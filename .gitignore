@@ -1,0 +1,43 @@
+# Android
+*.apk
+*.ap_
+*.desktop
+*.dex
+*.jar
+
+# iOS
+*.ipa
+*.app
+*.dSYM
+*.framework
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite-vec
+local_knowledge/
+
+# Keys and configuration
+.env
+*.key
+api_keys.dart
+secrets.dart
+
+# IDEs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
