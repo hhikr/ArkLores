@@ -88,37 +88,27 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 }
 
-/// Application widget with routing configuration.
-class ArkLoresApp extends ConsumerWidget {
-  const ArkLoresApp({super.key});
+/// Knowledge base page route wrapper.
+///
+/// Called from [MainShell] via Navigator.pushNamed.
+class KnowledgeBaseRoute extends ConsumerWidget {
+  const KnowledgeBaseRoute({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
+    return const KnowledgeBasePage();
+  }
+}
 
-    return MaterialApp(
-      title: 'ArkLores',
-      debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
-      darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
-        scaffoldBackgroundColor: theme.bgPrimary,
-      ),
-      theme: ThemeData.light(useMaterial3: true).copyWith(
-        scaffoldBackgroundColor: theme.bgPrimary,
-      ),
-      home: const MainShell(),
-      onGenerateRoute: (settings) {
-        // Push routes that overlay the main shell (e.g. settings sub-pages).
-        switch (settings.name) {
-          case '/knowledge-base':
-            return MaterialPageRoute(
-              builder: (_) => const KnowledgeBasePage(),
-              settings: settings,
-            );
-          default:
-            return null;
-        }
-      },
-    );
+/// Route generator for sub-pages pushed over the main shell.
+Route<dynamic>? generateAppRoute(RouteSettings settings) {
+  switch (settings.name) {
+    case '/knowledge-base':
+      return MaterialPageRoute(
+        builder: (_) => const KnowledgeBaseRoute(),
+        settings: settings,
+      );
+    default:
+      return null;
   }
 }
