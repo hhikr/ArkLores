@@ -6,8 +6,9 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 /// an invert filter on the root element, plus selective re-inversion of
 /// images and media to avoid double-inversion artifacts.
 ///
-/// Call [inject] after a page finishes loading (`onLoadStop`) and call
-/// [remove] (or re-inject with empty state) to disable dark mode.
+/// After CSS injection, a DOM walk re-inverts elements whose computed
+/// `background-image` is set via CSS classes (not inline styles), since
+/// those cannot be targeted by CSS attribute selectors alone.
 class WikiDarkMode {
   WikiDarkMode._();
 
@@ -18,7 +19,8 @@ class WikiDarkMode {
   /// - Base invert + hue rotation on `<html>` transforms light backgrounds
   ///   into dark ones while preserving hue relationships.
   /// - Images, videos, canvases and elements with background images are
-  ///   re-inverted so they appear naturally.
+  ///   re-inverted so they appear naturally, covering both longhand
+  ///   (`background-image`) and shorthand (`background: url(...)`) inline styles.
   /// - A subtle background colour prevents intermediate white flashes.
   static const String _darkModeCSS = '''
 html {
@@ -27,6 +29,8 @@ html {
 }
 img, video, iframe, canvas, svg,
 [style*="background-image"],
+[style*="background:url"],
+[style*="background: url"],
 picture,
 [role="img"] {
   filter: invert(1) hue-rotate(180deg) !important;
@@ -37,7 +41,45 @@ picture,
 }
 ''';
 
-  /// Injects (or updates) the dark mode style tag into the page.
+  /// JS that walks the DOM to re-invert elements whose computed
+  /// `background-image` is set via CSS classes (not inline styles) so they
+  /// render correctly under the html-level invert.
+  static const String _reInvertBackgroundsJS = '''
+(function() {
+  var reInvert = "invert(1) hue-rotate(180deg)";
+  var skip = {SCRIPT:1, STYLE:1, META:1, LINK:1, HEAD:1};
+  var all = document.querySelectorAll("*");
+  for (var i = 0; i < all.length; i++) {
+    var el = all[i];
+    if (skip[el.tagName]) continue;
+    try {
+      if (window.getComputedStyle(el).backgroundImage !== "none") {
+        if (el.dataset.arkloresInverted !== "1") {
+          el.style.filter = reInvert;
+          el.dataset.arkloresInverted = "1";
+        }
+      }
+    } catch(e) {}
+  }
+})();
+''';
+
+  /// JS that cleans up inline filters set by [_reInvertBackgroundsJS].
+  static const String _cleanupInvertedJS = '''
+(function() {
+  var el = document.getElementById("$_styleId");
+  if (el) el.remove();
+
+  var items = document.querySelectorAll("[data-arklores-inverted]");
+  for (var i = 0; i < items.length; i++) {
+    items[i].style.filter = "";
+    items[i].removeAttribute("data-arklores-inverted");
+  }
+})();
+''';
+
+  /// Injects (or updates) the dark mode style tag into the page, then
+  /// re-inverts elements with class-based background images.
   static Future<void> inject(InAppWebViewController controller) async {
     final js = '''
 (function() {
@@ -52,6 +94,7 @@ picture,
     document.head.appendChild(style);
   }
 })();
+$_reInvertBackgroundsJS
 ''';
     try {
       await controller.evaluateJavascript(source: js);
@@ -60,16 +103,10 @@ picture,
     }
   }
 
-  /// Removes the dark mode style tag from the page, restoring original colours.
+  /// Removes the dark mode style tag and cleans up inline filters.
   static Future<void> remove(InAppWebViewController controller) async {
-    final js = '''
-(function() {
-  var el = document.getElementById('$_styleId');
-  if (el) el.remove();
-})();
-''';
     try {
-      await controller.evaluateJavascript(source: js);
+      await controller.evaluateJavascript(source: _cleanupInvertedJS);
     } catch (_) {
       // Silently ignore.
     }
