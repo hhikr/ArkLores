@@ -4,60 +4,78 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
-/// Placeholder page for the Settings tab.
-///
-/// Will host API Key configuration, theme switcher, and knowledge base
-/// management in v0.3+.
+/// Settings tab — hosts API Key configuration, theme switcher, and
+/// knowledge base management (fully functional in v0.3+).
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
+    final notifier = ref.read(themeProvider.notifier);
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        children: [
+          // ── Header ───────────────────────────────────────────
+          const SizedBox(height: 32),
+          Center(
+            child: Icon(
               Icons.settings_rounded,
               size: 64,
               color: theme.accentPrimary.withValues(alpha: 0.4),
             ),
-            const SizedBox(height: 16),
-            Text(
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
               'Settings',
               style: theme.titleFont.copyWith(fontSize: 24),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'API Key · Theme · Knowledge Base',
-              style: theme.bodyFont.copyWith(color: theme.textSecondary),
-            ),
-            const SizedBox(height: 32),
-            ThemeAwareCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Coming in v0.3',
-                    style: theme.titleFont.copyWith(fontSize: 16),
+          ),
+          const SizedBox(height: 32),
+
+          // ── Theme Switcher ────────────────────────────────────
+          ThemeAwareCard(
+            child: Row(
+              children: [
+                Icon(
+                  Icons.palette_rounded,
+                  color: theme.accentPrimary,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Theme',
+                        style: theme.titleFont.copyWith(fontSize: 16),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        theme.themeName == 'ArkTheme'
+                            ? 'Tactical Archive'
+                            : 'Holographic Projection',
+                        style: theme.bodyFont.copyWith(
+                          color: theme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'API key configuration, theme switching, '
-                    'and knowledge base management.',
-                    style: theme.bodyFont.copyWith(color: theme.textSecondary),
-                  ),
-                ],
-              ),
+                ),
+                Switch(
+                  value: notifier.currentTheme == AppTheme.ark,
+                  onChanged: (_) => notifier.toggle(),
+                  activeColor: theme.accentPrimary,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

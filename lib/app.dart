@@ -8,6 +8,9 @@ import 'features/wiki/wiki_browser_page.dart';
 import 'shared/providers/theme_provider.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
+///
+/// When the theme switches, the body area fades through a 300ms
+/// cross-fade transition driven by [AnimatedSwitcher].
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
@@ -31,9 +34,23 @@ class _MainShellState extends ConsumerState<MainShell> {
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey('${theme.themeName}_$_currentIndex'),
+          child: IndexedStack(
+            index: _currentIndex,
+            children: _pages,
+          ),
+        ),
       ),
       bottomNavigationBar: Theme(
         data: ThemeData(
