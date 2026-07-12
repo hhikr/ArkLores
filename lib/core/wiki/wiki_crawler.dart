@@ -176,7 +176,7 @@ class MediaWikiCrawler {
         final pageData = entry.value as Map<String, dynamic>?;
         if (pageData == null) continue;
         // Skip missing/invalid pages.
-        if (pageData['missing'] == true) continue;
+        if (pageData.containsKey('missing') || pageData['pageid'] == null) continue;
 
         pages.add(WikiPage(
           pageId: pageData['pageid'] as int,
