@@ -87,17 +87,23 @@ int _estimateTokens(String text) {
   return (enTokens + zhTokens).round().clamp(1, 10000);
 }
 
+/// Result of heading detection.
+class _HeadingMatch {
+  final String text;
+  final int level;
+
+  const _HeadingMatch(this.text, this.level);
+}
+
 /// Detects whether [line] is a Markdown heading.
 ///
 /// Supports:
 /// - `# Heading` / `## Heading` / `### Heading` etc.
-/// - `=====` overline (level 1)
-/// - `------` overline (level 2)
-(String text, int level, bool isHeading)? _detectHeading(String line) {
+_HeadingMatch? _detectHeading(String line) {
   // Atx-style: # ## ### etc.
   final atxMatch = RegExp(r'^(#{1,6})\s+(.+)$').matchAsPrefix(line);
   if (atxMatch != null) {
-    return (atxMatch.group(2)!, atxMatch.group(1)!.length, true);
+    return _HeadingMatch(atxMatch.group(2)!, atxMatch.group(1)!.length);
   }
   return null;
 }

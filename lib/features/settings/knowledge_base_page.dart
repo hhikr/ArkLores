@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/llm/llm_client.dart';
 import '../../core/rag/chunker.dart';
-import '../../core/rag/embedder.dart';
+import '../../core/rag/embedder_provider.dart';
 import '../../core/rag/vector_store.dart';
 import '../../core/rag/vector_store_provider.dart';
 import '../../core/wiki/wiki_crawler.dart';
 import '../../core/wiki/wiki_models.dart';
-import '../../core/wiki/wiki_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
 /// Knowledge base management page — shows index status and controls
@@ -179,35 +178,30 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           const SizedBox(height: 32),
 
           // ── Engine info ──────────────────────────────────────
-          statsAsync.whenData((stats) {
-            if (stats.useVectorExtension) {
+          statsAsync.when(
+            data: (stats) {
+              final engineText = stats.useVectorExtension
+                  ? 'Search engine: sqlite-vec (native)'
+                  : 'Search engine: pure Dart (fallback)';
+              final engineColor = stats.useVectorExtension
+                  ? theme.textSecondary.withValues(alpha: 0.6)
+                  : theme.warning.withValues(alpha: 0.8);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 32),
                 child: Center(
                   child: Text(
-                    'Search engine: sqlite-vec (native)',
+                    engineText,
                     style: theme.bodyFont.copyWith(
-                      color: theme.textSecondary.withValues(alpha: 0.6),
+                      color: engineColor,
                       fontSize: 12,
                     ),
                   ),
                 ),
               );
-            } else {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 32),
-                child: Center(
-                  child: Text(
-                    'Search engine: pure Dart (fallback)',
-                    style: theme.bodyFont.copyWith(
-                      color: theme.warning.withValues(alpha: 0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              );
-            }
-          }),
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
         ],
       ),
     );

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/llm/llm_client.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
 /// Settings tab — hosts API Key configuration, theme switcher, and
