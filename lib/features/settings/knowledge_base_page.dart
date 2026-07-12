@@ -440,6 +440,12 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 (processedPages / totalUnique).clamp(0.0, 1.0);
           });
         }
+
+        // Yield to the Flutter event loop between pages so the rendering
+        // scheduler can produce frames while the next embed request is
+        // being prepared. Future.delayed(zero) schedules a macrotask
+        // (not a microtask), giving the engine a genuine opportunity to run.
+        await Future.delayed(Duration.zero);
       }
 
       ref.invalidate(vectorStoreStatsProvider);
