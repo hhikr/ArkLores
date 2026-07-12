@@ -34,6 +34,7 @@ class VectorStoreStats {
   final int wikiChunks;
   final int bookChunks;
   final int totalBooks;
+  final int failedChunks;
 
   /// Whether sqlite-vec native extension is active.
   /// Always false in the current pure-Dart fallback mode.
@@ -45,6 +46,7 @@ class VectorStoreStats {
     this.wikiChunks = 0,
     this.bookChunks = 0,
     this.totalBooks = 0,
+    this.failedChunks = 0,
     this.useVectorExtension = false,
   });
 }
@@ -107,7 +109,8 @@ class VectorStore {
             page_title  TEXT,
             section     TEXT,
             content     TEXT NOT NULL,
-            updated_at  INTEGER
+            updated_at  INTEGER,
+            embedding_status TEXT DEFAULT 'ok'
           )
         ''');
         await db.execute('''
@@ -129,7 +132,24 @@ class VectorStore {
       },
     );
 
+    // Run schema migration if upgrading from previous version.
+    try {
+      await _fallbackDb!.execute(
+        "ALTER TABLE chunks ADD COLUMN embedding_status TEXT DEFAULT 'ok'",
+      );
+    } catch (_) {
+      // Ignored if column already exists.
+    }
+
     _initialized = true;
+  }
+
+  bool _isZeroVector(List<double> vec) {
+    if (vec.isEmpty) return true;
+    for (final v in vec) {
+      if (v != 0.0) return false;
+    }
+    return true;
   }
 
   /// Inserts a single chunk with its embedding vector.
@@ -140,6 +160,7 @@ class VectorStore {
       String? bookId}) async {
     await initialize();
 
+    final isZero = _isZeroVector(embedding);
     await _fallbackDb!.insert(
       'chunks',
       {
@@ -152,6 +173,7 @@ class VectorStore {
         'section': chunk.section,
         'content': chunk.content,
         'updated_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        'embedding_status': isZero ? 'zero_vector' : 'ok',
       },
       conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
     );
@@ -190,6 +212,7 @@ class VectorStore {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await _fallbackDb!.transaction((txn) async {
       for (var i = 0; i < chunks.length; i++) {
+        final isZero = _isZeroVector(embeddings[i]);
         await txn.insert(
           'chunks',
           {
@@ -202,6 +225,7 @@ class VectorStore {
             'section': chunks[i].section,
             'content': chunks[i].content,
             'updated_at': now,
+            'embedding_status': isZero ? 'zero_vector' : 'ok',
           },
           conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
         );
@@ -320,6 +344,87 @@ class VectorStore {
     });
   }
 
+  /// Returns a map of pageTitle -> {max_updated_at, has_failures} for a given wiki.
+  Future<Map<String, ({int updatedAt, bool hasFailures})>> getWikiPagesMetadata(String wiki) async {
+    await initialize();
+    final results = await _fallbackDb!.rawQuery('''
+      SELECT page_title, MAX(updated_at) as max_updated, 
+             SUM(CASE WHEN embedding_status = 'zero_vector' THEN 1 ELSE 0 END) as fail_count
+      FROM chunks
+      WHERE source_type = 'wiki' AND wiki = ?
+      GROUP BY page_title
+    ''', [wiki]);
+
+    final metadata = <String, ({int updatedAt, bool hasFailures})>{};
+    for (final row in results) {
+      final title = row['page_title'] as String? ?? '';
+      if (title.isEmpty) continue;
+      final maxUpdated = (row['max_updated'] as int?) ?? 0;
+      final failCount = (row['fail_count'] as int?) ?? 0;
+      metadata[title] = (updatedAt: maxUpdated, hasFailures: failCount > 0);
+    }
+    return metadata;
+  }
+
+  /// Deletes chunks and embeddings for a specific Wiki page.
+  Future<void> deleteWikiPage(String wiki, String pageTitle) async {
+    await initialize();
+    await _fallbackDb!.transaction((txn) async {
+      final ids = await txn.query(
+        'chunks',
+        columns: ['id'],
+        where: 'source_type = ? AND wiki = ? AND page_title = ?',
+        whereArgs: ['wiki', wiki, pageTitle],
+      );
+
+      for (final row in ids) {
+        await txn.delete(
+          'chunk_embeddings',
+          where: 'chunk_id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+      await txn.delete(
+        'chunks',
+        where: 'source_type = ? AND wiki = ? AND page_title = ?',
+        whereArgs: ['wiki', wiki, pageTitle],
+      );
+    });
+  }
+
+  /// Returns all chunks where embedding_status is 'zero_vector'.
+  Future<List<Map<String, dynamic>>> getFailedChunks() async {
+    await initialize();
+    return await _fallbackDb!.query(
+      'chunks',
+      where: "embedding_status = 'zero_vector'",
+    );
+  }
+
+  /// Updates a specific chunk's embedding and marks it as 'ok'.
+  Future<void> updateChunkEmbedding(String chunkId, List<double> embedding) async {
+    await initialize();
+    await _fallbackDb!.transaction((txn) async {
+      await txn.update(
+        'chunks',
+        {
+          'embedding_status': 'ok',
+          'updated_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        },
+        where: 'id = ?',
+        whereArgs: [chunkId],
+      );
+      await txn.insert(
+        'chunk_embeddings',
+        {
+          'chunk_id': chunkId,
+          'embedding': _doubleListToBlob(embedding),
+        },
+        conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
+      );
+    });
+  }
+
   /// Deletes a book and all its associated chunks/embeddings.
   Future<void> deleteBook(String bookId) async {
     await deleteBySource('book', bookId: bookId);
@@ -385,12 +490,17 @@ class VectorStore {
           await _fallbackDb!.rawQuery('SELECT COUNT(*) FROM books'),
         ) ??
         0;
+    final failedCount = sqflite.Sqflite.firstIntValue(
+          await _fallbackDb!.rawQuery("SELECT COUNT(*) FROM chunks WHERE embedding_status = 'zero_vector'"),
+        ) ??
+        0;
 
     return VectorStoreStats(
       totalChunks: total,
       wikiChunks: wikiCount,
       bookChunks: bookCount,
       totalBooks: booksCount,
+      failedChunks: failedCount,
       useVectorExtension: false,
     );
   }

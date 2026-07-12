@@ -221,7 +221,8 @@ CREATE TABLE chunks (
   page_title  TEXT,              -- Wiki 页面标题 或 书籍章节标题
   section     TEXT,              -- 所属小节标题
   content     TEXT NOT NULL,     -- 原文内容
-  updated_at  INTEGER            -- Unix timestamp
+  updated_at  INTEGER,           -- Unix timestamp
+  embedding_status TEXT DEFAULT 'ok' -- 'ok' | 'zero_vector'
 );
 
 CREATE VIRTUAL TABLE chunk_embeddings USING vec0(
@@ -567,7 +568,7 @@ dependencies:
 | MediaWiki 爬取器 | 调用 `api.php` 批量拉取页面内容，支持 PRTS + 终末地 |
 | 文本分块器 | ~500 Token 窗口，50 Token 重叠，按标题层级切分 |
 | sqlite-vec 集成 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用）；向量维度**动态检测**，从首次 API 响应获取 |
-| Wiki 知识库管理页 | 显示索引状态、页面数、向量数，「更新 Wiki」按钮 |
+| Wiki 知识库管理页 | 显示索引状态、页面数、向量数，支持后台异步索引、增量爬取（比对 touched）、清理分类已废弃的旧数据、失败 Embedding 条目统计与一键手动重试 |
 | **资料 Tab 功能** | 书籍列表、PDF/TXT 导入、进度展示、显示名编辑、删除 |
 | **AI 信任策略实现** | Prompt 插入参考第 5 节，引用卡片颜色区分 Wiki/书籍 |
 | 首次引导流程 | 未配置 API Key 时，引导用户完成配置 + 首次 Wiki 索引建立 |
