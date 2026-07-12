@@ -23,21 +23,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late TextEditingController _embeddingModelController;
   bool _obscureApiKey = true;
   bool _saved = false;
-
   @override
   void initState() {
     super.initState();
-    final config = const LLMConfig();
-    _baseUrlController = TextEditingController(text: config.baseUrl);
-    _apiKeyController = TextEditingController(text: config.apiKey);
-    _chatModelController = TextEditingController(text: config.chatModel);
-    _embeddingModelController = TextEditingController(text: config.embeddingModel);
+    _baseUrlController = TextEditingController();
+    _apiKeyController = TextEditingController();
+    _chatModelController = TextEditingController();
+    _embeddingModelController = TextEditingController();
+    // Schedule a post-frame callback to sync controllers after the
+    // first build, by which time apiConfigProvider may have loaded.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncControllers());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Sync controllers when config loads from storage.
+    // Sync again when apiConfigProvider state changes (e.g. async load completes).
+    _syncControllers();
+  }
+
+  void _syncControllers() {
     final config = ref.read(apiConfigProvider);
     if (config.apiKey.isNotEmpty && _apiKeyController.text.isEmpty) {
       _baseUrlController.text = config.baseUrl;
@@ -76,6 +81,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final notifier = ref.read(themeProvider.notifier);
+    // Watch config so the UI re-renders when async load completes.
+    ref.watch(apiConfigProvider);
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
@@ -150,7 +157,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 _buildInputLabel('Base URL', theme),
                 _buildInputField(
                   controller: _baseUrlController,
-                  hintText: 'https://api.openai.com/v1',
+                  hintText: 'https://api.deepseek.com/v1',
                   theme: theme,
                 ),
                 const SizedBox(height: 16),
@@ -176,15 +183,47 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 _buildInputLabel('Chat Model', theme),
                 _buildInputField(
                   controller: _chatModelController,
-                  hintText: 'gpt-4o-mini',
+                  hintText: 'deepseek-v4-flash',
                   theme: theme,
                 ),
                 const SizedBox(height: 16),
                 _buildInputLabel('Embedding Model', theme),
                 _buildInputField(
                   controller: _embeddingModelController,
-                  hintText: 'text-embedding-3-small',
+                  hintText: 'deepseek-embed',
                   theme: theme,
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: theme.warning.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline,
+                          color: theme.warning, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'If your provider does not support embedding (e.g. DeepSeek), '
+                          'you can use a different provider for embeddings by changing '
+                          'the Base URL to a compatible one like '
+                          'https://api.openai.com/v1.',
+                          style: theme.bodyFont.copyWith(
+                            color: theme.textSecondary,
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
