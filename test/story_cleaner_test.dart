@@ -10,14 +10,14 @@ void main() {
     test('Integration: Crawl actual PRTS story "0-10 困境/BEG" and clean it', () async {
       final crawler = MediaWikiCrawler();
 
-      print('📡 Fetching actual story page "0-10 困境/BEG" from PRTS Wiki...');
-      
-      final pages = await crawler.fetchPageContents(
+      print('📡 Fetching raw wikitext for story page "0-10 困境/BEG" from PRTS Wiki...');
+
+      final pagesMap = await crawler.fetchRawWikitexts(
         WikiSite.prts,
         ['0-10 困境/BEG'],
       );
 
-      final page = pages.first;
+      final page = pagesMap['0-10 困境/BEG']!;
 
       // Write raw content to file for local debugging
       File('raw_page.txt').writeAsStringSync(page.content);
