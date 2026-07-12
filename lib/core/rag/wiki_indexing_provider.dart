@@ -119,6 +119,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       state = state.copyWith(status: WikiIndexingStatus.fetchingTitles);
       final allUniqueTitles = <String>{};
       final operatorTitles = <String>{};
+      final storyTitles = <String>{};
       for (final category in categories) {
         final titles = await _crawler.fetchCategoryTitles(
           site: site,
@@ -126,6 +127,10 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         );
         if (category == 'Category:干员') {
           operatorTitles.addAll(titles);
+        } else if (category == 'Category:主线剧情' ||
+                   category == 'Category:活动剧情' ||
+                   category == 'Category:干员密录') {
+          storyTitles.addAll(titles);
         }
         allUniqueTitles.addAll(titles);
       }
@@ -212,10 +217,13 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         );
 
         final opBatch = <String>[];
+        final storyBatch = <String>[];
         final normalBatch = <String>[];
         for (final title in batch) {
           if (site == WikiSite.prts && operatorTitles.contains(title)) {
             opBatch.add(title);
+          } else if (site == WikiSite.prts && storyTitles.contains(title)) {
+            storyBatch.add(title);
           } else {
             normalBatch.add(title);
           }
@@ -229,7 +237,18 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           wikiPages.addAll(normalPages);
         }
 
-        // 2. Fetch and assemble operator pages via raw wikitext
+        // 2. Fetch story pages via raw wikitext to avoid extracts truncation/bloating
+        if (storyBatch.isNotEmpty) {
+          final storyWikitexts = await _crawler.fetchRawWikitexts(site, storyBatch);
+          for (final title in storyBatch) {
+            final page = storyWikitexts[title];
+            if (page != null) {
+              wikiPages.add(page);
+            }
+          }
+        }
+
+        // 3. Fetch and assemble operator pages via raw wikitext
         if (opBatch.isNotEmpty) {
           final allOpTitlesToFetch = <String>[];
           for (final opTitle in opBatch) {
@@ -238,7 +257,42 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
             allOpTitlesToFetch.add('${opTitle}的信物');
           }
 
-          final wikitexts = await _crawler.fetchRawWikitexts(site, allOpTitlesToFetch);
+          // Phase 1: Fetch operator main pages, voice lines, and token descriptions
+          final wikitexts =
+              await _crawler.fetchRawWikitexts(site, allOpTitlesToFetch);
+
+          // Phase 1.5: Parse operator records to discover story page names
+          final recordStoryTitles = <String>{};
+          for (final opTitle in opBatch) {
+            final mainPage = wikitexts[opTitle];
+            if (mainPage == null) continue;
+            final miluTemplates =
+                parseAllTemplates(mainPage.content, '干员密录/list');
+            for (final m in miluTemplates) {
+              for (int j = 1; j <= 20; j++) {
+                final rawPage = m['storyTxt$j'] ?? '';
+                if (rawPage.isEmpty) break;
+                final resolved = rawPage
+                    .replaceAll('{{FULLPAGENAME}}', opTitle)
+                    .trim();
+                if (resolved.isNotEmpty) {
+                  recordStoryTitles.add(resolved);
+                }
+              }
+            }
+          }
+
+          // Phase 2: Fetch operator record story pages
+          final recordStoryWikitexts = <String, String>{};
+          if (recordStoryTitles.isNotEmpty) {
+            final recordPages =
+                await _crawler.fetchRawWikitexts(site, recordStoryTitles.toList());
+            for (final entry in recordPages.entries) {
+              if (entry.value.content.isNotEmpty) {
+                recordStoryWikitexts[entry.value.title] = entry.value.content;
+              }
+            }
+          }
 
           for (final opTitle in opBatch) {
             final mainPage = wikitexts[opTitle];
@@ -251,6 +305,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
                 mainPage.content,
                 voicePage?.content ?? '',
                 tokenPage?.content ?? '',
+                recordStoryWikitexts: recordStoryWikitexts,
               );
 
               wikiPages.add(WikiPage(
@@ -475,7 +530,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         startIdx = wikitext.toLowerCase().indexOf(startKey.toLowerCase(), searchOffset);
         if (startIdx == -1) break;
       }
-      
+
       // Find matching closing }}
       int depth = 0;
       int endIdx = -1;
@@ -578,12 +633,17 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   }
 
   /// Assembles operator raw wikitexts (main page, voice, token) into a unified markdown.
+  ///
+  /// If [recordStoryWikitexts] is provided (map of story page title → raw wikitext),
+  /// operator record sections will include the full cleaned story dialogue instead
+  /// of just a page link.
   static String assembleOperatorMarkdown(
     String operatorName,
     String mainWikitext,
     String voiceWikitext,
-    String tokenWikitext,
-  ) {
+    String tokenWikitext, {
+    Map<String, String>? recordStoryWikitexts,
+  }) {
     final sb = StringBuffer();
     sb.writeln('# $operatorName\n');
 
@@ -628,7 +688,22 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       }
     }
 
-    // --- 2. Parse Talents ---
+    // --- 2. Parse Recruitment Contract ---
+    final tokenRel = parseTemplate(mainWikitext, '相关道具');
+    final contract = tokenRel['干员简介'] ?? '';
+    final contractSupp = tokenRel['干员简介补充'] ?? '';
+    if (contract.isNotEmpty || contractSupp.isNotEmpty) {
+      sb.writeln('## 招聘合同');
+      if (contract.isNotEmpty) {
+        sb.writeln(cleanFormattedText(contract));
+      }
+      if (contractSupp.isNotEmpty) {
+        sb.writeln('\n${cleanFormattedText(contractSupp)}');
+      }
+      sb.writeln('');
+    }
+
+    // --- 3. Parse Talents ---
     final talentTemplates = parseAllTemplates(mainWikitext, '天赋列表3');
     if (talentTemplates.isNotEmpty) {
       sb.writeln('## 天赋设定');
@@ -636,47 +711,32 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         final name = t['天赋1'] ?? '';
         final category = t['天赋'] ?? '';
         if (name.isNotEmpty) {
-          sb.writeln('### $category：$name');
-          for (int j = 1; j <= 10; j++) {
-            final cond = t['天赋$j条件'] ?? '';
-            final eff = t['天赋$j效果'] ?? '';
-            if (eff.isNotEmpty) {
-              final condStr = cond.isNotEmpty ? '（$cond）' : '';
-              sb.writeln('- 效果$condStr：${cleanFormattedText(eff)}');
-            }
-          }
-          sb.writeln('');
+          sb.writeln('- $category：$name');
         }
       }
+      sb.writeln('');
     }
 
-    // --- 3. Parse Skills ---
-    final skillTemplates = parseAllTemplates(mainWikitext, '技能');
+    // --- 4. Parse Skills ---
+    // Parse both {{技能 and {{技能2 templates — different operators use different
+    // template names for their skill slots. Deduplicate by 技能名.
+    final seenSkillNames = <String>{};
+    final skillTemplates = <Map<String, String>>[
+      ...parseAllTemplates(mainWikitext, '技能'),
+      ...parseAllTemplates(mainWikitext, '技能2'),
+    ];
     if (skillTemplates.isNotEmpty) {
       sb.writeln('## 技能设定');
       for (final s in skillTemplates) {
         final name = s['技能名'] ?? '';
-        if (name.isNotEmpty) {
-          sb.writeln('### 技能：$name');
-          final type1 = s['技能类型1'] ?? '';
-          final type2 = s['技能类型2'] ?? '';
-          if (type1.isNotEmpty || type2.isNotEmpty) {
-            sb.writeln('- 类型：$type1 / $type2');
-          }
-          final desc7 = s['技能7描述'] ?? '';
-          final descM3 = s['技能专精3描述'] ?? '';
-          if (desc7.isNotEmpty) {
-            sb.writeln('- 7级效果：${cleanFormattedText(desc7)}');
-          }
-          if (descM3.isNotEmpty) {
-            sb.writeln('- 专精3效果：${cleanFormattedText(descM3)}');
-          }
-          sb.writeln('');
+        if (name.isNotEmpty && seenSkillNames.add(name)) {
+          sb.writeln('- 技能：$name');
         }
       }
+      sb.writeln('');
     }
 
-    // --- 4. Parse RIIC/Base Skills ---
+    // --- 5. Parse RIIC/Base Skills ---
     final baseTemplates = parseAllTemplates(mainWikitext, '后勤技能');
     if (baseTemplates.isNotEmpty) {
       sb.writeln('## 后勤技能');
@@ -695,7 +755,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       sb.writeln('');
     }
 
-    // --- 5. Parse Modules ---
+    // --- 6. Parse Modules ---
     final moduleTemplates = parseAllTemplates(mainWikitext, '模组');
     if (moduleTemplates.isNotEmpty) {
       sb.writeln('## 模组设定');
@@ -712,7 +772,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       }
     }
 
-    // --- 6. Parse Paradox Simulation ---
+    // --- 7. Parse Paradox Simulation ---
     final paradoxTemplates = parseAllTemplates(mainWikitext, '悖论模拟');
     if (paradoxTemplates.isNotEmpty) {
       sb.writeln('## 悖论模拟');
@@ -728,29 +788,44 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       }
     }
 
-    // --- 7. Parse Operator Records List ---
+    // --- 8. Parse Operator Records List with Story Content ---
     final miluTemplates = parseAllTemplates(mainWikitext, '干员密录/list');
     if (miluTemplates.isNotEmpty) {
-      sb.writeln('## 干员密录一览');
+      sb.writeln('## 干员密录');
       for (final m in miluTemplates) {
         final name = m['storySetName'] ?? '';
-        final intro = m['storyIntro1'] ?? '';
-        final page = m['storyTxt1'] ?? '';
-        if (name.isNotEmpty) {
-          final resolvedPage = page.replaceAll('{{FULLPAGENAME}}', operatorName).trim();
-          sb.writeln('### 干员密录：$name');
+        if (name.isEmpty) continue;
+
+        sb.writeln('### $name');
+
+        for (int j = 1; j <= 20; j++) {
+          final rawPage = m['storyTxt$j'] ?? '';
+          if (rawPage.isEmpty) break;
+
+          final resolvedPage = rawPage
+              .replaceAll('{{FULLPAGENAME}}', operatorName)
+              .trim();
+          if (resolvedPage.isEmpty) continue;
+
+          final intro = m['storyIntro$j'] ?? '';
           if (intro.isNotEmpty) {
-            sb.writeln('- 介绍：${cleanFormattedText(intro)}');
+            sb.writeln('${cleanFormattedText(intro)}\n');
           }
-          if (resolvedPage.isNotEmpty) {
-            sb.writeln('- 剧情页面：$resolvedPage');
+
+          if (recordStoryWikitexts != null &&
+              recordStoryWikitexts.containsKey(resolvedPage)) {
+            final cleaned =
+                cleanStoryContent(recordStoryWikitexts[resolvedPage]!);
+            sb.writeln(cleaned);
+            sb.writeln('');
+          } else if (resolvedPage.isNotEmpty) {
+            sb.writeln('（剧情页面：$resolvedPage）\n');
           }
-          sb.writeln('');
         }
       }
     }
 
-    // --- 8. Parse Token Description ---
+    // --- 9. Parse Token Description ---
     if (tokenWikitext.isNotEmpty) {
       final tokenInfo = parseTemplate(tokenWikitext, '道具信息');
       final desc = tokenInfo['描述'];
