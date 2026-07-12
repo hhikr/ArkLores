@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'features/settings/api_settings_page.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
 import 'shared/providers/settings_provider.dart';
@@ -84,6 +85,11 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
           case '/knowledge-base':
             return MaterialPageRoute(
               builder: (_) => const KnowledgeBasePage(),
+              settings: settings,
+            );
+          case '/api-settings':
+            return MaterialPageRoute(
+              builder: (_) => const ApiSettingsPage(),
               settings: settings,
             );
           default:

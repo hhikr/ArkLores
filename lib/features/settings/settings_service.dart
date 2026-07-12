@@ -6,11 +6,21 @@ import '../../core/llm/llm_client.dart';
 ///
 /// Keys are stored encrypted at the OS level (Keychain on iOS,
 /// EncryptedSharedPreferences on Android).
+///
+/// Chat and Embedding configs are stored separately so users can
+/// mix providers (e.g. DeepSeek for chat, OpenAI for embeddings).
 class SettingsService {
-  static const _keyBaseUrl = 'api_base_url';
-  static const _keyApiKey = 'api_key';
-  static const _keyChatModel = 'api_chat_model';
-  static const _keyEmbeddingModel = 'api_embedding_model';
+  // ── Chat keys ────────────────────────────────────────────
+  static const _keyChatBaseUrl = 'chat_base_url';
+  static const _keyChatApiKey = 'chat_api_key';
+  static const _keyChatModel = 'chat_model';
+
+  // ── Embedding keys ───────────────────────────────────────
+  static const _keyEmbedBaseUrl = 'embed_base_url';
+  static const _keyEmbedApiKey = 'embed_api_key';
+  static const _keyEmbedModel = 'embed_model';
+
+  // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
 
   final FlutterSecureStorage _storage;
@@ -20,26 +30,32 @@ class SettingsService {
 
   /// Loads the saved API configuration.
   Future<LLMConfig> loadApiConfig() async {
-    final baseUrl = await _storage.read(key: _keyBaseUrl);
-    final apiKey = await _storage.read(key: _keyApiKey);
+    final chatBaseUrl = await _storage.read(key: _keyChatBaseUrl);
+    final chatApiKey = await _storage.read(key: _keyChatApiKey);
     final chatModel = await _storage.read(key: _keyChatModel);
-    final embeddingModel = await _storage.read(key: _keyEmbeddingModel);
+    final embedBaseUrl = await _storage.read(key: _keyEmbedBaseUrl);
+    final embedApiKey = await _storage.read(key: _keyEmbedApiKey);
+    final embedModel = await _storage.read(key: _keyEmbedModel);
 
     return LLMConfig(
-      baseUrl: baseUrl ?? 'https://api.openai.com/v1',
-      apiKey: apiKey ?? '',
-      chatModel: chatModel ?? 'gpt-4o-mini',
-      embeddingModel: embeddingModel ?? 'text-embedding-3-small',
+      chatBaseUrl: chatBaseUrl ?? 'https://api.deepseek.com/v1',
+      chatApiKey: chatApiKey ?? '',
+      chatModel: chatModel ?? 'deepseek-v4-flash',
+      embedBaseUrl: embedBaseUrl ?? 'https://api.openai.com/v1',
+      embedApiKey: embedApiKey ?? '',
+      embedModel: embedModel ?? 'text-embedding-3-small',
     );
   }
 
   /// Saves the API configuration.
   Future<void> saveApiConfig(LLMConfig config) async {
     await Future.wait([
-      _storage.write(key: _keyBaseUrl, value: config.baseUrl),
-      _storage.write(key: _keyApiKey, value: config.apiKey),
+      _storage.write(key: _keyChatBaseUrl, value: config.chatBaseUrl),
+      _storage.write(key: _keyChatApiKey, value: config.chatApiKey),
       _storage.write(key: _keyChatModel, value: config.chatModel),
-      _storage.write(key: _keyEmbeddingModel, value: config.embeddingModel),
+      _storage.write(key: _keyEmbedBaseUrl, value: config.embedBaseUrl),
+      _storage.write(key: _keyEmbedApiKey, value: config.embedApiKey),
+      _storage.write(key: _keyEmbedModel, value: config.embedModel),
     ]);
   }
 
