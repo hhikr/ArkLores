@@ -144,7 +144,7 @@ class VectorStore {
     _initialized = true;
   }
 
-  bool _isZeroVector(List<double> vec) {
+  bool isZeroVector(List<double> vec) {
     if (vec.isEmpty) return true;
     for (final v in vec) {
       if (v != 0.0) return false;
@@ -160,7 +160,7 @@ class VectorStore {
       String? bookId}) async {
     await initialize();
 
-    final isZero = _isZeroVector(embedding);
+    final isZero = isZeroVector(embedding);
     await _fallbackDb!.insert(
       'chunks',
       {
@@ -212,7 +212,7 @@ class VectorStore {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await _fallbackDb!.transaction((txn) async {
       for (var i = 0; i < chunks.length; i++) {
-        final isZero = _isZeroVector(embeddings[i]);
+        final isZero = isZeroVector(embeddings[i]);
         await txn.insert(
           'chunks',
           {
