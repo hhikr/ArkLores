@@ -45,9 +45,8 @@ dependencies:
   # Database
   sqflite: ^2.4.0
 
-  # Vector search (sqlite-vec FFI, fallback to pure Dart)
-  sqlite_vec: ^0.1.3
-  sqlite3: ^2.4.0  # Required by sqlite_vec for FFI extension loading
+  # Vector search — using sqflite + pure Dart cosine similarity fallback
+  # (sqlite-vec FFI was deferred due to native build incompatibility)
 
   # File system paths
   path_provider: ^2.1.0

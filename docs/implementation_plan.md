@@ -475,7 +475,12 @@ dependencies:
 ```
 
 > [!WARNING]
-> `sqlite_vec` 的 Flutter 原生绑定目前处于早期阶段，需在 v0.3 优先验证 iOS/Android FFI 兼容性。不可用时回退为纯 Dart cosine similarity 实现（性能略低但零依赖，可作为永久备选）。
+> ~~`sqlite_vec` 的 Flutter 原生绑定目前处于早期阶段，需在 v0.3 优先验证 iOS/Android FFI 兼容性。不可用时回退为纯 Dart cosine similarity 实现（性能略低但零依赖，可作为永久备选）。~~
+>
+> **v0.3 验证结论**：`sqlite_vec` v0.1.7-alpha.3 Android native 构建缺失 C 源文件（`sqlite-vec.c`），FFI 路径暂不可用。项目已切换到纯 Dart cosine similarity 回退。
+> - 回退路径使用 `sqflite` 存储 embedding blob + `_cosineSimilarity()` 在 Dart 侧计算
+> - 1000-2000 chunks 量级下预期延迟 50-150ms，可接受
+> - 待 `sqlite_vec` 包稳定后，可通过恢复依赖和 `vector_store.dart` 中的 FFI 分支重新启用
 
 > [!NOTE]
 > `syncfusion_flutter_pdf` 社区版对非商业开源项目免费，符合本项目定位。如遇许可证问题可替换为 `pdfx`（纯 Dart，但文字提取能力较弱）。
@@ -685,7 +690,7 @@ dependencies:
 | 书籍导入入口 | 底部导航独立 **资料 Tab**（非设置内嵌） |
 | 多本书籍支持 | 支持同时导入多本书籍，可分别管理和删除 |
 | 最低系统版本 | Android 8.0（API 26）/ iOS 14 |
-| sqlite-vec 方案 | FFI 绑定优先，不可用时回退纯 Dart cosine similarity |
+| sqlite-vec 方案 | ~~FFI 绑定优先，不可用时回退纯 Dart cosine similarity~~ → **v0.3 实测 FFI 暂不可用（包发布不完整），已切至纯 Dart 回退** |
 | 作者署名 | **hhikr**（写入 `AUTHORS` 文件、README、LICENSE 头部） |
 | GitHub 仓库 | `github.com/hhikr/ArkLores` |
 | AI 资料可信度 | 书籍来源内容全局应用信任策略，以 Wiki 为优先参考，引用时马色区分并附免责声明 |
