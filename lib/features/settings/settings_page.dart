@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
+import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
-/// Settings tab — hosts theme switcher, API settings, and
-/// knowledge base management.
+/// Settings tab — hosts theme/language switchers, API settings,
+/// and knowledge base management.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -14,6 +15,7 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final notifier = ref.read(themeProvider.notifier);
+    final currentLocale = ref.watch(localeProvider);
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
@@ -68,6 +70,56 @@ class SettingsPage extends ConsumerWidget {
                   value: notifier.currentTheme == AppTheme.ark,
                   onChanged: (_) => notifier.toggle(),
                   activeColor: theme.accentPrimary,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Language Switcher ──────────────────────────────────
+          ThemeAwareCard(
+            child: Row(
+              children: [
+                Icon(Icons.language_rounded, color: theme.accentPrimary),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Language',
+                        style: theme.titleFont.copyWith(fontSize: 16),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        currentLocale.displayName,
+                        style: theme.bodyFont.copyWith(
+                          color: theme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SegmentedButton<SupportedLocale>(
+                  segments: const [
+                    ButtonSegment(
+                      value: SupportedLocale.en,
+                      label: Text('EN'),
+                    ),
+                    ButtonSegment(
+                      value: SupportedLocale.zh,
+                      label: Text('中文'),
+                    ),
+                  ],
+                  selected: {currentLocale},
+                  onSelectionChanged: (selected) {
+                    ref.read(localeProvider.notifier).switchTo(selected.first);
+                  },
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ],
             ),
