@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/providers/theme_provider.dart';
+import 'wiki_toolbar.dart';
 
 /// Wiki site configuration.
 class _WikiSite {
@@ -49,6 +50,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   final List<bool> _canGoBack = List.filled(_wikiSites.length, false);
   final List<bool> _canGoForward = List.filled(_wikiSites.length, false);
 
+  /// Dark mode toggle state (placeholder — wired up in T4).
+  bool _isDarkMode = true;
+
+  /// Bookmark toggle state (placeholder — wired up in T6).
+  bool _isBookmarked = false;
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +88,20 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   void _reload() {
     _controllers[_tabController.index]?.reload();
+  }
+
+  void _toggleDarkMode() {
+    setState(() => _isDarkMode = !_isDarkMode);
+    // CSS injection will be handled in T4.
+  }
+
+  void _toggleBookmark() {
+    // Placeholder — will connect to BookmarkProvider in T6.
+    setState(() => _isBookmarked = !_isBookmarked);
+  }
+
+  void _openBookmarks() {
+    // Placeholder — will navigate to BookmarkPage in T7.
   }
 
   // ─── WebView tab state callbacks ─────────────────────────────────
@@ -119,6 +140,21 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       body: SafeArea(
         child: Column(
           children: [
+            // ── Custom toolbar ────────────────────────────────
+            WikiToolbar(
+              canGoBack: _canGoBack[_tabController.index],
+              canGoForward: _canGoForward[_tabController.index],
+              currentTitle: _titles[_tabController.index],
+              isDarkMode: _isDarkMode,
+              isBookmarked: _isBookmarked,
+              onBack: _goBack,
+              onForward: _goForward,
+              onRefresh: _reload,
+              onToggleDarkMode: _toggleDarkMode,
+              onToggleBookmark: _toggleBookmark,
+              onOpenBookmarks: _openBookmarks,
+            ),
+
             // ── Site tab bar ───────────────────────────────────
             Container(
               color: theme.bgSecondary,
@@ -219,7 +255,9 @@ class _WikiTabViewState extends State<_WikiTabView>
         // Transparent background to avoid white flash on dark themes.
         transparentBackground: true,
       ),
-      onWebViewCreated: widget.onControllerCreated,
+      onWebViewCreated: (controller) {
+        widget.onControllerCreated(widget.index, controller);
+      },
       onTitleChanged: (controller, title) {
         widget.onTitleChanged(widget.index, title);
       },
