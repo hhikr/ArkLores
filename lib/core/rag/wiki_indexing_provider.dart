@@ -517,18 +517,47 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
 
   /// Parses all occurrences of a template in a mediawiki wikitext.
   ///
+  /// When [exactMatch] is true (default), only templates whose name exactly
+  /// matches [templateName] are returned — e.g. searching for "人员档案" will
+  /// NOT match "人员档案set". Set to false for legacy prefix matching.
+  ///
   /// Returns a list of maps, where each map contains the key-value parameters
   /// parsed from one template call. Supports nested curly/square brackets.
-  static List<Map<String, String>> parseAllTemplates(String wikitext, String templateName) {
+  static List<Map<String, String>> parseAllTemplates(
+    String wikitext,
+    String templateName, {
+    bool exactMatch = true,
+    
+  }) {
     final results = <Map<String, String>>[];
     final startKey = '{{$templateName';
-    
+
     int searchOffset = 0;
     while (true) {
       int startIdx = wikitext.indexOf(startKey, searchOffset);
       if (startIdx == -1) {
         startIdx = wikitext.toLowerCase().indexOf(startKey.toLowerCase(), searchOffset);
         if (startIdx == -1) break;
+      }
+
+      // When exactMatch is true, ensure the next character is a template
+      // delimiter (|, }, \n, \r, space, tab) and not a name continuation.
+      // Prevents {{人员档案 from matching {{人员档案set,
+      //         {{技能 from matching {{技能升级材料, etc.
+      if (exactMatch) {
+        final afterKey = startIdx + startKey.length;
+        if (afterKey < wikitext.length) {
+          final nextChar = wikitext[afterKey];
+          if (nextChar != '|' &&
+              nextChar != '}' &&
+              nextChar != '\n' &&
+              nextChar != '\r' &&
+              nextChar != ' ' &&
+              nextChar != '\t') {
+            searchOffset = afterKey;
+            continue;
+          }
+        }
       }
 
       // Find matching closing }}
