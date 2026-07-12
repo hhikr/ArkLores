@@ -27,6 +27,12 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   double _indexingProgress = 0.0;
   String? _error;
 
+  /// Timestamp of the last progress [setState] call.
+  /// Used to throttle UI updates during the embedding loop so the
+  /// widget tree is not rebuilt on every single page (which compounds
+  /// the main-thread load).
+  DateTime? _lastProgressUpdate;
+
   static const List<String> _prtsCategories = [
     'Category:干员',
     'Category:剧情',
@@ -423,7 +429,12 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         }
 
         processedPages++;
-        if (mounted) {
+        final now = DateTime.now();
+        if (mounted &&
+            (_lastProgressUpdate == null ||
+                now.difference(_lastProgressUpdate!) >
+                    const Duration(milliseconds: 300))) {
+          _lastProgressUpdate = now;
           setState(() {
             _indexingProgress =
                 (processedPages / totalUnique).clamp(0.0, 1.0);
