@@ -23,6 +23,51 @@ class MediaWikiCrawler {
   })  : _httpClient = httpClient ?? http.Client(),
         _requestDelay = requestDelay ?? const Duration(milliseconds: 200);
 
+  /// Fetches only the titles of pages belonging to a category.
+  ///
+  /// This is extremely lightweight as it fetches no page content, serving
+  /// as the first step of our incremental crawler checks.
+  Future<List<String>> fetchCategoryTitles({
+    required WikiSite site,
+    required String categoryName,
+  }) async {
+    final titles = <String>[];
+    String? continueToken;
+
+    do {
+      final params = <String, String>{
+        'action': 'query',
+        'format': 'json',
+        'list': 'categorymembers',
+        'cmtitle': categoryName,
+        'cmlimit': '500', // MediaWiki max for standard queries is 500
+      };
+      if (continueToken != null) {
+        params['cmcontinue'] = continueToken;
+      }
+
+      final result = await _queryApi(site, params);
+      final query = result['query'] as Map<String, dynamic>?;
+      final members = query?['categorymembers'] as List<dynamic>? ?? [];
+
+      for (final member in members) {
+        final title = member['title'] as String? ?? '';
+        if (title.isNotEmpty) {
+          titles.add(title);
+        }
+      }
+
+      final queryContinue = result['continue'] as Map<String, dynamic>?;
+      continueToken = queryContinue?['cmcontinue'] as String?;
+
+      if (continueToken != null) {
+        await Future.delayed(_requestDelay);
+      }
+    } while (continueToken != null);
+
+    return titles;
+  }
+
   /// Fetches all pages under a given category.
   ///
   /// Calls [onProgress] after each batch with updated progress info.
