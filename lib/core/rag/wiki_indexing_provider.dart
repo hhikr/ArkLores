@@ -127,12 +127,14 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         );
         if (category == 'Category:干员') {
           operatorTitles.addAll(titles);
+          allUniqueTitles.addAll(titles);
         } else if (category == 'Category:主线剧情' ||
                    category == 'Category:活动剧情' ||
                    category == 'Category:干员密录') {
           storyTitles.addAll(titles);
+          allUniqueTitles.addAll(titles);
         }
-        allUniqueTitles.addAll(titles);
+        // Other categories (e.g. 敌方, 物品, etc.) are intentionally skipped
       }
 
       if (allUniqueTitles.isEmpty) {
@@ -217,22 +219,22 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         );
 
         final opBatch = <String>[];
-        final rawBatch = <String>[];  // Everything fetched via raw wikitext
+        final storyBatch = <String>[];  // Story-only pages (主线/活动/干员密录)
         for (final title in batch) {
           if (site == WikiSite.prts && operatorTitles.contains(title)) {
             opBatch.add(title);
           } else {
-            rawBatch.add(title);
+            storyBatch.add(title);
           }
         }
 
         final wikiPages = <WikiPage>[];
 
-        // 1. Fetch all non-operator pages via raw wikitext (story + other)
-        if (rawBatch.isNotEmpty) {
-          final rawPages = await _crawler.fetchRawWikitexts(site, rawBatch);
-          for (final title in rawBatch) {
-            final page = rawPages[title];
+        // 1. Fetch story pages via raw wikitext
+        if (storyBatch.isNotEmpty) {
+          final storyWikitexts = await _crawler.fetchRawWikitexts(site, storyBatch);
+          for (final title in storyBatch) {
+            final page = storyWikitexts[title];
             if (page != null) {
               wikiPages.add(page);
             }
