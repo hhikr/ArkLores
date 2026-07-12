@@ -359,25 +359,40 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   static String cleanStoryContent(String rawContent) {
     var content = rawContent;
 
-    // 1. Remove HTML comments
+    // 1. Truncate at [Image] or [image] tag to discard huge list of media URL lines
+    final imageIndex = content.indexOf('[Image]');
+    if (imageIndex != -1) {
+      content = content.substring(0, imageIndex);
+    }
+    final lowercaseImageIndex = content.indexOf('[image]');
+    if (lowercaseImageIndex != -1) {
+      content = content.substring(0, lowercaseImageIndex);
+    }
+
+    // 2. Extract and keep character names inside [name="..."] tags before stripping brackets
+    content = content.replaceAllMapped(
+      RegExp(r'\[name="([^"]+)"\]\s*'),
+      (match) => '${match.group(1)}\n',
+    );
+
+    // 3. Remove HTML comments
     content = content.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
 
-    // 2. Remove plot navigator templates (e.g. {{Navigator/plot|...}})
+    // 4. Remove plot navigator templates (e.g. {{Navigator/plot|...}})
     content = content.replaceAll(RegExp(r'\{\{[Nn]avigator/[^}]*\}\}'), '');
     content = content.replaceAll(RegExp(r'\{\{[Pp]lot[^}]*\}\}'), '');
 
-    // 3. Remove story simulator headers / starts
+    // 5. Remove story simulator headers / starts
     content = content.replaceAll(RegExp(r'\{\{剧情模拟器[^}]*'), '');
 
-    // 4. Remove game scripting macro instructions (typically enclosed in square brackets)
-    // Matches patterns like [Character(name="...", ...)], [Background(...)], [Delay(...)], [name="..."]
+    // 6. Remove game scripting macro instructions (typically enclosed in square brackets)
     content = content.replaceAll(RegExp(r'\[[A-Za-z0-9_]+(?:\([^)]*\))?\]'), '');
     content = content.replaceAll(RegExp(r'\[[A-Za-z_]+=[^\]]*\]'), '');
 
-    // 5. Remove any other square bracket command lines
+    // 7. Remove any other square bracket command lines
     content = content.replaceAll(RegExp(r'\[[A-Za-z0-9_]+.*?\]'), '');
 
-    // 6. Split, trim, and filter out structural template residues
+    // 8. Split, trim, and filter out structural template residues
     final lines = content.split('\n');
     final cleanLines = lines
         .map((line) => line.trim())

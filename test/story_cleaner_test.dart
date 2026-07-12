@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arklores/core/rag/wiki_indexing_provider.dart';
 import 'package:arklores/core/rag/chunker.dart';
@@ -21,6 +22,9 @@ void main() {
       expect(pages.isNotEmpty, isTrue, reason: 'Failed to fetch the page from PRTS API');
       final page = pages.first;
 
+      // Write raw content to file for local debugging
+      File('raw_page.txt').writeAsStringSync(page.content);
+
       print('✓ Page successfully fetched: ${page.title}');
       print('📝 Raw content length: ${page.content.length} characters');
 
@@ -38,9 +42,10 @@ void main() {
       expect(cleaned.contains('Delay('), isFalse);
       
       // 5. Assertions to verify that actual dialogues and narrations were preserved
-      // PRTS 0-10 Beg dialogue features Amiya and Ch'en
       expect(cleaned.contains('阿米娅'), isTrue);
       expect(cleaned.contains('陈'), isTrue);
+      expect(cleaned.contains('梅菲斯特'), isTrue);
+      expect(cleaned.contains('临光'), isTrue);
 
       // Print preview of the cleaned script
       print('\n=== Cleaned Script Dialogue Preview (First 500 chars) ===');
@@ -52,6 +57,7 @@ void main() {
       const chunker = Chunker();
       final chunks = chunker.chunkByHeadings(cleaned, pageTitle: page.title);
       expect(chunks.isNotEmpty, isTrue);
+      expect(chunks.length < 10, isTrue, reason: 'Chunk count is too high: ${chunks.length}');
 
       print('\n=== Chunking Results (Total: ${chunks.length} chunks) ===');
       for (var i = 0; i < chunks.length; i++) {
