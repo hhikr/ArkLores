@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import 'wiki_dark_mode.dart';
 import 'wiki_toolbar.dart';
@@ -47,15 +48,15 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   final List<String> _titles =
       List.filled(_wikiSites.length, '');
 
+  /// Current page URL per tab.
+  final List<String> _currentUrls = List.filled(_wikiSites.length, '');
+
   /// Navigation state per tab.
   final List<bool> _canGoBack = List.filled(_wikiSites.length, false);
   final List<bool> _canGoForward = List.filled(_wikiSites.length, false);
 
   /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = true;
-
-  /// Bookmark toggle state (placeholder — wired up in T6).
-  bool _isBookmarked = false;
 
   @override
   void initState() {
@@ -110,8 +111,16 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   void _toggleBookmark() {
-    // Placeholder — will connect to BookmarkProvider in T6.
-    setState(() => _isBookmarked = !_isBookmarked);
+    final idx = _tabController.index;
+    final url = _currentUrls[idx];
+    if (url.isEmpty) return;
+    final title = _titles[idx].isNotEmpty ? _titles[idx] : _wikiSites[idx].label;
+    final site = idx == 0 ? 'prts' : 'endfield';
+    ref.read(bookmarkProvider.notifier).toggle(
+          title: title,
+          url: url,
+          site: site,
+        );
   }
 
   void _openBookmarks() {
@@ -127,6 +136,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void _onTitleChanged(int index, String? title) {
     if (title != null && title != _titles[index]) {
       setState(() => _titles[index] = title);
+    }
+  }
+
+  void _onUrlChanged(int index, String url) {
+    if (url != _currentUrls[index]) {
+      setState(() => _currentUrls[index] = url);
     }
   }
 
@@ -148,14 +163,21 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final bookmarkAsync = ref.watch(bookmarkProvider);
 
     // Sync dark mode toggle with app theme on first build or theme switch.
     if (_isDarkMode != theme.isDark) {
-      // Defer the state change to avoid build-time setState.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _toggleDarkModeFromTheme(theme.isDark);
       });
     }
+
+    // Determine if the current page is bookmarked.
+    final currentUrl = _currentUrls[_tabController.index];
+    final isBookmarked = bookmarkAsync.whenOrNull(
+          data: (_) => ref.read(bookmarkProvider.notifier).isBookmarked(currentUrl),
+        ) ??
+        false;
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
@@ -168,7 +190,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               canGoForward: _canGoForward[_tabController.index],
               currentTitle: _titles[_tabController.index],
               isDarkMode: _isDarkMode,
-              isBookmarked: _isBookmarked,
+              isBookmarked: isBookmarked,
               onBack: _goBack,
               onForward: _goForward,
               onRefresh: _reload,
@@ -219,6 +241,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     isDarkMode: _isDarkMode,
                     onControllerCreated: _onControllerCreated,
                     onTitleChanged: _onTitleChanged,
+                    onUrlChanged: _onUrlChanged,
                     onHistoryChanged: _onHistoryChanged,
                   );
                 }),
@@ -241,6 +264,7 @@ class _WikiTabView extends StatefulWidget {
   final bool isDarkMode;
   final void Function(int, InAppWebViewController) onControllerCreated;
   final void Function(int, String?) onTitleChanged;
+  final void Function(int, String) onUrlChanged;
   final Future<void> Function(int, bool, bool) onHistoryChanged;
 
   const _WikiTabView({
@@ -249,6 +273,7 @@ class _WikiTabView extends StatefulWidget {
     required this.isDarkMode,
     required this.onControllerCreated,
     required this.onTitleChanged,
+    required this.onUrlChanged,
     required this.onHistoryChanged,
   });
 
@@ -292,6 +317,9 @@ class _WikiTabViewState extends State<_WikiTabView>
         widget.onTitleChanged(widget.index, title);
       },
       onUpdateVisitedHistory: (controller, url, isReload) async {
+        if (url != null) {
+          widget.onUrlChanged(widget.index, url.toString());
+        }
         final back = await controller.canGoBack();
         final forward = await controller.canGoForward();
         await widget.onHistoryChanged(widget.index, back, forward);
