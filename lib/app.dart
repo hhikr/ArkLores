@@ -45,7 +45,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           );
         },
         child: KeyedSubtree(
-          key: ValueKey('${theme.themeName}_$_currentIndex'),
+          key: ValueKey('page_${theme.themeName}'),
           child: IndexedStack(
             index: _currentIndex,
             children: _pages,
