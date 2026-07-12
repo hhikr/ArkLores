@@ -460,10 +460,12 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
     return cleanLines.join('\n');
   }
 
-  /// Parses parameters from mediawiki templates, supporting nested structures.
-  /// Merges parameters if the template appears multiple times.
-  static Map<String, String> parseTemplate(String wikitext, String templateName) {
-    final params = <String, String>{};
+  /// Parses all occurrences of a template in a mediawiki wikitext.
+  ///
+  /// Returns a list of maps, where each map contains the key-value parameters
+  /// parsed from one template call. Supports nested curly/square brackets.
+  static List<Map<String, String>> parseAllTemplates(String wikitext, String templateName) {
+    final results = <Map<String, String>>[];
     final startKey = '{{$templateName';
     
     int searchOffset = 0;
@@ -498,6 +500,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       }
       
       final body = wikitext.substring(startIdx + startKey.length, endIdx - 2);
+      final params = <String, String>{};
       final parts = <String>[];
       int currentStart = 0;
       int bracketDepth = 0;
@@ -534,10 +537,44 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         }
       }
       
+      results.add(params);
       searchOffset = endIdx;
     }
     
-    return params;
+    return results;
+  }
+
+  /// Parses the first occurrence of a template, falling back to empty map if not found.
+  static Map<String, String> parseTemplate(String wikitext, String templateName) {
+    final list = parseAllTemplates(wikitext, templateName);
+    return list.isEmpty ? <String, String>{} : list.first;
+  }
+
+  /// Cleans wikitext/HTML styling markup to obtain pure readable text.
+  static String cleanFormattedText(String text) {
+    var clean = text;
+    // 1. Remove {{color|#XXXXXX|...}}
+    clean = clean.replaceAllMapped(
+      RegExp(r'\{\{[Cc]olor\|#[0-9A-Fa-f]{6}\|([^}]+)\}\}'),
+      (m) => m.group(1)!,
+    );
+    // 2. Remove {{术语|...|...}}
+    clean = clean.replaceAllMapped(
+      RegExp(r'\{\{术语\|[^|]*\|([^}]+)\}\}'),
+      (m) => m.group(1)!,
+    );
+    // 3. Remove {{popup|内容=...}}
+    clean = clean.replaceAll(RegExp(r'\{\{popup\|内容=[^}]*\}\}'), '');
+    // 4. Remove html-like tags
+    clean = clean.replaceAll(RegExp(r'<[^>]*>'), '');
+    // 5. Remove double brackets [[...]]
+    clean = clean.replaceAllMapped(
+      RegExp(r'\[\[(?:[^|\]]*\|)?([^\]]+)\]\]'),
+      (m) => m.group(1)!,
+    );
+    // 6. Remove remaining simple templates
+    clean = clean.replaceAll(RegExp(r'\{\{[^{}]*\}\}'), '');
+    return clean.trim();
   }
 
   /// Assembles operator raw wikitexts (main page, voice, token) into a unified markdown.
@@ -591,7 +628,129 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       }
     }
 
-    // --- 2. Parse Token Description ---
+    // --- 2. Parse Talents ---
+    final talentTemplates = parseAllTemplates(mainWikitext, '天赋列表3');
+    if (talentTemplates.isNotEmpty) {
+      sb.writeln('## 天赋设定');
+      for (final t in talentTemplates) {
+        final name = t['天赋1'] ?? '';
+        final category = t['天赋'] ?? '';
+        if (name.isNotEmpty) {
+          sb.writeln('### $category：$name');
+          for (int j = 1; j <= 10; j++) {
+            final cond = t['天赋$j条件'] ?? '';
+            final eff = t['天赋$j效果'] ?? '';
+            if (eff.isNotEmpty) {
+              final condStr = cond.isNotEmpty ? '（$cond）' : '';
+              sb.writeln('- 效果$condStr：${cleanFormattedText(eff)}');
+            }
+          }
+          sb.writeln('');
+        }
+      }
+    }
+
+    // --- 3. Parse Skills ---
+    final skillTemplates = parseAllTemplates(mainWikitext, '技能');
+    if (skillTemplates.isNotEmpty) {
+      sb.writeln('## 技能设定');
+      for (final s in skillTemplates) {
+        final name = s['技能名'] ?? '';
+        if (name.isNotEmpty) {
+          sb.writeln('### 技能：$name');
+          final type1 = s['技能类型1'] ?? '';
+          final type2 = s['技能类型2'] ?? '';
+          if (type1.isNotEmpty || type2.isNotEmpty) {
+            sb.writeln('- 类型：$type1 / $type2');
+          }
+          final desc7 = s['技能7描述'] ?? '';
+          final descM3 = s['技能专精3描述'] ?? '';
+          if (desc7.isNotEmpty) {
+            sb.writeln('- 7级效果：${cleanFormattedText(desc7)}');
+          }
+          if (descM3.isNotEmpty) {
+            sb.writeln('- 专精3效果：${cleanFormattedText(descM3)}');
+          }
+          sb.writeln('');
+        }
+      }
+    }
+
+    // --- 4. Parse RIIC/Base Skills ---
+    final baseTemplates = parseAllTemplates(mainWikitext, '后勤技能');
+    if (baseTemplates.isNotEmpty) {
+      sb.writeln('## 后勤技能');
+      for (final b in baseTemplates) {
+        for (int j = 1; j <= 5; j++) {
+          for (int k = 1; k <= 5; k++) {
+            final name = b['后勤技能$j-$k'];
+            final phase = b['后勤技能$j-${k}阶段'] ?? '';
+            if (name != null && name.trim().isNotEmpty) {
+              final phaseStr = phase.isNotEmpty ? '（$phase）' : '';
+              sb.writeln('- 后勤技能$phaseStr：${name.trim()}');
+            }
+          }
+        }
+      }
+      sb.writeln('');
+    }
+
+    // --- 5. Parse Modules ---
+    final moduleTemplates = parseAllTemplates(mainWikitext, '模组');
+    if (moduleTemplates.isNotEmpty) {
+      sb.writeln('## 模组设定');
+      for (final m in moduleTemplates) {
+        final name = m['名称'] ?? '';
+        final info = m['基础信息'] ?? '';
+        if (name.isNotEmpty) {
+          sb.writeln('### 模组：$name');
+          if (info.isNotEmpty) {
+            final cleanInfo = cleanFormattedText(info.replaceAll('<br>', '\n').replaceAll('<br/>', '\n'));
+            sb.writeln('$cleanInfo\n');
+          }
+        }
+      }
+    }
+
+    // --- 6. Parse Paradox Simulation ---
+    final paradoxTemplates = parseAllTemplates(mainWikitext, '悖论模拟');
+    if (paradoxTemplates.isNotEmpty) {
+      sb.writeln('## 悖论模拟');
+      for (final p in paradoxTemplates) {
+        final name = p['name'] ?? '';
+        final desc = p['description'] ?? '';
+        if (name.isNotEmpty) {
+          sb.writeln('### 悖论模拟：$name');
+          if (desc.isNotEmpty) {
+            sb.writeln('${cleanFormattedText(desc)}\n');
+          }
+        }
+      }
+    }
+
+    // --- 7. Parse Operator Records List ---
+    final miluTemplates = parseAllTemplates(mainWikitext, '干员密录/list');
+    if (miluTemplates.isNotEmpty) {
+      sb.writeln('## 干员密录一览');
+      for (final m in miluTemplates) {
+        final name = m['storySetName'] ?? '';
+        final intro = m['storyIntro1'] ?? '';
+        final page = m['storyTxt1'] ?? '';
+        if (name.isNotEmpty) {
+          final resolvedPage = page.replaceAll('{{FULLPAGENAME}}', operatorName).trim();
+          sb.writeln('### 干员密录：$name');
+          if (intro.isNotEmpty) {
+            sb.writeln('- 介绍：${cleanFormattedText(intro)}');
+          }
+          if (resolvedPage.isNotEmpty) {
+            sb.writeln('- 剧情页面：$resolvedPage');
+          }
+          sb.writeln('');
+        }
+      }
+    }
+
+    // --- 8. Parse Token Description ---
     if (tokenWikitext.isNotEmpty) {
       final tokenInfo = parseTemplate(tokenWikitext, '道具信息');
       final desc = tokenInfo['描述'];
@@ -621,7 +780,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       }
     }
 
-    // --- 3. Parse Voice Records ---
+    // --- 9. Parse Voice Records ---
     if (voiceWikitext.isNotEmpty) {
       final voiceTable = parseTemplate(voiceWikitext, 'VoiceTable');
       final voiceList = <String>[];
@@ -637,7 +796,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
             final cnDialogue = match.group(1)!.trim();
             voiceList.add('- ${title.trim()}：$cnDialogue');
           } else {
-            // Fallback: check if we have standard wikitext that can be trimmed
+            // Fallback
             if (!rawDialogue.contains('{{VoiceData/word')) {
               voiceList.add('- ${title.trim()}：${rawDialogue.trim()}');
             }
