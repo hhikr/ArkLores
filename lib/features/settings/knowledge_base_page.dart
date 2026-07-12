@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/rag/chunker.dart';
-import '../../core/rag/embedder_provider.dart';
 import '../../core/rag/vector_store.dart';
 import '../../core/rag/vector_store_provider.dart';
-import '../../core/wiki/wiki_crawler.dart';
+import '../../core/rag/wiki_indexing_provider.dart';
 import '../../core/wiki/wiki_models.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -14,24 +12,8 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
 /// Knowledge base management page.
-class KnowledgeBasePage extends ConsumerStatefulWidget {
+class KnowledgeBasePage extends ConsumerWidget {
   const KnowledgeBasePage({super.key});
-
-  @override
-  ConsumerState<KnowledgeBasePage> createState() => _KnowledgeBasePageState();
-}
-
-class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
-  bool _isIndexing = false;
-  String _indexingStatus = '';
-  double _indexingProgress = 0.0;
-  String? _error;
-
-  /// Timestamp of the last progress [setState] call.
-  /// Used to throttle UI updates during the embedding loop so the
-  /// widget tree is not rebuilt on every single page (which compounds
-  /// the main-thread load).
-  DateTime? _lastProgressUpdate;
 
   static const List<String> _prtsCategories = [
     'Category:干员',
@@ -47,10 +29,43 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final statsAsync = ref.watch(vectorStoreStatsProvider);
     final config = ref.watch(apiConfigProvider);
+    final indexingState = ref.watch(wikiIndexingProvider);
+
+    // Translate the enum status into a readable string
+    String statusText = '';
+    switch (indexingState.status) {
+      case WikiIndexingStatus.starting:
+        statusText = context.t.kbStartingCrawl(indexingState.currentSiteName ?? '');
+        break;
+      case WikiIndexingStatus.fetchingTitles:
+        statusText = '正在拉取维基页面目录...';
+        break;
+      case WikiIndexingStatus.fetchingTouched:
+        statusText = '正在检查更新时间戳...';
+        break;
+      case WikiIndexingStatus.cleaningUp:
+        statusText = '正在清理本地已废弃的数据...';
+        break;
+      case WikiIndexingStatus.embedding:
+        statusText = '正在生成向量：${indexingState.currentItemTitle} (${indexingState.processedCount}/${indexingState.totalCount}，跳过 ${indexingState.skippedCount} 页)';
+        break;
+      case WikiIndexingStatus.retryingFailed:
+        statusText = '正在重试失败向量：已处理 ${indexingState.processedCount}/${indexingState.totalCount}';
+        break;
+      case WikiIndexingStatus.completed:
+        statusText = '更新完成！';
+        break;
+      case WikiIndexingStatus.failed:
+        statusText = '更新失败：${indexingState.error}';
+        break;
+      case WikiIndexingStatus.idle:
+        statusText = '';
+        break;
+    }
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
@@ -102,55 +117,141 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           ),
           const SizedBox(height: 12),
           statsAsync.when(
-            data: (stats) => _buildStatsGrid(stats, theme),
+            data: (stats) => _buildStatsGrid(context, stats, theme),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) => _buildErrorCard(
               '${context.t.materialsLoadFailed} $err', theme),
           ),
           const SizedBox(height: 24),
 
-          if (_isIndexing) ...[
+          // Failed chunks alert block (Q3 retry)
+          statsAsync.when(
+            data: (stats) {
+              if (stats.failedChunks > 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: ThemeAwareCard(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline_rounded, color: theme.danger, size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '发现 ${stats.failedChunks} 个条目 Embedding 失败',
+                                style: theme.bodyFont.copyWith(
+                                  color: theme.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '可能由于 Token 超限或网络接口波动导致。这些条目暂以零向量存储，无法被 AI 检索。您可以点击重试重新获取其向量。',
+                                style: theme.bodyFont.copyWith(
+                                  color: theme.textSecondary,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: indexingState.isIndexing
+                              ? null
+                              : () => ref
+                                  .read(wikiIndexingProvider.notifier)
+                                  .retryFailedEmbeddings(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.danger.withValues(alpha: 0.15),
+                            foregroundColor: theme.danger,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            '立即重试',
+                            style: theme.titleFont.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+
+          // Common indexing progress panel
+          if (indexingState.isIndexing || indexingState.status == WikiIndexingStatus.completed || indexingState.status == WikiIndexingStatus.failed) ...[
             ThemeAwareCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: theme.accentPrimary,
+                      if (indexingState.isIndexing)
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.accentPrimary,
+                          ),
+                        )
+                      else
+                        Icon(
+                          indexingState.status == WikiIndexingStatus.completed
+                              ? Icons.check_circle_outline_rounded
+                              : Icons.error_outline_rounded,
+                          color: indexingState.status == WikiIndexingStatus.completed
+                              ? theme.accentPrimary
+                              : theme.danger,
+                          size: 20,
                         ),
-                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          _indexingStatus,
+                          statusText,
                           style: theme.bodyFont.copyWith(fontSize: 14),
                         ),
                       ),
+                      if (indexingState.status == WikiIndexingStatus.completed || indexingState.status == WikiIndexingStatus.failed)
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: () => ref.read(wikiIndexingProvider.notifier).reset(),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: _indexingProgress,
-                      backgroundColor: theme.divider,
-                      valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-                      minHeight: 6,
+                  if (indexingState.isIndexing) ...[
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: indexingState.progress,
+                        backgroundColor: theme.divider,
+                        valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+                        minHeight: 6,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-
-          if (_error != null) ...[
-            _buildErrorCard(_error!, theme),
             const SizedBox(height: 16),
           ],
 
@@ -160,19 +261,27 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           ),
           const SizedBox(height: 12),
           _buildWikiSection(
+            context: context,
+            ref: ref,
             theme: theme,
             site: WikiSite.prts,
             icon: Icons.language_rounded,
-            disabled: !config.isValid || _isIndexing,
-            onUpdate: () => _indexWiki(WikiSite.prts, _prtsCategories),
+            disabled: !config.isValid || indexingState.isIndexing,
+            onUpdate: () => ref
+                .read(wikiIndexingProvider.notifier)
+                .indexWiki(WikiSite.prts, _prtsCategories),
           ),
           const SizedBox(height: 12),
           _buildWikiSection(
+            context: context,
+            ref: ref,
             theme: theme,
             site: WikiSite.endfield,
             icon: Icons.language_rounded,
-            disabled: !config.isValid || _isIndexing,
-            onUpdate: () => _indexWiki(WikiSite.endfield, _endfieldCategories),
+            disabled: !config.isValid || indexingState.isIndexing,
+            onUpdate: () => ref
+                .read(wikiIndexingProvider.notifier)
+                .indexWiki(WikiSite.endfield, _endfieldCategories),
           ),
           const SizedBox(height: 32),
 
@@ -205,25 +314,26 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     );
   }
 
-  Widget _buildStatsGrid(VectorStoreStats stats, AppThemeTokens theme) {
+  Widget _buildStatsGrid(
+      BuildContext context, VectorStoreStats stats, AppThemeTokens theme) {
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: [
-        _statTile(context.t.kbTotalChunks, '${stats.totalChunks}',
+        _statTile(context, context.t.kbTotalChunks, '${stats.totalChunks}',
             Icons.dashboard_rounded, theme),
-        _statTile(context.t.kbWikiChunks, '${stats.wikiChunks}',
+        _statTile(context, context.t.kbWikiChunks, '${stats.wikiChunks}',
             Icons.language_rounded, theme),
-        _statTile(context.t.kbBookChunks, '${stats.bookChunks}',
+        _statTile(context, context.t.kbBookChunks, '${stats.bookChunks}',
             Icons.menu_book_rounded, theme),
-        _statTile(context.t.kbBooks, '${stats.totalBooks}',
+        _statTile(context, context.t.kbBooks, '${stats.totalBooks}',
             Icons.book_rounded, theme),
       ],
     );
   }
 
-  Widget _statTile(
-      String label, String value, IconData icon, AppThemeTokens theme) {
+  Widget _statTile(BuildContext context, String label, String value,
+      IconData icon, AppThemeTokens theme) {
     return SizedBox(
       width: (MediaQuery.of(context).size.width - 56) / 2,
       child: ThemeAwareCard(
@@ -245,12 +355,18 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   }
 
   Widget _buildWikiSection({
+    required BuildContext context,
+    required WidgetRef ref,
     required AppThemeTokens theme,
     required WikiSite site,
     required IconData icon,
     required bool disabled,
     required VoidCallback onUpdate,
   }) {
+    final indexingState = ref.watch(wikiIndexingProvider);
+    final isCurrentIndexing =
+        indexingState.isIndexing && indexingState.currentSiteName == site.displayName;
+
     return ThemeAwareCard(
       child: Row(
         children: [
@@ -273,9 +389,11 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           const SizedBox(width: 12),
           ElevatedButton.icon(
             onPressed: disabled ? null : onUpdate,
-            icon: const Icon(Icons.sync_rounded, size: 18),
+            icon: Icon(
+                isCurrentIndexing ? Icons.hourglass_empty_rounded : Icons.sync_rounded,
+                size: 18),
             label: Text(
-              _isIndexing ? context.t.kbIndexing : context.t.kbUpdate,
+              isCurrentIndexing ? context.t.kbIndexing : context.t.kbUpdate,
               style: theme.titleFont.copyWith(fontSize: 13),
             ),
             style: ElevatedButton.styleFrom(
@@ -308,175 +426,5 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         ],
       ),
     );
-  }
-
-  Future<void> _indexWiki(WikiSite site, List<String> categories) async {
-    if (_isIndexing) return;
-
-    setState(() {
-      _isIndexing = true;
-      _indexingProgress = 0.0;
-      _indexingStatus = context.t.kbStartingCrawl(site.displayName);
-      _error = null;
-    });
-
-    try {
-      final crawler = MediaWikiCrawler();
-      final chunker = const Chunker();
-      final vectorStore = ref.read(vectorStoreProvider);
-      final embedder = ref.read(embedderProvider);
-
-      // Phase 1: crawl all categories, deduplicate pages by title.
-      final allPagesByTitle = <String, WikiPage>{};
-
-      for (var ci = 0; ci < categories.length; ci++) {
-        final category = categories[ci];
-
-        setState(() {
-          _indexingStatus =
-              context.t.kbCrawlingPages(allPagesByTitle.length, site.displayName);
-          _indexingProgress = ci / categories.length;
-        });
-
-        final pages = await crawler.crawlCategory(
-          site: site,
-          categoryName: category,
-          onProgress: (progress) {
-            if (!mounted) return;
-            setState(() {
-              // cumulative deduplicated count (not per-category counter)
-              _indexingStatus = context.t.kbCrawlingPages(
-                allPagesByTitle.length + progress.pagesFetched,
-                site.displayName,
-              );
-            });
-          },
-        );
-
-        if (pages.isEmpty) continue;
-
-        for (final page in pages) {
-          allPagesByTitle.putIfAbsent(page.title, () => page);
-        }
-      }
-
-      final dedupedPages = allPagesByTitle.values.toList();
-      if (dedupedPages.isEmpty) {
-        setState(() {
-          _isIndexing = false;
-          _indexingStatus = context.t.kbCompleted(0, 0);
-        });
-        return;
-      }
-
-      // Phase 2: process each unique page (chunk → embed → store).
-      // Each page's failure is caught individually so one API error
-      // doesn't abort the entire indexing run. If the API is
-      // unresponsive for many consecutive pages, stop early.
-      final totalUnique = dedupedPages.length;
-      var processedPages = 0;
-      var totalChunks = 0;
-      var skippedPages = 0;
-      var consecutiveFailures = 0;
-      const int maxConsecutiveFailures = 10;
-
-      for (final page in dedupedPages) {
-        if (consecutiveFailures >= maxConsecutiveFailures) {
-          if (mounted) {
-            setState(() {
-              _indexingStatus = '索引已中止：嵌入 API 连续 '
-                  '$maxConsecutiveFailures 次无响应，请检查网络连接和 API Key。';
-            });
-          }
-          break;
-        }
-
-        try {
-          final chunks = chunker.chunkByHeadings(
-            page.content,
-            pageTitle: page.title,
-          );
-
-          if (chunks.isNotEmpty) {
-            if (mounted) {
-              setState(() {
-                _indexingStatus = context.t.kbEmbedding(chunks.length, page.title);
-              });
-            }
-
-            final texts = chunks.map((c) => c.content).toList();
-            final result = await embedder.embedBatch(texts);
-
-            if (result.vectors.isNotEmpty) {
-              await vectorStore.insertChunks(
-                chunks,
-                result.vectors,
-                sourceType: 'wiki',
-                sourceUrl:
-                    '${site == WikiSite.prts ? 'https://prts.wiki' : 'https://wiki.endfield.moe'}/w/${page.title}',
-                wiki: site.key,
-              );
-              totalChunks += result.vectors.length;
-            }
-          }
-          consecutiveFailures = 0;
-        } catch (e) {
-          // Log the error for debugging (visible via `flutter logs`
-          // in debug mode or `adb logcat -s flutter`).
-          debugPrint('[IndexWiki] skipped "${page.title}": $e');
-          skippedPages++;
-          consecutiveFailures++;
-        }
-
-        processedPages++;
-        final now = DateTime.now();
-        if (mounted &&
-            (_lastProgressUpdate == null ||
-                now.difference(_lastProgressUpdate!) >
-                    const Duration(milliseconds: 300))) {
-          _lastProgressUpdate = now;
-          setState(() {
-            _indexingProgress =
-                (processedPages / totalUnique).clamp(0.0, 1.0);
-          });
-        }
-
-        // Yield to the Flutter event loop between pages so the rendering
-        // scheduler can produce frames while the next embed request is
-        // being prepared. Future.delayed(zero) schedules a macrotask
-        // (not a microtask), giving the engine a genuine opportunity to run.
-        await Future.delayed(Duration.zero);
-      }
-
-      ref.invalidate(vectorStoreStatsProvider);
-
-      setState(() {
-        _isIndexing = false;
-        _indexingProgress = 1.0;
-        final baseMsg = context.t.kbCompleted(totalChunks, totalUnique);
-        _indexingStatus = skippedPages > 0
-            ? '$baseMsg （因错误跳过 $skippedPages 页）'
-            : baseMsg;
-      });
-
-      Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) {
-          setState(() {
-            _indexingStatus = '';
-            _indexingProgress = 0.0;
-          });
-        }
-      });
-    } catch (e) {
-      setState(() {
-        _isIndexing = false;
-        _error = context.t.kbFailed(e.toString());
-        _indexingStatus = '';
-      });
-
-      Future.delayed(const Duration(seconds: 8), () {
-        if (mounted) setState(() => _error = null);
-      });
-    }
   }
 }
