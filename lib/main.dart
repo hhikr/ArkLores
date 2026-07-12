@@ -28,7 +28,7 @@ class ArkLoresApp extends ConsumerWidget {
       darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: theme.bgPrimary,
       ),
-      theme: ThemeData.dark(useMaterial3: true).copyWith(
+      theme: ThemeData.light(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: theme.bgPrimary,
       ),
       home: const MainShell(),
