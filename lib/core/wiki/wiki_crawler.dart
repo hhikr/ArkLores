@@ -149,6 +149,62 @@ class MediaWikiCrawler {
     return pages;
   }
 
+  /// Fetches the last modification (touched) timestamps for a list of page titles.
+  ///
+  /// Splits into batches of [_batchSize] to avoid URL length limitations.
+  /// Returns a map of title -> last touched timestamp (seconds).
+  Future<Map<String, int>> fetchPagesLastTouched(
+    WikiSite site,
+    List<String> titles,
+  ) async {
+    if (titles.isEmpty) return {};
+
+    final result = <String, int>{};
+
+    for (var i = 0; i < titles.length; i += _batchSize) {
+      final batch = titles.sublist(
+        i,
+        (i + _batchSize > titles.length) ? titles.length : i + _batchSize,
+      );
+
+      final response = await _queryApi(site, {
+        'action': 'query',
+        'format': 'json',
+        'titles': batch.join('|'),
+        'prop': 'info',
+      });
+
+      final query = response['query'] as Map<String, dynamic>?;
+      final pagesJson = query?['pages'] as Map<String, dynamic>? ?? {};
+
+      for (final entry in pagesJson.entries) {
+        final pageData = entry.value as Map<String, dynamic>?;
+        if (pageData == null) continue;
+        if (pageData['missing'] == true) continue;
+
+        final title = pageData['title'] as String? ?? '';
+        final touchedStr = pageData['touched'] as String? ?? '';
+
+        if (title.isNotEmpty && touchedStr.isNotEmpty) {
+          try {
+            final parsedDate = DateTime.parse(touchedStr);
+            result[title] = parsedDate.millisecondsSinceEpoch ~/ 1000;
+          } catch (_) {
+            // Fallback to 0 if parsing fails.
+            result[title] = 0;
+          }
+        }
+      }
+
+      // Rate limiting delay.
+      if (i + _batchSize < titles.length) {
+        await Future.delayed(_requestDelay);
+      }
+    }
+
+    return result;
+  }
+
   /// Fetches a list of top-level category names for the given wiki site.
   Future<List<String>> fetchTopCategories(WikiSite site) async {
     final result = await _queryApi(site, {
