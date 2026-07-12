@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'chunker.dart';
+import 'embedder.dart';
 import 'embedder_provider.dart';
 import 'vector_store.dart';
 import 'vector_store_provider.dart';
