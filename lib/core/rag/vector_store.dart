@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
+
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
@@ -46,6 +48,27 @@ class VectorStoreStats {
     this.useVectorExtension = false,
   });
 }
+
+// ── Top-level helper for compute() isolate ─────────────────────────────────
+// Must be top-level (not a class member) so Flutter's isolate spawner can
+// locate it without capturing any class state.
+
+/// Converts a batch of embedding vectors to SQLite BLOB byte arrays.
+///
+/// Each double is stored as 8 bytes (Float64, big-endian). Running this in
+/// a background isolate via [compute] keeps the main/UI thread free during
+/// large indexing operations.
+List<Uint8List> _blobifyEmbeddings(List<List<double>> embeddings) {
+  return embeddings.map((vec) {
+    final buffer = ByteData(vec.length * 8);
+    for (var i = 0; i < vec.length; i++) {
+      buffer.setFloat64(i * 8, vec[i]);
+    }
+    return buffer.buffer.asUint8List();
+  }).toList();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Vector store backed by sqflite with pure-Dart cosine similarity search.
 ///
@@ -143,6 +166,9 @@ class VectorStore {
   }
 
   /// Inserts multiple chunks with their embeddings in a transaction.
+  ///
+  /// BLOB serialization is performed in a background isolate via [compute]
+  /// so the main/UI thread is not blocked during large indexing batches.
   Future<void> insertChunks(
     List<Chunk> chunks,
     List<List<double>> embeddings, {
@@ -154,6 +180,14 @@ class VectorStore {
     if (chunks.isEmpty) return;
     await initialize();
 
+    // Offload the CPU-intensive Float64 → BLOB conversion to a background
+    // isolate. This is the primary cause of UI-thread jank/black-screen
+    // during the embedding phase: each 1536-dim vector requires ~12 KB of
+    // ByteData writes, and doing this for every chunk in the main isolate
+    // starves the Flutter rendering pipeline.
+    final blobs = await compute(_blobifyEmbeddings, embeddings);
+
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await _fallbackDb!.transaction((txn) async {
       for (var i = 0; i < chunks.length; i++) {
         await txn.insert(
@@ -167,7 +201,7 @@ class VectorStore {
             'page_title': chunks[i].pageTitle,
             'section': chunks[i].section,
             'content': chunks[i].content,
-            'updated_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            'updated_at': now,
           },
           conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
         );
@@ -175,7 +209,7 @@ class VectorStore {
           'chunk_embeddings',
           {
             'chunk_id': chunks[i].id,
-            'embedding': _doubleListToBlob(embeddings[i]),
+            'embedding': blobs[i],
           },
           conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
         );
