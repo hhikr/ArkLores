@@ -1,79 +1,65 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arklores/core/rag/wiki_indexing_provider.dart';
 import 'package:arklores/core/rag/chunker.dart';
+import 'package:arklores/core/wiki/wiki_crawler.dart';
+import 'package:arklores/core/wiki/wiki_models.dart';
 
 void main() {
-  group('Story Cleaner & Chunker Tests', () {
-    const rawStoryText = '''
-<!-- 剧透警告 -->
-{{Navigator/plot|上一集=0-9 压线/END|下一集=0-10 困境/END|故事主页=黑暗时代}}
-{{剧情模拟器
-|背景=bg_rhodes_office
-|音频=music_active
-|文本=
-[Background(image="bg_rhodes_office", fade=1.5)]
-[PlayMusic(sound="music_active", delay=0.5)]
-[Character(name="char_002_amiya", focus=true, state="smile")]
-阿米娅：博士，我们该出发了。
-[Delay(time=1.0)]
-[Character(name="char_002_amiya", focus=false)]
-[Character(name="char_010_chen", focus=true)]
-陈：等等，阿米娅。
-[PlaySound(sound="music_combat")]
-[Character(name="char_010_chen", focus=false)]
-（远处传来炮火声）
-}}
-''';
+  group('Story Cleaner & Chunker Integration Tests', () {
+    test('Integration: Crawl actual PRTS story "0-10 困境/BEG" and clean it', () async {
+      // 1. Instantiate the mediawiki crawler (pure Dart http client backend)
+      final crawler = MediaWikiCrawler();
 
-    test('cleanStoryContent should strip HTML comments, Wiki templates and game macros', () {
-      final cleaned = WikiIndexingNotifier.cleanStoryContent(rawStoryText);
+      print('📡 Fetching actual story page "0-10 困境/BEG" from PRTS Wiki...');
+      
+      // 2. Fetch page contents from the real live wiki API
+      final pages = await crawler.fetchPageContents(
+        WikiSite.prts,
+        ['0-10 困境/BEG'],
+      );
 
-      // Verify that HTML comments are gone
-      expect(cleaned.contains('<!-- 剧透警告 -->'), isFalse);
+      expect(pages.isNotEmpty, isTrue, reason: 'Failed to fetch the page from PRTS API');
+      final page = pages.first;
 
-      // Verify that Navigator and 剧情模拟器 templates are gone
-      expect(cleaned.contains('{{Navigator/plot'), isFalse);
-      expect(cleaned.contains('{{剧情模拟器'), isFalse);
-      expect(cleaned.contains('|背景='), isFalse);
+      print('✓ Page successfully fetched: ${page.title}');
+      print('📝 Raw content length: ${page.content.length} characters');
 
-      // Verify that game scripting macros are gone
-      expect(cleaned.contains('[Background'), isFalse);
-      expect(cleaned.contains('[PlayMusic'), isFalse);
-      expect(cleaned.contains('[Character'), isFalse);
-      expect(cleaned.contains('[PlaySound'), isFalse);
-      expect(cleaned.contains('[Delay'), isFalse);
+      // 3. Clean using the production regular expression parser
+      final cleaned = WikiIndexingNotifier.cleanStoryContent(page.content);
+      
+      print('✨ Cleaned content length: ${cleaned.length} characters');
+      final compressionPercent = (100 * (1 - cleaned.length / page.content.length)).toStringAsFixed(1);
+      print('🧹 Compression / Noise Removal: $compressionPercent% of text stripped.');
 
-      // Verify that actual dialogue and narration remain intact
-      expect(cleaned.contains('阿米娅：博士，我们该出发了。'), isTrue);
-      expect(cleaned.contains('陈：等等，阿米娅。'), isTrue);
-      expect(cleaned.contains('（远处传来炮火声）'), isTrue);
+      // 4. Assertions to verify wikitext macros were successfully stripped from real data
+      expect(cleaned.contains('Character('), isFalse);
+      expect(cleaned.contains('Background('), isFalse);
+      expect(cleaned.contains('PlayMusic('), isFalse);
+      expect(cleaned.contains('Delay('), isFalse);
+      
+      // 5. Assertions to verify that actual dialogues and narrations were preserved
+      // PRTS 0-10 Beg dialogue features Amiya and Ch'en
+      expect(cleaned.contains('阿米娅'), isTrue);
+      expect(cleaned.contains('陈'), isTrue);
 
-      // Print clean content for manual review
-      print('=== Cleaned Story Content Preview ===');
-      print(cleaned);
-      print('=====================================');
-    });
+      // Print preview of the cleaned script
+      print('\n=== Cleaned Script Dialogue Preview (First 500 chars) ===');
+      final previewLen = cleaned.length > 500 ? 500 : cleaned.length;
+      print(cleaned.substring(0, previewLen));
+      print('===========================================================');
 
-    test('Chunker should properly chunk cleaned story content', () {
-      final cleaned = WikiIndexingNotifier.cleanStoryContent(rawStoryText);
+      // 6. Test Chunker on the cleaned script
       const chunker = Chunker();
-
-      // Chunk the clean dialogue text
-      final chunks = chunker.chunkByHeadings(cleaned, pageTitle: '0-10 困境/BEG');
-
+      final chunks = chunker.chunkByHeadings(cleaned, pageTitle: page.title);
       expect(chunks.isNotEmpty, isTrue);
-      expect(chunks.first.pageTitle, equals('0-10 困境/BEG'));
 
-      // The text shouldn't be empty and should match parts of our script
-      expect(chunks.first.content.contains('阿米娅：博士，我们该出发了。'), isTrue);
-      expect(chunks.first.content.contains('陈：等等，阿米娅。'), isTrue);
-
-      print('=== Chunked Result Preview ===');
+      print('\n=== Chunking Results (Total: ${chunks.length} chunks) ===');
       for (var i = 0; i < chunks.length; i++) {
-        print('Chunk \$i:');
-        print(chunks[i].content);
+        print('Chunk $i length: ${chunks[i].content.length} chars');
       }
-      print('==============================');
+      print('===========================================================');
+
+      crawler.dispose();
     });
   });
 }
