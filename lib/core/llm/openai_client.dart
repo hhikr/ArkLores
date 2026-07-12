@@ -203,90 +203,190 @@ class OpenAICompatibleClient implements LLMClient {
     }
   }
 
-  /// Returns the embedding API key, falling back to the chat key
-  /// when the user hasn't configured a separate embedding provider.
   String get _embedApiKey =>
       config.embedApiKey.isNotEmpty ? config.embedApiKey : config.chatApiKey;
+
+  // ── Constants for the resilient embed pipeline ────────────────────────────
+
+  /// Maximum number of retries for network / rate-limit errors.
+  static const int _maxEmbedRetries = 3;
+
+  /// Maximum character count for a single text sent to the API.
+  /// Texts exceeding this are truncated before the final retry attempt.
+  /// ~4 000 chars ≈ 2 200 tokens (Chinese-heavy) — safely under most limits.
+  static const int _embedTruncationLimit = 4000;
+
+  /// Default embedding dimension used when no successful embedding has been
+  /// made yet (e.g. for the zero-vector fallback).
+  static const int _embedDefaultDim = 1536;
+
+  // ── Public embedBatch ─────────────────────────────────────────────────────
 
   @override
   Future<List<List<double>>> embedBatch(List<String> texts) async {
     _requireEmbedConfig();
-
     if (texts.isEmpty) return [];
 
-    final results = <List<double>>[];
+    // Nullable slots — null means "not yet embedded".
+    final slots = List<List<double>?>.filled(texts.length, null);
 
+    // Process in groups of 100 to stay within typical API body-size limits.
+    const batchSize = 100;
+    for (var offset = 0; offset < texts.length; offset += batchSize) {
+      final end = (offset + batchSize).clamp(0, texts.length);
+      final indices = List<int>.generate(end - offset, (i) => offset + i);
+      await _embedGroup(texts, indices, slots);
+    }
+
+    // Determine dimension from any successful result; fall back to 1536.
+    final dim = slots.firstWhere((r) => r != null && r.isNotEmpty,
+            orElse: () => null)
+        ?.length ??
+        _embedDefaultDim;
+
+    // Replace any remaining nulls (irrecoverable items) with zero vectors.
+    // Zero vectors have negligible cosine similarity against real queries, so
+    // they effectively never surface in search — but the chunk's text IS stored
+    // and can still be found via exact-match / keyword search later.
+    return [for (final s in slots) s ?? List<double>.filled(dim, 0.0)];
+  }
+
+  // ── Private: resilient recursive embedding ────────────────────────────────
+
+  /// Embeds the texts at [indices] and writes results into [slots].
+  ///
+  /// Retry / degradation ladder (applied per sub-group, not globally):
+  ///
+  /// 1. **Network / timeout** — linear back-off, up to [_maxEmbedRetries].
+  /// 2. **HTTP 429 (rate-limited)** — exponential back-off (5 → 10 → 20 → 40 s).
+  /// 3. **HTTP 400 + batch > 1** — binary split; recurse on each half.
+  ///    This isolates the bad item without discarding its neighbours.
+  /// 4. **HTTP 400 + single item** — truncate to [_embedTruncationLimit] chars
+  ///    and retry once.  Still 400 after truncation → leave slot null (zero vec).
+  /// 5. **Other non-200** — linear back-off, up to [_maxEmbedRetries].
+  Future<void> _embedGroup(
+    List<String> texts,
+    List<int> indices,
+    List<List<double>?> slots, {
+    int attempt = 0,
+  }) async {
+    if (indices.isEmpty) return;
+
+    final batch = [for (final i in indices) texts[i]];
+    final batchTimeout = Duration(
+      seconds: _timeout.inSeconds + (batch.length ~/ 10).clamp(0, 60),
+    );
+
+    // ── Send the HTTP request ────────────────────────────────────────────────
+    http.Response response;
     try {
-      // Split into batches of 100 to avoid request size limits.
-      const batchSize = 100;
-      for (var offset = 0; offset < texts.length; offset += batchSize) {
-        final batch = texts.sublist(
-          offset,
-          offset + batchSize > texts.length
-              ? texts.length
-              : offset + batchSize,
-        );
+      response = await _httpClient
+          .post(
+            Uri.parse(config.embeddingEndpoint),
+            headers: _headers(_embedApiKey),
+            body: jsonEncode({'model': config.embedModel, 'input': batch}),
+          )
+          .timeout(batchTimeout);
+    } on SocketException catch (e) {
+      if (attempt < _maxEmbedRetries) {
+        final delay = Duration(seconds: 2 * (attempt + 1));
+        debugPrint('[Embed] SocketException (attempt ${attempt + 1}/${_maxEmbedRetries}): '
+            '${e.message}. Retrying in ${delay.inSeconds}s.');
+        await Future.delayed(delay);
+        return _embedGroup(texts, indices, slots, attempt: attempt + 1);
+      }
+      debugPrint('[Embed] Giving up on ${indices.length} item(s) after repeated SocketException.');
+      return; // slots stay null → zero vectors
+    } on TimeoutException {
+      if (attempt < _maxEmbedRetries) {
+        final delay = Duration(seconds: 2 * (attempt + 1));
+        debugPrint('[Embed] Timeout (attempt ${attempt + 1}/${_maxEmbedRetries}). '
+            'Retrying in ${delay.inSeconds}s.');
+        await Future.delayed(delay);
+        return _embedGroup(texts, indices, slots, attempt: attempt + 1);
+      }
+      debugPrint('[Embed] Giving up on ${indices.length} item(s) after repeated timeouts.');
+      return;
+    }
 
-        final batchTimeout = Duration(
-          seconds: _timeout.inSeconds + (batch.length ~/ 10),
-        );
+    // ── Handle non-200 responses ─────────────────────────────────────────────
+    if (response.statusCode == 429) {
+      if (attempt < _maxEmbedRetries) {
+        final delay = Duration(seconds: 5 * (1 << attempt)); // 5, 10, 20, 40 s
+        debugPrint('[Embed] Rate-limited 429 for ${indices.length} item(s) '
+            '(attempt ${attempt + 1}). Waiting ${delay.inSeconds}s.');
+        await Future.delayed(delay);
+        return _embedGroup(texts, indices, slots, attempt: attempt + 1);
+      }
+      debugPrint('[Embed] Giving up on ${indices.length} item(s) after repeated 429.');
+      return;
+    }
 
-        // Attempt the request; on SocketException retry once.
-        //
-        // "Software caused connection abort" / "Connection reset" happens
-        // when the server closes a keep-alive TCP connection while the app
-        // was busy (e.g., during the previous BLOB compute() isolate).
-        // A 2-second pause lets the server finish teardown, then a fresh
-        // connection is opened automatically by http.Client.
-        http.Response response;
-        try {
-          response = await _httpClient
-              .post(
-                Uri.parse(config.embeddingEndpoint),
-                headers: _headers(_embedApiKey),
-                body: jsonEncode({
-                  'model': config.embedModel,
-                  'input': batch,
-                }),
-              )
-              .timeout(batchTimeout);
-        } on SocketException {
-          await Future.delayed(const Duration(seconds: 2));
-          response = await _httpClient
-              .post(
-                Uri.parse(config.embeddingEndpoint),
-                headers: _headers(_embedApiKey),
-                body: jsonEncode({
-                  'model': config.embedModel,
-                  'input': batch,
-                }),
-              )
-              .timeout(batchTimeout);
-        }
-
-        if (response.statusCode != 200) {
-          throw LLMException(
-            'Batch embedding failed',
-            statusCode: response.statusCode,
-            body: response.body,
-          );
-        }
-
-        // Parse the JSON response in a background isolate.
-        //
-        // For a batch of even 10 chunks at 1536 dims, the raw JSON body is
-        // ~230 KB. Calling jsonDecode() synchronously on the main thread
-        // blocks the Flutter rendering pipeline and causes jank/black screen.
-        final parsed =
-            await compute(_parseEmbeddingBatchResponse, response.body);
-        results.addAll(parsed);
+    if (response.statusCode == 400) {
+      if (indices.length > 1) {
+        // Binary split — one of the items is likely too long or malformed.
+        // Splitting isolates it so the rest of the batch can succeed.
+        debugPrint('[Embed] 400 on batch of ${indices.length}, binary-splitting.');
+        final mid = indices.length ~/ 2;
+        await _embedGroup(texts, indices.sublist(0, mid), slots);
+        await _embedGroup(texts, indices.sublist(mid), slots);
+        return;
       }
 
-      return results;
-    } on SocketException catch (e) {
-      throw LLMException('Network error: ${e.message}');
-    } on TimeoutException {
-      throw const LLMException('Batch embedding timed out');
+      // Single-item 400: the text itself is rejected (usually too long).
+      // Truncate and retry once.
+      final idx = indices.first;
+      final text = texts[idx];
+      if (text.length > _embedTruncationLimit) {
+        debugPrint('[Embed] Single-item 400: truncating text[$idx] '
+            '(${text.length} → $_embedTruncationLimit chars) and retrying.');
+        final truncated = text.substring(0, _embedTruncationLimit);
+        try {
+          final r = await _httpClient
+              .post(
+                Uri.parse(config.embeddingEndpoint),
+                headers: _headers(_embedApiKey),
+                body: jsonEncode(
+                    {'model': config.embedModel, 'input': [truncated]}),
+              )
+              .timeout(_timeout);
+          if (r.statusCode == 200) {
+            final parsed = await compute(_parseEmbeddingBatchResponse, r.body);
+            if (parsed.isNotEmpty) {
+              slots[idx] = parsed.first;
+              debugPrint('[Embed] Truncated text[$idx] embedded successfully.');
+              return;
+            }
+          }
+        } catch (_) {}
+        debugPrint('[Embed] Truncated text[$idx] still failed. Using zero vector.');
+      } else {
+        debugPrint('[Embed] text[$idx] (${text.length} chars) returned 400 '
+            'but is already short — using zero vector.');
+      }
+      return; // slot stays null → zero vector
+    }
+
+    if (response.statusCode != 200) {
+      if (attempt < _maxEmbedRetries) {
+        final delay = Duration(seconds: 2 * (attempt + 1));
+        debugPrint('[Embed] HTTP ${response.statusCode} for ${indices.length} item(s) '
+            '(attempt ${attempt + 1}). Retrying in ${delay.inSeconds}s.');
+        await Future.delayed(delay);
+        return _embedGroup(texts, indices, slots, attempt: attempt + 1);
+      }
+      debugPrint('[Embed] Giving up on ${indices.length} item(s) after '
+          'repeated HTTP ${response.statusCode}.');
+      return;
+    }
+
+    // ── Parse successful response ────────────────────────────────────────────
+    // Run jsonDecode in a background isolate: response bodies for even small
+    // batches are ~100–500 KB and block the Flutter rendering pipeline if
+    // decoded synchronously on the main thread.
+    final parsed = await compute(_parseEmbeddingBatchResponse, response.body);
+    for (var j = 0; j < indices.length; j++) {
+      if (j < parsed.length) slots[indices[j]] = parsed[j];
     }
   }
 
