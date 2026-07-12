@@ -58,7 +58,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   final List<bool> _canGoForward = List.filled(_wikiSites.length, false);
 
   /// Dark mode toggle state for Wiki WebView pages.
-  bool _isDarkMode = true;
+  bool _isDarkMode = false;
   bool _trayExpanded = false;
 
   @override
@@ -100,16 +100,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     setState(() => _isDarkMode = newValue);
     for (final c in _controllers) {
       if (c != null) WikiDarkMode.setEnabled(c, newValue);
-    }
-  }
-
-  /// Syncs dark mode with the app theme without toggling UI state
-  /// back and forth during build.
-  void _toggleDarkModeFromTheme(bool value) {
-    if (_isDarkMode == value) return;
-    _isDarkMode = value;
-    for (final c in _controllers) {
-      if (c != null) WikiDarkMode.setEnabled(c, value);
     }
   }
 
@@ -188,13 +178,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
-
-    // Sync dark mode toggle with app theme on first build or theme switch.
-    if (_isDarkMode != theme.isDark) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _toggleDarkModeFromTheme(theme.isDark);
-      });
-    }
 
     // Determine if the current page is bookmarked.
     final currentUrl = _currentUrls[_tabController.index];
