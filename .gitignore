@@ -26,6 +26,11 @@ build/
 *.sqlite-vec
 local_knowledge/
 
+# Test artifacts (raw wikitext dumps, assembled output)
+raw_page.txt
+assembled_irene.md
+record_story_output.txt
+
 # Keys and configuration
 .env
 *.key
