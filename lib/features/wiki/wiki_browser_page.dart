@@ -59,6 +59,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = true;
+  bool _trayExpanded = false;
 
   @override
   void initState() {
@@ -205,13 +206,68 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     return Scaffold(
       backgroundColor: theme.bgPrimary,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // ── Custom toolbar ────────────────────────────────
-            WikiToolbar(
+            // ── Main content column ────────────────────────────
+            Column(
+              children: [
+                // ── Site tab bar ─────────────────────────────────
+                Container(
+                  color: theme.bgSecondary,
+                  child: TabBar(
+                    controller: _tabController,
+                    indicatorColor: theme.accentPrimary,
+                    labelColor: theme.accentPrimary,
+                    unselectedLabelColor: theme.textSecondary,
+                    labelStyle: theme.titleFont.copyWith(fontSize: 14),
+                    unselectedLabelStyle:
+                        theme.bodyFont.copyWith(fontSize: 14),
+                    indicatorWeight: 2,
+                    tabs: _wikiSites.map((site) {
+                      return Tab(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.public_rounded,
+                              size: 16,
+                              color: theme.accentPrimary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(site.label),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+
+                // ── WebView area (IndexedStack = no horizontal swipes) ──
+                Expanded(
+                  child: IndexedStack(
+                    index: _tabController.index,
+                    children: List.generate(_wikiSites.length, (i) {
+                      return _WikiTabView(
+                        index: i,
+                        initialUrl: _wikiSites[i].initialUrl,
+                        isDarkMode: _isDarkMode,
+                        onControllerCreated: _onControllerCreated,
+                        onTitleChanged: _onTitleChanged,
+                        onUrlChanged: _onUrlChanged,
+                        onHistoryChanged: _onHistoryChanged,
+                      );
+                    }),
+                  ),
+                ),
+              ],
+            ),
+
+            // ── Expandable floating tray (FAB ⇄ vertical toolbar) ──
+            _ExpandableTray(
+              expanded: _trayExpanded,
+              onToggle: () => setState(() => _trayExpanded = !_trayExpanded),
               canGoBack: _canGoBack[_tabController.index],
               canGoForward: _canGoForward[_tabController.index],
-              currentTitle: _titles[_tabController.index],
               isDarkMode: _isDarkMode,
               isBookmarked: isBookmarked,
               onBack: _goBack,
@@ -221,55 +277,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               onToggleBookmark: _toggleBookmark,
               onOpenBookmarks: _openBookmarks,
             ),
-
-            // ── Site tab bar ───────────────────────────────────
-            Container(
-              color: theme.bgSecondary,
-              child: TabBar(
-                controller: _tabController,
-                indicatorColor: theme.accentPrimary,
-                labelColor: theme.accentPrimary,
-                unselectedLabelColor: theme.textSecondary,
-                labelStyle: theme.titleFont.copyWith(fontSize: 14),
-                unselectedLabelStyle:
-                    theme.bodyFont.copyWith(fontSize: 14),
-                indicatorWeight: 2,
-                tabs: _wikiSites.map((site) {
-                  return Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.public_rounded,
-                          size: 16,
-                          color: theme.accentPrimary,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(site.label),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-
-            // ── WebView area ───────────────────────────────────
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: List.generate(_wikiSites.length, (i) {
-                  return _WikiTabView(
-                    index: i,
-                    initialUrl: _wikiSites[i].initialUrl,
-                    isDarkMode: _isDarkMode,
-                    onControllerCreated: _onControllerCreated,
-                    onTitleChanged: _onTitleChanged,
-                    onUrlChanged: _onUrlChanged,
-                    onHistoryChanged: _onHistoryChanged,
-                  );
-                }),
-              ),
-            ),
           ],
         ),
       ),
@@ -277,10 +284,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 }
 
-/// A single wiki tab that keeps its WebView alive across tab switches.
-///
-/// Uses [AutomaticKeepAliveClientMixin] so [TabBarView] does not dispose
-/// the WebView when the user switches to another tab.
+/// A single wiki tab whose WebView is kept alive by [IndexedStack] in the
+/// parent, so browsing state is preserved across tab switches.
 class _WikiTabView extends StatefulWidget {
   final int index;
   final String initialUrl;
@@ -304,15 +309,10 @@ class _WikiTabView extends StatefulWidget {
   State<_WikiTabView> createState() => _WikiTabViewState();
 }
 
-class _WikiTabViewState extends State<_WikiTabView>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
+class _WikiTabViewState extends State<_WikiTabView> {
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // required by AutomaticKeepAliveClientMixin
-
     return InAppWebView(
       initialUrlRequest: URLRequest(
         url: WebUri(widget.initialUrl),
@@ -350,6 +350,112 @@ class _WikiTabViewState extends State<_WikiTabView>
       onReceivedError: (controller, request, error) {
         // WebView shows its own error page; we handle it silently.
       },
+    );
+  }
+}
+
+// ─── Sizing constants for the expandable tray ───────────────────
+const double _traySize = 52;
+const double _trayMargin = 16;
+const double _trayHeightFactor = 0.45;
+
+/// Floating tray anchored at bottom-right that morphs between a FAB and a
+/// tall vertical toolbar.
+///
+/// Collapsed: a small round button.
+/// Expanded: the same-width container "stretches" upward into a floating
+/// vertical toolbar with [WikiToolbar] inside and a close toggle at bottom.
+class _ExpandableTray extends ConsumerWidget {
+  const _ExpandableTray({
+    required this.expanded,
+    required this.onToggle,
+    required this.canGoBack,
+    required this.canGoForward,
+    required this.isDarkMode,
+    required this.isBookmarked,
+    required this.onBack,
+    required this.onForward,
+    required this.onRefresh,
+    required this.onToggleDarkMode,
+    required this.onToggleBookmark,
+    required this.onOpenBookmarks,
+  });
+
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  final bool canGoBack;
+  final bool canGoForward;
+  final bool isDarkMode;
+  final bool isBookmarked;
+
+  final VoidCallback onBack;
+  final VoidCallback onForward;
+  final VoidCallback onRefresh;
+  final VoidCallback onToggleDarkMode;
+  final VoidCallback onToggleBookmark;
+  final VoidCallback onOpenBookmarks;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+
+    return Positioned(
+      right: _trayMargin,
+      bottom: _trayMargin,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+        width: _traySize,
+        height: expanded
+            ? (MediaQuery.of(context).size.height * _trayHeightFactor)
+            : _traySize,
+        decoration: BoxDecoration(
+          color: theme.cardSurface,
+          borderRadius: BorderRadius.circular(expanded ? 16 : _traySize / 2),
+          boxShadow: theme.cardShadow,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Toolbar buttons (only when expanded) ──────────────
+            if (expanded)
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: WikiToolbar(
+                    canGoBack: canGoBack,
+                    canGoForward: canGoForward,
+                    isDarkMode: isDarkMode,
+                    isBookmarked: isBookmarked,
+                    onBack: onBack,
+                    onForward: onForward,
+                    onRefresh: onRefresh,
+                    onToggleDarkMode: onToggleDarkMode,
+                    onToggleBookmark: onToggleBookmark,
+                    onOpenBookmarks: onOpenBookmarks,
+                  ),
+                ),
+              ),
+
+            // ── Toggle button (always visible at the bottom) ──────
+            SizedBox(
+              height: _traySize,
+              child: IconButton(
+                icon: Icon(
+                  expanded ? Icons.close_rounded : Icons.tune_rounded,
+                  size: 22,
+                ),
+                color: theme.textPrimary,
+                onPressed: onToggle,
+                padding: EdgeInsets.zero,
+                splashRadius: 22,
+                tooltip: expanded ? 'Close' : 'Tools',
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

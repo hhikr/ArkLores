@@ -4,17 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/providers/theme_provider.dart';
 
-/// Custom toolbar for the Wiki browser.
+/// Compact vertical toolbar with icon-only buttons.
 ///
-/// Displays navigation controls (back / forward / refresh), a page title
-/// preview, and actions (dark-mode toggle, bookmark toggle, bookmark list).
-/// All colors are driven by [AppThemeTokens] — no hardcoded values.
+/// Rendered inside the expandable tray in [WikiBrowserPage].
+/// No outer decoration — the parent handles the container, animation, and
+/// toggle button.
 class WikiToolbar extends ConsumerWidget {
   const WikiToolbar({
     super.key,
     required this.canGoBack,
     required this.canGoForward,
-    required this.currentTitle,
     required this.isDarkMode,
     required this.isBookmarked,
     required this.onBack,
@@ -27,7 +26,6 @@ class WikiToolbar extends ConsumerWidget {
 
   final bool canGoBack;
   final bool canGoForward;
-  final String currentTitle;
   final bool isDarkMode;
   final bool isBookmarked;
 
@@ -42,119 +40,50 @@ class WikiToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
 
-    return Container(
-      padding: EdgeInsets.only(
-        top: 0,
-        bottom: 4,
-        left: 4,
-        right: 4,
-      ),
-      decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.divider,
-            width: 0.5,
-          ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _TrayButton(icon: Icons.arrow_back_ios_rounded, theme: theme,
+          enabled: canGoBack, onTap: onBack),
+        _TrayButton(icon: Icons.arrow_forward_ios_rounded, theme: theme,
+          enabled: canGoForward, onTap: onForward),
+        _TrayButton(icon: Icons.refresh_rounded, theme: theme, onTap: onRefresh),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: Divider(color: theme.divider, height: 1),
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Action row ──────────────────────────────────────
-          Row(
-            children: [
-              // Back
-              _ToolbarIconButton(
-                icon: Icons.arrow_back_ios_rounded,
-                enabled: canGoBack,
-                onPressed: onBack,
-                theme: theme,
-              ),
-              // Forward
-              _ToolbarIconButton(
-                icon: Icons.arrow_forward_ios_rounded,
-                enabled: canGoForward,
-                onPressed: onForward,
-                theme: theme,
-              ),
-              // Refresh
-              _ToolbarIconButton(
-                icon: Icons.refresh_rounded,
-                enabled: true,
-                onPressed: onRefresh,
-                theme: theme,
-              ),
 
-              const Spacer(),
-
-              // Dark mode toggle
-              _ToolbarIconButton(
-                icon: isDarkMode
-                    ? Icons.light_mode_rounded
-                    : Icons.dark_mode_rounded,
-                enabled: true,
-                onPressed: onToggleDarkMode,
-                theme: theme,
-                activeColor: theme.accentPrimary,
-              ),
-
-              // Bookmark toggle
-              _ToolbarIconButton(
-                icon: isBookmarked
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_border_rounded,
-                enabled: true,
-                onPressed: onToggleBookmark,
-                theme: theme,
-                activeColor: isBookmarked ? theme.warning : null,
-              ),
-
-              // Bookmark list
-              _ToolbarIconButton(
-                icon: Icons.bookmarks_rounded,
-                enabled: true,
-                onPressed: onOpenBookmarks,
-                theme: theme,
-              ),
-            ],
-          ),
-
-          // ── Page title (truncated) ─────────────────────────
-          if (currentTitle.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                currentTitle,
-                style: theme.bodyFont.copyWith(
-                  fontSize: 11,
-                  color: theme.textSecondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
-      ),
+        _TrayButton(
+          icon: isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+          theme: theme, onTap: onToggleDarkMode,
+          activeColor: theme.accentPrimary,
+        ),
+        _TrayButton(
+          icon: isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          theme: theme, onTap: onToggleBookmark,
+          activeColor: isBookmarked ? theme.warning : null,
+        ),
+        _TrayButton(
+          icon: Icons.bookmarks_rounded, theme: theme, onTap: onOpenBookmarks),
+      ],
     );
   }
 }
 
-/// A single icon button in the toolbar.
-///
-/// Disabled buttons are dimmed and non-interactive.
-class _ToolbarIconButton extends StatelessWidget {
+/// A single icon button inside the expandable toolbar.
+class _TrayButton extends StatelessWidget {
   final IconData icon;
   final bool enabled;
-  final VoidCallback onPressed;
+  final VoidCallback? onTap;
   final AppThemeTokens theme;
   final Color? activeColor;
 
-  const _ToolbarIconButton({
+  const _TrayButton({
     required this.icon,
-    required this.enabled,
-    required this.onPressed,
     required this.theme,
+    this.enabled = true,
+    this.onTap,
     this.activeColor,
   });
 
@@ -165,13 +94,12 @@ class _ToolbarIconButton extends StatelessWidget {
         : (activeColor ?? theme.textPrimary);
 
     return SizedBox(
-      width: 40,
-      height: 40,
+      height: 44,
       child: IconButton(
         icon: Icon(icon, size: 20),
         color: color,
         disabledColor: theme.textSecondary.withValues(alpha: 0.3),
-        onPressed: enabled ? onPressed : null,
+        onPressed: enabled ? onTap : null,
         padding: EdgeInsets.zero,
         splashRadius: 18,
         tooltip: null,
