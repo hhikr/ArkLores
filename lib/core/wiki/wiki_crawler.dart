@@ -111,7 +111,7 @@ class MediaWikiCrawler {
 
       if (titles.isNotEmpty) {
         // Fetch content for all titles in one batch request.
-        final contentPages = await _fetchPageContents(site, titles);
+        final contentPages = await fetchPageContents(site, titles);
 
         for (final page in contentPages) {
           pages.add(page);
@@ -145,7 +145,7 @@ class MediaWikiCrawler {
   }
 
   /// Fetches content for a list of page titles in one API call.
-  Future<List<WikiPage>> _fetchPageContents(
+  Future<List<WikiPage>> fetchPageContents(
     WikiSite site,
     List<String> titles,
   ) async {
