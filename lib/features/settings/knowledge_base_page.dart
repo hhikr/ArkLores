@@ -320,16 +320,15 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       final vectorStore = ref.read(vectorStoreProvider);
       final embedder = ref.read(embedderProvider);
 
-      var totalPages = 0;
-      var processedPages = 0;
-      var totalChunks = 0;
+      // Phase 1: crawl all categories, deduplicate pages by title.
+      final allPagesByTitle = <String, WikiPage>{};
 
       for (var ci = 0; ci < categories.length; ci++) {
         final category = categories[ci];
 
         setState(() {
           _indexingStatus =
-              context.t.kbCrawlingPages(0, site.displayName);
+              context.t.kbCrawlingPages(allPagesByTitle.length, site.displayName);
           _indexingProgress = ci / categories.length;
         });
 
@@ -345,15 +344,40 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         );
 
         if (pages.isEmpty) continue;
-        totalPages += pages.length;
 
         for (final page in pages) {
+          allPagesByTitle.putIfAbsent(page.title, () => page);
+        }
+      }
+
+      final dedupedPages = allPagesByTitle.values.toList();
+      if (dedupedPages.isEmpty) {
+        setState(() {
+          _isIndexing = false;
+          _indexingStatus = context.t.kbCompleted(0, 0);
+        });
+        return;
+      }
+
+      // Phase 2: process each unique page (chunk → embed → store).
+      // Each page's failure is caught individually so one API error
+      // doesn't abort the entire indexing run.
+      final totalUnique = dedupedPages.length;
+      var processedPages = 0;
+      var totalChunks = 0;
+      var skippedPages = 0;
+
+      for (final page in dedupedPages) {
+        try {
           final chunks = chunker.chunkByHeadings(
             page.content,
             pageTitle: page.title,
           );
 
-          if (chunks.isEmpty) continue;
+          if (chunks.isEmpty) {
+            processedPages++;
+            continue;
+          }
 
           setState(() {
             _indexingStatus = context.t.kbEmbedding(chunks.length, page.title);
@@ -373,14 +397,16 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             );
             totalChunks += result.vectors.length;
           }
-
-          processedPages++;
-          setState(() {
-            _indexingProgress =
-                (ci + (processedPages / (totalPages > 0 ? totalPages : pages.length)) / categories.length)
-                    .clamp(0.0, 1.0);
-          });
+        } catch (_) {
+          // Single page failure doesn't abort the entire indexing.
+          skippedPages++;
         }
+
+        processedPages++;
+        setState(() {
+          _indexingProgress =
+              (processedPages / totalUnique).clamp(0.0, 1.0);
+        });
       }
 
       ref.invalidate(vectorStoreStatsProvider);
@@ -388,8 +414,10 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       setState(() {
         _isIndexing = false;
         _indexingProgress = 1.0;
-        _indexingStatus =
-            context.t.kbCompleted(totalChunks, totalPages);
+        final baseMsg = context.t.kbCompleted(totalChunks, totalUnique);
+        _indexingStatus = skippedPages > 0
+            ? '$baseMsg （因错误跳过 $skippedPages 页）'
+            : baseMsg;
       });
 
       Future.delayed(const Duration(seconds: 5), () {
