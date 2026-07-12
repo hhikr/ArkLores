@@ -230,8 +230,10 @@ class OpenAICompatibleClient implements LLMClient {
     // Nullable slots — null means "not yet embedded".
     final slots = List<List<double>?>.filled(texts.length, null);
 
-    // Process in groups of 100 to stay within typical API body-size limits.
-    const batchSize = 100;
+    // Process in groups of 16 to stay within typical API token / payload limits
+    // (16 chunks * ~500 tokens = ~8,000 tokens, which is the safe upper limit
+    // for most embedding engines like OpenAI's text-embedding-3-small).
+    const batchSize = 16;
     for (var offset = 0; offset < texts.length; offset += batchSize) {
       final end = (offset + batchSize).clamp(0, texts.length);
       final indices = List<int>.generate(end - offset, (i) => offset + i);
@@ -326,7 +328,7 @@ class OpenAICompatibleClient implements LLMClient {
       if (indices.length > 1) {
         // Binary split — one of the items is likely too long or malformed.
         // Splitting isolates it so the rest of the batch can succeed.
-        debugPrint('[Embed] 400 on batch of ${indices.length}, binary-splitting.');
+        debugPrint('[Embed] 400 on batch of ${indices.length}, binary-splitting. Response: ${response.body}');
         final mid = indices.length ~/ 2;
         await _embedGroup(texts, indices.sublist(0, mid), slots);
         await _embedGroup(texts, indices.sublist(mid), slots);
