@@ -20,6 +20,7 @@ class KnowledgeBasePage extends ConsumerWidget {
     'Category:剧情',
     'Category:阵营',
     'Category:角色',
+    'Category:干员密录',
   ];
 
   static const List<String> _endfieldCategories = [
