@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
-import 'features/settings/settings_service.dart';
+import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 
 void main() {
@@ -38,13 +38,26 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
   }
 
   Future<void> _checkOnboarding() async {
-    final service = SettingsService();
-    final done = await service.isOnboardingDone();
-    if (mounted) {
-      setState(() {
-        _checkingOnboarding = false;
-        _onboardingDone = done;
-      });
+    try {
+      // Use the same SettingsService instance managed by Riverpod to
+      // avoid races with EncryptedSharedPreferences initialization.
+      final service = ref.read(settingsServiceProvider);
+      final done = await service.isOnboardingDone();
+      if (mounted) {
+        setState(() {
+          _checkingOnboarding = false;
+          _onboardingDone = done;
+        });
+      }
+    } catch (_) {
+      // If the storage read fails (e.g. first-init timing), default to
+      // showing the onboarding flow so the user isn't locked out.
+      if (mounted) {
+        setState(() {
+          _checkingOnboarding = false;
+          _onboardingDone = false;
+        });
+      }
     }
   }
 
