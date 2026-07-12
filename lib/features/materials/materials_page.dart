@@ -205,6 +205,7 @@ class MaterialsPage extends ConsumerWidget {
   }
 
   Future<void> _importBooks(BuildContext context, WidgetRef ref) async {
+    final theme = ref.read(themeProvider);
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'txt'],
@@ -256,7 +257,7 @@ class MaterialsPage extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Import failed: $e'),
-            backgroundColor: Colors.red.shade800,
+            backgroundColor: theme.danger,
           ),
         );
       }
