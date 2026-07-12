@@ -22,7 +22,7 @@ class WikiDarkMode {
   /// - A subtle background colour prevents intermediate white flashes.
   static const String _darkModeCSS = '''
 html {
-  filter: invert(0.88) hue-rotate(180deg) !important;
+  filter: invert(1) hue-rotate(180deg) !important;
   background-color: #0b0d10 !important;
 }
 img, video, iframe, canvas, svg,
