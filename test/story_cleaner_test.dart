@@ -8,12 +8,10 @@ import 'package:arklores/core/wiki/wiki_models.dart';
 void main() {
   group('Story Cleaner & Chunker Integration Tests', () {
     test('Integration: Crawl actual PRTS story "0-10 困境/BEG" and clean it', () async {
-      // 1. Instantiate the mediawiki crawler (pure Dart http client backend)
       final crawler = MediaWikiCrawler();
 
       print('📡 Fetching actual story page "0-10 困境/BEG" from PRTS Wiki...');
       
-      // 2. Fetch page contents from the real live wiki API
       final pages = await crawler.fetchPageContents(
         WikiSite.prts,
         ['0-10 困境/BEG'],
@@ -28,6 +26,12 @@ void main() {
       print('✓ Page successfully fetched: ${page.title}');
       print('📝 Raw content length: ${page.content.length} characters');
 
+      // Print raw content preview before cleaning to see what we received from API
+      print('\n=== Raw content preview (First 1500 chars) ===');
+      final rawPreviewLen = page.content.length > 1500 ? 1500 : page.content.length;
+      print(page.content.substring(0, rawPreviewLen));
+      print('==============================================');
+
       // 3. Clean using the production regular expression parser
       final cleaned = WikiIndexingNotifier.cleanStoryContent(page.content);
       
@@ -35,35 +39,42 @@ void main() {
       final compressionPercent = (100 * (1 - cleaned.length / page.content.length)).toStringAsFixed(1);
       print('🧹 Compression / Noise Removal: $compressionPercent% of text stripped.');
 
-      // 4. Assertions to verify wikitext macros were successfully stripped from real data
-      expect(cleaned.contains('Character('), isFalse);
-      expect(cleaned.contains('Background('), isFalse);
-      expect(cleaned.contains('PlayMusic('), isFalse);
-      expect(cleaned.contains('Delay('), isFalse);
-      
-      // 5. Assertions to verify that actual dialogues and narrations were preserved
-      expect(cleaned.contains('阿米娅'), isTrue);
-      expect(cleaned.contains('陈'), isTrue);
-      expect(cleaned.contains('梅菲斯特'), isTrue);
-      expect(cleaned.contains('临光'), isTrue);
-
-      // Print preview of the cleaned script
-      print('\n=== Cleaned Script Dialogue Preview (First 500 chars) ===');
-      final previewLen = cleaned.length > 500 ? 500 : cleaned.length;
+      // Print preview of the cleaned script BEFORE assertions so they always output to stdout
+      print('\n=== Cleaned Script Dialogue Preview (First 1500 chars) ===');
+      final previewLen = cleaned.length > 1500 ? 1500 : cleaned.length;
       print(cleaned.substring(0, previewLen));
       print('===========================================================');
 
       // 6. Test Chunker on the cleaned script
       const chunker = Chunker();
       final chunks = chunker.chunkByHeadings(cleaned, pageTitle: page.title);
-      expect(chunks.isNotEmpty, isTrue);
-      expect(chunks.length < 10, isTrue, reason: 'Chunk count is too high: ${chunks.length}');
 
       print('\n=== Chunking Results (Total: ${chunks.length} chunks) ===');
       for (var i = 0; i < chunks.length; i++) {
         print('Chunk $i length: ${chunks[i].content.length} chars');
+        print('Chunk $i preview:');
+        final chunkPreviewLen = chunks[i].content.length > 300 ? 300 : chunks[i].content.length;
+        print(chunks[i].content.substring(0, chunkPreviewLen));
+        print('-----------------------------------------------------------');
       }
       print('===========================================================');
+
+      // ── Expect Assertions (Run at the very end so prints are never skipped) ──
+      
+      // Verify wikitext macros were successfully stripped
+      expect(cleaned.contains('Character('), isFalse);
+      expect(cleaned.contains('Background('), isFalse);
+      expect(cleaned.contains('PlayMusic('), isFalse);
+      expect(cleaned.contains('Delay('), isFalse);
+      
+      // Verify that actual dialogues and narrations were preserved
+      expect(cleaned.contains('阿米娅'), isTrue);
+      expect(cleaned.contains('陈'), isTrue);
+      expect(cleaned.contains('梅菲斯特'), isTrue);
+      expect(cleaned.contains('临光'), isTrue);
+
+      expect(chunks.isNotEmpty, isTrue);
+      expect(chunks.length < 10, isTrue, reason: 'Chunk count is too high: ${chunks.length}');
 
       crawler.dispose();
     });
