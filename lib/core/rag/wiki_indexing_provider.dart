@@ -217,38 +217,29 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         );
 
         final opBatch = <String>[];
-        final storyBatch = <String>[];
-        final normalBatch = <String>[];
+        final rawBatch = <String>[];  // Everything fetched via raw wikitext
         for (final title in batch) {
           if (site == WikiSite.prts && operatorTitles.contains(title)) {
             opBatch.add(title);
-          } else if (site == WikiSite.prts && storyTitles.contains(title)) {
-            storyBatch.add(title);
           } else {
-            normalBatch.add(title);
+            rawBatch.add(title);
           }
         }
 
         final wikiPages = <WikiPage>[];
 
-        // 1. Fetch normal pages via standard prop=extracts
-        if (normalBatch.isNotEmpty) {
-          final normalPages = await _crawler.fetchPageContents(site, normalBatch);
-          wikiPages.addAll(normalPages);
-        }
-
-        // 2. Fetch story pages via raw wikitext to avoid extracts truncation/bloating
-        if (storyBatch.isNotEmpty) {
-          final storyWikitexts = await _crawler.fetchRawWikitexts(site, storyBatch);
-          for (final title in storyBatch) {
-            final page = storyWikitexts[title];
+        // 1. Fetch all non-operator pages via raw wikitext (story + other)
+        if (rawBatch.isNotEmpty) {
+          final rawPages = await _crawler.fetchRawWikitexts(site, rawBatch);
+          for (final title in rawBatch) {
+            final page = rawPages[title];
             if (page != null) {
               wikiPages.add(page);
             }
           }
         }
 
-        // 3. Fetch and assemble operator pages via raw wikitext
+        // 2. Fetch and assemble operator pages via raw wikitext
         if (opBatch.isNotEmpty) {
           final allOpTitlesToFetch = <String>[];
           for (final opTitle in opBatch) {
