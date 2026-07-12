@@ -2,6 +2,7 @@ import 'dart:ui' show Color;
 
 import 'package:flutter/painting.dart'
     show TextStyle, FontWeight, BorderRadius, BoxShadow, Offset;
+import 'package:google_fonts/google_fonts.dart';
 
 import 'app_theme.dart';
 
@@ -68,16 +69,15 @@ class EndfieldThemeTokens implements AppThemeTokens {
 
   // ─── Typography ────────────────────────────────────────────────
   @override
-  late final TextStyle titleFont = TextStyle(
-    fontFamily: 'Exo2',
+  late final TextStyle titleFont = GoogleFonts.exo2(
     fontWeight: FontWeight.w600,
     fontSize: 18,
     color: textPrimary,
   );
 
   @override
-  late final TextStyle bodyFont = TextStyle(
-    fontFamily: 'NotoSansSC',
+  late final TextStyle bodyFont = GoogleFonts.getFont(
+    'Noto Sans SC',
     fontWeight: FontWeight.normal,
     fontSize: 14,
     color: textPrimary,
