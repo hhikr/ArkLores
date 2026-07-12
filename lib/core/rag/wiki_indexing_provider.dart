@@ -232,7 +232,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           var finalContent = page.content;
           final isStoryPage = page.content.contains('剧情模拟器');
           if (isStoryPage) {
-            finalContent = _cleanStoryContent(page.content);
+            finalContent = cleanStoryContent(page.content);
           }
 
           final chunks = chunker.chunkByHeadings(finalContent, pageTitle: page.title);
@@ -356,7 +356,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   ///
   /// Removes [Character(...)], [Background(...)], [PlayMusic(...)], HTML comments,
   /// and navigation templates, keeping only actual dialogues and narrations.
-  String _cleanStoryContent(String rawContent) {
+  static String cleanStoryContent(String rawContent) {
     var content = rawContent;
 
     // 1. Remove HTML comments
