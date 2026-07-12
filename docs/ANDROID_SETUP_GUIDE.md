@@ -5,6 +5,40 @@
 
 ---
 
+## 快速开始（一键脚本）
+
+项目提供了自动化脚本 `tools/setup.sh`，涵盖 SDK 安装、APK 构建、设备安装全流程：
+
+```bash
+# 构建 debug APK 并安装到已连接的设备
+./tools/setup.sh
+
+# 或构建 release APK
+./tools/setup.sh release
+```
+
+脚本会自动检测缺失的组件（Java、Android SDK、adb）并引导安装。详细步骤见下文。
+
+---
+
+## 脚本参考
+
+| 用法 | 说明 |
+| --- | --- |
+| `./tools/setup.sh` | 构建 debug APK 并安装 |
+| `./tools/setup.sh debug` | 同上 |
+| `./tools/setup.sh release` | 构建 release APK 并安装 |
+| `./tools/setup.sh --help` | 查看帮助 |
+
+**环境变量**：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `ANDROID_HOME` | `~/Android/Sdk` | Android SDK 路径 |
+| `FLUTTER_HOME` | `~/flutter` | Flutter SDK 路径 |
+
+以下为分步手动教程——脚本执行的就是这些步骤，供排查问题时参考。
+
 ## 一、前置条件
 
 | 组件 | 说明 | 检查命令 |
