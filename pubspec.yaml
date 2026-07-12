@@ -47,6 +47,7 @@ dependencies:
 
   # Vector search (sqlite-vec FFI, fallback to pure Dart)
   sqlite_vec: ^0.1.3
+  sqlite3: ^2.4.0  # Required by sqlite_vec for FFI extension loading
 
   # File system paths
   path_provider: ^2.1.0
