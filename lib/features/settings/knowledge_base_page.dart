@@ -336,9 +336,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           site: site,
           categoryName: category,
           onProgress: (progress) {
+            if (!mounted) return;
             setState(() {
-              _indexingStatus =
-                  context.t.kbCrawlingPages(progress.pagesFetched, site.displayName);
+              // cumulative deduplicated count (not per-category counter)
+              _indexingStatus = context.t.kbCrawlingPages(
+                allPagesByTitle.length + progress.pagesFetched,
+                site.displayName,
+              );
             });
           },
         );
@@ -361,52 +365,68 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
 
       // Phase 2: process each unique page (chunk → embed → store).
       // Each page's failure is caught individually so one API error
-      // doesn't abort the entire indexing run.
+      // doesn't abort the entire indexing run. If the API is
+      // unresponsive for many consecutive pages, stop early.
       final totalUnique = dedupedPages.length;
       var processedPages = 0;
       var totalChunks = 0;
       var skippedPages = 0;
+      var consecutiveFailures = 0;
+      const int maxConsecutiveFailures = 10;
 
       for (final page in dedupedPages) {
+        if (consecutiveFailures >= maxConsecutiveFailures) {
+          if (mounted) {
+            setState(() {
+              _indexingStatus = '索引已中止：嵌入 API 连续 '
+                  '$maxConsecutiveFailures 次无响应，请检查网络连接和 API Key。';
+            });
+          }
+          break;
+        }
+
         try {
           final chunks = chunker.chunkByHeadings(
             page.content,
             pageTitle: page.title,
           );
 
-          if (chunks.isEmpty) {
-            processedPages++;
-            continue;
+          if (chunks.isNotEmpty) {
+            if (mounted) {
+              setState(() {
+                _indexingStatus = context.t.kbEmbedding(chunks.length, page.title);
+              });
+            }
+
+            final texts = chunks.map((c) => c.content).toList();
+            final result = await embedder.embedBatch(texts);
+
+            if (result.vectors.isNotEmpty) {
+              await vectorStore.insertChunks(
+                chunks,
+                result.vectors,
+                sourceType: 'wiki',
+                sourceUrl:
+                    '${site == WikiSite.prts ? 'https://prts.wiki' : 'https://wiki.endfield.moe'}/w/${page.title}',
+                wiki: site.key,
+              );
+              totalChunks += result.vectors.length;
+            }
           }
-
-          setState(() {
-            _indexingStatus = context.t.kbEmbedding(chunks.length, page.title);
-          });
-
-          final texts = chunks.map((c) => c.content).toList();
-          final result = await embedder.embedBatch(texts);
-
-          if (result.vectors.isNotEmpty) {
-            await vectorStore.insertChunks(
-              chunks,
-              result.vectors,
-              sourceType: 'wiki',
-              sourceUrl:
-                  '${site == WikiSite.prts ? 'https://prts.wiki' : 'https://wiki.endfield.moe'}/w/${page.title}',
-              wiki: site.key,
-            );
-            totalChunks += result.vectors.length;
-          }
+          consecutiveFailures = 0;
         } catch (_) {
           // Single page failure doesn't abort the entire indexing.
           skippedPages++;
+          consecutiveFailures++;
         }
 
         processedPages++;
-        setState(() {
-          _indexingProgress =
-              (processedPages / totalUnique).clamp(0.0, 1.0);
-        });
+        if (mounted) {
+          setState(() {
+            _indexingProgress =
+                (processedPages / totalUnique).clamp(0.0, 1.0);
+          });
+        }
       }
 
       ref.invalidate(vectorStoreStatsProvider);
