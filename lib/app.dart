@@ -6,6 +6,7 @@ import 'features/materials/materials_page.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/wiki/wiki_browser_page.dart';
+import 'shared/l10n/l10n.dart';
 import 'shared/providers/theme_provider.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
@@ -64,22 +65,22 @@ class _MainShellState extends ConsumerState<MainShell> {
           selectedItemColor: theme.navSelectedItem,
           unselectedItemColor: theme.navUnselectedItem,
           type: BottomNavigationBarType.fixed,
-          items: const [
+          items: [
             BottomNavigationBarItem(
-              icon: Icon(Icons.language_rounded),
-              label: 'Wiki',
+              icon: const Icon(Icons.language_rounded),
+              label: context.t.navWiki,
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.psychology_rounded),
-              label: 'AI',
+              icon: const Icon(Icons.psychology_rounded),
+              label: context.t.navAI,
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.menu_book_rounded),
-              label: '资料',
+              icon: const Icon(Icons.menu_book_rounded),
+              label: context.t.navMaterials,
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.settings_rounded),
-              label: '设置',
+              icon: const Icon(Icons.settings_rounded),
+              label: context.t.navSettings,
             ),
           ],
         ),

@@ -5,6 +5,8 @@ import 'app.dart';
 import 'features/settings/api_settings_page.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
+import 'shared/l10n/generated/app_localizations.dart';
+import 'shared/l10n/locale_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 
@@ -18,9 +20,6 @@ void main() {
 }
 
 /// Root application widget.
-///
-/// Checks onboarding status on startup and shows the onboarding
-/// flow if the user hasn't completed it yet.
 class ArkLoresApp extends ConsumerStatefulWidget {
   const ArkLoresApp({super.key});
 
@@ -43,10 +42,6 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
       final service = ref.read(settingsServiceProvider);
       final done = await service.isOnboardingDone();
 
-      // ⚠️ Must load API config from secure storage on every startup.
-      // Without this, apiConfigProvider stays at its initial empty state
-      // forever, and settings_page shows blank fields even though the
-      // values were saved in a previous session.
       await ref.read(apiConfigProvider.notifier).load();
 
       if (mounted) {
@@ -68,6 +63,7 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final locale = ref.watch(localeProvider);
 
     return MaterialApp(
       title: 'ArkLores',
@@ -79,6 +75,9 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
       theme: ThemeData.light(useMaterial3: true).copyWith(
         scaffoldBackgroundColor: theme.bgPrimary,
       ),
+      locale: locale.flutterLocale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: _buildHome(),
       onGenerateRoute: (settings) {
         switch (settings.name) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/llm/llm_client.dart';
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -96,7 +97,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               child: TextButton(
                 onPressed: _skip,
                 child: Text(
-                  'Skip',
+                  context.t.onboardingSkip,
                   style: theme.bodyFont.copyWith(
                     color: theme.textSecondary,
                     fontSize: 14,
@@ -161,18 +162,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Welcome to ArkLores',
+            context.t.onboardingWelcomeTitle,
             style: theme.titleFont.copyWith(fontSize: 28),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           Text(
-            'Your AI-enhanced companion for exploring\n'
-            'Arknights and Endfield lore.\n\n'
-            '• Browse PRTS & Endfield Wikis\n'
-            '• AI-powered fact checking & summaries\n'
-            '• Import your lore books\n'
-            '• Immersive character roleplay',
+            context.t.onboardingWelcomeDesc,
             style: theme.bodyFont.copyWith(
               color: theme.textSecondary,
               fontSize: 15,
@@ -197,7 +193,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
             ),
             child: Text(
-              'Get Started',
+            context.t.onboardingGetStarted,
               style: theme.titleFont.copyWith(fontSize: 16),
             ),
           ),
@@ -219,15 +215,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Configure Chat API',
+            context.t.onboardingApiTitle,
             style: theme.titleFont.copyWith(fontSize: 22),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            'ArkLores uses your own AI API key.\n'
-            'Configure at least a Chat provider now;\n'
-            'Embedding can be set up later in Settings.',
+            context.t.onboardingApiDesc,
             style: theme.bodyFont.copyWith(
               color: theme.textSecondary,
               fontSize: 14,
@@ -237,14 +231,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           const SizedBox(height: 28),
           _buildInputField(
-            label: 'Base URL',
+            label: context.t.apiSettingsLabelBaseUrl,
             controller: _baseUrlController,
             hint: 'https://api.deepseek.com/v1',
             theme: theme,
           ),
           const SizedBox(height: 14),
           _buildInputField(
-            label: 'API Key',
+            label: context.t.apiSettingsLabelApiKey,
             controller: _apiKeyController,
             hint: 'sk-...',
             theme: theme,
@@ -263,7 +257,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           const SizedBox(height: 14),
           _buildInputField(
-            label: 'Model',
+            label: context.t.apiSettingsLabelModel,
             controller: _chatModelController,
             hint: 'deepseek-v4-flash',
             theme: theme,
@@ -280,7 +274,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
             ),
             child: Text(
-              'Save & Continue',
+            context.t.onboardingSaveContinue,
               style: theme.titleFont.copyWith(fontSize: 16),
             ),
           ),
@@ -288,7 +282,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           TextButton(
             onPressed: _skip,
             child: Text(
-              'Configure later',
+            context.t.onboardingConfigureLater,
               style: theme.bodyFont.copyWith(
                 color: theme.textSecondary,
                 fontSize: 13,
@@ -313,17 +307,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'All Set!',
+            context.t.onboardingDoneTitle,
             style: theme.titleFont.copyWith(fontSize: 28),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
           Text(
-            'You\'re ready to explore the world of\n'
-            'Arknights and Endfield.\n\n'
-            'Visit Settings > API Settings to configure\n'
-            'a separate Embedding provider if needed,\n'
-            'or start browsing the Wiki!',
+            context.t.onboardingDoneDesc,
             style: theme.bodyFont.copyWith(
               color: theme.textSecondary,
               fontSize: 15,
@@ -343,7 +333,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
             ),
             child: Text(
-              'Start Exploring',
+            context.t.onboardingStartExploring,
               style: theme.titleFont.copyWith(fontSize: 16),
             ),
           ),
