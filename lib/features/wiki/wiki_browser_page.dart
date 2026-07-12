@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/providers/theme_provider.dart';
+import 'wiki_dark_mode.dart';
 import 'wiki_toolbar.dart';
 
 /// Wiki site configuration.
@@ -50,7 +51,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   final List<bool> _canGoBack = List.filled(_wikiSites.length, false);
   final List<bool> _canGoForward = List.filled(_wikiSites.length, false);
 
-  /// Dark mode toggle state (placeholder — wired up in T4).
+  /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = true;
 
   /// Bookmark toggle state (placeholder — wired up in T6).
@@ -91,8 +92,21 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   void _toggleDarkMode() {
-    setState(() => _isDarkMode = !_isDarkMode);
-    // CSS injection will be handled in T4.
+    final newValue = !_isDarkMode;
+    setState(() => _isDarkMode = newValue);
+    for (final c in _controllers) {
+      if (c != null) WikiDarkMode.setEnabled(c, newValue);
+    }
+  }
+
+  /// Syncs dark mode with the app theme without toggling UI state
+  /// back and forth during build.
+  void _toggleDarkModeFromTheme(bool value) {
+    if (_isDarkMode == value) return;
+    _isDarkMode = value;
+    for (final c in _controllers) {
+      if (c != null) WikiDarkMode.setEnabled(c, value);
+    }
   }
 
   void _toggleBookmark() {
@@ -134,6 +148,14 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+
+    // Sync dark mode toggle with app theme on first build or theme switch.
+    if (_isDarkMode != theme.isDark) {
+      // Defer the state change to avoid build-time setState.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _toggleDarkModeFromTheme(theme.isDark);
+      });
+    }
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
@@ -194,6 +216,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                   return _WikiTabView(
                     index: i,
                     initialUrl: _wikiSites[i].initialUrl,
+                    isDarkMode: _isDarkMode,
                     onControllerCreated: _onControllerCreated,
                     onTitleChanged: _onTitleChanged,
                     onHistoryChanged: _onHistoryChanged,
@@ -215,6 +238,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 class _WikiTabView extends StatefulWidget {
   final int index;
   final String initialUrl;
+  final bool isDarkMode;
   final void Function(int, InAppWebViewController) onControllerCreated;
   final void Function(int, String?) onTitleChanged;
   final Future<void> Function(int, bool, bool) onHistoryChanged;
@@ -222,6 +246,7 @@ class _WikiTabView extends StatefulWidget {
   const _WikiTabView({
     required this.index,
     required this.initialUrl,
+    required this.isDarkMode,
     required this.onControllerCreated,
     required this.onTitleChanged,
     required this.onHistoryChanged,
@@ -257,6 +282,11 @@ class _WikiTabViewState extends State<_WikiTabView>
       ),
       onWebViewCreated: (controller) {
         widget.onControllerCreated(widget.index, controller);
+      },
+      onLoadStop: (controller, url) async {
+        if (widget.isDarkMode) {
+          await WikiDarkMode.inject(controller);
+        }
       },
       onTitleChanged: (controller, title) {
         widget.onTitleChanged(widget.index, title);
