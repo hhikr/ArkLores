@@ -414,8 +414,10 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             }
           }
           consecutiveFailures = 0;
-        } catch (_) {
-          // Single page failure doesn't abort the entire indexing.
+        } catch (e) {
+          // Log the error for debugging (visible via `flutter logs`
+          // in debug mode or `adb logcat -s flutter`).
+          debugPrint('[IndexWiki] skipped "${page.title}": $e');
           skippedPages++;
           consecutiveFailures++;
         }
