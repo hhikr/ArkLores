@@ -180,19 +180,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           // ── Engine info ──────────────────────────────────────
           statsAsync.when(
             data: (stats) {
-              final engineText = stats.useVectorExtension
-                  ? 'Search engine: sqlite-vec (native)'
-                  : 'Search engine: pure Dart (fallback)';
-              final engineColor = stats.useVectorExtension
-                  ? theme.textSecondary.withValues(alpha: 0.6)
-                  : theme.warning.withValues(alpha: 0.8);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 32),
                 child: Center(
                   child: Text(
-                    engineText,
+                    'Search engine: pure Dart (fallback)',
                     style: theme.bodyFont.copyWith(
-                      color: engineColor,
+                      color: theme.textSecondary.withValues(alpha: 0.6),
                       fontSize: 12,
                     ),
                   ),

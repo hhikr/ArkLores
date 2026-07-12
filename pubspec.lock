@@ -517,22 +517,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.0"
-  sqlite3:
-    dependency: "direct main"
-    description:
-      name: sqlite3
-      sha256: "3145bd74dcdb4fd6f5c6dda4d4e4490a8087d7f286a14dee5d37087290f0f8a2"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.9.4"
-  sqlite_vec:
-    dependency: "direct main"
-    description:
-      name: sqlite_vec
-      sha256: b43bf5df91b519fd2e92777900268accbc35d8f1c2d269bb0b31ab794b4ace01
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.7-alpha.3"
   stack_trace:
     dependency: transitive
     description:
