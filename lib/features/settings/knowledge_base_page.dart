@@ -7,13 +7,13 @@ import '../../core/rag/vector_store.dart';
 import '../../core/rag/vector_store_provider.dart';
 import '../../core/wiki/wiki_crawler.dart';
 import '../../core/wiki/wiki_models.dart';
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
-/// Knowledge base management page — shows index status and controls
-/// for updating Wiki content in the vector store.
+/// Knowledge base management page.
 class KnowledgeBasePage extends ConsumerStatefulWidget {
   const KnowledgeBasePage({super.key});
 
@@ -27,7 +27,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   double _indexingProgress = 0.0;
   String? _error;
 
-  // Target categories for wiki indexing.
   static const List<String> _prtsCategories = [
     'Category:干员',
     'Category:剧情',
@@ -52,7 +51,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(
-          'Knowledge Base',
+          context.t.kbTitle,
           style: theme.titleFont.copyWith(fontSize: 18),
         ),
         iconTheme: IconThemeData(color: theme.textPrimary),
@@ -61,7 +60,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Header icon ──────────────────────────────────────
           Center(
             child: Icon(
               Icons.storage_rounded,
@@ -71,7 +69,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           ),
           const SizedBox(height: 24),
 
-          // ── Configuration warning ────────────────────────────
           if (!config.isValid)
             ThemeAwareCard(
               child: Row(
@@ -81,8 +78,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Please configure your API Key in Settings before '
-                      'building the knowledge base.',
+                      context.t.kbConfigWarning,
                       style: theme.bodyFont.copyWith(
                         color: theme.textSecondary,
                         fontSize: 13,
@@ -94,20 +90,19 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             ),
           if (!config.isValid) const SizedBox(height: 20),
 
-          // ── Stats overview ──────────────────────────────────
           Text(
-            'Index Overview',
+            context.t.kbIndexOverview,
             style: theme.titleFont.copyWith(fontSize: 18),
           ),
           const SizedBox(height: 12),
           statsAsync.when(
             data: (stats) => _buildStatsGrid(stats, theme),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => _buildErrorCard('Failed to load stats: $err', theme),
+            error: (err, _) => _buildErrorCard(
+              '${context.t.materialsLoadFailed} $err', theme),
           ),
           const SizedBox(height: 24),
 
-          // ── Indexing status ─────────────────────────────────
           if (_isIndexing) ...[
             ThemeAwareCard(
               child: Column(
@@ -148,15 +143,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             const SizedBox(height: 16),
           ],
 
-          // ── Error display ────────────────────────────────────
           if (_error != null) ...[
             _buildErrorCard(_error!, theme),
             const SizedBox(height: 16),
           ],
 
-          // ── PRTS Wiki section ────────────────────────────────
           Text(
-            'Wiki Sources',
+            context.t.kbWikiSources,
             style: theme.titleFont.copyWith(fontSize: 18),
           ),
           const SizedBox(height: 12),
@@ -177,16 +170,21 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           ),
           const SizedBox(height: 32),
 
-          // ── Engine info ──────────────────────────────────────
           statsAsync.when(
             data: (stats) {
+              final engineText = stats.useVectorExtension
+                  ? context.t.kbEngineNative
+                  : context.t.kbEngineFallback;
+              final engineColor = stats.useVectorExtension
+                  ? theme.textSecondary.withValues(alpha: 0.6)
+                  : theme.warning.withValues(alpha: 0.8);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 32),
                 child: Center(
                   child: Text(
-                    'Search engine: pure Dart (fallback)',
+                    engineText,
                     style: theme.bodyFont.copyWith(
-                      color: theme.textSecondary.withValues(alpha: 0.6),
+                      color: engineColor,
                       fontSize: 12,
                     ),
                   ),
@@ -201,21 +199,25 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     );
   }
 
-  /// Builds the 4-stat grid (total, wiki, book, books count).
   Widget _buildStatsGrid(VectorStoreStats stats, AppThemeTokens theme) {
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: [
-        _statTile('Total Chunks', '${stats.totalChunks}', Icons.dashboard_rounded, theme),
-        _statTile('Wiki Chunks', '${stats.wikiChunks}', Icons.language_rounded, theme),
-        _statTile('Book Chunks', '${stats.bookChunks}', Icons.menu_book_rounded, theme),
-        _statTile('Books', '${stats.totalBooks}', Icons.book_rounded, theme),
+        _statTile(context.t.kbTotalChunks, '${stats.totalChunks}',
+            Icons.dashboard_rounded, theme),
+        _statTile(context.t.kbWikiChunks, '${stats.wikiChunks}',
+            Icons.language_rounded, theme),
+        _statTile(context.t.kbBookChunks, '${stats.bookChunks}',
+            Icons.menu_book_rounded, theme),
+        _statTile(context.t.kbBooks, '${stats.totalBooks}',
+            Icons.book_rounded, theme),
       ],
     );
   }
 
-  Widget _statTile(String label, String value, IconData icon, AppThemeTokens theme) {
+  Widget _statTile(
+      String label, String value, IconData icon, AppThemeTokens theme) {
     return SizedBox(
       width: (MediaQuery.of(context).size.width - 56) / 2,
       child: ThemeAwareCard(
@@ -224,25 +226,18 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           children: [
             Icon(icon, color: theme.accentPrimary, size: 20),
             const SizedBox(height: 8),
-            Text(
-              value,
-              style: theme.titleFont.copyWith(fontSize: 28, height: 1.1),
-            ),
+            Text(value,
+                style: theme.titleFont.copyWith(fontSize: 28, height: 1.1)),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-              ),
-            ),
+            Text(label,
+                style: theme.bodyFont.copyWith(
+                    color: theme.textSecondary, fontSize: 12)),
           ],
         ),
       ),
     );
   }
 
-  /// Builds a wiki source section card.
   Widget _buildWikiSection({
     required AppThemeTokens theme,
     required WikiSite site,
@@ -259,20 +254,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  site.displayName,
-                  style: theme.titleFont.copyWith(fontSize: 16),
-                ),
+                Text(site.displayName,
+                    style: theme.titleFont.copyWith(fontSize: 16)),
                 const SizedBox(height: 2),
-                Text(
-                  site.apiUrl,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 11,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                Text(site.apiUrl,
+                    style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary, fontSize: 11),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -281,7 +269,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             onPressed: disabled ? null : onUpdate,
             icon: const Icon(Icons.sync_rounded, size: 18),
             label: Text(
-              _isIndexing ? 'Indexing...' : 'Update',
+              _isIndexing ? context.t.kbIndexing : context.t.kbUpdate,
               style: theme.titleFont.copyWith(fontSize: 13),
             ),
             style: ElevatedButton.styleFrom(
@@ -291,8 +279,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               disabledForegroundColor: theme.textSecondary,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+                  borderRadius: BorderRadius.circular(8)),
             ),
           ),
         ],
@@ -308,27 +295,22 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           Icon(Icons.error_outline, color: theme.danger, size: 24),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              message,
-              style: theme.bodyFont.copyWith(
-                color: theme.textPrimary,
-                fontSize: 13,
-              ),
-            ),
+            child: Text(message,
+                style: theme.bodyFont.copyWith(
+                    color: theme.textPrimary, fontSize: 13)),
           ),
         ],
       ),
     );
   }
 
-  /// Runs the full indexing pipeline: crawl → chunk → embed → store.
   Future<void> _indexWiki(WikiSite site, List<String> categories) async {
     if (_isIndexing) return;
 
     setState(() {
       _isIndexing = true;
       _indexingProgress = 0.0;
-      _indexingStatus = 'Starting crawl of ${site.displayName}...';
+      _indexingStatus = context.t.kbStartingCrawl(site.displayName);
       _error = null;
     });
 
@@ -347,18 +329,17 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
 
         setState(() {
           _indexingStatus =
-              'Crawling ${site.displayName}: $category (${ci + 1}/${categories.length})';
+              context.t.kbCrawlingPages(0, site.displayName);
           _indexingProgress = ci / categories.length;
         });
 
-        // Crawl
         final pages = await crawler.crawlCategory(
           site: site,
           categoryName: category,
           onProgress: (progress) {
             setState(() {
               _indexingStatus =
-                  'Crawling ${site.displayName}: ${progress.pagesFetched} pages...';
+                  context.t.kbCrawlingPages(progress.pagesFetched, site.displayName);
             });
           },
         );
@@ -366,7 +347,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         if (pages.isEmpty) continue;
         totalPages += pages.length;
 
-        // Chunk each page
         for (final page in pages) {
           final chunks = chunker.chunkByHeadings(
             page.content,
@@ -375,10 +355,8 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
 
           if (chunks.isEmpty) continue;
 
-          // Embed chunks
           setState(() {
-            _indexingStatus =
-                'Embedding ${page.title} (${chunks.length} chunks)...';
+            _indexingStatus = context.t.kbEmbedding(chunks.length, page.title);
           });
 
           final texts = chunks.map((c) => c.content).toList();
@@ -405,17 +383,15 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         }
       }
 
-      // Refresh stats.
       ref.invalidate(vectorStoreStatsProvider);
 
       setState(() {
         _isIndexing = false;
         _indexingProgress = 1.0;
         _indexingStatus =
-            'Completed: $totalChunks chunks from $totalPages pages across ${categories.length} categories.';
+            context.t.kbCompleted(totalChunks, totalPages);
       });
 
-      // Clear status after 5 seconds.
       Future.delayed(const Duration(seconds: 5), () {
         if (mounted) {
           setState(() {
@@ -427,11 +403,10 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     } catch (e) {
       setState(() {
         _isIndexing = false;
-        _error = 'Indexing failed: $e';
+        _error = context.t.kbFailed(e.toString());
         _indexingStatus = '';
       });
 
-      // Clear error after 8 seconds.
       Future.delayed(const Duration(seconds: 8), () {
         if (mounted) setState(() => _error = null);
       });

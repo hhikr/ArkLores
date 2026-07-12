@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../providers/theme_provider.dart';
 
 /// Source type for a citation.
@@ -85,8 +86,8 @@ class _CitationCardState extends ConsumerState<CitationCard>
         : '📚';
 
     final badgeLabel = widget.sourceType == CitationSourceType.wiki
-        ? 'Wiki'
-        : 'Book';
+        ? context.t.citationWiki
+        : context.t.citationBook;
 
     return GestureDetector(
       onTap: _toggle,
@@ -196,7 +197,7 @@ class _CitationCardState extends ConsumerState<CitationCard>
                                 size: 14, color: theme.accentPrimary),
                             const SizedBox(width: 4),
                             Text(
-                              'View in Wiki',
+                              context.t.citationViewInWiki,
                               style: theme.bodyFont.copyWith(
                                 color: theme.accentPrimary,
                                 fontSize: 12,

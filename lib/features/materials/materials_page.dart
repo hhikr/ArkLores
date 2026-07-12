@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/llm/llm_client.dart';
 import '../../core/rag/embedder_provider.dart';
 import '../../core/rag/vector_store_provider.dart';
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -13,7 +14,6 @@ import 'book_import_service.dart';
 import 'book_import_sheet.dart';
 import 'book_list_item.dart';
 
-/// Provider for the [BookImportService].
 final bookImportServiceProvider = Provider<BookImportService>((ref) {
   final vectorStore = ref.watch(vectorStoreProvider);
   final embedder = ref.watch(embedderProvider);
@@ -34,7 +34,6 @@ class MaterialsPage extends ConsumerWidget {
       backgroundColor: theme.bgPrimary,
       body: Column(
         children: [
-          // ── Header ──────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 48, 16, 12),
             child: Row(
@@ -43,7 +42,7 @@ class MaterialsPage extends ConsumerWidget {
                     color: theme.warning, size: 28),
                 const SizedBox(width: 10),
                 Text(
-                  'Materials',
+                  context.t.materialsTitle,
                   style: theme.titleFont.copyWith(fontSize: 22),
                 ),
               ],
@@ -61,8 +60,7 @@ class MaterialsPage extends ConsumerWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '⚠️ 资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。'
-                    'AI 将小心引用并以 Wiki 内容为优先参考。',
+                    context.t.materialsWarning,
                     style: theme.bodyFont.copyWith(
                       color: theme.textSecondary,
                       fontSize: 12,
@@ -75,7 +73,6 @@ class MaterialsPage extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
 
-          // ── Book list or empty state ───────────────────────
           Expanded(
             child: booksAsync.when(
               data: (books) {
@@ -87,14 +84,13 @@ class MaterialsPage extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => Center(
                 child: Text(
-                  'Failed to load books: $err',
+                  context.t.materialsLoadFailed(err.toString()),
                   style: theme.bodyFont.copyWith(color: theme.danger),
                 ),
               ),
             ),
           ),
 
-          // ── Import FAB ───────────────────────────────────────
           if (config.isValid)
             SafeArea(
               child: Padding(
@@ -105,7 +101,7 @@ class MaterialsPage extends ConsumerWidget {
                     onPressed: () => _importBooks(context, ref),
                     icon: const Icon(Icons.add_rounded, size: 20),
                     label: Text(
-                      'Import Books',
+                      context.t.materialsImportButton,
                       style: theme.titleFont.copyWith(fontSize: 15),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -140,12 +136,12 @@ class MaterialsPage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'No books yet',
+              context.t.materialsNoBooks,
               style: theme.titleFont.copyWith(fontSize: 20),
             ),
             const SizedBox(height: 8),
             Text(
-              'Import PDF or TXT files to build your\npersonal lore reference library.',
+              context.t.materialsEmptyDesc,
               textAlign: TextAlign.center,
               style: theme.bodyFont.copyWith(
                 color: theme.textSecondary,
@@ -156,7 +152,7 @@ class MaterialsPage extends ConsumerWidget {
             if (!config.isValid) ...[
               const SizedBox(height: 24),
               Text(
-                'Configure your API Key in Settings to enable import.',
+                context.t.materialsNoApiKeyHint,
                 textAlign: TextAlign.center,
                 style: theme.bodyFont.copyWith(
                   color: theme.warning,
@@ -205,7 +201,6 @@ class MaterialsPage extends ConsumerWidget {
   }
 
   Future<void> _importBooks(BuildContext context, WidgetRef ref) async {
-    final theme = ref.read(themeProvider);
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'txt'],
@@ -216,7 +211,6 @@ class MaterialsPage extends ConsumerWidget {
 
     final service = ref.read(bookImportServiceProvider);
 
-    // Show initial progress sheet.
     BookImportSheet.show(
       context,
       BookImportProgress(fileName: result.files.first.name),
@@ -224,9 +218,8 @@ class MaterialsPage extends ConsumerWidget {
 
     try {
       for (final file in result.files) {
-        // Update the sheet for each file.
         if (context.mounted) {
-          Navigator.of(context).pop(); // Dismiss previous.
+          Navigator.of(context).pop();
           BookImportSheet.show(
             context,
             BookImportProgress(fileName: file.name),
@@ -236,28 +229,26 @@ class MaterialsPage extends ConsumerWidget {
         await service.importFile(
           file,
           onProgress: (progress) {
-            // Update bottom sheet with progress.
             if (context.mounted) {
-              Navigator.of(context).pop(); // Dismiss previous.
+              Navigator.of(context).pop();
               BookImportSheet.show(context, progress);
             }
           },
         );
 
         if (context.mounted) {
-          Navigator.of(context).pop(); // Dismiss done sheet.
+          Navigator.of(context).pop();
         }
       }
 
-      // Refresh book list.
       ref.invalidate(_booksProvider);
       ref.invalidate(vectorStoreStatsProvider);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Import failed: $e'),
-            backgroundColor: theme.danger,
+            content: Text(context.t.materialsImportFailed(e.toString())),
+            backgroundColor: Colors.red.shade800,
           ),
         );
       }
@@ -279,7 +270,7 @@ class MaterialsPage extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: theme.cardSurface,
         title: Text(
-          'Edit Display Name',
+          context.t.materialsEditTitle,
           style: theme.titleFont.copyWith(fontSize: 18),
         ),
         content: TextField(
@@ -287,7 +278,7 @@ class MaterialsPage extends ConsumerWidget {
           autofocus: true,
           style: theme.bodyFont.copyWith(color: theme.textPrimary),
           decoration: InputDecoration(
-            hintText: 'Enter a display name',
+            hintText: context.t.materialsEditHint,
             hintStyle: TextStyle(color: theme.textSecondary),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -302,12 +293,12 @@ class MaterialsPage extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel',
+            child: Text(context.t.materialsCancel,
                 style: theme.bodyFont.copyWith(color: theme.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: Text('Save',
+            child: Text(context.t.materialsSave,
                 style: theme.bodyFont.copyWith(color: theme.accentPrimary)),
           ),
         ],
@@ -333,7 +324,6 @@ class MaterialsPage extends ConsumerWidget {
   }
 }
 
-/// Internal provider that fetches the book list.
 final _booksProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final store = ref.watch(vectorStoreProvider);
   return await store.getBooks();

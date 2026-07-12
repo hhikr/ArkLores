@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
@@ -12,7 +13,6 @@ class BookImportSheet extends ConsumerWidget {
 
   const BookImportSheet({super.key, required this.progress});
 
-  /// Shows the import sheet as a modal bottom sheet.
   static void show(BuildContext context, BookImportProgress progress) {
     showModalBottomSheet(
       context: context,
@@ -34,14 +34,13 @@ class BookImportSheet extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Title row ────────────────────────────────────
             Row(
               children: [
                 _buildStageIcon(theme),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _titleText,
+                    _titleText(context),
                     style: theme.titleFont.copyWith(fontSize: 16),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -50,13 +49,10 @@ class BookImportSheet extends ConsumerWidget {
                   Icon(Icons.check_circle_rounded,
                       color: theme.accentPrimary, size: 24),
                 if (_isError)
-                  Icon(Icons.error_rounded,
-                      color: theme.danger, size: 24),
+                  Icon(Icons.error_rounded, color: theme.danger, size: 24),
               ],
             ),
             const SizedBox(height: 12),
-
-            // ── Progress bar ─────────────────────────────────
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
@@ -69,10 +65,10 @@ class BookImportSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 8),
-
-            // ── Detail text ──────────────────────────────────
             Text(
-              _detailText,
+              _isError
+                  ? context.t.importErrorOccurred
+                  : (progress.detail ?? ''),
               style: theme.bodyFont.copyWith(
                 color: theme.textSecondary,
                 fontSize: 12,
@@ -80,22 +76,13 @@ class BookImportSheet extends ConsumerWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-
-            // ── Error detail ─────────────────────────────────
             if (_isError && progress.error != null) ...[
               const SizedBox(height: 8),
-              Text(
-                progress.error!,
-                style: theme.bodyFont.copyWith(
-                  color: theme.danger,
-                  fontSize: 12,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
+              Text(progress.error!,
+                  style: theme.bodyFont.copyWith(
+                      color: theme.danger, fontSize: 12),
+                  maxLines: 3, overflow: TextOverflow.ellipsis),
             ],
-
-            // ── Done / Dismiss button ────────────────────────
             if (_isDone || _isError) ...[
               const SizedBox(height: 16),
               SizedBox(
@@ -108,11 +95,10 @@ class BookImportSheet extends ConsumerWidget {
                     foregroundColor: theme.bgPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   child: Text(
-                    _isDone ? 'Done' : 'Dismiss',
+                    _isDone ? context.t.importDismiss : context.t.importDismiss,
                     style: theme.titleFont.copyWith(fontSize: 14),
                   ),
                 ),
@@ -124,28 +110,23 @@ class BookImportSheet extends ConsumerWidget {
     );
   }
 
-  String get _titleText {
+  String _titleText(BuildContext context) {
     switch (progress.stage) {
       case 'extracting':
-        return 'Reading ${progress.fileName}';
+        return context.t.importReading(progress.fileName);
       case 'chunking':
-        return 'Chunking text...';
+        return context.t.importChunking;
       case 'embedding':
-        return 'Generating embeddings...';
+        return context.t.importEmbedding;
       case 'storing':
-        return 'Saving to knowledge base...';
+        return context.t.importStoring;
       case 'done':
-        return 'Import complete';
+        return context.t.importDone;
       case 'error':
-        return 'Import failed';
+        return context.t.importFailed;
       default:
         return 'Importing...';
     }
-  }
-
-  String get _detailText {
-    if (progress.error != null) return 'Error occurred during import.';
-    return progress.detail ?? '';
   }
 
   bool get _isDone => progress.stage == 'done';
@@ -176,3 +157,5 @@ class BookImportSheet extends ConsumerWidget {
     }
   }
 }
+
+

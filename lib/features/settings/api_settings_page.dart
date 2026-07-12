@@ -2,16 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/llm/llm_client.dart';
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
 /// Dedicated sub-page for configuring Chat and Embedding API providers.
-///
-/// Chat and Embedding can use different providers (e.g. DeepSeek for
-/// chat, OpenAI for embeddings). When Embedding fields are left empty,
-/// the app falls back to the Chat config at runtime.
 class ApiSettingsPage extends ConsumerStatefulWidget {
   const ApiSettingsPage({super.key});
 
@@ -107,7 +104,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(
-          'API Settings',
+          context.t.apiSettingsTitle,
           style: theme.titleFont.copyWith(fontSize: 18),
         ),
         iconTheme: IconThemeData(color: theme.textPrimary),
@@ -116,7 +113,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ── Header ────────────────────────────────────
           Center(
             child: Icon(
               Icons.api_rounded,
@@ -127,10 +123,10 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           const SizedBox(height: 24),
 
           // ── Chat API Section ──────────────────────────
-          _buildSectionHeader(theme, Icons.chat_rounded, 'Chat API'),
+          _sectionHeader(theme, Icons.chat_rounded, context.t.apiSettingsChatSection),
           const SizedBox(height: 4),
           Text(
-            'Used for AI conversations (Fact Check, Summary, Roleplay).',
+            context.t.apiSettingsChatDesc,
             style: theme.bodyFont.copyWith(
               color: theme.textSecondary,
               fontSize: 12,
@@ -141,14 +137,14 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _inputLabel(theme, 'Base URL'),
+                _inputLabel(theme, context.t.apiSettingsLabelBaseUrl),
                 _inputField(
                   theme: theme,
                   controller: _chatBaseUrlCtrl,
                   hint: 'https://api.deepseek.com/v1',
                 ),
                 const SizedBox(height: 14),
-                _inputLabel(theme, 'API Key'),
+                _inputLabel(theme, context.t.apiSettingsLabelApiKey),
                 _inputField(
                   theme: theme,
                   controller: _chatApiKeyCtrl,
@@ -167,7 +163,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                _inputLabel(theme, 'Model'),
+                _inputLabel(theme, context.t.apiSettingsLabelModel),
                 _inputField(
                   theme: theme,
                   controller: _chatModelCtrl,
@@ -179,11 +175,11 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           const SizedBox(height: 28),
 
           // ── Embedding API Section ─────────────────────
-          _buildSectionHeader(theme, Icons.auto_awesome_rounded, 'Embedding API'),
+          _sectionHeader(
+              theme, Icons.auto_awesome_rounded, context.t.apiSettingsEmbedSection),
           const SizedBox(height: 4),
           Text(
-            'Used for knowledge base indexing (Wiki, books). '
-            'Can use a different provider from Chat.',
+            context.t.apiSettingsEmbedDesc,
             style: theme.bodyFont.copyWith(
               color: theme.textSecondary,
               fontSize: 12,
@@ -194,7 +190,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Use Chat config toggle ──────────────
                 Row(
                   children: [
                     SizedBox(
@@ -212,7 +207,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Use same provider as Chat',
+                        context.t.apiSettingsUseSameProvider,
                         style: theme.bodyFont.copyWith(
                           color: theme.textPrimary,
                           fontSize: 14,
@@ -224,14 +219,14 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 const SizedBox(height: 14),
 
                 if (!_useChatForEmbed) ...[
-                  _inputLabel(theme, 'Base URL'),
+                  _inputLabel(theme, context.t.apiSettingsLabelBaseUrl),
                   _inputField(
                     theme: theme,
                     controller: _embedBaseUrlCtrl,
                     hint: 'https://api.openai.com/v1',
                   ),
                   const SizedBox(height: 14),
-                  _inputLabel(theme, 'API Key'),
+                  _inputLabel(theme, context.t.apiSettingsLabelApiKey),
                   _inputField(
                     theme: theme,
                     controller: _embedApiKeyCtrl,
@@ -250,7 +245,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _inputLabel(theme, 'Model'),
+                  _inputLabel(theme, context.t.apiSettingsLabelModel),
                   _inputField(
                     theme: theme,
                     controller: _embedModelCtrl,
@@ -274,10 +269,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Embedding will use the Chat API config above. '
-                            'Note: DeepSeek does not support embeddings — '
-                            'if you use DeepSeek for chat, uncheck this '
-                            'to configure a separate embedding provider.',
+                            context.t.apiSettingsEmbedFallbackNote,
                             style: theme.bodyFont.copyWith(
                               color: theme.textSecondary,
                               fontSize: 12,
@@ -304,7 +296,9 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 size: 20,
               ),
               label: Text(
-                _saved ? '✓ Saved' : 'Save Configuration',
+                _saved
+                    ? context.t.apiSettingsSaved
+                    : context.t.apiSettingsSave,
                 style: theme.titleFont.copyWith(fontSize: 15),
               ),
               style: ElevatedButton.styleFrom(
@@ -323,16 +317,12 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     );
   }
 
-  Widget _buildSectionHeader(
-      AppThemeTokens theme, IconData icon, String title) {
+  Widget _sectionHeader(AppThemeTokens theme, IconData icon, String title) {
     return Row(
       children: [
         Icon(icon, color: theme.accentPrimary, size: 22),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: theme.titleFont.copyWith(fontSize: 18),
-        ),
+        Text(title, style: theme.titleFont.copyWith(fontSize: 18)),
       ],
     );
   }

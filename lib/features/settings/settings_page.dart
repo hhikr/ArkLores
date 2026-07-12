@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
@@ -19,7 +20,6 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         children: [
-          // ── Header ───────────────────────────────────────────
           const SizedBox(height: 32),
           Center(
             child: Icon(
@@ -31,7 +31,7 @@ class SettingsPage extends ConsumerWidget {
           const SizedBox(height: 16),
           Center(
             child: Text(
-              'Settings',
+              context.t.settingsTitle,
               style: theme.titleFont.copyWith(fontSize: 24),
             ),
           ),
@@ -48,14 +48,14 @@ class SettingsPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Theme',
+                        context.t.settingsTheme,
                         style: theme.titleFont.copyWith(fontSize: 16),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         notifier.currentTheme == AppTheme.ark
-                            ? 'Tactical Archive'
-                            : 'Holographic Projection',
+                            ? context.t.settingsThemeArk
+                            : context.t.settingsThemeEndfield,
                         style: theme.bodyFont.copyWith(
                           color: theme.textSecondary,
                           fontSize: 12,
@@ -76,7 +76,7 @@ class SettingsPage extends ConsumerWidget {
 
           // ── API Settings ─────────────────────────────────────
           Text(
-            'AI Services',
+            context.t.settingsAiServices,
             style: theme.titleFont.copyWith(fontSize: 18),
           ),
           const SizedBox(height: 12),
@@ -105,12 +105,12 @@ class SettingsPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'API Settings',
+                        context.t.settingsApiSettings,
                         style: theme.titleFont.copyWith(fontSize: 16),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Configure Chat & Embedding providers',
+                        context.t.settingsApiSettingsDesc,
                         style: theme.bodyFont.copyWith(
                           color: theme.textSecondary,
                           fontSize: 12,
@@ -130,7 +130,7 @@ class SettingsPage extends ConsumerWidget {
 
           // ── Knowledge Base ──────────────────────────────────
           Text(
-            'Knowledge Base',
+            context.t.settingsKnowledgeBase,
             style: theme.titleFont.copyWith(fontSize: 18),
           ),
           const SizedBox(height: 12),
@@ -159,12 +159,12 @@ class SettingsPage extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Knowledge Base Management',
+                        context.t.settingsKnowledgeBase,
                         style: theme.titleFont.copyWith(fontSize: 16),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Manage Wiki index, view stats, update knowledge base',
+                        context.t.settingsKnowledgeBaseDesc,
                         style: theme.bodyFont.copyWith(
                           color: theme.textSecondary,
                           fontSize: 12,
