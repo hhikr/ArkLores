@@ -118,11 +118,15 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       // Step 1: Fetch all page titles belonging to these categories
       state = state.copyWith(status: WikiIndexingStatus.fetchingTitles);
       final allUniqueTitles = <String>{};
+      final operatorTitles = <String>{};
       for (final category in categories) {
         final titles = await _crawler.fetchCategoryTitles(
           site: site,
           categoryName: category,
         );
+        if (category == 'Category:干员') {
+          operatorTitles.addAll(titles);
+        }
         allUniqueTitles.addAll(titles);
       }
 
@@ -207,7 +211,56 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
               : i + crawlBatchSize,
         );
 
-        final wikiPages = await _crawler.fetchPageContents(site, batch);
+        final opBatch = <String>[];
+        final normalBatch = <String>[];
+        for (final title in batch) {
+          if (site == WikiSite.prts && operatorTitles.contains(title)) {
+            opBatch.add(title);
+          } else {
+            normalBatch.add(title);
+          }
+        }
+
+        final wikiPages = <WikiPage>[];
+
+        // 1. Fetch normal pages via standard prop=extracts
+        if (normalBatch.isNotEmpty) {
+          final normalPages = await _crawler.fetchPageContents(site, normalBatch);
+          wikiPages.addAll(normalPages);
+        }
+
+        // 2. Fetch and assemble operator pages via raw wikitext
+        if (opBatch.isNotEmpty) {
+          final allOpTitlesToFetch = <String>[];
+          for (final opTitle in opBatch) {
+            allOpTitlesToFetch.add(opTitle);
+            allOpTitlesToFetch.add('$opTitle/语音记录');
+            allOpTitlesToFetch.add('${opTitle}的信物');
+          }
+
+          final wikitexts = await _crawler.fetchRawWikitexts(site, allOpTitlesToFetch);
+
+          for (final opTitle in opBatch) {
+            final mainPage = wikitexts[opTitle];
+            final voicePage = wikitexts['$opTitle/语音记录'];
+            final tokenPage = wikitexts['${opTitle}的信物'];
+
+            if (mainPage != null) {
+              final assembledContent = assembleOperatorMarkdown(
+                opTitle,
+                mainPage.content,
+                voicePage?.content ?? '',
+                tokenPage?.content ?? '',
+              );
+
+              wikiPages.add(WikiPage(
+                pageId: mainPage.pageId,
+                title: opTitle,
+                content: assembledContent,
+              ));
+            }
+          }
+        }
 
         for (final page in wikiPages) {
           state = state.copyWith(currentItemTitle: page.title);
@@ -405,5 +458,202 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         .toList();
 
     return cleanLines.join('\n');
+  }
+
+  /// Parses parameters from mediawiki templates, supporting nested structures.
+  /// Merges parameters if the template appears multiple times.
+  static Map<String, String> parseTemplate(String wikitext, String templateName) {
+    final params = <String, String>{};
+    final startKey = '{{$templateName';
+    
+    int searchOffset = 0;
+    while (true) {
+      int startIdx = wikitext.indexOf(startKey, searchOffset);
+      if (startIdx == -1) {
+        startIdx = wikitext.toLowerCase().indexOf(startKey.toLowerCase(), searchOffset);
+        if (startIdx == -1) break;
+      }
+      
+      // Find matching closing }}
+      int depth = 0;
+      int endIdx = -1;
+      for (int i = startIdx; i < wikitext.length - 1; i++) {
+        if (wikitext[i] == '{' && wikitext[i+1] == '{') {
+          depth++;
+          i++;
+        } else if (wikitext[i] == '}' && wikitext[i+1] == '}') {
+          depth--;
+          if (depth == 0) {
+            endIdx = i + 2;
+            break;
+          }
+          i++;
+        }
+      }
+      
+      if (endIdx == -1) {
+        // malformed template, move past startKey to prevent infinite loop
+        searchOffset = startIdx + startKey.length;
+        continue;
+      }
+      
+      final body = wikitext.substring(startIdx + startKey.length, endIdx - 2);
+      final parts = <String>[];
+      int currentStart = 0;
+      int bracketDepth = 0;
+      int squareBracketDepth = 0;
+      for (int i = 0; i < body.length; i++) {
+        final c = body[i];
+        if (c == '{' && i < body.length - 1 && body[i+1] == '{') {
+          bracketDepth++;
+          i++;
+        } else if (c == '}' && i < body.length - 1 && body[i+1] == '}') {
+          bracketDepth--;
+          i++;
+        } else if (c == '[' && i < body.length - 1 && body[i+1] == '[') {
+          squareBracketDepth++;
+          i++;
+        } else if (c == ']' && i < body.length - 1 && body[i+1] == ']') {
+          squareBracketDepth--;
+          i++;
+        } else if (c == '|' && bracketDepth == 0 && squareBracketDepth == 0) {
+          parts.add(body.substring(currentStart, i));
+          currentStart = i + 1;
+        }
+      }
+      parts.add(body.substring(currentStart));
+      
+      for (final part in parts) {
+        final eqIdx = part.indexOf('=');
+        if (eqIdx != -1) {
+          final name = part.substring(0, eqIdx).trim();
+          final val = part.substring(eqIdx + 1).trim();
+          if (name.isNotEmpty) {
+            params[name] = val;
+          }
+        }
+      }
+      
+      searchOffset = endIdx;
+    }
+    
+    return params;
+  }
+
+  /// Assembles operator raw wikitexts (main page, voice, token) into a unified markdown.
+  static String assembleOperatorMarkdown(
+    String operatorName,
+    String mainWikitext,
+    String voiceWikitext,
+    String tokenWikitext,
+  ) {
+    final sb = StringBuffer();
+    sb.writeln('# $operatorName\n');
+
+    // --- 1. Parse Operator Archives ---
+    final archivesSet = parseTemplate(mainWikitext, '人员档案set');
+    final archives = parseTemplate(mainWikitext, '人员档案');
+
+    sb.writeln('## 个人档案');
+    final basicFields = {
+      '性别': '性别',
+      '战斗经验': '战斗经验',
+      '出身地': '出身地',
+      '生日': '生日',
+      '种族': '种族',
+      '身高': '身高',
+      '矿石病感染情况': '矿石病感染情况',
+      '物理强度': '物理强度',
+      '战场机动': '战场机动',
+      '生理耐受': '生理耐受',
+      '战术规划': '战术规划',
+      '战斗技巧': '战斗技巧',
+      '源石技艺适应性': '源石技艺适应性',
+      '体细胞与源石融合率': '体细胞与源石融合率',
+      '血液源石结晶密度': '血液源石结晶密度',
+    };
+
+    for (final entry in basicFields.entries) {
+      final val = archivesSet[entry.key];
+      if (val != null && val.trim().isNotEmpty) {
+        sb.writeln('- ${entry.value}：${val.trim()}');
+      }
+    }
+    sb.writeln('');
+
+    // Iterate archives 1..15
+    for (int i = 1; i <= 15; i++) {
+      final title = archives['档案$i'];
+      final text = archives['档案${i}文本'];
+      if (title != null && title.trim().isNotEmpty && text != null && text.trim().isNotEmpty) {
+        sb.writeln('### ${title.trim()}');
+        sb.writeln('${text.trim()}\n');
+      }
+    }
+
+    // --- 2. Parse Token Description ---
+    if (tokenWikitext.isNotEmpty) {
+      final tokenInfo = parseTemplate(tokenWikitext, '道具信息');
+      final desc = tokenInfo['描述'];
+      final usage = tokenInfo['用途'];
+      final source = tokenInfo['获得方式'];
+
+      if ((desc != null && desc.trim().isNotEmpty) ||
+          (usage != null && usage.trim().isNotEmpty) ||
+          (source != null && source.trim().isNotEmpty)) {
+        sb.writeln('## 信物描述');
+        if (desc != null && desc.trim().isNotEmpty) {
+          var cleanDesc = desc.trim();
+          if (cleanDesc.startsWith('"') && cleanDesc.endsWith('"')) {
+            cleanDesc = cleanDesc.substring(1, cleanDesc.length - 1);
+          } else if (cleanDesc.startsWith('“') && cleanDesc.endsWith('”')) {
+            cleanDesc = cleanDesc.substring(1, cleanDesc.length - 1);
+          }
+          sb.writeln('信物文案：“$cleanDesc”');
+        }
+        if (usage != null && usage.trim().isNotEmpty) {
+          sb.writeln('- 用途：${usage.trim()}');
+        }
+        if (source != null && source.trim().isNotEmpty) {
+          sb.writeln('- 获得方式：${source.trim()}');
+        }
+        sb.writeln('');
+      }
+    }
+
+    // --- 3. Parse Voice Records ---
+    if (voiceWikitext.isNotEmpty) {
+      final voiceTable = parseTemplate(voiceWikitext, 'VoiceTable');
+      final voiceList = <String>[];
+
+      // Iterate voice lines 1..100
+      for (int i = 1; i <= 100; i++) {
+        final title = voiceTable['标题$i'];
+        final rawDialogue = voiceTable['台词$i'];
+        if (title != null && title.trim().isNotEmpty && rawDialogue != null && rawDialogue.trim().isNotEmpty) {
+          // Extract Chinese dialogue from {{VoiceData/word|中文|...}}
+          final match = RegExp(r'\{\{VoiceData/word\|中文\|([^}]+)\}\}').firstMatch(rawDialogue);
+          if (match != null) {
+            final cnDialogue = match.group(1)!.trim();
+            voiceList.add('- ${title.trim()}：$cnDialogue');
+          } else {
+            // Fallback: check if we have standard wikitext that can be trimmed
+            if (!rawDialogue.contains('{{VoiceData/word')) {
+              voiceList.add('- ${title.trim()}：${rawDialogue.trim()}');
+            }
+          }
+        }
+      }
+
+      if (voiceList.isNotEmpty) {
+        sb.writeln('## 语音记录');
+        for (final voice in voiceList) {
+          sb.writeln(voice);
+        }
+        sb.writeln('');
+      }
+    }
+
+    return sb.toString().trim();
   }
 }
