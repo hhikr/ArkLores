@@ -370,7 +370,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
     // 2. Extract and keep character names inside [name="..."] tags before stripping brackets
     content = content.replaceAllMapped(
       RegExp(r'\[name="([^"]+)"\]\s*'),
-      (match) => '${match.group(1)}\n',
+      (match) => '${match.group(1)}：',
     );
 
     // 3. Remove HTML comments
