@@ -52,43 +52,56 @@ class Message {
       Message(role: MessageRole.assistant, content: content);
 }
 
-/// Configuration for an LLM client.
+/// Configuration for LLM API connections.
 ///
-/// All fields are user-configurable via the Settings page.
+/// Chat and Embedding can use different providers (e.g. DeepSeek for
+/// chat + OpenAI for embeddings). When [embedApiKey] is empty, the
+/// embedding layer falls back to the chat config at runtime.
 class LLMConfig {
-  final String baseUrl;
-  final String apiKey;
+  // ── Chat API ─────────────────────────────────────────────
+  final String chatBaseUrl;
+  final String chatApiKey;
   final String chatModel;
-  final String embeddingModel;
+
+  // ── Embedding API ────────────────────────────────────────
+  final String embedBaseUrl;
+  final String embedApiKey;
+  final String embedModel;
 
   const LLMConfig({
-    this.baseUrl = 'https://api.openai.com/v1',
-    this.apiKey = '',
-    this.chatModel = 'gpt-4o-mini',
-    this.embeddingModel = 'text-embedding-3-small',
+    this.chatBaseUrl = 'https://api.deepseek.com/v1',
+    this.chatApiKey = '',
+    this.chatModel = 'deepseek-v4-flash',
+    this.embedBaseUrl = 'https://api.openai.com/v1',
+    this.embedApiKey = '',
+    this.embedModel = 'text-embedding-3-small',
   });
 
   LLMConfig copyWith({
-    String? baseUrl,
-    String? apiKey,
+    String? chatBaseUrl,
+    String? chatApiKey,
     String? chatModel,
-    String? embeddingModel,
+    String? embedBaseUrl,
+    String? embedApiKey,
+    String? embedModel,
   }) =>
       LLMConfig(
-        baseUrl: baseUrl ?? this.baseUrl,
-        apiKey: apiKey ?? this.apiKey,
+        chatBaseUrl: chatBaseUrl ?? this.chatBaseUrl,
+        chatApiKey: chatApiKey ?? this.chatApiKey,
         chatModel: chatModel ?? this.chatModel,
-        embeddingModel: embeddingModel ?? this.embeddingModel,
+        embedBaseUrl: embedBaseUrl ?? this.embedBaseUrl,
+        embedApiKey: embedApiKey ?? this.embedApiKey,
+        embedModel: embedModel ?? this.embedModel,
       );
 
-  /// Returns `true` if a valid API key is configured.
-  bool get isValid => apiKey.isNotEmpty;
+  /// Returns `true` if a chat API key is configured (embedding optional).
+  bool get isValid => chatApiKey.isNotEmpty;
 
-  /// Returns the URL suffix for chat completions endpoint.
-  String get chatEndpoint => '$baseUrl/chat/completions';
+  /// Returns the full URL for chat completions endpoint.
+  String get chatEndpoint => '$chatBaseUrl/chat/completions';
 
-  /// Returns the URL suffix for embeddings endpoint.
-  String get embeddingEndpoint => '$baseUrl/embeddings';
+  /// Returns the full URL for embeddings endpoint.
+  String get embeddingEndpoint => '$embedBaseUrl/embeddings';
 }
 
 /// Exception thrown by LLM operations.

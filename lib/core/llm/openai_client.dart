@@ -29,7 +29,7 @@ class OpenAICompatibleClient implements LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
   }) async {
-    _requireValidConfig();
+    _requireChatConfig();
 
     final body = <String, dynamic>{
       'model': config.chatModel,
@@ -46,7 +46,7 @@ class OpenAICompatibleClient implements LLMClient {
       final response = await _httpClient
           .post(
             Uri.parse(config.chatEndpoint),
-            headers: _headers(),
+            headers: _headers(config.chatApiKey),
             body: jsonEncode(body),
           )
           .timeout(_timeout);
@@ -81,7 +81,7 @@ class OpenAICompatibleClient implements LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
   }) async {
-    _requireValidConfig();
+    _requireChatConfig();
 
     final body = <String, dynamic>{
       'model': config.chatModel,
@@ -93,7 +93,7 @@ class OpenAICompatibleClient implements LLMClient {
 
     try {
       final request = http.Request('POST', Uri.parse(config.chatEndpoint))
-        ..headers.addAll(_headers())
+        ..headers.addAll(_headers(config.chatApiKey))
         ..body = jsonEncode(body);
 
       final streamedResponse = await _httpClient
@@ -144,15 +144,15 @@ class OpenAICompatibleClient implements LLMClient {
 
   @override
   Future<List<double>> embed(String text) async {
-    _requireValidConfig();
+    _requireEmbedConfig();
 
     try {
       final response = await _httpClient
           .post(
             Uri.parse(config.embeddingEndpoint),
-            headers: _headers(),
+            headers: _headers(_embedApiKey),
             body: jsonEncode({
-              'model': config.embeddingModel,
+              'model': config.embedModel,
               'input': text,
             }),
           )
@@ -181,9 +181,14 @@ class OpenAICompatibleClient implements LLMClient {
     }
   }
 
+  /// Returns the embedding API key, falling back to the chat key
+  /// when the user hasn't configured a separate embedding provider.
+  String get _embedApiKey =>
+      config.embedApiKey.isNotEmpty ? config.embedApiKey : config.chatApiKey;
+
   @override
   Future<List<List<double>>> embedBatch(List<String> texts) async {
-    _requireValidConfig();
+    _requireEmbedConfig();
 
     if (texts.isEmpty) return [];
 
@@ -203,9 +208,9 @@ class OpenAICompatibleClient implements LLMClient {
         final response = await _httpClient
             .post(
               Uri.parse(config.embeddingEndpoint),
-              headers: _headers(),
+              headers: _headers(_embedApiKey),
               body: jsonEncode({
-                'model': config.embeddingModel,
+                'model': config.embedModel,
                 'input': batch,
               }),
             )
@@ -240,15 +245,24 @@ class OpenAICompatibleClient implements LLMClient {
     }
   }
 
-  Map<String, String> _headers() => {
-        'Authorization': 'Bearer ${config.apiKey}',
+  Map<String, String> _headers(String apiKey) => {
+        'Authorization': 'Bearer $apiKey',
         'Content-Type': 'application/json',
       };
 
-  void _requireValidConfig() {
-    if (!config.isValid) {
+  void _requireChatConfig() {
+    if (config.chatApiKey.isEmpty) {
       throw const LLMException(
-        'API Key not configured. Please set up your API Key in Settings.',
+        'Chat API Key not configured. Please set up your Chat API in Settings.',
+      );
+    }
+  }
+
+  void _requireEmbedConfig() {
+    if (config.chatApiKey.isEmpty && config.embedApiKey.isEmpty) {
+      throw const LLMException(
+        'Embedding API not configured. Configure an Embedding API in '
+        'Settings, or ensure your Chat API provider supports embeddings.',
       );
     }
   }

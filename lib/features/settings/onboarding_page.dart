@@ -10,8 +10,8 @@ import '../../shared/theme/app_theme.dart';
 ///
 /// Guides users through:
 /// 1. App introduction
-/// 2. API Key configuration
-/// 3. Optional: immediately build Wiki index
+/// 2. Chat API Key configuration (embedding can be set later in Settings)
+/// 3. Ready to explore
 class OnboardingPage extends ConsumerStatefulWidget {
   final VoidCallback onComplete;
 
@@ -25,21 +25,21 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
 
-  // API config form controllers.
+  // Chat API config form controllers.
   late TextEditingController _baseUrlController;
   late TextEditingController _apiKeyController;
   late TextEditingController _chatModelController;
-  late TextEditingController _embeddingModelController;
   bool _obscureApiKey = true;
 
   @override
   void initState() {
     super.initState();
-    _baseUrlController = TextEditingController(text: 'https://api.openai.com/v1');
+    _baseUrlController = TextEditingController(
+      text: 'https://api.deepseek.com/v1',
+    );
     _apiKeyController = TextEditingController();
-    _chatModelController = TextEditingController(text: 'gpt-4o-mini');
-    _embeddingModelController = TextEditingController(
-      text: 'text-embedding-3-small',
+    _chatModelController = TextEditingController(
+      text: 'deepseek-v4-flash',
     );
   }
 
@@ -49,7 +49,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _baseUrlController.dispose();
     _apiKeyController.dispose();
     _chatModelController.dispose();
-    _embeddingModelController.dispose();
     super.dispose();
   }
 
@@ -67,10 +66,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   Future<void> _saveAndContinue() async {
     final config = LLMConfig(
-      baseUrl: _baseUrlController.text.trim(),
-      apiKey: _apiKeyController.text.trim(),
+      chatBaseUrl: _baseUrlController.text.trim(),
+      chatApiKey: _apiKeyController.text.trim(),
       chatModel: _chatModelController.text.trim(),
-      embeddingModel: _embeddingModelController.text.trim(),
     );
 
     if (config.isValid) {
@@ -221,14 +219,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Configure API Key',
+            'Configure Chat API',
             style: theme.titleFont.copyWith(fontSize: 22),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
             'ArkLores uses your own AI API key.\n'
-            'It is stored securely on your device.',
+            'Configure at least a Chat provider now;\n'
+            'Embedding can be set up later in Settings.',
             style: theme.bodyFont.copyWith(
               color: theme.textSecondary,
               fontSize: 14,
@@ -240,7 +239,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           _buildInputField(
             label: 'Base URL',
             controller: _baseUrlController,
-            hint: 'https://api.openai.com/v1',
+            hint: 'https://api.deepseek.com/v1',
             theme: theme,
           ),
           const SizedBox(height: 14),
@@ -264,16 +263,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           const SizedBox(height: 14),
           _buildInputField(
-            label: 'Chat Model',
+            label: 'Model',
             controller: _chatModelController,
-            hint: 'gpt-4o-mini',
-            theme: theme,
-          ),
-          const SizedBox(height: 14),
-          _buildInputField(
-            label: 'Embedding Model',
-            controller: _embeddingModelController,
-            hint: 'text-embedding-3-small',
+            hint: 'deepseek-v4-flash',
             theme: theme,
           ),
           const SizedBox(height: 28),
@@ -329,9 +321,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           Text(
             'You\'re ready to explore the world of\n'
             'Arknights and Endfield.\n\n'
-            'Visit the Knowledge Base in Settings to\n'
-            'build your Wiki index, or import books\n'
-            'from the Materials tab.',
+            'Visit Settings > API Settings to configure\n'
+            'a separate Embedding provider if needed,\n'
+            'or start browsing the Wiki!',
             style: theme.bodyFont.copyWith(
               color: theme.textSecondary,
               fontSize: 15,
