@@ -39,10 +39,15 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
 
   Future<void> _checkOnboarding() async {
     try {
-      // Use the same SettingsService instance managed by Riverpod to
-      // avoid races with EncryptedSharedPreferences initialization.
       final service = ref.read(settingsServiceProvider);
       final done = await service.isOnboardingDone();
+
+      // ⚠️ Must load API config from secure storage on every startup.
+      // Without this, apiConfigProvider stays at its initial empty state
+      // forever, and settings_page shows blank fields even though the
+      // values were saved in a previous session.
+      await ref.read(apiConfigProvider.notifier).load();
+
       if (mounted) {
         setState(() {
           _checkingOnboarding = false;
@@ -50,8 +55,6 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
         });
       }
     } catch (_) {
-      // If the storage read fails (e.g. first-init timing), default to
-      // showing the onboarding flow so the user isn't locked out.
       if (mounted) {
         setState(() {
           _checkingOnboarding = false;
