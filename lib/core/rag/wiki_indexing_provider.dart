@@ -359,14 +359,12 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   static String cleanStoryContent(String rawContent) {
     var content = rawContent;
 
-    // 1. Truncate at [Image] or [image] tag to discard huge list of media URL lines
-    final imageIndex = content.indexOf('[Image]');
-    if (imageIndex != -1) {
-      content = content.substring(0, imageIndex);
-    }
-    final lowercaseImageIndex = content.indexOf('[image]');
-    if (lowercaseImageIndex != -1) {
-      content = content.substring(0, lowercaseImageIndex);
+    // 1. Truncate at [Image] or [image] tag to discard huge list of media URL lines.
+    // We use a RegExp to match only standalone '[Image]' or '[image]' lines to prevent
+    // false positives on mid-story picture macros like [image="..."] or [Image(...)].
+    final match = RegExp(r'\n\[[Ii]mage\](?:\r?\n|$)').firstMatch(content);
+    if (match != null) {
+      content = content.substring(0, match.start);
     }
 
     // 2. Extract and keep character names inside [name="..."] tags before stripping brackets
