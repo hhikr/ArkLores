@@ -146,10 +146,6 @@ class OpenAICompatibleClient implements LLMClient {
   Future<List<double>> embed(String text) async {
     _requireValidConfig();
 
-    if (text.trim().isEmpty) {
-      return List.filled(1536, 0.0);
-    }
-
     try {
       final response = await _httpClient
           .post(
@@ -191,30 +187,16 @@ class OpenAICompatibleClient implements LLMClient {
 
     if (texts.isEmpty) return [];
 
-    // Filter out empty texts and embed them as zero vectors.
     final results = <List<double>>[];
-    final validTexts = <String>[];
-    final validIndices = <int>[];
-
-    for (var i = 0; i < texts.length; i++) {
-      if (texts[i].trim().isEmpty) {
-        results.add(List.filled(1536, 0.0));
-      } else {
-        validIndices.add(i);
-        validTexts.add(texts[i]);
-      }
-    }
-
-    if (validTexts.isEmpty) return results;
 
     try {
       // Split into batches of 100 to avoid request size limits.
       const batchSize = 100;
-      for (var offset = 0; offset < validTexts.length; offset += batchSize) {
-        final batch = validTexts.sublist(
+      for (var offset = 0; offset < texts.length; offset += batchSize) {
+        final batch = texts.sublist(
           offset,
-          offset + batchSize > validTexts.length
-              ? validTexts.length
+          offset + batchSize > texts.length
+              ? texts.length
               : offset + batchSize,
         );
 

@@ -2,21 +2,42 @@ import '../../core/llm/llm_client.dart';
 
 /// Wraps the [LLMClient]'s embedding methods with error handling
 /// and validation specific to the indexing pipeline.
+///
+/// Automatically detects the embedding vector dimension from the
+/// first successful API response, so it works with any model
+/// (OpenAI 1536-dim, DeepSeek 2048-dim, etc.).
 class Embedder {
   final LLMClient _client;
 
+  /// Cached embedding dimension, detected from first API response.
+  /// 0 means "not yet determined".
+  int _dimension = 0;
+
+  /// Default fallback dimension before first API call completes.
+  static const int _defaultDimension = 1536;
+
   Embedder(this._client);
 
-  /// Embeds a single text string into a 1536-dimensional vector.
+  /// Returns the detected embedding dimension.
+  /// 0 if no embedding has been performed yet.
+  int get detectedDimension => _dimension;
+
+  /// Embeds a single text string.
   ///
-  /// Returns a zero vector for empty or whitespace-only input.
+  /// Returns a zero vector for empty or whitespace-only input,
+  /// using the detected embedding dimension.
   Future<List<double>> embed(String text) async {
     if (text.trim().isEmpty) {
-      return List.filled(1536, 0.0);
+      return List.filled(
+        _dimension > 0 ? _dimension : _defaultDimension,
+        0.0,
+      );
     }
 
     try {
-      return await _client.embed(text);
+      final result = await _client.embed(text);
+      _detectDimension(result);
+      return result;
     } catch (e) {
       throw EmbedderException('Embedding failed: $e');
     }
@@ -38,12 +59,18 @@ class Embedder {
 
     for (var i = 0; i < texts.length; i++) {
       if (texts[i].trim().isEmpty) {
-        results.add(List.filled(1536, 0.0));
+        results.add(List.filled(
+          _dimension > 0 ? _dimension : _defaultDimension,
+          0.0,
+        ));
       } else {
         validIndices.add(i);
         validTexts.add(texts[i]);
         // Placeholder — will be filled after batch embedding.
-        results.add(List.filled(1536, 0.0));
+        results.add(List.filled(
+          _dimension > 0 ? _dimension : _defaultDimension,
+          0.0,
+        ));
       }
     }
 
@@ -53,6 +80,12 @@ class Embedder {
 
     try {
       final embeddings = await _client.embedBatch(validTexts);
+
+      // Detect dimension from the first result if not yet known.
+      if (embeddings.isNotEmpty && _dimension == 0) {
+        _dimension = embeddings.first.length;
+      }
+
       for (var j = 0; j < embeddings.length; j++) {
         results[validIndices[j]] = embeddings[j];
       }
@@ -61,6 +94,13 @@ class Embedder {
     }
 
     return EmbeddingResult(vectors: results, failedIndices: []);
+  }
+
+  /// Detects and caches the embedding dimension from a vector.
+  void _detectDimension(List<double> vector) {
+    if (_dimension == 0 && vector.isNotEmpty) {
+      _dimension = vector.length;
+    }
   }
 }
 

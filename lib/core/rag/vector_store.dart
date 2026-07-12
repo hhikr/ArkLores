@@ -7,9 +7,6 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 
 import '../rag/chunker.dart';
 
-/// The dimension of embedding vectors (text-embedding-3-small).
-const int embeddingDim = 1536;
-
 /// Result of a semantic search.
 class SearchResult {
   final Chunk chunk;
