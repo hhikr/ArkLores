@@ -725,7 +725,7 @@ dependencies:
 | sqlite-vec 方案 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用） |
 | Chat/Embedding 配置 | **可分开指定不同提供商**（如 Chat 用 DeepSeek，Embedding 用 OpenAI），设置页位于子页面「API Settings」 |
 | Embedding 维度 | **动态检测**——从首次 API 响应自动获取，不写死 1536，兼容 OpenAI / DeepSeek / 其他模型 |
-| 本地化 | **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全），Riverpod 切换即时生效 |
+| 本地化 | **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全），设置页 `SegmentedButton` 切换即时生效 |
 | 作者署名 | **hhikr**（写入 `AUTHORS` 文件、README、LICENSE 头部） |
 | GitHub 仓库 | `github.com/hhikr/ArkLores` |
 | AI 资料可信度 | 书籍来源内容全局应用信任策略，以 Wiki 为优先参考，引用时颜色区分并附免责声明 |
