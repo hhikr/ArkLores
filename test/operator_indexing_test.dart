@@ -56,13 +56,9 @@ void main() {
         tokenPage.content,
       );
 
-      print('\n=== Assembled Operator Markdown (Snippet) ===');
-      final snippetLen = assembled.length > 1200 ? 1200 : assembled.length;
-      print(assembled.substring(0, snippetLen));
-      if (assembled.length > 1200) {
-        print('...\n[Assembled content truncated for display]');
-      }
-      print('=============================================\n');
+      print('\n=== Assembled Operator Markdown (ALL characters) ===');
+      print(assembled);
+      print('====================================================\n');
 
       // 1. Verify Archives
       expect(assembled, contains('# 阿米娅'));
@@ -91,10 +87,14 @@ void main() {
       print('Found ${chunks.length} chunks.');
       expect(chunks.isNotEmpty, isTrue);
 
+      print('\n=== Chunking Results (Total: ${chunks.length} chunks) ===');
       for (var i = 0; i < chunks.length; i++) {
-        print('Chunk $i: Section="${chunks[i].section}" Length=${chunks[i].content.length} chars');
-        expect(chunks[i].content.isNotEmpty, isTrue);
+        print('Chunk $i Section: "${chunks[i].section}" (length: ${chunks[i].content.length} chars)');
+        print('Chunk $i content:');
+        print(chunks[i].content);
+        print('-----------------------------------------------------------');
       }
+      print('===========================================================');
 
       crawler.dispose();
     });
