@@ -28,6 +28,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   bool _obscureEmbedKey = true;
   bool _useChatForEmbed = false;
   bool _saved = false;
+  bool _synced = false;
 
   @override
   void initState() {
@@ -44,18 +45,22 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Sync again when the provider state changes (e.g. load completes
+    // after the first didChangeDependencies call).
     _syncControllers();
   }
 
   void _syncControllers() {
+    if (_synced) return;
     final config = ref.read(apiConfigProvider);
-    if (config.chatApiKey.isNotEmpty && _chatApiKeyCtrl.text.isEmpty) {
+    if (config.chatApiKey.isNotEmpty) {
       _chatBaseUrlCtrl.text = config.chatBaseUrl;
       _chatApiKeyCtrl.text = config.chatApiKey;
       _chatModelCtrl.text = config.chatModel;
       _embedBaseUrlCtrl.text = config.embedBaseUrl;
       _embedApiKeyCtrl.text = config.embedApiKey;
       _embedModelCtrl.text = config.embedModel;
+      _synced = true;
     }
   }
 
