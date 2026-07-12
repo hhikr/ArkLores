@@ -51,6 +51,7 @@ dependencies:
 
   # File system paths
   path_provider: ^2.1.0
+  path: ^1.9.0  # Direct dependency for path utilities
 
   # UUID generation
   uuid: ^4.5.0

@@ -196,12 +196,8 @@ class BookImportService {
   Future<String> _extractPdfText(String filePath) async {
     final document = PdfDocument(inputBytes: await File(filePath).readAsBytes());
     try {
-      final buffer = StringBuffer();
-      for (var i = 0; i < document.pages.count; i++) {
-        final page = document.pages[i];
-        buffer.writeln(page.text);
-      }
-      return buffer.toString();
+      final extractor = PdfTextExtractor(document);
+      return extractor.extractText();
     } finally {
       document.dispose();
     }

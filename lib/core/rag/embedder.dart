@@ -31,25 +31,24 @@ class Embedder {
       return EmbeddingResult(vectors: [], failedIndices: []);
     }
 
-    // Filter out empty texts.
+    // Separate empty texts (skip embedding, assign zero vectors).
     final validTexts = <String>[];
     final validIndices = <int>[];
-    final results = <List<double>?> List.filled(texts.length, null);
+    final results = <List<double>>[];
 
     for (var i = 0; i < texts.length; i++) {
       if (texts[i].trim().isEmpty) {
-        results[i] = List.filled(1536, 0.0);
+        results.add(List.filled(1536, 0.0));
       } else {
         validIndices.add(i);
         validTexts.add(texts[i]);
+        // Placeholder — will be filled after batch embedding.
+        results.add(List.filled(1536, 0.0));
       }
     }
 
     if (validTexts.isEmpty) {
-      return EmbeddingResult(
-        vectors: results.whereType<List<double>>().toList(),
-        failedIndices: [],
-      );
+      return EmbeddingResult(vectors: results, failedIndices: []);
     }
 
     try {
@@ -58,21 +57,10 @@ class Embedder {
         results[validIndices[j]] = embeddings[j];
       }
     } catch (e) {
-      // Mark all valid texts as failed.
       throw EmbedderException('Batch embedding failed: $e');
     }
 
-    final failedIndices = <int>[];
-    for (var i = 0; i < results.length; i++) {
-      if (results[i] == null) {
-        failedIndices.add(i);
-      }
-    }
-
-    return EmbeddingResult(
-      vectors: results.whereType<List<double>>().toList(),
-      failedIndices: failedIndices,
-    );
+    return EmbeddingResult(vectors: results, failedIndices: []);
   }
 }
 
