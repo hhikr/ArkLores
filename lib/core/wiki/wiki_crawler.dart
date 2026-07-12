@@ -34,38 +34,14 @@ class MediaWikiCrawler {
   }) async {
     final pages = <WikiPage>[];
     String? continueToken;
-    var totalPages = 0;
+    var fetched = 0;
 
-    // Step 1: Count total pages in category.
-    final countResult = await _queryApi(site, {
-      'action': 'query',
-      'format': 'json',
-      'list': 'categorymembers',
-      'cmtitle': categoryName,
-      'cmlimit': '1',
-    });
-    totalPages = countResult['query']['categorymembers']?['cmcontinue'] as int? ?? 0;
-    if (totalPages == 0) {
-      // Fallback: count via query-meta
-      final metaResult = await _queryApi(site, {
-        'action': 'query',
-        'format': 'json',
-        'list': 'categorymembers',
-        'cmtitle': categoryName,
-        'cmlimit': 'max',
-      });
-      totalPages = (metaResult['query']['categorymembers'] as List<dynamic>?)?.length ?? 0;
-      // Actually, just proceed without total count.
-      totalPages = 0;
-    }
-
+    // Report initial progress (total pages unknown upfront).
     onProgress?.call(CrawlProgress(
-      totalPages: totalPages,
       currentTitle: categoryName,
     ));
 
-    // Step 2: Fetch pages in batches.
-    var fetched = 0;
+    // Fetch pages in batches.
     do {
       final params = <String, String>{
         'action': 'query',
