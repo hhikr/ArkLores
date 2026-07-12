@@ -348,7 +348,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
                 sourceType: 'wiki',
                 sourceUrl: site == WikiSite.prts
                     ? 'https://prts.wiki/w/${Uri.encodeComponent(page.title)}'
-                    : 'https://wiki.endfield.moe/w/${Uri.encodeComponent(page.title)}',
+                    : 'https://warfarin.wiki/cn/${Uri.encodeComponent(page.title)}',
                 wiki: site.key,
               );
               totalNewChunks += embedResult.vectors.length;

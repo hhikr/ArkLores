@@ -1,7 +1,7 @@
 /// Supported Wiki sites.
 enum WikiSite {
   prts('prts', 'https://prts.wiki/api.php'),
-  endfield('endfield', 'https://wiki.endfield.moe/api.php');
+  endfield('endfield', 'https://warfarin.wiki/cn/api.php');
 
   final String key;
   final String apiUrl;
@@ -13,7 +13,7 @@ enum WikiSite {
       case WikiSite.prts:
         return 'PRTS Wiki';
       case WikiSite.endfield:
-        return 'Endfield Wiki';
+        return '华法琳Wiki';
     }
   }
 }
