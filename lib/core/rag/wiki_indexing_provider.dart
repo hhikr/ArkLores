@@ -215,7 +215,27 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           // We delete the existing page chunks before writing new ones to prevent leftovers
           await _vectorStore.deleteWikiPage(site.key, page.title);
 
-          final chunks = chunker.chunkByHeadings(page.content, pageTitle: page.title);
+          // Skip indexing index/list pages to avoid unneeded vectors and massive noise
+          final isListOrNav = page.title.contains('一览') ||
+              page.title.contains('列表') ||
+              page.title.contains('导航') ||
+              page.title.contains('Category:');
+          if (isListOrNav) {
+            processed++;
+            state = state.copyWith(
+              processedCount: processed,
+              progress: (processed / pagesToUpdate.length).clamp(0.0, 1.0),
+            );
+            continue;
+          }
+
+          var finalContent = page.content;
+          final isStoryPage = page.content.contains('剧情模拟器');
+          if (isStoryPage) {
+            finalContent = _cleanStoryContent(page.content);
+          }
+
+          final chunks = chunker.chunkByHeadings(finalContent, pageTitle: page.title);
           if (chunks.isNotEmpty) {
             final texts = chunks.map((c) => c.content).toList();
             final embedResult = await _embedder.embedBatch(texts);
@@ -330,5 +350,47 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   /// Resets the indexing state back to idle.
   void reset() {
     state = WikiIndexingState();
+  }
+
+  /// Cleans wikitext script macros and templates from Arknights story pages.
+  ///
+  /// Removes [Character(...)], [Background(...)], [PlayMusic(...)], HTML comments,
+  /// and navigation templates, keeping only actual dialogues and narrations.
+  String _cleanStoryContent(String rawContent) {
+    var content = rawContent;
+
+    // 1. Remove HTML comments
+    content = content.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
+
+    // 2. Remove plot navigator templates (e.g. {{Navigator/plot|...}})
+    content = content.replaceAll(RegExp(r'\{\{[Nn]avigator/[^}]*\}\}'), '');
+    content = content.replaceAll(RegExp(r'\{\{[Pp]lot[^}]*\}\}'), '');
+
+    // 3. Remove story simulator headers / starts
+    content = content.replaceAll(RegExp(r'\{\{剧情模拟器[^}]*'), '');
+
+    // 4. Remove game scripting macro instructions (typically enclosed in square brackets)
+    // Matches patterns like [Character(name="...", ...)], [Background(...)], [Delay(...)], [name="..."]
+    content = content.replaceAll(RegExp(r'\[[A-Za-z0-9_]+(?:\([^)]*\))?\]'), '');
+    content = content.replaceAll(RegExp(r'\[[A-Za-z_]+=[^\]]*\]'), '');
+
+    // 5. Remove any other square bracket command lines
+    content = content.replaceAll(RegExp(r'\[[A-Za-z0-9_]+.*?\]'), '');
+
+    // 6. Split, trim, and filter out structural template residues
+    final lines = content.split('\n');
+    final cleanLines = lines
+        .map((line) => line.trim())
+        .where((line) =>
+            line.isNotEmpty &&
+            !line.startsWith('{{') &&
+            !line.startsWith('}}') &&
+            line != '|' &&
+            !line.startsWith('|背景=') &&
+            !line.startsWith('|立绘=') &&
+            !line.startsWith('|音频='))
+        .toList();
+
+    return cleanLines.join('\n');
   }
 }
