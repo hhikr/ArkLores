@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import 'bookmark_page.dart';
+import 'bookmark_service.dart' show Bookmark;
 import 'wiki_dark_mode.dart';
 import 'wiki_toolbar.dart';
 
@@ -123,8 +125,29 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         );
   }
 
-  void _openBookmarks() {
-    // Placeholder — will navigate to BookmarkPage in T7.
+  Future<void> _openBookmarks() async {
+    final bookmark = await Navigator.of(context).push<Bookmark>(
+      MaterialPageRoute(
+        builder: (_) => const BookmarkPage(),
+      ),
+    );
+    if (bookmark == null || !mounted) return;
+
+    // Determine which tab to switch to.
+    final targetIndex = bookmark.site == 'prts' ? 0 : 1;
+
+    // Switch tab if needed.
+    if (_tabController.index != targetIndex) {
+      _tabController.animateTo(targetIndex);
+    }
+
+    // Load the bookmarked URL in the corresponding WebView.
+    final controller = _controllers[targetIndex];
+    if (controller != null) {
+      controller.loadUrl(
+        urlRequest: URLRequest(url: WebUri(bookmark.url)),
+      );
+    }
   }
 
   // ─── WebView tab state callbacks ─────────────────────────────────
