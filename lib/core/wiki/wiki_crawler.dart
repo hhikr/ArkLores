@@ -194,6 +194,64 @@ class MediaWikiCrawler {
     return pages;
   }
 
+  /// Fetches raw wikitext for a list of page titles in one API call.
+  ///
+  /// Returns a Map of page title -> WikiPage (containing pageId, title, content).
+  /// Skips missing pages.
+  Future<Map<String, WikiPage>> fetchRawWikitexts(
+    WikiSite site,
+    List<String> titles,
+  ) async {
+    if (titles.isEmpty) return {};
+
+    final result = <String, WikiPage>{};
+
+    // Process in sub-batches to avoid URI too long errors.
+    for (var i = 0; i < titles.length; i += _batchSize) {
+      final batch = titles.sublist(
+        i,
+        (i + _batchSize > titles.length) ? titles.length : i + _batchSize,
+      );
+
+      final response = await _queryApi(site, {
+        'action': 'query',
+        'format': 'json',
+        'titles': batch.join('|'),
+        'prop': 'revisions',
+        'rvprop': 'content',
+        'rvslots': 'main',
+      });
+
+      final query = response['query'] as Map<String, dynamic>?;
+      final pagesJson = query?['pages'] as Map<String, dynamic>? ?? {};
+
+      for (final entry in pagesJson.entries) {
+        final pageData = entry.value as Map<String, dynamic>?;
+        if (pageData == null) continue;
+        if (pageData.containsKey('missing') || pageData['pageid'] == null) continue;
+
+        final title = pageData['title'] as String? ?? '';
+        final pageId = pageData['pageid'] as int;
+        final revisions = pageData['revisions'] as List<dynamic>?;
+        if (title.isNotEmpty && revisions != null && revisions.isNotEmpty) {
+          final wikitext = revisions[0]['slots']?['main']?['*'] as String? ?? '';
+          result[title] = WikiPage(
+            pageId: pageId,
+            title: title,
+            content: wikitext,
+          );
+        }
+      }
+
+      // Delay between sub-batches.
+      if (i + _batchSize < titles.length) {
+        await Future.delayed(_requestDelay);
+      }
+    }
+
+    return result;
+  }
+
   /// Fetches the last modification (touched) timestamps for a list of page titles.
   ///
   /// Splits into batches of [_batchSize] to avoid URL length limitations.
