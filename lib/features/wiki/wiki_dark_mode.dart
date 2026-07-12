@@ -2,26 +2,21 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 /// Manages Wiki dark mode via CSS injection into [InAppWebView].
 ///
-/// The strategy uses a style tag with id `arklores-dark-mode` containing
-/// an invert filter on the root element, plus selective re-inversion of
-/// images and media to avoid double-inversion artifacts.
-///
-/// After CSS injection, a DOM walk re-inverts elements whose computed
-/// `background-image` is set via CSS classes (not inline styles), since
-/// those cannot be targeted by CSS attribute selectors alone.
+/// Strategy selection:
+/// - For sites with a native dark mode (`<html class="dark">`, e.g. Warfarin
+///   Wiki / Tailwind CSS), "dark mode ON" toggles the `dark` class off so the
+///   site's own light-mode styles take effect — no filter inversion needed.
+/// - For light-native sites (e.g. PRTS Wiki), "dark mode ON" injects a CSS
+///   `filter: invert(1)` on `<html>` and re-inverts images/media so they
+///   appear at their original colours.
 class WikiDarkMode {
   WikiDarkMode._();
 
   static const String _styleId = 'arklores-dark-mode';
 
-  /// CSS rules for dark mode.
+  /// CSS rules for the dark-mode inversion strategy (light-native sites).
   ///
-  /// - Base invert + hue rotation on `<html>` transforms light backgrounds
-  ///   into dark ones while preserving hue relationships.
-  /// - Images, videos, canvases and elements with background images are
-  ///   re-inverted so they appear naturally, covering both longhand
-  ///   (`background-image`) and shorthand (`background: url(...)`) inline styles.
-  /// - A subtle background colour prevents intermediate white flashes.
+  /// Unused when the site has `<html class="dark">` (native dark mode site).
   static const String _darkModeCSS = '''
 html {
   filter: invert(1) hue-rotate(180deg) !important;
@@ -41,9 +36,8 @@ picture,
 }
 ''';
 
-  /// JS that walks the DOM to re-invert elements whose computed
-  /// `background-image` is set via CSS classes (not inline styles) so they
-  /// render correctly under the html-level invert.
+  /// JS injected for light-native sites to re-invert elements whose computed
+  /// `background-image` is set via CSS classes (beyond what CSS selectors reach).
   static const String _reInvertBackgroundsJS = '''
 (function() {
   var reInvert = "invert(1) hue-rotate(180deg)";
@@ -64,37 +58,62 @@ picture,
 })();
 ''';
 
-  /// JS that cleans up inline filters set by [_reInvertBackgroundsJS].
-  static const String _cleanupInvertedJS = '''
+  /// JS that cleans up when turning dark mode OFF.
+  static const String _cleanupJS = '''
 (function() {
-  var el = document.getElementById("$_styleId");
-  if (el) el.remove();
+  var html = document.documentElement;
 
-  var items = document.querySelectorAll("[data-arklores-inverted]");
-  for (var i = 0; i < items.length; i++) {
-    items[i].style.filter = "";
-    items[i].removeAttribute("data-arklores-inverted");
+  if (html.dataset.arkloresNativeDark === "removed") {
+    // ── Dark-native site cleanup ──
+    // Restore the dark class we removed during inject().
+    html.classList.add("dark");
+    delete html.dataset.arkloresNativeDark;
+  } else {
+    // ── Light-native site cleanup ──
+    // Remove the CSS inversion style tag and inline filters.
+    var style = document.getElementById("$_styleId");
+    if (style) style.remove();
+    var items = document.querySelectorAll("[data-arklores-inverted]");
+    for (var i = 0; i < items.length; i++) {
+      items[i].style.filter = "";
+      items[i].removeAttribute("data-arklores-inverted");
+    }
   }
 })();
 ''';
 
-  /// Injects (or updates) the dark mode style tag into the page, then
-  /// re-inverts elements with class-based background images.
+  /// Injects dark mode (or "day mode" for dark-native sites).
+  ///
+  /// For sites with `<html class="dark">`: removes the `dark` class so the
+  /// site's own light-mode styles render natively, no CSS inversion needed.
+  ///
+  /// For light-native sites: injects the inversion CSS and re-inverts media.
   static Future<void> inject(InAppWebViewController controller) async {
     final js = '''
 (function() {
-  var css = ${_jsStringLiteral(_darkModeCSS)};
-  var el = document.getElementById('$_styleId');
-  if (el) {
-    el.textContent = css;
+  var html = document.documentElement;
+
+  if (html.classList.contains("dark")) {
+    // ── Dark-native site (e.g. Warfarin Wiki) ──
+    // Remove the class so the site's own light-mode styles take over.
+    html.classList.remove("dark");
+    html.dataset.arkloresNativeDark = "removed";
   } else {
-    var style = document.createElement('style');
-    style.id = '$_styleId';
-    style.textContent = css;
-    document.head.appendChild(style);
+    // ── Light-native site (e.g. PRTS Wiki) ──
+    // Inject CSS inversion dark mode and re-invert media.
+    var css = ${_jsStringLiteral(_darkModeCSS)};
+    var el = document.getElementById('$_styleId');
+    if (el) {
+      el.textContent = css;
+    } else {
+      var style = document.createElement('style');
+      style.id = '$_styleId';
+      style.textContent = css;
+      document.head.appendChild(style);
+    }
+    $_reInvertBackgroundsJS
   }
 })();
-$_reInvertBackgroundsJS
 ''';
     try {
       await controller.evaluateJavascript(source: js);
@@ -103,10 +122,10 @@ $_reInvertBackgroundsJS
     }
   }
 
-  /// Removes the dark mode style tag and cleans up inline filters.
+  /// Removes dark mode, restoring the site's original appearance.
   static Future<void> remove(InAppWebViewController controller) async {
     try {
-      await controller.evaluateJavascript(source: _cleanupInvertedJS);
+      await controller.evaluateJavascript(source: _cleanupJS);
     } catch (_) {
       // Silently ignore.
     }
@@ -125,9 +144,6 @@ $_reInvertBackgroundsJS
   }
 
   /// Builds a safe JavaScript string literal from a multi-line Dart string.
-  ///
-  /// Escapes backticks, dollar signs, backslashes, and newlines so the CSS
-  /// can be embedded inside a template literal without breaking the JS AST.
   static String _jsStringLiteral(String value) {
     return '`${value
         .replaceAll('\\', '\\\\')
