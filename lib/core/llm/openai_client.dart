@@ -2,9 +2,31 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:http/http.dart' as http;
 
 import 'llm_client.dart';
+
+// ── Top-level helper for compute() isolate ──────────────────────────────────
+// Must be top-level (not a class member) so Flutter's isolate spawner can
+// locate it without capturing any mutable class state.
+
+/// Parses an OpenAI-compatible embedding batch JSON response string.
+///
+/// Sorts items by the `index` field to guarantee the original request order.
+/// Uses `(v as num).toDouble()` rather than `.cast<double>()` to handle
+/// providers that encode zero-valued floats as JSON integers.
+List<List<double>> _parseEmbeddingBatchResponse(String responseBody) {
+  final data = jsonDecode(responseBody) as Map<String, dynamic>;
+  final dataList = data['data'] as List<dynamic>;
+  dataList.sort((a, b) => (a['index'] as int).compareTo(b['index'] as int));
+  return dataList.map((item) {
+    final raw = item['embedding'] as List<dynamic>;
+    return raw.map((v) => (v as num).toDouble()).toList();
+  }).toList();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// OpenAI-compatible implementation of [LLMClient].
 ///
@@ -205,18 +227,42 @@ class OpenAICompatibleClient implements LLMClient {
               : offset + batchSize,
         );
 
-        final response = await _httpClient
-            .post(
-              Uri.parse(config.embeddingEndpoint),
-              headers: _headers(_embedApiKey),
-              body: jsonEncode({
-                'model': config.embedModel,
-                'input': batch,
-              }),
-            )
-            .timeout(Duration(
-              seconds: _timeout.inSeconds + (batch.length ~/ 10),
-            ));
+        final batchTimeout = Duration(
+          seconds: _timeout.inSeconds + (batch.length ~/ 10),
+        );
+
+        // Attempt the request; on SocketException retry once.
+        //
+        // "Software caused connection abort" / "Connection reset" happens
+        // when the server closes a keep-alive TCP connection while the app
+        // was busy (e.g., during the previous BLOB compute() isolate).
+        // A 2-second pause lets the server finish teardown, then a fresh
+        // connection is opened automatically by http.Client.
+        http.Response response;
+        try {
+          response = await _httpClient
+              .post(
+                Uri.parse(config.embeddingEndpoint),
+                headers: _headers(_embedApiKey),
+                body: jsonEncode({
+                  'model': config.embedModel,
+                  'input': batch,
+                }),
+              )
+              .timeout(batchTimeout);
+        } on SocketException {
+          await Future.delayed(const Duration(seconds: 2));
+          response = await _httpClient
+              .post(
+                Uri.parse(config.embeddingEndpoint),
+                headers: _headers(_embedApiKey),
+                body: jsonEncode({
+                  'model': config.embedModel,
+                  'input': batch,
+                }),
+              )
+              .timeout(batchTimeout);
+        }
 
         if (response.statusCode != 200) {
           throw LLMException(
@@ -226,15 +272,14 @@ class OpenAICompatibleClient implements LLMClient {
           );
         }
 
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final dataList = data['data'] as List<dynamic>;
-        // Sort by index to preserve order.
-        dataList.sort((a, b) =>
-            (a['index'] as int).compareTo(b['index'] as int));
-
-        for (final item in dataList) {
-          results.add((item['embedding'] as List<dynamic>).cast<double>());
-        }
+        // Parse the JSON response in a background isolate.
+        //
+        // For a batch of even 10 chunks at 1536 dims, the raw JSON body is
+        // ~230 KB. Calling jsonDecode() synchronously on the main thread
+        // blocks the Flutter rendering pipeline and causes jank/black screen.
+        final parsed =
+            await compute(_parseEmbeddingBatchResponse, response.body);
+        results.addAll(parsed);
       }
 
       return results;
