@@ -46,7 +46,9 @@ class KnowledgeBasePage extends ConsumerWidget {
             context.t.kbStartingCrawl(indexingState.currentSiteName ?? '');
         break;
       case WikiIndexingStatus.fetchingTitles:
-        statusText = '正在拉取维基页面目录...';
+        statusText = indexingState.currentItemTitle.isNotEmpty
+            ? indexingState.currentItemTitle
+            : '正在拉取维基页面目录...';
         break;
       case WikiIndexingStatus.fetchingTouched:
         statusText = '正在检查更新时间戳...';
@@ -436,19 +438,25 @@ class KnowledgeBasePage extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           ElevatedButton.icon(
-            onPressed: disabled ? null : onUpdate,
+            onPressed: isCurrentIndexing
+                ? () =>
+                    ref.read(wikiIndexingProvider.notifier).cancel()
+                : (disabled ? null : onUpdate),
             icon: Icon(
                 isCurrentIndexing
-                    ? Icons.hourglass_empty_rounded
+                    ? Icons.stop_rounded
                     : Icons.sync_rounded,
                 size: 18),
             label: Text(
-              isCurrentIndexing ? context.t.kbIndexing : context.t.kbUpdate,
+              isCurrentIndexing ? '取消' : context.t.kbUpdate,
               style: theme.titleFont.copyWith(fontSize: 13),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: theme.accentPrimary,
-              foregroundColor: theme.bgPrimary,
+              backgroundColor: isCurrentIndexing
+                  ? theme.danger.withValues(alpha: 0.15)
+                  : theme.accentPrimary,
+              foregroundColor:
+                  isCurrentIndexing ? theme.danger : theme.bgPrimary,
               disabledBackgroundColor: theme.divider,
               disabledForegroundColor: theme.textSecondary,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
