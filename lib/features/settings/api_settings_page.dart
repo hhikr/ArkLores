@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/llm/embedding_profile.dart';
 import '../../core/llm/llm_client.dart';
+import '../../core/rag/local_embedding/builtin_embedding_model.dart';
+import '../../core/rag/vector_store_provider.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -27,6 +30,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   bool _obscureChatKey = true;
   bool _obscureEmbedKey = true;
   bool _useChatForEmbed = false;
+  EmbeddingBackend _embeddingBackend = EmbeddingBackend.api;
   bool _saved = false;
   bool _synced = false;
 
@@ -53,14 +57,26 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   void _syncControllers() {
     if (_synced) return;
     final config = ref.read(apiConfigProvider);
-    if (config.chatApiKey.isNotEmpty) {
-      _chatBaseUrlCtrl.text = config.chatBaseUrl;
-      _chatApiKeyCtrl.text = config.chatApiKey;
-      _chatModelCtrl.text = config.chatModel;
+    final activeProfile = ref.read(embeddingSettingsProvider).activeProfile;
+    _chatBaseUrlCtrl.text = config.chatBaseUrl;
+    _chatApiKeyCtrl.text = config.chatApiKey;
+    _chatModelCtrl.text = config.chatModel;
+    if (activeProfile != null) {
+      _applyProfileToControllers(activeProfile);
+    } else {
       _embedBaseUrlCtrl.text = config.embedBaseUrl;
       _embedApiKeyCtrl.text = config.embedApiKey;
       _embedModelCtrl.text = config.embedModel;
-      _synced = true;
+    }
+    _synced = true;
+  }
+
+  void _applyProfileToControllers(EmbeddingProfile profile) {
+    _embeddingBackend = profile.backend;
+    if (profile.isApi) {
+      _embedBaseUrlCtrl.text = profile.baseUrl;
+      _embedApiKeyCtrl.text = profile.apiKey;
+      _embedModelCtrl.text = profile.model;
     }
   }
 
@@ -76,22 +92,42 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   }
 
   Future<void> _saveConfig() async {
+    final embedBaseUrl = _useChatForEmbed
+        ? _chatBaseUrlCtrl.text.trim()
+        : _embedBaseUrlCtrl.text.trim();
+    final embedApiKey = _useChatForEmbed
+        ? _chatApiKeyCtrl.text.trim()
+        : _embedApiKeyCtrl.text.trim();
+    final embedModel = _useChatForEmbed
+        ? _chatModelCtrl.text.trim()
+        : _embedModelCtrl.text.trim();
+
     final config = LLMConfig(
       chatBaseUrl: _chatBaseUrlCtrl.text.trim(),
       chatApiKey: _chatApiKeyCtrl.text.trim(),
       chatModel: _chatModelCtrl.text.trim(),
-      embedBaseUrl: _useChatForEmbed
-          ? _chatBaseUrlCtrl.text.trim()
-          : _embedBaseUrlCtrl.text.trim(),
-      embedApiKey: _useChatForEmbed
-          ? _chatApiKeyCtrl.text.trim()
-          : _embedApiKeyCtrl.text.trim(),
-      embedModel: _useChatForEmbed
-          ? _chatModelCtrl.text.trim()
-          : _embedModelCtrl.text.trim(),
+      embedBaseUrl: embedBaseUrl,
+      embedApiKey: embedApiKey,
+      embedModel: embedModel,
     );
 
     await ref.read(apiConfigProvider.notifier).save(config);
+
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final profile = _embeddingBackend == EmbeddingBackend.builtin
+        ? EmbeddingProfile.builtin(
+            model: BuiltinEmbeddingModel.id,
+            dimension: BuiltinEmbeddingModel.expectedDimension,
+            now: now,
+          )
+        : EmbeddingProfile.api(
+            baseUrl: embedBaseUrl,
+            apiKey: embedApiKey,
+            model: embedModel,
+            dimension: 0,
+            now: now,
+          );
+    await ref.read(embeddingSettingsProvider.notifier).upsertProfile(profile);
 
     setState(() => _saved = true);
     Future.delayed(const Duration(seconds: 2), () {
@@ -102,6 +138,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final embeddingSettings = ref.watch(embeddingSettingsProvider);
     ref.watch(apiConfigProvider);
 
     return Scaffold(
@@ -128,7 +165,8 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           const SizedBox(height: 24),
 
           // ── Chat API Section ──────────────────────────
-          _sectionHeader(theme, Icons.chat_rounded, context.t.apiSettingsChatSection),
+          _sectionHeader(
+              theme, Icons.chat_rounded, context.t.apiSettingsChatSection),
           const SizedBox(height: 4),
           Text(
             context.t.apiSettingsChatDesc,
@@ -180,8 +218,8 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           const SizedBox(height: 28),
 
           // ── Embedding API Section ─────────────────────
-          _sectionHeader(
-              theme, Icons.auto_awesome_rounded, context.t.apiSettingsEmbedSection),
+          _sectionHeader(theme, Icons.auto_awesome_rounded,
+              context.t.apiSettingsEmbedSection),
           const SizedBox(height: 4),
           Text(
             context.t.apiSettingsEmbedDesc,
@@ -195,86 +233,45 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: Checkbox(
-                        value: _useChatForEmbed,
-                        onChanged: (v) =>
-                            setState(() => _useChatForEmbed = v ?? false),
-                        activeColor: theme.accentPrimary,
-                        checkColor: theme.bgPrimary,
-                        side: BorderSide(color: theme.divider),
-                      ),
+                SegmentedButton<EmbeddingBackend>(
+                  segments: const [
+                    ButtonSegment(
+                      value: EmbeddingBackend.api,
+                      icon: Icon(Icons.cloud_queue_rounded, size: 18),
+                      label: Text('API'),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        context.t.apiSettingsUseSameProvider,
-                        style: theme.bodyFont.copyWith(
-                          color: theme.textPrimary,
-                          fontSize: 14,
-                        ),
-                      ),
+                    ButtonSegment(
+                      value: EmbeddingBackend.builtin,
+                      icon: Icon(Icons.memory_rounded, size: 18),
+                      label: Text('Built-in'),
                     ),
                   ],
+                  selected: {_embeddingBackend},
+                  onSelectionChanged: (selected) {
+                    setState(() => _embeddingBackend = selected.first);
+                  },
                 ),
                 const SizedBox(height: 14),
-
-                if (!_useChatForEmbed) ...[
-                  _inputLabel(theme, context.t.apiSettingsLabelBaseUrl),
-                  _inputField(
-                    theme: theme,
-                    controller: _embedBaseUrlCtrl,
-                    hint: 'https://api.openai.com/v1',
-                  ),
-                  const SizedBox(height: 14),
-                  _inputLabel(theme, context.t.apiSettingsLabelApiKey),
-                  _inputField(
-                    theme: theme,
-                    controller: _embedApiKeyCtrl,
-                    hint: 'sk-...',
-                    obscure: _obscureEmbedKey,
-                    suffix: IconButton(
-                      icon: Icon(
-                        _obscureEmbedKey
-                            ? Icons.visibility_off_rounded
-                            : Icons.visibility_rounded,
-                        color: theme.textSecondary,
-                        size: 20,
-                      ),
-                      onPressed: () =>
-                          setState(() => _obscureEmbedKey = !_obscureEmbedKey),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _inputLabel(theme, context.t.apiSettingsLabelModel),
-                  _inputField(
-                    theme: theme,
-                    controller: _embedModelCtrl,
-                    hint: 'text-embedding-3-small',
-                  ),
-                ] else ...[
+                if (_embeddingBackend == EmbeddingBackend.builtin) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: theme.warning.withValues(alpha: 0.08),
+                      color: theme.accentPrimary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: theme.warning.withValues(alpha: 0.2),
+                        color: theme.accentPrimary.withValues(alpha: 0.2),
                       ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.info_outline,
-                            color: theme.warning, size: 18),
+                        Icon(Icons.memory_rounded,
+                            color: theme.accentPrimary, size: 18),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            context.t.apiSettingsEmbedFallbackNote,
+                            '${BuiltinEmbeddingModel.displayName} · ${BuiltinEmbeddingModel.expectedDimension}d\n'
+                            '使用内置固定模型生成 embedding。切换后需要为当前 profile 重建知识库；旧 profile 会保留，可随时切回。',
                             style: theme.bodyFont.copyWith(
                               color: theme.textSecondary,
                               fontSize: 12,
@@ -285,10 +282,104 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                       ],
                     ),
                   ),
+                ] else ...[
+                  Row(
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: Checkbox(
+                          value: _useChatForEmbed,
+                          onChanged: (v) =>
+                              setState(() => _useChatForEmbed = v ?? false),
+                          activeColor: theme.accentPrimary,
+                          checkColor: theme.bgPrimary,
+                          side: BorderSide(color: theme.divider),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          context.t.apiSettingsUseSameProvider,
+                          style: theme.bodyFont.copyWith(
+                            color: theme.textPrimary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (!_useChatForEmbed) ...[
+                    _inputLabel(theme, context.t.apiSettingsLabelBaseUrl),
+                    _inputField(
+                      theme: theme,
+                      controller: _embedBaseUrlCtrl,
+                      hint: 'https://api.openai.com/v1',
+                    ),
+                    const SizedBox(height: 14),
+                    _inputLabel(theme, context.t.apiSettingsLabelApiKey),
+                    _inputField(
+                      theme: theme,
+                      controller: _embedApiKeyCtrl,
+                      hint: 'sk-...',
+                      obscure: _obscureEmbedKey,
+                      suffix: IconButton(
+                        icon: Icon(
+                          _obscureEmbedKey
+                              ? Icons.visibility_off_rounded
+                              : Icons.visibility_rounded,
+                          color: theme.textSecondary,
+                          size: 20,
+                        ),
+                        onPressed: () => setState(
+                            () => _obscureEmbedKey = !_obscureEmbedKey),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _inputLabel(theme, context.t.apiSettingsLabelModel),
+                    _inputField(
+                      theme: theme,
+                      controller: _embedModelCtrl,
+                      hint: 'text-embedding-3-small',
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.warning.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.warning.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline,
+                              color: theme.warning, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              context.t.apiSettingsEmbedFallbackNote,
+                              style: theme.bodyFont.copyWith(
+                                color: theme.textSecondary,
+                                fontSize: 12,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ],
             ),
           ),
+          const SizedBox(height: 28),
+
+          _buildProfileList(theme, embeddingSettings),
           const SizedBox(height: 28),
 
           // ── Save Button ───────────────────────────────
@@ -301,9 +392,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 size: 20,
               ),
               label: Text(
-                _saved
-                    ? context.t.apiSettingsSaved
-                    : context.t.apiSettingsSave,
+                _saved ? context.t.apiSettingsSaved : context.t.apiSettingsSave,
                 style: theme.titleFont.copyWith(fontSize: 15),
               ),
               style: ElevatedButton.styleFrom(
@@ -320,6 +409,123 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildProfileList(
+    AppThemeTokens theme,
+    EmbeddingSettingsState settings,
+  ) {
+    if (settings.profiles.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(theme, Icons.hub_rounded, 'Embedding Profiles'),
+        const SizedBox(height: 12),
+        ...settings.profiles.map((profile) {
+          final active = profile.id == settings.activeProfile?.id;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: ThemeAwareCard(
+              child: Row(
+                children: [
+                  Icon(
+                    profile.isBuiltin
+                        ? Icons.memory_rounded
+                        : Icons.cloud_queue_rounded,
+                    color: active ? theme.accentPrimary : theme.textSecondary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.displayName,
+                          style: theme.titleFont.copyWith(fontSize: 14),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          active
+                              ? 'Active · ${profile.dimension > 0 ? '${profile.dimension}d' : 'dimension pending'}'
+                              : '${profile.backend.name} · ${profile.dimension > 0 ? '${profile.dimension}d' : 'dimension pending'}',
+                          style: theme.bodyFont.copyWith(
+                            color: theme.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!active)
+                    IconButton(
+                      tooltip: 'Activate',
+                      icon: Icon(Icons.check_circle_outline_rounded,
+                          color: theme.accentPrimary),
+                      onPressed: () async {
+                        await ref
+                            .read(embeddingSettingsProvider.notifier)
+                            .activateProfile(profile.id);
+                        ref.invalidate(vectorStoreStatsProvider);
+                        setState(() => _applyProfileToControllers(profile));
+                      },
+                    ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: Icon(Icons.delete_outline_rounded,
+                        color: settings.profiles.length == 1
+                            ? theme.textSecondary.withValues(alpha: 0.35)
+                            : theme.danger),
+                    onPressed: settings.profiles.length == 1
+                        ? null
+                        : () => _deleteProfile(profile),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Future<void> _deleteProfile(EmbeddingProfile profile) async {
+    final theme = ref.read(themeProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: theme.bgSecondary,
+        title: Text(
+          'Delete profile?',
+          style: theme.titleFont.copyWith(color: theme.textPrimary),
+        ),
+        content: Text(
+          'This will delete the profile and all chunks/books indexed with it. This cannot be undone.',
+          style: theme.bodyFont.copyWith(color: theme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text('Cancel',
+                style: theme.bodyFont.copyWith(color: theme.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('Delete',
+                style: theme.bodyFont.copyWith(color: theme.danger)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await ref.read(vectorStoreProvider).deleteProfileData(profile.id);
+    await ref
+        .read(embeddingSettingsProvider.notifier)
+        .deleteProfile(profile.id);
+    ref.invalidate(vectorStoreStatsProvider);
   }
 
   Widget _sectionHeader(AppThemeTokens theme, IconData icon, String title) {

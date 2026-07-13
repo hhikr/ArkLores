@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/llm/llm_client.dart';
 import '../../core/rag/embedder_provider.dart';
 import '../../core/rag/vector_store_provider.dart';
 import '../../shared/l10n/l10n.dart';
@@ -17,7 +16,15 @@ import 'book_list_item.dart';
 final bookImportServiceProvider = Provider<BookImportService>((ref) {
   final vectorStore = ref.watch(vectorStoreProvider);
   final embedder = ref.watch(embedderProvider);
-  return BookImportService(vectorStore: vectorStore, embedder: embedder);
+  final profile = ref.watch(embeddingSettingsProvider).activeProfile;
+  if (profile == null) {
+    throw StateError('No active embedding profile configured.');
+  }
+  return BookImportService(
+    vectorStore: vectorStore,
+    embedder: embedder,
+    profileId: profile.id,
+  );
 });
 
 /// Materials tab — book list, PDF/TXT import, display name edit, delete.
@@ -27,7 +34,7 @@ class MaterialsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    final config = ref.watch(apiConfigProvider);
+    final embeddingSettings = ref.watch(embeddingSettingsProvider);
     final booksAsync = ref.watch(_booksProvider);
 
     return Scaffold(
@@ -38,8 +45,7 @@ class MaterialsPage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 48, 16, 12),
             child: Row(
               children: [
-                Icon(Icons.menu_book_rounded,
-                    color: theme.warning, size: 28),
+                Icon(Icons.menu_book_rounded, color: theme.warning, size: 28),
                 const SizedBox(width: 10),
                 Text(
                   context.t.materialsTitle,
@@ -77,9 +83,13 @@ class MaterialsPage extends ConsumerWidget {
             child: booksAsync.when(
               data: (books) {
                 if (books.isEmpty) {
-                  return _buildEmptyState(context, theme, config);
+                  return _buildEmptyState(
+                    context,
+                    theme,
+                    embeddingSettings.canEmbed,
+                  );
                 }
-                return _buildBookList(context, ref, books, config, theme);
+                return _buildBookList(context, ref, books, theme);
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => Center(
@@ -91,7 +101,7 @@ class MaterialsPage extends ConsumerWidget {
             ),
           ),
 
-          if (config.isValid)
+          if (embeddingSettings.canEmbed)
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -122,7 +132,10 @@ class MaterialsPage extends ConsumerWidget {
   }
 
   Widget _buildEmptyState(
-      BuildContext context, AppThemeTokens theme, LLMConfig config) {
+    BuildContext context,
+    AppThemeTokens theme,
+    bool canEmbed,
+  ) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -149,7 +162,7 @@ class MaterialsPage extends ConsumerWidget {
                 height: 1.4,
               ),
             ),
-            if (!config.isValid) ...[
+            if (!canEmbed) ...[
               const SizedBox(height: 24),
               Text(
                 context.t.materialsNoApiKeyHint,
@@ -170,7 +183,6 @@ class MaterialsPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     List<Map<String, dynamic>> books,
-    LLMConfig config,
     AppThemeTokens theme,
   ) {
     return RefreshIndicator(
@@ -326,5 +338,6 @@ class MaterialsPage extends ConsumerWidget {
 
 final _booksProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   final store = ref.watch(vectorStoreProvider);
-  return await store.getBooks();
+  final profileId = ref.watch(embeddingSettingsProvider).activeProfile?.id;
+  return await store.getBooks(profileId: profileId);
 });
