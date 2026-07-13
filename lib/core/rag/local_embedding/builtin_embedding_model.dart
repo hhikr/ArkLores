@@ -9,8 +9,8 @@ class BuiltinEmbeddingModel {
   static const String displayName = 'Built-in Embedding';
   static const String modelAsset = 'assets/models/embedding/model.tflite';
   static const String vocabAsset = 'assets/models/embedding/vocab.txt';
-  static const int maxSequenceLength = 128;
-  static const int expectedDimension = 384;
+  static const int maxSequenceLength = 512;
+  static const int expectedDimension = 512;
 
   static const String providerId = 'builtin:$id';
 }
