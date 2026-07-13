@@ -12,12 +12,15 @@
 ///
 /// Options:
 ///   --sources=endfield,prts   (default: endfield)
-///   --prts-categories=...     (default: Category:干员,Category:主线剧情,...)
+///   --prts-categories=...     (default: Category:干员,Category:剧情)
 ///   --limit=N                 (limit total items per source, 0=unlimited)
 ///   --embed-batch-size=N      (default: 16)
 ///   --crawl-delay-ms=N        (default: 500)
+///   --max-chunks-per-page=N   (default: 120)
 ///   --output=build/seeds      (output directory)
 ///   --force                   (overwrite existing output)
+///   --resume                  (reuse existing output and skip completed pages)
+///   --allow-large-pages       (write pages over max-chunks-per-page)
 ///   --no-copy-assets          (skip copying to assets/seeds/)
 library;
 import 'dart:convert';
@@ -39,13 +42,19 @@ void main(List<String> args) async {
   sqfliteFfiInit();
   final cfg = _Config.parse(args);
 
+  if (cfg.force && cfg.resume) {
+    print('Cannot use --force and --resume together.');
+    exit(1);
+  }
+
   final out = Directory(cfg.outputDir);
   if (await out.exists()) {
-    if (!cfg.force) {
-      print('Output directory "${cfg.outputDir}" already exists. Use --force.');
+    if (cfg.force) {
+      await out.delete(recursive: true);
+    } else if (!cfg.resume) {
+      print('Output directory "${cfg.outputDir}" already exists. Use --force or --resume.');
       exit(1);
     }
-    await out.delete(recursive: true);
   }
   await out.create(recursive: true);
 
@@ -58,7 +67,7 @@ void main(List<String> args) async {
 \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550''');
 
   final dbPath = p.join(out.path, 'arklores_knowledge.db');
-  final db = await _createDatabase(dbPath);
+  final db = await _openOrCreateDatabase(dbPath, resume: cfg.resume);
   final chunker = Chunker();
   final wikiCacheDir = Directory(p.join(out.path, 'wiki_cache'));
   final allStats = <_SrcStats>[];
@@ -131,6 +140,8 @@ Future<int> _storePage({
   required String markdown,
   required String sourceUrl,
   required int now,
+  required int maxChunksPerPage,
+  required bool allowLargePages,
 }) async {
   if (markdown.trim().isEmpty) return 0;
 
@@ -143,6 +154,13 @@ Future<int> _storePage({
   // Chunk
   final chunks = chunker.chunkByHeadings(markdown, pageTitle: title);
   if (chunks.isEmpty) return 0;
+  if (!allowLargePages && chunks.length > maxChunksPerPage) {
+    print(
+      '⚠ skipped large page: $title produced ${chunks.length} chunks '
+      '(limit $maxChunksPerPage)',
+    );
+    return 0;
+  }
 
   // Write chunks (no embeddings yet — app fills on first launch)
   await db.transaction((txn) async {
@@ -250,6 +268,11 @@ Future<_SrcStats> _buildEndfield(
     stdout.write('    [${i + 1}/${toProcess.length}] ${item.type} / ${item.title}... ');
 
     try {
+      if (cfg.resume && await _pageExists(db, 'endfield', item.title)) {
+        print('skipped (exists)');
+        continue;
+      }
+
       dynamic detail;
       if (item.type == 'operator') {
         detail = await crawler.fetchOperatorDetail(item.slug);
@@ -274,6 +297,8 @@ Future<_SrcStats> _buildEndfield(
         markdown: markdown,
         sourceUrl: _endfieldUrl(item.type, item.slug),
         now: now,
+        maxChunksPerPage: cfg.maxChunksPerPage,
+        allowLargePages: cfg.allowLargePages,
       );
       if (n > 0) {
         stats.pageCount++;
@@ -325,7 +350,7 @@ Future<_SrcStats> _buildPrts(
     if (trimmed == 'Category:干员') {
       operatorTitles.addAll(titles);
     } else {
-      storyTitles.addAll(titles);
+      storyTitles.addAll(titles.where((title) => !_isPrtsStandaloneRecord(title)));
     }
     print('    $trimmed: ${titles.length} pages');
   }
@@ -342,11 +367,15 @@ Future<_SrcStats> _buildPrts(
 
     try {
       // Skip list/nav pages
-      if (title.contains('一览') ||
-          title.contains('列表') ||
-          title.contains('导航') ||
-          title.contains('Category:')) {
-        print('\u26a0 skipped (nav)');
+      if (_shouldSkipPrtsStandalonePage(title)) {
+        print(_isPrtsStandaloneRecord(title)
+            ? '⚠ skipped (operator record page; included via operator assembly)'
+            : '⚠ skipped (nav)');
+        continue;
+      }
+
+      if (cfg.resume && await _pageExists(db, 'prts', title)) {
+        print('skipped (exists)');
         continue;
       }
 
@@ -401,17 +430,13 @@ Future<_SrcStats> _buildPrts(
         );
       } else {
         // Story page
-        final pages =
-            await crawler.fetchPageContents(WikiSite.prts, [title]);
-        if (pages.isEmpty) {
+        final pages = await crawler.fetchRawWikitexts(WikiSite.prts, [title]);
+        final page = pages[title];
+        if (page == null || page.content.trim().isEmpty) {
           print('\u2717 not found');
           continue;
         }
-        var content = pages.first.content;
-        if (content.contains('剧情模拟器')) {
-          content = prts.cleanStoryContent(content);
-        }
-        markdown = content;
+        markdown = prts.cleanStoryContent(page.content);
       }
 
       if (markdown.trim().isEmpty) {
@@ -429,6 +454,8 @@ Future<_SrcStats> _buildPrts(
         markdown: markdown,
         sourceUrl: sourceUrl,
         now: now,
+        maxChunksPerPage: cfg.maxChunksPerPage,
+        allowLargePages: cfg.allowLargePages,
       );
       if (n > 0) {
         stats.pageCount++;
@@ -448,15 +475,15 @@ Future<_SrcStats> _buildPrts(
 
 // ── Database ─────────────────────────────────────────────────────────────────
 
-Future<Database> _createDatabase(String path) async {
+Future<Database> _openOrCreateDatabase(String path, {required bool resume}) async {
   final absolutePath = p.absolute(path);
   final file = File(absolutePath);
-  if (await file.exists()) await file.delete();
+  if (!resume && await file.exists()) await file.delete();
   await file.parent.create(recursive: true);
 
   final db = await databaseFactoryFfi.openDatabase(absolutePath);
   await db.execute('''
-    CREATE TABLE chunks (
+    CREATE TABLE IF NOT EXISTS chunks (
       id          TEXT PRIMARY KEY,
       source_type TEXT NOT NULL,
       source_url  TEXT,
@@ -471,14 +498,14 @@ Future<Database> _createDatabase(String path) async {
     )
   ''');
   await db.execute('''
-    CREATE TABLE chunk_embeddings (
+    CREATE TABLE IF NOT EXISTS chunk_embeddings (
       chunk_id  TEXT PRIMARY KEY,
       embedding BLOB NOT NULL,
       FOREIGN KEY (chunk_id) REFERENCES chunks(id)
     )
   ''');
   await db.execute('''
-    CREATE TABLE books (
+    CREATE TABLE IF NOT EXISTS books (
       id           TEXT PRIMARY KEY,
       file_name    TEXT NOT NULL,
       display_name TEXT,
@@ -503,10 +530,13 @@ class _Config {
   final int limit;
   final int embedBatchSize;
   final int crawlDelayMs;
+  final int maxChunksPerPage;
   final String outputDir;
   final bool force;
+  final bool resume;
   final bool copyToAssets;
   final bool failOnEmptyChunks;
+  final bool allowLargePages;
   final String prtsCategories;
 
   const _Config({
@@ -514,11 +544,14 @@ class _Config {
     this.limit = 0,
     this.embedBatchSize = 16,
     this.crawlDelayMs = 500,
+    this.maxChunksPerPage = 120,
     this.outputDir = 'build/seeds',
     this.force = false,
+    this.resume = false,
     this.copyToAssets = true,
     this.failOnEmptyChunks = false,
-    this.prtsCategories = 'Category:干员,Category:主线剧情,Category:活动剧情,Category:干员密录',
+    this.allowLargePages = false,
+    this.prtsCategories = 'Category:干员,Category:剧情',
   });
 
   factory _Config.parse(List<String> args) {
@@ -530,14 +563,42 @@ class _Config {
       limit: int.tryParse(g('limit', '0')) ?? 0,
       embedBatchSize: int.tryParse(g('embed-batch-size', '16')) ?? 16,
       crawlDelayMs: int.tryParse(g('crawl-delay-ms', '500')) ?? 500,
+      maxChunksPerPage: int.tryParse(g('max-chunks-per-page', '120')) ?? 120,
       outputDir: g('output', 'build/seeds'),
       force: args.contains('--force'),
+      resume: args.contains('--resume'),
       copyToAssets: !args.contains('--no-copy-assets'),
       failOnEmptyChunks: args.contains('--fail-on-empty'),
+      allowLargePages: args.contains('--allow-large-pages'),
       prtsCategories: g('prts-categories',
-          'Category:干员,Category:主线剧情,Category:活动剧情,Category:干员密录'),
+          'Category:干员,Category:剧情'),
     );
   }
+}
+
+Future<bool> _pageExists(Database db, String wiki, String title) async {
+  final rows = await db.rawQuery(
+    '''
+    SELECT COUNT(*) AS c FROM chunks
+    WHERE source_type = 'wiki'
+      AND wiki = ?
+      AND page_title = ?
+      AND profile_id = 'builtin:builtin-embedding'
+      AND embedding_status IN ('pending_embedding', 'ok')
+    ''',
+    [wiki, title],
+  );
+  return (rows.first['c'] as int? ?? 0) > 0;
+}
+
+bool _isPrtsStandaloneRecord(String title) => title.contains('/干员密录/');
+
+bool _shouldSkipPrtsStandalonePage(String title) {
+  return _isPrtsStandaloneRecord(title) ||
+      title.contains('一览') ||
+      title.contains('列表') ||
+      title.contains('导航') ||
+      title.contains('Category:');
 }
 
 class _Item {
