@@ -11,7 +11,7 @@
 | **App 名称** | **ArkLores**（英文，与 Arknights 读音相近，一语双关） |
 | 目标平台 | Android + iOS（Flutter） |
 | 最低系统版本 | Android 8.0（API 26）/ iOS 14 |
-| AI 接入 | 用户自带 API Key，OpenAI 兼容接口（Chat + Embedding 可分开指定不同提供商） |
+| AI 接入 | 用户自带 API Key，OpenAI 兼容接口（Chat + Embedding 可分开指定不同提供商）；Embedding 可选择内置固定模型离线生成 |
 | 数据存储 | 本地 SQLite（结构化）+ 纯 Dart cosine similarity（向量）|
 | 向量方案 | sqlite-vec FFI 暂不可用（v0.1.7-alpha.3 构建不完整），当前使用 sqflite + 纯 Dart cosine similarity。待包稳定后再恢复 FFI 路径 |
 | 本地化 | **EN / 中文双语**，基于 `flutter_localizations` + `intl` + ARB 文件，Riverpod 控制切换，编译时类型安全 |
@@ -504,6 +504,7 @@ dependencies:
   google_fonts: ^6.x                  # Rajdhani / Exo2 / Noto Sans SC
   file_picker: ^8.x                   # 书籍文件选择（PDF/TXT）
   syncfusion_flutter_pdf: ^26.x       # PDF 文本提取（免费社区版）
+  tflite_flutter: ^0.x                # 内置固定 embedding 模型运行时（v0.3 spike）
   path_provider: ^2.x                 # 本地文件路径
   uuid: ^4.x                          # Chunk UUID 生成
 ```
@@ -512,6 +513,7 @@ dependencies:
 > **v0.3 实现结论**：当前使用纯 Dart cosine similarity 回退，`sqlite_vec` FFI 路径因包构建不完整暂不可用。
 > - 向量的维度不再写死 1536——`Embedder` 自动从首次 API 响应中检测维度（兼容 OpenAI 1536、DeepSeek 2048 等）
 > - Chat 和 Embedding 的 API 配置已分离，允许混合使用不同提供商
+> - 已启动内置固定 embedding 模型 spike：TFLite 运行入口和 WordPiece tokenizer 已隔离实现，正式接入前仍需提交固定模型资产并完成 Android/iOS 真机验证
 > - 详情见 `docs/v0.3_SUMMARY.md`
 
 > [!NOTE]
@@ -726,6 +728,7 @@ dependencies:
 | sqlite-vec 方案 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用） |
 | Chat/Embedding 配置 | **可分开指定不同提供商**（如 Chat 用 DeepSeek，Embedding 用 OpenAI），设置页位于子页面「API Settings」 |
 | Embedding 维度 | **动态检测**——从首次 API 响应自动获取，不写死 1536，兼容 OpenAI / DeepSeek / 其他模型 |
+| 内置 Embedding | **接受安装包体积增大**；仅支持一个固定内置模型，不提供用户替换模型能力；当前 v0.3 已开始 TFLite spike，正式启用前需验证模型资产与移动端推理 |
 | 本地化 | **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全），设置页 `SegmentedButton` 切换即时生效 |
 | 作者署名 | **hhikr**（写入 `AUTHORS` 文件、README、LICENSE 头部） |
 | GitHub 仓库 | `github.com/hhikr/ArkLores` |
@@ -733,5 +736,3 @@ dependencies:
 
 > [!NOTE]
 > 架构设计已全部确认。下一步可开始建立项目、搜索库名并初始化 Flutter 工程（v0.1）。
-
-
