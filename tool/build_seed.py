@@ -25,10 +25,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", default=0, type=int)
     parser.add_argument("--embed-batch-size", default=32, type=int)
     parser.add_argument("--crawl-delay-ms", default=500, type=int)
+    parser.add_argument("--max-chunks-per-page", default=120, type=int)
     parser.add_argument("--output", default=Path("build/seeds"), type=Path)
     parser.add_argument("--model", default=Path("assets/models/embedding/model.tflite"), type=Path)
     parser.add_argument("--vocab", default=Path("assets/models/embedding/vocab.txt"), type=Path)
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--allow-large-pages", action="store_true")
     parser.add_argument("--no-copy-assets", action="store_true")
     return parser.parse_args()
 
@@ -41,6 +44,8 @@ def _run(cmd: list[str]) -> None:
 def main() -> int:
     args = _parse_args()
     output = args.output
+    if args.force and args.resume:
+        raise SystemExit("Cannot use --force and --resume together.")
 
     dart_cmd = [
         "dart",
@@ -49,6 +54,7 @@ def main() -> int:
         f"--sources={args.sources}",
         f"--limit={args.limit}",
         f"--crawl-delay-ms={args.crawl_delay_ms}",
+        f"--max-chunks-per-page={args.max_chunks_per_page}",
         f"--output={output}",
         "--no-copy-assets",
     ]
@@ -56,6 +62,10 @@ def main() -> int:
         dart_cmd.append(f"--prts-categories={args.prts_categories}")
     if args.force:
         dart_cmd.append("--force")
+    if args.resume:
+        dart_cmd.append("--resume")
+    if args.allow_large_pages:
+        dart_cmd.append("--allow-large-pages")
     _run(dart_cmd)
 
     db_path = output / "arklores_knowledge.db"
