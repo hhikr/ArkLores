@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/llm/embedding_profile.dart';
 import '../../core/llm/llm_client.dart';
 
 /// Persistent storage for API configuration via flutter_secure_storage.
@@ -19,6 +22,10 @@ class SettingsService {
   static const _keyEmbedBaseUrl = 'embed_base_url';
   static const _keyEmbedApiKey = 'embed_api_key';
   static const _keyEmbedModel = 'embed_model';
+
+  // ── Embedding profile keys ─────────────────────────────────
+  static const _keyEmbeddingProfiles = 'embedding_profiles';
+  static const _keyActiveEmbeddingProfileId = 'active_embedding_profile_id';
 
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
@@ -64,6 +71,57 @@ class SettingsService {
     ]);
   }
 
+  /// Loads embedding profiles, migrating the legacy embedding API config when
+  /// the profile list does not exist yet.
+  Future<EmbeddingSettingsState> loadEmbeddingSettings(
+      {required LLMConfig legacyConfig}) async {
+    final rawProfiles = await _storage.read(key: _keyEmbeddingProfiles);
+    final activeId = await _storage.read(key: _keyActiveEmbeddingProfileId);
+
+    if (rawProfiles != null && rawProfiles.isNotEmpty) {
+      final profiles = _decodeProfiles(rawProfiles);
+      final resolvedActiveId = profiles.any((p) => p.id == activeId)
+          ? activeId
+          : (profiles.isNotEmpty ? profiles.first.id : null);
+      return EmbeddingSettingsState(
+        profiles: profiles,
+        activeProfileId: resolvedActiveId,
+      );
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final migrated = EmbeddingProfile.api(
+      baseUrl: legacyConfig.embedBaseUrl,
+      apiKey: legacyConfig.embedApiKey,
+      model: legacyConfig.embedModel,
+      dimension: 0,
+      now: now,
+      id: 'legacy',
+    );
+    final state = EmbeddingSettingsState(
+      profiles: [migrated],
+      activeProfileId: migrated.id,
+    );
+    await saveEmbeddingSettings(state);
+    return state;
+  }
+
+  Future<void> saveEmbeddingSettings(EmbeddingSettingsState state) async {
+    await Future.wait([
+      _storage.write(
+        key: _keyEmbeddingProfiles,
+        value: jsonEncode(state.profiles.map((p) => p.toJson()).toList()),
+      ),
+      if (state.activeProfileId != null)
+        _storage.write(
+          key: _keyActiveEmbeddingProfileId,
+          value: state.activeProfileId,
+        )
+      else
+        _storage.delete(key: _keyActiveEmbeddingProfileId),
+    ]);
+  }
+
   /// Returns `true` if onboarding has been completed.
   Future<bool> isOnboardingDone() async {
     final value = await _storage.read(key: _keyOnboardingDone);
@@ -73,5 +131,12 @@ class SettingsService {
   /// Marks onboarding as completed.
   Future<void> markOnboardingDone() async {
     await _storage.write(key: _keyOnboardingDone, value: 'true');
+  }
+
+  List<EmbeddingProfile> _decodeProfiles(String raw) {
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((item) => EmbeddingProfile.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 }
