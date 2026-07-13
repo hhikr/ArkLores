@@ -1,16 +1,24 @@
 /// Offline seed database builder.
 ///
-/// Fetches wiki pages, formats, chunks, and writes a bundled seed database
-/// and wiki cache zip for first-start distribution.
+/// Fetches wiki pages (Endfield + PRTS), formats, chunks, and writes a bundled
+/// seed database and wiki cache zip for first-start distribution.
+///
+/// Since TFLite native libraries are not available in `dart run` CLI context,
+/// chunks are written with `embedding_status = 'pending_embedding'`. On the
+/// app's first launch, the builtin embedding model generates the vectors.
 ///
 /// Usage:
 ///   dart run tool/build_seed_database.dart [options]
 ///
 /// Options:
-///   --sources=endfield,prts   (default: endfield,prts)
-///   --limit=N                 (limit total items per source, for testing)
-///   --output=build/seeds      (output directory, default: build/seeds)
+///   --sources=endfield,prts   (default: endfield)
+///   --prts-categories=...     (default: Category:干员,Category:主线剧情,...)
+///   --limit=N                 (limit total items per source, 0=unlimited)
+///   --embed-batch-size=N      (default: 16)
+///   --crawl-delay-ms=N        (default: 500)
+///   --output=build/seeds      (output directory)
 ///   --force                   (overwrite existing output)
+///   --no-copy-assets          (skip copying to assets/seeds/)
 library;
 import 'dart:convert';
 import 'dart:io';
@@ -21,56 +29,166 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../lib/core/rag/chunker.dart' show Chunker;
 import '../lib/core/wiki/warfarin_crawler.dart';
+import '../lib/core/wiki/wiki_crawler.dart';
+import '../lib/core/wiki/wiki_models.dart';
+import '../lib/core/wiki/prts_utils.dart' as prts;
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 void main(List<String> args) async {
   sqfliteFfiInit();
+  final cfg = _Config.parse(args);
 
-  final sources = _parseArg(args, 'sources', 'endfield,prts').split(',');
-  final limit = int.tryParse(_parseArg(args, 'limit', '0')) ?? 0;
-  final outputDir = _parseArg(args, 'output', 'build/seeds');
-  final force = args.contains('--force');
-
-  final out = Directory(outputDir);
+  final out = Directory(cfg.outputDir);
   if (await out.exists()) {
-    if (!force) {
-      print('Output directory "$outputDir" already exists. Use --force to overwrite.');
+    if (!cfg.force) {
+      print('Output directory "${cfg.outputDir}" already exists. Use --force.');
       exit(1);
     }
     await out.delete(recursive: true);
   }
   await out.create(recursive: true);
 
-  // ── Initialize database ────────────────────────────────────────────
+  print('''
+\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+\u2551 Seed Database Builder
+\u2551   Sources: ${cfg.sources.join(', ')}
+\u2551   Limit:   ${cfg.limit > 0 ? cfg.limit.toString() : 'unlimited'}
+\u2551   Output:  ${cfg.outputDir}
+\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550''');
+
   final dbPath = p.join(out.path, 'arklores_knowledge.db');
   final db = await _createDatabase(dbPath);
-
-  // ── Crawl, format, chunk, embed, store ──────────────────────────────
   final chunker = Chunker();
-  var totalChunks = 0;
   final wikiCacheDir = Directory(p.join(out.path, 'wiki_cache'));
+  final allStats = <_SrcStats>[];
 
-  for (final raw in sources) {
-    final trimmed = raw.trim();
-    if (trimmed == 'endfield') {
-      totalChunks += await _buildEndfield(
-        db: db,
-        chunker: chunker,
-        wikiCacheDir: wikiCacheDir,
-        limit: limit,
-      );
+  for (final src in cfg.sources) {
+    final s = src.trim();
+    if (s == 'endfield') {
+      allStats.add(await _buildEndfield(db, chunker, wikiCacheDir, cfg));
+    } else if (s == 'prts') {
+      allStats.add(await _buildPrts(db, chunker, wikiCacheDir, cfg));
     } else {
-      print('Skipping unsupported source: $trimmed');
+      print('Unknown source: $s');
     }
   }
 
-  // ── Finalize ────────────────────────────────────────────────────────
+  final now = DateTime.now().toUtc().toIso8601String();
+  await _writeSeedMetadata(db, allStats, now);
   await db.close();
 
-  // Sync write manifest
-  final now = DateTime.now().toUtc().toIso8601String();
-  final manifest = {
+  // Manifest
+  final manifest = _buildManifest(allStats, now);
+  final manifestPath = p.join(out.path, 'seed_manifest.json');
+  await File(manifestPath)
+      .writeAsString(const JsonEncoder.withIndent('  ').convert(manifest));
+
+  // Zip wiki cache
+  final zipPath = p.join(out.path, 'wiki_cache.zip');
+  await _zipDirectory(wikiCacheDir, zipPath);
+
+  final dbSize = await File(dbPath).length();
+  final zipSize = await File(zipPath).length();
+  var totalChunks = 0;
+  for (final s in allStats) totalChunks += s.chunkCount;
+
+  print('''
+\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+\u2551 Seed build complete
+\u2551   Database: $dbPath ($dbSize bytes)
+\u2551   Wiki cache: $zipPath ($zipSize bytes)
+\u2551   Total chunks: $totalChunks
+${allStats.map((s) => '  \u2551   ${s.name}: ${s.pageCount} pages, ${s.chunkCount} chunks').join('\n')}
+\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550''');
+
+  if (cfg.copyToAssets) {
+    final assetDir = Directory('assets/seeds');
+    if (!await assetDir.exists()) await assetDir.create(recursive: true);
+    await File(dbPath).copy(p.join(assetDir.path, 'arklores_knowledge.db'));
+    await File(zipPath).copy(p.join(assetDir.path, 'wiki_cache.zip'));
+    await File(manifestPath).copy(p.join(assetDir.path, 'seed_manifest.json'));
+    print('Copied seed assets to ${assetDir.path}/');
+  }
+}
+
+// ─── Shared store pipeline ───────────────────────────────────────────────────
+
+class _SrcStats {
+  final String name;
+  int pageCount = 0;
+  int chunkCount = 0;
+  _SrcStats(this.name);
+}
+
+/// Saves a formatted markdown page: cache file + chunk + no-embed marker.
+Future<int> _storePage({
+  required Database db,
+  required Directory wikiCacheDir,
+  required Chunker chunker,
+  required String wiki,
+  required String title,
+  required String markdown,
+  required String sourceUrl,
+  required int now,
+}) async {
+  if (markdown.trim().isEmpty) return 0;
+
+  // Save raw markdown
+  final sanitized = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+  final mdFile = File(p.join(wikiCacheDir.path, wiki, '$sanitized.md'));
+  await mdFile.parent.create(recursive: true);
+  await mdFile.writeAsString(markdown);
+
+  // Chunk
+  final chunks = chunker.chunkByHeadings(markdown, pageTitle: title);
+  if (chunks.isEmpty) return 0;
+
+  // Write chunks (no embeddings yet — app fills on first launch)
+  await db.transaction((txn) async {
+    for (final c in chunks) {
+      await txn.insert('chunks', {
+        'id': c.id,
+        'source_type': 'wiki',
+        'source_url': sourceUrl,
+        'wiki': wiki,
+        'book_id': null,
+        'page_title': c.pageTitle,
+        'section': c.section,
+        'content': c.content,
+        'updated_at': now,
+        'embedding_status': 'pending_embedding',
+        'profile_id': 'builtin:builtin-embedding',
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  });
+
+  return chunks.length;
+}
+
+Future<void> _writeSeedMetadata(
+    Database db, List<_SrcStats> allStats, String now) async {
+  final metadata = <String, String>{
+    'schema_version': '1',
+    'seed_version': now.substring(0, 10),
+    'embedding_profile_id': 'builtin:builtin-embedding',
+    'embedding_dimension': '512',
+    'embedding_model': 'builtin-embedding',
+    'chunker_version': '1',
+    'built_at': now,
+  };
+  for (final s in allStats) {
+    metadata['source_${s.name}_page_count'] = s.pageCount.toString();
+    metadata['source_${s.name}_chunk_count'] = s.chunkCount.toString();
+  }
+  for (final e in metadata.entries) {
+    await db.insert('seed_metadata', {'key': e.key, 'value': e.value},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+}
+
+Map<String, dynamic> _buildManifest(List<_SrcStats> allStats, String now) {
+  return {
     'schemaVersion': 1,
     'seedVersion': now.substring(0, 10),
     'builtAt': now,
@@ -87,68 +205,44 @@ void main(List<String> args) async {
       'maxChars': 4000,
     },
     'sources': {
-      for (final s in sources) s.trim(): {'enabled': true, 'snapshotAt': now},
+      for (final s in allStats)
+        s.name: {
+          'enabled': true,
+          'pageCount': s.pageCount,
+          'chunkCount': s.chunkCount,
+          'snapshotAt': now,
+        },
     },
   };
-  final manifestPath = p.join(out.path, 'seed_manifest.json');
-  await File(manifestPath)
-      .writeAsString(const JsonEncoder.withIndent('  ').convert(manifest));
-
-  // Zip wiki cache
-  final zipPath = p.join(out.path, 'wiki_cache.zip');
-  await _zipDirectory(wikiCacheDir, zipPath);
-
-  final dbSize = await File(dbPath).length();
-  final zipSize = await File(zipPath).length();
-  print('''
-┌─────────────────────────────────────────────────────────
-│ Seed build complete
-│   Database: $dbPath ($dbSize bytes)
-│   Wiki cache: $zipPath ($zipSize bytes)
-│   Manifest: $manifestPath
-│   Total chunks: $totalChunks
-└─────────────────────────────────────────────────────────''');
-
-  // Copy to assets/seeds for bundling
-  final assetDir = Directory('assets/seeds');
-  if (!await assetDir.exists()) await assetDir.create(recursive: true);
-  await File(dbPath).copy(p.join(assetDir.path, 'arklores_knowledge.db'));
-  await File(zipPath).copy(p.join(assetDir.path, 'wiki_cache.zip'));
-  await File(manifestPath).copy(p.join(assetDir.path, 'seed_manifest.json'));
-  print('Copied seed assets to ${assetDir.path}/');
 }
 
-// ─── Endfield source ─────────────────────────────────────────────────────────
+// ─── Endfield builder ─────────────────────────────────────────────────────────
 
-Future<int> _buildEndfield({
-  required Database db,
-  required Chunker chunker,
-  required Directory wikiCacheDir,
-  required int limit,
-}) async {
+Future<_SrcStats> _buildEndfield(
+    Database db, Chunker chunker, Directory wikiCacheDir, _Config cfg) async {
+  final stats = _SrcStats('endfield');
   final crawler = WarfarinWikiCrawler();
-  var totalChunks = 0;
+  final delay = Duration(milliseconds: cfg.crawlDelayMs);
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-  print('  Fetching operator listings...');
+  print('  Fetching Endfield listings...');
   final operators = await crawler.fetchOperatorListings();
-  print('  Fetching lore listings...');
   final lore = await crawler.fetchLoreListings();
-  print('  Fetching mission listings...');
   final missions = await crawler.fetchMissionListings();
-  print('  Found: ${operators.length} operators, ${lore.length} lore, ${missions.length} missions');
+  print('  Found: ${operators.length}op, ${lore.length}lore, ${missions.length}mission');
 
   final items = <_Item>[];
   for (final op in operators) {
-    items.add(_Item(slug: op.slug, title: op.name, type: 'operator'));
+    items.add(_Item(op.slug, op.name, 'operator'));
   }
   for (final l in lore) {
-    items.add(_Item(slug: l.slug, title: l.name, type: 'lore'));
+    items.add(_Item(l.slug, l.name, 'lore'));
   }
   for (final m in missions) {
-    items.add(_Item(slug: m.slug, title: m.name, type: 'mission'));
+    items.add(_Item(m.slug, m.name, 'mission'));
   }
 
-  final toProcess = limit > 0 ? items.take(limit).toList() : items;
+  final toProcess = cfg.limit > 0 ? items.take(cfg.limit).toList() : items;
   print('  Processing ${toProcess.length} items...');
 
   for (var i = 0; i < toProcess.length; i++) {
@@ -156,7 +250,6 @@ Future<int> _buildEndfield({
     stdout.write('    [${i + 1}/${toProcess.length}] ${item.type} / ${item.title}... ');
 
     try {
-      // Fetch detail
       dynamic detail;
       if (item.type == 'operator') {
         detail = await crawler.fetchOperatorDetail(item.slug);
@@ -166,70 +259,40 @@ Future<int> _buildEndfield({
         detail = await crawler.fetchMissionDetail(item.slug);
       }
 
-      // Format
-      String markdown;
-      if (item.type == 'operator') {
-        markdown = crawler.formatOperatorToMarkdown(detail);
-      } else if (item.type == 'lore') {
-        markdown = crawler.formatLoreToMarkdown(detail);
+      final markdown = item.type == 'operator'
+          ? crawler.formatOperatorToMarkdown(detail)
+          : item.type == 'lore'
+              ? crawler.formatLoreToMarkdown(detail)
+              : crawler.formatMissionToMarkdown(detail);
+
+      final n = await _storePage(
+        db: db,
+        wikiCacheDir: wikiCacheDir,
+        chunker: chunker,
+        wiki: 'endfield',
+        title: item.title,
+        markdown: markdown,
+        sourceUrl: _endfieldUrl(item.type, item.slug),
+        now: now,
+      );
+      if (n > 0) {
+        stats.pageCount++;
+        stats.chunkCount += n;
+        print('$n chunks');
       } else {
-        markdown = crawler.formatMissionToMarkdown(detail);
+        print('\u26a0 empty');
       }
-
-      if (markdown.isEmpty) {
-        print('⚠ empty');
-        continue;
-      }
-
-      // Save raw markdown to wiki cache
-      final typeDir = Directory(p.join(wikiCacheDir.path, 'endfield', '${item.type}s'));
-      if (!await typeDir.exists()) await typeDir.create(recursive: true);
-      final sanitized = item.slug.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      await File(p.join(typeDir.path, '$sanitized.md')).writeAsString(markdown);
-
-      // Chunk
-      final chunks = chunker.chunkByHeadings(markdown, pageTitle: item.title);
-      if (chunks.isEmpty) {
-        print('⚠ 0 chunks');
-        continue;
-      }
-
-      final sourceUrl = _endfieldSourceUrl(item.type, item.slug);
-      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
-      await db.transaction((txn) async {
-        for (final c in chunks) {
-          await txn.insert('chunks', {
-            'id': c.id,
-            'source_type': 'wiki',
-            'source_url': sourceUrl,
-            'wiki': 'endfield',
-            'book_id': null,
-            'page_title': c.pageTitle,
-            'section': c.section,
-            'content': c.content,
-            'updated_at': now,
-            'embedding_status': 'needs_embedding',
-            'profile_id': 'builtin:builtin-embedding',
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
-        }
-      });
-
-      totalChunks += chunks.length;
-      print('${chunks.length} chunks');
     } catch (e) {
-      print('✗ $e');
+      print('\u2717 $e');
     }
-
-    // Rate limit
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(delay);
   }
 
   crawler.dispose();
-  return totalChunks;
+  return stats;
 }
 
-String _endfieldSourceUrl(String type, String slug) {
+String _endfieldUrl(String type, String slug) {
   final path = type == 'operator'
       ? 'operators'
       : type == 'lore'
@@ -238,7 +301,152 @@ String _endfieldSourceUrl(String type, String slug) {
   return 'https://warfarin.wiki/cn/$path/${Uri.encodeComponent(slug)}';
 }
 
-// ── Database helpers ─────────────────────────────────────────────────────────
+// ─── PRTS builder ────────────────────────────────────────────────────────────
+
+Future<_SrcStats> _buildPrts(
+    Database db, Chunker chunker, Directory wikiCacheDir, _Config cfg) async {
+  final stats = _SrcStats('prts');
+  final crawler = MediaWikiCrawler();
+  final delay = Duration(milliseconds: cfg.crawlDelayMs);
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+  final categoryNames = cfg.prtsCategories.split(',');
+  print('  Fetching PRTS categories: ${categoryNames.join(', ')}');
+
+  final operatorTitles = <String>{};
+  final storyTitles = <String>{};
+  for (final cat in categoryNames) {
+    final trimmed = cat.trim();
+    if (trimmed.isEmpty) continue;
+    final titles = await crawler.fetchCategoryTitles(
+      site: WikiSite.prts,
+      categoryName: trimmed,
+    );
+    if (trimmed == 'Category:干员') {
+      operatorTitles.addAll(titles);
+    } else {
+      storyTitles.addAll(titles);
+    }
+    print('    $trimmed: ${titles.length} pages');
+  }
+
+  final allTitles = [...operatorTitles, ...storyTitles];
+  print('  Total titles to process: ${allTitles.length}');
+
+  final toProcess =
+      cfg.limit > 0 ? allTitles.take(cfg.limit).toList() : allTitles;
+
+  for (var i = 0; i < toProcess.length; i++) {
+    final title = toProcess[i];
+    stdout.write('    [${i + 1}/${toProcess.length}] $title... ');
+
+    try {
+      // Skip list/nav pages
+      if (title.contains('一览') ||
+          title.contains('列表') ||
+          title.contains('导航') ||
+          title.contains('Category:')) {
+        print('\u26a0 skipped (nav)');
+        continue;
+      }
+
+      final isOperator = operatorTitles.contains(title);
+      String markdown;
+
+      if (isOperator) {
+        // Fetch operator sub-pages
+        final allOpTitles = [title, '$title/语音记录', '${title}的信物'];
+        final wikitexts = await crawler.fetchRawWikitexts(
+            WikiSite.prts, allOpTitles);
+        final mainPage = wikitexts[title];
+        final voicePage = wikitexts['$title/语音记录'];
+        final tokenPage = wikitexts['${title}的信物'];
+
+        if (mainPage == null) {
+          print('\u2717 main page not found');
+          continue;
+        }
+
+        // Parse record story pages
+        final recordStoryTitles = <String>{};
+        final miluTemplates =
+            prts.parseAllTemplates(mainPage.content, '干员密录/list');
+        for (final m in miluTemplates) {
+          for (int j = 1; j <= 20; j++) {
+            final rawPage = m['storyTxt$j'] ?? '';
+            if (rawPage.isEmpty) break;
+            final resolved =
+                rawPage.replaceAll('{{FULLPAGENAME}}', title).trim();
+            if (resolved.isNotEmpty) recordStoryTitles.add(resolved);
+          }
+        }
+
+        final recordStoryWikitexts = <String, String>{};
+        if (recordStoryTitles.isNotEmpty) {
+          final recordPages = await crawler.fetchRawWikitexts(
+              WikiSite.prts, recordStoryTitles.toList());
+          for (final e in recordPages.entries) {
+            if (e.value.content.isNotEmpty) {
+              recordStoryWikitexts[e.value.title] = e.value.content;
+            }
+          }
+        }
+
+        markdown = prts.assembleOperatorMarkdown(
+          title,
+          mainPage.content,
+          voicePage?.content ?? '',
+          tokenPage?.content ?? '',
+          recordStoryWikitexts: recordStoryWikitexts,
+        );
+      } else {
+        // Story page
+        final pages =
+            await crawler.fetchPageContents(WikiSite.prts, [title]);
+        if (pages.isEmpty) {
+          print('\u2717 not found');
+          continue;
+        }
+        var content = pages.first.content;
+        if (content.contains('剧情模拟器')) {
+          content = prts.cleanStoryContent(content);
+        }
+        markdown = content;
+      }
+
+      if (markdown.trim().isEmpty) {
+        print('\u26a0 empty markdown');
+        continue;
+      }
+
+      final sourceUrl = 'https://prts.wiki/w/${Uri.encodeComponent(title)}';
+      final n = await _storePage(
+        db: db,
+        wikiCacheDir: wikiCacheDir,
+        chunker: chunker,
+        wiki: 'prts',
+        title: title,
+        markdown: markdown,
+        sourceUrl: sourceUrl,
+        now: now,
+      );
+      if (n > 0) {
+        stats.pageCount++;
+        stats.chunkCount += n;
+        print('$n chunks');
+      } else {
+        print('\u26a0 0 chunks');
+      }
+    } catch (e) {
+      print('\u2717 $e');
+    }
+    await Future.delayed(delay);
+  }
+
+  return stats;
+}
+
+// ── Database ─────────────────────────────────────────────────────────────────
 
 Future<Database> _createDatabase(String path) async {
   final file = File(path);
@@ -287,7 +495,56 @@ Future<Database> _createDatabase(String path) async {
   return db;
 }
 
-// ── Zip helper ───────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+class _Config {
+  final List<String> sources;
+  final int limit;
+  final int embedBatchSize;
+  final int crawlDelayMs;
+  final String outputDir;
+  final bool force;
+  final bool copyToAssets;
+  final bool failOnEmptyChunks;
+  final String prtsCategories;
+
+  const _Config({
+    required this.sources,
+    this.limit = 0,
+    this.embedBatchSize = 16,
+    this.crawlDelayMs = 500,
+    this.outputDir = 'build/seeds',
+    this.force = false,
+    this.copyToAssets = true,
+    this.failOnEmptyChunks = false,
+    this.prtsCategories = 'Category:干员,Category:主线剧情,Category:活动剧情,Category:干员密录',
+  });
+
+  factory _Config.parse(List<String> args) {
+    String g(String k, [String d = '']) =>
+        args.where((a) => a.startsWith('--$k=')).map((a) => a.split('=').skip(1).join('=')).firstOrNull ?? d;
+    final sources = g('sources', 'endfield').split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    return _Config(
+      sources: sources,
+      limit: int.tryParse(g('limit', '0')) ?? 0,
+      embedBatchSize: int.tryParse(g('embed-batch-size', '16')) ?? 16,
+      crawlDelayMs: int.tryParse(g('crawl-delay-ms', '500')) ?? 500,
+      outputDir: g('output', 'build/seeds'),
+      force: args.contains('--force'),
+      copyToAssets: !args.contains('--no-copy-assets'),
+      failOnEmptyChunks: args.contains('--fail-on-empty'),
+      prtsCategories: g('prts-categories',
+          'Category:干员,Category:主线剧情,Category:活动剧情,Category:干员密录'),
+    );
+  }
+}
+
+class _Item {
+  final String slug;
+  final String title;
+  final String type;
+  const _Item(this.slug, this.title, this.type);
+}
 
 Future<void> _zipDirectory(Directory src, String destPath) async {
   final archive = Archive();
@@ -304,20 +561,4 @@ Future<void> _zipDirectory(Directory src, String destPath) async {
   if (zipData != null) {
     await File(destPath).writeAsBytes(zipData);
   }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-String _parseArg(List<String> args, String key, String defaultValue) {
-  for (final arg in args) {
-    if (arg.startsWith('--$key=')) return arg.substring('--$key='.length);
-  }
-  return defaultValue;
-}
-
-class _Item {
-  final String slug;
-  final String title;
-  final String type;
-  const _Item({required this.slug, required this.title, required this.type});
 }
