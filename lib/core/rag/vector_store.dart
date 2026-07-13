@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
 import '../rag/chunker.dart';
+import 'local_embedding/builtin_embedding_client.dart';
 
 /// Result of a semantic search.
 class SearchResult {
@@ -215,6 +216,24 @@ class VectorStore {
     }
 
     _initialized = true;
+
+    // Kick off one-time embedding for pending chunks (seed data from CLI builder).
+    // This runs asynchronously so initialize() returns immediately.
+    _embedPendingChunksAsync();
+  }
+
+  Future<void> _embedPendingChunksAsync() async {
+    try {
+      final pending = await countChunksByStatus('pending_embedding');
+      if (pending > 0) {
+        print('[VectorStore] Embedding $pending pending chunks...');
+        final done = await embedPendingChunks();
+        print('[VectorStore] Embedded $done/$pending pending chunks.');
+      }
+    } catch (e) {
+      debugPrint('[VectorStore] Pending embed error (non-fatal): $e');
+    }
+  }
   }
 
   bool isZeroVector(List<double> vec) {
@@ -677,6 +696,111 @@ class VectorStore {
       whereArgs: profileId != null ? [profileId] : null,
       orderBy: 'imported_at DESC',
     );
+  }
+
+  /// Returns the count of chunks with a given [embeddingStatus].
+  Future<int> countChunksByStatus(
+    String embeddingStatus, {
+    String? profileId,
+  }) async {
+    await initialize();
+    final where = profileId != null
+        ? 'embedding_status = ? AND profile_id = ?'
+        : 'embedding_status = ?';
+    final args = profileId != null
+        ? [embeddingStatus, profileId]
+        : [embeddingStatus];
+    return sqflite.Sqflite.firstIntValue(
+          await _fallbackDb!.rawQuery(
+            'SELECT COUNT(*) FROM chunks WHERE $where',
+            args,
+          ),
+        ) ??
+        0;
+  }
+
+  /// Embeds all chunks with `pending_embedding` status using the builtin model.
+  ///
+  /// Returns the number of chunks successfully embedded. This is a one-time
+  /// operation on the first launch after seed install.
+  Future<int> embedPendingChunks({
+    String? profileId,
+    void Function(int current, int total)? onProgress,
+  }) async {
+    await initialize();
+
+    final rows = await _fallbackDb!.query(
+      'chunks',
+      columns: ['id', 'content'],
+      where: "embedding_status = 'pending_embedding'"
+          '${profileId != null ? ' AND profile_id = ?' : ''}',
+      whereArgs: profileId != null ? [profileId] : null,
+    );
+    if (rows.isEmpty) return 0;
+
+    // Load builtin embedding client from assets
+    final client = await BuiltinEmbeddingClient.load();
+    var embedded = 0;
+
+    try {
+      for (var i = 0; i < rows.length; i++) {
+        final row = rows[i];
+        final id = row['id'] as String;
+        final content = row['content'] as String;
+
+        if (content.trim().isEmpty) {
+          await _fallbackDb!.update(
+            'chunks',
+            {'embedding_status': 'zero_vector'},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          embedded++;
+          continue;
+        }
+
+        try {
+          final vector = await client.embed(content);
+          if (isZeroVector(vector)) {
+            await _fallbackDb!.update(
+              'chunks',
+              {'embedding_status': 'zero_vector'},
+              where: 'id = ?',
+              whereArgs: [id],
+            );
+          } else {
+            await _fallbackDb!.update(
+              'chunks',
+              {'embedding_status': 'ok'},
+              where: 'id = ?',
+              whereArgs: [id],
+            );
+            await _fallbackDb!.insert(
+              'chunk_embeddings',
+              {
+                'chunk_id': id,
+                'embedding': _doubleListToBlob(vector),
+              },
+              conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
+            );
+          }
+        } catch (_) {
+          await _fallbackDb!.update(
+            'chunks',
+            {'embedding_status': 'zero_vector'},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        }
+
+        embedded++;
+        onProgress?.call(embedded, rows.length);
+      }
+    } finally {
+      client.dispose();
+    }
+
+    return embedded;
   }
 
   // ── Utility methods ──────────────────────────────────────
