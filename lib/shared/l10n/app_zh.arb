@@ -106,5 +106,8 @@
   "onboardingConfigureLater": "稍后配置",
   "onboardingDoneTitle": "准备就绪！",
   "onboardingDoneDesc": "你已经准备好探索明日方舟与终末地的世界了。\n\n如有需要，可前往 设置 > API 设置\n配置单独的嵌入服务提供商，\n或直接开始浏览 Wiki！",
-  "onboardingStartExploring": "开始探索"
+  "onboardingStartExploring": "开始探索",
+  "settingsHelpGuide": "帮助与引导",
+  "settingsShowOnboarding": "新用户导览",
+  "settingsShowOnboardingDesc": "重新进行首次启动导览与配置"
 }

@@ -5,6 +5,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import 'onboarding_page.dart';
 
 /// Settings tab — hosts theme/language switchers, API settings,
 /// and knowledge base management.
@@ -217,6 +218,66 @@ class SettingsPage extends ConsumerWidget {
                       const SizedBox(height: 2),
                       Text(
                         context.t.settingsKnowledgeBaseDesc,
+                        style: theme.bodyFont.copyWith(
+                          color: theme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: theme.textSecondary,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Help & Guide ──────────────────────────────────
+          Text(
+            context.t.settingsHelpGuide,
+            style: theme.titleFont.copyWith(fontSize: 18),
+          ),
+          const SizedBox(height: 12),
+          ThemeAwareCard(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => OnboardingPage(
+                    onComplete: () => Navigator.of(context).pop(),
+                  ),
+                ),
+              );
+            },
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.accentPrimary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.help_outline_rounded,
+                    color: theme.accentPrimary,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.t.settingsShowOnboarding,
+                        style: theme.titleFont.copyWith(fontSize: 16),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        context.t.settingsShowOnboardingDesc,
                         style: theme.bodyFont.copyWith(
                           color: theme.textSecondary,
                           fontSize: 12,

@@ -38,24 +38,36 @@ class _ArkLoresAppState extends ConsumerState<ArkLoresApp> {
   }
 
   Future<void> _checkOnboarding() async {
-    try {
-      final service = ref.read(settingsServiceProvider);
-      final done = await service.isOnboardingDone();
+    int retryCount = 0;
+    const maxRetries = 3;
+    const retryDelay = Duration(milliseconds: 200);
 
-      await ref.read(apiConfigProvider.notifier).load();
+    while (retryCount < maxRetries) {
+      try {
+        final service = ref.read(settingsServiceProvider);
+        final done = await service.isOnboardingDone();
 
-      if (mounted) {
-        setState(() {
-          _checkingOnboarding = false;
-          _onboardingDone = done;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _checkingOnboarding = false;
-          _onboardingDone = false;
-        });
+        await ref.read(apiConfigProvider.notifier).load();
+
+        if (mounted) {
+          setState(() {
+            _checkingOnboarding = false;
+            _onboardingDone = done;
+          });
+        }
+        return;
+      } catch (_) {
+        retryCount++;
+        if (retryCount >= maxRetries) {
+          if (mounted) {
+            setState(() {
+              _checkingOnboarding = false;
+              _onboardingDone = false;
+            });
+          }
+        } else {
+          await Future.delayed(retryDelay);
+        }
       }
     }
   }
