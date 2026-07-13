@@ -62,6 +62,32 @@ class BuiltinEmbeddingClient implements EmbeddingClient {
     }
   }
 
+  static Future<BuiltinEmbeddingClient> fromBuffer({
+    required Uint8List modelBytes,
+    required String vocabContent,
+    int maxSequenceLength = BuiltinEmbeddingModel.maxSequenceLength,
+    String providerId = BuiltinEmbeddingModel.providerId,
+    int expectedDimension = BuiltinEmbeddingModel.expectedDimension,
+  }) async {
+    try {
+      final interpreter = Interpreter.fromBuffer(modelBytes);
+      final tokenizer = WordPieceTokenizer(
+        vocab: WordPieceTokenizer.parseVocab(vocabContent),
+        maxSequenceLength: maxSequenceLength,
+      );
+      return BuiltinEmbeddingClient._(
+        interpreter: interpreter,
+        tokenizer: tokenizer,
+        providerId: providerId,
+        dimension: expectedDimension,
+      );
+    } catch (e) {
+      throw BuiltinEmbeddingException(
+        'Failed to load built-in embedding from buffer. Original error: $e',
+      );
+    }
+  }
+
   @override
   Future<List<double>> embed(String text) async {
     final vectors = await embedBatch([text]);
@@ -184,30 +210,25 @@ class BuiltinEmbeddingClient implements EmbeddingClient {
 /// Data class holding parameters for the background embedding job.
 class _BuiltinEmbeddingJob {
   final List<String> texts;
-  final String modelAsset;
-  final String vocabAsset;
+  final Uint8List modelBytes;
+  final String vocabContent;
   final int maxSequenceLength;
   final int expectedDimension;
-  final RootIsolateToken? isolateToken;
 
   const _BuiltinEmbeddingJob({
     required this.texts,
-    required this.modelAsset,
-    required this.vocabAsset,
+    required this.modelBytes,
+    required this.vocabContent,
     required this.maxSequenceLength,
     required this.expectedDimension,
-    required this.isolateToken,
   });
 }
 
 /// Top-level helper function for compute() isolate to run TFLite embedding in background.
 Future<List<List<double>>> _runBuiltinEmbeddingBackground(_BuiltinEmbeddingJob job) async {
-  if (job.isolateToken != null) {
-    BackgroundIsolateBinaryMessenger.ensureInitialized(job.isolateToken!);
-  }
-  final client = await BuiltinEmbeddingClient.load(
-    modelAsset: job.modelAsset,
-    vocabAsset: job.vocabAsset,
+  final client = await BuiltinEmbeddingClient.fromBuffer(
+    modelBytes: job.modelBytes,
+    vocabContent: job.vocabContent,
     maxSequenceLength: job.maxSequenceLength,
     expectedDimension: job.expectedDimension,
   );
@@ -231,6 +252,9 @@ class LazyBuiltinEmbeddingClient implements EmbeddingClient {
   @override
   final int dimension;
 
+  Uint8List? _cachedModelBytes;
+  String? _cachedVocabContent;
+
   LazyBuiltinEmbeddingClient({
     required this.providerId,
     required this.dimension,
@@ -241,6 +265,17 @@ class LazyBuiltinEmbeddingClient implements EmbeddingClient {
         _vocabAsset = vocabAsset,
         _maxSequenceLength = maxSequenceLength;
 
+  Future<void> _ensureAssetsLoaded() async {
+    if (_cachedModelBytes != null && _cachedVocabContent != null) return;
+    
+    final modelData = await rootBundle.load(_modelAsset);
+    _cachedModelBytes = modelData.buffer.asUint8List(
+      modelData.offsetInBytes,
+      modelData.lengthInBytes,
+    );
+    _cachedVocabContent = await rootBundle.loadString(_vocabAsset);
+  }
+
   @override
   Future<List<double>> embed(String text) async {
     final vectors = await embedBatch([text]);
@@ -250,22 +285,22 @@ class LazyBuiltinEmbeddingClient implements EmbeddingClient {
   @override
   Future<List<List<double>>> embedBatch(List<String> texts) async {
     if (texts.isEmpty) return [];
-    final token = RootIsolateToken.instance;
+    await _ensureAssetsLoaded();
     return await compute(
       _runBuiltinEmbeddingBackground,
       _BuiltinEmbeddingJob(
         texts: texts,
-        modelAsset: _modelAsset,
-        vocabAsset: _vocabAsset,
+        modelBytes: _cachedModelBytes!,
+        vocabContent: _cachedVocabContent!,
         maxSequenceLength: _maxSequenceLength,
         expectedDimension: dimension,
-        isolateToken: token,
       ),
     );
   }
 
   @override
   void dispose() {
-    // No-op: interpreter is loaded and disposed per-job in the background isolate.
+    _cachedModelBytes = null;
+    _cachedVocabContent = null;
   }
 }
