@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'chunker.dart';
 import 'embedder.dart';
@@ -159,6 +161,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       for (final localTitle in localMetadata.keys) {
         if (!allUniqueTitles.contains(localTitle)) {
           await _vectorStore.deleteWikiPage(site.key, localTitle);
+          await _deleteRawWikiPage(site.key, localTitle);
           cleanedCount++;
         }
       }
@@ -321,6 +324,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
 
           // We delete the existing page chunks before writing new ones to prevent leftovers
           await _vectorStore.deleteWikiPage(site.key, page.title);
+          await _deleteRawWikiPage(site.key, page.title);
 
           // Skip indexing index/list pages to avoid unneeded vectors and massive noise
           final isListOrNav = page.title.contains('一览') ||
@@ -341,6 +345,8 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           if (isStoryPage) {
             finalContent = cleanStoryContent(page.content);
           }
+
+          await _saveRawWikiPage(site.key, page.title, finalContent);
 
           final chunks = chunker.chunkByHeadings(finalContent, pageTitle: page.title);
           if (chunks.isNotEmpty) {
@@ -970,6 +976,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       for (final localTitle in localMetadata.keys) {
         if (!allTasks.containsKey(localTitle)) {
           await _vectorStore.deleteWikiPage(site.key, localTitle);
+          await _deleteRawWikiPage(site.key, localTitle);
           cleanedCount++;
         }
       }
@@ -1067,7 +1074,10 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         // Delete old chunks if exists
         if (!isNew) {
           await _vectorStore.deleteWikiPage(site.key, title);
+          await _deleteRawWikiPage(site.key, title);
         }
+
+        await _saveRawWikiPage(site.key, title, markdown);
 
         // Chunker -> Embed -> Store
         final chunks = chunker.chunkByHeadings(markdown, pageTitle: title);
@@ -1123,6 +1133,33 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       return 'https://warfarin.wiki/cn/$path/${Uri.encodeComponent(slug)}';
     }
     return 'https://warfarin.wiki/cn';
+  }
+
+  Future<void> _saveRawWikiPage(String wiki, String title, String content) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final sanitizedTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final file = File('${dir.path}/wiki_cache/$wiki/$sanitizedTitle.md');
+      await file.parent.create(recursive: true);
+      await file.writeAsString(content);
+      debugPrint('[WikiIndexing] Saved raw page to ${file.path}');
+    } catch (e) {
+      debugPrint('[WikiIndexing] Failed to save raw page: $e');
+    }
+  }
+
+  Future<void> _deleteRawWikiPage(String wiki, String title) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final sanitizedTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final file = File('${dir.path}/wiki_cache/$wiki/$sanitizedTitle.md');
+      if (await file.exists()) {
+        await file.delete();
+        debugPrint('[WikiIndexing] Deleted raw page file: ${file.path}');
+      }
+    } catch (e) {
+      debugPrint('[WikiIndexing] Failed to delete raw page: $e');
+    }
   }
 }
 
