@@ -26,7 +26,12 @@ class SettingsService {
   final FlutterSecureStorage _storage;
 
   SettingsService({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(
+                encryptedSharedPreferences: true,
+              ),
+            );
 
   /// Loads the saved API configuration.
   Future<LLMConfig> loadApiConfig() async {

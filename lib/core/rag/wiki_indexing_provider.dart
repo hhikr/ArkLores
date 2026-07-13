@@ -919,6 +919,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           sb.writeln(voice);
         }
         sb.writeln('');
+      }
     }
 
     return sb.toString().trim();
@@ -1135,9 +1136,17 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
     return 'https://warfarin.wiki/cn';
   }
 
+  Future<Directory> _getWikiCacheDirectory() async {
+    if (Platform.isAndroid) {
+      final extDir = await getExternalStorageDirectory();
+      if (extDir != null) return extDir;
+    }
+    return await getApplicationDocumentsDirectory();
+  }
+
   Future<void> _saveRawWikiPage(String wiki, String title, String content) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await _getWikiCacheDirectory();
       final sanitizedTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
       final file = File('${dir.path}/wiki_cache/$wiki/$sanitizedTitle.md');
       await file.parent.create(recursive: true);
@@ -1150,7 +1159,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
 
   Future<void> _deleteRawWikiPage(String wiki, String title) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await _getWikiCacheDirectory();
       final sanitizedTitle = title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
       final file = File('${dir.path}/wiki_cache/$wiki/$sanitizedTitle.md');
       if (await file.exists()) {

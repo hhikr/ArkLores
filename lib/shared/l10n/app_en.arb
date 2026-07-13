@@ -106,5 +106,8 @@
   "onboardingConfigureLater": "Configure later",
   "onboardingDoneTitle": "All Set!",
   "onboardingDoneDesc": "You're ready to explore the world of Arknights and Endfield.\n\nVisit Settings > API Settings to configure\na separate Embedding provider if needed,\nor start browsing the Wiki!",
-  "onboardingStartExploring": "Start Exploring"
+  "onboardingStartExploring": "Start Exploring",
+  "settingsHelpGuide": "Help & Guide",
+  "settingsShowOnboarding": "Show Onboarding Guide",
+  "settingsShowOnboardingDesc": "Replay the first-launch guide to configure the app"
 }
