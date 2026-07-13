@@ -96,10 +96,31 @@ class VectorStore {
   Future<void> initialize() async {
     if (_initialized) return;
 
-    final dir = await getApplicationDocumentsDirectory();
+    // Use external storage on Android so it is visible to users (similar to markdown cache)
+    Directory dir = await getApplicationDocumentsDirectory();
+    if (Platform.isAndroid) {
+      final extDir = await getExternalStorageDirectory();
+      if (extDir != null) dir = extDir;
+    }
     final dbPath = p.join(dir.path, 'arklores_knowledge.db');
 
+    // Legacy sandbox database path migration
+    final legacyDir = await getApplicationDocumentsDirectory();
+    final legacyPath = p.join(legacyDir.path, 'arklores_knowledge.db');
+    final legacyFile = File(legacyPath);
     final file = File(dbPath);
+
+    if (dbPath != legacyPath && await legacyFile.exists() && !await file.exists()) {
+      try {
+        await file.parent.create(recursive: true);
+        await legacyFile.copy(dbPath);
+        await legacyFile.delete();
+        print('[VectorStore] Successfully migrated legacy sandbox database to: $dbPath');
+      } catch (e) {
+        print('[VectorStore] Failed to migrate legacy sandbox database: $e');
+      }
+    }
+
     if (!await file.exists()) {
       try {
         await file.parent.create(recursive: true);
