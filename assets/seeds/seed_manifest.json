@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "seedVersion": "2026-07-13",
+  "builtAt": "2026-07-13T13:34:47.652434Z",
+  "embedding": {
+    "profileId": "builtin:builtin-embedding",
+    "backend": "builtin",
+    "model": "builtin-embedding",
+    "dimension": 512
+  },
+  "chunker": {
+    "version": 1,
+    "targetTokens": 500,
+    "overlapTokens": 50,
+    "maxChars": 4000
+  },
+  "sources": {
+    "endfield": {
+      "enabled": true,
+      "snapshotAt": "2026-07-13T13:34:47.652434Z"
+    }
+  }
+}
