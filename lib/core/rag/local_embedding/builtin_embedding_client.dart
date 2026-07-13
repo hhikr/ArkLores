@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'builtin_embedding_model.dart';
@@ -179,6 +180,42 @@ class BuiltinEmbeddingClient implements EmbeddingClient {
   }
 }
 
+/// Data class holding parameters for the background embedding job.
+class _BuiltinEmbeddingJob {
+  final List<String> texts;
+  final String modelAsset;
+  final String vocabAsset;
+  final int maxSequenceLength;
+  final int expectedDimension;
+
+  const _BuiltinEmbeddingJob({
+    required this.texts,
+    required this.modelAsset,
+    required this.vocabAsset,
+    required this.maxSequenceLength,
+    required this.expectedDimension,
+  });
+}
+
+/// Top-level helper function for compute() isolate to run TFLite embedding in background.
+Future<List<List<double>>> _runBuiltinEmbeddingBackground(_BuiltinEmbeddingJob job) async {
+  final client = await BuiltinEmbeddingClient.load(
+    modelAsset: job.modelAsset,
+    vocabAsset: job.vocabAsset,
+    maxSequenceLength: job.maxSequenceLength,
+    expectedDimension: job.expectedDimension,
+  );
+  try {
+    final vectors = <List<double>>[];
+    for (final text in job.texts) {
+      vectors.add(client._embedOne(text));
+    }
+    return vectors;
+  } finally {
+    client.dispose();
+  }
+}
+
 class LazyBuiltinEmbeddingClient implements EmbeddingClient {
   final String _modelAsset;
   final String _vocabAsset;
@@ -187,8 +224,6 @@ class LazyBuiltinEmbeddingClient implements EmbeddingClient {
   final String providerId;
   @override
   final int dimension;
-
-  Future<BuiltinEmbeddingClient>? _clientFuture;
 
   LazyBuiltinEmbeddingClient({
     required this.providerId,
@@ -200,31 +235,29 @@ class LazyBuiltinEmbeddingClient implements EmbeddingClient {
         _vocabAsset = vocabAsset,
         _maxSequenceLength = maxSequenceLength;
 
-  Future<BuiltinEmbeddingClient> get _client {
-    return _clientFuture ??= BuiltinEmbeddingClient.load(
-      modelAsset: _modelAsset,
-      vocabAsset: _vocabAsset,
-      maxSequenceLength: _maxSequenceLength,
-      providerId: providerId,
-      expectedDimension: dimension,
-    );
-  }
-
   @override
   Future<List<double>> embed(String text) async {
-    return (await _client).embed(text);
+    final vectors = await embedBatch([text]);
+    return vectors.first;
   }
 
   @override
   Future<List<List<double>>> embedBatch(List<String> texts) async {
-    return (await _client).embedBatch(texts);
+    if (texts.isEmpty) return [];
+    return await compute(
+      _runBuiltinEmbeddingBackground,
+      _BuiltinEmbeddingJob(
+        texts: texts,
+        modelAsset: _modelAsset,
+        vocabAsset: _vocabAsset,
+        maxSequenceLength: _maxSequenceLength,
+        expectedDimension: dimension,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    final future = _clientFuture;
-    if (future != null) {
-      future.then((client) => client.dispose());
-    }
+    // No-op: interpreter is loaded and disposed per-job in the background isolate.
   }
 }
