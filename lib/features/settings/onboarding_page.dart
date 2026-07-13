@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/llm/llm_client.dart';
 import '../../shared/l10n/l10n.dart';
+import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -87,29 +88,59 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final currentLocale = ref.watch(localeProvider);
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Skip button (top right) ─────────────────────
-            if (_currentStep > 0)
-              Align(
-                alignment: Alignment.topRight,
-                child: ExcludeFocus(
-                  child: TextButton(
-                    onPressed: _skip,
-                    child: Text(
-                      context.t.onboardingSkip,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
+            // ── Top Bar (Language Switcher & Skip Button) ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Language Toggle (top left)
+                  TextButton.icon(
+                    onPressed: () {
+                      final next = currentLocale == SupportedLocale.en
+                          ? SupportedLocale.zh
+                          : SupportedLocale.en;
+                      ref.read(localeProvider.notifier).switchTo(next);
+                    },
+                    icon: Icon(
+                      Icons.translate_rounded,
+                      color: theme.accentPrimary,
+                      size: 18,
+                    ),
+                    label: Text(
+                      currentLocale == SupportedLocale.en ? '中文' : 'English',
+                      style: theme.titleFont.copyWith(
+                        color: theme.textPrimary,
                         fontSize: 14,
                       ),
                     ),
                   ),
-                ),
+                  // Skip button (top right)
+                  if (_currentStep > 0)
+                    ExcludeFocus(
+                      child: TextButton(
+                        onPressed: _skip,
+                        child: Text(
+                          context.t.onboardingSkip,
+                          style: theme.bodyFont.copyWith(
+                            color: theme.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 48), // Spacer to balance layout
+                ],
               ),
+            ),
 
             // ── PageView ────────────────────────────────────
             Expanded(
