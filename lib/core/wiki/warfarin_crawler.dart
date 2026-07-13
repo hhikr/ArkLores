@@ -302,7 +302,7 @@ class WarfarinWikiCrawler {
     final response = await _client.get(
       Uri.parse(url),
       headers: {'User-Agent': _userAgent},
-    );
+    ).timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
       throw CrawlerException(
