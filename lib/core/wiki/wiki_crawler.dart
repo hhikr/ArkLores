@@ -338,7 +338,7 @@ class MediaWikiCrawler {
       headers: {
         'User-Agent': 'ArkLores/0.3 (https://github.com/hhikr/ArkLores)',
       },
-    );
+    ).timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
       throw CrawlerException(
