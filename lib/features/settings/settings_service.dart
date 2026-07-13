@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/llm/embedding_profile.dart';
 import '../../core/llm/llm_client.dart';
+import '../../core/rag/local_embedding/builtin_embedding_model.dart';
 
 /// Persistent storage for API configuration via flutter_secure_storage.
 ///
@@ -90,6 +91,11 @@ class SettingsService {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final builtin = EmbeddingProfile.builtin(
+      model: BuiltinEmbeddingModel.id,
+      dimension: BuiltinEmbeddingModel.expectedDimension,
+      now: now,
+    );
     final migrated = EmbeddingProfile.api(
       baseUrl: legacyConfig.embedBaseUrl,
       apiKey: legacyConfig.embedApiKey,
@@ -99,8 +105,8 @@ class SettingsService {
       id: 'legacy',
     );
     final state = EmbeddingSettingsState(
-      profiles: [migrated],
-      activeProfileId: migrated.id,
+      profiles: [builtin, migrated],
+      activeProfileId: builtin.id,
     );
     await saveEmbeddingSettings(state);
     return state;
