@@ -231,7 +231,6 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       state = state.copyWith(status: WikiIndexingStatus.embedding);
       final chunker = const Chunker();
       var processed = 0;
-      var totalNewChunks = 0;
 
       // Process pages in batches of 10 to limit memory consumption and avoid locking SQLite too long
       const crawlBatchSize = 10;
@@ -375,6 +374,9 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
             final embedResult = await _embedder.embedBatch(texts);
 
             if (embedResult.vectors.isNotEmpty) {
+              await _ref
+                  .read(embeddingSettingsProvider.notifier)
+                  .updateActiveProfileDimension(_embedder.detectedDimension);
               await _vectorStore.insertChunks(
                 chunks,
                 embedResult.vectors,
@@ -385,7 +387,6 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
                 wiki: site.key,
                 profileId: _profileId,
               );
-              totalNewChunks += embedResult.vectors.length;
             }
           }
 
@@ -1041,7 +1042,6 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       final chunker = const Chunker();
       var processed = 0;
       var skipped = 0;
-      var totalNewChunks = 0;
 
       for (final title in allTasks.keys) {
         state = state.copyWith(currentItemTitle: title);
@@ -1139,6 +1139,9 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           final embedResult = await _embedder.embedBatch(texts);
 
           if (embedResult.vectors.isNotEmpty) {
+            await _ref
+                .read(embeddingSettingsProvider.notifier)
+                .updateActiveProfileDimension(_embedder.detectedDimension);
             await _vectorStore.insertChunks(
               chunks,
               embedResult.vectors,
@@ -1147,7 +1150,6 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
               wiki: site.key,
               profileId: _profileId,
             );
-            totalNewChunks += embedResult.vectors.length;
           }
         }
 

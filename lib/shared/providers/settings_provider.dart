@@ -99,6 +99,26 @@ class EmbeddingSettingsNotifier extends StateNotifier<EmbeddingSettingsState> {
     state = next;
   }
 
+  Future<void> updateActiveProfileDimension(int dimension) async {
+    if (dimension <= 0) return;
+    final active = state.activeProfile;
+    if (active == null || active.dimension == dimension) return;
+
+    final profiles = [
+      for (final profile in state.profiles)
+        if (profile.id == active.id)
+          profile.copyWith(
+            dimension: dimension,
+            updatedAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          )
+        else
+          profile,
+    ];
+    final next = state.copyWith(profiles: profiles);
+    await _service.saveEmbeddingSettings(next);
+    state = next;
+  }
+
   Future<void> deleteProfile(String profileId) async {
     final profiles = state.profiles.where((p) => p.id != profileId).toList();
     final nextActive = state.activeProfileId == profileId
