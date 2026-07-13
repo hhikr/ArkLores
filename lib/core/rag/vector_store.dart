@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -94,6 +96,19 @@ class VectorStore {
 
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'arklores_knowledge.db');
+
+    final file = File(dbPath);
+    if (!await file.exists()) {
+      try {
+        await file.parent.create(recursive: true);
+        final data = await rootBundle.load('assets/seeds/arklores_knowledge.db');
+        final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        await file.writeAsBytes(bytes, flush: true);
+        print('[VectorStore] Successfully seeded database from assets.');
+      } catch (e) {
+        print('[VectorStore] Database seed asset not found or failed to load. Creating fresh database.');
+      }
+    }
 
     _fallbackDb = await sqflite.openDatabase(
       dbPath,
