@@ -5,7 +5,6 @@ import 'dart:isolate';
 import 'package:http/http.dart' as http;
 
 import 'wiki_crawler.dart' show CrawlerException;
-import 'wiki_models.dart';
 
 /// Crawler for warfarin.wiki (Arknights: Endfield Wiki).
 ///
@@ -34,7 +33,8 @@ class WarfarinWikiCrawler {
   /// Fetches all operator slugs.
   Future<List<String>> fetchOperatorSlugs() async {
     final decoded = await _fetchAndDecode('$_baseUrl/operators.data');
-    final indexData = decoded['routes/\$lang.operators._index'] as Map<String, dynamic>?;
+    final indexData =
+        decoded['routes/\$lang.operators._index'] as Map<String, dynamic>?;
     if (indexData == null) return [];
     final responseList = indexData['response'] as List<dynamic>? ?? [];
     return responseList
@@ -47,7 +47,8 @@ class WarfarinWikiCrawler {
   /// Fetches a single operator's detail page and returns the parsed Map.
   Future<Map<String, dynamic>> fetchOperatorDetail(String slug) async {
     final decoded = await _fetchAndDecode('$_baseUrl/operators/$slug.data');
-    final detailData = decoded['routes/\$lang.operators.\$slug'] as Map<String, dynamic>?;
+    final detailData =
+        decoded['routes/\$lang.operators.\$slug'] as Map<String, dynamic>?;
     if (detailData == null || detailData['response'] == null) {
       throw CrawlerException('Failed to resolve operator detail: $slug');
     }
@@ -57,7 +58,8 @@ class WarfarinWikiCrawler {
   /// Fetches all lore/story slugs.
   Future<List<String>> fetchLoreSlugs() async {
     final decoded = await _fetchAndDecode('$_baseUrl/lore.data');
-    final indexData = decoded['routes/\$lang.lore._index'] as Map<String, dynamic>?;
+    final indexData =
+        decoded['routes/\$lang.lore._index'] as Map<String, dynamic>?;
     if (indexData == null) return [];
     final responseList = indexData['response'] as List<dynamic>? ?? [];
     return responseList
@@ -70,7 +72,8 @@ class WarfarinWikiCrawler {
   /// Fetches a single lore's detail.
   Future<Map<String, dynamic>> fetchLoreDetail(String slug) async {
     final decoded = await _fetchAndDecode('$_baseUrl/lore/$slug.data');
-    final detailData = decoded['routes/\$lang.lore.\$slug'] as Map<String, dynamic>?;
+    final detailData =
+        decoded['routes/\$lang.lore.\$slug'] as Map<String, dynamic>?;
     if (detailData == null || detailData['response'] == null) {
       throw CrawlerException('Failed to resolve lore detail: $slug');
     }
@@ -80,7 +83,8 @@ class WarfarinWikiCrawler {
   /// Fetches all mission slugs.
   Future<List<String>> fetchMissionSlugs() async {
     final decoded = await _fetchAndDecode('$_baseUrl/missions.data');
-    final indexData = decoded['routes/\$lang.missions._index'] as Map<String, dynamic>?;
+    final indexData =
+        decoded['routes/\$lang.missions._index'] as Map<String, dynamic>?;
     if (indexData == null) return [];
     final responseList = indexData['response'] as List<dynamic>? ?? [];
     return responseList
@@ -93,7 +97,8 @@ class WarfarinWikiCrawler {
   /// Fetches a single mission's detail.
   Future<Map<String, dynamic>> fetchMissionDetail(String slug) async {
     final decoded = await _fetchAndDecode('$_baseUrl/missions/$slug.data');
-    final detailData = decoded['routes/\$lang.missions.\$slug'] as Map<String, dynamic>?;
+    final detailData =
+        decoded['routes/\$lang.missions.\$slug'] as Map<String, dynamic>?;
     if (detailData == null || detailData['response'] == null) {
       throw CrawlerException('Failed to resolve mission detail: $slug');
     }
@@ -221,7 +226,8 @@ class WarfarinWikiCrawler {
   String formatLoreToMarkdown(Map<String, dynamic> data) {
     final name = data['name'] ?? '';
     final typeName = data['typeName'] ?? '';
-    final richContentTable = data['richContentTable'] as Map<String, dynamic>? ?? {};
+    final richContentTable =
+        data['richContentTable'] as Map<String, dynamic>? ?? {};
     final contentList = richContentTable['contentList'] as List<dynamic>? ?? [];
 
     final sb = StringBuffer();
@@ -347,9 +353,8 @@ Map<String, dynamic> decodeRemixStream(List<dynamic> arr) {
     }
 
     if (val is Map) {
-      final refKeys = val.keys
-          .where((k) => k is String && k.startsWith('_'))
-          .toList();
+      final refKeys =
+          val.keys.where((k) => k is String && k.startsWith('_')).toList();
 
       if (refKeys.isNotEmpty) {
         final built = <String, dynamic>{};

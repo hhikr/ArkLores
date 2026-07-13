@@ -20,7 +20,9 @@ class Embedder {
 
   /// Returns the detected embedding dimension.
   /// 0 if no embedding has been performed yet.
-  int get detectedDimension => _dimension;
+  int get detectedDimension => _dimension > 0 ? _dimension : _client.dimension;
+
+  String get providerId => _client.providerId;
 
   /// Embeds a single text string.
   ///
@@ -29,7 +31,7 @@ class Embedder {
   Future<List<double>> embed(String text) async {
     if (text.trim().isEmpty) {
       return List.filled(
-        _dimension > 0 ? _dimension : _defaultDimension,
+        detectedDimension > 0 ? detectedDimension : _defaultDimension,
         0.0,
       );
     }
@@ -60,7 +62,7 @@ class Embedder {
     for (var i = 0; i < texts.length; i++) {
       if (texts[i].trim().isEmpty) {
         results.add(List.filled(
-          _dimension > 0 ? _dimension : _defaultDimension,
+          detectedDimension > 0 ? detectedDimension : _defaultDimension,
           0.0,
         ));
       } else {
@@ -68,7 +70,7 @@ class Embedder {
         validTexts.add(texts[i]);
         // Placeholder — will be filled after batch embedding.
         results.add(List.filled(
-          _dimension > 0 ? _dimension : _defaultDimension,
+          detectedDimension > 0 ? detectedDimension : _defaultDimension,
           0.0,
         ));
       }

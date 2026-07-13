@@ -41,4 +41,34 @@ void main() {
     expect(first.id, isNot(second.id));
     expect(first.matchKey, isNot(second.matchKey));
   });
+
+  test('canEmbed reflects active profile backend and API key state', () {
+    final apiWithoutKey = EmbeddingProfile.api(
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: '',
+      model: 'text-embedding-3-small',
+      dimension: 0,
+      now: 100,
+    );
+    final builtin = EmbeddingProfile.builtin(
+      model: 'multilingual-e5-small-tflite',
+      dimension: 384,
+      now: 100,
+    );
+
+    expect(
+      EmbeddingSettingsState(
+        profiles: [apiWithoutKey, builtin],
+        activeProfileId: apiWithoutKey.id,
+      ).canEmbed,
+      isFalse,
+    );
+    expect(
+      EmbeddingSettingsState(
+        profiles: [apiWithoutKey, builtin],
+        activeProfileId: builtin.id,
+      ).canEmbed,
+      isTrue,
+    );
+  });
 }

@@ -24,6 +24,9 @@ final bookImportServiceProvider = Provider<BookImportService>((ref) {
     vectorStore: vectorStore,
     embedder: embedder,
     profileId: profile.id,
+    onEmbeddingDimensionDetected: (dimension) => ref
+        .read(embeddingSettingsProvider.notifier)
+        .updateActiveProfileDimension(dimension),
   );
 });
 

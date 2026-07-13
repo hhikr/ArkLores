@@ -63,6 +63,7 @@ class BookImportService {
   final VectorStore _vectorStore;
   final Embedder _embedder;
   final String _profileId;
+  final Future<void> Function(int dimension)? _onEmbeddingDimensionDetected;
   final Chunker _chunker;
   final Uuid _uuid;
 
@@ -70,11 +71,13 @@ class BookImportService {
     required VectorStore vectorStore,
     required Embedder embedder,
     required String profileId,
+    Future<void> Function(int dimension)? onEmbeddingDimensionDetected,
     Chunker? chunker,
     Uuid? uuid,
   })  : _vectorStore = vectorStore,
         _embedder = embedder,
         _profileId = profileId,
+        _onEmbeddingDimensionDetected = onEmbeddingDimensionDetected,
         _chunker = chunker ?? const Chunker(),
         _uuid = uuid ?? const Uuid();
 
@@ -136,6 +139,7 @@ class BookImportService {
       if (result.vectors.isEmpty) {
         throw Exception('Embedding produced no vectors for $fileName');
       }
+      await _recordEmbeddingDimension(result.vectors);
 
       emit('storing', 0.7,
           detail: 'Storing ${result.vectors.length} vectors...');
@@ -193,6 +197,19 @@ class BookImportService {
       results.add(result);
     }
     return results;
+  }
+
+  Future<void> _recordEmbeddingDimension(List<List<double>> vectors) async {
+    if (_onEmbeddingDimensionDetected == null || vectors.isEmpty) return;
+    final dimension = vectors
+        .firstWhere(
+          (vector) => vector.isNotEmpty,
+          orElse: () => const <double>[],
+        )
+        .length;
+    if (dimension > 0) {
+      await _onEmbeddingDimensionDetected(dimension);
+    }
   }
 
   /// Extracts text from a PDF file using syncfusion_flutter_pdf.
