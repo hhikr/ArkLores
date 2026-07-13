@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'builtin_embedding_model.dart';
@@ -187,6 +188,7 @@ class _BuiltinEmbeddingJob {
   final String vocabAsset;
   final int maxSequenceLength;
   final int expectedDimension;
+  final RootIsolateToken? isolateToken;
 
   const _BuiltinEmbeddingJob({
     required this.texts,
@@ -194,11 +196,15 @@ class _BuiltinEmbeddingJob {
     required this.vocabAsset,
     required this.maxSequenceLength,
     required this.expectedDimension,
+    required this.isolateToken,
   });
 }
 
 /// Top-level helper function for compute() isolate to run TFLite embedding in background.
 Future<List<List<double>>> _runBuiltinEmbeddingBackground(_BuiltinEmbeddingJob job) async {
+  if (job.isolateToken != null) {
+    BackgroundIsolateBinaryMessenger.ensureInitialized(job.isolateToken!);
+  }
   final client = await BuiltinEmbeddingClient.load(
     modelAsset: job.modelAsset,
     vocabAsset: job.vocabAsset,
@@ -244,6 +250,7 @@ class LazyBuiltinEmbeddingClient implements EmbeddingClient {
   @override
   Future<List<List<double>>> embedBatch(List<String> texts) async {
     if (texts.isEmpty) return [];
+    final token = RootIsolateToken.instance;
     return await compute(
       _runBuiltinEmbeddingBackground,
       _BuiltinEmbeddingJob(
@@ -252,6 +259,7 @@ class LazyBuiltinEmbeddingClient implements EmbeddingClient {
         vocabAsset: _vocabAsset,
         maxSequenceLength: _maxSequenceLength,
         expectedDimension: dimension,
+        isolateToken: token,
       ),
     );
   }
