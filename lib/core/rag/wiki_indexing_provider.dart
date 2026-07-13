@@ -9,6 +9,7 @@ import 'vector_store.dart';
 import 'vector_store_provider.dart';
 import '../../core/wiki/wiki_crawler.dart';
 import '../../core/wiki/wiki_models.dart';
+import '../../core/wiki/warfarin_crawler.dart';
 
 /// Status of the Wiki indexing process.
 enum WikiIndexingStatus {
@@ -108,6 +109,11 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   /// Runs the incremental indexing process for a given [WikiSite].
   Future<void> indexWiki(WikiSite site, List<String> categories) async {
     if (state.isIndexing) return;
+
+    if (site == WikiSite.endfield) {
+      await _indexEndfield(site);
+      return;
+    }
 
     state = WikiIndexingState(
       status: WikiIndexingStatus.starting,
@@ -907,9 +913,224 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           sb.writeln(voice);
         }
         sb.writeln('');
-      }
     }
 
     return sb.toString().trim();
   }
+
+  /// Synchronizes data incrementally from warfarin.wiki for Endfield.
+  Future<void> _indexEndfield(WikiSite site) async {
+    state = WikiIndexingState(
+      status: WikiIndexingStatus.starting,
+      currentSiteName: site.displayName,
+    );
+
+    final warfarinCrawler = WarfarinWikiCrawler();
+
+    try {
+      // Step 1: Fetch all slugs
+      state = state.copyWith(status: WikiIndexingStatus.fetchingTitles);
+      
+      final List<String> opSlugs;
+      final List<String> loreSlugs;
+      final List<String> missionSlugs;
+      
+      try {
+        opSlugs = await warfarinCrawler.fetchOperatorSlugs();
+        loreSlugs = await warfarinCrawler.fetchLoreSlugs();
+        missionSlugs = await warfarinCrawler.fetchMissionSlugs();
+      } catch (e) {
+        throw Exception('Failed to fetch data lists from Warfarin Wiki: $e');
+      }
+
+      final Map<String, _EndfieldTask> allTasks = {};
+      for (final slug in opSlugs) {
+        allTasks['operator/$slug'] = _EndfieldTask(slug: slug, type: _EndfieldType.operator);
+      }
+      for (final slug in loreSlugs) {
+        allTasks['lore/$slug'] = _EndfieldTask(slug: slug, type: _EndfieldType.lore);
+      }
+      for (final slug in missionSlugs) {
+        allTasks['mission/$slug'] = _EndfieldTask(slug: slug, type: _EndfieldType.mission);
+      }
+
+      if (allTasks.isEmpty) {
+        state = state.copyWith(
+          status: WikiIndexingStatus.completed,
+          progress: 1.0,
+        );
+        _ref.invalidate(vectorStoreStatsProvider);
+        return;
+      }
+
+      // Step 2: Clean up obsolete pages in local DB
+      state = state.copyWith(status: WikiIndexingStatus.cleaningUp);
+      final localMetadata = await _vectorStore.getWikiPagesMetadata(site.key);
+      var cleanedCount = 0;
+      for (final localTitle in localMetadata.keys) {
+        if (!allTasks.containsKey(localTitle)) {
+          await _vectorStore.deleteWikiPage(site.key, localTitle);
+          cleanedCount++;
+        }
+      }
+      if (cleanedCount > 0) {
+        debugPrint('[IndexEndfield] Cleaned up $cleanedCount obsolete pages');
+      }
+
+      // Step 3: Incremental Sync Checks & Embedding
+      state = state.copyWith(
+        status: WikiIndexingStatus.embedding,
+        totalCount: allTasks.length,
+        processedCount: 0,
+        skippedCount: 0,
+      );
+
+      final chunker = const Chunker();
+      var processed = 0;
+      var skipped = 0;
+      var totalNewChunks = 0;
+
+      for (final title in allTasks.keys) {
+        state = state.copyWith(currentItemTitle: title);
+        final task = allTasks[title]!;
+
+        // Check local status first
+        final localPage = localMetadata[title];
+        
+        // Fetch detail & extract remote updatedAt
+        Map<String, dynamic>? detail;
+        String? remoteUpdatedAtStr;
+        try {
+          if (task.type == _EndfieldType.operator) {
+            detail = await warfarinCrawler.fetchOperatorDetail(task.slug);
+            remoteUpdatedAtStr = detail['operator']?['updatedAt'] as String?;
+          } else if (task.type == _EndfieldType.lore) {
+            detail = await warfarinCrawler.fetchLoreDetail(task.slug);
+            remoteUpdatedAtStr = detail['updatedAt'] as String?;
+          } else {
+            detail = await warfarinCrawler.fetchMissionDetail(task.slug);
+            remoteUpdatedAtStr = detail['updatedAt'] as String?;
+          }
+        } catch (e) {
+          debugPrint('Failed to fetch details for $title: $e');
+          processed++;
+          state = state.copyWith(
+            processedCount: processed,
+            progress: (processed / allTasks.length).clamp(0.0, 1.0),
+          );
+          continue;
+        }
+
+        // Parse timestamps
+        int remoteUpdatedAt = 0;
+        if (remoteUpdatedAtStr != null) {
+          try {
+            remoteUpdatedAt = DateTime.parse(remoteUpdatedAtStr).millisecondsSinceEpoch ~/ 1000;
+          } catch (_) {}
+        }
+
+        // Compare with local metadata
+        final isNew = localPage == null;
+        final hasFailures = localPage?.hasFailures ?? false;
+        final isModified = localPage != null && remoteUpdatedAt > localPage.updatedAt;
+
+        if (!isNew && !hasFailures && !isModified) {
+          skipped++;
+          processed++;
+          state = state.copyWith(
+            skippedCount: skipped,
+            processedCount: processed,
+            progress: (processed / allTasks.length).clamp(0.0, 1.0),
+          );
+          continue;
+        }
+
+        // Format to Markdown
+        String markdown = '';
+        if (task.type == _EndfieldType.operator) {
+          markdown = warfarinCrawler.formatOperatorToMarkdown(detail);
+        } else if (task.type == _EndfieldType.lore) {
+          markdown = warfarinCrawler.formatLoreToMarkdown(detail);
+        } else {
+          markdown = warfarinCrawler.formatMissionToMarkdown(detail);
+        }
+
+        if (markdown.isEmpty) {
+          processed++;
+          state = state.copyWith(
+            processedCount: processed,
+            progress: (processed / allTasks.length).clamp(0.0, 1.0),
+          );
+          continue;
+        }
+
+        // Delete old chunks if exists
+        if (!isNew) {
+          await _vectorStore.deleteWikiPage(site.key, title);
+        }
+
+        // Chunker -> Embed -> Store
+        final chunks = chunker.chunkByHeadings(markdown, pageTitle: title);
+        if (chunks.isNotEmpty) {
+          final texts = chunks.map((c) => c.content).toList();
+          final embedResult = await _embedder.embedBatch(texts);
+
+          if (embedResult.vectors.isNotEmpty) {
+            await _vectorStore.insertChunks(
+              chunks,
+              embedResult.vectors,
+              sourceType: 'wiki',
+              sourceUrl: _getEndfieldSourceUrl(title),
+              wiki: site.key,
+            );
+            totalNewChunks += embedResult.vectors.length;
+          }
+        }
+
+        processed++;
+        state = state.copyWith(
+          processedCount: processed,
+          progress: (processed / allTasks.length).clamp(0.0, 1.0),
+        );
+
+        // Rate limit delay to respect the server guidelines
+        await Future.delayed(warfarinCrawler.requestDelay);
+      }
+
+      _ref.invalidate(vectorStoreStatsProvider);
+
+      state = state.copyWith(
+        status: WikiIndexingStatus.completed,
+        progress: 1.0,
+      );
+    } catch (e) {
+      debugPrint('[IndexEndfield] Error: $e');
+      state = state.copyWith(
+        status: WikiIndexingStatus.failed,
+        error: e.toString(),
+      );
+    } finally {
+      warfarinCrawler.dispose();
+    }
+  }
+
+  String _getEndfieldSourceUrl(String title) {
+    final parts = title.split('/');
+    if (parts.length == 2) {
+      final type = parts[0];
+      final slug = parts[1];
+      final path = type == 'operator' ? 'operators' : type == 'lore' ? 'lore' : 'missions';
+      return 'https://warfarin.wiki/cn/$path/${Uri.encodeComponent(slug)}';
+    }
+    return 'https://warfarin.wiki/cn';
+  }
+}
+
+enum _EndfieldType { operator, lore, mission }
+
+class _EndfieldTask {
+  final String slug;
+  final _EndfieldType type;
+  
+  _EndfieldTask({required this.slug, required this.type});
 }
