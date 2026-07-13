@@ -1,7 +1,7 @@
 /// Supported Wiki sites.
 enum WikiSite {
   prts('prts', 'https://prts.wiki/api.php'),
-  endfield('endfield', 'https://warfarin.wiki/cn/api.php');
+  endfield('endfield', 'https://warfarin.wiki/cn');
 
   final String key;
   final String apiUrl;
