@@ -7,7 +7,7 @@ import 'builtin_embedding_model.dart';
 import '../embedding_client.dart';
 import 'wordpiece_tokenizer.dart';
 
-/// Exception thrown by the built-in embedding spike client.
+/// Exception thrown by the built-in embedding client.
 class BuiltinEmbeddingException implements Exception {
   final String message;
   const BuiltinEmbeddingException(this.message);
@@ -16,10 +16,7 @@ class BuiltinEmbeddingException implements Exception {
   String toString() => 'BuiltinEmbeddingException: $message';
 }
 
-/// TFLite-backed local embedding client for validating the fixed built-in model.
-///
-/// This is intentionally isolated from the production RAG provider until the
-/// fixed model asset is committed and verified on Android/iOS devices.
+/// TFLite-backed local embedding client for the built-in embedding model.
 class BuiltinEmbeddingClient implements EmbeddingClient {
   final Interpreter _interpreter;
   final WordPieceTokenizer _tokenizer;
