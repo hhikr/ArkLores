@@ -39,9 +39,9 @@ def _load_interpreter_class():
         pass
 
     try:
-        from tensorflow.lite import Interpreter  # type: ignore
+        import tensorflow as tf  # type: ignore
 
-        return Interpreter, "tensorflow"
+        return tf.lite.Interpreter, "tensorflow"
     except ImportError:
         pass
 

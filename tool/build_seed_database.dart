@@ -449,11 +449,12 @@ Future<_SrcStats> _buildPrts(
 // ── Database ─────────────────────────────────────────────────────────────────
 
 Future<Database> _createDatabase(String path) async {
-  final file = File(path);
+  final absolutePath = p.absolute(path);
+  final file = File(absolutePath);
   if (await file.exists()) await file.delete();
   await file.parent.create(recursive: true);
 
-  final db = await databaseFactoryFfi.openDatabase(path);
+  final db = await databaseFactoryFfi.openDatabase(absolutePath);
   await db.execute('''
     CREATE TABLE chunks (
       id          TEXT PRIMARY KEY,
