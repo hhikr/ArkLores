@@ -23,7 +23,7 @@ enum SupportedLocale {
 
 /// Notifier that holds the current locale and persists the preference.
 class LocaleNotifier extends StateNotifier<SupportedLocale> {
-  LocaleNotifier() : super(SupportedLocale.en);
+  LocaleNotifier() : super(SupportedLocale.zh);
 
   void switchTo(SupportedLocale locale) {
     state = locale;
