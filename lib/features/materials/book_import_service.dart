@@ -25,7 +25,8 @@ class BookImportResult {
 /// Progress reported during a book import operation.
 class BookImportProgress {
   final String fileName;
-  final String stage; // 'extracting', 'chunking', 'embedding', 'storing', 'done', 'error'
+  final String
+      stage; // 'extracting', 'chunking', 'embedding', 'storing', 'done', 'error'
   final double fraction;
   final String? detail;
   final String? error;
@@ -61,16 +62,19 @@ class BookImportProgress {
 class BookImportService {
   final VectorStore _vectorStore;
   final Embedder _embedder;
+  final String _profileId;
   final Chunker _chunker;
   final Uuid _uuid;
 
   BookImportService({
     required VectorStore vectorStore,
     required Embedder embedder,
+    required String profileId,
     Chunker? chunker,
     Uuid? uuid,
   })  : _vectorStore = vectorStore,
         _embedder = embedder,
+        _profileId = profileId,
         _chunker = chunker ?? const Chunker(),
         _uuid = uuid ?? const Uuid();
 
@@ -123,8 +127,7 @@ class BookImportService {
         throw FormatException('Text too short to chunk: $fileName');
       }
 
-      emit('embedding', 0.4,
-          detail: 'Embedding ${chunks.length} chunks...');
+      emit('embedding', 0.4, detail: 'Embedding ${chunks.length} chunks...');
 
       // ── Step 3: Embed ─────────────────────────────────────
       final texts = chunks.map((c) => c.content).toList();
@@ -143,6 +146,7 @@ class BookImportService {
         result.vectors,
         sourceType: 'book',
         bookId: bookId,
+        profileId: _profileId,
       );
 
       await _vectorStore.upsertBook(
@@ -150,10 +154,10 @@ class BookImportService {
         fileName: fileName,
         displayName: _suggestDisplayName(fileName),
         chunkCount: result.vectors.length,
+        profileId: _profileId,
       );
 
-      emit('done', 1.0,
-          detail: 'Imported ${result.vectors.length} chunks.');
+      emit('done', 1.0, detail: 'Imported ${result.vectors.length} chunks.');
 
       return BookImportResult(
         bookId: bookId,
@@ -182,8 +186,7 @@ class BookImportService {
         files[i],
         onProgress: (progress) {
           onProgress?.call(progress.copyWith(
-            detail:
-                '${progress.detail ?? ''} (${i + 1}/${files.length})',
+            detail: '${progress.detail ?? ''} (${i + 1}/${files.length})',
           ));
         },
       );
@@ -194,7 +197,8 @@ class BookImportService {
 
   /// Extracts text from a PDF file using syncfusion_flutter_pdf.
   Future<String> _extractPdfText(String filePath) async {
-    final document = PdfDocument(inputBytes: await File(filePath).readAsBytes());
+    final document =
+        PdfDocument(inputBytes: await File(filePath).readAsBytes());
     try {
       final extractor = PdfTextExtractor(document);
       return extractor.extractText();

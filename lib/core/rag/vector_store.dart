@@ -53,6 +53,8 @@ class VectorStoreStats {
   });
 }
 
+const String _legacyProfileId = 'legacy';
+
 // ── Top-level helper for compute() isolate ─────────────────────────────────
 // Must be top-level (not a class member) so Flutter's isolate spawner can
 // locate it without capturing any class state.
@@ -101,12 +103,15 @@ class VectorStore {
     if (!await file.exists()) {
       try {
         await file.parent.create(recursive: true);
-        final data = await rootBundle.load('assets/seeds/arklores_knowledge.db');
-        final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        final data =
+            await rootBundle.load('assets/seeds/arklores_knowledge.db');
+        final bytes =
+            data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
         await file.writeAsBytes(bytes, flush: true);
         print('[VectorStore] Successfully seeded database from assets.');
       } catch (e) {
-        print('[VectorStore] Database seed asset not found or failed to load. Creating fresh database.');
+        print(
+            '[VectorStore] Database seed asset not found or failed to load. Creating fresh database.');
       }
     }
 
@@ -125,7 +130,8 @@ class VectorStore {
             section     TEXT,
             content     TEXT NOT NULL,
             updated_at  INTEGER,
-            embedding_status TEXT DEFAULT 'ok'
+            embedding_status TEXT DEFAULT 'ok',
+            profile_id TEXT DEFAULT 'legacy'
           )
         ''');
         await db.execute('''
@@ -141,7 +147,8 @@ class VectorStore {
             file_name    TEXT NOT NULL,
             display_name TEXT,
             chunk_count  INTEGER,
-            imported_at  INTEGER
+            imported_at  INTEGER,
+            profile_id TEXT DEFAULT 'legacy'
           )
         ''');
       },
@@ -151,6 +158,20 @@ class VectorStore {
     try {
       await _fallbackDb!.execute(
         "ALTER TABLE chunks ADD COLUMN embedding_status TEXT DEFAULT 'ok'",
+      );
+    } catch (_) {
+      // Ignored if column already exists.
+    }
+    try {
+      await _fallbackDb!.execute(
+        "ALTER TABLE chunks ADD COLUMN profile_id TEXT DEFAULT 'legacy'",
+      );
+    } catch (_) {
+      // Ignored if column already exists.
+    }
+    try {
+      await _fallbackDb!.execute(
+        "ALTER TABLE books ADD COLUMN profile_id TEXT DEFAULT 'legacy'",
       );
     } catch (_) {
       // Ignored if column already exists.
@@ -168,11 +189,15 @@ class VectorStore {
   }
 
   /// Inserts a single chunk with its embedding vector.
-  Future<void> insertChunk(Chunk chunk, List<double> embedding,
-      {String sourceType = 'wiki',
-      String? sourceUrl,
-      String? wiki,
-      String? bookId}) async {
+  Future<void> insertChunk(
+    Chunk chunk,
+    List<double> embedding, {
+    String sourceType = 'wiki',
+    String? sourceUrl,
+    String? wiki,
+    String? bookId,
+    String profileId = _legacyProfileId,
+  }) async {
     await initialize();
 
     final isZero = isZeroVector(embedding);
@@ -189,6 +214,7 @@ class VectorStore {
         'content': chunk.content,
         'updated_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
         'embedding_status': isZero ? 'zero_vector' : 'ok',
+        'profile_id': profileId,
       },
       conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
     );
@@ -213,6 +239,7 @@ class VectorStore {
     String? sourceUrl,
     String? wiki,
     String? bookId,
+    String profileId = _legacyProfileId,
   }) async {
     if (chunks.isEmpty) return;
     await initialize();
@@ -241,6 +268,7 @@ class VectorStore {
             'content': chunks[i].content,
             'updated_at': now,
             'embedding_status': isZero ? 'zero_vector' : 'ok',
+            'profile_id': profileId,
           },
           conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
         );
@@ -263,15 +291,22 @@ class VectorStore {
     List<double> queryEmbedding, {
     int topK = 10,
     String? sourceType,
+    String? profileId,
   }) async {
     await initialize();
     final results = <SearchResult>[];
 
-    final whereClause = sourceType != null
-        ? 'WHERE c.source_type = ?'
-        : '';
-    final whereParams = <String>[];
-    if (sourceType != null) whereParams.add(sourceType);
+    final filters = <String>[];
+    final whereParams = <Object?>[];
+    if (sourceType != null) {
+      filters.add('c.source_type = ?');
+      whereParams.add(sourceType);
+    }
+    if (profileId != null) {
+      filters.add('c.profile_id = ?');
+      whereParams.add(profileId);
+    }
+    final whereClause = filters.isEmpty ? '' : 'WHERE ${filters.join(' AND ')}';
 
     final dbResults = await _fallbackDb!.rawQuery(
       'SELECT c.id, c.source_type, c.source_url, c.wiki, c.book_id, '
@@ -324,7 +359,12 @@ class VectorStore {
   }
 
   /// Deletes chunks and embeddings by source type and optional source ID.
-  Future<void> deleteBySource(String sourceType, {String? bookId, String? wiki}) async {
+  Future<void> deleteBySource(
+    String sourceType, {
+    String? bookId,
+    String? wiki,
+    String? profileId,
+  }) async {
     await initialize();
 
     String where;
@@ -338,6 +378,11 @@ class VectorStore {
     } else {
       where = 'source_type = ?';
       params = [sourceType];
+    }
+
+    if (profileId != null) {
+      where += ' AND profile_id = ?';
+      params.add(profileId);
     }
 
     await _fallbackDb!.transaction((txn) async {
@@ -360,15 +405,22 @@ class VectorStore {
   }
 
   /// Returns a map of pageTitle -> {max_updated_at, has_failures} for a given wiki.
-  Future<Map<String, ({int updatedAt, bool hasFailures})>> getWikiPagesMetadata(String wiki) async {
+  Future<Map<String, ({int updatedAt, bool hasFailures})>> getWikiPagesMetadata(
+    String wiki, {
+    String? profileId,
+  }) async {
     await initialize();
-    final results = await _fallbackDb!.rawQuery('''
-      SELECT page_title, MAX(updated_at) as max_updated, 
+    final results = await _fallbackDb!.rawQuery(
+      '''
+      SELECT page_title, MAX(updated_at) as max_updated,
              SUM(CASE WHEN embedding_status = 'zero_vector' THEN 1 ELSE 0 END) as fail_count
       FROM chunks
       WHERE source_type = 'wiki' AND wiki = ?
+      ${profileId != null ? 'AND profile_id = ?' : ''}
       GROUP BY page_title
-    ''', [wiki]);
+    ''',
+      profileId != null ? [wiki, profileId] : [wiki],
+    );
 
     final metadata = <String, ({int updatedAt, bool hasFailures})>{};
     for (final row in results) {
@@ -382,14 +434,21 @@ class VectorStore {
   }
 
   /// Deletes chunks and embeddings for a specific Wiki page.
-  Future<void> deleteWikiPage(String wiki, String pageTitle) async {
+  Future<void> deleteWikiPage(String wiki, String pageTitle,
+      {String? profileId}) async {
     await initialize();
     await _fallbackDb!.transaction((txn) async {
       final ids = await txn.query(
         'chunks',
         columns: ['id'],
-        where: 'source_type = ? AND wiki = ? AND page_title = ?',
-        whereArgs: ['wiki', wiki, pageTitle],
+        where: 'source_type = ? AND wiki = ? AND page_title = ?'
+            '${profileId != null ? ' AND profile_id = ?' : ''}',
+        whereArgs: [
+          'wiki',
+          wiki,
+          pageTitle,
+          if (profileId != null) profileId,
+        ],
       );
 
       for (final row in ids) {
@@ -401,23 +460,33 @@ class VectorStore {
       }
       await txn.delete(
         'chunks',
-        where: 'source_type = ? AND wiki = ? AND page_title = ?',
-        whereArgs: ['wiki', wiki, pageTitle],
+        where: 'source_type = ? AND wiki = ? AND page_title = ?'
+            '${profileId != null ? ' AND profile_id = ?' : ''}',
+        whereArgs: [
+          'wiki',
+          wiki,
+          pageTitle,
+          if (profileId != null) profileId,
+        ],
       );
     });
   }
 
   /// Returns all chunks where embedding_status is 'zero_vector'.
-  Future<List<Map<String, dynamic>>> getFailedChunks() async {
+  Future<List<Map<String, dynamic>>> getFailedChunks(
+      {String? profileId}) async {
     await initialize();
     return await _fallbackDb!.query(
       'chunks',
-      where: "embedding_status = 'zero_vector'",
+      where:
+          "embedding_status = 'zero_vector'${profileId != null ? ' AND profile_id = ?' : ''}",
+      whereArgs: profileId != null ? [profileId] : null,
     );
   }
 
   /// Updates a specific chunk's embedding and marks it as 'ok'.
-  Future<void> updateChunkEmbedding(String chunkId, List<double> embedding) async {
+  Future<void> updateChunkEmbedding(
+      String chunkId, List<double> embedding) async {
     await initialize();
     await _fallbackDb!.transaction((txn) async {
       await txn.update(
@@ -447,12 +516,36 @@ class VectorStore {
     await _fallbackDb!.delete('books', where: 'id = ?', whereArgs: [bookId]);
   }
 
+  Future<void> deleteProfileData(String profileId) async {
+    await initialize();
+    await _fallbackDb!.transaction((txn) async {
+      final ids = await txn.query(
+        'chunks',
+        columns: ['id'],
+        where: 'profile_id = ?',
+        whereArgs: [profileId],
+      );
+      for (final row in ids) {
+        await txn.delete(
+          'chunk_embeddings',
+          where: 'chunk_id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+      await txn
+          .delete('chunks', where: 'profile_id = ?', whereArgs: [profileId]);
+      await txn
+          .delete('books', where: 'profile_id = ?', whereArgs: [profileId]);
+    });
+  }
+
   /// Inserts or updates a book record.
   Future<void> upsertBook({
     required String id,
     required String fileName,
     String? displayName,
     int chunkCount = 0,
+    String profileId = _legacyProfileId,
   }) async {
     await initialize();
 
@@ -466,6 +559,7 @@ class VectorStore {
         'display_name': displayName ?? fileName,
         'chunk_count': chunkCount,
         'imported_at': now,
+        'profile_id': profileId,
       },
       conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
     );
@@ -484,29 +578,45 @@ class VectorStore {
   }
 
   /// Returns statistics about the knowledge base.
-  Future<VectorStoreStats> getStats() async {
+  Future<VectorStoreStats> getStats({String? profileId}) async {
     await initialize();
 
+    final profileWhere = profileId != null ? ' AND profile_id = ?' : '';
+    final profileArgs = profileId != null ? [profileId] : null;
+
     final total = sqflite.Sqflite.firstIntValue(
-          await _fallbackDb!.rawQuery('SELECT COUNT(*) FROM chunks'),
+          await _fallbackDb!.rawQuery(
+            'SELECT COUNT(*) FROM chunks WHERE 1=1$profileWhere',
+            profileArgs,
+          ),
         ) ??
         0;
     final wikiCount = sqflite.Sqflite.firstIntValue(
-          await _fallbackDb!
-              .rawQuery("SELECT COUNT(*) FROM chunks WHERE source_type = 'wiki'"),
+          await _fallbackDb!.rawQuery(
+            "SELECT COUNT(*) FROM chunks WHERE source_type = 'wiki'$profileWhere",
+            profileArgs,
+          ),
         ) ??
         0;
     final bookCount = sqflite.Sqflite.firstIntValue(
-          await _fallbackDb!
-              .rawQuery("SELECT COUNT(*) FROM chunks WHERE source_type = 'book'"),
+          await _fallbackDb!.rawQuery(
+            "SELECT COUNT(*) FROM chunks WHERE source_type = 'book'$profileWhere",
+            profileArgs,
+          ),
         ) ??
         0;
     final booksCount = sqflite.Sqflite.firstIntValue(
-          await _fallbackDb!.rawQuery('SELECT COUNT(*) FROM books'),
+          await _fallbackDb!.rawQuery(
+            'SELECT COUNT(*) FROM books WHERE 1=1${profileId != null ? ' AND profile_id = ?' : ''}',
+            profileArgs,
+          ),
         ) ??
         0;
     final failedCount = sqflite.Sqflite.firstIntValue(
-          await _fallbackDb!.rawQuery("SELECT COUNT(*) FROM chunks WHERE embedding_status = 'zero_vector'"),
+          await _fallbackDb!.rawQuery(
+            "SELECT COUNT(*) FROM chunks WHERE embedding_status = 'zero_vector'$profileWhere",
+            profileArgs,
+          ),
         ) ??
         0;
 
@@ -521,10 +631,15 @@ class VectorStore {
   }
 
   /// Returns all books stored in the knowledge base.
-  Future<List<Map<String, dynamic>>> getBooks() async {
+  Future<List<Map<String, dynamic>>> getBooks({String? profileId}) async {
     await initialize();
 
-    return await _fallbackDb!.query('books', orderBy: 'imported_at DESC');
+    return await _fallbackDb!.query(
+      'books',
+      where: profileId != null ? 'profile_id = ?' : null,
+      whereArgs: profileId != null ? [profileId] : null,
+      orderBy: 'imported_at DESC',
+    );
   }
 
   // ── Utility methods ──────────────────────────────────────

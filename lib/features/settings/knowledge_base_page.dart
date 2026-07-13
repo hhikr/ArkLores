@@ -33,14 +33,17 @@ class KnowledgeBasePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final statsAsync = ref.watch(vectorStoreStatsProvider);
-    final config = ref.watch(apiConfigProvider);
+    final embeddingSettings = ref.watch(embeddingSettingsProvider);
+    final activeProfile = embeddingSettings.activeProfile;
+    final canEmbed = embeddingSettings.canEmbed;
     final indexingState = ref.watch(wikiIndexingProvider);
 
     // Translate the enum status into a readable string
     String statusText = '';
     switch (indexingState.status) {
       case WikiIndexingStatus.starting:
-        statusText = context.t.kbStartingCrawl(indexingState.currentSiteName ?? '');
+        statusText =
+            context.t.kbStartingCrawl(indexingState.currentSiteName ?? '');
         break;
       case WikiIndexingStatus.fetchingTitles:
         statusText = '正在拉取维基页面目录...';
@@ -52,10 +55,12 @@ class KnowledgeBasePage extends ConsumerWidget {
         statusText = '正在清理本地已废弃的数据...';
         break;
       case WikiIndexingStatus.embedding:
-        statusText = '正在生成向量：${indexingState.currentItemTitle} (${indexingState.processedCount}/${indexingState.totalCount}，跳过 ${indexingState.skippedCount} 页)';
+        statusText =
+            '正在生成向量：${indexingState.currentItemTitle} (${indexingState.processedCount}/${indexingState.totalCount}，跳过 ${indexingState.skippedCount} 页)';
         break;
       case WikiIndexingStatus.retryingFailed:
-        statusText = '正在重试失败向量：已处理 ${indexingState.processedCount}/${indexingState.totalCount}';
+        statusText =
+            '正在重试失败向量：已处理 ${indexingState.processedCount}/${indexingState.totalCount}';
         break;
       case WikiIndexingStatus.completed:
         statusText = '更新完成！';
@@ -91,7 +96,7 @@ class KnowledgeBasePage extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          if (!config.isValid)
+          if (!canEmbed)
             ThemeAwareCard(
               child: Row(
                 children: [
@@ -100,7 +105,7 @@ class KnowledgeBasePage extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      context.t.kbConfigWarning,
+                      '当前 embedding profile 不可用。请在 API Settings 中配置可用的 Embedding API，或切换到内置模型。',
                       style: theme.bodyFont.copyWith(
                         color: theme.textSecondary,
                         fontSize: 13,
@@ -110,7 +115,39 @@ class KnowledgeBasePage extends ConsumerWidget {
                 ],
               ),
             ),
-          if (!config.isValid) const SizedBox(height: 20),
+          if (!canEmbed) const SizedBox(height: 20),
+
+          ThemeAwareCard(
+            child: Row(
+              children: [
+                Icon(Icons.hub_rounded, color: theme.accentPrimary, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        activeProfile?.displayName ??
+                            'No active embedding profile',
+                        style: theme.titleFont.copyWith(fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        activeProfile == null
+                            ? '请先创建 embedding profile'
+                            : 'Active profile · ${activeProfile.backend.name} · ${activeProfile.dimension > 0 ? '${activeProfile.dimension}d' : 'dimension pending'}',
+                        style: theme.bodyFont.copyWith(
+                          color: theme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
 
           Text(
             context.t.kbIndexOverview,
@@ -120,8 +157,8 @@ class KnowledgeBasePage extends ConsumerWidget {
           statsAsync.when(
             data: (stats) => _buildStatsGrid(context, stats, theme),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => _buildErrorCard(
-              '${context.t.materialsLoadFailed} $err', theme),
+            error: (err, _) =>
+                _buildErrorCard('${context.t.materialsLoadFailed} $err', theme),
           ),
           const SizedBox(height: 24),
 
@@ -135,7 +172,8 @@ class KnowledgeBasePage extends ConsumerWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Icon(Icons.error_outline_rounded, color: theme.danger, size: 28),
+                        Icon(Icons.error_outline_rounded,
+                            color: theme.danger, size: 28),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -168,10 +206,12 @@ class KnowledgeBasePage extends ConsumerWidget {
                                   .read(wikiIndexingProvider.notifier)
                                   .retryFailedEmbeddings(),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.danger.withValues(alpha: 0.15),
+                            backgroundColor:
+                                theme.danger.withValues(alpha: 0.15),
                             foregroundColor: theme.danger,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -196,7 +236,9 @@ class KnowledgeBasePage extends ConsumerWidget {
           ),
 
           // Common indexing progress panel
-          if (indexingState.isIndexing || indexingState.status == WikiIndexingStatus.completed || indexingState.status == WikiIndexingStatus.failed) ...[
+          if (indexingState.isIndexing ||
+              indexingState.status == WikiIndexingStatus.completed ||
+              indexingState.status == WikiIndexingStatus.failed) ...[
             ThemeAwareCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,7 +259,8 @@ class KnowledgeBasePage extends ConsumerWidget {
                           indexingState.status == WikiIndexingStatus.completed
                               ? Icons.check_circle_outline_rounded
                               : Icons.error_outline_rounded,
-                          color: indexingState.status == WikiIndexingStatus.completed
+                          color: indexingState.status ==
+                                  WikiIndexingStatus.completed
                               ? theme.accentPrimary
                               : theme.danger,
                           size: 20,
@@ -229,10 +272,13 @@ class KnowledgeBasePage extends ConsumerWidget {
                           style: theme.bodyFont.copyWith(fontSize: 14),
                         ),
                       ),
-                      if (indexingState.status == WikiIndexingStatus.completed || indexingState.status == WikiIndexingStatus.failed)
+                      if (indexingState.status ==
+                              WikiIndexingStatus.completed ||
+                          indexingState.status == WikiIndexingStatus.failed)
                         IconButton(
                           icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () => ref.read(wikiIndexingProvider.notifier).reset(),
+                          onPressed: () =>
+                              ref.read(wikiIndexingProvider.notifier).reset(),
                           visualDensity: VisualDensity.compact,
                           padding: EdgeInsets.zero,
                         ),
@@ -267,7 +313,7 @@ class KnowledgeBasePage extends ConsumerWidget {
             theme: theme,
             site: WikiSite.prts,
             icon: Icons.language_rounded,
-            disabled: !config.isValid || indexingState.isIndexing,
+            disabled: !canEmbed || indexingState.isIndexing,
             onUpdate: () => ref
                 .read(wikiIndexingProvider.notifier)
                 .indexWiki(WikiSite.prts, _prtsCategories),
@@ -279,7 +325,7 @@ class KnowledgeBasePage extends ConsumerWidget {
             theme: theme,
             site: WikiSite.endfield,
             icon: Icons.language_rounded,
-            disabled: !config.isValid || indexingState.isIndexing,
+            disabled: !canEmbed || indexingState.isIndexing,
             onUpdate: () => ref
                 .read(wikiIndexingProvider.notifier)
                 .indexWiki(WikiSite.endfield, _endfieldCategories),
@@ -347,8 +393,8 @@ class KnowledgeBasePage extends ConsumerWidget {
                 style: theme.titleFont.copyWith(fontSize: 28, height: 1.1)),
             const SizedBox(height: 2),
             Text(label,
-                style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary, fontSize: 12)),
+                style: theme.bodyFont
+                    .copyWith(color: theme.textSecondary, fontSize: 12)),
           ],
         ),
       ),
@@ -365,8 +411,8 @@ class KnowledgeBasePage extends ConsumerWidget {
     required VoidCallback onUpdate,
   }) {
     final indexingState = ref.watch(wikiIndexingProvider);
-    final isCurrentIndexing =
-        indexingState.isIndexing && indexingState.currentSiteName == site.displayName;
+    final isCurrentIndexing = indexingState.isIndexing &&
+        indexingState.currentSiteName == site.displayName;
 
     return ThemeAwareCard(
       child: Row(
@@ -381,9 +427,10 @@ class KnowledgeBasePage extends ConsumerWidget {
                     style: theme.titleFont.copyWith(fontSize: 16)),
                 const SizedBox(height: 2),
                 Text(site.apiUrl,
-                    style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary, fontSize: 11),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                    style: theme.bodyFont
+                        .copyWith(color: theme.textSecondary, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -391,7 +438,9 @@ class KnowledgeBasePage extends ConsumerWidget {
           ElevatedButton.icon(
             onPressed: disabled ? null : onUpdate,
             icon: Icon(
-                isCurrentIndexing ? Icons.hourglass_empty_rounded : Icons.sync_rounded,
+                isCurrentIndexing
+                    ? Icons.hourglass_empty_rounded
+                    : Icons.sync_rounded,
                 size: 18),
             label: Text(
               isCurrentIndexing ? context.t.kbIndexing : context.t.kbUpdate,
@@ -421,8 +470,8 @@ class KnowledgeBasePage extends ConsumerWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(message,
-                style: theme.bodyFont.copyWith(
-                    color: theme.textPrimary, fontSize: 13)),
+                style: theme.bodyFont
+                    .copyWith(color: theme.textPrimary, fontSize: 13)),
           ),
         ],
       ),
