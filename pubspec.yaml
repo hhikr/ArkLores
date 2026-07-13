@@ -76,6 +76,9 @@ dependencies:
   # Local embedding model runtime (built-in fixed model spike)
   tflite_flutter: ^0.12.1
 
+  # Archive for zip extraction of prebuilt wiki cache
+  archive: ^3.6.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -102,6 +105,9 @@ flutter:
 
   assets:
     - assets/models/embedding/
+    - assets/seeds/arklores_knowledge.db
+    - assets/seeds/wiki_cache.zip
+    - assets/seeds/seed_manifest.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
