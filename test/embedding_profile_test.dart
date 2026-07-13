@@ -51,7 +51,7 @@ void main() {
       now: 100,
     );
     final builtin = EmbeddingProfile.builtin(
-      model: 'multilingual-e5-small-tflite',
+      model: 'builtin-embedding',
       dimension: 384,
       now: 100,
     );
