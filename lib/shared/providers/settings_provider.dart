@@ -8,17 +8,21 @@ final settingsServiceProvider = Provider<SettingsService>((ref) {
   return SettingsService();
 });
 
+/// Pre-loaded providers overridden in main()
+final onboardingDoneProvider = Provider<bool>((ref) => throw UnimplementedError());
+final initialApiConfigProvider = Provider<LLMConfig>((ref) => throw UnimplementedError());
+
+/// Active state for onboarding status.
+final onboardingStatusProvider = StateProvider<bool>((ref) {
+  return ref.watch(onboardingDoneProvider);
+});
+
 /// Notifier that holds the current [LLMConfig] and persists changes
 /// to secure storage.
 class ApiConfigNotifier extends StateNotifier<LLMConfig> {
   final SettingsService _service;
 
-  ApiConfigNotifier(this._service) : super(const LLMConfig());
-
-  /// Loads the config from secure storage (call once at startup).
-  Future<void> load() async {
-    state = await _service.loadApiConfig();
-  }
+  ApiConfigNotifier(this._service, LLMConfig initial) : super(initial);
 
   /// Saves a new config and updates state.
   Future<void> save(LLMConfig config) async {
@@ -40,12 +44,6 @@ class ApiConfigNotifier extends StateNotifier<LLMConfig> {
 final apiConfigProvider =
     StateNotifierProvider<ApiConfigNotifier, LLMConfig>((ref) {
   final service = ref.watch(settingsServiceProvider);
-  return ApiConfigNotifier(service);
-});
-
-/// Future provider that resolves once the initial config is loaded.
-/// Use this to gate startup flows (show loading or skip).
-final apiConfigLoadFuture = FutureProvider<void>((ref) async {
-  final notifier = ref.read(apiConfigProvider.notifier);
-  await notifier.load();
+  final initial = ref.watch(initialApiConfigProvider);
+  return ApiConfigNotifier(service, initial);
 });
