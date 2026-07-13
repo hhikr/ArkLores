@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'builtin_embedding_model.dart';
+import '../embedding_client.dart';
 import 'wordpiece_tokenizer.dart';
 
 /// Exception thrown by the built-in embedding spike client.
@@ -19,17 +20,19 @@ class BuiltinEmbeddingException implements Exception {
 ///
 /// This is intentionally isolated from the production RAG provider until the
 /// fixed model asset is committed and verified on Android/iOS devices.
-class BuiltinEmbeddingClient {
+class BuiltinEmbeddingClient implements EmbeddingClient {
   final Interpreter _interpreter;
   final WordPieceTokenizer _tokenizer;
+  @override
   final String providerId;
-  final int expectedDimension;
+  @override
+  final int dimension;
 
   BuiltinEmbeddingClient._({
     required Interpreter interpreter,
     required WordPieceTokenizer tokenizer,
     required this.providerId,
-    required this.expectedDimension,
+    required this.dimension,
   })  : _interpreter = interpreter,
         _tokenizer = tokenizer;
 
@@ -50,7 +53,7 @@ class BuiltinEmbeddingClient {
         interpreter: interpreter,
         tokenizer: tokenizer,
         providerId: providerId,
-        expectedDimension: expectedDimension,
+        dimension: expectedDimension,
       );
     } catch (e) {
       throw BuiltinEmbeddingException(
@@ -60,11 +63,13 @@ class BuiltinEmbeddingClient {
     }
   }
 
+  @override
   Future<List<double>> embed(String text) async {
     final vectors = await embedBatch([text]);
     return vectors.first;
   }
 
+  @override
   Future<List<List<double>>> embedBatch(List<String> texts) async {
     final vectors = <List<double>>[];
     for (final text in texts) {
@@ -74,7 +79,10 @@ class BuiltinEmbeddingClient {
     return vectors;
   }
 
-  void close() => _interpreter.close();
+  @override
+  void dispose() => _interpreter.close();
+
+  void close() => dispose();
 
   List<double> _embedOne(String text) {
     final tokenized = _tokenizer.encode(text);
@@ -92,9 +100,9 @@ class BuiltinEmbeddingClient {
     final shape = outputTensor.shape;
     final vector = _poolOutput(floats, shape, tokenized.attentionMask);
 
-    if (vector.length != expectedDimension) {
+    if (vector.length != dimension) {
       throw BuiltinEmbeddingException(
-        'Unexpected embedding dimension ${vector.length}; expected $expectedDimension.',
+        'Unexpected embedding dimension ${vector.length}; expected $dimension.',
       );
     }
     return _l2Normalize(vector);
@@ -171,5 +179,55 @@ class BuiltinEmbeddingClient {
     norm = sqrt(norm);
     if (norm == 0) return vector;
     return vector.map((value) => value / norm).toList(growable: false);
+  }
+}
+
+class LazyBuiltinEmbeddingClient implements EmbeddingClient {
+  final String _modelAsset;
+  final String _vocabAsset;
+  final int _maxSequenceLength;
+  @override
+  final String providerId;
+  @override
+  final int dimension;
+
+  Future<BuiltinEmbeddingClient>? _clientFuture;
+
+  LazyBuiltinEmbeddingClient({
+    required this.providerId,
+    required this.dimension,
+    String modelAsset = BuiltinEmbeddingModel.modelAsset,
+    String vocabAsset = BuiltinEmbeddingModel.vocabAsset,
+    int maxSequenceLength = BuiltinEmbeddingModel.maxSequenceLength,
+  })  : _modelAsset = modelAsset,
+        _vocabAsset = vocabAsset,
+        _maxSequenceLength = maxSequenceLength;
+
+  Future<BuiltinEmbeddingClient> get _client {
+    return _clientFuture ??= BuiltinEmbeddingClient.load(
+      modelAsset: _modelAsset,
+      vocabAsset: _vocabAsset,
+      maxSequenceLength: _maxSequenceLength,
+      providerId: providerId,
+      expectedDimension: dimension,
+    );
+  }
+
+  @override
+  Future<List<double>> embed(String text) async {
+    return (await _client).embed(text);
+  }
+
+  @override
+  Future<List<List<double>>> embedBatch(List<String> texts) async {
+    return (await _client).embedBatch(texts);
+  }
+
+  @override
+  void dispose() {
+    final future = _clientFuture;
+    if (future != null) {
+      future.then((client) => client.dispose());
+    }
   }
 }

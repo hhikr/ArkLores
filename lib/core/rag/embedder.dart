@@ -1,4 +1,4 @@
-import '../../core/llm/llm_client.dart';
+import 'embedding_client.dart';
 
 /// Wraps the [LLMClient]'s embedding methods with error handling
 /// and validation specific to the indexing pipeline.
@@ -7,7 +7,7 @@ import '../../core/llm/llm_client.dart';
 /// first successful API response, so it works with any model
 /// (OpenAI 1536-dim, DeepSeek 2048-dim, etc.).
 class Embedder {
-  final LLMClient _client;
+  final EmbeddingClient _client;
 
   /// Cached embedding dimension, detected from first API response.
   /// 0 means "not yet determined".

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/llm/embedding_profile.dart';
 import 'core/llm/llm_client.dart';
 import 'features/settings/api_settings_page.dart';
 import 'features/settings/knowledge_base_page.dart';
@@ -33,11 +34,22 @@ void main() async {
     print('[Startup] Error loading API config: $e');
   }
 
+  // Load embedding profile state, migrating legacy API embedding config if needed.
+  EmbeddingSettingsState embeddingSettings = const EmbeddingSettingsState();
+  try {
+    embeddingSettings = await settingsService.loadEmbeddingSettings(
+      legacyConfig: apiConfig,
+    );
+  } catch (e) {
+    print('[Startup] Error loading embedding profiles: $e');
+  }
+
   runApp(
     ProviderScope(
       overrides: [
         onboardingDoneProvider.overrideWithValue(onboardingDone),
         initialApiConfigProvider.overrideWithValue(apiConfig),
+        initialEmbeddingSettingsProvider.overrideWithValue(embeddingSettings),
       ],
       child: const ArkLoresApp(),
     ),
