@@ -172,6 +172,12 @@ class VectorStore {
             profile_id TEXT DEFAULT 'legacy'
           )
         ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS seed_metadata (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        ''');
       },
     );
 
@@ -196,6 +202,16 @@ class VectorStore {
       );
     } catch (_) {
       // Ignored if column already exists.
+    }
+    try {
+      await _fallbackDb!.execute('''
+        CREATE TABLE IF NOT EXISTS seed_metadata (
+          key   TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      ''');
+    } catch (_) {
+      // Ignored if table already exists.
     }
 
     _initialized = true;
@@ -702,6 +718,35 @@ class VectorStore {
     final denominator = sqrt(normA) * sqrt(normB);
     if (denominator == 0) return 0.0;
     return dotProduct / denominator;
+  }
+
+  /// Reads a single seed metadata value by key.
+  Future<String?> getSeedMetadata(String key) async {
+    await initialize();
+    final rows = await _fallbackDb!.query(
+      'seed_metadata',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+    );
+    return rows.isNotEmpty ? rows.first['value'] as String? : null;
+  }
+
+  /// Reads all seed metadata as a map.
+  Future<Map<String, String>> getAllSeedMetadata() async {
+    await initialize();
+    final rows = await _fallbackDb!.query('seed_metadata');
+    return {for (final r in rows) r['key'] as String: r['value'] as String};
+  }
+
+  /// Upserts a seed metadata entry (insert or replace).
+  Future<void> upsertSeedMetadata(String key, String value) async {
+    await initialize();
+    await _fallbackDb!.insert(
+      'seed_metadata',
+      {'key': key, 'value': value},
+      conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
+    );
   }
 
   /// Releases database resources.
