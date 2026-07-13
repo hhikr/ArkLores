@@ -54,12 +54,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _complete() async {
+    print('[OnboardingPage] _complete called!');
     final service = ref.read(settingsServiceProvider);
     await service.markOnboardingDone();
     widget.onComplete();
   }
 
   Future<void> _skip() async {
+    print('[OnboardingPage] _skip called!');
     final service = ref.read(settingsServiceProvider);
     await service.markOnboardingDone();
     widget.onComplete();
@@ -92,19 +94,22 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         child: Column(
           children: [
             // ── Skip button (top right) ─────────────────────
-            Align(
-              alignment: Alignment.topRight,
-              child: TextButton(
-                onPressed: _skip,
-                child: Text(
-                  context.t.onboardingSkip,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 14,
+            if (_currentStep > 0)
+              Align(
+                alignment: Alignment.topRight,
+                child: ExcludeFocus(
+                  child: TextButton(
+                    onPressed: _skip,
+                    child: Text(
+                      context.t.onboardingSkip,
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
 
             // ── PageView ────────────────────────────────────
             Expanded(
