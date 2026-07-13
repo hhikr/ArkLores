@@ -318,4 +318,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingStartExploring => '开始探索';
+
+  @override
+  String get settingsHelpGuide => '帮助与引导';
+
+  @override
+  String get settingsShowOnboarding => '新用户导览';
+
+  @override
+  String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
 }

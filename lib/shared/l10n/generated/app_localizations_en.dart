@@ -318,4 +318,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingStartExploring => 'Start Exploring';
+
+  @override
+  String get settingsHelpGuide => 'Help & Guide';
+
+  @override
+  String get settingsShowOnboarding => 'Show Onboarding Guide';
+
+  @override
+  String get settingsShowOnboardingDesc => 'Replay the first-launch guide to configure the app';
 }

@@ -664,6 +664,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start Exploring'**
   String get onboardingStartExploring;
+
+  /// No description provided for @settingsHelpGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Help & Guide'**
+  String get settingsHelpGuide;
+
+  /// No description provided for @settingsShowOnboarding.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Onboarding Guide'**
+  String get settingsShowOnboarding;
+
+  /// No description provided for @settingsShowOnboardingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay the first-launch guide to configure the app'**
+  String get settingsShowOnboardingDesc;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
