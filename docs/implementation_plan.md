@@ -513,7 +513,7 @@ dependencies:
 > **v0.3 实现结论**：当前使用纯 Dart cosine similarity 回退，`sqlite_vec` FFI 路径因包构建不完整暂不可用。
 > - 向量的维度不再写死 1536——`Embedder` 自动从首次 API 响应中检测维度（兼容 OpenAI 1536、DeepSeek 2048 等）
 > - Chat 和 Embedding 的 API 配置已分离，允许混合使用不同提供商
-> - 已启动内置固定 embedding 模型 spike：TFLite 运行入口和 WordPiece tokenizer 已隔离实现，正式接入前仍需提交固定模型资产并完成 Android/iOS 真机验证
+> - 内置固定 embedding 模型已使用合成 TFLite 模型（~750KB，384 维，128 seq len）打通端到端 pipeline，可安装 debug APK 在真机上验证 profile 激活→导入→embedding→搜索的完整链路。模型权重为随机值，替换真实模型时只需换 assets 文件并更新 BuiltinEmbeddingModel 契约
 > - Embedding 已引入 profile 隔离机制：切换 API provider/model 或内置模型时保留旧 profile，当前检索和索引只作用于 active profile；API Key 不参与 profile 身份识别
 > - 详情见 `docs/v0.3_SUMMARY.md`
 
@@ -729,7 +729,7 @@ dependencies:
 | sqlite-vec 方案 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用） |
 | Chat/Embedding 配置 | **可分开指定不同提供商**（如 Chat 用 DeepSeek，Embedding 用 OpenAI），设置页位于子页面「API Settings」 |
 | Embedding 维度 | **动态检测**——从首次 API 响应自动获取，不写死 1536，兼容 OpenAI / DeepSeek / 其他模型 |
-| 内置 Embedding | **接受安装包体积增大**；仅支持一个固定内置模型，不提供用户替换模型能力；当前 v0.3 已开始 TFLite spike，正式启用前需验证模型资产与移动端推理 |
+| 内置 Embedding | **接受安装包体积增大**；仅支持一个固定内置模型，不提供用户替换模型能力；v0.3 已使用合成 TFLite 模型打通端到端 pipeline；替换生产模型时只需换 assets 文件 |
 | Embedding Profile | **保留旧 profile**；用户切换 provider/model/内置模型时创建或激活独立 profile，可切回旧 profile；删除 profile 需用户手动确认；profile 身份不包含 API Key |
 | 本地化 | **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全），设置页 `SegmentedButton` 切换即时生效 |
 | 作者署名 | **hhikr**（写入 `AUTHORS` 文件、README、LICENSE 头部） |
