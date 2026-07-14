@@ -220,6 +220,40 @@ class VectorStore {
 
     await _normalizeSeedWikiTimestamps();
 
+    // Self-healing check: check if the first few embeddings are corrupt (identical vectors due to past tflite_flutter gotcha)
+    try {
+      final sampleEmbeddings = await _fallbackDb!.rawQuery('''
+        SELECT ce.embedding FROM chunk_embeddings ce
+        INNER JOIN chunks c ON ce.chunk_id = c.id
+        WHERE c.profile_id = 'builtin:builtin-embedding'
+        LIMIT 5
+      ''');
+      if (sampleEmbeddings.length >= 2) {
+        final blobs = sampleEmbeddings.map((row) => row['embedding'] as Uint8List).toList();
+        final vectors = blobs.map((b) => _blobToDoubleList(b)).toList();
+        
+        final sim = _cosineSimilarity(vectors[0], vectors[1]);
+        // If similarity is extremely close to 1.0 (e.g. > 0.9999), they are corrupt constant vectors!
+        if (sim > 0.9999) {
+          print('[VectorStore] Corrupt/constant embeddings detected (sim = $sim). Resetting profile to trigger re-embedding...');
+          await _fallbackDb!.transaction((txn) async {
+            await txn.update(
+              'chunks',
+              {'embedding_status': 'pending_embedding'},
+              where: "profile_id = 'builtin:builtin-embedding'",
+            );
+            await txn.delete(
+              'chunk_embeddings',
+              where: "chunk_id IN (SELECT id FROM chunks WHERE profile_id = 'builtin:builtin-embedding')",
+            );
+          });
+          print('[VectorStore] Successfully reset corrupt embeddings.');
+        }
+      }
+    } catch (e) {
+      debugPrint('[VectorStore] Self-healing error: $e');
+    }
+
     _initialized = true;
 
     // Kick off one-time embedding for pending chunks (seed data from CLI builder).
