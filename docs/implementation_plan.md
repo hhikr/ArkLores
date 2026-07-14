@@ -579,7 +579,7 @@ dependencies:
 | **AI 信任策略实现** | Prompt 插入参考第 5 节，引用卡片颜色区分 Wiki/书籍 |
 | 首次引导流程 | 未配置 API Key 时，引导用户完成配置 + 首次 Wiki 索引建立 |
 | **多语言本地化**（追加） | `flutter_localizations` + ARB 文件，EN / 中文双语平行，Riverpod 切换即时生效 |
-| **预构建 seed 知识库**（追加） | 桌面端构建 `arklores_knowledge.db` + `wiki_cache.zip` + manifest，App 首次启动安装到本地 files 目录 |
+| **预构建 seed 知识库**（追加） | 桌面端构建 `arklores_knowledge.db.gz` release asset + `wiki_cache.zip` + manifest，App 下载后安装到本地 files 目录 |
 
 **估时**：2 周  
 **风险**：sqlite-vec Flutter FFI 绑定不稳定，需预留备选方案时间。  
