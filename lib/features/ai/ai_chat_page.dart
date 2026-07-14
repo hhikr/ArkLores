@@ -81,7 +81,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               icon: Icons.fact_check_rounded,
               title: context.t.aiTabFactCheck,
               subtitle: 'Coming in v0.5',
-              desc: 'Cross-reference claims against PRTS Wiki and imported sources with confidence ratings.',
+              desc:
+                  'Cross-reference claims against PRTS Wiki and imported sources with confidence ratings.',
             ),
 
             // ── Summary Tab (Functional) ─────────────────────
@@ -95,7 +96,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               icon: Icons.supervised_user_circle_rounded,
               title: context.t.aiTabRoleplay,
               subtitle: 'Coming in v0.6',
-              desc: 'Choose your favorite operator and converse under custom narrative scenarios.',
+              desc:
+                  'Choose your favorite operator and converse under custom narrative scenarios.',
             ),
           ],
         ),
@@ -123,18 +125,21 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           const SizedBox(height: 16),
           Text(
             title,
-            style: theme.titleFont.copyWith(fontSize: 22, color: theme.textPrimary),
+            style: theme.titleFont
+                .copyWith(fontSize: 22, color: theme.textPrimary),
           ),
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: theme.titleFont.copyWith(fontSize: 14, color: theme.accentSecondary),
+            style: theme.titleFont
+                .copyWith(fontSize: 14, color: theme.accentSecondary),
           ),
           const SizedBox(height: 24),
           ThemeAwareCard(
             child: Text(
               desc,
-              style: theme.bodyFont.copyWith(color: theme.textSecondary, height: 1.5),
+              style: theme.bodyFont
+                  .copyWith(color: theme.textSecondary, height: 1.5),
               textAlign: TextAlign.center,
             ),
           ),
@@ -157,7 +162,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           const SizedBox(height: 16),
           Text(
             'API Key Required',
-            style: theme.titleFont.copyWith(fontSize: 20, color: theme.textPrimary),
+            style: theme.titleFont
+                .copyWith(fontSize: 20, color: theme.textPrimary),
           ),
           const SizedBox(height: 12),
           Text(
@@ -187,11 +193,11 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Widget _buildSummaryChatTab(AppThemeTokens theme) {
     final chatHistory = ref.watch(summaryChatProvider);
     final chatNotifier = ref.read(summaryChatProvider.notifier);
-    final activeProfile = ref.watch(embeddingSettingsProvider).activeProfile;
 
     // Listen to changes in chat history to scroll to bottom
     ref.listen(summaryChatProvider, (prev, next) {
-      if (prev?.length != next.length || (next.isNotEmpty && next.last.isStreaming)) {
+      if (prev?.length != next.length ||
+          (next.isNotEmpty && next.last.isStreaming)) {
         _scrollToBottom();
       }
     });
@@ -207,13 +213,15 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               Icon(Icons.storage_rounded, size: 14, color: theme.textSecondary),
               const SizedBox(width: 6),
               Text(
-                'Profile: ${activeProfile?.displayName ?? "Default"}',
-                style: theme.bodyFont.copyWith(color: theme.textSecondary, fontSize: 12),
+                'Knowledge: GameData structured DB',
+                style: theme.bodyFont
+                    .copyWith(color: theme.textSecondary, fontSize: 12),
               ),
               const Spacer(),
               if (chatHistory.isNotEmpty)
                 IconButton(
-                  icon: Icon(Icons.delete_sweep_rounded, color: theme.danger, size: 18),
+                  icon: Icon(Icons.delete_sweep_rounded,
+                      color: theme.danger, size: 18),
                   tooltip: context.t.aiClearHistory,
                   onPressed: () => _confirmClearHistory(context, chatNotifier),
                   constraints: const BoxConstraints(),
@@ -229,7 +237,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               ? _buildEmptyState(theme)
               : ListView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   itemCount: chatHistory.length,
                   itemBuilder: (context, index) {
                     return ChatBubble(message: chatHistory[index]);
@@ -238,7 +247,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         ),
 
         // ── Input box ────────────────────────────────────
-        _buildInputArea(theme, chatHistory.isNotEmpty && chatHistory.last.isStreaming),
+        _buildInputArea(
+            theme, chatHistory.isNotEmpty && chatHistory.last.isStreaming),
       ],
     );
   }
@@ -257,12 +267,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             const SizedBox(height: 12),
             Text(
               context.t.aiTabSummary,
-              style: theme.titleFont.copyWith(fontSize: 20, color: theme.textPrimary),
+              style: theme.titleFont
+                  .copyWith(fontSize: 20, color: theme.textPrimary),
             ),
             const SizedBox(height: 8),
             Text(
               'Ask me to summarize any Arknights entity (Operator, Faction, or Event).',
-              style: theme.bodyFont.copyWith(color: theme.textSecondary, fontSize: 13),
+              style: theme.bodyFont
+                  .copyWith(color: theme.textSecondary, fontSize: 13),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -286,7 +298,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Widget _buildSuggestionChip(AppThemeTokens theme, String text) {
     return ActionChip(
       label: Text(text),
-      labelStyle: theme.bodyFont.copyWith(fontSize: 12, color: theme.textPrimary),
+      labelStyle:
+          theme.bodyFont.copyWith(fontSize: 12, color: theme.textPrimary),
       backgroundColor: theme.bgSecondary,
       side: BorderSide(color: theme.divider, width: 0.5),
       onPressed: () {
@@ -320,8 +333,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   onSubmitted: isSending ? null : (_) => _handleSend(),
                   decoration: InputDecoration(
                     hintText: context.t.aiSummaryInputPlaceholder,
-                    hintStyle: theme.bodyFont.copyWith(color: theme.textSecondary, fontSize: 13),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    hintStyle: theme.bodyFont
+                        .copyWith(color: theme.textSecondary, fontSize: 13),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     border: InputBorder.none,
                     isDense: true,
                   ),
@@ -333,9 +348,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               onPressed: isSending ? null : _handleSend,
               icon: Icon(
                 Icons.send_rounded,
-                color: isSending
-                    ? theme.textSecondary
-                    : theme.accentPrimary,
+                color: isSending ? theme.textSecondary : theme.accentPrimary,
               ),
             ),
           ],
@@ -352,7 +365,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     ref.read(summaryChatProvider.notifier).sendMessage(text);
   }
 
-  void _confirmClearHistory(BuildContext context, SummaryChatNotifier notifier) {
+  void _confirmClearHistory(
+      BuildContext context, SummaryChatNotifier notifier) {
     final theme = ref.read(themeProvider);
 
     showDialog(

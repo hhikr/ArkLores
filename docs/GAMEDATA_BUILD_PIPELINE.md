@@ -1,6 +1,6 @@
 # ArkLores GameData Build Pipeline
 
-> 本文档定义 v0.4.5 GameData DB 的构建、向量化和 GitHub Release 分发规范。
+> 本文档定义 v0.4.5 GameData DB 的构建、FTS 索引和 GitHub Release 分发规范。
 
 内容分类和 importer 覆盖范围必须遵循
 [ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md](ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md)。
@@ -14,7 +14,8 @@
 - `gamedata_manifest.json`
 - `gamedata_build_report.json`
 
-`arklores_gamedata_zh.db.gz` 是 App 下载和安装的主知识库资产，必须包含原文和向量。
+`arklores_gamedata_zh.db.gz` 是 App 下载和安装的主知识库资产，必须包含原文、
+结构化表、检索元数据和 FTS 索引。
 
 ## 输入源
 
@@ -172,18 +173,6 @@ CREATE TABLE lore_chunks (
 );
 ```
 
-### `chunk_embeddings`
-
-```sql
-CREATE TABLE chunk_embeddings (
-  chunk_id   TEXT NOT NULL,
-  profile_id TEXT NOT NULL,
-  dimension  INTEGER NOT NULL,
-  embedding  BLOB NOT NULL,
-  PRIMARY KEY (chunk_id, profile_id)
-);
-```
-
 ### FTS
 
 ```sql
@@ -197,19 +186,23 @@ CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
 );
 ```
 
-## Embedding
+## Retrieval Contract
 
-默认 profile:
+v0.4.5 GameData DB 的检索质量由以下结构保证：
 
-- `profile_id`: `builtin:builtin-embedding`
-- `dimension`: `512`
-- runner: `tools/embed_seed_database.py` 的同款 TFLite runner 或后续替换的中文检索模型
+- `entities` / `entity_aliases` 支持 canonical entity lookup。
+- `entity_documents` 提供面向 Agent 的聚合主文档。
+- `entity_documents_fts` 负责实体摘要类关键词检索。
+- `lore_chunks_fts` 负责剧情原文和片段检索。
+- `normalized_records` 保留 importer 输出和引用元数据。
+- LIKE fallback 覆盖 Android SQLite FTS tokenizer 差异。
 
-构建要求：
+构建失败条件：
 
-- release DB 不允许只带 `pending_embedding`。
-- `lore_chunks` 中可检索 chunk 必须有对应 `chunk_embeddings`。
-- 如果 Linux 构建机缺少 TFLite runtime，构建应失败并记录，不发布缺向量 DB。
+- `entity_documents` 为空。
+- `entity_documents_fts` 或 `lore_chunks_fts` 缺失。
+- 固定验收查询不能命中预期实体或原文。
+- manifest 缺少源仓库、commit、row counts、DB hash 或 schema version。
 
 ## 构建命令草案
 
@@ -220,12 +213,20 @@ dart run tools/build_gamedata_database.dart \
   --language=zh \
   --force
 
-python3 tools/embed_gamedata_database.py \
-  --db=build/gamedata/arklores_gamedata_zh.db
-
 gzip -c build/gamedata/arklores_gamedata_zh.db \
   > build/gamedata/arklores_gamedata_zh.db.gz
+
+HOME=/tmp /home/hhikr/flutter/bin/dart run tools/finalize_gamedata_assets.dart \
+  --output=build/gamedata
 ```
+
+`tools/finalize_gamedata_assets.dart` 在 gzip 后更新
+`gamedata_manifest.json` 与 `gamedata_build_report.json`，写入：
+
+- compressed / uncompressed byte sizes
+- compressed / uncompressed SHA-256
+- release asset file names
+- finalization timestamp
 
 ## 未发布版本的真机测试
 
@@ -260,8 +261,7 @@ asset”。开发测试使用同一安装链路，但通过构建参数注入临
 - row counts
 - chunk counts by source type
 - normalized record counts
-- embedding profile id
-- embedding dimension
+- FTS table names and indexed row counts
 - compressed DB SHA-256
 - compressed / uncompressed byte sizes
 

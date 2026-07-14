@@ -1,30 +1,25 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/cite_source.dart';
 import 'package:arklores/core/agent/tools/search_local_lore.dart';
-import 'package:arklores/core/agent/tools/search_wiki.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
+import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
-import 'package:arklores/core/rag/chunker.dart';
-import 'package:arklores/core/rag/embedder.dart';
-import 'package:arklores/core/rag/embedding_client.dart';
-import 'package:arklores/core/rag/vector_store.dart';
+import 'package:arklores/core/llm/openai_client.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tempDir;
-  PathProviderPlatform? previousPathProvider;
   late sqflite.DatabaseFactory? previousDatabaseFactory;
-  late VectorStore vectorStore;
 
   setUp(() async {
     sqfliteFfiInit();
@@ -34,160 +29,21 @@ void main() {
       previousDatabaseFactory = null;
     }
     sqflite.databaseFactory = databaseFactoryFfi;
-
     tempDir = await Directory.systemTemp.createTemp('arklores_agent_test_');
-    previousPathProvider = PathProviderPlatform.instance;
-    PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
-
-    vectorStore = VectorStore();
-    await vectorStore.initialize();
   });
 
   tearDown(() async {
-    vectorStore.dispose();
-    if (previousPathProvider != null) {
-      PathProviderPlatform.instance = previousPathProvider!;
-    }
     if (previousDatabaseFactory != null) {
       sqflite.databaseFactory = previousDatabaseFactory!;
     }
     await tempDir.delete(recursive: true);
   });
 
-  group('Agent Tools Tests', () {
-    test('SearchWikiTool searches vector store successfully', () async {
-      final embedder = Embedder(_MockEmbeddingClient());
-      final tool = SearchWikiTool(
-        embedder: embedder,
-        vectorStore: vectorStore,
-        profileId: 'test-profile',
-      );
-
-      // Seed a chunk
-      await vectorStore.insertChunk(
-        Chunk(
-          id: 'chunk-123',
-          content: 'Amiya is the leader of Rhodes Island.',
-          pageTitle: 'Amiya',
-          section: 'Profile',
-          seqIndex: 0,
-          tokenCount: 10,
-        ),
-        [1.0, 0.0, 0.0],
-        sourceType: 'wiki',
-        wiki: 'prts',
-        profileId: 'test-profile',
-      );
-
-      final result = await tool.execute({'query': 'Amiya', 'top_k': 1});
-      expect(result, isA<ToolExecutionResult>());
-      final observation = (result as ToolExecutionResult).observation;
-      expect(observation, contains('Amiya is the leader of Rhodes Island.'));
-      expect(observation, contains('chunk-123'));
-      expect(observation, contains('Source Type: wiki'));
-      expect(result.debugLog, contains('Query embedding diagnostics'));
-    });
-
-    test('SearchWikiTool prioritizes exact title matches over weak vectors',
-        () async {
-      final embedder = Embedder(_MockEmbeddingClient());
-      final tool = SearchWikiTool(
-        embedder: embedder,
-        vectorStore: vectorStore,
-        profileId: 'test-profile',
-      );
-
-      await vectorStore.insertChunk(
-        Chunk(
-          id: 'amiya-profile',
-          content: '阿米娅是罗德岛的公开领袖，也是剧情中的核心角色。',
-          pageTitle: '阿米娅',
-          section: '个人档案',
-          seqIndex: 0,
-          tokenCount: 20,
-        ),
-        [0.0, 1.0, 0.0],
-        sourceType: 'wiki',
-        wiki: 'prts',
-        profileId: 'test-profile',
-      );
-      await vectorStore.insertChunk(
-        Chunk(
-          id: 'vector-noise',
-          content: 'This unrelated chunk has the vector most similar to query.',
-          pageTitle: 'Unrelated',
-          section: 'Noise',
-          seqIndex: 0,
-          tokenCount: 12,
-        ),
-        [1.0, 0.0, 0.0],
-        sourceType: 'wiki',
-        wiki: 'endfield',
-        profileId: 'test-profile',
-      );
-
-      final result = await tool.execute({'query': '阿米娅', 'top_k': 2});
-      expect(result, isA<ToolExecutionResult>());
-      final observation = (result as ToolExecutionResult).observation;
-      expect(observation, contains('Retrieval Type: title_exact'));
-      expect(observation, contains('Title: Unrelated'));
-      expect(observation.indexOf('Title: 阿米娅'),
-          lessThan(observation.indexOf('Title: Unrelated')));
-    });
-
-    test('SearchWikiTool filters low-information vector chunks', () async {
-      final embedder = Embedder(_MockEmbeddingClient());
-      final tool = SearchWikiTool(
-        embedder: embedder,
-        vectorStore: vectorStore,
-        profileId: 'test-profile',
-      );
-
-      await vectorStore.insertChunk(
-        Chunk(
-          id: 'low-info',
-          content: '分类：text',
-          pageTitle: 'LowInfo',
-          section: 'LowInfo',
-          seqIndex: 0,
-          tokenCount: 1,
-        ),
-        [1.0, 0.0, 0.0],
-        sourceType: 'wiki',
-        wiki: 'endfield',
-        profileId: 'test-profile',
-      );
-      await vectorStore.insertChunk(
-        Chunk(
-          id: 'useful',
-          content: '罗德岛是一家制药公司，也在主线剧情中承担重要角色。',
-          pageTitle: '罗德岛',
-          section: '概述',
-          seqIndex: 0,
-          tokenCount: 20,
-        ),
-        [0.9, 0.1, 0.0],
-        sourceType: 'wiki',
-        wiki: 'prts',
-        profileId: 'test-profile',
-      );
-
-      final result = await tool.execute({'query': '罗德岛', 'top_k': 2});
-      expect(result, isA<ToolExecutionResult>());
-      final observation = (result as ToolExecutionResult).observation;
-      expect(observation, contains('Title: 罗德岛'));
-      expect(observation, isNot(contains('分类：text')));
-    });
-
-    test('SearchLocalLoreTool prefers GameData records when DB is available',
-        () async {
+  group('SearchLocalLoreTool GameData tests', () {
+    test('prefers GameData entity documents when available', () async {
       final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
       await _createGameDataTestDb(dbPath);
-      final embedder = Embedder(_MockEmbeddingClient());
       final tool = SearchLocalLoreTool(
-        embedder: embedder,
-        vectorStore: vectorStore,
-        profileId: 'test-profile',
         gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
       );
 
@@ -196,23 +52,25 @@ void main() {
       expect(result, isA<ToolExecutionResult>());
       final observation = (result as ToolExecutionResult).observation;
       expect(observation, contains('Source Kind: GameData'));
-      expect(observation, contains('Content Type: operator_handbook_profile'));
+      expect(observation, contains('Retrieval Type: entity_document'));
       expect(
         observation,
-        contains('Source Path: zh_CN/gamedata/excel/handbook_info_table.json'),
+        contains(
+          'Ranking Reason: entity document exact match; highest priority for summaries',
+        ),
+      );
+      expect(observation, contains('Content Type: operator_profile_bundle'));
+      expect(
+        observation,
+        contains('zh_CN/gamedata/excel/handbook_info_table.json'),
       );
       expect(observation, contains('罗德岛的公开领袖'));
-      expect(observation, isNot(contains('Falling back')));
     });
 
-    test('SearchLocalLoreTool filters GameData by content_type', () async {
+    test('filters GameData by content_type', () async {
       final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
       await _createGameDataTestDb(dbPath);
-      final embedder = Embedder(_MockEmbeddingClient());
       final tool = SearchLocalLoreTool(
-        embedder: embedder,
-        vectorStore: vectorStore,
-        profileId: 'test-profile',
         gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
       );
 
@@ -229,92 +87,342 @@ void main() {
       expect(observation, isNot(contains('operator_handbook_profile')));
     });
 
-    test('CiteSourceTool retrieves chunk by ID', () async {
-      final tool = CiteSourceTool(vectorStore: vectorStore);
-
-      // Seed a chunk
-      await vectorStore.insertChunk(
-        Chunk(
-          id: 'chunk-456',
-          content: 'Kal\'tsit is a doctor.',
-          pageTitle: 'Kal\'tsit',
-          section: 'Overview',
-          seqIndex: 0,
-          tokenCount: 8,
-        ),
-        [0.0, 1.0, 0.0],
-        sourceType: 'book',
-        bookId: 'book-abc',
-        profileId: 'test-profile',
+    test('resolves GameData aliases structurally', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
       );
 
-      final result = await tool.execute({'chunk_id': 'chunk-456'});
-      expect(result, contains('Kal\'tsit is a doctor.'));
-      expect(result, contains('Book ID: book-abc'));
-      expect(result, contains('Source Type: book'));
+      final result = await tool.execute({'query': 'Amiya', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Source Kind: GameData'));
+      expect(observation, contains('Entity ID: char_002_amiya'));
+      expect(observation, contains('Retrieval Type: entity_document'));
+    });
+
+    test('uses entity document FTS for compound queries', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({'query': '阿米娅 罗德岛 公开领袖', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Retrieval Type: entity_document_fts'));
+      expect(observation, contains('Content Type: operator_profile_bundle'));
+      expect(observation, contains('阿米娅是罗德岛的公开领袖'));
+    });
+
+    test('keeps GameData observations bounded', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final db = await sqflite.openDatabase(dbPath);
+      final longContent = '长篇测试 ${List.filled(1600, '剧情线索').join()} END_MARKER';
+      await db.insert('normalized_records', {
+        'id': 'record_long_lore',
+        'game': 'arknights',
+        'language': 'zh',
+        'category': 'story',
+        'subtype': 'event',
+        'content_type': 'story_dialogue',
+        'entity_id': 'event_long_lore',
+        'entity_name': '长篇测试',
+        'title': '长篇测试',
+        'section': '剧情',
+        'content': longContent,
+        'source_path': 'zh_CN/gamedata/story/long_lore.txt',
+        'raw_id': 'long_lore',
+      });
+      await db.close();
+
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({'query': '长篇测试', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation.length, lessThanOrEqualTo(5200));
+      expect(observation, contains('Content Excerpt:'));
+      expect(observation, contains('[truncated]'));
+      expect(observation, isNot(contains('END_MARKER')));
+    });
+
+    test('returns disambiguation candidates for exact alias collisions',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      await _insertAmbiguousAmiyaCandidate(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({'query': 'Amiya', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Ambiguous GameData entity query'));
+      expect(observation, contains('Entity ID: char_002_amiya'));
+      expect(observation, contains('Entity ID: token_amiya_memory'));
+      expect(
+          observation, contains('call search_local_lore again with entity_id'));
+    });
+
+    test('summary mode announces retrieval plan and includes story context',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      await _insertAmiyaStoryChunk(dbPath, withEntityId: true);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '阿米娅',
+        'top_k': 4,
+        'search_mode': 'summary',
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Retrieval Plan: summary mode'));
+      expect(observation, contains('Retrieval Type: entity_document'));
+      expect(observation, contains('Retrieval Type: summary_story_context'));
+      expect(observation, contains('切尔诺伯格行动中，阿米娅与博士会合。'));
+    });
+
+    test('story intent query retrieves story chunks without entity_id',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      await _insertAmiyaStoryChunk(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '阿米娅 主线',
+        'top_k': 3,
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Retrieval Type: summary_story_context'));
+      expect(observation, contains('切尔诺伯格行动中，阿米娅与博士会合。'));
+      expect(observation, isNot(contains('No matching GameData result')));
+    });
+
+    test('normalizes entity content intent terms', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '阿米娅 语音',
+        'top_k': 3,
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Content Type: operator_voice'));
+      expect(observation, contains('博士，我们继续前进吧。'));
+      expect(observation, isNot(contains('No matching GameData result')));
+    });
+
+    test('uses term AND fallback for compound roguelike queries', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final db = await sqflite.openDatabase(dbPath);
+      await db.insert('normalized_records', {
+        'id': 'record_roguelike_collectible',
+        'game': 'arknights',
+        'language': 'zh',
+        'category': 'roguelike',
+        'subtype': 'topic',
+        'content_type': 'roguelike_topic',
+        'entity_id': 'roguelike_collectible',
+        'entity_name': '藏品说明',
+        'title': '奇物设计师',
+        'section': '集成战略',
+        'content': '在集成战略中，玩家可以获得各类收藏品并改变探索路线。',
+        'source_path': 'zh_CN/gamedata/excel/roguelike_topic_table.json',
+        'raw_id': 'roguelike_collectible',
+      });
+      await db.close();
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '集成战略 收藏品',
+        'top_k': 3,
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Content Type: roguelike_topic'));
+      expect(observation, contains('各类收藏品'));
+      expect(observation, isNot(contains('No matching GameData result')));
+    });
+
+    test('normalizes broad enemy intent to enemy profiles', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final db = await sqflite.openDatabase(dbPath);
+      await db.insert('normalized_records', {
+        'id': 'record_enemy_profile',
+        'game': 'arknights',
+        'language': 'zh',
+        'category': 'enemy',
+        'subtype': 'profile',
+        'content_type': 'enemy_profile',
+        'entity_id': 'enemy_1001',
+        'entity_name': '源石虫',
+        'title': '源石虫',
+        'section': '敌人介绍',
+        'content': '敌人介绍：感染生物，常见于各类作战区域。',
+        'source_path': 'zh_CN/gamedata/excel/enemy_handbook_table.json',
+        'raw_id': 'enemy_1001',
+      });
+      await db.close();
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '敌人介绍',
+        'top_k': 3,
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Content Type: enemy_profile'));
+      expect(observation, contains('源石虫'));
+      expect(observation, isNot(contains('No matching GameData result')));
+    });
+
+    test('normalizes operator record intent to record stories', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final db = await sqflite.openDatabase(dbPath);
+      await db.insert('normalized_records', {
+        'id': 'record_operator_memory',
+        'game': 'arknights',
+        'language': 'zh',
+        'category': 'story',
+        'subtype': 'operator_record',
+        'content_type': 'operator_record_story',
+        'entity_id': 'char_002_amiya',
+        'entity_name': '阿米娅',
+        'title': '阿米娅的干员秘录',
+        'section': '干员秘录',
+        'content': '干员秘录记录了阿米娅在罗德岛的片段。',
+        'source_path':
+            'zh_CN/gamedata/story/[uc]info/obt/memory/story_amiya_1_1.txt',
+        'raw_id': 'story_amiya_1_1',
+      });
+      await db.close();
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '干员秘录',
+        'top_k': 3,
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Content Type: operator_record_story'));
+      expect(observation, contains('阿米娅的干员秘录'));
+      expect(observation, isNot(contains('No matching GameData result')));
+    });
+  });
+
+  group('GameDataInstaller tests', () {
+    test('validates database before replacing installed DB', () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final installer = GameDataInstaller(installDirectory: tempDir);
+
+      await installer.installFromBytes(
+        await File(validDbPath).readAsBytes(),
+        overwrite: true,
+      );
+
+      final status = await installer.getStatus();
+      expect(status.installed, isTrue);
+      expect(status.manifest['schema_version'], '1');
+      expect(status.entityCount, '1');
+    });
+
+    test('rejects invalid database without replacing existing install',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final installer = GameDataInstaller(installDirectory: tempDir);
+      await installer.installFromBytes(
+        await File(validDbPath).readAsBytes(),
+        overwrite: true,
+      );
+      final installedPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      final beforeBytes = await File(installedPath).readAsBytes();
+
+      expect(
+        () => installer.installFromBytes(
+          const [1, 2, 3, 4],
+          overwrite: true,
+        ),
+        throwsA(isA<Object>()),
+      );
+
+      expect(await File(installedPath).readAsBytes(), beforeBytes);
     });
   });
 
   group('ReAct Loop Tests', () {
-    test('ReActLoop runs, executes tools, and yields final answer', () async {
+    test('runs, executes tools, and yields final answer', () async {
       final registry = ToolRegistry();
-      final mockLlm = _MockLLMClient();
-      final embedder = Embedder(_MockEmbeddingClient());
-
-      registry.register(SearchWikiTool(
-        embedder: embedder,
-        vectorStore: vectorStore,
-        profileId: 'test-profile',
-      ));
-      registry.register(CiteSourceTool(vectorStore: vectorStore));
-
-      // Seed database with a chunk
-      await vectorStore.insertChunk(
-        Chunk(
-          id: 'chunk-123',
-          content: 'W is a mercenary.',
-          pageTitle: 'W',
-          section: 'Overview',
-          seqIndex: 0,
-          tokenCount: 6,
-        ),
-        [1.0, 0.0, 0.0],
-        sourceType: 'wiki',
-        wiki: 'prts',
-        profileId: 'test-profile',
-      );
+      registry.register(_StaticSearchTool());
 
       final reactLoop = ReActLoop(
-        llmClient: mockLlm,
+        llmClient: _MockLLMClient(),
         toolRegistry: registry,
         maxIterations: 3,
       );
 
-      final eventStream = reactLoop.run(
-        systemPrompt: 'You are a helper.',
-        chatHistory: [],
-        userQuery: 'Who is W?',
-      );
+      final events = await reactLoop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'Who is W?',
+          )
+          .toList();
 
-      final events = await eventStream.toList();
-
-      // Verify ReAct event progression
       final eventTypes = events.map((e) => e.type).toList();
-
       expect(eventTypes, contains(ReActEventType.thought));
       expect(eventTypes, contains(ReActEventType.toolCall));
       expect(eventTypes, contains(ReActEventType.toolObservation));
       expect(eventTypes, contains(ReActEventType.finalAnswerToken));
       expect(eventTypes, contains(ReActEventType.complete));
 
-      // Verify specific outputs
       final finalAnswerEvent =
           events.firstWhere((e) => e.type == ReActEventType.finalAnswerToken);
-      expect(
-          finalAnswerEvent.content, contains('W is a mercenary [chunk-123]'));
+      expect(finalAnswerEvent.content, contains('W is a mercenary'));
     });
 
-    test('ReActLoop parses loose Action Input key-value maps', () async {
+    test('parses loose Action Input key-value maps', () async {
       final registry = ToolRegistry();
       final tool = _CaptureTool();
       registry.register(tool);
@@ -344,7 +452,37 @@ void main() {
       );
     });
 
-    test('ReActLoop reports empty final answers', () async {
+    test('ignores prose after Action Input JSON', () async {
+      final registry = ToolRegistry();
+      final tool = _CaptureTool();
+      registry.register(tool);
+
+      final reactLoop = ReActLoop(
+        llmClient: _TrailingActionInputLLMClient(),
+        toolRegistry: registry,
+        maxIterations: 2,
+      );
+
+      final events = await reactLoop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: '查阿米娅',
+          )
+          .toList();
+
+      expect(tool.lastArgs?['query'], '阿米娅 档案 干员 罗德岛');
+      expect(tool.lastArgs?['top_k'], 5);
+      expect(
+        events
+            .where((e) => e.type == ReActEventType.finalAnswerToken)
+            .single
+            .content,
+        contains('done'),
+      );
+    });
+
+    test('reports empty final answers', () async {
       final reactLoop = ReActLoop(
         llmClient: _EmptyFinalAnswerLLMClient(),
         toolRegistry: ToolRegistry(),
@@ -366,7 +504,7 @@ void main() {
       );
     });
 
-    test('ReActLoop reports truncated ReAct steps', () async {
+    test('reports truncated ReAct steps', () async {
       final reactLoop = ReActLoop(
         llmClient: _TruncatedLLMClient(),
         toolRegistry: ToolRegistry(),
@@ -387,39 +525,84 @@ void main() {
         contains('truncated'),
       );
     });
+
+    test('fallback warns about unsupported source claims', () async {
+      final registry = ToolRegistry();
+      registry.register(_NoMatchTool());
+      final llm = _UnsupportedSourceFallbackLLMClient();
+      final reactLoop = ReActLoop(
+        llmClient: llm,
+        toolRegistry: registry,
+        maxIterations: 1,
+      );
+
+      final events = await reactLoop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: '阿米娅',
+          )
+          .toList();
+
+      expect(llm.fallbackPrompt, contains('Wiki evidence available: no'));
+      final answer = events
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .single
+          .content;
+      expect(answer, contains('Source warning'));
+      expect(answer, contains('did not retrieve any observation'));
+    });
+
+    test('fallback counts current GameData no-result observations', () async {
+      final registry = ToolRegistry();
+      registry.register(_CurrentNoMatchTool());
+      final llm = _UnsupportedSourceFallbackLLMClient();
+      final reactLoop = ReActLoop(
+        llmClient: llm,
+        toolRegistry: registry,
+        maxIterations: 1,
+      );
+
+      await reactLoop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: '阿米娅 主线',
+          )
+          .toList();
+
+      expect(llm.fallbackPrompt, contains('Empty/error observations seen: 1'));
+      expect(
+        llm.fallbackPrompt,
+        contains('Do not add well-known lore'),
+      );
+    });
   });
-}
 
-class _FakePathProvider extends PathProviderPlatform {
-  final String path;
+  group('LLM Client Tests', () {
+    test('OpenAICompatibleClient rejects invalid API key text clearly',
+        () async {
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(
+          chatApiKey: '截图中的完整报错具体内容为：下载失败',
+        ),
+        httpClient: MockClient((request) async {
+          return http.Response('should not be called', 500);
+        }),
+      );
 
-  _FakePathProvider(this.path);
-
-  @override
-  Future<String?> getApplicationDocumentsPath() async => path;
-}
-
-class _MockEmbeddingClient implements EmbeddingClient {
-  _MockEmbeddingClient();
-
-  @override
-  String get providerId => 'mock-embed';
-
-  @override
-  int get dimension => 3;
-
-  @override
-  Future<List<double>> embed(String text) async {
-    return [1.0, 0.0, 0.0];
-  }
-
-  @override
-  Future<List<List<double>>> embedBatch(List<String> texts) async {
-    return List.generate(texts.length, (_) => [1.0, 0.0, 0.0]);
-  }
-
-  @override
-  void dispose() {}
+      expect(
+        () => client.chatCompletion([Message.user('test')]),
+        throwsA(
+          isA<LLMException>().having(
+            (e) => e.message,
+            'message',
+            contains('Please paste only the API key'),
+          ),
+        ),
+      );
+    });
+  });
 }
 
 class _MockLLMClient extends LLMClient {
@@ -436,22 +619,15 @@ class _MockLLMClient extends LLMClient {
     callCount++;
     if (callCount == 1) {
       return '''
-Thought: I need to look up W in the wiki database.
-Action: search_wiki
+Thought: I need to look up W in the local database.
+Action: search_local_lore
 Action Input: {"query": "W"}
 ''';
-    } else if (callCount == 2) {
-      return '''
-Thought: I need to retrieve details for the chunk using cite_source.
-Action: cite_source
-Action Input: {"chunk_id": "chunk-123"}
-''';
-    } else {
-      return '''
-Thought: I have enough information to write the final answer.
-Final Answer: W is a mercenary [chunk-123].
-''';
     }
+    return '''
+Thought: I have enough information to write the final answer.
+Final Answer: W is a mercenary.
+''';
   }
 
   @override
@@ -462,16 +638,13 @@ Final Answer: W is a mercenary [chunk-123].
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
-    return chat(messages,
-        temperature: temperature, maxTokens: maxTokens, stop: stop);
+    return chat(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
   }
-
-  @override
-  Future<List<double>> embed(String text) async => [1.0, 0.0, 0.0];
-
-  @override
-  Future<List<List<double>>> embedBatch(List<String> texts) async =>
-      List.generate(texts.length, (_) => [1.0, 0.0, 0.0]);
 }
 
 class _CaptureTool extends AgentTool {
@@ -500,6 +673,72 @@ class _CaptureTool extends AgentTool {
   }
 }
 
+class _StaticSearchTool extends AgentTool {
+  @override
+  String get name => 'search_local_lore';
+
+  @override
+  String get description => 'Returns a static search observation.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    return 'Source Kind: GameData\nContent Excerpt:\nW is a mercenary.';
+  }
+}
+
+class _NoMatchTool extends AgentTool {
+  @override
+  String get name => 'search_local_lore';
+
+  @override
+  String get description => 'Always returns no matching records.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    return 'No matching records found in the database.';
+  }
+}
+
+class _CurrentNoMatchTool extends AgentTool {
+  @override
+  String get name => 'search_local_lore';
+
+  @override
+  String get description => 'Returns current GameData no-result text.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    return 'No matching GameData result found for "${arguments['query']}". The local GameData knowledge DB is installed, but structured/FTS search returned no result.';
+  }
+}
+
 class _LooseActionInputLLMClient extends _MockLLMClient {
   @override
   Future<String> chat(
@@ -515,6 +754,31 @@ class _LooseActionInputLLMClient extends _MockLLMClient {
 Thought: I need local lore.
 Action: search_local_lore
 Action Input: {query: 缪因, top_k: 5}
+''';
+    }
+    return '''
+Thought: I have enough information to answer.
+Final Answer: done
+''';
+  }
+}
+
+class _TrailingActionInputLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      return '''
+Thought: I need local lore.
+Action: search_local_lore
+Action Input: {"query": "阿米娅 档案 干员 罗德岛", "top_k": 5}
+Based on the search results, I should continue reasoning here by mistake.
 ''';
     }
     return '''
@@ -553,6 +817,32 @@ class _TruncatedLLMClient extends _MockLLMClient {
   }
 }
 
+class _UnsupportedSourceFallbackLLMClient extends _MockLLMClient {
+  String? fallbackPrompt;
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      return '''
+Thought: I need local lore.
+Action: search_local_lore
+Action Input: {"query": "阿米娅"}
+''';
+    }
+    fallbackPrompt = messages.last.content;
+    return '''
+Final Answer: 我已通过 Wiki 获取了阿米娅的背景概述。
+''';
+  }
+}
+
 Future<void> _createGameDataTestDb(String path) async {
   final db = await sqflite.openDatabase(
     path,
@@ -569,6 +859,17 @@ Future<void> _createGameDataTestDb(String path) async {
           source_path  TEXT,
           game_version TEXT,
           updated_at   INTEGER
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE entity_aliases (
+          alias       TEXT NOT NULL,
+          entity_id   TEXT NOT NULL,
+          alias_type  TEXT NOT NULL,
+          confidence  REAL NOT NULL DEFAULT 1.0,
+          source_path TEXT,
+          PRIMARY KEY (alias, entity_id, alias_type),
+          FOREIGN KEY (entity_id) REFERENCES entities(id)
         )
       ''');
       await db.execute('''
@@ -622,9 +923,89 @@ Future<void> _createGameDataTestDb(String path) async {
           retrieval_hint   TEXT
         )
       ''');
+      await db.execute('''
+        CREATE TABLE story_lines (
+          id               TEXT PRIMARY KEY,
+          game             TEXT NOT NULL,
+          story_id         TEXT NOT NULL,
+          story_title      TEXT,
+          segment          TEXT,
+          line_index       INTEGER NOT NULL,
+          speaker          TEXT,
+          content          TEXT NOT NULL,
+          source_path      TEXT NOT NULL,
+          raw_id           TEXT,
+          language         TEXT NOT NULL DEFAULT 'zh',
+          game_version     TEXT,
+          updated_at       INTEGER
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE entity_documents (
+          id                TEXT PRIMARY KEY,
+          game              TEXT NOT NULL,
+          language          TEXT NOT NULL DEFAULT 'zh',
+          entity_id         TEXT NOT NULL,
+          entity_name       TEXT NOT NULL,
+          entity_type       TEXT NOT NULL,
+          document_type     TEXT NOT NULL,
+          title             TEXT NOT NULL,
+          summary           TEXT,
+          content           TEXT NOT NULL,
+          source_paths      TEXT,
+          source_record_ids TEXT,
+          updated_at        INTEGER
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE gamedata_manifest (
+          key   TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE VIRTUAL TABLE entity_documents_fts USING fts5(
+          entity_name,
+          entity_type,
+          document_type,
+          title,
+          summary,
+          content,
+          content='entity_documents',
+          content_rowid='rowid',
+          tokenize='trigram'
+        )
+      ''');
+      await db.execute('''
+        CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
+          page_title,
+          section,
+          content,
+          raw_id,
+          content='lore_chunks',
+          content_rowid='rowid',
+          tokenize='trigram'
+        )
+      ''');
     },
   );
 
+  await db.insert('gamedata_manifest', {
+    'key': 'schema_version',
+    'value': '1',
+  });
+  await db.insert('gamedata_manifest', {
+    'key': 'entity_count',
+    'value': '1',
+  });
+  await db.insert('gamedata_manifest', {
+    'key': 'normalized_record_count',
+    'value': '2',
+  });
+  await db.insert('gamedata_manifest', {
+    'key': 'lore_chunk_count',
+    'value': '1',
+  });
   await db.insert('entities', {
     'id': 'char_002_amiya',
     'name': '阿米娅',
@@ -632,6 +1013,20 @@ Future<void> _createGameDataTestDb(String path) async {
     'entity_type': 'operator',
     'source_type': 'operator_handbook_profile',
     'game': 'arknights',
+    'source_path': 'zh_CN/gamedata/excel/character_table.json',
+  });
+  await db.insert('entity_aliases', {
+    'alias': '阿米娅',
+    'entity_id': 'char_002_amiya',
+    'alias_type': 'canonical',
+    'confidence': 1.0,
+    'source_path': 'zh_CN/gamedata/excel/character_table.json',
+  });
+  await db.insert('entity_aliases', {
+    'alias': 'Amiya',
+    'entity_id': 'char_002_amiya',
+    'alias_type': 'alias',
+    'confidence': 0.8,
     'source_path': 'zh_CN/gamedata/excel/character_table.json',
   });
   await db.insert('normalized_records', {
@@ -664,5 +1059,74 @@ Future<void> _createGameDataTestDb(String path) async {
     'source_path': 'zh_CN/gamedata/excel/charword_table.json',
     'raw_id': 'char_002_amiya_CN_001',
   });
+  await db.insert('entity_documents', {
+    'id': 'doc_operator_amiya',
+    'game': 'arknights',
+    'language': 'zh',
+    'entity_id': 'char_002_amiya',
+    'entity_name': '阿米娅',
+    'entity_type': 'operator',
+    'document_type': 'operator_profile_bundle',
+    'title': '阿米娅',
+    'summary': '阿米娅是罗德岛的公开领袖。',
+    'content': '## 基础信息\n阿米娅是罗德岛的公开领袖。\n\n## 档案资料\n她也是剧情中的核心角色。',
+    'source_paths':
+        '["zh_CN/gamedata/excel/character_table.json","zh_CN/gamedata/excel/handbook_info_table.json"]',
+    'source_record_ids': '["char_002_amiya"]',
+  });
+  await db.execute(
+    "INSERT INTO entity_documents_fts(entity_documents_fts) VALUES('rebuild')",
+  );
+  await db.execute(
+    "INSERT INTO lore_chunks_fts(lore_chunks_fts) VALUES('rebuild')",
+  );
+  await db.close();
+}
+
+Future<void> _insertAmbiguousAmiyaCandidate(String path) async {
+  final db = await sqflite.openDatabase(path);
+  await db.insert('entities', {
+    'id': 'token_amiya_memory',
+    'name': '阿米娅的记忆',
+    'aliases': '["Amiya"]',
+    'entity_type': 'item',
+    'source_type': 'item_description',
+    'game': 'arknights',
+    'source_path': 'zh_CN/gamedata/excel/item_table.json',
+  });
+  await db.insert('entity_aliases', {
+    'alias': 'Amiya',
+    'entity_id': 'token_amiya_memory',
+    'alias_type': 'alias',
+    'confidence': 0.7,
+    'source_path': 'zh_CN/gamedata/excel/item_table.json',
+  });
+  await db.close();
+}
+
+Future<void> _insertAmiyaStoryChunk(
+  String path, {
+  bool withEntityId = false,
+}) async {
+  final db = await sqflite.openDatabase(path);
+  await db.insert('lore_chunks', {
+    'id': 'chunk_story_amiya_chernobog',
+    'game': 'arknights',
+    'source_type': 'game_data',
+    'content_category': 'story',
+    'content_subtype': 'main',
+    'content_type': 'story_dialogue',
+    'entity_id': withEntityId ? 'char_002_amiya' : null,
+    'story_id': 'main_00_01',
+    'page_title': '切尔诺伯格行动',
+    'section': '行动前',
+    'content': '切尔诺伯格行动中，阿米娅与博士会合。',
+    'source_path': 'zh_CN/gamedata/story/[uc]obt/main_00_01.txt',
+    'language': 'zh',
+    'raw_id': 'main_00_01',
+  });
+  await db.execute(
+    "INSERT INTO lore_chunks_fts(lore_chunks_fts) VALUES('rebuild')",
+  );
   await db.close();
 }

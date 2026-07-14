@@ -4,9 +4,6 @@ import 'package:uuid/uuid.dart';
 
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
-import '../rag/embedder_provider.dart';
-import '../rag/vector_store_provider.dart';
-import '../../shared/providers/settings_provider.dart';
 import 'react_loop.dart';
 import 'summary_agent.dart';
 
@@ -71,15 +68,9 @@ class ChatMessage {
 /// Provider for the [SummaryAgent] instance.
 final summaryAgentProvider = Provider<SummaryAgent>((ref) {
   final llm = ref.watch(llmClientProvider);
-  final embedder = ref.watch(embedderProvider);
-  final vectorStore = ref.watch(vectorStoreProvider);
-  final activeProfile = ref.watch(embeddingSettingsProvider).activeProfile;
 
   return SummaryAgent(
     llmClient: llm,
-    embedder: embedder,
-    vectorStore: vectorStore,
-    profileId: activeProfile?.id,
   );
 });
 

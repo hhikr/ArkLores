@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.3.0+3
+version: 0.4.5+4
 
 environment:
   sdk: ^3.6.0
@@ -48,9 +48,6 @@ dependencies:
   # Database
   sqflite: ^2.4.0
 
-  # Vector search — using sqflite + pure Dart cosine similarity fallback
-  # (sqlite-vec FFI was deferred due to native build incompatibility)
-
   # File system paths
   path_provider: ^2.1.0
   path: ^1.9.0  # Direct dependency for path utilities
@@ -69,18 +66,6 @@ dependencies:
 
   # Markdown rendering in AI chat
   flutter_markdown: ^0.7.4
-
-  # File picker for book import (PDF/TXT)
-  file_picker: ^8.1.6
-
-  # PDF text extraction
-  syncfusion_flutter_pdf: ^26.1.42
-
-  # Local embedding model runtime (built-in fixed model spike)
-  tflite_flutter: ^0.12.1
-
-  # Archive for zip extraction of prebuilt wiki cache
-  archive: ^3.6.1
 
 dev_dependencies:
   flutter_test:
@@ -105,11 +90,6 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
-  assets:
-    - assets/models/embedding/
-    - assets/seeds/wiki_cache.zip
-    - assets/seeds/seed_manifest.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -7,7 +7,6 @@ import '../../../core/agent/react_loop.dart';
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
-import 'lazy_citation_card.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
 /// and lazy loading of citations.
@@ -33,7 +32,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           if (!isUser) ...[
             _buildAvatar(theme, isRobot: true),
@@ -157,18 +157,25 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               ? _buildTypingIndicator(theme)
               : MarkdownBody(
                   data: formattedContent,
-                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                    p: theme.bodyFont.copyWith(color: theme.textPrimary, height: 1.5),
-                    h1: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 18),
-                    h2: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 16),
-                    h3: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 14),
+                  styleSheet:
+                      MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                    p: theme.bodyFont
+                        .copyWith(color: theme.textPrimary, height: 1.5),
+                    h1: theme.titleFont
+                        .copyWith(color: theme.textPrimary, fontSize: 18),
+                    h2: theme.titleFont
+                        .copyWith(color: theme.textPrimary, fontSize: 16),
+                    h3: theme.titleFont
+                        .copyWith(color: theme.textPrimary, fontSize: 14),
                     a: theme.bodyFont.copyWith(color: theme.accentPrimary),
-                    listBullet: theme.bodyFont.copyWith(color: theme.textPrimary),
+                    listBullet:
+                        theme.bodyFont.copyWith(color: theme.textPrimary),
                     code: theme.bodyFont.copyWith(
                       color: theme.accentSecondary,
                       backgroundColor: theme.bgPrimary,
                     ),
-                    blockquote: theme.bodyFont.copyWith(color: theme.textSecondary),
+                    blockquote:
+                        theme.bodyFont.copyWith(color: theme.textSecondary),
                     blockquoteDecoration: BoxDecoration(
                       color: theme.bgPrimary,
                       border: Border(
@@ -178,17 +185,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   ),
                 ),
         ),
-
-        // Display citation cards at the bottom of the bubble
-        if (citationIds.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          ...citationIds.map((uuid) {
-            return LazyCitationCard(
-              chunkId: uuid,
-              index: uuidToIdx[uuid],
-            );
-          }),
-        ],
+        if (citationIds.isNotEmpty) const SizedBox(height: 8),
       ],
     );
   }
@@ -199,7 +196,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       children: [
         Text(
           'Thinking',
-          style: theme.bodyFont.copyWith(color: theme.textSecondary, fontSize: 13),
+          style:
+              theme.bodyFont.copyWith(color: theme.textSecondary, fontSize: 13),
         ),
         const SizedBox(width: 4),
         const SizedBox(
@@ -254,7 +252,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    _showSteps ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                    _showSteps
+                        ? Icons.visibility_rounded
+                        : Icons.visibility_off_rounded,
                     size: 14,
                     color: theme.accentPrimary,
                   ),
@@ -290,7 +290,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Divider(height: 10),
-                  ...widget.message.steps.map((step) => _buildStepRow(theme, step)),
+                  ...widget.message.steps
+                      .map((step) => _buildStepRow(theme, step)),
                 ],
               ),
             ),

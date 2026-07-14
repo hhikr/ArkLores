@@ -25,7 +25,6 @@ class GameDataInstallStatus {
   String? get entityCount => manifest['entity_count'];
   String? get recordCount => manifest['normalized_record_count'];
   String? get chunkCount => manifest['lore_chunk_count'];
-  String? get embeddingStatus => manifest['embedding_status'];
 }
 
 class GameDataReleaseAsset {
@@ -44,12 +43,15 @@ class GameDataReleaseAsset {
 
 class GameDataInstaller {
   static const _dbFileName = 'arklores_gamedata_zh.db';
+  final Directory? installDirectory;
 
   // Development/test path before a public release exists. Example:
   // flutter run --dart-define=ARKLORES_GAMEDATA_DB_URL=http://192.168.1.2:8000/arklores_gamedata_zh.db.gz
   static const _definedUrl = String.fromEnvironment('ARKLORES_GAMEDATA_DB_URL');
   static const _definedSha =
       String.fromEnvironment('ARKLORES_GAMEDATA_DB_SHA256');
+
+  const GameDataInstaller({this.installDirectory});
 
   Future<GameDataInstallStatus> getStatus() async {
     final file = await _dbFile();
@@ -139,6 +141,12 @@ class GameDataInstaller {
     final tmp = File('${dbFile.path}.tmp');
     await tmp.parent.create(recursive: true);
     await tmp.writeAsBytes(dbBytes, flush: true);
+    try {
+      await _validateDatabase(tmp.path);
+    } catch (_) {
+      if (await tmp.exists()) await tmp.delete();
+      rethrow;
+    }
     if (await dbFile.exists()) {
       await dbFile.delete();
     }
@@ -151,6 +159,7 @@ class GameDataInstaller {
   }
 
   Future<Directory> _writableDirectory() async {
+    if (installDirectory != null) return installDirectory!;
     if (Platform.isAndroid) {
       final extDir = await getExternalStorageDirectory();
       if (extDir != null) return extDir;
@@ -168,6 +177,72 @@ class GameDataInstaller {
       };
     } catch (_) {
       return const {};
+    } finally {
+      await db?.close();
+    }
+  }
+
+  Future<void> _validateDatabase(String dbPath) async {
+    final file = File(dbPath);
+    if (!await file.exists() || await file.length() == 0) {
+      throw StateError('Downloaded GameData database is empty.');
+    }
+
+    sqflite.Database? db;
+    try {
+      db = await sqflite.openDatabase(dbPath, readOnly: true);
+      const requiredTables = {
+        'gamedata_manifest',
+        'entities',
+        'entity_aliases',
+        'entity_documents',
+        'normalized_records',
+        'story_lines',
+        'lore_chunks',
+        'entity_documents_fts',
+        'lore_chunks_fts',
+      };
+      final tableRows = await db.rawQuery(
+        '''
+        SELECT name
+        FROM sqlite_master
+        WHERE type IN ('table', 'virtual') AND name IN (${List.filled(requiredTables.length, '?').join(',')})
+        ''',
+        requiredTables.toList(growable: false),
+      );
+      final presentTables = {
+        for (final row in tableRows) '${row['name']}',
+      };
+      final missingTables = requiredTables.difference(presentTables);
+      if (missingTables.isNotEmpty) {
+        throw StateError(
+          'Downloaded GameData database is missing required table(s): ${missingTables.join(', ')}',
+        );
+      }
+
+      final manifest = {
+        for (final row in await db.query('gamedata_manifest'))
+          '${row['key']}': '${row['value']}',
+      };
+      final schemaVersion = manifest['schema_version'];
+      if (schemaVersion == null || schemaVersion.trim().isEmpty) {
+        throw StateError(
+          'Downloaded GameData database manifest is missing schema_version.',
+        );
+      }
+
+      for (final entry in const {
+        'entity_count': 'entities',
+        'normalized_record_count': 'records',
+        'lore_chunk_count': 'chunks',
+      }.entries) {
+        final value = int.tryParse(manifest[entry.key] ?? '');
+        if (value == null || value <= 0) {
+          throw StateError(
+            'Downloaded GameData database manifest has invalid ${entry.key} ${entry.value} count.',
+          );
+        }
+      }
     } finally {
       await db?.close();
     }

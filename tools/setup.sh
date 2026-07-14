@@ -48,6 +48,7 @@ usage() {
   -p, --platform <平台>  指定目标平台。可选值: android, ios。默认值: android
   -m, --mode <模式>      指定构建模式。可选值: debug, release。默认值: debug
   -t, --target <目标>    指定部署目标（仅对 iOS 有效）。可选值: device (真机), simulator (模拟器)。默认值: device
+      --dry-run          只解析并打印配置，不执行环境检查、构建、卸载或安装
       --with-gamedata    构建/配置 GameData 主知识库下载参数，并注入到 App
       --gamedata-source <路径>
                          ArknightsGameData 社区解包仓库路径。默认优先使用:
@@ -66,6 +67,7 @@ usage() {
 示例:
   ./tools/setup.sh                                            # 交互式菜单运行
   ./tools/setup.sh -a build -p android                        # 仅构建 Android 包
+  ./tools/setup.sh --with-gamedata --gamedata-url http://... --dry-run
   ./tools/setup.sh -a uninstall,install                       # 卸载并重新安装（使用已有包）
   ./tools/setup.sh --with-gamedata                            # 自动构建并提供 GameData 临时下载
   ./tools/setup.sh --gamedata-url https://.../db.gz --gamedata-sha <sha>
@@ -198,6 +200,7 @@ start_gamedata_http_server() {
     exit 1
   fi
   log_ok "GameData HTTP 服务已启动: pid=$pid, log=$log_file"
+  GAMEDATA_HTTP_STARTED=true
 }
 
 prepare_gamedata_defines() {
@@ -263,10 +266,12 @@ prepare_gamedata_defines() {
 # ─── 命令行参数解析 ──────────────────────────────────────────────
 
 ACTIONS=""
+ORIGINAL_ARGC=$#
 PLATFORM=""
 BUILD_MODE=""
 DEPLOY_TARGET=""
 FORCE_INTERACTIVE=false
+DRY_RUN=false
 WITH_GAMEDATA=false
 GAMEDATA_SOURCE="${GAMEDATA_SOURCE:-}"
 GAMEDATA_URL="${GAMEDATA_URL:-}"
@@ -275,6 +280,7 @@ GAMEDATA_PORT="${GAMEDATA_PORT:-$DEFAULT_GAMEDATA_PORT}"
 GAMEDATA_OUTPUT="${GAMEDATA_OUTPUT:-$DEFAULT_GAMEDATA_OUTPUT}"
 GAMEDATA_STORY_LIMIT="${GAMEDATA_STORY_LIMIT:-0}"
 GAMEDATA_USE_ADB_REVERSE="${GAMEDATA_USE_ADB_REVERSE:-true}"
+GAMEDATA_HTTP_STARTED=false
 
 # 临时解析参数以检测帮助或交互式标记
 for arg in "$@"; do
@@ -300,6 +306,10 @@ while [[ $# -gt 0 ]]; do
     -t|--target)
       DEPLOY_TARGET="$2"
       shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
       ;;
     --with-gamedata)
       WITH_GAMEDATA=true
@@ -367,7 +377,7 @@ done
 
 # ─── 交互菜单模式 ────────────────────────────────────────────────
 
-if [ -z "$ACTIONS" ] && [ -z "$PLATFORM" ] && [ -z "$BUILD_MODE" ] && [ -z "$DEPLOY_TARGET" ] || [ "$FORCE_INTERACTIVE" = true ]; then
+if [ "$FORCE_INTERACTIVE" = true ] || [ "$ORIGINAL_ARGC" -eq 0 ]; then
   log_step "ArkLores 移动端部署配置助手"
 
   # 1. 选择行为
@@ -511,6 +521,11 @@ if [ "$WITH_GAMEDATA" = true ] || [ -n "$GAMEDATA_URL" ]; then
   echo -e "   GameData : ${BOLD}启用${NC}"
   [ -n "$GAMEDATA_SOURCE" ] && echo -e "   数据源    : ${BOLD}${GAMEDATA_SOURCE}${NC}"
   [ -n "$GAMEDATA_URL" ] && echo -e "   下载 URL : ${BOLD}${GAMEDATA_URL}${NC}"
+fi
+
+if [ "$DRY_RUN" = true ]; then
+  log_ok "dry-run: 参数解析完成，未执行环境检查、构建、卸载或安装。"
+  exit 0
 fi
 
 # ─── 路径检查与环境准备 ──────────────────────────────────────────
@@ -757,7 +772,7 @@ echo -e "\n${GREEN}✓ 全部操作执行完成！${NC}"
 if [ "$WITH_GAMEDATA" = true ]; then
   echo -e "${CYAN}•${NC} GameData 下载地址已注入 App: ${BOLD}${GAMEDATA_URL}${NC}"
   echo -e "${CYAN}•${NC} 真机测试：打开 ArkLores → Settings → Knowledge Base → GameData 主知识库 → 下载/更新。"
-  if [ -f "$PROJECT_ROOT/build/gamedata_http.pid" ]; then
+  if [ "$GAMEDATA_HTTP_STARTED" = true ] && [ -f "$PROJECT_ROOT/build/gamedata_http.pid" ]; then
     echo -e "${CYAN}•${NC} 临时 HTTP 服务 pid: $(cat "$PROJECT_ROOT/build/gamedata_http.pid")"
   fi
 fi

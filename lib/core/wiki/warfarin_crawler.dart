@@ -216,13 +216,6 @@ class WarfarinWikiCrawler {
     'tag_activity_': '行事',
   };
 
-  static const Map<String, String> _voiceCategory = {
-    '行动准备': '    ',
-    '编入队伍': '    ',
-    '作战': '    ',
-    '战斗': '    ',
-  };
-
   /// Strips <@...> game markup tags from a string.
   static String _stripGameTags(String text) {
     return text.replaceAll(RegExp(r'<@[^>]+>'), '');
@@ -235,7 +228,7 @@ class WarfarinWikiCrawler {
     final tagt = _asMap(data['charTagTable']);
     final tagDes = _asMap(_asMap(data['charTagDesTable'])['tagDesc']);
 
-    final name = _getZh(ct['name']) ?? '';
+    final name = _getZh(ct['name']);
     final engName = ct['engName'] as String? ?? '';
     final rarity = cgt['rarity'] as int? ?? 0;
     final profId = cgt['profession'] as int? ?? -1;
@@ -342,7 +335,7 @@ class WarfarinWikiCrawler {
         if (title.isNotEmpty && desc.isNotEmpty) {
           sb.writeln('**$title**');
           sb.writeln('');
-          sb.writeln('$desc');
+          sb.writeln(desc);
           sb.writeln('');
         }
       }
@@ -387,7 +380,7 @@ class WarfarinWikiCrawler {
   /// Formats lore detailed map to a Markdown document.
   String formatLoreToMarkdown(Map<String, dynamic> data) {
     final prtsItem = _asMap(data['prtsAllItem']);
-    final name = _getZh(prtsItem['name']) ?? '';
+    final name = _getZh(prtsItem['name']);
     final type = prtsItem['type'] as String? ?? '';
 
     final rct = _asMap(data['richContentTable']);

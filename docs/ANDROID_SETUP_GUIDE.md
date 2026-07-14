@@ -10,11 +10,19 @@
 项目提供了自动化脚本 `tools/setup.sh`，涵盖 SDK 安装、APK 构建、设备安装全流程：
 
 ```bash
-# 构建 debug APK 并安装到已连接的设备
+# 进入交互式部署向导
 ./tools/setup.sh
 
-# 或构建 release APK
-./tools/setup.sh release
+# 非交互：构建 debug APK
+./tools/setup.sh -a build -p android -m debug
+
+# 非交互：构建 release APK
+./tools/setup.sh -a build -p android -m release
+
+# 非交互：注入已有 GameData 临时下载 URL
+./tools/setup.sh --with-gamedata \
+  --gamedata-url http://127.0.0.1:8765/arklores_gamedata_zh.db.gz \
+  --gamedata-sha <sha256>
 ```
 
 脚本会自动检测缺失的组件（Java、Android SDK、adb）并引导安装。详细步骤见下文。
@@ -25,9 +33,11 @@
 
 | 用法 | 说明 |
 | --- | --- |
-| `./tools/setup.sh` | 构建 debug APK 并安装 |
-| `./tools/setup.sh debug` | 同上 |
-| `./tools/setup.sh release` | 构建 release APK 并安装 |
+| `./tools/setup.sh` | 进入交互式部署向导 |
+| `./tools/setup.sh -a build -p android -m debug` | 仅构建 debug APK |
+| `./tools/setup.sh -a build -p android -m release` | 仅构建 release APK |
+| `./tools/setup.sh --with-gamedata --gamedata-source=/path/to/ArknightsGameData` | 构建并注入 GameData 临时下载参数 |
+| `./tools/setup.sh --dry-run ...` | 只解析配置，不执行构建/安装 |
 | `./tools/setup.sh --help` | 查看帮助 |
 
 **环境变量**：

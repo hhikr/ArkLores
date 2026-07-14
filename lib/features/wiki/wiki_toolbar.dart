@@ -43,29 +43,40 @@ class WikiToolbar extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _TrayButton(icon: Icons.arrow_back_ios_rounded, theme: theme,
-          enabled: canGoBack, onTap: onBack),
-        _TrayButton(icon: Icons.arrow_forward_ios_rounded, theme: theme,
-          enabled: canGoForward, onTap: onForward),
-        _TrayButton(icon: Icons.refresh_rounded, theme: theme, onTap: onRefresh),
-
+        _TrayButton(
+            icon: Icons.arrow_back_ios_rounded,
+            theme: theme,
+            enabled: canGoBack,
+            onTap: onBack),
+        _TrayButton(
+            icon: Icons.arrow_forward_ios_rounded,
+            theme: theme,
+            enabled: canGoForward,
+            onTap: onForward),
+        _TrayButton(
+            icon: Icons.refresh_rounded, theme: theme, onTap: onRefresh),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Divider(color: theme.divider, height: 1),
         ),
-
         _TrayButton(
           icon: isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-          theme: theme, onTap: onToggleDarkMode,
+          theme: theme,
+          onTap: onToggleDarkMode,
           activeColor: theme.accentPrimary,
         ),
         _TrayButton(
-          icon: isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-          theme: theme, onTap: onToggleBookmark,
+          icon: isBookmarked
+              ? Icons.bookmark_rounded
+              : Icons.bookmark_border_rounded,
+          theme: theme,
+          onTap: onToggleBookmark,
           activeColor: isBookmarked ? theme.warning : null,
         ),
         _TrayButton(
-          icon: Icons.bookmarks_rounded, theme: theme, onTap: onOpenBookmarks),
+            icon: Icons.bookmarks_rounded,
+            theme: theme,
+            onTap: onOpenBookmarks),
       ],
     );
   }

@@ -1,15 +1,14 @@
 import '../../gamedata/gamedata_knowledge_store.dart';
 import 'agent_tool.dart';
-import 'search_wiki.dart';
 
 /// Source-neutral local lore search tool.
-class SearchLocalLoreTool extends SearchWikiTool {
+class SearchLocalLoreTool extends AgentTool {
+  static const int _maxObservationChars = 4800;
+  static const int _maxContentExcerptChars = 700;
+
   final GameDataKnowledgeStore? _gameDataStore;
 
   SearchLocalLoreTool({
-    required super.embedder,
-    required super.vectorStore,
-    super.profileId,
     GameDataKnowledgeStore? gameDataStore,
   }) : _gameDataStore = gameDataStore ?? GameDataKnowledgeStore();
 
@@ -18,10 +17,10 @@ class SearchLocalLoreTool extends SearchWikiTool {
 
   @override
   String get description =>
-      'Search the local ArkLores knowledge base. Prefer GameData/game original '
-      'text when installed, then specified Wiki, then user-imported books. '
-      'Supports optional content_type and entity_id filters. Returns source '
-      'kind, content_type, source_path, raw_id, and chunk/record id for citations.';
+      'Search the local ArkLores GameData knowledge base. Supports entity '
+      'disambiguation, summary-focused retrieval, optional content_type, and '
+      'entity_id filters. Returns source kind, content_type, source_path, '
+      'raw_id, ranking reason, and chunk/record id for citations.';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -48,6 +47,13 @@ class SearchLocalLoreTool extends SearchWikiTool {
             'description':
                 'Optional GameData entity id filter, e.g. char_002_amiya.',
           },
+          'search_mode': {
+            'type': 'string',
+            'enum': ['general', 'summary'],
+            'description':
+                'Use summary for entity summaries: entity document first, then story context, then raw records.',
+            'default': 'general',
+          },
         },
         'required': ['query'],
       };
@@ -63,52 +69,75 @@ class SearchLocalLoreTool extends SearchWikiTool {
     final cleanTopK = topK.clamp(1, 10);
     final contentType = arguments['content_type'] as String?;
     final entityId = arguments['entity_id'] as String?;
+    final searchMode = (arguments['search_mode'] as String?) ?? 'general';
 
     final store = _gameDataStore;
     if (store != null && await store.isAvailable) {
+      if ((entityId == null || entityId.trim().isEmpty) &&
+          contentType == null) {
+        final candidates = await store.findEntityCandidates(query);
+        final exactCandidates = candidates
+            .where((candidate) =>
+                candidate.matchType == 'name_exact' ||
+                candidate.matchType == 'canonical_alias_exact' ||
+                candidate.matchType == 'alias_exact')
+            .toList(growable: false);
+        if (exactCandidates.length > 1) {
+          return _formatDisambiguationCandidates(query, exactCandidates);
+        }
+      }
+
       final results = await store.search(
         query: query,
         topK: cleanTopK,
         contentType: contentType,
         entityId: entityId,
+        searchMode: searchMode,
       );
       if (results.isNotEmpty) {
-        return _formatGameDataResults(results);
+        return _formatGameDataResults(results, searchMode: searchMode);
       }
-      final fallback = await super.execute(arguments);
-      if (fallback is ToolExecutionResult) {
-        return ToolExecutionResult(
-          observation:
-              'No confident GameData result found for "$query". Falling back to Wiki/Book compatibility search.\n\n${fallback.observation}',
-          debugLog: fallback.debugLog,
-        );
-      }
-      return 'No confident GameData result found for "$query". Falling back to Wiki/Book compatibility search.\n\n$fallback';
-    }
-
-    final fallback = await super.execute(arguments);
-    if (fallback is ToolExecutionResult) {
       return ToolExecutionResult(
         observation:
-            'Local GameData knowledge DB is not installed. Falling back to Wiki/Book compatibility search.\n\n${fallback.observation}',
-        debugLog: fallback.debugLog,
+            'No matching GameData result found for "$query". The local GameData knowledge DB is installed, but structured/FTS search returned no result.',
       );
     }
-    return 'Local GameData knowledge DB is not installed. Falling back to Wiki/Book compatibility search.\n\n$fallback';
+
+    return const ToolExecutionResult(
+      observation:
+          'Local GameData knowledge DB is not installed. Install the Chinese GameData knowledge base before searching lore.',
+    );
   }
 
   ToolExecutionResult _formatGameDataResults(
-    List<GameDataSearchResult> results,
-  ) {
+    List<GameDataSearchResult> results, {
+    required String searchMode,
+  }) {
     final buffer = StringBuffer();
+    var omittedResults = 0;
+
+    if (searchMode == 'summary') {
+      buffer.writeln(
+        'Retrieval Plan: summary mode = entity document first, then story context, then raw records and FTS fallback.',
+      );
+      buffer.writeln();
+    }
+
     for (var i = 0; i < results.length; i++) {
       final result = results[i];
+      final remainingBudget = _maxObservationChars - buffer.length;
+      if (remainingBudget <= 900) {
+        omittedResults = results.length - i;
+        break;
+      }
+
       buffer.writeln(
         '=== Result #${i + 1} (Score: ${result.score.toStringAsFixed(4)}) ===',
       );
       buffer.writeln('Source Kind: ${result.sourceKind}');
       buffer.writeln('Source Type: ${result.sourceType}');
       buffer.writeln('Retrieval Type: ${result.retrievalType}');
+      buffer.writeln('Ranking Reason: ${result.rankingReason}');
       buffer.writeln('ID: ${result.id}');
       if (result.contentCategory != null) {
         buffer.writeln('Content Category: ${result.contentCategory}');
@@ -140,9 +169,58 @@ class SearchLocalLoreTool extends SearchWikiTool {
             'Lines: ${result.lineStart ?? '?'}-${result.lineEnd ?? '?'}');
       }
       buffer.writeln('Trust: GameData / game original text (highest).');
-      buffer.writeln('Content:\n${result.content}');
+      buffer.writeln('Content Excerpt:\n${_excerpt(result.content)}');
       buffer.writeln();
     }
+
+    if (omittedResults > 0) {
+      buffer.writeln(
+        'Note: $omittedResults additional GameData result(s) were omitted to keep the agent context concise.',
+      );
+    }
+    buffer.writeln(
+      'Note: Content excerpts may be truncated. Use the listed ID/source_path/raw_id for exact citation details.',
+    );
+
     return ToolExecutionResult(observation: buffer.toString().trim());
+  }
+
+  ToolExecutionResult _formatDisambiguationCandidates(
+    String query,
+    List<GameDataEntityCandidate> candidates,
+  ) {
+    final buffer = StringBuffer()
+      ..writeln('Ambiguous GameData entity query: "$query".')
+      ..writeln(
+        'Multiple exact entity candidates were found. Ask the user to choose one, or call search_local_lore again with entity_id.',
+      )
+      ..writeln();
+
+    for (var i = 0; i < candidates.length; i++) {
+      final candidate = candidates[i];
+      buffer.writeln('=== Candidate #${i + 1} ===');
+      buffer.writeln('Entity ID: ${candidate.entityId}');
+      buffer.writeln('Name: ${candidate.name}');
+      buffer.writeln('Entity Type: ${candidate.entityType}');
+      buffer.writeln('Matched Alias: ${candidate.matchedAlias}');
+      buffer.writeln('Match Type: ${candidate.matchType}');
+      buffer.writeln(
+        'Confidence: ${candidate.confidence.toStringAsFixed(2)}',
+      );
+      buffer.writeln('Source Type: ${candidate.sourceType}');
+      if (candidate.sourcePath != null) {
+        buffer.writeln('Source Path: ${candidate.sourcePath}');
+      }
+      buffer.writeln('Trust: GameData / game original text (highest).');
+      buffer.writeln();
+    }
+
+    return ToolExecutionResult(observation: buffer.toString().trim());
+  }
+
+  String _excerpt(String content) {
+    final normalized = content.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (normalized.length <= _maxContentExcerptChars) return normalized;
+    return '${normalized.substring(0, _maxContentExcerptChars)}... [truncated]';
   }
 }

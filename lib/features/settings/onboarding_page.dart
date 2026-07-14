@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/llm/llm_client.dart';
 import '../../shared/l10n/l10n.dart';
-import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -12,7 +11,7 @@ import '../../shared/theme/app_theme.dart';
 ///
 /// Guides users through:
 /// 1. App introduction
-/// 2. Chat API Key configuration (embedding can be set later in Settings)
+/// 2. Chat API Key configuration
 /// 3. Ready to explore
 class OnboardingPage extends ConsumerStatefulWidget {
   final VoidCallback onComplete;
@@ -55,23 +54,31 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _complete() async {
-    print('[OnboardingPage] _complete called!');
     final service = ref.read(settingsServiceProvider);
     await service.markOnboardingDone();
     widget.onComplete();
   }
 
   Future<void> _skip() async {
-    print('[OnboardingPage] _skip called!');
     final service = ref.read(settingsServiceProvider);
     await service.markOnboardingDone();
     widget.onComplete();
   }
 
   Future<void> _saveAndContinue() async {
+    final chatApiKey = _apiKeyController.text.trim();
+    final keyError =
+        LLMConfig.apiKeyFormatError(chatApiKey, label: 'Chat API Key');
+    if (keyError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(keyError)),
+      );
+      return;
+    }
+
     final config = LLMConfig(
       chatBaseUrl: _baseUrlController.text.trim(),
-      chatApiKey: _apiKeyController.text.trim(),
+      chatApiKey: chatApiKey,
       chatModel: _chatModelController.text.trim(),
     );
 
@@ -229,7 +236,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
             ),
             child: Text(
-            context.t.onboardingGetStarted,
+              context.t.onboardingGetStarted,
               style: theme.titleFont.copyWith(fontSize: 16),
             ),
           ),
@@ -287,8 +294,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 color: theme.textSecondary,
                 size: 20,
               ),
-              onPressed: () =>
-                  setState(() => _obscureApiKey = !_obscureApiKey),
+              onPressed: () => setState(() => _obscureApiKey = !_obscureApiKey),
             ),
           ),
           const SizedBox(height: 14),
@@ -310,7 +316,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
             ),
             child: Text(
-            context.t.onboardingSaveContinue,
+              context.t.onboardingSaveContinue,
               style: theme.titleFont.copyWith(fontSize: 16),
             ),
           ),
@@ -318,7 +324,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           TextButton(
             onPressed: _skip,
             child: Text(
-            context.t.onboardingConfigureLater,
+              context.t.onboardingConfigureLater,
               style: theme.bodyFont.copyWith(
                 color: theme.textSecondary,
                 fontSize: 13,
@@ -369,7 +375,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
             ),
             child: Text(
-            context.t.onboardingStartExploring,
+              context.t.onboardingStartExploring,
               style: theme.titleFont.copyWith(fontSize: 16),
             ),
           ),
