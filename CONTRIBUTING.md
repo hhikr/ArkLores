@@ -70,6 +70,13 @@ chore(ci): add GitHub Actions workflow for APK build
 - **测试**：`flutter test` 全部通过
 - **无调试残留**：提交前移除所有 `print()` 语句和调试代码
 
+### RAG / Seed 数据
+
+- 普通本地数据库、用户导入资料和调试输出不得提交。
+- `assets/seeds/arklores_knowledge.db`、`assets/seeds/wiki_cache.zip`、`assets/seeds/seed_manifest.json` 是发布用预构建 seed bundle，只有在执行 v0.3+ seed 构建或发布收尾时才应更新。
+- 修改 seed pipeline 后请至少校验：`chunks == chunk_embeddings`，且 `embedding_status` 全部为 `ok`。
+- Wiki / Book 来源必须保留 `source_type`，Agent 和引用卡片不得把 Book 内容当作官方 Wiki 内容展示。
+
 ---
 
 ## PR 规范
