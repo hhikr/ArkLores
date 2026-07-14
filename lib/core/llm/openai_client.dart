@@ -50,6 +50,7 @@ class OpenAICompatibleClient implements LLMClient {
     List<Map<String, dynamic>>? tools,
     double temperature = 0.7,
     int maxTokens = 2048,
+    List<String>? stop,
   }) async {
     _requireChatConfig();
 
@@ -58,6 +59,7 @@ class OpenAICompatibleClient implements LLMClient {
       'messages': messages.map((m) => m.toJson()).toList(),
       'temperature': temperature,
       'max_tokens': maxTokens,
+      if (stop != null) 'stop': stop,
     };
 
     if (tools != null && tools.isNotEmpty) {
@@ -102,6 +104,7 @@ class OpenAICompatibleClient implements LLMClient {
     void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
+    List<String>? stop,
   }) async {
     _requireChatConfig();
 
@@ -111,6 +114,7 @@ class OpenAICompatibleClient implements LLMClient {
       'temperature': temperature,
       'max_tokens': maxTokens,
       'stream': true,
+      if (stop != null) 'stop': stop,
     };
 
     try {

@@ -96,6 +96,7 @@ Let's begin!
           loopMessages,
           temperature: 0.1, // Low temperature for high format compliance
           maxTokens: 1024,
+          stop: const ['Observation:', '\nObservation:', 'observation:', '\nobservation:'],
         );
       } catch (e) {
         yield ReActEvent(type: ReActEventType.error, content: 'LLM Error: $e');
