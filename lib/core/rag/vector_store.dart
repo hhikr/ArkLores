@@ -20,6 +20,8 @@ class SearchResult {
   final String? sourceUrl;
   final String? wiki;
   final String? bookId;
+  final String retrievalType;
+  final bool isLowInformation;
 
   SearchResult({
     required this.chunk,
@@ -28,6 +30,8 @@ class SearchResult {
     this.sourceUrl,
     this.wiki,
     this.bookId,
+    this.retrievalType = 'vector',
+    this.isLowInformation = false,
   });
 }
 
@@ -220,7 +224,9 @@ class VectorStore {
 
     await _normalizeSeedWikiTimestamps();
 
-    // Self-healing check: check if the first few embeddings are corrupt (identical vectors due to past tflite_flutter gotcha)
+    // Health check only. Do not rewrite release seed vectors automatically: if
+    // the on-device TFLite path is unhealthy, re-embedding would corrupt the
+    // whole local seed profile.
     try {
       final sampleEmbeddings = await _fallbackDb!.rawQuery('''
         SELECT ce.embedding FROM chunk_embeddings ce
@@ -229,25 +235,18 @@ class VectorStore {
         LIMIT 5
       ''');
       if (sampleEmbeddings.length >= 2) {
-        final blobs = sampleEmbeddings.map((row) => row['embedding'] as Uint8List).toList();
+        final blobs = sampleEmbeddings
+            .map((row) => row['embedding'] as Uint8List)
+            .toList();
         final vectors = blobs.map((b) => _blobToDoubleList(b)).toList();
-        
+
         final sim = _cosineSimilarity(vectors[0], vectors[1]);
-        // If similarity is extremely close to 1.0 (e.g. > 0.9999), they are corrupt constant vectors!
         if (sim > 0.9999) {
-          print('[VectorStore] Corrupt/constant embeddings detected (sim = $sim). Resetting profile to trigger re-embedding...');
-          await _fallbackDb!.transaction((txn) async {
-            await txn.update(
-              'chunks',
-              {'embedding_status': 'pending_embedding'},
-              where: "profile_id = 'builtin:builtin-embedding'",
-            );
-            await txn.delete(
-              'chunk_embeddings',
-              where: "chunk_id IN (SELECT id FROM chunks WHERE profile_id = 'builtin:builtin-embedding')",
-            );
-          });
-          print('[VectorStore] Successfully reset corrupt embeddings.');
+          debugPrint(
+            '[VectorStore] Suspiciously similar seed embeddings detected '
+            '(sim = $sim). Keeping existing vectors; inspect built-in '
+            'embedding diagnostics before any re-embedding.',
+          );
         }
       }
     } catch (e) {
@@ -407,6 +406,7 @@ class VectorStore {
     int topK = 10,
     String? sourceType,
     String? profileId,
+    bool filterLowInformation = false,
   }) async {
     await initialize();
     final results = <SearchResult>[];
@@ -437,23 +437,29 @@ class VectorStore {
     for (final row in dbResults) {
       final blob = row['embedding'] as Uint8List?;
       if (blob == null) continue;
+      final chunk = Chunk(
+        id: row['id'] as String,
+        content: row['content'] as String,
+        pageTitle: (row['page_title'] as String?) ?? '',
+        section: (row['section'] as String?) ?? '',
+        seqIndex: 0,
+        tokenCount: 0,
+      );
+      final isLowInformation = _isLowInformationChunk(chunk);
+      if (filterLowInformation && isLowInformation) continue;
+
       final vec = _blobToDoubleList(blob);
       final score = _cosineSimilarity(queryEmbedding, vec);
 
       scored.add(_ScoredResult(
         score: score,
-        chunk: Chunk(
-          id: row['id'] as String,
-          content: row['content'] as String,
-          pageTitle: (row['page_title'] as String?) ?? '',
-          section: (row['section'] as String?) ?? '',
-          seqIndex: 0,
-          tokenCount: 0,
-        ),
+        chunk: chunk,
         sourceType: row['source_type'] as String,
         sourceUrl: row['source_url'] as String?,
         wiki: row['wiki'] as String?,
         bookId: row['book_id'] as String?,
+        retrievalType: 'vector',
+        isLowInformation: isLowInformation,
       ));
     }
 
@@ -467,10 +473,188 @@ class VectorStore {
         sourceUrl: scored[i].sourceUrl,
         wiki: scored[i].wiki,
         bookId: scored[i].bookId,
+        retrievalType: scored[i].retrievalType,
+        isLowInformation: scored[i].isLowInformation,
       ));
     }
 
     return results;
+  }
+
+  /// Searches by exact title, fuzzy title, and literal content match.
+  ///
+  /// This is intentionally separate from vector search so entity lookups (for
+  /// example operator names) remain reliable even when the embedding space is
+  /// weak or temporarily unhealthy.
+  Future<List<SearchResult>> keywordSearch(
+    List<String> queries, {
+    int topK = 10,
+    String? sourceType,
+    String? profileId,
+    bool filterLowInformation = true,
+  }) async {
+    await initialize();
+    final cleanQueries = queries
+        .map((q) => q.trim())
+        .where((q) => q.isNotEmpty)
+        .toSet()
+        .toList();
+    if (cleanQueries.isEmpty) return [];
+
+    final byId = <String, SearchResult>{};
+    for (final query in cleanQueries) {
+      await _collectKeywordMatches(
+        byId,
+        query,
+        matchType: 'title_exact',
+        baseScore: 100.0,
+        whereSql: 'c.page_title = ?',
+        whereArgs: [query],
+        sourceType: sourceType,
+        profileId: profileId,
+        filterLowInformation: filterLowInformation,
+      );
+      await _collectKeywordMatches(
+        byId,
+        query,
+        matchType: 'title_like',
+        baseScore: 80.0,
+        whereSql: 'c.page_title LIKE ?',
+        whereArgs: ['%$query%'],
+        sourceType: sourceType,
+        profileId: profileId,
+        filterLowInformation: filterLowInformation,
+      );
+      await _collectKeywordMatches(
+        byId,
+        query,
+        matchType: 'content_like',
+        baseScore: 50.0,
+        whereSql: 'c.content LIKE ?',
+        whereArgs: ['%$query%'],
+        sourceType: sourceType,
+        profileId: profileId,
+        filterLowInformation: filterLowInformation,
+      );
+    }
+
+    final results = byId.values.toList()
+      ..sort((a, b) {
+        final scoreCompare = b.score.compareTo(a.score);
+        if (scoreCompare != 0) return scoreCompare;
+        if (a.wiki == 'prts' && b.wiki != 'prts') return -1;
+        if (a.wiki != 'prts' && b.wiki == 'prts') return 1;
+        return a.chunk.pageTitle.compareTo(b.chunk.pageTitle);
+      });
+    return results.take(topK).toList();
+  }
+
+  Future<void> _collectKeywordMatches(
+    Map<String, SearchResult> byId,
+    String query, {
+    required String matchType,
+    required double baseScore,
+    required String whereSql,
+    required List<Object?> whereArgs,
+    String? sourceType,
+    String? profileId,
+    required bool filterLowInformation,
+  }) async {
+    final filters = <String>[whereSql];
+    final params = <Object?>[...whereArgs];
+    if (sourceType != null) {
+      filters.add('c.source_type = ?');
+      params.add(sourceType);
+    }
+    if (profileId != null) {
+      filters.add('c.profile_id = ?');
+      params.add(profileId);
+    }
+
+    final rows = await _fallbackDb!.rawQuery(
+      'SELECT c.id, c.source_type, c.source_url, c.wiki, c.book_id, '
+      'c.page_title, c.section, c.content, c.updated_at '
+      'FROM chunks c '
+      'WHERE ${filters.join(' AND ')} '
+      'LIMIT 50',
+      params,
+    );
+
+    for (final row in rows) {
+      final result = _rowToSearchResult(
+        row,
+        score: _keywordScore(row, query, baseScore),
+        retrievalType: matchType,
+      );
+      if (filterLowInformation && result.isLowInformation) continue;
+
+      final existing = byId[result.chunk.id];
+      if (existing == null || result.score > existing.score) {
+        byId[result.chunk.id] = result;
+      }
+    }
+  }
+
+  SearchResult _rowToSearchResult(
+    Map<String, Object?> row, {
+    required double score,
+    required String retrievalType,
+  }) {
+    final chunk = Chunk(
+      id: row['id'] as String,
+      content: row['content'] as String,
+      pageTitle: (row['page_title'] as String?) ?? '',
+      section: (row['section'] as String?) ?? '',
+      seqIndex: 0,
+      tokenCount: 0,
+    );
+    return SearchResult(
+      chunk: chunk,
+      score: score,
+      sourceType: row['source_type'] as String,
+      sourceUrl: row['source_url'] as String?,
+      wiki: row['wiki'] as String?,
+      bookId: row['book_id'] as String?,
+      retrievalType: retrievalType,
+      isLowInformation: _isLowInformationChunk(chunk),
+    );
+  }
+
+  double _keywordScore(
+    Map<String, Object?> row,
+    String query,
+    double baseScore,
+  ) {
+    final title = (row['page_title'] as String?) ?? '';
+    final content = (row['content'] as String?) ?? '';
+    final section = (row['section'] as String?) ?? '';
+    var score = baseScore;
+    if (title == query) score += 20;
+    if (title.startsWith(query)) score += 8;
+    if (section.contains(query)) score += 4;
+    if (content.contains(query)) score += 2;
+    if (row['wiki'] == 'prts') score += 5;
+    if (_isLowInformationText(content, section)) score -= 30;
+    return score;
+  }
+
+  bool _isLowInformationChunk(Chunk chunk) {
+    return _isLowInformationText(chunk.content, chunk.section);
+  }
+
+  bool _isLowInformationText(String content, String section) {
+    final text = content.trim();
+    if (text.isEmpty) return true;
+    if (text == '分类：text') return true;
+    if (text.length < 20) return true;
+    if (RegExp(r'^-\s*技能[:：].{1,30}$').hasMatch(text)) return true;
+    if (RegExp(r'^-\s*(?:第[一二三四五六七八九十]+)?天赋[:：].{1,30}$').hasMatch(text)) {
+      return true;
+    }
+    if ((section == '技能设定' || section == '天赋设定') && text.length < 60) {
+      return true;
+    }
+    return false;
   }
 
   /// Deletes chunks and embeddings by source type and optional source ID.
@@ -594,7 +778,7 @@ class VectorStore {
     return await _fallbackDb!.query(
       'chunks',
       where:
-      "embedding_status = 'zero_vector'${profileId != null ? ' AND profile_id = ?' : ''}",
+          "embedding_status = 'zero_vector'${profileId != null ? ' AND profile_id = ?' : ''}",
       whereArgs: profileId != null ? [profileId] : null,
     );
   }
@@ -959,6 +1143,8 @@ class _ScoredResult {
   final String? sourceUrl;
   final String? wiki;
   final String? bookId;
+  final String retrievalType;
+  final bool isLowInformation;
 
   _ScoredResult({
     required this.score,
@@ -967,5 +1153,7 @@ class _ScoredResult {
     this.sourceUrl,
     this.wiki,
     this.bookId,
+    this.retrievalType = 'vector',
+    this.isLowInformation = false,
   });
 }
