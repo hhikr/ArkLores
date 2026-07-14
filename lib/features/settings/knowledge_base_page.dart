@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/gamedata_installer.dart';
+import '../../core/gamedata/gamedata_provider.dart';
 import '../../core/rag/seed_installer.dart';
 import '../../core/rag/vector_store.dart';
 import '../../core/rag/vector_store_provider.dart';
@@ -25,6 +27,10 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   int _seedDownloadedBytes = 0;
   int? _seedTotalBytes;
   String? _seedDownloadError;
+  bool _isDownloadingGameData = false;
+  int _gameDataDownloadedBytes = 0;
+  int? _gameDataTotalBytes;
+  String? _gameDataDownloadError;
 
   static const List<String> _prtsCategories = [
     'Category:干员',
@@ -41,6 +47,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final statsAsync = ref.watch(vectorStoreStatsProvider);
+    final gameDataStatusAsync = ref.watch(gameDataInstallStatusProvider);
     final embeddingSettings = ref.watch(embeddingSettingsProvider);
     final activeProfile = embeddingSettings.activeProfile;
     final canEmbed = embeddingSettings.canEmbed;
@@ -169,6 +176,12 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) =>
                 _buildErrorCard(context.t.materialsLoadFailed(err), theme),
+          ),
+          const SizedBox(height: 16),
+          gameDataStatusAsync.when(
+            data: (status) => _buildGameDataCard(context, status, theme),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, _) => _buildErrorCard('GameData 状态读取失败：$err', theme),
           ),
           statsAsync.when(
             data: (stats) => _buildSeedDownloadCard(context, stats, theme),
@@ -416,6 +429,49 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     }
   }
 
+  Future<void> _downloadGameData() async {
+    setState(() {
+      _isDownloadingGameData = true;
+      _gameDataDownloadedBytes = 0;
+      _gameDataTotalBytes = null;
+      _gameDataDownloadError = null;
+    });
+
+    try {
+      final installer = ref.read(gameDataInstallerProvider);
+      final installed = await installer.installFromReleaseAsset(
+        overwrite: true,
+        onProgress: (received, total) {
+          if (!mounted) return;
+          setState(() {
+            _gameDataDownloadedBytes = received;
+            _gameDataTotalBytes = total;
+          });
+        },
+      );
+      ref.invalidate(gameDataInstallStatusProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(installed
+              ? 'GameData 主知识库已安装'
+              : '当前构建未配置 GameData release asset URL'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _gameDataDownloadError = _friendlyGameDataError(e);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloadingGameData = false;
+        });
+      }
+    }
+  }
+
   String _friendlySeedError(Object error) {
     final text = '$error';
     if (text.contains('Failed host lookup') || text.contains('errno = 7')) {
@@ -431,6 +487,153 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       return '下载文件校验失败，文件可能损坏。请重新下载。';
     }
     return '下载预构建知识库失败：$text';
+  }
+
+  String _friendlyGameDataError(Object error) {
+    final text = '$error';
+    if (text.contains('Failed host lookup') || text.contains('errno = 7')) {
+      return '无法解析下载地址。真机测试请确认手机能访问该 GitHub / 局域网 URL。';
+    }
+    if (text.contains('Connection timed out') || text.contains('timed out')) {
+      return '连接超时。请切换网络，或确认临时 HTTP 服务和手机在同一网络。';
+    }
+    if (text.contains('HTTP 404')) {
+      return '未找到 GameData DB 文件。未正式发布时请使用预发布 asset 或 --dart-define 指向临时 URL。';
+    }
+    if (text.contains('checksum mismatch')) {
+      return 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
+    }
+    return '下载 GameData 主知识库失败：$text';
+  }
+
+  Widget _buildGameDataCard(
+    BuildContext context,
+    GameDataInstallStatus status,
+    AppThemeTokens theme,
+  ) {
+    final total = _gameDataTotalBytes;
+    final progress = total != null && total > 0
+        ? (_gameDataDownloadedBytes / total).clamp(0.0, 1.0)
+        : null;
+    final progressText = total != null && total > 0
+        ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} MB'
+        : _gameDataDownloadedBytes > 0
+            ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
+            : status.installed
+                ? '${(status.bytes / 1024 / 1024).toStringAsFixed(1)} MB'
+                : '未安装';
+    final subtitle = status.installed
+        ? [
+            if (status.recordCount != null) 'records ${status.recordCount}',
+            if (status.chunkCount != null) 'chunks ${status.chunkCount}',
+            if (status.embeddingStatus != null)
+              'embedding ${status.embeddingStatus}',
+          ].join(' · ')
+        : '正式发布前可用 --dart-define=ARKLORES_GAMEDATA_DB_URL 指向预发布 asset 或局域网临时 .db.gz。';
+
+    return ThemeAwareCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                status.installed
+                    ? Icons.verified_rounded
+                    : Icons.dataset_linked_rounded,
+                color: status.installed ? theme.accentPrimary : theme.warning,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'GameData 主知识库',
+                      style: theme.titleFont.copyWith(fontSize: 15),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle.isEmpty
+                          ? progressText
+                          : '$progressText · $subtitle',
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _isDownloadingGameData ? null : _downloadGameData,
+                icon: Icon(
+                  _isDownloadingGameData
+                      ? Icons.downloading_rounded
+                      : Icons.download_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _isDownloadingGameData
+                      ? '下载中'
+                      : status.installed
+                          ? '更新'
+                          : '下载',
+                  style: theme.titleFont.copyWith(fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.accentPrimary,
+                  foregroundColor: theme.bgPrimary,
+                  disabledBackgroundColor: theme.divider,
+                  disabledForegroundColor: theme.textSecondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_isDownloadingGameData) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: theme.divider,
+                valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+                minHeight: 6,
+              ),
+            ),
+          ],
+          if (_gameDataDownloadError != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _gameDataDownloadError!,
+              style: theme.bodyFont.copyWith(
+                color: theme.danger,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (status.installed && status.dbPath.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              status.dbPath,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary.withValues(alpha: 0.7),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildSeedDownloadCard(
