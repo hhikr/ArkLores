@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
 import 'bookmark_page.dart';
 import 'bookmark_service.dart' show Bookmark;
 import 'wiki_dark_mode.dart';
@@ -47,8 +48,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       List.filled(_wikiSites.length, null);
 
   /// Current page title per tab.
-  final List<String> _titles =
-      List.filled(_wikiSites.length, '');
+  final List<String> _titles = List.filled(_wikiSites.length, '');
 
   /// Current page URL per tab.
   final List<String> _currentUrls = List.filled(_wikiSites.length, '');
@@ -107,7 +107,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     final idx = _tabController.index;
     final url = _currentUrls[idx];
     if (url.isEmpty) return;
-    final title = _titles[idx].isNotEmpty ? _titles[idx] : _wikiSites[idx].label;
+    final title =
+        _titles[idx].isNotEmpty ? _titles[idx] : _wikiSites[idx].label;
     final site = idx == 0 ? 'prts' : 'endfield';
     ref.read(bookmarkProvider.notifier).toggle(
           title: title,
@@ -182,7 +183,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     // Determine if the current page is bookmarked.
     final currentUrl = _currentUrls[_tabController.index];
     final isBookmarked = bookmarkAsync.whenOrNull(
-          data: (_) => ref.read(bookmarkProvider.notifier).isBookmarked(currentUrl),
+          data: (_) =>
+              ref.read(bookmarkProvider.notifier).isBookmarked(currentUrl),
         ) ??
         false;
 
@@ -203,8 +205,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     labelColor: theme.accentPrimary,
                     unselectedLabelColor: theme.textSecondary,
                     labelStyle: theme.titleFont.copyWith(fontSize: 14),
-                    unselectedLabelStyle:
-                        theme.bodyFont.copyWith(fontSize: 14),
+                    unselectedLabelStyle: theme.bodyFont.copyWith(fontSize: 14),
                     indicatorWeight: 2,
                     tabs: _wikiSites.map((site) {
                       return Tab(
@@ -233,6 +234,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                       return _WikiTabView(
                         index: i,
                         initialUrl: _wikiSites[i].initialUrl,
+                        theme: theme,
                         isDarkMode: _isDarkMode,
                         onControllerCreated: _onControllerCreated,
                         onTitleChanged: _onTitleChanged,
@@ -272,6 +274,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 class _WikiTabView extends StatefulWidget {
   final int index;
   final String initialUrl;
+  final AppThemeTokens theme;
   final bool isDarkMode;
   final void Function(int, InAppWebViewController) onControllerCreated;
   final void Function(int, String?) onTitleChanged;
@@ -281,6 +284,7 @@ class _WikiTabView extends StatefulWidget {
   const _WikiTabView({
     required this.index,
     required this.initialUrl,
+    required this.theme,
     required this.isDarkMode,
     required this.onControllerCreated,
     required this.onTitleChanged,
@@ -293,47 +297,147 @@ class _WikiTabView extends StatefulWidget {
 }
 
 class _WikiTabViewState extends State<_WikiTabView> {
+  InAppWebViewController? _controller;
+  String? _loadError;
 
   @override
   Widget build(BuildContext context) {
-    return InAppWebView(
-      initialUrlRequest: URLRequest(
-        url: WebUri(widget.initialUrl),
-      ),
-      initialSettings: InAppWebViewSettings(
-        javaScriptEnabled: true,
-        verticalScrollBarEnabled: true,
-        horizontalScrollBarEnabled: false,
-        cacheEnabled: true,
-        domStorageEnabled: true,
-        useWideViewPort: true,
-        supportZoom: true,
-        // Transparent background to avoid white flash on dark themes.
-        transparentBackground: true,
-      ),
-      onWebViewCreated: (controller) {
-        widget.onControllerCreated(widget.index, controller);
-      },
-      onLoadStop: (controller, url) async {
-        if (widget.isDarkMode) {
-          await WikiDarkMode.inject(controller);
-        }
-      },
-      onTitleChanged: (controller, title) {
-        widget.onTitleChanged(widget.index, title);
-      },
-      onUpdateVisitedHistory: (controller, url, isReload) async {
-        if (url != null) {
-          widget.onUrlChanged(widget.index, url.toString());
-        }
-        final back = await controller.canGoBack();
-        final forward = await controller.canGoForward();
-        await widget.onHistoryChanged(widget.index, back, forward);
-      },
-      onReceivedError: (controller, request, error) {
-        // WebView shows its own error page; we handle it silently.
-      },
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        InAppWebView(
+          initialUrlRequest: URLRequest(
+            url: WebUri(widget.initialUrl),
+          ),
+          initialSettings: InAppWebViewSettings(
+            javaScriptEnabled: true,
+            verticalScrollBarEnabled: true,
+            horizontalScrollBarEnabled: false,
+            cacheEnabled: true,
+            domStorageEnabled: true,
+            useWideViewPort: true,
+            supportZoom: true,
+            // Transparent background to avoid white flash on dark themes.
+            transparentBackground: true,
+          ),
+          onWebViewCreated: (controller) {
+            _controller = controller;
+            widget.onControllerCreated(widget.index, controller);
+          },
+          onLoadStart: (controller, url) {
+            if (_loadError != null) {
+              setState(() => _loadError = null);
+            }
+          },
+          onLoadStop: (controller, url) async {
+            if (widget.isDarkMode) {
+              await WikiDarkMode.inject(controller);
+            }
+          },
+          onTitleChanged: (controller, title) {
+            widget.onTitleChanged(widget.index, title);
+          },
+          onUpdateVisitedHistory: (controller, url, isReload) async {
+            if (url != null) {
+              widget.onUrlChanged(widget.index, url.toString());
+            }
+            final back = await controller.canGoBack();
+            final forward = await controller.canGoForward();
+            await widget.onHistoryChanged(widget.index, back, forward);
+          },
+          onReceivedError: (controller, request, error) {
+            final isMainFrame = request.isForMainFrame ?? true;
+            if (!isMainFrame) return;
+            setState(() {
+              _loadError = _friendlyWebViewError(error.description);
+            });
+          },
+        ),
+        if (_loadError != null) _buildErrorOverlay(context),
+      ],
     );
+  }
+
+  Widget _buildErrorOverlay(BuildContext context) {
+    final theme = widget.theme;
+    return ColoredBox(
+      color: theme.bgPrimary,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.cardSurface,
+                borderRadius: theme.cardRadius,
+                border: Border.all(color: theme.divider),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.wifi_off_rounded, color: theme.danger, size: 28),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Wiki 页面加载失败',
+                      style: theme.titleFont.copyWith(fontSize: 18),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _loadError!,
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() => _loadError = null);
+                          _controller?.reload();
+                        },
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: Text(
+                          '重试',
+                          style: theme.titleFont.copyWith(fontSize: 13),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.accentPrimary,
+                          foregroundColor: theme.bgPrimary,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _friendlyWebViewError(String description) {
+    final lower = description.toLowerCase();
+    if (lower.contains('host') || lower.contains('dns')) {
+      return '无法解析 Wiki 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
+    }
+    if (lower.contains('timeout')) {
+      return '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+    }
+    if (lower.contains('net::err_internet_disconnected')) {
+      return '设备当前没有可用网络连接。';
+    }
+    return description;
   }
 }
 
