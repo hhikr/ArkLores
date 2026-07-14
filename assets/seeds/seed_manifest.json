@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "seedVersion": "2026-07-13",
   "builtAt": "2026-07-13T18:37:10.800176Z",
+  "database": {
+    "delivery": "release-asset",
+    "url": "https://github.com/hhikr/ArkLores/releases/download/v0.3.0/arklores_knowledge_v0.3.0.db.gz",
+    "fileName": "arklores_knowledge_v0.3.0.db.gz",
+    "compression": "gzip",
+    "sha256": "cff091f501e983e962fd189cfdb37cdcd1d546463026aee1ad7a6e5ff7fde636",
+    "compressedBytes": 80175519,
+    "uncompressedBytes": 122626048
+  },
   "embedding": {
     "profileId": "builtin:builtin-embedding",
     "backend": "builtin",
