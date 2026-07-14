@@ -405,14 +405,32 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _seedDownloadError = '$e';
+        _seedDownloadError = _friendlySeedError(e);
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isDownloadingSeed = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isDownloadingSeed = false;
+        });
+      }
     }
+  }
+
+  String _friendlySeedError(Object error) {
+    final text = '$error';
+    if (text.contains('Failed host lookup') || text.contains('errno = 7')) {
+      return '无法解析 GitHub 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
+    }
+    if (text.contains('Connection timed out') || text.contains('timed out')) {
+      return '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+    }
+    if (text.contains('HTTP 404')) {
+      return '未找到预构建知识库文件。请确认 v0.3.0 Release asset 已上传。';
+    }
+    if (text.contains('checksum mismatch')) {
+      return '下载文件校验失败，文件可能损坏。请重新下载。';
+    }
+    return '下载预构建知识库失败：$text';
   }
 
   Widget _buildSeedDownloadCard(
