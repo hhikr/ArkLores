@@ -50,7 +50,7 @@ def main() -> int:
     dart_cmd = [
         "dart",
         "run",
-        "tool/build_seed_database.dart",
+        "tools/build_seed_database.dart",
         f"--sources={args.sources}",
         f"--limit={args.limit}",
         f"--crawl-delay-ms={args.crawl_delay_ms}",
@@ -71,7 +71,7 @@ def main() -> int:
     db_path = output / "arklores_knowledge.db"
     embed_cmd = [
         sys.executable,
-        "tool/embed_seed_database.py",
+        "tools/embed_seed_database.py",
         "--db",
         str(db_path),
         "--model",

@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Materials tab** — PDF/TXT import, text extraction, chunking, embedding, book list management, display-name editing, and deletion.
 - **Knowledge base page** — Wiki index overview, active embedding profile display, failed embedding retry, and source-specific sync controls.
 - **Prebuilt seed bundle** — Release asset distribution for `arklores_knowledge.db.gz`, with bundled manifest and wiki cache so users do not need to crawl Wiki data from scratch on mobile.
-- **Desktop seed builder** — `tool/build_seed.py` orchestrates Wiki crawling, chunking, TFLite embedding, verification, and asset copying.
+- **Desktop seed builder** — `tools/build_seed.py` orchestrates Wiki crawling, chunking, TFLite embedding, verification, and asset copying.
 - **Warfarin Wiki crawler** — Remix `.data` client for Endfield operators, lore, and missions with Markdown formatting.
 - **PRTS story/operator assembly** — Raw wikitext crawler, story cleaner, operator profile assembly, voice records, tokens, modules, paradox records, and operator record stories.
 - **Bilingual localization** — English and Chinese ARB files, generated localization classes, and Riverpod-controlled locale switching.

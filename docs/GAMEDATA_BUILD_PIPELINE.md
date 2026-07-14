@@ -203,7 +203,7 @@ CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
 
 - `profile_id`: `builtin:builtin-embedding`
 - `dimension`: `512`
-- runner: `tool/embed_seed_database.py` 的同款 TFLite runner 或后续替换的中文检索模型
+- runner: `tools/embed_seed_database.py` 的同款 TFLite runner 或后续替换的中文检索模型
 
 构建要求：
 
@@ -214,13 +214,13 @@ CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
 ## 构建命令草案
 
 ```bash
-dart run tool/build_gamedata_database.dart \
+dart run tools/build_gamedata_database.dart \
   --arknights-source=/path/to/ArknightsGameData \
   --output=build/gamedata \
   --language=zh \
   --force
 
-python3 tool/embed_gamedata_database.py \
+python3 tools/embed_gamedata_database.py \
   --db=build/gamedata/arklores_gamedata_zh.db
 
 gzip -c build/gamedata/arklores_gamedata_zh.db \

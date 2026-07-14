@@ -256,7 +256,7 @@ content_type = "roguelike_monthly_record"
 | `roguelike_level` | 557 | 肉鸽关卡 JSON，少量含中文 |
 | `sandbox_level` | 333 | 生息演算关卡 JSON，少量含中文 |
 
-人工审核不要只看上面的摘要表。`tool/audit_arknights_gamedata_files.py`
+人工审核不要只看上面的摘要表。`tools/audit_arknights_gamedata_files.py`
 会额外生成：
 
 - `Category Directory Distribution`：每个分类实际分布在哪些目录、目录内文件数、含中文文件数、文本量。
