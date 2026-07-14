@@ -11,17 +11,20 @@
 | **App 名称** | **ArkLores**（英文，与 Arknights 读音相近，一语双关） |
 | 目标平台 | Android + iOS（Flutter） |
 | 最低系统版本 | Android 8.0（API 26）/ iOS 14 |
-| AI 接入 | 用户自带 API Key，OpenAI 兼容接口（Chat + Embedding 可分开指定不同提供商）；Embedding 可选择内置固定模型离线生成 |
-| 数据存储 | 本地 SQLite（结构化）+ 纯 Dart cosine similarity（向量）|
-| 向量方案 | sqlite-vec FFI 暂不可用（v0.1.7-alpha.3 构建不完整），当前使用 sqflite + 纯 Dart cosine similarity。待包稳定后再恢复 FFI 路径 |
-| 本地化 | **EN / 中文双语**，基于 `flutter_localizations` + `intl` + ARB 文件，Riverpod 控制切换，编译时类型安全 |
+| AI 接入 | 用户自带 API Key，OpenAI 兼容接口（Chat + Embedding 可分开指定不同提供商）；Embedding 是召回补充，不再作为唯一检索入口 |
+| 数据存储 | 本地 SQLite（结构化 GameData + FTS + chunk metadata）+ 可选向量检索 |
+| 向量方案 | sqlite-vec FFI 暂不可用；当前使用 sqflite + 纯 Dart cosine similarity 作为临时向量回退。生产检索以结构化查询 / FTS / 标题匹配优先 |
+| 本地化 | **中文优先**；UI 保留 EN / 中文双语框架，知识库 v0.4.5 起仅构建中文 GameData |
 | Agent 实现 | 纯 Dart 手写 ReAct Loop |
 | 状态管理 | Riverpod |
 | 开源协议 | GPL-3.0 + README 道义声明"非商业" |
 | 作者署名 | `hhikr`（GitHub ID，写入 AUTHORS 文件和 README） |
 | 视觉主题 | **双主题可切换**：① 明日方舟·战术档案风 ② 终末地·全息投影风 |
-| 知识来源 | PRTS Wiki + 终末地 Wiki + 书籍文件（用户导入 PDF/TXT） |
-| 迭代路线 | v0.1: 项目骨架与双主题；v0.2: Wiki 浏览器；v0.3: LLM + 知识库基础设施；v0.4: 梗概生成 Agent；v0.5: 事实核查 Agent；v0.6: 角色扮演 Agent；v0.7: Wiki 智能联动；v0.8: UI 精修；v0.9: 测试；v1.0: 发布 |
+| 知识来源 | **中文 GameData 解包数据（主知识源，release asset 下载）** + 指定 Wiki 在线搜索补充 + 书籍文件（用户导入 PDF/TXT） |
+| 迭代路线 | v0.1: 项目骨架与双主题；v0.2: Wiki 浏览器；v0.3: LLM + Wiki RAG 原型基础设施；v0.4: Agent 基础设施 + 可替换知识源抽象 + Summary MVP；v0.4.5: 中文 GameData 知识库重构；v0.5: 基于 GameData 的事实核查 Agent；v0.6: 基于 GameData 的角色扮演 Agent；v0.7: Wiki 智能联动；v0.8: UI 精修；v0.9: 测试；v1.0: 发布 |
+
+> [!IMPORTANT]
+> **2026-07 架构转向决策**：v0.3 的 Wiki seed + built-in embedding 已验证为原型链路，不再作为长期主知识库方案。后续主知识源改为中文 GameData 解包数据，通过 GitHub release asset 在 App 内下载；Wiki 仅作为受限在线补充检索工具，Book 仍作为用户导入的低可信辅助来源。
 
 ---
 
@@ -46,8 +49,8 @@
 │  │           ↓ Tool Calls                            │  │
 │  │  ┌────────────────────────────────────────────┐  │  │
 │  │  │              Tool Registry                  │  │  │
-│  │  │  search_wiki | get_character | cite_source │  │  │
-│  │  │  get_timeline | get_related_events         │  │  │
+│  │  │  search_local_lore | get_entity_profile    │  │  │
+│  │  │  get_story_context | search_wiki | cite    │  │  │
 │  │  └────────────────────────────────────────────┘  │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────────────────────┬───────────────────────────┘
@@ -55,11 +58,12 @@
          ┌───────────────────┼──────────────────┐
          ▼                   ▼                  ▼
 ┌──────────────┐   ┌──────────────────────────┐  ┌──────────────┐
-│ sqlite-vec   │   │   内容摄取层               │  │  LLM Client  │
-│ 向量索引      │   │  ┌──────────────────────┐  │  │  OpenAI 兼容 │
-│ + SQLite     │   │  │ Wiki 爬取器           │  │  │  Embedding + │
-│ 结构化缓存    │   │  │ MediaWiki API        │  │  │  Chat API    │
-└──────────────┘   │  │ (prts + warfarin)    │  │  └──────────────┘
+│ SQLite + FTS │   │   内容摄取层               │  │  LLM Client  │
+│ 结构化索引     │   │  ┌──────────────────────┐  │  │  OpenAI 兼容 │
+│ + 可选向量     │   │  │ GameData 解包导入器    │  │  │  Embedding + │
+│ 检索回退       │   │  │ Release Asset DB     │  │  │  Chat API    │
+└──────────────┘   │  ├──────────────────────┤  │  └──────────────┘
+                   │  │ Wiki 在线补充搜索      │  │
                    │  ├──────────────────────┤  │
                    │  │ 书籍导入器            │  │
                    │  │ PDF/TXT 文件导入      │  │
@@ -165,33 +169,43 @@
 - **删除书籍**：滑动删除，同步清除该文件对应的所有向量
 - **全局警示卡片**：资料页顶部常驻展示：
 
-  > ⚠️ **资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。AI 将小心引用并以 Wiki 内容为优先参考。**
+  > ⚠️ **资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。AI 将小心引用，并以 GameData 游戏原文为最高优先参考，Wiki 作为补充。**
 
 ---
 
 ### 4. 知识库（RAG 引擎）
 
-知识库支持两类内容来源，经统一管道处理后存入同一向量库，Agent 检索时透明感知来源类型。
+知识库支持三类内容来源。v0.4.5 起，中文 GameData 解包数据是主知识源；Wiki 不再作为主 RAG seed，而是受限在线补充搜索；用户导入 Book 仍作为辅助资料。Agent 必须透明感知来源类型，并按可信度优先级使用证据。
 
-#### 来源一：Wiki 在线爬取
+#### 来源一：中文 GameData 解包数据（主知识源）
 
 ```
-MediaWiki API (api.php)
-  → 批量拉取页面 Wikitext/HTML
-  → 按标题层级切块（Chunk: ~500 Token，50 Token 重叠）
-  → 调用 Embedding API（用户 API Key）
-  → 存入 sqlite-vec（source_type = 'wiki'）
+中文解包数据（角色 / 剧情 / 语音 / 物品 / 组织等）
+  → 解析结构化实体、剧情行、语音台词、档案字段
+  → 写入 SQLite structured tables + FTS index
+  → 生成 lore_chunks（带 entity_id / story_id / speaker / source_path）
+  → 可选生成 embedding（API 或内置模型）
+  → 打包为 GitHub release asset，App 内下载安装
 ```
 
-#### 来源二：书籍文件导入（大地巡旅等）
+#### 来源二：指定 Wiki 在线补充搜索
+
+```
+受限 Wiki 搜索工具（PRTS / Warfarin 等允许站点）
+  → 只在 Agent 需要查缺补漏或交叉验证时调用
+  → 不作为默认主知识源
+  → 返回时标注 source_type = 'wiki'
+```
+
+#### 来源三：书籍文件导入（大地巡旅等）
 
 ```
 用户通过文件选择器选取 PDF 或 TXT 文件
   → PDF：使用 syncfusion_flutter_pdf 提取纯文本
   → TXT：直接读取
   → 按段落/固定窗口切块（~500 Token，50 Token 重叠）
-  → 调用 Embedding API
-  → 存入 sqlite-vec（source_type = 'book'，file_name 记录书名）
+  → 写入本地 chunks + FTS + 可选 embedding
+  → source_type = 'book'，file_name 记录书名
 ```
 
 > [!NOTE]
@@ -201,17 +215,21 @@ MediaWiki API (api.php)
 
 | 操作 | 触发方式 |
 |------|----------|
-| 首次建立 | 用户首次配置 API Key 后引导建立（仅 Wiki） |
-| 增量更新 Wiki | 常驻「更新知识库」按钮，可选 PRTS / 终末地 / 两者 |
+| 首次建立 | 用户在知识库页面下载中文 GameData release asset |
+| 更新 GameData | 下载新版 release asset，校验 manifest 后替换或迁移本地 DB |
+| Wiki 补充搜索 | Agent 运行时按需调用受限 Wiki 搜索工具 |
 | 导入书籍 | 知识库管理页「导入书籍」按钮，选择文件后自动索引 |
 | 删除书籍 | 知识库管理页列表中删除，同步清除对应向量 |
 
-#### SQLite Vector Schema（v0.3 实现）
+#### SQLite Schema（v0.3 原型 / v0.4.5 将升级）
+
+> [!NOTE]
+> v0.3 schema 是 Wiki RAG 原型。v0.4.5 将新增 `entities`、`story_lines`、`lore_chunks`、FTS 表和 GameData manifest。详细设计见 `docs/GAMEDATA_KNOWLEDGE_PLAN.md`。
 
 ```sql
 CREATE TABLE chunks (
   id          TEXT PRIMARY KEY,  -- UUID
-  source_type TEXT NOT NULL,     -- 'wiki' | 'book'
+  source_type TEXT NOT NULL,     -- 'game_story' | 'operator_profile' | 'operator_voice' | 'wiki' | 'book' 等
   -- Wiki 来源字段
   source_url  TEXT,              -- 原始 Wiki 页面 URL（wiki 类型）
   wiki        TEXT,              -- 'prts' | 'warfarin'（wiki 类型）
@@ -246,28 +264,31 @@ CREATE TABLE books (
 
 ### 5. AI 资料可信度策略
 
-> 用户导入的书籍内容来源不稳定，可能包含翻译误差、非官方解读或进度要求。AI 必须对其审慎对待。
+> GameData 解包数据是主知识源；Wiki 是社区整理的补充证据；用户导入的书籍内容来源不稳定，可能包含翻译误差、非官方解读或进度要求。AI 必须按来源可信度使用证据。
 
 这不是“不用书籍内容”，而是“使用但标注并警醒”。具体实现如下：
 
 #### System Prompt 插入（每个 Agent 均注入）
 
 ```
-下面提供的检索结果包含两类来源：
-- [Wiki] 来自 PRTS Wiki 或终末地 Wiki（官方社区维护，较可信）
+下面提供的检索结果包含三类来源：
+- [GameData] 来自中文游戏解包数据（角色档案、剧情原文、语音、物品描述等），作为最高优先级证据
+- [Wiki] 来自指定 Wiki 站点（社区整理，用于补充和交叉验证）
 - [Book] 来自用户导入的书籍资料（可能包含非官方解读或翻译误差）
 
 引用规则：
-1. 当 [Wiki] 和 [Book] 内容冲突时，优先采信 [Wiki]
-2. 引用 [Book] 内容时，必须明确标注为「来自书籍资料」
-3. 如果 [Book] 内容无法被 [Wiki] 佐证，应在输出中说明“此信息仅来自用户导入资料，建议自行核实”
-4. 不得将 [Book] 来源的内容以确定语气表述为官方设定
+1. 当 [GameData] 与 [Wiki] / [Book] 冲突时，优先采信 [GameData]
+2. [Wiki] 可作为补充说明，但不得覆盖 GameData 原文证据
+3. 引用 [Book] 内容时，必须明确标注为「来自书籍资料」
+4. 如果 [Book] 内容无法被 [GameData] 或 [Wiki] 佐证，应说明“此信息仅来自用户导入资料，建议自行核实”
+5. 不得将 [Book] 来源的内容以确定语气表述为官方设定
 ```
 
 #### 引用卡片视觉区分
 
 | 来源类型 | 卡片标识 | 颜色 |
 |----------|----------|------|
+| GameData 原文 | 🎮 GameData · [类型] | 主题强调色 / 高可信标识 |
 | PRTS Wiki | 🌐 Wiki · PRTS | 主题强调色 |
 | 终末地 Wiki | 🌐 Wiki · Endfield | 主题强调色 |
 | 书籍资料 | 📚 资料 · [显示名] | 琥珀金/棕色，区分于 Wiki |
@@ -426,19 +447,25 @@ arklores/
 │   │   ├── agent/
 │   │   │   └── agent_prompts.dart  # Agent Prompt 模板（信任策略）
 │   │   ├── rag/
-│   │   │   ├── vector_store.dart   # 向量存储（纯 Dart cosine similarity）
+│   │   │   ├── vector_store.dart   # SQLite + FTS + 可选向量检索
 │   │   │   ├── vector_store_provider.dart
 │   │   │   ├── chunker.dart        # 文本分块
 │   │   │   ├── embedder.dart       # Embedding 调用（动态维度检测）
 │   │   │   └── embedder_provider.dart
+│   │   ├── gamedata/               # v0.4.5 中文 GameData 导入与 schema
+│   │   │   ├── gamedata_importer.dart
+│   │   │   ├── gamedata_models.dart
+│   │   │   └── gamedata_manifest.dart
 │   │   ├── wiki/
 │   │   │   ├── wiki_crawler.dart   # MediaWiki API 爬取
 │   │   │   └── wiki_models.dart
 │   │   └── agent/
 │   │       ├── react_loop.dart     # 通用 ReAct 执行器
 │   │       ├── tools/
+│   │       │   ├── search_local_lore.dart
+│   │       │   ├── get_entity_profile.dart
+│   │       │   ├── get_story_context.dart
 │   │       │   ├── search_wiki.dart
-│   │       │   ├── get_character.dart
 │   │       │   └── cite_source.dart
 │   │       ├── fact_check_agent.dart
 │   │       ├── summary_agent.dart
@@ -565,7 +592,7 @@ dependencies:
 ---
 
 ### v0.3 — 基础设施：LLM + 知识库（已完成）
-**目标**：跑通从 Wiki 爬取 → Embedding → SQLite 本地向量检索的完整数据链路。
+**目标**：跑通从 Wiki 爬取 → Embedding → SQLite 本地向量检索的原型链路，为后续 Agent/UI 验证提供临时数据源。
 
 | 交付内容 | 说明 |
 |----------|------|
@@ -585,32 +612,54 @@ dependencies:
 **风险**：sqlite-vec Flutter FFI 绑定不稳定，需预留备选方案时间。  
 **验收标准**：能安装预构建 seed 知识库（当前 17087 chunks），能执行语义搜索并返回结果，Wiki 同步不会重复重建健康 seed 页面。
 
+> [!WARNING]
+> v0.3 的 Wiki seed 与 built-in embedding 已确认为原型能力。后续不再围绕该方案继续深度优化检索质量；v0.4.5 将以中文 GameData release asset 重建主知识库。
+
 ---
 
-### v0.4 — 梗概生成 Agent（首个 AI 功能）
-**目标**：用户输入人物/事件/国家名，能得到有引用来源的剧情梗概。
+### v0.4 — Agent 基础设施 + 可替换知识源抽象 + Summary MVP
+**目标**：建立稳定的 ReAct / Tool / Citation / UI 基础设施，并将 Agent 从 `search_wiki` 单一数据源中解耦。Summary Agent 交付 MVP，但不以 v0.3 Wiki RAG 质量作为最终验收目标。
 
 | 交付内容 | 说明 |
 |----------|------|
-| ReAct Loop 核心 | 通用 Agent 执行器，支持 Tool 调用和多轮思考 |
-| Tool：`search_wiki` | 语义检索 sqlite-vec，返回 Top-K 段落 |
-| Tool：`cite_source` | 根据 chunk_id 返回原文 + 来源 URL |
-| 梗概生成 Workflow | 实体分类 → 多轮检索 → 层级摘要 → Markdown 格式输出 |
-| AI 对话界面骨架 | 三模式顶部 Tab，气泡消息列表，Markdown 渲染，流式输出 |
-| 引用卡片 UI | 带下划线引用 → 点击展开卡片 → 「在 Wiki 中查看」按钮 |
+| ReAct Loop 稳定性 | 支持 Tool 调用、多轮思考、非严格 Action Input 修复、空回答保护、截断检测与续写 |
+| Tool 抽象重构 | 引入 `search_local_lore` / `get_entity_profile` / `get_story_context` 的接口预留，`search_wiki` 降级为在线补充工具 |
+| Tool：临时本地检索 | 当前可代理 v0.3 Wiki DB，但接口命名和返回结构必须兼容未来 GameData |
+| Tool：`cite_source` | 根据 chunk_id 返回原文 + 来源 URL / source_path，支持 GameData / Wiki / Book 多来源 |
+| Summary MVP | 实体分类 → 本地知识源检索 → 必要时 Wiki 补充 → 层级摘要 → Markdown 输出 |
+| AI 对话界面骨架 | 三模式顶部 Tab，气泡消息列表，Markdown 渲染，真正流式最终回答 |
+| 引用卡片 UI | 引用卡片按 GameData / Wiki / Book 区分来源、可信度和跳转方式 |
 
 **估时**：2 周  
-**风险**：中文实体识别准确率依赖 LLM 能力，复杂角色（如涉及多线剧情的角色）梗概质量需要调优 Prompt。  
-**验收标准**：输入「凯尔希」「龙门」「第二次卡兹戴尔战役」能得到结构完整、有出处的梗概。
+**风险**：v0.3 Wiki RAG 数据质量有限，Summary MVP 只验证 Agent 链路与信息源抽象；高质量内容依赖 v0.4.5 GameData DB。  
+**验收标准**：输入「阿米娅」「凯尔希」「罗德岛」不会返回空回答或无提示截断；工具参数解析稳定；引用来源类型清晰；若数据不足必须明确说明限制。
+
+---
+
+### v0.4.5 — 中文 GameData 知识库重构
+**目标**：以中文解包数据重建主知识库，作为 v0.5 / v0.6 的可靠数据基础。数据库通过 GitHub release asset 发布，App 内下载安装。
+
+| 交付内容 | 说明 |
+|----------|------|
+| GameData 导入管线 | 解析中文角色档案、剧情文本、语音、物品描述、组织/事件相关数据 |
+| 结构化 SQLite Schema | 新增 `entities`、`story_lines`、`lore_chunks`、FTS 表、manifest 表 |
+| Release asset 分发 | 构建 `arklores_gamedata_zh.db.gz` + manifest，App 内下载、校验、安装 |
+| FTS / 结构化检索 | 标题、别名、speaker、剧情 ID、正文关键词优先，向量检索为补充 |
+| 引用定位 | 引用卡片能显示 GameData 类型、source_path、剧情行号或实体字段 |
+| 检索验收 | 固定查询集：阿米娅、凯尔希、罗德岛、龙门、莱茵生命、第二次卡兹戴尔战争 |
+
+**估时**：2 周  
+**风险**：解包数据格式稳定性、数据版权/体积、GameData 版本更新策略。  
+**验收标准**：中文 GameData DB 可下载并安装；固定查询能稳定命中正确实体或剧情；Fact Check / Roleplay 可直接基于 GameData 开发。
 
 ---
 
 ### v0.5 — 事实核查 Agent
-**目标**：用户输入一个剧情说法，得到「真/假/存疑/无法确认」的判断和依据。
+**目标**：基于 GameData 原文优先的证据链，用户输入一个剧情说法后得到「真/假/存疑/无法确认」的判断和依据。
 
 | 交付内容 | 说明 |
 |----------|------|
-| 事实核查 Workflow | 关键词提取 → 多次检索 → 证据汇总 → LLM 综合判断 |
+| 事实核查 Workflow | 关键词提取 → GameData 原文/结构化检索 → 必要时 Wiki 补充 → 证据汇总 → LLM 综合判断 |
 | 话题切换检测 | 利用 LLM 判断新消息是否与当前对话相关，不相关则提示开新对话 |
 | 追问支持 | 多轮对话保留上下文，支持「那……又是怎么回事？」式追问 |
 | 结论 UI 标识 | 醒目的「✓ 正确」「✗ 错误」「? 存疑」标签，带颜色区分 |
@@ -625,7 +674,7 @@ dependencies:
 
 | 交付内容 | 说明 |
 |----------|------|
-| Tool：`get_character_info` | 检索角色 Wiki 信息：性格、身份、相关剧情摘要 |
+| Tool：`get_character_info` | 读取 GameData 角色档案、语音、干员密录和剧情上下文 |
 | 角色搜索界面 | 输入角色名 → 模糊匹配本地索引 → 建议列表 |
 | 角色信息卡 | 展示性格/身份/登场剧情，来源标注，风格与主题一致 |
 | 场景描述输入 | 可选文本框，填写当前对话发生的剧情背景 |
@@ -707,17 +756,18 @@ dependencies:
 |------|----------|------|------|
 | v0.1 | 骨架 + 双主题 | 1 周 | 1 周 |
 | v0.2 | Wiki 浏览器 | 1.5 周 | 2.5 周 |
-| v0.3 | LLM + 知识库基础设施 | 2 周 | 4.5 周 |
-| v0.4 | 梗概生成 Agent | 2 周 | 6.5 周 |
-| v0.5 | 事实核查 Agent | 1.5 周 | 8 周 |
-| v0.6 | 角色扮演 Agent | 2 周 | 10 周 |
-| v0.7 | Wiki 智能联动 | 1 周 | 11 周 |
-| v0.8 | UI 精修 + 动画 | 1.5 周 | 12.5 周 |
-| v0.9 | 测试 + 稳定性 | 1.5 周 | 14 周 |
-| v1.0 | 正式发布 | 1 周 | **15 周** |
+| v0.3 | LLM + Wiki RAG 原型基础设施 | 2 周 | 4.5 周 |
+| v0.4 | Agent 基础设施 + Summary MVP | 2 周 | 6.5 周 |
+| v0.4.5 | 中文 GameData 知识库重构 | 2 周 | 8.5 周 |
+| v0.5 | 基于 GameData 的事实核查 Agent | 1.5 周 | 10 周 |
+| v0.6 | 基于 GameData 的角色扮演 Agent | 2 周 | 12 周 |
+| v0.7 | Wiki 智能联动 | 1 周 | 13 周 |
+| v0.8 | UI 精修 + 动画 | 1.5 周 | 14.5 周 |
+| v0.9 | 测试 + 稳定性 | 1.5 周 | 16 周 |
+| v1.0 | 正式发布 | 1 周 | **17 周** |
 
 > [!TIP]
-> 如果优先验证 AI 功能的实用性，可以在 v0.3 完成后先内测，用真实玩家反馈来调整 Agent Prompt，再继续开发后续版本。
+> v0.3 后不要继续围绕 Wiki RAG 深调 Prompt。v0.4 先完成 Agent 基础设施和知识源抽象，v0.4.5 完成中文 GameData 主知识库后，再进入 Fact Check 与 Roleplay 的质量打磨。
 
 ---
 
@@ -735,10 +785,12 @@ dependencies:
 | Embedding 维度 | **动态检测**——从首次 API 响应自动获取，不写死 1536，兼容 OpenAI / DeepSeek / 其他模型 |
 | 内置 Embedding | **接受安装包体积增大**；仅支持一个固定内置模型，不提供用户替换模型能力；v0.3 已打包固定 512 维 TFLite 模型并用于 seed embedding 与移动端 fallback |
 | Embedding Profile | **保留旧 profile**；用户切换 provider/model/内置模型时创建或激活独立 profile，可切回旧 profile；删除 profile 需用户手动确认；profile 身份不包含 API Key |
-| 本地化 | **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全），设置页 `SegmentedButton` 切换即时生效 |
+| GameData 知识库 | **只做中文**；以解包数据构建主知识库，通过 GitHub release asset 在 App 内下载 |
+| Wiki 定位 | Wiki 不再作为主 RAG seed；保留 WebView 阅读与受限在线补充搜索工具 |
+| 本地化 | UI 保留 **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全）；知识库内容中文优先 |
 | 作者署名 | **hhikr**（写入 `AUTHORS` 文件、README、LICENSE 头部） |
 | GitHub 仓库 | `github.com/hhikr/ArkLores` |
-| AI 资料可信度 | 书籍来源内容全局应用信任策略，以 Wiki 为优先参考，引用时颜色区分并附免责声明 |
+| AI 资料可信度 | 全局优先级：GameData / 游戏原始文本 > 指定 Wiki > 用户导入 Book；Book 引用必须附免责声明 |
 
 > [!NOTE]
 > 架构设计已全部确认。下一步可开始建立项目、搜索库名并初始化 Flutter 工程（v0.1）。
