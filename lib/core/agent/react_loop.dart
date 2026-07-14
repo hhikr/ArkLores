@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import '../llm/llm_client.dart';
+import 'agent_logger.dart';
 import 'tools/tool_registry.dart';
 
 /// Types of events emitted by the ReAct Loop.
@@ -90,9 +91,11 @@ Let's begin!
     final loopMessages = List<Message>.from(messages);
     var iteration = 0;
     var completed = false;
+    final logger = AgentLogger(userQuery);
 
     while (iteration < _maxIterations && !completed) {
       iteration++;
+      logger.logIteration(iteration, _maxIterations);
 
       // We ask the LLM for a Thought and Action step (we restrict maxTokens to keep it concise)
       String response;
@@ -110,12 +113,20 @@ Let's begin!
 
       // Add assistant response to loop messages so it has context
       loopMessages.add(Message.assistant(response));
+      logger.logRawResponse(response);
 
       // Parse Thought, Action, Action Input
       final thought = _parseKey(response, 'Thought');
       final action = _parseKey(response, 'Action').trim();
       final actionInputRaw = _parseKey(response, 'Action Input').trim();
       final finalAnswer = _parseKey(response, 'Final Answer');
+
+      logger.logParsed(
+        thought: thought,
+        action: action,
+        actionInput: actionInputRaw,
+        finalAnswer: finalAnswer,
+      );
 
       if (thought.isNotEmpty) {
         yield ReActEvent(type: ReActEventType.thought, content: thought);
@@ -127,6 +138,8 @@ Let's begin!
             ? finalAnswer
             : response.split('Final Answer:').last.trim();
 
+        logger.logFinalAnswer(actualAnswer);
+        await logger.flush();
         yield ReActEvent(type: ReActEventType.finalAnswerToken, content: actualAnswer);
         completed = true;
         break;
@@ -143,6 +156,7 @@ Let's begin!
       final tool = _toolRegistry.getTool(action);
       if (tool == null) {
         final errorMsg = 'Tool "$action" is not registered.';
+        logger.logError(errorMsg);
         yield ReActEvent(type: ReActEventType.error, content: errorMsg);
         loopMessages.add(Message.user('Observation: Error - $errorMsg'));
         continue;
@@ -166,6 +180,7 @@ Let's begin!
         }
       }
 
+      logger.logToolCall(action, arguments);
       yield ReActEvent(
         type: ReActEventType.toolCall,
         content: 'Executing tool "$action" with arguments: $arguments',
@@ -182,6 +197,7 @@ Let's begin!
         observation = 'Error executing tool: $e';
       }
 
+      logger.logObservation(observation);
       yield ReActEvent(
         type: ReActEventType.toolObservation,
         content: observation,
@@ -200,12 +216,18 @@ Let's begin!
         
         final finalResponse = await _llmClient.chat(loopMessages, temperature: 0.2);
         final finalAnswer = _parseKey(finalResponse, 'Final Answer');
-        
+        final content = finalAnswer.isNotEmpty ? finalAnswer : finalResponse;
+
+        logger.logFallback(fallbackPrompt, finalResponse);
+        logger.logFinalAnswer(content);
+        await logger.flush();
         yield ReActEvent(
           type: ReActEventType.finalAnswerToken,
-          content: finalAnswer.isNotEmpty ? finalAnswer : finalResponse,
+          content: content,
         );
       } catch (e) {
+        logger.logError('Failed to generate final answer: $e');
+        await logger.flush();
         yield ReActEvent(type: ReActEventType.error, content: 'Failed to generate final answer: $e');
       }
     }
@@ -217,7 +239,7 @@ Let's begin!
   /// Handles markdown formatting like bolding, bullet points, and inline key placement.
   String _parseKey(String text, String key) {
     // Matches the key optionally preceded by start of text, space, or newline, and optional bold asterisks
-    final pattern = RegExp('(?:^|\\s)\\**${key}\\**\\s*:\\s*(.*)', caseSensitive: false);
+    final pattern = RegExp('(?:^|\\s)\\**$key\\**\\s*:\\s*(.*)', caseSensitive: false);
     final match = pattern.firstMatch(text);
     if (match != null) {
       var value = match.group(1) ?? '';
