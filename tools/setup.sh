@@ -60,6 +60,7 @@ usage() {
                          本地临时 HTTP 服务端口。默认: $DEFAULT_GAMEDATA_PORT
       --gamedata-story-limit <N>
                          仅导入 N 个 story txt 进行快速 smoke DB。默认: 0，即全量导入
+      --no-adb-reverse   Android 真机不使用 adb reverse，改用局域网 IP 下载
   -h, --help             显示帮助信息
 
 示例:
@@ -137,6 +138,29 @@ detect_host_ip() {
   elif command -v hostname &>/dev/null; then
     hostname -I 2>/dev/null | awk '{print $1}'
   fi
+}
+
+setup_gamedata_adb_reverse() {
+  if [ "$PLATFORM" != "android" ] || [ "${GAMEDATA_USE_ADB_REVERSE}" != true ]; then
+    return 1
+  fi
+  if [ ! -f "$ADB" ]; then
+    return 1
+  fi
+
+  local devices
+  devices=$("$ADB" devices | awk 'NR>1 && /device$/ {print $1}')
+  if [ -z "$devices" ]; then
+    return 1
+  fi
+
+  for device in $devices; do
+    log_info "正在为设备 $device 配置 adb reverse: tcp:$GAMEDATA_PORT -> tcp:$GAMEDATA_PORT"
+    "$ADB" -s "$device" reverse "tcp:$GAMEDATA_PORT" "tcp:$GAMEDATA_PORT"
+  done
+  GAMEDATA_URL="http://127.0.0.1:$GAMEDATA_PORT/arklores_gamedata_zh.db.gz"
+  log_ok "已启用 adb reverse，手机 App 将通过 $GAMEDATA_URL 下载"
+  return 0
 }
 
 start_gamedata_http_server() {
@@ -219,15 +243,19 @@ prepare_gamedata_defines() {
   gzip -c "$db_path" > "$gz_path"
   GAMEDATA_SHA="$(sha256_file "$gz_path")"
 
-  local host_ip
-  host_ip="$(detect_host_ip)"
-  if [ -z "$host_ip" ]; then
-    log_err "无法自动检测本机局域网 IP。请改用 --gamedata-url 手动指定下载地址。"
-    exit 1
-  fi
-
   start_gamedata_http_server "$output_dir" "$GAMEDATA_PORT"
-  GAMEDATA_URL="http://$host_ip:$GAMEDATA_PORT/arklores_gamedata_zh.db.gz"
+  if setup_gamedata_adb_reverse; then
+    :
+  else
+    local host_ip
+    host_ip="$(detect_host_ip)"
+    if [ -z "$host_ip" ]; then
+      log_err "无法自动检测本机局域网 IP。请改用 --gamedata-url 手动指定下载地址。"
+      exit 1
+    fi
+    GAMEDATA_URL="http://$host_ip:$GAMEDATA_PORT/arklores_gamedata_zh.db.gz"
+    log_warn "未使用 adb reverse，改用局域网地址。若手机无法访问，请确认电脑和手机在同一可互访网络。"
+  fi
   log_ok "GameData 下载 URL: $GAMEDATA_URL"
   log_ok "GameData SHA256: $GAMEDATA_SHA"
 }
@@ -246,6 +274,7 @@ GAMEDATA_SHA="${GAMEDATA_SHA:-}"
 GAMEDATA_PORT="${GAMEDATA_PORT:-$DEFAULT_GAMEDATA_PORT}"
 GAMEDATA_OUTPUT="${GAMEDATA_OUTPUT:-$DEFAULT_GAMEDATA_OUTPUT}"
 GAMEDATA_STORY_LIMIT="${GAMEDATA_STORY_LIMIT:-0}"
+GAMEDATA_USE_ADB_REVERSE="${GAMEDATA_USE_ADB_REVERSE:-true}"
 
 # 临时解析参数以检测帮助或交互式标记
 for arg in "$@"; do
@@ -318,6 +347,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --gamedata-story-limit=*)
       GAMEDATA_STORY_LIMIT="${1#--gamedata-story-limit=}"
+      shift
+      ;;
+    --no-adb-reverse)
+      GAMEDATA_USE_ADB_REVERSE=false
       shift
       ;;
     -i|--interactive)
@@ -503,17 +536,6 @@ if [ ! -f "$FLUTTER" ]; then
 fi
 log_ok "Flutter SDK 路径: $FLUTTER_HOME"
 
-prepare_gamedata_defines
-
-DART_DEFINE_ARGS=()
-if [ "$WITH_GAMEDATA" = true ]; then
-  DART_DEFINE_ARGS+=("--dart-define=ARKLORES_GAMEDATA_DB_URL=$GAMEDATA_URL")
-  if [ -n "$GAMEDATA_SHA" ]; then
-    DART_DEFINE_ARGS+=("--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$GAMEDATA_SHA")
-  fi
-  log_ok "Flutter 构建将注入 GameData 下载参数"
-fi
-
 # 2. 检查 Java (仅 Android 需要)
 if [ "$PLATFORM" = "android" ]; then
   if command -v java &>/dev/null; then
@@ -577,6 +599,17 @@ if [ "$DO_UNINSTALL" = true ] || [ "$DO_INSTALL" = true ]; then
       fi
     fi
   fi
+fi
+
+prepare_gamedata_defines
+
+DART_DEFINE_ARGS=()
+if [ "$WITH_GAMEDATA" = true ]; then
+  DART_DEFINE_ARGS+=("--dart-define=ARKLORES_GAMEDATA_DB_URL=$GAMEDATA_URL")
+  if [ -n "$GAMEDATA_SHA" ]; then
+    DART_DEFINE_ARGS+=("--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$GAMEDATA_SHA")
+  fi
+  log_ok "Flutter 构建将注入 GameData 下载参数"
 fi
 
 # ─── 执行第一阶段：卸载旧版本 ────────────────────────────────────
