@@ -45,6 +45,7 @@ TEXT_KEYS = {
 @dataclass
 class FileAudit:
     path: str
+    directory: str
     extension: str
     bytes: int
     text_values: int
@@ -110,6 +111,7 @@ def _audit_file(root: Path, file: Path) -> FileAudit:
     relevance = _suggest_relevance(rel, suffix, text_values, text_chars)
     return FileAudit(
         path=rel,
+        directory=_review_directory(rel),
         extension=suffix or "(none)",
         bytes=file.stat().st_size,
         text_values=text_values,
@@ -278,6 +280,48 @@ def _write_markdown(path: Path, audits: list[FileAudit], sample_limit: int) -> N
             )
         handle.write("\n")
 
+        handle.write("## Category Directory Distribution\n\n")
+        handle.write(
+            "Use this section for manual review: it shows where each suggested "
+            "category actually lives in the unpacked tree.\n\n"
+        )
+        for category, files in sorted(by_category.items()):
+            handle.write(f"### `{category}`\n\n")
+            handle.write("| Directory | Files | Files with Chinese text | Text values | Bytes |\n")
+            handle.write("|---|---:|---:|---:|---:|\n")
+            dir_rows = _directory_rows(files)
+            for directory, row_files in dir_rows[:40]:
+                handle.write(
+                    f"| `{directory}` | {len(row_files)} | "
+                    f"{sum(1 for f in row_files if f.text_values > 0)} | "
+                    f"{sum(f.text_values for f in row_files)} | "
+                    f"{sum(f.bytes for f in row_files)} |\n"
+                )
+            if len(dir_rows) > 40:
+                handle.write(f"| _truncated_ | {len(dir_rows) - 40} more directories |  |  |  |\n")
+            handle.write("\n")
+
+        handle.write("## Category Review Packets\n\n")
+        handle.write(
+            "For each category, review the highest-text files first. These are "
+            "the files most likely to need a dedicated importer adapter.\n\n"
+        )
+        for category, files in sorted(by_category.items()):
+            candidates = [file for file in files if file.text_values > 0]
+            if not candidates:
+                continue
+            handle.write(f"### `{category}`\n\n")
+            handle.write("| File | Directory | Relevance | Text values | Keys | Sample |\n")
+            handle.write("|---|---|---|---:|---|---|\n")
+            ranked = sorted(candidates, key=lambda a: (a.text_values, a.text_chars), reverse=True)
+            for audit in ranked[:20]:
+                sample = audit.sample.replace("|", "\\|")
+                handle.write(
+                    f"| `{audit.path}` | `{audit.directory}` | `{audit.suggested_relevance}` | "
+                    f"{audit.text_values} | `{audit.text_keys}` | {sample} |\n"
+                )
+            handle.write("\n")
+
         handle.write("## Top Text Files\n\n")
         handle.write("| File | Category | Relevance | Text values | Text chars | Keys | Sample |\n")
         handle.write("|---|---|---|---:|---:|---|---|\n")
@@ -288,6 +332,45 @@ def _write_markdown(path: Path, audits: list[FileAudit], sample_limit: int) -> N
                 f"| `{audit.path}` | `{audit.suggested_category}` | `{audit.suggested_relevance}` | "
                 f"{audit.text_values} | {audit.text_chars} | `{audit.text_keys}` | {sample} |\n"
             )
+
+
+def _review_directory(path: str) -> str:
+    parts = Path(path).parts
+    if len(parts) <= 1:
+        return "."
+    if parts[0] == "story":
+        if len(parts) >= 5:
+            return "/".join(parts[:4])
+        return "/".join(parts[:-1])
+    if parts[0] == "levels":
+        if len(parts) >= 5:
+            return "/".join(parts[:4])
+        return "/".join(parts[:-1])
+    if parts[0] == "excel":
+        return "excel"
+    if parts[0] == "bakemuzzledata":
+        if len(parts) >= 2:
+            return "/".join(parts[:2])
+        return "/".join(parts[:-1])
+    if parts[0] == "[uc]lua":
+        if len(parts) >= 5:
+            return "/".join(parts[:4])
+        return "/".join(parts[:-1])
+    return "/".join(parts[:-1])
+
+
+def _directory_rows(files: list[FileAudit]) -> list[tuple[str, list[FileAudit]]]:
+    by_dir: defaultdict[str, list[FileAudit]] = defaultdict(list)
+    for file in files:
+        by_dir[file.directory].append(file)
+    return sorted(
+        by_dir.items(),
+        key=lambda item: (
+            sum(file.text_values for file in item[1]),
+            sum(file.bytes for file in item[1]),
+        ),
+        reverse=True,
+    )
 
 
 if __name__ == "__main__":
