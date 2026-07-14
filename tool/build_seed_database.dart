@@ -28,6 +28,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -89,6 +90,13 @@ void main(List<String> args) async {
   await _writeSeedMetadata(db, allStats, now);
   await db.close();
 
+  // Compress the DB for GitHub release asset distribution. The raw DB is too
+  // large for normal Git storage and should not be copied into Flutter assets.
+  final dbGzPath = '$dbPath.gz';
+  final dbGzBytes = gzip.encode(await File(dbPath).readAsBytes());
+  await File(dbGzPath).writeAsBytes(dbGzBytes, flush: true);
+  final dbGzSha256 = sha256.convert(dbGzBytes).toString();
+
   // Manifest
   final manifest = _buildManifest(allStats, now);
   final manifestPath = p.join(out.path, 'seed_manifest.json');
@@ -100,6 +108,7 @@ void main(List<String> args) async {
   await _zipDirectory(wikiCacheDir, zipPath);
 
   final dbSize = await File(dbPath).length();
+  final dbGzSize = await File(dbGzPath).length();
   final zipSize = await File(zipPath).length();
   var totalChunks = 0;
   for (final s in allStats) totalChunks += s.chunkCount;
@@ -113,13 +122,16 @@ void main(List<String> args) async {
 ${allStats.map((s) => '  \u2551   ${s.name}: ${s.pageCount} pages, ${s.chunkCount} chunks').join('\n')}
 \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550''');
 
+  print('Database gzip: $dbGzPath ($dbGzSize bytes)');
+  print('Database gzip SHA256: $dbGzSha256');
+
   if (cfg.copyToAssets) {
     final assetDir = Directory('assets/seeds');
     if (!await assetDir.exists()) await assetDir.create(recursive: true);
-    await File(dbPath).copy(p.join(assetDir.path, 'arklores_knowledge.db'));
+    await File(dbGzPath).copy(p.join(assetDir.path, 'arklores_knowledge.db.gz'));
     await File(zipPath).copy(p.join(assetDir.path, 'wiki_cache.zip'));
     await File(manifestPath).copy(p.join(assetDir.path, 'seed_manifest.json'));
-    print('Copied seed assets to ${assetDir.path}/');
+    print('Copied release seed artifacts to ${assetDir.path}/');
   }
 }
 

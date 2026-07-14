@@ -22,9 +22,11 @@ build/
 
 # Local databases
 *.db
+*.db.gz
 *.sqlite
 *.sqlite-vec
 local_knowledge/
+!assets/seeds/seed_manifest.json
 
 # Test artifacts (raw wikitext dumps, assembled output)
 raw_page.txt
