@@ -80,14 +80,28 @@ class SettingsService {
     final activeId = await _storage.read(key: _keyActiveEmbeddingProfileId);
 
     if (rawProfiles != null && rawProfiles.isNotEmpty) {
-      final profiles = _decodeProfiles(rawProfiles);
-      final resolvedActiveId = profiles.any((p) => p.id == activeId)
-          ? activeId
-          : (profiles.isNotEmpty ? profiles.first.id : null);
-      return EmbeddingSettingsState(
+      final decodedProfiles = _decodeProfiles(rawProfiles);
+      final activeProfile = decodedProfiles
+          .where((profile) => profile.id == activeId)
+          .firstOrNull;
+      final profiles = _normalizeBuiltinProfiles(decodedProfiles);
+      final normalizedActiveId = activeProfile?.isBuiltin == true
+          ? BuiltinEmbeddingModel.providerId
+          : activeId;
+      final resolvedActiveId = profiles.any((p) => p.id == normalizedActiveId)
+          ? normalizedActiveId
+          : profiles.any((p) => p.id == activeId)
+              ? activeId
+              : (profiles.isNotEmpty ? profiles.first.id : null);
+      final state = EmbeddingSettingsState(
         profiles: profiles,
         activeProfileId: resolvedActiveId,
       );
+      if (_profilesChanged(decodedProfiles, profiles) ||
+          activeId != resolvedActiveId) {
+        await saveEmbeddingSettings(state);
+      }
+      return state;
     }
 
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -144,5 +158,59 @@ class SettingsService {
     return decoded
         .map((item) => EmbeddingProfile.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  List<EmbeddingProfile> _normalizeBuiltinProfiles(
+    List<EmbeddingProfile> profiles,
+  ) {
+    final normalized = <EmbeddingProfile>[];
+    var hasBuiltin = false;
+
+    for (final profile in profiles) {
+      if (!profile.isBuiltin) {
+        normalized.add(profile);
+        continue;
+      }
+
+      final canonical = profile.copyWith(
+        id: BuiltinEmbeddingModel.providerId,
+        model: BuiltinEmbeddingModel.id,
+        dimension: profile.dimension > 0
+            ? profile.dimension
+            : BuiltinEmbeddingModel.expectedDimension,
+      );
+
+      if (!hasBuiltin) {
+        normalized.add(canonical);
+        hasBuiltin = true;
+      }
+    }
+
+    if (!hasBuiltin) {
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      normalized.insert(
+        0,
+        EmbeddingProfile.builtin(
+          model: BuiltinEmbeddingModel.id,
+          dimension: BuiltinEmbeddingModel.expectedDimension,
+          now: now,
+        ),
+      );
+    }
+
+    return normalized;
+  }
+
+  bool _profilesChanged(
+    List<EmbeddingProfile> before,
+    List<EmbeddingProfile> after,
+  ) {
+    if (before.length != after.length) return true;
+    for (var i = 0; i < before.length; i++) {
+      if (jsonEncode(before[i].toJson()) != jsonEncode(after[i].toJson())) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -23,6 +23,7 @@
 ///   --allow-large-pages       (write pages over max-chunks-per-page)
 ///   --no-copy-assets          (skip copying to assets/seeds/)
 library;
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -52,7 +53,8 @@ void main(List<String> args) async {
     if (cfg.force) {
       await out.delete(recursive: true);
     } else if (!cfg.resume) {
-      print('Output directory "${cfg.outputDir}" already exists. Use --force or --resume.');
+      print(
+          'Output directory "${cfg.outputDir}" already exists. Use --force or --resume.');
       exit(1);
     }
   }
@@ -139,7 +141,6 @@ Future<int> _storePage({
   required String title,
   required String markdown,
   required String sourceUrl,
-  required int now,
   required int maxChunksPerPage,
   required bool allowLargePages,
 }) async {
@@ -163,21 +164,25 @@ Future<int> _storePage({
   }
 
   // Write chunks (no embeddings yet — app fills on first launch)
+  final updatedAt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
   await db.transaction((txn) async {
     for (final c in chunks) {
-      await txn.insert('chunks', {
-        'id': c.id,
-        'source_type': 'wiki',
-        'source_url': sourceUrl,
-        'wiki': wiki,
-        'book_id': null,
-        'page_title': c.pageTitle,
-        'section': c.section,
-        'content': c.content,
-        'updated_at': now,
-        'embedding_status': 'pending_embedding',
-        'profile_id': 'builtin:builtin-embedding',
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await txn.insert(
+          'chunks',
+          {
+            'id': c.id,
+            'source_type': 'wiki',
+            'source_url': sourceUrl,
+            'wiki': wiki,
+            'book_id': null,
+            'page_title': c.pageTitle,
+            'section': c.section,
+            'content': c.content,
+            'updated_at': updatedAt,
+            'embedding_status': 'pending_embedding',
+            'profile_id': 'builtin:builtin-embedding',
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace);
     }
   });
 
@@ -241,13 +246,13 @@ Future<_SrcStats> _buildEndfield(
   final stats = _SrcStats('endfield');
   final crawler = WarfarinWikiCrawler();
   final delay = Duration(milliseconds: cfg.crawlDelayMs);
-  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
   print('  Fetching Endfield listings...');
   final operators = await crawler.fetchOperatorListings();
   final lore = await crawler.fetchLoreListings();
   final missions = await crawler.fetchMissionListings();
-  print('  Found: ${operators.length}op, ${lore.length}lore, ${missions.length}mission');
+  print(
+      '  Found: ${operators.length}op, ${lore.length}lore, ${missions.length}mission');
 
   final items = <_Item>[];
   for (final op in operators) {
@@ -265,7 +270,8 @@ Future<_SrcStats> _buildEndfield(
 
   for (var i = 0; i < toProcess.length; i++) {
     final item = toProcess[i];
-    stdout.write('    [${i + 1}/${toProcess.length}] ${item.type} / ${item.title}... ');
+    stdout.write(
+        '    [${i + 1}/${toProcess.length}] ${item.type} / ${item.title}... ');
 
     try {
       if (cfg.resume && await _pageExists(db, 'endfield', item.title)) {
@@ -296,7 +302,6 @@ Future<_SrcStats> _buildEndfield(
         title: item.title,
         markdown: markdown,
         sourceUrl: _endfieldUrl(item.type, item.slug),
-        now: now,
         maxChunksPerPage: cfg.maxChunksPerPage,
         allowLargePages: cfg.allowLargePages,
       );
@@ -333,7 +338,6 @@ Future<_SrcStats> _buildPrts(
   final stats = _SrcStats('prts');
   final crawler = MediaWikiCrawler();
   final delay = Duration(milliseconds: cfg.crawlDelayMs);
-  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
   final categoryNames = cfg.prtsCategories.split(',');
   print('  Fetching PRTS categories: ${categoryNames.join(', ')}');
@@ -350,7 +354,8 @@ Future<_SrcStats> _buildPrts(
     if (trimmed == 'Category:干员') {
       operatorTitles.addAll(titles);
     } else {
-      storyTitles.addAll(titles.where((title) => !_isPrtsStandaloneRecord(title)));
+      storyTitles
+          .addAll(titles.where((title) => !_isPrtsStandaloneRecord(title)));
     }
     print('    $trimmed: ${titles.length} pages');
   }
@@ -385,8 +390,8 @@ Future<_SrcStats> _buildPrts(
       if (isOperator) {
         // Fetch operator sub-pages
         final allOpTitles = [title, '$title/语音记录', '${title}的信物'];
-        final wikitexts = await crawler.fetchRawWikitexts(
-            WikiSite.prts, allOpTitles);
+        final wikitexts =
+            await crawler.fetchRawWikitexts(WikiSite.prts, allOpTitles);
         final mainPage = wikitexts[title];
         final voicePage = wikitexts['$title/语音记录'];
         final tokenPage = wikitexts['${title}的信物'];
@@ -453,7 +458,6 @@ Future<_SrcStats> _buildPrts(
         title: title,
         markdown: markdown,
         sourceUrl: sourceUrl,
-        now: now,
         maxChunksPerPage: cfg.maxChunksPerPage,
         allowLargePages: cfg.allowLargePages,
       );
@@ -475,13 +479,15 @@ Future<_SrcStats> _buildPrts(
 
 // ── Database ─────────────────────────────────────────────────────────────────
 
-Future<Database> _openOrCreateDatabase(String path, {required bool resume}) async {
+Future<Database> _openOrCreateDatabase(String path,
+    {required bool resume}) async {
   final absolutePath = p.absolute(path);
   final file = File(absolutePath);
   if (!resume && await file.exists()) await file.delete();
   await file.parent.create(recursive: true);
 
   final db = await databaseFactoryFfi.openDatabase(absolutePath);
+  await db.setVersion(1);
   await db.execute('''
     CREATE TABLE IF NOT EXISTS chunks (
       id          TEXT PRIMARY KEY,
@@ -556,8 +562,16 @@ class _Config {
 
   factory _Config.parse(List<String> args) {
     String g(String k, [String d = '']) =>
-        args.where((a) => a.startsWith('--$k=')).map((a) => a.split('=').skip(1).join('=')).firstOrNull ?? d;
-    final sources = g('sources', 'endfield').split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        args
+            .where((a) => a.startsWith('--$k='))
+            .map((a) => a.split('=').skip(1).join('='))
+            .firstOrNull ??
+        d;
+    final sources = g('sources', 'endfield')
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
     return _Config(
       sources: sources,
       limit: int.tryParse(g('limit', '0')) ?? 0,
@@ -570,8 +584,7 @@ class _Config {
       copyToAssets: !args.contains('--no-copy-assets'),
       failOnEmptyChunks: args.contains('--fail-on-empty'),
       allowLargePages: args.contains('--allow-large-pages'),
-      prtsCategories: g('prts-categories',
-          'Category:干员,Category:剧情'),
+      prtsCategories: g('prts-categories', 'Category:干员,Category:剧情'),
     );
   }
 }

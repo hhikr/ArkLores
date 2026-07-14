@@ -18,9 +18,6 @@ class KnowledgeBasePage extends ConsumerWidget {
   static const List<String> _prtsCategories = [
     'Category:干员',
     'Category:剧情',
-    'Category:阵营',
-    'Category:角色',
-    'Category:干员密录',
   ];
 
   static const List<String> _endfieldCategories = [
@@ -160,7 +157,7 @@ class KnowledgeBasePage extends ConsumerWidget {
             data: (stats) => _buildStatsGrid(context, stats, theme),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) =>
-                _buildErrorCard('${context.t.materialsLoadFailed} $err', theme),
+                _buildErrorCard(context.t.materialsLoadFailed(err), theme),
           ),
           const SizedBox(height: 24),
 
@@ -439,13 +436,10 @@ class KnowledgeBasePage extends ConsumerWidget {
           const SizedBox(width: 12),
           ElevatedButton.icon(
             onPressed: isCurrentIndexing
-                ? () =>
-                    ref.read(wikiIndexingProvider.notifier).cancel()
+                ? () => ref.read(wikiIndexingProvider.notifier).cancel()
                 : (disabled ? null : onUpdate),
             icon: Icon(
-                isCurrentIndexing
-                    ? Icons.stop_rounded
-                    : Icons.sync_rounded,
+                isCurrentIndexing ? Icons.stop_rounded : Icons.sync_rounded,
                 size: 18),
             label: Text(
               isCurrentIndexing ? '取消' : context.t.kbUpdate,

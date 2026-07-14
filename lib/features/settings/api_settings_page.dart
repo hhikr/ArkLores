@@ -423,7 +423,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
         _sectionHeader(theme, Icons.hub_rounded, 'Embedding Profiles'),
         const SizedBox(height: 12),
         ...settings.profiles.map((profile) {
-          final active = profile.id == settings.activeProfile?.id;
+          final active = profile.id == settings.activeProfileId;
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: ThemeAwareCard(
@@ -459,10 +459,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                     ),
                   ),
                   if (!active)
-                    IconButton(
-                      tooltip: 'Activate',
-                      icon: Icon(Icons.check_circle_outline_rounded,
-                          color: theme.accentPrimary),
+                    TextButton(
                       onPressed: () async {
                         await ref
                             .read(embeddingSettingsProvider.notifier)
@@ -470,6 +467,13 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                         ref.invalidate(vectorStoreStatsProvider);
                         setState(() => _applyProfileToControllers(profile));
                       },
+                      child: Text(
+                        'Activate',
+                        style: theme.bodyFont.copyWith(
+                          color: theme.accentPrimary,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                   IconButton(
                     tooltip: 'Delete',

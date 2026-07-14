@@ -104,6 +104,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   final String _profileId;
   final MediaWikiCrawler _crawler;
   bool _cancelled = false;
+  int _runGeneration = 0;
 
   @override
   void dispose() {
@@ -114,7 +115,12 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   /// Cancels a running indexing operation.
   void cancel() {
     _cancelled = true;
+    _runGeneration++;
     state = WikiIndexingState(status: WikiIndexingStatus.idle);
+  }
+
+  bool _shouldStop(int runGeneration) {
+    return _cancelled || runGeneration != _runGeneration;
   }
 
   WikiIndexingNotifier({
@@ -133,6 +139,9 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
   Future<void> indexWiki(WikiSite site, List<String> categories) async {
     if (state.isIndexing) return;
 
+    _cancelled = false;
+    final runGeneration = ++_runGeneration;
+
     if (site == WikiSite.endfield) {
       await _indexEndfield(site);
       return;
@@ -150,14 +159,17 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       final operatorTitles = <String>{};
       final storyTitles = <String>{};
       for (final category in categories) {
+        if (_shouldStop(runGeneration)) return;
         final titles = await _crawler.fetchCategoryTitles(
           site: site,
           categoryName: category,
         );
+        if (_shouldStop(runGeneration)) return;
         if (category == 'Category:干员') {
           operatorTitles.addAll(titles);
           allUniqueTitles.addAll(titles);
-        } else if (category == 'Category:主线剧情' ||
+        } else if (category == 'Category:剧情' ||
+            category == 'Category:主线剧情' ||
             category == 'Category:活动剧情' ||
             category == 'Category:干员密录') {
           storyTitles.addAll(titles);
@@ -181,8 +193,10 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         site.key,
         profileId: _profileId,
       );
+      if (_shouldStop(runGeneration)) return;
       var cleanedCount = 0;
       for (final localTitle in localMetadata.keys) {
+        if (_shouldStop(runGeneration)) return;
         if (!allUniqueTitles.contains(localTitle)) {
           await _vectorStore.deleteWikiPage(
             site.key,
@@ -198,18 +212,15 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
             '[IndexWiki] Cleaned up $cleanedCount obsolete pages for ${site.key}');
       }
 
-      // Step 3: Fetch last touched timestamps for all remote pages
-      state = state.copyWith(status: WikiIndexingStatus.fetchingTouched);
+      // Step 3: Identify which pages need to be crawled and embedded.
+      // MediaWiki `touched` changes on cache/template refreshes and is too noisy
+      // for seeded data, so existing healthy pages are treated as up-to-date.
       final titleList = allUniqueTitles.toList();
-      final touchedMetadata =
-          await _crawler.fetchPagesLastTouched(site, titleList);
-
-      // Step 4: Identify which pages need to be crawled and embedded
       final pagesToUpdate = <String>[];
       var skippedCount = 0;
 
       for (final title in titleList) {
-        final remoteTouched = touchedMetadata[title] ?? 0;
+        if (_shouldStop(runGeneration)) return;
         final localPage = localMetadata[title];
 
         if (localPage == null) {
@@ -217,9 +228,6 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           pagesToUpdate.add(title);
         } else if (localPage.hasFailures) {
           // Existed but contains failed chunk embeddings
-          pagesToUpdate.add(title);
-        } else if (remoteTouched > localPage.updatedAt) {
-          // Page modified online
           pagesToUpdate.add(title);
         } else {
           // Up-to-date
@@ -249,6 +257,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       // Process pages in batches of 10 to limit memory consumption and avoid locking SQLite too long
       const crawlBatchSize = 10;
       for (var i = 0; i < pagesToUpdate.length; i += crawlBatchSize) {
+        if (_shouldStop(runGeneration)) return;
         final batch = pagesToUpdate.sublist(
           i,
           i + crawlBatchSize > pagesToUpdate.length
@@ -272,6 +281,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         if (storyBatch.isNotEmpty) {
           final storyWikitexts =
               await _crawler.fetchRawWikitexts(site, storyBatch);
+          if (_shouldStop(runGeneration)) return;
           for (final title in storyBatch) {
             final page = storyWikitexts[title];
             if (page != null) {
@@ -292,6 +302,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           // Phase 1: Fetch operator main pages, voice lines, and token descriptions
           final wikitexts =
               await _crawler.fetchRawWikitexts(site, allOpTitlesToFetch);
+          if (_shouldStop(runGeneration)) return;
 
           // Phase 1.5: Parse operator records to discover story page names
           final recordStoryTitles = <String>{};
@@ -318,6 +329,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           if (recordStoryTitles.isNotEmpty) {
             final recordPages = await _crawler.fetchRawWikitexts(
                 site, recordStoryTitles.toList());
+            if (_shouldStop(runGeneration)) return;
             for (final entry in recordPages.entries) {
               if (entry.value.content.isNotEmpty) {
                 recordStoryWikitexts[entry.value.title] = entry.value.content;
@@ -349,6 +361,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         }
 
         for (final page in wikiPages) {
+          if (_shouldStop(runGeneration)) return;
           state = state.copyWith(currentItemTitle: page.title);
 
           // We delete the existing page chunks before writing new ones to prevent leftovers
@@ -386,6 +399,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
           if (chunks.isNotEmpty) {
             final texts = chunks.map((c) => c.content).toList();
             final embedResult = await _embedder.embedBatch(texts);
+            if (_shouldStop(runGeneration)) return;
 
             if (embedResult.vectors.isNotEmpty) {
               await _ref
@@ -422,6 +436,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         progress: 1.0,
       );
     } catch (e) {
+      if (_shouldStop(runGeneration)) return;
       debugPrint('[IndexWiki] Error: $e');
       state = state.copyWith(
         status: WikiIndexingStatus.failed,
@@ -519,72 +534,6 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
     bool exactMatch = true,
   }) =>
       prts.parseAllTemplates(wikitext, templateName, exactMatch: exactMatch);
-      int depth = 0;
-      int endIdx = -1;
-      for (int i = startIdx; i < wikitext.length - 1; i++) {
-        if (wikitext[i] == '{' && wikitext[i + 1] == '{') {
-          depth++;
-          i++;
-        } else if (wikitext[i] == '}' && wikitext[i + 1] == '}') {
-          depth--;
-          if (depth == 0) {
-            endIdx = i + 2;
-            break;
-          }
-          i++;
-        }
-      }
-
-      if (endIdx == -1) {
-        // malformed template, move past startKey to prevent infinite loop
-        searchOffset = startIdx + startKey.length;
-        continue;
-      }
-
-      final body = wikitext.substring(startIdx + startKey.length, endIdx - 2);
-      final params = <String, String>{};
-      final parts = <String>[];
-      int currentStart = 0;
-      int bracketDepth = 0;
-      int squareBracketDepth = 0;
-      for (int i = 0; i < body.length; i++) {
-        final c = body[i];
-        if (c == '{' && i < body.length - 1 && body[i + 1] == '{') {
-          bracketDepth++;
-          i++;
-        } else if (c == '}' && i < body.length - 1 && body[i + 1] == '}') {
-          bracketDepth--;
-          i++;
-        } else if (c == '[' && i < body.length - 1 && body[i + 1] == '[') {
-          squareBracketDepth++;
-          i++;
-        } else if (c == ']' && i < body.length - 1 && body[i + 1] == ']') {
-          squareBracketDepth--;
-          i++;
-        } else if (c == '|' && bracketDepth == 0 && squareBracketDepth == 0) {
-          parts.add(body.substring(currentStart, i));
-          currentStart = i + 1;
-        }
-      }
-      parts.add(body.substring(currentStart));
-
-      for (final part in parts) {
-        final eqIdx = part.indexOf('=');
-        if (eqIdx != -1) {
-          final name = part.substring(0, eqIdx).trim();
-          final val = part.substring(eqIdx + 1).trim();
-          if (name.isNotEmpty) {
-            params[name] = val;
-          }
-        }
-      }
-
-      results.add(params);
-      searchOffset = endIdx;
-    }
-
-    return results;
-  }
 
   /// Parses the first occurrence of a template, falling back to empty map if not found.
   static Map<String, String> parseTemplate(
@@ -673,21 +622,21 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
 
     final Map<String, _EndfieldTask> allTasks = {};
     for (final item in opItems) {
-      allTasks['operator/${item.slug}'] = _EndfieldTask(
+      allTasks[item.name.isNotEmpty ? item.name : item.slug] = _EndfieldTask(
         slug: item.slug,
         displayName: item.name.isNotEmpty ? item.name : item.slug,
         type: _EndfieldType.operator,
       );
     }
     for (final item in loreItems) {
-      allTasks['lore/${item.slug}'] = _EndfieldTask(
+      allTasks[item.name.isNotEmpty ? item.name : item.slug] = _EndfieldTask(
         slug: item.slug,
         displayName: item.name.isNotEmpty ? item.name : item.slug,
         type: _EndfieldType.lore,
       );
     }
     for (final item in missionItems) {
-      allTasks['mission/${item.slug}'] = _EndfieldTask(
+      allTasks[item.name.isNotEmpty ? item.name : item.slug] = _EndfieldTask(
         slug: item.slug,
         displayName: item.name.isNotEmpty ? item.name : item.slug,
         type: _EndfieldType.mission,
@@ -792,8 +741,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
       if (remoteUpdatedAtStr != null) {
         try {
           remoteUpdatedAt =
-              DateTime.parse(remoteUpdatedAtStr).millisecondsSinceEpoch ~/
-                  1000;
+              DateTime.parse(remoteUpdatedAtStr).millisecondsSinceEpoch ~/ 1000;
         } catch (_) {}
       }
 
@@ -872,7 +820,7 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
             chunks,
             embedResult.vectors,
             sourceType: 'wiki',
-            sourceUrl: _getEndfieldSourceUrl(title),
+            sourceUrl: _getEndfieldSourceUrl(task),
             wiki: site.key,
             profileId: _profileId,
           );
@@ -908,19 +856,13 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
     );
   }
 
-  String _getEndfieldSourceUrl(String title) {
-    final parts = title.split('/');
-    if (parts.length == 2) {
-      final type = parts[0];
-      final slug = parts[1];
-      final path = type == 'operator'
-          ? 'operators'
-          : type == 'lore'
-              ? 'lore'
-              : 'missions';
-      return 'https://warfarin.wiki/cn/$path/${Uri.encodeComponent(slug)}';
-    }
-    return 'https://warfarin.wiki/cn';
+  String _getEndfieldSourceUrl(_EndfieldTask task) {
+    final path = task.type == _EndfieldType.operator
+        ? 'operators'
+        : task.type == _EndfieldType.lore
+            ? 'lore'
+            : 'missions';
+    return 'https://warfarin.wiki/cn/$path/${Uri.encodeComponent(task.slug)}';
   }
 
   Future<Directory> _getWikiCacheDirectory() async {

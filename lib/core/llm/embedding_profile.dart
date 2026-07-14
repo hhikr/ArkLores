@@ -62,7 +62,7 @@ class EmbeddingProfile {
       model: model,
       dimension: dimension,
       now: now,
-      id: id,
+      id: id ?? 'builtin:$model',
     );
   }
 
