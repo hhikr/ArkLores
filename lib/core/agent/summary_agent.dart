@@ -4,6 +4,7 @@ import '../rag/embedder.dart';
 import '../rag/vector_store.dart';
 import 'agent_prompts.dart';
 import 'react_loop.dart';
+import 'tools/search_local_lore.dart';
 import 'tools/search_wiki.dart';
 import 'tools/cite_source.dart';
 import 'tools/tool_registry.dart';
@@ -20,9 +21,17 @@ class SummaryAgent {
     required Embedder embedder,
     required VectorStore vectorStore,
     String? profileId,
-  }) : _llmClient = llmClient,
-       _toolRegistry = ToolRegistry() {
-    // Register the tools needed by the Summary Agent
+  })  : _llmClient = llmClient,
+        _toolRegistry = ToolRegistry() {
+    // Primary v0.4 tool: source-neutral local lore search. In the current
+    // compatibility phase it is backed by the v0.3 Wiki/Book local DB.
+    _toolRegistry.register(SearchLocalLoreTool(
+      embedder: embedder,
+      vectorStore: vectorStore,
+      profileId: profileId,
+    ));
+    // Legacy/fallback tool retained for prompts or older transcripts that
+    // still request search_wiki explicitly.
     _toolRegistry.register(SearchWikiTool(
       embedder: embedder,
       vectorStore: vectorStore,

@@ -1,7 +1,7 @@
 /// System prompt templates for ArkLores AI agents.
 ///
-/// Every agent's system prompt includes the trust strategy rules
-/// for handling Wiki-sourced vs Book-sourced content.
+/// Every agent's system prompt includes the trust strategy rules for handling
+/// GameData, Wiki, and Book sourced content.
 ///
 /// Templates are composable: start with [basePrompt], append
 /// [knowledgeBaseRules], then agent-specific instructions.
@@ -23,17 +23,21 @@ When you don't know something, say so honestly rather than making up information
 /// Knowledge base trust strategy rules.
 ///
 /// Injected into every agent's system prompt to ensure proper handling
-/// of Wiki vs Book sourced content.
+/// of GameData vs Wiki vs Book sourced content.
 const String knowledgeBaseRules = '''
-下面提供的检索结果包含两类来源：
-- [Wiki] 来自 PRTS Wiki 或终末地 Wiki（官方社区维护，较可信）
+下面提供的检索结果可能包含三类来源：
+- [GameData] 来自中文游戏原始文本 / 解包数据（最高可信）
+- [Wiki] 来自指定 Wiki（PRTS Wiki 或终末地 Wiki，用作补充）
 - [Book] 来自用户导入的书籍资料（可能包含非官方解读或翻译误差）
 
 引用规则：
-1. 当 [Wiki] 和 [Book] 内容冲突时，优先采信 [Wiki]
-2. 引用 [Book] 内容时，必须明确标注为「来自书籍资料」
-3. 如果 [Book] 内容无法被 [Wiki] 佐证，应在输出中说明"此信息仅来自用户导入资料，建议自行核实"
-4. 不得将 [Book] 来源的内容以确定语气表述为官方设定
+1. 可信度优先级必须是 GameData / 游戏原始文本 > 指定 Wiki > 用户导入 Book
+2. 当 [GameData] 与 [Wiki] 或 [Book] 内容冲突时，优先采信 [GameData]
+3. Wiki 只能作为补充说明或交叉验证，不要把 Wiki 当作主知识源
+4. 引用 [Book] 内容时，必须明确标注为「来自书籍资料」
+5. 如果 [Book] 内容无法被 [GameData] 或 [Wiki] 佐证，应说明"此信息仅来自用户导入资料，建议自行核实"
+6. 不得将 [Book] 来源的内容以确定语气表述为官方设定
+7. 如果当前知识库没有覆盖，明确说明限制，不得编造
 ''';
 
 /// Fact-Check Agent specific instructions.
@@ -44,14 +48,15 @@ const String factCheckInstructions = '''
 
 工作流程：
 1. 分析用户输入，提取关键实体和主张
-2. 使用 search_wiki 工具检索相关知识库内容（3~5次）
-3. 综合判断该说法的准确性
-4. 输出结论，格式为：
-   - ✅ 正确（有 Wiki 证据支持）
-   - ❌ 错误（与 Wiki 证据矛盾）
-   - ❓ 存疑（证据不足以判断）
-   - 🤷 无法确认（知识库中没有相关信息）
-5. 每个结论附带引用证据，用下划线标注可展开查看原文
+2. 优先使用 search_local_lore 工具检索本地知识库内容（3~5次）
+3. 仅在本地结果不足时使用 search_wiki 作为指定 Wiki 补充搜索
+4. 综合判断该说法的准确性
+5. 输出结论，格式为：
+   - 正确（有 GameData / Wiki 证据支持）
+   - 错误（与高可信证据矛盾）
+   - 存疑（证据不足以判断）
+   - 无法确认（知识库中没有相关信息）
+6. 每个结论附带引用证据，用下划线标注可展开查看原文
 
 对于多轮对话：
 - 检测用户是否在追问同一话题（如"那……又是怎么回事？"）
@@ -66,17 +71,19 @@ const String summaryInstructions = '''
 
 工作流程：
 1. 识别输入实体并分类（人物/事件/地点/组织）
-2. 使用 search_wiki 工具检索主条目和关联条目
-3. 生成层级摘要：
+2. 优先使用 search_local_lore 工具检索主条目和关联条目
+3. 仅在本地知识库结果不足或需要补充导航性说明时使用 search_wiki
+4. 生成层级摘要：
    - 概述（1~2句话）
    - 时间线整合（按时间顺序排列关键事件）
-   - 重要节点标注（用 ⭐ 标记）
+   - 重要节点标注
    - 关联条目链接
-4. 输出 Markdown 格式，段落标题 + 正文 + 引用列表（可点击展开）
+5. 输出 Markdown 格式，段落标题 + 正文 + 引用列表（可点击展开）
 
 注意：
 - 对涉及多线剧情的复杂角色（如凯尔希），优先按时间线组织
-- 如果实体在知识库中未找到，明确告知用户并提供近似建议
+- 如果实体在知识库中未找到，明确告知“当前知识库未覆盖”，并可提供近似建议
+- 当前 v0.4 若只有 Wiki/Book 临时库结果，需要说明 GameData 主库尚未覆盖或尚未安装
 ''';
 
 /// Roleplay Agent specific instructions.

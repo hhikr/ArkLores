@@ -78,7 +78,9 @@ Final Answer: <your complete, well-structured, final response in Markdown format
 CRITICAL FORMATTING RULES:
 1. Each key (Thought, Action, Action Input, Final Answer) MUST start on a new line. Do NOT combine them on the same line.
 2. Do NOT format keys with markdown bolding or list symbols. Write them exactly as "Thought:", "Action:", "Action Input:", "Final Answer:".
-3. Write ONLY one Thought, Action, and Action Input at a time. Do NOT write "Observation:" or hallucinate observations yourself. Stop generating immediately after writing "Action Input:".
+3. Action Input MUST be strict JSON with quoted keys and string values, for example {"query": "缪尔赛思", "top_k": 5}.
+4. Write ONLY one Thought, Action, and Action Input at a time. Do NOT write "Observation:" or hallucinate observations yourself. Stop generating immediately after writing "Action Input:".
+5. When you are ready to answer, output "Final Answer:" with non-empty Markdown content. Do not call more tools after "Final Answer:".
 
 Let's begin!
 ''';
@@ -100,9 +102,9 @@ Let's begin!
       logger.logIteration(iteration, _maxIterations);
 
       // We ask the LLM for a Thought and Action step (we restrict maxTokens to keep it concise)
-      String response;
+      ChatCompletionResult completion;
       try {
-        response = await _llmClient.chat(
+        completion = await _llmClient.chatCompletion(
           loopMessages,
           temperature: 0.1, // Low temperature for high format compliance
           maxTokens: 1024,
@@ -115,6 +117,15 @@ Let's begin!
         );
       } catch (e) {
         yield ReActEvent(type: ReActEventType.error, content: 'LLM Error: $e');
+        return;
+      }
+      final response = completion.content;
+      if (completion.wasTruncated) {
+        final errorMsg =
+            'LLM response was truncated before the ReAct step completed. Please retry with a shorter query or a larger max token limit.';
+        logger.logError('TRUNCATED_REACT_STEP: $errorMsg');
+        await logger.flush();
+        yield ReActEvent(type: ReActEventType.error, content: errorMsg);
         return;
       }
 
@@ -148,6 +159,16 @@ Let's begin!
             ? finalAnswer
             : response.split('Final Answer:').last.trim();
 
+        if (actualAnswer.trim().isEmpty) {
+          final errorMsg =
+              'The model returned an empty final answer. Please retry.';
+          logger.logError('EMPTY_FINAL_ANSWER: $errorMsg');
+          await logger.flush();
+          yield ReActEvent(type: ReActEventType.error, content: errorMsg);
+          completed = true;
+          break;
+        }
+
         logger.logFinalAnswer(actualAnswer);
         await logger.flush();
         yield ReActEvent(
@@ -175,22 +196,7 @@ Let's begin!
       }
 
       // Parse tool arguments
-      Map<String, dynamic> arguments = {};
-      if (actionInputRaw.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(actionInputRaw);
-          if (decoded is Map<String, dynamic>) {
-            arguments = decoded;
-          }
-        } catch (_) {
-          // If JSON decode fails, try to build a default parameter map if the tool expects a string query
-          if (tool.parameters['properties']?['query'] != null) {
-            arguments = {'query': actionInputRaw};
-          } else if (tool.parameters['properties']?['chunk_id'] != null) {
-            arguments = {'chunk_id': actionInputRaw};
-          }
-        }
-      }
+      final arguments = _parseActionInput(actionInputRaw, tool);
 
       logger.logToolCall(action, arguments);
       yield ReActEvent(
@@ -232,12 +238,30 @@ Let's begin!
             'Please summarize all findings and output your Final Answer now.';
         loopMessages.add(Message.user(fallbackPrompt));
 
-        final finalResponse =
-            await _llmClient.chat(loopMessages, temperature: 0.2);
+        final completion = await _llmClient.chatCompletion(
+          loopMessages,
+          temperature: 0.2,
+          maxTokens: 3072,
+        );
+        final finalResponse = completion.content;
         final finalAnswer = _parseKey(finalResponse, 'Final Answer');
-        final content = finalAnswer.isNotEmpty ? finalAnswer : finalResponse;
+        var content = finalAnswer.isNotEmpty ? finalAnswer : finalResponse;
+        if (completion.wasTruncated) {
+          content = content.trim().isEmpty
+              ? 'The model response was truncated before it produced a final answer. Please retry with a narrower question.'
+              : '$content\n\n> Note: the model response was truncated and may be incomplete.';
+        }
 
         logger.logFallback(fallbackPrompt, finalResponse);
+        if (content.trim().isEmpty) {
+          const errorMsg =
+              'The model returned an empty final answer. Please retry.';
+          logger.logError('EMPTY_FINAL_ANSWER: $errorMsg');
+          await logger.flush();
+          yield const ReActEvent(type: ReActEventType.error, content: errorMsg);
+          yield const ReActEvent(type: ReActEventType.complete);
+          return;
+        }
         logger.logFinalAnswer(content);
         await logger.flush();
         yield ReActEvent(
@@ -302,6 +326,106 @@ Let's begin!
     }
     if (cleaned.startsWith('**')) {
       cleaned = cleaned.substring(2).trim();
+    }
+    return cleaned;
+  }
+
+  Map<String, dynamic> _parseActionInput(String raw, AgentTool tool) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return {};
+
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+    } catch (_) {
+      // Fall through to the tolerant parser below.
+    }
+
+    final properties = tool.parameters['properties'];
+    final knownKeys = properties is Map
+        ? properties.keys.map((key) => '$key').toSet()
+        : <String>{};
+
+    final pairs = _parseLooseKeyValuePairs(trimmed, knownKeys);
+    if (pairs.isNotEmpty) return pairs;
+
+    if (knownKeys.contains('query')) {
+      return {'query': _stripLooseQuotes(trimmed)};
+    }
+    if (knownKeys.contains('chunk_id')) {
+      return {'chunk_id': _stripLooseQuotes(trimmed)};
+    }
+    return {};
+  }
+
+  Map<String, dynamic> _parseLooseKeyValuePairs(
+    String raw,
+    Set<String> knownKeys,
+  ) {
+    var text = raw.trim();
+    if (text.startsWith('{') && text.endsWith('}')) {
+      text = text.substring(1, text.length - 1).trim();
+    }
+    if (text.isEmpty) return {};
+
+    final result = <String, dynamic>{};
+    for (final part in _splitLoosePairs(text)) {
+      final separator = part.indexOf(':');
+      if (separator <= 0) continue;
+
+      final key = _stripLooseQuotes(part.substring(0, separator).trim());
+      if (!knownKeys.contains(key)) continue;
+
+      final valueText = part.substring(separator + 1).trim();
+      result[key] = _coerceLooseValue(key, valueText);
+    }
+    return result;
+  }
+
+  List<String> _splitLoosePairs(String text) {
+    final parts = <String>[];
+    final buffer = StringBuffer();
+    var inSingleQuote = false;
+    var inDoubleQuote = false;
+
+    for (var i = 0; i < text.length; i++) {
+      final char = text[i];
+      if (char == "'" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+      } else if (char == '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+      }
+
+      if (char == ',' && !inSingleQuote && !inDoubleQuote) {
+        parts.add(buffer.toString().trim());
+        buffer.clear();
+      } else {
+        buffer.write(char);
+      }
+    }
+
+    final last = buffer.toString().trim();
+    if (last.isNotEmpty) parts.add(last);
+    return parts;
+  }
+
+  dynamic _coerceLooseValue(String key, String rawValue) {
+    final value = _stripLooseQuotes(rawValue);
+    if (key == 'top_k') {
+      return int.tryParse(value) ?? value;
+    }
+    if (value == 'true') return true;
+    if (value == 'false') return false;
+    return value;
+  }
+
+  String _stripLooseQuotes(String value) {
+    var cleaned = value.trim();
+    if ((cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+        (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+      cleaned = cleaned.substring(1, cleaned.length - 1).trim();
     }
     return cleaned;
   }
