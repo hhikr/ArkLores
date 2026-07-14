@@ -261,6 +261,80 @@ void main() {
       expect(
           finalAnswerEvent.content, contains('W is a mercenary [chunk-123]'));
     });
+
+    test('ReActLoop parses loose Action Input key-value maps', () async {
+      final registry = ToolRegistry();
+      final tool = _CaptureTool();
+      registry.register(tool);
+
+      final reactLoop = ReActLoop(
+        llmClient: _LooseActionInputLLMClient(),
+        toolRegistry: registry,
+        maxIterations: 2,
+      );
+
+      final events = await reactLoop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: '查缪因',
+          )
+          .toList();
+
+      expect(tool.lastArgs?['query'], '缪因');
+      expect(tool.lastArgs?['top_k'], 5);
+      expect(
+        events
+            .where((e) => e.type == ReActEventType.finalAnswerToken)
+            .single
+            .content,
+        contains('done'),
+      );
+    });
+
+    test('ReActLoop reports empty final answers', () async {
+      final reactLoop = ReActLoop(
+        llmClient: _EmptyFinalAnswerLLMClient(),
+        toolRegistry: ToolRegistry(),
+        maxIterations: 1,
+      );
+
+      final events = await reactLoop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'empty',
+          )
+          .toList();
+
+      expect(events.any((e) => e.type == ReActEventType.error), isTrue);
+      expect(
+        events.firstWhere((e) => e.type == ReActEventType.error).content,
+        contains('empty final answer'),
+      );
+    });
+
+    test('ReActLoop reports truncated ReAct steps', () async {
+      final reactLoop = ReActLoop(
+        llmClient: _TruncatedLLMClient(),
+        toolRegistry: ToolRegistry(),
+        maxIterations: 1,
+      );
+
+      final events = await reactLoop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'truncate',
+          )
+          .toList();
+
+      expect(events.any((e) => e.type == ReActEventType.error), isTrue);
+      expect(
+        events.firstWhere((e) => e.type == ReActEventType.error).content,
+        contains('truncated'),
+      );
+    });
   });
 }
 
@@ -346,4 +420,83 @@ Final Answer: W is a mercenary [chunk-123].
   @override
   Future<List<List<double>>> embedBatch(List<String> texts) async =>
       List.generate(texts.length, (_) => [1.0, 0.0, 0.0]);
+}
+
+class _CaptureTool extends AgentTool {
+  Map<String, dynamic>? lastArgs;
+
+  @override
+  String get name => 'search_local_lore';
+
+  @override
+  String get description => 'Capture tool arguments for tests.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+          'top_k': {'type': 'integer'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    lastArgs = Map<String, dynamic>.of(arguments);
+    return 'captured';
+  }
+}
+
+class _LooseActionInputLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      return '''
+Thought: I need local lore.
+Action: search_local_lore
+Action Input: {query: 缪因, top_k: 5}
+''';
+    }
+    return '''
+Thought: I have enough information to answer.
+Final Answer: done
+''';
+  }
+}
+
+class _EmptyFinalAnswerLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return 'Thought: done\nFinal Answer:';
+  }
+}
+
+class _TruncatedLLMClient extends _MockLLMClient {
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return const ChatCompletionResult(
+      content: 'Thought: too long',
+      finishReason: 'length',
+    );
+  }
 }

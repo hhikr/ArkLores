@@ -52,6 +52,24 @@ class OpenAICompatibleClient implements LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
+    final result = await chatCompletion(
+      messages,
+      tools: tools,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+    return result.content;
+  }
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
     _requireChatConfig();
 
     final body = <String, dynamic>{
@@ -90,7 +108,10 @@ class OpenAICompatibleClient implements LLMClient {
       }
 
       final message = choices[0]['message'] as Map<String, dynamic>;
-      return (message['content'] as String?) ?? '';
+      return ChatCompletionResult(
+        content: (message['content'] as String?) ?? '',
+        finishReason: choices[0]['finish_reason'] as String?,
+      );
     } on SocketException catch (e) {
       throw LLMException('Network error: ${e.message}');
     } on TimeoutException {
@@ -122,9 +143,8 @@ class OpenAICompatibleClient implements LLMClient {
         ..headers.addAll(_headers(config.chatApiKey))
         ..body = jsonEncode(body);
 
-      final streamedResponse = await _httpClient
-          .send(request)
-          .timeout(_timeout);
+      final streamedResponse =
+          await _httpClient.send(request).timeout(_timeout);
 
       if (streamedResponse.statusCode != 200) {
         final body = await streamedResponse.stream.bytesToString();
@@ -136,7 +156,8 @@ class OpenAICompatibleClient implements LLMClient {
       }
 
       final buffer = StringBuffer();
-      await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+      await for (final chunk
+          in streamedResponse.stream.transform(utf8.decoder)) {
         final lines = chunk.split('\n');
         for (final line in lines) {
           if (!line.startsWith('data: ')) continue;
@@ -245,9 +266,9 @@ class OpenAICompatibleClient implements LLMClient {
     }
 
     // Determine dimension from any successful result; fall back to 1536.
-    final dim = slots.firstWhere((r) => r != null && r.isNotEmpty,
-            orElse: () => null)
-        ?.length ??
+    final dim = slots
+            .firstWhere((r) => r != null && r.isNotEmpty, orElse: () => null)
+            ?.length ??
         _embedDefaultDim;
 
     // Replace any remaining nulls (irrecoverable items) with zero vectors.
@@ -296,22 +317,26 @@ class OpenAICompatibleClient implements LLMClient {
     } on SocketException catch (e) {
       if (attempt < _maxEmbedRetries) {
         final delay = Duration(seconds: 2 * (attempt + 1));
-        debugPrint('[Embed] SocketException (attempt ${attempt + 1}/${_maxEmbedRetries}): '
+        debugPrint(
+            '[Embed] SocketException (attempt ${attempt + 1}/$_maxEmbedRetries): '
             '${e.message}. Retrying in ${delay.inSeconds}s.');
         await Future.delayed(delay);
         return _embedGroup(texts, indices, slots, attempt: attempt + 1);
       }
-      debugPrint('[Embed] Giving up on ${indices.length} item(s) after repeated SocketException.');
+      debugPrint(
+          '[Embed] Giving up on ${indices.length} item(s) after repeated SocketException.');
       return; // slots stay null → zero vectors
     } on TimeoutException {
       if (attempt < _maxEmbedRetries) {
         final delay = Duration(seconds: 2 * (attempt + 1));
-        debugPrint('[Embed] Timeout (attempt ${attempt + 1}/${_maxEmbedRetries}). '
+        debugPrint(
+            '[Embed] Timeout (attempt ${attempt + 1}/$_maxEmbedRetries). '
             'Retrying in ${delay.inSeconds}s.');
         await Future.delayed(delay);
         return _embedGroup(texts, indices, slots, attempt: attempt + 1);
       }
-      debugPrint('[Embed] Giving up on ${indices.length} item(s) after repeated timeouts.');
+      debugPrint(
+          '[Embed] Giving up on ${indices.length} item(s) after repeated timeouts.');
       return;
     }
 
@@ -324,7 +349,8 @@ class OpenAICompatibleClient implements LLMClient {
         await Future.delayed(delay);
         return _embedGroup(texts, indices, slots, attempt: attempt + 1);
       }
-      debugPrint('[Embed] Giving up on ${indices.length} item(s) after repeated 429.');
+      debugPrint(
+          '[Embed] Giving up on ${indices.length} item(s) after repeated 429.');
       return;
     }
 
@@ -332,7 +358,8 @@ class OpenAICompatibleClient implements LLMClient {
       if (indices.length > 1) {
         // Binary split — one of the items is likely too long or malformed.
         // Splitting isolates it so the rest of the batch can succeed.
-        debugPrint('[Embed] 400 on batch of ${indices.length}, binary-splitting. Response: ${response.body}');
+        debugPrint(
+            '[Embed] 400 on batch of ${indices.length}, binary-splitting. Response: ${response.body}');
         final mid = indices.length ~/ 2;
         await _embedGroup(texts, indices.sublist(0, mid), slots);
         await _embedGroup(texts, indices.sublist(mid), slots);
@@ -352,8 +379,10 @@ class OpenAICompatibleClient implements LLMClient {
               .post(
                 Uri.parse(config.embeddingEndpoint),
                 headers: _headers(_embedApiKey),
-                body: jsonEncode(
-                    {'model': config.embedModel, 'input': [truncated]}),
+                body: jsonEncode({
+                  'model': config.embedModel,
+                  'input': [truncated]
+                }),
               )
               .timeout(_timeout);
           if (r.statusCode == 200) {
@@ -365,7 +394,8 @@ class OpenAICompatibleClient implements LLMClient {
             }
           }
         } catch (_) {}
-        debugPrint('[Embed] Truncated text[$idx] still failed. Using zero vector.');
+        debugPrint(
+            '[Embed] Truncated text[$idx] still failed. Using zero vector.');
       } else {
         debugPrint('[Embed] text[$idx] (${text.length} chars) returned 400 '
             'but is already short — using zero vector.');
@@ -376,7 +406,8 @@ class OpenAICompatibleClient implements LLMClient {
     if (response.statusCode != 200) {
       if (attempt < _maxEmbedRetries) {
         final delay = Duration(seconds: 2 * (attempt + 1));
-        debugPrint('[Embed] HTTP ${response.statusCode} for ${indices.length} item(s) '
+        debugPrint(
+            '[Embed] HTTP ${response.statusCode} for ${indices.length} item(s) '
             '(attempt ${attempt + 1}). Retrying in ${delay.inSeconds}s.');
         await Future.delayed(delay);
         return _embedGroup(texts, indices, slots, attempt: attempt + 1);

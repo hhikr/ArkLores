@@ -113,7 +113,21 @@ class LLMException implements Exception {
   const LLMException(this.message, {this.statusCode, this.body});
 
   @override
-  String toString() => 'LLMException: $message${statusCode != null ? ' ($statusCode)' : ''}';
+  String toString() =>
+      'LLMException: $message${statusCode != null ? ' ($statusCode)' : ''}';
+}
+
+/// Metadata returned by a chat completion.
+class ChatCompletionResult {
+  final String content;
+  final String? finishReason;
+
+  const ChatCompletionResult({
+    required this.content,
+    this.finishReason,
+  });
+
+  bool get wasTruncated => finishReason == 'length';
 }
 
 /// Abstract LLM client interface.
@@ -128,6 +142,28 @@ abstract class LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   });
+
+  /// Sends a chat completion request and returns response metadata.
+  ///
+  /// Existing clients can keep implementing [chat]; this default adapter
+  /// preserves compatibility while newer clients expose provider finish
+  /// reasons such as `length`.
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    final content = await chat(
+      messages,
+      tools: tools,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+    return ChatCompletionResult(content: content);
+  }
 
   /// Sends a chat completion request and streams the response tokens
   /// via the [onToken] callback. Returns the full assembled response.
