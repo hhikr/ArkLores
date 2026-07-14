@@ -560,9 +560,21 @@ class VectorStore {
     return await _fallbackDb!.query(
       'chunks',
       where:
-          "embedding_status = 'zero_vector'${profileId != null ? ' AND profile_id = ?' : ''}",
+      "embedding_status = 'zero_vector'${profileId != null ? ' AND profile_id = ?' : ''}",
       whereArgs: profileId != null ? [profileId] : null,
     );
+  }
+
+  /// Retrieves a single chunk by its ID.
+  Future<Map<String, dynamic>?> getChunkById(String id) async {
+    await initialize();
+    final list = await _fallbackDb!.query(
+      'chunks',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return list.isNotEmpty ? list.first : null;
   }
 
   /// Updates a specific chunk's embedding and marks it as 'ok'.
