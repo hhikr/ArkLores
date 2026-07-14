@@ -23,8 +23,8 @@ class SummaryAgent {
     String? profileId,
   })  : _llmClient = llmClient,
         _toolRegistry = ToolRegistry() {
-    // Primary v0.4 tool: source-neutral local lore search. In the current
-    // compatibility phase it is backed by the v0.3 Wiki/Book local DB.
+    // Primary v0.4 tool: source-neutral local lore search. It uses installed
+    // GameData first, then falls back to the v0.3 Wiki/Book local DB.
     _toolRegistry.register(SearchLocalLoreTool(
       embedder: embedder,
       vectorStore: vectorStore,

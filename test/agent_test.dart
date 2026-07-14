@@ -8,8 +8,10 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/cite_source.dart';
+import 'package:arklores/core/agent/tools/search_local_lore.dart';
 import 'package:arklores/core/agent/tools/search_wiki.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
+import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/rag/chunker.dart';
 import 'package:arklores/core/rag/embedder.dart';
@@ -175,6 +177,56 @@ void main() {
       final observation = (result as ToolExecutionResult).observation;
       expect(observation, contains('Title: 罗德岛'));
       expect(observation, isNot(contains('分类：text')));
+    });
+
+    test('SearchLocalLoreTool prefers GameData records when DB is available',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final embedder = Embedder(_MockEmbeddingClient());
+      final tool = SearchLocalLoreTool(
+        embedder: embedder,
+        vectorStore: vectorStore,
+        profileId: 'test-profile',
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({'query': '阿米娅', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Source Kind: GameData'));
+      expect(observation, contains('Content Type: operator_handbook_profile'));
+      expect(
+        observation,
+        contains('Source Path: zh_CN/gamedata/excel/handbook_info_table.json'),
+      );
+      expect(observation, contains('罗德岛的公开领袖'));
+      expect(observation, isNot(contains('Falling back')));
+    });
+
+    test('SearchLocalLoreTool filters GameData by content_type', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final embedder = Embedder(_MockEmbeddingClient());
+      final tool = SearchLocalLoreTool(
+        embedder: embedder,
+        vectorStore: vectorStore,
+        profileId: 'test-profile',
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '阿米娅',
+        'top_k': 3,
+        'content_type': 'operator_voice',
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Content Type: operator_voice'));
+      expect(observation, contains('博士，我们继续前进吧。'));
+      expect(observation, isNot(contains('operator_handbook_profile')));
     });
 
     test('CiteSourceTool retrieves chunk by ID', () async {
@@ -499,4 +551,118 @@ class _TruncatedLLMClient extends _MockLLMClient {
       finishReason: 'length',
     );
   }
+}
+
+Future<void> _createGameDataTestDb(String path) async {
+  final db = await sqflite.openDatabase(
+    path,
+    version: 1,
+    onCreate: (db, version) async {
+      await db.execute('''
+        CREATE TABLE entities (
+          id           TEXT PRIMARY KEY,
+          name         TEXT NOT NULL,
+          aliases      TEXT,
+          entity_type  TEXT NOT NULL,
+          source_type  TEXT NOT NULL,
+          game         TEXT NOT NULL,
+          source_path  TEXT,
+          game_version TEXT,
+          updated_at   INTEGER
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE normalized_records (
+          id               TEXT PRIMARY KEY,
+          game             TEXT NOT NULL,
+          language         TEXT NOT NULL DEFAULT 'zh',
+          category         TEXT NOT NULL,
+          subtype          TEXT NOT NULL,
+          content_type     TEXT NOT NULL,
+          entity_id        TEXT,
+          entity_name      TEXT,
+          parent_id        TEXT,
+          parent_type      TEXT,
+          title            TEXT,
+          section          TEXT,
+          speaker          TEXT,
+          content          TEXT NOT NULL,
+          source_path      TEXT NOT NULL,
+          raw_id           TEXT,
+          line_start       INTEGER,
+          line_end         INTEGER,
+          source_repo      TEXT,
+          source_commit    TEXT,
+          game_version     TEXT,
+          updated_at       INTEGER
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE lore_chunks (
+          id               TEXT PRIMARY KEY,
+          game             TEXT NOT NULL,
+          source_type      TEXT NOT NULL,
+          content_category TEXT,
+          content_subtype  TEXT,
+          content_type     TEXT,
+          entity_id        TEXT,
+          story_id         TEXT,
+          page_title       TEXT,
+          section          TEXT,
+          content          TEXT NOT NULL,
+          source_path      TEXT,
+          source_url       TEXT,
+          line_start       INTEGER,
+          line_end         INTEGER,
+          speaker          TEXT,
+          language         TEXT NOT NULL DEFAULT 'zh',
+          game_version     TEXT,
+          updated_at       INTEGER,
+          raw_id           TEXT,
+          retrieval_hint   TEXT
+        )
+      ''');
+    },
+  );
+
+  await db.insert('entities', {
+    'id': 'char_002_amiya',
+    'name': '阿米娅',
+    'aliases': '["Amiya"]',
+    'entity_type': 'operator',
+    'source_type': 'operator_handbook_profile',
+    'game': 'arknights',
+    'source_path': 'zh_CN/gamedata/excel/character_table.json',
+  });
+  await db.insert('normalized_records', {
+    'id': 'record_profile_amiya',
+    'game': 'arknights',
+    'language': 'zh',
+    'category': 'operator',
+    'subtype': 'handbook_profile',
+    'content_type': 'operator_handbook_profile',
+    'entity_id': 'char_002_amiya',
+    'entity_name': '阿米娅',
+    'title': '阿米娅',
+    'section': '档案资料',
+    'content': '阿米娅是罗德岛的公开领袖，也是剧情中的核心角色。',
+    'source_path': 'zh_CN/gamedata/excel/handbook_info_table.json',
+    'raw_id': 'char_002_amiya',
+  });
+  await db.insert('normalized_records', {
+    'id': 'record_voice_amiya',
+    'game': 'arknights',
+    'language': 'zh',
+    'category': 'operator',
+    'subtype': 'voice',
+    'content_type': 'operator_voice',
+    'entity_id': 'char_002_amiya',
+    'entity_name': '阿米娅',
+    'title': '交谈1',
+    'section': '交谈1',
+    'content': '博士，我们继续前进吧。',
+    'source_path': 'zh_CN/gamedata/excel/charword_table.json',
+    'raw_id': 'char_002_amiya_CN_001',
+  });
+  await db.close();
 }
