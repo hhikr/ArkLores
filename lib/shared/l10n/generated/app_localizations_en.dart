@@ -327,4 +327,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsShowOnboardingDesc => 'Replay the first-launch guide to configure the app';
+
+  @override
+  String get aiTabFactCheck => 'Fact Check';
+
+  @override
+  String get aiTabSummary => 'Summary';
+
+  @override
+  String get aiTabRoleplay => 'Roleplay';
+
+  @override
+  String get aiInputPlaceholder => 'Enter lore query or claim...';
+
+  @override
+  String get aiSummaryInputPlaceholder => 'Enter character, event, location or faction to summarize...';
+
+  @override
+  String get aiSettingsRequired => 'Please configure your Chat API Key in settings first to use AI features.';
+
+  @override
+  String get aiSettingsGoTo => 'Go to Settings';
+
+  @override
+  String get aiClearHistory => 'Clear Chat';
+
+  @override
+  String get aiClearHistoryConfirm => 'Are you sure you want to clear the chat history for this tab?';
+
+  @override
+  String get aiClearConfirmBtn => 'Clear';
 }
