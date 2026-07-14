@@ -703,27 +703,33 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
               ? '资料'
               : '任务';
 
-      // Fetch detail
+      // Check local status first
+      final localPage = localMetadata[title];
+      if (localPage != null && !localPage.hasFailures) {
+        skipped++;
+        processed++;
+        state = state.copyWith(
+          skippedCount: skipped,
+          processedCount: processed,
+          progress: (processed / allTasks.length).clamp(0.0, 1.0),
+          currentItemTitle: '跳过 $typePrefix/${task.displayName}',
+        );
+        continue;
+      }
+
+      // Fetch detail only for new pages or pages with failed embeddings.
       state = state.copyWith(
         currentItemTitle: '下载 $typePrefix/${task.displayName}',
       );
 
-      // Check local status first
-      final localPage = localMetadata[title];
-
-      // Fetch detail & extract remote updatedAt
       Map<String, dynamic>? detail;
-      String? remoteUpdatedAtStr;
       try {
         if (task.type == _EndfieldType.operator) {
           detail = await warfarinCrawler.fetchOperatorDetail(task.slug);
-          remoteUpdatedAtStr = detail['operator']?['updatedAt'] as String?;
         } else if (task.type == _EndfieldType.lore) {
           detail = await warfarinCrawler.fetchLoreDetail(task.slug);
-          remoteUpdatedAtStr = detail['updatedAt'] as String?;
         } else {
           detail = await warfarinCrawler.fetchMissionDetail(task.slug);
-          remoteUpdatedAtStr = detail['updatedAt'] as String?;
         }
       } catch (e) {
         debugPrint('Failed to fetch details for $title: $e');
@@ -736,31 +742,8 @@ class WikiIndexingNotifier extends StateNotifier<WikiIndexingState> {
         continue;
       }
 
-      // Parse timestamps
-      int remoteUpdatedAt = 0;
-      if (remoteUpdatedAtStr != null) {
-        try {
-          remoteUpdatedAt =
-              DateTime.parse(remoteUpdatedAtStr).millisecondsSinceEpoch ~/ 1000;
-        } catch (_) {}
-      }
-
       // Compare with local metadata
       final isNew = localPage == null;
-      final hasFailures = localPage?.hasFailures ?? false;
-      final isModified =
-          localPage != null && remoteUpdatedAt > localPage.updatedAt;
-
-      if (!isNew && !hasFailures && !isModified) {
-        skipped++;
-        processed++;
-        state = state.copyWith(
-          skippedCount: skipped,
-          processedCount: processed,
-          progress: (processed / allTasks.length).clamp(0.0, 1.0),
-        );
-        continue;
-      }
 
       state = state.copyWith(
         currentItemTitle: '转换 $typePrefix/${task.displayName}',
