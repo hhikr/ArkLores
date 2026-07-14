@@ -682,6 +682,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Replay the first-launch guide to configure the app'**
   String get settingsShowOnboardingDesc;
+
+  /// No description provided for @aiTabFactCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Fact Check'**
+  String get aiTabFactCheck;
+
+  /// No description provided for @aiTabSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get aiTabSummary;
+
+  /// No description provided for @aiTabRoleplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Roleplay'**
+  String get aiTabRoleplay;
+
+  /// No description provided for @aiInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter lore query or claim...'**
+  String get aiInputPlaceholder;
+
+  /// No description provided for @aiSummaryInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter character, event, location or faction to summarize...'**
+  String get aiSummaryInputPlaceholder;
+
+  /// No description provided for @aiSettingsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please configure your Chat API Key in settings first to use AI features.'**
+  String get aiSettingsRequired;
+
+  /// No description provided for @aiSettingsGoTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Settings'**
+  String get aiSettingsGoTo;
+
+  /// No description provided for @aiClearHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Chat'**
+  String get aiClearHistory;
+
+  /// No description provided for @aiClearHistoryConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to clear the chat history for this tab?'**
+  String get aiClearHistoryConfirm;
+
+  /// No description provided for @aiClearConfirmBtn.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get aiClearConfirmBtn;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

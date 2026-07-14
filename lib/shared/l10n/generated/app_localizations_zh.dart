@@ -327,4 +327,34 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
+
+  @override
+  String get aiTabFactCheck => '事实核查';
+
+  @override
+  String get aiTabSummary => '剧情梗概';
+
+  @override
+  String get aiTabRoleplay => '角色扮演';
+
+  @override
+  String get aiInputPlaceholder => '输入剧情内容或设定...';
+
+  @override
+  String get aiSummaryInputPlaceholder => '输入人物、事件、地点或组织名称以生成梗概...';
+
+  @override
+  String get aiSettingsRequired => '请先在设置中配置对话 API 密钥以使用 AI 功能。';
+
+  @override
+  String get aiSettingsGoTo => '去设置';
+
+  @override
+  String get aiClearHistory => '清空对话';
+
+  @override
+  String get aiClearHistoryConfirm => '确定要清空当前的对话历史吗？';
+
+  @override
+  String get aiClearConfirmBtn => '清空';
 }

@@ -109,5 +109,15 @@
   "onboardingStartExploring": "Start Exploring",
   "settingsHelpGuide": "Help & Guide",
   "settingsShowOnboarding": "Show Onboarding Guide",
-  "settingsShowOnboardingDesc": "Replay the first-launch guide to configure the app"
+  "settingsShowOnboardingDesc": "Replay the first-launch guide to configure the app",
+  "aiTabFactCheck": "Fact Check",
+  "aiTabSummary": "Summary",
+  "aiTabRoleplay": "Roleplay",
+  "aiInputPlaceholder": "Enter lore query or claim...",
+  "aiSummaryInputPlaceholder": "Enter character, event, location or faction to summarize...",
+  "aiSettingsRequired": "Please configure your Chat API Key in settings first to use AI features.",
+  "aiSettingsGoTo": "Go to Settings",
+  "aiClearHistory": "Clear Chat",
+  "aiClearHistoryConfirm": "Are you sure you want to clear the chat history for this tab?",
+  "aiClearConfirmBtn": "Clear"
 }
