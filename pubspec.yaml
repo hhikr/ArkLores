@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.1.0+1
+version: 0.3.0+3
 
 environment:
   sdk: ^3.6.0
@@ -30,6 +30,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
 
   cupertino_icons: ^1.0.8
 
@@ -45,11 +48,36 @@ dependencies:
   # Database
   sqflite: ^2.4.0
 
+  # Vector search — using sqflite + pure Dart cosine similarity fallback
+  # (sqlite-vec FFI was deferred due to native build incompatibility)
+
   # File system paths
   path_provider: ^2.1.0
+  path: ^1.9.0  # Direct dependency for path utilities
 
   # UUID generation
   uuid: ^4.5.0
+
+  # LLM API communication
+  http: ^1.2.2
+
+  # Secure storage for API keys
+  flutter_secure_storage: ^9.2.4
+
+  # Markdown rendering in AI chat
+  flutter_markdown: ^0.7.4
+
+  # File picker for book import (PDF/TXT)
+  file_picker: ^8.1.6
+
+  # PDF text extraction
+  syncfusion_flutter_pdf: ^26.1.42
+
+  # Local embedding model runtime (built-in fixed model spike)
+  tflite_flutter: ^0.12.1
+
+  # Archive for zip extraction of prebuilt wiki cache
+  archive: ^3.6.1
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +89,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  path_provider_platform_interface: ^2.1.2
+  sqflite_common_ffi: ^2.3.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -73,16 +103,20 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/models/embedding/
+    - assets/seeds/arklores_knowledge.db
+    - assets/seeds/wiki_cache.zip
+    - assets/seeds/seed_manifest.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
+
+  # Localization code generation (flutter gen-l10n)
+  generate: true
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a

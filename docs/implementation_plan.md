@@ -11,16 +11,17 @@
 | **App 名称** | **ArkLores**（英文，与 Arknights 读音相近，一语双关） |
 | 目标平台 | Android + iOS（Flutter） |
 | 最低系统版本 | Android 8.0（API 26）/ iOS 14 |
-| AI 接入 | 用户自带 API Key，OpenAI 兼容接口 |
-| 数据存储 | 本地 sqlite-vec（向量）+ SQLite（结构化） |
-| 向量方案 | sqlite-vec FFI（优先）；不可用时回退纯 Dart cosine similarity |
+| AI 接入 | 用户自带 API Key，OpenAI 兼容接口（Chat + Embedding 可分开指定不同提供商）；Embedding 可选择内置固定模型离线生成 |
+| 数据存储 | 本地 SQLite（结构化）+ 纯 Dart cosine similarity（向量）|
+| 向量方案 | sqlite-vec FFI 暂不可用（v0.1.7-alpha.3 构建不完整），当前使用 sqflite + 纯 Dart cosine similarity。待包稳定后再恢复 FFI 路径 |
+| 本地化 | **EN / 中文双语**，基于 `flutter_localizations` + `intl` + ARB 文件，Riverpod 控制切换，编译时类型安全 |
 | Agent 实现 | 纯 Dart 手写 ReAct Loop |
 | 状态管理 | Riverpod |
 | 开源协议 | GPL-3.0 + README 道义声明"非商业" |
 | 作者署名 | `hhikr`（GitHub ID，写入 AUTHORS 文件和 README） |
 | 视觉主题 | **双主题可切换**：① 明日方舟·战术档案风 ② 终末地·全息投影风 |
 | 知识来源 | PRTS Wiki + 终末地 Wiki + 书籍文件（用户导入 PDF/TXT） |
-| 迭代路线 | v0.1: Wiki/AI 核心导航；v0.2: Agent 与引用卡片；v0.3: 书籍导入与资料 Tab；v0.4: 设置与知识库管理 |
+| 迭代路线 | v0.1: 项目骨架与双主题；v0.2: Wiki 浏览器；v0.3: LLM + 知识库基础设施；v0.4: 梗概生成 Agent；v0.5: 事实核查 Agent；v0.6: 角色扮演 Agent；v0.7: Wiki 智能联动；v0.8: UI 精修；v0.9: 测试；v1.0: 发布 |
 
 ---
 
@@ -205,7 +206,7 @@ MediaWiki API (api.php)
 | 导入书籍 | 知识库管理页「导入书籍」按钮，选择文件后自动索引 |
 | 删除书籍 | 知识库管理页列表中删除，同步清除对应向量 |
 
-#### sqlite-vec Schema（草案）
+#### SQLite Vector Schema（v0.3 实现）
 
 ```sql
 CREATE TABLE chunks (
@@ -220,12 +221,15 @@ CREATE TABLE chunks (
   page_title  TEXT,              -- Wiki 页面标题 或 书籍章节标题
   section     TEXT,              -- 所属小节标题
   content     TEXT NOT NULL,     -- 原文内容
-  updated_at  INTEGER            -- Unix timestamp
+  updated_at  INTEGER,           -- Unix timestamp
+  embedding_status TEXT DEFAULT 'ok' -- 'ok' | 'zero_vector'
 );
 
-CREATE VIRTUAL TABLE chunk_embeddings USING vec0(
+CREATE TABLE chunk_embeddings (
   chunk_id TEXT PRIMARY KEY,
-  embedding FLOAT[1536]          -- text-embedding-3-small 维度
+  profile_id TEXT NOT NULL,
+  dimension INTEGER NOT NULL,
+  embedding BLOB NOT NULL
 );
 
 -- 书籍文件元数据表
@@ -285,6 +289,23 @@ abstract class LLMClient {
 }
 
 class OpenAICompatibleClient implements LLMClient { ... }
+```
+
+**配置模型**（Chat + Embedding 分离）：
+```dart
+class LLMConfig {
+  // Chat API
+  final String chatBaseUrl;
+  final String chatApiKey;
+  final String chatModel;
+
+  // Embedding API（可为空，运行时回退到 Chat 配置）
+  final String embedBaseUrl;
+  final String embedApiKey;
+  final String embedModel;
+
+  bool get isValid => chatApiKey.isNotEmpty;
+}
 ```
 
 ---
@@ -399,12 +420,17 @@ arklores/
 │   ├── app.dart                    # 路由 & 主题
 │   ├── core/
 │   │   ├── llm/
-│   │   │   ├── llm_client.dart     # 抽象接口
+│   │   │   ├── llm_client.dart     # 抽象接口 + LLMConfig（Chat/Embed 分离）
+│   │   │   ├── llm_provider.dart   # Riverpod Provider
 │   │   │   └── openai_client.dart  # OpenAI 兼容实现
+│   │   ├── agent/
+│   │   │   └── agent_prompts.dart  # Agent Prompt 模板（信任策略）
 │   │   ├── rag/
-│   │   │   ├── vector_store.dart   # sqlite-vec 封装
+│   │   │   ├── vector_store.dart   # 向量存储（纯 Dart cosine similarity）
+│   │   │   ├── vector_store_provider.dart
 │   │   │   ├── chunker.dart        # 文本分块
-│   │   │   └── embedder.dart       # Embedding 调用
+│   │   │   ├── embedder.dart       # Embedding 调用（动态维度检测）
+│   │   │   └── embedder_provider.dart
 │   │   ├── wiki/
 │   │   │   ├── wiki_crawler.dart   # MediaWiki API 爬取
 │   │   │   └── wiki_models.dart
@@ -435,18 +461,27 @@ arklores/
 │   │   │   └── book_list_item.dart        # 单本书籍条目组件
 │   │   └── settings/
 │   │       ├── settings_page.dart
-│   │       └── knowledge_base_page.dart   # Wiki 知识库管理（准确性设置）
+│   │       ├── settings_service.dart   # SecureStorage 存取
+│   │       ├── api_settings_page.dart  # Chat/Embed 分开配置
+│   │       ├── knowledge_base_page.dart # Wiki 知识库管理
+│   │       └── onboarding_page.dart    # 首次引导流程
 │   └── shared/
+│       ├── l10n/
+│       │   ├── app_en.arb             # 英文翻译
+│       │   ├── app_zh.arb             # 中文翻译（平行结构）
+│       │   ├── generated/             # gen-l10n 自动生成
+│       │   ├── l10n.dart              # context.t 便利扩展
+│       │   └── locale_provider.dart   # Riverpod 语言切换
 │       ├── theme/
 │       │   ├── app_theme.dart           # 抽象 Token 接口
 │       │   ├── ark_theme_tokens.dart    # 主题A：战术档案风
 │       │   └── endfield_theme_tokens.dart # 主题B：全息投影风
 │       ├── widgets/
-│       │   ├── citation_card.dart       # 可展开引用卡片
+│       │   ├── citation_card.dart       # 可展开引用卡片（Wiki/Book 颜色区分）
 │       │   ├── floating_action.dart
 │       │   └── theme_aware_card.dart    # 自适应主题的基础卡片组件
 │       └── providers/
-│           ├── settings_provider.dart
+│           ├── settings_provider.dart   # API 配置（Chat/Embed 分离）
 │           ├── theme_provider.dart      # 主题切换状态
 │           └── chat_provider.dart
 ├── android/
@@ -462,20 +497,28 @@ arklores/
 dependencies:
   flutter_inappwebview: ^6.x          # WebView
   flutter_riverpod: ^2.x              # 状态管理
+  flutter_localizations: sdk:flutter  # 多语言本地化
+  intl: any                           # 国际化基础库
   sqflite: ^2.x                       # SQLite
-  sqlite_vec: ^0.1.x                  # 向量搜索（FFI 绑定，优先）
   http: ^1.x                          # HTTP 客户端
   flutter_markdown: ^0.x              # Markdown 渲染
   flutter_secure_storage: ^9.x        # API Key 安全存储
   google_fonts: ^6.x                  # Rajdhani / Exo2 / Noto Sans SC
   file_picker: ^8.x                   # 书籍文件选择（PDF/TXT）
   syncfusion_flutter_pdf: ^26.x       # PDF 文本提取（免费社区版）
+  tflite_flutter: ^0.x                # 内置固定 embedding 模型运行时（v0.3 spike）
   path_provider: ^2.x                 # 本地文件路径
   uuid: ^4.x                          # Chunk UUID 生成
 ```
 
 > [!WARNING]
-> `sqlite_vec` 的 Flutter 原生绑定目前处于早期阶段，需在 v0.3 优先验证 iOS/Android FFI 兼容性。不可用时回退为纯 Dart cosine similarity 实现（性能略低但零依赖，可作为永久备选）。
+> **v0.3 实现结论**：当前使用纯 Dart cosine similarity 回退，`sqlite_vec` FFI 路径因包构建不完整暂不可用。
+> - 向量的维度不再写死 1536——`Embedder` 自动从首次 API 响应中检测维度（兼容 OpenAI 1536、DeepSeek 2048 等）
+> - Chat 和 Embedding 的 API 配置已分离，允许混合使用不同提供商
+> - 内置固定 embedding 模型已打包为 TFLite 资产（512 维，512 seq len），支持离线 embedding profile、预构建 seed DB 和移动端 fallback embedding
+> - Embedding 已引入 profile 隔离机制：切换 API provider/model 或内置模型时保留旧 profile，当前检索和索引只作用于 active profile；API Key 不参与 profile 身份识别
+> - v0.3 已新增桌面端 seed 构建流程：`tool/build_seed.py` 在电脑端爬取 PRTS / Warfarin Wiki、分块、生成 embedding、校验并复制到 `assets/seeds/`，避免用户首次安装后在手机端长时间建库
+> - 详情见 `docs/v0.3_SUMMARY.md`
 
 > [!NOTE]
 > `syncfusion_flutter_pdf` 社区版对非商业开源项目免费，符合本项目定位。如遇许可证问题可替换为 `pdfx`（纯 Dart，但文字提取能力较弱）。
@@ -521,24 +564,26 @@ dependencies:
 
 ---
 
-### v0.3 — 基础设施：LLM + 知识库
-**目标**：跑通从 Wiki 爬取 → Embedding → sqlite-vec 的完整数据链路。
+### v0.3 — 基础设施：LLM + 知识库（已完成）
+**目标**：跑通从 Wiki 爬取 → Embedding → SQLite 本地向量检索的完整数据链路。
 
 | 交付内容 | 说明 |
 |----------|------|
-| 设置页：API Key 配置 | Base URL / API Key / Chat 模型 / Embedding 模型，`flutter_secure_storage` 加密存储 |
-| LLM 客户端 | `OpenAICompatibleClient` 实现，支持 Chat + Embedding |
+| 设置页：API Key 配置 | **Chat/Embedding 分开配置**，独立 Base URL / API Key / 模型，位于子页面「API Settings」；支持混合使用不同提供商（如 DeepSeek + OpenAI） |
+| LLM 客户端 | `OpenAICompatibleClient` 实现，支持 Chat + Embedding+ Streaming，配置按方法路由不同 API |
 | MediaWiki 爬取器 | 调用 `api.php` 批量拉取页面内容，支持 PRTS + 终末地 |
 | 文本分块器 | ~500 Token 窗口，50 Token 重叠，按标题层级切分 |
-| sqlite-vec 集成 | 验证 FFI 可行性，向量存取封装（备选：纯 Dart cosine similarity）|
-| Wiki 知识库管理页 | 显示索引状态、页面数、向量数，「更新 Wiki」按钮 |
+| sqlite-vec 集成 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用）；向量维度**动态检测**，从首次 API 响应获取 |
+| Wiki 知识库管理页 | 显示索引状态、页面数、向量数，支持后台异步索引、seed 页面快速跳过、清理废弃数据、失败 Embedding 条目统计与一键手动重试 |
 | **资料 Tab 功能** | 书籍列表、PDF/TXT 导入、进度展示、显示名编辑、删除 |
 | **AI 信任策略实现** | Prompt 插入参考第 5 节，引用卡片颜色区分 Wiki/书籍 |
 | 首次引导流程 | 未配置 API Key 时，引导用户完成配置 + 首次 Wiki 索引建立 |
+| **多语言本地化**（追加） | `flutter_localizations` + ARB 文件，EN / 中文双语平行，Riverpod 切换即时生效 |
+| **预构建 seed 知识库**（追加） | 桌面端构建 `arklores_knowledge.db` + `wiki_cache.zip` + manifest，App 首次启动安装到本地 files 目录 |
 
 **估时**：2 周  
 **风险**：sqlite-vec Flutter FFI 绑定不稳定，需预留备选方案时间。  
-**验收标准**：能将 100 个 Wiki 页面成功向量化入库，能执行语义搜索并返回结果。
+**验收标准**：能安装预构建 seed 知识库（当前 17087 chunks），能执行语义搜索并返回结果，Wiki 同步不会重复重建健康 seed 页面。
 
 ---
 
@@ -685,12 +730,15 @@ dependencies:
 | 书籍导入入口 | 底部导航独立 **资料 Tab**（非设置内嵌） |
 | 多本书籍支持 | 支持同时导入多本书籍，可分别管理和删除 |
 | 最低系统版本 | Android 8.0（API 26）/ iOS 14 |
-| sqlite-vec 方案 | FFI 绑定优先，不可用时回退纯 Dart cosine similarity |
+| sqlite-vec 方案 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用） |
+| Chat/Embedding 配置 | **可分开指定不同提供商**（如 Chat 用 DeepSeek，Embedding 用 OpenAI），设置页位于子页面「API Settings」 |
+| Embedding 维度 | **动态检测**——从首次 API 响应自动获取，不写死 1536，兼容 OpenAI / DeepSeek / 其他模型 |
+| 内置 Embedding | **接受安装包体积增大**；仅支持一个固定内置模型，不提供用户替换模型能力；v0.3 已打包固定 512 维 TFLite 模型并用于 seed embedding 与移动端 fallback |
+| Embedding Profile | **保留旧 profile**；用户切换 provider/model/内置模型时创建或激活独立 profile，可切回旧 profile；删除 profile 需用户手动确认；profile 身份不包含 API Key |
+| 本地化 | **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全），设置页 `SegmentedButton` 切换即时生效 |
 | 作者署名 | **hhikr**（写入 `AUTHORS` 文件、README、LICENSE 头部） |
 | GitHub 仓库 | `github.com/hhikr/ArkLores` |
-| AI 资料可信度 | 书籍来源内容全局应用信任策略，以 Wiki 为优先参考，引用时马色区分并附免责声明 |
+| AI 资料可信度 | 书籍来源内容全局应用信任策略，以 Wiki 为优先参考，引用时颜色区分并附免责声明 |
 
 > [!NOTE]
 > 架构设计已全部确认。下一步可开始建立项目、搜索库名并初始化 Flutter 工程（v0.1）。
-
-
