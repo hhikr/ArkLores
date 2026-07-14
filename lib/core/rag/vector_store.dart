@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:path/path.dart' as p;
@@ -111,12 +111,15 @@ class VectorStore {
     final legacyFile = File(legacyPath);
     final file = File(dbPath);
 
-    if (dbPath != legacyPath && await legacyFile.exists() && !await file.exists()) {
+    if (dbPath != legacyPath &&
+        await legacyFile.exists() &&
+        !await file.exists()) {
       try {
         await file.parent.create(recursive: true);
         await legacyFile.copy(dbPath);
         await legacyFile.delete();
-        print('[VectorStore] Successfully migrated legacy sandbox database to: $dbPath');
+        print(
+            '[VectorStore] Successfully migrated legacy sandbox database to: $dbPath');
       } catch (e) {
         print('[VectorStore] Failed to migrate legacy sandbox database: $e');
       }
@@ -142,7 +145,7 @@ class VectorStore {
       version: 1,
       onCreate: (db, version) async {
         await db.execute('''
-          CREATE TABLE chunks (
+          CREATE TABLE IF NOT EXISTS chunks (
             id          TEXT PRIMARY KEY,
             source_type TEXT NOT NULL,
             source_url  TEXT,
@@ -157,14 +160,14 @@ class VectorStore {
           )
         ''');
         await db.execute('''
-          CREATE TABLE chunk_embeddings (
+          CREATE TABLE IF NOT EXISTS chunk_embeddings (
             chunk_id  TEXT PRIMARY KEY,
             embedding BLOB NOT NULL,
             FOREIGN KEY (chunk_id) REFERENCES chunks(id)
           )
         ''');
         await db.execute('''
-          CREATE TABLE books (
+          CREATE TABLE IF NOT EXISTS books (
             id           TEXT PRIMARY KEY,
             file_name    TEXT NOT NULL,
             display_name TEXT,
@@ -215,6 +218,8 @@ class VectorStore {
       // Ignored if table already exists.
     }
 
+    await _normalizeSeedWikiTimestamps();
+
     _initialized = true;
 
     // Kick off one-time embedding for pending chunks (seed data from CLI builder).
@@ -234,6 +239,26 @@ class VectorStore {
       debugPrint('[VectorStore] Pending embed error (non-fatal): $e');
     }
   }
+
+  Future<void> _normalizeSeedWikiTimestamps() async {
+    final metadata = await _fallbackDb!.query('seed_metadata');
+    final values = {
+      for (final row in metadata) row['key'] as String: row['value'] as String,
+    };
+    if (values['embedding_profile_id'] != 'builtin:builtin-embedding') return;
+
+    final builtAt = DateTime.tryParse(values['built_at'] ?? '');
+    if (builtAt == null) return;
+
+    final builtAtSeconds = builtAt.millisecondsSinceEpoch ~/ 1000;
+    await _fallbackDb!.update(
+      'chunks',
+      {'updated_at': builtAtSeconds},
+      where: "source_type = 'wiki' "
+          "AND profile_id = 'builtin:builtin-embedding' "
+          'AND updated_at < ?',
+      whereArgs: [builtAtSeconds],
+    );
   }
 
   bool isZeroVector(List<double> vec) {
@@ -707,9 +732,8 @@ class VectorStore {
     final where = profileId != null
         ? 'embedding_status = ? AND profile_id = ?'
         : 'embedding_status = ?';
-    final args = profileId != null
-        ? [embeddingStatus, profileId]
-        : [embeddingStatus];
+    final args =
+        profileId != null ? [embeddingStatus, profileId] : [embeddingStatus];
     return sqflite.Sqflite.firstIntValue(
           await _fallbackDb!.rawQuery(
             'SELECT COUNT(*) FROM chunks WHERE $where',

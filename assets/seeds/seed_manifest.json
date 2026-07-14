@@ -1,12 +1,16 @@
 {
   "schemaVersion": 1,
   "seedVersion": "2026-07-13",
-  "builtAt": "2026-07-13T13:46:22.432938Z",
+  "builtAt": "2026-07-13T18:37:10.800176Z",
   "embedding": {
     "profileId": "builtin:builtin-embedding",
     "backend": "builtin",
     "model": "builtin-embedding",
-    "dimension": 512
+    "dimension": 512,
+    "status": "complete",
+    "runner": "python-tflite:tensorflow",
+    "completedAt": "2026-07-13T18:53:38.750504+00:00",
+    "vectorCount": 17087
   },
   "chunker": {
     "version": 1,
@@ -17,9 +21,15 @@
   "sources": {
     "prts": {
       "enabled": true,
-      "pageCount": 3,
-      "chunkCount": 48,
-      "snapshotAt": "2026-07-13T13:46:22.432938Z"
+      "pageCount": 2123,
+      "chunkCount": 15218,
+      "snapshotAt": "2026-07-13T18:37:10.800176Z"
+    },
+    "endfield": {
+      "enabled": true,
+      "pageCount": 739,
+      "chunkCount": 1869,
+      "snapshotAt": "2026-07-13T18:37:10.800176Z"
     }
   }
 }
