@@ -105,10 +105,34 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
     );
 
     // Build history for the LLM before adding the new user message to the state
-    final history = state
-        .where((m) => !m.isStreaming && !m.isError)
-        .map((m) => Message(role: m.role, content: m.content))
-        .toList();
+    final history = <Message>[];
+    for (final m in state) {
+      if (m.isStreaming || m.isError) continue;
+      if (m.role == MessageRole.user) {
+        history.add(Message.user(m.content));
+      } else if (m.role == MessageRole.assistant) {
+        final buffer = StringBuffer();
+        for (final step in m.steps) {
+          if (step.type == ReActEventType.thought) {
+            buffer.writeln('Thought: ${step.content}');
+          } else if (step.type == ReActEventType.toolCall) {
+            buffer.writeln('Action: ${step.toolName}');
+            // Content matches 'Executing tool "..." with arguments: {...}'
+            final argsPart = step.content.contains('arguments: ')
+                ? step.content.split('arguments: ').last
+                : '{}';
+            buffer.writeln('Action Input: $argsPart');
+          } else if (step.type == ReActEventType.toolObservation) {
+            buffer.writeln('Observation: ${step.content}');
+          }
+        }
+        if (m.content.isNotEmpty) {
+          buffer.writeln('Thought: I have enough information to answer.');
+          buffer.writeln('Final Answer: ${m.content}');
+        }
+        history.add(Message.assistant(buffer.toString().trim()));
+      }
+    }
 
     state = [...state, userMsg];
 
