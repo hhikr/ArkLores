@@ -208,6 +208,7 @@ class _MockLLMClient extends LLMClient {
     List<Map<String, dynamic>>? tools,
     double temperature = 0.7,
     int maxTokens = 2048,
+    List<String>? stop,
   }) async {
     callCount++;
     if (callCount == 1) {
@@ -236,8 +237,9 @@ Final Answer: W is a mercenary [chunk-123].
     void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
+    List<String>? stop,
   }) async {
-    return chat(messages, temperature: temperature, maxTokens: maxTokens);
+    return chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
   }
 
   @override

@@ -126,6 +126,7 @@ abstract class LLMClient {
     List<Map<String, dynamic>>? tools,
     double temperature = 0.7,
     int maxTokens = 2048,
+    List<String>? stop,
   });
 
   /// Sends a chat completion request and streams the response tokens
@@ -135,6 +136,7 @@ abstract class LLMClient {
     void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
+    List<String>? stop,
   });
 
   /// Embeds a single text string into a vector.
