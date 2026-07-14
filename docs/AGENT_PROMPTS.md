@@ -326,7 +326,7 @@ scope 列表（参考文档）：wiki | ai | materials | rag | agent | theme | s
 执行前先检查：
 - 当前分支和 git status。
 - 是否已有未提交改动；不要 revert、reset 或覆盖用户/其他 agent 的改动。
-- /home/hhikr/ArkLores/log/ 下是否有最新 AI 对话日志；这些日志有价值，不要删除。
+- /home/hhikr/ArkLores/logs/ 下是否有最新 AI 对话日志；这些日志有价值，不要删除。
 - Flutter 工具优先使用 /home/hhikr/flutter/bin/flutter。
 
 【当前上下文】
@@ -365,7 +365,7 @@ scope 列表（参考文档）：wiki | ai | materials | rag | agent | theme | s
    - 代码改动后至少跑相关 unit tests；大改动后跑 flutter analyze。
 
 【禁止事项】
-- 不要删除 log/。
+- 不要删除 logs/。
 - 不要 revert 未提交改动，除非用户明确要求。
 - 不要引入新的主知识源路线。
 - 不要把 Wiki seed RAG 当作最终方案继续扩展。

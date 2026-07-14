@@ -8,7 +8,7 @@
 /// app's first launch, the builtin embedding model generates the vectors.
 ///
 /// Usage:
-///   dart run tool/build_seed_database.dart [options]
+///   dart run tools/build_seed_database.dart [options]
 ///
 /// Options:
 ///   --sources=endfield,prts   (default: endfield)

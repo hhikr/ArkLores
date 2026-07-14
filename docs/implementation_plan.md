@@ -544,7 +544,7 @@ dependencies:
 > - Chat 和 Embedding 的 API 配置已分离，允许混合使用不同提供商
 > - 内置固定 embedding 模型已打包为 TFLite 资产（512 维，512 seq len），支持离线 embedding profile、预构建 seed DB 和移动端 fallback embedding
 > - Embedding 已引入 profile 隔离机制：切换 API provider/model 或内置模型时保留旧 profile，当前检索和索引只作用于 active profile；API Key 不参与 profile 身份识别
-> - v0.3 已新增桌面端 seed 构建流程：`tool/build_seed.py` 在电脑端爬取 PRTS / Warfarin Wiki、分块、生成 embedding、校验并复制到 `assets/seeds/`，避免用户首次安装后在手机端长时间建库
+> - v0.3 已新增桌面端 seed 构建流程：`tools/build_seed.py` 在电脑端爬取 PRTS / Warfarin Wiki、分块、生成 embedding、校验并复制到 `assets/seeds/`，避免用户首次安装后在手机端长时间建库
 > - 详情见 `docs/v0.3_SUMMARY.md`
 
 > [!NOTE]

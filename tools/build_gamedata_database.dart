@@ -3,7 +3,7 @@
 /// Initial scope: Chinese Arknights data from Kengxxiao/ArknightsGameData.
 ///
 /// Usage:
-///   dart run tool/build_gamedata_database.dart \
+///   dart run tools/build_gamedata_database.dart \
 ///     --arknights-source=/path/to/ArknightsGameData \
 ///     --output=build/gamedata \
 ///     --force
@@ -169,7 +169,7 @@ void main(List<String> args) async {
       'status': 'ok',
       'database': dbPath,
       'counts': stats.toJson(),
-      'nextStep': 'Run tool/embed_gamedata_database.py before publishing.',
+      'nextStep': 'Run tools/embed_gamedata_database.py before publishing.',
     }),
     flush: true,
   );
@@ -1355,7 +1355,7 @@ class _Config {
   static Never _printUsageAndExit({int exitCode = 0}) {
     stdout.writeln('''
 Usage:
-  dart run tool/build_gamedata_database.dart \\
+  dart run tools/build_gamedata_database.dart \\
     --arknights-source=/path/to/ArknightsGameData \\
     --output=build/gamedata \\
     --force
