@@ -311,8 +311,10 @@ String assembleOperatorMarkdown(
       for (int j = 1; j <= 20; j++) {
         final rawPage = m['storyTxt$j'] ?? '';
         if (rawPage.isEmpty) break;
-        final resolvedPage =
-            rawPage.replaceAll('{{FULLPAGENAME}}', operatorName).trim();
+        final resolvedPage = rawPage
+            .replaceAll('{{FULLPAGENAME}}', operatorName)
+            .replaceFirst(RegExp(r'\s*\}\}+\s*$'), '')
+            .trim();
         if (resolvedPage.isEmpty) continue;
         final intro = m['storyIntro$j'] ?? '';
         if (intro.isNotEmpty) {
