@@ -73,7 +73,8 @@ chore(ci): add GitHub Actions workflow for APK build
 ### RAG / Seed 数据
 
 - 普通本地数据库、用户导入资料和调试输出不得提交。
-- `assets/seeds/arklores_knowledge.db`、`assets/seeds/wiki_cache.zip`、`assets/seeds/seed_manifest.json` 是发布用预构建 seed bundle，只有在执行 v0.3+ seed 构建或发布收尾时才应更新。
+- `assets/seeds/arklores_knowledge.db` 和 `assets/seeds/arklores_knowledge.db.gz` 不得提交。预构建 DB 作为 GitHub Release asset 发布。
+- `assets/seeds/wiki_cache.zip` 和 `assets/seeds/seed_manifest.json` 是发布用 seed metadata/cache，只有在执行 v0.3+ seed 构建或发布收尾时才应更新。
 - 修改 seed pipeline 后请至少校验：`chunks == chunk_embeddings`，且 `embedding_status` 全部为 `ok`。
 - Wiki / Book 来源必须保留 `source_type`，Agent 和引用卡片不得把 Book 内容当作官方 Wiki 内容展示。
 
