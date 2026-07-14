@@ -111,9 +111,8 @@ class SeedInstaller {
       final compressed = BytesBuilder(copy: false);
       var received = 0;
       final contentLength = response.contentLength;
-      final total = contentLength != null && contentLength >= 0
-          ? contentLength
-          : null;
+      final total =
+          contentLength != null && contentLength >= 0 ? contentLength : null;
       await for (final chunk in response.stream) {
         compressed.add(chunk);
         received += chunk.length;
@@ -180,7 +179,8 @@ class SeedInstaller {
     try {
       final zipData = await rootBundle.load(_cacheZipAsset);
       final archive = ZipDecoder().decodeBytes(
-        zipData.buffer.asUint8List(zipData.offsetInBytes, zipData.lengthInBytes),
+        zipData.buffer
+            .asUint8List(zipData.offsetInBytes, zipData.lengthInBytes),
       );
 
       final cacheDir = Directory(p.join(dir.path, 'wiki_cache'));
@@ -222,8 +222,8 @@ class SeedInstaller {
       await manifestFile.parent.create(recursive: true);
       await manifestFile.writeAsString(
         utf8.decode(
-          manifestData.buffer
-              .asUint8List(manifestData.offsetInBytes, manifestData.lengthInBytes),
+          manifestData.buffer.asUint8List(
+              manifestData.offsetInBytes, manifestData.lengthInBytes),
         ),
       );
     } catch (_) {}

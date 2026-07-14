@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/rag/seed_installer.dart';
 import '../../core/rag/vector_store.dart';
 import '../../core/rag/vector_store_provider.dart';
 import '../../core/rag/wiki_indexing_provider.dart';
@@ -12,8 +13,18 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
 /// Knowledge base management page.
-class KnowledgeBasePage extends ConsumerWidget {
+class KnowledgeBasePage extends ConsumerStatefulWidget {
   const KnowledgeBasePage({super.key});
+
+  @override
+  ConsumerState<KnowledgeBasePage> createState() => _KnowledgeBasePageState();
+}
+
+class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
+  bool _isDownloadingSeed = false;
+  int _seedDownloadedBytes = 0;
+  int? _seedTotalBytes;
+  String? _seedDownloadError;
 
   static const List<String> _prtsCategories = [
     'Category:干员',
@@ -27,7 +38,7 @@ class KnowledgeBasePage extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final statsAsync = ref.watch(vectorStoreStatsProvider);
     final embeddingSettings = ref.watch(embeddingSettingsProvider);
@@ -158,6 +169,11 @@ class KnowledgeBasePage extends ConsumerWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, _) =>
                 _buildErrorCard(context.t.materialsLoadFailed(err), theme),
+          ),
+          statsAsync.when(
+            data: (stats) => _buildSeedDownloadCard(context, stats, theme),
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
           ),
           const SizedBox(height: 24),
 
@@ -356,6 +372,147 @@ class KnowledgeBasePage extends ConsumerWidget {
             error: (_, __) => const SizedBox.shrink(),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _downloadReleaseSeed() async {
+    setState(() {
+      _isDownloadingSeed = true;
+      _seedDownloadedBytes = 0;
+      _seedTotalBytes = null;
+      _seedDownloadError = null;
+    });
+
+    try {
+      ref.read(vectorStoreProvider).dispose();
+      await SeedInstaller().installFromReleaseAsset(
+        overwrite: true,
+        onProgress: (received, total) {
+          if (!mounted) return;
+          setState(() {
+            _seedDownloadedBytes = received;
+            _seedTotalBytes = total;
+          });
+        },
+      );
+      ref.invalidate(vectorStoreStatsProvider);
+      ref.invalidate(vectorStoreInitProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('预构建知识库已安装')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _seedDownloadError = '$e';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isDownloadingSeed = false;
+      });
+    }
+  }
+
+  Widget _buildSeedDownloadCard(
+    BuildContext context,
+    VectorStoreStats stats,
+    AppThemeTokens theme,
+  ) {
+    if (stats.totalChunks > 0) return const SizedBox.shrink();
+
+    final total = _seedTotalBytes;
+    final progress = total != null && total > 0
+        ? (_seedDownloadedBytes / total).clamp(0.0, 1.0)
+        : null;
+    final progressText = total != null && total > 0
+        ? '${(_seedDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} MB'
+        : _seedDownloadedBytes > 0
+            ? '${(_seedDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
+            : 'Release asset';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: ThemeAwareCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.cloud_download_rounded,
+                    color: theme.accentPrimary, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '下载预构建 Wiki 知识库',
+                        style: theme.titleFont.copyWith(fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        progressText,
+                        style: theme.bodyFont.copyWith(
+                          color: theme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: _isDownloadingSeed ? null : _downloadReleaseSeed,
+                  icon: Icon(
+                    _isDownloadingSeed
+                        ? Icons.downloading_rounded
+                        : Icons.download_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _isDownloadingSeed ? '下载中' : '下载',
+                    style: theme.titleFont.copyWith(fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.accentPrimary,
+                    foregroundColor: theme.bgPrimary,
+                    disabledBackgroundColor: theme.divider,
+                    disabledForegroundColor: theme.textSecondary,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_isDownloadingSeed) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: theme.divider,
+                  valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+                  minHeight: 6,
+                ),
+              ),
+            ],
+            if (_seedDownloadError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _seedDownloadError!,
+                style: theme.bodyFont.copyWith(
+                  color: theme.danger,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

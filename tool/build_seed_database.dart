@@ -128,7 +128,8 @@ ${allStats.map((s) => '  \u2551   ${s.name}: ${s.pageCount} pages, ${s.chunkCoun
   if (cfg.copyToAssets) {
     final assetDir = Directory('assets/seeds');
     if (!await assetDir.exists()) await assetDir.create(recursive: true);
-    await File(dbGzPath).copy(p.join(assetDir.path, 'arklores_knowledge.db.gz'));
+    await File(dbGzPath)
+        .copy(p.join(assetDir.path, 'arklores_knowledge.db.gz'));
     await File(zipPath).copy(p.join(assetDir.path, 'wiki_cache.zip'));
     await File(manifestPath).copy(p.join(assetDir.path, 'seed_manifest.json'));
     print('Copied release seed artifacts to ${assetDir.path}/');
