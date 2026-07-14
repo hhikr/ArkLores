@@ -145,10 +145,6 @@ picture,
 
   /// Builds a safe JavaScript string literal from a multi-line Dart string.
   static String _jsStringLiteral(String value) {
-    return '`${value
-        .replaceAll('\\', '\\\\')
-        .replaceAll('`', '\\`')
-        .replaceAll(r'$', r'\$')
-        .trim()}`';
+    return '`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll(r'$', r'\$').trim()}`';
   }
 }

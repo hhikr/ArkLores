@@ -15,7 +15,7 @@ You help users explore story details, character backgrounds, and world-building.
 Your answers should be:
 - Accurate and grounded in the provided knowledge base content
 - Clear and well-structured (use Markdown for formatting)
-- Accompanied by citations that the user can click to verify
+- Accompanied by source paths, raw ids, content types, and trust notes when available
 
 When you don't know something, say so honestly rather than making up information.
 ''';
@@ -48,15 +48,14 @@ const String factCheckInstructions = '''
 
 工作流程：
 1. 分析用户输入，提取关键实体和主张
-2. 优先使用 search_local_lore 工具检索本地知识库内容（3~5次）
-3. 仅在本地结果不足时使用 search_wiki 作为指定 Wiki 补充搜索
-4. 综合判断该说法的准确性
-5. 输出结论，格式为：
+2. 使用 search_local_lore 工具检索本地 GameData 结构化知识库内容（3~5次）
+3. 综合判断该说法的准确性
+4. 输出结论，格式为：
    - 正确（有 GameData / Wiki 证据支持）
    - 错误（与高可信证据矛盾）
    - 存疑（证据不足以判断）
    - 无法确认（知识库中没有相关信息）
-6. 每个结论附带引用证据，用下划线标注可展开查看原文
+5. 每个结论附带引用证据，用下划线标注可展开查看原文
 
 对于多轮对话：
 - 检测用户是否在追问同一话题（如"那……又是怎么回事？"）
@@ -71,19 +70,20 @@ const String summaryInstructions = '''
 
 工作流程：
 1. 识别输入实体并分类（人物/事件/地点/组织）
-2. 优先使用 search_local_lore 工具检索主条目和关联条目
-3. 仅在本地知识库结果不足或需要补充导航性说明时使用 search_wiki
-4. 生成层级摘要：
+2. 第一次调用 search_local_lore 时使用 {"search_mode":"summary"}，优先获取实体文档
+3. 如果 Observation 返回 Ambiguous GameData entity query，不要继续猜测；请列出候选项并要求用户选择，或在下一次工具调用中带上明确 entity_id
+4. 确认实体后，必要时用 entity_id 再查关联剧情片段、语音、物品或敌人记录
+5. 生成层级摘要：
    - 概述（1~2句话）
    - 时间线整合（按时间顺序排列关键事件）
    - 重要节点标注
    - 关联条目链接
-5. 输出 Markdown 格式，段落标题 + 正文 + 引用列表（可点击展开）
+6. 输出 Markdown 格式，段落标题 + 正文 + 引用列表；引用列表优先写 source_path / raw_id / content_type
 
 注意：
 - 对涉及多线剧情的复杂角色（如凯尔希），优先按时间线组织
 - 如果实体在知识库中未找到，明确告知“当前知识库未覆盖”，并可提供近似建议
-- 当前 v0.4 若只有 Wiki/Book 临时库结果，需要说明 GameData 主库尚未覆盖或尚未安装
+- 如果只有低覆盖片段，说明“当前 GameData 本地库检索结果有限”
 ''';
 
 /// Roleplay Agent specific instructions.

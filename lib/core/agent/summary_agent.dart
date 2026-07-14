@@ -1,12 +1,8 @@
 import 'dart:async';
 import '../llm/llm_client.dart';
-import '../rag/embedder.dart';
-import '../rag/vector_store.dart';
 import 'agent_prompts.dart';
 import 'react_loop.dart';
 import 'tools/search_local_lore.dart';
-import 'tools/search_wiki.dart';
-import 'tools/cite_source.dart';
 import 'tools/tool_registry.dart';
 
 /// Class representing the Summary Agent.
@@ -18,27 +14,12 @@ class SummaryAgent {
 
   SummaryAgent({
     required LLMClient llmClient,
-    required Embedder embedder,
-    required VectorStore vectorStore,
-    String? profileId,
   })  : _llmClient = llmClient,
         _toolRegistry = ToolRegistry() {
-    // Primary v0.4 tool: source-neutral local lore search. It uses installed
-    // GameData first, then falls back to the v0.3 Wiki/Book local DB.
+    // Primary v0.4 tool: source-neutral local lore search over installed
+    // GameData only.
     _toolRegistry.register(SearchLocalLoreTool(
-      embedder: embedder,
-      vectorStore: vectorStore,
-      profileId: profileId,
-    ));
-    // Legacy/fallback tool retained for prompts or older transcripts that
-    // still request search_wiki explicitly.
-    _toolRegistry.register(SearchWikiTool(
-      embedder: embedder,
-      vectorStore: vectorStore,
-      profileId: profileId,
-    ));
-    _toolRegistry.register(CiteSourceTool(
-      vectorStore: vectorStore,
+      gameDataStore: null,
     ));
   }
 

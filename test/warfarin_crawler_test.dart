@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arklores/core/wiki/warfarin_crawler.dart';
 
@@ -23,16 +24,17 @@ void main() {
       () async {
         final crawler = WarfarinWikiCrawler();
 
-        print('📡 Fetching operator slugs from Warfarin Wiki...');
+        debugPrint('📡 Fetching operator slugs from Warfarin Wiki...');
         final opSlugs = await crawler.fetchOperatorSlugs();
-        print('✓ Found ${opSlugs.length} operators. First few: ${opSlugs.take(5).toList()}');
+        debugPrint(
+            '✓ Found ${opSlugs.length} operators. First few: ${opSlugs.take(5).toList()}');
         expect(opSlugs.length, greaterThanOrEqualTo(1));
 
-        print('📡 Fetching operator listings (with names)...');
+        debugPrint('📡 Fetching operator listings (with names)...');
         final opItems = await crawler.fetchOperatorListings();
-        print('✓ Listing items: ${opItems.length}');
+        debugPrint('✓ Listing items: ${opItems.length}');
         for (final item in opItems.take(5)) {
-          print('  ${item.slug} / ${item.name}');
+          debugPrint('  ${item.slug} / ${item.name}');
         }
         expect(opItems.length, greaterThanOrEqualTo(1));
         expect(opItems.first.slug, isNotEmpty);
@@ -48,9 +50,10 @@ void main() {
       () async {
         final crawler = WarfarinWikiCrawler();
 
-        print('📡 Fetching lore slugs...');
+        debugPrint('📡 Fetching lore slugs...');
         final loreSlugs = await crawler.fetchLoreSlugs();
-        print('✓ Found ${loreSlugs.length} lore entries. First few: ${loreSlugs.take(3).toList()}');
+        debugPrint(
+            '✓ Found ${loreSlugs.length} lore entries. First few: ${loreSlugs.take(3).toList()}');
         expect(loreSlugs.length, greaterThanOrEqualTo(1));
 
         final loreItems = await crawler.fetchLoreListings();
@@ -68,9 +71,10 @@ void main() {
       () async {
         final crawler = WarfarinWikiCrawler();
 
-        print('📡 Fetching mission slugs...');
+        debugPrint('📡 Fetching mission slugs...');
         final missionSlugs = await crawler.fetchMissionSlugs();
-        print('✓ Found ${missionSlugs.length} missions. First few: ${missionSlugs.take(3).toList()}');
+        debugPrint(
+            '✓ Found ${missionSlugs.length} missions. First few: ${missionSlugs.take(3).toList()}');
         expect(missionSlugs.length, greaterThanOrEqualTo(1));
 
         final missionItems = await crawler.fetchMissionListings();
@@ -91,17 +95,18 @@ void main() {
 
         if (ops.isNotEmpty) {
           final slug = ops.first.slug;
-          print('📡 Fetching detail for operator: $slug (${ops.first.name})...');
+          debugPrint(
+              '📡 Fetching detail for operator: $slug (${ops.first.name})...');
           final opData = await crawler.fetchOperatorDetail(slug);
           expect(opData, isNotEmpty);
-          print('Detail data keys: ${opData.keys.take(8).toList()}');
+          debugPrint('Detail data keys: ${opData.keys.take(8).toList()}');
           var markdown = crawler.formatOperatorToMarkdown(opData);
           if (markdown.isEmpty || markdown == '# \n') {
-            markdown = '# ${ops.first.name}\n${markdown}';
+            markdown = '# ${ops.first.name}\n$markdown';
           }
-          print('=== MARKDOWN PREVIEW ===');
-          print(markdown.split('\n').take(10).join('\n'));
-          print('=======================');
+          debugPrint('=== MARKDOWN PREVIEW ===');
+          debugPrint(markdown.split('\n').take(10).join('\n'));
+          debugPrint('=======================');
         }
 
         crawler.dispose();
@@ -117,12 +122,12 @@ void main() {
 
         if (loreItems.isNotEmpty) {
           final slug = loreItems.first.slug;
-          print('📡 Fetching lore detail: $slug...');
+          debugPrint('📡 Fetching lore detail: $slug...');
           final data = await crawler.fetchLoreDetail(slug);
           expect(data, isNotEmpty);
           final markdown = crawler.formatLoreToMarkdown(data);
-          print('=== MARKDOWN PREVIEW ===');
-          print(markdown.split('\n').take(10).join('\n'));
+          debugPrint('=== MARKDOWN PREVIEW ===');
+          debugPrint(markdown.split('\n').take(10).join('\n'));
         }
 
         crawler.dispose();
@@ -138,12 +143,12 @@ void main() {
 
         if (missionItems.isNotEmpty) {
           final slug = missionItems.first.slug;
-          print('📡 Fetching mission detail: $slug...');
+          debugPrint('📡 Fetching mission detail: $slug...');
           final data = await crawler.fetchMissionDetail(slug);
           expect(data, isNotEmpty);
           final markdown = crawler.formatMissionToMarkdown(data);
-          print('=== MARKDOWN PREVIEW ===');
-          print(markdown.split('\n').take(10).join('\n'));
+          debugPrint('=== MARKDOWN PREVIEW ===');
+          debugPrint(markdown.split('\n').take(10).join('\n'));
         }
 
         crawler.dispose();
@@ -156,34 +161,34 @@ void main() {
     test('Format: 干员 汤汤', () async {
       final crawler = WarfarinWikiCrawler();
       final ops = await crawler.fetchOperatorListings();
-      final tangtang = ops.firstWhere((o) => o.slug == 'tangtang',
-          orElse: () => ops[0]);
-      print('═══════════════════════════════════════════');
-      print('📄 干员：${tangtang.name} (${tangtang.slug})');
-      print('═══════════════════════════════════════════');
+      final tangtang =
+          ops.firstWhere((o) => o.slug == 'tangtang', orElse: () => ops[0]);
+      debugPrint('═══════════════════════════════════════════');
+      debugPrint('📄 干员：${tangtang.name} (${tangtang.slug})');
+      debugPrint('═══════════════════════════════════════════');
       final data = await crawler.fetchOperatorDetail(tangtang.slug);
       final md = crawler.formatOperatorToMarkdown(data);
-      print('字符数：${md.length}');
-      print('════');
-      print(md);
-      print('═══════════════════════════════════════════');
+      debugPrint('字符数：${md.length}');
+      debugPrint('════');
+      debugPrint(md);
+      debugPrint('═══════════════════════════════════════════');
       crawler.dispose();
     }, timeout: const Timeout(Duration(minutes: 1)));
 
     test('Format: 干员 佩丽卡', () async {
       final crawler = WarfarinWikiCrawler();
       final ops = await crawler.fetchOperatorListings();
-      final target = ops.firstWhere((o) => o.slug == 'perlica',
-          orElse: () => ops[0]);
-      print('═══════════════════════════════════════════');
-      print('📄 干员：${target.name} (${target.slug})');
-      print('═══════════════════════════════════════════');
+      final target =
+          ops.firstWhere((o) => o.slug == 'perlica', orElse: () => ops[0]);
+      debugPrint('═══════════════════════════════════════════');
+      debugPrint('📄 干员：${target.name} (${target.slug})');
+      debugPrint('═══════════════════════════════════════════');
       final data = await crawler.fetchOperatorDetail(target.slug);
       final md = crawler.formatOperatorToMarkdown(data);
-      print('字符数：${md.length}');
-      print('════');
-      print(md);
-      print('═══════════════════════════════════════════');
+      debugPrint('字符数：${md.length}');
+      debugPrint('════');
+      debugPrint(md);
+      debugPrint('═══════════════════════════════════════════');
       crawler.dispose();
     }, timeout: const Timeout(Duration(minutes: 1)));
 
@@ -193,44 +198,44 @@ void main() {
       final target = loreItems.firstWhere(
           (o) => o.slug.contains('text_sm1l5m1'),
           orElse: () => loreItems[0]);
-      print('═══════════════════════════════════════════');
-      print('📄 资料：${target.name} (${target.slug})');
-      print('═══════════════════════════════════════════');
+      debugPrint('═══════════════════════════════════════════');
+      debugPrint('📄 资料：${target.name} (${target.slug})');
+      debugPrint('═══════════════════════════════════════════');
       final data = await crawler.fetchLoreDetail(target.slug);
       final md = crawler.formatLoreToMarkdown(data);
-      print('字符数：${md.length}');
-      print('════');
-      print(md);
-      print('═══════════════════════════════════════════');
+      debugPrint('字符数：${md.length}');
+      debugPrint('════');
+      debugPrint(md);
+      debugPrint('═══════════════════════════════════════════');
       crawler.dispose();
     }, timeout: const Timeout(Duration(minutes: 1)));
 
     test('Format: 资料 弩箭残片的记录', () async {
       final crawler = WarfarinWikiCrawler();
-      final data = await crawler
-          .fetchLoreDetail('text_map01_lv001_sm1l1m4_1');
-      print('═══════════════════════════════════════════');
-      print('📄 资料：弩箭残片的记录');
-      print('═══════════════════════════════════════════');
+      final data = await crawler.fetchLoreDetail('text_map01_lv001_sm1l1m4_1');
+      debugPrint('═══════════════════════════════════════════');
+      debugPrint('📄 资料：弩箭残片的记录');
+      debugPrint('═══════════════════════════════════════════');
       final md = crawler.formatLoreToMarkdown(data);
-      print('字符数：${md.length}');
-      print('════');
-      print(md);
-      print('═══════════════════════════════════════════');
+      debugPrint('字符数：${md.length}');
+      debugPrint('════');
+      debugPrint(md);
+      debugPrint('═══════════════════════════════════════════');
       crawler.dispose();
     }, timeout: const Timeout(Duration(minutes: 1)));
 
     test('Format: 任务 c27m1 完整对话', () async {
       final crawler = WarfarinWikiCrawler();
-      print('═══════════════════════════════════════════');
-      print('📄 任务：c27m1（风平水不静）');
-      print('═══════════════════════════════════════════');
+      debugPrint('═══════════════════════════════════════════');
+      debugPrint('📄 任务：c27m1（风平水不静）');
+      debugPrint('═══════════════════════════════════════════');
       final data = await crawler.fetchMissionDetail('c27m1');
       final md = crawler.formatMissionToMarkdown(data);
-      print('字符数：${md.length} ｜ 对话条目数：${(data['dialog'] as List?)?.length ?? 0}');
-      print('════');
-      print(md);
-      print('═══════════════════════════════════════════');
+      debugPrint(
+          '字符数：${md.length} ｜ 对话条目数：${(data['dialog'] as List?)?.length ?? 0}');
+      debugPrint('════');
+      debugPrint(md);
+      debugPrint('═══════════════════════════════════════════');
       crawler.dispose();
     }, timeout: const Timeout(Duration(minutes: 1)));
 
@@ -238,15 +243,15 @@ void main() {
       final crawler = WarfarinWikiCrawler();
       final missions = await crawler.fetchMissionListings();
       final last = missions.last;
-      print('═══════════════════════════════════════════');
-      print('📄 任务：${last.slug}（${last.name}）');
-      print('═══════════════════════════════════════════');
+      debugPrint('═══════════════════════════════════════════');
+      debugPrint('📄 任务：${last.slug}（${last.name}）');
+      debugPrint('═══════════════════════════════════════════');
       final data = await crawler.fetchMissionDetail(last.slug);
       final md = crawler.formatMissionToMarkdown(data);
-      print('字符数：${md.length}');
-      print('════');
-      print(md);
-      print('═══════════════════════════════════════════');
+      debugPrint('字符数：${md.length}');
+      debugPrint('════');
+      debugPrint(md);
+      debugPrint('═══════════════════════════════════════════');
       crawler.dispose();
     }, timeout: const Timeout(Duration(minutes: 1)));
   });

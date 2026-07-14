@@ -96,18 +96,20 @@ Let's begin!
     var iteration = 0;
     var completed = false;
     final logger = AgentLogger(userQuery);
+    final evidenceSummary = _EvidenceSummary();
 
     while (iteration < _maxIterations && !completed) {
       iteration++;
       logger.logIteration(iteration, _maxIterations);
 
-      // We ask the LLM for a Thought and Action step (we restrict maxTokens to keep it concise)
+      // Ask for one Thought and Action step. Keep this bounded, but leave
+      // enough room for providers that include verbose reasoning text.
       ChatCompletionResult completion;
       try {
         completion = await _llmClient.chatCompletion(
           loopMessages,
           temperature: 0.1, // Low temperature for high format compliance
-          maxTokens: 1024,
+          maxTokens: 2048,
           stop: const [
             'Observation:',
             '\nObservation:',
@@ -122,7 +124,7 @@ Let's begin!
       final response = completion.content;
       if (completion.wasTruncated) {
         final errorMsg =
-            'LLM response was truncated before the ReAct step completed. Please retry with a shorter query or a larger max token limit.';
+            'LLM response was truncated before the ReAct step completed. Please retry with a narrower question.';
         logger.logError('TRUNCATED_REACT_STEP: $errorMsg');
         await logger.flush();
         yield ReActEvent(type: ReActEventType.error, content: errorMsg);
@@ -172,7 +174,9 @@ Let's begin!
         logger.logFinalAnswer(actualAnswer);
         await logger.flush();
         yield ReActEvent(
-            type: ReActEventType.finalAnswerToken, content: actualAnswer);
+          type: ReActEventType.finalAnswerToken,
+          content: _applySourceGuard(actualAnswer, evidenceSummary),
+        );
         completed = true;
         break;
       }
@@ -221,6 +225,7 @@ Let's begin!
       }
 
       logger.logObservation(observation);
+      evidenceSummary.addObservation(observation);
       yield ReActEvent(
         type: ReActEventType.toolObservation,
         content: observation,
@@ -234,8 +239,7 @@ Let's begin!
     if (!completed) {
       // Loop finished without Final Answer, stream the final model response or a fallback
       try {
-        final fallbackPrompt =
-            'Please summarize all findings and output your Final Answer now.';
+        final fallbackPrompt = _buildFallbackPrompt(evidenceSummary);
         loopMessages.add(Message.user(fallbackPrompt));
 
         final completion = await _llmClient.chatCompletion(
@@ -266,7 +270,7 @@ Let's begin!
         await logger.flush();
         yield ReActEvent(
           type: ReActEventType.finalAnswerToken,
-          content: content,
+          content: _applySourceGuard(content, evidenceSummary),
         );
       } catch (e) {
         logger.logError('Failed to generate final answer: $e');
@@ -290,7 +294,7 @@ Let's begin!
     if (match != null) {
       var value = match.group(1) ?? '';
 
-      // Handle inline next key on the same line (e.g. Action: search_wiki Action Input: {...})
+      // Handle inline next key on the same line.
       final nextKeyInlinePattern = RegExp(
           r'\b(Thought|Action|Action Input|Observation|Final Answer)\s*:',
           caseSensitive: false);
@@ -333,9 +337,10 @@ Let's begin!
   Map<String, dynamic> _parseActionInput(String raw, AgentTool tool) {
     final trimmed = raw.trim();
     if (trimmed.isEmpty) return {};
+    final actionInput = _extractLeadingJsonObject(trimmed) ?? trimmed;
 
     try {
-      final decoded = jsonDecode(trimmed);
+      final decoded = jsonDecode(actionInput);
       if (decoded is Map<String, dynamic>) {
         return decoded;
       }
@@ -348,7 +353,7 @@ Let's begin!
         ? properties.keys.map((key) => '$key').toSet()
         : <String>{};
 
-    final pairs = _parseLooseKeyValuePairs(trimmed, knownKeys);
+    final pairs = _parseLooseKeyValuePairs(actionInput, knownKeys);
     if (pairs.isNotEmpty) return pairs;
 
     if (knownKeys.contains('query')) {
@@ -358,6 +363,40 @@ Let's begin!
       return {'chunk_id': _stripLooseQuotes(trimmed)};
     }
     return {};
+  }
+
+  String? _extractLeadingJsonObject(String raw) {
+    final start = raw.indexOf('{');
+    if (start < 0) return null;
+
+    var depth = 0;
+    var inString = false;
+    var escaped = false;
+    for (var i = start; i < raw.length; i++) {
+      final char = raw[i];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char == '\\') {
+          escaped = true;
+        } else if (char == '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char == '"') {
+        inString = true;
+      } else if (char == '{') {
+        depth++;
+      } else if (char == '}') {
+        depth--;
+        if (depth == 0) {
+          return raw.substring(start, i + 1);
+        }
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> _parseLooseKeyValuePairs(
@@ -428,5 +467,93 @@ Let's begin!
       cleaned = cleaned.substring(1, cleaned.length - 1).trim();
     }
     return cleaned;
+  }
+
+  String _buildFallbackPrompt(_EvidenceSummary evidence) {
+    return '''
+Please summarize all findings and output your Final Answer now.
+
+Verified evidence summary for this ReAct session:
+- GameData evidence available: ${evidence.hasGameData ? 'yes' : 'no'}
+- Wiki evidence available: ${evidence.hasWiki ? 'yes' : 'no'}
+- Book evidence available: ${evidence.hasBook ? 'yes' : 'no'}
+- Empty/error observations seen: ${evidence.emptyOrErrorObservationCount}
+
+Use only facts that appear in the Observation messages above.
+Do not add well-known lore, inferred timeline events, or background knowledge unless the same concrete names/events appear in Observation content.
+If an event, chapter, faction, battle, or character relationship was not retrieved, say it was not retrieved instead of filling it from memory.
+Do not claim Wiki evidence exists unless an Observation contains "Source Type: wiki".
+Do not claim Book evidence exists unless an Observation contains "Source Type: book" or "Book ID:".
+Do not claim GameData evidence exists unless an Observation contains "Source Kind: GameData".
+Treat "No matching records found", "No matching GameData result found", "No confident GameData result", and tool errors as absence of evidence, not as supporting evidence.
+If a requested detail was not found in the verified evidence, say the current knowledge base did not retrieve it.
+''';
+  }
+
+  String _applySourceGuard(String content, _EvidenceSummary evidence) {
+    final warnings = <String>[];
+    if (!evidence.hasWiki && _mentionsWikiEvidence(content)) {
+      warnings.add(
+        'This answer mentions Wiki evidence, but this session did not retrieve any observation with Source Type: wiki.',
+      );
+    }
+    if (!evidence.hasBook && _mentionsBookEvidence(content)) {
+      warnings.add(
+        'This answer mentions Book evidence, but this session did not retrieve any observation with Source Type: book or Book ID.',
+      );
+    }
+    if (!evidence.hasGameData && _mentionsGameDataEvidence(content)) {
+      warnings.add(
+        'This answer mentions GameData evidence, but this session did not retrieve any observation with Source Kind: GameData.',
+      );
+    }
+    if (warnings.isEmpty) return content;
+
+    return [
+      content.trim(),
+      '',
+      '> Source warning: ${warnings.join(' ')}',
+    ].join('\n');
+  }
+
+  bool _mentionsWikiEvidence(String content) {
+    return RegExp(r'(Wiki|维基|PRTS)', caseSensitive: false).hasMatch(content);
+  }
+
+  bool _mentionsBookEvidence(String content) {
+    return RegExp(r'(Book|书籍资料|用户导入)', caseSensitive: false).hasMatch(content);
+  }
+
+  bool _mentionsGameDataEvidence(String content) {
+    return RegExp(r'(GameData|游戏原始文本|解包数据)', caseSensitive: false)
+        .hasMatch(content);
+  }
+}
+
+class _EvidenceSummary {
+  bool hasGameData = false;
+  bool hasWiki = false;
+  bool hasBook = false;
+  int emptyOrErrorObservationCount = 0;
+
+  void addObservation(String observation) {
+    if (observation.contains('Source Kind: GameData')) {
+      hasGameData = true;
+    }
+    if (observation.contains('Source Type: wiki')) {
+      hasWiki = true;
+    }
+    if (observation.contains('Source Type: book') ||
+        observation.contains('Book ID:')) {
+      hasBook = true;
+    }
+    if (observation.contains('No matching records found') ||
+        observation.contains('No matching GameData result found') ||
+        observation.contains('No confident GameData result') ||
+        observation.contains('Error:') ||
+        observation.contains('Error occurred') ||
+        observation.contains('Error executing tool')) {
+      emptyOrErrorObservationCount++;
+    }
   }
 }

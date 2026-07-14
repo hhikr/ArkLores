@@ -164,7 +164,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsApiSettingsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Configure Chat & Embedding providers'**
+  /// **'Configure Chat provider'**
   String get settingsApiSettingsDesc;
 
   /// No description provided for @settingsKnowledgeBase.
@@ -176,7 +176,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsKnowledgeBaseDesc.
   ///
   /// In en, this message translates to:
-  /// **'Manage Wiki index, view stats, update knowledge base'**
+  /// **'Manage GameData knowledge base'**
   String get settingsKnowledgeBaseDesc;
 
   /// No description provided for @apiSettingsTitle.
@@ -197,29 +197,11 @@ abstract class AppLocalizations {
   /// **'Used for AI conversations (Fact Check, Summary, Roleplay).'**
   String get apiSettingsChatDesc;
 
-  /// No description provided for @apiSettingsEmbedSection.
-  ///
-  /// In en, this message translates to:
-  /// **'Embedding API'**
-  String get apiSettingsEmbedSection;
-
-  /// No description provided for @apiSettingsEmbedDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Used for knowledge base indexing (Wiki, books). Can use a different provider from Chat.'**
-  String get apiSettingsEmbedDesc;
-
   /// No description provided for @apiSettingsUseSameProvider.
   ///
   /// In en, this message translates to:
   /// **'Use same provider as Chat'**
   String get apiSettingsUseSameProvider;
-
-  /// No description provided for @apiSettingsEmbedFallbackNote.
-  ///
-  /// In en, this message translates to:
-  /// **'Embedding will use the Chat API config above. Note: DeepSeek does not support embeddings — if you use DeepSeek for chat, uncheck this to configure a separate embedding provider.'**
-  String get apiSettingsEmbedFallbackNote;
 
   /// No description provided for @apiSettingsLabelBaseUrl.
   ///
@@ -322,12 +304,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Crawling {site}: {count} pages...'**
   String kbCrawlingPages(Object count, Object site);
-
-  /// No description provided for @kbEmbedding.
-  ///
-  /// In en, this message translates to:
-  /// **'Embedding {title} ({count} chunks)...'**
-  String kbEmbedding(Object count, Object title);
 
   /// No description provided for @kbCompleted.
   ///
@@ -485,12 +461,6 @@ abstract class AppLocalizations {
   /// **'Chunking text...'**
   String get importChunking;
 
-  /// No description provided for @importEmbedding.
-  ///
-  /// In en, this message translates to:
-  /// **'Generating embeddings...'**
-  String get importEmbedding;
-
   /// No description provided for @importStoring.
   ///
   /// In en, this message translates to:
@@ -632,7 +602,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingApiDesc.
   ///
   /// In en, this message translates to:
-  /// **'ArkLores uses your own AI API key.\nConfigure at least a Chat provider now;\nEmbedding can be set up later in Settings.'**
+  /// **'ArkLores uses your own AI API key.\nConfigure a Chat provider to use AI features.'**
   String get onboardingApiDesc;
 
   /// No description provided for @onboardingSaveContinue.
@@ -656,7 +626,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingDoneDesc.
   ///
   /// In en, this message translates to:
-  /// **'You\'re ready to explore the world of Arknights and Endfield.\n\nVisit Settings > API Settings to configure\na separate Embedding provider if needed,\nor start browsing the Wiki!'**
+  /// **'You\'re ready to explore the world of Arknights and Endfield.\n\nInstall the GameData knowledge base in Settings,\nor start browsing the Wiki!'**
   String get onboardingDoneDesc;
 
   /// No description provided for @onboardingStartExploring.

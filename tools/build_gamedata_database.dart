@@ -19,7 +19,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 const _schemaVersion = 1;
 const _language = 'zh';
-const _profileId = 'builtin:builtin-embedding';
 const _game = 'arknights';
 
 const _textKeys = {
@@ -77,7 +76,7 @@ void main(List<String> args) async {
   sqfliteFfiInit();
   final cfg = _Config.parse(args);
 
-  final out = Directory(cfg.outputDir);
+  final out = Directory(p.absolute(cfg.outputDir));
   if (await out.exists()) {
     if (!cfg.force) {
       stderr.writeln(
@@ -104,8 +103,6 @@ void main(List<String> args) async {
             'https://github.com/Kengxxiao/ArknightsGameData',
         'source_arknights_branch': 'master',
         'source_arknights_commit': await _gitCommit(cfg.arknightsSource),
-        'embedding_profile_id': _profileId,
-        'embedding_status': 'pending',
         'built_at': DateTime.now().toUtc().toIso8601String(),
       },
     );
@@ -119,6 +116,8 @@ void main(List<String> args) async {
     await importer.importAll();
 
     await db.execute(
+        "INSERT INTO entity_documents_fts(entity_documents_fts) VALUES('rebuild')");
+    await db.execute(
         "INSERT INTO lore_chunks_fts(lore_chunks_fts) VALUES('rebuild')");
     await stats.refreshFrom(db);
     await _writeManifest(
@@ -127,6 +126,7 @@ void main(List<String> args) async {
         'entity_count': '${stats.entities}',
         'story_line_count': '${stats.storyLines}',
         'normalized_record_count': '${stats.normalizedRecords}',
+        'entity_document_count': '${stats.entityDocuments}',
         'lore_chunk_count': '${stats.loreChunks}',
         'arknights_profile_chunk_count': '${stats.profileChunks}',
         'arknights_story_chunk_count': '${stats.storyChunks}',
@@ -153,11 +153,6 @@ void main(List<String> args) async {
         'languagePath': 'zh_CN',
       },
     },
-    'embedding': {
-      'profileId': _profileId,
-      'status': 'pending',
-      'dimension': 512,
-    },
     'counts': stats.toJson(),
   };
   await File(p.join(out.path, 'gamedata_manifest.json')).writeAsString(
@@ -169,13 +164,13 @@ void main(List<String> args) async {
       'status': 'ok',
       'database': dbPath,
       'counts': stats.toJson(),
-      'nextStep': 'Run tools/embed_gamedata_database.py before publishing.',
     }),
     flush: true,
   );
 
   stdout.writeln('GameData DB built: $dbPath');
   stdout.writeln('Entities: ${stats.entities}');
+  stdout.writeln('Entity documents: ${stats.entityDocuments}');
   stdout.writeln('Story lines: ${stats.storyLines}');
   stdout.writeln('Lore chunks: ${stats.loreChunks}');
 }
@@ -199,6 +194,17 @@ Future<void> _createSchema(Database db) async {
       source_path  TEXT,
       game_version TEXT,
       updated_at   INTEGER
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE entity_aliases (
+      alias       TEXT NOT NULL,
+      entity_id   TEXT NOT NULL,
+      alias_type  TEXT NOT NULL,
+      confidence  REAL NOT NULL DEFAULT 1.0,
+      source_path TEXT,
+      PRIMARY KEY (alias, entity_id, alias_type),
+      FOREIGN KEY (entity_id) REFERENCES entities(id)
     )
   ''');
   await db.execute('''
@@ -252,6 +258,23 @@ Future<void> _createSchema(Database db) async {
     )
   ''');
   await db.execute('''
+    CREATE TABLE entity_documents (
+      id                TEXT PRIMARY KEY,
+      game              TEXT NOT NULL,
+      language          TEXT NOT NULL DEFAULT 'zh',
+      entity_id         TEXT NOT NULL,
+      entity_name       TEXT NOT NULL,
+      entity_type       TEXT NOT NULL,
+      document_type     TEXT NOT NULL,
+      title             TEXT NOT NULL,
+      summary           TEXT,
+      content           TEXT NOT NULL,
+      source_paths      TEXT,
+      source_record_ids TEXT,
+      updated_at        INTEGER
+    )
+  ''');
+  await db.execute('''
     CREATE TABLE lore_chunks (
       id             TEXT PRIMARY KEY,
       game           TEXT NOT NULL,
@@ -277,13 +300,16 @@ Future<void> _createSchema(Database db) async {
     )
   ''');
   await db.execute('''
-    CREATE TABLE chunk_embeddings (
-      chunk_id   TEXT NOT NULL,
-      profile_id TEXT NOT NULL,
-      dimension  INTEGER NOT NULL,
-      embedding  BLOB NOT NULL,
-      PRIMARY KEY (chunk_id, profile_id),
-      FOREIGN KEY (chunk_id) REFERENCES lore_chunks(id)
+    CREATE VIRTUAL TABLE entity_documents_fts USING fts5(
+      entity_name,
+      entity_type,
+      document_type,
+      title,
+      summary,
+      content,
+      content='entity_documents',
+      content_rowid='rowid',
+      tokenize='trigram'
     )
   ''');
   await db.execute('''
@@ -313,6 +339,18 @@ Future<void> _createSchema(Database db) async {
   );
   await db.execute(
     'CREATE INDEX idx_lore_chunks_entity_id ON lore_chunks(entity_id)',
+  );
+  await db.execute(
+    'CREATE INDEX idx_entity_aliases_alias ON entity_aliases(alias)',
+  );
+  await db.execute(
+    'CREATE INDEX idx_entity_aliases_entity ON entity_aliases(entity_id)',
+  );
+  await db.execute(
+    'CREATE INDEX idx_entity_documents_entity ON entity_documents(entity_id)',
+  );
+  await db.execute(
+    'CREATE INDEX idx_entity_documents_type ON entity_documents(document_type)',
   );
 }
 
@@ -387,6 +425,7 @@ class _ArknightsImporter {
           if ('${data['displayNumber'] ?? ''}'.trim().isNotEmpty)
             '${data['displayNumber']}'.trim(),
         }.toList();
+        final documentSections = <_TextSection>[];
 
         await txn.insert(
           'entities',
@@ -403,6 +442,25 @@ class _ArknightsImporter {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
         stats.entities++;
+        await _insertEntityAliases(
+          txn,
+          entityId: charId,
+          canonicalName: name,
+          aliases: aliases,
+          sourcePath: sourcePath,
+        );
+
+        final basicProfile = [
+          if ('${data['description'] ?? ''}'.trim().isNotEmpty)
+            '${data['description']}'.trim(),
+          if ('${data['itemUsage'] ?? ''}'.trim().isNotEmpty)
+            '${data['itemUsage']}'.trim(),
+          if ('${data['itemDesc'] ?? ''}'.trim().isNotEmpty)
+            '${data['itemDesc']}'.trim(),
+        ].join('\n').trim();
+        if (basicProfile.isNotEmpty) {
+          documentSections.add(_TextSection('基础信息', basicProfile));
+        }
 
         await _insertChunk(
           txn,
@@ -412,14 +470,7 @@ class _ArknightsImporter {
           entityId: charId,
           pageTitle: name,
           section: '基础信息',
-          content: [
-            if ('${data['description'] ?? ''}'.trim().isNotEmpty)
-              '${data['description']}'.trim(),
-            if ('${data['itemUsage'] ?? ''}'.trim().isNotEmpty)
-              '${data['itemUsage']}'.trim(),
-            if ('${data['itemDesc'] ?? ''}'.trim().isNotEmpty)
-              '${data['itemDesc']}'.trim(),
-          ].join('\n'),
+          content: basicProfile,
           sourcePath: sourcePath,
           rawId: charId,
           retrievalHint: 'operator_profile',
@@ -438,6 +489,7 @@ class _ArknightsImporter {
                 if (storyRaw is! Map) continue;
                 final text = '${storyRaw['storyText'] ?? ''}'.trim();
                 if (text.isEmpty) continue;
+                documentSections.add(_TextSection(section, text));
                 await _insertChunk(
                   txn,
                   category: 'operator',
@@ -455,6 +507,21 @@ class _ArknightsImporter {
             }
           }
         }
+
+        await _insertEntityDocument(
+          txn,
+          entityId: charId,
+          entityName: name,
+          entityType: 'operator',
+          documentType: 'operator_profile_bundle',
+          title: name,
+          sections: documentSections,
+          sourcePaths: const [
+            'zh_CN/gamedata/excel/character_table.json',
+            'zh_CN/gamedata/excel/handbook_info_table.json',
+          ],
+          sourceRecordIds: [charId],
+        );
       }
     });
   }
@@ -1008,6 +1075,65 @@ class _ArknightsImporter {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     stats.entities++;
+    await _insertEntityAliases(
+      txn,
+      entityId: id,
+      canonicalName: cleanName,
+      aliases: const [],
+      sourcePath: sourcePath,
+    );
+  }
+
+  Future<void> _insertEntityAliases(
+    Transaction txn, {
+    required String entityId,
+    required String canonicalName,
+    required List<String> aliases,
+    required String sourcePath,
+  }) async {
+    final generatedAliases = <String>{
+      ...aliases,
+      ..._generatedAliases(canonicalName),
+    };
+    final entries = <({String alias, String type, double confidence})>[
+      (alias: canonicalName.trim(), type: 'canonical', confidence: 1.0),
+      for (final alias in generatedAliases)
+        if (alias.trim().isNotEmpty)
+          (alias: alias.trim(), type: 'alias', confidence: 0.8),
+    ];
+    for (final entry in entries) {
+      await txn.insert(
+        'entity_aliases',
+        {
+          'alias': entry.alias,
+          'entity_id': entityId,
+          'alias_type': entry.type,
+          'confidence': entry.confidence,
+          'source_path': sourcePath,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  List<String> _generatedAliases(String canonicalName) {
+    final name = canonicalName.trim();
+    if (name.isEmpty) return const [];
+
+    final aliases = <String>{};
+    final delimiterIndex = name.indexOf(RegExp(r'[，,（(「『“]'));
+    if (delimiterIndex > 1) {
+      aliases.add(name.substring(0, delimiterIndex).trim());
+    }
+    final quotedPrefix = RegExp(r'^([^「『“”"]+)[「『“"].+[」』”"]$')
+        .firstMatch(name)
+        ?.group(1)
+        ?.trim();
+    if (quotedPrefix != null && quotedPrefix.length > 1) {
+      aliases.add(quotedPrefix);
+    }
+    aliases.remove(name);
+    return aliases.toList(growable: false);
   }
 
   Future<void> _insertRelation(
@@ -1036,6 +1162,48 @@ class _ArknightsImporter {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     stats.entityRelations++;
+  }
+
+  Future<void> _insertEntityDocument(
+    Transaction txn, {
+    required String entityId,
+    required String entityName,
+    required String entityType,
+    required String documentType,
+    required String title,
+    required List<_TextSection> sections,
+    required List<String> sourcePaths,
+    required List<String> sourceRecordIds,
+  }) async {
+    final cleanSections = sections
+        .where((section) => section.content.trim().isNotEmpty)
+        .toList(growable: false);
+    if (cleanSections.isEmpty) return;
+
+    final content = cleanSections
+        .map((section) => '## ${section.section}\n${section.content.trim()}')
+        .join('\n\n')
+        .trim();
+    await txn.insert(
+      'entity_documents',
+      {
+        'id': _stableId('$_game:$documentType:$entityId'),
+        'game': _game,
+        'language': _language,
+        'entity_id': entityId,
+        'entity_name': entityName,
+        'entity_type': entityType,
+        'document_type': documentType,
+        'title': title,
+        'summary': cleanSections.first.content.trim(),
+        'content': content,
+        'source_paths': jsonEncode(sourcePaths),
+        'source_record_ids': jsonEncode(sourceRecordIds),
+        'updated_at': _nowSeconds(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    stats.entityDocuments++;
   }
 }
 
@@ -1254,6 +1422,7 @@ class _BuildStats {
   int storyLines = 0;
   int normalizedRecords = 0;
   int entityRelations = 0;
+  int entityDocuments = 0;
   int loreChunks = 0;
   int profileChunks = 0;
   int storyChunks = 0;
@@ -1264,6 +1433,7 @@ class _BuildStats {
         'storyLines': storyLines,
         'normalizedRecords': normalizedRecords,
         'entityRelations': entityRelations,
+        'entityDocuments': entityDocuments,
         'loreChunks': loreChunks,
         'profileChunks': profileChunks,
         'storyChunks': storyChunks,
@@ -1279,6 +1449,9 @@ class _BuildStats {
     );
     entityRelations = _firstInt(
       await db.rawQuery('SELECT COUNT(*) FROM entity_relations'),
+    );
+    entityDocuments = _firstInt(
+      await db.rawQuery('SELECT COUNT(*) FROM entity_documents'),
     );
     loreChunks =
         _firstInt(await db.rawQuery('SELECT COUNT(*) FROM lore_chunks'));
