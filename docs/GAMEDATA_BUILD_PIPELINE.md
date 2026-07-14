@@ -2,6 +2,9 @@
 
 > 本文档定义 v0.4.5 GameData DB 的构建、向量化和 GitHub Release 分发规范。
 
+内容分类和 importer 覆盖范围必须遵循
+[ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md](ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md)。
+
 ## 目标产物
 
 每个 ArkLores Release 至少包含：
@@ -194,4 +197,3 @@ gzip -c build/gamedata/arklores_gamedata_zh.db \
 - 剧情查询 top 10 命中原文或结构化剧情行。
 - GameData 结果优先级高于 Wiki / Book。
 - 引用能回到 `source_path` 和行号。
-
