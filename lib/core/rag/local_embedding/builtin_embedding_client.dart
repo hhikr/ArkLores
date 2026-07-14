@@ -153,7 +153,7 @@ class BuiltinEmbeddingClient implements EmbeddingClient {
     return ordered;
   }
 
-  List<List<int>> _batch(List<int> values) => [values];
+  List<Int32List> _batch(List<int> values) => [Int32List.fromList(values)];
 
   List<double> _float32TensorData(Uint8List bytes) {
     final view = ByteData.sublistView(bytes);
