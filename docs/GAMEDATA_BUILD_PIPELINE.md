@@ -31,6 +31,20 @@
 - `zh_CN/gamedata/excel/handbook_info_table.json`
 - `zh_CN/gamedata/excel/charword_table.json`
 - `zh_CN/gamedata/excel/item_table.json`
+- `zh_CN/gamedata/excel/skin_table.json`
+- `zh_CN/gamedata/excel/medal_table.json`
+- `zh_CN/gamedata/excel/uniequip_table.json`
+- `zh_CN/gamedata/excel/enemy_handbook_table.json`
+- `zh_CN/gamedata/excel/stage_table.json`
+- `zh_CN/gamedata/excel/zone_table.json`
+- `zh_CN/gamedata/excel/campaign_table.json`
+- `zh_CN/gamedata/excel/activity_table.json`
+- `zh_CN/gamedata/excel/retro_table.json`
+- `zh_CN/gamedata/excel/mission_table.json`
+- `zh_CN/gamedata/excel/roguelike_table.json`
+- `zh_CN/gamedata/excel/roguelike_topic_table.json`
+- `zh_CN/gamedata/excel/sandbox_table.json`
+- `zh_CN/gamedata/excel/sandbox_perm_table.json`
 - `zh_CN/gamedata/excel/story_table.json`
 - `zh_CN/gamedata/story/**/*.txt`
 
@@ -85,6 +99,51 @@ CREATE TABLE story_lines (
 );
 ```
 
+### `normalized_records`
+
+`normalized_records` 是 importer adapter 的 canonical 输出层。原始 JSON / txt
+先归一化到 record，再派生 `lore_chunks`。
+
+```sql
+CREATE TABLE normalized_records (
+  id             TEXT PRIMARY KEY,
+  game           TEXT NOT NULL,
+  language       TEXT NOT NULL DEFAULT 'zh',
+  category       TEXT NOT NULL,
+  subtype        TEXT NOT NULL,
+  content_type   TEXT NOT NULL,
+  entity_id      TEXT,
+  entity_name    TEXT,
+  parent_id      TEXT,
+  parent_type    TEXT,
+  title          TEXT,
+  section        TEXT,
+  speaker        TEXT,
+  content        TEXT NOT NULL,
+  source_path    TEXT NOT NULL,
+  raw_id         TEXT,
+  line_start     INTEGER,
+  line_end       INTEGER,
+  source_repo    TEXT,
+  source_commit  TEXT,
+  game_version   TEXT,
+  updated_at     INTEGER
+);
+```
+
+### `entity_relations`
+
+```sql
+CREATE TABLE entity_relations (
+  id               TEXT PRIMARY KEY,
+  source_entity_id TEXT NOT NULL,
+  target_entity_id TEXT NOT NULL,
+  relation_type    TEXT NOT NULL,
+  source_path      TEXT,
+  raw_id           TEXT
+);
+```
+
 ### `lore_chunks`
 
 ```sql
@@ -92,6 +151,9 @@ CREATE TABLE lore_chunks (
   id             TEXT PRIMARY KEY,
   game           TEXT NOT NULL,
   source_type    TEXT NOT NULL,
+  content_category TEXT,
+  content_subtype  TEXT,
+  content_type     TEXT,
   entity_id      TEXT,
   story_id       TEXT,
   page_title     TEXT,
@@ -105,6 +167,7 @@ CREATE TABLE lore_chunks (
   language       TEXT NOT NULL DEFAULT 'zh',
   game_version   TEXT,
   updated_at     INTEGER,
+  raw_id         TEXT,
   retrieval_hint TEXT
 );
 ```
@@ -176,6 +239,7 @@ gzip -c build/gamedata/arklores_gamedata_zh.db \
 - source commit SHA
 - row counts
 - chunk counts by source type
+- normalized record counts
 - embedding profile id
 - embedding dimension
 - compressed DB SHA-256
@@ -195,5 +259,6 @@ gzip -c build/gamedata/arklores_gamedata_zh.db \
 
 - 实体查询 top 5 命中正确实体或档案 chunk。
 - 剧情查询 top 10 命中原文或结构化剧情行。
+- `normalized_records` 能按 `content_type` 区分 `operator_voice`、`enemy_profile`、`roguelike_topic`、`sandbox_item` 等来源。
 - GameData 结果优先级高于 Wiki / Book。
 - 引用能回到 `source_path` 和行号。
