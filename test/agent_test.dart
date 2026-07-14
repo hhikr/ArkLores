@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/cite_source.dart';
 import 'package:arklores/core/agent/tools/search_wiki.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
@@ -77,9 +78,103 @@ void main() {
       );
 
       final result = await tool.execute({'query': 'Amiya', 'top_k': 1});
-      expect(result, contains('Amiya is the leader of Rhodes Island.'));
-      expect(result, contains('chunk-123'));
-      expect(result, contains('Source Type: wiki'));
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Amiya is the leader of Rhodes Island.'));
+      expect(observation, contains('chunk-123'));
+      expect(observation, contains('Source Type: wiki'));
+      expect(result.debugLog, contains('Query embedding diagnostics'));
+    });
+
+    test('SearchWikiTool prioritizes exact title matches over weak vectors',
+        () async {
+      final embedder = Embedder(_MockEmbeddingClient());
+      final tool = SearchWikiTool(
+        embedder: embedder,
+        vectorStore: vectorStore,
+        profileId: 'test-profile',
+      );
+
+      await vectorStore.insertChunk(
+        Chunk(
+          id: 'amiya-profile',
+          content: '阿米娅是罗德岛的公开领袖，也是剧情中的核心角色。',
+          pageTitle: '阿米娅',
+          section: '个人档案',
+          seqIndex: 0,
+          tokenCount: 20,
+        ),
+        [0.0, 1.0, 0.0],
+        sourceType: 'wiki',
+        wiki: 'prts',
+        profileId: 'test-profile',
+      );
+      await vectorStore.insertChunk(
+        Chunk(
+          id: 'vector-noise',
+          content: 'This unrelated chunk has the vector most similar to query.',
+          pageTitle: 'Unrelated',
+          section: 'Noise',
+          seqIndex: 0,
+          tokenCount: 12,
+        ),
+        [1.0, 0.0, 0.0],
+        sourceType: 'wiki',
+        wiki: 'endfield',
+        profileId: 'test-profile',
+      );
+
+      final result = await tool.execute({'query': '阿米娅', 'top_k': 2});
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Retrieval Type: title_exact'));
+      expect(observation, contains('Title: Unrelated'));
+      expect(observation.indexOf('Title: 阿米娅'),
+          lessThan(observation.indexOf('Title: Unrelated')));
+    });
+
+    test('SearchWikiTool filters low-information vector chunks', () async {
+      final embedder = Embedder(_MockEmbeddingClient());
+      final tool = SearchWikiTool(
+        embedder: embedder,
+        vectorStore: vectorStore,
+        profileId: 'test-profile',
+      );
+
+      await vectorStore.insertChunk(
+        Chunk(
+          id: 'low-info',
+          content: '分类：text',
+          pageTitle: 'LowInfo',
+          section: 'LowInfo',
+          seqIndex: 0,
+          tokenCount: 1,
+        ),
+        [1.0, 0.0, 0.0],
+        sourceType: 'wiki',
+        wiki: 'endfield',
+        profileId: 'test-profile',
+      );
+      await vectorStore.insertChunk(
+        Chunk(
+          id: 'useful',
+          content: '罗德岛是一家制药公司，也在主线剧情中承担重要角色。',
+          pageTitle: '罗德岛',
+          section: '概述',
+          seqIndex: 0,
+          tokenCount: 20,
+        ),
+        [0.9, 0.1, 0.0],
+        sourceType: 'wiki',
+        wiki: 'prts',
+        profileId: 'test-profile',
+      );
+
+      final result = await tool.execute({'query': '罗德岛', 'top_k': 2});
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Title: 罗德岛'));
+      expect(observation, isNot(contains('分类：text')));
     });
 
     test('CiteSourceTool retrieves chunk by ID', () async {
@@ -153,7 +248,7 @@ void main() {
 
       // Verify ReAct event progression
       final eventTypes = events.map((e) => e.type).toList();
-      
+
       expect(eventTypes, contains(ReActEventType.thought));
       expect(eventTypes, contains(ReActEventType.toolCall));
       expect(eventTypes, contains(ReActEventType.toolObservation));
@@ -161,8 +256,10 @@ void main() {
       expect(eventTypes, contains(ReActEventType.complete));
 
       // Verify specific outputs
-      final finalAnswerEvent = events.firstWhere((e) => e.type == ReActEventType.finalAnswerToken);
-      expect(finalAnswerEvent.content, contains('W is a mercenary [chunk-123]'));
+      final finalAnswerEvent =
+          events.firstWhere((e) => e.type == ReActEventType.finalAnswerToken);
+      expect(
+          finalAnswerEvent.content, contains('W is a mercenary [chunk-123]'));
     });
   });
 }
@@ -239,7 +336,8 @@ Final Answer: W is a mercenary [chunk-123].
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
-    return chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
+    return chat(messages,
+        temperature: temperature, maxTokens: maxTokens, stop: stop);
   }
 
   @override
