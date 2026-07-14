@@ -206,7 +206,7 @@ MediaWiki API (api.php)
 | 导入书籍 | 知识库管理页「导入书籍」按钮，选择文件后自动索引 |
 | 删除书籍 | 知识库管理页列表中删除，同步清除对应向量 |
 
-#### sqlite-vec Schema（草案）
+#### SQLite Vector Schema（v0.3 实现）
 
 ```sql
 CREATE TABLE chunks (
@@ -225,9 +225,11 @@ CREATE TABLE chunks (
   embedding_status TEXT DEFAULT 'ok' -- 'ok' | 'zero_vector'
 );
 
-CREATE VIRTUAL TABLE chunk_embeddings USING vec0(
+CREATE TABLE chunk_embeddings (
   chunk_id TEXT PRIMARY KEY,
-  embedding FLOAT[1536]          -- text-embedding-3-small 维度
+  profile_id TEXT NOT NULL,
+  dimension INTEGER NOT NULL,
+  embedding BLOB NOT NULL
 );
 
 -- 书籍文件元数据表
@@ -513,8 +515,9 @@ dependencies:
 > **v0.3 实现结论**：当前使用纯 Dart cosine similarity 回退，`sqlite_vec` FFI 路径因包构建不完整暂不可用。
 > - 向量的维度不再写死 1536——`Embedder` 自动从首次 API 响应中检测维度（兼容 OpenAI 1536、DeepSeek 2048 等）
 > - Chat 和 Embedding 的 API 配置已分离，允许混合使用不同提供商
-> - 内置固定 embedding 模型已使用合成 TFLite 模型（~750KB，384 维，128 seq len）打通端到端 pipeline，可安装 debug APK 在真机上验证 profile 激活→导入→embedding→搜索的完整链路。模型权重为随机值，替换真实模型时只需换 assets 文件并更新 BuiltinEmbeddingModel 契约
+> - 内置固定 embedding 模型已打包为 TFLite 资产（512 维，512 seq len），支持离线 embedding profile、预构建 seed DB 和移动端 fallback embedding
 > - Embedding 已引入 profile 隔离机制：切换 API provider/model 或内置模型时保留旧 profile，当前检索和索引只作用于 active profile；API Key 不参与 profile 身份识别
+> - v0.3 已新增桌面端 seed 构建流程：`tool/build_seed.py` 在电脑端爬取 PRTS / Warfarin Wiki、分块、生成 embedding、校验并复制到 `assets/seeds/`，避免用户首次安装后在手机端长时间建库
 > - 详情见 `docs/v0.3_SUMMARY.md`
 
 > [!NOTE]
@@ -561,8 +564,8 @@ dependencies:
 
 ---
 
-### v0.3 — 基础设施：LLM + 知识库
-**目标**：跑通从 Wiki 爬取 → Embedding → sqlite-vec 的完整数据链路。
+### v0.3 — 基础设施：LLM + 知识库（已完成）
+**目标**：跑通从 Wiki 爬取 → Embedding → SQLite 本地向量检索的完整数据链路。
 
 | 交付内容 | 说明 |
 |----------|------|
@@ -571,15 +574,16 @@ dependencies:
 | MediaWiki 爬取器 | 调用 `api.php` 批量拉取页面内容，支持 PRTS + 终末地 |
 | 文本分块器 | ~500 Token 窗口，50 Token 重叠，按标题层级切分 |
 | sqlite-vec 集成 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用）；向量维度**动态检测**，从首次 API 响应获取 |
-| Wiki 知识库管理页 | 显示索引状态、页面数、向量数，支持后台异步索引、增量爬取（比对 touched）、清理分类已废弃的旧数据、失败 Embedding 条目统计与一键手动重试 |
+| Wiki 知识库管理页 | 显示索引状态、页面数、向量数，支持后台异步索引、seed 页面快速跳过、清理废弃数据、失败 Embedding 条目统计与一键手动重试 |
 | **资料 Tab 功能** | 书籍列表、PDF/TXT 导入、进度展示、显示名编辑、删除 |
 | **AI 信任策略实现** | Prompt 插入参考第 5 节，引用卡片颜色区分 Wiki/书籍 |
 | 首次引导流程 | 未配置 API Key 时，引导用户完成配置 + 首次 Wiki 索引建立 |
 | **多语言本地化**（追加） | `flutter_localizations` + ARB 文件，EN / 中文双语平行，Riverpod 切换即时生效 |
+| **预构建 seed 知识库**（追加） | 桌面端构建 `arklores_knowledge.db` + `wiki_cache.zip` + manifest，App 首次启动安装到本地 files 目录 |
 
 **估时**：2 周  
 **风险**：sqlite-vec Flutter FFI 绑定不稳定，需预留备选方案时间。  
-**验收标准**：能将 100 个 Wiki 页面成功向量化入库，能执行语义搜索并返回结果。
+**验收标准**：能安装预构建 seed 知识库（当前 17087 chunks），能执行语义搜索并返回结果，Wiki 同步不会重复重建健康 seed 页面。
 
 ---
 
@@ -729,7 +733,7 @@ dependencies:
 | sqlite-vec 方案 | **纯 Dart cosine similarity 回退**（FFI 因包构建不完整暂不可用） |
 | Chat/Embedding 配置 | **可分开指定不同提供商**（如 Chat 用 DeepSeek，Embedding 用 OpenAI），设置页位于子页面「API Settings」 |
 | Embedding 维度 | **动态检测**——从首次 API 响应自动获取，不写死 1536，兼容 OpenAI / DeepSeek / 其他模型 |
-| 内置 Embedding | **接受安装包体积增大**；仅支持一个固定内置模型，不提供用户替换模型能力；v0.3 已使用合成 TFLite 模型打通端到端 pipeline；替换生产模型时只需换 assets 文件 |
+| 内置 Embedding | **接受安装包体积增大**；仅支持一个固定内置模型，不提供用户替换模型能力；v0.3 已打包固定 512 维 TFLite 模型并用于 seed embedding 与移动端 fallback |
 | Embedding Profile | **保留旧 profile**；用户切换 provider/model/内置模型时创建或激活独立 profile，可切回旧 profile；删除 profile 需用户手动确认；profile 身份不包含 API Key |
 | 本地化 | **EN / 中文双语**，`flutter_localizations` + ARB 文件（平行结构，编译时类型安全），设置页 `SegmentedButton` 切换即时生效 |
 | 作者署名 | **hhikr**（写入 `AUTHORS` 文件、README、LICENSE 头部） |

@@ -1,7 +1,7 @@
 /// Built-in embedding model backed by a TFLite model.
 ///
-/// The current model is a small synthetic embedding model (~750 KB) for
-/// pipeline testing. Replace with a production-quality model when available.
+/// The current bundled model is a fixed 512-dimensional TFLite embedding model
+/// used for offline seed generation and on-device fallback embedding.
 class BuiltinEmbeddingModel {
   const BuiltinEmbeddingModel._();
 
