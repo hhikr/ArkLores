@@ -32,20 +32,21 @@ class WarfarinWikiCrawler {
 
   /// Extracts listing items from a decoded Remix index response,
   /// handling both `response` as direct List and `response.data` as List.
-  List<WarfarinListingItem> _extractListingItems(Map<String, dynamic>? indexData) {
+  List<WarfarinListingItem> _extractListingItems(
+      Map<String, dynamic>? indexData) {
     if (indexData == null) return [];
     final rawResponse = _unwrapRemixResponse(indexData);
     List<dynamic> rawList;
     if (rawResponse is List) {
       rawList = rawResponse;
     } else if (rawResponse is Map && rawResponse['data'] is List) {
-      rawList = rawResponse['data'] as List<dynamic>;
+      rawList = _asList(rawResponse['data']);
     } else {
       return [];
     }
     return rawList
         .map((item) {
-          final map = item as Map<String, dynamic>;
+          final map = _asMap(item);
           return WarfarinListingItem(
             slug: (map['slug'] as String?) ?? '',
             name: _getZh(map['name']),
@@ -60,7 +61,8 @@ class WarfarinWikiCrawler {
   Map<String, dynamic>? _extractRouteData(Map<String, dynamic>? decoded) {
     if (decoded == null) return null;
     final routeData = decoded['data'];
-    if (routeData is Map<String, dynamic>) return routeData;
+    final map = _asMap(routeData);
+    if (map.isNotEmpty) return map;
     return null;
   }
 
@@ -74,10 +76,9 @@ class WarfarinWikiCrawler {
   /// Unwraps a detail response, extracting `data` if the response is
   /// a wrapper Map with `data` key (Remix single-fetch format).
   Map<String, dynamic> _unwrapResponse(dynamic rawResponse) {
-    if (rawResponse is Map && rawResponse['data'] is Map) {
-      return rawResponse['data'] as Map<String, dynamic>;
-    }
-    return rawResponse as Map<String, dynamic>;
+    final rawMap = _asMap(rawResponse);
+    final dataMap = _asMap(rawMap['data']);
+    return dataMap.isNotEmpty ? dataMap : rawMap;
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -229,12 +230,10 @@ class WarfarinWikiCrawler {
 
   /// Formats operator detailed map to a Markdown document.
   String formatOperatorToMarkdown(Map<String, dynamic> data) {
-    final ct = data['characterTable'] as Map<String, dynamic>? ?? {};
-    final cgt = data['charGrowthTable'] as Map<String, dynamic>? ?? {};
-    final tagt = data['charTagTable'] as Map<String, dynamic>? ?? {};
-    final tagDes = (data['charTagDesTable']
-            as Map<String, dynamic>?)?['tagDesc'] as Map<String, dynamic>? ??
-        {};
+    final ct = _asMap(data['characterTable']);
+    final cgt = _asMap(data['charGrowthTable']);
+    final tagt = _asMap(data['charTagTable']);
+    final tagDes = _asMap(_asMap(data['charTagDesTable'])['tagDesc']);
 
     final name = _getZh(ct['name']) ?? '';
     final engName = ct['engName'] as String? ?? '';
@@ -242,9 +241,9 @@ class WarfarinWikiCrawler {
     final profId = cgt['profession'] as int? ?? -1;
     final profession = profId >= 0 ? (_professionNames[profId] ?? '') : '';
     final charTypeId = ct['charTypeId'] as String? ?? '';
-    final cvData = ct['cvName'] as Map<String, dynamic>? ?? {};
-    final profileRecord = ct['profileRecord'] as List<dynamic>? ?? [];
-    final profileVoice = ct['profileVoice'] as List<dynamic>? ?? [];
+    final cvData = _asMap(ct['cvName']);
+    final profileRecord = _asList(ct['profileRecord']);
+    final profileVoice = _asList(ct['profileVoice']);
 
     final sb = StringBuffer();
     sb.writeln('# $name');
@@ -271,14 +270,14 @@ class WarfarinWikiCrawler {
     }
 
     // Expertise & Hobbies via tags
-    final expertIds = tagt['expertTagIds'] as List<dynamic>? ?? [];
+    final expertIds = _asList(tagt['expertTagIds']);
     for (final eid in expertIds) {
       final desc = _resolveTag('$eid', tagDes);
       if (desc.isNotEmpty) {
         sb.writeln('- 专长：$desc');
       }
     }
-    final hobbyIds = tagt['hobbyTagIds'] as List<dynamic>? ?? [];
+    final hobbyIds = _asList(tagt['hobbyTagIds']);
     for (final hid in hobbyIds) {
       final desc = _resolveTag('$hid', tagDes);
       if (desc.isNotEmpty) {
@@ -293,14 +292,14 @@ class WarfarinWikiCrawler {
 
     // Profile records (archive)
     for (final record in profileRecord) {
-      final r = record as Map<String, dynamic>;
+      final r = _asMap(record);
+      if (r.isEmpty) continue;
       final title = r['recordTitle'] as String? ?? '';
       var desc = r['recordDesc'] as String? ?? '';
       desc = _stripGameTags(desc).trim();
 
       if (title.isNotEmpty || desc.isNotEmpty) {
-        final sectionTitle =
-            title.replaceAll(RegExp(r'<@[^>]+>'), '').trim();
+        final sectionTitle = title.replaceAll(RegExp(r'<@[^>]+>'), '').trim();
         if (sectionTitle.isNotEmpty) {
           sb.writeln('## $sectionTitle');
           sb.writeln('');
@@ -313,13 +312,12 @@ class WarfarinWikiCrawler {
     }
 
     // Skills from skillGroupMap
-    final skillGroupMap =
-        cgt['skillGroupMap'] as Map<String, dynamic>? ?? {};
+    final skillGroupMap = _asMap(cgt['skillGroupMap']);
     if (skillGroupMap.isNotEmpty) {
       sb.writeln('## 技能设定');
       sb.writeln('');
       for (final entry in skillGroupMap.entries) {
-        final sg = entry.value as Map<String, dynamic>? ?? {};
+        final sg = _asMap(entry.value);
         final skillName = sg['name'] as String? ?? '';
         final skillDesc = sg['desc'] as String? ?? '';
         if (skillName.isNotEmpty || skillDesc.isNotEmpty) {
@@ -337,7 +335,8 @@ class WarfarinWikiCrawler {
       sb.writeln('## 语音记录');
       sb.writeln('');
       for (final v in profileVoice) {
-        final voice = v as Map<String, dynamic>;
+        final voice = _asMap(v);
+        if (voice.isEmpty) continue;
         final title = voice['voiceTitle'] as String? ?? '';
         final desc = voice['voiceDesc'] as String? ?? '';
         if (title.isNotEmpty && desc.isNotEmpty) {
@@ -371,8 +370,8 @@ class WarfarinWikiCrawler {
   String _resolveTag(String tagId, Map<String, dynamic> tagDes) {
     if (tagId.isEmpty) return '';
     // Direct lookup
-    final entry = tagDes[tagId] as Map<String, dynamic>?;
-    if (entry != null) {
+    final entry = _asMap(tagDes[tagId]);
+    if (entry.isNotEmpty) {
       final desc = entry['desc'] as String? ?? '';
       if (desc.isNotEmpty) return desc;
     }
@@ -387,14 +386,13 @@ class WarfarinWikiCrawler {
 
   /// Formats lore detailed map to a Markdown document.
   String formatLoreToMarkdown(Map<String, dynamic> data) {
-    final prtsItem =
-        data['prtsAllItem'] as Map<String, dynamic>? ?? {};
+    final prtsItem = _asMap(data['prtsAllItem']);
     final name = _getZh(prtsItem['name']) ?? '';
     final type = prtsItem['type'] as String? ?? '';
 
-    final rct = data['richContentTable'] as Map<String, dynamic>? ?? {};
+    final rct = _asMap(data['richContentTable']);
     final title = rct['title'] as String? ?? '';
-    final contentList = rct['contentList'] as List<dynamic>? ?? [];
+    final contentList = _asList(rct['contentList']);
 
     final sb = StringBuffer();
     final displayName = name.isNotEmpty ? name : title;
@@ -408,7 +406,7 @@ class WarfarinWikiCrawler {
 
     if (contentList.isNotEmpty) {
       for (final item in contentList) {
-        final text = (item as Map<String, dynamic>)['content'] as String? ?? '';
+        final text = _asMap(item)['content'] as String? ?? '';
         if (text.isNotEmpty && !text.startsWith('<image>')) {
           sb.writeln(text);
           sb.writeln('');
@@ -421,11 +419,11 @@ class WarfarinWikiCrawler {
 
   /// Formats mission detailed map to a Markdown document.
   String formatMissionToMarkdown(Map<String, dynamic> data) {
-    final mission = data['mission'] as Map<String, dynamic>? ?? {};
+    final mission = _asMap(data['mission']);
     final name = '${mission['name'] ?? ''}';
     final typeName = '${mission['typeName'] ?? ''}';
     final desc = '${mission['description'] ?? ''}';
-    final dialog = data['dialog'] as List<dynamic>? ?? [];
+    final dialog = _asList(data['dialog']);
 
     final sb = StringBuffer();
     if (typeName.isNotEmpty) {
@@ -443,7 +441,8 @@ class WarfarinWikiCrawler {
       sb.writeln('## 剧情对话');
       sb.writeln('');
       for (final item in dialog) {
-        final d = item as Map<String, dynamic>;
+        final d = _asMap(item);
+        if (d.isEmpty) continue;
         final speaker = d['actorName'] as String? ?? '';
         final text = d['dialogText'] as String? ?? '';
         final type = d['type'] as String? ?? '';
@@ -498,6 +497,18 @@ class WarfarinWikiCrawler {
       return (value['zh'] as String?) ?? '';
     }
     return '';
+  }
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      return value.map((key, value) => MapEntry('$key', value));
+    }
+    return <String, dynamic>{};
+  }
+
+  List<dynamic> _asList(dynamic value) {
+    return value is List ? value : const <dynamic>[];
   }
 }
 
