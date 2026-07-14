@@ -20,6 +20,58 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 const _schemaVersion = 1;
 const _language = 'zh';
 const _profileId = 'builtin:builtin-embedding';
+const _game = 'arknights';
+
+const _textKeys = {
+  'name',
+  'description',
+  'desc',
+  'usage',
+  'storyText',
+  'voiceText',
+  'voiceTitle',
+  'title',
+  'subtitle',
+  'content',
+  'text',
+  'itemDesc',
+  'itemUsage',
+  'teamDes',
+  'teamFlavorDesc',
+  'endingDescription',
+  'changeEndingDesc',
+  'eliteDesc',
+  'taskDes',
+  'unlockCondDesc',
+  'obtainApproach',
+  'lineText',
+  'getMethod',
+  'dangerLevel',
+  'displayDesc',
+  'displayName',
+  'zoneNameFirst',
+  'zoneNameSecond',
+  'textDesc',
+  'storyName',
+  'storyTitle',
+  'storyIntro',
+  'storySetName',
+  'groupName',
+  'groupDesc',
+  'skinName',
+  'skinGroupName',
+  'brandName',
+  'dialog',
+  'medalName',
+  'uniEquipName',
+  'uniEquipDesc',
+  'specialEquipDesc',
+  'subProfessionName',
+  'topicName',
+  'itemName',
+  'buffName',
+  'buffEffectDesc',
+};
 
 void main(List<String> args) async {
   sqfliteFfiInit();
@@ -68,14 +120,17 @@ void main(List<String> args) async {
 
     await db.execute(
         "INSERT INTO lore_chunks_fts(lore_chunks_fts) VALUES('rebuild')");
+    await stats.refreshFrom(db);
     await _writeManifest(
       db,
       {
         'entity_count': '${stats.entities}',
         'story_line_count': '${stats.storyLines}',
+        'normalized_record_count': '${stats.normalizedRecords}',
         'lore_chunk_count': '${stats.loreChunks}',
         'arknights_profile_chunk_count': '${stats.profileChunks}',
         'arknights_story_chunk_count': '${stats.storyChunks}',
+        'arknights_structured_chunk_count': '${stats.structuredChunks}',
       },
     );
   } finally {
@@ -161,10 +216,49 @@ Future<void> _createSchema(Database db) async {
     )
   ''');
   await db.execute('''
+    CREATE TABLE normalized_records (
+      id               TEXT PRIMARY KEY,
+      game             TEXT NOT NULL,
+      language         TEXT NOT NULL DEFAULT 'zh',
+      category         TEXT NOT NULL,
+      subtype          TEXT NOT NULL,
+      content_type     TEXT NOT NULL,
+      entity_id        TEXT,
+      entity_name      TEXT,
+      parent_id        TEXT,
+      parent_type      TEXT,
+      title            TEXT,
+      section          TEXT,
+      speaker          TEXT,
+      content          TEXT NOT NULL,
+      source_path      TEXT NOT NULL,
+      raw_id           TEXT,
+      line_start       INTEGER,
+      line_end         INTEGER,
+      source_repo      TEXT,
+      source_commit    TEXT,
+      game_version     TEXT,
+      updated_at       INTEGER
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE entity_relations (
+      id               TEXT PRIMARY KEY,
+      source_entity_id TEXT NOT NULL,
+      target_entity_id TEXT NOT NULL,
+      relation_type    TEXT NOT NULL,
+      source_path      TEXT,
+      raw_id           TEXT
+    )
+  ''');
+  await db.execute('''
     CREATE TABLE lore_chunks (
       id             TEXT PRIMARY KEY,
       game           TEXT NOT NULL,
       source_type    TEXT NOT NULL,
+      content_category TEXT,
+      content_subtype  TEXT,
+      content_type     TEXT,
       entity_id      TEXT,
       story_id       TEXT,
       page_title     TEXT,
@@ -178,6 +272,7 @@ Future<void> _createSchema(Database db) async {
       language       TEXT NOT NULL DEFAULT 'zh',
       game_version   TEXT,
       updated_at     INTEGER,
+      raw_id         TEXT,
       retrieval_hint TEXT
     )
   ''');
@@ -205,7 +300,16 @@ Future<void> _createSchema(Database db) async {
     'CREATE INDEX idx_entities_name ON entities(name)',
   );
   await db.execute(
+    'CREATE INDEX idx_normalized_records_type ON normalized_records(content_type)',
+  );
+  await db.execute(
+    'CREATE INDEX idx_normalized_records_entity ON normalized_records(entity_id)',
+  );
+  await db.execute(
     'CREATE INDEX idx_lore_chunks_source_type ON lore_chunks(source_type)',
+  );
+  await db.execute(
+    'CREATE INDEX idx_lore_chunks_content_type ON lore_chunks(content_type)',
   );
   await db.execute(
     'CREATE INDEX idx_lore_chunks_entity_id ON lore_chunks(entity_id)',
@@ -251,6 +355,8 @@ class _ArknightsImporter {
       throw StateError('Missing zh_CN directory: ${zh.path}');
     }
     await _importCharacterProfiles(zh);
+    await _importCharacterVoices(zh);
+    await _importStructuredTextTables(zh);
     await _importStories(zh);
   }
 
@@ -300,7 +406,9 @@ class _ArknightsImporter {
 
         await _insertChunk(
           txn,
-          sourceType: 'operator_profile',
+          category: 'operator',
+          subtype: 'basic_profile',
+          contentType: 'operator_basic_profile',
           entityId: charId,
           pageTitle: name,
           section: '基础信息',
@@ -313,6 +421,7 @@ class _ArknightsImporter {
               '${data['itemDesc']}'.trim(),
           ].join('\n'),
           sourcePath: sourcePath,
+          rawId: charId,
           retrievalHint: 'operator_profile',
         );
 
@@ -331,12 +440,15 @@ class _ArknightsImporter {
                 if (text.isEmpty) continue;
                 await _insertChunk(
                   txn,
-                  sourceType: 'operator_profile',
+                  category: 'operator',
+                  subtype: 'handbook_profile',
+                  contentType: 'operator_handbook_profile',
                   entityId: charId,
                   pageTitle: name,
                   section: section,
                   content: text,
                   sourcePath: 'zh_CN/gamedata/excel/handbook_info_table.json',
+                  rawId: charId,
                   retrievalHint: 'operator_handbook',
                 );
               }
@@ -345,6 +457,291 @@ class _ArknightsImporter {
         }
       }
     });
+  }
+
+  Future<void> _importCharacterVoices(Directory zh) async {
+    final sourcePath = 'zh_CN/gamedata/excel/charword_table.json';
+    final table = await _readJsonMap(p.join(sourceDir.path, sourcePath));
+    final charWords =
+        (table['charWords'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+    await db.transaction((txn) async {
+      for (final entry in charWords.entries) {
+        final raw = entry.value;
+        if (raw is! Map) continue;
+        final data = raw.cast<String, dynamic>();
+        final text = '${data['voiceText'] ?? ''}'.trim();
+        if (text.isEmpty) continue;
+        final charId = '${data['charId'] ?? ''}'.trim();
+        final title = '${data['voiceTitle'] ?? '语音'}'.trim();
+        final record = _NormalizedRecord(
+          category: 'operator',
+          subtype: 'voice',
+          contentType: 'operator_voice',
+          entityId: charId.isEmpty ? null : charId,
+          title: title,
+          section: title,
+          content: text,
+          sourcePath: sourcePath,
+          rawId: '${data['charWordId'] ?? entry.key}',
+        );
+        await _insertRecord(txn, record);
+        if (charId.isNotEmpty) {
+          await _insertRelation(
+            txn,
+            sourceEntityId: charId,
+            targetEntityId: record.id,
+            relationType: 'operator_voice',
+            sourcePath: sourcePath,
+            rawId: record.rawId,
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _importStructuredTextTables(Directory zh) async {
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/item_table.json',
+      roots: const ['items', 'expItems', 'potentialItems', 'apSupplies'],
+      category: 'world_item',
+      subtype: 'item',
+      contentType: 'item_description',
+      entityType: 'item',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/skin_table.json',
+      roots: const ['charSkins', 'brandList'],
+      category: 'world_item',
+      subtype: 'skin',
+      contentType: 'skin_description',
+      entityType: 'skin',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/medal_table.json',
+      roots: const ['medalList', 'medalTypeData'],
+      category: 'world_item',
+      subtype: 'medal',
+      contentType: 'medal_description',
+      entityType: 'medal',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/uniequip_table.json',
+      roots: const ['equipDict'],
+      category: 'operator',
+      subtype: 'module',
+      contentType: 'operator_module',
+      entityType: 'operator_module',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/enemy_handbook_table.json',
+      roots: const ['enemyData', 'raceData'],
+      category: 'enemy',
+      subtype: 'profile',
+      contentType: 'enemy_profile',
+      entityType: 'enemy',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/stage_table.json',
+      roots: const ['stages'],
+      category: 'stage',
+      subtype: 'stage',
+      contentType: 'stage_description',
+      entityType: 'stage',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/zone_table.json',
+      roots: const ['zones', 'zoneMetaData'],
+      category: 'stage',
+      subtype: 'zone',
+      contentType: 'zone_description',
+      entityType: 'zone',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/campaign_table.json',
+      roots: const ['campaigns', 'campaignGroups', 'campaignZones'],
+      category: 'stage',
+      subtype: 'campaign',
+      contentType: 'campaign_description',
+      entityType: 'campaign',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/activity_table.json',
+      roots: const ['basicInfo', 'activity', 'missionData', 'missionGroup'],
+      category: 'activity',
+      subtype: 'basic_info',
+      contentType: 'activity_basic_info',
+      entityType: 'activity',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/retro_table.json',
+      roots: const ['retroActList', 'retroTrailList', 'ruleData'],
+      category: 'activity',
+      subtype: 'archive',
+      contentType: 'activity_archive',
+      entityType: 'activity_archive',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/mission_table.json',
+      roots: const ['missions', 'missionGroups'],
+      category: 'activity',
+      subtype: 'mission',
+      contentType: 'activity_mission',
+      entityType: 'mission',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/roguelike_table.json',
+      roots: const ['itemTable', 'stages', 'zones', 'choices', 'endings'],
+      category: 'roguelike',
+      subtype: 'mechanic',
+      contentType: 'roguelike_mechanic',
+      entityType: 'roguelike',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/roguelike_topic_table.json',
+      roots: const ['topics', 'details', 'modules'],
+      category: 'roguelike',
+      subtype: 'topic',
+      contentType: 'roguelike_topic',
+      entityType: 'roguelike_topic',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/sandbox_table.json',
+      roots: const ['sandboxActTables', 'itemDatas'],
+      category: 'sandbox',
+      subtype: 'mechanic',
+      contentType: 'sandbox_mechanic',
+      entityType: 'sandbox',
+    );
+    await _importJsonCollection(
+      zh,
+      sourcePath: 'zh_CN/gamedata/excel/sandbox_perm_table.json',
+      roots: const ['basicInfo', 'detail', 'itemData'],
+      category: 'sandbox',
+      subtype: 'item',
+      contentType: 'sandbox_item',
+      entityType: 'sandbox_item',
+    );
+  }
+
+  Future<void> _importJsonCollection(
+    Directory zh, {
+    required String sourcePath,
+    required List<String> roots,
+    required String category,
+    required String subtype,
+    required String contentType,
+    required String entityType,
+  }) async {
+    final table = await _readJsonMap(p.join(sourceDir.path, sourcePath));
+    await db.transaction((txn) async {
+      for (final root in roots) {
+        final node = table[root];
+        await _walkStructuredEntries(
+          txn,
+          node,
+          sourcePath: sourcePath,
+          root: root,
+          category: category,
+          subtype: subtype,
+          contentType: contentType,
+          entityType: entityType,
+        );
+      }
+    });
+  }
+
+  Future<void> _walkStructuredEntries(
+    Transaction txn,
+    Object? node, {
+    required String sourcePath,
+    required String root,
+    required String category,
+    required String subtype,
+    required String contentType,
+    required String entityType,
+    String? inheritedId,
+  }) async {
+    if (node is Map) {
+      final data = node.cast<String, dynamic>();
+      final rawId = _rawIdFromMap(data) ?? inheritedId;
+      final texts = _collectTextSections(data);
+      if (rawId != null && texts.isNotEmpty) {
+        final title = _titleFromMap(data) ?? rawId;
+        await _upsertEntity(
+          txn,
+          id: '$entityType:$rawId',
+          name: title,
+          entityType: entityType,
+          sourceType: contentType,
+          sourcePath: sourcePath,
+        );
+        for (final text in texts) {
+          await _insertRecord(
+            txn,
+            _NormalizedRecord(
+              category: category,
+              subtype: subtype,
+              contentType: contentType,
+              entityId: '$entityType:$rawId',
+              entityName: title,
+              parentId: _parentIdFromMap(data),
+              parentType: category,
+              title: title,
+              section: text.section,
+              content: text.content,
+              sourcePath: sourcePath,
+              rawId: rawId,
+            ),
+          );
+        }
+        return;
+      }
+      for (final entry in data.entries) {
+        await _walkStructuredEntries(
+          txn,
+          entry.value,
+          sourcePath: sourcePath,
+          root: root,
+          category: category,
+          subtype: subtype,
+          contentType: contentType,
+          entityType: entityType,
+          inheritedId: entry.key,
+        );
+      }
+      return;
+    }
+
+    if (node is List) {
+      for (var i = 0; i < node.length; i++) {
+        await _walkStructuredEntries(
+          txn,
+          node[i],
+          sourcePath: sourcePath,
+          root: root,
+          category: category,
+          subtype: subtype,
+          contentType: contentType,
+          entityType: entityType,
+          inheritedId: '$root:$i',
+        );
+      }
+    }
   }
 
   Future<void> _importStories(Directory zh) async {
@@ -399,18 +796,25 @@ class _ArknightsImporter {
               : '${line.speaker}: ${line.content}')
           .join('\n');
       final chunks = _chunker.chunkBySliding(text, pageTitle: storyId);
-      for (final chunk in chunks) {
-        await _insertChunk(
+      for (var chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        final chunk = chunks[chunkIndex];
+        await _insertRecord(
           txn,
-          sourceType: 'game_story',
-          storyId: storyId,
-          pageTitle: storyId,
-          section: '剧情文本',
-          content: chunk.content,
-          sourcePath: relativePath,
-          lineStart: null,
-          lineEnd: null,
-          retrievalHint: 'story_text',
+          _NormalizedRecord(
+            category: _storyCategory(storyId),
+            subtype: _storySubtype(storyId),
+            contentType: _storyContentType(storyId),
+            parentId: storyId,
+            parentType: 'story_file',
+            title: storyId,
+            section: '剧情文本',
+            speaker: null,
+            content: chunk.content,
+            sourcePath: relativePath,
+            rawId: '$storyId:$chunkIndex',
+            lineStart: null,
+            lineEnd: null,
+          ),
         );
       }
     });
@@ -463,7 +867,9 @@ class _ArknightsImporter {
 
   Future<void> _insertChunk(
     Transaction txn, {
-    required String sourceType,
+    required String category,
+    required String subtype,
+    required String contentType,
     required String pageTitle,
     required String section,
     required String content,
@@ -472,15 +878,20 @@ class _ArknightsImporter {
     String? storyId,
     int? lineStart,
     int? lineEnd,
+    String? rawId,
     String? retrievalHint,
   }) async {
     final clean = content.trim();
     if (clean.isEmpty) return;
+    final sourceType = category == 'story' || contentType.endsWith('_story')
+        ? 'game_story'
+        : 'game_data';
     final id = _stableId([
       'arknights',
-      sourceType,
+      contentType,
       entityId ?? '',
       storyId ?? '',
+      rawId ?? '',
       pageTitle,
       section,
       clean,
@@ -489,8 +900,11 @@ class _ArknightsImporter {
       'lore_chunks',
       {
         'id': id,
-        'game': 'arknights',
+        'game': _game,
         'source_type': sourceType,
+        'content_category': category,
+        'content_subtype': subtype,
+        'content_type': contentType,
         'entity_id': entityId,
         'story_id': storyId,
         'page_title': pageTitle,
@@ -501,6 +915,7 @@ class _ArknightsImporter {
         'line_end': lineEnd,
         'language': _language,
         'updated_at': _nowSeconds(),
+        'raw_id': rawId,
         'retrieval_hint': retrievalHint,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -508,9 +923,119 @@ class _ArknightsImporter {
     stats.loreChunks++;
     if (sourceType == 'game_story') {
       stats.storyChunks++;
-    } else {
+    } else if (category == 'operator') {
       stats.profileChunks++;
+    } else {
+      stats.structuredChunks++;
     }
+  }
+
+  Future<void> _insertRecord(
+    Transaction txn,
+    _NormalizedRecord record,
+  ) async {
+    final clean = record.content.trim();
+    if (clean.isEmpty) return;
+    await txn.insert(
+      'normalized_records',
+      {
+        'id': record.id,
+        'game': _game,
+        'language': _language,
+        'category': record.category,
+        'subtype': record.subtype,
+        'content_type': record.contentType,
+        'entity_id': record.entityId,
+        'entity_name': record.entityName,
+        'parent_id': record.parentId,
+        'parent_type': record.parentType,
+        'title': record.title,
+        'section': record.section,
+        'speaker': record.speaker,
+        'content': clean,
+        'source_path': record.sourcePath,
+        'raw_id': record.rawId,
+        'line_start': record.lineStart,
+        'line_end': record.lineEnd,
+        'source_repo': 'https://github.com/Kengxxiao/ArknightsGameData',
+        'source_commit': null,
+        'updated_at': _nowSeconds(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    stats.normalizedRecords++;
+    await _insertChunk(
+      txn,
+      category: record.category,
+      subtype: record.subtype,
+      contentType: record.contentType,
+      entityId: record.entityId,
+      pageTitle:
+          record.title ?? record.entityName ?? record.rawId ?? 'GameData',
+      section: record.section ?? record.subtype,
+      content: clean,
+      sourcePath: record.sourcePath,
+      lineStart: record.lineStart,
+      lineEnd: record.lineEnd,
+      rawId: record.rawId,
+      storyId: record.parentType == 'story_file' ? record.parentId : null,
+      retrievalHint: record.contentType,
+    );
+  }
+
+  Future<void> _upsertEntity(
+    Transaction txn, {
+    required String id,
+    required String name,
+    required String entityType,
+    required String sourceType,
+    required String sourcePath,
+  }) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return;
+    await txn.insert(
+      'entities',
+      {
+        'id': id,
+        'name': cleanName,
+        'aliases': jsonEncode(const <String>[]),
+        'entity_type': entityType,
+        'source_type': sourceType,
+        'game': _game,
+        'source_path': sourcePath,
+        'updated_at': _nowSeconds(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    stats.entities++;
+  }
+
+  Future<void> _insertRelation(
+    Transaction txn, {
+    required String sourceEntityId,
+    required String targetEntityId,
+    required String relationType,
+    required String sourcePath,
+    String? rawId,
+  }) async {
+    await txn.insert(
+      'entity_relations',
+      {
+        'id': _stableId([
+          sourceEntityId,
+          targetEntityId,
+          relationType,
+          rawId ?? '',
+        ].join(':')),
+        'source_entity_id': sourceEntityId,
+        'target_entity_id': targetEntityId,
+        'relation_type': relationType,
+        'source_path': sourcePath,
+        'raw_id': rawId,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    stats.entityRelations++;
   }
 }
 
@@ -521,20 +1046,261 @@ class _StoryLine {
   const _StoryLine(this.speaker, this.content);
 }
 
+class _TextSection {
+  final String section;
+  final String content;
+
+  const _TextSection(this.section, this.content);
+}
+
+class _NormalizedRecord {
+  final String category;
+  final String subtype;
+  final String contentType;
+  final String? entityId;
+  final String? entityName;
+  final String? parentId;
+  final String? parentType;
+  final String? title;
+  final String? section;
+  final String? speaker;
+  final String content;
+  final String sourcePath;
+  final String? rawId;
+  final int? lineStart;
+  final int? lineEnd;
+
+  const _NormalizedRecord({
+    required this.category,
+    required this.subtype,
+    required this.contentType,
+    required this.content,
+    required this.sourcePath,
+    this.entityId,
+    this.entityName,
+    this.parentId,
+    this.parentType,
+    this.title,
+    this.section,
+    this.speaker,
+    this.rawId,
+    this.lineStart,
+    this.lineEnd,
+  });
+
+  String get id => _stableId([
+        _game,
+        category,
+        subtype,
+        contentType,
+        entityId ?? '',
+        rawId ?? '',
+        section ?? '',
+        content,
+      ].join(':'));
+}
+
+List<_TextSection> _collectTextSections(Map<String, dynamic> data) {
+  final sections = <_TextSection>[];
+
+  void visit(Object? value, String path) {
+    if (value is String) {
+      final key = path.split('.').last;
+      final text = value.trim();
+      if (_textKeys.contains(key) && _containsChinese(text)) {
+        sections.add(_TextSection(key, _cleanStructuredText(text)));
+      }
+      return;
+    }
+    if (value is List) {
+      for (var i = 0; i < value.length; i++) {
+        visit(value[i], '$path.$i');
+      }
+      return;
+    }
+    if (value is Map) {
+      for (final entry in value.entries) {
+        visit(
+            entry.value, path.isEmpty ? '${entry.key}' : '$path.${entry.key}');
+      }
+    }
+  }
+
+  visit(data, '');
+  final seen = <String>{};
+  return [
+    for (final section in sections)
+      if (section.content.isNotEmpty &&
+          seen.add('${section.section}\n${section.content}'))
+        section,
+  ];
+}
+
+String? _rawIdFromMap(Map<String, dynamic> data) {
+  const keys = [
+    'id',
+    'charId',
+    'charWordId',
+    'itemId',
+    'enemyId',
+    'raceId',
+    'stageId',
+    'zoneId',
+    'campaignId',
+    'activityId',
+    'missionId',
+    'topicId',
+    'medalId',
+    'skinId',
+    'uniEquipId',
+  ];
+  for (final key in keys) {
+    final value = '${data[key] ?? ''}'.trim();
+    if (value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+String? _titleFromMap(Map<String, dynamic> data) {
+  const keys = [
+    'name',
+    'appellation',
+    'title',
+    'voiceTitle',
+    'itemName',
+    'medalName',
+    'skinName',
+    'uniEquipName',
+    'topicName',
+    'zoneNameFirst',
+    'zoneNameSecond',
+    'displayName',
+    'storyName',
+    'groupName',
+  ];
+  for (final key in keys) {
+    final value = '${data[key] ?? ''}'.trim();
+    if (_containsChinese(value)) return _cleanStructuredText(value);
+  }
+  return null;
+}
+
+String? _parentIdFromMap(Map<String, dynamic> data) {
+  const keys = [
+    'activityId',
+    'actId',
+    'topicId',
+    'zoneId',
+    'stageId',
+    'charId',
+  ];
+  final rawId = _rawIdFromMap(data);
+  for (final key in keys) {
+    final value = '${data[key] ?? ''}'.trim();
+    if (value.isNotEmpty && value != rawId) return value;
+  }
+  return null;
+}
+
+bool _containsChinese(String text) =>
+    text.runes.any((rune) => rune >= 0x4e00 && rune <= 0x9fff);
+
+String _cleanStructuredText(String value) {
+  return value
+      .replaceAll(RegExp(r'<[^>]+>'), '')
+      .replaceAll(r'\n', '\n')
+      .replaceAll(RegExp(r'[ \t]+'), ' ')
+      .trim();
+}
+
+String _storyCategory(String storyId) {
+  if (storyId.contains('/rogue/') || storyId.contains('/roguelike/')) {
+    return 'roguelike';
+  }
+  if (storyId.contains('/sandbox')) return 'sandbox';
+  return 'story';
+}
+
+String _storySubtype(String storyId) {
+  if (storyId.contains('/memory/')) return 'operator_record_story';
+  if (storyId.startsWith('activities/')) return 'activity_story';
+  if (storyId.contains('/main/')) return 'main_story';
+  if (storyId.contains('/rogue/') || storyId.contains('/roguelike/')) {
+    if (storyId.contains('/month_chat_')) return 'monthly_squad';
+    return 'story';
+  }
+  if (storyId.contains('/sandbox')) return 'story';
+  if (storyId.contains('/guide/') || storyId.contains('/tutorial/')) {
+    return 'tutorial_story';
+  }
+  return 'story';
+}
+
+String _storyContentType(String storyId) {
+  final subtype = _storySubtype(storyId);
+  if (subtype == 'operator_record_story') return 'operator_record_story';
+  if (subtype == 'activity_story') return 'activity_story';
+  if (subtype == 'main_story') return 'main_story';
+  if (_storyCategory(storyId) == 'roguelike') {
+    if (subtype == 'monthly_squad') return 'roguelike_monthly_squad';
+    return 'roguelike_story';
+  }
+  if (_storyCategory(storyId) == 'sandbox') return 'sandbox_story';
+  return subtype;
+}
+
 class _BuildStats {
   int entities = 0;
   int storyLines = 0;
+  int normalizedRecords = 0;
+  int entityRelations = 0;
   int loreChunks = 0;
   int profileChunks = 0;
   int storyChunks = 0;
+  int structuredChunks = 0;
 
   Map<String, int> toJson() => {
         'entities': entities,
         'storyLines': storyLines,
+        'normalizedRecords': normalizedRecords,
+        'entityRelations': entityRelations,
         'loreChunks': loreChunks,
         'profileChunks': profileChunks,
         'storyChunks': storyChunks,
+        'structuredChunks': structuredChunks,
       };
+
+  Future<void> refreshFrom(Database db) async {
+    entities = _firstInt(await db.rawQuery('SELECT COUNT(*) FROM entities'));
+    storyLines =
+        _firstInt(await db.rawQuery('SELECT COUNT(*) FROM story_lines'));
+    normalizedRecords = _firstInt(
+      await db.rawQuery('SELECT COUNT(*) FROM normalized_records'),
+    );
+    entityRelations = _firstInt(
+      await db.rawQuery('SELECT COUNT(*) FROM entity_relations'),
+    );
+    loreChunks =
+        _firstInt(await db.rawQuery('SELECT COUNT(*) FROM lore_chunks'));
+    storyChunks = _firstInt(
+      await db.rawQuery(
+        "SELECT COUNT(*) FROM lore_chunks WHERE source_type = 'game_story'",
+      ),
+    );
+    profileChunks = _firstInt(
+      await db.rawQuery(
+        "SELECT COUNT(*) FROM lore_chunks WHERE content_category = 'operator'",
+      ),
+    );
+    structuredChunks = loreChunks - storyChunks - profileChunks;
+  }
+}
+
+int _firstInt(List<Map<String, Object?>> rows) {
+  if (rows.isEmpty || rows.first.isEmpty) return 0;
+  final value = rows.first.values.first;
+  if (value is int) return value;
+  return int.tryParse('$value') ?? 0;
 }
 
 class _Config {
