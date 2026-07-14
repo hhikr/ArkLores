@@ -216,7 +216,8 @@ Let's begin!
   /// Parses a value for a specific key (e.g. "Thought:") from the response.
   /// Handles markdown formatting like bolding, bullet points, and inline key placement.
   String _parseKey(String text, String key) {
-    final pattern = RegExp('^[-\\*\\s]*\\**$key\\**\\s*:\\s*(.*)', caseSensitive: false, multiLine: true);
+    // Matches the key optionally preceded by start of text, space, or newline, and optional bold asterisks
+    final pattern = RegExp('(?:^|\\s)\\**${key}\\**\\s*:\\s*(.*)', caseSensitive: false);
     final match = pattern.firstMatch(text);
     if (match != null) {
       var value = match.group(1) ?? '';
