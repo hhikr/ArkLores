@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/l10n/l10n.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -8,13 +9,9 @@ import '../../shared/widgets/theme_aware_card.dart';
 import 'bookmark_service.dart';
 
 /// Bookmark management page.
-///
-/// Displays all saved bookmarks in a scrollable list with swipe-to-delete.
-/// Tapping a bookmark pops the page and returns the selected [Bookmark].
 class BookmarkPage extends ConsumerWidget {
   const BookmarkPage({super.key});
 
-  /// Route name for navigation.
   static const routeName = '/bookmarks';
 
   @override
@@ -27,7 +24,7 @@ class BookmarkPage extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(
-          'Bookmarks',
+          context.t.bookmarksTitle,
           style: theme.titleFont.copyWith(fontSize: 18),
         ),
         leading: IconButton(
@@ -42,7 +39,7 @@ class BookmarkPage extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(
           child: Text(
-            'Failed to load bookmarks: $err',
+            context.t.bookmarksLoadFailed(err.toString()),
             style: theme.bodyFont.copyWith(color: theme.danger),
           ),
         ),
@@ -71,7 +68,6 @@ class BookmarkPage extends ConsumerWidget {
   }
 }
 
-/// Empty state shown when there are no bookmarks.
 class _EmptyState extends StatelessWidget {
   final AppThemeTokens theme;
 
@@ -83,30 +79,18 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.bookmark_border_rounded,
-              size: 72,
-              color: theme.textSecondary.withValues(alpha: 0.4),
-            ),
+            Icon(Icons.bookmark_border_rounded,
+                size: 64, color: theme.accentPrimary.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
-            Text(
-              'No bookmarks yet',
-              style: theme.titleFont.copyWith(
-                fontSize: 20,
-                color: theme.textPrimary,
-              ),
-            ),
+            Text(context.t.bookmarksEmpty,
+                style: theme.titleFont.copyWith(fontSize: 20)),
             const SizedBox(height: 8),
-            Text(
-              'Tap the bookmark icon in the toolbar\nto save your favorite wiki pages.',
-              textAlign: TextAlign.center,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 14,
-              ),
-            ),
+            Text(context.t.bookmarksEmptyDesc,
+                textAlign: TextAlign.center,
+                style: theme.bodyFont.copyWith(
+                    color: theme.textSecondary, fontSize: 14, height: 1.4)),
           ],
         ),
       ),
@@ -114,7 +98,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// A single bookmark list item with swipe-to-delete.
 class _BookmarkListItem extends StatelessWidget {
   final Bookmark bookmark;
   final AppThemeTokens theme;
@@ -134,148 +117,41 @@ class _BookmarkListItem extends StatelessWidget {
       key: ValueKey(bookmark.id),
       direction: DismissDirection.endToStart,
       background: Container(
-        margin: const EdgeInsets.only(bottom: 8),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
           color: theme.danger,
-          borderRadius: theme.cardRadius,
+          borderRadius: BorderRadius.circular(8),
         ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: Icon(
-          Icons.delete_rounded,
-          color: theme.textPrimary,
-          size: 24,
-        ),
+        child: Icon(Icons.delete_rounded, color: Colors.white, size: 28),
       ),
-      confirmDismiss: (_) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            backgroundColor: theme.cardSurface,
-            title: Text(
-              'Delete bookmark?',
-              style: theme.titleFont,
-            ),
-            content: Text(
-              'Remove "${bookmark.title}" from your bookmarks?',
-              style: theme.bodyFont,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text(
-                  'Cancel',
-                  style: theme.bodyFont.copyWith(color: theme.textSecondary),
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: Text(
-                  'Delete',
-                  style: theme.bodyFont.copyWith(color: theme.danger),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
       onDismissed: (_) => onDelete(),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: ThemeAwareCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          onTap: onTap,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Site indicator
-              Icon(
-                Icons.public_rounded,
-                size: 18,
-                color: theme.wikiBadgeColor,
-              ),
-              const SizedBox(width: 10),
-
-              // Text content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title
-                    Text(
-                      bookmark.title,
-                      style: theme.titleFont.copyWith(fontSize: 14),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    // URL
-                    Text(
-                      bookmark.url,
+      child: ThemeAwareCard(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Icon(Icons.bookmark_rounded,
+                color: theme.wikiBadgeColor, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(bookmark.title,
+                      style: theme.titleFont.copyWith(fontSize: 15),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(bookmark.siteLabel,
                       style: theme.bodyFont.copyWith(
-                        fontSize: 11,
-                        color: theme.textSecondary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    // Meta row: site badge + date
-                    Row(
-                      children: [
-                        // Site badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.wikiBadgeColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            bookmark.siteLabel,
-                            style: theme.bodyFont.copyWith(
-                              fontSize: 10,
-                              color: theme.wikiBadgeColor,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Date
-                        Text(
-                          _formatDate(bookmark.createdAt),
-                          style: theme.bodyFont.copyWith(
-                            fontSize: 10,
-                            color: theme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                          color: theme.textSecondary, fontSize: 12)),
+                ],
               ),
-
-              // Chevron
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: theme.textSecondary,
-              ),
-            ],
-          ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                color: theme.textSecondary, size: 20),
+          ],
         ),
       ),
     );
-  }
-
-  String _formatDate(int timestamp) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final y = dt.year;
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    final h = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $h:$min';
   }
 }

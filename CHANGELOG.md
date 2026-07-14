@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] — 2026-07-14
+
+### Added
+
+- **OpenAI-compatible LLM layer** — Chat and Embedding clients with separate Base URL, API key, and model configuration.
+- **Knowledge base infrastructure** — SQLite-backed chunk store, embedding BLOB storage, pure Dart cosine similarity search, and profile-scoped indexing.
+- **Embedding profile management** — Built-in and API profiles are isolated; switching provider/model preserves old indexes and scopes search to the active profile.
+- **Built-in embedding model** — Bundled fixed 512-dimensional TFLite embedding model for offline fallback and prebuilt seed data.
+- **Materials tab** — PDF/TXT import, text extraction, chunking, embedding, book list management, display-name editing, and deletion.
+- **Knowledge base page** — Wiki index overview, active embedding profile display, failed embedding retry, and source-specific sync controls.
+- **Prebuilt seed bundle** — Bundled `assets/seeds/arklores_knowledge.db`, `wiki_cache.zip`, and manifest so users do not need to crawl Wiki data from scratch on mobile.
+- **Desktop seed builder** — `tool/build_seed.py` orchestrates Wiki crawling, chunking, TFLite embedding, verification, and asset copying.
+- **Warfarin Wiki crawler** — Remix `.data` client for Endfield operators, lore, and missions with Markdown formatting.
+- **PRTS story/operator assembly** — Raw wikitext crawler, story cleaner, operator profile assembly, voice records, tokens, modules, paradox records, and operator record stories.
+- **Bilingual localization** — English and Chinese ARB files, generated localization classes, and Riverpod-controlled locale switching.
+- **Citation and trust strategy** — Agent prompt templates and citation cards distinguish Wiki and user-imported book materials.
+
+### Changed
+
+- Replaced the planned sqlite-vec FFI path with SQLite + pure Dart cosine similarity because current sqlite-vec Flutter/Android packaging is incomplete.
+- Moved the knowledge database to Android external app storage so users can inspect local files under the app files directory.
+- Default embedding profile is now the built-in profile, matching the bundled seed database profile id `builtin:builtin-embedding`.
+- PRTS and Warfarin incremental sync now skip healthy seeded pages instead of re-embedding the bundled knowledge base on first update.
+- `pubspec.yaml` version bumped to `0.3.0+3`.
+
+### Fixed
+
+- Prevented duplicate table creation when sqflite opens a prebuilt seed database with existing tables.
+- Fixed profile id mismatch that caused the knowledge base page to show zero chunks despite a populated seed database.
+- Fixed PRTS sync cancellation so cancelled tasks no longer continue writing vectors or updating UI state in the background.
+- Fixed noisy MediaWiki `touched` comparisons that caused seeded PRTS story pages to be re-embedded unnecessarily.
+- Fixed Warfarin formatter crashes caused by dynamic Remix fields that may decode as primitive references instead of maps.
+- Fixed API settings profile list display so inactive profiles show an `Activate` action instead of an ambiguous check icon.
+
+### Documentation
+
+- Updated `README.md`, `docs/implementation_plan.md`, `docs/v0.3_SUMMARY.md`, `docs/v0.3_VALIDATION_REPORT.md`, and `docs/v0.3_TASK_BREAKDOWN.md` for the final v0.3 implementation.
+
+---
+
 ## [0.2.0] — 2026-07-12
 
 ### Added

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
@@ -28,12 +29,12 @@ class AiChatPage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'AI Chat',
+              context.t.aiChatTitle,
               style: theme.titleFont.copyWith(fontSize: 24),
             ),
             const SizedBox(height: 8),
             Text(
-              'Fact Check · Summary · Roleplay',
+              context.t.aiChatSubtitle,
               style: theme.bodyFont.copyWith(color: theme.textSecondary),
             ),
             const SizedBox(height: 32),
@@ -43,13 +44,12 @@ class AiChatPage extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Coming in v0.4',
+                    context.t.aiChatComingSoon,
                     style: theme.titleFont.copyWith(fontSize: 16),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Three AI agent modes with citation cards and '
-                    'streaming markdown responses.',
+                    context.t.aiChatComingSoonDesc,
                     style: theme.bodyFont.copyWith(color: theme.textSecondary),
                   ),
                 ],
