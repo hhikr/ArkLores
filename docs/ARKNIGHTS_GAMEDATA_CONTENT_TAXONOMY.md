@@ -213,6 +213,8 @@ content_type = "roguelike_monthly_record"
 
 基于 `Kengxxiao/ArknightsGameData` 的 `zh_CN/gamedata` 快照：
 
+- 全仓库文件数：10634
+- 含中文文本文件数：5999
 - `story/`: 5606 files, 5605 `.txt`
 - `excel/`: 57 JSON files
 - `levels/`: 3743 JSON files
@@ -235,6 +237,31 @@ content_type = "roguelike_monthly_record"
 - `enemy_handbook_table.json`
 - `skin_table.json`
 - `item_table.json`
+
+全文件级 audit 的候选分类摘要：
+
+| Category | Files | Notes |
+|---|---:|---|
+| `activity_story` | 1933 | 活动剧情文本 |
+| `main_story` | 986 | 主线 / 教程 / 主线相关文本 |
+| `operator_record_story` | 764 | 干员秘录和干员相关剧情文本 |
+| `roguelike_story` | 250 | 肉鸽结局、月度记录、挑战等剧情文本 |
+| `sandbox_story` | 255 | 生息演算相关剧情文本 |
+| `operator` | 3 | 干员基础、档案、语音主表 |
+| `roguelike` | 2 | 肉鸽主题结构化主表 |
+| `world_item` | 5 | 物品、模组、皮肤、奖章等文本 |
+| `enemy` | 1 | 敌人图鉴主表 |
+| `stage` | 3 | 关卡、区域、战役文本 |
+| `level` | 2853 | 大量关卡 JSON，少量含中文，需要进一步筛选 |
+| `roguelike_level` | 557 | 肉鸽关卡 JSON，少量含中文 |
+| `sandbox_level` | 333 | 生息演算关卡 JSON，少量含中文 |
+
+注意：`levels/`、`bakemuzzledata/`、`building/`、`[uc]lua/` 不应默认排除。全文件 audit 显示：
+
+- `levels/enemydata/enemy_database.json` 含大量敌人文本候选。
+- `building_data.json` 含大量基建 / 技能 / UI 文本，部分可能是 lore 辅助资料。
+- `skill_table.json`、`skin_table.json`、`medal_table.json` 也含高密度中文文本。
+- `[uc]lua/` 中文文本极少，暂列人工复核，不进入首批 importer。
 
 ## 分块前的 Normalized Record
 
@@ -332,9 +359,10 @@ roguelike_topic rogue_5
 
 ## 后续任务
 
-1. 扩展 builder：先产 normalized records。
-2. 为每个来源文件写 adapter，而不是直接写 chunks。
-3. 增加 content taxonomy smoke test。
-4. 增加 coverage report：每次构建输出每类记录数量。
-5. importer 覆盖后再接 `search_local_lore`。
-
+1. 先完成全文件 audit 人工复核，不直接扩 importer。
+2. 将文件标注为 `core` / `candidate` / `low` / `exclude`。
+3. 扩展 builder：先产 normalized records。
+4. 为每个来源文件写 adapter，而不是直接写 chunks。
+5. 增加 content taxonomy smoke test。
+6. 增加 coverage report：每次构建输出每类记录数量。
+7. importer 覆盖后再接 `search_local_lore`。
