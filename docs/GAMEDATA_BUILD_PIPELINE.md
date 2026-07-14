@@ -227,6 +227,26 @@ gzip -c build/gamedata/arklores_gamedata_zh.db \
   > build/gamedata/arklores_gamedata_zh.db.gz
 ```
 
+## 未发布版本的真机测试
+
+正式 v0.4.5 发布前，App 不能依赖“当前版本已有 GitHub Release
+asset”。开发测试使用同一安装链路，但通过构建参数注入临时下载地址：
+
+```bash
+/home/hhikr/flutter/bin/flutter run \
+  --dart-define=ARKLORES_GAMEDATA_DB_URL=http://<LAN-IP>:8000/arklores_gamedata_zh.db.gz \
+  --dart-define=ARKLORES_GAMEDATA_DB_SHA256=<compressed-db-sha256>
+```
+
+可选临时分发方式：
+
+- 本机启动局域网 HTTP 服务，手机与电脑在同一网络。
+- 上传到 GitHub pre-release asset，使用公开下载 URL。
+- 不建议使用 draft release asset，因为 App 侧没有 GitHub token，不应在客户端内置 token。
+
+未提供 `ARKLORES_GAMEDATA_DB_URL` 时，知识库页面会显示 GameData
+未安装，并提示当前构建未配置下载地址；这不是业务失败，而是未发布版本的预期状态。
+
 ## Manifest
 
 `gamedata_manifest.json` 必须包含：
