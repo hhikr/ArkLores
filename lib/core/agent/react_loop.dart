@@ -72,6 +72,11 @@ Once you have gathered enough information, output:
 Thought: I have enough information to answer.
 Final Answer: <your complete, well-structured, final response in Markdown format, with proper citation marks like [chunk_id]>
 
+CRITICAL FORMATTING RULES:
+1. Each key (Thought, Action, Action Input, Final Answer) MUST start on a new line. Do NOT combine them on the same line.
+2. Do NOT format keys with markdown bolding or list symbols. Write them exactly as "Thought:", "Action:", "Action Input:", "Final Answer:".
+3. Write ONLY one Thought, Action, and Action Input at a time. Do NOT write "Observation:" or hallucinate observations yourself. Stop generating immediately after writing "Action Input:".
+
 Let's begin!
 ''';
 
@@ -209,22 +214,44 @@ Let's begin!
   }
 
   /// Parses a value for a specific key (e.g. "Thought:") from the response.
+  /// Handles markdown formatting like bolding, bullet points, and inline key placement.
   String _parseKey(String text, String key) {
-    final pattern = RegExp('^$key:\\s*(.*)', caseSensitive: false, multiLine: true);
+    final pattern = RegExp('^[-\\*\\s]*\\**$key\\**\\s*:\\s*(.*)', caseSensitive: false, multiLine: true);
     final match = pattern.firstMatch(text);
     if (match != null) {
-      final value = match.group(1) ?? '';
-      // Continue parsing until the next key or end of text
+      var value = match.group(1) ?? '';
+      
+      // Handle inline next key on the same line (e.g. Action: search_wiki Action Input: {...})
+      final nextKeyInlinePattern = RegExp(r'\b(Thought|Action|Action Input|Observation|Final Answer)\s*:', caseSensitive: false);
+      final inlineMatch = nextKeyInlinePattern.firstMatch(value);
+      if (inlineMatch != null) {
+        value = value.substring(0, inlineMatch.start).trim();
+        return _cleanValue(value);
+      }
+
+      // Continue parsing subsequent lines until the next key or end of text
       final startIndex = text.indexOf(match.group(0)!);
       final remainingText = text.substring(startIndex + match.group(0)!.length);
-      final nextKeyPattern = RegExp(r'^(Thought|Action|Action Input|Observation|Final Answer):', caseSensitive: false, multiLine: true);
+      final nextKeyPattern = RegExp(r'^[-\\*\\s]*\**(Thought|Action|Action Input|Observation|Final Answer)\**\s*:', caseSensitive: false, multiLine: true);
       final nextKeyMatch = nextKeyPattern.firstMatch(remainingText);
       if (nextKeyMatch != null) {
         final contentEnd = remainingText.indexOf(nextKeyMatch.group(0)!);
-        return '${value.trim()}\n${remainingText.substring(0, contentEnd).trim()}'.trim();
+        return _cleanValue('${value.trim()}\n${remainingText.substring(0, contentEnd).trim()}');
       }
-      return '${value.trim()}\n${remainingText.trim()}'.trim();
+      return _cleanValue('${value.trim()}\n${remainingText.trim()}');
     }
     return '';
+  }
+
+  /// Cleans up trailing formatting symbols like markdown bolding **.
+  String _cleanValue(String val) {
+    var cleaned = val.trim();
+    if (cleaned.endsWith('**')) {
+      cleaned = cleaned.substring(0, cleaned.length - 2).trim();
+    }
+    if (cleaned.startsWith('**')) {
+      cleaned = cleaned.substring(2).trim();
+    }
+    return cleaned;
   }
 }
