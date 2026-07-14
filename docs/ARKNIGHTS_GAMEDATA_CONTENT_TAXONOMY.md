@@ -256,6 +256,20 @@ content_type = "roguelike_monthly_record"
 | `roguelike_level` | 557 | 肉鸽关卡 JSON，少量含中文 |
 | `sandbox_level` | 333 | 生息演算关卡 JSON，少量含中文 |
 
+人工审核不要只看上面的摘要表。`tool/audit_arknights_gamedata_files.py`
+会额外生成：
+
+- `Category Directory Distribution`：每个分类实际分布在哪些目录、目录内文件数、含中文文件数、文本量。
+- `Category Review Packets`：每个分类按文本量排序的代表文件、目录、relevance、字段 key、文本样例。
+- CSV 明细：每个文件一行，包含 `directory` 字段，可按分类和目录筛选。
+
+审核时先看目录分布确认分类边界，再看 review packets 决定是否需要独立 importer adapter。
+例如：
+
+- `operator_record_story` 主要分布在 `story/obt/memory` 与 `story/[uc]info/obt/memory`。
+- `roguelike_story` 分布在 `story/obt/rogue/rogue_*`、`story/obt/roguelike/ro*`、`story/obt/rogue/month_chat_rogue_*`。
+- `level` 与 `roguelike_level` 需要按 `levels/enemydata`、`levels/activities/*`、`levels/obt/roguelike/ro*` 分开复核，不能整体导入或整体排除。
+
 注意：`levels/`、`bakemuzzledata/`、`building/`、`[uc]lua/` 不应默认排除。全文件 audit 显示：
 
 - `levels/enemydata/enemy_database.json` 含大量敌人文本候选。
