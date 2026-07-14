@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import '../llm/llm_client.dart';
 import 'agent_logger.dart';
+import 'tools/agent_tool.dart';
 import 'tools/tool_registry.dart';
 
 /// Types of events emitted by the ReAct Loop.
@@ -55,7 +56,8 @@ class ReActLoop {
   }) async* {
     // 1. Build the instruction prompt specifying the ReAct format and available tools
     final toolsDesc = _toolRegistry.allTools
-        .map((t) => '- `${t.name}`: ${t.description}. Parameters Schema: ${jsonEncode(t.parameters)}')
+        .map((t) =>
+            '- `${t.name}`: ${t.description}. Parameters Schema: ${jsonEncode(t.parameters)}')
         .join('\n');
 
     final reactFormatPrompt = '''
@@ -104,7 +106,12 @@ Let's begin!
           loopMessages,
           temperature: 0.1, // Low temperature for high format compliance
           maxTokens: 1024,
-          stop: const ['Observation:', '\nObservation:', 'observation:', '\nobservation:'],
+          stop: const [
+            'Observation:',
+            '\nObservation:',
+            'observation:',
+            '\nobservation:'
+          ],
         );
       } catch (e) {
         yield ReActEvent(type: ReActEventType.error, content: 'LLM Error: $e');
@@ -133,21 +140,26 @@ Let's begin!
       }
 
       // If LLM output a Final Answer directly, we are done
-      if (finalAnswer.isNotEmpty || (action.isEmpty && finalAnswer.isEmpty && response.contains('Final Answer:'))) {
+      if (finalAnswer.isNotEmpty ||
+          (action.isEmpty &&
+              finalAnswer.isEmpty &&
+              response.contains('Final Answer:'))) {
         final actualAnswer = finalAnswer.isNotEmpty
             ? finalAnswer
             : response.split('Final Answer:').last.trim();
 
         logger.logFinalAnswer(actualAnswer);
         await logger.flush();
-        yield ReActEvent(type: ReActEventType.finalAnswerToken, content: actualAnswer);
+        yield ReActEvent(
+            type: ReActEventType.finalAnswerToken, content: actualAnswer);
         completed = true;
         break;
       }
 
       if (action.isEmpty) {
         // If no action or final answer, default to treating the response as final answer
-        yield ReActEvent(type: ReActEventType.finalAnswerToken, content: response);
+        yield ReActEvent(
+            type: ReActEventType.finalAnswerToken, content: response);
         completed = true;
         break;
       }
@@ -192,7 +204,12 @@ Let's begin!
       String observation;
       try {
         final result = await tool.execute(arguments);
-        observation = result?.toString() ?? 'No output';
+        if (result is ToolExecutionResult) {
+          observation = result.observation;
+          logger.logToolDiagnostics(result.debugLog ?? '');
+        } else {
+          observation = result?.toString() ?? 'No output';
+        }
       } catch (e) {
         observation = 'Error executing tool: $e';
       }
@@ -211,10 +228,12 @@ Let's begin!
     if (!completed) {
       // Loop finished without Final Answer, stream the final model response or a fallback
       try {
-        final fallbackPrompt = 'Please summarize all findings and output your Final Answer now.';
+        final fallbackPrompt =
+            'Please summarize all findings and output your Final Answer now.';
         loopMessages.add(Message.user(fallbackPrompt));
-        
-        final finalResponse = await _llmClient.chat(loopMessages, temperature: 0.2);
+
+        final finalResponse =
+            await _llmClient.chat(loopMessages, temperature: 0.2);
         final finalAnswer = _parseKey(finalResponse, 'Final Answer');
         final content = finalAnswer.isNotEmpty ? finalAnswer : finalResponse;
 
@@ -228,7 +247,9 @@ Let's begin!
       } catch (e) {
         logger.logError('Failed to generate final answer: $e');
         await logger.flush();
-        yield ReActEvent(type: ReActEventType.error, content: 'Failed to generate final answer: $e');
+        yield ReActEvent(
+            type: ReActEventType.error,
+            content: 'Failed to generate final answer: $e');
       }
     }
 
@@ -239,13 +260,16 @@ Let's begin!
   /// Handles markdown formatting like bolding, bullet points, and inline key placement.
   String _parseKey(String text, String key) {
     // Matches the key optionally preceded by start of text, space, or newline, and optional bold asterisks
-    final pattern = RegExp('(?:^|\\s)\\**$key\\**\\s*:\\s*(.*)', caseSensitive: false);
+    final pattern =
+        RegExp('(?:^|\\s)\\**$key\\**\\s*:\\s*(.*)', caseSensitive: false);
     final match = pattern.firstMatch(text);
     if (match != null) {
       var value = match.group(1) ?? '';
-      
+
       // Handle inline next key on the same line (e.g. Action: search_wiki Action Input: {...})
-      final nextKeyInlinePattern = RegExp(r'\b(Thought|Action|Action Input|Observation|Final Answer)\s*:', caseSensitive: false);
+      final nextKeyInlinePattern = RegExp(
+          r'\b(Thought|Action|Action Input|Observation|Final Answer)\s*:',
+          caseSensitive: false);
       final inlineMatch = nextKeyInlinePattern.firstMatch(value);
       if (inlineMatch != null) {
         value = value.substring(0, inlineMatch.start).trim();
@@ -255,11 +279,15 @@ Let's begin!
       // Continue parsing subsequent lines until the next key or end of text
       final startIndex = text.indexOf(match.group(0)!);
       final remainingText = text.substring(startIndex + match.group(0)!.length);
-      final nextKeyPattern = RegExp(r'^[-\\*\\s]*\**(Thought|Action|Action Input|Observation|Final Answer)\**\s*:', caseSensitive: false, multiLine: true);
+      final nextKeyPattern = RegExp(
+          r'^[-\\*\\s]*\**(Thought|Action|Action Input|Observation|Final Answer)\**\s*:',
+          caseSensitive: false,
+          multiLine: true);
       final nextKeyMatch = nextKeyPattern.firstMatch(remainingText);
       if (nextKeyMatch != null) {
         final contentEnd = remainingText.indexOf(nextKeyMatch.group(0)!);
-        return _cleanValue('${value.trim()}\n${remainingText.substring(0, contentEnd).trim()}');
+        return _cleanValue(
+            '${value.trim()}\n${remainingText.substring(0, contentEnd).trim()}');
       }
       return _cleanValue('${value.trim()}\n${remainingText.trim()}');
     }

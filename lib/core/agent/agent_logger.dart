@@ -72,6 +72,13 @@ class AgentLogger {
     _buf.writeln();
   }
 
+  void logToolDiagnostics(String diagnostics) {
+    if (!isEnabled || diagnostics.trim().isEmpty) return;
+    _buf.writeln('▶ TOOL DIAGNOSTICS:');
+    _buf.writeln(diagnostics.trim());
+    _buf.writeln();
+  }
+
   void logFinalAnswer(String answer) {
     if (!isEnabled) return;
     _buf.writeln('─' * 60);
@@ -128,7 +135,10 @@ class AgentLogger {
 
       await logDir.create(recursive: true);
 
-      final ts = _startTime.toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+      final ts = _startTime
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .replaceAll('.', '-');
       final file = File(p.join(logDir.path, 'session_$ts.log'));
       await file.writeAsString(_buf.toString(), flush: true);
 
