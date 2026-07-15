@@ -2,7 +2,8 @@
 
 ## 2026-07 Architecture Decision
 
-ArkLores v0.4.5 主线使用中文 GameData release asset 作为主知识源。
+ArkLores 自 v0.4.5 起使用中文 GameData release asset 作为主知识源；当前未发布开发版本为
+v0.8.0，最新 release 为 v0.7.0，兼容 GameData schema 2。
 
 可信度策略：
 

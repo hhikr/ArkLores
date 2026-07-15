@@ -37,16 +37,20 @@ v0.7.0 GitHub Release 包含：
 ## 开始使用
 
 ```bash
-flutter pub get
-flutter run
+/home/hhikr/flutter/bin/flutter pub get
+/home/hhikr/flutter/bin/flutter run
 ```
 
 开发期真机测试 GameData 下载可通过：
 
 ```bash
-flutter run \
-  --dart-define=ARKLORES_GAMEDATA_DB_URL=http://<host>:<port>/arklores_gamedata_zh.db.gz
+/home/hhikr/flutter/bin/flutter run \
+  --dart-define=ARKLORES_GAMEDATA_DB_URL=http://<host>:<port>/arklores_gamedata_zh.db.gz \
+  --dart-define=ARKLORES_GAMEDATA_DB_SHA256=<compressed-db-sha256>
 ```
+
+真机使用 localhost 时还需要 `adb reverse`；推荐直接使用下方 `tools/setup.sh`，详见
+[`docs/ANDROID_SETUP_GUIDE.md`](docs/ANDROID_SETUP_GUIDE.md)。
 
 也可以用统一安装向导从 GameData source 重建，或直接复用已有 `.db.gz`：
 

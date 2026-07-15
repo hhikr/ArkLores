@@ -14,10 +14,13 @@ All notable changes to ArkLores will be documented in this file.
 - Unified Summary and Fact-check source bars and send/stop interactions.
 - Localized Agent loading and reasoning status text and improved evidence metadata wrapping for narrow screens and large text.
 - Bumped the development version to `0.8.0+8`; no tag, Release, APK publication, or push was performed.
+- Audited tracked documentation for current version, architecture, verification ownership, local links, and deferred scope;
+  corrected the GameData build/finalization example to match the current helper CLI.
 
 ### Verification
 
-- Verified focused evidence parser and Widget tests, `test/agent_test.dart`, and `flutter analyze` on 2026-07-15.
+- Verified focused evidence parser and Widget tests, `test/agent_test.dart`, the full offline test suite
+  (58 passed; 3 opt-in external Chat tests skipped), and `flutter analyze` on 2026-07-15.
 
 ### Known Limitations
 
