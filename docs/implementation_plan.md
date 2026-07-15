@@ -70,8 +70,10 @@ search_local_lore
 ReAct Loop requirements:
 
 - tolerate loose Action Input maps;
+- tolerate provider keys placed after sentence punctuation or followed by provider metadata;
 - reject empty final answer;
 - surface truncated model output;
+- allow an Agent to require completed tool calls before accepting a final answer;
 - protect against unsupported source claims.
 
 ## App Behavior
@@ -101,10 +103,10 @@ ReAct Loop requirements:
 
 ### v0.5 - 事实核查 Agent
 
-实现状态（2026-07-15）：代码与自动化测试已完成。事实核查仅注册
-`search_local_lore`，结论经过实际 GameData observation 二次校验；四态 UI、证据展开、
-追问历史、话题切换指令、取消和重试已接入。固定真实 API 命题 QA 与 Android 真机渲染
-仍待配置外部模型和设备后执行，详见 `v0.5_task_breakdown.md` 与 `RETRIEVAL_QA.md`。
+实现状态（2026-07-15）：代码、deterministic 自动化测试和 scoped 剧情命题的真实 Chat
+QA 已完成。事实核查仅注册 `search_local_lore`，结论经过实际 GameData observation 二次
+校验；四态 UI、证据展开、追问历史、话题切换指令、取消和重试已接入。其余固定真实 API
+命题和 Android 真机渲染仍待执行，详见 `v0.5_task_breakdown.md` 与 `RETRIEVAL_QA.md`。
 
 目标：仅依据本地 GameData 证据，把用户的设定或剧情说法判断为“支持”“反驳”
 “存疑”或“无法确认”。
@@ -114,6 +116,12 @@ ReAct Loop requirements:
 - 基于现有 ReAct Loop 增加事实核查模式。
 - 实现“拆解主张与实体 → 多次定向调用 `search_local_lore` → 对照支持与反驳
   证据 → 形成结论”的 workflow。
+- 剧情命题先分别解析 canonical `scope_id` 和 `entity_id`，再用单一关系、状态或动作词
+  执行 evidence mode；普通复合关键词无结果不能被解释为反证。
+- Fact-check 最终回答前至少完成一次工具调用；其 ReAct 预算为 7 轮、单步 4096 tokens，
+  以容纳实体/范围解析和 reasoning provider 的输出，其他 Agent 保持默认预算。
+- scoped evidence 在候选交集内按实体名与关系词的最短文本距离排序，优先返回同句或
+  邻近句的直接陈述，而不是按剧情文件名排序。
 - 在回答中区分直接证据、间接证据和证据缺失，不把 retrieval confidence 等同于
   事实确定性。
 - 支持带对话上下文的追问，并检测话题切换；不得静默丢弃当前对话。

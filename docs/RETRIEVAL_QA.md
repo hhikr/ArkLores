@@ -115,6 +115,26 @@ Additional smoke check:
 
 ## v0.5 Fact-Check QA
 
+### Scoped Evidence 维护约束
+
+真实 Chat QA 暴露的问题及当前通用处理如下：
+
+| 问题表现 | 根因 | 当前处理 | 回归覆盖 |
+| --- | --- | --- | --- |
+| 模型解析出活动和角色，却没有进入 scoped evidence | prompt 约束不能保证 provider 严格编排 | 范围和实体必须分别解析；evidence mode 缺少 `scope_id/entity_id` 时工具返回可重试错误；最终回答前至少完成一次工具调用 | `agent_test.dart` 的 evidence 参数和 minimum tool-call tests |
+| 用“范围名 + 实体名”检索无结果后错误断言角色未登场 | 普通复合 query 无结果被当成反证 | prompt 明确禁止该推断；evidence 无候选时要求保留稳定 ID，只用一个关系、状态或动作词重试 | invalid/empty scoped evidence test；live 目标命题 |
+| 短关系词命中很多剧情片段，直接原文被弱相关片段挤出 | 候选原先按 `story_id/raw_id` 排序 | scope/entity/关系词取交集后，按实体名和关系词在 chunk 内的最短距离排序，再应用 `top_k` | synthetic distant-candidate test；finalized DB 固定 QA |
+| provider 输出 `。Action:` 或附加 `Action Query/Tool` 时工具名解析失败 | ReAct key parser 只接受空白边界或吸收后续 metadata | key 支持常见中英文句末标点；Action 只取首行 | punctuated action 和 action metadata tests |
+| 模型未检索就直接回答 | ReAct 默认接受首轮 Final Answer | ReAct 提供 `minimumToolCalls`；Fact-check 设置为 1，其他 Agent 默认 0 | early-final deterministic test；live QA |
+| reasoning provider 在证据返回后截断 | 2048 tokens 同时承载隐藏 reasoning 和可见 ReAct 输出 | Fact-check 单步上限设为 4096，迭代上限设为 7；截断仍作为错误而非不完整答案返回 | truncated response unit test；live QA |
+| provider 400 只显示状态码 | 标准错误正文未被解析 | Chat client 仅提取标准 `error.message`，不记录 key、请求正文或完整错误响应 | analyze/unit suite；不得把凭据写入 fixture |
+
+Live test 默认跳过，避免普通 `flutter test` 产生外部费用或引入模型波动。只有设置
+`ARKLORES_RUN_LIVE_CHAT=true` 才执行；`tools/api_info` 必须保持 Git ignored，格式为
+`API_KEY/MODEL/URL` 三个键。该测试复用生产 Agent、检索和 verdict 链路，但显式指定
+finalized DB，并临时解除 `flutter_test` 的网络拦截。它不是 Settings/UI/原生日志目录的
+真机 integration test。
+
 固定命题集：
 
 | 结论 | 命题 / 操作 | 验收重点 |
