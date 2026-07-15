@@ -113,6 +113,27 @@ Additional smoke check:
 - `特蕾西娅` 等变体名现在有基础 alias 候选，但用户提问时是否需要展示候选仍取决于 Agent 调用 `search_local_lore` 的 disambiguation 分支。
 - 真机端到端仍需要用 release asset 或临时 HTTP asset 验证下载、安装、检索、Summary Agent 全链路。
 
+## v0.6 Role-play QA
+
+角色扮演继续只注册 `search_local_lore`。角色选择先通过 `entities/entity_aliases` 解析为
+canonical name 和稳定 `entity_id`；角色绑定工具会覆盖模型传入的 entity id，并默认使用
+`roleplay` 检索计划。该计划复用实体文档、档案记录和 canonical 角色名剧情回查，使未直接
+写入 `entity_id` 的任务剧情仍可作为候选记忆；每轮至少完成一次检索，未覆盖经历不得用模型
+记忆补齐。
+
+2026-07-15 自动验证：
+
+- Passed: `test/agent_test.dart` 的 41 项测试，其中 Role-play 覆盖唯一角色解析、alias
+  重名消歧、稳定 entity id 注入、首轮档案/语音/秘录/模组/任务记忆约束，以及会话文件的
+  空状态、保存、读取、损坏和删除。
+- Passed: Role-play 复用 ReAct 的空回答、截断、minimum tool-call 和 unsupported source
+  claim 回归测试。
+- Passed: 完整 `flutter test` 为 51 passed、3 个 opt-in live tests skipped；
+  `flutter analyze` 为 No issues found。
+- Not run: 真实 Chat API 角色一致性与场景冲突矩阵。
+- Not verified: finalized 完整 DB 上的角色参与任务覆盖率；320 logical px、2 倍文字缩放
+  自动 Widget 测试因测试 pump 未稳定完成而撤回，Android 双语/无障碍/真机渲染仍 deferred。
+
 ## v0.5 Fact-Check QA
 
 ### Scoped Evidence 维护约束
