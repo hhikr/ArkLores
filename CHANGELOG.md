@@ -20,6 +20,7 @@ All notable changes to ArkLores will be documented in this file.
 - Added opt-in live Chat QA, evidence proximity ranking, and Fact-check retrieval enforcement for provider format and truncation variance.
 - Replaced network-dependent Warfarin crawler output tests with deterministic offline parser and formatter contracts.
 - Updated Android setup automation for API 36, data-preserving installs, verified GameData URLs, localhost adb reverse, and explicit debug-key release warnings.
+- Added an Android setup option to serve an existing local GameData `.db.gz` with gzip/SHA256 validation, without rebuilding the database.
 
 ## [0.4.5] - 2026-07-15
 
