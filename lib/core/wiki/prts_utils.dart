@@ -21,9 +21,8 @@ List<Map<String, String>> parseAllTemplates(
   while (true) {
     int startIdx = wikitext.indexOf(startKey, searchOffset);
     if (startIdx == -1) {
-      startIdx = wikitext
-          .toLowerCase()
-          .indexOf(startKey.toLowerCase(), searchOffset);
+      startIdx =
+          wikitext.toLowerCase().indexOf(startKey.toLowerCase(), searchOffset);
       if (startIdx == -1) break;
     }
 
@@ -47,12 +46,10 @@ List<Map<String, String>> parseAllTemplates(
     var depth = 2;
     var endIdx = startIdx + startKey.length;
     while (endIdx < wikitext.length - 1 && depth > 0) {
-      if (wikitext[endIdx] == '{' &&
-          wikitext[endIdx + 1] == '{') {
+      if (wikitext[endIdx] == '{' && wikitext[endIdx + 1] == '{') {
         depth++;
         endIdx += 2;
-      } else if (wikitext[endIdx] == '}' &&
-          wikitext[endIdx + 1] == '}') {
+      } else if (wikitext[endIdx] == '}' && wikitext[endIdx + 1] == '}') {
         depth--;
         endIdx += 2;
       } else {
@@ -139,14 +136,11 @@ String cleanStoryContent(String rawContent) {
   content = content.replaceAll(RegExp(r'\[[A-Za-z0-9_]+.*?\]'), '');
 
   final lines = content.split('\n');
-  final cleanLines = lines
-      .map((line) => line.trim())
-      .where((line) {
-        if (line.isEmpty) return false;
-        if (line.startsWith('{{') && line.endsWith('}}')) return false;
-        return true;
-      })
-      .toList();
+  final cleanLines = lines.map((line) => line.trim()).where((line) {
+    if (line.isEmpty) return false;
+    if (line.startsWith('{{') && line.endsWith('}}')) return false;
+    return true;
+  }).toList();
 
   return cleanLines.join('\n');
 }
@@ -198,7 +192,7 @@ String assembleOperatorMarkdown(
 
   for (int i = 1; i <= 15; i++) {
     final title = archives['档案$i'];
-    final text = archives['档案${i}文本'];
+    final text = archives['档案$i文本'];
     if (title != null &&
         title.trim().isNotEmpty &&
         text != null &&
@@ -258,7 +252,7 @@ String assembleOperatorMarkdown(
       for (int j = 1; j <= 5; j++) {
         for (int k = 1; k <= 5; k++) {
           final name = b['后勤技能$j-$k'];
-          final phase = b['后勤技能$j-${k}阶段'] ?? '';
+          final phase = b['后勤技能$j-$k阶段'] ?? '';
           if (name != null && name.trim().isNotEmpty) {
             final phaseStr = phase.isNotEmpty ? '（$phase）' : '';
             sb.writeln('- 后勤技能$phaseStr：${name.trim()}');
@@ -322,7 +316,8 @@ String assembleOperatorMarkdown(
         }
         if (recordStoryWikitexts != null &&
             recordStoryWikitexts.containsKey(resolvedPage)) {
-          final cleaned = cleanStoryContent(recordStoryWikitexts[resolvedPage]!);
+          final cleaned =
+              cleanStoryContent(recordStoryWikitexts[resolvedPage]!);
           sb.writeln(cleaned);
           sb.writeln('');
         } else if (resolvedPage.isNotEmpty) {

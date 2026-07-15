@@ -61,9 +61,7 @@ class Bookmark {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Bookmark &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
+      other is Bookmark && runtimeType == other.runtimeType && id == other.id;
 
   @override
   int get hashCode => id.hashCode;
@@ -157,8 +155,7 @@ class BookmarkService {
   /// Returns the number of bookmarks currently stored.
   Future<int> count() async {
     final db = await database;
-    final result =
-        await db.rawQuery('SELECT COUNT(*) AS cnt FROM bookmarks');
+    final result = await db.rawQuery('SELECT COUNT(*) AS cnt FROM bookmarks');
     return Sqflite.firstIntValue(result) ?? 0;
   }
 }

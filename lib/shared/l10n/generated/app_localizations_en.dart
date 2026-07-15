@@ -40,13 +40,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsApiSettings => 'API Settings';
 
   @override
-  String get settingsApiSettingsDesc => 'Configure Chat & Embedding providers';
+  String get settingsApiSettingsDesc => 'Configure Chat provider';
 
   @override
   String get settingsKnowledgeBase => 'Knowledge Base Management';
 
   @override
-  String get settingsKnowledgeBaseDesc => 'Manage Wiki index, view stats, update knowledge base';
+  String get settingsKnowledgeBaseDesc => 'Manage GameData knowledge base';
 
   @override
   String get apiSettingsTitle => 'API Settings';
@@ -58,16 +58,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get apiSettingsChatDesc => 'Used for AI conversations (Fact Check, Summary, Roleplay).';
 
   @override
-  String get apiSettingsEmbedSection => 'Embedding API';
-
-  @override
-  String get apiSettingsEmbedDesc => 'Used for knowledge base indexing (Wiki, books). Can use a different provider from Chat.';
-
-  @override
   String get apiSettingsUseSameProvider => 'Use same provider as Chat';
-
-  @override
-  String get apiSettingsEmbedFallbackNote => 'Embedding will use the Chat API config above. Note: DeepSeek does not support embeddings — if you use DeepSeek for chat, uncheck this to configure a separate embedding provider.';
 
   @override
   String get apiSettingsLabelBaseUrl => 'Base URL';
@@ -122,11 +113,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String kbCrawlingPages(Object count, Object site) {
     return 'Crawling $site: $count pages...';
-  }
-
-  @override
-  String kbEmbedding(Object count, Object title) {
-    return 'Embedding $title ($count chunks)...';
   }
 
   @override
@@ -228,9 +214,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importChunking => 'Chunking text...';
 
   @override
-  String get importEmbedding => 'Generating embeddings...';
-
-  @override
   String get importStoring => 'Saving to knowledge base...';
 
   @override
@@ -302,7 +285,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingApiTitle => 'Configure Chat API';
 
   @override
-  String get onboardingApiDesc => 'ArkLores uses your own AI API key.\nConfigure at least a Chat provider now;\nEmbedding can be set up later in Settings.';
+  String get onboardingApiDesc => 'ArkLores uses your own AI API key.\nConfigure a Chat provider to use AI features.';
 
   @override
   String get onboardingSaveContinue => 'Save & Continue';
@@ -314,7 +297,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingDoneTitle => 'All Set!';
 
   @override
-  String get onboardingDoneDesc => 'You\'re ready to explore the world of Arknights and Endfield.\n\nVisit Settings > API Settings to configure\na separate Embedding provider if needed,\nor start browsing the Wiki!';
+  String get onboardingDoneDesc => 'You\'re ready to explore the world of Arknights and Endfield.\n\nInstall the GameData knowledge base in Settings,\nor start browsing the Wiki!';
 
   @override
   String get onboardingStartExploring => 'Start Exploring';
@@ -327,4 +310,74 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsShowOnboardingDesc => 'Replay the first-launch guide to configure the app';
+
+  @override
+  String get aiTabFactCheck => 'Fact Check';
+
+  @override
+  String get aiTabSummary => 'Summary';
+
+  @override
+  String get aiTabRoleplay => 'Roleplay';
+
+  @override
+  String get aiFactCheckSource => 'Evidence: installed Chinese GameData only';
+
+  @override
+  String get aiFactCheckEmpty => 'Enter a lore claim to check it against local GameData evidence.';
+
+  @override
+  String get aiFactCheckInputPlaceholder => 'Enter a claim to verify...';
+
+  @override
+  String get aiVerdictSupported => 'Supported';
+
+  @override
+  String get aiVerdictRefuted => 'Refuted';
+
+  @override
+  String get aiVerdictUncertain => 'Uncertain';
+
+  @override
+  String get aiVerdictUnavailable => 'Cannot confirm';
+
+  @override
+  String aiVerdictSemantics(String verdict) {
+    return 'Fact-check verdict: $verdict';
+  }
+
+  @override
+  String aiEvidenceTitle(int count) {
+    return 'GameData evidence ($count)';
+  }
+
+  @override
+  String get aiRetry => 'Retry';
+
+  @override
+  String get aiCancel => 'Cancel';
+
+  @override
+  String get aiSend => 'Send';
+
+  @override
+  String get aiInputPlaceholder => 'Enter lore query or claim...';
+
+  @override
+  String get aiSummaryInputPlaceholder => 'Enter character, event, location or faction to summarize...';
+
+  @override
+  String get aiSettingsRequired => 'Please configure your Chat API Key in settings first to use AI features.';
+
+  @override
+  String get aiSettingsGoTo => 'Go to Settings';
+
+  @override
+  String get aiClearHistory => 'Clear Chat';
+
+  @override
+  String get aiClearHistoryConfirm => 'Are you sure you want to clear the chat history for this tab?';
+
+  @override
+  String get aiClearConfirmBtn => 'Clear';
 }

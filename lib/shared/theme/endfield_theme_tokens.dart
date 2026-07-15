@@ -19,13 +19,15 @@ class EndfieldThemeTokens implements AppThemeTokens {
 
   // ─── Backgrounds ───────────────────────────────────────────────
   @override
-  final Color bgPrimary = const Color(0xFF050810); // Deep near-black with blue-violet
+  final Color bgPrimary =
+      const Color(0xFF050810); // Deep near-black with blue-violet
   @override
   final Color bgSecondary = const Color(0xFF0C1020); // Deep cosmic blue
 
   // ─── Cards & Surfaces ──────────────────────────────────────────
   @override
-  final Color cardSurface = const Color(0xB3101828); // Translucent deep blue (frosted glass)
+  final Color cardSurface =
+      const Color(0xB3101828); // Translucent deep blue (frosted glass)
   @override
   final Color cardBorder = const Color(0x2600C8FF); // Subtle holographic cyan
 

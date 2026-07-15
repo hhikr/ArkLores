@@ -164,7 +164,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsApiSettingsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Configure Chat & Embedding providers'**
+  /// **'Configure Chat provider'**
   String get settingsApiSettingsDesc;
 
   /// No description provided for @settingsKnowledgeBase.
@@ -176,7 +176,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsKnowledgeBaseDesc.
   ///
   /// In en, this message translates to:
-  /// **'Manage Wiki index, view stats, update knowledge base'**
+  /// **'Manage GameData knowledge base'**
   String get settingsKnowledgeBaseDesc;
 
   /// No description provided for @apiSettingsTitle.
@@ -197,29 +197,11 @@ abstract class AppLocalizations {
   /// **'Used for AI conversations (Fact Check, Summary, Roleplay).'**
   String get apiSettingsChatDesc;
 
-  /// No description provided for @apiSettingsEmbedSection.
-  ///
-  /// In en, this message translates to:
-  /// **'Embedding API'**
-  String get apiSettingsEmbedSection;
-
-  /// No description provided for @apiSettingsEmbedDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Used for knowledge base indexing (Wiki, books). Can use a different provider from Chat.'**
-  String get apiSettingsEmbedDesc;
-
   /// No description provided for @apiSettingsUseSameProvider.
   ///
   /// In en, this message translates to:
   /// **'Use same provider as Chat'**
   String get apiSettingsUseSameProvider;
-
-  /// No description provided for @apiSettingsEmbedFallbackNote.
-  ///
-  /// In en, this message translates to:
-  /// **'Embedding will use the Chat API config above. Note: DeepSeek does not support embeddings — if you use DeepSeek for chat, uncheck this to configure a separate embedding provider.'**
-  String get apiSettingsEmbedFallbackNote;
 
   /// No description provided for @apiSettingsLabelBaseUrl.
   ///
@@ -322,12 +304,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Crawling {site}: {count} pages...'**
   String kbCrawlingPages(Object count, Object site);
-
-  /// No description provided for @kbEmbedding.
-  ///
-  /// In en, this message translates to:
-  /// **'Embedding {title} ({count} chunks)...'**
-  String kbEmbedding(Object count, Object title);
 
   /// No description provided for @kbCompleted.
   ///
@@ -485,12 +461,6 @@ abstract class AppLocalizations {
   /// **'Chunking text...'**
   String get importChunking;
 
-  /// No description provided for @importEmbedding.
-  ///
-  /// In en, this message translates to:
-  /// **'Generating embeddings...'**
-  String get importEmbedding;
-
   /// No description provided for @importStoring.
   ///
   /// In en, this message translates to:
@@ -632,7 +602,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingApiDesc.
   ///
   /// In en, this message translates to:
-  /// **'ArkLores uses your own AI API key.\nConfigure at least a Chat provider now;\nEmbedding can be set up later in Settings.'**
+  /// **'ArkLores uses your own AI API key.\nConfigure a Chat provider to use AI features.'**
   String get onboardingApiDesc;
 
   /// No description provided for @onboardingSaveContinue.
@@ -656,7 +626,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingDoneDesc.
   ///
   /// In en, this message translates to:
-  /// **'You\'re ready to explore the world of Arknights and Endfield.\n\nVisit Settings > API Settings to configure\na separate Embedding provider if needed,\nor start browsing the Wiki!'**
+  /// **'You\'re ready to explore the world of Arknights and Endfield.\n\nInstall the GameData knowledge base in Settings,\nor start browsing the Wiki!'**
   String get onboardingDoneDesc;
 
   /// No description provided for @onboardingStartExploring.
@@ -682,6 +652,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Replay the first-launch guide to configure the app'**
   String get settingsShowOnboardingDesc;
+
+  /// No description provided for @aiTabFactCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Fact Check'**
+  String get aiTabFactCheck;
+
+  /// No description provided for @aiTabSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary'**
+  String get aiTabSummary;
+
+  /// No description provided for @aiTabRoleplay.
+  ///
+  /// In en, this message translates to:
+  /// **'Roleplay'**
+  String get aiTabRoleplay;
+
+  /// No description provided for @aiFactCheckSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence: installed Chinese GameData only'**
+  String get aiFactCheckSource;
+
+  /// No description provided for @aiFactCheckEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a lore claim to check it against local GameData evidence.'**
+  String get aiFactCheckEmpty;
+
+  /// No description provided for @aiFactCheckInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a claim to verify...'**
+  String get aiFactCheckInputPlaceholder;
+
+  /// No description provided for @aiVerdictSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Supported'**
+  String get aiVerdictSupported;
+
+  /// No description provided for @aiVerdictRefuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Refuted'**
+  String get aiVerdictRefuted;
+
+  /// No description provided for @aiVerdictUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'Uncertain'**
+  String get aiVerdictUncertain;
+
+  /// No description provided for @aiVerdictUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot confirm'**
+  String get aiVerdictUnavailable;
+
+  /// No description provided for @aiVerdictSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Fact-check verdict: {verdict}'**
+  String aiVerdictSemantics(String verdict);
+
+  /// No description provided for @aiEvidenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData evidence ({count})'**
+  String aiEvidenceTitle(int count);
+
+  /// No description provided for @aiRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get aiRetry;
+
+  /// No description provided for @aiCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get aiCancel;
+
+  /// No description provided for @aiSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get aiSend;
+
+  /// No description provided for @aiInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter lore query or claim...'**
+  String get aiInputPlaceholder;
+
+  /// No description provided for @aiSummaryInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter character, event, location or faction to summarize...'**
+  String get aiSummaryInputPlaceholder;
+
+  /// No description provided for @aiSettingsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please configure your Chat API Key in settings first to use AI features.'**
+  String get aiSettingsRequired;
+
+  /// No description provided for @aiSettingsGoTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Settings'**
+  String get aiSettingsGoTo;
+
+  /// No description provided for @aiClearHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Chat'**
+  String get aiClearHistory;
+
+  /// No description provided for @aiClearHistoryConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to clear the chat history for this tab?'**
+  String get aiClearHistoryConfirm;
+
+  /// No description provided for @aiClearConfirmBtn.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get aiClearConfirmBtn;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

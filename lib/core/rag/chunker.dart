@@ -36,11 +36,13 @@ class Chunk {
         pageTitle: map['page_title'] as String,
         section: (map['section'] as String?) ?? '',
         seqIndex: map['seq_index'] as int,
-        tokenCount: (map['token_count'] as int?) ?? _estimateTokens(map['content'] as String),
+        tokenCount: (map['token_count'] as int?) ??
+            _estimateTokens(map['content'] as String),
       );
 
   @override
-  String toString() => 'Chunk($id, "$pageTitle" / "$section", #$seqIndex, ${tokenCount}tok)';
+  String toString() =>
+      'Chunk($id, "$pageTitle" / "$section", #$seqIndex, ${tokenCount}tok)';
 }
 
 /// Rough token count estimation for mixed Chinese/English text.
@@ -126,7 +128,7 @@ class ChunkerConfig {
   });
 }
 
-/// Text chunker that splits documents into passages suitable for embedding.
+/// Text chunker that splits long documents into retrieval-friendly passages.
 ///
 /// Two strategies:
 /// 1. **Heading-based** — splits by Markdown headings, keeping each section
@@ -173,7 +175,10 @@ class Chunker {
     if (current != null) sections.add(current);
 
     // If no headings were found, fall back to sliding window.
-    if (sections.isEmpty || (sections.length == 1 && sections.first.heading == pageTitle && _estimateTokens(text) > config.targetTokens)) {
+    if (sections.isEmpty ||
+        (sections.length == 1 &&
+            sections.first.heading == pageTitle &&
+            _estimateTokens(text) > config.targetTokens)) {
       return chunkBySliding(text, pageTitle: pageTitle);
     }
 
