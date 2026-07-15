@@ -247,6 +247,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wikiTabEndfield => 'Endfield Wiki';
 
   @override
+  String get wikiSendToAi => 'Send to AI';
+
+  @override
+  String get wikiSendToAiDesc => 'Selected Wiki text is reading context only; factual claims are verified separately with GameData.';
+
+  @override
+  String get wikiSendToSummaryDesc => 'Summarize from the page and selected text';
+
+  @override
+  String get wikiSendToFactCheckDesc => 'Use the selected text as the claim to check';
+
+  @override
   String get bookmarksTitle => 'Bookmarks';
 
   @override
@@ -380,4 +392,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiClearConfirmBtn => 'Clear';
+
+  @override
+  String get aiRoleplayChoose => 'Choose a character';
+
+  @override
+  String get aiRoleplayChooseDesc => 'The character is resolved to a stable GameData entity before dialogue begins.';
+
+  @override
+  String get aiRoleplayCharacter => 'Character name or alias';
+
+  @override
+  String get aiRoleplayScene => 'Scene (optional)';
+
+  @override
+  String get aiRoleplaySceneContext => 'The scene is session context, not GameData evidence';
+
+  @override
+  String get aiRoleplayStart => 'Resolve character and start';
+
+  @override
+  String get aiRoleplayResolving => 'Resolving…';
+
+  @override
+  String get aiRoleplayNoDatabase => 'The Chinese GameData knowledge base is not installed. Install it in Settings first.';
+
+  @override
+  String get aiRoleplayNotFound => 'No matching character was found in GameData. Check the name or alias.';
+
+  @override
+  String get aiRoleplayDisambiguate => 'Choose the matching GameData entity';
+
+  @override
+  String get aiRoleplayContinue => 'Continue saved local session';
+
+  @override
+  String get aiRoleplayRestart => 'Restart';
+
+  @override
+  String get aiRoleplayGeneratedNotice => 'Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.';
+
+  @override
+  String get aiRoleplayEmpty => 'Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.';
+
+  @override
+  String get aiRoleplayInputPlaceholder => 'Talk to the character…';
+
+  @override
+  String get aiRoleplayError => 'Generation failed. Please retry.';
+
+  @override
+  String get aiRoleplayCanceled => 'Generation canceled.';
 }

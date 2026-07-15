@@ -81,6 +81,10 @@
 
   "wikiTabPrts": "PRTS Wiki",
   "wikiTabEndfield": "终末地 Wiki",
+  "wikiSendToAi": "转交给 AI",
+  "wikiSendToAiDesc": "选中的 Wiki 文本只作为阅读上下文；事实声明仍会用 GameData 单独核验。",
+  "wikiSendToSummaryDesc": "根据页面和选中文字生成梗概",
+  "wikiSendToFactCheckDesc": "把选中文字作为待核查主张",
 
   "bookmarksTitle": "书签",
   "bookmarksLoadFailed": "加载书签失败：{error}",
@@ -128,5 +132,22 @@
   "aiSettingsGoTo": "去设置",
   "aiClearHistory": "清空对话",
   "aiClearHistoryConfirm": "确定要清空当前的对话历史吗？",
-  "aiClearConfirmBtn": "清空"
+  "aiClearConfirmBtn": "清空",
+  "aiRoleplayChoose": "选择角色",
+  "aiRoleplayChooseDesc": "角色会先解析到 GameData 中的稳定实体，再开始生成对话。",
+  "aiRoleplayCharacter": "角色名或别名",
+  "aiRoleplayScene": "场景设定（可选）",
+  "aiRoleplaySceneContext": "场景属于会话上下文，不是 GameData 证据",
+  "aiRoleplayStart": "解析角色并开始",
+  "aiRoleplayResolving": "正在解析…",
+  "aiRoleplayNoDatabase": "未安装中文 GameData 知识库，请先前往设置安装。",
+  "aiRoleplayNotFound": "当前 GameData 未找到该角色，请检查名称或别名。",
+  "aiRoleplayDisambiguate": "请选择对应的 GameData 实体",
+  "aiRoleplayContinue": "继续本地保存的会话",
+  "aiRoleplayRestart": "重新开始",
+  "aiRoleplayGeneratedNotice": "角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。",
+  "aiRoleplayEmpty": "输入第一句话。首轮会先检索角色档案、语音、秘录、模组及相关任务剧情。",
+  "aiRoleplayInputPlaceholder": "与角色对话…",
+  "aiRoleplayError": "生成失败，请重试。",
+  "aiRoleplayCanceled": "已取消本次生成。"
 }

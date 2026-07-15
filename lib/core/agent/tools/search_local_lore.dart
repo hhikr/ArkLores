@@ -54,9 +54,9 @@ class SearchLocalLoreTool extends AgentTool {
           },
           'search_mode': {
             'type': 'string',
-            'enum': ['general', 'summary', 'evidence'],
+            'enum': ['general', 'summary', 'roleplay', 'evidence'],
             'description':
-                'Use summary for entity summaries: entity document first, then story context, then raw records.',
+                'Use summary for entity summaries. Use roleplay for character profiles and participation memories: entity document first, then story context, then raw records.',
             'default': 'general',
           },
         },
@@ -146,6 +146,12 @@ class SearchLocalLoreTool extends AgentTool {
     if (searchMode == 'summary') {
       buffer.writeln(
         'Retrieval Plan: summary mode = entity document first, then story context, then raw records and FTS fallback.',
+      );
+      buffer.writeln();
+    }
+    if (searchMode == 'roleplay') {
+      buffer.writeln(
+        'Retrieval Plan: roleplay mode = canonical character document, profile/voice/record/module material, then story participation context.',
       );
       buffer.writeln();
     }

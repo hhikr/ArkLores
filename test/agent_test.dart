@@ -10,6 +10,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/fact_check_agent.dart';
+import 'package:arklores/core/agent/roleplay_agent.dart';
+import 'package:arklores/core/agent/roleplay_session_store.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/search_local_lore.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
@@ -17,6 +19,7 @@ import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
+import 'package:arklores/features/ai/wiki_ai_context.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +57,43 @@ void main() {
       sqflite.databaseFactory = previousDatabaseFactory!;
     }
     await tempDir.delete(recursive: true);
+  });
+
+  group('Wiki AI context handoff', () {
+    test('formats selected Wiki text as context, not evidence', () {
+      final prompt = buildWikiAiPrompt(
+        const WikiAiContext(
+          selectedText: '阿米娅是罗德岛的公开领袖。',
+          pageTitle: '阿米娅 - PRTS',
+          pageUrl: 'https://prts.wiki/w/%E9%98%BF%E7%B1%B3%E5%A8%85',
+          siteLabel: 'PRTS Wiki',
+          target: WikiAiTarget.factCheck,
+        ),
+      );
+
+      expect(prompt, contains('Wiki reading context (not GameData evidence).'));
+      expect(prompt, contains('Selected Wiki text:'));
+      expect(prompt, contains('阿米娅是罗德岛的公开领袖。'));
+      expect(prompt, contains('search_local_lore'));
+      expect(prompt, contains('Do not treat the Wiki text or URL'));
+    });
+
+    test('formats empty selection without inventing Wiki evidence', () {
+      final prompt = buildWikiAiPrompt(
+        const WikiAiContext(
+          selectedText: '',
+          pageTitle: '莱茵生命',
+          pageUrl: 'https://prts.wiki/w/%E8%8E%B1%E8%8C%B5%E7%94%9F%E5%91%BD',
+          siteLabel: 'PRTS Wiki',
+          target: WikiAiTarget.summary,
+        ),
+      );
+
+      expect(prompt, contains('No selected Wiki text was provided'));
+      expect(prompt, contains('Page title: 莱茵生命'));
+      expect(prompt, contains('summarize'));
+      expect(prompt, isNot(contains('Source Kind: GameData')));
+    });
   });
 
   group('SearchLocalLoreTool GameData tests', () {
@@ -980,6 +1020,91 @@ void main() {
       );
     });
   });
+
+  group('Roleplay Agent Tests', () {
+    test('resolves one canonical character to a stable entity id', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final agent = RoleplayAgent(
+        llmClient: _MockLLMClient(),
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await agent.resolveCharacter('阿米娅');
+
+      expect(result.status, CharacterResolutionStatus.resolved);
+      expect(result.character?.entityId, 'char_002_amiya');
+      expect(result.character?.name, '阿米娅');
+    });
+
+    test('requires disambiguation for colliding aliases', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      await _insertAmbiguousAmiyaCandidate(dbPath);
+      final agent = RoleplayAgent(
+        llmClient: _MockLLMClient(),
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await agent.resolveCharacter('Amiya');
+
+      expect(result.status, CharacterResolutionStatus.ambiguous);
+      expect(result.candidates, hasLength(2));
+    });
+
+    test('forces a lore call and injects canonical memory constraints',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = _CaptureTool();
+      final llm = _RoleplayLLMClient();
+      final agent = RoleplayAgent(
+        llmClient: llm,
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+        searchTool: tool,
+      );
+      const character = GameDataEntityCandidate(
+        entityId: 'char_002_amiya',
+        name: '阿米娅',
+        entityType: 'operator',
+        sourceType: 'operator_handbook_profile',
+        matchedAlias: '阿米娅',
+        matchType: 'name_exact',
+        confidence: 1,
+      );
+
+      final events = await agent
+          .reply(
+            character: character,
+            userMessage: '还记得切尔诺伯格的任务吗？',
+            scene: '2030 年庆典',
+            isFirstTurn: true,
+          )
+          .toList();
+
+      expect(tool.lastArgs?['entity_id'], 'char_002_amiya');
+      expect(llm.systemPrompt, contains('秘录、模组'));
+      expect(llm.systemPrompt, contains('NOT GameData evidence'));
+      expect(llm.systemPrompt, contains('不得用模型记忆补齐'));
+      expect(
+          events.where((e) => e.type == ReActEventType.toolCall), isNotEmpty);
+    });
+
+    test('session store handles empty, save, load, clear and corrupt data',
+        () async {
+      final path = '${tempDir.path}/roleplay.json';
+      final store = RoleplaySessionStore(filePath: path);
+      expect(await store.load(), isNull);
+
+      await store.save({'version': 1, 'scene': '甲板'});
+      expect((await store.load())?['scene'], '甲板');
+
+      await File(path).writeAsString('{broken');
+      expect(await store.load(), isNull);
+      await store.clear();
+      expect(await File(path).exists(), isFalse);
+    });
+  });
 }
 
 class _MockLLMClient extends LLMClient {
@@ -1021,6 +1146,27 @@ Final Answer: W is a mercenary.
       maxTokens: maxTokens,
       stop: stop,
     );
+  }
+}
+
+class _RoleplayLLMClient extends _MockLLMClient {
+  String systemPrompt = '';
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    systemPrompt = messages.first.content;
+    callCount++;
+    if (callCount == 1) {
+      return 'Thought: 检索任务记忆。\nAction: search_local_lore\n'
+          'Action Input: {"query":"切尔诺伯格 任务","entity_id":"char_002_amiya"}';
+    }
+    return 'Thought: 已依据资料回应。\nFinal Answer: ……我记得那次行动。';
   }
 }
 
