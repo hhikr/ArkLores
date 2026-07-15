@@ -5,6 +5,11 @@ import 'agent_logger.dart';
 import 'tools/agent_tool.dart';
 import 'tools/tool_registry.dart';
 
+typedef FinalAnswerTransform = String Function(
+  String answer,
+  List<String> observations,
+);
+
 /// Types of events emitted by the ReAct Loop.
 enum ReActEventType {
   thought,
@@ -53,6 +58,8 @@ class ReActLoop {
     required String systemPrompt,
     required List<Message> chatHistory,
     required String userQuery,
+    String agentName = 'ReAct',
+    FinalAnswerTransform? finalAnswerTransform,
   }) async* {
     // 1. Build the instruction prompt specifying the ReAct format and available tools
     final toolsDesc = _toolRegistry.allTools
@@ -95,8 +102,9 @@ Let's begin!
     final loopMessages = List<Message>.from(messages);
     var iteration = 0;
     var completed = false;
-    final logger = AgentLogger(userQuery);
+    final logger = AgentLogger(userQuery, agentName: agentName);
     final evidenceSummary = _EvidenceSummary();
+    final observations = <String>[];
 
     while (iteration < _maxIterations && !completed) {
       iteration++;
@@ -118,6 +126,8 @@ Let's begin!
           ],
         );
       } catch (e) {
+        logger.logError('LLM_ERROR: $e');
+        await logger.flush();
         yield ReActEvent(type: ReActEventType.error, content: 'LLM Error: $e');
         return;
       }
@@ -171,20 +181,35 @@ Let's begin!
           break;
         }
 
-        logger.logFinalAnswer(actualAnswer);
+        final effectiveAnswer = _finalizeAnswer(
+          actualAnswer,
+          evidenceSummary,
+          observations,
+          finalAnswerTransform,
+        );
+        logger.logFinalAnswer(effectiveAnswer);
         await logger.flush();
         yield ReActEvent(
           type: ReActEventType.finalAnswerToken,
-          content: _applySourceGuard(actualAnswer, evidenceSummary),
+          content: effectiveAnswer,
         );
         completed = true;
         break;
       }
 
       if (action.isEmpty) {
-        // If no action or final answer, default to treating the response as final answer
+        final effectiveAnswer = _finalizeAnswer(
+          response,
+          evidenceSummary,
+          observations,
+          finalAnswerTransform,
+        );
+        logger.logFinalAnswer(effectiveAnswer);
+        await logger.flush();
         yield ReActEvent(
-            type: ReActEventType.finalAnswerToken, content: response);
+          type: ReActEventType.finalAnswerToken,
+          content: effectiveAnswer,
+        );
         completed = true;
         break;
       }
@@ -226,6 +251,7 @@ Let's begin!
 
       logger.logObservation(observation);
       evidenceSummary.addObservation(observation);
+      observations.add(observation);
       yield ReActEvent(
         type: ReActEventType.toolObservation,
         content: observation,
@@ -266,11 +292,17 @@ Let's begin!
           yield const ReActEvent(type: ReActEventType.complete);
           return;
         }
-        logger.logFinalAnswer(content);
+        final effectiveAnswer = _finalizeAnswer(
+          content,
+          evidenceSummary,
+          observations,
+          finalAnswerTransform,
+        );
+        logger.logFinalAnswer(effectiveAnswer);
         await logger.flush();
         yield ReActEvent(
           type: ReActEventType.finalAnswerToken,
-          content: _applySourceGuard(content, evidenceSummary),
+          content: effectiveAnswer,
         );
       } catch (e) {
         logger.logError('Failed to generate final answer: $e');
@@ -282,6 +314,18 @@ Let's begin!
     }
 
     yield const ReActEvent(type: ReActEventType.complete);
+  }
+
+  String _finalizeAnswer(
+    String answer,
+    _EvidenceSummary evidenceSummary,
+    List<String> observations,
+    FinalAnswerTransform? transform,
+  ) {
+    final guarded = _applySourceGuard(answer, evidenceSummary);
+    return transform == null
+        ? guarded
+        : transform(guarded, List.unmodifiable(observations));
   }
 
   /// Parses a value for a specific key (e.g. "Thought:") from the response.

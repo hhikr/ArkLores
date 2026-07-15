@@ -10,6 +10,7 @@ All notable changes to ArkLores will be documented in this file.
 - Added supported, refuted, uncertain, and cannot-confirm verdict states with expandable GameData evidence.
 - Added verdict enforcement that prevents supported/refuted results without retrieved GameData records.
 - Added fact-check cancellation, retry, empty/error handling, localized UI strings, and narrow-screen text-scale coverage.
+- Added Fact-check session labels and validated-verdict output to the shared debug Agent log.
 
 ### Changed
 

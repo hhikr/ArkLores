@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
@@ -21,6 +23,7 @@ void main() {
 
   late Directory tempDir;
   late sqflite.DatabaseFactory? previousDatabaseFactory;
+  late DebugPrintCallback previousDebugPrint;
 
   setUp(() async {
     sqfliteFfiInit();
@@ -31,9 +34,22 @@ void main() {
     }
     sqflite.databaseFactory = databaseFactoryFfi;
     tempDir = await Directory.systemTemp.createTemp('arklores_agent_test_');
+    previousDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {};
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => tempDir.path,
+    );
   });
 
   tearDown(() async {
+    debugPrint = previousDebugPrint;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      null,
+    );
     if (previousDatabaseFactory != null) {
       sqflite.databaseFactory = previousDatabaseFactory!;
     }
@@ -664,6 +680,44 @@ void main() {
         isTrue,
       );
     });
+
+    test('logs the validated verdict through the shared ReAct logger',
+        () async {
+      final agent = FactCheckAgent(
+        llmClient: _UnsupportedFactCheckLLMClient(),
+        searchTool: _CurrentNoMatchTool(),
+      );
+
+      final events = await agent.checkClaim(claim: '未知命题').toList();
+      expect(
+        events
+            .where((event) => event.type == ReActEventType.finalAnswerToken)
+            .single
+            .content,
+        startsWith('[FACT_CHECK_VERDICT:unavailable]'),
+      );
+
+      final logDir = Directory('${tempDir.path}/ArkLores/agent_logs');
+      final logFiles = await logDir
+          .list()
+          .where((entry) => entry is File && entry.path.endsWith('.log'))
+          .cast<File>()
+          .toList();
+      expect(logFiles, hasLength(1));
+      final log = await logFiles.single.readAsString();
+      expect(log, contains('Agent  : FactCheck'));
+      expect(log, contains('▶ TOOL CALL: search_local_lore'));
+      expect(log, contains('No matching GameData result'));
+      final loggedFinalAnswer = log.split('▶ FINAL ANSWER:').last;
+      expect(
+        loggedFinalAnswer,
+        contains('[FACT_CHECK_VERDICT:unavailable]'),
+      );
+      expect(
+        loggedFinalAnswer,
+        isNot(contains('[FACT_CHECK_VERDICT:supported]')),
+      );
+    });
   });
 
   group('LLM Client Tests', () {
@@ -797,6 +851,25 @@ class _FactCheckSearchTool extends AgentTool {
           'Content Type: operator_profile\nSource Path: character_table.json\n'
           'Raw ID: char_002_amiya\nContent Excerpt: 阿米娅是罗德岛的公开领袖。',
     );
+  }
+}
+
+class _UnsupportedFactCheckLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      return 'Thought: 检索本地证据。\nAction: search_local_lore\n'
+          'Action Input: {"query":"未知命题"}';
+    }
+    return 'Thought: 完成。\nFinal Answer: '
+        '[FACT_CHECK_VERDICT:supported]\n错误地声称支持。';
   }
 }
 

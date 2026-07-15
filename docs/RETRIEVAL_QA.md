@@ -128,7 +128,7 @@ Additional smoke check:
 2026-07-15 自动验证：
 
 - `test/agent_test.dart` 覆盖定向多次检索、唯一工具限制、支持/反驳证据门槛、无覆盖、
-  实体歧义、unsupported verdict 降级和追问历史。
+  实体歧义、unsupported verdict 降级、追问历史，以及降级后有效结论的 debug 日志。
 - `test/fact_check_widget_test.dart` 覆盖 320 logical px 宽度、2 倍文字缩放、结论状态和
   GameData evidence 展开，无 RenderFlex overflow。
 - 上述固定命题尚未使用真实外部 Chat API 逐条执行；状态为 deferred，不记录为通过。
