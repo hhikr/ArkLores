@@ -3,9 +3,11 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/agent_provider.dart';
+import '../../../core/agent/fact_check_agent.dart';
 import '../../../core/agent/react_loop.dart';
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/providers/theme_provider.dart';
+import '../../../shared/l10n/l10n.dart';
 import '../../../shared/theme/app_theme.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
@@ -21,6 +23,7 @@ class ChatBubble extends ConsumerStatefulWidget {
 
 class _ChatBubbleState extends ConsumerState<ChatBubble> {
   bool _showSteps = false;
+  bool _showEvidence = false;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +51,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 if (!isUser && msg.steps.isNotEmpty) ...[
                   _buildReActStepsSection(theme),
                   const SizedBox(height: 4),
+                ],
+                if (!isUser && msg.factCheckVerdict != null) ...[
+                  _buildVerdictBanner(theme, msg.factCheckVerdict!),
+                  const SizedBox(height: 6),
                 ],
 
                 // ── Message Content Box ──────────────────────
@@ -117,7 +124,15 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
   Widget _buildAssistantContentBox(AppThemeTokens theme) {
     final msg = widget.message;
-    final content = msg.content;
+    var content = msg.content.replaceFirst(
+      RegExp(r'\[FACT_CHECK_VERDICT:[a-z]+\]\s*', caseSensitive: false),
+      '',
+    );
+    if (content == '[FACT_CHECK_ERROR]') {
+      content = context.t.importErrorOccurred;
+    } else if (content == '[FACT_CHECK_CANCELED]') {
+      content = context.t.aiCancel;
+    }
 
     // Scan for citation UUIDs
     final uuidRegex = RegExp(
@@ -186,7 +201,102 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ),
         ),
         if (citationIds.isNotEmpty) const SizedBox(height: 8),
+        if (msg.factCheckVerdict != null && _evidenceObservations.isNotEmpty)
+          _buildEvidenceSection(theme),
       ],
+    );
+  }
+
+  List<String> get _evidenceObservations => widget.message.steps
+      .where((step) =>
+          step.type == ReActEventType.toolObservation &&
+          step.content.contains('Source Kind: GameData'))
+      .map((step) => step.content)
+      .toList(growable: false);
+
+  Widget _buildVerdictBanner(AppThemeTokens theme, FactCheckVerdict verdict) {
+    final config = switch (verdict) {
+      FactCheckVerdict.supported => (
+          Icons.check_circle_rounded,
+          Colors.green,
+          context.t.aiVerdictSupported
+        ),
+      FactCheckVerdict.refuted => (
+          Icons.cancel_rounded,
+          theme.danger,
+          context.t.aiVerdictRefuted
+        ),
+      FactCheckVerdict.uncertain => (
+          Icons.help_rounded,
+          Colors.amber.shade800,
+          context.t.aiVerdictUncertain
+        ),
+      FactCheckVerdict.unavailable => (
+          Icons.remove_circle_outline_rounded,
+          theme.textSecondary,
+          context.t.aiVerdictUnavailable
+        ),
+    };
+    return Semantics(
+      label: context.t.aiVerdictSemantics(config.$3),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: config.$2.withValues(alpha: 0.12),
+          border: Border(left: BorderSide(color: config.$2, width: 3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(config.$1, size: 18, color: config.$2),
+            const SizedBox(width: 6),
+            Text(config.$3,
+                style: theme.titleFont.copyWith(
+                  color: config.$2,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEvidenceSection(AppThemeTokens theme) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: ExpansionTile(
+        initiallyExpanded: _showEvidence,
+        onExpansionChanged: (value) => setState(() => _showEvidence = value),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+        childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        leading: Icon(Icons.source_rounded, color: theme.accentPrimary),
+        title: Text(
+          context.t.aiEvidenceTitle(_evidenceObservations.length),
+          style: theme.titleFont.copyWith(fontSize: 13),
+        ),
+        children: [
+          for (final observation in _evidenceObservations)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: theme.bgPrimary,
+                border: Border.all(color: theme.divider),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                observation,
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -249,7 +359,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     _showSteps
@@ -259,12 +368,15 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                     color: theme.accentPrimary,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    '$statusText ($stepsCount steps)',
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                  Flexible(
+                    child: Text(
+                      '$statusText ($stepsCount steps)',
+                      softWrap: true,
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                   if (isThinking) ...[

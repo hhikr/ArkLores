@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/search_local_lore.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
@@ -579,6 +580,92 @@ void main() {
     });
   });
 
+  group('FactCheck Agent Tests', () {
+    test('keeps supported verdict only after directed GameData searches',
+        () async {
+      final llm = _FactCheckLLMClient();
+      final tool = _FactCheckSearchTool();
+      final agent = FactCheckAgent(llmClient: llm, searchTool: tool);
+
+      final events = await agent.checkClaim(claim: '阿米娅是罗德岛的领袖吗？').toList();
+
+      expect(tool.queries, ['阿米娅 罗德岛 身份', '阿米娅 领袖 反证']);
+      expect(
+        events
+            .where((event) => event.type == ReActEventType.finalAnswerToken)
+            .single
+            .content,
+        startsWith('[FACT_CHECK_VERDICT:supported]'),
+      );
+      expect(llm.systemPrompt, contains('仅使用 search_local_lore'));
+      expect(llm.systemPrompt, isNot(contains('search_wiki')));
+    });
+
+    test('downgrades unsupported supported verdict to unavailable', () {
+      final verdict = validateFactCheckVerdict(
+        '[FACT_CHECK_VERDICT:supported]\n模型记忆说这是正确的。',
+        const ['No matching GameData result found for "未知命题".'],
+      );
+      expect(verdict, FactCheckVerdict.unavailable);
+    });
+
+    test('keeps refuted verdict with an actual GameData record', () {
+      final verdict = validateFactCheckVerdict(
+        '[FACT_CHECK_VERDICT:refuted]',
+        const [
+          '=== Result #1 ===\nSource Kind: GameData\nSource Path: a.json\nRaw ID: a',
+        ],
+      );
+      expect(verdict, FactCheckVerdict.refuted);
+    });
+
+    test('maps entity ambiguity without records to uncertain', () {
+      final verdict = validateFactCheckVerdict(
+        '[FACT_CHECK_VERDICT:uncertain]',
+        const [
+          'Ambiguous GameData entity query\n=== Candidate #1 ===\nSource Kind: GameData',
+        ],
+      );
+      expect(verdict, FactCheckVerdict.uncertain);
+    });
+
+    test('maps empty coverage to unavailable', () {
+      expect(
+        validateFactCheckVerdict('[FACT_CHECK_VERDICT:uncertain]', const []),
+        FactCheckVerdict.unavailable,
+      );
+    });
+
+    test('passes prior claim and evidence marker to a follow-up', () async {
+      final llm = _FactCheckLLMClient();
+      final agent = FactCheckAgent(
+        llmClient: llm,
+        searchTool: _FactCheckSearchTool(),
+      );
+      await agent.checkClaim(
+        claim: '那她什么时候加入的？',
+        history: const [
+          Message(role: MessageRole.user, content: '阿米娅属于罗德岛吗？'),
+          Message(
+            role: MessageRole.assistant,
+            content: '[FACT_CHECK_VERDICT:supported] Source Path: a.json',
+          ),
+        ],
+      ).toList();
+
+      expect(
+        llm.firstRequestMessages
+            .any((message) => message.content.contains('阿米娅属于罗德岛')),
+        isTrue,
+      );
+      expect(
+        llm.firstRequestMessages
+            .any((message) => message.content.contains('Source Path: a.json')),
+        isTrue,
+      );
+    });
+  });
+
   group('LLM Client Tests', () {
     test('OpenAICompatibleClient rejects invalid API key text clearly',
         () async {
@@ -643,6 +730,72 @@ Final Answer: W is a mercenary.
       temperature: temperature,
       maxTokens: maxTokens,
       stop: stop,
+    );
+  }
+}
+
+class _FactCheckLLMClient extends LLMClient {
+  int callCount = 0;
+  String systemPrompt = '';
+  List<Message> firstRequestMessages = const [];
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      firstRequestMessages = List.of(messages);
+      systemPrompt = messages.first.content;
+      return 'Thought: 查身份支持证据。\nAction: search_local_lore\nAction Input: {"query":"阿米娅 罗德岛 身份"}';
+    }
+    if (callCount == 2) {
+      return 'Thought: 查可能的反证。\nAction: search_local_lore\nAction Input: {"query":"阿米娅 领袖 反证"}';
+    }
+    return 'Thought: 证据足够。\nFinal Answer: [FACT_CHECK_VERDICT:supported]\n## 核查结论\n支持。';
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) =>
+      chat(messages,
+          temperature: temperature, maxTokens: maxTokens, stop: stop);
+}
+
+class _FactCheckSearchTool extends AgentTool {
+  final queries = <String>[];
+
+  @override
+  String get name => 'search_local_lore';
+
+  @override
+  String get description => 'GameData-only fact-check search.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    queries.add(arguments['query'] as String);
+    return const ToolExecutionResult(
+      observation: '=== Result #1 ===\nSource Kind: GameData\n'
+          'Content Type: operator_profile\nSource Path: character_table.json\n'
+          'Raw ID: char_002_amiya\nContent Excerpt: 阿米娅是罗德岛的公开领袖。',
     );
   }
 }

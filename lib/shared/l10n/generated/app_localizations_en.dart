@@ -321,6 +321,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiTabRoleplay => 'Roleplay';
 
   @override
+  String get aiFactCheckSource => 'Evidence: installed Chinese GameData only';
+
+  @override
+  String get aiFactCheckEmpty => 'Enter a lore claim to check it against local GameData evidence.';
+
+  @override
+  String get aiFactCheckInputPlaceholder => 'Enter a claim to verify...';
+
+  @override
+  String get aiVerdictSupported => 'Supported';
+
+  @override
+  String get aiVerdictRefuted => 'Refuted';
+
+  @override
+  String get aiVerdictUncertain => 'Uncertain';
+
+  @override
+  String get aiVerdictUnavailable => 'Cannot confirm';
+
+  @override
+  String aiVerdictSemantics(String verdict) {
+    return 'Fact-check verdict: $verdict';
+  }
+
+  @override
+  String aiEvidenceTitle(int count) {
+    return 'GameData evidence ($count)';
+  }
+
+  @override
+  String get aiRetry => 'Retry';
+
+  @override
+  String get aiCancel => 'Cancel';
+
+  @override
+  String get aiSend => 'Send';
+
+  @override
   String get aiInputPlaceholder => 'Enter lore query or claim...';
 
   @override

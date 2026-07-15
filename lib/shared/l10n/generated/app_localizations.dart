@@ -671,6 +671,78 @@ abstract class AppLocalizations {
   /// **'Roleplay'**
   String get aiTabRoleplay;
 
+  /// No description provided for @aiFactCheckSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence: installed Chinese GameData only'**
+  String get aiFactCheckSource;
+
+  /// No description provided for @aiFactCheckEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a lore claim to check it against local GameData evidence.'**
+  String get aiFactCheckEmpty;
+
+  /// No description provided for @aiFactCheckInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a claim to verify...'**
+  String get aiFactCheckInputPlaceholder;
+
+  /// No description provided for @aiVerdictSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Supported'**
+  String get aiVerdictSupported;
+
+  /// No description provided for @aiVerdictRefuted.
+  ///
+  /// In en, this message translates to:
+  /// **'Refuted'**
+  String get aiVerdictRefuted;
+
+  /// No description provided for @aiVerdictUncertain.
+  ///
+  /// In en, this message translates to:
+  /// **'Uncertain'**
+  String get aiVerdictUncertain;
+
+  /// No description provided for @aiVerdictUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot confirm'**
+  String get aiVerdictUnavailable;
+
+  /// No description provided for @aiVerdictSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'Fact-check verdict: {verdict}'**
+  String aiVerdictSemantics(String verdict);
+
+  /// No description provided for @aiEvidenceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData evidence ({count})'**
+  String aiEvidenceTitle(int count);
+
+  /// No description provided for @aiRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get aiRetry;
+
+  /// No description provided for @aiCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get aiCancel;
+
+  /// No description provided for @aiSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get aiSend;
+
   /// No description provided for @aiInputPlaceholder.
   ///
   /// In en, this message translates to:

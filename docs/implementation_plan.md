@@ -101,6 +101,11 @@ ReAct Loop requirements:
 
 ### v0.5 - 事实核查 Agent
 
+实现状态（2026-07-15）：代码与自动化测试已完成。事实核查仅注册
+`search_local_lore`，结论经过实际 GameData observation 二次校验；四态 UI、证据展开、
+追问历史、话题切换指令、取消和重试已接入。固定真实 API 命题 QA 与 Android 真机渲染
+仍待配置外部模型和设备后执行，详见 `v0.5_task_breakdown.md` 与 `RETRIEVAL_QA.md`。
+
 目标：仅依据本地 GameData 证据，把用户的设定或剧情说法判断为“支持”“反驳”
 “存疑”或“无法确认”。
 

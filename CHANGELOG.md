@@ -2,6 +2,20 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.5.0] - 2026-07-15
+
+### Added
+
+- Added a GameData-only Fact-Check Agent with claim decomposition, directed support/counter-evidence searches, and conversation-aware follow-ups.
+- Added supported, refuted, uncertain, and cannot-confirm verdict states with expandable GameData evidence.
+- Added verdict enforcement that prevents supported/refuted results without retrieved GameData records.
+- Added fact-check cancellation, retry, empty/error handling, localized UI strings, and narrow-screen text-scale coverage.
+
+### Changed
+
+- Updated shared Agent trust instructions so Wiki and user text are context only, never active GameData evidence.
+- Replaced network-dependent Warfarin crawler output tests with deterministic offline parser and formatter contracts.
+
 ## [0.4.5] - 2026-07-15
 
 ### Changed
