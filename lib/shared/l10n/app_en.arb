@@ -128,5 +128,22 @@
   "aiSettingsGoTo": "Go to Settings",
   "aiClearHistory": "Clear Chat",
   "aiClearHistoryConfirm": "Are you sure you want to clear the chat history for this tab?",
-  "aiClearConfirmBtn": "Clear"
+  "aiClearConfirmBtn": "Clear",
+  "aiRoleplayChoose": "Choose a character",
+  "aiRoleplayChooseDesc": "The character is resolved to a stable GameData entity before dialogue begins.",
+  "aiRoleplayCharacter": "Character name or alias",
+  "aiRoleplayScene": "Scene (optional)",
+  "aiRoleplaySceneContext": "The scene is session context, not GameData evidence",
+  "aiRoleplayStart": "Resolve character and start",
+  "aiRoleplayResolving": "Resolving…",
+  "aiRoleplayNoDatabase": "The Chinese GameData knowledge base is not installed. Install it in Settings first.",
+  "aiRoleplayNotFound": "No matching character was found in GameData. Check the name or alias.",
+  "aiRoleplayDisambiguate": "Choose the matching GameData entity",
+  "aiRoleplayContinue": "Continue saved local session",
+  "aiRoleplayRestart": "Restart",
+  "aiRoleplayGeneratedNotice": "Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.",
+  "aiRoleplayEmpty": "Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.",
+  "aiRoleplayInputPlaceholder": "Talk to the character…",
+  "aiRoleplayError": "Generation failed. Please retry.",
+  "aiRoleplayCanceled": "Generation canceled."
 }
