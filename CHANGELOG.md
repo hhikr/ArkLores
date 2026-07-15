@@ -2,6 +2,31 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.7.0] - 2026-07-15
+
+### Added
+
+- Added explicit Wiki reading-context handoff from WebView to Summary and Fact-check.
+- Added transfer of selected Wiki text, page title, URL, and site label as user context.
+- Added bilingual UI strings for the Wiki-to-AI handoff sheet and toolbar action.
+
+### Changed
+
+- Updated Summary and Fact-check prompts so Wiki reading context must be independently verified with `search_local_lore`.
+- Kept Wiki text and URLs visually and semantically separate from GameData evidence; no Wiki embedding, vector indexing, Book indexing, hidden indexing path, or GameData DB writes were introduced.
+- Bumped the app version to `0.7.0+7` and built the release APK with the v0.7.0 GameData asset URL and SHA256.
+
+### Verification
+
+- Verified `test/agent_test.dart`, `test/fact_check_widget_test.dart`, `flutter analyze`,
+  full GameData retrieval QA, setup release dry-run, release-mode APK build, and APK v1/v2 signature verification on 2026-07-15.
+
+### Known Limitations
+
+- Android real-device validation for WebView selection, the handoff bottom sheet, return-to-browse flow, TalkBack, and large text remains deferred.
+- Real external Chat QA and a finalized-DB Wiki-context retrieval matrix remain deferred.
+- The GitHub APK remains a release-mode debug-certificate acceptance build, not a store-signed production package.
+
 ## [0.6.0] - 2026-07-15
 
 ### Added
