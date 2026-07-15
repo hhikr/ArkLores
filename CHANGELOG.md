@@ -15,6 +15,7 @@ All notable changes to ArkLores will be documented in this file.
 
 - Updated shared Agent trust instructions so Wiki and user text are context only, never active GameData evidence.
 - Replaced network-dependent Warfarin crawler output tests with deterministic offline parser and formatter contracts.
+- Updated Android setup automation for API 36, data-preserving installs, verified GameData URLs, localhost adb reverse, and explicit debug-key release warnings.
 
 ## [0.4.5] - 2026-07-15
 

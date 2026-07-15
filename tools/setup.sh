@@ -21,6 +21,8 @@ readonly APP_ID="com.arklores.arklores"
 readonly DEFAULT_GAMEDATA_SOURCE="/tmp/ArkLores-ArknightsGameData"
 readonly DEFAULT_GAMEDATA_PORT="8765"
 readonly DEFAULT_GAMEDATA_OUTPUT="build/gamedata_mobile"
+readonly ANDROID_API_LEVEL="36"
+readonly ANDROID_BUILD_TOOLS="34.0.0"
 
 # ─── 颜色输出 ────────────────────────────────────────────────────
 
@@ -44,7 +46,7 @@ usage() {
   -i, --interactive      强制进入交互式菜单模式（无参数运行时的默认行为）
   -a, --action <动作>    指定执行的行为，用逗号分隔多个值。
                          可选值: uninstall (卸载), build (构建), install (安装)
-                         默认值: uninstall,build,install
+                         默认值: build,install（保留 App 数据）
   -p, --platform <平台>  指定目标平台。可选值: android, ios。默认值: android
   -m, --mode <模式>      指定构建模式。可选值: debug, release。默认值: debug
   -t, --target <目标>    指定部署目标（仅对 iOS 有效）。可选值: device (真机), simulator (模拟器)。默认值: device
@@ -56,7 +58,9 @@ usage() {
       --gamedata-url <URL>
                          直接使用已有 arklores_gamedata_zh.db.gz 下载地址，不本地构建
       --gamedata-sha <SHA256>
-                         压缩 DB 的 SHA256；未提供且本地构建时自动计算
+                         压缩 DB 的 64 位 SHA256；外部 URL 必须提供，本地构建时自动计算
+      --allow-unverified-gamedata
+                         仅限临时开发：允许外部 URL 跳过 SHA256 校验
       --gamedata-port <端口>
                          本地临时 HTTP 服务端口。默认: $DEFAULT_GAMEDATA_PORT
       --gamedata-story-limit <N>
@@ -67,7 +71,7 @@ usage() {
 示例:
   ./tools/setup.sh                                            # 交互式菜单运行
   ./tools/setup.sh -a build -p android                        # 仅构建 Android 包
-  ./tools/setup.sh --with-gamedata --gamedata-url http://... --dry-run
+  ./tools/setup.sh --with-gamedata --gamedata-url https://... --gamedata-sha <sha> --dry-run
   ./tools/setup.sh -a uninstall,install                       # 卸载并重新安装（使用已有包）
   ./tools/setup.sh --with-gamedata                            # 自动构建并提供 GameData 临时下载
   ./tools/setup.sh --gamedata-url https://.../db.gz --gamedata-sha <sha>
@@ -105,11 +109,11 @@ install_android_sdk() {
   yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses
 
   # 安装必要组件
-  log_info "正在安装必要组件: platform-tools, platforms;android-34, build-tools;34.0.0..."
+  log_info "正在安装必要组件: platform-tools, platforms;android-$ANDROID_API_LEVEL, build-tools;$ANDROID_BUILD_TOOLS..."
   "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
     "platform-tools" \
-    "platforms;android-34" \
-    "build-tools;34.0.0"
+    "platforms;android-$ANDROID_API_LEVEL" \
+    "build-tools;$ANDROID_BUILD_TOOLS"
 
   # Flutter Android 许可证
   log_info "正在接受 Flutter 侧的 Android 许可证..."
@@ -117,6 +121,25 @@ install_android_sdk() {
 
   popd > /dev/null
   log_ok "Android SDK 配置完成: $ANDROID_HOME"
+}
+
+ensure_android_sdk_components() {
+  if [ -d "$ANDROID_HOME/platforms/android-$ANDROID_API_LEVEL" ] && \
+     [ -d "$ANDROID_HOME/build-tools/$ANDROID_BUILD_TOOLS" ]; then
+    log_ok "Android SDK 组件: platform $ANDROID_API_LEVEL, build-tools $ANDROID_BUILD_TOOLS"
+    return
+  fi
+
+  local sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+  if [ ! -x "$sdkmanager" ]; then
+    log_err "Android SDK 缺少 API $ANDROID_API_LEVEL，且未找到 sdkmanager: $sdkmanager"
+    log_info "请安装 Android command-line tools，或按 docs/ANDROID_SETUP_GUIDE.md 手动补齐组件。"
+    exit 1
+  fi
+  log_info "正在补齐 Android API $ANDROID_API_LEVEL 和 build-tools $ANDROID_BUILD_TOOLS..."
+  "$sdkmanager" --sdk_root="$ANDROID_HOME" \
+    "platforms;android-$ANDROID_API_LEVEL" \
+    "build-tools;$ANDROID_BUILD_TOOLS"
 }
 
 # ─── GameData 临时 release asset 准备 ────────────────────────────
@@ -210,8 +233,16 @@ prepare_gamedata_defines() {
   WITH_GAMEDATA=true
 
   if [ -n "$GAMEDATA_URL" ]; then
-    if [ -z "$GAMEDATA_SHA" ]; then
-      log_warn "已提供 GameData URL 但未提供 SHA256；App 将跳过压缩包校验。"
+    if [ "$PLATFORM" = "android" ] && \
+       [[ "$GAMEDATA_URL" =~ ^http://(127\.0\.0\.1|localhost)(:|/) ]]; then
+      if ! setup_gamedata_adb_reverse; then
+        log_err "GameData URL 使用 localhost，但没有可配置 adb reverse 的 Android 设备。"
+        log_info "请连接并授权设备，或改用手机可访问的局域网/HTTPS URL。"
+        exit 1
+      fi
+    fi
+    if [ "$ALLOW_UNVERIFIED_GAMEDATA" = true ]; then
+      log_warn "已显式允许跳过 GameData SHA256 校验；此模式仅限临时开发。"
     fi
     return
   fi
@@ -281,6 +312,7 @@ GAMEDATA_OUTPUT="${GAMEDATA_OUTPUT:-$DEFAULT_GAMEDATA_OUTPUT}"
 GAMEDATA_STORY_LIMIT="${GAMEDATA_STORY_LIMIT:-0}"
 GAMEDATA_USE_ADB_REVERSE="${GAMEDATA_USE_ADB_REVERSE:-true}"
 GAMEDATA_HTTP_STARTED=false
+ALLOW_UNVERIFIED_GAMEDATA=false
 
 # 临时解析参数以检测帮助或交互式标记
 for arg in "$@"; do
@@ -343,6 +375,10 @@ while [[ $# -gt 0 ]]; do
       GAMEDATA_SHA="${1#--gamedata-sha=}"
       shift
       ;;
+    --allow-unverified-gamedata)
+      ALLOW_UNVERIFIED_GAMEDATA=true
+      shift
+      ;;
     --gamedata-port)
       GAMEDATA_PORT="$2"
       shift 2
@@ -381,12 +417,12 @@ if [ "$FORCE_INTERACTIVE" = true ] || [ "$ORIGINAL_ARGC" -eq 0 ]; then
   log_step "ArkLores 移动端部署配置助手"
 
   # 1. 选择行为
-  echo -e "${BOLD}1. 请选择要执行的行为（多选，用空格分隔，直接回车默认执行全部 [1 2 3]）:${NC}"
+  echo -e "${BOLD}1. 请选择要执行的行为（多选，用空格分隔，直接回车默认 [2 3]，保留 App 数据）:${NC}"
   echo "   1) 卸载手机上的旧版本 (Uninstall)"
   echo "   2) 构建安装包 (Build)"
   echo "   3) 安装到设备 (Install)"
   read -r -p "   请输入选择: " action_input
-  action_input="${action_input:-1 2 3}"
+  action_input="${action_input:-2 3}"
   
   ACTIONS=""
   for opt in $action_input; do
@@ -460,7 +496,7 @@ if [ "$FORCE_INTERACTIVE" = true ] || [ "$ORIGINAL_ARGC" -eq 0 ]; then
   fi
 else
   # 填充未指定的默认值
-  ACTIONS="${ACTIONS:-uninstall,build,install}"
+  ACTIONS="${ACTIONS:-build,install}"
   PLATFORM="${PLATFORM:-android}"
   BUILD_MODE="${BUILD_MODE:-debug}"
   DEPLOY_TARGET="${DEPLOY_TARGET:-device}"
@@ -489,6 +525,16 @@ if [[ ! "$GAMEDATA_PORT" =~ ^[0-9]+$ ]]; then
 fi
 if [[ ! "$GAMEDATA_STORY_LIMIT" =~ ^[0-9]+$ ]]; then
   log_err "不支持的 GameData story limit: $GAMEDATA_STORY_LIMIT"
+  exit 1
+fi
+if [ -n "$GAMEDATA_SHA" ] && [[ ! "$GAMEDATA_SHA" =~ ^[[:xdigit:]]{64}$ ]]; then
+  log_err "GameData SHA256 必须是 64 位十六进制字符串。"
+  exit 1
+fi
+if [ -n "$GAMEDATA_URL" ] && [ -z "$GAMEDATA_SHA" ] && \
+   [ "$ALLOW_UNVERIFIED_GAMEDATA" != true ]; then
+  log_err "外部 GameData URL 必须同时提供 --gamedata-sha。"
+  log_info "临时开发确需跳过校验时，显式添加 --allow-unverified-gamedata。"
   exit 1
 fi
 
@@ -521,6 +567,11 @@ if [ "$WITH_GAMEDATA" = true ] || [ -n "$GAMEDATA_URL" ]; then
   echo -e "   GameData : ${BOLD}启用${NC}"
   [ -n "$GAMEDATA_SOURCE" ] && echo -e "   数据源    : ${BOLD}${GAMEDATA_SOURCE}${NC}"
   [ -n "$GAMEDATA_URL" ] && echo -e "   下载 URL : ${BOLD}${GAMEDATA_URL}${NC}"
+  if [ -n "$GAMEDATA_SHA" ]; then
+    echo -e "   完整性校验: ${BOLD}SHA256${NC}"
+  elif [ "$ALLOW_UNVERIFIED_GAMEDATA" = true ]; then
+    echo -e "   完整性校验: ${YELLOW}已显式跳过（仅限开发）${NC}"
+  fi
 fi
 
 if [ "$DRY_RUN" = true ]; then
@@ -574,6 +625,7 @@ if [ "$PLATFORM" = "android" ]; then
   # 3. 检查 Android SDK
   if [ -d "$ANDROID_HOME/platform-tools" ]; then
     log_ok "Android SDK 路径: $ANDROID_HOME"
+    ensure_android_sdk_components
   else
     log_warn "未找到 Android SDK，开始进行全自动下载与安装..."
     install_android_sdk
@@ -676,6 +728,10 @@ if [ "$DO_BUILD" = true ]; then
   
   # 执行 Flutter 编译
   if [ "$PLATFORM" = "android" ]; then
+    if [ "$BUILD_MODE" = "release" ] && \
+       grep -q 'signingConfig = signingConfigs.debug' "$PROJECT_ROOT/android/app/build.gradle"; then
+      log_warn "当前 release build 使用 debug key，仅适合本地验收，不能作为正式发布签名包。"
+    fi
     log_info "正在运行 flutter build apk --${BUILD_MODE} ..."
     "$FLUTTER" build apk --"${BUILD_MODE}" "${DART_DEFINE_ARGS[@]}"
     if [ ! -f "$APK_PATH" ]; then
