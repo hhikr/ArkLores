@@ -87,8 +87,7 @@ GameData schema v2 增加 `story_scopes` 和剧情 chunk 的 `scope_type/scope_i
 - commit：`634e7e7d12c9d099c55896d51b4cf8ef633fa2a5`
 - language path：`zh_CN`
 
-详细验证、deferred 项和最终资产 hash 见 `v0.5_task_breakdown.md`、`RETRIEVAL_QA.md`
-及 v0.5.0 GitHub Release。
+详细检索 QA 见 `RETRIEVAL_QA.md`。
 
 封盘资产：
 
@@ -97,3 +96,30 @@ GameData schema v2 增加 `story_scopes` 和剧情 chunk 的 `scope_type/scope_i
 - `app-release.apk`：SHA256
   `58f4b42a5ac239af0a0e5d2f33a2dae786ea80ab87fb138395bd317d42e72b37`
 - APK 为 release-mode、Android Debug certificate 签名的 GitHub 验收包，不是正式商店签名。
+
+封盘验证：
+
+- `flutter test`：47 passed，3 个 opt-in live tests 默认 skipped。
+- `flutter analyze` 及 GameData builder/retrieval/finalizer analyze passed。
+- schema v2 smoke build passed：17680 entities、833 entity documents、1 story line、
+  82930 lore chunks。
+- finalized 完整 DB retrieval QA passed，包括
+  `activities/act21mini/level_act21mini_st07.txt:3` scoped evidence。
+- 真实 Chat scoped 剧情目标和无 unsupported verdict 安全用例 passed；其余固定外部模型
+  命题未全部执行。
+- release URL/SHA dry-run、release-mode APK build 和 `apksigner` v1/v2 verification passed。
+- PR #1 将 feature 合入 `dev`；PR #2 将 `dev` 合入 `main`。
+
+GitHub Release：
+
+- tag：`v0.5.0`
+- target：`74a4a0c6061003f42a97813f9ba186d146aa88cb`
+- URL：`https://github.com/hhikr/ArkLores/releases/tag/v0.5.0`
+- 状态：非 draft、非 prerelease；APK、DB.gz、manifest、build report 的远端 size/digest
+  已回读并与本地产物一致。
+
+封盘时 deferred：
+
+- 真实外部 Chat API 的全部固定命题矩阵。
+- Android 双主题、双语、TalkBack、更多文字缩放与设备组合。
+- 正式商店签名；当前 GitHub APK 仅为 Android Debug certificate 签名的验收包。
