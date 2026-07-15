@@ -55,6 +55,8 @@ usage() {
       --gamedata-source <路径>
                          ArknightsGameData 社区解包仓库路径。默认优先使用:
                          $DEFAULT_GAMEDATA_SOURCE
+      --gamedata-asset <路径>
+                         复用本机已有 .db.gz 并启动临时 HTTP 服务，不重建数据库
       --gamedata-url <URL>
                          直接使用已有 arklores_gamedata_zh.db.gz 下载地址，不本地构建
       --gamedata-sha <SHA256>
@@ -74,6 +76,7 @@ usage() {
   ./tools/setup.sh --with-gamedata --gamedata-url https://... --gamedata-sha <sha> --dry-run
   ./tools/setup.sh -a uninstall,install                       # 卸载并重新安装（使用已有包）
   ./tools/setup.sh --with-gamedata                            # 自动构建并提供 GameData 临时下载
+  ./tools/setup.sh --gamedata-asset build/gamedata_mobile/arklores_gamedata_zh.db.gz
   ./tools/setup.sh --gamedata-url https://.../db.gz --gamedata-sha <sha>
   ./tools/setup.sh -p ios -t simulator                        # iOS 模拟器构建与部署
 EOF
@@ -183,7 +186,7 @@ setup_gamedata_adb_reverse() {
     log_info "正在为设备 $device 配置 adb reverse: tcp:$GAMEDATA_PORT -> tcp:$GAMEDATA_PORT"
     "$ADB" -s "$device" reverse "tcp:$GAMEDATA_PORT" "tcp:$GAMEDATA_PORT"
   done
-  GAMEDATA_URL="http://127.0.0.1:$GAMEDATA_PORT/arklores_gamedata_zh.db.gz"
+  GAMEDATA_URL="http://127.0.0.1:$GAMEDATA_PORT/$GAMEDATA_HTTP_FILENAME"
   log_ok "已启用 adb reverse，手机 App 将通过 $GAMEDATA_URL 下载"
   return 0
 }
@@ -193,14 +196,28 @@ start_gamedata_http_server() {
   local port="$2"
   local pid_file="$PROJECT_ROOT/build/gamedata_http.pid"
   local log_file="$PROJECT_ROOT/build/gamedata_http.log"
+  local dir_file="$PROJECT_ROOT/build/gamedata_http.dir"
+  local port_file="$PROJECT_ROOT/build/gamedata_http.port"
 
   mkdir -p "$PROJECT_ROOT/build"
   if [ -f "$pid_file" ]; then
     local old_pid
     old_pid="$(cat "$pid_file" 2>/dev/null || true)"
     if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
-      log_ok "复用已运行的 GameData HTTP 服务: pid=$old_pid"
-      return
+      local old_dir
+      local old_port
+      old_dir="$(cat "$dir_file" 2>/dev/null || true)"
+      old_port="$(cat "$port_file" 2>/dev/null || true)"
+      if [ "$old_dir" = "$serve_dir" ] && [ "$old_port" = "$port" ]; then
+        log_ok "复用已运行的 GameData HTTP 服务: pid=$old_pid"
+        return
+      fi
+      log_info "已有 HTTP 服务配置不同，正在重启: $old_dir (port ${old_port:-unknown})"
+      kill "$old_pid"
+      for _ in {1..10}; do
+        kill -0 "$old_pid" 2>/dev/null || break
+        sleep 0.1
+      done
     fi
   fi
 
@@ -214,6 +231,8 @@ start_gamedata_http_server() {
     cd "$serve_dir"
     nohup python3 -m http.server "$port" --bind 0.0.0.0 > "$log_file" 2>&1 &
     echo $! > "$pid_file"
+    echo "$serve_dir" > "$dir_file"
+    echo "$port" > "$port_file"
   )
   sleep 1
   local pid
@@ -222,7 +241,22 @@ start_gamedata_http_server() {
     log_err "GameData HTTP 服务启动失败，日志: $log_file"
     exit 1
   fi
+  local probe_url="http://127.0.0.1:$port/$GAMEDATA_HTTP_FILENAME"
+  if ! python3 - "$probe_url" <<'PY'
+import sys
+import urllib.request
+
+request = urllib.request.Request(sys.argv[1], method="HEAD")
+with urllib.request.urlopen(request, timeout=5) as response:
+    if response.status >= 400:
+        raise RuntimeError(f"HTTP {response.status}")
+PY
+  then
+    log_err "GameData HTTP 文件探测失败: $probe_url"
+    exit 1
+  fi
   log_ok "GameData HTTP 服务已启动: pid=$pid, log=$log_file"
+  log_ok "GameData HTTP 文件可访问: $probe_url"
   GAMEDATA_HTTP_STARTED=true
 }
 
@@ -247,6 +281,49 @@ prepare_gamedata_defines() {
     return
   fi
 
+  if [ -n "$GAMEDATA_ASSET" ]; then
+    local asset_path
+    local asset_dir
+    asset_dir="$(cd "$(dirname "$GAMEDATA_ASSET")" 2>/dev/null && pwd -P || true)"
+    asset_path="$asset_dir/$(basename "$GAMEDATA_ASSET")"
+    if [ -z "$asset_path" ] || [ ! -f "$asset_path" ]; then
+      log_err "已有 GameData 资产不存在: $GAMEDATA_ASSET"
+      exit 1
+    fi
+    if [[ "$asset_path" != *.db.gz ]]; then
+      log_err "已有 GameData 资产必须是 .db.gz: $asset_path"
+      exit 1
+    fi
+    GAMEDATA_HTTP_FILENAME="$(basename "$asset_path")"
+    if [[ ! "$GAMEDATA_HTTP_FILENAME" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      log_err "已有 GameData 资产文件名只能包含字母、数字、点、下划线和连字符。"
+      exit 1
+    fi
+    log_step "准备已有 GameData 主知识库临时下载资产"
+    log_info "asset: $asset_path"
+    if ! gzip -t "$asset_path"; then
+      log_err "已有 GameData gzip 校验失败: $asset_path"
+      exit 1
+    fi
+    GAMEDATA_SHA="$(sha256_file "$asset_path")"
+    start_gamedata_http_server "$(dirname "$asset_path")" "$GAMEDATA_PORT"
+    if setup_gamedata_adb_reverse; then
+      :
+    else
+      local host_ip
+      host_ip="$(detect_host_ip)"
+      if [ -z "$host_ip" ]; then
+        log_err "无法自动检测本机局域网 IP。请改用 --gamedata-url 手动指定下载地址。"
+        exit 1
+      fi
+      GAMEDATA_URL="http://$host_ip:$GAMEDATA_PORT/$GAMEDATA_HTTP_FILENAME"
+      log_warn "未使用 adb reverse，改用局域网地址。若手机无法访问，请确认电脑和手机在同一可互访网络。"
+    fi
+    log_ok "GameData 下载 URL: $GAMEDATA_URL"
+    log_ok "GameData SHA256: $GAMEDATA_SHA"
+    return
+  fi
+
   if [ -z "$GAMEDATA_SOURCE" ]; then
     if [ -d "$DEFAULT_GAMEDATA_SOURCE" ]; then
       GAMEDATA_SOURCE="$DEFAULT_GAMEDATA_SOURCE"
@@ -263,6 +340,7 @@ prepare_gamedata_defines() {
   local output_dir="$PROJECT_ROOT/$GAMEDATA_OUTPUT"
   local db_path="$output_dir/arklores_gamedata_zh.db"
   local gz_path="$output_dir/arklores_gamedata_zh.db.gz"
+  GAMEDATA_HTTP_FILENAME="arklores_gamedata_zh.db.gz"
 
   log_step "准备 GameData 主知识库临时下载资产"
   log_info "source: $GAMEDATA_SOURCE"
@@ -287,7 +365,7 @@ prepare_gamedata_defines() {
       log_err "无法自动检测本机局域网 IP。请改用 --gamedata-url 手动指定下载地址。"
       exit 1
     fi
-    GAMEDATA_URL="http://$host_ip:$GAMEDATA_PORT/arklores_gamedata_zh.db.gz"
+    GAMEDATA_URL="http://$host_ip:$GAMEDATA_PORT/$GAMEDATA_HTTP_FILENAME"
     log_warn "未使用 adb reverse，改用局域网地址。若手机无法访问，请确认电脑和手机在同一可互访网络。"
   fi
   log_ok "GameData 下载 URL: $GAMEDATA_URL"
@@ -305,6 +383,7 @@ FORCE_INTERACTIVE=false
 DRY_RUN=false
 WITH_GAMEDATA=false
 GAMEDATA_SOURCE="${GAMEDATA_SOURCE:-}"
+GAMEDATA_ASSET="${GAMEDATA_ASSET:-}"
 GAMEDATA_URL="${GAMEDATA_URL:-}"
 GAMEDATA_SHA="${GAMEDATA_SHA:-}"
 GAMEDATA_PORT="${GAMEDATA_PORT:-$DEFAULT_GAMEDATA_PORT}"
@@ -312,6 +391,7 @@ GAMEDATA_OUTPUT="${GAMEDATA_OUTPUT:-$DEFAULT_GAMEDATA_OUTPUT}"
 GAMEDATA_STORY_LIMIT="${GAMEDATA_STORY_LIMIT:-0}"
 GAMEDATA_USE_ADB_REVERSE="${GAMEDATA_USE_ADB_REVERSE:-true}"
 GAMEDATA_HTTP_STARTED=false
+GAMEDATA_HTTP_FILENAME="arklores_gamedata_zh.db.gz"
 ALLOW_UNVERIFIED_GAMEDATA=false
 
 # 临时解析参数以检测帮助或交互式标记
@@ -354,6 +434,16 @@ while [[ $# -gt 0 ]]; do
       ;;
     --gamedata-source=*)
       GAMEDATA_SOURCE="${1#--gamedata-source=}"
+      WITH_GAMEDATA=true
+      shift
+      ;;
+    --gamedata-asset)
+      GAMEDATA_ASSET="$2"
+      WITH_GAMEDATA=true
+      shift 2
+      ;;
+    --gamedata-asset=*)
+      GAMEDATA_ASSET="${1#--gamedata-asset=}"
       WITH_GAMEDATA=true
       shift
       ;;
@@ -465,9 +555,10 @@ if [ "$FORCE_INTERACTIVE" = true ] || [ "$ORIGINAL_ARGC" -eq 0 ]; then
   # 4. 选择是否配置 GameData 主知识库临时下载
   echo -e "\n${BOLD}4. 是否自动准备 GameData 主知识库下载参数?${NC}"
   echo "   1) 是，使用本地 ArknightsGameData 构建 .db.gz 并启动临时 HTTP 服务"
-  echo "   2) 否，仅构建/安装 App (默认)"
-  read -r -p "   请输入选择 [2]: " gamedata_input
-  gamedata_input="${gamedata_input:-2}"
+  echo "   2) 是，复用本机已有 .db.gz 并启动临时 HTTP 服务"
+  echo "   3) 否，仅构建/安装 App (默认)"
+  read -r -p "   请输入选择 [3]: " gamedata_input
+  gamedata_input="${gamedata_input:-3}"
   case "$gamedata_input" in
     1)
       WITH_GAMEDATA=true
@@ -476,7 +567,14 @@ if [ "$FORCE_INTERACTIVE" = true ] || [ "$ORIGINAL_ARGC" -eq 0 ]; then
       read -r -p "   临时 HTTP 端口 [$DEFAULT_GAMEDATA_PORT]: " gamedata_port_input
       GAMEDATA_PORT="${gamedata_port_input:-$DEFAULT_GAMEDATA_PORT}"
       ;;
-    2) WITH_GAMEDATA=false ;;
+    2)
+      WITH_GAMEDATA=true
+      read -r -p "   已有 .db.gz 路径 [$PROJECT_ROOT/$DEFAULT_GAMEDATA_OUTPUT/arklores_gamedata_zh.db.gz]: " gamedata_asset_input
+      GAMEDATA_ASSET="${gamedata_asset_input:-$PROJECT_ROOT/$DEFAULT_GAMEDATA_OUTPUT/arklores_gamedata_zh.db.gz}"
+      read -r -p "   临时 HTTP 端口 [$DEFAULT_GAMEDATA_PORT]: " gamedata_port_input
+      GAMEDATA_PORT="${gamedata_port_input:-$DEFAULT_GAMEDATA_PORT}"
+      ;;
+    3) WITH_GAMEDATA=false ;;
     *) log_warn "未知选择，默认不配置 GameData"; WITH_GAMEDATA=false ;;
   esac
 
@@ -531,6 +629,14 @@ if [ -n "$GAMEDATA_SHA" ] && [[ ! "$GAMEDATA_SHA" =~ ^[[:xdigit:]]{64}$ ]]; then
   log_err "GameData SHA256 必须是 64 位十六进制字符串。"
   exit 1
 fi
+if [ -n "$GAMEDATA_URL" ] && { [ -n "$GAMEDATA_SOURCE" ] || [ -n "$GAMEDATA_ASSET" ]; }; then
+  log_err "--gamedata-url 不能与 --gamedata-source/--gamedata-asset 同时使用。"
+  exit 1
+fi
+if [ -n "$GAMEDATA_SOURCE" ] && [ -n "$GAMEDATA_ASSET" ]; then
+  log_err "--gamedata-source 与 --gamedata-asset 只能选择一个。"
+  exit 1
+fi
 if [ -n "$GAMEDATA_URL" ] && [ -z "$GAMEDATA_SHA" ] && \
    [ "$ALLOW_UNVERIFIED_GAMEDATA" != true ]; then
   log_err "外部 GameData URL 必须同时提供 --gamedata-sha。"
@@ -566,6 +672,7 @@ echo ""
 if [ "$WITH_GAMEDATA" = true ] || [ -n "$GAMEDATA_URL" ]; then
   echo -e "   GameData : ${BOLD}启用${NC}"
   [ -n "$GAMEDATA_SOURCE" ] && echo -e "   数据源    : ${BOLD}${GAMEDATA_SOURCE}${NC}"
+  [ -n "$GAMEDATA_ASSET" ] && echo -e "   已有资产  : ${BOLD}${GAMEDATA_ASSET}${NC}"
   [ -n "$GAMEDATA_URL" ] && echo -e "   下载 URL : ${BOLD}${GAMEDATA_URL}${NC}"
   if [ -n "$GAMEDATA_SHA" ]; then
     echo -e "   完整性校验: ${BOLD}SHA256${NC}"

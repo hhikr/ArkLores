@@ -99,7 +99,24 @@ adb reverse tcp:8765 tcp:8765
 
 `--gamedata-story-limit=N` 只适合快速 schema/smoke DB，不得用来代替完整 DB 检索验收。
 
-### 使用已有下载资产
+### 使用本机已有下载资产
+
+若 `.db.gz` 已由当前 builder 完整构建，可直接复用，不再次解析 GameData source：
+
+```bash
+./tools/setup.sh \
+  -a build,install \
+  -p android \
+  -m debug \
+  --gamedata-asset=build/gamedata_mobile/arklores_gamedata_zh.db.gz
+```
+
+交互向导的 GameData 第 2 项提供相同行为。脚本会执行 gzip 完整性检查、计算 SHA256、
+启动临时 HTTP 服务、确认目标文件可通过本地 HTTP 访问并配置 adb reverse，但不会调用
+`build_gamedata_database.dart`。App 安装器仍会在下载后校验 GameData schema version 和
+必需表。
+
+### 使用已有远程下载资产
 
 推荐使用手机可访问的 HTTPS URL，并必须提供压缩文件 SHA256：
 
