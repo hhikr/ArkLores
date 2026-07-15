@@ -44,11 +44,14 @@ fix(agent): handle empty final answer in react loop
 
 ## Knowledge Base
 
-- v0.4.5 主知识源是中文 GameData release asset。
+- v0.5.0 主知识源是中文 GameData release asset；当前兼容 schema version 为 2。
 - 知识库 DB 由 `tools/build_gamedata_database.dart` 构建。
 - App 端检索使用结构化 lookup、别名、LIKE 和 FTS。
 - Wiki 与用户资料不得被表述为官方游戏原文。
 - Book/用户资料链路当前暂停，恢复前需要重新设计来源标注和可信度策略。
+- scoped story evidence 必须使用稳定 scope/entity ID；普通复合关键词无结果不能作为反证。
+- 真实 Chat 测试必须显式 opt-in，凭据只放在 Git ignored 的 `tools/api_info`，不得写入
+  test fixture、日志、文档或提交历史。
 
 ## PR Checklist
 
@@ -57,3 +60,5 @@ fix(agent): handle empty final answer in react loop
 - [ ] `flutter test` 或相关单测通过。
 - [ ] `flutter analyze` 无新增问题。
 - [ ] 涉及 Agent/RAG 时，来源可信度标注正确。
+- [ ] 涉及剧情检索时，运行 finalized 完整 DB retrieval QA；不能用 smoke DB 代替。
+- [ ] 新增外部模型 QA 时保留 deterministic test，默认测试不得产生网络费用。

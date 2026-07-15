@@ -66,3 +66,26 @@ v0.4.5 封盘验证：
 - story chunks 仍主要依赖 FTS / LIKE，缺少完整实体级剧情关系索引。
 - 组织、阵营和概念实体汇总仍需增强。
 - `肉鸽`、`秘录`、`模组` 等归一化仍是规则表。
+
+## v0.5.0
+
+v0.5.0 完成 GameData-only Fact-check 工作流，并将剧情取证升级到 schema v2 scoped
+evidence。主要交付包括四态 verdict UI、来源约束、Fact-check debug log、取消/重试、
+provider 格式兼容，以及可复现的真实 Chat opt-in QA。
+
+GameData schema v2 增加 `story_scopes` 和剧情 chunk 的 `scope_type/scope_id`。剧情事实检索
+按 canonical scope、entity 和关系/状态词取交集，并用实体与关系词的文本距离排序候选；
+普通档案、活动名称或无结果不能放行 supported/refuted。
+
+安装和开发工具同步到 Android API 36，默认更新安装保留 App 数据；setup 支持从 source
+重建数据库、复用已有本地 `.db.gz` 或使用带 SHA256 的远程 asset。
+
+发布来源继续固定为：
+
+- repo：`Kengxxiao/ArknightsGameData`
+- branch：`master`
+- commit：`634e7e7d12c9d099c55896d51b4cf8ef633fa2a5`
+- language path：`zh_CN`
+
+详细验证、deferred 项和最终资产 hash 见 `v0.5_task_breakdown.md`、`RETRIEVAL_QA.md`
+及 v0.5.0 GitHub Release。
