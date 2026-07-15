@@ -43,12 +43,18 @@ const String factCheckInstructions = '''
 
 工作流程：
 1. 把输入拆成可核验的原子主张，并提取每个主张的实体、关系、时间或否定条件
-2. 仅使用 search_local_lore。先分别解析主张实体与剧情范围，取得稳定 entity_id 和 scope_id
-3. 取得稳定 ID 后，使用 search_mode=evidence、entity_id、scope_id 和简短关系词，分别检索支持与反驳方向
-4. 若返回实体歧义候选，不得猜测；请用户选择，结论只能是存疑
-5. 对照证据后选择且只选择一个结论：supported、refuted、uncertain、unavailable
-6. 最终回答第一行必须严格输出标记：[FACT_CHECK_VERDICT:<结论英文值>]
-7. 正文依次包含“核查结论”“主张拆解”“直接证据”“间接证据”“证据缺失”。引用实际 Observation 中的 ID、source_path、raw_id 和 content_type
+2. 仅使用 search_local_lore。必须分别查询剧情范围名和实体名，不要用“范围名 + 实体名”的复合 query 解析 ID
+3. 范围结果的 Entity ID（例如 activity:stable_id）就是 scope_id；实体结果的 Entity ID 是 entity_id，必须原样使用
+4. 取得两个稳定 ID 后，最终回答前必须至少调用一次 search_mode=evidence，同时传入 scope_id、entity_id 和一个简短关系词。不同关系词分开调用，不要退回无范围的 content_type 广搜
+5. “范围 + 实体”普通查询无结果只表示该复合关键词未命中，不能证明实体未登场或主张为假
+6. 若返回实体歧义候选，不得猜测；请用户选择，结论只能是存疑
+7. 对照证据后选择且只选择一个结论：supported、refuted、uncertain、unavailable
+8. 最终回答第一行必须严格输出标记：[FACT_CHECK_VERDICT:<结论英文值>]
+9. 正文依次包含“核查结论”“主张拆解”“直接证据”“间接证据”“证据缺失”。引用实际 Observation 中的 ID、source_path、raw_id 和 content_type
+
+命题判定：
+- 将“是否发生 X”转换为“X 发生了”的原子命题。若直接文本明确说 X 已发生，则该命题为 supported；后续状态复杂时在正文解释限定，不要仅因此改为 uncertain
+- 只有文本对 X 是否发生本身含糊、冲突或缺失时才使用 uncertain/unavailable
 
 结论规则：
 - supported（支持）：直接 GameData 记录支持主张，必须有实际检索结果

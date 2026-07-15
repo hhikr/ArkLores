@@ -391,6 +391,21 @@ void main() {
         'language': 'zh',
         'raw_id': 'story_01:3',
       });
+      await db.insert('lore_chunks', {
+        'id': 'distant_scoped_story_evidence',
+        'game': 'arknights',
+        'source_type': 'game_story',
+        'content_category': 'story',
+        'content_subtype': 'activity',
+        'content_type': 'story_dialogue',
+        'story_id': 'activities/act_test/story_00.txt',
+        'scope_type': 'activity',
+        'scope_id': 'act_test',
+        'content': '牺牲${List.filled(80, '无关背景').join()}阿米娅出现在远处。',
+        'source_path': 'zh_CN/gamedata/story/activities/act_test/story_00.txt',
+        'language': 'zh',
+        'raw_id': 'story_00:1',
+      });
       await db.close();
       final tool = SearchLocalLoreTool(
         gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
@@ -407,6 +422,12 @@ void main() {
       expect(result.observation, contains('scoped_story_evidence'));
       expect(result.observation, contains('选择牺牲自己'));
       expect(result.observation, isNot(contains('operator_profile_bundle')));
+      expect(
+        result.observation.indexOf('ID: scoped_story_evidence'),
+        lessThan(
+          result.observation.indexOf('ID: distant_scoped_story_evidence'),
+        ),
+      );
     });
 
     test('requires canonical scope type and a non-empty claim term', () async {
@@ -438,7 +459,7 @@ void main() {
       }) as ToolExecutionResult;
       expect(
         wrongScope.observation,
-        contains('No matching GameData result'),
+        contains('No scoped direct candidate'),
       );
 
       final emptyTerms = await store.search(
@@ -448,6 +469,30 @@ void main() {
         searchMode: 'evidence',
       );
       expect(emptyTerms, isEmpty);
+    });
+
+    test('guides invalid and empty scoped evidence searches to retry',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final missingIds = await tool.execute({
+        'query': '离开',
+        'search_mode': 'evidence',
+      }) as ToolExecutionResult;
+      expect(missingIds.observation, contains('requires both'));
+
+      final noCandidate = await tool.execute({
+        'query': '测试范围 测试角色',
+        'scope_id': 'activity:act_test',
+        'entity_id': 'char_002_amiya',
+        'search_mode': 'evidence',
+      }) as ToolExecutionResult;
+      expect(noCandidate.observation, contains('only one short claim'));
+      expect(noCandidate.observation, contains('same scope_id and entity_id'));
     });
   });
 
@@ -628,6 +673,50 @@ void main() {
           .toList();
 
       expect(tool.lastArgs?['query'], 'scope entity relation');
+    });
+
+    test('parses an action placed directly after sentence punctuation',
+        () async {
+      final registry = ToolRegistry();
+      final tool = _CaptureTool();
+      registry.register(tool);
+      final loop = ReActLoop(
+        llmClient: _PunctuatedActionLLMClient(),
+        toolRegistry: registry,
+        maxIterations: 2,
+      );
+
+      await loop
+          .run(systemPrompt: 'test', chatHistory: const [], userQuery: 'test')
+          .toList();
+
+      expect(tool.lastArgs?['query'], '米格鲁');
+    });
+
+    test('requires a tool call before accepting a final answer when configured',
+        () async {
+      final registry = ToolRegistry();
+      final tool = _CaptureTool();
+      registry.register(tool);
+      final loop = ReActLoop(
+        llmClient: _EarlyFinalThenActionLLMClient(),
+        toolRegistry: registry,
+        maxIterations: 3,
+        minimumToolCalls: 1,
+      );
+
+      final events = await loop
+          .run(systemPrompt: 'test', chatHistory: const [], userQuery: 'test')
+          .toList();
+
+      expect(tool.lastArgs?['query'], 'required evidence');
+      expect(
+        events
+            .where((event) => event.type == ReActEventType.finalAnswerToken)
+            .single
+            .content,
+        'verified',
+      );
     });
 
     test('does not treat handbook metadata as a Book source claim', () async {
@@ -1178,6 +1267,43 @@ class _ActionMetadataLLMClient extends _MockLLMClient {
           'Action Input: {"query":"scope entity relation"}';
     }
     return 'Final Answer: done';
+  }
+}
+
+class _PunctuatedActionLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      return '现在查询实体。Action: search_local_lore\n'
+          'Action Input: {"query":"米格鲁"}';
+    }
+    return 'Final Answer: done';
+  }
+}
+
+class _EarlyFinalThenActionLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) return 'Final Answer: unverified';
+    if (callCount == 2) {
+      return 'Action: search_local_lore\n'
+          'Action Input: {"query":"required evidence"}';
+    }
+    return 'Final Answer: verified';
   }
 }
 

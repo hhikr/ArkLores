@@ -29,7 +29,9 @@ class FactCheckAgent {
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: registry,
-      maxIterations: 5,
+      maxIterations: 7,
+      minimumToolCalls: 1,
+      stepMaxTokens: 4096,
     );
     return loop.run(
       systemPrompt: buildAgentPrompt(factCheckInstructions),
@@ -64,6 +66,7 @@ FactCheckVerdict validateFactCheckVerdict(
           joined.contains('Evidence Level: direct candidate');
   final noCoverage = joined.isEmpty ||
       joined.contains('No matching GameData result') ||
+      joined.contains('No scoped direct candidate') ||
       joined.contains('GameData knowledge DB is not installed');
 
   if (requested == FactCheckVerdict.supported ||

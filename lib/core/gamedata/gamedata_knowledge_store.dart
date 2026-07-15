@@ -948,17 +948,34 @@ class GameDataKnowledgeStore {
           .write(' AND (content LIKE ? OR page_title LIKE ? OR raw_id LIKE ?)');
       args.addAll(['%$term%', '%$term%', '%$term%']);
     }
-    args.add(limit);
     final rows = await db.rawQuery(
       '''
       SELECT * FROM lore_chunks
       WHERE $where
       ORDER BY story_id, raw_id
-      LIMIT ?
+      LIMIT 200
       ''',
       args,
     );
-    return rows
+    final ranked = rows.toList(growable: false)
+      ..sort((left, right) {
+        final proximity = _evidenceProximity(
+          left['content'] as String,
+          names: names,
+          terms: terms,
+        ).compareTo(
+          _evidenceProximity(
+            right['content'] as String,
+            names: names,
+            terms: terms,
+          ),
+        );
+        if (proximity != 0) return proximity;
+        return '${left['story_id']}:${left['raw_id']}'
+            .compareTo('${right['story_id']}:${right['raw_id']}');
+      });
+    return ranked
+        .take(limit)
         .map((row) => _chunkResult(row, 15000, 'scoped_story_evidence'))
         .toList(growable: false);
   }
@@ -1297,4 +1314,34 @@ List<String> _searchTerms(String query) {
       .where((term) => term.isNotEmpty)
       .toSet()
       .toList(growable: false);
+}
+
+int _evidenceProximity(
+  String content, {
+  required List<String> names,
+  required List<String> terms,
+}) {
+  var closest = content.length;
+  for (final name in names) {
+    final nameOffsets = _allOffsets(content, name);
+    for (final term in terms) {
+      for (final termOffset in _allOffsets(content, term)) {
+        for (final nameOffset in nameOffsets) {
+          final distance = (nameOffset - termOffset).abs();
+          if (distance < closest) closest = distance;
+        }
+      }
+    }
+  }
+  return closest;
+}
+
+Iterable<int> _allOffsets(String content, String term) sync* {
+  var offset = 0;
+  while (offset < content.length) {
+    final match = content.indexOf(term, offset);
+    if (match < 0) return;
+    yield match;
+    offset = match + term.length;
+  }
 }

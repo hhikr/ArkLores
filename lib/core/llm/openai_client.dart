@@ -72,7 +72,8 @@ class OpenAICompatibleClient implements LLMClient {
 
       if (response.statusCode != 200) {
         throw LLMException(
-          'Chat completion failed',
+          _responseErrorMessage(response.body,
+              fallback: 'Chat completion failed'),
           statusCode: response.statusCode,
           body: response.body,
         );
@@ -194,4 +195,24 @@ class OpenAICompatibleClient implements LLMClient {
   void dispose() {
     _httpClient.close();
   }
+}
+
+String _responseErrorMessage(String body, {required String fallback}) {
+  try {
+    final decoded = jsonDecode(body) as Map<String, dynamic>;
+    final error = decoded['error'];
+    if (error is Map<String, dynamic>) {
+      final message = error['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return '$fallback: ${message.trim()}';
+      }
+    }
+    final message = decoded['message'];
+    if (message is String && message.trim().isNotEmpty) {
+      return '$fallback: ${message.trim()}';
+    }
+  } catch (_) {
+    // Keep the stable fallback for non-JSON provider responses.
+  }
+  return fallback;
 }
