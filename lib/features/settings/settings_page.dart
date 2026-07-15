@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
-import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'onboarding_page.dart';

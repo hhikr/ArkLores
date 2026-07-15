@@ -1,6 +1,7 @@
 import 'dart:ui' show Color;
 
-import 'package:flutter/painting.dart' show TextStyle, FontWeight, BorderRadius, Radius, BoxShadow, Offset;
+import 'package:flutter/painting.dart'
+    show TextStyle, FontWeight, BorderRadius, Radius, BoxShadow, Offset;
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_theme.dart';

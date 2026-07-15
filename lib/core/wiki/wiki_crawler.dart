@@ -101,7 +101,8 @@ class MediaWikiCrawler {
       }
 
       final result = await _queryApi(site, params);
-      final members = result['query']['categorymembers'] as List<dynamic>? ?? [];
+      final members =
+          result['query']['categorymembers'] as List<dynamic>? ?? [];
 
       // Collect page titles from this batch.
       final titles = members
@@ -176,7 +177,9 @@ class MediaWikiCrawler {
         final pageData = entry.value as Map<String, dynamic>?;
         if (pageData == null) continue;
         // Skip missing/invalid pages.
-        if (pageData.containsKey('missing') || pageData['pageid'] == null) continue;
+        if (pageData.containsKey('missing') || pageData['pageid'] == null) {
+          continue;
+        }
 
         pages.add(WikiPage(
           pageId: pageData['pageid'] as int,
@@ -228,13 +231,16 @@ class MediaWikiCrawler {
       for (final entry in pagesJson.entries) {
         final pageData = entry.value as Map<String, dynamic>?;
         if (pageData == null) continue;
-        if (pageData.containsKey('missing') || pageData['pageid'] == null) continue;
+        if (pageData.containsKey('missing') || pageData['pageid'] == null) {
+          continue;
+        }
 
         final title = pageData['title'] as String? ?? '';
         final pageId = pageData['pageid'] as int;
         final revisions = pageData['revisions'] as List<dynamic>?;
         if (title.isNotEmpty && revisions != null && revisions.isNotEmpty) {
-          final wikitext = revisions[0]['slots']?['main']?['*'] as String? ?? '';
+          final wikitext =
+              revisions[0]['slots']?['main']?['*'] as String? ?? '';
           result[title] = WikiPage(
             pageId: pageId,
             title: title,

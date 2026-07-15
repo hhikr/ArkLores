@@ -81,9 +81,8 @@ class _CitationCardState extends ConsumerState<CitationCard>
         ? theme.wikiBadgeColor
         : theme.bookBadgeColor;
 
-    final badgeIcon = widget.sourceType == CitationSourceType.wiki
-        ? '🌐'
-        : '📚';
+    final badgeIcon =
+        widget.sourceType == CitationSourceType.wiki ? '🌐' : '📚';
 
     final badgeLabel = widget.sourceType == CitationSourceType.wiki
         ? context.t.citationWiki
@@ -113,8 +112,8 @@ class _CitationCardState extends ConsumerState<CitationCard>
                   Text(badgeIcon, style: const TextStyle(fontSize: 16)),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: badgeColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
