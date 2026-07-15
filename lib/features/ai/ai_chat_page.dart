@@ -62,7 +62,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       length: 3,
       initialIndex: _initialTabIndex,
       child: Scaffold(
-        backgroundColor: theme.bgPrimary,
+        backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: theme.bgSecondary,
           elevation: 0,

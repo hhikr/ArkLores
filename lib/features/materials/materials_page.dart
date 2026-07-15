@@ -17,7 +17,7 @@ class MaterialsPage extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
 
     return Scaffold(
-      backgroundColor: theme.bgPrimary,
+      backgroundColor: Colors.transparent,
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
         child: Column(
