@@ -130,8 +130,7 @@ class _BookmarkListItem extends StatelessWidget {
         onTap: onTap,
         child: Row(
           children: [
-            Icon(Icons.bookmark_rounded,
-                color: theme.wikiBadgeColor, size: 22),
+            Icon(Icons.bookmark_rounded, color: theme.wikiBadgeColor, size: 22),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -139,11 +138,12 @@ class _BookmarkListItem extends StatelessWidget {
                 children: [
                   Text(bookmark.title,
                       style: theme.titleFont.copyWith(fontSize: 15),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 2),
                   Text(bookmark.siteLabel,
-                      style: theme.bodyFont.copyWith(
-                          color: theme.textSecondary, fontSize: 12)),
+                      style: theme.bodyFont
+                          .copyWith(color: theme.textSecondary, fontSize: 12)),
                 ],
               ),
             ),

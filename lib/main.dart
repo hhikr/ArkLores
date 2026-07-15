@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
-import 'core/llm/embedding_profile.dart';
 import 'core/llm/llm_client.dart';
-import 'core/rag/seed_installer.dart';
 import 'features/settings/api_settings_page.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
@@ -19,19 +17,12 @@ void main() async {
 
   final settingsService = SettingsService();
 
-  // Install prebuilt seed database and wiki cache before anything else.
-  try {
-    await SeedInstaller().installIfNeeded();
-  } catch (e) {
-    print('[Startup] Seed install failed (non-fatal): $e');
-  }
-
   // Load onboarding status
   bool onboardingDone = false;
   try {
     onboardingDone = await settingsService.isOnboardingDone();
   } catch (e) {
-    print('[Startup] Error reading onboarding status: $e');
+    debugPrint('[Startup] Error reading onboarding status: $e');
   }
 
   // Load API config
@@ -39,17 +30,7 @@ void main() async {
   try {
     apiConfig = await settingsService.loadApiConfig();
   } catch (e) {
-    print('[Startup] Error loading API config: $e');
-  }
-
-  // Load embedding profile state, migrating legacy API embedding config if needed.
-  EmbeddingSettingsState embeddingSettings = const EmbeddingSettingsState();
-  try {
-    embeddingSettings = await settingsService.loadEmbeddingSettings(
-      legacyConfig: apiConfig,
-    );
-  } catch (e) {
-    print('[Startup] Error loading embedding profiles: $e');
+    debugPrint('[Startup] Error loading API config: $e');
   }
 
   runApp(
@@ -57,7 +38,6 @@ void main() async {
       overrides: [
         onboardingDoneProvider.overrideWithValue(onboardingDone),
         initialApiConfigProvider.overrideWithValue(apiConfig),
-        initialEmbeddingSettingsProvider.overrideWithValue(embeddingSettings),
       ],
       child: const ArkLoresApp(),
     ),

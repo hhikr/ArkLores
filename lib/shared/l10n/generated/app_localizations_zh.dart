@@ -40,13 +40,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsApiSettings => 'API 设置';
 
   @override
-  String get settingsApiSettingsDesc => '配置对话与嵌入服务提供商';
+  String get settingsApiSettingsDesc => '配置对话服务提供商';
 
   @override
   String get settingsKnowledgeBase => '知识库管理';
 
   @override
-  String get settingsKnowledgeBaseDesc => '管理 Wiki 索引、查看统计、更新知识库';
+  String get settingsKnowledgeBaseDesc => '管理 GameData 知识库';
 
   @override
   String get apiSettingsTitle => 'API 设置';
@@ -58,16 +58,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get apiSettingsChatDesc => '用于 AI 对话（事实核查、梗概生成、角色扮演）。';
 
   @override
-  String get apiSettingsEmbedSection => '嵌入 API';
-
-  @override
-  String get apiSettingsEmbedDesc => '用于知识库索引（Wiki、书籍）。可使用与对话不同的提供商。';
-
-  @override
   String get apiSettingsUseSameProvider => '使用与对话相同的提供商';
-
-  @override
-  String get apiSettingsEmbedFallbackNote => '嵌入将使用上方对话 API 的配置。注意：DeepSeek 不支持嵌入——如果你使用 DeepSeek 作为对话模型，请取消勾选此项以配置单独的嵌入提供商。';
 
   @override
   String get apiSettingsLabelBaseUrl => '接口地址';
@@ -122,11 +113,6 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String kbCrawlingPages(Object count, Object site) {
     return '正在爬取 $site：$count 页...';
-  }
-
-  @override
-  String kbEmbedding(Object count, Object title) {
-    return '正在嵌入 $title（$count 个片段）...';
   }
 
   @override
@@ -228,9 +214,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importChunking => '正在分块...';
 
   @override
-  String get importEmbedding => '正在生成嵌入向量...';
-
-  @override
   String get importStoring => '正在保存到知识库...';
 
   @override
@@ -302,7 +285,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingApiTitle => '配置对话 API';
 
   @override
-  String get onboardingApiDesc => 'ArkLores 使用你自己的 AI API 密钥。\n请至少配置一个对话提供商；\n嵌入服务可在设置中稍后配置。';
+  String get onboardingApiDesc => 'ArkLores 使用你自己的 AI API 密钥。\n请配置一个对话提供商以使用 AI 功能。';
 
   @override
   String get onboardingSaveContinue => '保存并继续';
@@ -314,7 +297,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingDoneTitle => '准备就绪！';
 
   @override
-  String get onboardingDoneDesc => '你已经准备好探索明日方舟与终末地的世界了。\n\n如有需要，可前往 设置 > API 设置\n配置单独的嵌入服务提供商，\n或直接开始浏览 Wiki！';
+  String get onboardingDoneDesc => '你已经准备好探索明日方舟与终末地的世界了。\n\n可前往设置安装 GameData 知识库，\n或直接开始浏览 Wiki！';
 
   @override
   String get onboardingStartExploring => '开始探索';
@@ -327,4 +310,74 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
+
+  @override
+  String get aiTabFactCheck => '事实核查';
+
+  @override
+  String get aiTabSummary => '剧情梗概';
+
+  @override
+  String get aiTabRoleplay => '角色扮演';
+
+  @override
+  String get aiFactCheckSource => '证据范围：仅限已安装的中文 GameData';
+
+  @override
+  String get aiFactCheckEmpty => '输入一条设定或剧情说法，使用本地 GameData 证据进行核查。';
+
+  @override
+  String get aiFactCheckInputPlaceholder => '输入要核查的说法…';
+
+  @override
+  String get aiVerdictSupported => '支持';
+
+  @override
+  String get aiVerdictRefuted => '反驳';
+
+  @override
+  String get aiVerdictUncertain => '存疑';
+
+  @override
+  String get aiVerdictUnavailable => '无法确认';
+
+  @override
+  String aiVerdictSemantics(String verdict) {
+    return '事实核查结论：$verdict';
+  }
+
+  @override
+  String aiEvidenceTitle(int count) {
+    return 'GameData 证据（$count）';
+  }
+
+  @override
+  String get aiRetry => '重试';
+
+  @override
+  String get aiCancel => '取消';
+
+  @override
+  String get aiSend => '发送';
+
+  @override
+  String get aiInputPlaceholder => '输入剧情内容或设定...';
+
+  @override
+  String get aiSummaryInputPlaceholder => '输入人物、事件、地点或组织名称以生成梗概...';
+
+  @override
+  String get aiSettingsRequired => '请先在设置中配置对话 API 密钥以使用 AI 功能。';
+
+  @override
+  String get aiSettingsGoTo => '去设置';
+
+  @override
+  String get aiClearHistory => '清空对话';
+
+  @override
+  String get aiClearHistoryConfirm => '确定要清空当前的对话历史吗？';
+
+  @override
+  String get aiClearConfirmBtn => '清空';
 }
