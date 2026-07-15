@@ -32,7 +32,7 @@ All notable changes to ArkLores will be documented in this file.
 ### Known Limitations
 
 - The full external Chat matrix and Android accessibility/large-text/device coverage remain incomplete; see
-  `docs/v0.5_task_breakdown.md`.
+  `docs/RETRIEVAL_QA.md` and `docs/RELEASE_HISTORY.md`.
 - Wiki and user text remain browsing/context only and are not official GameData evidence.
 
 ## [0.4.5] - 2026-07-15
