@@ -235,7 +235,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         false;
 
     return Scaffold(
-      backgroundColor: theme.bgPrimary,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Stack(
           children: [

@@ -107,6 +107,16 @@ Additional smoke check:
 
 ## Known Limits
 
+跨 v0.6-v0.9 仍持续有效的 deferred 验收统一维护在此：
+
+- Android 真机上的 Role-play 存档恢复、长对话、取消、双语与 TalkBack。
+- Wiki WebView 原生选区、底部托盘、返回浏览、软键盘及系统选区行为。
+- Summary/Fact-check Wiki context 的真实外部 Chat 与完整 DB 检索矩阵。
+- 证据卡在横屏、极端文字缩放和 TalkBack 下的朗读/操作顺序。
+- 多角色任务参与检索矩阵、低覆盖量化和 `source_path` 到原始文件的可信导航。
+- 正式商店签名；既有 GitHub APK 使用 Android Debug certificate。
+- v0.9 双主题/双语自动截图回读与代表性 Android 真机截图。
+
 - Story chunks 当前仍以 FTS / LIKE 为主，没有实体级剧情索引。
 - `肉鸽`、`秘录`、`模组` 等归一化是规则表，不是完整同义词知识库。
 - `莱茵生命`、`萨卡兹王庭` 等宽泛组织 query 当前可命中相关干员档案，但 GameData DB 尚未构建组织级汇总实体。

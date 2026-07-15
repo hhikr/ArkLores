@@ -3,10 +3,11 @@
 > Arknights AI-enhanced reading companion - 明日方舟剧情智能助手
 
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Flutter 应用。
-v0.8.0 使用中文 GameData release asset 作为主知识源，并提供带原文引用的梗概、
+当前版本 v0.9.0 已完成双主题设计系统与设置界面重构，并继续使用中文 GameData release asset
+作为主知识源，并提供带原文引用的梗概、
 事实核查、证据约束的角色扮演，以及 Wiki 阅读上下文转交到 AI workflow。
 
-Latest release: [v0.8.0](https://github.com/hhikr/ArkLores/releases/tag/v0.8.0)
+Latest release: [v0.9.0](https://github.com/hhikr/ArkLores/releases/tag/v0.9.0)
 
 ## 当前方向
 
@@ -25,9 +26,10 @@ Latest release: [v0.8.0](https://github.com/hhikr/ArkLores/releases/tag/v0.8.0)
 
 ## 发布资产
 
-v0.8.0 GitHub Release 包含：
+v0.9.0 GitHub Release 包含：
 
-- `ArkLores-0.8.0.apk`：Android release-mode debug-certificate 验收包。
+- `ArkLores-0.9.0.apk`：Android release-mode debug-certificate 验收包，SHA-256
+  `a261919380865efa1ed22f11f4eba09558adfeee1095ce4068d5a2cb8c5b686c`。
 - `arklores_gamedata_zh.db.gz`：schema 2 中文 GameData DB，SHA-256
   `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5`。
 - `gamedata_manifest.json` / `gamedata_build_report.json`：来源、计数、大小和 hash 元数据。
@@ -87,5 +89,5 @@ tools/
 docs/
 ```
 
-开发文档入口见 [`docs/README.md`](docs/README.md)。当前架构以
-[`docs/implementation_plan.md`](docs/implementation_plan.md) 为准。
+完整运行原理见 [`docs/ARKLORES_V0.9_TECHNICAL_REPORT.md`](docs/ARKLORES_V0.9_TECHNICAL_REPORT.md)，
+当前路线与跨版本约束见 [`docs/implementation_plan.md`](docs/implementation_plan.md)。

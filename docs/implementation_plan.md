@@ -3,7 +3,7 @@
 ## 2026-07 Architecture Decision
 
 ArkLores 自 v0.4.5 起使用中文 GameData release asset 作为主知识源；当前 release 为
-v0.8.0，兼容 GameData schema 2。
+v0.9.0，兼容 GameData schema 2。
 
 可信度策略：
 
@@ -107,7 +107,7 @@ ReAct Loop requirements:
 实现状态（2026-07-15）：代码、deterministic 自动化测试和 scoped 剧情命题的真实 Chat
 QA 已完成。事实核查仅注册 `search_local_lore`，结论经过实际 GameData observation 二次
 校验；四态 UI、证据展开、追问历史、话题切换指令、取消和重试已接入。其余固定真实 API
-命题和 Android 真机渲染仍待执行，详见 `RELEASE_HISTORY.md` 与 `RETRIEVAL_QA.md`。
+命题和 Android 真机渲染仍待执行，详见 `RETRIEVAL_QA.md`。
 
 目标：仅依据本地 GameData 证据，把用户的设定或剧情说法判断为“支持”“反驳”
 “存疑”或“无法确认”。
@@ -162,7 +162,7 @@ v0.5 已验证的 scoped evidence 能力目前分布在 `search_local_lore`、
 角色绑定检索、多轮本地存档、继续/重开、取消/重试及双语 UI 已实现。自动 Agent 测试已
 覆盖解析、歧义、工具门槛、角色记忆约束和存档容错；`test/live_fact_check_test.dart`、
 `test/fact_check_widget_test.dart` 与完整 DB retrieval QA 已通过。更广的多角色矩阵和 Android
-真机仍待验收，详见 `v0.6_task_breakdown.md` 与 `RETRIEVAL_QA.md`。
+真机仍待验收，详见 `RETRIEVAL_QA.md`。
 
 目标：提供角色扮演能力，同时明确区分官方设定事实与模型创作内容。
 
@@ -191,7 +191,7 @@ Summary / Fact-check；转交文本会被包装为用户阅读上下文，Agent 
 Wiki context prompt 的有选区/空选区边界，以及 AI 页面接收 Summary 转交后的窄路径渲染；
 release-mode APK build、完整 DB retrieval QA、setup dry-run 和 APK 签名校验已通过。
 WebView 原生选区读取、底部面板交互、真实外部 Chat QA 和 Android 真机仍待验收，详见
-`docs/v0.7_task_breakdown.md`、`RETRIEVAL_QA.md` 与 `RELEASE_HISTORY.md`。
+`RETRIEVAL_QA.md` 与 `ARKLORES_V0.9_TECHNICAL_REPORT.md`。
 
 目标：连接 Wiki 人工阅读与 AI workflow，但不恢复 Wiki seed RAG，也不把 Wiki
 内容当作 GameData 证据。
@@ -217,7 +217,7 @@ WebView 原生选区读取、底部面板交互、真实外部 Chat QA 和 Andro
 原文片段和不暗示事实确定性的覆盖度标签。自动测试覆盖窄屏、大字、双语资源、取消与 parser
 边界；release-mode APK、完整 DB QA、release dry-run 和签名校验已通过。Android 真机截图、
 TalkBack、横屏和来源路径导航仍 deferred，详见
-`docs/v0.8_task_breakdown.md` 与 `RETRIEVAL_QA.md`。
+`RETRIEVAL_QA.md` 与 `ARKLORES_V0.9_TECHNICAL_REPORT.md`。
 
 目标：让移动端 Agent 结果便于检查，并能清楚理解结论的证据基础。
 
@@ -237,6 +237,10 @@ TalkBack、横屏和来源路径导航仍 deferred，详见
 - Summary / Fact-check 核心流程支持无障碍文字缩放及现有双语环境。
 
 ### v0.9 - 视觉重设计与代码质量重构
+
+实现状态（2026-07-15）：v0.9.0 已完成开发、自动验证、release-mode APK 构建、分支合并、
+tag、推送与 GitHub Release。完整实现审计见 `ARKLORES_V0.9_TECHNICAL_REPORT.md`，持续验收
+缺口统一维护在 `RETRIEVAL_QA.md`。
 
 目标：在核心功能和证据交互稳定后，以《明日方舟》和《明日方舟：终末地》的
 真实 UI 图片为视觉研究依据，系统重做 App 界面，并同步偿还影响 v1.0 维护性的
