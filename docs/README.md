@@ -17,6 +17,8 @@
 
 - [ANDROID_SETUP_GUIDE.md](ANDROID_SETUP_GUIDE.md)：Android 环境、构建与安装。
 - [RELEASE_HISTORY.md](RELEASE_HISTORY.md)：已封盘版本、关键迁移与发布资产记录。
+- [v0.7_task_breakdown.md](v0.7_task_breakdown.md)：v0.7 Wiki 阅读上下文转交的实现与
+  deferred 验收项。
 
 ## 文档维护规则
 

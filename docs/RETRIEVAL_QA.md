@@ -156,6 +156,10 @@ Fact-check；事实声明仍必须由既有 `search_local_lore` 和中文 GameDa
 - Passed: `test/fact_check_widget_test.dart` 的 3 项测试，其中新增覆盖 AI 页面接收
   `WikiAiContext` 后进入 Summary tab，并把 Wiki 页面标题、URL 和选中文字作为用户上下文渲染。
 - Passed: `/home/hhikr/flutter/bin/flutter analyze` 为 No issues found。
+- Passed: finalized 完整 DB retrieval QA；固定 query、`特蕾西娅` alias candidates 和
+  `activities/act21mini/level_act21mini_st07.txt:3` scoped evidence 均通过。
+- Passed: v0.7.0 release-mode APK build、setup release GameData URL/SHA dry-run 和
+  `apksigner` v1/v2 verification。
 
 Not verified:
 

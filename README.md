@@ -3,10 +3,10 @@
 > Arknights AI-enhanced reading companion - 明日方舟剧情智能助手
 
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Flutter 应用。
-v0.6.0 使用中文 GameData release asset 作为主知识源，并提供带原文引用的梗概、
-事实核查和证据约束的角色扮演。
+v0.7.0 使用中文 GameData release asset 作为主知识源，并提供带原文引用的梗概、
+事实核查、证据约束的角色扮演，以及 Wiki 阅读上下文转交到 AI workflow。
 
-Latest release: [v0.6.0](https://github.com/hhikr/ArkLores/releases/tag/v0.6.0)
+Latest release: [v0.7.0](https://github.com/hhikr/ArkLores/releases/tag/v0.7.0)
 
 ## 当前方向
 
@@ -20,12 +20,14 @@ Latest release: [v0.6.0](https://github.com/hhikr/ArkLores/releases/tag/v0.6.0)
   evidence，证据不足时明确返回存疑或无法确认。
 - Role-play 先解析 canonical character 和稳定 `entity_id`，只使用 GameData 检索作为角色事实依据；
   用户场景和生成对白不会被标记为官方游戏原文。
+- Wiki 可将选中文字、页面标题和 URL 显式转交给 Summary / Fact-check；这些内容只作为
+  用户阅读上下文，事实声明仍必须由 GameData 独立核验。
 
 ## 发布资产
 
-v0.6.0 GitHub Release 包含：
+v0.7.0 GitHub Release 包含：
 
-- `ArkLores-0.6.0.apk`：Android release-mode debug-certificate 验收包。
+- `ArkLores-0.7.0.apk`：Android release-mode debug-certificate 验收包。
 - `arklores_gamedata_zh.db.gz`：schema 2 中文 GameData DB，SHA-256
   `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5`。
 - `gamedata_manifest.json` / `gamedata_build_report.json`：来源、计数、大小和 hash 元数据。
