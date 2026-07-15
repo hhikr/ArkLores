@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/rag/seed_installer.dart';
-import '../../core/rag/vector_store.dart';
-import '../../core/rag/vector_store_provider.dart';
-import '../../core/rag/wiki_indexing_provider.dart';
-import '../../core/wiki/wiki_models.dart';
+import '../../core/gamedata/gamedata_installer.dart';
+import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
-import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
-/// Knowledge base management page.
+/// Knowledge base management page for the structured Chinese GameData DB.
 class KnowledgeBasePage extends ConsumerStatefulWidget {
   const KnowledgeBasePage({super.key});
 
@@ -21,67 +17,15 @@ class KnowledgeBasePage extends ConsumerStatefulWidget {
 }
 
 class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
-  bool _isDownloadingSeed = false;
-  int _seedDownloadedBytes = 0;
-  int? _seedTotalBytes;
-  String? _seedDownloadError;
-
-  static const List<String> _prtsCategories = [
-    'Category:干员',
-    'Category:剧情',
-  ];
-
-  static const List<String> _endfieldCategories = [
-    'Category:角色',
-    'Category:剧情',
-    'Category:阵营',
-  ];
+  bool _isDownloadingGameData = false;
+  int _gameDataDownloadedBytes = 0;
+  int? _gameDataTotalBytes;
+  String? _gameDataDownloadError;
 
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final statsAsync = ref.watch(vectorStoreStatsProvider);
-    final embeddingSettings = ref.watch(embeddingSettingsProvider);
-    final activeProfile = embeddingSettings.activeProfile;
-    final canEmbed = embeddingSettings.canEmbed;
-    final indexingState = ref.watch(wikiIndexingProvider);
-
-    // Translate the enum status into a readable string
-    String statusText = '';
-    switch (indexingState.status) {
-      case WikiIndexingStatus.starting:
-        statusText =
-            context.t.kbStartingCrawl(indexingState.currentSiteName ?? '');
-        break;
-      case WikiIndexingStatus.fetchingTitles:
-        statusText = indexingState.currentItemTitle.isNotEmpty
-            ? indexingState.currentItemTitle
-            : '正在拉取维基页面目录...';
-        break;
-      case WikiIndexingStatus.fetchingTouched:
-        statusText = '正在检查更新时间戳...';
-        break;
-      case WikiIndexingStatus.cleaningUp:
-        statusText = '正在清理本地已废弃的数据...';
-        break;
-      case WikiIndexingStatus.embedding:
-        statusText =
-            '正在生成向量：${indexingState.currentItemTitle} (${indexingState.processedCount}/${indexingState.totalCount}，跳过 ${indexingState.skippedCount} 页)';
-        break;
-      case WikiIndexingStatus.retryingFailed:
-        statusText =
-            '正在重试失败向量：已处理 ${indexingState.processedCount}/${indexingState.totalCount}';
-        break;
-      case WikiIndexingStatus.completed:
-        statusText = '更新完成！';
-        break;
-      case WikiIndexingStatus.failed:
-        statusText = '更新失败：${indexingState.error}';
-        break;
-      case WikiIndexingStatus.idle:
-        statusText = '';
-        break;
-    }
+    final gameDataStatusAsync = ref.watch(gameDataInstallStatusProvider);
 
     return Scaffold(
       backgroundColor: theme.bgPrimary,
@@ -105,269 +49,42 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             ),
           ),
           const SizedBox(height: 24),
-
-          if (!canEmbed)
-            ThemeAwareCard(
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      color: theme.warning, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '当前 embedding profile 不可用。请在 API Settings 中配置可用的 Embedding API，或切换到内置模型。',
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (!canEmbed) const SizedBox(height: 20),
-
+          Text(
+            'GameData 结构化知识库',
+            style: theme.titleFont.copyWith(fontSize: 18),
+          ),
+          const SizedBox(height: 12),
           ThemeAwareCard(
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.hub_rounded, color: theme.accentPrimary, size: 24),
+                Icon(Icons.info_outline_rounded,
+                    color: theme.accentPrimary, size: 22),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        activeProfile?.displayName ??
-                            'No active embedding profile',
-                        style: theme.titleFont.copyWith(fontSize: 15),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        activeProfile == null
-                            ? '请先创建 embedding profile'
-                            : 'Active profile · ${activeProfile.backend.name} · ${activeProfile.dimension > 0 ? '${activeProfile.dimension}d' : 'dimension pending'}',
-                        style: theme.bodyFont.copyWith(
-                          color: theme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'v0.4.5 只使用中文 GameData 结构化库：实体、别名、原始记录、剧情行、文档片段和 FTS。旧 Wiki seed 与资料导入索引链路已移除。',
+                    style: theme.bodyFont.copyWith(
+                      color: theme.textSecondary,
+                      fontSize: 13,
+                      height: 1.45,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-
-          Text(
-            context.t.kbIndexOverview,
-            style: theme.titleFont.copyWith(fontSize: 18),
-          ),
-          const SizedBox(height: 12),
-          statsAsync.when(
-            data: (stats) => _buildStatsGrid(context, stats, theme),
+          const SizedBox(height: 16),
+          gameDataStatusAsync.when(
+            data: (status) => _buildGameDataCard(context, status, theme),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) =>
-                _buildErrorCard(context.t.materialsLoadFailed(err), theme),
+            error: (err, _) => _buildErrorCard('GameData 状态读取失败：$err', theme),
           ),
-          statsAsync.when(
-            data: (stats) => _buildSeedDownloadCard(context, stats, theme),
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-          const SizedBox(height: 24),
-
-          // Failed chunks alert block (Q3 retry)
-          statsAsync.when(
-            data: (stats) {
-              if (stats.failedChunks > 0) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: ThemeAwareCard(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline_rounded,
-                            color: theme.danger, size: 28),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '发现 ${stats.failedChunks} 个条目 Embedding 失败',
-                                style: theme.bodyFont.copyWith(
-                                  color: theme.textPrimary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '可能由于 Token 超限或网络接口波动导致。这些条目暂以零向量存储，无法被 AI 检索。您可以点击重试重新获取其向量。',
-                                style: theme.bodyFont.copyWith(
-                                  color: theme.textSecondary,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: indexingState.isIndexing
-                              ? null
-                              : () => ref
-                                  .read(wikiIndexingProvider.notifier)
-                                  .retryFailedEmbeddings(),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                theme.danger.withValues(alpha: 0.15),
-                            foregroundColor: theme.danger,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Text(
-                            '立即重试',
-                            style: theme.titleFont.copyWith(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-
-          // Common indexing progress panel
-          if (indexingState.isIndexing ||
-              indexingState.status == WikiIndexingStatus.completed ||
-              indexingState.status == WikiIndexingStatus.failed) ...[
-            ThemeAwareCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (indexingState.isIndexing)
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: theme.accentPrimary,
-                          ),
-                        )
-                      else
-                        Icon(
-                          indexingState.status == WikiIndexingStatus.completed
-                              ? Icons.check_circle_outline_rounded
-                              : Icons.error_outline_rounded,
-                          color: indexingState.status ==
-                                  WikiIndexingStatus.completed
-                              ? theme.accentPrimary
-                              : theme.danger,
-                          size: 20,
-                        ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          statusText,
-                          style: theme.bodyFont.copyWith(fontSize: 14),
-                        ),
-                      ),
-                      if (indexingState.status ==
-                              WikiIndexingStatus.completed ||
-                          indexingState.status == WikiIndexingStatus.failed)
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () =>
-                              ref.read(wikiIndexingProvider.notifier).reset(),
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                        ),
-                    ],
-                  ),
-                  if (indexingState.isIndexing) ...[
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: indexingState.progress,
-                        backgroundColor: theme.divider,
-                        valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-                        minHeight: 6,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          Text(
-            context.t.kbWikiSources,
-            style: theme.titleFont.copyWith(fontSize: 18),
-          ),
-          const SizedBox(height: 12),
-          _buildWikiSection(
-            context: context,
-            ref: ref,
-            theme: theme,
-            site: WikiSite.prts,
-            icon: Icons.language_rounded,
-            disabled: !canEmbed || indexingState.isIndexing,
-            onUpdate: () => ref
-                .read(wikiIndexingProvider.notifier)
-                .indexWiki(WikiSite.prts, _prtsCategories),
-          ),
-          const SizedBox(height: 12),
-          _buildWikiSection(
-            context: context,
-            ref: ref,
-            theme: theme,
-            site: WikiSite.endfield,
-            icon: Icons.language_rounded,
-            disabled: !canEmbed || indexingState.isIndexing,
-            onUpdate: () => ref
-                .read(wikiIndexingProvider.notifier)
-                .indexWiki(WikiSite.endfield, _endfieldCategories),
-          ),
-          const SizedBox(height: 32),
-
-          statsAsync.when(
-            data: (stats) {
-              final engineText = stats.useVectorExtension
-                  ? context.t.kbEngineNative
-                  : context.t.kbEngineFallback;
-              final engineColor = stats.useVectorExtension
-                  ? theme.textSecondary.withValues(alpha: 0.6)
-                  : theme.warning.withValues(alpha: 0.8);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 32),
-                child: Center(
-                  child: Text(
-                    engineText,
-                    style: theme.bodyFont.copyWith(
-                      color: engineColor,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              );
-            },
+          const SizedBox(height: 16),
+          gameDataStatusAsync.when(
+            data: (status) => status.installed
+                ? _buildManifestGrid(context, status, theme)
+                : const SizedBox.shrink(),
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
           ),
@@ -376,179 +93,217 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     );
   }
 
-  Future<void> _downloadReleaseSeed() async {
+  Future<void> _downloadGameData() async {
     setState(() {
-      _isDownloadingSeed = true;
-      _seedDownloadedBytes = 0;
-      _seedTotalBytes = null;
-      _seedDownloadError = null;
+      _isDownloadingGameData = true;
+      _gameDataDownloadedBytes = 0;
+      _gameDataTotalBytes = null;
+      _gameDataDownloadError = null;
     });
 
     try {
-      ref.read(vectorStoreProvider).dispose();
-      await SeedInstaller().installFromReleaseAsset(
+      final installer = ref.read(gameDataInstallerProvider);
+      final installed = await installer.installFromReleaseAsset(
         overwrite: true,
         onProgress: (received, total) {
           if (!mounted) return;
           setState(() {
-            _seedDownloadedBytes = received;
-            _seedTotalBytes = total;
+            _gameDataDownloadedBytes = received;
+            _gameDataTotalBytes = total;
           });
         },
       );
-      ref.invalidate(vectorStoreStatsProvider);
-      ref.invalidate(vectorStoreInitProvider);
+      ref.invalidate(gameDataInstallStatusProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('预构建知识库已安装')),
+        SnackBar(
+          content: Text(installed
+              ? 'GameData 主知识库已安装'
+              : '当前构建未配置 GameData release asset URL'),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _seedDownloadError = _friendlySeedError(e);
+        _gameDataDownloadError = _friendlyGameDataError(e);
       });
     } finally {
       if (mounted) {
         setState(() {
-          _isDownloadingSeed = false;
+          _isDownloadingGameData = false;
         });
       }
     }
   }
 
-  String _friendlySeedError(Object error) {
+  String _friendlyGameDataError(Object error) {
     final text = '$error';
     if (text.contains('Failed host lookup') || text.contains('errno = 7')) {
-      return '无法解析 GitHub 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
+      return '无法解析下载地址。真机测试请确认手机能访问该 GitHub / 局域网 URL。';
     }
     if (text.contains('Connection timed out') || text.contains('timed out')) {
-      return '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+      return '连接超时。请切换网络，或确认临时 HTTP 服务和手机在同一网络。';
     }
     if (text.contains('HTTP 404')) {
-      return '未找到预构建知识库文件。请确认 v0.3.0 Release asset 已上传。';
+      return '未找到 GameData DB 文件。未正式发布时请使用预发布 asset 或 --dart-define 指向临时 URL。';
     }
     if (text.contains('checksum mismatch')) {
-      return '下载文件校验失败，文件可能损坏。请重新下载。';
+      return 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
     }
-    return '下载预构建知识库失败：$text';
+    return '下载 GameData 主知识库失败：$text';
   }
 
-  Widget _buildSeedDownloadCard(
+  Widget _buildGameDataCard(
     BuildContext context,
-    VectorStoreStats stats,
+    GameDataInstallStatus status,
     AppThemeTokens theme,
   ) {
-    if (stats.totalChunks > 0) return const SizedBox.shrink();
-
-    final total = _seedTotalBytes;
+    final total = _gameDataTotalBytes;
     final progress = total != null && total > 0
-        ? (_seedDownloadedBytes / total).clamp(0.0, 1.0)
+        ? (_gameDataDownloadedBytes / total).clamp(0.0, 1.0)
         : null;
     final progressText = total != null && total > 0
-        ? '${(_seedDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} MB'
-        : _seedDownloadedBytes > 0
-            ? '${(_seedDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
-            : 'Release asset';
+        ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} MB'
+        : _gameDataDownloadedBytes > 0
+            ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
+            : status.installed
+                ? '${(status.bytes / 1024 / 1024).toStringAsFixed(1)} MB'
+                : '未安装';
+    final subtitle = status.installed
+        ? [
+            if (status.entityCount != null) 'entities ${status.entityCount}',
+            if (status.recordCount != null) 'records ${status.recordCount}',
+            if (status.chunkCount != null) 'chunks ${status.chunkCount}',
+          ].join(' · ')
+        : '正式发布前可用 --dart-define=ARKLORES_GAMEDATA_DB_URL 指向预发布 asset 或局域网临时 .db.gz。';
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: ThemeAwareCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.cloud_download_rounded,
-                    color: theme.accentPrimary, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '下载预构建 Wiki 知识库',
-                        style: theme.titleFont.copyWith(fontSize: 15),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        progressText,
-                        style: theme.bodyFont.copyWith(
-                          color: theme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _isDownloadingSeed ? null : _downloadReleaseSeed,
-                  icon: Icon(
-                    _isDownloadingSeed
-                        ? Icons.downloading_rounded
-                        : Icons.download_rounded,
-                    size: 18,
-                  ),
-                  label: Text(
-                    _isDownloadingSeed ? '下载中' : '下载',
-                    style: theme.titleFont.copyWith(fontSize: 13),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.accentPrimary,
-                    foregroundColor: theme.bgPrimary,
-                    disabledBackgroundColor: theme.divider,
-                    disabledForegroundColor: theme.textSecondary,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+    return ThemeAwareCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                status.installed
+                    ? Icons.verified_rounded
+                    : Icons.dataset_linked_rounded,
+                color: status.installed ? theme.accentPrimary : theme.warning,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'GameData 主知识库',
+                      style: theme.titleFont.copyWith(fontSize: 15),
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle.isEmpty
+                          ? progressText
+                          : '$progressText · $subtitle',
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _isDownloadingGameData ? null : _downloadGameData,
+                icon: Icon(
+                  _isDownloadingGameData
+                      ? Icons.downloading_rounded
+                      : Icons.download_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _isDownloadingGameData
+                      ? '下载中'
+                      : status.installed
+                          ? '更新'
+                          : '下载',
+                  style: theme.titleFont.copyWith(fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.accentPrimary,
+                  foregroundColor: theme.bgPrimary,
+                  disabledBackgroundColor: theme.divider,
+                  disabledForegroundColor: theme.textSecondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+          if (_isDownloadingGameData) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: theme.divider,
+                valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+                minHeight: 6,
+              ),
             ),
-            if (_isDownloadingSeed) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: theme.divider,
-                  valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-                  minHeight: 6,
-                ),
-              ),
-            ],
-            if (_seedDownloadError != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _seedDownloadError!,
-                style: theme.bodyFont.copyWith(
-                  color: theme.danger,
-                  fontSize: 12,
-                ),
-              ),
-            ],
           ],
-        ),
+          if (_gameDataDownloadError != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _gameDataDownloadError!,
+              style: theme.bodyFont.copyWith(
+                color: theme.danger,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (status.installed && status.dbPath.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              status.dbPath,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary.withValues(alpha: 0.7),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildStatsGrid(
-      BuildContext context, VectorStoreStats stats, AppThemeTokens theme) {
+  Widget _buildManifestGrid(
+    BuildContext context,
+    GameDataInstallStatus status,
+    AppThemeTokens theme,
+  ) {
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: [
-        _statTile(context, context.t.kbTotalChunks, '${stats.totalChunks}',
-            Icons.dashboard_rounded, theme),
-        _statTile(context, context.t.kbWikiChunks, '${stats.wikiChunks}',
-            Icons.language_rounded, theme),
-        _statTile(context, context.t.kbBookChunks, '${stats.bookChunks}',
-            Icons.menu_book_rounded, theme),
-        _statTile(context, context.t.kbBooks, '${stats.totalBooks}',
-            Icons.book_rounded, theme),
+        _statTile(context, '实体', status.entityCount ?? '-',
+            Icons.account_tree_rounded, theme),
+        _statTile(context, '原始记录', status.recordCount ?? '-',
+            Icons.dataset_rounded, theme),
+        _statTile(context, '文档片段', status.chunkCount ?? '-',
+            Icons.article_rounded, theme),
+        _statTile(
+          context,
+          '来源提交',
+          _shortCommit(status.sourceCommit),
+          Icons.commit_rounded,
+          theme,
+        ),
       ],
     );
   }
@@ -563,77 +318,22 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           children: [
             Icon(icon, color: theme.accentPrimary, size: 20),
             const SizedBox(height: 8),
-            Text(value,
-                style: theme.titleFont.copyWith(fontSize: 28, height: 1.1)),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.titleFont.copyWith(fontSize: 24, height: 1.1),
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: theme.bodyFont
-                    .copyWith(color: theme.textSecondary, fontSize: 12)),
+            Text(
+              label,
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12,
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildWikiSection({
-    required BuildContext context,
-    required WidgetRef ref,
-    required AppThemeTokens theme,
-    required WikiSite site,
-    required IconData icon,
-    required bool disabled,
-    required VoidCallback onUpdate,
-  }) {
-    final indexingState = ref.watch(wikiIndexingProvider);
-    final isCurrentIndexing = indexingState.isIndexing &&
-        indexingState.currentSiteName == site.displayName;
-
-    return ThemeAwareCard(
-      child: Row(
-        children: [
-          Icon(icon, color: theme.accentPrimary, size: 28),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(site.displayName,
-                    style: theme.titleFont.copyWith(fontSize: 16)),
-                const SizedBox(height: 2),
-                Text(site.apiUrl,
-                    style: theme.bodyFont
-                        .copyWith(color: theme.textSecondary, fontSize: 11),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            onPressed: isCurrentIndexing
-                ? () => ref.read(wikiIndexingProvider.notifier).cancel()
-                : (disabled ? null : onUpdate),
-            icon: Icon(
-                isCurrentIndexing ? Icons.stop_rounded : Icons.sync_rounded,
-                size: 18),
-            label: Text(
-              isCurrentIndexing ? '取消' : context.t.kbUpdate,
-              style: theme.titleFont.copyWith(fontSize: 13),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isCurrentIndexing
-                  ? theme.danger.withValues(alpha: 0.15)
-                  : theme.accentPrimary,
-              foregroundColor:
-                  isCurrentIndexing ? theme.danger : theme.bgPrimary,
-              disabledBackgroundColor: theme.divider,
-              disabledForegroundColor: theme.textSecondary,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -646,12 +346,22 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           Icon(Icons.error_outline, color: theme.danger, size: 24),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(message,
-                style: theme.bodyFont
-                    .copyWith(color: theme.textPrimary, fontSize: 13)),
+            child: Text(
+              message,
+              style: theme.bodyFont.copyWith(
+                color: theme.textPrimary,
+                fontSize: 13,
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _shortCommit(String? commit) {
+    if (commit == null || commit.isEmpty) return '-';
+    if (commit.length <= 7) return commit;
+    return commit.substring(0, 7);
   }
 }

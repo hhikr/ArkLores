@@ -32,12 +32,14 @@ local_knowledge/
 raw_page.txt
 assembled_irene.md
 record_story_output.txt
+logs/
 
 # Keys and configuration
 .env
 *.key
 api_keys.dart
 secrets.dart
+tools/api_info
 
 # IDEs
 .idea/
