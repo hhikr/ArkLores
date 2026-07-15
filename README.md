@@ -3,10 +3,10 @@
 > Arknights AI-enhanced reading companion - 明日方舟剧情智能助手
 
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Flutter 应用。
-v0.7.0 使用中文 GameData release asset 作为主知识源，并提供带原文引用的梗概、
+v0.8.0 使用中文 GameData release asset 作为主知识源，并提供带原文引用的梗概、
 事实核查、证据约束的角色扮演，以及 Wiki 阅读上下文转交到 AI workflow。
 
-Latest release: [v0.7.0](https://github.com/hhikr/ArkLores/releases/tag/v0.7.0)
+Latest release: [v0.8.0](https://github.com/hhikr/ArkLores/releases/tag/v0.8.0)
 
 ## 当前方向
 
@@ -25,9 +25,9 @@ Latest release: [v0.7.0](https://github.com/hhikr/ArkLores/releases/tag/v0.7.0)
 
 ## 发布资产
 
-v0.7.0 GitHub Release 包含：
+v0.8.0 GitHub Release 包含：
 
-- `ArkLores-0.7.0.apk`：Android release-mode debug-certificate 验收包。
+- `ArkLores-0.8.0.apk`：Android release-mode debug-certificate 验收包。
 - `arklores_gamedata_zh.db.gz`：schema 2 中文 GameData DB，SHA-256
   `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5`。
 - `gamedata_manifest.json` / `gamedata_build_report.json`：来源、计数、大小和 hash 元数据。
@@ -35,16 +35,20 @@ v0.7.0 GitHub Release 包含：
 ## 开始使用
 
 ```bash
-flutter pub get
-flutter run
+/home/hhikr/flutter/bin/flutter pub get
+/home/hhikr/flutter/bin/flutter run
 ```
 
 开发期真机测试 GameData 下载可通过：
 
 ```bash
-flutter run \
-  --dart-define=ARKLORES_GAMEDATA_DB_URL=http://<host>:<port>/arklores_gamedata_zh.db.gz
+/home/hhikr/flutter/bin/flutter run \
+  --dart-define=ARKLORES_GAMEDATA_DB_URL=http://<host>:<port>/arklores_gamedata_zh.db.gz \
+  --dart-define=ARKLORES_GAMEDATA_DB_SHA256=<compressed-db-sha256>
 ```
+
+真机使用 localhost 时还需要 `adb reverse`；推荐直接使用下方 `tools/setup.sh`，详见
+[`docs/ANDROID_SETUP_GUIDE.md`](docs/ANDROID_SETUP_GUIDE.md)。
 
 也可以用统一安装向导从 GameData source 重建，或直接复用已有 `.db.gz`：
 

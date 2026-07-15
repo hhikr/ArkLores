@@ -1,6 +1,6 @@
 # ArkLores Android 配置、构建与安装
 
-本文适用于 ArkLores v0.7 开发与发布验收。当前工程版本来自 `pubspec.yaml`，Android 工程使用
+本文适用于 ArkLores v0.8.0 开发与发布验收。当前工程版本来自 `pubspec.yaml`，Android 工程使用
 API 36 编译，主知识源是单独下载的中文 GameData DB。
 
 ## 快速开始

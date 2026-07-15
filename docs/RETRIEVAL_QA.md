@@ -170,6 +170,35 @@ Not verified:
   量化。
 - Wiki 转交底部面板在双语、文字缩放、TalkBack 和常见手机尺寸下的截图或真机验收。
 
+## v0.8 Evidence UX QA
+
+v0.8 不改变 GameData schema、检索排序或 Agent 来源协议。UI 只解析
+`search_local_lore` 已有 observation 字段；非 GameData、缺少必要 provenance 字段或格式不完整
+的 result block 不会显示为 GameData 证据卡。
+
+2026-07-15 自动验证：
+
+- Passed: `test/evidence_observation_test.dart`，覆盖多 result block、含冒号原文、direct
+  candidate、非 GameData 和不完整字段拒绝。
+- Passed: `test/fact_check_widget_test.dart` 的 4 项测试；结构化证据卡在 320 logical px、
+  2x 文字缩放下展示来源路径、ranking reason 和中性覆盖度，Summary 覆盖取消与重试状态。
+- Passed: `test/agent_test.dart`，既有 GameData-only Agent、无库、无结果、歧义、截断和
+  unsupported source claim 回归保持通过。
+- Passed: `flutter analyze` 为 No issues found。
+- Passed: 完整 `flutter test`：58 passed；3 个需 `ARKLORES_RUN_LIVE_CHAT=true` 的外部
+  Chat QA 按默认离线策略 skipped。
+- Passed: 文档全量审计后按修正的 pipeline 命令重跑 finalized 完整 DB QA；11 个固定 query、
+  3 个 `特蕾西娅` alias candidates 和固定 scoped evidence 通过。
+- Passed: v0.8.0 release-mode APK build、release GameData URL/SHA dry-run、versionName/versionCode
+  检查及 `apksigner` v1/v2 verification。
+
+Not verified:
+
+- Android 真机的 Summary / Fact-check 长回答滚动、横屏、TalkBack 顺序和极端文字缩放。
+- `source_path` 到原始 GameData 文件的应用内导航；当前字段用于 provenance 检查，release asset
+  不包含可直接打开的源文件。
+- 真实外部 Chat 的 v0.8 专项矩阵；本迭代未改变 prompt、ReAct 或 retrieval 行为。
+
 ## v0.5 Fact-Check QA
 
 ### Scoped Evidence 维护约束

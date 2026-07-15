@@ -146,6 +146,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Widget _buildSummaryChatTab(AppThemeTokens theme) {
     final chatHistory = ref.watch(summaryChatProvider);
     final chatNotifier = ref.read(summaryChatProvider.notifier);
+    final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
 
     // Listen to changes in chat history to scroll to bottom
     ref.listen(summaryChatProvider, (prev, next) {
@@ -165,12 +166,20 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             children: [
               Icon(Icons.storage_rounded, size: 14, color: theme.textSecondary),
               const SizedBox(width: 6),
-              Text(
-                'Knowledge: GameData structured DB',
-                style: theme.bodyFont
-                    .copyWith(color: theme.textSecondary, fontSize: 12),
+              Expanded(
+                child: Text(
+                  context.t.aiSummarySource,
+                  style: theme.bodyFont
+                      .copyWith(color: theme.textSecondary, fontSize: 12),
+                ),
               ),
-              const Spacer(),
+              if (chatHistory.isNotEmpty)
+                IconButton(
+                  onPressed: isSending ? null : chatNotifier.retryLast,
+                  tooltip: context.t.aiRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  visualDensity: VisualDensity.compact,
+                ),
               if (chatHistory.isNotEmpty)
                 IconButton(
                   icon: Icon(Icons.delete_sweep_rounded,
@@ -202,9 +211,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         // ── Input box ────────────────────────────────────
         _buildInputArea(
           theme,
-          chatHistory.isNotEmpty && chatHistory.last.isStreaming,
-          onSend: _handleSummarySend,
+          isSending,
+          onSend: isSending ? chatNotifier.cancel : _handleSummarySend,
           hintText: context.t.aiSummaryInputPlaceholder,
+          isCancel: isSending,
         ),
       ],
     );
@@ -229,7 +239,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ask me to summarize any Arknights entity (Operator, Faction, or Event).',
+              context.t.aiSummaryEmpty,
               style: theme.bodyFont
                   .copyWith(color: theme.textSecondary, fontSize: 13),
               textAlign: TextAlign.center,
@@ -240,10 +250,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: [
-                _buildSuggestionChip(theme, 'Amiya (阿米娅)'),
-                _buildSuggestionChip(theme, 'Kal\'tsit (凯尔希)'),
-                _buildSuggestionChip(theme, 'Rhine Lab (莱茵生命)'),
-                _buildSuggestionChip(theme, 'Chernobog Incident (切尔诺伯格事件)'),
+                _buildSuggestionChip(theme, context.t.aiSummarySuggestionAmiya),
+                _buildSuggestionChip(
+                    theme, context.t.aiSummarySuggestionKaltsit),
+                _buildSuggestionChip(theme, context.t.aiSummarySuggestionRhine),
+                _buildSuggestionChip(
+                    theme, context.t.aiSummarySuggestionChernobog),
               ],
             ),
           ],

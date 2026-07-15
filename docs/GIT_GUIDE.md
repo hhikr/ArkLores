@@ -57,3 +57,9 @@ docs(rag): document structured retrieval phases
 - 运行相关 unit tests。
 - 大改动运行 `flutter analyze`。
 - 涉及 GameData 构建时运行 schema smoke build。
+- 涉及 GameData schema、builder 或检索行为时，使用 finalized 完整 DB 运行固定 retrieval QA；
+  smoke DB 不能替代完整 DB 验收。
+- 用户可见字符串修改后运行 `flutter gen-l10n`，并提交 ARB 与仓库当前跟踪的生成文件。
+- 同步 implementation plan、当前迭代 breakdown、QA 和 changelog 中真正受影响的状态；
+  未执行的真机、外部 API 或发布步骤必须保留为 deferred。
+- 最后运行 `git diff --check`，检查 staged diff、secrets、生成物和 `logs/` 状态。

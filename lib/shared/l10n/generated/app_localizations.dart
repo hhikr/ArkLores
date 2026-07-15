@@ -749,6 +749,102 @@ abstract class AppLocalizations {
   /// **'GameData evidence ({count})'**
   String aiEvidenceTitle(int count);
 
+  /// No description provided for @aiEvidenceSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Section'**
+  String get aiEvidenceSection;
+
+  /// No description provided for @aiEvidenceContentType.
+  ///
+  /// In en, this message translates to:
+  /// **'Content type'**
+  String get aiEvidenceContentType;
+
+  /// No description provided for @aiEvidenceSourcePath.
+  ///
+  /// In en, this message translates to:
+  /// **'Source path'**
+  String get aiEvidenceSourcePath;
+
+  /// No description provided for @aiEvidenceRawId.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw ID'**
+  String get aiEvidenceRawId;
+
+  /// No description provided for @aiEvidenceRetrievalType.
+  ///
+  /// In en, this message translates to:
+  /// **'Retrieval type'**
+  String get aiEvidenceRetrievalType;
+
+  /// No description provided for @aiEvidenceRankingReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Ranking reason'**
+  String get aiEvidenceRankingReason;
+
+  /// No description provided for @aiEvidenceTrustNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust note'**
+  String get aiEvidenceTrustNote;
+
+  /// No description provided for @aiCoverageDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct candidate'**
+  String get aiCoverageDirect;
+
+  /// No description provided for @aiCoverageRetrieved.
+  ///
+  /// In en, this message translates to:
+  /// **'Retrieved context'**
+  String get aiCoverageRetrieved;
+
+  /// No description provided for @aiEvidenceSemantics.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData evidence: {title}; coverage: {coverage}'**
+  String aiEvidenceSemantics(String title, String coverage);
+
+  /// No description provided for @aiThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking…'**
+  String get aiThinking;
+
+  /// No description provided for @aiReasoning.
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning…'**
+  String get aiReasoning;
+
+  /// No description provided for @aiProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing…'**
+  String get aiProcessing;
+
+  /// No description provided for @aiReasoningComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning complete'**
+  String get aiReasoningComplete;
+
+  /// No description provided for @aiUsingTool.
+  ///
+  /// In en, this message translates to:
+  /// **'Using tool: {tool}'**
+  String aiUsingTool(String tool);
+
+  /// No description provided for @aiStepsStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{status} ({count} steps)'**
+  String aiStepsStatus(String status, int count);
+
   /// No description provided for @aiRetry.
   ///
   /// In en, this message translates to:
@@ -778,6 +874,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter character, event, location or faction to summarize...'**
   String get aiSummaryInputPlaceholder;
+
+  /// No description provided for @aiSummarySource.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence: installed Chinese GameData only'**
+  String get aiSummarySource;
+
+  /// No description provided for @aiSummaryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an Arknights character, event, location, or faction to summarize from local GameData evidence.'**
+  String get aiSummaryEmpty;
+
+  /// No description provided for @aiSummarySuggestionAmiya.
+  ///
+  /// In en, this message translates to:
+  /// **'Amiya'**
+  String get aiSummarySuggestionAmiya;
+
+  /// No description provided for @aiSummarySuggestionKaltsit.
+  ///
+  /// In en, this message translates to:
+  /// **'Kal\'tsit'**
+  String get aiSummarySuggestionKaltsit;
+
+  /// No description provided for @aiSummarySuggestionRhine.
+  ///
+  /// In en, this message translates to:
+  /// **'Rhine Lab'**
+  String get aiSummarySuggestionRhine;
+
+  /// No description provided for @aiSummarySuggestionChernobog.
+  ///
+  /// In en, this message translates to:
+  /// **'Chernobog Incident'**
+  String get aiSummarySuggestionChernobog;
+
+  /// No description provided for @aiSummaryError.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary generation failed. Please retry.'**
+  String get aiSummaryError;
+
+  /// No description provided for @aiSummaryCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary generation canceled.'**
+  String get aiSummaryCanceled;
 
   /// No description provided for @aiSettingsRequired.
   ///
