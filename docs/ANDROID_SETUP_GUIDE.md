@@ -1,222 +1,184 @@
-# ArkLores — Android 构建环境配置指南
+# ArkLores Android 配置、构建与安装
 
-> 适用平台：Arch Linux（其他 Linux 发行版步骤类似）
-> 目标：从零配置 Flutter Android 构建环境，生成 APK 并在真机上安装运行
+本文适用于 ArkLores v0.5 开发分支。当前工程版本来自 `pubspec.yaml`，Android 工程使用
+API 36 编译，主知识源是单独下载的中文 GameData DB。
 
----
+## 快速开始
 
-## 快速开始（一键脚本）
-
-项目提供了自动化脚本 `tools/setup.sh`，涵盖 SDK 安装、APK 构建、设备安装全流程：
+推荐先检查环境，再使用脚本构建和安装：
 
 ```bash
-# 进入交互式部署向导
-./tools/setup.sh
-
-# 非交互：构建 debug APK
-./tools/setup.sh -a build -p android -m debug
-
-# 非交互：构建 release APK
-./tools/setup.sh -a build -p android -m release
-
-# 非交互：注入已有 GameData 临时下载 URL
-./tools/setup.sh --with-gamedata \
-  --gamedata-url http://127.0.0.1:8765/arklores_gamedata_zh.db.gz \
-  --gamedata-sha <sha256>
+/home/hhikr/flutter/bin/flutter doctor
+./tools/setup.sh -a build,install -p android -m debug
 ```
 
-脚本会自动检测缺失的组件（Java、Android SDK、adb）并引导安装。详细步骤见下文。
+`adb install -r` 会保留已安装 App 的数据。无参数运行 `./tools/setup.sh` 时，交互向导的
+默认动作也是 `build + install`。只有需要 clean install 时才明确选择 `uninstall`；卸载会
+删除 App 数据、已安装 GameData 和本地会话。
 
----
+常用命令：
 
-## 脚本参考
-
-| 用法 | 说明 |
+| 命令 | 用途 |
 | --- | --- |
-| `./tools/setup.sh` | 进入交互式部署向导 |
+| `./tools/setup.sh` | 交互式构建/安装向导，默认保留 App 数据 |
 | `./tools/setup.sh -a build -p android -m debug` | 仅构建 debug APK |
-| `./tools/setup.sh -a build -p android -m release` | 仅构建 release APK |
-| `./tools/setup.sh --with-gamedata --gamedata-source=/path/to/ArknightsGameData` | 构建并注入 GameData 临时下载参数 |
-| `./tools/setup.sh --dry-run ...` | 只解析配置，不执行构建/安装 |
-| `./tools/setup.sh --help` | 查看帮助 |
+| `./tools/setup.sh -a build,install -p android -m debug` | 构建并覆盖安装 debug APK |
+| `./tools/setup.sh -a uninstall,build,install -p android -m debug` | 明确执行 clean install |
+| `./tools/setup.sh -a build -p android -m release` | 构建本地 release-mode 验收包 |
+| `./tools/setup.sh --dry-run ...` | 只校验和显示参数，不检查环境或执行动作 |
 
-**环境变量**：
+APK 产物：
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `ANDROID_HOME` | `~/Android/Sdk` | Android SDK 路径 |
-| `FLUTTER_HOME` | `~/flutter` | Flutter SDK 路径 |
-
-以下为分步手动教程——脚本执行的就是这些步骤，供排查问题时参考。
-
-## 一、前置条件
-
-| 组件 | 说明 | 检查命令 |
-|------|------|---------|
-| **Flutter SDK** | 位于 `~/flutter` | `~/flutter/bin/flutter --version` |
-| **Java JDK** | ≥ 17（推荐 21） | `java -version` |
-| **Android SDK** | 命令行工具 + platform-tools + build-tools | 见下文 |
-
-> Java 通常已预装。如未安装：`sudo pacman -S jdk21-openjdk`
-
----
-
-## 二、安装 Android SDK（轻量方案，无 Android Studio）
-
-### 2.1 下载命令行工具
-
-```bash
-mkdir -p ~/Android/Sdk
-cd ~/Android/Sdk
-wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-unzip commandlinetools-linux-*_latest.zip
-rm commandlinetools-linux-*_latest.zip
+```text
+build/app/outputs/flutter-apk/app-debug.apk
+build/app/outputs/flutter-apk/app-release.apk
 ```
 
-### 2.2 整理目录结构
+## 环境要求
 
-SDK Manager 要求工具位于 `cmdline-tools/latest/` 子目录：
+| 组件 | 当前要求 | 检查方式 |
+| --- | --- | --- |
+| Flutter | 项目支持的 Flutter / Dart SDK | `flutter --version` |
+| Java | JDK 17 或更新版本 | `java -version` |
+| Android SDK | platform 36、build-tools 34.0.0、platform-tools | `sdkmanager --list_installed` |
+| Android 设备 | 已开启 USB 调试并授权 | `adb devices` |
 
-```bash
-mkdir -p ~/Android/Sdk/cmdline-tools/latest
-mv ~/Android/Sdk/cmdline-tools/bin ~/Android/Sdk/cmdline-tools/latest/
-mv ~/Android/Sdk/cmdline-tools/lib ~/Android/Sdk/cmdline-tools/latest/
-mv ~/Android/Sdk/cmdline-tools/*.* ~/Android/Sdk/cmdline-tools/latest/
+默认路径：
+
+```text
+FLUTTER_HOME=$HOME/flutter
+ANDROID_HOME=$HOME/Android/Sdk
 ```
 
-### 2.3 安装 SDK 组件
+可通过同名环境变量覆盖。脚本在缺少 SDK 时会安装 command-line tools；已有 SDK 也会
+检查并补齐 API 36 和当前已验证的 build-tools 34.0.0。
+
+手动安装 SDK 组件：
 
 ```bash
-# 接受所有许可证
-yes | ~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager \
-  --sdk_root=$HOME/Android/Sdk --licenses
-
-# 安装必要组件
-~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager \
-  --sdk_root=$HOME/Android/Sdk \
+$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+  --sdk_root="$ANDROID_HOME" \
   "platform-tools" \
-  "platforms;android-34" \
+  "platforms;android-36" \
   "build-tools;34.0.0"
+
+/home/hhikr/flutter/bin/flutter doctor --android-licenses
 ```
 
-> `platforms;android-34` 是 Flutter 当前使用的目标 SDK 版本。
-> 首次 `flutter build` 时 Gradle 会自动补齐缺失的版本（如 android-35）。
+## GameData 真机测试
 
-### 2.4 配置环境变量
+App 不内置数据库。构建时通过以下参数配置可下载的 `.db.gz`：
 
-```bash
-echo 'export ANDROID_HOME=$HOME/Android/Sdk' >> ~/.zshrc
-echo 'export PATH=$PATH:$ANDROID_HOME/platform-tools' >> ~/.zshrc
-source ~/.zshrc
+```text
+ARKLORES_GAMEDATA_DB_URL
+ARKLORES_GAMEDATA_DB_SHA256
 ```
 
-### 2.5 接受 Flutter 的 Android 许可证
+### 从本地 GameData 源构建
+
+连接并授权 Android 设备后运行：
 
 ```bash
-~/flutter/bin/flutter doctor --android-licenses
+./tools/setup.sh \
+  -a build,install \
+  -p android \
+  -m debug \
+  --with-gamedata \
+  --gamedata-source=/path/to/ArknightsGameData
 ```
 
-### 2.6 验证
+脚本会构建并压缩 DB、计算 SHA256、启动临时 HTTP 服务，并优先配置：
 
-```bash
-~/flutter/bin/flutter doctor
+```text
+adb reverse tcp:8765 tcp:8765
 ```
 
-输出应包含：`[✓] Android toolchain - develop for Android devices`
+此时注入 App 的 `http://127.0.0.1:8765/...` 通过 USB 转发访问开发机，而不是直接访问
+手机本身。若不使用 adb reverse，添加 `--no-adb-reverse`，脚本会尝试使用局域网地址；
+手机和电脑必须位于可互访网络。
 
----
+`--gamedata-story-limit=N` 只适合快速 schema/smoke DB，不得用来代替完整 DB 检索验收。
 
-## 三、构建 APK
+### 使用已有下载资产
 
-### 3.1 Debug APK（开发测试用，≈80MB）
+推荐使用手机可访问的 HTTPS URL，并必须提供压缩文件 SHA256：
 
 ```bash
-cd ~/ArkLores
-export ANDROID_HOME=$HOME/Android/Sdk
-~/flutter/bin/flutter build apk --debug
+./tools/setup.sh \
+  -a build,install \
+  -p android \
+  -m debug \
+  --gamedata-url=https://example.invalid/arklores_gamedata_zh.db.gz \
+  --gamedata-sha=<64位十六进制SHA256>
 ```
 
-产物：`build/app/outputs/flutter-apk/app-debug.apk`
+若 URL 使用 `127.0.0.1` 或 `localhost`，脚本必须检测到已连接设备并成功配置
+`adb reverse`，否则会停止，避免生成手机无法下载的包。
 
-### 3.2 Release APK（正式使用，更小更快）
+仅临时开发且明确接受压缩包未校验风险时可以使用：
 
-```bash
-~/flutter/bin/flutter build apk --release
+```text
+--allow-unverified-gamedata
 ```
 
-产物：`build/app/outputs/flutter-apk/app-release.apk`
+该选项不得用于 release 验收、分发或发布资产。
 
-> Release 包需要配置签名密钥。debug 包使用自动生成的 debug keystore，
-> 无需额外配置即可安装。
+安装后打开：`Settings -> Knowledge Base -> GameData 主知识库 -> 下载/更新`。
 
----
+## Release 签名边界
 
-## 四、安装到手机
+当前 `android/app/build.gradle` 的 `release` build type 仍使用 debug signing config。
+因此：
 
-### 方式 A：USB 数据线 + adb（推荐）
+- `-m release` 可以生成优化后的本地验收 APK；
+- 该 APK 不是正式生产签名包；
+- 脚本检测到 debug signing 时会显示警告；
+- 正式发布必须另行配置受保护的 release keystore，且不得把 keystore、密码或
+  `key.properties` 提交到仓库。
+
+本指南和 `setup.sh` 不执行 tag、GitHub Release、asset 上传或 push。
+
+## 常见问题
+
+### 找不到设备
 
 ```bash
-# 1. 手机开启「开发者选项」→「USB 调试」
-# 2. 连接数据线，手机上同意调试授权
-# 3. 检查设备
 $ANDROID_HOME/platform-tools/adb devices
-# 4. 安装
-$ANDROID_HOME/platform-tools/adb install build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-### 方式 B：文件传输手动安装
+状态必须是 `device`。若为 `unauthorized`，解锁手机并确认 USB 调试授权。
 
-1. 将 APK 传到手机（微信 / 数据线 / 网盘）
-2. 手机文件管理器中点击 APK 文件
-3. 允许「安装未知来源应用」
+### GameData 下载失败
 
----
+依次检查：
 
-## 五、常见问题
+1. URL 是否能从手机访问；localhost 是否已成功配置 adb reverse。
+2. 临时 HTTP 服务是否仍在运行。
+3. SHA256 是否对应压缩后的 `.db.gz`，而不是解压后的 DB。
+4. Android 网络是否允许当前开发 URL；正式验收优先使用 HTTPS。
 
-### Q：构建报错 `JdkImageTransform` / AGP 相关
+### 需要保留数据升级
 
-**原因**：Java 21 + Android Gradle Plugin < 8.2.1 不兼容
-
-**解决**：升级 `android/settings.gradle` 中的 AGP 版本：
-
-```gradle
-plugins {
-    id "com.android.application" version "8.2.2" apply false  // ≥ 8.2.1
-    id "org.jetbrains.kotlin.android" version "1.9.24" apply false
-}
-```
-
-### Q：`flutter doctor` 找不到 Android SDK
-
-**原因**：`ANDROID_HOME` 环境变量未设置
-
-**解决**：
+不要选择 `uninstall`。使用：
 
 ```bash
-echo 'export ANDROID_HOME=$HOME/Android/Sdk' >> ~/.zshrc
-source ~/.zshrc
+./tools/setup.sh -a build,install -p android -m debug
 ```
 
-### Q：adb 找不到设备
+### AGP 或 JDK 构建错误
 
-**原因**：未开启 USB 调试或缺少 udev 规则
-
-**解决**：
+先运行：
 
 ```bash
-# 列出 USB 设备，找到手机的 vendor id
-lsusb
-# 创建 udev 规则（以 Google 设备为例）
-echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", MODE="0666"' | \
-  sudo tee /etc/udev/rules.d/51-android.rules
-sudo udevadm control --reload-rules
-# 重新插拔数据线
+/home/hhikr/flutter/bin/flutter doctor -v
 ```
 
----
+工程当前 AGP 和 Gradle 版本以 `android/settings.gradle` 与
+`android/gradle/wrapper/gradle-wrapper.properties` 为准，不要仅根据旧教程盲目修改版本。
 
-## 六、参考
+## 相关文档
 
-- [Flutter Android 安装文档](https://docs.flutter.dev/get-started/install/linux/android)
-- [Android Studio 命令行工具](https://developer.android.com/studio/command-line)
+- `docs/GAMEDATA_BUILD_PIPELINE.md`
+- `docs/RETRIEVAL_QA.md`
+- `docs/GIT_GUIDE.md`
+- <https://docs.flutter.dev/get-started/install/linux/android>
