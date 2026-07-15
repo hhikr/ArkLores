@@ -9,6 +9,7 @@ import '../../../core/llm/llm_client.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../evidence_observation.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
 /// and lazy loading of citations.
@@ -136,6 +137,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       content = context.t.aiRoleplayError;
     } else if (content == '[ROLEPLAY_CANCELED]') {
       content = context.t.aiRoleplayCanceled;
+    } else if (content == '[SUMMARY_ERROR]') {
+      content = context.t.aiSummaryError;
+    } else if (content == '[SUMMARY_CANCELED]') {
+      content = context.t.aiSummaryCanceled;
     }
 
     // Scan for citation UUIDs
@@ -205,8 +210,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ),
         ),
         if (citationIds.isNotEmpty) const SizedBox(height: 8),
-        if (msg.factCheckVerdict != null && _evidenceObservations.isNotEmpty)
-          _buildEvidenceSection(theme),
+        if (_evidenceRecords.isNotEmpty) _buildEvidenceSection(theme),
       ],
     );
   }
@@ -217,6 +221,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           step.content.contains('Source Kind: GameData'))
       .map((step) => step.content)
       .toList(growable: false);
+
+  List<EvidenceRecord> get _evidenceRecords => [
+        for (final observation in _evidenceObservations)
+          ...parseGameDataEvidence(observation),
+      ];
 
   Widget _buildVerdictBanner(AppThemeTokens theme, FactCheckVerdict verdict) {
     final config = switch (verdict) {
@@ -276,29 +285,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
         leading: Icon(Icons.source_rounded, color: theme.accentPrimary),
         title: Text(
-          context.t.aiEvidenceTitle(_evidenceObservations.length),
+          context.t.aiEvidenceTitle(_evidenceRecords.length),
           style: theme.titleFont.copyWith(fontSize: 13),
         ),
         children: [
-          for (final observation in _evidenceObservations)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(top: 6),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: theme.bgPrimary,
-                border: Border.all(color: theme.divider),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: SelectableText(
-                observation,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 11,
-                  height: 1.4,
-                ),
-              ),
-            ),
+          for (final record in _evidenceRecords)
+            _buildEvidenceRecord(theme, record),
         ],
       ),
     );
@@ -309,7 +301,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Thinking',
+          context.t.aiThinking,
           style:
               theme.bodyFont.copyWith(color: theme.textSecondary, fontSize: 13),
         ),
@@ -330,21 +322,21 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final stepsCount = widget.message.steps.length;
 
     // Determine current activity status
-    var statusText = 'Completed reasoning';
+    var statusText = context.t.aiReasoningComplete;
     var isThinking = false;
     if (widget.message.isStreaming) {
       isThinking = true;
       if (widget.message.steps.isNotEmpty) {
         final lastStep = widget.message.steps.last;
         if (lastStep.type == ReActEventType.toolCall) {
-          statusText = 'Using tool: ${lastStep.toolName}';
+          statusText = context.t.aiUsingTool(lastStep.toolName ?? '');
         } else if (lastStep.type == ReActEventType.thought) {
-          statusText = 'Reasoning...';
+          statusText = context.t.aiReasoning;
         } else {
-          statusText = 'Processing...';
+          statusText = context.t.aiProcessing;
         }
       } else {
-        statusText = 'Thinking...';
+        statusText = context.t.aiThinking;
       }
     }
 
@@ -374,7 +366,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      '$statusText ($stepsCount steps)',
+                      context.t.aiStepsStatus(statusText, stepsCount),
                       softWrap: true,
                       style: theme.bodyFont.copyWith(
                         color: theme.textSecondary,
@@ -415,6 +407,86 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       ),
     );
   }
+
+  Widget _buildEvidenceRecord(AppThemeTokens theme, EvidenceRecord record) {
+    final coverage = record.isDirectCandidate
+        ? context.t.aiCoverageDirect
+        : context.t.aiCoverageRetrieved;
+    return Semantics(
+      container: true,
+      label: context.t.aiEvidenceSemantics(record.title, coverage),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: theme.bgPrimary,
+          border: Border.all(color: theme.divider),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(record.title,
+                    style: theme.titleFont.copyWith(
+                        color: theme.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold)),
+                _evidenceBadge(theme, coverage),
+              ],
+            ),
+            if (record.section != null)
+              _metadata(context.t.aiEvidenceSection, record.section!, theme),
+            if (record.contentType != null)
+              _metadata(
+                  context.t.aiEvidenceContentType, record.contentType!, theme),
+            _metadata(
+                context.t.aiEvidenceRetrievalType, record.retrievalType, theme),
+            _metadata(
+                context.t.aiEvidenceRankingReason, record.rankingReason, theme),
+            if (record.sourcePath != null)
+              _metadata(
+                  context.t.aiEvidenceSourcePath, record.sourcePath!, theme),
+            if (record.rawId != null)
+              _metadata(context.t.aiEvidenceRawId, record.rawId!, theme),
+            _metadata(context.t.aiEvidenceTrustNote, record.trustNote, theme),
+            if (record.excerpt.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              SelectableText(record.excerpt,
+                  style: theme.bodyFont.copyWith(
+                      color: theme.textPrimary, fontSize: 12, height: 1.4)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metadata(String label, String value, AppThemeTokens theme) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: SelectableText('$label: $value',
+            style: theme.bodyFont.copyWith(
+                color: theme.textSecondary, fontSize: 11, height: 1.35)),
+      );
+
+  Widget _evidenceBadge(AppThemeTokens theme, String label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: theme.accentPrimary.withValues(alpha: 0.12),
+          border: Border.all(color: theme.accentPrimary.withValues(alpha: 0.4)),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(label,
+            style: theme.bodyFont.copyWith(
+                color: theme.accentPrimary,
+                fontSize: 10,
+                fontWeight: FontWeight.bold)),
+      );
 
   Widget _buildStepRow(AppThemeTokens theme, ReActStep step) {
     IconData icon;

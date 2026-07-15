@@ -364,6 +364,60 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get aiEvidenceSection => 'Section';
+
+  @override
+  String get aiEvidenceContentType => 'Content type';
+
+  @override
+  String get aiEvidenceSourcePath => 'Source path';
+
+  @override
+  String get aiEvidenceRawId => 'Raw ID';
+
+  @override
+  String get aiEvidenceRetrievalType => 'Retrieval type';
+
+  @override
+  String get aiEvidenceRankingReason => 'Ranking reason';
+
+  @override
+  String get aiEvidenceTrustNote => 'Trust note';
+
+  @override
+  String get aiCoverageDirect => 'Direct candidate';
+
+  @override
+  String get aiCoverageRetrieved => 'Retrieved context';
+
+  @override
+  String aiEvidenceSemantics(String title, String coverage) {
+    return 'GameData evidence: $title; coverage: $coverage';
+  }
+
+  @override
+  String get aiThinking => 'Thinking…';
+
+  @override
+  String get aiReasoning => 'Reasoning…';
+
+  @override
+  String get aiProcessing => 'Processing…';
+
+  @override
+  String get aiReasoningComplete => 'Reasoning complete';
+
+  @override
+  String aiUsingTool(String tool) {
+    return 'Using tool: $tool';
+  }
+
+  @override
+  String aiStepsStatus(String status, int count) {
+    return '$status ($count steps)';
+  }
+
+  @override
   String get aiRetry => 'Retry';
 
   @override
@@ -377,6 +431,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiSummaryInputPlaceholder => 'Enter character, event, location or faction to summarize...';
+
+  @override
+  String get aiSummarySource => 'Evidence: installed Chinese GameData only';
+
+  @override
+  String get aiSummaryEmpty => 'Enter an Arknights character, event, location, or faction to summarize from local GameData evidence.';
+
+  @override
+  String get aiSummarySuggestionAmiya => 'Amiya';
+
+  @override
+  String get aiSummarySuggestionKaltsit => 'Kal\'tsit';
+
+  @override
+  String get aiSummarySuggestionRhine => 'Rhine Lab';
+
+  @override
+  String get aiSummarySuggestionChernobog => 'Chernobog Incident';
+
+  @override
+  String get aiSummaryError => 'Summary generation failed. Please retry.';
+
+  @override
+  String get aiSummaryCanceled => 'Summary generation canceled.';
 
   @override
   String get aiSettingsRequired => 'Please configure your Chat API Key in settings first to use AI features.';

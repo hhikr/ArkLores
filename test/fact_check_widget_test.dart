@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
@@ -34,8 +36,13 @@ void main() {
         ReActStep(
           type: ReActEventType.toolObservation,
           content: '=== Result #1 ===\nSource Kind: GameData\n'
+              'Retrieval Type: structured_entity\n'
+              'Ranking Reason: exact entity match\n'
               'Content Type: operator_profile\n'
-              'Source Path: character_table.json\nRaw ID: char_002_amiya',
+              'Title: 阿米娅\nSection: 档案资料\n'
+              'Source Path: character_table.json\nRaw ID: char_002_amiya\n'
+              'Trust: GameData / game original text (highest).\n'
+              'Content Excerpt:\n罗德岛公开领袖。',
         ),
       ],
       timestamp: DateTime(2026),
@@ -71,6 +78,42 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.textContaining('character_table.json'), findsOneWidget);
+    expect(find.text('直接候选证据'), findsNothing);
+    expect(find.text('检索上下文'), findsOneWidget);
+    expect(find.textContaining('exact entity match'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('summary exposes localized cancel and retry states',
+      (tester) async {
+    final client = _PendingLLMClient();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          initialApiConfigProvider.overrideWithValue(
+            const LLMConfig(chatApiKey: 'test-key'),
+          ),
+          llmClientProvider.overrideWithValue(client),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const AiChatPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('剧情梗概').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '阿米娅');
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pump();
+    expect(find.byTooltip('取消'), findsOneWidget);
+    await tester.tap(find.byTooltip('取消'));
+    await tester.pump();
+    expect(find.text('已取消本次梗概生成。'), findsOneWidget);
+    expect(find.byTooltip('重试'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -227,4 +270,26 @@ class _FinalAnswerLLMClient extends LLMClient {
   }) {
     throw UnimplementedError();
   }
+}
+
+class _PendingLLMClient extends LLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) =>
+      Completer<String>().future;
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) =>
+      Completer<String>().future;
 }
