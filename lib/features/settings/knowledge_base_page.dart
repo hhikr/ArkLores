@@ -28,7 +28,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     final gameDataStatusAsync = ref.watch(gameDataInstallStatusProvider);
 
     return Scaffold(
-      backgroundColor: theme.bgPrimary,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(

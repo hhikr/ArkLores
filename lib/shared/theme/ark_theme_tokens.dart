@@ -1,7 +1,7 @@
 import 'dart:ui' show Color;
 
 import 'package:flutter/painting.dart'
-    show TextStyle, FontWeight, BorderRadius, Radius, BoxShadow, Offset;
+    show TextStyle, FontWeight, BorderRadius, BoxShadow, Offset;
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_theme.dart';
@@ -19,21 +19,25 @@ class ArkThemeTokens implements AppThemeTokens {
 
   // ─── Backgrounds ───────────────────────────────────────────────
   @override
-  final Color bgPrimary = const Color(0xFF0B0D10); // Near-black with blue tint
+  final Color bgPrimary = const Color(0xFF090A0B);
   @override
-  final Color bgSecondary = const Color(0xFF13181F); // Deep slate-gray blue
+  final Color bgSecondary = const Color(0xFF151617);
 
   // ─── Cards & Surfaces ──────────────────────────────────────────
   @override
-  final Color cardSurface = const Color(0xFF1A2233); // Blue-tinted dark gray
+  final Color cardSurface = const Color(0xFF202224);
   @override
-  final Color cardBorder = const Color(0xFF1E2D40); // Deep blue-gray
+  final Color cardBorder = const Color(0xFF505457);
+  @override
+  final Color surfaceElevated = const Color(0xFF292C2E);
+  @override
+  final Color surfaceOverlay = const Color(0xC20E0F10);
 
   // ─── Accents ───────────────────────────────────────────────────
   @override
-  final Color accentPrimary = const Color(0xFF4A90D9); // Cold steel blue
+  final Color accentPrimary = const Color(0xFF0BA0D0);
   @override
-  final Color accentSecondary = const Color(0xFFA8C8E8); // Pale ice blue
+  final Color accentSecondary = const Color(0xFFCFD6DA);
 
   // ─── Semantic colors ───────────────────────────────────────────
   @override
@@ -43,17 +47,19 @@ class ArkThemeTokens implements AppThemeTokens {
 
   // ─── Text ──────────────────────────────────────────────────────
   @override
-  final Color textPrimary = const Color(0xFFE2E8F0); // Light cold white
+  final Color textPrimary = const Color(0xFFF1F3F4);
   @override
-  final Color textSecondary = const Color(0xFF6B7F99); // Gray-blue
+  final Color textSecondary = const Color(0xFFA7AAAC);
+  @override
+  final Color textMuted = const Color(0xFF6F7274);
 
   // ─── Borders / Dividers ────────────────────────────────────────
   @override
-  final Color divider = const Color(0xFF1E2D40); // Deep blue-gray
+  final Color divider = const Color(0xFF383B3D);
 
   // ─── Dynamic / Glow effects ────────────────────────────────────
   @override
-  final Color glow = const Color(0xFF5BA3E0); // Bright blue
+  final Color glow = const Color(0xFF0BA0D0);
 
   // ─── Source badge colors for citation cards ────────────────────
   @override
@@ -63,14 +69,15 @@ class ArkThemeTokens implements AppThemeTokens {
 
   // ─── Bottom navigation ─────────────────────────────────────────
   @override
-  final Color navSelectedItem = const Color(0xFF4A90D9);
+  final Color navSelectedItem = const Color(0xFF0BA0D0);
   @override
-  final Color navUnselectedItem = const Color(0xFF6B7F99);
+  final Color navUnselectedItem = const Color(0xFF8C979D);
 
   // ─── Typography ────────────────────────────────────────────────
   @override
-  late final TextStyle titleFont = GoogleFonts.rajdhani(
-    fontWeight: FontWeight.w600,
+  late final TextStyle titleFont = GoogleFonts.getFont(
+    'Noto Sans SC',
+    fontWeight: FontWeight.w700,
     fontSize: 18,
     color: textPrimary,
   );
@@ -86,19 +93,20 @@ class ArkThemeTokens implements AppThemeTokens {
 
   // ─── Geometry ──────────────────────────────────────────────────
   @override
-  final BorderRadius cardRadius = BorderRadius.only(
-    topRight: const Radius.circular(12),
-    topLeft: const Radius.circular(4),
-    bottomRight: const Radius.circular(4),
-    bottomLeft: const Radius.circular(4),
-  );
+  final BorderRadius cardRadius = BorderRadius.zero;
 
   @override
   final List<BoxShadow> cardShadow = [
     BoxShadow(
       color: const Color(0xFF000000).withValues(alpha: 0.3),
       offset: const Offset(0, 2),
-      blurRadius: 8,
+      blurRadius: 6,
     ),
   ];
+
+  @override
+  final bool isEndfield = false;
+
+  @override
+  final double cornerCut = 10;
 }

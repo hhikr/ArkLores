@@ -98,7 +98,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final currentLocale = ref.watch(localeProvider);
 
     return Scaffold(
-      backgroundColor: theme.bgPrimary,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: Column(
           children: [
