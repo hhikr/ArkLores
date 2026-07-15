@@ -57,3 +57,6 @@ tools/
   build_gamedata_database.dart
 docs/
 ```
+
+开发文档入口见 [`docs/README.md`](docs/README.md)。当前架构以
+[`docs/implementation_plan.md`](docs/implementation_plan.md) 为准。
