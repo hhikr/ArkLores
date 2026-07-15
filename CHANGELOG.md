@@ -4,6 +4,8 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-15
+
 ### Added
 
 - Added shared industrial UI primitives for angular surfaces, section markers, responsive page headers, and layered perspective grid backdrops across app routes.
@@ -14,7 +16,25 @@ All notable changes to ArkLores will be documented in this file.
 - Rebuilt the Night theme around neutral tactical black/gray and `#0BA0D0` wayfinding, and the Day theme around soft white/gray surfaces with `#F8D439` emphasis.
 - Redesigned settings and bottom navigation with a shared information architecture, equal centered card widths, responsive section labels, and higher-contrast light-theme icons.
 - Expanded the application-wide Material theme for consistent app bars, inputs, buttons, tabs, progress states, and feedback surfaces.
-- Bumped the development version to `0.9.0+9`.
+- Released app version `0.9.0+9`.
+
+### Verification
+
+- Verified the full offline test suite (61 passed; 3 opt-in external Chat tests skipped),
+  `flutter analyze`, finalized GameData retrieval QA, release-mode APK build, and APK signing.
+- Published `v0.9.0` to GitHub after merging the completed `dev` line into `main`.
+
+### Release Assets
+
+- `ArkLores-0.9.0.apk`: 27167887 bytes, SHA-256
+  `a261919380865efa1ed22f11f4eba09558adfeee1095ce4068d5a2cb8c5b686c`.
+- `arklores_gamedata_zh.db.gz`: 115092521 bytes, schema 2, SHA-256
+  `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5`.
+- `gamedata_manifest.json`: 984 bytes, SHA-256
+  `e8d45acb2d3cc5ff3a33a386f77de7caefda9193d07b106c9fc6d8bf1e4cc90d`.
+- `gamedata_build_report.json`: 690 bytes, SHA-256
+  `7116dc394db92173682e2560e0ea11ea115434816b227340f6869cdb908cb3db`.
+- The APK is release-mode but signed with the Android Debug certificate, not a store production certificate.
 
 ## [0.8.0] - 2026-07-15
 
@@ -123,7 +143,7 @@ All notable changes to ArkLores will be documented in this file.
 ### Known Limitations
 
 - The full external Chat matrix and Android accessibility/large-text/device coverage remain incomplete; see
-  `docs/RETRIEVAL_QA.md` and `docs/RELEASE_HISTORY.md`.
+  `docs/RETRIEVAL_QA.md`.
 - Wiki and user text remain browsing/context only and are not official GameData evidence.
 
 ## [0.4.5] - 2026-07-15
@@ -158,3 +178,16 @@ Superseded by the v0.4.5 GameData-first architecture.
 ## [0.1.0] - 2026-07-12
 
 - Initialized Flutter project, theme system, bottom navigation, placeholder pages, and Android build setup.
+
+## Historical Release Metadata
+
+Detailed task snapshots remain available in Git history. Durable asset records are consolidated here:
+
+| Version | APK SHA-256 | GameData DB.gz SHA-256 | Notes |
+| --- | --- | --- | --- |
+| v0.4.5 | `a81d3c4ef849ca09319d8516226cbeaa1ea63d75b7654a299fa64acdc9c07977` | `cfd3bfaeeefdf7477ae0c9342cab61ab4feb3367bb11b820ba8075c35dc70675` | GameData-first/schema 1 transition |
+| v0.5.0 | `58f4b42a5ac239af0a0e5d2f33a2dae786ea80ab87fb138395bd317d42e72b37` | `c96599a7291751ada06f8d9b52b90fe0193615beb8eac39488bb49bd03694b10` | schema 2 scoped evidence |
+| v0.6.0 | `a6d5dcc55b775fa08dc0609ca5e6dd91f672ca44bc906abaf3005c029d898e91` | `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5` | Role-play; debug-certificate APK |
+| v0.7.0 | `a656154d5cf0495fd70f12332b45da8ec29e2b7b9356e85bcb0e962c7ed96496` | `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5` | Wiki context handoff |
+| v0.8.0 | `f246e55b53690f3139a29d82d4f8c2d1abfecb59068bf5d204b67785f752c5e3` | `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5` | Evidence UX; debug-certificate APK |
+| v0.9.0 | `a261919380865efa1ed22f11f4eba09558adfeee1095ce4068d5a2cb8c5b686c` | `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5` | Visual system; debug-certificate APK |

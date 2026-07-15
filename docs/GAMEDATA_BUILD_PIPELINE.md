@@ -3,8 +3,38 @@
 > 本文档定义当前 schema 2 中文 GameData DB 的构建、FTS 索引、验收和 GitHub Release
 > 分发规范。v0.4.5 是 GameData-first 架构起点，不是本规范的版本上限。
 
-内容分类和 importer 覆盖范围必须遵循
-[ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md](ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md)。
+内容分类、普查和 importer 覆盖范围由本文统一定义。
+
+## 内容分类与普查原则
+
+解包数据进入 importer 前必须先遍历文件树、识别中文剧情/档案/描述/语音来源、建立层级
+分类，再转换成 normalized records；不能直接从原始 JSON/TXT 生成无 provenance 的 chunk。
+
+分类同时保存层级 `content_category/content_subtype` 和便于 SQLite 过滤的扁平
+`content_type`。当前主要枚举如下：
+
+| Category | 主要 content type | 典型来源 |
+| --- | --- | --- |
+| `operator` | basic/profile/voice/record/module/skin | character、handbook、charword、uniequip、memory |
+| `story` | main/activity/side/mini/tutorial/review/record | story TXT、story/review tables |
+| `roguelike` | topic/ending/monthly/collectible/stage/event/mechanic | roguelike tables、rogue story/levels |
+| `world_item` | item/material/collectible/medal/skin/module description | item、medal、skin、uniequip tables |
+| `enemy` | profile/race/level data | enemy handbook、enemydata |
+| `stage` | stage/zone/campaign/activity-zone/tutorial description | stage、zone、campaign、levels |
+| `activity` | basic/mission/rule/reward/archive | activity、retro、mission、activity story |
+| `sandbox` | story/ending/stage/item/event/mechanic | sandbox tables、story、levels |
+| `system_text` | worldview/loading/UI/building/base-skill text | tip、main/init text、building data |
+
+基准源快照普查为 10634 个文件、5999 个含中文文本文件，其中 story 5606、Excel JSON 57、
+levels JSON 3743、bakemuzzledata JSON 702；`story_table.json` 的 2368 个条目与 TXT 在大小写
+归一后无缺失。`levels/`、`bakemuzzledata/`、`building/` 和 `[uc]lua/` 不得仅按目录整体
+导入或排除，应使用 `tools/audit_arknights_gamedata_files.py` 的目录分布、review packets 和
+CSV 明细人工复核，并标记 `core/candidate/low/exclude`。
+
+需要表达的主要层级关系包括 activity 到 stage/story/item、operator 到 voice/profile/
+record story、roguelike topic 到 monthly squad/ending/collectible/stage、sandbox activity 到
+stage/story、enemy race 到 enemy，以及 zone 到 stage。关系写入 `entity_relations`，不可只靠
+路径字符串推断。
 
 ## 目标产物
 
