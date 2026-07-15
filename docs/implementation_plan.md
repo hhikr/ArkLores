@@ -2,8 +2,8 @@
 
 ## 2026-07 Architecture Decision
 
-ArkLores 自 v0.4.5 起使用中文 GameData release asset 作为主知识源；当前未发布开发版本为
-v0.8.0，最新 release 为 v0.7.0，兼容 GameData schema 2。
+ArkLores 自 v0.4.5 起使用中文 GameData release asset 作为主知识源；当前 release 为
+v0.8.0，兼容 GameData schema 2。
 
 可信度策略：
 
@@ -212,10 +212,11 @@ WebView 原生选区读取、底部面板交互、真实外部 Chat QA 和 Andro
 
 ### v0.8 - 证据与交互体验
 
-实现状态（2026-07-15）：Summary / Fact-check 已统一来源栏、加载、取消、重试、错误和空状态；
+实现状态（2026-07-15）：v0.8.0 已封盘。Summary / Fact-check 已统一来源栏、加载、取消、重试、错误和空状态；
 `search_local_lore` observation 已通过独立 parser 转为可展开 GameData 证据卡，展示计划字段、
 原文片段和不暗示事实确定性的覆盖度标签。自动测试覆盖窄屏、大字、双语资源、取消与 parser
-边界；Android 真机截图、TalkBack、横屏和来源路径导航仍 deferred，详见
+边界；release-mode APK、完整 DB QA、release dry-run 和签名校验已通过。Android 真机截图、
+TalkBack、横屏和来源路径导航仍 deferred，详见
 `docs/v0.8_task_breakdown.md` 与 `RETRIEVAL_QA.md`。
 
 目标：让移动端 Agent 结果便于检查，并能清楚理解结论的证据基础。
