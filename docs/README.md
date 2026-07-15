@@ -19,6 +19,8 @@
 - [RELEASE_HISTORY.md](RELEASE_HISTORY.md)：已封盘版本、关键迁移与发布资产记录。
 - [v0.7_task_breakdown.md](v0.7_task_breakdown.md)：v0.7 Wiki 阅读上下文转交的实现与
   deferred 验收项。
+- [v0.8_task_breakdown.md](v0.8_task_breakdown.md)：v0.8 证据检查与 Agent 交互体验的实现、
+  自动验证和 deferred 真机项。
 
 ## 文档维护规则
 
