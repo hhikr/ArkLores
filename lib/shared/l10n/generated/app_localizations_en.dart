@@ -247,6 +247,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wikiTabEndfield => 'Endfield Wiki';
 
   @override
+  String get wikiSendToAi => 'Send to AI';
+
+  @override
+  String get wikiSendToAiDesc => 'Selected Wiki text is reading context only; factual claims are verified separately with GameData.';
+
+  @override
+  String get wikiSendToSummaryDesc => 'Summarize from the page and selected text';
+
+  @override
+  String get wikiSendToFactCheckDesc => 'Use the selected text as the claim to check';
+
+  @override
   String get bookmarksTitle => 'Bookmarks';
 
   @override

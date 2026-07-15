@@ -6,6 +6,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import 'wiki_ai_context.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/roleplay_tab.dart';
 
@@ -13,7 +14,9 @@ import 'widgets/roleplay_tab.dart';
 ///
 /// Features a TabBar for fact-check, summary, and roleplay modes.
 class AiChatPage extends ConsumerStatefulWidget {
-  const AiChatPage({super.key});
+  final WikiAiContext? initialWikiContext;
+
+  const AiChatPage({super.key, this.initialWikiContext});
 
   @override
   ConsumerState<AiChatPage> createState() => _AiChatPageState();
@@ -22,6 +25,13 @@ class AiChatPage extends ConsumerStatefulWidget {
 class _AiChatPageState extends ConsumerState<AiChatPage> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _handledInitialWikiContext = false;
+
+  int get _initialTabIndex {
+    final target = widget.initialWikiContext?.target;
+    if (target == WikiAiTarget.factCheck) return 0;
+    return 1;
+  }
 
   @override
   void dispose() {
@@ -46,10 +56,11 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final isConfigured = ref.watch(apiConfigProvider).isValid;
+    _dispatchInitialWikiContext(isConfigured);
 
     return DefaultTabController(
       length: 3,
-      initialIndex: 1, // Start on the working Summary tab
+      initialIndex: _initialTabIndex,
       child: Scaffold(
         backgroundColor: theme.bgPrimary,
         appBar: AppBar(
@@ -398,6 +409,26 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     if (text.isEmpty) return;
     _inputController.clear();
     ref.read(factCheckChatProvider.notifier).sendMessage(text);
+  }
+
+  void _dispatchInitialWikiContext(bool isConfigured) {
+    final wikiContext = widget.initialWikiContext;
+    if (_handledInitialWikiContext || wikiContext == null || !isConfigured) {
+      return;
+    }
+    _handledInitialWikiContext = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final prompt = buildWikiAiPrompt(wikiContext);
+      switch (wikiContext.target) {
+        case WikiAiTarget.summary:
+          ref.read(summaryChatProvider.notifier).sendMessage(prompt);
+          break;
+        case WikiAiTarget.factCheck:
+          ref.read(factCheckChatProvider.notifier).sendMessage(prompt);
+          break;
+      }
+    });
   }
 
   void _confirmClearHistory(

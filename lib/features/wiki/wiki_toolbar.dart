@@ -22,6 +22,8 @@ class WikiToolbar extends ConsumerWidget {
     required this.onToggleDarkMode,
     required this.onToggleBookmark,
     required this.onOpenBookmarks,
+    required this.onSendToAi,
+    required this.sendToAiTooltip,
   });
 
   final bool canGoBack;
@@ -35,6 +37,8 @@ class WikiToolbar extends ConsumerWidget {
   final VoidCallback onToggleDarkMode;
   final VoidCallback onToggleBookmark;
   final VoidCallback onOpenBookmarks;
+  final VoidCallback onSendToAi;
+  final String sendToAiTooltip;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -77,6 +81,17 @@ class WikiToolbar extends ConsumerWidget {
             icon: Icons.bookmarks_rounded,
             theme: theme,
             onTap: onOpenBookmarks),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: Divider(color: theme.divider, height: 1),
+        ),
+        _TrayButton(
+          icon: Icons.psychology_alt_rounded,
+          theme: theme,
+          onTap: onSendToAi,
+          activeColor: theme.accentPrimary,
+          tooltip: sendToAiTooltip,
+        ),
       ],
     );
   }
@@ -89,6 +104,7 @@ class _TrayButton extends StatelessWidget {
   final VoidCallback? onTap;
   final AppThemeTokens theme;
   final Color? activeColor;
+  final String? tooltip;
 
   const _TrayButton({
     required this.icon,
@@ -96,6 +112,7 @@ class _TrayButton extends StatelessWidget {
     this.enabled = true,
     this.onTap,
     this.activeColor,
+    this.tooltip,
   });
 
   @override
@@ -113,7 +130,7 @@ class _TrayButton extends StatelessWidget {
         onPressed: enabled ? onTap : null,
         padding: EdgeInsets.zero,
         splashRadius: 18,
-        tooltip: null,
+        tooltip: tooltip,
       ),
     );
   }
