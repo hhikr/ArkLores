@@ -173,6 +173,9 @@ finalized DB，并临时解除 `flutter_test` 的网络拦截。它不是 Settin
   实体歧义、unsupported verdict 降级、追问历史，以及降级后有效结论的 debug 日志。
 - `test/fact_check_widget_test.dart` 覆盖 320 logical px 宽度、2 倍文字缩放、结论状态和
   GameData evidence 展开，无 RenderFlex overflow。
+- `test/live_fact_check_test.dart` 使用 `tools/api_info` 中的真实 API 配置完成最小 chat
+  completion、scoped story evidence 和未来命题的 live QA；`AgentLogger` 在测试环境下已降级到
+  系统临时目录。
 - 真实 Chat QA 可通过 `ARKLORES_RUN_LIVE_CHAT=true flutter test
   test/live_fact_check_test.dart` 显式运行。API 配置仅从已忽略的
   `tools/api_info` 读取，测试使用生产 `OpenAICompatibleClient -> FactCheckAgent ->
@@ -183,5 +186,5 @@ finalized DB，并临时解除 `flutter_test` 的网络拦截。它不是 Settin
   `supported`，引用 `level_act21mini_st07.txt:3`，并区分身体死亡与意识保留。
 - Passed: 同一 live suite 的无覆盖未来命题没有返回 supported/refuted；当前模型结果为
   `uncertain`。其宽查询曾将数字 `2030` 误命中 enemy ID，后续定向查询均无结果。
-- Not covered: `flutter_test` 没有原生 `path_provider` 实现，live QA 不验证真机日志目录、
-  Settings/provider 状态或 UI；这些仍需真机 integration 验收。
+- Not covered: `flutter_test` 没有原生 `path_provider` 真机插件实现，live QA 只能回退到系统临时目录；
+  Settings/provider 状态和 Android 真机路径、TalkBack 仍需真机 integration 验收。
