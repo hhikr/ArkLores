@@ -135,6 +135,26 @@ QA 已完成。事实核查仅注册 `search_local_lore`，结论经过实际 Ga
 - 追问能保留相关主张和证据上下文。
 - 单元测试覆盖 tool 限制、来源声明、空结果、实体歧义和结论解析。
 
+#### 后续候选：跨 Agent 共享剧情取证工具
+
+v0.5 已验证的 scoped evidence 能力目前分布在 `search_local_lore`、
+`GameDataKnowledgeStore`、Fact-check prompt 和 ReAct 配置中。后续迭代可将其抽取为独立
+`StoryEvidenceRetriever` 和 `search_story_evidence` Agent tool，供 Fact-check、Summary
+及后续 Role-play 复用；这项抽取不是 v0.5 已交付功能。
+
+候选边界：
+
+- 共享层负责 scope/entity 结构化解析、歧义状态、claim term 检索、proximity ranking、
+  coverage 分类、稳定引用和 observation 截断。
+- Agent 只负责各自任务：Fact-check 形成 verdict，Summary 按剧情顺序生成梗概，
+  Role-play 只把证据作为角色背景而不冒充官方对白。
+- 保留 `search_local_lore(search_mode=evidence)` 兼容入口，迁移完成且固定 QA 通过后再考虑
+  弃用，避免复制 prompt 或一次性破坏既有 Agent。
+- 首轮抽取不需要改变 schema v2；只有引入实体级剧情倒排表或行级关系索引时才规划
+  schema v3 和新 release asset。
+- 验收至少覆盖普通人物梗概回归、指定剧情中的人物经历、范围/实体双歧义、无覆盖、
+  大量弱相关候选、输出截断和真实 Chat opt-in QA。
+
 ### v0.6 - 证据约束的角色扮演 Agent
 
 目标：提供角色扮演能力，同时明确区分官方设定事实与模型创作内容。

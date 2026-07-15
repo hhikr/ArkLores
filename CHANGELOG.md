@@ -22,6 +22,19 @@ All notable changes to ArkLores will be documented in this file.
 - Updated Android setup automation for API 36, data-preserving installs, verified GameData URLs, localhost adb reverse, and explicit debug-key release warnings.
 - Added an Android setup option to serve an existing local GameData `.db.gz` with gzip/SHA256 validation, without rebuilding the database.
 
+### Migration
+
+- GameData schema v1 assets are incompatible with v0.5.0. Install the v0.5.0 schema v2 asset;
+  the App validates the downloaded DB before replacing an existing valid installation.
+- Existing App settings and conversations are preserved by normal update installs. Explicit uninstall/clean
+  install still removes App data.
+
+### Known Limitations
+
+- The full external Chat matrix and Android accessibility/large-text/device coverage remain incomplete; see
+  `docs/v0.5_task_breakdown.md`.
+- Wiki and user text remain browsing/context only and are not official GameData evidence.
+
 ## [0.4.5] - 2026-07-15
 
 ### Changed
