@@ -2,6 +2,28 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.8.0] - Unreleased
+
+### Added
+
+- Added structured expandable GameData evidence cards for Summary and Fact-check, including title, section, content type, source path, raw ID, retrieval type, ranking reason, trust note, excerpt, and a neutral coverage label.
+- Added Summary cancellation, stale-response protection, retry, and localized empty/error/canceled states to match Fact-check behavior.
+
+### Changed
+
+- Unified Summary and Fact-check source bars and send/stop interactions.
+- Localized Agent loading and reasoning status text and improved evidence metadata wrapping for narrow screens and large text.
+- Bumped the development version to `0.8.0+8`; no tag, Release, APK publication, or push was performed.
+
+### Verification
+
+- Verified focused evidence parser and Widget tests, `test/agent_test.dart`, and `flutter analyze` on 2026-07-15.
+
+### Known Limitations
+
+- Android real-device screenshots, TalkBack navigation, landscape layouts, and extreme text scaling remain deferred.
+- Evidence source navigation is not implemented because GameData `source_path` values are release-asset provenance paths, not app-openable documents.
+
 ## [0.7.0] - 2026-07-15
 
 ### Added
