@@ -81,6 +81,212 @@ ReAct Loop requirements:
 - Materials: paused state until user material source strategy is redesigned.
 - AI Summary: GameData structured local search.
 
+## GameData 转向后的 v0.5-v1.0 路线
+
+旧路线的产品演进顺序仍有价值，但其中 Wiki seed、Book indexing、embedding、
+向量检索与 TFLite 的实现前提已被 v0.4.5 架构决策废止。后续版本必须建立在
+中文 GameData release DB 和结构化检索契约上。
+
+跨版本约束：
+
+- `search_local_lore` 是默认且唯一的 Agent 检索工具。
+- 除非后续版本重新立项并设计新的来源协议，否则 GameData / 游戏原始文本是
+  唯一 active evidence source。
+- Wiki 浏览内容和用户提供文本可以作为问题上下文，但不是 GameData 证据，不能
+  被表述为官方游戏原文。
+- Agent 不得用模型记忆补齐证据缺口；证据不足时必须明确说明无法确认或覆盖不足。
+- 带证据的输出应保留 `source_path`、`raw_id`、`content_type`、retrieval type
+  和 trust information。
+- 新增检索行为必须提供基于 finalized GameData DB 的固定 QA 与回归测试。
+
+### v0.5 - 事实核查 Agent
+
+目标：仅依据本地 GameData 证据，把用户的设定或剧情说法判断为“支持”“反驳”
+“存疑”或“无法确认”。
+
+交付内容：
+
+- 基于现有 ReAct Loop 增加事实核查模式。
+- 实现“拆解主张与实体 → 多次定向调用 `search_local_lore` → 对照支持与反驳
+  证据 → 形成结论”的 workflow。
+- 在回答中区分直接证据、间接证据和证据缺失，不把 retrieval confidence 等同于
+  事实确定性。
+- 支持带对话上下文的追问，并检测话题切换；不得静默丢弃当前对话。
+- 增加四种结论 UI 状态和可展开的 GameData 证据引用。
+- 固定 QA 至少覆盖：支持、反驳、存疑、无覆盖各一个命题，以及一个上下文追问。
+
+验收标准：
+
+- “支持”或“反驳”结论必须引用实际检索到的 GameData 记录。
+- 证据冲突或不完整时必须输出“存疑”或“无法确认”，不得依赖模型记忆作答。
+- 追问能保留相关主张和证据上下文。
+- 单元测试覆盖 tool 限制、来源声明、空结果、实体歧义和结论解析。
+
+### v0.6 - 证据约束的角色扮演 Agent
+
+目标：提供角色扮演能力，同时明确区分官方设定事实与模型创作内容。
+
+交付内容：
+
+- 使用 GameData entity / alias 完成角色选择，并在开始会话前处理实体消歧。
+- 通过 `search_local_lore` 检索干员档案、语音、秘录、模组和相关剧情片段，
+  构建角色上下文。
+- 允许用户提供可选场景设定，但必须标记为会话上下文而非 GameData 证据。
+- 对超出角色认知、无证据时间线、用户设定与 GameData 冲突等情况定义约束。
+- 支持多轮对话、本地存档、继续会话和重新开始。
+- 展示选中的 canonical character 及会话所依据的 GameData 范围；生成对白不得
+  冒充游戏官方台词。
+
+验收标准：
+
+- 生成前必须把角色解析到稳定 `entity_id`。
+- 对话中的设定事实可追溯到 GameData；创作对白被明确视为生成内容。
+- 测试覆盖重名、角色资料缺失、场景冲突、继续会话和重新开始。
+
+### v0.7 - Wiki 阅读上下文转交
+
+目标：连接 Wiki 人工阅读与 AI workflow，但不恢复 Wiki seed RAG，也不把 Wiki
+内容当作 GameData 证据。
+
+交付内容：
+
+- 支持把 WebView 选中文字和当前页面信息转交给 Summary / Fact-check 模式。
+- Wiki 选中文字只作为用户提供的主张或提问上下文。
+- 从选中文字解析实体，并独立调用 `search_local_lore` 核验后再作事实声明。
+- 保留 Wiki URL 用于返回浏览和来源说明，但与 GameData evidence 分开展示。
+- 书签或保存上下文的联动不得引入隐藏 indexing 路径。
+
+验收标准：
+
+- 不对 Wiki 页面做 embedding、vector indexing 或写入 GameData DB。
+- Wiki 上下文和 GameData 证据在语义与视觉上明确区分。
+- GameData 无法核实时，Agent 必须说明限制，不能直接认可 Wiki 选中文字。
+
+### v0.8 - 证据与交互体验
+
+目标：让移动端 Agent 结果便于检查，并能清楚理解结论的证据基础。
+
+交付内容：
+
+- 统一 Summary / Fact-check 的模式切换、加载、取消、重试、截断和空结果状态。
+- 提供可展开证据视图，展示 title、section、content type、source path、raw id、
+  retrieval type、ranking reason 和 trust note。
+- 增加紧凑的结论与覆盖度标识，但不能暗示证据未支持的确定性。
+- 改善实体消歧、来源导航、长回答阅读、无障碍、本地化和响应式布局。
+- 视觉改进延续现有主题，优先保证证据检查与高频操作，不以装饰动画为主目标。
+
+验收标准：
+
+- 证据在支持的移动端尺寸下可读且不重叠。
+- 来源标签不得把 Wiki、Book、用户上下文或生成文本描述为官方 GameData。
+- Summary / Fact-check 核心流程支持无障碍文字缩放及现有双语环境。
+
+### v0.9 - 视觉重设计与代码质量重构
+
+目标：在核心功能和证据交互稳定后，以《明日方舟》和《明日方舟：终末地》的
+真实 UI 图片为视觉研究依据，系统重做 App 界面，并同步偿还影响 v1.0 维护性的
+代码质量债务。
+
+视觉设计交付内容：
+
+- 收集并整理来自游戏实机、官方演示或官方宣传材料的 UI 参考图，记录图片来源、
+  对应界面、可借鉴的布局规律和不应直接复制的品牌资产。
+- 分别研究《明日方舟》的战术档案、工业信息层级与高对比导视，以及《终末地》的
+  空间界面、信息密度、材质和动效语言；不得只凭印象使用通用科幻风模板。
+- 先产出关键页面的 reference board、界面审计、线框图和高保真方案，经确认后再
+  修改 Flutter UI。
+- 重建可复用 design tokens，包括颜色、排版、间距、边框、图标、动效、状态和
+  响应式约束；两套主题应有共同的信息架构，但保持清晰的视觉差异。
+- 重做 Wiki、AI 对话、证据详情、知识库、设置和错误/空/加载状态，优先保证信息
+  扫描、来源识别和高频操作效率。
+- 对使用到的参考图片和最终 App 资产进行版权与授权检查；参考游戏 UI 不代表可以
+  直接打包游戏截图、商标、角色立绘或其他受保护资产。
+- 使用真机截图或自动化截图对比检查常见手机尺寸、横竖屏、双主题、双语和无障碍
+  文字缩放，避免文字溢出、控件位移和内容遮挡。
+
+代码质量交付内容：
+
+- 审计 `print`、临时日志和可能泄露 API key、请求正文或用户对话的输出；开发诊断
+  统一使用受 `kDebugMode`、assert 或项目日志抽象约束的机制，release 构建不输出
+  调试信息。
+- 把面向用户的字符串统一迁移到 ARB 本地化资源，补齐中英文翻译，并禁止在 Widget、
+  Agent 错误提示和设置页面继续新增硬编码文案。
+- 按职责拆分过长文件和过大的 Widget / service / Agent 类，优先处理同时承担 UI、
+  状态、存储、网络或检索职责的模块；不以任意行数阈值制造无意义的小文件。
+- 清理重复样式、重复 Widget、过深 build 嵌套、无效代码和过期兼容分支，统一命名、
+  import、错误处理、异步生命周期和 Riverpod 使用方式。
+- 收紧 analyzer / lint 规则，并为重构涉及的共享组件、状态流和关键业务行为补充测试，
+  保证重构不改变检索、来源声明与 Agent 行为。
+- 分阶段提交视觉改动与行为保持型重构，避免把全项目格式化、UI 重写和功能修改混在
+  一个不可审查的变更中。
+
+验收标准：
+
+- 设计文档能把关键视觉决策追溯到具体的官方或实机 UI 参考，而不是只写“方舟风”
+  或“终末地风”。
+- 关键页面在目标尺寸、双主题、双语和文字缩放下通过截图审查，无明显溢出或遮挡。
+- release 构建不存在无约束的 `print` 或敏感调试输出；用户可见字符串进入本地化资源。
+- 选定的超长、高耦合文件完成职责拆分，公共组件和状态边界有清晰所有权。
+- `flutter analyze`、相关单元/Widget 测试和既有 GameData retrieval QA 全部通过。
+- 重构前后的固定 Agent / retrieval QA 结果没有非预期行为变化。
+
+### v0.10 - 真机验证、检索质量与发布工程
+
+目标：在 v1.0 前验证完整产品链路，并使 GameData 发布资产可复现。
+
+交付内容：
+
+- 完成真机 asset 下载、checksum 校验、安装、替换、失败保留、检索和 Agent 对话。
+- 覆盖下载中断、坏资产、空间不足、离线启动、schema 不兼容及旧有效 DB 保留。
+- 扩充角色、组织、概念、剧情、歧义别名和意图归一化的固定 retrieval / Agent QA。
+- 根据量化 QA 缺口增强剧情实体关系、组织/概念汇总和同义词归一化。
+- 固定 GameData 源元数据，记录可复现的 builder、finalization、manifest、checksum
+  和 release asset 流程。
+- 在代表性 Android 设备上测量安装时间、DB 体积、查询延迟、内存和长对话表现。
+- 进行小规模 beta，按严重级别处理正确性、检索、安装和 UI 问题。
+
+验收标准：
+
+- 自动测试、Flutter analyze、完整 DB 固定 QA、schema smoke build 和 release
+  dry-run 能在文档化的干净环境中通过。
+- 至少一台受支持 Android 真机完成从 release asset 到 Agent 回答的完整流程。
+- 发布资产可由固定 GameData commit 重建，hash 与 finalized metadata 一致。
+- 不存在未解决的发布阻断级正确性、数据丢失或来源归属问题。
+
+### v1.0 - 稳定 GameData-first 发布
+
+目标：发布行为、文档和资产均与 GameData-first 架构一致的稳定版本。
+
+交付内容：
+
+- 稳定交付 Summary 和 Fact-check；Role-play 与 Wiki 联动只有在满足对应证据和
+  稳定性验收标准后才进入 v1.0。
+- 发布签名应用、finalized 中文 GameData DB、manifest、build report、checksums
+  和 release notes。
+- 完善安装、API 配置、GameData 下载、存储需求、来源信任、隐私、限制与排障文档。
+- 完善 tests、analyze、asset metadata 校验和 release packaging 的 CI，禁止提交
+  secrets。
+- 定义 GameData schema 升级、数据源刷新和不兼容已安装 DB 的支持策略。
+
+验收标准：
+
+- 全新安装和从最近受支持的 pre-1.0 版本升级均不会丢失有效设置或会话。
+- 发布 hash、manifest、tag 和 release assets 相互一致。
+- 产品文案与 Agent 行为始终区分 GameData 证据、Wiki 上下文、用户上下文和
+  生成文本。
+
+## 旧路线映射
+
+| 版本 | 保留的产品方向 | 已废止的实现前提 |
+| --- | --- | --- |
+| v0.5 | 事实核查、追问、话题切换、结论 UI | `search_wiki`、向量检索、Wiki 默认取证 |
+| v0.6 | 角色选择与多轮角色扮演 | Wiki 角色卡和 Wiki / vector RAG 上下文 |
+| v0.7 | Wiki 阅读到 AI 的联动 | 把 Wiki 文本送入隐藏索引证据源 |
+| v0.8 | 交互和视觉完善 | 缺少 evidence UX 要求的动画优先范围 |
+| v0.9 | UI 精修与工程质量提升 | 仅凭抽象主题描述进行动画优先的视觉修改 |
+| v0.10 | 测试、性能、beta、错误处理 | 向量索引 benchmark 和 seed index 健康检查 |
+| v1.0 | 稳定开源发布 | 依赖已废止 seed DB 的打包假设 |
+
 ## Verification
 
 Required for relevant changes:
