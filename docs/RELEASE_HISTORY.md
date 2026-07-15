@@ -89,3 +89,11 @@ GameData schema v2 增加 `story_scopes` 和剧情 chunk 的 `scope_type/scope_i
 
 详细验证、deferred 项和最终资产 hash 见 `v0.5_task_breakdown.md`、`RETRIEVAL_QA.md`
 及 v0.5.0 GitHub Release。
+
+封盘资产：
+
+- `arklores_gamedata_zh.db.gz`：115090365 bytes，SHA256
+  `c96599a7291751ada06f8d9b52b90fe0193615beb8eac39488bb49bd03694b10`
+- `app-release.apk`：SHA256
+  `58f4b42a5ac239af0a0e5d2f33a2dae786ea80ab87fb138395bd317d42e72b37`
+- APK 为 release-mode、Android Debug certificate 签名的 GitHub 验收包，不是正式商店签名。
