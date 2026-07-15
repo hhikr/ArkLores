@@ -184,6 +184,13 @@ v0.5 已验证的 scoped evidence 能力目前分布在 `search_local_lore`、
 
 ### v0.7 - Wiki 阅读上下文转交
 
+实现状态（2026-07-15）：已实现 WebView 当前选中文字、页面标题、URL 和站点信息显式转交到
+Summary / Fact-check；转交文本会被包装为用户阅读上下文，Agent prompt 明确要求独立调用
+`search_local_lore` 核验，且不得把 Wiki 文本或 URL 写成 GameData 证据。自动测试覆盖
+Wiki context prompt 的有选区/空选区边界，以及 AI 页面接收 Summary 转交后的窄路径渲染。
+WebView 原生选区读取、底部面板交互、真实外部 Chat QA 和 Android 真机仍待验收，详见
+`docs/v0.7_task_breakdown.md` 与 `RETRIEVAL_QA.md`。
+
 目标：连接 Wiki 人工阅读与 AI workflow，但不恢复 Wiki seed RAG，也不把 Wiki
 内容当作 GameData 证据。
 
