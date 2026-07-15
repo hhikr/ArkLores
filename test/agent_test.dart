@@ -363,6 +363,92 @@ void main() {
       expect(observation, contains('阿米娅的干员秘录'));
       expect(observation, isNot(contains('No matching GameData result')));
     });
+
+    test('intersects resolved story scope, entity, and claim terms', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final db = await sqflite.openDatabase(dbPath);
+      await db.insert('story_scopes', {
+        'story_id': 'activities/act_test/story_01.txt',
+        'scope_type': 'activity',
+        'scope_id': 'act_test',
+        'source_path': 'zh_CN/gamedata/story/activities/act_test/story_01.txt',
+      });
+      await db.insert('lore_chunks', {
+        'id': 'scoped_story_evidence',
+        'game': 'arknights',
+        'source_type': 'game_story',
+        'content_category': 'story',
+        'content_subtype': 'activity',
+        'content_type': 'story_dialogue',
+        'story_id': 'activities/act_test/story_01.txt',
+        'scope_type': 'activity',
+        'scope_id': 'act_test',
+        'page_title': 'story_01',
+        'section': '剧情文本',
+        'content': '阿米娅明确拒绝撤退，并选择牺牲自己保护其他人。',
+        'source_path': 'zh_CN/gamedata/story/activities/act_test/story_01.txt',
+        'language': 'zh',
+        'raw_id': 'story_01:3',
+      });
+      await db.close();
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      final result = await tool.execute({
+        'query': '牺牲',
+        'scope_id': 'activity:act_test',
+        'entity_id': 'char_002_amiya',
+        'search_mode': 'evidence',
+      }) as ToolExecutionResult;
+
+      expect(result.observation, contains('Evidence Scope Match: yes'));
+      expect(result.observation, contains('scoped_story_evidence'));
+      expect(result.observation, contains('选择牺牲自己'));
+      expect(result.observation, isNot(contains('operator_profile_bundle')));
+    });
+
+    test('requires canonical scope type and a non-empty claim term', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final db = await sqflite.openDatabase(dbPath);
+      await db.insert('lore_chunks', {
+        'id': 'same_scope_id_other_type',
+        'game': 'arknights',
+        'source_type': 'game_story',
+        'content_category': 'story',
+        'content_subtype': 'mainline',
+        'content_type': 'story_dialogue',
+        'story_id': 'mainline/act_test/story_01.txt',
+        'scope_type': 'mainline',
+        'scope_id': 'act_test',
+        'content': '阿米娅选择牺牲自己。',
+        'language': 'zh',
+      });
+      await db.close();
+      final store = GameDataKnowledgeStore(dbPath: dbPath);
+      final tool = SearchLocalLoreTool(gameDataStore: store);
+
+      final wrongScope = await tool.execute({
+        'query': '牺牲',
+        'scope_id': 'activity:act_test',
+        'entity_id': 'char_002_amiya',
+        'search_mode': 'evidence',
+      }) as ToolExecutionResult;
+      expect(
+        wrongScope.observation,
+        contains('No matching GameData result'),
+      );
+
+      final emptyTerms = await store.search(
+        query: '',
+        scopeId: 'mainline:act_test',
+        entityId: 'char_002_amiya',
+        searchMode: 'evidence',
+      );
+      expect(emptyTerms, isEmpty);
+    });
   });
 
   group('GameDataInstaller tests', () {
@@ -379,7 +465,7 @@ void main() {
 
       final status = await installer.getStatus();
       expect(status.installed, isTrue);
-      expect(status.manifest['schema_version'], '1');
+      expect(status.manifest['schema_version'], '2');
       expect(status.entityCount, '1');
     });
 
@@ -405,6 +491,33 @@ void main() {
       );
 
       expect(await File(installedPath).readAsBytes(), beforeBytes);
+    });
+
+    test('rejects legacy schema before replacing the installed DB', () async {
+      final legacyPath = '${tempDir.path}/legacy_gamedata.db';
+      await _createGameDataTestDb(legacyPath);
+      final db = await sqflite.openDatabase(legacyPath);
+      await db.update(
+        'gamedata_manifest',
+        {'value': '1'},
+        where: 'key = ?',
+        whereArgs: ['schema_version'],
+      );
+      await db.close();
+      final installer = GameDataInstaller(installDirectory: tempDir);
+      final legacyBytes = await File(legacyPath).readAsBytes();
+
+      expect(
+        () => installer.installFromBytes(
+          legacyBytes,
+          overwrite: true,
+        ),
+        throwsA(isA<StateError>().having(
+          (error) => '$error',
+          'message',
+          contains('incompatible'),
+        )),
+      );
     });
   });
 
@@ -497,6 +610,40 @@ void main() {
             .content,
         contains('done'),
       );
+    });
+
+    test('keeps the registered action name when providers add action metadata',
+        () async {
+      final registry = ToolRegistry();
+      final tool = _CaptureTool();
+      registry.register(tool);
+      final loop = ReActLoop(
+        llmClient: _ActionMetadataLLMClient(),
+        toolRegistry: registry,
+        maxIterations: 2,
+      );
+
+      await loop
+          .run(systemPrompt: 'test', chatHistory: const [], userQuery: 'test')
+          .toList();
+
+      expect(tool.lastArgs?['query'], 'scope entity relation');
+    });
+
+    test('does not treat handbook metadata as a Book source claim', () async {
+      final loop = ReActLoop(
+        llmClient: _HandbookAnswerLLMClient(),
+        toolRegistry: ToolRegistry(),
+      );
+      final events = await loop
+          .run(systemPrompt: 'test', chatHistory: const [], userQuery: 'test')
+          .toList();
+      final answer = events
+          .where((event) => event.type == ReActEventType.finalAnswerToken)
+          .single
+          .content;
+      expect(answer, contains('operator_handbook_profile'));
+      expect(answer, isNot(contains('mentions Book evidence')));
     });
 
     test('reports empty final answers', () async {
@@ -629,7 +776,7 @@ void main() {
       final verdict = validateFactCheckVerdict(
         '[FACT_CHECK_VERDICT:refuted]',
         const [
-          '=== Result #1 ===\nSource Kind: GameData\nSource Path: a.json\nRaw ID: a',
+          '=== Result #1 ===\nSource Kind: GameData\nEvidence Scope Match: yes\nEvidence Level: direct candidate\nSource Path: a.json\nRaw ID: a',
         ],
       );
       expect(verdict, FactCheckVerdict.refuted);
@@ -848,6 +995,7 @@ class _FactCheckSearchTool extends AgentTool {
     queries.add(arguments['query'] as String);
     return const ToolExecutionResult(
       observation: '=== Result #1 ===\nSource Kind: GameData\n'
+          'Evidence Scope Match: yes\nEvidence Level: direct candidate\n'
           'Content Type: operator_profile\nSource Path: character_table.json\n'
           'Raw ID: char_002_amiya\nContent Excerpt: 阿米娅是罗德岛的公开领袖。',
     );
@@ -1014,6 +1162,37 @@ Final Answer: done
   }
 }
 
+class _ActionMetadataLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      return 'Action: search_local_lore\nAction Query: arg/search\n'
+          'Action Tool: search_local_lore\n'
+          'Action Input: {"query":"scope entity relation"}';
+    }
+    return 'Final Answer: done';
+  }
+}
+
+class _HandbookAnswerLLMClient extends _MockLLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      'Final Answer: Content Type: operator_handbook_profile';
+}
+
 class _EmptyFinalAnswerLLMClient extends _MockLLMClient {
   @override
   Future<String> chat(
@@ -1134,6 +1313,8 @@ Future<void> _createGameDataTestDb(String path) async {
           content_type     TEXT,
           entity_id        TEXT,
           story_id         TEXT,
+          scope_type       TEXT,
+          scope_id         TEXT,
           page_title       TEXT,
           section          TEXT,
           content          TEXT NOT NULL,
@@ -1147,6 +1328,14 @@ Future<void> _createGameDataTestDb(String path) async {
           updated_at       INTEGER,
           raw_id           TEXT,
           retrieval_hint   TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE story_scopes (
+          story_id    TEXT PRIMARY KEY,
+          scope_type  TEXT NOT NULL,
+          scope_id    TEXT NOT NULL,
+          source_path TEXT NOT NULL
         )
       ''');
       await db.execute('''
@@ -1218,7 +1407,7 @@ Future<void> _createGameDataTestDb(String path) async {
 
   await db.insert('gamedata_manifest', {
     'key': 'schema_version',
-    'value': '1',
+    'value': '2',
   });
   await db.insert('gamedata_manifest', {
     'key': 'entity_count',

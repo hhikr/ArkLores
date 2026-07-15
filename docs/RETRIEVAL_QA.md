@@ -124,6 +124,7 @@ Additional smoke check:
 | 存疑 | `特蕾西娅就是当前检索结果中的同一个实体。` | exact alias 多候选时不得猜测实体，只能存疑并要求消歧。 |
 | 无法确认 | `罗德岛在 2030 年公开举办过庆典。` | 无结果时不得使用模型记忆，结论为无法确认。 |
 | 上下文追问 | 先核查阿米娅命题，再问 `那她是什么时候承担这个身份的？` | 保留原主张与证据上下文，对新时间主张再次检索。 |
+| 剧情范围 + 实体 + 状态 | `丛林症结故事集中，米格鲁死掉了吗` | scoped evidence 命中 `level_act21mini_st07.txt:3`，并区分身体死亡与意识保留。 |
 
 2026-07-15 自动验证：
 
@@ -132,3 +133,5 @@ Additional smoke check:
 - `test/fact_check_widget_test.dart` 覆盖 320 logical px 宽度、2 倍文字缩放、结论状态和
   GameData evidence 展开，无 RenderFlex overflow。
 - 上述固定命题尚未使用真实外部 Chat API 逐条执行；状态为 deferred，不记录为通过。
+- Passed: schema v2 finalized 完整 DB scoped retrieval：`act21mini + 米格鲁 + 死亡` 命中
+  `activities/act21mini/level_act21mini_st07.txt:3`。

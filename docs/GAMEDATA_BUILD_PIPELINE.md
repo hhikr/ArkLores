@@ -58,6 +58,20 @@ v0.4.5 不阻塞。后续候选：
 
 ## SQLite Schema
 
+当前 schema version 为 `2`。v2 为剧情 chunk 增加通用 `scope_type/scope_id`，并新增
+`story_scopes`；旧 schema DB 不包含可靠剧情范围，App 安装器会拒绝替换。
+
+### `story_scopes`
+
+```sql
+CREATE TABLE story_scopes (
+  story_id    TEXT PRIMARY KEY,
+  scope_type  TEXT NOT NULL,
+  scope_id    TEXT NOT NULL,
+  source_path TEXT NOT NULL
+);
+```
+
 ### `gamedata_manifest`
 
 ```sql
@@ -157,6 +171,8 @@ CREATE TABLE lore_chunks (
   content_type     TEXT,
   entity_id      TEXT,
   story_id       TEXT,
+  scope_type     TEXT,
+  scope_id       TEXT,
   page_title     TEXT,
   section        TEXT,
   content        TEXT NOT NULL,

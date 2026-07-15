@@ -18,8 +18,8 @@ class SearchLocalLoreTool extends AgentTool {
   @override
   String get description =>
       'Search the local ArkLores GameData knowledge base. Supports entity '
-      'disambiguation, summary-focused retrieval, optional content_type, and '
-      'entity_id filters. Returns source kind, content_type, source_path, '
+      'disambiguation, summary/evidence retrieval, optional content_type, '
+      'scope_id, and entity_id filters. Returns source kind, content_type, source_path, '
       'raw_id, ranking reason, and chunk/record id for citations.';
 
   @override
@@ -47,9 +47,14 @@ class SearchLocalLoreTool extends AgentTool {
             'description':
                 'Optional GameData entity id filter, e.g. char_002_amiya.',
           },
+          'scope_id': {
+            'type': 'string',
+            'description':
+                'Optional resolved story scope id, e.g. activity:act21mini. Use with entity_id and evidence mode.',
+          },
           'search_mode': {
             'type': 'string',
-            'enum': ['general', 'summary'],
+            'enum': ['general', 'summary', 'evidence'],
             'description':
                 'Use summary for entity summaries: entity document first, then story context, then raw records.',
             'default': 'general',
@@ -69,6 +74,7 @@ class SearchLocalLoreTool extends AgentTool {
     final cleanTopK = topK.clamp(1, 10);
     final contentType = arguments['content_type'] as String?;
     final entityId = arguments['entity_id'] as String?;
+    final scopeId = arguments['scope_id'] as String?;
     final searchMode = (arguments['search_mode'] as String?) ?? 'general';
 
     final store = _gameDataStore;
@@ -93,6 +99,7 @@ class SearchLocalLoreTool extends AgentTool {
         contentType: contentType,
         entityId: entityId,
         searchMode: searchMode,
+        scopeId: scopeId,
       );
       if (results.isNotEmpty) {
         return _formatGameDataResults(results, searchMode: searchMode);
@@ -122,6 +129,12 @@ class SearchLocalLoreTool extends AgentTool {
       );
       buffer.writeln();
     }
+    if (searchMode == 'evidence') {
+      buffer.writeln(
+        'Retrieval Plan: evidence mode = resolved story scope and entity intersection, then claim-term match.',
+      );
+      buffer.writeln();
+    }
 
     for (var i = 0; i < results.length; i++) {
       final result = results[i];
@@ -137,6 +150,10 @@ class SearchLocalLoreTool extends AgentTool {
       buffer.writeln('Source Kind: ${result.sourceKind}');
       buffer.writeln('Source Type: ${result.sourceType}');
       buffer.writeln('Retrieval Type: ${result.retrievalType}');
+      if (result.retrievalType == 'scoped_story_evidence') {
+        buffer.writeln('Evidence Scope Match: yes');
+        buffer.writeln('Evidence Level: direct candidate');
+      }
       buffer.writeln('Ranking Reason: ${result.rankingReason}');
       buffer.writeln('ID: ${result.id}');
       if (result.contentCategory != null) {

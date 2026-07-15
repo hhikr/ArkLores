@@ -85,6 +85,7 @@ class GameDataKnowledgeStore {
     String? contentType,
     String? entityId,
     String searchMode = 'general',
+    String? scopeId,
   }) async {
     final plan =
         _GameDataQueryPlan.from(query, explicitContentType: contentType);
@@ -98,6 +99,19 @@ class GameDataKnowledgeStore {
     final effectiveContentType = plan.effectiveContentType;
 
     final summaryMode = searchMode == 'summary';
+    if (searchMode == 'evidence' &&
+        scopeId != null &&
+        scopeId.trim().isNotEmpty &&
+        entityId != null &&
+        entityId.trim().isNotEmpty) {
+      return _searchScopedStoryEvidence(
+        db,
+        query: cleanQuery,
+        scopeId: scopeId,
+        entityId: entityId,
+        limit: limit,
+      );
+    }
 
     if (entityId == null) {
       for (final result in await _searchEntities(
@@ -902,6 +916,51 @@ class GameDataKnowledgeStore {
       [...args.take(args.length - 1), query, '%$query%', limit],
     );
     return rows.map((row) => _chunkResult(row, 3000, 'chunk_like')).toList();
+  }
+
+  Future<List<GameDataSearchResult>> _searchScopedStoryEvidence(
+    sqflite.Database db, {
+    required String query,
+    required String scopeId,
+    required String entityId,
+    required int limit,
+  }) async {
+    final scopeParts = scopeId.trim().split(':');
+    if (scopeParts.length != 2) return const [];
+    final scopeType = scopeParts.first.trim();
+    final scope = scopeParts.last.trim();
+    final names = await _entityNamesById(db, entityId.trim());
+    final terms = _searchTerms(query);
+    if (scopeType.isEmpty || scope.isEmpty || names.isEmpty || terms.isEmpty) {
+      return const [];
+    }
+    final where = StringBuffer(
+      "source_type = 'game_story' AND scope_type = ? AND scope_id = ? AND "
+      '(${List.filled(names.length, 'content LIKE ?').join(' OR ')})',
+    );
+    final args = <Object?>[
+      scopeType,
+      scope,
+      for (final name in names) '%$name%',
+    ];
+    for (final term in terms) {
+      where
+          .write(' AND (content LIKE ? OR page_title LIKE ? OR raw_id LIKE ?)');
+      args.addAll(['%$term%', '%$term%', '%$term%']);
+    }
+    args.add(limit);
+    final rows = await db.rawQuery(
+      '''
+      SELECT * FROM lore_chunks
+      WHERE $where
+      ORDER BY story_id, raw_id
+      LIMIT ?
+      ''',
+      args,
+    );
+    return rows
+        .map((row) => _chunkResult(row, 15000, 'scoped_story_evidence'))
+        .toList(growable: false);
   }
 
   GameDataSearchResult _recordResult(

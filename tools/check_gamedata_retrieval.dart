@@ -21,7 +21,8 @@ const _queries = <_RetrievalCheck>[
 Future<void> main(List<String> args) async {
   sqfliteFfiInit();
 
-  final dbPath = _argValue(args, '--db') ?? _defaultDbPath;
+  final requestedDbPath = _argValue(args, '--db') ?? _defaultDbPath;
+  final dbPath = File(requestedDbPath).absolute.path;
   final dbFile = File(dbPath);
   if (!await dbFile.exists()) {
     stderr.writeln('GameData DB not found: $dbPath');
@@ -74,6 +75,25 @@ Future<void> main(List<String> args) async {
         '[OK] 特蕾西娅 alias candidates: $teresaCandidates',
       );
     }
+
+    final scopedEvidence = await _scopedStoryEvidence(
+      db,
+      scopeId: 'act21mini',
+      entityName: '米格鲁',
+      claimTerm: '死亡',
+    );
+    if (scopedEvidence == null ||
+        !scopedEvidence.content.contains('严格意义上，你已经死了')) {
+      failed = true;
+      stdout.writeln(
+        '[FAIL] scoped story evidence: act21mini + 米格鲁 + 死亡',
+      );
+    } else {
+      stdout.writeln(
+        '[OK] scoped story evidence: ${scopedEvidence.rawId}',
+      );
+      stdout.writeln('     ${scopedEvidence.sourcePath}');
+    }
   } finally {
     await db.close();
   }
@@ -83,6 +103,34 @@ Future<void> main(List<String> args) async {
     stderr.writeln('One or more retrieval QA queries returned no result.');
     exitCode = 1;
   }
+}
+
+Future<({String content, String rawId, String sourcePath})?>
+    _scopedStoryEvidence(
+  Database db, {
+  required String scopeId,
+  required String entityName,
+  required String claimTerm,
+}) async {
+  final rows = await db.rawQuery(
+    '''
+    SELECT content, raw_id, source_path
+    FROM lore_chunks
+    WHERE source_type = 'game_story'
+      AND scope_id = ?
+      AND content LIKE ?
+      AND content LIKE ?
+    ORDER BY story_id, raw_id
+    LIMIT 1
+    ''',
+    [scopeId, '%$entityName%', '%$claimTerm%'],
+  );
+  if (rows.isEmpty) return null;
+  return (
+    content: '${rows.first['content']}',
+    rawId: '${rows.first['raw_id']}',
+    sourcePath: '${rows.first['source_path']}',
+  );
 }
 
 Future<_QaResult?> _search(

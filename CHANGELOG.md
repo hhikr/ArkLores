@@ -11,10 +11,12 @@ All notable changes to ArkLores will be documented in this file.
 - Added verdict enforcement that prevents supported/refuted results without retrieved GameData records.
 - Added fact-check cancellation, retry, empty/error handling, localized UI strings, and narrow-screen text-scale coverage.
 - Added Fact-check session labels and validated-verdict output to the shared debug Agent log.
+- Added schema v2 story scopes and scoped evidence retrieval for entity-and-relationship fact checks.
 
 ### Changed
 
 - Updated shared Agent trust instructions so Wiki and user text are context only, never active GameData evidence.
+- Hardened ReAct action parsing and source guards, and prevented unrelated GameData results from authorizing definitive verdicts.
 - Replaced network-dependent Warfarin crawler output tests with deterministic offline parser and formatter contracts.
 - Updated Android setup automation for API 36, data-preserving installs, verified GameData URLs, localhost adb reverse, and explicit debug-key release warnings.
 
