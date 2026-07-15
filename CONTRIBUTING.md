@@ -9,7 +9,8 @@
 3. 小步提交，每个 commit 只做一件事。
 4. 提交 PR 到 `dev` 分支，等待 review。
 
-详见 [GIT_GUIDE.md](docs/GIT_GUIDE.md)。
+稳定发布分支为 `main`，集成分支为 `dev`；功能和修复从最新 `dev` 创建分支，
+通过 PR 合回 `dev`，不要直接 push `main` 或 `dev`。
 
 ## 分支命名
 
@@ -18,6 +19,8 @@
 ```
 
 常用 scope：`wiki` / `ai` / `materials` / `rag` / `agent` / `theme` / `settings` / `llm` / `db` / `gamedata`。
+
+推荐前缀：`feature/`、`fix/`、`docs/`、`refactor/`。
 
 ## Commit Message
 
@@ -44,7 +47,7 @@ fix(agent): handle empty final answer in react loop
 
 ## Knowledge Base
 
-- 当前未发布开发版本为 v0.8.0，最新 release 为 v0.7.0；主知识源是中文 GameData
+- 当前版本与最新 release 为 v0.9.0。主知识源是中文 GameData
   release asset，当前兼容 schema version 为 2。
 - 知识库 DB 由 `tools/build_gamedata_database.dart` 构建。
 - App 端检索使用结构化 lookup、别名、LIKE 和 FTS。
@@ -67,3 +70,4 @@ fix(agent): handle empty final answer in react loop
 - [ ] 用户可见字符串进入中英文 ARB，并运行 `flutter gen-l10n`。
 - [ ] 文档同步实际实现、验证命令和 deferred 项，不把自动测试写成真机验收。
 - [ ] 新增外部模型 QA 时保留 deterministic test，默认测试不得产生网络费用。
+- [ ] 最后运行 `git diff --check`，检查 staged diff、secrets、生成物和 `logs/` 状态。
