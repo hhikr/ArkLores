@@ -3,7 +3,8 @@
 > Arknights AI-enhanced reading companion - 明日方舟剧情智能助手
 
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Flutter 应用。
-v0.8.0 使用中文 GameData release asset 作为主知识源，并提供带原文引用的梗概、
+当前开发版 v0.9.0 正在重建设计系统；已发布的 v0.8.0 使用中文 GameData release asset
+作为主知识源，并提供带原文引用的梗概、
 事实核查、证据约束的角色扮演，以及 Wiki 阅读上下文转交到 AI workflow。
 
 Latest release: [v0.8.0](https://github.com/hhikr/ArkLores/releases/tag/v0.8.0)

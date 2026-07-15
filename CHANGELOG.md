@@ -2,6 +2,20 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added shared industrial UI primitives for angular surfaces, section markers, responsive page headers, and layered perspective grid backdrops across app routes.
+- Added narrow-screen and enlarged-text Widget coverage for the redesigned bilingual settings page.
+
+### Changed
+
+- Rebuilt the Night theme around neutral tactical black/gray and `#0BA0D0` wayfinding, and the Day theme around soft white/gray surfaces with `#F8D439` emphasis.
+- Redesigned settings and bottom navigation with a shared information architecture, equal centered card widths, responsive section labels, and higher-contrast light-theme icons.
+- Expanded the application-wide Material theme for consistent app bars, inputs, buttons, tabs, progress states, and feedback surfaces.
+- Bumped the development version to `0.9.0+9`.
+
 ## [0.8.0] - 2026-07-15
 
 ### Added

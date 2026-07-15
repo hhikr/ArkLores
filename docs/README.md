@@ -37,6 +37,10 @@ Git 历史中。
   deferred 验收项。
 - [v0.8_task_breakdown.md](v0.8_task_breakdown.md)：v0.8 证据检查与 Agent 交互体验的实现、
   自动验证和 deferred 真机项。
+- [v0.9_task_breakdown.md](v0.9_task_breakdown.md)：当前视觉重设计、设计依据、实现状态与
+  截图验收矩阵。
+- [v0.9_visual_design.md](v0.9_visual_design.md)：双主题视觉规则、页面结构、组件契约和
+  资产边界。
 
 ## 文档维护规则
 
