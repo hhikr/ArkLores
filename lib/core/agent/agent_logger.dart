@@ -149,7 +149,7 @@ class AgentLogger {
 
       debugPrint('[AgentLogger] Log saved to: ${file.path}');
       return file.path;
-    } on MissingPluginException catch (e) {
+    } on MissingPluginException {
       final logDir = Directory(p.join(Directory.systemTemp.path, 'ArkLores', 'agent_logs'));
       await logDir.create(recursive: true);
 
