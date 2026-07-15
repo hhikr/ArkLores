@@ -1,12 +1,32 @@
 # Changelog
 
-## [0.6.0] - Unreleased
-
-- Add GameData-resolved role-play with entity disambiguation and character-bound lore retrieval.
-- Add multi-turn local role-play sessions with continue, restart, cancel, and retry flows.
-- Distinguish optional user scenes and generated dialogue from official GameData evidence in the UI.
-
 All notable changes to ArkLores will be documented in this file.
+
+## [0.6.0] - 2026-07-15
+
+### Added
+
+- Added GameData-resolved role-play with entity disambiguation and character-bound lore retrieval.
+- Added multi-turn local role-play sessions with continue, restart, cancel, retry, and JSON session persistence.
+- Added roleplay UI states that show the canonical character, stable entity id, GameData range, and generated-dialogue disclaimer.
+- Added English and Chinese roleplay UI strings.
+
+### Changed
+
+- Kept roleplay on the GameData-only `search_local_lore` path; Wiki, Book, and user scene text remain context only.
+- Hardened debug Agent logging in Flutter test environments where `path_provider` plugins are unavailable.
+
+### Verification
+
+- Verified `test/agent_test.dart`, `test/fact_check_widget_test.dart`,
+  `ARKLORES_RUN_LIVE_CHAT=true test/live_fact_check_test.dart`, full GameData retrieval QA,
+  schema smoke build, setup release dry-run, and `flutter analyze` on 2026-07-15.
+
+### Known Limitations
+
+- Android real-device validation for local save restore, bilingual UI, TalkBack, cancellation, and long-session performance remains deferred.
+- Roleplay UI still needs real screenshots/device-rendering review beyond automated Widget coverage.
+- Broader multi-character roleplay retrieval matrices and low-coverage quantification remain deferred.
 
 ## [0.5.0] - 2026-07-15
 
