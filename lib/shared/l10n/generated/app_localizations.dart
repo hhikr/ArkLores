@@ -131,29 +131,71 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsTitle;
 
+  /// No description provided for @settingsSystemCode.
+  ///
+  /// In en, this message translates to:
+  /// **'ARKLORES / SYSTEM'**
+  String get settingsSystemCode;
+
   /// No description provided for @settingsTheme.
   ///
   /// In en, this message translates to:
   /// **'Theme'**
   String get settingsTheme;
 
+  /// No description provided for @settingsLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get settingsLanguage;
+
   /// No description provided for @settingsThemeArk.
   ///
   /// In en, this message translates to:
-  /// **'Tactical Archive'**
+  /// **'Night mode'**
   String get settingsThemeArk;
 
   /// No description provided for @settingsThemeEndfield.
   ///
   /// In en, this message translates to:
-  /// **'Holographic Projection'**
+  /// **'Day mode'**
   String get settingsThemeEndfield;
+
+  /// No description provided for @settingsThemeArkShort.
+  ///
+  /// In en, this message translates to:
+  /// **'NIGHT'**
+  String get settingsThemeArkShort;
+
+  /// No description provided for @settingsThemeEndfieldShort.
+  ///
+  /// In en, this message translates to:
+  /// **'DAY'**
+  String get settingsThemeEndfieldShort;
+
+  /// No description provided for @localeEnglishShort.
+  ///
+  /// In en, this message translates to:
+  /// **'EN'**
+  String get localeEnglishShort;
+
+  /// No description provided for @localeChineseShort.
+  ///
+  /// In en, this message translates to:
+  /// **'中文'**
+  String get localeChineseShort;
 
   /// No description provided for @settingsAiServices.
   ///
   /// In en, this message translates to:
   /// **'AI Services'**
   String get settingsAiServices;
+
+  /// No description provided for @settingsAiSectionCode.
+  ///
+  /// In en, this message translates to:
+  /// **'AI SERVICE'**
+  String get settingsAiSectionCode;
 
   /// No description provided for @settingsApiSettings.
   ///
@@ -172,6 +214,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Knowledge Base Management'**
   String get settingsKnowledgeBase;
+
+  /// No description provided for @settingsKnowledgeSectionCode.
+  ///
+  /// In en, this message translates to:
+  /// **'KNOWLEDGE BASE'**
+  String get settingsKnowledgeSectionCode;
 
   /// No description provided for @settingsKnowledgeBaseDesc.
   ///
@@ -664,6 +712,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Help & Guide'**
   String get settingsHelpGuide;
+
+  /// No description provided for @settingsHelpSectionCode.
+  ///
+  /// In en, this message translates to:
+  /// **'HELP & GUIDE'**
+  String get settingsHelpSectionCode;
+
+  /// No description provided for @settingsVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'ARKLORES / 0.9 DEVELOPMENT'**
+  String get settingsVersionLabel;
 
   /// No description provided for @settingsShowOnboarding.
   ///
