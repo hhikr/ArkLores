@@ -98,7 +98,7 @@ class GameDataKnowledgeStore {
     final byId = <String, GameDataSearchResult>{};
     final effectiveContentType = plan.effectiveContentType;
 
-    final summaryMode = searchMode == 'summary';
+    final summaryMode = searchMode == 'summary' || searchMode == 'roleplay';
     if (searchMode == 'evidence' &&
         scopeId != null &&
         scopeId.trim().isNotEmpty &&
