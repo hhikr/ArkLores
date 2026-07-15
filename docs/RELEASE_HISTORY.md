@@ -123,3 +123,120 @@ GitHub Release：
 - 真实外部 Chat API 的全部固定命题矩阵。
 - Android 双主题、双语、TalkBack、更多文字缩放与设备组合。
 - 正式商店签名；当前 GitHub APK 仅为 Android Debug certificate 签名的验收包。
+
+## v0.6.0
+
+v0.6.0 于 2026-07-15 封盘。发布 tag 指向收尾提交；开发验收目标 commit 为
+`94997f12e1224b720b5b577b9b2530df8522cf68`。
+
+主要交付：
+
+- 新增 GameData entity / alias 解析驱动的 Role-play Agent，开始会话前要求稳定
+  `entity_id` 或返回消歧候选。
+- Role-play 继续只注册 `search_local_lore`，每轮至少一次工具调用；角色绑定检索覆盖档案、
+  语音、秘录、模组和 canonical 角色名剧情回查。
+- 用户场景只作为 session context；UI 明确区分 GameData 事实依据和 AI 生成对白。
+- 增加多轮本地 JSON 存档、继续、重新开始、取消和重试。
+- 中英文 roleplay 文案已接入 localization。
+
+发布来源继续固定为：
+
+- repo：`Kengxxiao/ArknightsGameData`
+- branch：`master`
+- commit：`634e7e7d12c9d099c55896d51b4cf8ef633fa2a5`
+- language path：`zh_CN`
+- schema version：`2`
+
+发布资产：
+
+- `app-release.apk`：27116912 bytes，SHA256
+  `a6d5dcc55b775fa08dc0609ca5e6dd91f672ca44bc906abaf3005c029d898e91`
+- `arklores_gamedata_zh.db`：395022336 bytes，SHA256
+  `3b6d61417da8bed1edda4535762d20f5ca2135389a37df3fa2c9fc4f785ab7c0`
+- `arklores_gamedata_zh.db.gz`：115092521 bytes，SHA256
+  `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5`
+- `gamedata_manifest.json`：984 bytes，SHA256
+  `805c3c1514e7849b5aad3f1a8e69a34561d0302e5306ca8f38e5948b65a78516`
+- `gamedata_build_report.json`：690 bytes，SHA256
+  `7116dc394db92173682e2560e0ea11ea115434816b227340f6869cdb908cb3db`
+
+收尾验证：
+
+- `/home/hhikr/flutter/bin/flutter test test/agent_test.dart`：41 passed。
+- `/home/hhikr/flutter/bin/flutter test test/fact_check_widget_test.dart`：2 passed。
+- `ARKLORES_RUN_LIVE_CHAT=true /home/hhikr/flutter/bin/flutter test
+  test/live_fact_check_test.dart`：3 passed。
+- `/home/hhikr/flutter/bin/flutter analyze`：No issues found。
+- finalized 完整 DB retrieval QA passed，包括固定 query、`特蕾西娅` alias candidates 和
+  `activities/act21mini/level_act21mini_st07.txt:3` scoped evidence。
+- schema smoke build passed：17680 entities、833 entity documents、1 story line、
+  82930 lore chunks。
+- `tools/setup.sh` release GameData URL/SHA dry-run passed。
+
+`app-release.apk` 为 v0.6.0 / versionCode 6、release-mode、Android Debug certificate
+签名的 GitHub 验收包，不是正式商店签名。
+
+封盘时 deferred：
+
+- Android 真机上的本地存档恢复、双语、TalkBack、取消和长对话性能。
+- Roleplay UI 的真实截图/真机渲染验收。
+- 更广的多角色矩阵覆盖和低覆盖量化。
+- tag、GitHub Release、远端 asset 上传和 push。
+
+## v0.7.0
+
+v0.7.0 于 2026-07-15 封盘。发布 tag 指向收尾提交；本次 release 不变更 GameData
+schema、builder 或源数据，继续复用 v0.6.0 已 finalized 的 schema 2 中文 GameData DB。
+
+主要交付：
+
+- Wiki WebView 工具栏新增“转交给 AI”入口，读取当前选中文字，并携带页面标题、URL 和站点
+  标签。
+- 转交目标支持 Summary 和 Fact-check；AI 页面根据目标打开对应 tab，并把 Wiki context
+  作为用户消息提交给既有 Agent。
+- Wiki context 明确标记为用户阅读上下文，不是 GameData evidence；Summary / Fact-check
+  prompt 要求独立调用 `search_local_lore` 核验事实声明。
+- 未引入 Wiki embedding、vector indexing、隐藏索引、Book indexing 或 GameData DB 写入。
+- 新增中英文本地化文案。
+
+发布来源继续固定为：
+
+- repo：`Kengxxiao/ArknightsGameData`
+- branch：`master`
+- commit：`634e7e7d12c9d099c55896d51b4cf8ef633fa2a5`
+- language path：`zh_CN`
+- schema version：`2`
+
+发布资产：
+
+- `ArkLores-0.7.0.apk`：27187140 bytes，SHA256
+  `a656154d5cf0495fd70f12332b45da8ec29e2b7b9356e85bcb0e962c7ed96496`
+- `arklores_gamedata_zh.db`：395022336 bytes，SHA256
+  `3b6d61417da8bed1edda4535762d20f5ca2135389a37df3fa2c9fc4f785ab7c0`
+- `arklores_gamedata_zh.db.gz`：115092521 bytes，SHA256
+  `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5`
+- `gamedata_manifest.json`：984 bytes，SHA256
+  `805c3c1514e7849b5aad3f1a8e69a34561d0302e5306ca8f38e5948b65a78516`
+- `gamedata_build_report.json`：690 bytes，SHA256
+  `7116dc394db92173682e2560e0ea11ea115434816b227340f6869cdb908cb3db`
+
+收尾验证：
+
+- `/home/hhikr/flutter/bin/flutter test test/agent_test.dart`：43 passed。
+- `/home/hhikr/flutter/bin/flutter test test/fact_check_widget_test.dart`：3 passed。
+- `/home/hhikr/flutter/bin/flutter analyze`：No issues found。
+- finalized 完整 DB retrieval QA passed，包括固定 query、`特蕾西娅` alias candidates 和
+  `activities/act21mini/level_act21mini_st07.txt:3` scoped evidence。
+- release-mode APK build passed，构建时注入 v0.7.0 GameData release asset URL 与 SHA256。
+- `tools/setup.sh` v0.7.0 release GameData URL/SHA dry-run 参数解析通过。
+- `apksigner verify --verbose --print-certs`：v1/v2 verified，签名证书仍为 Android Debug
+  certificate。
+
+`ArkLores-0.7.0.apk` 为 v0.7.0 / versionCode 7、release-mode、Android Debug certificate
+签名的 GitHub 验收包，不是正式商店签名。
+
+封盘时 deferred：
+
+- Android 真机 WebView 选区读取、底部面板交互、返回浏览和无障碍验收。
+- 真实外部 Chat QA 与 finalized 完整 DB 的 Wiki context 检索矩阵。
+- 正式商店签名。

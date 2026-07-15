@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../ai/ai_chat_page.dart';
+import '../ai/wiki_ai_context.dart';
 import 'bookmark_page.dart';
 import 'bookmark_service.dart' show Bookmark;
 import 'wiki_dark_mode.dart';
@@ -142,6 +145,49 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
+  Future<void> _sendSelectionToAi() async {
+    final idx = _tabController.index;
+    final controller = _controllers[idx];
+    if (controller == null) return;
+    final selectedText = await _readSelectedText(controller);
+    if (!mounted) return;
+
+    final target = await showModalBottomSheet<WikiAiTarget>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _WikiAiTargetSheet(theme: ref.read(themeProvider)),
+    );
+    if (target == null || !mounted) return;
+
+    final contextPayload = WikiAiContext(
+      selectedText: selectedText,
+      pageTitle:
+          _titles[idx].trim().isNotEmpty ? _titles[idx] : _wikiSites[idx].label,
+      pageUrl: _currentUrls[idx].trim().isNotEmpty
+          ? _currentUrls[idx]
+          : _wikiSites[idx].initialUrl,
+      siteLabel: _wikiSites[idx].label,
+      target: target,
+    );
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AiChatPage(initialWikiContext: contextPayload),
+      ),
+    );
+  }
+
+  Future<String> _readSelectedText(InAppWebViewController controller) async {
+    try {
+      final value = await controller.evaluateJavascript(
+        source: 'window.getSelection ? window.getSelection().toString() : ""',
+      );
+      return value?.toString().trim() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   // ─── WebView tab state callbacks ─────────────────────────────────
 
   void _onControllerCreated(int index, InAppWebViewController controller) {
@@ -261,6 +307,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               onToggleDarkMode: _toggleDarkMode,
               onToggleBookmark: _toggleBookmark,
               onOpenBookmarks: _openBookmarks,
+              onSendToAi: _sendSelectionToAi,
             ),
           ],
         ),
@@ -441,6 +488,91 @@ class _WikiTabViewState extends State<_WikiTabView> {
   }
 }
 
+class _WikiAiTargetSheet extends StatelessWidget {
+  final AppThemeTokens theme;
+
+  const _WikiAiTargetSheet({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.cardSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          border: Border(top: BorderSide(color: theme.cardBorder)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.t.wikiSendToAi,
+                style: theme.titleFont.copyWith(fontSize: 18),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                context.t.wikiSendToAiDesc,
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _TargetTile(
+                theme: theme,
+                icon: Icons.summarize_rounded,
+                title: context.t.aiTabSummary,
+                subtitle: context.t.wikiSendToSummaryDesc,
+                onTap: () => Navigator.pop(context, WikiAiTarget.summary),
+              ),
+              _TargetTile(
+                theme: theme,
+                icon: Icons.verified_outlined,
+                title: context.t.aiTabFactCheck,
+                subtitle: context.t.wikiSendToFactCheckDesc,
+                onTap: () => Navigator.pop(context, WikiAiTarget.factCheck),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TargetTile extends StatelessWidget {
+  final AppThemeTokens theme;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _TargetTile({
+    required this.theme,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: theme.accentPrimary),
+      title: Text(title, style: theme.titleFont.copyWith(fontSize: 15)),
+      subtitle: Text(
+        subtitle,
+        style: theme.bodyFont.copyWith(color: theme.textSecondary),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
 // ─── Sizing constants for the expandable tray ───────────────────
 const double _traySize = 52;
 const double _trayMargin = 16;
@@ -466,6 +598,7 @@ class _ExpandableTray extends ConsumerWidget {
     required this.onToggleDarkMode,
     required this.onToggleBookmark,
     required this.onOpenBookmarks,
+    required this.onSendToAi,
   });
 
   final bool expanded;
@@ -482,6 +615,7 @@ class _ExpandableTray extends ConsumerWidget {
   final VoidCallback onToggleDarkMode;
   final VoidCallback onToggleBookmark;
   final VoidCallback onOpenBookmarks;
+  final VoidCallback onSendToAi;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -521,6 +655,8 @@ class _ExpandableTray extends ConsumerWidget {
                     onToggleDarkMode: onToggleDarkMode,
                     onToggleBookmark: onToggleBookmark,
                     onOpenBookmarks: onOpenBookmarks,
+                    onSendToAi: onSendToAi,
+                    sendToAiTooltip: context.t.wikiSendToAi,
                   ),
                 ),
               ),

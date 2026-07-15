@@ -95,7 +95,12 @@ void main() {
       );
       expect(
         result.observations,
-        contains('level_act21mini_st07.txt:3'),
+        contains('scoped_story_evidence'),
+        reason: diagnostics,
+      );
+      expect(
+        result.observations,
+        contains('activities/act21mini/level_act21mini_st'),
       );
       expect(result.answer, contains('死'));
       expect(result.answer, contains('意识'));

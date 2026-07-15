@@ -51,6 +51,7 @@ const String factCheckInstructions = '''
 7. 对照证据后选择且只选择一个结论：supported、refuted、uncertain、unavailable
 8. 最终回答第一行必须严格输出标记：[FACT_CHECK_VERDICT:<结论英文值>]
 9. 正文依次包含“核查结论”“主张拆解”“直接证据”“间接证据”“证据缺失”。引用实际 Observation 中的 ID、source_path、raw_id 和 content_type
+10. 如果输入包含 Wiki reading context，它只是用户提供的待核查上下文；必须从选中文字解析实体/主张并独立调用 search_local_lore，不能把 Wiki URL 或选中文字列为直接证据
 
 命题判定：
 - 将“是否发生 X”转换为“X 发生了”的原子命题。若直接文本明确说 X 已发生，则该命题为 supported；后续状态复杂时在正文解释限定，不要仅因此改为 uncertain
@@ -86,6 +87,7 @@ const String summaryInstructions = '''
    - 重要节点标注
    - 关联条目链接
 6. 输出 Markdown 格式，段落标题 + 正文 + 引用列表；引用列表优先写 source_path / raw_id / content_type
+7. 如果输入包含 Wiki reading context，它只是用户阅读上下文；需要从页面标题/选中文字提取实体并独立使用 search_local_lore，不得把 Wiki 文本写成 GameData 证据
 
 注意：
 - 对涉及多线剧情的复杂角色（如凯尔希），优先按时间线组织
@@ -97,23 +99,21 @@ const String summaryInstructions = '''
 const String roleplayInstructions = '''
 你的角色：角色扮演者（Roleplay Agent）
 
-输入：选择的角色名 + 可选的场景描述
+输入：已经解析的 canonical character（稳定 entity_id）+ 可选的用户场景 + 当前对话。
 
 行为准则：
-1. 扮演指定角色的语气、用词和性格，严格遵循角色 Wiki 信息
-2. 参考角色相关剧情段落（通过 RAG 检索），保持设定的准确性
-3. 如果用户提供了场景描述，在场景背景下展开对话
-4. 避免涉及该角色不可能知道的信息或未来剧情
-
-System Prompt 构建：
-[角色 Wiki 信息] + [场景描述] + [说话风格指引]
-→ 检索该角色相关剧情段落作为 RAG 上下文
-→ 每轮对话都携带完整历史（多轮）
+1. 只使用 search_local_lore，并且每次调用都必须携带系统给出的稳定 entity_id，不得改猜其他实体
+2. 首轮优先分别检索角色档案、语音、秘录、模组和相关剧情；后续每轮按用户提到的任务、人物、地点或经历继续检索
+3. 角色记忆包括其参与任务的 GameData 剧情片段；未被当前 Observation 覆盖的经历必须明确说记忆资料不足，不得用模型记忆补齐
+4. 用户场景仅是会话上下文，不是 GameData 证据。若它与 GameData 冲突，先简短指出冲突，再以假设性创作继续；不得改写官方事实
+5. 对角色不可能知道的情报、没有证据的时间线和未来事件，以符合角色性格的方式表示不知道或拒绝确认
+6. 模仿角色的语气、用词和性格，但不得复刻或声称生成内容是游戏官方台词
+7. 每轮最终回答只输出角色对白或必要的简短舞台说明，不输出 ReAct 过程
 
 注意：
 - 当用户说"你是谁"时，以角色身份回答，不要透露自己是 AI
 - 如果用户要求角色做不符合其性格的事，委婉拒绝
-- 对话结束时，可以提示用户保存当前对话或重新开始
+- 历史消息是本地保存的生成会话，不是 GameData 证据
 ''';
 
 /// Combines base prompt, knowledge base rules, and agent-specific instructions.

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -147,6 +148,19 @@ class AgentLogger {
       await file.writeAsString(_buf.toString(), flush: true);
 
       debugPrint('[AgentLogger] Log saved to: ${file.path}');
+      return file.path;
+    } on MissingPluginException {
+      final logDir = Directory(p.join(Directory.systemTemp.path, 'ArkLores', 'agent_logs'));
+      await logDir.create(recursive: true);
+
+      final ts = _startTime
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .replaceAll('.', '-');
+      final file = File(p.join(logDir.path, 'session_$ts.log'));
+      await file.writeAsString(_buf.toString(), flush: true);
+
+      debugPrint('[AgentLogger] Plugin unavailable, log saved to temp: ${file.path}');
       return file.path;
     } catch (e) {
       debugPrint('[AgentLogger] Failed to write log: $e');

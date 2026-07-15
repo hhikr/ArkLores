@@ -527,6 +527,30 @@ abstract class AppLocalizations {
   /// **'Endfield Wiki'**
   String get wikiTabEndfield;
 
+  /// No description provided for @wikiSendToAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to AI'**
+  String get wikiSendToAi;
+
+  /// No description provided for @wikiSendToAiDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected Wiki text is reading context only; factual claims are verified separately with GameData.'**
+  String get wikiSendToAiDesc;
+
+  /// No description provided for @wikiSendToSummaryDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize from the page and selected text'**
+  String get wikiSendToSummaryDesc;
+
+  /// No description provided for @wikiSendToFactCheckDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the selected text as the claim to check'**
+  String get wikiSendToFactCheckDesc;
+
   /// No description provided for @bookmarksTitle.
   ///
   /// In en, this message translates to:
@@ -784,6 +808,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get aiClearConfirmBtn;
+
+  /// No description provided for @aiRoleplayChoose.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a character'**
+  String get aiRoleplayChoose;
+
+  /// No description provided for @aiRoleplayChooseDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The character is resolved to a stable GameData entity before dialogue begins.'**
+  String get aiRoleplayChooseDesc;
+
+  /// No description provided for @aiRoleplayCharacter.
+  ///
+  /// In en, this message translates to:
+  /// **'Character name or alias'**
+  String get aiRoleplayCharacter;
+
+  /// No description provided for @aiRoleplayScene.
+  ///
+  /// In en, this message translates to:
+  /// **'Scene (optional)'**
+  String get aiRoleplayScene;
+
+  /// No description provided for @aiRoleplaySceneContext.
+  ///
+  /// In en, this message translates to:
+  /// **'The scene is session context, not GameData evidence'**
+  String get aiRoleplaySceneContext;
+
+  /// No description provided for @aiRoleplayStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve character and start'**
+  String get aiRoleplayStart;
+
+  /// No description provided for @aiRoleplayResolving.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolving…'**
+  String get aiRoleplayResolving;
+
+  /// No description provided for @aiRoleplayNoDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'The Chinese GameData knowledge base is not installed. Install it in Settings first.'**
+  String get aiRoleplayNoDatabase;
+
+  /// No description provided for @aiRoleplayNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching character was found in GameData. Check the name or alias.'**
+  String get aiRoleplayNotFound;
+
+  /// No description provided for @aiRoleplayDisambiguate.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the matching GameData entity'**
+  String get aiRoleplayDisambiguate;
+
+  /// No description provided for @aiRoleplayContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue saved local session'**
+  String get aiRoleplayContinue;
+
+  /// No description provided for @aiRoleplayRestart.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart'**
+  String get aiRoleplayRestart;
+
+  /// No description provided for @aiRoleplayGeneratedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.'**
+  String get aiRoleplayGeneratedNotice;
+
+  /// No description provided for @aiRoleplayEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.'**
+  String get aiRoleplayEmpty;
+
+  /// No description provided for @aiRoleplayInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Talk to the character…'**
+  String get aiRoleplayInputPlaceholder;
+
+  /// No description provided for @aiRoleplayError.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation failed. Please retry.'**
+  String get aiRoleplayError;
+
+  /// No description provided for @aiRoleplayCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation canceled.'**
+  String get aiRoleplayCanceled;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

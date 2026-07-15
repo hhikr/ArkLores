@@ -113,6 +113,63 @@ Additional smoke check:
 - `特蕾西娅` 等变体名现在有基础 alias 候选，但用户提问时是否需要展示候选仍取决于 Agent 调用 `search_local_lore` 的 disambiguation 分支。
 - 真机端到端仍需要用 release asset 或临时 HTTP asset 验证下载、安装、检索、Summary Agent 全链路。
 
+## v0.6 Role-play QA
+
+角色扮演继续只注册 `search_local_lore`。角色选择先通过 `entities/entity_aliases` 解析为
+canonical name 和稳定 `entity_id`；角色绑定工具会覆盖模型传入的 entity id，并默认使用
+`roleplay` 检索计划。该计划复用实体文档、档案记录和 canonical 角色名剧情回查，使未直接
+写入 `entity_id` 的任务剧情仍可作为候选记忆；每轮至少完成一次检索，未覆盖经历不得用模型
+记忆补齐。
+
+2026-07-15 收尾验证：
+
+- Passed: `test/agent_test.dart` 的 41 项测试，其中 Role-play 覆盖唯一角色解析、alias
+  重名消歧、稳定 entity id 注入、首轮档案/语音/秘录/模组/任务记忆约束，以及会话文件的
+  空状态、保存、读取、损坏和删除。
+- Passed: Role-play 复用 ReAct 的空回答、截断、minimum tool-call 和 unsupported source
+  claim 回归测试。
+- Passed: `test/fact_check_widget_test.dart` 的 2 项测试，覆盖 320 logical px 窄屏、
+  fact-check evidence 展开，以及 roleplay setup/conversation state 渲染，无 Flutter
+  test exception。
+- Passed: `ARKLORES_RUN_LIVE_CHAT=true test/live_fact_check_test.dart` 的 3 项真实 Chat
+  QA；测试环境下 `AgentLogger` 回退到系统临时目录。
+- Passed: finalized 完整 DB retrieval QA；固定 query、`特蕾西娅` alias candidates 和
+  `activities/act21mini/level_act21mini_st07.txt:3` scoped evidence 均通过。
+- Passed: schema smoke build：17680 entities、833 entity documents、1 story line、
+  82930 lore chunks。
+- Passed: `flutter analyze` 为 No issues found。
+- Not verified: roleplay 真实截图/真机渲染、Android 本地存档恢复、双语、TalkBack、取消和
+  长对话性能。
+- Not covered: finalized 完整 DB 上的更广多角色任务参与检索矩阵和低覆盖量化。
+
+## v0.7 Wiki Context Handoff QA
+
+Wiki 阅读上下文转交不新增检索来源，不写入 GameData DB，也不恢复 Wiki seed RAG、
+embedding、vector indexing 或 Book indexing。转交内容只作为用户上下文进入 Summary /
+Fact-check；事实声明仍必须由既有 `search_local_lore` 和中文 GameData 结构化 DB 独立核验。
+
+2026-07-15 自动验证：
+
+- Passed: `test/agent_test.dart` 的 43 项测试，其中新增覆盖 Wiki context 有选区和空选区两种
+  prompt 格式，确认文本被标记为 `not GameData evidence`，并要求使用 `search_local_lore`
+  独立核验。
+- Passed: `test/fact_check_widget_test.dart` 的 3 项测试，其中新增覆盖 AI 页面接收
+  `WikiAiContext` 后进入 Summary tab，并把 Wiki 页面标题、URL 和选中文字作为用户上下文渲染。
+- Passed: `/home/hhikr/flutter/bin/flutter analyze` 为 No issues found。
+- Passed: finalized 完整 DB retrieval QA；固定 query、`特蕾西娅` alias candidates 和
+  `activities/act21mini/level_act21mini_st07.txt:3` scoped evidence 均通过。
+- Passed: v0.7.0 release-mode APK build、setup release GameData URL/SHA dry-run 和
+  `apksigner` v1/v2 verification。
+
+Not verified:
+
+- Android 真机 WebView 的真实选区读取、系统选择菜单、底部面板操作和返回浏览页面。
+- Fact-check Wiki context 的真实外部 Chat QA；尚未验证模型在真实 provider 下是否稳定从
+  Wiki 选中文字解析主张并调用 `search_local_lore`。
+- finalized 完整 DB 上的 Summary / Fact-check Wiki context 检索矩阵、实体歧义和无覆盖
+  量化。
+- Wiki 转交底部面板在双语、文字缩放、TalkBack 和常见手机尺寸下的截图或真机验收。
+
 ## v0.5 Fact-Check QA
 
 ### Scoped Evidence 维护约束
@@ -152,6 +209,9 @@ finalized DB，并临时解除 `flutter_test` 的网络拦截。它不是 Settin
   实体歧义、unsupported verdict 降级、追问历史，以及降级后有效结论的 debug 日志。
 - `test/fact_check_widget_test.dart` 覆盖 320 logical px 宽度、2 倍文字缩放、结论状态和
   GameData evidence 展开，无 RenderFlex overflow。
+- `test/live_fact_check_test.dart` 使用 `tools/api_info` 中的真实 API 配置完成最小 chat
+  completion、scoped story evidence 和未来命题的 live QA；`AgentLogger` 在测试环境下已降级到
+  系统临时目录。
 - 真实 Chat QA 可通过 `ARKLORES_RUN_LIVE_CHAT=true flutter test
   test/live_fact_check_test.dart` 显式运行。API 配置仅从已忽略的
   `tools/api_info` 读取，测试使用生产 `OpenAICompatibleClient -> FactCheckAgent ->
@@ -162,5 +222,5 @@ finalized DB，并临时解除 `flutter_test` 的网络拦截。它不是 Settin
   `supported`，引用 `level_act21mini_st07.txt:3`，并区分身体死亡与意识保留。
 - Passed: 同一 live suite 的无覆盖未来命题没有返回 supported/refuted；当前模型结果为
   `uncertain`。其宽查询曾将数字 `2030` 误命中 enemy ID，后续定向查询均无结果。
-- Not covered: `flutter_test` 没有原生 `path_provider` 实现，live QA 不验证真机日志目录、
-  Settings/provider 状态或 UI；这些仍需真机 integration 验收。
+- Not covered: `flutter_test` 没有原生 `path_provider` 真机插件实现，live QA 只能回退到系统临时目录；
+  Settings/provider 状态和 Android 真机路径、TalkBack 仍需真机 integration 验收。
