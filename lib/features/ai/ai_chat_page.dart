@@ -6,8 +6,8 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/theme_aware_card.dart';
 import 'widgets/chat_bubble.dart';
+import 'widgets/roleplay_tab.dart';
 
 /// The main AI Chat Page hosting the three AI modes (FactCheck, Summary, Roleplay).
 ///
@@ -83,60 +83,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 ? _buildSummaryChatTab(theme)
                 : _buildConfigRequiredTab(theme),
 
-            // ── Roleplay Tab (Placeholder) ───────────────────
-            _buildPlaceholderTab(
-              theme,
-              icon: Icons.supervised_user_circle_rounded,
-              title: context.t.aiTabRoleplay,
-              subtitle: 'Coming in v0.6',
-              desc:
-                  'Choose your favorite operator and converse under custom narrative scenarios.',
-            ),
+            isConfigured ? const RoleplayTab() : _buildConfigRequiredTab(theme),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderTab(
-    AppThemeTokens theme, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String desc,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 64,
-            color: theme.accentPrimary.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: theme.titleFont
-                .copyWith(fontSize: 22, color: theme.textPrimary),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: theme.titleFont
-                .copyWith(fontSize: 14, color: theme.accentSecondary),
-          ),
-          const SizedBox(height: 24),
-          ThemeAwareCard(
-            child: Text(
-              desc,
-              style: theme.bodyFont
-                  .copyWith(color: theme.textSecondary, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
       ),
     );
   }

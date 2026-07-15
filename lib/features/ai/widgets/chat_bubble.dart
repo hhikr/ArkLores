@@ -132,6 +132,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       content = context.t.importErrorOccurred;
     } else if (content == '[FACT_CHECK_CANCELED]') {
       content = context.t.aiCancel;
+    } else if (content == '[ROLEPLAY_ERROR]') {
+      content = context.t.aiRoleplayError;
+    } else if (content == '[ROLEPLAY_CANCELED]') {
+      content = context.t.aiRoleplayCanceled;
     }
 
     // Scan for citation UUIDs
