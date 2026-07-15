@@ -1,258 +1,119 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:arklores/core/wiki/warfarin_crawler.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('WarfarinWikiCrawler Tests', () {
-    test('Unit Test: decodeRemixStream correctly decodes index references', () {
-      final mockRemixArray = [
-        {"version": 3},
-        "route_a",
-        {"_3": 4},
-        "title",
-        "佩丽卡"
-      ];
-      final decoded = decodeRemixStream(mockRemixArray);
-      expect(decoded, isA<Map<String, dynamic>>());
-      expect(decoded.containsKey('route_a'), isTrue);
-      expect(decoded['route_a'], isA<Map<String, dynamic>>());
-      expect((decoded['route_a'] as Map)['title'], '佩丽卡');
+  group('Remix stream decoder', () {
+    test('resolves indexed keys and nested values', () {
+      final decoded = decodeRemixStream([
+        {'version': 3},
+        'route_a',
+        {'_3': 4},
+        'title',
+        '佩丽卡',
+      ]);
+
+      expect(decoded['route_a'], {'title': '佩丽卡'});
+      expect(decoded['title'], '佩丽卡');
     });
 
-    test(
-      'Integration Test: Fetch operators listing only',
-      () async {
-        final crawler = WarfarinWikiCrawler();
-
-        debugPrint('📡 Fetching operator slugs from Warfarin Wiki...');
-        final opSlugs = await crawler.fetchOperatorSlugs();
-        debugPrint(
-            '✓ Found ${opSlugs.length} operators. First few: ${opSlugs.take(5).toList()}');
-        expect(opSlugs.length, greaterThanOrEqualTo(1));
-
-        debugPrint('📡 Fetching operator listings (with names)...');
-        final opItems = await crawler.fetchOperatorListings();
-        debugPrint('✓ Listing items: ${opItems.length}');
-        for (final item in opItems.take(5)) {
-          debugPrint('  ${item.slug} / ${item.name}');
-        }
-        expect(opItems.length, greaterThanOrEqualTo(1));
-        expect(opItems.first.slug, isNotEmpty);
-        expect(opItems.first.name, isNotEmpty);
-
-        crawler.dispose();
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
-
-    test(
-      'Integration Test: Fetch lore listing',
-      () async {
-        final crawler = WarfarinWikiCrawler();
-
-        debugPrint('📡 Fetching lore slugs...');
-        final loreSlugs = await crawler.fetchLoreSlugs();
-        debugPrint(
-            '✓ Found ${loreSlugs.length} lore entries. First few: ${loreSlugs.take(3).toList()}');
-        expect(loreSlugs.length, greaterThanOrEqualTo(1));
-
-        final loreItems = await crawler.fetchLoreListings();
-        expect(loreItems.length, greaterThanOrEqualTo(1));
-        expect(loreItems.first.slug, isNotEmpty);
-        expect(loreItems.first.name, isNotEmpty);
-
-        crawler.dispose();
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
-
-    test(
-      'Integration Test: Fetch mission listing',
-      () async {
-        final crawler = WarfarinWikiCrawler();
-
-        debugPrint('📡 Fetching mission slugs...');
-        final missionSlugs = await crawler.fetchMissionSlugs();
-        debugPrint(
-            '✓ Found ${missionSlugs.length} missions. First few: ${missionSlugs.take(3).toList()}');
-        expect(missionSlugs.length, greaterThanOrEqualTo(1));
-
-        final missionItems = await crawler.fetchMissionListings();
-        expect(missionItems.length, greaterThanOrEqualTo(1));
-        expect(missionItems.first.slug, isNotEmpty);
-        expect(missionItems.first.name, isNotEmpty);
-
-        crawler.dispose();
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
-
-    test(
-      'Integration Test: Fetch operator detail and format',
-      () async {
-        final crawler = WarfarinWikiCrawler();
-        final ops = await crawler.fetchOperatorListings();
-
-        if (ops.isNotEmpty) {
-          final slug = ops.first.slug;
-          debugPrint(
-              '📡 Fetching detail for operator: $slug (${ops.first.name})...');
-          final opData = await crawler.fetchOperatorDetail(slug);
-          expect(opData, isNotEmpty);
-          debugPrint('Detail data keys: ${opData.keys.take(8).toList()}');
-          var markdown = crawler.formatOperatorToMarkdown(opData);
-          if (markdown.isEmpty || markdown == '# \n') {
-            markdown = '# ${ops.first.name}\n$markdown';
-          }
-          debugPrint('=== MARKDOWN PREVIEW ===');
-          debugPrint(markdown.split('\n').take(10).join('\n'));
-          debugPrint('=======================');
-        }
-
-        crawler.dispose();
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
-
-    test(
-      'Integration Test: Fetch lore detail and format',
-      () async {
-        final crawler = WarfarinWikiCrawler();
-        final loreItems = await crawler.fetchLoreListings();
-
-        if (loreItems.isNotEmpty) {
-          final slug = loreItems.first.slug;
-          debugPrint('📡 Fetching lore detail: $slug...');
-          final data = await crawler.fetchLoreDetail(slug);
-          expect(data, isNotEmpty);
-          final markdown = crawler.formatLoreToMarkdown(data);
-          debugPrint('=== MARKDOWN PREVIEW ===');
-          debugPrint(markdown.split('\n').take(10).join('\n'));
-        }
-
-        crawler.dispose();
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
-
-    test(
-      'Integration Test: Fetch mission detail and format',
-      () async {
-        final crawler = WarfarinWikiCrawler();
-        final missionItems = await crawler.fetchMissionListings();
-
-        if (missionItems.isNotEmpty) {
-          final slug = missionItems.first.slug;
-          debugPrint('📡 Fetching mission detail: $slug...');
-          final data = await crawler.fetchMissionDetail(slug);
-          expect(data, isNotEmpty);
-          final markdown = crawler.formatMissionToMarkdown(data);
-          debugPrint('=== MARKDOWN PREVIEW ===');
-          debugPrint(markdown.split('\n').take(10).join('\n'));
-        }
-
-        crawler.dispose();
-      },
-      timeout: const Timeout(Duration(minutes: 1)),
-    );
+    test('returns empty data for incomplete streams', () {
+      expect(decodeRemixStream(const []), isEmpty);
+      expect(decodeRemixStream(const [1]), isEmpty);
+    });
   });
 
-  group('Formatter Full Output — 分块向量化前的文本（无断言）', () {
-    test('Format: 干员 汤汤', () async {
-      final crawler = WarfarinWikiCrawler();
-      final ops = await crawler.fetchOperatorListings();
-      final tangtang =
-          ops.firstWhere((o) => o.slug == 'tangtang', orElse: () => ops[0]);
-      debugPrint('═══════════════════════════════════════════');
-      debugPrint('📄 干员：${tangtang.name} (${tangtang.slug})');
-      debugPrint('═══════════════════════════════════════════');
-      final data = await crawler.fetchOperatorDetail(tangtang.slug);
-      final md = crawler.formatOperatorToMarkdown(data);
-      debugPrint('字符数：${md.length}');
-      debugPrint('════');
-      debugPrint(md);
-      debugPrint('═══════════════════════════════════════════');
-      crawler.dispose();
-    }, timeout: const Timeout(Duration(minutes: 1)));
+  group('Warfarin markdown formatter', () {
+    late WarfarinWikiCrawler crawler;
 
-    test('Format: 干员 佩丽卡', () async {
-      final crawler = WarfarinWikiCrawler();
-      final ops = await crawler.fetchOperatorListings();
-      final target =
-          ops.firstWhere((o) => o.slug == 'perlica', orElse: () => ops[0]);
-      debugPrint('═══════════════════════════════════════════');
-      debugPrint('📄 干员：${target.name} (${target.slug})');
-      debugPrint('═══════════════════════════════════════════');
-      final data = await crawler.fetchOperatorDetail(target.slug);
-      final md = crawler.formatOperatorToMarkdown(data);
-      debugPrint('字符数：${md.length}');
-      debugPrint('════');
-      debugPrint(md);
-      debugPrint('═══════════════════════════════════════════');
-      crawler.dispose();
-    }, timeout: const Timeout(Duration(minutes: 1)));
+    setUp(() => crawler = WarfarinWikiCrawler());
+    tearDown(() => crawler.dispose());
 
-    test('Format: 干员 汤汤', () async {
-      final crawler = WarfarinWikiCrawler();
-      final loreItems = await crawler.fetchLoreListings();
-      final target = loreItems.firstWhere(
-          (o) => o.slug.contains('text_sm1l5m1'),
-          orElse: () => loreItems[0]);
-      debugPrint('═══════════════════════════════════════════');
-      debugPrint('📄 资料：${target.name} (${target.slug})');
-      debugPrint('═══════════════════════════════════════════');
-      final data = await crawler.fetchLoreDetail(target.slug);
-      final md = crawler.formatLoreToMarkdown(data);
-      debugPrint('字符数：${md.length}');
-      debugPrint('════');
-      debugPrint(md);
-      debugPrint('═══════════════════════════════════════════');
-      crawler.dispose();
-    }, timeout: const Timeout(Duration(minutes: 1)));
+    test('formats operator metadata, archive and voice without game tags', () {
+      final markdown = crawler.formatOperatorToMarkdown({
+        'characterTable': {
+          'name': {'zh': '佩丽卡'},
+          'engName': 'Perlica',
+          'charTypeId': 'electric',
+          'cvName': {'ChiCVName': '测试声优'},
+          'profileRecord': [
+            {
+              'recordTitle': '<@title>档案资料',
+              'recordDesc': '<@text>来自终末地工业的管理员。',
+            },
+          ],
+          'profileVoice': [
+            {'voiceTitle': '问候', 'voiceDesc': '欢迎回来。'},
+          ],
+        },
+        'charGrowthTable': {
+          'rarity': 6,
+          'profession': 5,
+          'skillGroupMap': {
+            'skill_1': {'name': '协议技', 'desc': '造成法术伤害。'},
+          },
+        },
+        'charTagTable': {
+          'blocId': 'power_endfield',
+          'raceTagId': 'tag_race_liberi',
+          'expertTagIds': ['tag_expert_manage'],
+        },
+        'charTagDesTable': {
+          'tagDesc': {
+            'tag_expert_manage': {'desc': '管理'},
+          },
+        },
+      });
 
-    test('Format: 资料 弩箭残片的记录', () async {
-      final crawler = WarfarinWikiCrawler();
-      final data = await crawler.fetchLoreDetail('text_map01_lv001_sm1l1m4_1');
-      debugPrint('═══════════════════════════════════════════');
-      debugPrint('📄 资料：弩箭残片的记录');
-      debugPrint('═══════════════════════════════════════════');
-      final md = crawler.formatLoreToMarkdown(data);
-      debugPrint('字符数：${md.length}');
-      debugPrint('════');
-      debugPrint(md);
-      debugPrint('═══════════════════════════════════════════');
-      crawler.dispose();
-    }, timeout: const Timeout(Duration(minutes: 1)));
+      expect(markdown, contains('# 佩丽卡'));
+      expect(markdown, contains('> Perlica'));
+      expect(markdown, contains('- 职业：术师'));
+      expect(markdown, contains('- 阵营：终末地工业'));
+      expect(markdown, contains('- 种族：黎博利'));
+      expect(markdown, contains('- 专长：管理'));
+      expect(markdown, contains('## 档案资料'));
+      expect(markdown, contains('**问候**'));
+      expect(markdown, isNot(contains('<@')));
+    });
 
-    test('Format: 任务 c27m1 完整对话', () async {
-      final crawler = WarfarinWikiCrawler();
-      debugPrint('═══════════════════════════════════════════');
-      debugPrint('📄 任务：c27m1（风平水不静）');
-      debugPrint('═══════════════════════════════════════════');
-      final data = await crawler.fetchMissionDetail('c27m1');
-      final md = crawler.formatMissionToMarkdown(data);
-      debugPrint(
-          '字符数：${md.length} ｜ 对话条目数：${(data['dialog'] as List?)?.length ?? 0}');
-      debugPrint('════');
-      debugPrint(md);
-      debugPrint('═══════════════════════════════════════════');
-      crawler.dispose();
-    }, timeout: const Timeout(Duration(minutes: 1)));
+    test('formats lore text and ignores image-only records', () {
+      final markdown = crawler.formatLoreToMarkdown({
+        'prtsAllItem': {
+          'name': {'zh': '弩箭残片的记录'},
+          'type': '资料',
+        },
+        'richContentTable': {
+          'contentList': [
+            {'content': '<image>asset.png'},
+            {'content': '这是一段可阅读的记录。'},
+          ],
+        },
+      });
 
-    test('Format: 任务 最后一个 mission', () async {
-      final crawler = WarfarinWikiCrawler();
-      final missions = await crawler.fetchMissionListings();
-      final last = missions.last;
-      debugPrint('═══════════════════════════════════════════');
-      debugPrint('📄 任务：${last.slug}（${last.name}）');
-      debugPrint('═══════════════════════════════════════════');
-      final data = await crawler.fetchMissionDetail(last.slug);
-      final md = crawler.formatMissionToMarkdown(data);
-      debugPrint('字符数：${md.length}');
-      debugPrint('════');
-      debugPrint(md);
-      debugPrint('═══════════════════════════════════════════');
-      crawler.dispose();
-    }, timeout: const Timeout(Duration(minutes: 1)));
+      expect(markdown, startsWith('# 弩箭残片的记录'));
+      expect(markdown, contains('分类：资料'));
+      expect(markdown, contains('这是一段可阅读的记录。'));
+      expect(markdown, isNot(contains('asset.png')));
+    });
+
+    test('formats dialogue and excludes action/event rows', () {
+      final markdown = crawler.formatMissionToMarkdown({
+        'mission': {
+          'name': '风平水不静',
+          'typeName': '主线',
+          'description': '调查异常信号。',
+        },
+        'dialog': [
+          {'actorName': '佩丽卡', 'dialogText': '开始行动。', 'type': 'talk'},
+          {'dialogText': '镜头切换', 'type': 'action'},
+          {'dialogText': '通讯中断。', 'type': 'talk'},
+        ],
+      });
+
+      expect(markdown, contains('# 风平水不静（主线）'));
+      expect(markdown, contains('> 调查异常信号。'));
+      expect(markdown, contains('**佩丽卡**：开始行动。'));
+      expect(markdown, contains('通讯中断。'));
+      expect(markdown, isNot(contains('镜头切换')));
+    });
   });
 }

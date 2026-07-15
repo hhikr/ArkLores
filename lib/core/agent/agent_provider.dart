@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import 'react_loop.dart';
+import 'fact_check_agent.dart';
 import 'summary_agent.dart';
 
 const _uuid = Uuid();
@@ -32,6 +33,7 @@ class ChatMessage {
   final List<ReActStep> steps;
   final bool isStreaming;
   final bool isError;
+  final FactCheckVerdict? factCheckVerdict;
   final DateTime timestamp;
 
   const ChatMessage({
@@ -41,6 +43,7 @@ class ChatMessage {
     this.steps = const [],
     this.isStreaming = false,
     this.isError = false,
+    this.factCheckVerdict,
     required this.timestamp,
   });
 
@@ -51,6 +54,7 @@ class ChatMessage {
     List<ReActStep>? steps,
     bool? isStreaming,
     bool? isError,
+    FactCheckVerdict? factCheckVerdict,
     DateTime? timestamp,
   }) {
     return ChatMessage(
@@ -60,6 +64,7 @@ class ChatMessage {
       steps: steps ?? this.steps,
       isStreaming: isStreaming ?? this.isStreaming,
       isError: isError ?? this.isError,
+      factCheckVerdict: factCheckVerdict ?? this.factCheckVerdict,
       timestamp: timestamp ?? this.timestamp,
     );
   }
@@ -72,6 +77,10 @@ final summaryAgentProvider = Provider<SummaryAgent>((ref) {
   return SummaryAgent(
     llmClient: llm,
   );
+});
+
+final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
+  return FactCheckAgent(llmClient: ref.watch(llmClientProvider));
 });
 
 /// State notifier for Summary Chat history and processing.
@@ -232,4 +241,155 @@ final summaryChatProvider =
     StateNotifierProvider<SummaryChatNotifier, List<ChatMessage>>((ref) {
   final agent = ref.watch(summaryAgentProvider);
   return SummaryChatNotifier(agent);
+});
+
+class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
+  final FactCheckAgent _agent;
+  int _requestGeneration = 0;
+
+  FactCheckChatNotifier(this._agent) : super([]);
+
+  Future<void> sendMessage(String text) async {
+    final claim = text.trim();
+    if (claim.isEmpty || state.any((message) => message.isStreaming)) return;
+    final generation = ++_requestGeneration;
+    final history = _buildHistory(state);
+    final assistantId = _uuid.v4();
+    state = [
+      ...state,
+      ChatMessage(
+        id: _uuid.v4(),
+        role: MessageRole.user,
+        content: claim,
+        timestamp: DateTime.now(),
+      ),
+      ChatMessage(
+        id: assistantId,
+        role: MessageRole.assistant,
+        content: '',
+        isStreaming: true,
+        timestamp: DateTime.now(),
+      ),
+    ];
+
+    final steps = <ReActStep>[];
+    try {
+      await for (final event
+          in _agent.checkClaim(claim: claim, history: history)) {
+        if (generation != _requestGeneration) return;
+        switch (event.type) {
+          case ReActEventType.thought:
+          case ReActEventType.toolObservation:
+          case ReActEventType.error:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+            ));
+            _update(
+              assistantId,
+              content: event.type == ReActEventType.error
+                  ? '[FACT_CHECK_ERROR]'
+                  : null,
+              steps: List.of(steps),
+              isError: event.type == ReActEventType.error,
+            );
+            break;
+          case ReActEventType.toolCall:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+              toolArgs: event.toolArgs,
+            ));
+            _update(assistantId, steps: List.of(steps));
+            break;
+          case ReActEventType.finalAnswerToken:
+            _update(
+              assistantId,
+              content: event.content,
+              factCheckVerdict: parseFactCheckVerdict(event.content),
+            );
+            break;
+          case ReActEventType.complete:
+            _update(assistantId, isStreaming: false);
+            break;
+        }
+      }
+    } catch (_) {
+      if (generation == _requestGeneration) {
+        _update(assistantId,
+            content: '[FACT_CHECK_ERROR]', isError: true, isStreaming: false);
+      }
+    }
+  }
+
+  void cancel() {
+    _requestGeneration++;
+    state = [
+      for (final message in state)
+        if (message.isStreaming)
+          message.copyWith(
+            content: '[FACT_CHECK_CANCELED]',
+            isStreaming: false,
+            isError: true,
+          )
+        else
+          message,
+    ];
+  }
+
+  Future<void> retryLast() async {
+    final users = state.where((message) => message.role == MessageRole.user);
+    if (users.isEmpty || state.any((message) => message.isStreaming)) return;
+    final claim = users.last.content;
+    if (state.isNotEmpty && state.last.role == MessageRole.assistant) {
+      state = state.sublist(0, state.length - 1);
+    }
+    if (state.isNotEmpty && state.last.role == MessageRole.user) {
+      state = state.sublist(0, state.length - 1);
+    }
+    await sendMessage(claim);
+  }
+
+  void clearChat() {
+    cancel();
+    state = [];
+  }
+
+  List<Message> _buildHistory(List<ChatMessage> messages) => [
+        for (final message in messages)
+          if (!message.isStreaming && !message.isError)
+            message.role == MessageRole.user
+                ? Message.user(message.content)
+                : Message.assistant(message.content),
+      ];
+
+  void _update(
+    String id, {
+    String? content,
+    List<ReActStep>? steps,
+    bool? isStreaming,
+    bool? isError,
+    FactCheckVerdict? factCheckVerdict,
+  }) {
+    state = [
+      for (final message in state)
+        if (message.id == id)
+          message.copyWith(
+            content: content,
+            steps: steps,
+            isStreaming: isStreaming,
+            isError: isError,
+            factCheckVerdict: factCheckVerdict,
+          )
+        else
+          message,
+    ];
+  }
+}
+
+final factCheckChatProvider =
+    StateNotifierProvider<FactCheckChatNotifier, List<ChatMessage>>((ref) {
+  return FactCheckChatNotifier(ref.watch(factCheckAgentProvider));
 });

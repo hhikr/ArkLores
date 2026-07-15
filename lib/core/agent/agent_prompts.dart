@@ -25,19 +25,14 @@ When you don't know something, say so honestly rather than making up information
 /// Injected into every agent's system prompt to ensure proper handling
 /// of GameData vs Wiki vs Book sourced content.
 const String knowledgeBaseRules = '''
-下面提供的检索结果可能包含三类来源：
-- [GameData] 来自中文游戏原始文本 / 解包数据（最高可信）
-- [Wiki] 来自指定 Wiki（PRTS Wiki 或终末地 Wiki，用作补充）
-- [Book] 来自用户导入的书籍资料（可能包含非官方解读或翻译误差）
+当前默认且唯一可用于 Agent 取证的来源是 [GameData] 中文游戏原始文本 / 解包数据。
+Wiki 浏览内容和用户文本只能作为用户提供的上下文，不能当作 GameData 证据。
 
 引用规则：
 1. 可信度优先级必须是 GameData / 游戏原始文本 > 指定 Wiki > 用户导入 Book
-2. 当 [GameData] 与 [Wiki] 或 [Book] 内容冲突时，优先采信 [GameData]
-3. Wiki 只能作为补充说明或交叉验证，不要把 Wiki 当作主知识源
-4. 引用 [Book] 内容时，必须明确标注为「来自书籍资料」
-5. 如果 [Book] 内容无法被 [GameData] 或 [Wiki] 佐证，应说明"此信息仅来自用户导入资料，建议自行核实"
-6. 不得将 [Book] 来源的内容以确定语气表述为官方设定
-7. 如果当前知识库没有覆盖，明确说明限制，不得编造
+2. 不得声称已检索 Wiki、Book 或其他未出现在 Observation 中的来源
+3. 用户上下文与 GameData 冲突时，以 GameData 为事实核查依据并明确指出冲突
+4. 如果当前知识库没有覆盖，明确说明限制，不得用模型记忆补齐
 ''';
 
 /// Fact-Check Agent specific instructions.
@@ -47,19 +42,23 @@ const String factCheckInstructions = '''
 输入：用户提出一个关于明日方舟/终末地剧情的说法。
 
 工作流程：
-1. 分析用户输入，提取关键实体和主张
-2. 使用 search_local_lore 工具检索本地 GameData 结构化知识库内容（3~5次）
-3. 综合判断该说法的准确性
-4. 输出结论，格式为：
-   - 正确（有 GameData / Wiki 证据支持）
-   - 错误（与高可信证据矛盾）
-   - 存疑（证据不足以判断）
-   - 无法确认（知识库中没有相关信息）
-5. 每个结论附带引用证据，用下划线标注可展开查看原文
+1. 把输入拆成可核验的原子主张，并提取每个主张的实体、关系、时间或否定条件
+2. 仅使用 search_local_lore，针对实体、支持方向和反驳方向分别检索，通常调用 3~5 次
+3. 若返回实体歧义候选，不得猜测；请用户选择，结论只能是存疑
+4. 对照证据后选择且只选择一个结论：supported、refuted、uncertain、unavailable
+5. 最终回答第一行必须严格输出标记：[FACT_CHECK_VERDICT:<结论英文值>]
+6. 正文依次包含“核查结论”“主张拆解”“直接证据”“间接证据”“证据缺失”。引用实际 Observation 中的 ID、source_path、raw_id 和 content_type
+
+结论规则：
+- supported（支持）：直接 GameData 记录支持主张，必须有实际检索结果
+- refuted（反驳）：直接 GameData 记录与主张矛盾，必须有实际检索结果
+- uncertain（存疑）：证据冲突、实体歧义、只有间接证据或覆盖不完整
+- unavailable（无法确认）：无库、无结果，或没有任何可用于该主张的 GameData 记录
+- retrieval score/confidence 只表示匹配程度，不表示事实确定性
 
 对于多轮对话：
-- 检测用户是否在追问同一话题（如"那……又是怎么回事？"）
-- 如果话题已切换，提示用户可能需要开始新的核查对话
+- 使用历史中的相关主张和已检索证据回答追问，但仍需对新主张定向检索
+- 检测是否话题切换；若切换，明确说已开始核查新话题，不得静默丢弃或混用旧证据
 ''';
 
 /// Summary Agent specific instructions.

@@ -11,8 +11,7 @@ import 'widgets/chat_bubble.dart';
 
 /// The main AI Chat Page hosting the three AI modes (FactCheck, Summary, Roleplay).
 ///
-/// Features a TabBar to navigate between modes. Summary Agent is fully functional,
-/// while FactCheck and Roleplay render coming soon placeholders for v0.5 and v0.6.
+/// Features a TabBar for fact-check, summary, and roleplay modes.
 class AiChatPage extends ConsumerStatefulWidget {
   const AiChatPage({super.key});
 
@@ -75,15 +74,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         ),
         body: TabBarView(
           children: [
-            // ── Fact-Check Tab (Placeholder) ─────────────────
-            _buildPlaceholderTab(
-              theme,
-              icon: Icons.fact_check_rounded,
-              title: context.t.aiTabFactCheck,
-              subtitle: 'Coming in v0.5',
-              desc:
-                  'Cross-reference claims against PRTS Wiki and imported sources with confidence ratings.',
-            ),
+            isConfigured
+                ? _buildFactCheckTab(theme)
+                : _buildConfigRequiredTab(theme),
 
             // ── Summary Tab (Functional) ─────────────────────
             isConfigured
@@ -248,7 +241,11 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
         // ── Input box ────────────────────────────────────
         _buildInputArea(
-            theme, chatHistory.isNotEmpty && chatHistory.last.isStreaming),
+          theme,
+          chatHistory.isNotEmpty && chatHistory.last.isStreaming,
+          onSend: _handleSummarySend,
+          hintText: context.t.aiSummaryInputPlaceholder,
+        ),
       ],
     );
   }
@@ -308,7 +305,88 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  Widget _buildInputArea(AppThemeTokens theme, bool isSending) {
+  Widget _buildFactCheckTab(AppThemeTokens theme) {
+    final history = ref.watch(factCheckChatProvider);
+    final notifier = ref.read(factCheckChatProvider.notifier);
+    final isSending = history.isNotEmpty && history.last.isStreaming;
+    ref.listen(factCheckChatProvider, (previous, next) => _scrollToBottom());
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: theme.bgSecondary.withValues(alpha: 0.5),
+          child: Row(
+            children: [
+              Icon(Icons.verified_outlined,
+                  size: 16, color: theme.accentPrimary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  context.t.aiFactCheckSource,
+                  style: theme.bodyFont
+                      .copyWith(color: theme.textSecondary, fontSize: 12),
+                ),
+              ),
+              if (history.isNotEmpty)
+                IconButton(
+                  onPressed: notifier.retryLast,
+                  tooltip: context.t.aiRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  visualDensity: VisualDensity.compact,
+                ),
+              if (history.isNotEmpty)
+                IconButton(
+                  onPressed: notifier.clearChat,
+                  tooltip: context.t.aiClearHistory,
+                  icon: Icon(Icons.delete_sweep_rounded, color: theme.danger),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: history.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      context.t.aiFactCheckEmpty,
+                      textAlign: TextAlign.center,
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: history.length,
+                  itemBuilder: (context, index) =>
+                      ChatBubble(message: history[index]),
+                ),
+        ),
+        _buildInputArea(
+          theme,
+          isSending,
+          onSend: isSending ? notifier.cancel : _handleFactCheckSend,
+          hintText: context.t.aiFactCheckInputPlaceholder,
+          isCancel: isSending,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInputArea(
+    AppThemeTokens theme,
+    bool isSending, {
+    required VoidCallback onSend,
+    required String hintText,
+    bool isCancel = false,
+  }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -330,9 +408,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   style: theme.bodyFont.copyWith(color: theme.textPrimary),
                   cursorColor: theme.accentPrimary,
                   textInputAction: TextInputAction.send,
-                  onSubmitted: isSending ? null : (_) => _handleSend(),
+                  onSubmitted: isSending ? null : (_) => onSend(),
                   decoration: InputDecoration(
-                    hintText: context.t.aiSummaryInputPlaceholder,
+                    hintText: hintText,
                     hintStyle: theme.bodyFont
                         .copyWith(color: theme.textSecondary, fontSize: 13),
                     contentPadding: const EdgeInsets.symmetric(
@@ -345,11 +423,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              onPressed: isSending ? null : _handleSend,
+              onPressed: onSend,
               icon: Icon(
-                Icons.send_rounded,
-                color: isSending ? theme.textSecondary : theme.accentPrimary,
+                isCancel ? Icons.stop_rounded : Icons.send_rounded,
+                color: isCancel ? theme.danger : theme.accentPrimary,
               ),
+              tooltip: isCancel ? context.t.aiCancel : context.t.aiSend,
             ),
           ],
         ),
@@ -357,12 +436,19 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  void _handleSend() {
+  void _handleSummarySend() {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
     _inputController.clear();
     ref.read(summaryChatProvider.notifier).sendMessage(text);
+  }
+
+  void _handleFactCheckSend() {
+    final text = _inputController.text.trim();
+    if (text.isEmpty) return;
+    _inputController.clear();
+    ref.read(factCheckChatProvider.notifier).sendMessage(text);
   }
 
   void _confirmClearHistory(

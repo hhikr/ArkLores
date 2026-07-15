@@ -112,3 +112,23 @@ Additional smoke check:
 - `莱茵生命`、`萨卡兹王庭` 等宽泛组织 query 当前可命中相关干员档案，但 GameData DB 尚未构建组织级汇总实体。
 - `特蕾西娅` 等变体名现在有基础 alias 候选，但用户提问时是否需要展示候选仍取决于 Agent 调用 `search_local_lore` 的 disambiguation 分支。
 - 真机端到端仍需要用 release asset 或临时 HTTP asset 验证下载、安装、检索、Summary Agent 全链路。
+
+## v0.5 Fact-Check QA
+
+固定命题集：
+
+| 结论 | 命题 / 操作 | 验收重点 |
+| --- | --- | --- |
+| 支持 | `阿米娅是罗德岛的公开领袖。` | 至少一条实际 GameData record，引用 source path、raw id 和 content type。 |
+| 反驳 | `阿米娅从未加入罗德岛。` | 检索支持与反证方向；反驳必须引用实际 GameData record。 |
+| 存疑 | `特蕾西娅就是当前检索结果中的同一个实体。` | exact alias 多候选时不得猜测实体，只能存疑并要求消歧。 |
+| 无法确认 | `罗德岛在 2030 年公开举办过庆典。` | 无结果时不得使用模型记忆，结论为无法确认。 |
+| 上下文追问 | 先核查阿米娅命题，再问 `那她是什么时候承担这个身份的？` | 保留原主张与证据上下文，对新时间主张再次检索。 |
+
+2026-07-15 自动验证：
+
+- `test/agent_test.dart` 覆盖定向多次检索、唯一工具限制、支持/反驳证据门槛、无覆盖、
+  实体歧义、unsupported verdict 降级和追问历史。
+- `test/fact_check_widget_test.dart` 覆盖 320 logical px 宽度、2 倍文字缩放、结论状态和
+  GameData evidence 展开，无 RenderFlex overflow。
+- 上述固定命题尚未使用真实外部 Chat API 逐条执行；状态为 deferred，不记录为通过。

@@ -321,6 +321,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabRoleplay => '角色扮演';
 
   @override
+  String get aiFactCheckSource => '证据范围：仅限已安装的中文 GameData';
+
+  @override
+  String get aiFactCheckEmpty => '输入一条设定或剧情说法，使用本地 GameData 证据进行核查。';
+
+  @override
+  String get aiFactCheckInputPlaceholder => '输入要核查的说法…';
+
+  @override
+  String get aiVerdictSupported => '支持';
+
+  @override
+  String get aiVerdictRefuted => '反驳';
+
+  @override
+  String get aiVerdictUncertain => '存疑';
+
+  @override
+  String get aiVerdictUnavailable => '无法确认';
+
+  @override
+  String aiVerdictSemantics(String verdict) {
+    return '事实核查结论：$verdict';
+  }
+
+  @override
+  String aiEvidenceTitle(int count) {
+    return 'GameData 证据（$count）';
+  }
+
+  @override
+  String get aiRetry => '重试';
+
+  @override
+  String get aiCancel => '取消';
+
+  @override
+  String get aiSend => '发送';
+
+  @override
   String get aiInputPlaceholder => '输入剧情内容或设定...';
 
   @override
