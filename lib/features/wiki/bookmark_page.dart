@@ -20,7 +20,7 @@ class BookmarkPage extends ConsumerWidget {
     final bookmarkAsync = ref.watch(bookmarkProvider);
 
     return Scaffold(
-      backgroundColor: theme.bgPrimary,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(

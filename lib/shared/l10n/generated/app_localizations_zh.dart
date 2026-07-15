@@ -25,16 +25,37 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTitle => '设置';
 
   @override
+  String get settingsSystemCode => 'ARKLORES / 系统设置';
+
+  @override
   String get settingsTheme => '主题';
 
   @override
-  String get settingsThemeArk => '战术档案';
+  String get settingsLanguage => '语言';
 
   @override
-  String get settingsThemeEndfield => '全息投影';
+  String get settingsThemeArk => '夜间模式';
+
+  @override
+  String get settingsThemeEndfield => '日间模式';
+
+  @override
+  String get settingsThemeArkShort => '夜间';
+
+  @override
+  String get settingsThemeEndfieldShort => '日间';
+
+  @override
+  String get localeEnglishShort => 'EN';
+
+  @override
+  String get localeChineseShort => '中文';
 
   @override
   String get settingsAiServices => 'AI 服务';
+
+  @override
+  String get settingsAiSectionCode => 'AI SERVICE';
 
   @override
   String get settingsApiSettings => 'API 设置';
@@ -44,6 +65,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsKnowledgeBase => '知识库管理';
+
+  @override
+  String get settingsKnowledgeSectionCode => 'KNOWLEDGE BASE';
 
   @override
   String get settingsKnowledgeBaseDesc => '管理 GameData 知识库';
@@ -316,6 +340,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsHelpGuide => '帮助与引导';
+
+  @override
+  String get settingsHelpSectionCode => 'HELP & GUIDE';
+
+  @override
+  String get settingsVersionLabel => 'ARKLORES / 0.9 开发版';
 
   @override
   String get settingsShowOnboarding => '新用户导览';

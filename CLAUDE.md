@@ -1,7 +1,7 @@
 # ArkLores Developer Notes
 
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS。
-当前开发版本：v0.8.0（未发布）；最新 release：v0.7.0；GameData schema：2。
+当前版本与最新 release：v0.9.0；GameData schema：2。
 
 ## Do
 

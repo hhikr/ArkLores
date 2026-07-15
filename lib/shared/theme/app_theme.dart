@@ -6,7 +6,7 @@ import 'package:flutter/painting.dart' show TextStyle, BorderRadius, BoxShadow;
 ///
 /// Two concrete implementations exist:
 /// - [ArkThemeTokens] — Tactical Archive (Arknights industrial aesthetic)
-/// - [EndfieldThemeTokens] — Holographic Projection (Endfield sci-fi aesthetic)
+/// - [EndfieldThemeTokens] — Industrial Signal (Endfield black/white/yellow)
 ///
 /// Every UI component MUST read tokens via [ref.watch(themeProvider)]
 /// and MUST NOT hardcode any color, font, or spacing value.
@@ -18,6 +18,8 @@ abstract class AppThemeTokens {
   // ─── Cards & Surfaces ──────────────────────────────────────────
   Color get cardSurface;
   Color get cardBorder;
+  Color get surfaceElevated;
+  Color get surfaceOverlay;
 
   // ─── Accents ───────────────────────────────────────────────────
   Color get accentPrimary;
@@ -30,6 +32,7 @@ abstract class AppThemeTokens {
   // ─── Text ──────────────────────────────────────────────────────
   Color get textPrimary;
   Color get textSecondary;
+  Color get textMuted;
 
   // ─── Borders / Dividers ────────────────────────────────────────
   Color get divider;
@@ -52,6 +55,10 @@ abstract class AppThemeTokens {
   // ─── Geometry ──────────────────────────────────────────────────
   BorderRadius get cardRadius;
   List<BoxShadow> get cardShadow;
+
+  // ─── Visual language ───────────────────────────────────────────
+  bool get isEndfield;
+  double get cornerCut;
 
   // ─── Theme metadata ────────────────────────────────────────────
   String get themeName;

@@ -25,16 +25,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTitle => 'Settings';
 
   @override
+  String get settingsSystemCode => 'ARKLORES / SYSTEM';
+
+  @override
   String get settingsTheme => 'Theme';
 
   @override
-  String get settingsThemeArk => 'Tactical Archive';
+  String get settingsLanguage => 'Language';
 
   @override
-  String get settingsThemeEndfield => 'Holographic Projection';
+  String get settingsThemeArk => 'Night mode';
+
+  @override
+  String get settingsThemeEndfield => 'Day mode';
+
+  @override
+  String get settingsThemeArkShort => 'NIGHT';
+
+  @override
+  String get settingsThemeEndfieldShort => 'DAY';
+
+  @override
+  String get localeEnglishShort => 'EN';
+
+  @override
+  String get localeChineseShort => '中文';
 
   @override
   String get settingsAiServices => 'AI Services';
+
+  @override
+  String get settingsAiSectionCode => 'AI SERVICE';
 
   @override
   String get settingsApiSettings => 'API Settings';
@@ -44,6 +65,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsKnowledgeBase => 'Knowledge Base Management';
+
+  @override
+  String get settingsKnowledgeSectionCode => 'KNOWLEDGE BASE';
 
   @override
   String get settingsKnowledgeBaseDesc => 'Manage GameData knowledge base';
@@ -316,6 +340,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsHelpGuide => 'Help & Guide';
+
+  @override
+  String get settingsHelpSectionCode => 'HELP & GUIDE';
+
+  @override
+  String get settingsVersionLabel => 'ARKLORES / 0.9 DEVELOPMENT';
 
   @override
   String get settingsShowOnboarding => 'Show Onboarding Guide';
