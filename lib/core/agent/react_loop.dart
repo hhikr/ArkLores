@@ -147,7 +147,7 @@ Let's begin!
 
       // Parse Thought, Action, Action Input
       final thought = _parseKey(response, 'Thought');
-      final action = _parseKey(response, 'Action').trim();
+      final action = _parseKey(response, 'Action').trim().split('\n').first;
       final actionInputRaw = _parseKey(response, 'Action Input').trim();
       final finalAnswer = _parseKey(response, 'Final Answer');
 
@@ -219,6 +219,7 @@ Let's begin!
       if (tool == null) {
         final errorMsg = 'Tool "$action" is not registered.';
         logger.logError(errorMsg);
+        evidenceSummary.addError();
         yield ReActEvent(type: ReActEventType.error, content: errorMsg);
         loopMessages.add(Message.user('Observation: Error - $errorMsg'));
         continue;
@@ -565,7 +566,8 @@ If a requested detail was not found in the verified evidence, say the current kn
   }
 
   bool _mentionsBookEvidence(String content) {
-    return RegExp(r'(Book|书籍资料|用户导入)', caseSensitive: false).hasMatch(content);
+    return RegExp(r'(\bBook\b|书籍资料|用户导入)', caseSensitive: false)
+        .hasMatch(content);
   }
 
   bool _mentionsGameDataEvidence(String content) {
@@ -579,6 +581,8 @@ class _EvidenceSummary {
   bool hasWiki = false;
   bool hasBook = false;
   int emptyOrErrorObservationCount = 0;
+
+  void addError() => emptyOrErrorObservationCount++;
 
   void addObservation(String observation) {
     if (observation.contains('Source Kind: GameData')) {

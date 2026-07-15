@@ -59,13 +59,19 @@ FactCheckVerdict validateFactCheckVerdict(
   final joined = observations.join('\n');
   final hasGameDataEvidence = joined.contains('Source Kind: GameData') &&
       joined.contains('=== Result #');
+  final hasScopedDirectCandidate =
+      joined.contains('Evidence Scope Match: yes') &&
+          joined.contains('Evidence Level: direct candidate');
   final noCoverage = joined.isEmpty ||
       joined.contains('No matching GameData result') ||
       joined.contains('GameData knowledge DB is not installed');
 
   if (requested == FactCheckVerdict.supported ||
       requested == FactCheckVerdict.refuted) {
-    return hasGameDataEvidence ? requested : FactCheckVerdict.unavailable;
+    if (hasScopedDirectCandidate) return requested;
+    return hasGameDataEvidence
+        ? FactCheckVerdict.uncertain
+        : FactCheckVerdict.unavailable;
   }
   if (requested == FactCheckVerdict.uncertain &&
       !hasGameDataEvidence &&

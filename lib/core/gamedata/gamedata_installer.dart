@@ -198,6 +198,7 @@ class GameDataInstaller {
         'entity_documents',
         'normalized_records',
         'story_lines',
+        'story_scopes',
         'lore_chunks',
         'entity_documents_fts',
         'lore_chunks_fts',
@@ -228,6 +229,11 @@ class GameDataInstaller {
       if (schemaVersion == null || schemaVersion.trim().isEmpty) {
         throw StateError(
           'Downloaded GameData database manifest is missing schema_version.',
+        );
+      }
+      if (schemaVersion != '2') {
+        throw StateError(
+          'Downloaded GameData database schema_version $schemaVersion is incompatible; expected 2.',
         );
       }
 

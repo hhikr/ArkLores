@@ -17,7 +17,7 @@ import 'package:arklores/core/rag/chunker.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const _schemaVersion = 1;
+const _schemaVersion = 2;
 const _language = 'zh';
 const _game = 'arknights';
 
@@ -275,6 +275,14 @@ Future<void> _createSchema(Database db) async {
     )
   ''');
   await db.execute('''
+    CREATE TABLE story_scopes (
+      story_id    TEXT PRIMARY KEY,
+      scope_type  TEXT NOT NULL,
+      scope_id    TEXT NOT NULL,
+      source_path TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
     CREATE TABLE lore_chunks (
       id             TEXT PRIMARY KEY,
       game           TEXT NOT NULL,
@@ -284,6 +292,8 @@ Future<void> _createSchema(Database db) async {
       content_type     TEXT,
       entity_id      TEXT,
       story_id       TEXT,
+      scope_type     TEXT,
+      scope_id       TEXT,
       page_title     TEXT,
       section        TEXT,
       content        TEXT NOT NULL,
@@ -339,6 +349,9 @@ Future<void> _createSchema(Database db) async {
   );
   await db.execute(
     'CREATE INDEX idx_lore_chunks_entity_id ON lore_chunks(entity_id)',
+  );
+  await db.execute(
+    'CREATE INDEX idx_lore_chunks_scope ON lore_chunks(scope_type, scope_id)',
   );
   await db.execute(
     'CREATE INDEX idx_entity_aliases_alias ON entity_aliases(alias)',
@@ -836,8 +849,19 @@ class _ArknightsImporter {
     final raw = await file.readAsString();
     final lines = _parseStoryLines(raw);
     if (lines.isEmpty) return;
+    final scope = _storyScope(storyId);
 
     await db.transaction((txn) async {
+      await txn.insert(
+        'story_scopes',
+        {
+          'story_id': storyId,
+          'scope_type': scope.$1,
+          'scope_id': scope.$2,
+          'source_path': relativePath,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
       for (var i = 0; i < lines.length; i++) {
         final line = lines[i];
         await txn.insert(
@@ -846,6 +870,7 @@ class _ArknightsImporter {
             'id': _stableId('arknights:story_line:$storyId:$i'),
             'game': 'arknights',
             'story_id': storyId,
+            'event_id': scope.$1 == 'activity' ? scope.$2 : null,
             'speaker': line.speaker,
             'content': line.content,
             'line_index': i,
@@ -953,6 +978,7 @@ class _ArknightsImporter {
     final sourceType = category == 'story' || contentType.endsWith('_story')
         ? 'game_story'
         : 'game_data';
+    final scope = storyId == null ? null : _storyScope(storyId);
     final id = _stableId([
       'arknights',
       contentType,
@@ -974,6 +1000,8 @@ class _ArknightsImporter {
         'content_type': contentType,
         'entity_id': entityId,
         'story_id': storyId,
+        'scope_type': scope?.$1,
+        'scope_id': scope?.$2,
         'page_title': pageTitle,
         'section': section,
         'content': clean,
@@ -1205,6 +1233,15 @@ class _ArknightsImporter {
     );
     stats.entityDocuments++;
   }
+}
+
+(String, String) _storyScope(String storyId) {
+  final parts = storyId.split('/').where((part) => part.isNotEmpty).toList();
+  if (parts.length >= 2 && parts.first == 'activities') {
+    return ('activity', parts[1]);
+  }
+  if (parts.isNotEmpty) return (parts.first, parts.first);
+  return ('story', storyId);
 }
 
 class _StoryLine {

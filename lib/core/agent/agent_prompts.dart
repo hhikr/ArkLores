@@ -43,11 +43,12 @@ const String factCheckInstructions = '''
 
 工作流程：
 1. 把输入拆成可核验的原子主张，并提取每个主张的实体、关系、时间或否定条件
-2. 仅使用 search_local_lore，针对实体、支持方向和反驳方向分别检索，通常调用 3~5 次
-3. 若返回实体歧义候选，不得猜测；请用户选择，结论只能是存疑
-4. 对照证据后选择且只选择一个结论：supported、refuted、uncertain、unavailable
-5. 最终回答第一行必须严格输出标记：[FACT_CHECK_VERDICT:<结论英文值>]
-6. 正文依次包含“核查结论”“主张拆解”“直接证据”“间接证据”“证据缺失”。引用实际 Observation 中的 ID、source_path、raw_id 和 content_type
+2. 仅使用 search_local_lore。先分别解析主张实体与剧情范围，取得稳定 entity_id 和 scope_id
+3. 取得稳定 ID 后，使用 search_mode=evidence、entity_id、scope_id 和简短关系词，分别检索支持与反驳方向
+4. 若返回实体歧义候选，不得猜测；请用户选择，结论只能是存疑
+5. 对照证据后选择且只选择一个结论：supported、refuted、uncertain、unavailable
+6. 最终回答第一行必须严格输出标记：[FACT_CHECK_VERDICT:<结论英文值>]
+7. 正文依次包含“核查结论”“主张拆解”“直接证据”“间接证据”“证据缺失”。引用实际 Observation 中的 ID、source_path、raw_id 和 content_type
 
 结论规则：
 - supported（支持）：直接 GameData 记录支持主张，必须有实际检索结果
@@ -55,6 +56,7 @@ const String factCheckInstructions = '''
 - uncertain（存疑）：证据冲突、实体歧义、只有间接证据或覆盖不完整
 - unavailable（无法确认）：无库、无结果，或没有任何可用于该主张的 GameData 记录
 - retrieval score/confidence 只表示匹配程度，不表示事实确定性
+- 没有 Evidence Scope Match 的普通档案、活动名称或语音只能作为间接证据；无结果绝不是反证
 
 对于多轮对话：
 - 使用历史中的相关主张和已检索证据回答追问，但仍需对新主张定向检索
