@@ -527,6 +527,30 @@ abstract class AppLocalizations {
   /// **'Endfield Wiki'**
   String get wikiTabEndfield;
 
+  /// No description provided for @wikiSendToAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to AI'**
+  String get wikiSendToAi;
+
+  /// No description provided for @wikiSendToAiDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected Wiki text is reading context only; factual claims are verified separately with GameData.'**
+  String get wikiSendToAiDesc;
+
+  /// No description provided for @wikiSendToSummaryDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize from the page and selected text'**
+  String get wikiSendToSummaryDesc;
+
+  /// No description provided for @wikiSendToFactCheckDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the selected text as the claim to check'**
+  String get wikiSendToFactCheckDesc;
+
   /// No description provided for @bookmarksTitle.
   ///
   /// In en, this message translates to:

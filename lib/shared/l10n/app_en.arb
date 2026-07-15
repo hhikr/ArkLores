@@ -81,6 +81,10 @@
 
   "wikiTabPrts": "PRTS Wiki",
   "wikiTabEndfield": "Endfield Wiki",
+  "wikiSendToAi": "Send to AI",
+  "wikiSendToAiDesc": "Selected Wiki text is reading context only; factual claims are verified separately with GameData.",
+  "wikiSendToSummaryDesc": "Summarize from the page and selected text",
+  "wikiSendToFactCheckDesc": "Use the selected text as the claim to check",
 
   "bookmarksTitle": "Bookmarks",
   "bookmarksLoadFailed": "Failed to load bookmarks: {error}",

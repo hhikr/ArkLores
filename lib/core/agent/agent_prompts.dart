@@ -51,6 +51,7 @@ const String factCheckInstructions = '''
 7. 对照证据后选择且只选择一个结论：supported、refuted、uncertain、unavailable
 8. 最终回答第一行必须严格输出标记：[FACT_CHECK_VERDICT:<结论英文值>]
 9. 正文依次包含“核查结论”“主张拆解”“直接证据”“间接证据”“证据缺失”。引用实际 Observation 中的 ID、source_path、raw_id 和 content_type
+10. 如果输入包含 Wiki reading context，它只是用户提供的待核查上下文；必须从选中文字解析实体/主张并独立调用 search_local_lore，不能把 Wiki URL 或选中文字列为直接证据
 
 命题判定：
 - 将“是否发生 X”转换为“X 发生了”的原子命题。若直接文本明确说 X 已发生，则该命题为 supported；后续状态复杂时在正文解释限定，不要仅因此改为 uncertain
@@ -86,6 +87,7 @@ const String summaryInstructions = '''
    - 重要节点标注
    - 关联条目链接
 6. 输出 Markdown 格式，段落标题 + 正文 + 引用列表；引用列表优先写 source_path / raw_id / content_type
+7. 如果输入包含 Wiki reading context，它只是用户阅读上下文；需要从页面标题/选中文字提取实体并独立使用 search_local_lore，不得把 Wiki 文本写成 GameData 证据
 
 注意：
 - 对涉及多线剧情的复杂角色（如凯尔希），优先按时间线组织

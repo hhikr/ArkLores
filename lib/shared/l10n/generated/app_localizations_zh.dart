@@ -247,6 +247,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wikiTabEndfield => '终末地 Wiki';
 
   @override
+  String get wikiSendToAi => '转交给 AI';
+
+  @override
+  String get wikiSendToAiDesc => '选中的 Wiki 文本只作为阅读上下文；事实声明仍会用 GameData 单独核验。';
+
+  @override
+  String get wikiSendToSummaryDesc => '根据页面和选中文字生成梗概';
+
+  @override
+  String get wikiSendToFactCheckDesc => '把选中文字作为待核查主张';
+
+  @override
   String get bookmarksTitle => '书签';
 
   @override
