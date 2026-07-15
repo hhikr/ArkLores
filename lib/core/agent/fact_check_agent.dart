@@ -24,33 +24,23 @@ class FactCheckAgent {
   Stream<ReActEvent> checkClaim({
     required String claim,
     List<Message> history = const [],
-  }) async* {
+  }) {
     final registry = ToolRegistry()..register(_searchTool);
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: registry,
       maxIterations: 5,
     );
-    final observations = <String>[];
-
-    await for (final event in loop.run(
+    return loop.run(
       systemPrompt: buildAgentPrompt(factCheckInstructions),
       chatHistory: history,
       userQuery: claim,
-    )) {
-      if (event.type == ReActEventType.toolObservation) {
-        observations.add(event.content);
-      }
-      if (event.type == ReActEventType.finalAnswerToken) {
-        final verdict = validateFactCheckVerdict(event.content, observations);
-        yield ReActEvent(
-          type: event.type,
-          content: _withValidatedVerdict(event.content, verdict),
-        );
-      } else {
-        yield event;
-      }
-    }
+      agentName: 'FactCheck',
+      finalAnswerTransform: (answer, observations) {
+        final verdict = validateFactCheckVerdict(answer, observations);
+        return _withValidatedVerdict(answer, verdict);
+      },
+    );
   }
 }
 

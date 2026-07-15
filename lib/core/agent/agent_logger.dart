@@ -13,8 +13,11 @@ class AgentLogger {
   final StringBuffer _buf = StringBuffer();
   final DateTime _startTime;
   final String _userQuery;
+  final String _agentName;
 
-  AgentLogger(this._userQuery) : _startTime = DateTime.now() {
+  AgentLogger(this._userQuery, {String agentName = 'ReAct'})
+      : _agentName = agentName,
+        _startTime = DateTime.now() {
     _header();
   }
 
@@ -23,6 +26,7 @@ class AgentLogger {
   void _header() {
     _buf.writeln('═' * 72);
     _buf.writeln('ArkLores Agent Debug Log');
+    _buf.writeln('Agent  : $_agentName');
     _buf.writeln('Time   : ${_startTime.toIso8601String()}');
     _buf.writeln('Query  : $_userQuery');
     _buf.writeln('═' * 72);

@@ -42,6 +42,7 @@ class SummaryAgent {
       systemPrompt: systemPrompt,
       chatHistory: history,
       userQuery: query,
+      agentName: 'Summary',
     );
   }
 }
