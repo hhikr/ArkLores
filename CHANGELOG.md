@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.0] - Unreleased
+
+- Add GameData-resolved role-play with entity disambiguation and character-bound lore retrieval.
+- Add multi-turn local role-play sessions with continue, restart, cancel, and retry flows.
+- Distinguish optional user scenes and generated dialogue from official GameData evidence in the UI.
+
 All notable changes to ArkLores will be documented in this file.
 
 ## [0.5.0] - 2026-07-15

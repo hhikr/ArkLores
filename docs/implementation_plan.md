@@ -157,6 +157,12 @@ v0.5 已验证的 scoped evidence 能力目前分布在 `search_local_lore`、
 
 ### v0.6 - 证据约束的角色扮演 Agent
 
+实现状态（2026-07-15）：稳定 GameData entity/alias 解析、消歧、GameData-only ReAct、
+角色绑定检索、多轮本地存档、继续/重开、取消/重试及双语 UI 已实现。自动 Agent 测试已
+覆盖解析、歧义、工具门槛、角色记忆约束和存档容错；完整 DB 固定角色矩阵、真实 Chat、
+窄屏/文字缩放自动渲染和 Android 真机仍待验收，详见 `v0.6_task_breakdown.md` 与
+`RETRIEVAL_QA.md`。
+
 目标：提供角色扮演能力，同时明确区分官方设定事实与模型创作内容。
 
 交付内容：
