@@ -1,6 +1,7 @@
 # ArkLores GameData Build Pipeline
 
-> 本文档定义 v0.4.5 GameData DB 的构建、FTS 索引和 GitHub Release 分发规范。
+> 本文档定义当前 schema 2 中文 GameData DB 的构建、FTS 索引、验收和 GitHub Release
+> 分发规范。v0.4.5 是 GameData-first 架构起点，不是本规范的版本上限。
 
 内容分类和 importer 覆盖范围必须遵循
 [ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md](ARKNIGHTS_GAMEDATA_CONTENT_TAXONOMY.md)。
@@ -51,7 +52,8 @@
 
 ### 终末地
 
-v0.4.5 不阻塞。后续候选：
+终末地数据不属于当前 active knowledge source，也不阻塞当前版本。以下仅为历史候选，
+在来源协议、授权和 importer 另行立项前不得接入默认 Agent 检索：
 
 - `3aKHP/EndFieldGameData` release asset `endfield-tables.zip`
 - `wuyilingwei/EndfieldGameData` raw `TableCfg/*.json`
@@ -204,7 +206,7 @@ CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
 
 ## Retrieval Contract
 
-v0.4.5 GameData DB 的检索质量由以下结构保证：
+当前 GameData DB 的检索质量由以下结构保证：
 
 - `entities` / `entity_aliases` 支持 canonical entity lookup。
 - `entity_documents` 提供面向 Agent 的聚合主文档。
@@ -220,21 +222,27 @@ v0.4.5 GameData DB 的检索质量由以下结构保证：
 - 固定验收查询不能命中预期实体或原文。
 - manifest 缺少源仓库、commit、row counts、DB hash 或 schema version。
 
-## 构建命令草案
+## 构建与 finalization 命令
 
 ```bash
-dart run tools/build_gamedata_database.dart \
+/home/hhikr/flutter/bin/dart run tools/build_gamedata_database.dart \
   --arknights-source=/path/to/ArknightsGameData \
-  --output=build/gamedata \
-  --language=zh \
+  --output=build/gamedata_mobile \
   --force
 
-gzip -c build/gamedata/arklores_gamedata_zh.db \
-  > build/gamedata/arklores_gamedata_zh.db.gz
+gzip -c build/gamedata_mobile/arklores_gamedata_zh.db \
+  > build/gamedata_mobile/arklores_gamedata_zh.db.gz
 
 HOME=/tmp /home/hhikr/flutter/bin/dart run tools/finalize_gamedata_assets.dart \
-  --output=build/gamedata
+  --output=build/gamedata_mobile
+
+HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
+  --db=build/gamedata_mobile/arklores_gamedata_zh.db
 ```
+
+builder 当前只接受 `--arknights-source`、`--output`、`--force` 和 smoke 专用的
+`--story-limit=N`；语言固定为中文，不存在 `--language` 参数。`--story-limit` 产物不能用于
+finalized 完整 DB retrieval QA。
 
 `tools/finalize_gamedata_assets.dart` 在 gzip 后更新
 `gamedata_manifest.json` 与 `gamedata_build_report.json`，写入：
@@ -246,8 +254,8 @@ HOME=/tmp /home/hhikr/flutter/bin/dart run tools/finalize_gamedata_assets.dart \
 
 ## 未发布版本的真机测试
 
-正式 v0.4.5 发布前，App 不能依赖“当前版本已有 GitHub Release
-asset”。开发测试使用同一安装链路，但通过构建参数注入临时下载地址：
+未发布开发版本不能假设同版本 GitHub Release asset 已存在。开发测试使用同一安装链路，
+但通过构建参数注入临时下载地址：
 
 ```bash
 /home/hhikr/flutter/bin/flutter run \
@@ -281,20 +289,30 @@ asset”。开发测试使用同一安装链路，但通过构建参数注入临
 - compressed DB SHA-256
 - compressed / uncompressed byte sizes
 
-## 首批验收查询
+## 固定验收查询
 
 - `阿米娅`
-- `凯尔希`
-- `罗德岛`
-- `龙门`
+- `阿米娅 语音`
+- `阿米娅 主线`
 - `莱茵生命`
-- `第二次卡兹戴尔战争`
-- `缪尔赛思`
+- `萨卡兹王庭`
+- `特蕾西娅`
+- `源石技艺`
+- `肉鸽`
+- `集成战略 收藏品`
+- `敌人介绍`
+- `干员秘录`
 
 最低标准：
 
 - 实体查询 top 5 命中正确实体或档案 chunk。
 - 剧情查询 top 10 命中原文或结构化剧情行。
 - `normalized_records` 能按 `content_type` 区分 `operator_voice`、`enemy_profile`、`roguelike_topic`、`sandbox_item` 等来源。
-- GameData 结果优先级高于 Wiki / Book。
+- 默认 Agent evidence 只能来自 GameData；Wiki、Book 和用户文本不是候补官方证据源。
 - 引用能回到 `source_path` 和行号。
+- `特蕾西娅` 至少返回两个 alias candidates。
+- `act21mini + 米格鲁 + 死亡` scoped evidence 命中固定剧情原文。
+
+固定查询及预期的唯一维护入口是 [RETRIEVAL_QA.md](RETRIEVAL_QA.md) 和
+`tools/check_gamedata_retrieval.dart`；本节只概述 release gate，二者冲突时必须先修正文档或
+工具再验收，不能静默选择更宽松的一方。

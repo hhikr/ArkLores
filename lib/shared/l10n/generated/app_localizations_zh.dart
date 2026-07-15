@@ -364,6 +364,60 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get aiEvidenceSection => '章节';
+
+  @override
+  String get aiEvidenceContentType => '内容类型';
+
+  @override
+  String get aiEvidenceSourcePath => '来源路径';
+
+  @override
+  String get aiEvidenceRawId => '原始 ID';
+
+  @override
+  String get aiEvidenceRetrievalType => '检索类型';
+
+  @override
+  String get aiEvidenceRankingReason => '排序原因';
+
+  @override
+  String get aiEvidenceTrustNote => '可信度说明';
+
+  @override
+  String get aiCoverageDirect => '直接候选证据';
+
+  @override
+  String get aiCoverageRetrieved => '检索上下文';
+
+  @override
+  String aiEvidenceSemantics(String title, String coverage) {
+    return 'GameData 证据：$title；覆盖度：$coverage';
+  }
+
+  @override
+  String get aiThinking => '正在思考…';
+
+  @override
+  String get aiReasoning => '正在推理…';
+
+  @override
+  String get aiProcessing => '正在处理…';
+
+  @override
+  String get aiReasoningComplete => '推理完成';
+
+  @override
+  String aiUsingTool(String tool) {
+    return '正在使用工具：$tool';
+  }
+
+  @override
+  String aiStepsStatus(String status, int count) {
+    return '$status（$count 步）';
+  }
+
+  @override
   String get aiRetry => '重试';
 
   @override
@@ -377,6 +431,30 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiSummaryInputPlaceholder => '输入人物、事件、地点或组织名称以生成梗概...';
+
+  @override
+  String get aiSummarySource => '证据范围：仅限已安装的中文 GameData';
+
+  @override
+  String get aiSummaryEmpty => '输入明日方舟人物、事件、地点或组织，依据本地 GameData 证据生成梗概。';
+
+  @override
+  String get aiSummarySuggestionAmiya => '阿米娅';
+
+  @override
+  String get aiSummarySuggestionKaltsit => '凯尔希';
+
+  @override
+  String get aiSummarySuggestionRhine => '莱茵生命';
+
+  @override
+  String get aiSummarySuggestionChernobog => '切尔诺伯格事件';
+
+  @override
+  String get aiSummaryError => '梗概生成失败，请重试。';
+
+  @override
+  String get aiSummaryCanceled => '已取消本次梗概生成。';
 
   @override
   String get aiSettingsRequired => '请先在设置中配置对话 API 密钥以使用 AI 功能。';

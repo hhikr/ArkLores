@@ -89,12 +89,16 @@ final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
 /// State notifier for Summary Chat history and processing.
 class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
   final SummaryAgent _agent;
+  int _requestGeneration = 0;
 
   SummaryChatNotifier(this._agent) : super([]);
 
   /// Sends a message and triggers the Summary Agent ReAct stream.
   Future<void> sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
+    if (text.trim().isEmpty || state.any((message) => message.isStreaming)) {
+      return;
+    }
+    final generation = ++_requestGeneration;
 
     final userMsgId = _uuid.v4();
     final assistantMsgId = _uuid.v4();
@@ -155,6 +159,7 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
       var finalAnswerBuffer = StringBuffer();
 
       await for (final event in stream) {
+        if (generation != _requestGeneration) return;
         switch (event.type) {
           case ReActEventType.thought:
             steps.add(ReActStep(type: event.type, content: event.content));
@@ -203,17 +208,48 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
         }
       }
     } catch (e) {
-      _updateAssistantMessage(
-        assistantMsgId,
-        content: 'An unexpected error occurred: $e',
-        isError: true,
-        isStreaming: false,
-      );
+      if (generation == _requestGeneration) {
+        _updateAssistantMessage(
+          assistantMsgId,
+          content: '[SUMMARY_ERROR]',
+          isError: true,
+          isStreaming: false,
+        );
+      }
     }
+  }
+
+  void cancel() {
+    _requestGeneration++;
+    state = [
+      for (final message in state)
+        if (message.isStreaming)
+          message.copyWith(
+            content: '[SUMMARY_CANCELED]',
+            isStreaming: false,
+            isError: true,
+          )
+        else
+          message,
+    ];
+  }
+
+  Future<void> retryLast() async {
+    final users = state.where((message) => message.role == MessageRole.user);
+    if (users.isEmpty || state.any((message) => message.isStreaming)) return;
+    final query = users.last.content;
+    if (state.isNotEmpty && state.last.role == MessageRole.assistant) {
+      state = state.sublist(0, state.length - 1);
+    }
+    if (state.isNotEmpty && state.last.role == MessageRole.user) {
+      state = state.sublist(0, state.length - 1);
+    }
+    await sendMessage(query);
   }
 
   /// Clears the chat history.
   void clearChat() {
+    cancel();
     state = [];
   }
 
