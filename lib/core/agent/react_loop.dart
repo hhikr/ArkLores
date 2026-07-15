@@ -44,14 +44,20 @@ class ReActLoop {
   final LLMClient _llmClient;
   final ToolRegistry _toolRegistry;
   final int _maxIterations;
+  final int _minimumToolCalls;
+  final int _stepMaxTokens;
 
   ReActLoop({
     required LLMClient llmClient,
     required ToolRegistry toolRegistry,
     int maxIterations = 5,
+    int minimumToolCalls = 0,
+    int stepMaxTokens = 2048,
   })  : _llmClient = llmClient,
         _toolRegistry = toolRegistry,
-        _maxIterations = maxIterations;
+        _maxIterations = maxIterations,
+        _minimumToolCalls = minimumToolCalls,
+        _stepMaxTokens = stepMaxTokens;
 
   /// Runs the ReAct Loop and yields [ReActEvent]s.
   Stream<ReActEvent> run({
@@ -102,6 +108,7 @@ Let's begin!
     final loopMessages = List<Message>.from(messages);
     var iteration = 0;
     var completed = false;
+    var completedToolCalls = 0;
     final logger = AgentLogger(userQuery, agentName: agentName);
     final evidenceSummary = _EvidenceSummary();
     final observations = <String>[];
@@ -117,7 +124,7 @@ Let's begin!
         completion = await _llmClient.chatCompletion(
           loopMessages,
           temperature: 0.1, // Low temperature for high format compliance
-          maxTokens: 2048,
+          maxTokens: _stepMaxTokens,
           stop: const [
             'Observation:',
             '\nObservation:',
@@ -171,6 +178,15 @@ Let's begin!
             ? finalAnswer
             : response.split('Final Answer:').last.trim();
 
+        if (completedToolCalls < _minimumToolCalls) {
+          final errorMsg = 'A final answer requires at least '
+              '$_minimumToolCalls completed tool call(s). Use a registered '
+              'tool before answering.';
+          logger.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
+          loopMessages.add(Message.user('Observation: Error - $errorMsg'));
+          continue;
+        }
+
         if (actualAnswer.trim().isEmpty) {
           final errorMsg =
               'The model returned an empty final answer. Please retry.';
@@ -198,6 +214,14 @@ Let's begin!
       }
 
       if (action.isEmpty) {
+        if (completedToolCalls < _minimumToolCalls) {
+          final errorMsg = 'A final answer requires at least '
+              '$_minimumToolCalls completed tool call(s). Use a registered '
+              'tool before answering.';
+          logger.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
+          loopMessages.add(Message.user('Observation: Error - $errorMsg'));
+          continue;
+        }
         final effectiveAnswer = _finalizeAnswer(
           response,
           evidenceSummary,
@@ -251,6 +275,7 @@ Let's begin!
       }
 
       logger.logObservation(observation);
+      completedToolCalls++;
       evidenceSummary.addObservation(observation);
       observations.add(observation);
       yield ReActEvent(
@@ -332,9 +357,11 @@ Let's begin!
   /// Parses a value for a specific key (e.g. "Thought:") from the response.
   /// Handles markdown formatting like bolding, bullet points, and inline key placement.
   String _parseKey(String text, String key) {
-    // Matches the key optionally preceded by start of text, space, or newline, and optional bold asterisks
-    final pattern =
-        RegExp('(?:^|\\s)\\**$key\\**\\s*:\\s*(.*)', caseSensitive: false);
+    // Providers sometimes place a ReAct key directly after sentence punctuation.
+    final pattern = RegExp(
+      '(?:^|[\\s。！？；.!?;])\\**$key\\**\\s*:\\s*(.*)',
+      caseSensitive: false,
+    );
     final match = pattern.firstMatch(text);
     if (match != null) {
       var value = match.group(1) ?? '';
@@ -597,6 +624,8 @@ class _EvidenceSummary {
     }
     if (observation.contains('No matching records found') ||
         observation.contains('No matching GameData result found') ||
+        observation.contains('No scoped direct candidate found') ||
+        observation.contains('Evidence search requires both') ||
         observation.contains('No confident GameData result') ||
         observation.contains('Error:') ||
         observation.contains('Error occurred') ||

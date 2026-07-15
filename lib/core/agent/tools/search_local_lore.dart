@@ -76,6 +76,16 @@ class SearchLocalLoreTool extends AgentTool {
     final entityId = arguments['entity_id'] as String?;
     final scopeId = arguments['scope_id'] as String?;
     final searchMode = (arguments['search_mode'] as String?) ?? 'general';
+    if (searchMode == 'evidence' &&
+        (entityId == null ||
+            entityId.trim().isEmpty ||
+            scopeId == null ||
+            scopeId.trim().isEmpty)) {
+      return const ToolExecutionResult(
+        observation: 'Evidence search requires both a resolved entity_id and '
+            'a canonical scope_id. Resolve them separately, then retry.',
+      );
+    }
 
     final store = _gameDataStore;
     if (store != null && await store.isAvailable) {
@@ -103,6 +113,16 @@ class SearchLocalLoreTool extends AgentTool {
       );
       if (results.isNotEmpty) {
         return _formatGameDataResults(results, searchMode: searchMode);
+      }
+      if (searchMode == 'evidence') {
+        return ToolExecutionResult(
+          observation:
+              'No scoped direct candidate found for "$query". The scope and '
+              'entity intersection was checked. Retry evidence mode with the '
+              'same scope_id and entity_id but only one short claim '
+              'relationship, state, or action term; do not use the scope or '
+              'entity names as query terms.',
+        );
       }
       return ToolExecutionResult(
         observation:
