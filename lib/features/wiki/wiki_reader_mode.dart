@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -7,54 +9,29 @@ class WikiReaderMode {
   static const _styleId = 'arklores-reader-mode';
   static const _bodyClass = 'arklores-reader-mode';
   static const _fontFamily = 'LXGW WenKai';
-  static const fontScheme = 'arklores-reader-font';
-  static const _regularFontUrl = '$fontScheme://lxgw-wenkai/regular.woff2';
-  static const _mediumFontUrl = '$fontScheme://lxgw-wenkai/medium.woff2';
   static const _regularFontAsset =
       'assets/fonts/lxgw-wenkai/LXGWWenKai-Regular.woff2';
-  static const _mediumFontAsset =
-      'assets/fonts/lxgw-wenkai/LXGWWenKai-Medium.woff2';
 
-  static const _fontFaces = '''
+  static Future<String>? _fontFacesFuture;
+
+  static Future<String> _fontFaces() {
+    return _fontFacesFuture ??= _buildFontFaces();
+  }
+
+  static Future<String> _buildFontFaces() async {
+    final data = await rootBundle.load(_regularFontAsset);
+    final bytes =
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    final uri = 'data:font/woff2;base64,${base64Encode(bytes)}';
+    return '''
 @font-face {
   font-family: "$_fontFamily";
-  src: url("$_regularFontUrl") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "$_fontFamily";
-  src: url("$_mediumFontUrl") format("woff2");
-  font-weight: 700;
+  src: url("$uri") format("woff2");
+  font-weight: 400 700;
   font-style: normal;
   font-display: swap;
 }
 ''';
-
-  static Future<CustomSchemeResponse?> loadFontResource(
-    WebResourceRequest request,
-  ) async {
-    final url = request.url;
-    if (url.scheme != fontScheme) return null;
-
-    final assetPath = switch (url.path) {
-      '/regular.woff2' => _regularFontAsset,
-      '/medium.woff2' => _mediumFontAsset,
-      _ => null,
-    };
-    if (assetPath == null) return null;
-
-    try {
-      final data = await rootBundle.load(assetPath);
-      return CustomSchemeResponse(
-        data: data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        contentType: 'font/woff2',
-      );
-    } catch (_) {
-      return null;
-    }
   }
 
   static Future<void> setEnabled(
@@ -75,6 +52,7 @@ class WikiReaderMode {
     required bool dark,
     required double fontScale,
   }) async {
+    final fontFaces = await _fontFaces();
     final background = dark ? '#0B0F14' : '#F6F3EA';
     final storySurface = dark ? '#111A24' : '#FFFDF7';
     final storyHeader = dark ? '#172230' : '#EFE8DA';
@@ -92,7 +70,7 @@ class WikiReaderMode {
         (1.72 - ((fontScale - 1) * 0.08)).clamp(1.56, 1.78).toStringAsFixed(2);
 
     final css = '''
-$_fontFaces
+$fontFaces
 
 :root {
   color-scheme: ${dark ? 'dark' : 'light'} !important;
@@ -473,6 +451,14 @@ body.$_bodyClass .succession-box {
     document.head.appendChild(style);
   }
   style.textContent = ${_jsStringLiteral(css)};
+  if (body.dataset.arkloresReaderTapHandler !== '1') {
+    document.addEventListener('click', function() {
+      try {
+        window.flutter_inappwebview.callHandler('arkloresReaderTap');
+      } catch (e) {}
+    }, true);
+    body.dataset.arkloresReaderTapHandler = '1';
+  }
 
   var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
   var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';

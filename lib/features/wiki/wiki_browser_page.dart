@@ -6,6 +6,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../ai/ai_chat_page.dart';
 import '../ai/wiki_ai_context.dart';
@@ -67,6 +68,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   bool _isReaderMode = false;
   double _readerFontScale = 1.0;
   bool _trayExpanded = false;
+  bool _readerControlsVisible = true;
   bool _restoredState = false;
 
   @override
@@ -78,6 +80,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
             Brightness.dark;
     _tabController = TabController(length: _wikiSites.length, vsync: this);
     _tabController.addListener(_onTabChanged);
+    ref.read(wikiBackHandlerProvider.notifier).state = _handleSystemBack;
     _restoreBrowsingState();
   }
 
@@ -85,6 +88,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _persistBrowsingState();
+    ref.read(wikiReaderFullscreenProvider.notifier).state = false;
+    ref.read(wikiBackHandlerProvider.notifier).state = null;
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
@@ -144,6 +149,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       _readerFontScale = readerFontScale;
       _restoredState = true;
     });
+    ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
   }
 
   Future<void> _persistBrowsingState() async {
@@ -180,12 +186,25 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   // ─── Toolbar action callbacks ────────────────────────────────────
 
-  void _goBack() {
-    _controllers[_tabController.index]?.goBack();
+  Future<bool> _handleSystemBack() async {
+    if (_isReaderMode) {
+      _setReaderMode(false);
+      return true;
+    }
+    final controller = _controllers[_tabController.index];
+    if (controller == null) return true;
+    if (await controller.canGoBack()) {
+      await controller.goBack();
+    }
+    return true;
   }
 
-  void _goForward() {
-    _controllers[_tabController.index]?.goForward();
+  void _zoomOut() {
+    _controllers[_tabController.index]?.zoomOut();
+  }
+
+  void _zoomIn() {
+    _controllers[_tabController.index]?.zoomIn();
   }
 
   void _reload() {
@@ -200,13 +219,29 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   void _toggleReaderMode() {
     final enabled = !_isReaderMode;
-    setState(() => _isReaderMode = enabled);
+    _setReaderMode(enabled);
+  }
+
+  void _setReaderMode(bool enabled) {
+    setState(() {
+      _isReaderMode = enabled;
+      if (enabled) {
+        _trayExpanded = false;
+        _readerControlsVisible = true;
+      }
+    });
+    ref.read(wikiReaderFullscreenProvider.notifier).state = enabled;
     ref.read(settingsServiceProvider).saveWikiReaderMode(enabled).catchError(
           (Object error) => debugPrint(
             '[WikiBrowser] Error saving reader mode: $error',
           ),
         );
     _applyAppearanceToControllers();
+  }
+
+  void _toggleReaderControls() {
+    if (!_isReaderMode) return;
+    setState(() => _readerControlsVisible = !_readerControlsVisible);
   }
 
   void _decreaseReaderFont() {
@@ -398,39 +433,62 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
+        top: !_isReaderMode,
+        bottom: false,
         child: Stack(
           children: [
             // ── Main content column ────────────────────────────
             Column(
               children: [
                 // ── Site tab bar ─────────────────────────────────
-                Container(
-                  color: theme.bgSecondary,
-                  child: TabBar(
-                    controller: _tabController,
-                    indicatorColor: theme.accentPrimary,
-                    labelColor: theme.accentPrimary,
-                    unselectedLabelColor: theme.textSecondary,
-                    labelStyle: theme.titleFont.copyWith(fontSize: 14),
-                    unselectedLabelStyle: theme.bodyFont.copyWith(fontSize: 14),
-                    indicatorWeight: 2,
-                    tabs: _wikiSites.map((site) {
-                      return Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.public_rounded,
-                              size: 16,
-                              color: theme.accentPrimary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(site.label),
-                          ],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeInOutCubic,
+                  child: _isReaderMode
+                      ? const SizedBox.shrink()
+                      : Container(
+                          color: theme.bgSecondary,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TabBar(
+                                  controller: _tabController,
+                                  indicatorColor: theme.accentPrimary,
+                                  labelColor: theme.accentPrimary,
+                                  unselectedLabelColor: theme.textSecondary,
+                                  labelStyle:
+                                      theme.titleFont.copyWith(fontSize: 14),
+                                  unselectedLabelStyle:
+                                      theme.bodyFont.copyWith(fontSize: 14),
+                                  indicatorWeight: 2,
+                                  tabs: _wikiSites.map((site) {
+                                    return Tab(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.public_rounded,
+                                            size: 16,
+                                            color: theme.accentPrimary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(site.label),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.bookmarks_rounded),
+                                color: theme.textSecondary,
+                                tooltip: 'Bookmarks',
+                                onPressed: _openBookmarks,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                          ),
                         ),
-                      );
-                    }).toList(),
-                  ),
                 ),
 
                 // ── WebView area (IndexedStack = no horizontal swipes) ──
@@ -448,6 +506,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                         isReaderMode: _isReaderMode,
                         readerDark: _isDarkMode,
                         readerFontScale: _readerFontScale,
+                        onReaderTapped: _toggleReaderControls,
                         onControllerCreated: _onControllerCreated,
                         onTitleChanged: _onTitleChanged,
                         onUrlChanged: _onUrlChanged,
@@ -459,26 +518,32 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               ],
             ),
 
-            // ── Expandable floating tray (FAB ⇄ vertical toolbar) ──
-            _ExpandableTray(
-              expanded: _trayExpanded,
-              onToggle: () => setState(() => _trayExpanded = !_trayExpanded),
-              canGoBack: _canGoBack[_tabController.index],
-              canGoForward: _canGoForward[_tabController.index],
-              isDarkMode: _isDarkMode,
-              isReaderMode: _isReaderMode,
-              isBookmarked: isBookmarked,
-              onBack: _goBack,
-              onForward: _goForward,
-              onRefresh: _reload,
-              onToggleDarkMode: _toggleDarkMode,
-              onToggleReaderMode: _toggleReaderMode,
-              onDecreaseReaderFont: _decreaseReaderFont,
-              onIncreaseReaderFont: _increaseReaderFont,
-              onToggleBookmark: _toggleBookmark,
-              onOpenBookmarks: _openBookmarks,
-              onSendToAi: _sendSelectionToAi,
-            ),
+            if (_isReaderMode)
+              _ReaderToolbar(
+                visible: _readerControlsVisible,
+                isDarkMode: _isDarkMode,
+                onToggleDarkMode: _toggleDarkMode,
+                onDecreaseReaderFont: _decreaseReaderFont,
+                onIncreaseReaderFont: _increaseReaderFont,
+                onExitReader: () => _setReaderMode(false),
+              )
+            else
+              _ExpandableTray(
+                expanded: _trayExpanded,
+                onToggle: () => setState(() => _trayExpanded = !_trayExpanded),
+                isDarkMode: _isDarkMode,
+                isReaderMode: _isReaderMode,
+                isBookmarked: isBookmarked,
+                onZoomOut: _zoomOut,
+                onZoomIn: _zoomIn,
+                onRefresh: _reload,
+                onToggleDarkMode: _toggleDarkMode,
+                onToggleReaderMode: _toggleReaderMode,
+                onDecreaseReaderFont: _decreaseReaderFont,
+                onIncreaseReaderFont: _increaseReaderFont,
+                onToggleBookmark: _toggleBookmark,
+                onSendToAi: _sendSelectionToAi,
+              ),
           ],
         ),
       ),
@@ -496,6 +561,7 @@ class _WikiTabView extends StatefulWidget {
   final bool isReaderMode;
   final bool readerDark;
   final double readerFontScale;
+  final VoidCallback onReaderTapped;
   final void Function(int, InAppWebViewController) onControllerCreated;
   final void Function(int, String?) onTitleChanged;
   final void Function(int, String) onUrlChanged;
@@ -509,6 +575,7 @@ class _WikiTabView extends StatefulWidget {
     required this.isReaderMode,
     required this.readerDark,
     required this.readerFontScale,
+    required this.onReaderTapped,
     required this.onControllerCreated,
     required this.onTitleChanged,
     required this.onUrlChanged,
@@ -522,6 +589,7 @@ class _WikiTabView extends StatefulWidget {
 class _WikiTabViewState extends State<_WikiTabView> {
   InAppWebViewController? _controller;
   String? _loadError;
+  double? _edgeDragStartX;
 
   @override
   void didUpdateWidget(covariant _WikiTabView oldWidget) {
@@ -570,12 +638,18 @@ class _WikiTabViewState extends State<_WikiTabView> {
             domStorageEnabled: true,
             useWideViewPort: true,
             supportZoom: true,
-            resourceCustomSchemes: [WikiReaderMode.fontScheme],
             // Transparent background to avoid white flash on dark themes.
             transparentBackground: true,
           ),
           onWebViewCreated: (controller) {
             _controller = controller;
+            controller.addJavaScriptHandler(
+              handlerName: 'arkloresReaderTap',
+              callback: (_) {
+                if (widget.isReaderMode) widget.onReaderTapped();
+                return null;
+              },
+            );
             widget.onControllerCreated(widget.index, controller);
           },
           onLoadStart: (controller, url) {
@@ -604,12 +678,65 @@ class _WikiTabViewState extends State<_WikiTabView> {
               _loadError = _friendlyWebViewError(error.description);
             });
           },
-          onLoadResourceWithCustomScheme: (controller, request) {
-            return WikiReaderMode.loadFontResource(request);
-          },
         ),
+        if (!widget.isReaderMode) _buildEdgeGestureLayer(),
         if (_loadError != null) _buildErrorOverlay(context),
       ],
+    );
+  }
+
+  Widget _buildEdgeGestureLayer() {
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const edgeWidth = 28.0;
+          return IgnorePointer(
+            ignoring: false,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: edgeWidth,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragStart: (details) {
+                      _edgeDragStartX = details.globalPosition.dx;
+                    },
+                    onHorizontalDragEnd: (details) async {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity > 320 || (_edgeDragStartX ?? 0) < 12) {
+                        if (await _controller?.canGoBack() ?? false) {
+                          await _controller?.goBack();
+                        }
+                      }
+                      _edgeDragStartX = null;
+                    },
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: edgeWidth,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragEnd: (details) async {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity < -320) {
+                        if (await _controller?.canGoForward() ?? false) {
+                          await _controller?.goForward();
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -781,9 +908,128 @@ class _TargetTile extends StatelessWidget {
   }
 }
 
+class _ReaderToolbar extends ConsumerWidget {
+  const _ReaderToolbar({
+    required this.visible,
+    required this.isDarkMode,
+    required this.onToggleDarkMode,
+    required this.onDecreaseReaderFont,
+    required this.onIncreaseReaderFont,
+    required this.onExitReader,
+  });
+
+  final bool visible;
+  final bool isDarkMode;
+  final VoidCallback onToggleDarkMode;
+  final VoidCallback onDecreaseReaderFont;
+  final VoidCallback onIncreaseReaderFont;
+  final VoidCallback onExitReader;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+
+    return Positioned(
+      left: 18,
+      right: 18,
+      bottom: 22,
+      child: SafeArea(
+        top: false,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            offset: visible ? Offset.zero : const Offset(0, 1.2),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 180),
+              opacity: visible ? 1 : 0,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.cardSurface.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: theme.cardBorder),
+                  boxShadow: theme.cardShadow,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _ReaderToolButton(
+                        theme: theme,
+                        icon: isDarkMode
+                            ? Icons.light_mode_rounded
+                            : Icons.dark_mode_rounded,
+                        onTap: onToggleDarkMode,
+                      ),
+                      _ReaderToolButton(
+                        theme: theme,
+                        label: 'A-',
+                        onTap: onDecreaseReaderFont,
+                      ),
+                      _ReaderToolButton(
+                        theme: theme,
+                        label: 'A+',
+                        onTap: onIncreaseReaderFont,
+                      ),
+                      _ReaderToolButton(
+                        theme: theme,
+                        icon: Icons.close_rounded,
+                        onTap: onExitReader,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReaderToolButton extends StatelessWidget {
+  const _ReaderToolButton({
+    required this.theme,
+    required this.onTap,
+    this.icon,
+    this.label,
+  });
+
+  final AppThemeTokens theme;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 54,
+      height: 44,
+      child: IconButton(
+        onPressed: onTap,
+        color: theme.textPrimary,
+        splashRadius: 22,
+        icon: icon != null
+            ? Icon(icon, size: 22)
+            : Text(
+                label ?? '',
+                style: theme.titleFont.copyWith(fontSize: 18),
+              ),
+      ),
+    );
+  }
+}
+
 // ─── Sizing constants for the expandable tray ───────────────────
 const double _traySize = 52;
 const double _trayMargin = 16;
+const double _trayBottomOffset = 64;
 const double _trayHeightFactor = 0.45;
 
 /// Floating tray anchored at bottom-right that morphs between a FAB and a
@@ -796,41 +1042,35 @@ class _ExpandableTray extends ConsumerWidget {
   const _ExpandableTray({
     required this.expanded,
     required this.onToggle,
-    required this.canGoBack,
-    required this.canGoForward,
     required this.isDarkMode,
     required this.isReaderMode,
     required this.isBookmarked,
-    required this.onBack,
-    required this.onForward,
+    required this.onZoomOut,
+    required this.onZoomIn,
     required this.onRefresh,
     required this.onToggleDarkMode,
     required this.onToggleReaderMode,
     required this.onDecreaseReaderFont,
     required this.onIncreaseReaderFont,
     required this.onToggleBookmark,
-    required this.onOpenBookmarks,
     required this.onSendToAi,
   });
 
   final bool expanded;
   final VoidCallback onToggle;
 
-  final bool canGoBack;
-  final bool canGoForward;
   final bool isDarkMode;
   final bool isReaderMode;
   final bool isBookmarked;
 
-  final VoidCallback onBack;
-  final VoidCallback onForward;
+  final VoidCallback onZoomOut;
+  final VoidCallback onZoomIn;
   final VoidCallback onRefresh;
   final VoidCallback onToggleDarkMode;
   final VoidCallback onToggleReaderMode;
   final VoidCallback onDecreaseReaderFont;
   final VoidCallback onIncreaseReaderFont;
   final VoidCallback onToggleBookmark;
-  final VoidCallback onOpenBookmarks;
   final VoidCallback onSendToAi;
 
   @override
@@ -839,7 +1079,7 @@ class _ExpandableTray extends ConsumerWidget {
 
     return Positioned(
       right: _trayMargin,
-      bottom: _trayMargin,
+      bottom: _trayBottomOffset,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOutCubic,
@@ -861,20 +1101,17 @@ class _ExpandableTray extends ConsumerWidget {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: WikiToolbar(
-                    canGoBack: canGoBack,
-                    canGoForward: canGoForward,
                     isDarkMode: isDarkMode,
                     isReaderMode: isReaderMode,
                     isBookmarked: isBookmarked,
-                    onBack: onBack,
-                    onForward: onForward,
+                    onZoomOut: onZoomOut,
+                    onZoomIn: onZoomIn,
                     onRefresh: onRefresh,
                     onToggleDarkMode: onToggleDarkMode,
                     onToggleReaderMode: onToggleReaderMode,
                     onDecreaseReaderFont: onDecreaseReaderFont,
                     onIncreaseReaderFont: onIncreaseReaderFont,
                     onToggleBookmark: onToggleBookmark,
-                    onOpenBookmarks: onOpenBookmarks,
                     onSendToAi: onSendToAi,
                     sendToAiTooltip: context.t.wikiSendToAi,
                     readerModeTooltip: context.t.wikiReaderMode,

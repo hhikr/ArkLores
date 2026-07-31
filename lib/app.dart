@@ -9,6 +9,7 @@ import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
+import 'shared/providers/wiki_navigation_provider.dart';
 import 'shared/theme/app_theme.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
@@ -41,37 +42,55 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final wikiReaderFullscreen = ref.watch(wikiReaderFullscreenProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: Curves.easeInOut,
-        switchOutCurve: Curves.easeInOut,
-        transitionBuilder: (Widget child, Animation<double> animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey('page_${theme.themeName}'),
-          child: IndexedStack(
-            index: _currentIndex,
-            children: _pages,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (_currentIndex == 0) {
+          final handled = await (ref.read(wikiBackHandlerProvider)?.call() ??
+              Future.value(false));
+          if (handled) return;
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          switchInCurve: Curves.easeInOut,
+          switchOutCurve: Curves.easeInOut,
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey('page_${theme.themeName}'),
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _pages,
+            ),
           ),
         ),
-      ),
-      bottomNavigationBar: _IndustrialNavigation(
-        theme: theme,
-        currentIndex: _currentIndex,
-        onSelected: _selectTab,
-        items: [
-          (Icons.language_rounded, context.t.navWiki),
-          (Icons.psychology_alt_rounded, context.t.navAI),
-          (Icons.menu_book_rounded, context.t.navMaterials),
-          (Icons.settings_rounded, context.t.navSettings),
-        ],
+        bottomNavigationBar: AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeInOutCubic,
+          child: wikiReaderFullscreen && _currentIndex == 0
+              ? const SizedBox.shrink()
+              : _IndustrialNavigation(
+                  theme: theme,
+                  currentIndex: _currentIndex,
+                  onSelected: _selectTab,
+                  items: [
+                    (Icons.language_rounded, context.t.navWiki),
+                    (Icons.psychology_alt_rounded, context.t.navAI),
+                    (Icons.menu_book_rounded, context.t.navMaterials),
+                    (Icons.settings_rounded, context.t.navSettings),
+                  ],
+                ),
+        ),
       ),
     );
   }

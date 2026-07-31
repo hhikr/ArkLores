@@ -12,20 +12,17 @@ import '../../shared/providers/theme_provider.dart';
 class WikiToolbar extends ConsumerWidget {
   const WikiToolbar({
     super.key,
-    required this.canGoBack,
-    required this.canGoForward,
     required this.isDarkMode,
     required this.isReaderMode,
     required this.isBookmarked,
-    required this.onBack,
-    required this.onForward,
+    required this.onZoomOut,
+    required this.onZoomIn,
     required this.onRefresh,
     required this.onToggleDarkMode,
     required this.onToggleReaderMode,
     required this.onDecreaseReaderFont,
     required this.onIncreaseReaderFont,
     required this.onToggleBookmark,
-    required this.onOpenBookmarks,
     required this.onSendToAi,
     required this.sendToAiTooltip,
     required this.readerModeTooltip,
@@ -33,21 +30,18 @@ class WikiToolbar extends ConsumerWidget {
     required this.readerFontLargerTooltip,
   });
 
-  final bool canGoBack;
-  final bool canGoForward;
   final bool isDarkMode;
   final bool isReaderMode;
   final bool isBookmarked;
 
-  final VoidCallback onBack;
-  final VoidCallback onForward;
+  final VoidCallback onZoomOut;
+  final VoidCallback onZoomIn;
   final VoidCallback onRefresh;
   final VoidCallback onToggleDarkMode;
   final VoidCallback onToggleReaderMode;
   final VoidCallback onDecreaseReaderFont;
   final VoidCallback onIncreaseReaderFont;
   final VoidCallback onToggleBookmark;
-  final VoidCallback onOpenBookmarks;
   final VoidCallback onSendToAi;
   final String sendToAiTooltip;
   final String readerModeTooltip;
@@ -62,15 +56,8 @@ class WikiToolbar extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _TrayButton(
-            icon: Icons.arrow_back_ios_rounded,
-            theme: theme,
-            enabled: canGoBack,
-            onTap: onBack),
-        _TrayButton(
-            icon: Icons.arrow_forward_ios_rounded,
-            theme: theme,
-            enabled: canGoForward,
-            onTap: onForward),
+            icon: Icons.zoom_out_rounded, theme: theme, onTap: onZoomOut),
+        _TrayButton(icon: Icons.zoom_in_rounded, theme: theme, onTap: onZoomIn),
         _TrayButton(
             icon: Icons.refresh_rounded, theme: theme, onTap: onRefresh),
         Padding(
@@ -114,10 +101,6 @@ class WikiToolbar extends ConsumerWidget {
           onTap: onToggleBookmark,
           activeColor: isBookmarked ? theme.warning : null,
         ),
-        _TrayButton(
-            icon: Icons.bookmarks_rounded,
-            theme: theme,
-            onTap: onOpenBookmarks),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Divider(color: theme.divider, height: 1),
@@ -137,7 +120,6 @@ class WikiToolbar extends ConsumerWidget {
 /// A single icon button inside the expandable toolbar.
 class _TrayButton extends StatelessWidget {
   final IconData icon;
-  final bool enabled;
   final VoidCallback? onTap;
   final AppThemeTokens theme;
   final Color? activeColor;
@@ -146,7 +128,6 @@ class _TrayButton extends StatelessWidget {
   const _TrayButton({
     required this.icon,
     required this.theme,
-    this.enabled = true,
     this.onTap,
     this.activeColor,
     this.tooltip,
@@ -154,17 +135,14 @@ class _TrayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = !enabled
-        ? theme.textSecondary.withValues(alpha: 0.3)
-        : (activeColor ?? theme.textPrimary);
+    final color = activeColor ?? theme.textPrimary;
 
     return SizedBox(
       height: 44,
       child: IconButton(
         icon: Icon(icon, size: 20),
         color: color,
-        disabledColor: theme.textSecondary.withValues(alpha: 0.3),
-        onPressed: enabled ? onTap : null,
+        onPressed: onTap,
         padding: EdgeInsets.zero,
         splashRadius: 18,
         tooltip: tooltip,
