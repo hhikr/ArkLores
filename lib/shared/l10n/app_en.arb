@@ -93,6 +93,9 @@
   "wikiSendToAiDesc": "Selected Wiki text is reading context only; factual claims are verified separately with GameData.",
   "wikiSendToSummaryDesc": "Summarize from the page and selected text",
   "wikiSendToFactCheckDesc": "Use the selected text as the claim to check",
+  "wikiReaderMode": "Reader mode",
+  "wikiReaderFontSmaller": "Smaller text",
+  "wikiReaderFontLarger": "Larger text",
 
   "bookmarksTitle": "Bookmarks",
   "bookmarksLoadFailed": "Failed to load bookmarks: {error}",

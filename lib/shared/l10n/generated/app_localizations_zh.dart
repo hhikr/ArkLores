@@ -283,6 +283,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wikiSendToFactCheckDesc => '把选中文字作为待核查主张';
 
   @override
+  String get wikiReaderMode => '阅读模式';
+
+  @override
+  String get wikiReaderFontSmaller => '缩小文字';
+
+  @override
+  String get wikiReaderFontLarger => '放大文字';
+
+  @override
   String get bookmarksTitle => '书签';
 
   @override

@@ -93,6 +93,9 @@
   "wikiSendToAiDesc": "选中的 Wiki 文本只作为阅读上下文；事实声明仍会用 GameData 单独核验。",
   "wikiSendToSummaryDesc": "根据页面和选中文字生成梗概",
   "wikiSendToFactCheckDesc": "把选中文字作为待核查主张",
+  "wikiReaderMode": "阅读模式",
+  "wikiReaderFontSmaller": "缩小文字",
+  "wikiReaderFontLarger": "放大文字",
 
   "bookmarksTitle": "书签",
   "bookmarksLoadFailed": "加载书签失败：{error}",

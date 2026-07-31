@@ -15,30 +15,44 @@ class WikiToolbar extends ConsumerWidget {
     required this.canGoBack,
     required this.canGoForward,
     required this.isDarkMode,
+    required this.isReaderMode,
     required this.isBookmarked,
     required this.onBack,
     required this.onForward,
     required this.onRefresh,
     required this.onToggleDarkMode,
+    required this.onToggleReaderMode,
+    required this.onDecreaseReaderFont,
+    required this.onIncreaseReaderFont,
     required this.onToggleBookmark,
     required this.onOpenBookmarks,
     required this.onSendToAi,
     required this.sendToAiTooltip,
+    required this.readerModeTooltip,
+    required this.readerFontSmallerTooltip,
+    required this.readerFontLargerTooltip,
   });
 
   final bool canGoBack;
   final bool canGoForward;
   final bool isDarkMode;
+  final bool isReaderMode;
   final bool isBookmarked;
 
   final VoidCallback onBack;
   final VoidCallback onForward;
   final VoidCallback onRefresh;
   final VoidCallback onToggleDarkMode;
+  final VoidCallback onToggleReaderMode;
+  final VoidCallback onDecreaseReaderFont;
+  final VoidCallback onIncreaseReaderFont;
   final VoidCallback onToggleBookmark;
   final VoidCallback onOpenBookmarks;
   final VoidCallback onSendToAi;
   final String sendToAiTooltip;
+  final String readerModeTooltip;
+  final String readerFontSmallerTooltip;
+  final String readerFontLargerTooltip;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -69,6 +83,29 @@ class WikiToolbar extends ConsumerWidget {
           onTap: onToggleDarkMode,
           activeColor: theme.accentPrimary,
         ),
+        _TrayButton(
+          icon: isReaderMode
+              ? Icons.chrome_reader_mode_rounded
+              : Icons.chrome_reader_mode_outlined,
+          theme: theme,
+          onTap: onToggleReaderMode,
+          activeColor: isReaderMode ? theme.accentPrimary : null,
+          tooltip: readerModeTooltip,
+        ),
+        if (isReaderMode) ...[
+          _TrayButton(
+            icon: Icons.text_decrease_rounded,
+            theme: theme,
+            onTap: onDecreaseReaderFont,
+            tooltip: readerFontSmallerTooltip,
+          ),
+          _TrayButton(
+            icon: Icons.text_increase_rounded,
+            theme: theme,
+            onTap: onIncreaseReaderFont,
+            tooltip: readerFontLargerTooltip,
+          ),
+        ],
         _TrayButton(
           icon: isBookmarked
               ? Icons.bookmark_rounded

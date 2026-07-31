@@ -283,6 +283,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wikiSendToFactCheckDesc => 'Use the selected text as the claim to check';
 
   @override
+  String get wikiReaderMode => 'Reader mode';
+
+  @override
+  String get wikiReaderFontSmaller => 'Smaller text';
+
+  @override
+  String get wikiReaderFontLarger => 'Larger text';
+
+  @override
   String get bookmarksTitle => 'Bookmarks';
 
   @override

@@ -96,6 +96,8 @@ flutter:
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
+  assets:
+    - assets/fonts/lxgw-wenkai/
 
   # Localization code generation (flutter gen-l10n)
   generate: true

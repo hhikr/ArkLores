@@ -12,6 +12,7 @@ import '../ai/wiki_ai_context.dart';
 import 'bookmark_page.dart';
 import 'bookmark_service.dart' show Bookmark;
 import 'wiki_dark_mode.dart';
+import 'wiki_reader_mode.dart';
 import 'wiki_toolbar.dart';
 
 /// Wiki site configuration.
@@ -63,6 +64,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = false;
+  bool _isReaderMode = false;
+  double _readerFontScale = 1.0;
   bool _trayExpanded = false;
   bool _restoredState = false;
 
@@ -102,6 +105,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   Future<void> _restoreBrowsingState() async {
     var tabIndex = 0;
+    var readerMode = false;
+    var readerFontScale = 1.0;
     final urls = [
       for (final site in _wikiSites) site.initialUrl,
     ];
@@ -111,6 +116,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         urls[i] = await service.loadWikiUrl(i) ?? _wikiSites[i].initialUrl;
       }
       tabIndex = await service.loadWikiTabIndex();
+      readerMode = await service.loadWikiReaderMode();
+      readerFontScale = await service.loadWikiReaderFontScale();
     } catch (e) {
       debugPrint('[WikiBrowser] Error restoring browsing state: $e');
     }
@@ -120,6 +127,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         _currentUrls[i] = urls[i];
       }
       _tabController.index = tabIndex;
+      _isReaderMode = readerMode;
+      _readerFontScale = readerFontScale;
       _restoredState = true;
     });
   }
@@ -128,6 +137,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     try {
       final service = ref.read(settingsServiceProvider);
       await service.saveWikiTabIndex(_tabController.index);
+      await service.saveWikiReaderMode(_isReaderMode);
+      await service.saveWikiReaderFontScale(_readerFontScale);
       await Future.wait([
         for (var i = 0; i < _currentUrls.length; i++)
           if (_currentUrls[i].trim().isNotEmpty)
@@ -172,7 +183,62 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     final newValue = !_isDarkMode;
     setState(() => _isDarkMode = newValue);
     for (final c in _controllers) {
-      if (c != null) WikiDarkMode.setEnabled(c, newValue);
+      if (c != null) {
+        WikiDarkMode.setEnabled(c, newValue).then((_) {
+          if (_isReaderMode) {
+            WikiReaderMode.inject(
+              c,
+              dark: ref.read(themeProvider).isDark,
+              fontScale: _readerFontScale,
+            );
+          }
+        });
+      }
+    }
+  }
+
+  void _toggleReaderMode() {
+    final enabled = !_isReaderMode;
+    setState(() => _isReaderMode = enabled);
+    ref.read(settingsServiceProvider).saveWikiReaderMode(enabled).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving reader mode: $error',
+          ),
+        );
+    _applyReaderModeToControllers();
+  }
+
+  void _decreaseReaderFont() {
+    _setReaderFontScale(_readerFontScale - 0.08);
+  }
+
+  void _increaseReaderFont() {
+    _setReaderFontScale(_readerFontScale + 0.08);
+  }
+
+  void _setReaderFontScale(double value) {
+    final next = value.clamp(0.86, 1.34).toDouble();
+    if (next == _readerFontScale) return;
+    setState(() => _readerFontScale = next);
+    ref.read(settingsServiceProvider).saveWikiReaderFontScale(next).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving reader font scale: $error',
+          ),
+        );
+    if (_isReaderMode) _applyReaderModeToControllers();
+  }
+
+  void _applyReaderModeToControllers() {
+    final theme = ref.read(themeProvider);
+    for (final c in _controllers) {
+      if (c != null) {
+        WikiReaderMode.setEnabled(
+          c,
+          enabled: _isReaderMode,
+          dark: theme.isDark,
+          fontScale: _readerFontScale,
+        );
+      }
     }
   }
 
@@ -367,6 +433,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                             : _wikiSites[i].initialUrl,
                         theme: theme,
                         isDarkMode: _isDarkMode,
+                        isReaderMode: _isReaderMode,
+                        readerDark: theme.isDark,
+                        readerFontScale: _readerFontScale,
                         onControllerCreated: _onControllerCreated,
                         onTitleChanged: _onTitleChanged,
                         onUrlChanged: _onUrlChanged,
@@ -385,11 +454,15 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               canGoBack: _canGoBack[_tabController.index],
               canGoForward: _canGoForward[_tabController.index],
               isDarkMode: _isDarkMode,
+              isReaderMode: _isReaderMode,
               isBookmarked: isBookmarked,
               onBack: _goBack,
               onForward: _goForward,
               onRefresh: _reload,
               onToggleDarkMode: _toggleDarkMode,
+              onToggleReaderMode: _toggleReaderMode,
+              onDecreaseReaderFont: _decreaseReaderFont,
+              onIncreaseReaderFont: _increaseReaderFont,
               onToggleBookmark: _toggleBookmark,
               onOpenBookmarks: _openBookmarks,
               onSendToAi: _sendSelectionToAi,
@@ -408,6 +481,9 @@ class _WikiTabView extends StatefulWidget {
   final String initialUrl;
   final AppThemeTokens theme;
   final bool isDarkMode;
+  final bool isReaderMode;
+  final bool readerDark;
+  final double readerFontScale;
   final void Function(int, InAppWebViewController) onControllerCreated;
   final void Function(int, String?) onTitleChanged;
   final void Function(int, String) onUrlChanged;
@@ -418,6 +494,9 @@ class _WikiTabView extends StatefulWidget {
     required this.initialUrl,
     required this.theme,
     required this.isDarkMode,
+    required this.isReaderMode,
+    required this.readerDark,
+    required this.readerFontScale,
     required this.onControllerCreated,
     required this.onTitleChanged,
     required this.onUrlChanged,
@@ -431,6 +510,33 @@ class _WikiTabView extends StatefulWidget {
 class _WikiTabViewState extends State<_WikiTabView> {
   InAppWebViewController? _controller;
   String? _loadError;
+
+  @override
+  void didUpdateWidget(covariant _WikiTabView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_controller == null) return;
+    if (oldWidget.isDarkMode != widget.isDarkMode) {
+      WikiDarkMode.setEnabled(_controller!, widget.isDarkMode).then((_) {
+        if (widget.isReaderMode) {
+          WikiReaderMode.inject(
+            _controller!,
+            dark: widget.readerDark,
+            fontScale: widget.readerFontScale,
+          );
+        }
+      });
+    }
+    if (oldWidget.isReaderMode != widget.isReaderMode ||
+        oldWidget.readerDark != widget.readerDark ||
+        oldWidget.readerFontScale != widget.readerFontScale) {
+      WikiReaderMode.setEnabled(
+        _controller!,
+        enabled: widget.isReaderMode,
+        dark: widget.readerDark,
+        fontScale: widget.readerFontScale,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -449,6 +555,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
             domStorageEnabled: true,
             useWideViewPort: true,
             supportZoom: true,
+            resourceCustomSchemes: [WikiReaderMode.fontScheme],
             // Transparent background to avoid white flash on dark themes.
             transparentBackground: true,
           ),
@@ -464,6 +571,13 @@ class _WikiTabViewState extends State<_WikiTabView> {
           onLoadStop: (controller, url) async {
             if (widget.isDarkMode) {
               await WikiDarkMode.inject(controller);
+            }
+            if (widget.isReaderMode) {
+              await WikiReaderMode.inject(
+                controller,
+                dark: widget.readerDark,
+                fontScale: widget.readerFontScale,
+              );
             }
           },
           onTitleChanged: (controller, title) {
@@ -483,6 +597,9 @@ class _WikiTabViewState extends State<_WikiTabView> {
             setState(() {
               _loadError = _friendlyWebViewError(error.description);
             });
+          },
+          onLoadResourceWithCustomScheme: (controller, request) {
+            return WikiReaderMode.loadFontResource(request);
           },
         ),
         if (_loadError != null) _buildErrorOverlay(context),
@@ -676,11 +793,15 @@ class _ExpandableTray extends ConsumerWidget {
     required this.canGoBack,
     required this.canGoForward,
     required this.isDarkMode,
+    required this.isReaderMode,
     required this.isBookmarked,
     required this.onBack,
     required this.onForward,
     required this.onRefresh,
     required this.onToggleDarkMode,
+    required this.onToggleReaderMode,
+    required this.onDecreaseReaderFont,
+    required this.onIncreaseReaderFont,
     required this.onToggleBookmark,
     required this.onOpenBookmarks,
     required this.onSendToAi,
@@ -692,12 +813,16 @@ class _ExpandableTray extends ConsumerWidget {
   final bool canGoBack;
   final bool canGoForward;
   final bool isDarkMode;
+  final bool isReaderMode;
   final bool isBookmarked;
 
   final VoidCallback onBack;
   final VoidCallback onForward;
   final VoidCallback onRefresh;
   final VoidCallback onToggleDarkMode;
+  final VoidCallback onToggleReaderMode;
+  final VoidCallback onDecreaseReaderFont;
+  final VoidCallback onIncreaseReaderFont;
   final VoidCallback onToggleBookmark;
   final VoidCallback onOpenBookmarks;
   final VoidCallback onSendToAi;
@@ -733,15 +858,22 @@ class _ExpandableTray extends ConsumerWidget {
                     canGoBack: canGoBack,
                     canGoForward: canGoForward,
                     isDarkMode: isDarkMode,
+                    isReaderMode: isReaderMode,
                     isBookmarked: isBookmarked,
                     onBack: onBack,
                     onForward: onForward,
                     onRefresh: onRefresh,
                     onToggleDarkMode: onToggleDarkMode,
+                    onToggleReaderMode: onToggleReaderMode,
+                    onDecreaseReaderFont: onDecreaseReaderFont,
+                    onIncreaseReaderFont: onIncreaseReaderFont,
                     onToggleBookmark: onToggleBookmark,
                     onOpenBookmarks: onOpenBookmarks,
                     onSendToAi: onSendToAi,
                     sendToAiTooltip: context.t.wikiSendToAi,
+                    readerModeTooltip: context.t.wikiReaderMode,
+                    readerFontSmallerTooltip: context.t.wikiReaderFontSmaller,
+                    readerFontLargerTooltip: context.t.wikiReaderFontLarger,
                   ),
                 ),
               ),

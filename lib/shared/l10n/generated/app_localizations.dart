@@ -599,6 +599,24 @@ abstract class AppLocalizations {
   /// **'Use the selected text as the claim to check'**
   String get wikiSendToFactCheckDesc;
 
+  /// No description provided for @wikiReaderMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Reader mode'**
+  String get wikiReaderMode;
+
+  /// No description provided for @wikiReaderFontSmaller.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller text'**
+  String get wikiReaderFontSmaller;
+
+  /// No description provided for @wikiReaderFontLarger.
+  ///
+  /// In en, this message translates to:
+  /// **'Larger text'**
+  String get wikiReaderFontLarger;
+
   /// No description provided for @bookmarksTitle.
   ///
   /// In en, this message translates to:

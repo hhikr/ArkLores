@@ -18,6 +18,8 @@ class SettingsService {
   static const _keyMainTabIndex = 'main_tab_index';
   static const _keyWikiTabIndex = 'wiki_tab_index';
   static const _keyWikiUrlPrefix = 'wiki_url_';
+  static const _keyWikiReaderMode = 'wiki_reader_mode';
+  static const _keyWikiReaderFontScale = 'wiki_reader_font_scale';
 
   final FlutterSecureStorage _storage;
 
@@ -89,6 +91,27 @@ class SettingsService {
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) return;
     await _storage.write(key: '$_keyWikiUrlPrefix$index', value: url);
+  }
+
+  Future<bool> loadWikiReaderMode() async {
+    final value = await _storage.read(key: _keyWikiReaderMode);
+    return value == 'true';
+  }
+
+  Future<void> saveWikiReaderMode(bool enabled) async {
+    await _storage.write(key: _keyWikiReaderMode, value: '$enabled');
+  }
+
+  Future<double> loadWikiReaderFontScale() async {
+    final raw = await _storage.read(key: _keyWikiReaderFontScale);
+    final value = double.tryParse(raw ?? '');
+    if (value == null || value < 0.86 || value > 1.34) return 1.0;
+    return value;
+  }
+
+  Future<void> saveWikiReaderFontScale(double scale) async {
+    final value = scale.clamp(0.86, 1.34).toStringAsFixed(2);
+    await _storage.write(key: _keyWikiReaderFontScale, value: value);
   }
 
   Future<int> _loadBoundedInt(
