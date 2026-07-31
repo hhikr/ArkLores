@@ -182,19 +182,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void _toggleDarkMode() {
     final newValue = !_isDarkMode;
     setState(() => _isDarkMode = newValue);
-    for (final c in _controllers) {
-      if (c != null) {
-        WikiDarkMode.setEnabled(c, newValue).then((_) {
-          if (_isReaderMode) {
-            WikiReaderMode.inject(
-              c,
-              dark: ref.read(themeProvider).isDark,
-              fontScale: _readerFontScale,
-            );
-          }
-        });
-      }
-    }
+    _applyAppearanceToControllers();
   }
 
   void _toggleReaderMode() {
@@ -205,7 +193,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
             '[WikiBrowser] Error saving reader mode: $error',
           ),
         );
-    _applyReaderModeToControllers();
+    _applyAppearanceToControllers();
   }
 
   void _decreaseReaderFont() {
@@ -225,21 +213,33 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
             '[WikiBrowser] Error saving reader font scale: $error',
           ),
         );
-    if (_isReaderMode) _applyReaderModeToControllers();
+    if (_isReaderMode) _applyAppearanceToControllers();
   }
 
-  void _applyReaderModeToControllers() {
-    final theme = ref.read(themeProvider);
+  void _applyAppearanceToControllers() {
     for (final c in _controllers) {
       if (c != null) {
-        WikiReaderMode.setEnabled(
-          c,
-          enabled: _isReaderMode,
-          dark: theme.isDark,
-          fontScale: _readerFontScale,
-        );
+        _applyAppearanceToController(c);
       }
     }
+  }
+
+  Future<void> _applyAppearanceToController(
+    InAppWebViewController controller,
+  ) async {
+    final theme = ref.read(themeProvider);
+    if (_isReaderMode) {
+      await WikiDarkMode.remove(controller);
+      await WikiReaderMode.inject(
+        controller,
+        dark: theme.isDark,
+        fontScale: _readerFontScale,
+      );
+      return;
+    }
+
+    await WikiReaderMode.remove(controller);
+    await WikiDarkMode.setEnabled(controller, _isDarkMode);
   }
 
   void _toggleBookmark() {
@@ -515,27 +515,30 @@ class _WikiTabViewState extends State<_WikiTabView> {
   void didUpdateWidget(covariant _WikiTabView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_controller == null) return;
-    if (oldWidget.isDarkMode != widget.isDarkMode) {
-      WikiDarkMode.setEnabled(_controller!, widget.isDarkMode).then((_) {
-        if (widget.isReaderMode) {
-          WikiReaderMode.inject(
-            _controller!,
-            dark: widget.readerDark,
-            fontScale: widget.readerFontScale,
-          );
-        }
-      });
-    }
     if (oldWidget.isReaderMode != widget.isReaderMode ||
         oldWidget.readerDark != widget.readerDark ||
-        oldWidget.readerFontScale != widget.readerFontScale) {
-      WikiReaderMode.setEnabled(
-        _controller!,
-        enabled: widget.isReaderMode,
+        oldWidget.readerFontScale != widget.readerFontScale ||
+        oldWidget.isDarkMode != widget.isDarkMode) {
+      _applyAppearance();
+    }
+  }
+
+  Future<void> _applyAppearance() async {
+    final controller = _controller;
+    if (controller == null) return;
+
+    if (widget.isReaderMode) {
+      await WikiDarkMode.remove(controller);
+      await WikiReaderMode.inject(
+        controller,
         dark: widget.readerDark,
         fontScale: widget.readerFontScale,
       );
+      return;
     }
+
+    await WikiReaderMode.remove(controller);
+    await WikiDarkMode.setEnabled(controller, widget.isDarkMode);
   }
 
   @override
@@ -569,16 +572,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
             }
           },
           onLoadStop: (controller, url) async {
-            if (widget.isDarkMode) {
-              await WikiDarkMode.inject(controller);
-            }
-            if (widget.isReaderMode) {
-              await WikiReaderMode.inject(
-                controller,
-                dark: widget.readerDark,
-                fontScale: widget.readerFontScale,
-              );
-            }
+            await _applyAppearance();
           },
           onTitleChanged: (controller, title) {
             widget.onTitleChanged(widget.index, title);

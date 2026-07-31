@@ -76,12 +76,13 @@ class WikiReaderMode {
     required double fontScale,
   }) async {
     final background = dark ? '#0B0F14' : '#F6F3EA';
-    final surface = dark ? '#111821' : '#FFFDF7';
     final text = dark ? '#E8EDF2' : '#24211C';
     final muted = dark ? '#A7B1BA' : '#686157';
     final border = dark ? '#263241' : '#DED6C8';
     final link = dark ? '#7AC7DD' : '#236A80';
-    final tableHeader = dark ? '#172230' : '#ECE5D8';
+    final controlSurface = dark ? '#172230' : '#ECE5D8';
+    final controlText = dark ? '#DCE8F0' : '#17202A';
+    final tableHeader = dark ? '#151E29' : '#EFE8DA';
     final selection =
         dark ? 'rgba(122, 199, 221, 0.28)' : 'rgba(35, 106, 128, 0.18)';
     final baseFontSize = (18 * fontScale).clamp(15, 24).toStringAsFixed(1);
@@ -93,6 +94,21 @@ $_fontFaces
 
 :root {
   color-scheme: ${dark ? 'dark' : 'light'} !important;
+  --color-base: $text !important;
+  --color-emphasized: $text !important;
+  --color-subtle: $muted !important;
+  --color-placeholder: $muted !important;
+  --color-link: $link !important;
+  --color-link--visited: $link !important;
+  --background-color-base: $background !important;
+  --background-color-neutral: $background !important;
+  --background-color-interactive: $controlSurface !important;
+  --border-color-base: $border !important;
+}
+
+html {
+  background: $background !important;
+  filter: none !important;
 }
 
 html,
@@ -111,12 +127,23 @@ body.$_bodyClass td,
 body.$_bodyClass th,
 body.$_bodyClass blockquote,
 body.$_bodyClass dd,
-body.$_bodyClass dt {
+body.$_bodyClass dt,
+body.$_bodyClass div,
+body.$_bodyClass span {
   font-family: "$_fontFamily", -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif !important;
   font-size: ${baseFontSize}px !important;
   line-height: $lineHeight !important;
   letter-spacing: 0 !important;
   font-variant-ligatures: common-ligatures !important;
+}
+
+body.$_bodyClass *,
+body.$_bodyClass *::before,
+body.$_bodyClass *::after {
+  box-sizing: border-box !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  filter: none !important;
 }
 
 body.$_bodyClass ::selection {
@@ -152,6 +179,7 @@ body.$_bodyClass .page-header,
 body.$_bodyClass .bread,
 body.$_bodyClass .breadcrumb,
 body.$_bodyClass .advertisement,
+body.$_bodyClass .noprint,
 body.$_bodyClass [role="banner"],
 body.$_bodyClass [role="navigation"],
 body.$_bodyClass [aria-label="Advertisement"] {
@@ -189,16 +217,34 @@ body.$_bodyClass #content,
 body.$_bodyClass .mw-body,
 body.$_bodyClass main,
 body.$_bodyClass article {
-  padding: 28px 20px 56px !important;
+  padding: 24px 18px 56px !important;
 }
 
 body.$_bodyClass .mw-parser-output,
 body.$_bodyClass .prose {
-  background: $surface !important;
-  border: 1px solid $border !important;
-  border-radius: 2px !important;
-  padding: 22px 18px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
   box-sizing: border-box !important;
+}
+
+body.$_bodyClass .mw-parser-output,
+body.$_bodyClass .mw-parser-output :where(p, li, dd, dt, div, span, small, b, strong, em, label, caption),
+body.$_bodyClass #mw-content-text,
+body.$_bodyClass #mw-content-text :where(p, li, dd, dt, div, span, small, b, strong, em, label, caption) {
+  color: $text !important;
+}
+
+body.$_bodyClass .mw-parser-output :where(div, section, article, center, ul, ol, dl),
+body.$_bodyClass #mw-content-text :where(div, section, article, center, ul, ol, dl) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+}
+
+body.$_bodyClass .mw-parser-output :where([style*="background-image"], [style*="background: url"], [style*="background:url"]) {
+  background-image: none !important;
 }
 
 body.$_bodyClass h1,
@@ -229,7 +275,8 @@ body.$_bodyClass p {
   margin: 0.75em 0 !important;
 }
 
-body.$_bodyClass a {
+body.$_bodyClass a,
+body.$_bodyClass a * {
   color: $link !important;
   text-decoration-thickness: 1px !important;
   text-underline-offset: 0.18em !important;
@@ -253,7 +300,16 @@ body.$_bodyClass .image {
   text-align: center !important;
 }
 
-body.$_bodyClass table {
+body.$_bodyClass .thumbinner,
+body.$_bodyClass .gallerybox,
+body.$_bodyClass .gallerytext {
+  background: transparent !important;
+  border: 0 !important;
+  color: $muted !important;
+}
+
+body.$_bodyClass table,
+body.$_bodyClass .wikitable {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
@@ -261,16 +317,21 @@ body.$_bodyClass table {
   border-collapse: collapse !important;
   background: transparent !important;
   color: $text !important;
+  border-color: $border !important;
 }
 
-body.$_bodyClass th {
+body.$_bodyClass th,
+body.$_bodyClass .wikitable th {
   background: $tableHeader !important;
 }
 
 body.$_bodyClass td,
-body.$_bodyClass th {
+body.$_bodyClass th,
+body.$_bodyClass .wikitable td,
+body.$_bodyClass .wikitable th {
   border: 1px solid $border !important;
   padding: 0.5em 0.65em !important;
+  color: $text !important;
 }
 
 body.$_bodyClass blockquote,
@@ -286,10 +347,22 @@ body.$_bodyClass button,
 body.$_bodyClass input,
 body.$_bodyClass select,
 body.$_bodyClass textarea,
-body.$_bodyClass [role="button"] {
-  color: $text !important;
-  background: ${dark ? '#172230' : '#ECE5D8'} !important;
+body.$_bodyClass [role="button"],
+body.$_bodyClass .mw-collapsible-toggle,
+body.$_bodyClass .mw-collapsible-toggle a {
+  color: $controlText !important;
+  background: $controlSurface !important;
   border: 1px solid $border !important;
+  border-radius: 2px !important;
+  text-decoration: none !important;
+}
+
+body.$_bodyClass .mw-collapsible-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 2em !important;
+  padding: 0.12em 0.45em !important;
+  vertical-align: baseline !important;
 }
 
 body.$_bodyClass .reference,
