@@ -452,11 +452,35 @@ body.$_bodyClass .succession-box {
   }
   style.textContent = ${_jsStringLiteral(css)};
   if (body.dataset.arkloresReaderTapHandler !== '1') {
+    function isReaderChromeTapTarget(target) {
+      if (!target || !target.closest) return false;
+      var interactive = target.closest('a, button, input, select, textarea, label, summary, details, audio, video, [controls], [role="button"], [role="slider"], [onclick], [href], .mw-collapsible-toggle, .mw-collapsible-toggle *');
+      if (interactive) return true;
+
+      var el = target;
+      var steps = 0;
+      while (el && el !== document.body && steps < 8) {
+        var haystack = [
+          el.className && typeof el.className === 'string' ? el.className : '',
+          el.id || '',
+          el.getAttribute ? (el.getAttribute('aria-label') || '') : '',
+          el.getAttribute ? (el.getAttribute('title') || '') : '',
+          el.getAttribute ? (el.getAttribute('data-title') || '') : '',
+          el.getAttribute ? (el.getAttribute('data-action') || '') : '',
+          el.getAttribute ? (el.getAttribute('data-mw') || '') : ''
+        ].join(' ').toLowerCase();
+        if (/(audio|voice|sound|media|play|pause|播放|暂停|语音|音频)/.test(haystack)) {
+          return true;
+        }
+        el = el.parentElement;
+        steps++;
+      }
+      return false;
+    }
+
     document.addEventListener('click', function(event) {
       var target = event.target;
-      if (!target || !target.closest) return;
-      var interactive = target.closest('a, button, input, select, textarea, label, summary, details, [role="button"], [onclick], [href], .mw-collapsible-toggle, .mw-collapsible-toggle *');
-      if (interactive) return;
+      if (isReaderChromeTapTarget(target)) return;
       try {
         var selected = window.getSelection ? window.getSelection().toString() : '';
         if (selected && selected.trim()) return;

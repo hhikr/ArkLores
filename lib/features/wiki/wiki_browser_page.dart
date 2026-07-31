@@ -740,8 +740,8 @@ class _WikiTabViewState extends State<_WikiTabView> {
                     onHorizontalDragEnd: (details) async {
                       final velocity = details.primaryVelocity ?? 0;
                       if (velocity > 320 || (_edgeDragStartX ?? 0) < 12) {
-                        if (await _controller?.canGoBack() ?? false) {
-                          await _controller?.goBack();
+                        if (await _controller?.canGoForward() ?? false) {
+                          await _controller?.goForward();
                         }
                       }
                       _edgeDragStartX = null;
@@ -758,8 +758,8 @@ class _WikiTabViewState extends State<_WikiTabView> {
                     onHorizontalDragEnd: (details) async {
                       final velocity = details.primaryVelocity ?? 0;
                       if (velocity < -320) {
-                        if (await _controller?.canGoForward() ?? false) {
-                          await _controller?.goForward();
+                        if (await _controller?.canGoBack() ?? false) {
+                          await _controller?.goBack();
                         }
                       }
                     },
