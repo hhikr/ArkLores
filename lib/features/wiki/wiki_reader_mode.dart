@@ -76,6 +76,8 @@ class WikiReaderMode {
     required double fontScale,
   }) async {
     final background = dark ? '#0B0F14' : '#F6F3EA';
+    final storySurface = dark ? '#111A24' : '#FFFDF7';
+    final storyHeader = dark ? '#172230' : '#EFE8DA';
     final text = dark ? '#E8EDF2' : '#24211C';
     final muted = dark ? '#A7B1BA' : '#686157';
     final border = dark ? '#263241' : '#DED6C8';
@@ -241,6 +243,8 @@ body.$_bodyClass #mw-content-text :where(div, section, article, center, ul, ol, 
   width: auto !important;
   max-width: none !important;
   min-width: 0 !important;
+  min-height: 0 !important;
+  float: none !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
   padding-left: 0 !important;
@@ -251,8 +255,8 @@ body.$_bodyClass #mw-content-text :where(div, section, article, center, ul, ol, 
   border-radius: 0 !important;
 }
 
-body.$_bodyClass .mw-parser-output :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(th):not(td):not(pre):not(code):not(.mw-collapsible-toggle),
-body.$_bodyClass #mw-content-text :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(th):not(td):not(pre):not(code):not(.mw-collapsible-toggle) {
+body.$_bodyClass .mw-parser-output :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(pre):not(code):not(.mw-collapsible-toggle),
+body.$_bodyClass #mw-content-text :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(pre):not(code):not(.mw-collapsible-toggle) {
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
@@ -265,10 +269,39 @@ body.$_bodyClass #mw-content-text :where([style*="color"]) {
 
 body.$_bodyClass .mw-parser-output :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery),
 body.$_bodyClass #mw-content-text :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery) {
+  width: auto !important;
   max-width: none !important;
   min-width: 0 !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
+}
+
+body.$_bodyClass .arklores-reader-story-block {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0.9em 0 !important;
+  padding: 0.85em 0.95em !important;
+  background: $storySurface !important;
+  color: $text !important;
+  border: 1px solid $border !important;
+  border-radius: 2px !important;
+}
+
+body.$_bodyClass .arklores-reader-story-heading {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0.6em 0 !important;
+  padding: 0.55em 0.7em !important;
+  background: $storyHeader !important;
+  color: $text !important;
+  border: 1px solid $border !important;
+  border-radius: 2px !important;
+}
+
+body.$_bodyClass .arklores-reader-story-block *,
+body.$_bodyClass .arklores-reader-story-heading * {
+  color: inherit !important;
+  background-color: transparent !important;
 }
 
 body.$_bodyClass h1,
@@ -358,6 +391,12 @@ body.$_bodyClass .wikitable th {
   color: $text !important;
 }
 
+body.$_bodyClass td[style],
+body.$_bodyClass th[style] {
+  background: transparent !important;
+  color: $text !important;
+}
+
 body.$_bodyClass blockquote,
 body.$_bodyClass pre,
 body.$_bodyClass code {
@@ -413,7 +452,7 @@ body.$_bodyClass .succession-box {
   }
   style.textContent = ${_jsStringLiteral(css)};
 
-  var keepVisualStyle = 'button,input,select,textarea,th,td,pre,code,img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
+  var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
   var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
   var roots = document.querySelectorAll('#mw-content-text, .mw-parser-output, main, article');
   var touched = [];
@@ -435,13 +474,58 @@ body.$_bodyClass .succession-box {
       el.style.removeProperty('filter');
       el.style.removeProperty('border-left-color');
       el.style.removeProperty('border-right-color');
+      el.style.removeProperty('border-top-color');
+      el.style.removeProperty('border-bottom-color');
     }
     if (!el.matches(keepSizing)) {
+      el.style.removeProperty('margin');
+      el.style.removeProperty('padding');
       el.style.removeProperty('width');
       el.style.removeProperty('max-width');
       el.style.removeProperty('min-width');
       el.style.removeProperty('margin-left');
       el.style.removeProperty('margin-right');
+      el.style.removeProperty('padding-left');
+      el.style.removeProperty('padding-right');
+      el.style.removeProperty('float');
+    }
+  }
+
+  function cleanText(el) {
+    return (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+  }
+
+  function hasTextBlockChild(el) {
+    var children = el.children || [];
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (!child || child.matches('script,style,button,input,select,textarea,pre,code,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle')) {
+        continue;
+      }
+      if (!child.matches('div,section,article,center,blockquote,ul,ol,dl')) {
+        continue;
+      }
+      if (cleanText(child).length >= 18) return true;
+    }
+    return false;
+  }
+
+  for (var j = 0; j < touched.length; j++) {
+    var block = touched[j];
+    if (!block || !block.classList || !block.matches('div,section,article,center,blockquote')) {
+      continue;
+    }
+    if (block.matches('button,input,select,textarea,pre,code,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *')) {
+      continue;
+    }
+    var text = cleanText(block);
+    if (!text) continue;
+    if (/^(PART\\s*\\d+|PART\\s*\\d*|.*(展开|折叠|解锁|需要触发).*)/i.test(text) && text.length <= 120) {
+      block.classList.add('arklores-reader-story-heading');
+      continue;
+    }
+    if (text.length >= 40 && !hasTextBlockChild(block)) {
+      block.classList.add('arklores-reader-story-block');
     }
   }
 })();

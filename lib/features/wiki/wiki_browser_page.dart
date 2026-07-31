@@ -73,6 +73,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _isDarkMode =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
     _tabController = TabController(length: _wikiSites.length, vsync: this);
     _tabController.addListener(_onTabChanged);
     _restoreBrowsingState();
@@ -101,6 +104,16 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         state == AppLifecycleState.detached) {
       _persistBrowsingState();
     }
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    final prefersDark =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+    if (prefersDark == _isDarkMode) return;
+    setState(() => _isDarkMode = prefersDark);
+    _applyAppearanceToControllers();
   }
 
   Future<void> _restoreBrowsingState() async {
@@ -227,12 +240,11 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   Future<void> _applyAppearanceToController(
     InAppWebViewController controller,
   ) async {
-    final theme = ref.read(themeProvider);
     if (_isReaderMode) {
       await WikiDarkMode.remove(controller);
       await WikiReaderMode.inject(
         controller,
-        dark: theme.isDark,
+        dark: _isDarkMode,
         fontScale: _readerFontScale,
       );
       return;
@@ -434,7 +446,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                         theme: theme,
                         isDarkMode: _isDarkMode,
                         isReaderMode: _isReaderMode,
-                        readerDark: theme.isDark,
+                        readerDark: _isDarkMode,
                         readerFontScale: _readerFontScale,
                         onControllerCreated: _onControllerCreated,
                         onTitleChanged: _onTitleChanged,
