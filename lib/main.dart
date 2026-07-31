@@ -35,11 +35,19 @@ void main() async {
     debugPrint('[Startup] Error loading API config: $e');
   }
 
+  var mainTabIndex = 0;
+  try {
+    mainTabIndex = await settingsService.loadMainTabIndex();
+  } catch (e) {
+    debugPrint('[Startup] Error loading main tab index: $e');
+  }
+
   runApp(
     ProviderScope(
       overrides: [
         onboardingDoneProvider.overrideWithValue(onboardingDone),
         initialApiConfigProvider.overrideWithValue(apiConfig),
+        initialMainTabIndexProvider.overrideWithValue(mainTabIndex),
       ],
       child: const ArkLoresApp(),
     ),

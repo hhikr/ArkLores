@@ -13,6 +13,8 @@ final onboardingDoneProvider =
     Provider<bool>((ref) => throw UnimplementedError());
 final initialApiConfigProvider =
     Provider<LLMConfig>((ref) => throw UnimplementedError());
+final initialMainTabIndexProvider =
+    Provider<int>((ref) => throw UnimplementedError());
 
 /// Active state for onboarding status.
 final onboardingStatusProvider = StateProvider<bool>((ref) {

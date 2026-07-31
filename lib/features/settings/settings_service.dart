@@ -15,6 +15,9 @@ class SettingsService {
 
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
+  static const _keyMainTabIndex = 'main_tab_index';
+  static const _keyWikiTabIndex = 'wiki_tab_index';
+  static const _keyWikiUrlPrefix = 'wiki_url_';
 
   final FlutterSecureStorage _storage;
 
@@ -57,5 +60,44 @@ class SettingsService {
   /// Marks onboarding as completed.
   Future<void> markOnboardingDone() async {
     await _storage.write(key: _keyOnboardingDone, value: 'true');
+  }
+
+  Future<int> loadMainTabIndex() async {
+    return _loadBoundedInt(_keyMainTabIndex, min: 0, max: 3);
+  }
+
+  Future<void> saveMainTabIndex(int index) async {
+    await _storage.write(key: _keyMainTabIndex, value: '$index');
+  }
+
+  Future<int> loadWikiTabIndex() async {
+    return _loadBoundedInt(_keyWikiTabIndex, min: 0, max: 1);
+  }
+
+  Future<void> saveWikiTabIndex(int index) async {
+    await _storage.write(key: _keyWikiTabIndex, value: '$index');
+  }
+
+  Future<String?> loadWikiUrl(int index) async {
+    final value = await _storage.read(key: '$_keyWikiUrlPrefix$index');
+    final uri = value == null ? null : Uri.tryParse(value);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
+    return value;
+  }
+
+  Future<void> saveWikiUrl(int index, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return;
+    await _storage.write(key: '$_keyWikiUrlPrefix$index', value: url);
+  }
+
+  Future<int> _loadBoundedInt(
+    String key, {
+    required int min,
+    required int max,
+  }) async {
+    final value = int.tryParse(await _storage.read(key: key) ?? '');
+    if (value == null || value < min || value > max) return min;
+    return value;
   }
 }

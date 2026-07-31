@@ -7,6 +7,7 @@ import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
+import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/theme/app_theme.dart';
 
@@ -30,6 +31,12 @@ class _MainShellState extends ConsumerState<MainShell> {
     MaterialsPage(),
     SettingsPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = ref.read(initialMainTabIndexProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +65,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       bottomNavigationBar: _IndustrialNavigation(
         theme: theme,
         currentIndex: _currentIndex,
-        onSelected: (index) => setState(() => _currentIndex = index),
+        onSelected: _selectTab,
         items: [
           (Icons.language_rounded, context.t.navWiki),
           (Icons.psychology_alt_rounded, context.t.navAI),
@@ -67,6 +74,16 @@ class _MainShellState extends ConsumerState<MainShell> {
         ],
       ),
     );
+  }
+
+  void _selectTab(int index) {
+    if (index == _currentIndex) return;
+    setState(() => _currentIndex = index);
+    ref.read(settingsServiceProvider).saveMainTabIndex(index).catchError(
+          (Object error) => debugPrint(
+            '[MainShell] Error saving selected tab: $error',
+          ),
+        );
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../ai/ai_chat_page.dart';
@@ -43,7 +44,7 @@ class WikiBrowserPage extends ConsumerStatefulWidget {
 }
 
 class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final TabController _tabController;
 
   /// Controllers for each site tab.
@@ -63,16 +64,21 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = false;
   bool _trayExpanded = false;
+  bool _restoredState = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: _wikiSites.length, vsync: this);
     _tabController.addListener(_onTabChanged);
+    _restoreBrowsingState();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _persistBrowsingState();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
@@ -81,7 +87,71 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void _onTabChanged() {
     if (!_tabController.indexIsChanging) {
       setState(() {});
+      _saveWikiTabIndex(_tabController.index);
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _persistBrowsingState();
+    }
+  }
+
+  Future<void> _restoreBrowsingState() async {
+    var tabIndex = 0;
+    final urls = [
+      for (final site in _wikiSites) site.initialUrl,
+    ];
+    try {
+      final service = ref.read(settingsServiceProvider);
+      for (var i = 0; i < _wikiSites.length; i++) {
+        urls[i] = await service.loadWikiUrl(i) ?? _wikiSites[i].initialUrl;
+      }
+      tabIndex = await service.loadWikiTabIndex();
+    } catch (e) {
+      debugPrint('[WikiBrowser] Error restoring browsing state: $e');
+    }
+    if (!mounted) return;
+    setState(() {
+      for (var i = 0; i < _wikiSites.length; i++) {
+        _currentUrls[i] = urls[i];
+      }
+      _tabController.index = tabIndex;
+      _restoredState = true;
+    });
+  }
+
+  Future<void> _persistBrowsingState() async {
+    try {
+      final service = ref.read(settingsServiceProvider);
+      await service.saveWikiTabIndex(_tabController.index);
+      await Future.wait([
+        for (var i = 0; i < _currentUrls.length; i++)
+          if (_currentUrls[i].trim().isNotEmpty)
+            service.saveWikiUrl(i, _currentUrls[i]),
+      ]);
+    } catch (e) {
+      debugPrint('[WikiBrowser] Error saving browsing state: $e');
+    }
+  }
+
+  void _saveWikiTabIndex(int index) {
+    ref.read(settingsServiceProvider).saveWikiTabIndex(index).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving wiki tab: $error',
+          ),
+        );
+  }
+
+  void _saveWikiUrl(int index, String url) {
+    ref.read(settingsServiceProvider).saveWikiUrl(index, url).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving wiki URL: $error',
+          ),
+        );
   }
 
   // ─── Toolbar action callbacks ────────────────────────────────────
@@ -134,6 +204,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     // Switch tab if needed.
     if (_tabController.index != targetIndex) {
       _tabController.animateTo(targetIndex);
+      _saveWikiTabIndex(targetIndex);
     }
 
     // Load the bookmarked URL in the corresponding WebView.
@@ -203,6 +274,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void _onUrlChanged(int index, String url) {
     if (url != _currentUrls[index]) {
       setState(() => _currentUrls[index] = url);
+      _saveWikiUrl(index, url);
     }
   }
 
@@ -225,6 +297,17 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
+
+    if (!_restoredState) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Center(
+            child: CircularProgressIndicator(color: theme.accentPrimary),
+          ),
+        ),
+      );
+    }
 
     // Determine if the current page is bookmarked.
     final currentUrl = _currentUrls[_tabController.index];
@@ -279,7 +362,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     children: List.generate(_wikiSites.length, (i) {
                       return _WikiTabView(
                         index: i,
-                        initialUrl: _wikiSites[i].initialUrl,
+                        initialUrl: _currentUrls[i].trim().isNotEmpty
+                            ? _currentUrls[i]
+                            : _wikiSites[i].initialUrl,
                         theme: theme,
                         isDarkMode: _isDarkMode,
                         onControllerCreated: _onControllerCreated,
