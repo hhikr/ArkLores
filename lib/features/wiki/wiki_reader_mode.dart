@@ -238,13 +238,37 @@ body.$_bodyClass #mw-content-text :where(p, li, dd, dt, div, span, small, b, str
 
 body.$_bodyClass .mw-parser-output :where(div, section, article, center, ul, ol, dl),
 body.$_bodyClass #mw-content-text :where(div, section, article, center, ul, ol, dl) {
+  width: auto !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
   background-color: transparent !important;
+  background-image: none !important;
   border-color: transparent !important;
   border-radius: 0 !important;
 }
 
-body.$_bodyClass .mw-parser-output :where([style*="background-image"], [style*="background: url"], [style*="background:url"]) {
+body.$_bodyClass .mw-parser-output :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(th):not(td):not(pre):not(code):not(.mw-collapsible-toggle),
+body.$_bodyClass #mw-content-text :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(th):not(td):not(pre):not(code):not(.mw-collapsible-toggle) {
+  background: transparent !important;
+  background-color: transparent !important;
   background-image: none !important;
+}
+
+body.$_bodyClass .mw-parser-output :where([style*="color"]),
+body.$_bodyClass #mw-content-text :where([style*="color"]) {
+  color: $text !important;
+}
+
+body.$_bodyClass .mw-parser-output :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery),
+body.$_bodyClass #mw-content-text :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery) {
+  max-width: none !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 body.$_bodyClass h1,
@@ -388,6 +412,38 @@ body.$_bodyClass .succession-box {
     document.head.appendChild(style);
   }
   style.textContent = ${_jsStringLiteral(css)};
+
+  var keepVisualStyle = 'button,input,select,textarea,th,td,pre,code,img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
+  var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
+  var roots = document.querySelectorAll('#mw-content-text, .mw-parser-output, main, article');
+  var touched = [];
+  for (var r = 0; r < roots.length; r++) {
+    touched.push(roots[r]);
+    var nodes = roots[r].querySelectorAll('*');
+    for (var n = 0; n < nodes.length; n++) touched.push(nodes[n]);
+  }
+  for (var i = 0; i < touched.length; i++) {
+    var el = touched[i];
+    if (!el || !el.style) continue;
+    if (!el.matches(keepVisualStyle)) {
+      el.style.removeProperty('color');
+      el.style.removeProperty('background');
+      el.style.removeProperty('background-color');
+      el.style.removeProperty('background-image');
+      el.style.removeProperty('text-shadow');
+      el.style.removeProperty('box-shadow');
+      el.style.removeProperty('filter');
+      el.style.removeProperty('border-left-color');
+      el.style.removeProperty('border-right-color');
+    }
+    if (!el.matches(keepSizing)) {
+      el.style.removeProperty('width');
+      el.style.removeProperty('max-width');
+      el.style.removeProperty('min-width');
+      el.style.removeProperty('margin-left');
+      el.style.removeProperty('margin-right');
+    }
+  }
 })();
 ''';
     try {
