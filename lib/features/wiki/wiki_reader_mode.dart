@@ -437,6 +437,107 @@ body.$_bodyClass .vertical-navbox,
 body.$_bodyClass .succession-box {
   color: $muted !important;
 }
+
+body.$_bodyClass #sys_fullscreen.arklores-prts-scenario-shell-hidden {
+  display: none !important;
+}
+
+body.$_bodyClass #arklores-prts-scenario-reader {
+  width: 100% !important;
+  max-width: 760px !important;
+  margin: 1.2em auto 1.6em !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: $text !important;
+}
+
+body.$_bodyClass #arklores-prts-log-all-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 44px !important;
+  padding: 0 1.05em !important;
+  color: $controlText !important;
+  background: $controlSurface !important;
+  border: 1px solid $border !important;
+  border-radius: 4px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+body.$_bodyClass #sys_playback_all.arklores-prts-log-panel {
+  position: static !important;
+  display: none !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 1em 0 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: $text !important;
+  overflow: visible !important;
+  cursor: default !important;
+  user-select: text !important;
+}
+
+body.$_bodyClass #sys_playback_all.arklores-prts-log-visible {
+  display: block !important;
+}
+
+body.$_bodyClass #playback_all_result.arklores-prts-log-list,
+body.$_bodyClass #playback_all_result.arklores-prts-log-list .log_style {
+  position: static !important;
+  display: block !important;
+  left: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: $text !important;
+}
+
+body.$_bodyClass #playback_all_result.arklores-prts-log-list li {
+  display: grid !important;
+  grid-template-columns: minmax(4.5em, 22%) minmax(0, 1fr) !important;
+  column-gap: 0.8em !important;
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0.65em 0 !important;
+  border-bottom: 1px solid $border !important;
+  background: transparent !important;
+  color: $text !important;
+}
+
+body.$_bodyClass #playback_all_result.arklores-prts-log-list li > em,
+body.$_bodyClass #playback_all_result.arklores-prts-log-list li > span {
+  position: static !important;
+  display: block !important;
+  left: auto !important;
+  width: auto !important;
+  max-width: none !important;
+  padding: 0 !important;
+  color: $text !important;
+  background: transparent !important;
+  text-align: left !important;
+}
+
+body.$_bodyClass #playback_all_result.arklores-prts-log-list li > em {
+  color: $muted !important;
+  font-style: normal !important;
+  font-weight: 700 !important;
+}
+
+body.$_bodyClass #playback_all_result.arklores-prts-log-list div.decision,
+body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
+  display: block !important;
+  margin: 0.6em 0 !important;
+  padding: 0.65em 0.8em !important;
+  border: 1px solid $border !important;
+  background: $storySurface !important;
+  color: $text !important;
+}
 ''';
 
     final js = '''
@@ -451,6 +552,64 @@ body.$_bodyClass .succession-box {
     document.head.appendChild(style);
   }
   style.textContent = ${_jsStringLiteral(css)};
+
+  function setupPrtsScenarioReader() {
+    var nativeButton = document.getElementById('button_playback_all');
+    var panel = document.getElementById('sys_playback_all');
+    var log = document.getElementById('playback_all_result');
+    var data = document.getElementById('datas_txt');
+    if (!nativeButton || !panel || !log || !data) return;
+
+    var shell = document.getElementById('sys_fullscreen');
+    var host = document.getElementById('arklores-prts-scenario-reader');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'arklores-prts-scenario-reader';
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.id = 'arklores-prts-log-all-button';
+      open.textContent = 'LOG ALL';
+      host.appendChild(open);
+      if (shell && shell.parentElement) {
+        shell.parentElement.insertBefore(host, shell);
+      } else {
+        body.insertBefore(host, body.firstChild);
+      }
+    }
+
+    if (panel.parentElement !== host) {
+      host.appendChild(panel);
+    }
+    if (shell) shell.classList.add('arklores-prts-scenario-shell-hidden');
+    panel.classList.add('arklores-prts-log-panel');
+    log.classList.add('arklores-prts-log-list');
+
+    var button = document.getElementById('arklores-prts-log-all-button');
+    if (!button || button.dataset.arkloresBound === '1') return;
+    button.addEventListener('click', function(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        if (panel.classList.contains('hidden')) {
+          if (typeof window.txt_playback === 'function') {
+            window.txt_playback('sys_playback_all', 'button_playback_all', true);
+          } else if (nativeButton.click) {
+            nativeButton.click();
+          }
+        }
+      } catch (e) {
+        if (nativeButton.click) nativeButton.click();
+      }
+      panel.classList.remove('hidden');
+      panel.classList.add('arklores-prts-log-visible');
+      host.classList.add('arklores-prts-log-open');
+      button.textContent = '全部剧情日志';
+    }, true);
+    button.dataset.arkloresBound = '1';
+  }
+
+  setupPrtsScenarioReader();
+
   if (body.dataset.arkloresReaderTapHandler !== '1') {
     function isReaderChromeTapTarget(target) {
       if (!target || !target.closest) return false;
@@ -492,8 +651,8 @@ body.$_bodyClass .succession-box {
     body.dataset.arkloresReaderTapHandler = '1';
   }
 
-  var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
-  var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *';
+  var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
+  var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
   var roots = document.querySelectorAll('#mw-content-text, .mw-parser-output, main, article');
   var touched = [];
   for (var r = 0; r < roots.length; r++) {
@@ -625,6 +784,18 @@ body.$_bodyClass .succession-box {
   static Future<void> remove(InAppWebViewController controller) async {
     const js = '''
 (function() {
+  var host = document.getElementById('arklores-prts-scenario-reader');
+  var panel = document.getElementById('sys_playback_all');
+  var offset = document.getElementById('sys_offset');
+  var shell = document.getElementById('sys_fullscreen');
+  if (panel) {
+    panel.classList.remove('arklores-prts-log-panel', 'arklores-prts-log-visible');
+    if (host && offset) offset.appendChild(panel);
+  }
+  var log = document.getElementById('playback_all_result');
+  if (log) log.classList.remove('arklores-prts-log-list');
+  if (shell) shell.classList.remove('arklores-prts-scenario-shell-hidden');
+  if (host) host.remove();
   if (document.body) document.body.classList.remove('$_bodyClass');
   var style = document.getElementById('$_styleId');
   if (style) style.remove();
