@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/llm/llm_client.dart';
 import 'features/settings/api_settings_page.dart';
+import 'features/settings/app_icon_service.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
 import 'features/settings/settings_service.dart';
@@ -40,6 +41,12 @@ void main() async {
     mainTabIndex = await settingsService.loadMainTabIndex();
   } catch (e) {
     debugPrint('[Startup] Error loading main tab index: $e');
+  }
+
+  try {
+    await AppIconService.setIcon(await settingsService.loadAppLauncherIcon());
+  } catch (e) {
+    debugPrint('[Startup] Error applying launcher icon: $e');
   }
 
   runApp(

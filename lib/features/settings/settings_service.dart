@@ -1,6 +1,68 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/llm/llm_client.dart';
+
+enum AppLauncherIcon {
+  light('light'),
+  dark('dark');
+
+  const AppLauncherIcon(this.storageValue);
+
+  final String storageValue;
+
+  static AppLauncherIcon fromStorage(String? value) {
+    return AppLauncherIcon.values.firstWhere(
+      (icon) => icon.storageValue == value,
+      orElse: () => AppLauncherIcon.light,
+    );
+  }
+}
+
+class WikiSiteConfig {
+  const WikiSiteConfig({
+    required this.id,
+    required this.label,
+    required this.url,
+    this.iconUrl,
+    this.builtIn = false,
+  });
+
+  final String id;
+  final String label;
+  final String url;
+  final String? iconUrl;
+  final bool builtIn;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'label': label,
+        'url': url,
+        'iconUrl': iconUrl,
+        'builtIn': builtIn,
+      };
+
+  static WikiSiteConfig? fromJson(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    final id = value['id']?.toString().trim() ?? '';
+    final label = value['label']?.toString().trim() ?? '';
+    final url = value['url']?.toString().trim() ?? '';
+    final iconUrl = value['iconUrl']?.toString().trim();
+    final uri = Uri.tryParse(url);
+    if (id.isEmpty || label.isEmpty || uri == null || !uri.hasScheme) {
+      return null;
+    }
+    if (uri.host.isEmpty) return null;
+    return WikiSiteConfig(
+      id: id,
+      label: label,
+      url: url,
+      iconUrl: iconUrl == null || iconUrl.isEmpty ? null : iconUrl,
+      builtIn: value['builtIn'] == true,
+    );
+  }
+}
 
 /// Persistent storage for API configuration via flutter_secure_storage.
 ///
@@ -18,8 +80,27 @@ class SettingsService {
   static const _keyMainTabIndex = 'main_tab_index';
   static const _keyWikiTabIndex = 'wiki_tab_index';
   static const _keyWikiUrlPrefix = 'wiki_url_';
+  static const _keyWikiSources = 'wiki_sources';
   static const _keyWikiReaderMode = 'wiki_reader_mode';
   static const _keyWikiReaderFontScale = 'wiki_reader_font_scale';
+  static const _keyAppLauncherIcon = 'app_launcher_icon';
+
+  static const defaultWikiSites = [
+    WikiSiteConfig(
+      id: 'prts',
+      label: 'PRTS Wiki',
+      url: 'https://prts.wiki',
+      iconUrl: 'https://prts.wiki/favicon.ico',
+      builtIn: true,
+    ),
+    WikiSiteConfig(
+      id: 'endfield',
+      label: 'Endfield Wiki',
+      url: 'https://warfarin.wiki/cn',
+      iconUrl: 'https://warfarin.wiki/cn/favicon.ico',
+      builtIn: true,
+    ),
+  ];
 
   final FlutterSecureStorage _storage;
 
@@ -73,7 +154,7 @@ class SettingsService {
   }
 
   Future<int> loadWikiTabIndex() async {
-    return _loadBoundedInt(_keyWikiTabIndex, min: 0, max: 1);
+    return _loadBoundedInt(_keyWikiTabIndex, min: 0, max: 999);
   }
 
   Future<void> saveWikiTabIndex(int index) async {
@@ -91,6 +172,77 @@ class SettingsService {
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) return;
     await _storage.write(key: '$_keyWikiUrlPrefix$index', value: url);
+  }
+
+  Future<List<WikiSiteConfig>> loadWikiSites() async {
+    final raw = await _storage.read(key: _keyWikiSources);
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          final sites = decoded
+              .map(WikiSiteConfig.fromJson)
+              .whereType<WikiSiteConfig>()
+              .toList();
+          if (sites.isNotEmpty) return sites;
+        }
+      } catch (_) {
+        // Fall through to defaults.
+      }
+    }
+
+    final migrated = <WikiSiteConfig>[];
+    for (var i = 0; i < defaultWikiSites.length; i++) {
+      final site = defaultWikiSites[i];
+      migrated.add(
+        WikiSiteConfig(
+          id: site.id,
+          label: site.label,
+          url: await loadWikiUrl(i) ?? site.url,
+          iconUrl: site.iconUrl,
+          builtIn: true,
+        ),
+      );
+    }
+    return migrated;
+  }
+
+  Future<void> saveWikiSites(List<WikiSiteConfig> sites) async {
+    final previous = await loadWikiSites();
+    final sanitized = sites
+        .map((site) => WikiSiteConfig.fromJson(site.toJson()))
+        .whereType<WikiSiteConfig>()
+        .toList();
+    if (sanitized.isEmpty) return;
+    await _storage.write(
+      key: _keyWikiSources,
+      value: jsonEncode(sanitized.map((site) => site.toJson()).toList()),
+    );
+    await Future.wait([
+      for (var i = 0; i < sanitized.length; i++)
+        if (i >= previous.length || sanitized[i].url != previous[i].url)
+          _storage.delete(key: '$_keyWikiUrlPrefix$i'),
+    ]);
+  }
+
+  Future<void> resetWikiSites() async {
+    await _storage.delete(key: _keyWikiSources);
+    await Future.wait([
+      for (var i = 0; i < 20; i++) _storage.delete(key: '$_keyWikiUrlPrefix$i'),
+    ]);
+  }
+
+  Future<AppLauncherIcon> loadAppLauncherIcon() async {
+    return AppLauncherIcon.fromStorage(
+      await _storage.read(key: _keyAppLauncherIcon),
+    );
+  }
+
+  Future<void> saveAppLauncherIcon(AppLauncherIcon icon) async {
+    await _storage.write(
+      key: _keyAppLauncherIcon,
+      value: icon.storageValue,
+    );
   }
 
   Future<bool> loadWikiReaderMode() async {

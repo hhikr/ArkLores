@@ -16,6 +16,8 @@ final initialApiConfigProvider =
 final initialMainTabIndexProvider =
     Provider<int>((ref) => throw UnimplementedError());
 
+final wikiSourcesRevisionProvider = StateProvider<int>((ref) => 0);
+
 /// Active state for onboarding status.
 final onboardingStatusProvider = StateProvider<bool>((ref) {
   return ref.watch(onboardingDoneProvider);
