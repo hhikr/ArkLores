@@ -377,6 +377,14 @@ body.$_bodyClass .wikitable {
   border-color: $border !important;
 }
 
+body.$_bodyClass table tr,
+body.$_bodyClass .wikitable tr,
+body.$_bodyClass table tbody,
+body.$_bodyClass .wikitable tbody {
+  background: transparent !important;
+  color: $text !important;
+}
+
 body.$_bodyClass th,
 body.$_bodyClass .wikitable th {
   background: $tableHeader !important;
@@ -392,9 +400,23 @@ body.$_bodyClass .wikitable th {
 }
 
 body.$_bodyClass td[style],
-body.$_bodyClass th[style] {
+body.$_bodyClass th[style],
+body.$_bodyClass td[bgcolor],
+body.$_bodyClass th[bgcolor] {
   background: transparent !important;
   color: $text !important;
+}
+
+body.$_bodyClass .arklores-reader-table-accent {
+  background: $storyHeader !important;
+  color: $text !important;
+  border-color: $border !important;
+}
+
+body.$_bodyClass .arklores-reader-table-accent * {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: inherit !important;
 }
 
 body.$_bodyClass blockquote,
@@ -461,9 +483,54 @@ body.$_bodyClass .succession-box {
     var nodes = roots[r].querySelectorAll('*');
     for (var n = 0; n < nodes.length; n++) touched.push(nodes[n]);
   }
+
+  function colorParts(value) {
+    var match = String(value || '').match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/i);
+    if (!match) return null;
+    var alpha = match[4] == null ? 1 : parseFloat(match[4]);
+    if (!alpha) return null;
+    return {
+      r: parseInt(match[1], 10),
+      g: parseInt(match[2], 10),
+      b: parseInt(match[3], 10),
+      a: alpha
+    };
+  }
+
+  function luminance(parts) {
+    return (0.2126 * parts.r + 0.7152 * parts.g + 0.0722 * parts.b) / 255;
+  }
+
+  function hasDecorativeBackground(el) {
+    if (!el) return false;
+    var inline = (el.getAttribute('style') || '').toLowerCase();
+    var hasBgAttr = el.hasAttribute('bgcolor') || inline.indexOf('background') !== -1;
+    var color = colorParts(window.getComputedStyle(el).backgroundColor);
+    if (!color || color.a < 0.2) return false;
+    var lum = luminance(color);
+    return hasBgAttr || lum < 0.22 || lum > 0.90;
+  }
+
+  var cells = document.querySelectorAll('#mw-content-text td, #mw-content-text th, .mw-parser-output td, .mw-parser-output th');
+  for (var c = 0; c < cells.length; c++) {
+    var cell = cells[c];
+    if (!cell || cell.matches('.mw-collapsible-toggle, .mw-collapsible-toggle *')) continue;
+    var textInCell = cleanText(cell);
+    if (!textInCell) continue;
+    if (hasDecorativeBackground(cell)) {
+      cell.classList.add('arklores-reader-table-accent');
+      continue;
+    }
+    var decoratedChild = cell.querySelector('div[style*="background"], span[style*="background"], div[bgcolor], span[bgcolor]');
+    if (decoratedChild && cleanText(decoratedChild)) {
+      cell.classList.add('arklores-reader-table-accent');
+    }
+  }
+
   for (var i = 0; i < touched.length; i++) {
     var el = touched[i];
     if (!el || !el.style) continue;
+    el.removeAttribute('bgcolor');
     if (!el.matches(keepVisualStyle)) {
       el.style.removeProperty('color');
       el.style.removeProperty('background');
