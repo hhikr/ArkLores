@@ -123,6 +123,62 @@ Additional smoke check:
 - `特蕾西娅` 等变体名现在有基础 alias 候选，但用户提问时是否需要展示候选仍取决于 Agent 调用 `search_local_lore` 的 disambiguation 分支。
 - 真机端到端仍需要用 release asset 或临时 HTTP asset 验证下载、安装、检索、Summary Agent 全链路。
 
+## v1.0 Readiness QA Backlog
+
+v0.9 的 QA 证明了当前 GameData-first MVP 可以工作，但还不能证明它已经是正式可用版本。
+以下 backlog 用于约束 v1.0 前的质量提升，避免把“单次测试通过”误写成“产品稳定”。
+
+### 数据更新与覆盖
+
+- 检查 App 能展示当前安装 DB 的 game、language、schema version、source commit、
+  finalized time、hash 和记录计数。
+- 验证远程 update manifest 的发现、下载、取消、重试、hash mismatch、gzip 损坏、
+  schema 不兼容和旧 DB 保留。
+- 每次 GameData source commit 更新后运行差异报告，并人工审查实体/alias/story scope 的
+  异常变化。
+- 增加组织、阵营、地点、概念、活动、敌人、材料、语音、秘录、模组、肉鸽和主线剧情的
+  固定 query 矩阵。
+- 明确 Endfield 当前状态：在 Endfield importer 和 QA 未完成前，AI 不能声称使用
+  Endfield GameData 证据。
+
+### Hybrid / Vector Retrieval
+
+若引入向量化，必须新增与现有 SQLite 检索并排的 benchmark，而不是只验证“能查到结果”：
+
+- baseline：当前 structured lookup、alias、FTS、LIKE fallback。
+- candidate：embedding top-k、hybrid merge、reranker 或 proximity rerank。
+- 指标：direct evidence recall、false evidence rate、歧义处理、p50/p95 latency、
+  memory peak、index size、cold start impact。
+- 场景：模糊剧情描述、跨章节角色经历、组织/概念宽泛问题、反事实命题、同名实体、
+  无覆盖问题和长篇梗概。
+- 回退：向量索引缺失、不兼容、损坏或设备不支持时，结果应与现有 SQLite 路线一致可用。
+
+通过标准不是“向量分数更高”，而是固定 QA 的有效证据召回提升，并且不增加不能接受的
+误证据或来源缺失。
+
+### Agent Quality Matrix
+
+Agent QA 需要逐步从 prompt snapshot 扩展为 workflow 质量矩阵：
+
+- Summary：普通角色梗概、指定活动梗概、长剧情压缩、低覆盖提示、引用完整性。
+- Fact-check：支持、反驳、存疑、无法确认、范围/实体双消歧、关系词重试、后续追问。
+- Role-play：角色解析、设定冲突、无证据经历、用户场景隔离、会话记忆压缩、多轮漂移。
+- Provider matrix：至少覆盖不同 OpenAI-compatible provider、reasoning provider 和低成本模型，
+  记录格式遵循、截断、中文表达、工具调用稳定性、延迟和错误正文。
+- Post-check：最终回答中的每个 GameData 来源声明都必须能在 observation 中找到对应
+  `source_path/raw_id/content_type`。
+
+### 性能与正式应用体验
+
+v1.0 前需要在代表性 Android 设备上记录以下指标：
+
+- 首次启动、进入 AI 页、知识库状态读取、DB 下载/解压/校验/替换耗时。
+- 常见检索 query 的 p50/p95 延迟和长 query 超时行为。
+- Summary / Fact-check / Role-play 长会话内存、滚动、Markdown 渲染和取消响应。
+- Wiki WebView 双标签切换、返回/前进、选区转交、软键盘和低内存恢复。
+- 横屏、TalkBack、1.6x 及更高文字缩放、中英文、双主题截图回读。
+- release keystore 签名、升级安装、保留设置/会话/DB、隐私与日志策略。
+
 ## v0.6 Role-play QA
 
 角色扮演继续只注册 `search_local_lore`。角色选择先通过 `entities/entity_aliases` 解析为

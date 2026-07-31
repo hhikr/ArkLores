@@ -88,6 +88,64 @@ stage/story、enemy race 到 enemy，以及 zone 到 stage。关系写入 `entit
 - `3aKHP/EndFieldGameData` release asset `endfield-tables.zip`
 - `wuyilingwei/EndfieldGameData` raw `TableCfg/*.json`
 
+## v1.0 前的数据产品缺口
+
+当前 schema 2 DB 是可用的 Arknights 中文 GameData 快照，但还不是长期可维护的数据产品。
+v1.0 前需要把以下问题独立立项，不能只靠重新上传一个 `.db.gz` 解决。
+
+### 更新模式
+
+后续 release asset 需要从“固定下载文件”升级为“可检查、可解释、可恢复”的更新模式：
+
+- 远程 update manifest 必须描述 game、language、schema version、source commit、
+  builder version、asset URL、压缩包 hash、解压后 hash、大小、发布时间、最低 App
+  版本和迁移说明。
+- App 应能展示当前安装 DB 的来源 commit、构建时间、schema 和覆盖游戏，并检查是否有
+  新版本。
+- 下载失败、hash mismatch、gzip 损坏、空间不足、schema 不兼容时必须保留旧有效 DB。
+- 是否支持增量包需要基于真实体积和失败恢复成本决策。若 v1.0 仍只支持全量包，需记录
+  下载体积、网络建议和用户可取消/重试行为。
+- 每次数据刷新必须生成差异报告，至少包含实体增删、alias 改动、story scope 改动、
+  记录计数变化、固定 QA 变化和 hash。
+
+### 多游戏与终末地接入
+
+当前 DB 的 `game` 字段已经存在，但 active importer 和 release asset 实际只覆盖
+Arknights `zh_CN`。终末地接入不能只把文件塞进同一张表：
+
+- 需要确认数据来源授权、稳定 ID、语言策略、版本号、source path 和 raw id 规则。
+- 需要为 Endfield 单独建立 importer adapter、content category、entity type、story scope
+  与固定 QA。
+- App UI 和 Agent observation 必须明确区分 Arknights / Endfield 的证据来源；跨游戏查询
+  需要显式范围，不能默认混搜导致错证据。
+- 在 Endfield GameData 未完成前，终末地主题和 Wiki 浏览只代表阅读体验，不代表 AI
+  已有终末地官方数据支持。
+
+### schema v3 候选方向
+
+schema v2 仍大量依赖 FTS / LIKE 和规则归一化。若要支撑 v1.0 后的高质量检索，schema v3
+候选应优先考虑：
+
+- 组织、阵营、概念和地点的汇总实体，而不只依赖干员档案里偶然出现的词。
+- 实体级剧情倒排表，记录 entity_id、story_id、scope_id、line range、speaker 和提及强度。
+- 关系索引，区分同场出现、称谓、身份、归属、敌对、死亡/存活、时间线状态等可核查关系。
+- 更新质量标记，如 low coverage、ambiguous alias、generated aggregate、manual review needed。
+- 多游戏、多语言和跨版本兼容字段，避免后续 Endfield 或其他语言接入时破坏现有 App。
+
+### 向量索引资产
+
+向量化必须作为 GameData 派生产物，而不是无来源的第二知识库。任何 embedding / ANN asset
+至少需要：
+
+- embedding model id/version、维度、量化方式和生成命令。
+- chunk/record id 到向量行号的稳定映射。
+- 索引文件 hash、大小、schema compatibility 和 source DB hash。
+- 与 SQLite structured/FTS 的 hybrid retrieval contract。
+- 索引缺失或不兼容时的回退行为。
+
+向量结果只能改善召回和排序；最终证据仍必须回到 `source_path`、`raw_id`、
+`content_type` 和 GameData chunk/record。
+
 ## SQLite Schema
 
 当前 schema version 为 `2`。v2 为剧情 chunk 增加通用 `scope_type/scope_id`，并新增
