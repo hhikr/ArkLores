@@ -65,7 +65,7 @@ class WikiReaderMode {
     final tableHeader = dark ? '#151E29' : '#EFE8DA';
     final selection =
         dark ? 'rgba(122, 199, 221, 0.28)' : 'rgba(35, 106, 128, 0.18)';
-    final baseFontSize = (18 * fontScale).clamp(15, 24).toStringAsFixed(1);
+    final baseFontSize = (18 * fontScale).clamp(11, 25).toStringAsFixed(1);
     final lineHeight =
         (1.72 - ((fontScale - 1) * 0.08)).clamp(1.56, 1.78).toStringAsFixed(2);
 
@@ -295,15 +295,15 @@ body.$_bodyClass h4 {
 }
 
 body.$_bodyClass h1 {
-  font-size: ${(26 * fontScale).clamp(22, 34).toStringAsFixed(1)}px !important;
+  font-size: ${(26 * fontScale).clamp(17, 35).toStringAsFixed(1)}px !important;
 }
 
 body.$_bodyClass h2 {
-  font-size: ${(22 * fontScale).clamp(19, 30).toStringAsFixed(1)}px !important;
+  font-size: ${(22 * fontScale).clamp(15, 31).toStringAsFixed(1)}px !important;
 }
 
 body.$_bodyClass h3 {
-  font-size: ${(19 * fontScale).clamp(17, 26).toStringAsFixed(1)}px !important;
+  font-size: ${(19 * fontScale).clamp(13, 27).toStringAsFixed(1)}px !important;
 }
 
 body.$_bodyClass p {
@@ -452,7 +452,15 @@ body.$_bodyClass .succession-box {
   }
   style.textContent = ${_jsStringLiteral(css)};
   if (body.dataset.arkloresReaderTapHandler !== '1') {
-    document.addEventListener('click', function() {
+    document.addEventListener('click', function(event) {
+      var target = event.target;
+      if (!target || !target.closest) return;
+      var interactive = target.closest('a, button, input, select, textarea, label, summary, details, [role="button"], [onclick], [href], .mw-collapsible-toggle, .mw-collapsible-toggle *');
+      if (interactive) return;
+      try {
+        var selected = window.getSelection ? window.getSelection().toString() : '';
+        if (selected && selected.trim()) return;
+      } catch (e) {}
       try {
         window.flutter_inappwebview.callHandler('arkloresReaderTap');
       } catch (e) {}

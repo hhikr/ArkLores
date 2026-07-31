@@ -105,12 +105,12 @@ class SettingsService {
   Future<double> loadWikiReaderFontScale() async {
     final raw = await _storage.read(key: _keyWikiReaderFontScale);
     final value = double.tryParse(raw ?? '');
-    if (value == null || value < 0.86 || value > 1.34) return 1.0;
+    if (value == null || value < 0.62 || value > 1.38) return 1.0;
     return value;
   }
 
   Future<void> saveWikiReaderFontScale(double scale) async {
-    final value = scale.clamp(0.86, 1.34).toStringAsFixed(2);
+    final value = scale.clamp(0.62, 1.38).toStringAsFixed(2);
     await _storage.write(key: _keyWikiReaderFontScale, value: value);
   }
 

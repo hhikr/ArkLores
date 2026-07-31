@@ -67,6 +67,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   bool _isDarkMode = false;
   bool _isReaderMode = false;
   double _readerFontScale = 1.0;
+  double _pageScale = 1.0;
   bool _trayExpanded = false;
   bool _readerControlsVisible = true;
   bool _restoredState = false;
@@ -200,11 +201,41 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   void _zoomOut() {
-    _controllers[_tabController.index]?.zoomOut();
+    _setPageScale(_pageScale - 0.08);
   }
 
   void _zoomIn() {
-    _controllers[_tabController.index]?.zoomIn();
+    _setPageScale(_pageScale + 0.08);
+  }
+
+  void _setPageScale(double value) {
+    final next = value.clamp(0.72, 1.36).toDouble();
+    if (next == _pageScale) return;
+    setState(() => _pageScale = next);
+    _applyPageScaleToControllers();
+  }
+
+  void _applyPageScaleToControllers() {
+    for (final c in _controllers) {
+      if (c != null) _applyPageScale(c);
+    }
+  }
+
+  Future<void> _applyPageScale(InAppWebViewController controller) async {
+    final scale = _isReaderMode ? 1.0 : _pageScale;
+    final js = '''
+(function() {
+  var html = document.documentElement;
+  if (!html) return;
+  html.style.setProperty('zoom', '$scale');
+  html.style.setProperty('transform-origin', '0 0');
+})();
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // Page scale is best-effort across WebView engines.
+    }
   }
 
   void _reload() {
@@ -245,15 +276,15 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   void _decreaseReaderFont() {
-    _setReaderFontScale(_readerFontScale - 0.08);
+    _setReaderFontScale(_readerFontScale - 0.1);
   }
 
   void _increaseReaderFont() {
-    _setReaderFontScale(_readerFontScale + 0.08);
+    _setReaderFontScale(_readerFontScale + 0.1);
   }
 
   void _setReaderFontScale(double value) {
-    final next = value.clamp(0.86, 1.34).toDouble();
+    final next = value.clamp(0.62, 1.38).toDouble();
     if (next == _readerFontScale) return;
     setState(() => _readerFontScale = next);
     ref.read(settingsServiceProvider).saveWikiReaderFontScale(next).catchError(
@@ -277,6 +308,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   ) async {
     if (_isReaderMode) {
       await WikiDarkMode.remove(controller);
+      await _applyPageScale(controller);
       await WikiReaderMode.inject(
         controller,
         dark: _isDarkMode,
@@ -287,6 +319,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
     await WikiReaderMode.remove(controller);
     await WikiDarkMode.setEnabled(controller, _isDarkMode);
+    await _applyPageScale(controller);
   }
 
   void _toggleBookmark() {
