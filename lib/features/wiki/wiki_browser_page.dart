@@ -422,9 +422,15 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
-  if (!alreadyWrapped && typeof window.fun_fullscreen === 'function') {
+  function wrapFullscreen() {
+    if (document.documentElement.dataset.arkloresPrtsFitWrapped === '1') return;
+    if (typeof window.fun_fullscreen !== 'function') return;
+    if (window.fun_fullscreen.__arkloresWrapped === '1') {
+      document.documentElement.dataset.arkloresPrtsFitWrapped = '1';
+      return;
+    }
     var originalFullscreen = window.fun_fullscreen;
-    window.fun_fullscreen = function() {
+    var wrapped = function() {
       try {
         originalFullscreen.apply(this, arguments);
       } catch (e) {}
@@ -432,7 +438,26 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         fitScenario();
       } catch (e) {}
     };
+    wrapped.__arkloresWrapped = '1';
+    window.fun_fullscreen = wrapped;
     document.documentElement.dataset.arkloresPrtsFitWrapped = '1';
+  }
+
+  function installPolling() {
+    if (document.documentElement.dataset.arkloresPrtsFitPolling === '1') return;
+    document.documentElement.dataset.arkloresPrtsFitPolling = '1';
+    var timer = window.setInterval(function() {
+      wrapFullscreen();
+      fitScenario();
+    }, 350);
+    window.addEventListener('pagehide', function() {
+      window.clearInterval(timer);
+      document.documentElement.dataset.arkloresPrtsFitPolling = '0';
+    }, { once: true });
+  }
+
+  if (!alreadyWrapped) {
+    wrapFullscreen();
   }
 
   if (!alreadyListening) {
@@ -456,6 +481,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     document.documentElement.dataset.arkloresPrtsFitListening = '1';
   }
 
+  installPolling();
   fitScenario();
 })();
 ''';

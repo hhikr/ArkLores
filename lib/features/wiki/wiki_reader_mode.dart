@@ -100,21 +100,36 @@ body.$_bodyClass {
   overflow-x: hidden !important;
 }
 
-body.$_bodyClass,
-body.$_bodyClass p,
-body.$_bodyClass li,
-body.$_bodyClass td,
-body.$_bodyClass th,
-body.$_bodyClass blockquote,
-body.$_bodyClass dd,
-body.$_bodyClass dt,
-body.$_bodyClass div,
-body.$_bodyClass span {
+body.$_bodyClass:not(.arklores-reader-operator-profile),
+body.$_bodyClass:not(.arklores-reader-operator-profile) p,
+body.$_bodyClass:not(.arklores-reader-operator-profile) li,
+body.$_bodyClass:not(.arklores-reader-operator-profile) td,
+body.$_bodyClass:not(.arklores-reader-operator-profile) th,
+body.$_bodyClass:not(.arklores-reader-operator-profile) blockquote,
+body.$_bodyClass:not(.arklores-reader-operator-profile) dd,
+body.$_bodyClass:not(.arklores-reader-operator-profile) dt,
+body.$_bodyClass:not(.arklores-reader-operator-profile) div,
+body.$_bodyClass:not(.arklores-reader-operator-profile) span,
+body.$_bodyClass.arklores-reader-operator-profile,
+body.$_bodyClass.arklores-reader-operator-profile p,
+body.$_bodyClass.arklores-reader-operator-profile li,
+body.$_bodyClass.arklores-reader-operator-profile td,
+body.$_bodyClass.arklores-reader-operator-profile th,
+body.$_bodyClass.arklores-reader-operator-profile blockquote,
+body.$_bodyClass.arklores-reader-operator-profile dd,
+body.$_bodyClass.arklores-reader-operator-profile dt {
   font-family: "$_fontFamily", -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif !important;
   font-size: ${baseFontSize}px !important;
   line-height: $lineHeight !important;
   letter-spacing: 0 !important;
   font-variant-ligatures: common-ligatures !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile div,
+body.$_bodyClass.arklores-reader-operator-profile span {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
 }
 
 body.$_bodyClass *,
@@ -247,12 +262,79 @@ body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where(
 
 body.$_bodyClass.arklores-reader-operator-profile .charinfo-container,
 body.$_bodyClass.arklores-reader-operator-profile #charinfo-wrapper,
+body.$_bodyClass.arklores-reader-operator-profile .charinfo-wrapper,
 body.$_bodyClass.arklores-reader-operator-profile #basictemplate,
 body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
   width: 100% !important;
   max-width: 100% !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
+  overflow: visible !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #charinfo-wrapper {
+  display: block !important;
+  min-width: 0 !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .charinfo-container {
+  overflow-x: auto !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #basictemplate,
+body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
+  background: $storySurface !important;
+  color: $text !important;
+  border: 1px solid $border !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .equiptemplate *,
+body.$_bodyClass.arklores-reader-operator-profile #basictemplate * {
+  color: inherit !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .equip-base-title,
+body.$_bodyClass.arklores-reader-operator-profile .equip-type-text,
+body.$_bodyClass.arklores-reader-operator-profile .equip-name-box,
+body.$_bodyClass.arklores-reader-operator-profile .equip-level-desc,
+body.$_bodyClass.arklores-reader-operator-profile .equip-task-content,
+body.$_bodyClass.arklores-reader-operator-profile .equip-material-content,
+body.$_bodyClass.arklores-reader-operator-profile .equip-level-stats {
+  color: $text !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .equip-full-btn {
+  background: $controlSurface !important;
+  color: $controlText !important;
+  border: 1px solid $border !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .equip-nofull-btn {
+  background: ${dark ? '#7A2E2E' : '#C93A3A'} !important;
+  color: #ffffff !important;
+  border: 1px solid ${dark ? '#A65A5A' : '#A51F1F'} !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2 {
+  color: inherit !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2 * {
+  color: inherit !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .mw-collapsible-toggle,
+body.$_bodyClass.arklores-reader-operator-profile .mw-collapsible-toggle a {
+  background: $controlSurface !important;
+  color: $controlText !important;
+  border-color: $border !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2,
+body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2 * {
+  background: transparent !important;
 }
 
 body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery),
