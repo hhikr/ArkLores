@@ -358,6 +358,112 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     await WikiReaderMode.remove(controller);
     await WikiDarkMode.setEnabled(controller, _isDarkMode);
     await _applyPageScale(controller);
+    await _applyPrtsScenarioFit(controller);
+  }
+
+  Future<void> _applyPrtsScenarioFit(
+    InAppWebViewController controller,
+  ) async {
+    const js = '''
+(function() {
+  var shell = document.getElementById('sys_fullscreen');
+  var offset = document.getElementById('sys_offset');
+  var main = document.getElementById('sys_main');
+  var fullscreenButton = document.getElementById('button_fullscreen');
+  if (!shell || !offset || !main || !fullscreenButton) return;
+
+  var alreadyWrapped = document.documentElement.dataset.arkloresPrtsFitWrapped === '1';
+  var alreadyListening = document.documentElement.dataset.arkloresPrtsFitListening === '1';
+  var baseWidth = 960;
+  var baseHeight = 540;
+
+  function viewportSize() {
+    var viewport = window.visualViewport;
+    var width = viewport && viewport.width ? viewport.width : window.innerWidth;
+    var height = viewport && viewport.height ? viewport.height : window.innerHeight;
+    return {
+      width: Math.max(1, Math.floor(width || baseWidth)),
+      height: Math.max(1, Math.floor(height || baseHeight))
+    };
+  }
+
+  function isFullscreenActive() {
+    return !!(document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement ||
+      document.webkitIsFullScreen ||
+      document.webkitFullScreen);
+  }
+
+  function fitScenario() {
+    var viewport = viewportSize();
+    var scale = Math.min(viewport.width / baseWidth, viewport.height / baseHeight);
+    if (!isFinite(scale) || scale <= 0) scale = 1;
+    scale = Math.min(scale, 1.0);
+    var width = Math.round(baseWidth * scale);
+    var height = Math.round(baseHeight * scale);
+    var left = isFullscreenActive() ? Math.max(Math.round((viewport.width - width) / 2), 0) : 0;
+    var top = isFullscreenActive() ? Math.max(Math.round((viewport.height - height) / 2), 0) : 0;
+
+    main.style.transformOrigin = '0 0';
+    main.style.transform = 'scale(' + scale + ')';
+    offset.style.width = width + 'px';
+    offset.style.height = height + 'px';
+    offset.style.left = left + 'px';
+    offset.style.top = top + 'px';
+
+    if (isFullscreenActive()) {
+      fullscreenButton.classList.remove('normal');
+      fullscreenButton.classList.add('return');
+    } else {
+      fullscreenButton.classList.add('normal');
+      fullscreenButton.classList.remove('return');
+    }
+  }
+
+  if (!alreadyWrapped && typeof window.fun_fullscreen === 'function') {
+    var originalFullscreen = window.fun_fullscreen;
+    window.fun_fullscreen = function() {
+      try {
+        originalFullscreen.apply(this, arguments);
+      } catch (e) {}
+      try {
+        fitScenario();
+      } catch (e) {}
+    };
+    document.documentElement.dataset.arkloresPrtsFitWrapped = '1';
+  }
+
+  if (!alreadyListening) {
+    var schedule = function() {
+      if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(fitScenario);
+      } else {
+        window.setTimeout(fitScenario, 0);
+      }
+    };
+    window.addEventListener('resize', schedule, { passive: true });
+    window.addEventListener('orientationchange', schedule, { passive: true });
+    document.addEventListener('fullscreenchange', schedule, true);
+    document.addEventListener('webkitfullscreenchange', schedule, true);
+    document.addEventListener('mozfullscreenchange', schedule, true);
+    document.addEventListener('MSFullscreenChange', schedule, true);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', schedule, { passive: true });
+      window.visualViewport.addEventListener('scroll', schedule, { passive: true });
+    }
+    document.documentElement.dataset.arkloresPrtsFitListening = '1';
+  }
+
+  fitScenario();
+})();
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // Best-effort PRTS simulator fit for mobile/fullscreen layouts.
+    }
   }
 
   void _toggleBookmark() {

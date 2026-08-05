@@ -216,8 +216,8 @@ body.$_bodyClass #mw-content-text :where(p, li, dd, dt, div, span, small, b, str
   color: $text !important;
 }
 
-body.$_bodyClass .mw-parser-output :where(div, section, article, center, ul, ol, dl),
-body.$_bodyClass #mw-content-text :where(div, section, article, center, ul, ol, dl) {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where(div, section, article, center, ul, ol, dl),
+body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where(div, section, article, center, ul, ol, dl) {
   width: auto !important;
   max-width: none !important;
   min-width: 0 !important;
@@ -233,20 +233,30 @@ body.$_bodyClass #mw-content-text :where(div, section, article, center, ul, ol, 
   border-radius: 0 !important;
 }
 
-body.$_bodyClass .mw-parser-output :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(pre):not(code):not(.mw-collapsible-toggle),
-body.$_bodyClass #mw-content-text :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(pre):not(code):not(.mw-collapsible-toggle) {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(pre):not(code):not(.mw-collapsible-toggle),
+body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where([style*="background"], [style*="background-color"], [style*="background-image"], [style*="background: url"], [style*="background:url"]):not(button):not(input):not(select):not(textarea):not(pre):not(code):not(.mw-collapsible-toggle) {
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
 }
 
-body.$_bodyClass .mw-parser-output :where([style*="color"]),
-body.$_bodyClass #mw-content-text :where([style*="color"]) {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where([style*="color"]),
+body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where([style*="color"]) {
   color: $text !important;
 }
 
-body.$_bodyClass .mw-parser-output :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery),
-body.$_bodyClass #mw-content-text :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery) {
+body.$_bodyClass.arklores-reader-operator-profile .charinfo-container,
+body.$_bodyClass.arklores-reader-operator-profile #charinfo-wrapper,
+body.$_bodyClass.arklores-reader-operator-profile #basictemplate,
+body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery),
+body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery) {
   width: auto !important;
   max-width: none !important;
   min-width: 0 !important;
@@ -254,7 +264,7 @@ body.$_bodyClass #mw-content-text :where([style*="width"], [style*="margin"]):no
   margin-right: 0 !important;
 }
 
-body.$_bodyClass .arklores-reader-story-block {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .arklores-reader-story-block {
   width: 100% !important;
   max-width: none !important;
   margin: 0.9em 0 !important;
@@ -265,7 +275,7 @@ body.$_bodyClass .arklores-reader-story-block {
   border-radius: 2px !important;
 }
 
-body.$_bodyClass .arklores-reader-story-heading {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .arklores-reader-story-heading {
   width: 100% !important;
   max-width: none !important;
   margin: 0.6em 0 !important;
@@ -510,6 +520,20 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list li {
   color: $text !important;
 }
 
+body.$_bodyClass #playback_all_result.arklores-prts-log-list li.arklores-prts-log-narration {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+body.$_bodyClass #playback_all_result.arklores-prts-log-list li.arklores-prts-log-narration > em {
+  display: none !important;
+}
+
+body.$_bodyClass #playback_all_result.arklores-prts-log-list li.arklores-prts-log-narration > span {
+  color: $text !important;
+  padding-left: 0 !important;
+  left: auto !important;
+}
+
 body.$_bodyClass #playback_all_result.arklores-prts-log-list li > em,
 body.$_bodyClass #playback_all_result.arklores-prts-log-list li > span {
   position: static !important;
@@ -537,6 +561,19 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
   border: 1px solid $border !important;
   background: $storySurface !important;
   color: $text !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile div,
+body.$_bodyClass.arklores-reader-operator-profile span,
+body.$_bodyClass.arklores-reader-operator-profile section,
+body.$_bodyClass.arklores-reader-operator-profile article,
+body.$_bodyClass.arklores-reader-operator-profile center,
+body.$_bodyClass.arklores-reader-operator-profile ul,
+body.$_bodyClass.arklores-reader-operator-profile ol,
+body.$_bodyClass.arklores-reader-operator-profile dl {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
 }
 ''';
 
@@ -609,6 +646,46 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
   }
 
   setupPrtsScenarioReader();
+
+  function refreshPrtsLogNarrationStyles() {
+    var logList = document.getElementById('playback_all_result');
+    if (!logList) return;
+    var items = logList.querySelectorAll('li');
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var speaker = item.firstElementChild && item.firstElementChild.tagName === 'EM'
+          ? (item.firstElementChild.textContent || '').trim()
+          : '';
+      var isNarration =
+          !speaker ||
+          speaker === '旁白' ||
+          speaker === '剧情旁白' ||
+          speaker === '叙述' ||
+          speaker === 'Narration' ||
+          speaker === 'narration';
+      item.classList.toggle('arklores-prts-log-narration', isNarration);
+    }
+    if (logList.dataset.arkloresNarrationObserver !== '1') {
+      var observer = new MutationObserver(function() {
+        refreshPrtsLogNarrationStyles();
+      });
+      observer.observe(logList, { childList: true, subtree: true });
+      logList.dataset.arkloresNarrationObserver = '1';
+    }
+  }
+
+  refreshPrtsLogNarrationStyles();
+
+  function isOperatorProfilePage() {
+    var text = (document.body && document.body.innerText) ? document.body.innerText : '';
+    return text.indexOf('干员信息') !== -1 &&
+        text.indexOf('模组') !== -1 &&
+        (text.indexOf('特性') !== -1 || text.indexOf('基础信息') !== -1);
+  }
+
+  if (isOperatorProfilePage()) {
+    body.classList.add('arklores-reader-operator-profile');
+  }
 
   if (body.dataset.arkloresReaderTapHandler !== '1') {
     function isReaderChromeTapTarget(target) {
@@ -721,7 +798,8 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       el.style.removeProperty('border-top-color');
       el.style.removeProperty('border-bottom-color');
     }
-    if (!el.matches(keepSizing)) {
+    if (!body.classList.contains('arklores-reader-operator-profile') &&
+        !el.matches(keepSizing)) {
       el.style.removeProperty('margin');
       el.style.removeProperty('padding');
       el.style.removeProperty('width');
@@ -757,6 +835,9 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
   for (var j = 0; j < touched.length; j++) {
     var block = touched[j];
     if (!block || !block.classList || !block.matches('div,section,article,center,blockquote')) {
+      continue;
+    }
+    if (body.classList.contains('arklores-reader-operator-profile')) {
       continue;
     }
     if (block.matches('button,input,select,textarea,pre,code,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *')) {
