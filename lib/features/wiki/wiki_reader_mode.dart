@@ -92,12 +92,16 @@ $fontFaces
 }
 
 html {
+  width: 100% !important;
+  max-width: 100% !important;
   background: $background !important;
   filter: none !important;
 }
 
 html,
 body.$_bodyClass {
+  width: 100% !important;
+  max-width: 100% !important;
   min-height: 100% !important;
   margin: 0 !important;
   background: $background !important;
@@ -763,6 +767,20 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
 (function() {
   var body = document.body;
   if (!body || !document.head) return;
+  var viewport = document.querySelector('meta[name="viewport"]');
+  if (!viewport) {
+    viewport = document.createElement('meta');
+    viewport.name = 'viewport';
+    viewport.dataset.arkloresReaderViewportCreated = '1';
+    document.head.appendChild(viewport);
+  } else if (viewport.dataset.arkloresReaderViewportOriginal === undefined) {
+    viewport.dataset.arkloresReaderViewportOriginal =
+        viewport.getAttribute('content') || '';
+  }
+  viewport.setAttribute(
+    'content',
+    'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover',
+  );
   body.classList.add('$_bodyClass');
   var style = document.getElementById('$_styleId');
   if (!style) {
@@ -1224,6 +1242,20 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       'arklores-prts-paradox-mobile',
       'arklores-prts-paradox-desktop',
     );
+  }
+  var viewport = document.querySelector('meta[name="viewport"]');
+  if (viewport) {
+    if (viewport.dataset.arkloresReaderViewportCreated === '1') {
+      viewport.remove();
+    } else if (
+      viewport.dataset.arkloresReaderViewportOriginal !== undefined
+    ) {
+      viewport.setAttribute(
+        'content',
+        viewport.dataset.arkloresReaderViewportOriginal,
+      );
+      delete viewport.dataset.arkloresReaderViewportOriginal;
+    }
   }
   var style = document.getElementById('$_styleId');
   if (style) style.remove();

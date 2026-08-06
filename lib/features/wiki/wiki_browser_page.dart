@@ -116,7 +116,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
             Brightness.dark;
     if (prefersDark == _isDarkMode) return;
     setState(() => _isDarkMode = prefersDark);
-    _applyAppearanceToControllers();
   }
 
   Future<void> _restoreBrowsingState() async {
@@ -287,7 +286,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void _toggleDarkMode() {
     final newValue = !_isDarkMode;
     setState(() => _isDarkMode = newValue);
-    _applyAppearanceToControllers();
   }
 
   void _toggleReaderMode() {
@@ -310,7 +308,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
             '[WikiBrowser] Error saving reader mode: $error',
           ),
         );
-    _applyAppearanceToControllers();
     if (enabled) _scheduleReaderControlsHide();
   }
 
@@ -359,33 +356,11 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
             '[WikiBrowser] Error saving reader font scale: $error',
           ),
         );
-    if (_isReaderMode) _applyAppearanceToControllers();
   }
 
-  void _applyAppearanceToControllers() {
-    for (final c in _controllers) {
-      if (c != null) {
-        _applyAppearanceToController(c);
-      }
-    }
-  }
-
-  Future<void> _applyAppearanceToController(
+  Future<void> _applyNormalWebViewEnhancements(
     InAppWebViewController controller,
   ) async {
-    if (_isReaderMode) {
-      await WikiDarkMode.remove(controller);
-      await _applyPageScale(controller);
-      await WikiReaderMode.inject(
-        controller,
-        dark: _isDarkMode,
-        fontScale: _readerFontScale,
-      );
-      return;
-    }
-
-    await WikiReaderMode.remove(controller);
-    await WikiDarkMode.setEnabled(controller, _isDarkMode);
     await _applyPageScale(controller);
     await _applyPrtsOperatorResponsiveLayout(controller);
     await _applyPrtsScenarioFit(controller);
@@ -843,6 +818,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                         readerDark: _isDarkMode,
                         readerFontScale: _readerFontScale,
                         onReaderTapped: _toggleReaderControls,
+                        onNormalAppearance: _applyNormalWebViewEnhancements,
                         onControllerCreated: _onControllerCreated,
                         onTitleChanged: _onTitleChanged,
                         onUrlChanged: _onUrlChanged,
@@ -905,6 +881,7 @@ class _WikiTabView extends StatefulWidget {
   final bool readerDark;
   final double readerFontScale;
   final VoidCallback onReaderTapped;
+  final Future<void> Function(InAppWebViewController) onNormalAppearance;
   final void Function(int, InAppWebViewController) onControllerCreated;
   final void Function(int, String?) onTitleChanged;
   final void Function(int, String) onUrlChanged;
@@ -920,6 +897,7 @@ class _WikiTabView extends StatefulWidget {
     required this.readerDark,
     required this.readerFontScale,
     required this.onReaderTapped,
+    required this.onNormalAppearance,
     required this.onControllerCreated,
     required this.onTitleChanged,
     required this.onUrlChanged,
@@ -961,8 +939,15 @@ class _WikiTabViewState extends State<_WikiTabView> {
 
   Future<void> _prepareWebViewAppearance() async {
     final request = ++_appearanceRequest;
+    var needsFrame = false;
     if (mounted && !_isPreparingWebView) {
       setState(() => _isPreparingWebView = true);
+      needsFrame = true;
+    }
+
+    if (needsFrame) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || request != _appearanceRequest) return;
     }
 
     try {
@@ -981,6 +966,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
 
     if (widget.isReaderMode) {
       await WikiDarkMode.remove(controller);
+      await _resetPageScale(controller);
       await WikiReaderMode.inject(
         controller,
         dark: widget.readerDark,
@@ -991,6 +977,24 @@ class _WikiTabViewState extends State<_WikiTabView> {
 
     await WikiReaderMode.remove(controller);
     await WikiDarkMode.setEnabled(controller, widget.isDarkMode);
+    await widget.onNormalAppearance(controller);
+  }
+
+  Future<void> _resetPageScale(InAppWebViewController controller) async {
+    try {
+      await controller.evaluateJavascript(
+        source: '''
+(function() {
+  var html = document.documentElement;
+  if (!html) return;
+  html.style.removeProperty('zoom');
+  html.style.removeProperty('transform-origin');
+})();
+''',
+      );
+    } catch (_) {
+      // Reader mode always uses the document's natural scale.
+    }
   }
 
   @override
