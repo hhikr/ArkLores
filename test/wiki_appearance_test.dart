@@ -10,6 +10,8 @@ void main() {
     expect(css, contains('--arklores-page-bg'));
     expect(css, contains('color-scheme: dark'));
     expect(css, contains('color-scheme: light'));
+    expect(css, contains('arklores-prts-site'));
+    expect(css, contains(':not(.arklores-prts-site)'));
   });
 
   test('rendered media and simulators are protected from appearance changes',

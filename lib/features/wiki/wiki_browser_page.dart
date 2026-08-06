@@ -993,9 +993,8 @@ class _WikiTabViewState extends State<_WikiTabView> {
     }
 
     await WikiReaderMode.remove(controller);
-    await WikiAppearance.setEnabled(
+    await WikiAppearance.inject(
       controller,
-      widget.isDarkMode,
       dark: widget.isDarkMode,
     );
     await widget.onNormalAppearance(controller);

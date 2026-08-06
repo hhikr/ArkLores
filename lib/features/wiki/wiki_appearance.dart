@@ -46,10 +46,51 @@ class WikiAppearance {
 html[data-arklores-appearance],
 html[data-arklores-appearance] body {
   background-color: var(--arklores-page-bg) !important;
+}
+
+html[data-arklores-appearance]:not(.arklores-prts-site) body {
   color: var(--arklores-text) !important;
 }
 
-html[data-arklores-appearance] :where(
+html[data-arklores-appearance="dark"].arklores-prts-site :where(
+  #content,
+  #bodyContent,
+  #mw-content-text,
+  .mw-body,
+  .vector-body
+) {
+  background-color: var(--arklores-page-bg) !important;
+}
+
+html[data-arklores-appearance="dark"].arklores-prts-site :where(
+  h1.firstHeading,
+  .mw-first-heading,
+  .firstHeading .mw-page-title-main
+) {
+  color: var(--arklores-text) !important;
+}
+
+html[data-arklores-appearance="dark"].arklores-prts-site :where(
+  #siteSub,
+  .mw-editsection,
+  .mw-indicator,
+  .catlinks
+) {
+  color: var(--arklores-muted) !important;
+}
+
+html[data-arklores-appearance="dark"].arklores-prts-site :where(
+  #content,
+  .mw-body,
+  table.wikitable,
+  .infobox,
+  .cbox2,
+  #app
+) {
+  border-color: var(--arklores-border) !important;
+}
+
+html[data-arklores-appearance]:not(.arklores-prts-site) :where(
   #mw-content-text,
   .mw-parser-output,
   main,
@@ -60,7 +101,7 @@ html[data-arklores-appearance] :where(
   color: var(--arklores-text);
 }
 
-html[data-arklores-appearance="dark"] :where(
+html[data-arklores-appearance="dark"]:not(.arklores-prts-site) :where(
   .mw-parser-output,
   .mw-parser-output > table,
   .mw-parser-output .wikitable,
@@ -76,7 +117,7 @@ html[data-arklores-appearance="dark"] :where(
   border-color: var(--arklores-border) !important;
 }
 
-html[data-arklores-appearance] :where(
+html[data-arklores-appearance]:not(.arklores-prts-site) :where(
   .mw-parser-output p,
   .mw-parser-output li,
   .mw-parser-output dd,
@@ -97,7 +138,7 @@ html[data-arklores-appearance] :where(
   color: var(--arklores-link);
 }
 
-html[data-arklores-appearance] :where(
+html[data-arklores-appearance]:not(.arklores-prts-site) :where(
   button,
   input,
   select,
@@ -139,6 +180,8 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
 (function() {
   var html = document.documentElement;
   if (!html) return;
+  var body = document.body;
+  var isPrts = /(^|\.)prts\.wiki$/i.test(location.hostname);
 
   var style = document.getElementById('arklores-wiki-appearance');
   if (!style) {
@@ -148,8 +191,32 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
   }
   style.textContent = __ARKLORES_CSS__;
 
-  html.setAttribute('data-arklores-appearance', __ARKLORES_MODE__);
+  var mode = __ARKLORES_MODE__;
+  html.classList.toggle('arklores-prts-site', isPrts);
+  html.setAttribute('data-arklores-appearance', mode);
   html.setAttribute('data-arklores-appearance-version', '2');
+
+  if (isPrts) {
+    if (mode === 'dark') {
+      html.classList.remove('skin-theme-clientpref-day');
+      html.classList.remove('skin-theme-clientpref-os');
+      html.classList.add('skin-theme-clientpref-night');
+      if (body) {
+        body.classList.remove('skin-theme-clientpref-day');
+        body.classList.remove('skin-theme-clientpref-os');
+        body.classList.add('skin-theme-clientpref-night');
+      }
+    } else {
+      html.classList.remove('skin-theme-clientpref-night');
+      html.classList.remove('skin-theme-clientpref-os');
+      html.classList.add('skin-theme-clientpref-day');
+      if (body) {
+        body.classList.remove('skin-theme-clientpref-night');
+        body.classList.remove('skin-theme-clientpref-os');
+        body.classList.add('skin-theme-clientpref-day');
+      }
+    }
+  }
 })();
 ''';
 
@@ -159,6 +226,7 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
   if (html) {
     html.removeAttribute('data-arklores-appearance');
     html.removeAttribute('data-arklores-appearance-version');
+    html.classList.remove('arklores-prts-site');
   }
   var style = document.getElementById('arklores-wiki-appearance');
   if (style) style.remove();
