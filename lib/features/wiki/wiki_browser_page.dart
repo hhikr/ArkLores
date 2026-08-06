@@ -1175,7 +1175,7 @@ class _ReaderToolbar extends ConsumerWidget {
                     children: [
                       _ReaderToolButton(
                         theme: theme,
-                        icon: Icons.visibility_off_rounded,
+                        icon: Icons.keyboard_arrow_down_rounded,
                         onTap: onHide,
                       ),
                       _ReaderToolButton(

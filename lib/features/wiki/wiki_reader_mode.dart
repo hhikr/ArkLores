@@ -825,7 +825,7 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
 
   // A document-level click cannot reliably distinguish empty space from a
   // custom wiki control: many PRTS widgets handle clicks on an ancestor or
-  // on a plain div. Use a deliberate two-finger tap instead.
+  // on a plain div. Use a deliberate double tap instead.
   if (window.__arkloresReaderClickHandler) {
     document.removeEventListener(
       'click',
@@ -851,28 +851,20 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       true,
     );
   }
+  if (window.__arkloresReaderDoubleTapHandler) {
+    document.removeEventListener(
+      'touchend',
+      window.__arkloresReaderDoubleTapHandler,
+      true,
+    );
+    delete window.__arkloresReaderDoubleTapHandler;
+  }
 
-  var twoFingerGesture = {
-    active: false,
-    valid: true,
-    startedAt: 0,
-    centerX: 0,
-    centerY: 0,
-    distance: 0,
+  var doubleTap = {
+    lastAt: 0,
+    lastX: 0,
+    lastY: 0,
   };
-
-  function touchCenter(touches) {
-    return {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-  }
-
-  function touchDistance(touches) {
-    var dx = touches[0].clientX - touches[1].clientX;
-    var dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
 
   function onReaderGesture() {
     try {
@@ -880,47 +872,26 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
     } catch (e) {}
   }
 
-  function onTwoFingerStart(event) {
-    if (event.touches.length !== 2) return;
-    var center = touchCenter(event.touches);
-    twoFingerGesture.active = true;
-    twoFingerGesture.valid = true;
-    twoFingerGesture.startedAt = Date.now();
-    twoFingerGesture.centerX = center.x;
-    twoFingerGesture.centerY = center.y;
-    twoFingerGesture.distance = touchDistance(event.touches);
+  function onDoubleTap(event) {
+    if (!event.changedTouches || event.changedTouches.length !== 1) return;
+    var touch = event.changedTouches[0];
+    var now = Date.now();
+    var dx = touch.clientX - doubleTap.lastX;
+    var dy = touch.clientY - doubleTap.lastY;
+    var closeEnough = Math.sqrt(dx * dx + dy * dy) <= 36;
+    var isDoubleTap = now - doubleTap.lastAt <= 360 && closeEnough;
+    if (isDoubleTap) {
+      doubleTap.lastAt = 0;
+      onReaderGesture();
+      return;
+    }
+    doubleTap.lastAt = now;
+    doubleTap.lastX = touch.clientX;
+    doubleTap.lastY = touch.clientY;
   }
 
-  function onTwoFingerMove(event) {
-    if (!twoFingerGesture.active || event.touches.length < 2) return;
-    var center = touchCenter(event.touches);
-    var moved = Math.sqrt(
-      Math.pow(center.x - twoFingerGesture.centerX, 2) +
-      Math.pow(center.y - twoFingerGesture.centerY, 2),
-    );
-    var pinched = Math.abs(
-      touchDistance(event.touches) - twoFingerGesture.distance,
-    );
-    if (moved > 28 || pinched > 28) twoFingerGesture.valid = false;
-  }
-
-  function onTwoFingerEnd(event) {
-    if (!twoFingerGesture.active || event.touches.length !== 0) return;
-    var elapsed = Date.now() - twoFingerGesture.startedAt;
-    var shouldToggle = twoFingerGesture.valid && elapsed <= 450;
-    twoFingerGesture.active = false;
-    if (shouldToggle) onReaderGesture();
-  }
-
-  var gestureHandlers = {
-    start: onTwoFingerStart,
-    move: onTwoFingerMove,
-    end: onTwoFingerEnd,
-  };
-  document.addEventListener('touchstart', gestureHandlers.start, true);
-  document.addEventListener('touchmove', gestureHandlers.move, true);
-  document.addEventListener('touchend', gestureHandlers.end, true);
-  window.__arkloresReaderGestureHandlers = gestureHandlers;
+  document.addEventListener('touchend', onDoubleTap, true);
+  window.__arkloresReaderDoubleTapHandler = onDoubleTap;
   body.dataset.arkloresReaderGestureHandler = '1';
 
   // PRTS operator pages mount interactive applications, not article prose.
@@ -1118,6 +1089,14 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       true,
     );
     delete window.__arkloresReaderGestureHandlers;
+  }
+  if (window.__arkloresReaderDoubleTapHandler) {
+    document.removeEventListener(
+      'touchend',
+      window.__arkloresReaderDoubleTapHandler,
+      true,
+    );
+    delete window.__arkloresReaderDoubleTapHandler;
   }
   if (document.body) {
     document.body.classList.remove(
