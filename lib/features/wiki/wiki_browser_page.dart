@@ -56,6 +56,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   bool _trayExpanded = false;
   bool _readerControlsVisible = true;
   bool _restoredState = false;
+  bool _hasStoredDarkMode = false;
   Timer? _readerControlsTimer;
 
   @override
@@ -111,6 +112,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   @override
   void didChangePlatformBrightness() {
+    if (_hasStoredDarkMode) return;
     final prefersDark =
         WidgetsBinding.instance.platformDispatcher.platformBrightness ==
             Brightness.dark;
@@ -122,6 +124,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     var tabIndex = 0;
     var readerMode = false;
     var readerFontScale = 1.0;
+    bool? storedDarkMode;
     var sites = SettingsService.defaultWikiSites;
     var urls = <String>[];
     try {
@@ -134,6 +137,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       tabIndex = await service.loadWikiTabIndex();
       readerMode = await service.loadWikiReaderMode();
       readerFontScale = await service.loadWikiReaderFontScale();
+      storedDarkMode = await service.loadWikiDarkMode();
     } catch (e) {
       debugPrint('[WikiBrowser] Error restoring browsing state: $e');
     }
@@ -150,6 +154,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       _tabController.index = tabIndex.clamp(0, _wikiSites.length - 1).toInt();
       _isReaderMode = readerMode;
       _readerFontScale = readerFontScale;
+      if (storedDarkMode != null) {
+        _isDarkMode = storedDarkMode;
+        _hasStoredDarkMode = true;
+      }
       _restoredState = true;
     });
     ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
@@ -200,6 +208,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       await service.saveWikiTabIndex(_tabController.index);
       await service.saveWikiReaderMode(_isReaderMode);
       await service.saveWikiReaderFontScale(_readerFontScale);
+      if (_hasStoredDarkMode) {
+        await service.saveWikiDarkMode(_isDarkMode);
+      }
       await Future.wait([
         for (var i = 0; i < _currentUrls.length; i++)
           if (_currentUrls[i].trim().isNotEmpty)
@@ -286,6 +297,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void _toggleDarkMode() {
     final newValue = !_isDarkMode;
     setState(() => _isDarkMode = newValue);
+    _hasStoredDarkMode = true;
+    ref.read(settingsServiceProvider).saveWikiDarkMode(newValue).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving wiki appearance: $error',
+          ),
+        );
   }
 
   void _toggleReaderMode() {

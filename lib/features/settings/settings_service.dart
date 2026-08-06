@@ -83,6 +83,7 @@ class SettingsService {
   static const _keyWikiSources = 'wiki_sources';
   static const _keyWikiReaderMode = 'wiki_reader_mode';
   static const _keyWikiReaderFontScale = 'wiki_reader_font_scale';
+  static const _keyWikiDarkMode = 'wiki_dark_mode';
   static const _keyAppLauncherIcon = 'app_launcher_icon';
 
   static const defaultWikiSites = [
@@ -264,6 +265,18 @@ class SettingsService {
   Future<void> saveWikiReaderFontScale(double scale) async {
     final value = scale.clamp(0.62, 1.38).toStringAsFixed(2);
     await _storage.write(key: _keyWikiReaderFontScale, value: value);
+  }
+
+  Future<bool?> loadWikiDarkMode() async {
+    final value = await _storage.read(key: _keyWikiDarkMode);
+    if (value == null) return null;
+    if (value == 'true') return true;
+    if (value == 'false') return false;
+    return null;
+  }
+
+  Future<void> saveWikiDarkMode(bool enabled) async {
+    await _storage.write(key: _keyWikiDarkMode, value: '$enabled');
   }
 
   Future<int> _loadBoundedInt(
