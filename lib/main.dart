@@ -96,14 +96,14 @@ class ArkLoresApp extends ConsumerWidget {
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/knowledge-base':
-            return MaterialPageRoute(
-              builder: (_) => const KnowledgeBasePage(),
+            return smoothAppRoute(
               settings: settings,
+              builder: (_) => const KnowledgeBasePage(),
             );
           case '/api-settings':
-            return MaterialPageRoute(
-              builder: (_) => const ApiSettingsPage(),
+            return smoothAppRoute(
               settings: settings,
+              builder: (_) => const ApiSettingsPage(),
             );
           default:
             return null;

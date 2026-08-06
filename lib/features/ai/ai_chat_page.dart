@@ -125,13 +125,17 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          ElevatedButton.icon(
+          FilledButton.icon(
             onPressed: () {
               Navigator.pushNamed(context, '/api-settings');
             },
-            icon: const Icon(Icons.settings_rounded),
+            icon: Icon(
+              Icons.settings_rounded,
+              size: 21,
+              color: theme.isDark ? Colors.black : Colors.white,
+            ),
             label: Text(context.t.aiSettingsGoTo),
-            style: ElevatedButton.styleFrom(
+            style: FilledButton.styleFrom(
               backgroundColor: theme.accentPrimary,
               foregroundColor: theme.isDark ? Colors.black : Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),

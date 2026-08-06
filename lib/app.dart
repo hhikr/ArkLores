@@ -25,6 +25,7 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
+  bool _pageTransitioning = false;
 
   final List<Widget> _pages = const [
     WikiBrowserPage(),
@@ -56,18 +57,14 @@ class _MainShellState extends ConsumerState<MainShell> {
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          switchInCurve: Curves.easeInOut,
-          switchOutCurve: Curves.easeInOut,
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          child: KeyedSubtree(
-            key: ValueKey('page_${theme.themeName}'),
+        body: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          opacity: _pageTransitioning ? 0.72 : 1,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            scale: _pageTransitioning ? 0.985 : 1,
             child: IndexedStack(
               index: _currentIndex,
               children: _pages,
@@ -97,7 +94,13 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   void _selectTab(int index) {
     if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+      _pageTransitioning = true;
+    });
+    Future<void>.delayed(const Duration(milliseconds: 140), () {
+      if (mounted) setState(() => _pageTransitioning = false);
+    });
     ref.read(settingsServiceProvider).saveMainTabIndex(index).catchError(
           (Object error) => debugPrint(
             '[MainShell] Error saving selected tab: $error',
@@ -150,7 +153,7 @@ class _IndustrialNavigation extends StatelessWidget {
   }
 }
 
-class _NavigationItem extends StatelessWidget {
+class _NavigationItem extends StatefulWidget {
   const _NavigationItem({
     required this.theme,
     required this.icon,
@@ -166,45 +169,97 @@ class _NavigationItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_NavigationItem> createState() => _NavigationItemState();
+}
+
+class _NavigationItemState extends State<_NavigationItem> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (mounted && _pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = selected
-        ? (theme.isEndfield ? theme.textPrimary : theme.navSelectedItem)
-        : theme.navUnselectedItem;
+    final color = widget.selected
+        ? (widget.theme.isEndfield
+            ? widget.theme.textPrimary
+            : widget.theme.navSelectedItem)
+        : widget.theme.navUnselectedItem;
     return Semantics(
       button: true,
-      selected: selected,
-      label: label,
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (selected)
-              Positioned(
-                top: 0,
-                left: 18,
-                right: 18,
-                child: Container(height: 3, color: theme.accentPrimary),
-              ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      selected: widget.selected,
+      label: widget.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _setPressed(true),
+        onTapCancel: () => _setPressed(false),
+        onTapUp: (_) => _setPressed(false),
+        onTap: () {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) widget.onTap();
+          });
+        },
+        child: AnimatedScale(
+          scale: _pressed ? 0.94 : 1,
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            decoration: BoxDecoration(
+              color: widget.selected
+                  ? widget.theme.accentPrimary.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Icon(icon, color: color, size: 24),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.bodyFont.copyWith(
-                    color: color,
-                    fontSize: 11,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    height: 1.2,
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  bottom: 3,
+                  left: widget.selected ? 26 : 32,
+                  right: widget.selected ? 26 : 32,
+                  height: 3,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: widget.selected
+                          ? widget.theme.accentPrimary
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedScale(
+                      scale: widget.selected ? 1.04 : 1,
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutBack,
+                      child: Icon(widget.icon, color: color, size: 24),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: widget.theme.bodyFont.copyWith(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight:
+                            widget.selected ? FontWeight.w700 : FontWeight.w500,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -227,11 +282,41 @@ class KnowledgeBaseRoute extends ConsumerWidget {
 Route<dynamic>? generateAppRoute(RouteSettings settings) {
   switch (settings.name) {
     case '/knowledge-base':
-      return MaterialPageRoute(
-        builder: (_) => const KnowledgeBaseRoute(),
+      return smoothAppRoute(
         settings: settings,
+        builder: (_) => const KnowledgeBaseRoute(),
       );
     default:
       return null;
   }
+}
+
+PageRoute<T> smoothAppRoute<T>({
+  required RouteSettings settings,
+  required WidgetBuilder builder,
+}) {
+  return PageRouteBuilder<T>(
+    settings: settings,
+    opaque: true,
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final eased = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: eased,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.025),
+            end: Offset.zero,
+          ).animate(eased),
+          child: child,
+        ),
+      );
+    },
+  );
 }
