@@ -14,6 +14,7 @@ import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/industrial_ui.dart';
+import 'shared/widgets/smooth_page_route.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -96,12 +97,12 @@ class ArkLoresApp extends ConsumerWidget {
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/knowledge-base':
-            return smoothAppRoute(
+            return smoothPageRoute(
               settings: settings,
               builder: (_) => const KnowledgeBasePage(),
             );
           case '/api-settings':
-            return smoothAppRoute(
+            return smoothPageRoute(
               settings: settings,
               builder: (_) => const ApiSettingsPage(),
             );

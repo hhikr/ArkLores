@@ -7,6 +7,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import '../../shared/widgets/smooth_page_route.dart';
 import 'app_icon_service.dart';
 import 'onboarding_page.dart';
 import 'settings_service.dart';
@@ -213,7 +214,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             title: 'Wiki 来源',
                             subtitle: '修改内置 Wiki URL，添加自定义 Wiki 入口',
                             onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
+                              smoothPageRoute(
                                 builder: (_) => const WikiSourcesSettingsPage(),
                               ),
                             ),
@@ -245,7 +246,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             title: context.t.settingsShowOnboarding,
                             subtitle: context.t.settingsShowOnboardingDesc,
                             onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
+                              smoothPageRoute(
                                 builder: (context) => OnboardingPage(
                                   onComplete: () => Navigator.of(context).pop(),
                                 ),

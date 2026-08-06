@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +13,7 @@ import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/providers/wiki_navigation_provider.dart';
 import 'shared/theme/app_theme.dart';
+import 'shared/widgets/smooth_page_route.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
 ///
@@ -25,7 +28,8 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
-  bool _pageTransitioning = false;
+  int? _previousIndex;
+  Timer? _tabTransitionTimer;
 
   final List<Widget> _pages = const [
     WikiBrowserPage(),
@@ -38,6 +42,12 @@ class _MainShellState extends ConsumerState<MainShell> {
   void initState() {
     super.initState();
     _currentIndex = ref.read(initialMainTabIndexProvider);
+  }
+
+  @override
+  void dispose() {
+    _tabTransitionTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -57,20 +67,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: AnimatedOpacity(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          opacity: _pageTransitioning ? 0.72 : 1,
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            scale: _pageTransitioning ? 0.985 : 1,
-            child: IndexedStack(
-              index: _currentIndex,
-              children: _pages,
-            ),
-          ),
-        ),
+        body: _buildPageStack(),
         bottomNavigationBar: AnimatedSize(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeInOutCubic,
@@ -94,18 +91,54 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   void _selectTab(int index) {
     if (index == _currentIndex) return;
+    _tabTransitionTimer?.cancel();
     setState(() {
+      _previousIndex = _currentIndex;
       _currentIndex = index;
-      _pageTransitioning = true;
     });
-    Future<void>.delayed(const Duration(milliseconds: 140), () {
-      if (mounted) setState(() => _pageTransitioning = false);
+    _tabTransitionTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() => _previousIndex = null);
     });
     ref.read(settingsServiceProvider).saveMainTabIndex(index).catchError(
           (Object error) => debugPrint(
             '[MainShell] Error saving selected tab: $error',
           ),
         );
+  }
+
+  Widget _buildPageStack() {
+    final visibleIndexes = <int>[
+      if (_previousIndex != null) _previousIndex!,
+      _currentIndex,
+    ];
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (final index in visibleIndexes)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: index != _currentIndex,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                opacity: index == _currentIndex ? 1 : 0,
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                  offset: index == _currentIndex
+                      ? Offset.zero
+                      : const Offset(-0.018, 0),
+                  child: _pages[index],
+                ),
+              ),
+            ),
+          ),
+        for (var index = 0; index < _pages.length; index++)
+          if (!visibleIndexes.contains(index))
+            Offstage(offstage: true, child: _pages[index]),
+      ],
+    );
   }
 }
 
@@ -282,46 +315,11 @@ class KnowledgeBaseRoute extends ConsumerWidget {
 Route<dynamic>? generateAppRoute(RouteSettings settings) {
   switch (settings.name) {
     case '/knowledge-base':
-      return smoothAppRoute(
+      return smoothPageRoute(
         settings: settings,
         builder: (_) => const KnowledgeBaseRoute(),
       );
     default:
       return null;
   }
-}
-
-PageRoute<T> smoothAppRoute<T>({
-  required RouteSettings settings,
-  required WidgetBuilder builder,
-}) {
-  return PageRouteBuilder<T>(
-    settings: settings,
-    opaque: true,
-    transitionDuration: const Duration(milliseconds: 300),
-    reverseTransitionDuration: const Duration(milliseconds: 220),
-    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final eased = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return ColoredBox(
-        color: Theme.of(context).canvasColor,
-        child: ClipRect(
-          child: FadeTransition(
-            opacity: eased,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.025),
-                end: Offset.zero,
-              ).animate(eased),
-              child: child,
-            ),
-          ),
-        ),
-      );
-    },
-  );
 }
