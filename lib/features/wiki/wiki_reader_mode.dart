@@ -56,6 +56,8 @@ class WikiReaderMode {
     final background = dark ? '#0B0F14' : '#F6F3EA';
     final storySurface = dark ? '#111A24' : '#FFFDF7';
     final storyHeader = dark ? '#172230' : '#EFE8DA';
+    final componentSurface =
+        dark ? 'rgba(23, 34, 48, 0.82)' : 'rgba(255, 253, 247, 0.78)';
     final text = dark ? '#E8EDF2' : '#24211C';
     final muted = dark ? '#A7B1BA' : '#686157';
     final border = dark ? '#263241' : '#DED6C8';
@@ -82,6 +84,7 @@ $fontFaces
   --color-link--visited: $link !important;
   --background-color-base: $background !important;
   --background-color-neutral: $background !important;
+  --background-color-neutral-subtle: $storyHeader !important;
   --background-color-interactive: $controlSurface !important;
   --border-color-base: $border !important;
 }
@@ -110,14 +113,7 @@ body.$_bodyClass:not(.arklores-reader-operator-profile) dd,
 body.$_bodyClass:not(.arklores-reader-operator-profile) dt,
 body.$_bodyClass:not(.arklores-reader-operator-profile) div,
 body.$_bodyClass:not(.arklores-reader-operator-profile) span,
-body.$_bodyClass.arklores-reader-operator-profile,
-body.$_bodyClass.arklores-reader-operator-profile p,
-body.$_bodyClass.arklores-reader-operator-profile li,
-body.$_bodyClass.arklores-reader-operator-profile td,
-body.$_bodyClass.arklores-reader-operator-profile th,
-body.$_bodyClass.arklores-reader-operator-profile blockquote,
-body.$_bodyClass.arklores-reader-operator-profile dd,
-body.$_bodyClass.arklores-reader-operator-profile dt {
+body.$_bodyClass.arklores-reader-operator-profile {
   font-family: "$_fontFamily", -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif !important;
   font-size: ${baseFontSize}px !important;
   line-height: $lineHeight !important;
@@ -125,16 +121,9 @@ body.$_bodyClass.arklores-reader-operator-profile dt {
   font-variant-ligatures: common-ligatures !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile div,
-body.$_bodyClass.arklores-reader-operator-profile span {
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-}
-
-body.$_bodyClass *,
-body.$_bodyClass *::before,
-body.$_bodyClass *::after {
+body.$_bodyClass:not(.arklores-reader-operator-profile) *,
+body.$_bodyClass:not(.arklores-reader-operator-profile) *::before,
+body.$_bodyClass:not(.arklores-reader-operator-profile) *::after {
   box-sizing: border-box !important;
   text-shadow: none !important;
   box-shadow: none !important;
@@ -224,10 +213,10 @@ body.$_bodyClass .prose {
   box-sizing: border-box !important;
 }
 
-body.$_bodyClass .mw-parser-output,
-body.$_bodyClass .mw-parser-output :where(p, li, dd, dt, div, span, small, b, strong, em, label, caption),
-body.$_bodyClass #mw-content-text,
-body.$_bodyClass #mw-content-text :where(p, li, dd, dt, div, span, small, b, strong, em, label, caption) {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where(p, li, dd, dt, div, span, small, b, strong, em, label, caption),
+body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text,
+body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where(p, li, dd, dt, div, span, small, b, strong, em, label, caption) {
   color: $text !important;
 }
 
@@ -260,9 +249,6 @@ body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where(
   color: $text !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile .charinfo-container,
-body.$_bodyClass.arklores-reader-operator-profile #charinfo-wrapper,
-body.$_bodyClass.arklores-reader-operator-profile .charinfo-wrapper,
 body.$_bodyClass.arklores-reader-operator-profile #basictemplate,
 body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
   width: 100% !important;
@@ -272,31 +258,18 @@ body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
   overflow: visible !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile #charinfo-wrapper {
-  display: block !important;
-  min-width: 0 !important;
-}
-
-body.$_bodyClass.arklores-reader-operator-profile .charinfo-container {
-  overflow-x: auto !important;
-}
-
 body.$_bodyClass.arklores-reader-operator-profile #basictemplate,
 body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
-  background: $storySurface !important;
+  background: $componentSurface !important;
   color: $text !important;
   border: 1px solid $border !important;
   border-radius: 2px !important;
   box-shadow: none !important;
-}
-
-body.$_bodyClass.arklores-reader-operator-profile .equiptemplate *,
-body.$_bodyClass.arklores-reader-operator-profile #basictemplate * {
-  color: inherit !important;
+  backdrop-filter: blur(10px) saturate(118%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(118%) !important;
 }
 
 body.$_bodyClass.arklores-reader-operator-profile .equip-base-title,
-body.$_bodyClass.arklores-reader-operator-profile .equip-type-text,
 body.$_bodyClass.arklores-reader-operator-profile .equip-name-box,
 body.$_bodyClass.arklores-reader-operator-profile .equip-level-desc,
 body.$_bodyClass.arklores-reader-operator-profile .equip-task-content,
@@ -317,24 +290,11 @@ body.$_bodyClass.arklores-reader-operator-profile .equip-nofull-btn {
   border: 1px solid ${dark ? '#A65A5A' : '#A51F1F'} !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2 {
-  color: inherit !important;
-}
-
-body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2 * {
-  color: inherit !important;
-}
-
 body.$_bodyClass.arklores-reader-operator-profile .mw-collapsible-toggle,
 body.$_bodyClass.arklores-reader-operator-profile .mw-collapsible-toggle a {
   background: $controlSurface !important;
   color: $controlText !important;
   border-color: $border !important;
-}
-
-body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2,
-body.$_bodyClass.arklores-reader-operator-profile .mw-customtoggle-module-2 * {
-  background: transparent !important;
 }
 
 body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery),
@@ -374,10 +334,10 @@ body.$_bodyClass .arklores-reader-story-heading * {
   background-color: transparent !important;
 }
 
-body.$_bodyClass h1,
-body.$_bodyClass h2,
-body.$_bodyClass h3,
-body.$_bodyClass h4 {
+body.$_bodyClass:not(.arklores-reader-operator-profile) h1,
+body.$_bodyClass:not(.arklores-reader-operator-profile) h2,
+body.$_bodyClass:not(.arklores-reader-operator-profile) h3,
+body.$_bodyClass:not(.arklores-reader-operator-profile) h4 {
   color: $text !important;
   line-height: 1.28 !important;
   margin: 1.4em 0 0.65em !important;
@@ -386,57 +346,57 @@ body.$_bodyClass h4 {
   font-weight: 700 !important;
 }
 
-body.$_bodyClass h1 {
+body.$_bodyClass:not(.arklores-reader-operator-profile) h1 {
   font-size: ${(26 * fontScale).clamp(17, 35).toStringAsFixed(1)}px !important;
 }
 
-body.$_bodyClass h2 {
+body.$_bodyClass:not(.arklores-reader-operator-profile) h2 {
   font-size: ${(22 * fontScale).clamp(15, 31).toStringAsFixed(1)}px !important;
 }
 
-body.$_bodyClass h3 {
+body.$_bodyClass:not(.arklores-reader-operator-profile) h3 {
   font-size: ${(19 * fontScale).clamp(13, 27).toStringAsFixed(1)}px !important;
 }
 
-body.$_bodyClass p {
+body.$_bodyClass:not(.arklores-reader-operator-profile) p {
   margin: 0.75em 0 !important;
 }
 
-body.$_bodyClass a,
-body.$_bodyClass a * {
+body.$_bodyClass:not(.arklores-reader-operator-profile) a,
+body.$_bodyClass:not(.arklores-reader-operator-profile) a * {
   color: $link !important;
   text-decoration-thickness: 1px !important;
   text-underline-offset: 0.18em !important;
 }
 
-body.$_bodyClass img,
-body.$_bodyClass video,
-body.$_bodyClass canvas,
-body.$_bodyClass svg {
+body.$_bodyClass:not(.arklores-reader-operator-profile) img,
+body.$_bodyClass:not(.arklores-reader-operator-profile) video,
+body.$_bodyClass:not(.arklores-reader-operator-profile) canvas,
+body.$_bodyClass:not(.arklores-reader-operator-profile) svg {
   max-width: 100% !important;
   height: auto !important;
 }
 
-body.$_bodyClass figure,
-body.$_bodyClass .thumb,
-body.$_bodyClass .gallery,
-body.$_bodyClass .floatnone,
-body.$_bodyClass .image {
+body.$_bodyClass:not(.arklores-reader-operator-profile) figure,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .thumb,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .gallery,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .floatnone,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .image {
   max-width: 100% !important;
   margin: 1em auto !important;
   text-align: center !important;
 }
 
-body.$_bodyClass .thumbinner,
-body.$_bodyClass .gallerybox,
-body.$_bodyClass .gallerytext {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .thumbinner,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .gallerybox,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .gallerytext {
   background: transparent !important;
   border: 0 !important;
   color: $muted !important;
 }
 
-body.$_bodyClass table,
-body.$_bodyClass .wikitable {
+body.$_bodyClass:not(.arklores-reader-operator-profile) table,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .wikitable {
   display: block !important;
   width: 100% !important;
   max-width: 100% !important;
@@ -447,64 +407,64 @@ body.$_bodyClass .wikitable {
   border-color: $border !important;
 }
 
-body.$_bodyClass table tr,
-body.$_bodyClass .wikitable tr,
-body.$_bodyClass table tbody,
-body.$_bodyClass .wikitable tbody {
+body.$_bodyClass:not(.arklores-reader-operator-profile) table tr,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .wikitable tr,
+body.$_bodyClass:not(.arklores-reader-operator-profile) table tbody,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .wikitable tbody {
   background: transparent !important;
   color: $text !important;
 }
 
-body.$_bodyClass th,
-body.$_bodyClass .wikitable th {
+body.$_bodyClass:not(.arklores-reader-operator-profile) th,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .wikitable th {
   background: $tableHeader !important;
 }
 
-body.$_bodyClass td,
-body.$_bodyClass th,
-body.$_bodyClass .wikitable td,
-body.$_bodyClass .wikitable th {
+body.$_bodyClass:not(.arklores-reader-operator-profile) td,
+body.$_bodyClass:not(.arklores-reader-operator-profile) th,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .wikitable td,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .wikitable th {
   border: 1px solid $border !important;
   padding: 0.5em 0.65em !important;
   color: $text !important;
 }
 
-body.$_bodyClass td[style],
-body.$_bodyClass th[style],
-body.$_bodyClass td[bgcolor],
-body.$_bodyClass th[bgcolor] {
+body.$_bodyClass:not(.arklores-reader-operator-profile) td[style],
+body.$_bodyClass:not(.arklores-reader-operator-profile) th[style],
+body.$_bodyClass:not(.arklores-reader-operator-profile) td[bgcolor],
+body.$_bodyClass:not(.arklores-reader-operator-profile) th[bgcolor] {
   background: transparent !important;
   color: $text !important;
 }
 
-body.$_bodyClass .arklores-reader-table-accent {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .arklores-reader-table-accent {
   background: $storyHeader !important;
   color: $text !important;
   border-color: $border !important;
 }
 
-body.$_bodyClass .arklores-reader-table-accent * {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .arklores-reader-table-accent * {
   background-color: transparent !important;
   background-image: none !important;
   color: inherit !important;
 }
 
-body.$_bodyClass blockquote,
-body.$_bodyClass pre,
-body.$_bodyClass code {
+body.$_bodyClass:not(.arklores-reader-operator-profile) blockquote,
+body.$_bodyClass:not(.arklores-reader-operator-profile) pre,
+body.$_bodyClass:not(.arklores-reader-operator-profile) code {
   background: ${dark ? '#151E29' : '#EFE8DA'} !important;
   color: $text !important;
   border: 1px solid $border !important;
   border-radius: 2px !important;
 }
 
-body.$_bodyClass button,
-body.$_bodyClass input,
-body.$_bodyClass select,
-body.$_bodyClass textarea,
-body.$_bodyClass [role="button"],
-body.$_bodyClass .mw-collapsible-toggle,
-body.$_bodyClass .mw-collapsible-toggle a {
+body.$_bodyClass:not(.arklores-reader-operator-profile) button,
+body.$_bodyClass:not(.arklores-reader-operator-profile) input,
+body.$_bodyClass:not(.arklores-reader-operator-profile) select,
+body.$_bodyClass:not(.arklores-reader-operator-profile) textarea,
+body.$_bodyClass:not(.arklores-reader-operator-profile) [role="button"],
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-collapsible-toggle,
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-collapsible-toggle a {
   color: $controlText !important;
   background: $controlSurface !important;
   border: 1px solid $border !important;
@@ -512,7 +472,7 @@ body.$_bodyClass .mw-collapsible-toggle a {
   text-decoration: none !important;
 }
 
-body.$_bodyClass .mw-collapsible-toggle {
+body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-collapsible-toggle {
   display: inline-flex !important;
   align-items: center !important;
   min-height: 2em !important;
@@ -645,18 +605,6 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
   color: $text !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile div,
-body.$_bodyClass.arklores-reader-operator-profile span,
-body.$_bodyClass.arklores-reader-operator-profile section,
-body.$_bodyClass.arklores-reader-operator-profile article,
-body.$_bodyClass.arklores-reader-operator-profile center,
-body.$_bodyClass.arklores-reader-operator-profile ul,
-body.$_bodyClass.arklores-reader-operator-profile ol,
-body.$_bodyClass.arklores-reader-operator-profile dl {
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-}
 ''';
 
     final js = '''
@@ -769,6 +717,49 @@ body.$_bodyClass.arklores-reader-operator-profile dl {
     body.classList.add('arklores-reader-operator-profile');
   }
 
+  function setupPrtsOperatorReader() {
+    if (!body.classList.contains('arklores-reader-operator-profile')) return;
+    var html = document.documentElement;
+    if (!html) return;
+    html.dataset.arkloresReaderDark = ${dark ? "'1'" : "'0'"};
+
+    function syncPrtsTheme() {
+      var useDark = html.dataset.arkloresReaderDark === '1';
+      if (useDark) {
+        if (!html.classList.contains('skin-theme-clientpref-night')) {
+          html.classList.add('skin-theme-clientpref-night');
+          html.dataset.arkloresPrtsNight = '1';
+        }
+      } else if (html.dataset.arkloresPrtsNight === '1') {
+        html.classList.remove('skin-theme-clientpref-night');
+        delete html.dataset.arkloresPrtsNight;
+      }
+
+      var voiceRoot = document.getElementById('voice-table-root');
+      if (!voiceRoot) return;
+      if (useDark) {
+        if (!voiceRoot.classList.contains('prts-widget-dark')) {
+          voiceRoot.classList.add('prts-widget-dark');
+          voiceRoot.dataset.arkloresPrtsWidgetDark = '1';
+        }
+      } else if (voiceRoot.dataset.arkloresPrtsWidgetDark === '1') {
+        voiceRoot.classList.remove('prts-widget-dark');
+        delete voiceRoot.dataset.arkloresPrtsWidgetDark;
+      }
+    }
+
+    syncPrtsTheme();
+    if (!window.__arkloresPrtsOperatorObserver) {
+      var observer = new MutationObserver(syncPrtsTheme);
+      observer.observe(body, { childList: true, subtree: true });
+      window.__arkloresPrtsOperatorObserver = observer;
+    }
+    window.setTimeout(syncPrtsTheme, 350);
+    window.setTimeout(syncPrtsTheme, 1200);
+  }
+
+  setupPrtsOperatorReader();
+
   if (body.dataset.arkloresReaderTapHandler !== '1') {
     function isReaderChromeTapTarget(target) {
       if (!target || !target.closest) return false;
@@ -809,6 +800,10 @@ body.$_bodyClass.arklores-reader-operator-profile dl {
     }, true);
     body.dataset.arkloresReaderTapHandler = '1';
   }
+
+  // PRTS operator pages mount interactive applications, not article prose.
+  // Their own styles and scripts control fixed canvases, controls and tables.
+  if (body.classList.contains('arklores-reader-operator-profile')) return;
 
   var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
   var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
@@ -959,7 +954,29 @@ body.$_bodyClass.arklores-reader-operator-profile dl {
   if (log) log.classList.remove('arklores-prts-log-list');
   if (shell) shell.classList.remove('arklores-prts-scenario-shell-hidden');
   if (host) host.remove();
-  if (document.body) document.body.classList.remove('$_bodyClass');
+  var html = document.documentElement;
+  if (html) {
+    if (html.dataset.arkloresPrtsNight === '1') {
+      html.classList.remove('skin-theme-clientpref-night');
+      delete html.dataset.arkloresPrtsNight;
+    }
+    delete html.dataset.arkloresReaderDark;
+  }
+  var voiceRoot = document.getElementById('voice-table-root');
+  if (voiceRoot && voiceRoot.dataset.arkloresPrtsWidgetDark === '1') {
+    voiceRoot.classList.remove('prts-widget-dark');
+    delete voiceRoot.dataset.arkloresPrtsWidgetDark;
+  }
+  if (window.__arkloresPrtsOperatorObserver) {
+    window.__arkloresPrtsOperatorObserver.disconnect();
+    delete window.__arkloresPrtsOperatorObserver;
+  }
+  if (document.body) {
+    document.body.classList.remove(
+      '$_bodyClass',
+      'arklores-reader-operator-profile',
+    );
+  }
   var style = document.getElementById('$_styleId');
   if (style) style.remove();
 })();
