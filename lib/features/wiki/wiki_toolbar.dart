@@ -118,7 +118,7 @@ class WikiToolbar extends ConsumerWidget {
 }
 
 /// A single icon button inside the expandable toolbar.
-class _TrayButton extends StatelessWidget {
+class _TrayButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback? onTap;
   final AppThemeTokens theme;
@@ -134,18 +134,54 @@ class _TrayButton extends StatelessWidget {
   });
 
   @override
+  State<_TrayButton> createState() => _TrayButtonState();
+}
+
+class _TrayButtonState extends State<_TrayButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (mounted && _pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = activeColor ?? theme.textPrimary;
+    final color = widget.activeColor ?? widget.theme.textPrimary;
 
     return SizedBox(
       height: 44,
-      child: IconButton(
-        icon: Icon(icon, size: 20),
-        color: color,
-        onPressed: onTap,
-        padding: EdgeInsets.zero,
-        splashRadius: 18,
-        tooltip: tooltip,
+      child: Tooltip(
+        message: widget.tooltip ?? '',
+        preferBelow: false,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
+          onTap: () {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) widget.onTap?.call();
+            });
+          },
+          child: AnimatedScale(
+            scale: _pressed ? 0.9 : 1,
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 110),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: _pressed
+                    ? widget.theme.accentPrimary.withValues(alpha: 0.14)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Icon(widget.icon, size: 20, color: color),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,6 +56,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   bool _trayExpanded = false;
   bool _readerControlsVisible = true;
   bool _restoredState = false;
+  Timer? _readerControlsTimer;
 
   @override
   void initState() {
@@ -71,6 +74,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   @override
   void dispose() {
+    _readerControlsTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _persistBrowsingState();
     ref.read(wikiReaderFullscreenProvider.notifier).state = false;
@@ -292,6 +296,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   void _setReaderMode(bool enabled) {
+    _readerControlsTimer?.cancel();
     setState(() {
       _isReaderMode = enabled;
       if (enabled) {
@@ -306,11 +311,35 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
           ),
         );
     _applyAppearanceToControllers();
+    if (enabled) _scheduleReaderControlsHide();
   }
 
   void _toggleReaderControls() {
     if (!_isReaderMode) return;
-    setState(() => _readerControlsVisible = !_readerControlsVisible);
+    if (_readerControlsVisible) {
+      _readerControlsTimer?.cancel();
+      setState(() => _readerControlsVisible = false);
+      return;
+    }
+    setState(() => _readerControlsVisible = true);
+    _scheduleReaderControlsHide();
+  }
+
+  void _scheduleReaderControlsHide() {
+    _readerControlsTimer?.cancel();
+    if (!_isReaderMode || !_readerControlsVisible) return;
+    _readerControlsTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted || !_isReaderMode) return;
+      setState(() => _readerControlsVisible = false);
+    });
+  }
+
+  void _runReaderToolbarAction(VoidCallback action) {
+    _scheduleReaderControlsHide();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isReaderMode) return;
+      action();
+    });
   }
 
   void _decreaseReaderFont() {
@@ -732,10 +761,16 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               _ReaderToolbar(
                 visible: _readerControlsVisible,
                 isDarkMode: _isDarkMode,
-                onToggleDarkMode: _toggleDarkMode,
-                onDecreaseReaderFont: _decreaseReaderFont,
-                onIncreaseReaderFont: _increaseReaderFont,
-                onHide: () => setState(() => _readerControlsVisible = false),
+                onToggleDarkMode: () =>
+                    _runReaderToolbarAction(_toggleDarkMode),
+                onDecreaseReaderFont: () =>
+                    _runReaderToolbarAction(_decreaseReaderFont),
+                onIncreaseReaderFont: () =>
+                    _runReaderToolbarAction(_increaseReaderFont),
+                onHide: () {
+                  _readerControlsTimer?.cancel();
+                  setState(() => _readerControlsVisible = false);
+                },
                 onExitReader: () => _setReaderMode(false),
               )
             else
@@ -1212,7 +1247,7 @@ class _ReaderToolbar extends ConsumerWidget {
   }
 }
 
-class _ReaderToolButton extends StatelessWidget {
+class _ReaderToolButton extends StatefulWidget {
   const _ReaderToolButton({
     required this.theme,
     required this.onTap,
@@ -1226,20 +1261,61 @@ class _ReaderToolButton extends StatelessWidget {
   final String? label;
 
   @override
+  State<_ReaderToolButton> createState() => _ReaderToolButtonState();
+}
+
+class _ReaderToolButtonState extends State<_ReaderToolButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (mounted && _pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 54,
       height: 44,
-      child: IconButton(
-        onPressed: onTap,
-        color: theme.textPrimary,
-        splashRadius: 22,
-        icon: icon != null
-            ? Icon(icon, size: 22)
-            : Text(
-                label ?? '',
-                style: theme.titleFont.copyWith(fontSize: 18),
+      child: Semantics(
+        button: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
+          onTap: () {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) widget.onTap();
+            });
+          },
+          child: AnimatedScale(
+            scale: _pressed ? 0.9 : 1,
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 110),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: _pressed
+                    ? widget.theme.accentPrimary.withValues(alpha: 0.14)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: Center(
+                child: widget.icon != null
+                    ? Icon(
+                        widget.icon,
+                        size: 22,
+                        color: widget.theme.textPrimary,
+                      )
+                    : Text(
+                        widget.label ?? '',
+                        style: widget.theme.titleFont.copyWith(fontSize: 18),
+                      ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1351,8 +1427,14 @@ class _ExpandableTray extends ConsumerWidget {
                 color: theme.textPrimary,
                 onPressed: onToggle,
                 padding: EdgeInsets.zero,
-                splashRadius: 22,
                 tooltip: expanded ? 'Close' : 'Tools',
+                style: IconButton.styleFrom(
+                  splashFactory: NoSplash.splashFactory,
+                  overlayColor: theme.accentPrimary.withValues(alpha: 0.12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
               ),
             ),
           ],
