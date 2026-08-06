@@ -823,51 +823,105 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
 
   setupPrtsOperatorReader();
 
-  function isReaderBlankSurfaceTap(event) {
-    if (!event || event.defaultPrevented || event.button > 0) return false;
-    var target = event.target;
-    if (!target || !target.matches || !target.closest) return false;
-    if (target === document.documentElement) return true;
-    var contentRoot = target.closest(
-      'body, main, article, #content, .mw-body, #mw-content-text, .mw-parser-output, .content, .page, .prose'
+  // A document-level click cannot reliably distinguish empty space from a
+  // custom wiki control: many PRTS widgets handle clicks on an ancestor or
+  // on a plain div. Use a deliberate two-finger tap instead.
+  if (window.__arkloresReaderClickHandler) {
+    document.removeEventListener(
+      'click',
+      window.__arkloresReaderClickHandler,
+      true,
     );
-    if (!contentRoot) return false;
-
-    // A blank area resolves to its layout root. Content descendants, including
-    // unannotated div/span controls used by PRTS and MediaWiki, never qualify.
-    if (target !== document.body &&
-        target !== document.documentElement &&
-        target !== contentRoot) {
-      return false;
-    }
-
-    if (!target.matches(
-      'body, html, main, article, #content, .mw-body, #mw-content-text, .mw-parser-output, .content, .page, .prose'
-    )) {
-      return false;
-    }
-
-    return true;
+    delete window.__arkloresReaderClickHandler;
+  }
+  if (window.__arkloresReaderGestureHandlers) {
+    document.removeEventListener(
+      'touchstart',
+      window.__arkloresReaderGestureHandlers.start,
+      true,
+    );
+    document.removeEventListener(
+      'touchmove',
+      window.__arkloresReaderGestureHandlers.move,
+      true,
+    );
+    document.removeEventListener(
+      'touchend',
+      window.__arkloresReaderGestureHandlers.end,
+      true,
+    );
   }
 
-  if (window.__arkloresReaderTapHandler) {
-    document.removeEventListener('click', window.__arkloresReaderTapHandler);
-  }
-  window.__arkloresReaderTapHandler = function(event) {
-    if (!isReaderBlankSurfaceTap(event)) return;
-    try {
-      var selected = window.getSelection ? window.getSelection().toString() : '';
-      if (selected && selected.trim()) return;
-    } catch (e) {}
-    window.setTimeout(function() {
-      if (event.defaultPrevented) return;
-      try {
-        window.flutter_inappwebview.callHandler('arkloresReaderTap');
-      } catch (e) {}
-    }, 0);
+  var twoFingerGesture = {
+    active: false,
+    valid: true,
+    startedAt: 0,
+    centerX: 0,
+    centerY: 0,
+    distance: 0,
   };
-  document.addEventListener('click', window.__arkloresReaderTapHandler);
-  body.dataset.arkloresReaderTapHandler = '1';
+
+  function touchCenter(touches) {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }
+
+  function touchDistance(touches) {
+    var dx = touches[0].clientX - touches[1].clientX;
+    var dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function onReaderGesture() {
+    try {
+      window.flutter_inappwebview.callHandler('arkloresReaderTap');
+    } catch (e) {}
+  }
+
+  function onTwoFingerStart(event) {
+    if (event.touches.length !== 2) return;
+    var center = touchCenter(event.touches);
+    twoFingerGesture.active = true;
+    twoFingerGesture.valid = true;
+    twoFingerGesture.startedAt = Date.now();
+    twoFingerGesture.centerX = center.x;
+    twoFingerGesture.centerY = center.y;
+    twoFingerGesture.distance = touchDistance(event.touches);
+  }
+
+  function onTwoFingerMove(event) {
+    if (!twoFingerGesture.active || event.touches.length < 2) return;
+    var center = touchCenter(event.touches);
+    var moved = Math.sqrt(
+      Math.pow(center.x - twoFingerGesture.centerX, 2) +
+      Math.pow(center.y - twoFingerGesture.centerY, 2),
+    );
+    var pinched = Math.abs(
+      touchDistance(event.touches) - twoFingerGesture.distance,
+    );
+    if (moved > 28 || pinched > 28) twoFingerGesture.valid = false;
+  }
+
+  function onTwoFingerEnd(event) {
+    if (!twoFingerGesture.active || event.touches.length !== 0) return;
+    var elapsed = Date.now() - twoFingerGesture.startedAt;
+    var shouldToggle = twoFingerGesture.valid && elapsed <= 450;
+    twoFingerGesture.active = false;
+    if (shouldToggle) onReaderGesture();
+  }
+
+  var gestureHandlers = {
+    start: onTwoFingerStart,
+    move: onTwoFingerMove,
+    end: onTwoFingerEnd,
+  };
+  document.addEventListener('touchstart', gestureHandlers.start, true);
+  document.addEventListener('touchmove', gestureHandlers.move, true);
+  document.addEventListener('touchend', gestureHandlers.end, true);
+  window.__arkloresReaderGestureHandlers = gestureHandlers;
+  body.dataset.arkloresReaderGestureHandler = '1';
 
   // PRTS operator pages mount interactive applications, not article prose.
   // Their own styles and scripts control fixed canvases, controls and tables.
@@ -1039,9 +1093,31 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
     window.__arkloresPrtsOperatorObserver.disconnect();
     delete window.__arkloresPrtsOperatorObserver;
   }
-  if (window.__arkloresReaderTapHandler) {
-    document.removeEventListener('click', window.__arkloresReaderTapHandler);
-    delete window.__arkloresReaderTapHandler;
+  if (window.__arkloresReaderClickHandler) {
+    document.removeEventListener(
+      'click',
+      window.__arkloresReaderClickHandler,
+      true,
+    );
+    delete window.__arkloresReaderClickHandler;
+  }
+  if (window.__arkloresReaderGestureHandlers) {
+    document.removeEventListener(
+      'touchstart',
+      window.__arkloresReaderGestureHandlers.start,
+      true,
+    );
+    document.removeEventListener(
+      'touchmove',
+      window.__arkloresReaderGestureHandlers.move,
+      true,
+    );
+    document.removeEventListener(
+      'touchend',
+      window.__arkloresReaderGestureHandlers.end,
+      true,
+    );
+    delete window.__arkloresReaderGestureHandlers;
   }
   if (document.body) {
     document.body.classList.remove(
