@@ -387,7 +387,89 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     await WikiReaderMode.remove(controller);
     await WikiDarkMode.setEnabled(controller, _isDarkMode);
     await _applyPageScale(controller);
+    await _applyPrtsOperatorResponsiveLayout(controller);
     await _applyPrtsScenarioFit(controller);
+  }
+
+  Future<void> _applyPrtsOperatorResponsiveLayout(
+    InAppWebViewController controller,
+  ) async {
+    const js = '''
+(function() {
+  var styleId = 'arklores-prts-paradox-mobile-fit';
+  if (!document.getElementById(styleId)) {
+    var style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .arklores-prts-paradox-table {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+      }
+      .arklores-prts-paradox-table :where(table, tbody, tr, td, th) {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+      .arklores-prts-paradox-table img {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+      @media (max-width: 600px) {
+        .arklores-prts-paradox-table .nomobile { display: none !important; }
+        .arklores-prts-paradox-table .nodesktop {
+          display: table !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          table-layout: fixed !important;
+        }
+      }
+      @media (min-width: 601px) {
+        .arklores-prts-paradox-table .nodesktop { display: none !important; }
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function findHeading() {
+    var headings = document.querySelectorAll('#mw-content-text h2, .mw-parser-output h2');
+    for (var i = 0; i < headings.length; i++) {
+      var heading = headings[i];
+      var id = heading.querySelector('[id="悖论模拟"]');
+      if (id || (heading.textContent || '').trim() === '悖论模拟') return heading;
+    }
+    return null;
+  }
+
+  function markParadoxTables() {
+    var heading = findHeading();
+    if (!heading) return;
+    var node = heading.nextElementSibling;
+    while (node && node.tagName !== 'H2') {
+      var tables = node.tagName === 'TABLE' ? [node] : [];
+      if (node.querySelectorAll) {
+        var nested = node.querySelectorAll('table');
+        for (var i = 0; i < nested.length; i++) tables.push(nested[i]);
+      }
+      for (var j = 0; j < tables.length; j++) {
+        tables[j].classList.add('arklores-prts-paradox-table');
+      }
+      node = node.nextElementSibling;
+    }
+  }
+
+  markParadoxTables();
+  window.setTimeout(markParadoxTables, 500);
+})();
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // PRTS operator tables are enhanced only when the page exposes them.
+    }
   }
 
   Future<void> _applyPrtsScenarioFit(
@@ -837,6 +919,9 @@ class _WikiTabViewState extends State<_WikiTabView> {
   InAppWebViewController? _controller;
   String? _loadError;
   double? _edgeDragStartX;
+  bool _isPreparingWebView = true;
+  bool _hasLoadedPage = false;
+  int _appearanceRequest = 0;
 
   @override
   void didUpdateWidget(covariant _WikiTabView oldWidget) {
@@ -846,8 +931,33 @@ class _WikiTabViewState extends State<_WikiTabView> {
         oldWidget.readerDark != widget.readerDark ||
         oldWidget.readerFontScale != widget.readerFontScale ||
         oldWidget.isDarkMode != widget.isDarkMode) {
-      _applyAppearance();
+      if (_hasLoadedPage) {
+        _prepareWebViewAppearance();
+      }
     }
+  }
+
+  void _showLoadingOverlay() {
+    _appearanceRequest++;
+    if (mounted && !_isPreparingWebView) {
+      setState(() => _isPreparingWebView = true);
+    }
+  }
+
+  Future<void> _prepareWebViewAppearance() async {
+    final request = ++_appearanceRequest;
+    if (mounted && !_isPreparingWebView) {
+      setState(() => _isPreparingWebView = true);
+    }
+
+    try {
+      await _applyAppearance();
+    } catch (error) {
+      debugPrint('[WikiBrowser] Error applying WebView appearance: $error');
+    }
+
+    if (!mounted || request != _appearanceRequest) return;
+    setState(() => _isPreparingWebView = false);
   }
 
   Future<void> _applyAppearance() async {
@@ -885,8 +995,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
             domStorageEnabled: true,
             useWideViewPort: true,
             supportZoom: true,
-            // Transparent background to avoid white flash on dark themes.
-            transparentBackground: true,
+            transparentBackground: false,
           ),
           onWebViewCreated: (controller) {
             _controller = controller;
@@ -900,12 +1009,13 @@ class _WikiTabViewState extends State<_WikiTabView> {
             widget.onControllerCreated(widget.index, controller);
           },
           onLoadStart: (controller, url) {
-            if (_loadError != null) {
-              setState(() => _loadError = null);
-            }
+            _hasLoadedPage = false;
+            _showLoadingOverlay();
+            if (_loadError != null) setState(() => _loadError = null);
           },
           onLoadStop: (controller, url) async {
-            await _applyAppearance();
+            _hasLoadedPage = true;
+            await _prepareWebViewAppearance();
           },
           onTitleChanged: (controller, title) {
             widget.onTitleChanged(widget.index, title);
@@ -923,12 +1033,37 @@ class _WikiTabViewState extends State<_WikiTabView> {
             if (!isMainFrame) return;
             setState(() {
               _loadError = _friendlyWebViewError(error.description);
+              _isPreparingWebView = false;
             });
+            _appearanceRequest++;
           },
         ),
         if (!widget.isReaderMode) _buildEdgeGestureLayer(),
+        if (_isPreparingWebView) _buildLoadingOverlay(),
         if (_loadError != null) _buildErrorOverlay(context),
       ],
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return AbsorbPointer(
+      child: ColoredBox(
+        color: widget.isReaderMode
+            ? (widget.readerDark
+                ? const Color(0xFF0B0F14)
+                : const Color(0xFFF6F3EA))
+            : widget.theme.bgPrimary,
+        child: Center(
+          child: SizedBox(
+            height: 28,
+            width: 28,
+            child: CircularProgressIndicator(
+              color: widget.theme.accentPrimary,
+              strokeWidth: 2.5,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

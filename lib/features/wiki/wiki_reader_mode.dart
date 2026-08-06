@@ -360,6 +360,53 @@ body.$_bodyClass.arklores-reader-operator-profile #mw-content-text #voice-table-
   border-color: $border !important;
 }
 
+body.$_bodyClass.arklores-reader-operator-profile
+  #mw-content-text
+  .arklores-prts-paradox-table {
+  display: table !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+  overflow: visible !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile
+  #mw-content-text
+  .arklores-prts-paradox-table
+  :where(table, tbody, tr, td, th) {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile
+  #mw-content-text
+  .arklores-prts-paradox-table
+  img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile.arklores-prts-paradox-mobile
+  #mw-content-text
+  .nomobile {
+  display: none !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile.arklores-prts-paradox-mobile
+  #mw-content-text
+  .nodesktop {
+  display: table !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile.arklores-prts-paradox-desktop
+  #mw-content-text
+  .nodesktop {
+  display: none !important;
+}
+
 body.$_bodyClass:not(.arklores-reader-operator-profile) .mw-parser-output :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery),
 body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where([style*="width"], [style*="margin"]):not(img):not(video):not(canvas):not(svg):not(table):not(.thumb):not(.gallery) {
   width: auto !important;
@@ -786,6 +833,31 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
     if (!html) return;
     html.dataset.arkloresReaderDark = ${dark ? "'1'" : "'0'"};
 
+    function setupPrtsParadoxLayout() {
+      var marker = document.querySelector(
+        '#mw-content-text h2 span#悖论模拟, .mw-parser-output h2 span#悖论模拟',
+      );
+      if (!marker || !marker.closest) return;
+      var heading = marker.closest('h2');
+      if (!heading) return;
+      var node = heading.nextElementSibling;
+      while (node && node.tagName !== 'H2') {
+        var tables = [];
+        if (node.tagName === 'TABLE') tables.push(node);
+        var nested = node.querySelectorAll
+            ? node.querySelectorAll('table')
+            : [];
+        for (var i = 0; i < nested.length; i++) tables.push(nested[i]);
+        for (var j = 0; j < tables.length; j++) {
+          tables[j].classList.add('arklores-prts-paradox-table');
+        }
+        node = node.nextElementSibling;
+      }
+      var mobile = window.innerWidth <= 600;
+      body.classList.toggle('arklores-prts-paradox-mobile', mobile);
+      body.classList.toggle('arklores-prts-paradox-desktop', !mobile);
+    }
+
     function syncPrtsTheme() {
       var useDark = html.dataset.arkloresReaderDark === '1';
       if (useDark) {
@@ -799,16 +871,19 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       }
 
       var voiceRoot = document.getElementById('voice-table-root');
-      if (!voiceRoot) return;
-      if (useDark) {
+      if (voiceRoot && useDark) {
         if (!voiceRoot.classList.contains('prts-widget-dark')) {
           voiceRoot.classList.add('prts-widget-dark');
           voiceRoot.dataset.arkloresPrtsWidgetDark = '1';
         }
-      } else if (voiceRoot.dataset.arkloresPrtsWidgetDark === '1') {
+      } else if (
+        voiceRoot &&
+        voiceRoot.dataset.arkloresPrtsWidgetDark === '1'
+      ) {
         voiceRoot.classList.remove('prts-widget-dark');
         delete voiceRoot.dataset.arkloresPrtsWidgetDark;
       }
+      setupPrtsParadoxLayout();
     }
 
     syncPrtsTheme();
@@ -816,6 +891,10 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       var observer = new MutationObserver(syncPrtsTheme);
       observer.observe(body, { childList: true, subtree: true });
       window.__arkloresPrtsOperatorObserver = observer;
+    }
+    if (!html.dataset.arkloresPrtsParadoxResize) {
+      window.addEventListener('resize', setupPrtsParadoxLayout, { passive: true });
+      html.dataset.arkloresPrtsParadoxResize = '1';
     }
     window.setTimeout(syncPrtsTheme, 350);
     window.setTimeout(syncPrtsTheme, 1200);
@@ -1102,6 +1181,8 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
     document.body.classList.remove(
       '$_bodyClass',
       'arklores-reader-operator-profile',
+      'arklores-prts-paradox-mobile',
+      'arklores-prts-paradox-desktop',
     );
   }
   var style = document.getElementById('$_styleId');
