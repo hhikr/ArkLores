@@ -15,7 +15,7 @@ import '../ai/wiki_ai_context.dart';
 import '../settings/settings_service.dart';
 import 'bookmark_page.dart';
 import 'bookmark_service.dart' show Bookmark;
-import 'wiki_dark_mode.dart';
+import 'wiki_appearance.dart';
 import 'wiki_reader_mode.dart';
 import 'wiki_toolbar.dart';
 
@@ -965,7 +965,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
     if (controller == null) return;
 
     if (widget.isReaderMode) {
-      await WikiDarkMode.remove(controller);
+      await WikiAppearance.remove(controller);
       await _resetPageScale(controller);
       await WikiReaderMode.inject(
         controller,
@@ -976,7 +976,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
     }
 
     await WikiReaderMode.remove(controller);
-    await WikiDarkMode.setEnabled(
+    await WikiAppearance.setEnabled(
       controller,
       widget.isDarkMode,
       dark: widget.isDarkMode,

@@ -1,10 +1,10 @@
 import 'package:arklores/features/wiki/wiki_appearance_palette.dart';
-import 'package:arklores/features/wiki/wiki_dark_mode.dart';
+import 'package:arklores/features/wiki/wiki_appearance.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('wiki appearance uses semantic colors instead of page inversion', () {
-    final css = WikiDarkMode.cssForTesting();
+    final css = WikiAppearance.cssForTesting();
 
     expect(css, isNot(contains('filter: invert')));
     expect(css, contains('--arklores-page-bg'));
@@ -14,7 +14,7 @@ void main() {
 
   test('rendered media and simulators are protected from appearance changes',
       () {
-    final css = WikiDarkMode.cssForTesting();
+    final css = WikiAppearance.cssForTesting();
 
     for (final selector in [
       'img',

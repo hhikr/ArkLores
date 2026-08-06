@@ -10,8 +10,8 @@ import 'wiki_appearance_palette.dart';
 /// canvas, SVG, iframes, game simulators, or nested compositing. This
 /// implementation only changes semantic page surfaces and text, while
 /// explicitly leaving rendered media and interactive widgets untouched.
-class WikiDarkMode {
-  WikiDarkMode._();
+class WikiAppearance {
+  WikiAppearance._();
 
   @visibleForTesting
   static String cssForTesting() => _css();
@@ -128,20 +128,11 @@ html[data-arklores-appearance] :where(
   filter: none !important;
 }
 
-html[data-arklores-appearance] :where(
-  img,
-  video,
-  canvas,
-  svg,
-  iframe
-) {
-  background-color: transparent !important;
-}
-
 html[data-arklores-appearance] .arklores-reader-mode,
 html[data-arklores-appearance] #arklores-prts-scenario-reader {
   filter: none !important;
 }
+
 ''';
 
   static const _applyScript = r'''
@@ -224,4 +215,28 @@ String jsonString(String value) {
       .replaceAll('\r', '\\r')
       .replaceAll('\n', '\\n');
   return '`$escaped`';
+}
+
+/// Compatibility facade for older feature code.
+@Deprecated('Use WikiAppearance instead.')
+class WikiDarkMode {
+  WikiDarkMode._();
+
+  static String cssForTesting() => WikiAppearance.cssForTesting();
+
+  static Future<void> inject(
+    InAppWebViewController controller, {
+    required bool dark,
+  }) =>
+      WikiAppearance.inject(controller, dark: dark);
+
+  static Future<void> remove(InAppWebViewController controller) =>
+      WikiAppearance.remove(controller);
+
+  static Future<void> setEnabled(
+    InAppWebViewController controller,
+    bool enabled, {
+    bool dark = false,
+  }) =>
+      WikiAppearance.setEnabled(controller, enabled, dark: dark);
 }
