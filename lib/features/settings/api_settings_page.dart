@@ -92,7 +92,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     ref.watch(apiConfigProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: theme.bgPrimary,
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(
