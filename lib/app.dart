@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -28,8 +26,9 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
-  int? _previousIndex;
-  Timer? _tabTransitionTimer;
+  bool _pageTransitioning = false;
+  bool _pageRevealActive = false;
+  int _pageRevealToken = 0;
 
   final List<Widget> _pages = const [
     WikiBrowserPage(),
@@ -42,12 +41,6 @@ class _MainShellState extends ConsumerState<MainShell> {
   void initState() {
     super.initState();
     _currentIndex = ref.read(initialMainTabIndexProvider);
-  }
-
-  @override
-  void dispose() {
-    _tabTransitionTimer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -67,7 +60,16 @@ class _MainShellState extends ConsumerState<MainShell> {
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: _buildPageStack(),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            IndexedStack(
+              index: _currentIndex,
+              children: _pages,
+            ),
+            _buildPageTransitionOverlay(theme),
+          ],
+        ),
         bottomNavigationBar: AnimatedSize(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeInOutCubic,
@@ -91,14 +93,18 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   void _selectTab(int index) {
     if (index == _currentIndex) return;
-    _tabTransitionTimer?.cancel();
     setState(() {
-      _previousIndex = _currentIndex;
       _currentIndex = index;
+      _pageTransitioning = true;
+      _pageRevealActive = false;
     });
-    _tabTransitionTimer = Timer(const Duration(milliseconds: 300), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() => _previousIndex = null);
+      setState(() {
+        _pageTransitioning = false;
+        _pageRevealActive = true;
+        _pageRevealToken++;
+      });
     });
     ref.read(settingsServiceProvider).saveMainTabIndex(index).catchError(
           (Object error) => debugPrint(
@@ -107,30 +113,34 @@ class _MainShellState extends ConsumerState<MainShell> {
         );
   }
 
-  Widget _buildPageStack() {
-    final visibleIndexes = <int>[
-      if (_previousIndex != null) _previousIndex!,
-      _currentIndex,
-    ];
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        for (final index in visibleIndexes)
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: index != _currentIndex,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                opacity: index == _currentIndex ? 1 : 0,
-                child: _pages[index],
-              ),
-            ),
-          ),
-        for (var index = 0; index < _pages.length; index++)
-          if (!visibleIndexes.contains(index))
-            Offstage(offstage: true, child: _pages[index]),
-      ],
+  Widget _buildPageTransitionOverlay(AppThemeTokens theme) {
+    if (_pageTransitioning) {
+      return Positioned.fill(
+        child: IgnorePointer(
+          child: ColoredBox(color: theme.bgPrimary),
+        ),
+      );
+    }
+    if (!_pageRevealActive) return const SizedBox.shrink();
+
+    final token = _pageRevealToken;
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey(token),
+          tween: Tween(begin: 1, end: 0),
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          onEnd: () {
+            if (!mounted || token != _pageRevealToken) return;
+            setState(() => _pageRevealActive = false);
+          },
+          builder: (context, opacity, child) {
+            return Opacity(opacity: opacity, child: child);
+          },
+          child: ColoredBox(color: theme.bgPrimary),
+        ),
+      ),
     );
   }
 }
