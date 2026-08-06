@@ -732,6 +732,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               _ReaderToolbar(
                 visible: _readerControlsVisible,
                 isDarkMode: _isDarkMode,
+                onHide: _toggleReaderControls,
                 onToggleDarkMode: _toggleDarkMode,
                 onDecreaseReaderFont: _decreaseReaderFont,
                 onIncreaseReaderFont: _increaseReaderFont,
@@ -1123,6 +1124,7 @@ class _ReaderToolbar extends ConsumerWidget {
   const _ReaderToolbar({
     required this.visible,
     required this.isDarkMode,
+    required this.onHide,
     required this.onToggleDarkMode,
     required this.onDecreaseReaderFont,
     required this.onIncreaseReaderFont,
@@ -1131,6 +1133,7 @@ class _ReaderToolbar extends ConsumerWidget {
 
   final bool visible;
   final bool isDarkMode;
+  final VoidCallback onHide;
   final VoidCallback onToggleDarkMode;
   final VoidCallback onDecreaseReaderFont;
   final VoidCallback onIncreaseReaderFont;
@@ -1172,6 +1175,12 @@ class _ReaderToolbar extends ConsumerWidget {
                     children: [
                       _ReaderToolButton(
                         theme: theme,
+                        icon: Icons.keyboard_arrow_down_rounded,
+                        onTap: onHide,
+                        tooltip: 'Hide reader controls',
+                      ),
+                      _ReaderToolButton(
+                        theme: theme,
                         icon: isDarkMode
                             ? Icons.light_mode_rounded
                             : Icons.dark_mode_rounded,
@@ -1210,12 +1219,14 @@ class _ReaderToolButton extends StatelessWidget {
     required this.onTap,
     this.icon,
     this.label,
+    this.tooltip,
   });
 
   final AppThemeTokens theme;
   final VoidCallback onTap;
   final IconData? icon;
   final String? label;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -1226,6 +1237,7 @@ class _ReaderToolButton extends StatelessWidget {
         onPressed: onTap,
         color: theme.textPrimary,
         splashRadius: 22,
+        tooltip: tooltip,
         icon: icon != null
             ? Icon(icon, size: 22)
             : Text(

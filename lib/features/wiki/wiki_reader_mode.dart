@@ -823,46 +823,51 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
 
   setupPrtsOperatorReader();
 
-  if (body.dataset.arkloresReaderTapHandler !== '1') {
-    function isReaderChromeTapTarget(target) {
-      if (!target || !target.closest) return false;
-      var interactive = target.closest('a, button, input, select, textarea, label, summary, details, audio, video, [controls], [role="button"], [role="slider"], [onclick], [href], .mw-collapsible-toggle, .mw-collapsible-toggle *');
-      if (interactive) return true;
+  function isReaderBlankSurfaceTap(event) {
+    if (!event || event.defaultPrevented || event.button > 0) return false;
+    var target = event.target;
+    if (!target || !target.matches || !target.closest) return false;
+    if (target === document.documentElement) return true;
+    var contentRoot = target.closest(
+      'body, main, article, #content, .mw-body, #mw-content-text, .mw-parser-output, .content, .page, .prose'
+    );
+    if (!contentRoot) return false;
 
-      var el = target;
-      var steps = 0;
-      while (el && el !== document.body && steps < 8) {
-        var haystack = [
-          el.className && typeof el.className === 'string' ? el.className : '',
-          el.id || '',
-          el.getAttribute ? (el.getAttribute('aria-label') || '') : '',
-          el.getAttribute ? (el.getAttribute('title') || '') : '',
-          el.getAttribute ? (el.getAttribute('data-title') || '') : '',
-          el.getAttribute ? (el.getAttribute('data-action') || '') : '',
-          el.getAttribute ? (el.getAttribute('data-mw') || '') : ''
-        ].join(' ').toLowerCase();
-        if (/(audio|voice|sound|media|play|pause|播放|暂停|语音|音频)/.test(haystack)) {
-          return true;
-        }
-        el = el.parentElement;
-        steps++;
-      }
+    // A blank area resolves to its layout root. Content descendants, including
+    // unannotated div/span controls used by PRTS and MediaWiki, never qualify.
+    if (target !== document.body &&
+        target !== document.documentElement &&
+        target !== contentRoot) {
       return false;
     }
 
-    document.addEventListener('click', function(event) {
-      var target = event.target;
-      if (isReaderChromeTapTarget(target)) return;
-      try {
-        var selected = window.getSelection ? window.getSelection().toString() : '';
-        if (selected && selected.trim()) return;
-      } catch (e) {}
+    if (!target.matches(
+      'body, html, main, article, #content, .mw-body, #mw-content-text, .mw-parser-output, .content, .page, .prose'
+    )) {
+      return false;
+    }
+
+    return true;
+  }
+
+  if (window.__arkloresReaderTapHandler) {
+    document.removeEventListener('click', window.__arkloresReaderTapHandler);
+  }
+  window.__arkloresReaderTapHandler = function(event) {
+    if (!isReaderBlankSurfaceTap(event)) return;
+    try {
+      var selected = window.getSelection ? window.getSelection().toString() : '';
+      if (selected && selected.trim()) return;
+    } catch (e) {}
+    window.setTimeout(function() {
+      if (event.defaultPrevented) return;
       try {
         window.flutter_inappwebview.callHandler('arkloresReaderTap');
       } catch (e) {}
-    }, true);
-    body.dataset.arkloresReaderTapHandler = '1';
-  }
+    }, 0);
+  };
+  document.addEventListener('click', window.__arkloresReaderTapHandler);
+  body.dataset.arkloresReaderTapHandler = '1';
 
   // PRTS operator pages mount interactive applications, not article prose.
   // Their own styles and scripts control fixed canvases, controls and tables.
@@ -1033,6 +1038,10 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
   if (window.__arkloresPrtsOperatorObserver) {
     window.__arkloresPrtsOperatorObserver.disconnect();
     delete window.__arkloresPrtsOperatorObserver;
+  }
+  if (window.__arkloresReaderTapHandler) {
+    document.removeEventListener('click', window.__arkloresReaderTapHandler);
+    delete window.__arkloresReaderTapHandler;
   }
   if (document.body) {
     document.body.classList.remove(
