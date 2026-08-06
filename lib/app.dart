@@ -30,6 +30,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
   int? _previousIndex;
   Timer? _tabTransitionTimer;
+  bool _pageEntering = false;
 
   final List<Widget> _pages = const [
     WikiBrowserPage(),
@@ -95,6 +96,10 @@ class _MainShellState extends ConsumerState<MainShell> {
     setState(() {
       _previousIndex = _currentIndex;
       _currentIndex = index;
+      _pageEntering = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _pageEntering = false);
     });
     _tabTransitionTimer = Timer(const Duration(milliseconds: 300), () {
       if (!mounted) return;
@@ -119,18 +124,13 @@ class _MainShellState extends ConsumerState<MainShell> {
           Positioned.fill(
             child: IgnorePointer(
               ignoring: index != _currentIndex,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 260),
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 280),
                 curve: Curves.easeOutCubic,
-                opacity: index == _currentIndex ? 1 : 0,
-                child: AnimatedSlide(
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
-                  offset: index == _currentIndex
-                      ? Offset.zero
-                      : const Offset(-0.018, 0),
-                  child: _pages[index],
-                ),
+                offset: index == _currentIndex
+                    ? (_pageEntering ? const Offset(0.035, 0) : Offset.zero)
+                    : const Offset(-0.018, 0),
+                child: _pages[index],
               ),
             ),
           ),

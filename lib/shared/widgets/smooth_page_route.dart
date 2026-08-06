@@ -19,15 +19,12 @@ PageRoute<T> smoothPageRoute<T>({
       return ColoredBox(
         color: Theme.of(context).canvasColor,
         child: ClipRect(
-          child: FadeTransition(
-            opacity: eased,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.025),
-                end: Offset.zero,
-              ).animate(eased),
-              child: child,
-            ),
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.025),
+              end: Offset.zero,
+            ).animate(eased),
+            child: child,
           ),
         ),
       );
