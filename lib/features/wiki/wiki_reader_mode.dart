@@ -395,18 +395,21 @@ body.$_bodyClass.arklores-reader-operator-profile
 
 body.$_bodyClass.arklores-reader-operator-profile.arklores-prts-paradox-mobile
   #mw-content-text
+  .arklores-prts-paradox-table
   .nomobile {
   display: none !important;
 }
 
 body.$_bodyClass.arklores-reader-operator-profile.arklores-prts-paradox-mobile
   #mw-content-text
+  .arklores-prts-paradox-table
   .nodesktop {
   display: table !important;
 }
 
 body.$_bodyClass.arklores-reader-operator-profile.arklores-prts-paradox-desktop
   #mw-content-text
+  .arklores-prts-paradox-table
   .nodesktop {
   display: none !important;
 }
@@ -911,9 +914,11 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
         }
         node = node.nextElementSibling;
       }
-      var mobile = window.innerWidth <= 600;
-      body.classList.toggle('arklores-prts-paradox-mobile', mobile);
-      body.classList.toggle('arklores-prts-paradox-desktop', !mobile);
+      // PRTS declares a 1120px viewport, so window.innerWidth reports a
+      // desktop-sized value even on phones. Reader mode is touch-first and
+      // must always choose the compact variant of this component.
+      body.classList.add('arklores-prts-paradox-mobile');
+      body.classList.remove('arklores-prts-paradox-desktop');
     }
 
     function syncPrtsTheme() {
