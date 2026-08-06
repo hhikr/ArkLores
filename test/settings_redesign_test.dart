@@ -85,7 +85,7 @@ Widget _testApp({required Locale locale, double textScale = 1}) {
         return MaterialApp(
           theme: buildAppTheme(tokens),
           darkTheme: buildAppTheme(tokens),
-          themeMode: ThemeMode.dark,
+          themeMode: tokens.isDark ? ThemeMode.dark : ThemeMode.light,
           locale: locale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,

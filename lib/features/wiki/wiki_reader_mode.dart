@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
+import 'wiki_appearance_palette.dart';
+
 class WikiReaderMode {
   WikiReaderMode._();
 
@@ -53,22 +55,21 @@ class WikiReaderMode {
     required double fontScale,
   }) async {
     final fontFaces = await _fontFaces();
-    final background = dark ? '#0B0F14' : '#F6F3EA';
-    final storySurface = dark ? '#111A24' : '#FFFDF7';
-    final storyHeader = dark ? '#172230' : '#EFE8DA';
-    final componentSurface =
-        dark ? 'rgba(23, 38, 56, 0.84)' : 'rgba(231, 239, 239, 0.86)';
-    final componentHeader =
-        dark ? 'rgba(34, 57, 80, 0.78)' : 'rgba(213, 227, 228, 0.9)';
-    final text = dark ? '#E8EDF2' : '#24211C';
-    final muted = dark ? '#A7B1BA' : '#686157';
-    final border = dark ? '#263241' : '#DED6C8';
-    final link = dark ? '#7AC7DD' : '#236A80';
-    final controlSurface = dark ? '#172230' : '#ECE5D8';
-    final controlText = dark ? '#DCE8F0' : '#17202A';
-    final tableHeader = dark ? '#151E29' : '#EFE8DA';
-    final selection =
-        dark ? 'rgba(122, 199, 221, 0.28)' : 'rgba(35, 106, 128, 0.18)';
+    final palette =
+        dark ? WikiAppearancePalette.dark : WikiAppearancePalette.light;
+    final background = palette.pageBackground;
+    final storySurface = palette.storySurface;
+    final storyHeader = palette.storyHeader;
+    final componentSurface = palette.componentSurface;
+    final componentHeader = palette.componentHeader;
+    final text = palette.text;
+    final muted = palette.muted;
+    final border = palette.border;
+    final link = palette.link;
+    final controlSurface = palette.controlSurface;
+    final controlText = palette.controlText;
+    final tableHeader = palette.tableHeader;
+    final selection = palette.selection;
     final baseFontSize = (18 * fontScale).clamp(11, 25).toStringAsFixed(1);
     final lineHeight =
         (1.72 - ((fontScale - 1) * 0.08)).clamp(1.56, 1.78).toStringAsFixed(2);

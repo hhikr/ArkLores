@@ -77,7 +77,7 @@ class ArkLoresApp extends ConsumerWidget {
     return MaterialApp(
       title: 'ArkLores',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
+      themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
       darkTheme: appTheme,
       theme: appTheme,
       locale: locale.flutterLocale,

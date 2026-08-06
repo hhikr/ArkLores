@@ -976,7 +976,11 @@ class _WikiTabViewState extends State<_WikiTabView> {
     }
 
     await WikiReaderMode.remove(controller);
-    await WikiDarkMode.setEnabled(controller, widget.isDarkMode);
+    await WikiDarkMode.setEnabled(
+      controller,
+      widget.isDarkMode,
+      dark: widget.isDarkMode,
+    );
     await widget.onNormalAppearance(controller);
   }
 
