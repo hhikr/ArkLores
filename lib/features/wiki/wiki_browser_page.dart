@@ -407,7 +407,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         min-width: 0 !important;
         table-layout: fixed !important;
       }
-      .arklores-prts-paradox-table :where(table, tbody, tr, td, th) {
+      .arklores-prts-paradox-table :where(tbody, tr, td, th) {
         max-width: 100% !important;
         min-width: 0 !important;
         overflow-wrap: anywhere !important;
@@ -421,10 +421,26 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         .arklores-prts-paradox-table .nomobile { display: none !important; }
         .arklores-prts-paradox-table .nodesktop {
           display: table !important;
-          width: 100% !important;
+          width: min(100%, 15rem) !important;
           max-width: 100% !important;
           min-width: 0 !important;
-          table-layout: fixed !important;
+          margin: 0.55em auto !important;
+          table-layout: auto !important;
+        }
+        .arklores-prts-paradox-table .nodesktop > tbody > tr > td > a > div {
+          width: 100% !important;
+          max-width: 100% !important;
+          margin-left: 0 !important;
+        }
+        .arklores-prts-paradox-table .nodesktop > tbody > tr > td > span {
+          width: auto !important;
+          max-width: 100% !important;
+          margin: 0.7em auto 0 !important;
+          padding: 0.4em 0.5em !important;
+          height: auto !important;
+          flex-wrap: wrap !important;
+          justify-content: center !important;
+          gap: 0.35em !important;
         }
       }
       @media (min-width: 601px) {
@@ -449,13 +465,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     if (!heading) return;
     var node = heading.nextElementSibling;
     while (node && node.tagName !== 'H2') {
-      var tables = node.tagName === 'TABLE' ? [node] : [];
-      if (node.querySelectorAll) {
+      if (node.tagName === 'TABLE') {
         var nested = node.querySelectorAll('table');
-        for (var i = 0; i < nested.length; i++) tables.push(nested[i]);
-      }
-      for (var j = 0; j < tables.length; j++) {
-        tables[j].classList.add('arklores-prts-paradox-table');
+        for (var i = 0; i < nested.length; i++) {
+          nested[i].classList.remove('arklores-prts-paradox-table');
+        }
+        node.classList.add('arklores-prts-paradox-table');
       }
       node = node.nextElementSibling;
     }
