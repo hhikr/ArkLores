@@ -897,6 +897,15 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
     html.dataset.arkloresReaderDark = ${dark ? "'1'" : "'0'"};
 
     function setupPrtsParadoxLayout() {
+      function rememberStyle(element) {
+        if (
+          element.dataset.arkloresPrtsParadoxOriginalStyle === undefined
+        ) {
+          element.dataset.arkloresPrtsParadoxOriginalStyle =
+              element.getAttribute('style') || '';
+        }
+      }
+
       var marker = document.querySelector(
         '#mw-content-text h2 span#悖论模拟, .mw-parser-output h2 span#悖论模拟',
       );
@@ -911,6 +920,72 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
             nested[i].classList.remove('arklores-prts-paradox-table');
           }
           node.classList.add('arklores-prts-paradox-table');
+          rememberStyle(node);
+          node.style.setProperty('width', '100%', 'important');
+          node.style.setProperty('max-width', '100%', 'important');
+          node.style.setProperty('min-width', '0', 'important');
+          node.style.setProperty('table-layout', 'fixed', 'important');
+
+          var desktopLayouts = node.querySelectorAll('.nomobile');
+          for (var j = 0; j < desktopLayouts.length; j++) {
+            rememberStyle(desktopLayouts[j]);
+            desktopLayouts[j].style.setProperty(
+              'display',
+              'none',
+              'important',
+            );
+          }
+
+          var mobileLayouts = node.querySelectorAll('.nodesktop');
+          for (var k = 0; k < mobileLayouts.length; k++) {
+            rememberStyle(mobileLayouts[k]);
+            mobileLayouts[k].style.setProperty(
+              'display',
+              'table',
+              'important',
+            );
+            mobileLayouts[k].style.setProperty(
+              'width',
+              'min(100%, 15rem)',
+              'important',
+            );
+            mobileLayouts[k].style.setProperty(
+              'max-width',
+              '100%',
+              'important',
+            );
+            mobileLayouts[k].style.setProperty(
+              'margin',
+              '0.55em auto',
+              'important',
+            );
+          }
+
+          if (node.dataset.arkloresPrtsParadoxBound !== '1') {
+            var resync = function() {
+              window.setTimeout(setupPrtsParadoxLayout, 0);
+              window.setTimeout(setupPrtsParadoxLayout, 80);
+            };
+            var clickHandler = function(event) {
+              var target = event.target;
+              if (
+                target &&
+                target.closest &&
+                target.closest('.mw-collapsible-toggle')
+              ) {
+                resync();
+              }
+            };
+            node.addEventListener('click', clickHandler, true);
+            if (window.jQuery) {
+              window.jQuery(node).on(
+                'afterExpand.mw-collapsible.arkloresPrtsParadox',
+                resync,
+              );
+            }
+            node.__arkloresPrtsParadoxClickHandler = clickHandler;
+            node.dataset.arkloresPrtsParadoxBound = '1';
+          }
         }
         node = node.nextElementSibling;
       }
@@ -1239,6 +1314,38 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       true,
     );
     delete window.__arkloresReaderDoubleTapHandler;
+  }
+  var paradoxTables = document.querySelectorAll(
+    '.arklores-prts-paradox-table',
+  );
+  for (var i = 0; i < paradoxTables.length; i++) {
+    var paradoxTable = paradoxTables[i];
+    if (paradoxTable.__arkloresPrtsParadoxClickHandler) {
+      paradoxTable.removeEventListener(
+        'click',
+        paradoxTable.__arkloresPrtsParadoxClickHandler,
+        true,
+      );
+      delete paradoxTable.__arkloresPrtsParadoxClickHandler;
+    }
+    if (window.jQuery) {
+      window.jQuery(paradoxTable).off('.arkloresPrtsParadox');
+    }
+    delete paradoxTable.dataset.arkloresPrtsParadoxBound;
+    paradoxTable.classList.remove('arklores-prts-paradox-table');
+  }
+  var paradoxStyled = document.querySelectorAll(
+    '[data-arklores-prts-paradox-original-style]',
+  );
+  for (var j = 0; j < paradoxStyled.length; j++) {
+    var element = paradoxStyled[j];
+    var originalStyle = element.dataset.arkloresPrtsParadoxOriginalStyle;
+    if (originalStyle) {
+      element.setAttribute('style', originalStyle);
+    } else {
+      element.removeAttribute('style');
+    }
+    delete element.dataset.arkloresPrtsParadoxOriginalStyle;
   }
   if (document.body) {
     document.body.classList.remove(
