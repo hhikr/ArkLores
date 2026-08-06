@@ -57,7 +57,9 @@ class WikiReaderMode {
     final storySurface = dark ? '#111A24' : '#FFFDF7';
     final storyHeader = dark ? '#172230' : '#EFE8DA';
     final componentSurface =
-        dark ? 'rgba(23, 34, 48, 0.82)' : 'rgba(255, 253, 247, 0.78)';
+        dark ? 'rgba(23, 38, 56, 0.84)' : 'rgba(231, 239, 239, 0.86)';
+    final componentHeader =
+        dark ? 'rgba(34, 57, 80, 0.78)' : 'rgba(213, 227, 228, 0.9)';
     final text = dark ? '#E8EDF2' : '#24211C';
     final muted = dark ? '#A7B1BA' : '#686157';
     final border = dark ? '#263241' : '#DED6C8';
@@ -249,51 +251,112 @@ body.$_bodyClass:not(.arklores-reader-operator-profile) #mw-content-text :where(
   color: $text !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile #basictemplate,
-body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
-  width: 100% !important;
-  max-width: 100% !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  overflow: visible !important;
+/* Keep the character canvas and voice application native, but restore
+   reader typography for the surrounding operator article. */
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text :where(
+  p, li, dd, dt, td, th, caption, blockquote, small, b, strong, em, label,
+  .mw-collapsible-content, .mw-collapsible-content *
+):not(.charinfo-container *):not(#voice-table-root *) {
+  font-family: "$_fontFamily", -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+  font-size: ${baseFontSize}px !important;
+  line-height: $lineHeight !important;
+  letter-spacing: 0 !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile #basictemplate,
-body.$_bodyClass.arklores-reader-operator-profile .equiptemplate {
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text :where(h1, h2, h3, h4, h5, h6, .mw-headline):not(.charinfo-container *):not(#voice-table-root *) {
+  font-family: "$_fontFamily", -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+  color: $text !important;
+  letter-spacing: 0 !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text h2:not(.charinfo-container *):not(#voice-table-root *) {
+  font-size: ${(22 * fontScale).clamp(15, 31).toStringAsFixed(1)}px !important;
+  line-height: 1.28 !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text h3:not(.charinfo-container *):not(#voice-table-root *) {
+  font-size: ${(19 * fontScale).clamp(13, 27).toStringAsFixed(1)}px !important;
+  line-height: 1.32 !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text #basictemplate,
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text .equiptemplate {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 1.15em 0 !important;
+  overflow: visible !important;
   background: $componentSurface !important;
   color: $text !important;
   border: 1px solid $border !important;
-  border-radius: 2px !important;
-  box-shadow: none !important;
-  backdrop-filter: blur(10px) saturate(118%) !important;
-  -webkit-backdrop-filter: blur(10px) saturate(118%) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 8px 24px ${dark ? 'rgba(0, 0, 0, 0.16)' : 'rgba(58, 76, 78, 0.10)'} !important;
+  backdrop-filter: blur(14px) saturate(116%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(116%) !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile .equip-base-title,
-body.$_bodyClass.arklores-reader-operator-profile .equip-name-box,
-body.$_bodyClass.arklores-reader-operator-profile .equip-level-desc,
-body.$_bodyClass.arklores-reader-operator-profile .equip-task-content,
-body.$_bodyClass.arklores-reader-operator-profile .equip-material-content,
-body.$_bodyClass.arklores-reader-operator-profile .equip-level-stats {
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text #basictemplate > div,
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text .equiptemplate > div {
+  background-color: transparent !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text :where(
+  .equip-base-title, .equip-name-box, .equip-level-desc, .equip-task-content,
+  .equip-material-content, .equip-level-stats
+) {
   color: $text !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile .equip-full-btn {
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text .equip-full-btn {
   background: $controlSurface !important;
   color: $controlText !important;
   border: 1px solid $border !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile .equip-nofull-btn {
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text .equip-nofull-btn {
   background: ${dark ? '#7A2E2E' : '#C93A3A'} !important;
   color: #ffffff !important;
   border: 1px solid ${dark ? '#A65A5A' : '#A51F1F'} !important;
 }
 
-body.$_bodyClass.arklores-reader-operator-profile .mw-collapsible-toggle,
-body.$_bodyClass.arklores-reader-operator-profile .mw-collapsible-toggle a {
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text .mw-collapsible-toggle,
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text .mw-collapsible-toggle a {
   background: $controlSurface !important;
   color: $controlText !important;
+  border-color: $border !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text #voice-table-root {
+  margin: 1.15em 0 !important;
+  padding: 0.7em !important;
+  background: $componentSurface !important;
+  color: $text !important;
+  border: 1px solid $border !important;
+  border-radius: 6px !important;
+  box-shadow: 0 8px 24px ${dark ? 'rgba(0, 0, 0, 0.16)' : 'rgba(58, 76, 78, 0.10)'} !important;
+  backdrop-filter: blur(14px) saturate(116%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(116%) !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text #voice-table-root :where(
+  .bg-wikitable, .table, table, tbody, tr, td
+) {
+  background: transparent !important;
+  color: $text !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text #voice-table-root :where(
+  [class~="!bg-table"], .filter-title, thead, th, input, .n-base-selection,
+  .n-base-selection-label, .n-base-selection-tags, .n-base-selection-input,
+  .n-base-selection-input__content
+) {
+  background: $componentHeader !important;
+  color: $text !important;
+  border-color: $border !important;
+}
+
+body.$_bodyClass.arklores-reader-operator-profile #mw-content-text #voice-table-root :where(
+  .border, .border-divider, td, th
+) {
   border-color: $border !important;
 }
 
