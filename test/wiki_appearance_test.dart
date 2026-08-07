@@ -11,7 +11,8 @@ void main() {
     expect(css, contains('color-scheme: dark'));
     expect(css, contains('color-scheme: light'));
     expect(css, contains('arklores-prts-site'));
-    expect(css, contains(':not(.arklores-prts-site)'));
+    expect(css, contains('arklores-generic-site'));
+    expect(css, isNot(contains('html[data-arklores-appearance] body {')));
   });
 
   test('rendered media and simulators are protected from appearance changes',

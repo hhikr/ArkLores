@@ -2,6 +2,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'wiki_appearance_palette.dart';
+import 'wiki_site_adapter.dart';
 
 /// Applies ArkLores appearance overrides to wiki pages.
 ///
@@ -43,12 +44,14 @@ class WikiAppearance {
   --arklores-control-text: ${WikiAppearancePalette.light.controlText};
 }
 
-html[data-arklores-appearance],
-html[data-arklores-appearance] body {
+html[data-arklores-appearance].arklores-prts-site,
+html[data-arklores-appearance].arklores-prts-site body,
+html[data-arklores-appearance].arklores-generic-site,
+html[data-arklores-appearance].arklores-generic-site body {
   background-color: var(--arklores-page-bg) !important;
 }
 
-html[data-arklores-appearance]:not(.arklores-prts-site) body {
+html[data-arklores-appearance].arklores-generic-site body {
   color: var(--arklores-text) !important;
 }
 
@@ -90,7 +93,7 @@ html[data-arklores-appearance="dark"].arklores-prts-site :where(
   border-color: var(--arklores-border) !important;
 }
 
-html[data-arklores-appearance]:not(.arklores-prts-site) :where(
+html[data-arklores-appearance].arklores-generic-site :where(
   #mw-content-text,
   .mw-parser-output,
   main,
@@ -117,7 +120,7 @@ html[data-arklores-appearance="dark"]:not(.arklores-prts-site) :where(
   border-color: var(--arklores-border) !important;
 }
 
-html[data-arklores-appearance]:not(.arklores-prts-site) :where(
+html[data-arklores-appearance].arklores-generic-site :where(
   .mw-parser-output p,
   .mw-parser-output li,
   .mw-parser-output dd,
@@ -138,7 +141,7 @@ html[data-arklores-appearance] :where(
   color: var(--arklores-link);
 }
 
-html[data-arklores-appearance]:not(.arklores-prts-site) :where(
+html[data-arklores-appearance].arklores-generic-site :where(
   button,
   input,
   select,
@@ -182,6 +185,8 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
   if (!html) return;
   var body = document.body;
   var isPrts = /(^|\.)prts\.wiki$/i.test(location.hostname);
+  var isFz = /(^|\.)fz\.wiki$/i.test(location.hostname);
+  var isWarfarin = /(^|\.)warfarin\.wiki$/i.test(location.hostname);
 
   var style = document.getElementById('arklores-wiki-appearance');
   if (!style) {
@@ -193,6 +198,9 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
 
   var mode = __ARKLORES_MODE__;
   html.classList.toggle('arklores-prts-site', isPrts);
+  html.classList.toggle('arklores-fz-site', isFz);
+  html.classList.toggle('arklores-warfarin-site', isWarfarin);
+  html.classList.toggle('arklores-generic-site', !isPrts && !isFz && !isWarfarin);
   html.setAttribute('data-arklores-appearance', mode);
   html.setAttribute('data-arklores-appearance-version', '2');
 
@@ -217,6 +225,13 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
       }
     }
   }
+
+  if (!isPrts) {
+    try {
+      var adapterScript = __ARKLORES_ADAPTER_SCRIPT__;
+      (0, eval)(adapterScript);
+    } catch (e) {}
+  }
 })();
 ''';
 
@@ -227,9 +242,17 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
     html.removeAttribute('data-arklores-appearance');
     html.removeAttribute('data-arklores-appearance-version');
     html.classList.remove('arklores-prts-site');
+    html.classList.remove(
+      'arklores-fz-site',
+      'arklores-warfarin-site',
+      'arklores-generic-site',
+    );
   }
   var style = document.getElementById('arklores-wiki-appearance');
   if (style) style.remove();
+  try {
+    (0, eval)(__ARKLORES_REMOVE_ADAPTER_SCRIPT__);
+  } catch (e) {}
 })();
 ''';
 
@@ -243,8 +266,12 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
           '__ARKLORES_MODE__',
           _jsStringLiteral(dark ? 'dark' : 'light'),
         );
+    final withAdapter = script.replaceFirst(
+      '__ARKLORES_ADAPTER_SCRIPT__',
+      _jsStringLiteral(WikiSiteAdapter.applyThemeScript(dark: dark)),
+    );
     try {
-      await controller.evaluateJavascript(source: script);
+      await controller.evaluateJavascript(source: withAdapter);
     } catch (_) {
       // Appearance is best effort while a page is navigating.
     }
@@ -252,7 +279,12 @@ html[data-arklores-appearance] #arklores-prts-scenario-reader {
 
   static Future<void> remove(InAppWebViewController controller) async {
     try {
-      await controller.evaluateJavascript(source: _removeScript);
+      await controller.evaluateJavascript(
+        source: _removeScript.replaceFirst(
+          '__ARKLORES_REMOVE_ADAPTER_SCRIPT__',
+          _jsStringLiteral(WikiSiteAdapter.removeThemeScript()),
+        ),
+      );
     } catch (_) {
       // The WebView may already have been disposed during navigation.
     }

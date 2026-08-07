@@ -95,10 +95,17 @@ class SettingsService {
       builtIn: true,
     ),
     WikiSiteConfig(
-      id: 'endfield',
-      label: 'Endfield Wiki',
+      id: 'endfield-warfarin',
+      label: '终末地 Wiki · Warfarin',
       url: 'https://warfarin.wiki/cn',
-      iconUrl: 'https://warfarin.wiki/cn/favicon.ico',
+      iconUrl: 'https://warfarin.wiki/icon.png',
+      builtIn: true,
+    ),
+    WikiSiteConfig(
+      id: 'endfield-fz',
+      label: '终末地 Wiki · fz',
+      url: 'https://fz.wiki',
+      iconUrl: 'https://fz.wiki/icon.svg',
       builtIn: true,
     ),
   ];
@@ -184,8 +191,21 @@ class SettingsService {
           final sites = decoded
               .map(WikiSiteConfig.fromJson)
               .whereType<WikiSiteConfig>()
+              .map(_migrateWikiSite)
               .toList();
-          if (sites.isNotEmpty) return sites;
+          if (sites.isNotEmpty) {
+            final hasFz = sites.any((site) => site.id == 'endfield-fz');
+            if (!hasFz) {
+              sites.add(defaultWikiSites.last);
+              await _storage.write(
+                key: _keyWikiSources,
+                value: jsonEncode(
+                  sites.map((site) => site.toJson()).toList(),
+                ),
+              );
+            }
+            return sites;
+          }
         }
       } catch (_) {
         // Fall through to defaults.
@@ -206,6 +226,21 @@ class SettingsService {
       );
     }
     return migrated;
+  }
+
+  static WikiSiteConfig _migrateWikiSite(WikiSiteConfig site) {
+    if (site.builtIn &&
+        site.id == 'endfield' &&
+        site.url.contains('warfarin.wiki')) {
+      return WikiSiteConfig(
+        id: 'endfield-warfarin',
+        label: '终末地 Wiki · Warfarin',
+        url: site.url,
+        iconUrl: site.iconUrl ?? 'https://warfarin.wiki/icon.png',
+        builtIn: true,
+      );
+    }
+    return site;
   }
 
   Future<void> saveWikiSites(List<WikiSiteConfig> sites) async {

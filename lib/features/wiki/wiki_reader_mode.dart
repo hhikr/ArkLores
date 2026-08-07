@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import 'wiki_appearance_palette.dart';
+import 'wiki_site_adapter.dart';
 
 class WikiReaderMode {
   WikiReaderMode._();
@@ -53,6 +54,7 @@ class WikiReaderMode {
     InAppWebViewController controller, {
     required bool dark,
     required double fontScale,
+    WikiSiteKind siteKind = WikiSiteKind.generic,
   }) async {
     final fontFaces = await _fontFaces();
     final palette =
@@ -185,7 +187,8 @@ body.$_bodyClass #mw-content-text,
 body.$_bodyClass .mw-parser-output,
 body.$_bodyClass .content,
 body.$_bodyClass .page,
-body.$_bodyClass .prose {
+body.$_bodyClass .prose,
+body.$_bodyClass .arklores-reader-content-root {
   display: block !important;
   visibility: visible !important;
   opacity: 1 !important;
@@ -207,12 +210,14 @@ body.$_bodyClass .prose {
 body.$_bodyClass #content,
 body.$_bodyClass .mw-body,
 body.$_bodyClass main,
-body.$_bodyClass article {
+body.$_bodyClass article,
+body.$_bodyClass .arklores-reader-content-root {
   padding: 24px 18px 56px !important;
 }
 
 body.$_bodyClass .mw-parser-output,
-body.$_bodyClass .prose {
+body.$_bodyClass .prose,
+body.$_bodyClass .arklores-reader-content-root {
   background: transparent !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -786,13 +791,16 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
     'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover',
   );
   body.classList.add('$_bodyClass');
-  var style = document.getElementById('$_styleId');
+    var style = document.getElementById('$_styleId');
   if (!style) {
     style = document.createElement('style');
     style.id = '$_styleId';
     document.head.appendChild(style);
   }
   style.textContent = ${_jsStringLiteral(css)};
+  try {
+    (0, eval)(${_jsStringLiteral(WikiSiteAdapter.applyThemeScript(dark: dark))});
+  } catch (e) {}
 
   function setupPrtsScenarioReader() {
     var nativeButton = document.getElementById('button_playback_all');
@@ -1118,7 +1126,33 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
 
   var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
   var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
-  var roots = document.querySelectorAll('#mw-content-text, .mw-parser-output, main, article');
+  function readerText(el) {
+    return (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
+  }
+
+  var siteRootSelector = ${_jsStringLiteral(WikiSiteAdapter.readerRootSelector(siteKind))};
+  var previousRoots = document.querySelectorAll(
+    '.arklores-reader-content-root',
+  );
+  for (var previousIndex = 0; previousIndex < previousRoots.length; previousIndex++) {
+    previousRoots[previousIndex].classList.remove(
+      'arklores-reader-content-root',
+    );
+  }
+  var roots = document.querySelectorAll(siteRootSelector);
+  var contentRoot = null;
+  for (var rootIndex = 0; rootIndex < roots.length; rootIndex++) {
+    var candidate = roots[rootIndex];
+    if (readerText(candidate).length >= 20) {
+      contentRoot = candidate;
+      break;
+    }
+  }
+  if (!contentRoot && roots.length) contentRoot = roots[0];
+  if (contentRoot) {
+    contentRoot.classList.add('arklores-reader-content-root');
+    document.body.dataset.arkloresReaderSite = '${siteKind.name}';
+  }
   var touched = [];
   for (var r = 0; r < roots.length; r++) {
     touched.push(roots[r]);
@@ -1355,6 +1389,15 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       'arklores-prts-paradox-mobile',
       'arklores-prts-paradox-desktop',
     );
+    var readerRoots = document.querySelectorAll(
+      '.arklores-reader-content-root',
+    );
+    for (var rootIndex = 0; rootIndex < readerRoots.length; rootIndex++) {
+      readerRoots[rootIndex].classList.remove(
+        'arklores-reader-content-root',
+      );
+    }
+    delete document.body.dataset.arkloresReaderSite;
   }
   var viewport = document.querySelector('meta[name="viewport"]');
   if (viewport) {

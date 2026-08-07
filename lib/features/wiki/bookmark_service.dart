@@ -53,7 +53,19 @@ class Bookmark {
   }
 
   /// Human-readable site label.
-  String get siteLabel => site == 'prts' ? 'PRTS Wiki' : 'Endfield Wiki';
+  String get siteLabel {
+    switch (site) {
+      case 'prts':
+        return 'PRTS Wiki';
+      case 'endfield-warfarin':
+      case 'endfield':
+        return '终末地 Wiki · Warfarin';
+      case 'endfield-fz':
+        return '终末地 Wiki · fz';
+      default:
+        return site;
+    }
+  }
 
   @override
   String toString() => 'Bookmark($title — $siteLabel)';

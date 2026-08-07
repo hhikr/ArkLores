@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -17,11 +18,12 @@ import 'bookmark_page.dart';
 import 'bookmark_service.dart' show Bookmark;
 import 'wiki_appearance.dart';
 import 'wiki_reader_mode.dart';
+import 'wiki_site_adapter.dart';
 import 'wiki_toolbar.dart';
 
 /// Wiki Browser tab — hosts dual-site WebView with custom toolbar.
 ///
-/// Two wiki sites (PRTS and Endfield) are available via a top TabBar.
+/// Wiki sites are available via a top TabBar.
 /// Each site keeps its own [InAppWebViewController] and browsing history.
 class WikiBrowserPage extends ConsumerStatefulWidget {
   const WikiBrowserPage({super.key});
@@ -834,6 +836,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                         isReaderMode: _isReaderMode,
                         readerDark: _isDarkMode,
                         readerFontScale: _readerFontScale,
+                        siteKind: WikiSiteAdapter.kindForUrl(_currentUrls[i]),
                         onReaderTapped: _toggleReaderControls,
                         onNormalAppearance: _applyNormalWebViewEnhancements,
                         onControllerCreated: _onControllerCreated,
@@ -897,6 +900,7 @@ class _WikiTabView extends StatefulWidget {
   final bool isReaderMode;
   final bool readerDark;
   final double readerFontScale;
+  final WikiSiteKind siteKind;
   final VoidCallback onReaderTapped;
   final Future<void> Function(InAppWebViewController) onNormalAppearance;
   final void Function(int, InAppWebViewController) onControllerCreated;
@@ -913,6 +917,7 @@ class _WikiTabView extends StatefulWidget {
     required this.isReaderMode,
     required this.readerDark,
     required this.readerFontScale,
+    required this.siteKind,
     required this.onReaderTapped,
     required this.onNormalAppearance,
     required this.onControllerCreated,
@@ -988,6 +993,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
         controller,
         dark: widget.readerDark,
         fontScale: widget.readerFontScale,
+        siteKind: widget.siteKind,
       );
       return;
     }
@@ -1036,6 +1042,16 @@ class _WikiTabViewState extends State<_WikiTabView> {
             supportZoom: true,
             transparentBackground: false,
           ),
+          initialUserScripts: UnmodifiableListView<UserScript>([
+            UserScript(
+              groupName: 'arklores-theme-bootstrap',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: true,
+              source: WikiSiteAdapter.documentStartThemeScript(
+                dark: widget.isDarkMode,
+              ),
+            ),
+          ]),
           onWebViewCreated: (controller) {
             _controller = controller;
             controller.addJavaScriptHandler(
