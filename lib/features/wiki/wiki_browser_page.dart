@@ -49,6 +49,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// Navigation state per tab.
   var _canGoBack = <bool>[];
   var _canGoForward = <bool>[];
+  var _siteGenerations = <int>[];
 
   /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = false;
@@ -101,6 +102,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     _currentUrls = [for (final site in _wikiSites) site.url];
     _canGoBack = List.filled(_wikiSites.length, false);
     _canGoForward = List.filled(_wikiSites.length, false);
+    _siteGenerations = List.filled(_wikiSites.length, 0);
   }
 
   @override
@@ -178,6 +180,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     final oldUrls = _currentUrls;
     final oldBack = _canGoBack;
     final oldForward = _canGoForward;
+    final oldGenerations = _siteGenerations;
 
     setState(() {
       _resetTabState(sites);
@@ -193,6 +196,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
             : _wikiSites[i].url;
         _canGoBack[i] = oldBack[oldSiteIndex];
         _canGoForward[i] = oldForward[oldSiteIndex];
+        _siteGenerations[i] = oldSites[oldSiteIndex].url == _wikiSites[i].url
+            ? oldGenerations[oldSiteIndex]
+            : oldGenerations[oldSiteIndex] + 1;
       }
 
       _tabController.removeListener(_onTabChanged);
@@ -738,6 +744,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
+    ref.watch(wikiSourcesRevisionProvider);
     ref.listen<int>(wikiSourcesRevisionProvider, (_, __) => _reloadWikiSites());
 
     if (!_restoredState) {
@@ -826,7 +833,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     index: _tabController.index,
                     children: List.generate(_wikiSites.length, (i) {
                       return _WikiTabView(
-                        key: ValueKey(_wikiSites[i].id),
+                        key: ValueKey(
+                          '${_wikiSites[i].id}-${_siteGenerations[i]}',
+                        ),
                         index: i,
                         initialUrl: _currentUrls[i].trim().isNotEmpty
                             ? _currentUrls[i]
