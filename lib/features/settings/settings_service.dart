@@ -80,6 +80,7 @@ class SettingsService {
   static const _keyMainTabIndex = 'main_tab_index';
   static const _keyWikiTabIndex = 'wiki_tab_index';
   static const _keyWikiUrlPrefix = 'wiki_url_';
+  static const _keyWikiAppliedUrlPrefix = 'wiki_applied_url_';
   static const _keyWikiSources = 'wiki_sources';
   static const _keyWikiReaderMode = 'wiki_reader_mode';
   static const _keyWikiReaderFontScale = 'wiki_reader_font_scale';
@@ -175,6 +176,22 @@ class SettingsService {
     await _storage.write(key: '$_keyWikiUrlPrefix$index', value: url);
   }
 
+  Future<String?> loadWikiAppliedUrl(int index) async {
+    final value = await _storage.read(key: '$_keyWikiAppliedUrlPrefix$index');
+    final uri = value == null ? null : Uri.tryParse(value);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
+    return value;
+  }
+
+  Future<void> saveWikiAppliedUrl(int index, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return;
+    await _storage.write(
+      key: '$_keyWikiAppliedUrlPrefix$index',
+      value: url,
+    );
+  }
+
   Future<List<WikiSiteConfig>> loadWikiSites() async {
     final raw = await _storage.read(key: _keyWikiSources);
     if (raw != null && raw.trim().isNotEmpty) {
@@ -266,7 +283,10 @@ class SettingsService {
   Future<void> resetWikiSites() async {
     await _storage.delete(key: _keyWikiSources);
     await Future.wait([
-      for (var i = 0; i < 20; i++) _storage.delete(key: '$_keyWikiUrlPrefix$i'),
+      for (var i = 0; i < 20; i++) ...[
+        _storage.delete(key: '$_keyWikiUrlPrefix$i'),
+        _storage.delete(key: '$_keyWikiAppliedUrlPrefix$i'),
+      ],
     ]);
   }
 

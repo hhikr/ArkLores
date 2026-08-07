@@ -46,6 +46,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// Current page URL per tab.
   var _currentUrls = <String>[];
 
+  /// Source URL that each WebView last applied.
+  var _appliedSourceUrls = <String>[];
+
   /// Navigation state per tab.
   var _canGoBack = <bool>[];
   var _canGoForward = <bool>[];
@@ -99,6 +102,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     _controllers = List.filled(_wikiSites.length, null);
     _titles = List.filled(_wikiSites.length, '');
     _currentUrls = [for (final site in _wikiSites) site.url];
+    _appliedSourceUrls = [for (final site in _wikiSites) site.url];
     _canGoBack = List.filled(_wikiSites.length, false);
     _canGoForward = List.filled(_wikiSites.length, false);
   }
@@ -129,12 +133,17 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     bool? storedDarkMode;
     var sites = SettingsService.defaultWikiSites;
     var urls = <String>[];
+    var appliedUrls = <String>[];
     try {
       final service = ref.read(settingsServiceProvider);
       sites = await service.loadWikiSites();
       urls = [
         for (var i = 0; i < sites.length; i++)
           await service.loadWikiUrl(i) ?? sites[i].url,
+      ];
+      appliedUrls = [
+        for (var i = 0; i < sites.length; i++)
+          await service.loadWikiAppliedUrl(i) ?? sites[i].url,
       ];
       tabIndex = await service.loadWikiTabIndex();
       readerMode = await service.loadWikiReaderMode();
@@ -150,6 +159,11 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       _resetTabState(sites);
       for (var i = 0; i < urls.length && i < _currentUrls.length; i++) {
         _currentUrls[i] = urls[i];
+      }
+      for (var i = 0;
+          i < appliedUrls.length && i < _appliedSourceUrls.length;
+          i++) {
+        _appliedSourceUrls[i] = appliedUrls[i];
       }
       _tabController = TabController(length: _wikiSites.length, vsync: this);
       _tabController.addListener(_onTabChanged);
@@ -178,6 +192,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         for (var i = 0; i < _currentUrls.length; i++)
           if (_currentUrls[i].trim().isNotEmpty)
             service.saveWikiUrl(i, _currentUrls[i]),
+        for (var i = 0; i < _appliedSourceUrls.length; i++)
+          if (_appliedSourceUrls[i].trim().isNotEmpty)
+            service.saveWikiAppliedUrl(i, _appliedSourceUrls[i]),
       ]);
     } catch (e) {
       debugPrint('[WikiBrowser] Error saving browsing state: $e');
@@ -274,16 +291,21 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     final configuredSite =
         configuredIndex >= 0 ? configuredSites[configuredIndex] : null;
 
-    if (configuredSite != null && configuredSite.url != activeSite.url) {
+    if (configuredSite != null &&
+        configuredSite.url != _appliedSourceUrls[index]) {
       final nextSites = [..._wikiSites];
       nextSites[index] = configuredSite;
       setState(() {
         _wikiSites = nextSites;
         _currentUrls[index] = configuredSite.url;
+        _appliedSourceUrls[index] = configuredSite.url;
         _titles[index] = '';
         _canGoBack[index] = false;
         _canGoForward[index] = false;
       });
+      await ref
+          .read(settingsServiceProvider)
+          .saveWikiAppliedUrl(index, configuredSite.url);
       await controller.loadUrl(
         urlRequest: URLRequest(url: WebUri(configuredSite.url)),
       );
