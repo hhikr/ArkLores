@@ -95,17 +95,10 @@ class SettingsService {
       builtIn: true,
     ),
     WikiSiteConfig(
-      id: 'endfield-warfarin',
-      label: '终末地 Wiki · Warfarin',
+      id: 'endfield',
+      label: 'Endfield Wiki',
       url: 'https://warfarin.wiki/cn',
       iconUrl: 'https://warfarin.wiki/icon.png',
-      builtIn: true,
-    ),
-    WikiSiteConfig(
-      id: 'endfield-fz',
-      label: '终末地 Wiki · fz',
-      url: 'https://fz.wiki',
-      iconUrl: 'https://fz.wiki/icon.svg',
       builtIn: true,
     ),
   ];
@@ -188,22 +181,26 @@ class SettingsService {
       try {
         final decoded = jsonDecode(raw);
         if (decoded is List) {
-          final sites = decoded
+          final rawSites = decoded
               .map(WikiSiteConfig.fromJson)
               .whereType<WikiSiteConfig>()
               .map(_migrateWikiSite)
               .toList();
-          if (sites.isNotEmpty) {
-            final hasFz = sites.any((site) => site.id == 'endfield-fz');
-            if (!hasFz) {
-              sites.add(defaultWikiSites.last);
-              await _storage.write(
-                key: _keyWikiSources,
-                value: jsonEncode(
-                  sites.map((site) => site.toJson()).toList(),
-                ),
-              );
+          final sites = <WikiSiteConfig>[];
+          var hasEndfield = false;
+          for (final site in rawSites) {
+            if (site.builtIn && site.id == 'endfield') {
+              if (hasEndfield) continue;
+              hasEndfield = true;
             }
+            sites.add(site);
+          }
+          if (sites.isNotEmpty) {
+            if (!hasEndfield) sites.add(defaultWikiSites[1]);
+            await _storage.write(
+              key: _keyWikiSources,
+              value: jsonEncode(sites.map((site) => site.toJson()).toList()),
+            );
             return sites;
           }
         }
@@ -230,13 +227,18 @@ class SettingsService {
 
   static WikiSiteConfig _migrateWikiSite(WikiSiteConfig site) {
     if (site.builtIn &&
-        site.id == 'endfield' &&
-        site.url.contains('warfarin.wiki')) {
+        (site.id == 'endfield' ||
+            site.id == 'endfield-warfarin' ||
+            site.id == 'endfield-fz')) {
+      final isFz = site.url.contains('fz.wiki');
       return WikiSiteConfig(
-        id: 'endfield-warfarin',
-        label: '终末地 Wiki · Warfarin',
+        id: 'endfield',
+        label: 'Endfield Wiki',
         url: site.url,
-        iconUrl: site.iconUrl ?? 'https://warfarin.wiki/icon.png',
+        iconUrl: site.iconUrl ??
+            (isFz
+                ? 'https://fz.wiki/icon.svg'
+                : 'https://warfarin.wiki/icon.png'),
         builtIn: true,
       );
     }

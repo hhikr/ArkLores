@@ -448,6 +448,8 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
   late final TextEditingController _iconController;
   String? _error;
 
+  bool get _isBuiltInEndfield => widget.site?.id == 'endfield';
+
   @override
   void initState() {
     super.initState();
@@ -490,6 +492,18 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
     );
   }
 
+  void _selectEndfieldPreset({
+    required String url,
+    required String iconUrl,
+  }) {
+    if (_labelController.text.trim().isEmpty || _isBuiltInEndfield) {
+      _labelController.text = 'Endfield Wiki';
+    }
+    _urlController.text = url;
+    _iconController.text = iconUrl;
+    setState(() => _error = null);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -511,6 +525,41 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.next,
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '终末地 Wiki 预设',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.public_rounded, size: 16),
+                    label: const Text('Warfarin'),
+                    onPressed: () => _selectEndfieldPreset(
+                      url: 'https://warfarin.wiki/cn',
+                      iconUrl: 'https://warfarin.wiki/icon.png',
+                    ),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.public_rounded, size: 16),
+                    label: const Text('fz.wiki'),
+                    onPressed: () => _selectEndfieldPreset(
+                      url: 'https://fz.wiki',
+                      iconUrl: 'https://fz.wiki/icon.svg',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: _iconController,
               decoration: const InputDecoration(labelText: '图标 URL（可选）'),

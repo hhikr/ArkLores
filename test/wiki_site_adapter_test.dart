@@ -1,8 +1,17 @@
 import 'package:arklores/features/wiki/wiki_site_adapter.dart';
+import 'package:arklores/features/settings/settings_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('WikiSiteAdapter', () {
+    test('keeps Endfield as one selectable built-in source', () {
+      expect(SettingsService.defaultWikiSites, hasLength(2));
+      expect(
+        SettingsService.defaultWikiSites.map((site) => site.id),
+        containsAll(<String>['prts', 'endfield']),
+      );
+    });
+
     test('recognizes built-in Wiki hosts', () {
       expect(
         WikiSiteAdapter.kindForUrl('https://prts.wiki/w/Test'),

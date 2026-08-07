@@ -59,9 +59,8 @@ class Bookmark {
         return 'PRTS Wiki';
       case 'endfield-warfarin':
       case 'endfield':
-        return '终末地 Wiki · Warfarin';
       case 'endfield-fz':
-        return '终末地 Wiki · fz';
+        return 'Endfield Wiki';
       default:
         return site;
     }

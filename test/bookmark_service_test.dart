@@ -72,7 +72,7 @@ void main() {
       );
 
       expect(prts.siteLabel, equals('PRTS Wiki'));
-      expect(endfield.siteLabel, equals('终末地 Wiki · Warfarin'));
+      expect(endfield.siteLabel, equals('Endfield Wiki'));
     });
   });
 }

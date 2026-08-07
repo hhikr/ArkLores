@@ -11,12 +11,12 @@ ArkLores 的 Wiki 浏览器使用 WebView 展示远程站点。站点适配分�
 | ID | 来源 | 前端结构 | 主题机制 |
 | --- | --- | --- | --- |
 | `prts` | PRTS Wiki | MediaWiki | MediaWiki 原生主题 class |
-| `endfield-warfarin` | Warfarin Wiki | Remix + Tailwind/shadcn 风格 | `html.dark` 与 CSS token |
-| `endfield-fz` | fz Wiki | Next.js + RSC + Tailwind 风格 | `data-theme` 与 `endfield-wiki-theme` |
+| `endfield` | Endfield Wiki | 用户在设置中选择 fz 或 Warfarin | 按当前 URL 自动选择站点策略 |
 
-旧版本中保存的 `endfield` Warfarin 来源会迁移为
-`endfield-warfarin`。已有用户的 Wiki 来源列表会保留；如果列表中没有
-`endfield-fz`，升级时追加该内置来源。
+Endfield Wiki 只占用一个标签页。设置页编辑该来源或添加自定义来源时，URL
+输入框下方会提供 `Warfarin` 与 `fz.wiki` 预设。旧版分别保存的
+`endfield-warfarin` 与 `endfield-fz` 会折叠为一个 `endfield` 来源，
+保留列表中第一个已配置的终末地地址。
 
 ## 主题策略
 
