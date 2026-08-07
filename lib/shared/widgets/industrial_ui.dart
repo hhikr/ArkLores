@@ -184,14 +184,9 @@ class _BackdropPainter extends CustomPainter {
         ..color = theme.divider.withValues(
           alpha: baseAlpha * (major ? 1.7 : 0.65 + (index % 3) * 0.18),
         )
-        ..strokeWidth = major ? 1.8 : 1.05;
-      final breakStart = 210.0 + (index % 3) * 54;
-      canvas.drawLine(Offset(x, 0), Offset(x, breakStart), paint);
-      canvas.drawLine(
-        Offset(x, breakStart + 38 + (index % 2) * 26),
-        Offset(x, size.height),
-        paint,
-      );
+        ..strokeWidth = major ? 1.8 : 1.15
+        ..isAntiAlias = true;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
 
     index = 0;
@@ -201,14 +196,9 @@ class _BackdropPainter extends CustomPainter {
         ..color = theme.divider.withValues(
           alpha: baseAlpha * (major ? 1.55 : 0.55 + (index % 4) * 0.13),
         )
-        ..strokeWidth = major ? 1.7 : 1.0;
-      final gapStart = size.width * (0.18 + (index % 4) * 0.12);
-      canvas.drawLine(Offset(0, y), Offset(gapStart, y), paint);
-      canvas.drawLine(
-        Offset(gapStart + 26 + (index % 3) * 18, y),
-        Offset(size.width, y),
-        paint,
-      );
+        ..strokeWidth = major ? 1.7 : 1.1
+        ..isAntiAlias = true;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
 
     final perspective = Paint()
