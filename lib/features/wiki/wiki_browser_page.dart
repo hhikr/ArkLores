@@ -165,45 +165,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
   }
 
-  Future<void> _reloadWikiSites() async {
-    if (!_restoredState) return;
-    final service = ref.read(settingsServiceProvider);
-    final sites = await service.loadWikiSites();
-    if (!mounted) return;
-
-    final oldIndex = _tabController.index;
-    final oldSites = _wikiSites;
-    final oldControllers = _controllers;
-    final oldTitles = _titles;
-    final oldUrls = _currentUrls;
-    final oldBack = _canGoBack;
-    final oldForward = _canGoForward;
-
-    setState(() {
-      _resetTabState(sites);
-      for (var i = 0; i < _wikiSites.length; i++) {
-        final oldSiteIndex =
-            oldSites.indexWhere((site) => site.id == _wikiSites[i].id);
-        if (oldSiteIndex < 0) continue;
-        if (oldSites[oldSiteIndex].url != _wikiSites[i].url) continue;
-        _controllers[i] = oldControllers[oldSiteIndex];
-        _titles[i] = oldTitles[oldSiteIndex];
-        _currentUrls[i] = oldUrls[oldSiteIndex].trim().isNotEmpty
-            ? oldUrls[oldSiteIndex]
-            : _wikiSites[i].url;
-        _canGoBack[i] = oldBack[oldSiteIndex];
-        _canGoForward[i] = oldForward[oldSiteIndex];
-      }
-
-      _tabController.removeListener(_onTabChanged);
-      _tabController.dispose();
-      _tabController = TabController(length: _wikiSites.length, vsync: this);
-      _tabController.addListener(_onTabChanged);
-      _tabController.index = oldIndex.clamp(0, _wikiSites.length - 1).toInt();
-    });
-    _saveWikiTabIndex(_tabController.index);
-  }
-
   Future<void> _persistBrowsingState() async {
     try {
       final service = ref.read(settingsServiceProvider);
@@ -293,7 +254,43 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   void _reload() {
-    _controllers[_tabController.index]?.reload();
+    _refreshCurrentWiki();
+  }
+
+  Future<void> _refreshCurrentWiki() async {
+    if (!_restoredState || _wikiSites.isEmpty) return;
+
+    final index = _tabController.index;
+    final controller = _controllers[index];
+    if (controller == null) return;
+
+    final configuredSites =
+        await ref.read(settingsServiceProvider).loadWikiSites();
+    if (!mounted) return;
+
+    final activeSite = _wikiSites[index];
+    final configuredIndex =
+        configuredSites.indexWhere((site) => site.id == activeSite.id);
+    final configuredSite =
+        configuredIndex >= 0 ? configuredSites[configuredIndex] : null;
+
+    if (configuredSite != null && configuredSite.url != activeSite.url) {
+      final nextSites = [..._wikiSites];
+      nextSites[index] = configuredSite;
+      setState(() {
+        _wikiSites = nextSites;
+        _currentUrls[index] = configuredSite.url;
+        _titles[index] = '';
+        _canGoBack[index] = false;
+        _canGoForward[index] = false;
+      });
+      await controller.loadUrl(
+        urlRequest: URLRequest(url: WebUri(configuredSite.url)),
+      );
+      return;
+    }
+
+    await controller.reload();
   }
 
   void _toggleDarkMode() {
@@ -738,8 +735,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
-    ref.listen<int>(wikiSourcesRevisionProvider, (_, __) => _reloadWikiSites());
-
     if (!_restoredState) {
       return Scaffold(
         backgroundColor: Colors.transparent,
