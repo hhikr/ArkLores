@@ -1,5 +1,11 @@
 # GameData Retrieval QA
 
+> 状态更新（2026-08）：开发者已在代表性 Android 真机上完成个人验收，覆盖知识库
+> 下载/安装/替换、检索、Summary / Fact-check / Role-play 对话、Wiki 双站浏览与
+> 阅读器、双主题/双语、TalkBack 与横屏等主路径，结果符合预期。下文历史版本记录
+> 中的 "Not verified: Android 真机…" 条目视为已被该轮个人验收关闭；仍开放项统一
+> 维护在本文档 Known Limits。
+
 当前主线使用中文 GameData release DB 作为唯一默认知识源。检索路线是结构化 RAG：
 
 1. 实体 / 别名结构化查询。
@@ -107,26 +113,37 @@ Additional smoke check:
 
 ## Known Limits
 
-跨 v0.6-v0.9 仍持续有效的 deferred 验收统一维护在此：
+### 已关闭（2026-08 开发者个人真机验收）
 
-- Android 真机上的 Role-play 存档恢复、长对话、取消、双语与 TalkBack。
+以下 Android 真机验收项已由开发者个人完成，结果符合预期：
+
+- Role-play 存档恢复、长对话、取消、双语与 TalkBack。
 - Wiki WebView 原生选区、底部托盘、返回浏览、软键盘及系统选区行为。
-- Summary/Fact-check Wiki context 的真实外部 Chat 与完整 DB 检索矩阵。
 - 证据卡在横屏、极端文字缩放和 TalkBack 下的朗读/操作顺序。
+- 知识库下载、安装、替换、检索与 Summary / Fact-check / Role-play 全链路。
+- v0.9 双主题/双语在代表性 Android 真机上的渲染。
+
+### 仍开放
+
+- Summary / Fact-check Wiki context 的真实外部 Chat 与完整 DB 检索矩阵。
 - 多角色任务参与检索矩阵、低覆盖量化和 `source_path` 到原始文件的可信导航。
 - 正式商店签名；既有 GitHub APK 使用 Android Debug certificate。
-- v0.9 双主题/双语自动截图回读与代表性 Android 真机截图。
+- v0.9 双主题/双语自动截图回读（自动化截图对比管线）。
 
 - Story chunks 当前仍以 FTS / LIKE 为主，没有实体级剧情索引。
 - `肉鸽`、`秘录`、`模组` 等归一化是规则表，不是完整同义词知识库。
 - `莱茵生命`、`萨卡兹王庭` 等宽泛组织 query 当前可命中相关干员档案，但 GameData DB 尚未构建组织级汇总实体。
 - `特蕾西娅` 等变体名现在有基础 alias 候选，但用户提问时是否需要展示候选仍取决于 Agent 调用 `search_local_lore` 的 disambiguation 分支。
-- 真机端到端仍需要用 release asset 或临时 HTTP asset 验证下载、安装、检索、Summary Agent 全链路。
 
-## v1.0 Readiness QA Backlog
+以上仍开放项的根因分析与修复方向见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
+
+## 持续 QA Backlog
+
+v0.10 之后的逐版本详细计划已不再在 `implementation_plan.md` 维护；本 backlog 作为
+持续质量清单保留，与 `KNOWN_LIMITATIONS_AND_DEBT.md` 的根因分析配套使用。
 
 v0.9 的 QA 证明了当前 GameData-first MVP 可以工作，但还不能证明它已经是正式可用版本。
-以下 backlog 用于约束 v1.0 前的质量提升，避免把“单次测试通过”误写成“产品稳定”。
+以下 backlog 用于约束正式发布前的质量提升，避免把“单次测试通过”误写成“产品稳定”。
 
 ### 数据更新与覆盖
 
@@ -170,7 +187,8 @@ Agent QA 需要逐步从 prompt snapshot 扩展为 workflow 质量矩阵：
 
 ### 性能与正式应用体验
 
-v1.0 前需要在代表性 Android 设备上记录以下指标：
+功能真机验收已由开发者个人完成并符合预期（见 Known Limits 已关闭项）；以下性能
+指标量化与正式发布工程仍作为持续工作，在代表性 Android 设备上记录：
 
 - 首次启动、进入 AI 页、知识库状态读取、DB 下载/解压/校验/替换耗时。
 - 常见检索 query 的 p50/p95 延迟和长 query 超时行为。
