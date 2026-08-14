@@ -26,9 +26,9 @@ final onboardingStatusProvider = StateProvider<bool>((ref) {
 /// Notifier that holds the current [LLMConfig] and persists changes
 /// to secure storage.
 class ApiConfigNotifier extends StateNotifier<LLMConfig> {
-  final SettingsService _service;
 
   ApiConfigNotifier(this._service, LLMConfig initial) : super(initial);
+  final SettingsService _service;
 
   /// Saves a new config and updates state.
   Future<void> save(LLMConfig config) async {

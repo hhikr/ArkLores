@@ -9,8 +9,9 @@ enum CitationSourceType {
   wiki('Wiki'),
   book('Book');
 
-  final String label;
   const CitationSourceType(this.label);
+
+  final String label;
 }
 
 /// A collapsible citation card that displays a referenced text passage
@@ -23,12 +24,6 @@ enum CitationSourceType {
 /// Clicking the citation opens the card to reveal the full source text
 /// and a "View in Wiki" button (Wiki sources only).
 class CitationCard extends ConsumerStatefulWidget {
-  final String title;
-  final String content;
-  final CitationSourceType sourceType;
-  final String? sourceUrl;
-  final String? sourceDetail;
-
   const CitationCard({
     super.key,
     required this.title,
@@ -37,6 +32,12 @@ class CitationCard extends ConsumerStatefulWidget {
     this.sourceUrl,
     this.sourceDetail,
   });
+
+  final String title;
+  final String content;
+  final CitationSourceType sourceType;
+  final String? sourceUrl;
+  final String? sourceDetail;
 
   @override
   ConsumerState<CitationCard> createState() => _CitationCardState();
@@ -193,7 +194,7 @@ class _CitationCardState extends ConsumerState<CitationCard>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(Icons.open_in_new_rounded,
-                                size: 14, color: theme.accentPrimary),
+                                size: 14, color: theme.accentPrimary,),
                             const SizedBox(width: 4),
                             Text(
                               context.t.citationViewInWiki,

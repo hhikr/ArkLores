@@ -1,5 +1,5 @@
-import 'package:arklores/features/wiki/wiki_site_adapter.dart';
 import 'package:arklores/features/settings/settings_service.dart';
+import 'package:arklores/features/wiki/wiki_site_adapter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

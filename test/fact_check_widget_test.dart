@@ -9,9 +9,9 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
-import 'package:arklores/features/ai/wiki_ai_context.dart';
 import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/features/ai/widgets/roleplay_tab.dart';
+import 'package:arklores/features/ai/wiki_ai_context.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
@@ -181,7 +181,7 @@ void main() {
     expect(find.text('阿米娅'), findsWidgets);
     expect(find.textContaining('char_002_amiya'), findsWidgets);
     expect(find.text('角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。'),
-        findsOneWidget);
+        findsOneWidget,);
     expect(find.text('你好'), findsWidgets);
     expect(tester.takeException(), isNull);
   });

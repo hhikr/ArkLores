@@ -3,14 +3,14 @@ import 'agent_tool.dart';
 
 /// Source-neutral local lore search tool.
 class SearchLocalLoreTool extends AgentTool {
-  static const int _maxObservationChars = 4800;
-  static const int _maxContentExcerptChars = 700;
-
-  final GameDataKnowledgeStore? _gameDataStore;
 
   SearchLocalLoreTool({
     GameDataKnowledgeStore? gameDataStore,
   }) : _gameDataStore = gameDataStore ?? GameDataKnowledgeStore();
+  static const int _maxObservationChars = 4800;
+  static const int _maxContentExcerptChars = 700;
+
+  final GameDataKnowledgeStore? _gameDataStore;
 
   @override
   String get name => 'search_local_lore';
@@ -96,7 +96,7 @@ class SearchLocalLoreTool extends AgentTool {
             .where((candidate) =>
                 candidate.matchType == 'name_exact' ||
                 candidate.matchType == 'canonical_alias_exact' ||
-                candidate.matchType == 'alias_exact')
+                candidate.matchType == 'alias_exact',)
             .toList(growable: false);
         if (exactCandidates.length > 1) {
           return _formatDisambiguationCandidates(query, exactCandidates);
@@ -209,7 +209,7 @@ class SearchLocalLoreTool extends AgentTool {
       }
       if (result.lineStart != null || result.lineEnd != null) {
         buffer.writeln(
-            'Lines: ${result.lineStart ?? '?'}-${result.lineEnd ?? '?'}');
+            'Lines: ${result.lineStart ?? '?'}-${result.lineEnd ?? '?'}',);
       }
       buffer.writeln('Trust: GameData / game original text (highest).');
       buffer.writeln('Content Excerpt:\n${_excerpt(result.content)}');

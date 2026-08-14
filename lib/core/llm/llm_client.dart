@@ -23,10 +23,6 @@ enum MessageRole {
 
 /// A single message in a conversation.
 class Message {
-  final MessageRole role;
-  final String content;
-  final String? toolCallId;
-  final List<Map<String, dynamic>>? toolCalls;
 
   const Message({
     required this.role,
@@ -34,13 +30,6 @@ class Message {
     this.toolCallId,
     this.toolCalls,
   });
-
-  Map<String, dynamic> toJson() => {
-        'role': role.jsonValue,
-        'content': content,
-        if (toolCallId != null) 'tool_call_id': toolCallId,
-        if (toolCalls != null) 'tool_calls': toolCalls,
-      };
 
   factory Message.system(String content) =>
       Message(role: MessageRole.system, content: content);
@@ -50,20 +39,31 @@ class Message {
 
   factory Message.assistant(String content) =>
       Message(role: MessageRole.assistant, content: content);
+  final MessageRole role;
+  final String content;
+  final String? toolCallId;
+  final List<Map<String, dynamic>>? toolCalls;
+
+  Map<String, dynamic> toJson() => {
+        'role': role.jsonValue,
+        'content': content,
+        if (toolCallId != null) 'tool_call_id': toolCallId,
+        if (toolCalls != null) 'tool_calls': toolCalls,
+      };
 }
 
 /// Configuration for LLM API connections.
 class LLMConfig {
-  // ── Chat API ─────────────────────────────────────────────
-  final String chatBaseUrl;
-  final String chatApiKey;
-  final String chatModel;
 
   const LLMConfig({
     this.chatBaseUrl = 'https://api.deepseek.com/v1',
     this.chatApiKey = '',
     this.chatModel = 'deepseek-v4-flash',
   });
+  // ── Chat API ─────────────────────────────────────────────
+  final String chatBaseUrl;
+  final String chatApiKey;
+  final String chatModel;
 
   LLMConfig copyWith({
     String? chatBaseUrl,
@@ -99,11 +99,11 @@ class LLMConfig {
 
 /// Exception thrown by LLM operations.
 class LLMException implements Exception {
+
+  const LLMException(this.message, {this.statusCode, this.body});
   final String message;
   final int? statusCode;
   final String? body;
-
-  const LLMException(this.message, {this.statusCode, this.body});
 
   @override
   String toString() =>
@@ -112,13 +112,13 @@ class LLMException implements Exception {
 
 /// Metadata returned by a chat completion.
 class ChatCompletionResult {
-  final String content;
-  final String? finishReason;
 
   const ChatCompletionResult({
     required this.content,
     this.finishReason,
   });
+  final String content;
+  final String? finishReason;
 
   bool get wasTruncated => finishReason == 'length';
 }

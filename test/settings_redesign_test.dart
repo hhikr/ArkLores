@@ -54,7 +54,7 @@ void main() {
     final context = tester.element(find.byType(SettingsPage));
     final container = ProviderScope.containerOf(context);
     expect(
-        container.read(themeProvider.notifier).currentTheme, AppTheme.endfield);
+        container.read(themeProvider.notifier).currentTheme, AppTheme.endfield,);
     expect(tester.takeException(), isNull);
   });
 

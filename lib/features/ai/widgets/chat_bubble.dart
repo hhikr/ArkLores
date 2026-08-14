@@ -6,17 +6,17 @@ import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/fact_check_agent.dart';
 import '../../../core/agent/react_loop.dart';
 import '../../../core/llm/llm_client.dart';
-import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/l10n/l10n.dart';
+import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../evidence_observation.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
 /// and lazy loading of citations.
 class ChatBubble extends ConsumerStatefulWidget {
-  final ChatMessage message;
 
   const ChatBubble({super.key, required this.message});
+  final ChatMessage message;
 
   @override
   ConsumerState<ChatBubble> createState() => _ChatBubbleState();
@@ -145,7 +145,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
     // Scan for citation UUIDs
     final uuidRegex = RegExp(
-        r'\[([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\]');
+        r'\[([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\]',);
     final matches = uuidRegex.allMatches(content);
     final citationIds = matches.map((m) => m.group(1)!).toSet().toList();
 
@@ -218,7 +218,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   List<String> get _evidenceObservations => widget.message.steps
       .where((step) =>
           step.type == ReActEventType.toolObservation &&
-          step.content.contains('Source Kind: GameData'))
+          step.content.contains('Source Kind: GameData'),)
       .map((step) => step.content)
       .toList(growable: false);
 
@@ -268,7 +268,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   color: config.$2,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                )),
+                ),),
           ],
         ),
       ),
@@ -436,7 +436,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                     style: theme.titleFont.copyWith(
                         color: theme.textPrimary,
                         fontSize: 13,
-                        fontWeight: FontWeight.bold)),
+                        fontWeight: FontWeight.bold,),),
                 _evidenceBadge(theme, coverage),
               ],
             ),
@@ -444,14 +444,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               _metadata(context.t.aiEvidenceSection, record.section!, theme),
             if (record.contentType != null)
               _metadata(
-                  context.t.aiEvidenceContentType, record.contentType!, theme),
+                  context.t.aiEvidenceContentType, record.contentType!, theme,),
             _metadata(
-                context.t.aiEvidenceRetrievalType, record.retrievalType, theme),
+                context.t.aiEvidenceRetrievalType, record.retrievalType, theme,),
             _metadata(
-                context.t.aiEvidenceRankingReason, record.rankingReason, theme),
+                context.t.aiEvidenceRankingReason, record.rankingReason, theme,),
             if (record.sourcePath != null)
               _metadata(
-                  context.t.aiEvidenceSourcePath, record.sourcePath!, theme),
+                  context.t.aiEvidenceSourcePath, record.sourcePath!, theme,),
             if (record.rawId != null)
               _metadata(context.t.aiEvidenceRawId, record.rawId!, theme),
             _metadata(context.t.aiEvidenceTrustNote, record.trustNote, theme),
@@ -459,7 +459,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               const SizedBox(height: 6),
               SelectableText(record.excerpt,
                   style: theme.bodyFont.copyWith(
-                      color: theme.textPrimary, fontSize: 12, height: 1.4)),
+                      color: theme.textPrimary, fontSize: 12, height: 1.4,),),
             ],
           ],
         ),
@@ -471,7 +471,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         padding: const EdgeInsets.only(top: 4),
         child: SelectableText('$label: $value',
             style: theme.bodyFont.copyWith(
-                color: theme.textSecondary, fontSize: 11, height: 1.35)),
+                color: theme.textSecondary, fontSize: 11, height: 1.35,),),
       );
 
   Widget _evidenceBadge(AppThemeTokens theme, String label) => Container(
@@ -485,7 +485,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             style: theme.bodyFont.copyWith(
                 color: theme.accentPrimary,
                 fontSize: 10,
-                fontWeight: FontWeight.bold)),
+                fontWeight: FontWeight.bold,),),
       );
 
   Widget _buildStepRow(AppThemeTokens theme, ReActStep step) {

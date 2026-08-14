@@ -167,11 +167,6 @@ Future<_LiveResult> _runCase(FactCheckAgent agent, String claim) async {
 }
 
 class _LiveResult {
-  final FactCheckVerdict? verdict;
-  final String answer;
-  final String observations;
-  final int toolCalls;
-  final List<String> errors;
 
   const _LiveResult({
     required this.verdict,
@@ -180,6 +175,11 @@ class _LiveResult {
     required this.toolCalls,
     required this.errors,
   });
+  final FactCheckVerdict? verdict;
+  final String answer;
+  final String observations;
+  final int toolCalls;
+  final List<String> errors;
 
   String get diagnostics => [
         ...errors,

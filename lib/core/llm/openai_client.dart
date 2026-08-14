@@ -10,9 +10,6 @@ import 'llm_client.dart';
 ///
 /// Supports custom Base URL for chat-completion providers.
 class OpenAICompatibleClient implements LLMClient {
-  final LLMConfig config;
-  final http.Client _httpClient;
-  final Duration _timeout;
 
   OpenAICompatibleClient({
     required this.config,
@@ -20,6 +17,9 @@ class OpenAICompatibleClient implements LLMClient {
     Duration? timeout,
   })  : _httpClient = httpClient ?? http.Client(),
         _timeout = timeout ?? const Duration(seconds: 30);
+  final LLMConfig config;
+  final http.Client _httpClient;
+  final Duration _timeout;
 
   @override
   Future<String> chat(
@@ -73,7 +73,7 @@ class OpenAICompatibleClient implements LLMClient {
       if (response.statusCode != 200) {
         throw LLMException(
           _responseErrorMessage(response.body,
-              fallback: 'Chat completion failed'),
+              fallback: 'Chat completion failed',),
           statusCode: response.statusCode,
           body: response.body,
         );
@@ -85,10 +85,11 @@ class OpenAICompatibleClient implements LLMClient {
         throw const LLMException('Empty response from chat completion');
       }
 
-      final message = choices[0]['message'] as Map<String, dynamic>;
+      final firstChoice = choices[0] as Map<String, dynamic>;
+      final message = firstChoice['message'] as Map<String, dynamic>;
       return ChatCompletionResult(
         content: (message['content'] as String?) ?? '',
-        finishReason: choices[0]['finish_reason'] as String?,
+        finishReason: firstChoice['finish_reason'] as String?,
       );
     } on SocketException catch (e) {
       throw LLMException('Network error: ${e.message}');
@@ -147,7 +148,8 @@ class OpenAICompatibleClient implements LLMClient {
             final choices = json['choices'] as List<dynamic>?;
             if (choices == null || choices.isEmpty) continue;
 
-            final delta = choices[0]['delta'] as Map<String, dynamic>?;
+            final firstChoice = choices[0] as Map<String, dynamic>;
+            final delta = firstChoice['delta'] as Map<String, dynamic>?;
             final content = delta?['content'] as String?;
             if (content != null && content.isNotEmpty) {
               buffer.write(content);

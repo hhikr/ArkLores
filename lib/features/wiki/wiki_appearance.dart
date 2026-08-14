@@ -1,5 +1,5 @@
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import 'wiki_appearance_palette.dart';
 import 'wiki_site_adapter.dart';

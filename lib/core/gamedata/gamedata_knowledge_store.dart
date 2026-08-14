@@ -5,24 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
 class GameDataSearchResult {
-  final String id;
-  final double score;
-  final String retrievalType;
-  final String sourceKind;
-  final String sourceType;
-  final String? contentCategory;
-  final String? contentSubtype;
-  final String? contentType;
-  final String? entityId;
-  final String? storyId;
-  final String title;
-  final String? section;
-  final String content;
-  final String? sourcePath;
-  final String? rawId;
-  final int? lineStart;
-  final int? lineEnd;
-  final String rankingReason;
 
   const GameDataSearchResult({
     required this.id,
@@ -44,17 +26,27 @@ class GameDataSearchResult {
     this.lineEnd,
     this.rankingReason = 'structured GameData match',
   });
+  final String id;
+  final double score;
+  final String retrievalType;
+  final String sourceKind;
+  final String sourceType;
+  final String? contentCategory;
+  final String? contentSubtype;
+  final String? contentType;
+  final String? entityId;
+  final String? storyId;
+  final String title;
+  final String? section;
+  final String content;
+  final String? sourcePath;
+  final String? rawId;
+  final int? lineStart;
+  final int? lineEnd;
+  final String rankingReason;
 }
 
 class GameDataEntityCandidate {
-  final String entityId;
-  final String name;
-  final String entityType;
-  final String sourceType;
-  final String? sourcePath;
-  final String matchedAlias;
-  final String matchType;
-  final double confidence;
 
   const GameDataEntityCandidate({
     required this.entityId,
@@ -66,13 +58,21 @@ class GameDataEntityCandidate {
     required this.confidence,
     this.sourcePath,
   });
+  final String entityId;
+  final String name;
+  final String entityType;
+  final String sourceType;
+  final String? sourcePath;
+  final String matchedAlias;
+  final String matchType;
+  final double confidence;
 }
 
 class GameDataKnowledgeStore {
-  final String? dbPath;
-  sqflite.Database? _db;
 
   GameDataKnowledgeStore({this.dbPath});
+  final String? dbPath;
+  sqflite.Database? _db;
 
   Future<bool> get isAvailable async {
     final path = await _resolveDbPath();
@@ -298,7 +298,7 @@ class GameDataKnowledgeStore {
                 matchType:
                     row['name'] == cleanQuery ? 'name_exact' : 'legacy_like',
                 confidence: row['name'] == cleanQuery ? 1.0 : 0.6,
-              ))
+              ),)
           .toList();
     }
 
@@ -349,7 +349,7 @@ class GameDataKnowledgeStore {
               matchedAlias: row['matched_alias'] as String,
               matchType: _candidateMatchType(row['rank'] as int?),
               confidence: (row['confidence'] as num?)?.toDouble() ?? 1.0,
-            ))
+            ),)
         .toList();
   }
 
@@ -465,7 +465,7 @@ class GameDataKnowledgeStore {
               score: row['name'] == query ? 7600 : 6200,
               retrievalType:
                   row['name'] == query ? 'entity_exact' : 'entity_like',
-            )));
+            ),),);
         continue;
       }
       if (contentType != null && contentType.trim().isNotEmpty) {
@@ -484,7 +484,7 @@ class GameDataKnowledgeStore {
         content: row['name'] as String,
         sourcePath: row['source_path'] as String?,
         rawId: entityId,
-      ));
+      ),);
     }
     return results;
   }
@@ -1121,11 +1121,6 @@ bool _hasStoryIntent(String query) {
 }
 
 class _GameDataQueryPlan {
-  final String originalQuery;
-  final String entityQuery;
-  final List<String> searchQueries;
-  final String? effectiveContentType;
-  final bool hasStoryIntent;
 
   const _GameDataQueryPlan({
     required this.originalQuery,
@@ -1160,6 +1155,11 @@ class _GameDataQueryPlan {
       hasStoryIntent: _hasStoryIntent(normalized),
     );
   }
+  final String originalQuery;
+  final String entityQuery;
+  final List<String> searchQueries;
+  final String? effectiveContentType;
+  final bool hasStoryIntent;
 }
 
 String? _inferContentType(String query) {

@@ -12,8 +12,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:arklores/core/rag/chunker.dart';
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -116,9 +116,9 @@ void main(List<String> args) async {
     await importer.importAll();
 
     await db.execute(
-        "INSERT INTO entity_documents_fts(entity_documents_fts) VALUES('rebuild')");
+        "INSERT INTO entity_documents_fts(entity_documents_fts) VALUES('rebuild')",);
     await db.execute(
-        "INSERT INTO lore_chunks_fts(lore_chunks_fts) VALUES('rebuild')");
+        "INSERT INTO lore_chunks_fts(lore_chunks_fts) VALUES('rebuild')",);
     await stats.refreshFrom(db);
     await _writeManifest(
       db,
@@ -387,11 +387,6 @@ Future<String> _gitCommit(String path) async {
 }
 
 class _ArknightsImporter {
-  final Directory sourceDir;
-  final Database db;
-  final _BuildStats stats;
-  final int storyLimit;
-  final Chunker _chunker = const Chunker();
 
   _ArknightsImporter({
     required this.sourceDir,
@@ -399,6 +394,11 @@ class _ArknightsImporter {
     required this.stats,
     required this.storyLimit,
   });
+  final Directory sourceDir;
+  final Database db;
+  final _BuildStats stats;
+  final int storyLimit;
+  final Chunker _chunker = const Chunker();
 
   Future<void> importAll() async {
     final zh = Directory(p.join(sourceDir.path, 'zh_CN'));
@@ -885,7 +885,7 @@ class _ArknightsImporter {
       final text = lines
           .map((line) => line.speaker == null
               ? line.content
-              : '${line.speaker}: ${line.content}')
+              : '${line.speaker}: ${line.content}',)
           .join('\n');
       final chunks = _chunker.chunkBySliding(text, pageTitle: storyId);
       for (var chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
@@ -988,7 +988,7 @@ class _ArknightsImporter {
       pageTitle,
       section,
       clean,
-    ].join(':'));
+    ].join(':'),);
     await txn.insert(
       'lore_chunks',
       {
@@ -1180,7 +1180,7 @@ class _ArknightsImporter {
           targetEntityId,
           relationType,
           rawId ?? '',
-        ].join(':')),
+        ].join(':'),),
         'source_entity_id': sourceEntityId,
         'target_entity_id': targetEntityId,
         'relation_type': relationType,
@@ -1245,35 +1245,20 @@ class _ArknightsImporter {
 }
 
 class _StoryLine {
-  final String? speaker;
-  final String content;
 
   const _StoryLine(this.speaker, this.content);
+  final String? speaker;
+  final String content;
 }
 
 class _TextSection {
-  final String section;
-  final String content;
 
   const _TextSection(this.section, this.content);
+  final String section;
+  final String content;
 }
 
 class _NormalizedRecord {
-  final String category;
-  final String subtype;
-  final String contentType;
-  final String? entityId;
-  final String? entityName;
-  final String? parentId;
-  final String? parentType;
-  final String? title;
-  final String? section;
-  final String? speaker;
-  final String content;
-  final String sourcePath;
-  final String? rawId;
-  final int? lineStart;
-  final int? lineEnd;
 
   const _NormalizedRecord({
     required this.category,
@@ -1292,6 +1277,21 @@ class _NormalizedRecord {
     this.lineStart,
     this.lineEnd,
   });
+  final String category;
+  final String subtype;
+  final String contentType;
+  final String? entityId;
+  final String? entityName;
+  final String? parentId;
+  final String? parentType;
+  final String? title;
+  final String? section;
+  final String? speaker;
+  final String content;
+  final String sourcePath;
+  final String? rawId;
+  final int? lineStart;
+  final int? lineEnd;
 
   String get id => _stableId([
         _game,
@@ -1302,7 +1302,7 @@ class _NormalizedRecord {
         rawId ?? '',
         section ?? '',
         content,
-      ].join(':'));
+      ].join(':'),);
 }
 
 List<_TextSection> _collectTextSections(Map<String, dynamic> data) {
@@ -1326,7 +1326,7 @@ List<_TextSection> _collectTextSections(Map<String, dynamic> data) {
     if (value is Map) {
       for (final entry in value.entries) {
         visit(
-            entry.value, path.isEmpty ? '${entry.key}' : '$path.${entry.key}');
+            entry.value, path.isEmpty ? '${entry.key}' : '$path.${entry.key}',);
       }
     }
   }
@@ -1514,10 +1514,6 @@ int _firstInt(List<Map<String, Object?>> rows) {
 }
 
 class _Config {
-  final String arknightsSource;
-  final String outputDir;
-  final bool force;
-  final int storyLimit;
 
   const _Config({
     required this.arknightsSource,
@@ -1525,6 +1521,10 @@ class _Config {
     required this.force,
     required this.storyLimit,
   });
+  final String arknightsSource;
+  final String outputDir;
+  final bool force;
+  final int storyLimit;
 
   static _Config parse(List<String> args) {
     String? arknightsSource;

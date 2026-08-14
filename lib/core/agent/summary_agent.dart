@@ -9,8 +9,6 @@ import 'tools/tool_registry.dart';
 ///
 /// Sets up the tool registry and runs the ReAct loop using the summary prompts.
 class SummaryAgent {
-  final LLMClient _llmClient;
-  final ToolRegistry _toolRegistry;
 
   SummaryAgent({
     required LLMClient llmClient,
@@ -20,8 +18,10 @@ class SummaryAgent {
     // GameData only.
     _toolRegistry.register(SearchLocalLoreTool(
       gameDataStore: null,
-    ));
+    ),);
   }
+  final LLMClient _llmClient;
+  final ToolRegistry _toolRegistry;
 
   /// Runs the Summary Agent for a user query.
   ///

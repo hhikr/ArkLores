@@ -8,10 +8,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
 class GameDataInstallStatus {
-  final bool installed;
-  final String dbPath;
-  final int bytes;
-  final Map<String, String> manifest;
 
   const GameDataInstallStatus({
     required this.installed,
@@ -19,6 +15,10 @@ class GameDataInstallStatus {
     required this.bytes,
     required this.manifest,
   });
+  final bool installed;
+  final String dbPath;
+  final int bytes;
+  final Map<String, String> manifest;
 
   String? get sourceCommit => manifest['source_arknights_commit'];
   String? get builtAt => manifest['built_at'];
@@ -28,10 +28,6 @@ class GameDataInstallStatus {
 }
 
 class GameDataReleaseAsset {
-  final Uri url;
-  final String? sha256;
-  final int? compressedBytes;
-  final int? uncompressedBytes;
 
   const GameDataReleaseAsset({
     required this.url,
@@ -39,9 +35,15 @@ class GameDataReleaseAsset {
     this.compressedBytes,
     this.uncompressedBytes,
   });
+  final Uri url;
+  final String? sha256;
+  final int? compressedBytes;
+  final int? uncompressedBytes;
 }
 
 class GameDataInstaller {
+
+  const GameDataInstaller({this.installDirectory});
   static const _dbFileName = 'arklores_gamedata_zh.db';
   final Directory? installDirectory;
 
@@ -50,8 +52,6 @@ class GameDataInstaller {
   static const _definedUrl = String.fromEnvironment('ARKLORES_GAMEDATA_DB_URL');
   static const _definedSha =
       String.fromEnvironment('ARKLORES_GAMEDATA_DB_SHA256');
-
-  const GameDataInstaller({this.installDirectory});
 
   Future<GameDataInstallStatus> getStatus() async {
     final file = await _dbFile();

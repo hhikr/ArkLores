@@ -11,17 +11,17 @@ import 'wiki_models.dart';
 /// Uses `action=query&prop=extracts&explaintext=true` to obtain
 /// plain text content directly (no Wikitext parsing needed).
 class MediaWikiCrawler {
-  final http.Client _httpClient;
-  final Duration _requestDelay;
-
-  /// Maximum pages per batch request.
-  static const int _batchSize = 50;
 
   MediaWikiCrawler({
     http.Client? httpClient,
     Duration? requestDelay,
   })  : _httpClient = httpClient ?? http.Client(),
         _requestDelay = requestDelay ?? const Duration(milliseconds: 200);
+  final http.Client _httpClient;
+  final Duration _requestDelay;
+
+  /// Maximum pages per batch request.
+  static const int _batchSize = 50;
 
   /// Fetches only the titles of pages belonging to a category.
   ///
@@ -51,7 +51,8 @@ class MediaWikiCrawler {
       final members = query?['categorymembers'] as List<dynamic>? ?? [];
 
       for (final member in members) {
-        final title = member['title'] as String? ?? '';
+        final memberMap = member as Map<String, dynamic>;
+        final title = memberMap['title'] as String? ?? '';
         if (title.isNotEmpty) {
           titles.add(title);
         }
@@ -61,7 +62,7 @@ class MediaWikiCrawler {
       continueToken = queryContinue?['cmcontinue'] as String?;
 
       if (continueToken != null) {
-        await Future.delayed(_requestDelay);
+        await Future<void>.delayed(_requestDelay);
       }
     } while (continueToken != null);
 
@@ -84,7 +85,7 @@ class MediaWikiCrawler {
     // Report initial progress (total pages unknown upfront).
     onProgress?.call(CrawlProgress(
       currentTitle: categoryName,
-    ));
+    ),);
 
     // Fetch pages in batches.
     do {
@@ -101,12 +102,12 @@ class MediaWikiCrawler {
       }
 
       final result = await _queryApi(site, params);
-      final members =
-          result['query']['categorymembers'] as List<dynamic>? ?? [];
+      final query = result['query'] as Map<String, dynamic>?;
+      final members = query?['categorymembers'] as List<dynamic>? ?? [];
 
       // Collect page titles from this batch.
       final titles = members
-          .map((m) => m['title'] as String)
+          .map((m) => (m as Map<String, dynamic>)['title'] as String)
           .where((t) => t.isNotEmpty)
           .toList();
 
@@ -121,7 +122,7 @@ class MediaWikiCrawler {
             pagesFetched: fetched,
             currentTitle: page.title,
             isComplete: false,
-          ));
+          ),);
         }
       }
 
@@ -131,7 +132,7 @@ class MediaWikiCrawler {
 
       // Rate limiting delay between requests.
       if (continueToken != null) {
-        await Future.delayed(_requestDelay);
+        await Future<void>.delayed(_requestDelay);
       }
     } while (continueToken != null);
 
@@ -140,7 +141,7 @@ class MediaWikiCrawler {
       totalPages: fetched,
       currentTitle: '',
       isComplete: true,
-    ));
+    ),);
 
     return pages;
   }
@@ -185,12 +186,12 @@ class MediaWikiCrawler {
           pageId: pageData['pageid'] as int,
           title: pageData['title'] as String? ?? '',
           content: (pageData['extract'] as String?) ?? '',
-        ));
+        ),);
       }
 
       // Delay between sub-batches.
       if (i + _batchSize < titles.length) {
-        await Future.delayed(_requestDelay);
+        await Future<void>.delayed(_requestDelay);
       }
     }
 
@@ -239,8 +240,10 @@ class MediaWikiCrawler {
         final pageId = pageData['pageid'] as int;
         final revisions = pageData['revisions'] as List<dynamic>?;
         if (title.isNotEmpty && revisions != null && revisions.isNotEmpty) {
-          final wikitext =
-              revisions[0]['slots']?['main']?['*'] as String? ?? '';
+          final revision = revisions[0] as Map<String, dynamic>;
+          final slots = revision['slots'] as Map<String, dynamic>?;
+          final main = slots?['main'] as Map<String, dynamic>?;
+          final wikitext = main?['*'] as String? ?? '';
           result[title] = WikiPage(
             pageId: pageId,
             title: title,
@@ -251,7 +254,7 @@ class MediaWikiCrawler {
 
       // Delay between sub-batches.
       if (i + _batchSize < titles.length) {
-        await Future.delayed(_requestDelay);
+        await Future<void>.delayed(_requestDelay);
       }
     }
 
@@ -307,7 +310,7 @@ class MediaWikiCrawler {
 
       // Rate limiting delay.
       if (i + _batchSize < titles.length) {
-        await Future.delayed(_requestDelay);
+        await Future<void>.delayed(_requestDelay);
       }
     }
 
@@ -325,9 +328,10 @@ class MediaWikiCrawler {
       'apfilterredir': 'nonredirects',
     });
 
-    final pages = result['query']['allpages'] as List<dynamic>? ?? [];
+    final query = result['query'] as Map<String, dynamic>?;
+    final pages = query?['allpages'] as List<dynamic>? ?? [];
     return pages
-        .map((p) => p['title'] as String)
+        .map((p) => (p as Map<String, dynamic>)['title'] as String)
         .where((t) => t.startsWith('Category:'))
         .toList();
   }
@@ -365,11 +369,11 @@ class MediaWikiCrawler {
 
 /// Exception thrown by [MediaWikiCrawler].
 class CrawlerException implements Exception {
+
+  const CrawlerException(this.message, {this.statusCode, this.uri});
   final String message;
   final int? statusCode;
   final String? uri;
-
-  const CrawlerException(this.message, {this.statusCode, this.uri});
 
   @override
   String toString() =>

@@ -1,5 +1,5 @@
-import 'package:arklores/features/wiki/wiki_appearance_palette.dart';
 import 'package:arklores/features/wiki/wiki_appearance.dart';
+import 'package:arklores/features/wiki/wiki_appearance_palette.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

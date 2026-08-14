@@ -14,12 +14,12 @@ extension FactCheckVerdictWireValue on FactCheckVerdict {
 }
 
 class FactCheckAgent {
-  final LLMClient _llmClient;
-  final AgentTool _searchTool;
 
   FactCheckAgent({required LLMClient llmClient, AgentTool? searchTool})
       : _llmClient = llmClient,
         _searchTool = searchTool ?? SearchLocalLoreTool();
+  final LLMClient _llmClient;
+  final AgentTool _searchTool;
 
   Stream<ReActEvent> checkClaim({
     required String claim,

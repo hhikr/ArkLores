@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../shared/theme/app_theme.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
 
 /// Compact vertical toolbar with icon-only buttons.
 ///
@@ -56,10 +56,10 @@ class WikiToolbar extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _TrayButton(
-            icon: Icons.zoom_out_rounded, theme: theme, onTap: onZoomOut),
+            icon: Icons.zoom_out_rounded, theme: theme, onTap: onZoomOut,),
         _TrayButton(icon: Icons.zoom_in_rounded, theme: theme, onTap: onZoomIn),
         _TrayButton(
-            icon: Icons.refresh_rounded, theme: theme, onTap: onRefresh),
+            icon: Icons.refresh_rounded, theme: theme, onTap: onRefresh,),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Divider(color: theme.divider, height: 1),
@@ -119,11 +119,6 @@ class WikiToolbar extends ConsumerWidget {
 
 /// A single icon button inside the expandable toolbar.
 class _TrayButton extends StatefulWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  final AppThemeTokens theme;
-  final Color? activeColor;
-  final String? tooltip;
 
   const _TrayButton({
     required this.icon,
@@ -132,6 +127,11 @@ class _TrayButton extends StatefulWidget {
     this.activeColor,
     this.tooltip,
   });
+  final IconData icon;
+  final VoidCallback? onTap;
+  final AppThemeTokens theme;
+  final Color? activeColor;
+  final String? tooltip;
 
   @override
   State<_TrayButton> createState() => _TrayButtonState();

@@ -12,10 +12,6 @@ final wikiCrawlerProvider = Provider<MediaWikiCrawler>((ref) {
 
 /// State holder for an ongoing or completed crawl operation.
 class CrawlState {
-  final List<WikiPage> pages;
-  final CrawlProgress progress;
-  final bool isRunning;
-  final String? error;
 
   const CrawlState({
     this.pages = const [],
@@ -23,6 +19,10 @@ class CrawlState {
     this.isRunning = false,
     this.error,
   });
+  final List<WikiPage> pages;
+  final CrawlProgress progress;
+  final bool isRunning;
+  final String? error;
 
   CrawlState copyWith({
     List<WikiPage>? pages,
@@ -40,9 +40,9 @@ class CrawlState {
 
 /// Notifier that manages wiki crawl operations.
 class CrawlNotifier extends StateNotifier<CrawlState> {
-  final MediaWikiCrawler _crawler;
 
   CrawlNotifier(this._crawler) : super(const CrawlState());
+  final MediaWikiCrawler _crawler;
 
   /// Crawls all pages under the given category on [site].
   Future<List<WikiPage>> crawlCategory({

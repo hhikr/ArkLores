@@ -5,9 +5,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class RoleplaySessionStore {
-  final String? filePath;
 
   const RoleplaySessionStore({this.filePath});
+  final String? filePath;
 
   Future<Map<String, dynamic>?> load() async {
     final file = await _file();

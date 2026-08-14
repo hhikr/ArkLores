@@ -554,22 +554,18 @@ String? _argValue(List<String> args, String name) {
 }
 
 class _RetrievalCheck {
-  final String query;
-  final bool storyIntent;
-  final String? expectedContentType;
 
   const _RetrievalCheck(
     this.query, {
     this.storyIntent = false,
     this.expectedContentType,
   });
+  final String query;
+  final bool storyIntent;
+  final String? expectedContentType;
 }
 
 class _QaResult {
-  final String retrievalType;
-  final String title;
-  final String? contentType;
-  final String? sourcePath;
 
   const _QaResult({
     required this.retrievalType,
@@ -577,4 +573,8 @@ class _QaResult {
     required this.contentType,
     required this.sourcePath,
   });
+  final String retrievalType;
+  final String title;
+  final String? contentType;
+  final String? sourcePath;
 }

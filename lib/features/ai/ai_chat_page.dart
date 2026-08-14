@@ -6,17 +6,17 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import 'wiki_ai_context.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/roleplay_tab.dart';
+import 'wiki_ai_context.dart';
 
 /// The main AI Chat Page hosting the three AI modes (FactCheck, Summary, Roleplay).
 ///
 /// Features a TabBar for fact-check, summary, and roleplay modes.
 class AiChatPage extends ConsumerStatefulWidget {
-  final WikiAiContext? initialWikiContext;
 
   const AiChatPage({super.key, this.initialWikiContext});
+  final WikiAiContext? initialWikiContext;
 
   @override
   ConsumerState<AiChatPage> createState() => _AiChatPageState();
@@ -187,7 +187,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               if (chatHistory.isNotEmpty)
                 IconButton(
                   icon: Icon(Icons.delete_sweep_rounded,
-                      color: theme.danger, size: 18),
+                      color: theme.danger, size: 18,),
                   tooltip: context.t.aiClearHistory,
                   onPressed: () => _confirmClearHistory(context, chatNotifier),
                   constraints: const BoxConstraints(),
@@ -256,10 +256,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               children: [
                 _buildSuggestionChip(theme, context.t.aiSummarySuggestionAmiya),
                 _buildSuggestionChip(
-                    theme, context.t.aiSummarySuggestionKaltsit),
+                    theme, context.t.aiSummarySuggestionKaltsit,),
                 _buildSuggestionChip(theme, context.t.aiSummarySuggestionRhine),
                 _buildSuggestionChip(
-                    theme, context.t.aiSummarySuggestionChernobog),
+                    theme, context.t.aiSummarySuggestionChernobog,),
               ],
             ),
           ],
@@ -295,7 +295,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           child: Row(
             children: [
               Icon(Icons.verified_outlined,
-                  size: 16, color: theme.accentPrimary),
+                  size: 16, color: theme.accentPrimary,),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -390,7 +390,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     hintStyle: theme.bodyFont
                         .copyWith(color: theme.textSecondary, fontSize: 13),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
+                        horizontal: 16, vertical: 10,),
                     border: InputBorder.none,
                     isDense: true,
                   ),
@@ -448,10 +448,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   }
 
   void _confirmClearHistory(
-      BuildContext context, SummaryChatNotifier notifier) {
+      BuildContext context, SummaryChatNotifier notifier,) {
     final theme = ref.read(themeProvider);
 
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
