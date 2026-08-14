@@ -6,8 +6,8 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/industrial_ui.dart';
-import '../../shared/widgets/theme_aware_card.dart';
 import '../../shared/widgets/smooth_page_route.dart';
+import '../../shared/widgets/theme_aware_card.dart';
 import 'app_icon_service.dart';
 import 'onboarding_page.dart';
 import 'settings_service.dart';
@@ -48,7 +48,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() => _launcherIcon = icon);
     if (!applied) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('当前平台暂不支持运行时切换图标，设置已保存。')),
+        SnackBar(content: Text(context.t.settingsIconUnsupported)),
       );
     }
   }
@@ -103,7 +103,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                       ButtonSegment(
                                         value: AppTheme.ark,
                                         label: Text(
-                                            context.t.settingsThemeArkShort),
+                                            context.t.settingsThemeArkShort,),
                                       ),
                                       ButtonSegment(
                                         value: AppTheme.endfield,
@@ -114,9 +114,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                     ],
                                     selected: {currentTheme},
                                     onSelectionChanged: (selection) {
+                                      final next = selection.first;
                                       ref
                                           .read(themeProvider.notifier)
-                                          .switchTo(selection.first);
+                                          .switchTo(next);
+                                      ref
+                                          .read(settingsServiceProvider)
+                                          .saveTheme(next);
                                     },
                                   ),
                                 ),
@@ -142,9 +146,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                     ],
                                     selected: {currentLocale},
                                     onSelectionChanged: (selection) {
+                                      final next = selection.first;
                                       ref
                                           .read(localeProvider.notifier)
-                                          .switchTo(selection.first);
+                                          .switchTo(next);
+                                      ref
+                                          .read(settingsServiceProvider)
+                                          .saveLocale(next);
                                     },
                                   ),
                                 ),
@@ -152,21 +160,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 _PreferenceRow(
                                   theme: theme,
                                   icon: Icons.apps_rounded,
-                                  title: '应用图标',
+                                  title: context.t.settingsAppIcon,
                                   subtitle:
                                       _launcherIcon == AppLauncherIcon.light
-                                          ? '白天图标'
-                                          : '夜间图标',
+                                          ? context.t.settingsIconLightLabel
+                                          : context.t.settingsIconDarkLabel,
                                   control: SegmentedButton<AppLauncherIcon>(
                                     showSelectedIcon: false,
-                                    segments: const [
+                                    segments: [
                                       ButtonSegment(
                                         value: AppLauncherIcon.light,
-                                        label: Text('浅色'),
+                                        label:
+                                            Text(context.t.settingsIconLightShort),
                                       ),
                                       ButtonSegment(
                                         value: AppLauncherIcon.dark,
-                                        label: Text('深色'),
+                                        label:
+                                            Text(context.t.settingsIconDarkShort),
                                       ),
                                     ],
                                     selected: {_launcherIcon},
@@ -211,11 +221,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           child: _SettingsActionTile(
                             theme: theme,
                             icon: Icons.dns_outlined,
-                            title: 'Wiki 来源',
-                            subtitle: '修改内置 Wiki URL，添加自定义 Wiki 入口',
+                            title: context.t.settingsWikiSources,
+                            subtitle: context.t.settingsWikiSourcesDesc,
                             onTap: () => Navigator.of(context).push(
-                              smoothPageRoute(
-                                builder: (_) => const WikiSourcesSettingsPage(),
+                              smoothPageRoute<void>(
+                                builder: (_) =>
+                                    const WikiSourcesSettingsPage(),
                               ),
                             ),
                           ),
@@ -246,7 +257,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             title: context.t.settingsShowOnboarding,
                             subtitle: context.t.settingsShowOnboardingDesc,
                             onTap: () => Navigator.of(context).push(
-                              smoothPageRoute(
+                              smoothPageRoute<void>(
                                 builder: (context) => OnboardingPage(
                                   onComplete: () => Navigator.of(context).pop(),
                                 ),
@@ -343,11 +354,12 @@ class _WikiSourcesSettingsPageState
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
-        title: Text('Wiki 来源', style: theme.titleFont.copyWith(fontSize: 18)),
+        title: Text(context.t.settingsWikiSources,
+            style: theme.titleFont.copyWith(fontSize: 18),),
         iconTheme: IconThemeData(color: theme.textPrimary),
         actions: [
           IconButton(
-            tooltip: '重置',
+            tooltip: context.t.wikiSourcesReset,
             icon: const Icon(Icons.restore_rounded),
             onPressed: _resetSites,
           ),
@@ -410,14 +422,14 @@ class _WikiSourcesSettingsPageState
                         ),
                       ),
                       IconButton(
-                        tooltip: '编辑',
+                        tooltip: context.t.wikiSourcesEdit,
                         icon: const Icon(Icons.edit_rounded),
                         color: theme.textSecondary,
                         onPressed: () => _editSite(site: site, index: index),
                       ),
                       if (!site.builtIn)
                         IconButton(
-                          tooltip: '删除',
+                          tooltip: context.t.wikiSourcesDelete,
                           icon: const Icon(Icons.delete_outline_rounded),
                           color: theme.danger,
                           onPressed: () => _deleteSite(index),
@@ -473,11 +485,11 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
     final iconUrl = _iconController.text.trim();
     final uri = Uri.tryParse(url);
     if (label.isEmpty) {
-      setState(() => _error = '请输入 Wiki 名称');
+      setState(() => _error = context.t.wikiSourcesNameRequired);
       return;
     }
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-      setState(() => _error = '请输入有效 URL');
+      setState(() => _error = context.t.wikiSourcesUrlRequired);
       return;
     }
     Navigator.of(context).pop(
@@ -508,7 +520,9 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: Text(widget.site == null ? '添加 Wiki' : '编辑 Wiki'),
+      title: Text(widget.site == null
+          ? context.t.wikiSourcesAddTitle
+          : context.t.wikiSourcesEditTitle,),
       content: SizedBox(
         width: 420,
         child: Column(
@@ -516,7 +530,7 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
           children: [
             TextField(
               controller: _labelController,
-              decoration: const InputDecoration(labelText: '名称'),
+              decoration: InputDecoration(labelText: context.t.wikiSourcesNameLabel),
               textInputAction: TextInputAction.next,
             ),
             TextField(
@@ -529,7 +543,7 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '终末地 Wiki 预设',
+                context.t.wikiSourcesEndfieldPreset,
                 style: Theme.of(context).textTheme.labelMedium,
               ),
             ),
@@ -562,7 +576,9 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
             const SizedBox(height: 8),
             TextField(
               controller: _iconController,
-              decoration: const InputDecoration(labelText: '图标 URL（可选）'),
+              decoration: InputDecoration(
+                labelText: context.t.wikiSourcesIconUrlLabel,
+              ),
               keyboardType: TextInputType.url,
             ),
             if (_error != null) ...[
@@ -583,11 +599,11 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+          child: Text(context.t.wikiSourcesCancel),
         ),
         FilledButton(
           onPressed: _submit,
-          child: const Text('保存'),
+          child: Text(context.t.wikiSourcesSave),
         ),
       ],
     );

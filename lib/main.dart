@@ -44,6 +44,20 @@ void main() async {
     debugPrint('[Startup] Error loading main tab index: $e');
   }
 
+  var appTheme = AppTheme.ark;
+  try {
+    appTheme = await settingsService.loadTheme();
+  } catch (e) {
+    debugPrint('[Startup] Error loading theme: $e');
+  }
+
+  var appLocale = SupportedLocale.zh;
+  try {
+    appLocale = await settingsService.loadLocale();
+  } catch (e) {
+    debugPrint('[Startup] Error loading locale: $e');
+  }
+
   try {
     await AppIconService.setIcon(await settingsService.loadAppLauncherIcon());
   } catch (e) {
@@ -56,6 +70,8 @@ void main() async {
         onboardingDoneProvider.overrideWithValue(onboardingDone),
         initialApiConfigProvider.overrideWithValue(apiConfig),
         initialMainTabIndexProvider.overrideWithValue(mainTabIndex),
+        initialThemeProvider.overrideWithValue(appTheme),
+        initialLocaleProvider.overrideWithValue(appLocale),
       ],
       child: const ArkLoresApp(),
     ),

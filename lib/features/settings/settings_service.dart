@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/llm/llm_client.dart';
+import '../../shared/l10n/locale_provider.dart';
+import '../../shared/providers/theme_provider.dart';
 
 enum AppLauncherIcon {
   light('light'),
@@ -70,6 +72,14 @@ class WikiSiteConfig {
 /// EncryptedSharedPreferences on Android).
 ///
 class SettingsService {
+
+  SettingsService({FlutterSecureStorage? storage})
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(
+                encryptedSharedPreferences: true,
+              ),
+            );
   // ── Chat keys ────────────────────────────────────────────
   static const _keyChatBaseUrl = 'chat_base_url';
   static const _keyChatApiKey = 'chat_api_key';
@@ -86,6 +96,10 @@ class SettingsService {
   static const _keyWikiReaderFontScale = 'wiki_reader_font_scale';
   static const _keyWikiDarkMode = 'wiki_dark_mode';
   static const _keyAppLauncherIcon = 'app_launcher_icon';
+
+  // ── Appearance keys ──────────────────────────────────────
+  static const _keyTheme = 'theme';
+  static const _keyLocale = 'locale';
 
   static const defaultWikiSites = [
     WikiSiteConfig(
@@ -105,14 +119,6 @@ class SettingsService {
   ];
 
   final FlutterSecureStorage _storage;
-
-  SettingsService({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(
-                encryptedSharedPreferences: true,
-              ),
-            );
 
   /// Loads the saved API configuration.
   Future<LLMConfig> loadApiConfig() async {
@@ -334,6 +340,30 @@ class SettingsService {
 
   Future<void> saveWikiDarkMode(bool enabled) async {
     await _storage.write(key: _keyWikiDarkMode, value: '$enabled');
+  }
+
+  Future<AppTheme> loadTheme() async {
+    final value = await _storage.read(key: _keyTheme);
+    return AppTheme.values.firstWhere(
+      (theme) => theme.name == value,
+      orElse: () => AppTheme.ark,
+    );
+  }
+
+  Future<void> saveTheme(AppTheme theme) async {
+    await _storage.write(key: _keyTheme, value: theme.name);
+  }
+
+  Future<SupportedLocale> loadLocale() async {
+    final value = await _storage.read(key: _keyLocale);
+    return SupportedLocale.values.firstWhere(
+      (locale) => locale.name == value,
+      orElse: () => SupportedLocale.zh,
+    );
+  }
+
+  Future<void> saveLocale(SupportedLocale locale) async {
+    await _storage.write(key: _keyLocale, value: locale.name);
   }
 
   Future<int> _loadBoundedInt(

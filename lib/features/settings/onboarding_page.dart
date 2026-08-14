@@ -14,9 +14,9 @@ import '../../shared/theme/app_theme.dart';
 /// 2. Chat API Key configuration
 /// 3. Ready to explore
 class OnboardingPage extends ConsumerStatefulWidget {
-  final VoidCallback onComplete;
 
   const OnboardingPage({super.key, required this.onComplete});
+  final VoidCallback onComplete;
 
   @override
   ConsumerState<OnboardingPage> createState() => _OnboardingPageState();
@@ -86,7 +86,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       await ref.read(apiConfigProvider.notifier).save(config);
     }
 
-    _pageController.nextPage(
+    await _pageController.nextPage(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOut,
     );
@@ -115,6 +115,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                           ? SupportedLocale.zh
                           : SupportedLocale.en;
                       ref.read(localeProvider.notifier).switchTo(next);
+                      ref.read(settingsServiceProvider).saveLocale(next);
                     },
                     icon: Icon(
                       Icons.translate_rounded,
@@ -122,7 +123,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       size: 18,
                     ),
                     label: Text(
-                      currentLocale == SupportedLocale.en ? '中文' : 'English',
+                      currentLocale == SupportedLocale.en
+                          ? SupportedLocale.zh.displayName
+                          : SupportedLocale.en.displayName,
                       style: theme.titleFont.copyWith(
                         color: theme.textPrimary,
                         fontSize: 14,

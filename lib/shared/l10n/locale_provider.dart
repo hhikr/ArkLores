@@ -8,8 +8,9 @@ enum SupportedLocale {
   en(Locale('en')),
   zh(Locale('zh'));
 
-  final Locale flutterLocale;
   const SupportedLocale(this.flutterLocale);
+
+  final Locale flutterLocale;
 
   String get displayName {
     switch (this) {
@@ -21,9 +22,17 @@ enum SupportedLocale {
   }
 }
 
+/// Initial locale read from persisted storage in `main()` and injected here.
+///
+/// Defaults to [SupportedLocale.zh] so tests and non-overridden environments
+/// keep the historical default; `main()` always overrides it with the saved
+/// value.
+final initialLocaleProvider =
+    Provider<SupportedLocale>((ref) => SupportedLocale.zh);
+
 /// Notifier that holds the current locale and persists the preference.
 class LocaleNotifier extends StateNotifier<SupportedLocale> {
-  LocaleNotifier() : super(SupportedLocale.zh);
+  LocaleNotifier(super.initial);
 
   void switchTo(SupportedLocale locale) {
     state = locale;
@@ -32,5 +41,5 @@ class LocaleNotifier extends StateNotifier<SupportedLocale> {
 
 /// Provider for locale state.
 final localeProvider = StateNotifierProvider<LocaleNotifier, SupportedLocale>(
-  (ref) => LocaleNotifier(),
+  (ref) => LocaleNotifier(ref.watch(initialLocaleProvider)),
 );
