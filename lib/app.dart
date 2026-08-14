@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/ai/ai_chat_page.dart';
 import 'features/materials/materials_page.dart';
-import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
@@ -11,7 +10,6 @@ import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/providers/wiki_navigation_provider.dart';
 import 'shared/theme/app_theme.dart';
-import 'shared/widgets/smooth_page_route.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
 ///
@@ -299,30 +297,5 @@ class _NavigationItemState extends State<_NavigationItem> {
         ),
       ),
     );
-  }
-}
-
-/// Knowledge base page route wrapper.
-///
-/// Called from [MainShell] via Navigator.pushNamed.
-class KnowledgeBaseRoute extends ConsumerWidget {
-  const KnowledgeBaseRoute({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return const KnowledgeBasePage();
-  }
-}
-
-/// Route generator for sub-pages pushed over the main shell.
-Route<dynamic>? generateAppRoute(RouteSettings settings) {
-  switch (settings.name) {
-    case '/knowledge-base':
-      return smoothPageRoute(
-        settings: settings,
-        builder: (_) => const KnowledgeBaseRoute(),
-      );
-    default:
-      return null;
   }
 }
