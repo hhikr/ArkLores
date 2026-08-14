@@ -90,4 +90,5 @@ docs/
 ```
 
 完整运行原理见 [`docs/ARKLORES_V0.9_TECHNICAL_REPORT.md`](docs/ARKLORES_V0.9_TECHNICAL_REPORT.md)，
-当前路线与跨版本约束见 [`docs/implementation_plan.md`](docs/implementation_plan.md)。
+当前路线与跨版本约束见 [`docs/implementation_plan.md`](docs/implementation_plan.md)，
+已知限制与技术债根因分析见 [`docs/KNOWN_LIMITATIONS_AND_DEBT.md`](docs/KNOWN_LIMITATIONS_AND_DEBT.md)。
