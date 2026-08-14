@@ -1,15 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
-import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/fact_check_agent.dart';
+import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
 import 'package:arklores/core/agent/roleplay_session_store.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
@@ -20,6 +12,13 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
 import 'package:arklores/features/ai/wiki_ai_context.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -229,7 +228,7 @@ void main() {
       expect(observation, contains('Entity ID: char_002_amiya'));
       expect(observation, contains('Entity ID: token_amiya_memory'));
       expect(
-          observation, contains('call search_local_lore again with entity_id'));
+          observation, contains('call search_local_lore again with entity_id'),);
     });
 
     test('summary mode announces retrieval plan and includes story context',
@@ -601,7 +600,7 @@ void main() {
           (error) => '$error',
           'message',
           contains('incompatible'),
-        )),
+        ),),
       );
     });
   });
@@ -661,8 +660,8 @@ void main() {
       expect(
         events
             .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((e) => e.content)
+            .join(),
         contains('done'),
       );
     });
@@ -691,8 +690,8 @@ void main() {
       expect(
         events
             .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((e) => e.content)
+            .join(),
         contains('done'),
       );
     });
@@ -753,8 +752,8 @@ void main() {
       expect(
         events
             .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((event) => event.content)
+            .join(),
         'verified',
       );
     });
@@ -769,8 +768,8 @@ void main() {
           .toList();
       final answer = events
           .where((event) => event.type == ReActEventType.finalAnswerToken)
-          .single
-          .content;
+          .map((event) => event.content)
+          .join();
       expect(answer, contains('operator_handbook_profile'));
       expect(answer, isNot(contains('mentions Book evidence')));
     });
@@ -840,8 +839,8 @@ void main() {
       expect(llm.fallbackPrompt, contains('Wiki evidence available: no'));
       final answer = events
           .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .single
-          .content;
+          .map((e) => e.content)
+          .join();
       expect(answer, contains('Source warning'));
       expect(answer, contains('did not retrieve any observation'));
     });
@@ -885,8 +884,8 @@ void main() {
       expect(
         events
             .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((event) => event.content)
+            .join(),
         startsWith('[FACT_CHECK_VERDICT:supported]'),
       );
       expect(llm.systemPrompt, contains('仅使用 search_local_lore'));
@@ -968,8 +967,8 @@ void main() {
       expect(
         events
             .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((event) => event.content)
+            .join(),
         startsWith('[FACT_CHECK_VERDICT:unavailable]'),
       );
 
@@ -1087,7 +1086,7 @@ void main() {
       expect(llm.systemPrompt, contains('NOT GameData evidence'));
       expect(llm.systemPrompt, contains('不得用模型记忆补齐'));
       expect(
-          events.where((e) => e.type == ReActEventType.toolCall), isNotEmpty);
+          events.where((e) => e.type == ReActEventType.toolCall), isNotEmpty,);
     });
 
     test('session store handles empty, save, load, clear and corrupt data',
@@ -1204,7 +1203,7 @@ class _FactCheckLLMClient extends LLMClient {
     List<String>? stop,
   }) =>
       chat(messages,
-          temperature: temperature, maxTokens: maxTokens, stop: stop);
+          temperature: temperature, maxTokens: maxTokens, stop: stop,);
 }
 
 class _FactCheckSearchTool extends AgentTool {

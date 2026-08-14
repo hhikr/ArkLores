@@ -1,77 +1,20 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../gamedata/gamedata_knowledge_store.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
-import 'react_loop.dart';
+import 'chat_message.dart';
+import 'chat_notifier_base.dart';
 import 'fact_check_agent.dart';
+import 'react_loop.dart';
 import 'roleplay_agent.dart';
 import 'roleplay_session_store.dart';
 import 'summary_agent.dart';
 
-const _uuid = Uuid();
-
-/// One step in the ReAct loop process.
-class ReActStep {
-  final ReActEventType type;
-  final String content;
-  final String? toolName;
-  final Map<String, dynamic>? toolArgs;
-
-  const ReActStep({
-    required this.type,
-    required this.content,
-    this.toolName,
-    this.toolArgs,
-  });
-}
-
-/// Message model for AI chats.
-class ChatMessage {
-  final String id;
-  final MessageRole role;
-  final String content;
-  final List<ReActStep> steps;
-  final bool isStreaming;
-  final bool isError;
-  final FactCheckVerdict? factCheckVerdict;
-  final DateTime timestamp;
-
-  const ChatMessage({
-    required this.id,
-    required this.role,
-    required this.content,
-    this.steps = const [],
-    this.isStreaming = false,
-    this.isError = false,
-    this.factCheckVerdict,
-    required this.timestamp,
-  });
-
-  ChatMessage copyWith({
-    String? id,
-    MessageRole? role,
-    String? content,
-    List<ReActStep>? steps,
-    bool? isStreaming,
-    bool? isError,
-    FactCheckVerdict? factCheckVerdict,
-    DateTime? timestamp,
-  }) {
-    return ChatMessage(
-      id: id ?? this.id,
-      role: role ?? this.role,
-      content: content ?? this.content,
-      steps: steps ?? this.steps,
-      isStreaming: isStreaming ?? this.isStreaming,
-      isError: isError ?? this.isError,
-      factCheckVerdict: factCheckVerdict ?? this.factCheckVerdict,
-      timestamp: timestamp ?? this.timestamp,
-    );
-  }
-}
+export 'chat_message.dart';
 
 /// Provider for the [SummaryAgent] instance.
 final summaryAgentProvider = Provider<SummaryAgent>((ref) {
@@ -87,21 +30,20 @@ final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
 });
 
 /// State notifier for Summary Chat history and processing.
-class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
-  final SummaryAgent _agent;
-  int _requestGeneration = 0;
+class SummaryChatNotifier extends ChatNotifierBase {
 
   SummaryChatNotifier(this._agent) : super([]);
+  final SummaryAgent _agent;
 
   /// Sends a message and triggers the Summary Agent ReAct stream.
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty || state.any((message) => message.isStreaming)) {
       return;
     }
-    final generation = ++_requestGeneration;
+    final generation = nextGeneration();
 
-    final userMsgId = _uuid.v4();
-    final assistantMsgId = _uuid.v4();
+    final userMsgId = newId();
+    final assistantMsgId = newId();
     final now = DateTime.now();
 
     final userMsg = ChatMessage(
@@ -112,8 +54,96 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
     );
 
     // Build history for the LLM before adding the new user message to the state
+    final history = buildHistory(state);
+
+    state = [...state, userMsg];
+
+    final placeholderAssistant = ChatMessage(
+      id: assistantMsgId,
+      role: MessageRole.assistant,
+      content: '',
+      isStreaming: true,
+      timestamp: DateTime.now(),
+    );
+
+    state = [...state, placeholderAssistant];
+
+    try {
+      final stream = _agent.generateSummary(query: text, history: history);
+      final steps = <ReActStep>[];
+      final finalAnswerBuffer = StringBuffer();
+
+      await for (final event in stream) {
+        if (!isCurrentGeneration(generation)) return;
+        switch (event.type) {
+          case ReActEventType.thought:
+            steps.add(ReActStep(type: event.type, content: event.content));
+            updateMessage(assistantMsgId, steps: List.from(steps));
+            break;
+          case ReActEventType.toolCall:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+              toolArgs: event.toolArgs,
+            ),);
+            updateMessage(assistantMsgId, steps: List.from(steps));
+            break;
+          case ReActEventType.toolObservation:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+            ),);
+            updateMessage(assistantMsgId, steps: List.from(steps));
+            break;
+          case ReActEventType.finalAnswerToken:
+            finalAnswerBuffer.write(event.content);
+            updateMessage(
+              assistantMsgId,
+              content: finalAnswerBuffer.toString(),
+              steps: List.from(steps),
+            );
+            break;
+          case ReActEventType.error:
+            steps.add(ReActStep(type: event.type, content: event.content));
+            updateMessage(
+              assistantMsgId,
+              isError: true,
+              steps: List.from(steps),
+            );
+            break;
+          case ReActEventType.complete:
+            updateMessage(
+              assistantMsgId,
+              isStreaming: false,
+              steps: List.from(steps),
+            );
+            break;
+        }
+      }
+    } catch (e) {
+      if (isCurrentGeneration(generation)) {
+        updateMessage(
+          assistantMsgId,
+          content: '[SUMMARY_ERROR]',
+          isError: true,
+          isStreaming: false,
+        );
+      }
+    }
+  }
+
+  @override
+  String get canceledMarker => '[SUMMARY_CANCELED]';
+
+  @override
+  Future<void> resendLast(String query) => sendMessage(query);
+
+  @override
+  List<Message> buildHistory(List<ChatMessage> messages) {
     final history = <Message>[];
-    for (final m in state) {
+    for (final m in messages) {
       if (m.isStreaming || m.isError) continue;
       if (m.role == MessageRole.user) {
         history.add(Message.user(m.content));
@@ -140,138 +170,7 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
         history.add(Message.assistant(buffer.toString().trim()));
       }
     }
-
-    state = [...state, userMsg];
-
-    final placeholderAssistant = ChatMessage(
-      id: assistantMsgId,
-      role: MessageRole.assistant,
-      content: '',
-      isStreaming: true,
-      timestamp: DateTime.now(),
-    );
-
-    state = [...state, placeholderAssistant];
-
-    try {
-      final stream = _agent.generateSummary(query: text, history: history);
-      final steps = <ReActStep>[];
-      var finalAnswerBuffer = StringBuffer();
-
-      await for (final event in stream) {
-        if (generation != _requestGeneration) return;
-        switch (event.type) {
-          case ReActEventType.thought:
-            steps.add(ReActStep(type: event.type, content: event.content));
-            _updateAssistantMessage(assistantMsgId, steps: List.from(steps));
-            break;
-          case ReActEventType.toolCall:
-            steps.add(ReActStep(
-              type: event.type,
-              content: event.content,
-              toolName: event.toolName,
-              toolArgs: event.toolArgs,
-            ));
-            _updateAssistantMessage(assistantMsgId, steps: List.from(steps));
-            break;
-          case ReActEventType.toolObservation:
-            steps.add(ReActStep(
-              type: event.type,
-              content: event.content,
-              toolName: event.toolName,
-            ));
-            _updateAssistantMessage(assistantMsgId, steps: List.from(steps));
-            break;
-          case ReActEventType.finalAnswerToken:
-            finalAnswerBuffer.write(event.content);
-            _updateAssistantMessage(
-              assistantMsgId,
-              content: finalAnswerBuffer.toString(),
-              steps: List.from(steps),
-            );
-            break;
-          case ReActEventType.error:
-            steps.add(ReActStep(type: event.type, content: event.content));
-            _updateAssistantMessage(
-              assistantMsgId,
-              isError: true,
-              steps: List.from(steps),
-            );
-            break;
-          case ReActEventType.complete:
-            _updateAssistantMessage(
-              assistantMsgId,
-              isStreaming: false,
-              steps: List.from(steps),
-            );
-            break;
-        }
-      }
-    } catch (e) {
-      if (generation == _requestGeneration) {
-        _updateAssistantMessage(
-          assistantMsgId,
-          content: '[SUMMARY_ERROR]',
-          isError: true,
-          isStreaming: false,
-        );
-      }
-    }
-  }
-
-  void cancel() {
-    _requestGeneration++;
-    state = [
-      for (final message in state)
-        if (message.isStreaming)
-          message.copyWith(
-            content: '[SUMMARY_CANCELED]',
-            isStreaming: false,
-            isError: true,
-          )
-        else
-          message,
-    ];
-  }
-
-  Future<void> retryLast() async {
-    final users = state.where((message) => message.role == MessageRole.user);
-    if (users.isEmpty || state.any((message) => message.isStreaming)) return;
-    final query = users.last.content;
-    if (state.isNotEmpty && state.last.role == MessageRole.assistant) {
-      state = state.sublist(0, state.length - 1);
-    }
-    if (state.isNotEmpty && state.last.role == MessageRole.user) {
-      state = state.sublist(0, state.length - 1);
-    }
-    await sendMessage(query);
-  }
-
-  /// Clears the chat history.
-  void clearChat() {
-    cancel();
-    state = [];
-  }
-
-  void _updateAssistantMessage(
-    String id, {
-    String? content,
-    List<ReActStep>? steps,
-    bool? isStreaming,
-    bool? isError,
-  }) {
-    state = [
-      for (final m in state)
-        if (m.id == id)
-          m.copyWith(
-            content: content ?? m.content,
-            steps: steps ?? m.steps,
-            isStreaming: isStreaming ?? m.isStreaming,
-            isError: isError ?? m.isError,
-          )
-        else
-          m
-    ];
+    return history;
   }
 }
 
@@ -282,22 +181,21 @@ final summaryChatProvider =
   return SummaryChatNotifier(agent);
 });
 
-class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
-  final FactCheckAgent _agent;
-  int _requestGeneration = 0;
+class FactCheckChatNotifier extends ChatNotifierBase {
 
   FactCheckChatNotifier(this._agent) : super([]);
+  final FactCheckAgent _agent;
 
   Future<void> sendMessage(String text) async {
     final claim = text.trim();
     if (claim.isEmpty || state.any((message) => message.isStreaming)) return;
-    final generation = ++_requestGeneration;
-    final history = _buildHistory(state);
-    final assistantId = _uuid.v4();
+    final generation = nextGeneration();
+    final history = buildHistory(state);
+    final assistantId = newId();
     state = [
       ...state,
       ChatMessage(
-        id: _uuid.v4(),
+        id: newId(),
         role: MessageRole.user,
         content: claim,
         timestamp: DateTime.now(),
@@ -315,7 +213,7 @@ class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
     try {
       await for (final event
           in _agent.checkClaim(claim: claim, history: history)) {
-        if (generation != _requestGeneration) return;
+        if (!isCurrentGeneration(generation)) return;
         switch (event.type) {
           case ReActEventType.thought:
           case ReActEventType.toolObservation:
@@ -324,8 +222,8 @@ class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
               type: event.type,
               content: event.content,
               toolName: event.toolName,
-            ));
-            _update(
+            ),);
+            updateMessage(
               assistantId,
               content: event.type == ReActEventType.error
                   ? '[FACT_CHECK_ERROR]'
@@ -340,92 +238,34 @@ class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
               content: event.content,
               toolName: event.toolName,
               toolArgs: event.toolArgs,
-            ));
-            _update(assistantId, steps: List.of(steps));
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
             break;
           case ReActEventType.finalAnswerToken:
-            _update(
+            updateMessage(
               assistantId,
               content: event.content,
               factCheckVerdict: parseFactCheckVerdict(event.content),
             );
             break;
           case ReActEventType.complete:
-            _update(assistantId, isStreaming: false);
+            updateMessage(assistantId, isStreaming: false);
             break;
         }
       }
     } catch (_) {
-      if (generation == _requestGeneration) {
-        _update(assistantId,
-            content: '[FACT_CHECK_ERROR]', isError: true, isStreaming: false);
+      if (isCurrentGeneration(generation)) {
+        updateMessage(assistantId,
+            content: '[FACT_CHECK_ERROR]', isError: true, isStreaming: false,);
       }
     }
   }
 
-  void cancel() {
-    _requestGeneration++;
-    state = [
-      for (final message in state)
-        if (message.isStreaming)
-          message.copyWith(
-            content: '[FACT_CHECK_CANCELED]',
-            isStreaming: false,
-            isError: true,
-          )
-        else
-          message,
-    ];
-  }
+  @override
+  String get canceledMarker => '[FACT_CHECK_CANCELED]';
 
-  Future<void> retryLast() async {
-    final users = state.where((message) => message.role == MessageRole.user);
-    if (users.isEmpty || state.any((message) => message.isStreaming)) return;
-    final claim = users.last.content;
-    if (state.isNotEmpty && state.last.role == MessageRole.assistant) {
-      state = state.sublist(0, state.length - 1);
-    }
-    if (state.isNotEmpty && state.last.role == MessageRole.user) {
-      state = state.sublist(0, state.length - 1);
-    }
-    await sendMessage(claim);
-  }
-
-  void clearChat() {
-    cancel();
-    state = [];
-  }
-
-  List<Message> _buildHistory(List<ChatMessage> messages) => [
-        for (final message in messages)
-          if (!message.isStreaming && !message.isError)
-            message.role == MessageRole.user
-                ? Message.user(message.content)
-                : Message.assistant(message.content),
-      ];
-
-  void _update(
-    String id, {
-    String? content,
-    List<ReActStep>? steps,
-    bool? isStreaming,
-    bool? isError,
-    FactCheckVerdict? factCheckVerdict,
-  }) {
-    state = [
-      for (final message in state)
-        if (message.id == id)
-          message.copyWith(
-            content: content,
-            steps: steps,
-            isStreaming: isStreaming,
-            isError: isError,
-            factCheckVerdict: factCheckVerdict,
-          )
-        else
-          message,
-    ];
-  }
+  @override
+  Future<void> resendLast(String query) => sendMessage(query);
 }
 
 final factCheckChatProvider =
@@ -434,13 +274,6 @@ final factCheckChatProvider =
 });
 
 class RoleplayState {
-  final GameDataEntityCandidate? character;
-  final List<GameDataEntityCandidate> candidates;
-  final String scene;
-  final List<ChatMessage> messages;
-  final bool isResolving;
-  final bool hasSavedSession;
-  final CharacterResolutionStatus? resolutionStatus;
 
   const RoleplayState({
     this.character,
@@ -451,6 +284,13 @@ class RoleplayState {
     this.hasSavedSession = false,
     this.resolutionStatus,
   });
+  final GameDataEntityCandidate? character;
+  final List<GameDataEntityCandidate> candidates;
+  final String scene;
+  final List<ChatMessage> messages;
+  final bool isResolving;
+  final bool hasSavedSession;
+  final CharacterResolutionStatus? resolutionStatus;
 
   bool get isSending => messages.any((message) => message.isStreaming);
 
@@ -486,14 +326,15 @@ final roleplayAgentProvider = Provider<RoleplayAgent>((ref) {
 });
 
 class RoleplayNotifier extends StateNotifier<RoleplayState> {
-  final RoleplayAgent _agent;
-  final RoleplaySessionStore _sessionStore;
-  int _requestGeneration = 0;
 
   RoleplayNotifier(this._agent, this._sessionStore)
       : super(const RoleplayState()) {
     _checkSavedSession();
   }
+  final RoleplayAgent _agent;
+  final RoleplaySessionStore _sessionStore;
+  final Uuid _uuid = Uuid();
+  int _requestGeneration = 0;
 
   Future<void> _checkSavedSession() async {
     final saved = await _sessionStore.load();
@@ -552,7 +393,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
         isStreaming: true,
         timestamp: DateTime.now(),
       ),
-    ]);
+    ],);
     final steps = <ReActStep>[];
     try {
       await for (final event in _agent.reply(
@@ -570,10 +411,10 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
             steps.add(ReActStep(
                 type: event.type,
                 content: event.content,
-                toolName: event.toolName));
+                toolName: event.toolName,),);
             _updateMessage(assistantId,
                 steps: List.of(steps),
-                isError: event.type == ReActEventType.error);
+                isError: event.type == ReActEventType.error,);
             break;
           case ReActEventType.toolCall:
             steps.add(ReActStep(
@@ -581,7 +422,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
               content: event.content,
               toolName: event.toolName,
               toolArgs: event.toolArgs,
-            ));
+            ),);
             _updateMessage(assistantId, steps: List.of(steps));
             break;
           case ReActEventType.finalAnswerToken:
@@ -596,7 +437,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
     } catch (_) {
       if (generation == _requestGeneration) {
         _updateMessage(assistantId,
-            content: '[ROLEPLAY_ERROR]', isError: true, isStreaming: false);
+            content: '[ROLEPLAY_ERROR]', isError: true, isStreaming: false,);
       }
     }
   }
@@ -607,10 +448,10 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
       for (final message in state.messages)
         if (message.isStreaming)
           message.copyWith(
-              content: '[ROLEPLAY_CANCELED]', isStreaming: false, isError: true)
+              content: '[ROLEPLAY_CANCELED]', isStreaming: false, isError: true,)
         else
           message,
-    ]);
+    ],);
   }
 
   Future<void> retryLast() async {
@@ -667,7 +508,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
       {String? content,
       List<ReActStep>? steps,
       bool? isStreaming,
-      bool? isError}) {
+      bool? isError,}) {
     state = state.copyWith(messages: [
       for (final message in state.messages)
         if (message.id == id)
@@ -675,10 +516,10 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
               content: content,
               steps: steps,
               isStreaming: isStreaming,
-              isError: isError)
+              isError: isError,)
         else
           message,
-    ]);
+    ],);
   }
 
   Future<void> _persist() async {
