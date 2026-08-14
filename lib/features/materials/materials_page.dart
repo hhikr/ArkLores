@@ -39,19 +39,19 @@ class MaterialsPage extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(Icons.pause_circle_outline_rounded,
-                      color: theme.warning, size: 24),
+                      color: theme.warning, size: 24,),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '用户资料导入暂未启用',
+                          context.t.materialsPausedTitle,
                           style: theme.titleFont.copyWith(fontSize: 16),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '旧版 PDF/TXT 导入链路已暂停。v0.4.5 当前 Agent 只使用 GameData 结构化知识库、FTS 和精确匹配。',
+                          context.t.materialsPausedDesc,
                           style: theme.bodyFont.copyWith(
                             color: theme.textSecondary,
                             fontSize: 13,

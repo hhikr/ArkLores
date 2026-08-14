@@ -50,7 +50,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'GameData 结构化知识库',
+            context.t.kbStructuredTitle,
             style: theme.titleFont.copyWith(fontSize: 18),
           ),
           const SizedBox(height: 12),
@@ -59,11 +59,11 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.info_outline_rounded,
-                    color: theme.accentPrimary, size: 22),
+                    color: theme.accentPrimary, size: 22,),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'v0.4.5 只使用中文 GameData 结构化库：实体、别名、原始记录、剧情行、文档片段和 FTS。旧 Wiki seed 与资料导入索引链路已移除。',
+                    context.t.kbScopeDescription,
                     style: theme.bodyFont.copyWith(
                       color: theme.textSecondary,
                       fontSize: 13,
@@ -78,7 +78,8 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           gameDataStatusAsync.when(
             data: (status) => _buildGameDataCard(context, status, theme),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => _buildErrorCard('GameData 状态读取失败：$err', theme),
+            error: (err, _) => _buildErrorCard(
+                context.t.kbStatusError(err.toString()), theme,),
           ),
           const SizedBox(height: 16),
           gameDataStatusAsync.when(
@@ -118,8 +119,8 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(installed
-              ? 'GameData 主知识库已安装'
-              : '当前构建未配置 GameData release asset URL'),
+              ? context.t.kbInstalled
+              : context.t.kbNoAssetUrl,),
         ),
       );
     } catch (e) {
@@ -139,18 +140,18 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   String _friendlyGameDataError(Object error) {
     final text = '$error';
     if (text.contains('Failed host lookup') || text.contains('errno = 7')) {
-      return '无法解析下载地址。真机测试请确认手机能访问该 GitHub / 局域网 URL。';
+      return context.t.kbErrorInvalidUrl;
     }
     if (text.contains('Connection timed out') || text.contains('timed out')) {
-      return '连接超时。请切换网络，或确认临时 HTTP 服务和手机在同一网络。';
+      return context.t.kbErrorTimeout;
     }
     if (text.contains('HTTP 404')) {
-      return '未找到 GameData DB 文件。未正式发布时请使用预发布 asset 或 --dart-define 指向临时 URL。';
+      return context.t.kbErrorNotFound;
     }
     if (text.contains('checksum mismatch')) {
-      return 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
+      return context.t.kbErrorChecksum;
     }
-    return '下载 GameData 主知识库失败：$text';
+    return context.t.kbDownloadFailed(text);
   }
 
   Widget _buildGameDataCard(
@@ -168,14 +169,14 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
             : status.installed
                 ? '${(status.bytes / 1024 / 1024).toStringAsFixed(1)} MB'
-                : '未安装';
+                : context.t.kbNotInstalled;
     final subtitle = status.installed
         ? [
             if (status.entityCount != null) 'entities ${status.entityCount}',
             if (status.recordCount != null) 'records ${status.recordCount}',
             if (status.chunkCount != null) 'chunks ${status.chunkCount}',
           ].join(' · ')
-        : '正式发布前可用 --dart-define=ARKLORES_GAMEDATA_DB_URL 指向预发布 asset 或局域网临时 .db.gz。';
+        : context.t.kbDevAssetHint;
 
     return ThemeAwareCard(
       child: Column(
@@ -196,7 +197,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'GameData 主知识库',
+                      context.t.kbStructuredTitle,
                       style: theme.titleFont.copyWith(fontSize: 15),
                     ),
                     const SizedBox(height: 2),
@@ -223,10 +224,10 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 ),
                 label: Text(
                   _isDownloadingGameData
-                      ? '下载中'
+                      ? context.t.kbDownloading
                       : status.installed
-                          ? '更新'
-                          : '下载',
+                          ? context.t.kbUpdate
+                          : context.t.kbDownload,
                   style: theme.titleFont.copyWith(fontSize: 13),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -291,15 +292,15 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       spacing: 12,
       runSpacing: 12,
       children: [
-        _statTile(context, '实体', status.entityCount ?? '-',
-            Icons.account_tree_rounded, theme),
-        _statTile(context, '原始记录', status.recordCount ?? '-',
-            Icons.dataset_rounded, theme),
-        _statTile(context, '文档片段', status.chunkCount ?? '-',
-            Icons.article_rounded, theme),
+        _statTile(context, context.t.kbStatEntities, status.entityCount ?? '-',
+            Icons.account_tree_rounded, theme,),
+        _statTile(context, context.t.kbStatRecords, status.recordCount ?? '-',
+            Icons.dataset_rounded, theme,),
+        _statTile(context, context.t.kbStatChunks, status.chunkCount ?? '-',
+            Icons.article_rounded, theme,),
         _statTile(
           context,
-          '来源提交',
+          context.t.kbStatSourceCommit,
           _shortCommit(status.sourceCommit),
           Icons.commit_rounded,
           theme,
@@ -309,7 +310,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   }
 
   Widget _statTile(BuildContext context, String label, String value,
-      IconData icon, AppThemeTokens theme) {
+      IconData icon, AppThemeTokens theme,) {
     return SizedBox(
       width: (MediaQuery.of(context).size.width - 56) / 2,
       child: ThemeAwareCard(

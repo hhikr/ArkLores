@@ -560,4 +560,143 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiRoleplayCanceled => '已取消本次生成。';
+
+  @override
+  String get settingsAppIcon => '应用图标';
+
+  @override
+  String get settingsIconLightLabel => '白天图标';
+
+  @override
+  String get settingsIconDarkLabel => '夜间图标';
+
+  @override
+  String get settingsIconLightShort => '浅色';
+
+  @override
+  String get settingsIconDarkShort => '深色';
+
+  @override
+  String get settingsIconUnsupported => '当前平台暂不支持运行时切换图标，设置已保存。';
+
+  @override
+  String get settingsWikiSources => 'Wiki 来源';
+
+  @override
+  String get settingsWikiSourcesDesc => '修改内置 Wiki URL，添加自定义 Wiki 入口';
+
+  @override
+  String get wikiSourcesAddTitle => '添加 Wiki';
+
+  @override
+  String get wikiSourcesEditTitle => '编辑 Wiki';
+
+  @override
+  String get wikiSourcesNameLabel => '名称';
+
+  @override
+  String get wikiSourcesIconUrlLabel => '图标 URL（可选）';
+
+  @override
+  String get wikiSourcesEndfieldPreset => '终末地 Wiki 预设';
+
+  @override
+  String get wikiSourcesReset => '重置';
+
+  @override
+  String get wikiSourcesEdit => '编辑';
+
+  @override
+  String get wikiSourcesDelete => '删除';
+
+  @override
+  String get wikiSourcesCancel => '取消';
+
+  @override
+  String get wikiSourcesSave => '保存';
+
+  @override
+  String get wikiSourcesNameRequired => '请输入 Wiki 名称';
+
+  @override
+  String get wikiSourcesUrlRequired => '请输入有效 URL';
+
+  @override
+  String get kbStructuredTitle => 'GameData 结构化知识库';
+
+  @override
+  String get kbScopeDescription => 'v0.4.5 只使用中文 GameData 结构化库：实体、别名、原始记录、剧情行、文档片段和 FTS。旧 Wiki seed 与资料导入索引链路已移除。';
+
+  @override
+  String kbStatusError(String error) {
+    return 'GameData 状态读取失败：$error';
+  }
+
+  @override
+  String get kbInstalled => 'GameData 主知识库已安装';
+
+  @override
+  String get kbNoAssetUrl => '当前构建未配置 GameData release asset URL';
+
+  @override
+  String get kbErrorInvalidUrl => '无法解析下载地址。真机测试请确认手机能访问该 GitHub / 局域网 URL。';
+
+  @override
+  String get kbErrorTimeout => '连接超时。请切换网络，或确认临时 HTTP 服务和手机在同一网络。';
+
+  @override
+  String get kbErrorNotFound => '未找到 GameData DB 文件。未正式发布时请使用预发布 asset 或 --dart-define 指向临时 URL。';
+
+  @override
+  String get kbErrorChecksum => 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
+
+  @override
+  String kbDownloadFailed(String error) {
+    return '下载 GameData 主知识库失败：$error';
+  }
+
+  @override
+  String get kbNotInstalled => '未安装';
+
+  @override
+  String get kbDevAssetHint => '正式发布前可用 --dart-define=ARKLORES_GAMEDATA_DB_URL 指向预发布 asset 或局域网临时 .db.gz。';
+
+  @override
+  String get kbDownloading => '下载中';
+
+  @override
+  String get kbDownload => '下载';
+
+  @override
+  String get kbStatEntities => '实体';
+
+  @override
+  String get kbStatRecords => '原始记录';
+
+  @override
+  String get kbStatChunks => '文档片段';
+
+  @override
+  String get kbStatSourceCommit => '来源提交';
+
+  @override
+  String get materialsPausedTitle => '用户资料导入暂未启用';
+
+  @override
+  String get materialsPausedDesc => '旧版 PDF/TXT 导入链路已暂停。v0.4.5 当前 Agent 只使用 GameData 结构化知识库、FTS 和精确匹配。';
+
+  @override
+  String get wikiLoadFailed => 'Wiki 页面加载失败';
+
+  @override
+  String get wikiRetry => '重试';
+
+  @override
+  String get wikiErrorDns => '无法解析 Wiki 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
+
+  @override
+  String get wikiErrorTimeout => '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+
+  @override
+  String get wikiErrorOffline => '设备当前没有可用网络连接。';
 }

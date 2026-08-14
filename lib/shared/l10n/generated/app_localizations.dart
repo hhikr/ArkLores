@@ -1132,6 +1132,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Generation canceled.'**
   String get aiRoleplayCanceled;
+
+  /// No description provided for @settingsAppIcon.
+  ///
+  /// In en, this message translates to:
+  /// **'App icon'**
+  String get settingsAppIcon;
+
+  /// No description provided for @settingsIconLightLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Light icon'**
+  String get settingsIconLightLabel;
+
+  /// No description provided for @settingsIconDarkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark icon'**
+  String get settingsIconDarkLabel;
+
+  /// No description provided for @settingsIconLightShort.
+  ///
+  /// In en, this message translates to:
+  /// **'LIGHT'**
+  String get settingsIconLightShort;
+
+  /// No description provided for @settingsIconDarkShort.
+  ///
+  /// In en, this message translates to:
+  /// **'DARK'**
+  String get settingsIconDarkShort;
+
+  /// No description provided for @settingsIconUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime icon switching is not supported on this platform. Settings were saved.'**
+  String get settingsIconUnsupported;
+
+  /// No description provided for @settingsWikiSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Wiki Sources'**
+  String get settingsWikiSources;
+
+  /// No description provided for @settingsWikiSourcesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit built-in Wiki URLs or add custom Wiki entries.'**
+  String get settingsWikiSourcesDesc;
+
+  /// No description provided for @wikiSourcesAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Wiki'**
+  String get wikiSourcesAddTitle;
+
+  /// No description provided for @wikiSourcesEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Wiki'**
+  String get wikiSourcesEditTitle;
+
+  /// No description provided for @wikiSourcesNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get wikiSourcesNameLabel;
+
+  /// No description provided for @wikiSourcesIconUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Icon URL (optional)'**
+  String get wikiSourcesIconUrlLabel;
+
+  /// No description provided for @wikiSourcesEndfieldPreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield Wiki presets'**
+  String get wikiSourcesEndfieldPreset;
+
+  /// No description provided for @wikiSourcesReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get wikiSourcesReset;
+
+  /// No description provided for @wikiSourcesEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get wikiSourcesEdit;
+
+  /// No description provided for @wikiSourcesDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get wikiSourcesDelete;
+
+  /// No description provided for @wikiSourcesCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get wikiSourcesCancel;
+
+  /// No description provided for @wikiSourcesSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get wikiSourcesSave;
+
+  /// No description provided for @wikiSourcesNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a Wiki name.'**
+  String get wikiSourcesNameRequired;
+
+  /// No description provided for @wikiSourcesUrlRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid URL.'**
+  String get wikiSourcesUrlRequired;
+
+  /// No description provided for @kbStructuredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData structured knowledge base'**
+  String get kbStructuredTitle;
+
+  /// No description provided for @kbScopeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Since v0.4.5 the Agent uses the structured Chinese GameData library only: entities, aliases, raw records, story lines, document chunks, and FTS. The old Wiki seed and material import indexing pipelines were removed.'**
+  String get kbScopeDescription;
+
+  /// No description provided for @kbStatusError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to read GameData status: {error}'**
+  String kbStatusError(String error);
+
+  /// No description provided for @kbInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData main knowledge base installed'**
+  String get kbInstalled;
+
+  /// No description provided for @kbNoAssetUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'This build has no GameData release asset URL configured'**
+  String get kbNoAssetUrl;
+
+  /// No description provided for @kbErrorInvalidUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.'**
+  String get kbErrorInvalidUrl;
+
+  /// No description provided for @kbErrorTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Switch networks, or make sure the temporary HTTP server and the phone are on the same network.'**
+  String get kbErrorTimeout;
+
+  /// No description provided for @kbErrorNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData DB file not found. Before release, use a pre-release asset or point --dart-define at a temporary URL.'**
+  String get kbErrorNotFound;
+
+  /// No description provided for @kbErrorChecksum.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData DB checksum failed. The file may be corrupted or the SHA256 does not match the build parameters.'**
+  String get kbErrorChecksum;
+
+  /// No description provided for @kbDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to download the GameData main knowledge base: {error}'**
+  String kbDownloadFailed(String error);
+
+  /// No description provided for @kbNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed'**
+  String get kbNotInstalled;
+
+  /// No description provided for @kbDevAssetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Before release, use --dart-define=ARKLORES_GAMEDATA_DB_URL to point to a pre-release asset or a LAN temporary .db.gz.'**
+  String get kbDevAssetHint;
+
+  /// No description provided for @kbDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get kbDownloading;
+
+  /// No description provided for @kbDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get kbDownload;
+
+  /// No description provided for @kbStatEntities.
+  ///
+  /// In en, this message translates to:
+  /// **'Entities'**
+  String get kbStatEntities;
+
+  /// No description provided for @kbStatRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw records'**
+  String get kbStatRecords;
+
+  /// No description provided for @kbStatChunks.
+  ///
+  /// In en, this message translates to:
+  /// **'Document chunks'**
+  String get kbStatChunks;
+
+  /// No description provided for @kbStatSourceCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Source commit'**
+  String get kbStatSourceCommit;
+
+  /// No description provided for @materialsPausedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'User material import is not enabled yet'**
+  String get materialsPausedTitle;
+
+  /// No description provided for @materialsPausedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The legacy PDF/TXT import pipeline is paused. Since v0.4.5 the Agent uses the structured GameData knowledge base, FTS, and exact matching only.'**
+  String get materialsPausedDesc;
+
+  /// No description provided for @wikiLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Wiki page failed to load'**
+  String get wikiLoadFailed;
+
+  /// No description provided for @wikiRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get wikiRetry;
+
+  /// No description provided for @wikiErrorDns.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not resolve the Wiki domain. Check your network, DNS, or proxy and retry.'**
+  String get wikiErrorDns;
+
+  /// No description provided for @wikiErrorTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Switch networks or check that your proxy/VPN is connected, then retry.'**
+  String get wikiErrorTimeout;
+
+  /// No description provided for @wikiErrorOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'The device currently has no network connection.'**
+  String get wikiErrorOffline;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

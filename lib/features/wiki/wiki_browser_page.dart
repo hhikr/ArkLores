@@ -666,7 +666,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     // Load the bookmarked URL in the corresponding WebView.
     final controller = _controllers[targetIndex];
     if (controller != null) {
-      controller.loadUrl(
+      await controller.loadUrl(
         urlRequest: URLRequest(url: WebUri(bookmark.url)),
       );
     }
@@ -697,8 +697,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       target: target,
     );
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
         builder: (_) => AiChatPage(initialWikiContext: contextPayload),
       ),
     );
@@ -910,20 +910,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 /// A single wiki tab whose WebView is kept alive by [IndexedStack] in the
 /// parent, so browsing state is preserved across tab switches.
 class _WikiTabView extends StatefulWidget {
-  final int index;
-  final String initialUrl;
-  final AppThemeTokens theme;
-  final bool isDarkMode;
-  final bool isReaderMode;
-  final bool readerDark;
-  final double readerFontScale;
-  final WikiSiteKind siteKind;
-  final VoidCallback onReaderTapped;
-  final Future<void> Function(InAppWebViewController) onNormalAppearance;
-  final void Function(int, InAppWebViewController) onControllerCreated;
-  final void Function(int, String?) onTitleChanged;
-  final void Function(int, String) onUrlChanged;
-  final Future<void> Function(int, bool, bool) onHistoryChanged;
 
   const _WikiTabView({
     super.key,
@@ -942,6 +928,20 @@ class _WikiTabView extends StatefulWidget {
     required this.onUrlChanged,
     required this.onHistoryChanged,
   });
+  final int index;
+  final String initialUrl;
+  final AppThemeTokens theme;
+  final bool isDarkMode;
+  final bool isReaderMode;
+  final bool readerDark;
+  final double readerFontScale;
+  final WikiSiteKind siteKind;
+  final VoidCallback onReaderTapped;
+  final Future<void> Function(InAppWebViewController) onNormalAppearance;
+  final void Function(int, InAppWebViewController) onControllerCreated;
+  final void Function(int, String?) onTitleChanged;
+  final void Function(int, String) onUrlChanged;
+  final Future<void> Function(int, bool, bool) onHistoryChanged;
 
   @override
   State<_WikiTabView> createState() => _WikiTabViewState();
@@ -1218,7 +1218,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
                     Icon(Icons.wifi_off_rounded, color: theme.danger, size: 28),
                     const SizedBox(height: 12),
                     Text(
-                      'Wiki 页面加载失败',
+                      context.t.wikiLoadFailed,
                       style: theme.titleFont.copyWith(fontSize: 18),
                     ),
                     const SizedBox(height: 8),
@@ -1239,7 +1239,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
                         },
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: Text(
-                          '重试',
+                          context.t.wikiRetry,
                           style: theme.titleFont.copyWith(fontSize: 13),
                         ),
                         style: ElevatedButton.styleFrom(
@@ -1265,22 +1265,22 @@ class _WikiTabViewState extends State<_WikiTabView> {
   String _friendlyWebViewError(String description) {
     final lower = description.toLowerCase();
     if (lower.contains('host') || lower.contains('dns')) {
-      return '无法解析 Wiki 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
+      return context.t.wikiErrorDns;
     }
     if (lower.contains('timeout')) {
-      return '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+      return context.t.wikiErrorTimeout;
     }
     if (lower.contains('net::err_internet_disconnected')) {
-      return '设备当前没有可用网络连接。';
+      return context.t.wikiErrorOffline;
     }
     return description;
   }
 }
 
 class _WikiAiTargetSheet extends StatelessWidget {
-  final AppThemeTokens theme;
 
   const _WikiAiTargetSheet({required this.theme});
+  final AppThemeTokens theme;
 
   @override
   Widget build(BuildContext context) {
@@ -1333,11 +1333,6 @@ class _WikiAiTargetSheet extends StatelessWidget {
 }
 
 class _TargetTile extends StatelessWidget {
-  final AppThemeTokens theme;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
 
   const _TargetTile({
     required this.theme,
@@ -1346,6 +1341,11 @@ class _TargetTile extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
   });
+  final AppThemeTokens theme;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {

@@ -560,4 +560,143 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiRoleplayCanceled => 'Generation canceled.';
+
+  @override
+  String get settingsAppIcon => 'App icon';
+
+  @override
+  String get settingsIconLightLabel => 'Light icon';
+
+  @override
+  String get settingsIconDarkLabel => 'Dark icon';
+
+  @override
+  String get settingsIconLightShort => 'LIGHT';
+
+  @override
+  String get settingsIconDarkShort => 'DARK';
+
+  @override
+  String get settingsIconUnsupported => 'Runtime icon switching is not supported on this platform. Settings were saved.';
+
+  @override
+  String get settingsWikiSources => 'Wiki Sources';
+
+  @override
+  String get settingsWikiSourcesDesc => 'Edit built-in Wiki URLs or add custom Wiki entries.';
+
+  @override
+  String get wikiSourcesAddTitle => 'Add Wiki';
+
+  @override
+  String get wikiSourcesEditTitle => 'Edit Wiki';
+
+  @override
+  String get wikiSourcesNameLabel => 'Name';
+
+  @override
+  String get wikiSourcesIconUrlLabel => 'Icon URL (optional)';
+
+  @override
+  String get wikiSourcesEndfieldPreset => 'Endfield Wiki presets';
+
+  @override
+  String get wikiSourcesReset => 'Reset';
+
+  @override
+  String get wikiSourcesEdit => 'Edit';
+
+  @override
+  String get wikiSourcesDelete => 'Delete';
+
+  @override
+  String get wikiSourcesCancel => 'Cancel';
+
+  @override
+  String get wikiSourcesSave => 'Save';
+
+  @override
+  String get wikiSourcesNameRequired => 'Please enter a Wiki name.';
+
+  @override
+  String get wikiSourcesUrlRequired => 'Please enter a valid URL.';
+
+  @override
+  String get kbStructuredTitle => 'GameData structured knowledge base';
+
+  @override
+  String get kbScopeDescription => 'Since v0.4.5 the Agent uses the structured Chinese GameData library only: entities, aliases, raw records, story lines, document chunks, and FTS. The old Wiki seed and material import indexing pipelines were removed.';
+
+  @override
+  String kbStatusError(String error) {
+    return 'Failed to read GameData status: $error';
+  }
+
+  @override
+  String get kbInstalled => 'GameData main knowledge base installed';
+
+  @override
+  String get kbNoAssetUrl => 'This build has no GameData release asset URL configured';
+
+  @override
+  String get kbErrorInvalidUrl => 'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.';
+
+  @override
+  String get kbErrorTimeout => 'Connection timed out. Switch networks, or make sure the temporary HTTP server and the phone are on the same network.';
+
+  @override
+  String get kbErrorNotFound => 'GameData DB file not found. Before release, use a pre-release asset or point --dart-define at a temporary URL.';
+
+  @override
+  String get kbErrorChecksum => 'GameData DB checksum failed. The file may be corrupted or the SHA256 does not match the build parameters.';
+
+  @override
+  String kbDownloadFailed(String error) {
+    return 'Failed to download the GameData main knowledge base: $error';
+  }
+
+  @override
+  String get kbNotInstalled => 'Not installed';
+
+  @override
+  String get kbDevAssetHint => 'Before release, use --dart-define=ARKLORES_GAMEDATA_DB_URL to point to a pre-release asset or a LAN temporary .db.gz.';
+
+  @override
+  String get kbDownloading => 'Downloading';
+
+  @override
+  String get kbDownload => 'Download';
+
+  @override
+  String get kbStatEntities => 'Entities';
+
+  @override
+  String get kbStatRecords => 'Raw records';
+
+  @override
+  String get kbStatChunks => 'Document chunks';
+
+  @override
+  String get kbStatSourceCommit => 'Source commit';
+
+  @override
+  String get materialsPausedTitle => 'User material import is not enabled yet';
+
+  @override
+  String get materialsPausedDesc => 'The legacy PDF/TXT import pipeline is paused. Since v0.4.5 the Agent uses the structured GameData knowledge base, FTS, and exact matching only.';
+
+  @override
+  String get wikiLoadFailed => 'Wiki page failed to load';
+
+  @override
+  String get wikiRetry => 'Retry';
+
+  @override
+  String get wikiErrorDns => 'Could not resolve the Wiki domain. Check your network, DNS, or proxy and retry.';
+
+  @override
+  String get wikiErrorTimeout => 'Connection timed out. Switch networks or check that your proxy/VPN is connected, then retry.';
+
+  @override
+  String get wikiErrorOffline => 'The device currently has no network connection.';
 }
