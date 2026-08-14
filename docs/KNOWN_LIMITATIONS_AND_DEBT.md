@@ -267,7 +267,7 @@ schema v3：实体级剧情倒排、关系索引、组织/概念实体、质量�
 
 ## 6. 代码结构与维护性
 
-### 6.1 大文件与职责集中（Open）
+### 6.1 大文件与职责集中（In Progress）
 
 **现象与影响**：以下文件显著超长且职责集中：
 
@@ -299,11 +299,24 @@ schema v3：实体级剧情倒排、关系索引、组织/概念实体、质量�
 **当前缓解**：技术报告附录 A 提供逐文件职责索引；`agent_test.dart` 与 Widget 测试
 覆盖关键行为；CLAUDE.md 约束代理"相关 tests / analyze 后再汇报"防止盲目重构。
 
-**修复方向与触发条件**：按 implementation plan 的代码质量清单分批拆解，
-每批以固定 Agent / retrieval QA 回归为门槛；优先拆 `agent_provider.dart`
-（抽共享 Notifier 基类）与 knowledge store（抽 scoped evidence 检索层）。
+**修复记录（第一批，agent 模块）**：
+- `react_loop.dart`（645 → 368 行）：解析器提取为 `react_parser.dart`
+  （`parseReActKey` / `parseActionInput` 等纯函数），证据汇总与回答约束
+  提取为 `evidence_summary.dart`（`EvidenceSummary`、`buildFallbackPrompt`、
+  `applySourceGuard`）；`react_loop.dart` 只保留状态机与事件编排。
+- `agent_provider.dart`（747 → 588 行）：`ReActStep` / `ChatMessage` 提取为
+  `chat_message.dart`（经 `export` 保持引用兼容）；三个 chat Notifier 的
+  代次、消息更新、cancel/retry/clear 与 history 构建提取为
+  `chat_notifier_base.dart` 抽象基类，Summary / Fact-check 继承后只保留
+  各自工作流差异（verdict、steps 重建、取消文案）。
+- 待拆：`wiki_reader_mode.dart`（CSS/JS 模板）、`wiki_browser_page.dart`
+  （WebView 状态机小组件）、`gamedata_knowledge_store.dart`（query plan /
+  scoped evidence 检索层）。
 
-### 6.2 重复路由实现（Open）
+**修复方向与触发条件**：继续按批拆解剩余文件，每批以固定 Agent / retrieval
+QA 回归为门槛。
+
+### 6.2 重复路由实现（Closed）
 
 **现象与影响**：`lib/app.dart` 尾部的 `KnowledgeBaseRoute` 与 `generateAppRoute()`
 未被根 `MaterialApp` 使用；实际路由由 `main.dart` 的 `onGenerateRoute` +
@@ -313,23 +326,31 @@ schema v3：实体级剧情倒排、关系索引、组织/概念实体、质量�
 改为 onGenerateRoute 统一注册；旧包装没有被删除，因为它在文件末尾不影响
 编译与行为，属于"顺手可做、无人立项"的低风险清理债务。
 
-**修复方向**：删除重复实现，统一到 `onGenerateRoute`；无行为变化，
-由 `flutter analyze` 与既有 Widget 测试守护。
+**修复记录**：已删除 `KnowledgeBaseRoute` 与 `generateAppRoute` 及其不再使用的
+import；路由统一由 `main.dart` 的 `onGenerateRoute` 注册。`flutter analyze`
+与既有 Widget 测试守护该行为。
 
-### 6.3 analyzer 规则未收紧（Open）
+### 6.3 analyzer 规则未收紧（Closed）
 
 **现象与影响**：`analysis_options.yaml` 只继承 `flutter_lints` 默认规则集，
-v0.9 计划中"收紧 analyzer / lint 规则"的交付未完成（当前为 No issues found，
+v0.9 计划中"收紧 analyzer / lint 规则"的交付未完成（当时为 No issues found，
 但默认规则较宽松）。
 
 **根因分析**：收紧规则（如 strict 模式、额外 lint）会立即暴露存量告警，
 需要配套逐项修复与确认；v0.9 的实际工作量集中在视觉系统与设置页迁移，
 规则收紧作为"代码质量交付内容"被推迟，且没有单独立项。
 
-**修复方向与触发条件**：分批启用规则并修复告警，保持 analyze 全绿；
-与 6.1 的重构批次合并执行，避免重复改动同一批文件。
+**修复记录**：已启用 analyzer strict 模式（`strict-casts` / `strict-inference` /
+`strict-raw-types`）与 10 条补充 lint（`directives_ordering`、
+`prefer_single_quotes`、`require_trailing_commas`、`sort_constructors_first`、
+`use_super_parameters`、`prefer_final_fields`、`prefer_final_locals`、
+`avoid_dynamic_calls`、`unawaited_futures`）。`dart fix` 自动修复 204 处，
+手动修复 28 处，其中 strict 模式暴露了 1 个真实类型错误
+（`warfarin_crawler.dart` 中 `dynamic` 键传给 `int.parse`）与多处缺失的
+泛型参数（`Future<void>.delayed`、`showDialog<void>`、`smoothPageRoute<void>`
+等）。当前 `flutter analyze` 为 No issues found。
 
-### 6.4 硬编码中文未完全进入 ARB（Open）
+### 6.4 硬编码中文未完全进入 ARB（Closed）
 
 **现象与影响**：Materials、知识库页与 Wiki 错误覆盖层等仍存在硬编码中文
 （技术报告 22.2 确认），英文用户在这些界面会看到中文；新文案也可能
@@ -339,12 +360,15 @@ v0.9 计划中"收紧 analyzer / lint 规则"的交付未完成（当前为 No i
 （Materials 是暂停态）不在迁移范围；逐个字符串提取需要双语补译与
 对应 Widget 测试更新，对低活跃页面的投入产出低。
 
-**当前缓解**：ARB 已有约 176 条中英条目；新增主要页面文案已走本地化。
+**修复记录**：为 `app_en.arb` / `app_zh.arb` 新增 45 个条目（含 2 个带
+placeholder 的错误消息），迁移了设置页（Wiki 来源管理、应用图标、对话框）、
+知识库页（标题、错误消息、统计标签、下载按钮）、Wiki 错误覆盖层与
+Materials 暂停说明的全部硬编码 UI 文案；引导页语言按钮改用
+`SupportedLocale.displayName`。遗留硬编码仅剩专名（GameData、Warfarin）、
+数据值（entityId）与注入网页的 DOM 选择器/脚本字符串（站点适配逻辑，
+不属于 App 本地化范围）。
 
-**修复方向与触发条件**：页面级迁移到 ARB，补齐中英翻译，并在 CONTRIBUTING
-中禁止新增硬编码文案；优先处理知识库页（用户高频路径）。
-
-### 6.5 主题/语言不持久化（Open）
+### 6.5 主题/语言不持久化（Closed）
 
 **现象与影响**：用户切换的 Endfield 主题与英文语言在重启后回到默认值
 （Ark 深色 + 中文），主题/语言选择是进程内状态。
@@ -355,13 +379,13 @@ provider override 注入——`main.dart` 已为 onboarding 状态、主标签�
 索引实现过同款模式（`initialMainTabIndexProvider` 等），接入成本低，
 属于"已知怎么做、未排期"的小债。
 
-**当前缓解**：启动时应用保存的主标签页（同类模式已存在）；主题/语言
-默认值稳定，不产生数据风险。
+**修复记录**：`SettingsService` 新增 `loadTheme` / `saveTheme` /
+`loadLocale` / `saveLocale`；`main.dart` 启动时读取并注入
+`initialThemeProvider` / `initialLocaleProvider`；设置页与引导页切换时
+同步保存。两个 initial provider 默认保留历史值（ark / zh），测试与
+未 override 环境无需改动。
 
-**修复方向**：把主题与语言写入 Secure Storage / 偏好存储，启动时注入
-provider；同时保留默认值兜底。
-
-### 6.6 非流式输出（Mitigated）
+### 6.6 非流式输出（Mitigated，已改进）
 
 **现象与影响**：`OpenAICompatibleClient` 实现了 SSE `chatStream`，但 ReAct
 主循环使用非流式 `chatCompletion`，最终回答整段返回后一次性渲染，
@@ -376,10 +400,17 @@ ReAct 核心与 Notifier 消费端，属于中等风险重构。项目选择先�
 **当前缓解**：UI 有加载/思考步骤展示，用户能感知进度；
 `wasTruncated` 截断检测保证不把半截回答当完整答案。
 
-**修复方向与触发条件**：长回答延迟成为体验瓶颈时，在最终回答阶段切换
-`chatStream`，保留取消与代次语义。
+**修复记录**：最终回答改为分块事件（`_emitFinalAnswer`，120 字符/块），
+UI 已具备的 `finalAnswerBuffer` 追加逻辑使其渐进渲染，长回答不再整段
+闪现；相关测试断言同步更新为拼接校验。
 
-### 6.7 debug Agent 日志敏感且无清理机制（Open）
+**仍开放的权衡**：真正的 provider 级 SSE 流式（请求阶段边收边显示）未实施。
+原因是 ReAct 步骤解析需要完整响应文本（Action Input 可能跨 chunk），且
+Fact-check 的 verdict transform 与来源守卫必须在完整文本上执行后才能
+发出——把流式接入请求阶段会破坏这两条约束。若未来引入结构化步骤协议
+（v0.13 方向），可以重新评估。
+
+### 6.7 debug Agent 日志敏感且无清理机制（Closed）
 
 **现象与影响**：`AgentLogger`（仅 `kDebugMode` 启用）记录完整用户 query、
 每轮模型原始输出、工具参数与数据库原文；release 构建 no-op，但 debug
@@ -394,9 +425,11 @@ Documents，用户卸载即清除，但没有主动管理机制。
 **当前缓解**：release 构建 no-op；`logs/` 不参与编译与产品数据链；
 测试环境下回退到系统临时目录。
 
-**修复方向与触发条件**：正式分发前实现脱敏（截断 query、不记录 API key
-与请求头）、应用内日志清理入口与隐私说明；v0.9 代码质量清单中
-"审计 print / 临时日志"项的部分目标。
+**修复记录**：`AgentLogger` 增加两级防护——(1) 脱敏：query 截断到 200
+字符、模型输出 / observation / 最终回答 / 错误正文截断到 2000 字符，
+debug 构建不再落盘完整用户问题、完整推理或完整数据库原文；
+(2) 清理：flush 后自动保留最近 20 个会话日志（`_pruneOldLogs`），并新增
+`AgentLogger.clearLogs()` 静态方法供设置/隐私 UI 调用。
 
 ## 7. 工程化与量化
 
@@ -490,13 +523,13 @@ v0.7 之后演进为右下角可展开托盘，旧组件未随演进删除。
 | 5.1 | 组织/概念汇总实体缺失 | Open | 数据构建 | schema v3 立项 |
 | 5.2 | 同义词归一化为规则表 | Open | 数据维护 | 俗称召回缺口量化 |
 | 5.3 | 歧义展示依赖 Agent 行为 | Mitigated | LLM 编排不确定性 | 结构化步骤协议 |
-| 6.1 | 大文件职责集中 | Open | 重构未立项 | 代码质量清单分批执行 |
-| 6.2 | 重复路由实现 | Open | 清理未立项 | 顺手清理（低风险） |
-| 6.3 | analyzer 规则未收紧 | Open | 规则配套重构 | 与 6.1 合并执行 |
-| 6.4 | 硬编码中文未入 ARB | Open | 本地化迁移 | 页面级迁移 |
-| 6.5 | 主题/语言不持久化 | Open | 产品选择遗留 | 体验反馈（低成本） |
-| 6.6 | 非流式输出 | Mitigated | ReAct 架构取舍 | 感知延迟成为瓶颈 |
-| 6.7 | debug 日志敏感无清理 | Open | 隐私工程 | 正式分发前 |
+| 6.1 | 大文件职责集中 | In Progress | 重构未立项 | 分批执行（agent 模块已拆） |
+| 6.2 | 重复路由实现 | Closed | 清理未立项 | 已删除重复实现 |
+| 6.3 | analyzer 规则未收紧 | Closed | 规则配套重构 | 已启用 strict + 10 条 lint，0 issues |
+| 6.4 | 硬编码中文未入 ARB | Closed | 本地化迁移 | 45 个新 ARB key 迁移完成 |
+| 6.5 | 主题/语言不持久化 | Closed | 产品选择遗留 | 已持久化并启动注入 |
+| 6.6 | 非流式输出 | Mitigated（已改进） | ReAct 架构取舍 | 分块渲染已上线；真流式受 transform 约束 |
+| 6.7 | debug 日志敏感无清理 | Closed | 隐私工程 | 已脱敏 + 自动清理 + clearLogs |
 | 7.1 | 真机性能未量化 | Open | 测试工程 | 正式发布前 |
 | 7.2 | 无自动截图回读 | Open | 测试工程 | 正式发布前或明确放弃 |
 | 8.1 | Wiki crawler 死代码 | Open | 历史链 | 清理立项 |
