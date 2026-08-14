@@ -215,6 +215,71 @@ body.$_bodyClass .arklores-reader-content-root {
   padding: 24px 18px 56px !important;
 }
 
+/* fz.wiki is a Next.js application with card-based layouts rather than
+   MediaWiki article markup. Keep the article column fluid in reader mode. */
+body.$_bodyClass.arklores-reader-fz main,
+body.$_bodyClass.arklores-reader-fz article,
+body.$_bodyClass.arklores-reader-fz .arklores-reader-content-root {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  padding: 24px 12px 56px !important;
+  overflow: visible !important;
+}
+
+body.$_bodyClass.arklores-reader-fz .arklores-reader-content-root,
+body.$_bodyClass.arklores-reader-fz .arklores-reader-content-root > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+body.$_bodyClass.arklores-reader-fz .arklores-fz-visual {
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+body.$_bodyClass.arklores-reader-fz .arklores-fz-media {
+  visibility: visible !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+body.$_bodyClass.arklores-reader-fz img.arklores-fz-media,
+body.$_bodyClass.arklores-reader-fz picture.arklores-fz-media img {
+  display: block !important;
+  width: auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+
+body.$_bodyClass.arklores-reader-fz .arklores-fz-overflow-repair {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  overflow: visible !important;
+}
+
+body.$_bodyClass.arklores-reader-fz .arklores-fz-overflow-repair > img,
+body.$_bodyClass.arklores-reader-fz .arklores-fz-overflow-repair > picture,
+body.$_bodyClass.arklores-reader-fz .arklores-fz-overflow-repair
+  > picture
+  img,
+body.$_bodyClass.arklores-reader-fz .arklores-fz-overflow-repair > canvas,
+body.$_bodyClass.arklores-reader-fz .arklores-fz-overflow-repair > svg {
+  width: auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+body.$_bodyClass.arklores-reader-fz.arklores-reader-fz-operator
+  .arklores-reader-content-root
+  :where(.flex, .grid, [class*="flex-"], [class*="grid-"]) {
+  min-width: 0 !important;
+}
+
 body.$_bodyClass .mw-parser-output,
 body.$_bodyClass .prose,
 body.$_bodyClass .arklores-reader-content-root {
@@ -1120,12 +1185,29 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
   window.__arkloresReaderDoubleTapHandler = onDoubleTap;
   body.dataset.arkloresReaderGestureHandler = '1';
 
+  var isFz = '${siteKind.name}' === 'fz';
+  var decodedPath = String(location.pathname || '');
+  try {
+    decodedPath = decodeURIComponent(decodedPath);
+  } catch (e) {}
+  var isFzOperator = isFz &&
+      (decodedPath.indexOf('/wiki/干员/') !== -1 ||
+          decodedPath.indexOf('/wiki/Operators/') !== -1);
+  if (isFz) {
+    body.classList.add('arklores-reader-fz');
+    if (isFzOperator) {
+      body.classList.add('arklores-reader-fz-operator');
+    }
+  }
+
   // PRTS operator pages mount interactive applications, not article prose.
   // Their own styles and scripts control fixed canvases, controls and tables.
-  if (body.classList.contains('arklores-reader-operator-profile')) return;
+  if (body.classList.contains('arklores-reader-operator-profile') && !isFz) {
+    return;
+  }
 
-  var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
-  var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *';
+  var keepVisualStyle = 'button,input,select,textarea,pre,code,img,video,canvas,svg,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *, .arklores-fz-visual';
+  var keepSizing = 'img,video,canvas,svg,table,.wikitable,.thumb,.gallery,.mw-collapsible-toggle,.mw-collapsible-toggle *,#arklores-prts-scenario-reader,#arklores-prts-scenario-reader *,#sys_playback_all,#sys_playback_all *, .arklores-fz-visual';
   function readerText(el) {
     return (el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim();
   }
@@ -1141,11 +1223,17 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
   }
   var roots = document.querySelectorAll(siteRootSelector);
   var contentRoot = null;
+  var bestRootScore = -1;
   for (var rootIndex = 0; rootIndex < roots.length; rootIndex++) {
     var candidate = roots[rootIndex];
-    if (readerText(candidate).length >= 20) {
+    var candidateText = readerText(candidate);
+    var candidateScore = candidateText.length;
+    if (candidate.querySelector('img, picture, [style*="background"], [style*="mask"]')) {
+      candidateScore += 500;
+    }
+    if (candidateText.length >= 20 && candidateScore > bestRootScore) {
       contentRoot = candidate;
-      break;
+      bestRootScore = candidateScore;
     }
   }
   if (!contentRoot && roots.length) contentRoot = roots[0];
@@ -1158,6 +1246,171 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
     touched.push(roots[r]);
     var nodes = roots[r].querySelectorAll('*');
     for (var n = 0; n < nodes.length; n++) touched.push(nodes[n]);
+  }
+
+  function refreshFzRoot() {
+    if (!isFz) return;
+    var fzRoots = document.querySelectorAll(siteRootSelector);
+    var nextRoot = null;
+    var nextScore = -1;
+    for (var fzRootIndex = 0; fzRootIndex < fzRoots.length; fzRootIndex++) {
+      var fzCandidate = fzRoots[fzRootIndex];
+      var fzText = readerText(fzCandidate);
+      var fzScore = fzText.length;
+      if (
+        fzCandidate.querySelector(
+          'img, picture, [style*="background"], [style*="mask"]',
+        )
+      ) {
+        fzScore += 500;
+      }
+      if (fzText.length >= 20 && fzScore > nextScore) {
+        nextRoot = fzCandidate;
+        nextScore = fzScore;
+      }
+    }
+    if (!nextRoot && fzRoots.length) nextRoot = fzRoots[0];
+    if (nextRoot !== contentRoot) {
+      if (contentRoot) {
+        contentRoot.classList.remove('arklores-reader-content-root');
+      }
+      contentRoot = nextRoot;
+      if (contentRoot) {
+        contentRoot.classList.add('arklores-reader-content-root');
+      }
+    }
+  }
+
+  function refreshFzMedia() {
+    if (!isFz || !contentRoot) return;
+    var fzVisuals = contentRoot.querySelectorAll(
+      'img, picture, video, canvas, svg, [style*="background-image"], [style*="background:"], [style*="background:url"], [style*="mask-image"], [style*="-webkit-mask-image"]',
+    );
+    for (var visualIndex = 0; visualIndex < fzVisuals.length; visualIndex++) {
+      var visual = fzVisuals[visualIndex];
+      var visualStyle = window.getComputedStyle(visual);
+      var visualBackgroundImage = String(
+        visualStyle.backgroundImage || 'none',
+      );
+      var visualMaskImage = String(visualStyle.maskImage || 'none');
+      var visualWebkitMaskImage = String(
+        visualStyle.webkitMaskImage || 'none',
+      );
+      var hasImageResource = visual.tagName === 'IMG' ||
+          visual.tagName === 'PICTURE' ||
+          visual.tagName === 'VIDEO' ||
+          visual.tagName === 'CANVAS' ||
+          visual.tagName === 'SVG' ||
+          visualBackgroundImage !== 'none' ||
+          visualMaskImage !== 'none' ||
+          visualWebkitMaskImage !== 'none';
+      if (!hasImageResource) continue;
+      visual.classList.add('arklores-fz-media');
+      var visualContainer = visual.closest(
+        'div, section, article, a, figure, picture',
+      );
+      if (visualContainer && visualContainer !== contentRoot) {
+        visualContainer.classList.add('arklores-fz-visual');
+        visualContainer.classList.add('arklores-fz-media');
+      }
+    }
+
+    var fzElements = contentRoot.querySelectorAll('*');
+    for (var elementIndex = 0; elementIndex < fzElements.length; elementIndex++) {
+      var fzElement = fzElements[elementIndex];
+      var computed = window.getComputedStyle(fzElement);
+      var backgroundImage = String(computed.backgroundImage || 'none');
+      var maskImage = String(computed.maskImage || 'none');
+      var webkitMaskImage = String(computed.webkitMaskImage || 'none');
+      if (
+        backgroundImage === 'none' &&
+        maskImage === 'none' &&
+        webkitMaskImage === 'none'
+      ) {
+        continue;
+      }
+      fzElement.classList.add('arklores-fz-media');
+      fzElement.classList.add('arklores-fz-visual');
+    }
+
+    var fzImages = contentRoot.querySelectorAll('img');
+    for (var imageIndex = 0; imageIndex < fzImages.length; imageIndex++) {
+      var image = fzImages[imageIndex];
+      if (image.dataset.arkloresOriginalLoading === undefined) {
+        image.dataset.arkloresOriginalLoading =
+            image.getAttribute('loading') || '';
+      }
+      if (image.getAttribute('loading') === 'lazy') {
+        image.setAttribute('loading', 'eager');
+      }
+      var deferredSource = image.getAttribute('data-src') ||
+          image.getAttribute('data-lazy-src') ||
+          image.getAttribute('data-original');
+      if (deferredSource && image.getAttribute('src') !== deferredSource) {
+        image.setAttribute('src', deferredSource);
+      }
+    }
+  }
+
+  refreshFzRoot();
+  refreshFzMedia();
+
+  function repairFzOverflow() {
+    if (!isFz || !contentRoot) return;
+    var rootRect = contentRoot.getBoundingClientRect();
+    var rootRight = rootRect.left + rootRect.width;
+    var candidates = contentRoot.querySelectorAll(
+      'div, section, article, a, figure, picture, table, ul, ol, dl',
+    );
+    for (
+      var candidateIndex = 0;
+      candidateIndex < candidates.length;
+      candidateIndex++
+    ) {
+      var candidate = candidates[candidateIndex];
+      if (
+        !candidate ||
+        candidate.classList.contains('arklores-fz-visual') ||
+        candidate.classList.contains('arklores-fz-overflow-repair')
+      ) {
+        continue;
+      }
+      var rect = candidate.getBoundingClientRect();
+      if (rect.width > rootRect.width + 2 || rect.right > rootRight + 2) {
+        candidate.classList.add('arklores-fz-overflow-repair');
+      }
+    }
+  }
+
+  if (isFz) {
+    repairFzOverflow();
+    window.setTimeout(repairFzOverflow, 250);
+    window.setTimeout(repairFzOverflow, 900);
+    if (!window.__arkloresFzResizeHandler) {
+      var fzResizeHandler = function() {
+        window.requestAnimationFrame(repairFzOverflow);
+      };
+      window.addEventListener('resize', fzResizeHandler, { passive: true });
+      window.__arkloresFzResizeHandler = fzResizeHandler;
+    }
+    if (!window.__arkloresFzContentObserver) {
+      var fzRefreshScheduled = false;
+      var fzContentObserver = new MutationObserver(function() {
+        if (fzRefreshScheduled) return;
+        fzRefreshScheduled = true;
+        window.setTimeout(function() {
+          fzRefreshScheduled = false;
+          refreshFzRoot();
+          refreshFzMedia();
+          repairFzOverflow();
+        }, 0);
+      });
+      fzContentObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+      window.__arkloresFzContentObserver = fzContentObserver;
+    }
   }
 
   function colorParts(value) {
@@ -1211,7 +1464,9 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       el.style.removeProperty('color');
       el.style.removeProperty('background');
       el.style.removeProperty('background-color');
-      el.style.removeProperty('background-image');
+      if (!isFz || !el.matches('.arklores-fz-visual')) {
+        el.style.removeProperty('background-image');
+      }
       el.style.removeProperty('text-shadow');
       el.style.removeProperty('box-shadow');
       el.style.removeProperty('filter');
@@ -1388,6 +1643,8 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       'arklores-reader-operator-profile',
       'arklores-prts-paradox-mobile',
       'arklores-prts-paradox-desktop',
+      'arklores-reader-fz',
+      'arklores-reader-fz-operator',
     );
     var readerRoots = document.querySelectorAll(
       '.arklores-reader-content-root',
@@ -1398,6 +1655,41 @@ body.$_bodyClass #playback_all_result.arklores-prts-log-list div.predicate {
       );
     }
     delete document.body.dataset.arkloresReaderSite;
+  }
+  if (window.__arkloresFzContentObserver) {
+    window.__arkloresFzContentObserver.disconnect();
+    delete window.__arkloresFzContentObserver;
+  }
+  if (window.__arkloresFzResizeHandler) {
+    window.removeEventListener('resize', window.__arkloresFzResizeHandler);
+    delete window.__arkloresFzResizeHandler;
+  }
+    var fzReaderClasses = document.querySelectorAll(
+    '.arklores-fz-media, .arklores-fz-visual, .arklores-fz-overflow-repair',
+  );
+  for (
+    var fzClassIndex = 0;
+    fzClassIndex < fzReaderClasses.length;
+    fzClassIndex++
+  ) {
+    fzReaderClasses[fzClassIndex].classList.remove(
+      'arklores-fz-visual',
+      'arklores-fz-media',
+      'arklores-fz-overflow-repair',
+    );
+  }
+  var fzImages = document.querySelectorAll(
+    'img[data-arklores-original-loading]',
+  );
+  for (var imageIndex = 0; imageIndex < fzImages.length; imageIndex++) {
+    var image = fzImages[imageIndex];
+    var originalLoading = image.dataset.arkloresOriginalLoading;
+    if (originalLoading) {
+      image.setAttribute('loading', originalLoading);
+    } else {
+      image.removeAttribute('loading');
+    }
+    delete image.dataset.arkloresOriginalLoading;
   }
   var viewport = document.querySelector('meta[name="viewport"]');
   if (viewport) {
