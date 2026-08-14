@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../providers/theme_provider.dart';
+import 'industrial_ui.dart';
 
 PageRoute<T> smoothPageRoute<T>({
   required WidgetBuilder builder,
@@ -16,17 +20,25 @@ PageRoute<T> smoothPageRoute<T>({
         curve: Curves.easeOutCubic,
         reverseCurve: Curves.easeInCubic,
       );
-      return ColoredBox(
-        color: Theme.of(context).canvasColor,
-        child: ClipRect(
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.025),
-              end: Offset.zero,
-            ).animate(eased),
-            child: child,
-          ),
-        ),
+      return Consumer(
+        builder: (context, ref, _) {
+          final theme = ref.watch(themeProvider);
+          return IndustrialBackdrop(
+            theme: theme,
+            child: ClipRect(
+              child: FadeTransition(
+                opacity: eased,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.025),
+                    end: Offset.zero,
+                  ).animate(eased),
+                  child: child,
+                ),
+              ),
+            ),
+          );
+        },
       );
     },
   );
