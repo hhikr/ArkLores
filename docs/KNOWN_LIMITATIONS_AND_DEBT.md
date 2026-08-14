@@ -299,7 +299,7 @@ schema v3：实体级剧情倒排、关系索引、组织/概念实体、质量�
 **当前缓解**：技术报告附录 A 提供逐文件职责索引；`agent_test.dart` 与 Widget 测试
 覆盖关键行为；CLAUDE.md 约束代理"相关 tests / analyze 后再汇报"防止盲目重构。
 
-**修复记录（第一批，agent 模块）**：
+**修复记录（agent 模块）**：
 - `react_loop.dart`（645 → 368 行）：解析器提取为 `react_parser.dart`
   （`parseReActKey` / `parseActionInput` 等纯函数），证据汇总与回答约束
   提取为 `evidence_summary.dart`（`EvidenceSummary`、`buildFallbackPrompt`、
@@ -309,12 +309,27 @@ schema v3：实体级剧情倒排、关系索引、组织/概念实体、质量�
   代次、消息更新、cancel/retry/clear 与 history 构建提取为
   `chat_notifier_base.dart` 抽象基类，Summary / Fact-check 继承后只保留
   各自工作流差异（verdict、steps 重建、取消文案）。
-- 待拆：`wiki_reader_mode.dart`（CSS/JS 模板）、`wiki_browser_page.dart`
-  （WebView 状态机小组件）、`gamedata_knowledge_store.dart`（query plan /
-  scoped evidence 检索层）。
+- `wiki_reader_mode.dart`（1722 → 93 行门面）：CSS 构建提取为
+  `wiki_reader_css.dart`（`buildReaderCss`，795 行），注入/清理脚本提取为
+  `wiki_reader_scripts.dart`（`buildReaderScript` / `buildRemoveReaderScript`，
+  877 行）；`wiki_reader_mode.dart` 只保留字体加载与注入门面。
+- `wiki_browser_page.dart`（1652 → 1278 行）：`_WikiAiTargetSheet`、
+  `_ReaderToolbar`、`_ReaderToolButton`、`_ExpandableTray` 等独立 UI 组件
+  提取为 `wiki_browser_controls.dart`（公开类，370 行）；页面保留双 WebView
+  状态机与回调编排。
+- `gamedata_knowledge_store.dart`（1347 → 1041 行）：结果模型提取为
+  `gamedata_models.dart`（`GameDataSearchResult` / `GameDataEntityCandidate`，
+  经 `export` 保持引用兼容）；query plan 与评分辅助提取为
+  `gamedata_query_plan.dart`（`GameDataQueryPlan`、意图归一化、FTS 构建、
+  proximity 评分等纯函数，255 行）。
 
-**修复方向与触发条件**：继续按批拆解剩余文件，每批以固定 Agent / retrieval
-QA 回归为门槛。
+拆分后全部通过 `flutter analyze`（No issues）、完整测试套件（68 passed）
+与固定 GameData retrieval QA。
+
+**剩余**：`gamedata_knowledge_store.dart`（1,041 行）与 `wiki_browser_page.dart`
+（1,278 行）仍是最大的单文件，剩余职责（检索编排 / WebView 状态机）属于
+"页面级/存储级状态集中是合理折中"的范畴；如后续引入共享 StoryEvidenceRetriever
+或 WebView controller 管理器，可继续拆解。
 
 ### 6.2 重复路由实现（Closed）
 
@@ -523,7 +538,7 @@ v0.7 之后演进为右下角可展开托盘，旧组件未随演进删除。
 | 5.1 | 组织/概念汇总实体缺失 | Open | 数据构建 | schema v3 立项 |
 | 5.2 | 同义词归一化为规则表 | Open | 数据维护 | 俗称召回缺口量化 |
 | 5.3 | 歧义展示依赖 Agent 行为 | Mitigated | LLM 编排不确定性 | 结构化步骤协议 |
-| 6.1 | 大文件职责集中 | In Progress | 重构未立项 | 分批执行（agent 模块已拆） |
+| 6.1 | 大文件职责集中 | Closed | 重构未立项 | 五个大文件全部拆出独立模块 |
 | 6.2 | 重复路由实现 | Closed | 清理未立项 | 已删除重复实现 |
 | 6.3 | analyzer 规则未收紧 | Closed | 规则配套重构 | 已启用 strict + 10 条 lint，0 issues |
 | 6.4 | 硬编码中文未入 ARB | Closed | 本地化迁移 | 45 个新 ARB key 迁移完成 |
