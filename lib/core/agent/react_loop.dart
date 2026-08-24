@@ -51,16 +51,25 @@ class ReActLoop {
     int maxIterations = 5,
     int minimumToolCalls = 0,
     int stepMaxTokens = 2048,
+    int maxObservationHistory = 8,
   })  : _llmClient = llmClient,
         _toolRegistry = toolRegistry,
         _maxIterations = maxIterations,
         _minimumToolCalls = minimumToolCalls,
-        _stepMaxTokens = stepMaxTokens;
+        _stepMaxTokens = stepMaxTokens,
+        _maxObservationHistory = maxObservationHistory;
   final LLMClient _llmClient;
   final ToolRegistry _toolRegistry;
   final int _maxIterations;
   final int _minimumToolCalls;
   final int _stepMaxTokens;
+
+  /// Max full `Observation:` messages kept in the LLM history (R3 context
+  /// budget, design decision 2). Older observations are replaced by a
+  /// placeholder. 0 disables trimming. The transform-side `observations`
+  /// snapshot always contains the complete list, so trimming never weakens
+  /// code-level validation.
+  final int _maxObservationHistory;
 
   /// Runs the ReAct Loop and yields [ReActEvent]s.
   Stream<ReActEvent> run({
@@ -283,6 +292,7 @@ Let's begin!
 
       // Add observation to LLM history so it can think on the next iteration
       loopMessages.add(Message.user('Observation: $observation'));
+      _trimObservationHistory(loopMessages);
     }
 
     if (!completed) {
@@ -355,6 +365,30 @@ Let's begin!
   /// responses for parsing, and verdict/source transforms must run on the
   /// whole text); chunking is a rendering decision only. Chunks are small
   /// enough for smooth UI updates and large enough to avoid event flooding.
+  void _trimObservationHistory(List<Message> loopMessages) {
+    if (_maxObservationHistory <= 0) return;
+    var count = 0;
+    for (final message in loopMessages) {
+      if (_isUntrimmedObservation(message)) count++;
+    }
+    final excess = count - _maxObservationHistory;
+    if (excess <= 0) return;
+    var replaced = 0;
+    for (var i = 0; i < loopMessages.length && replaced < excess; i++) {
+      if (_isUntrimmedObservation(loopMessages[i])) {
+        loopMessages[i] = Message.user(
+          'Observation: [prior observation trimmed to control context size]',
+        );
+        replaced++;
+      }
+    }
+  }
+
+  bool _isUntrimmedObservation(Message message) =>
+      message.role == MessageRole.user &&
+      message.content.startsWith('Observation: ') &&
+      !message.content.contains('[prior observation trimmed');
+
   Stream<ReActEvent> _emitFinalAnswer(String answer) async* {
     const chunkSize = 120;
     for (var i = 0; i < answer.length; i += chunkSize) {
