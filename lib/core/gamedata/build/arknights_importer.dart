@@ -596,7 +596,14 @@ class ArknightsImporter {
 
     final files = await storyRoot
         .list(recursive: true)
-        .where((entity) => entity is File && entity.path.endsWith('.txt'))
+        .where((entity) {
+          if (entity is! File || !entity.path.endsWith('.txt')) return false;
+          // The upstream repo ships a `[uc]info/` tree of one-line story
+          // stubs alongside the real full-text tree; importing both would
+          // duplicate every story and pollute scopes/coverage with stub rows.
+          final rel = p.relative(entity.path, from: storyRoot.path);
+          return !rel.startsWith('[uc]info${p.separator}');
+        })
         .cast<File>()
         .toList();
     files.sort((a, b) => a.path.compareTo(b.path));
@@ -1006,6 +1013,12 @@ int nowSeconds() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
   final parts = storyId.split('/').where((part) => part.isNotEmpty).toList();
   if (parts.length >= 2 && parts.first == 'activities') {
     return ('activity', parts[1]);
+  }
+  if (parts.length >= 2 && parts.first == 'obt') {
+    // Group main story, memory, rogue, sandbox, tutorial, ... under
+    // `obt:<group>` (e.g. obt/main -> obt:main) instead of lumping them
+    // all under obt:obt.
+    return ('obt', parts[1]);
   }
   if (parts.isNotEmpty) return (parts.first, parts.first);
   return ('story', storyId);

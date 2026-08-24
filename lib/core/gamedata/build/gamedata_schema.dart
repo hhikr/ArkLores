@@ -18,7 +18,15 @@ import 'package:sqflite_common/sqlite_api.dart';
 /// coverage layer tables (`entity_story_mentions`, `story_chapter_profiles`,
 /// `rare_terms`) and the `story_lines_fts` external-content FTS index. No
 /// existing table or column is modified.
-const int gamedataSchemaVersion = 3;
+///
+/// v4 (R3 follow-up, data fix) changes no tables: the importer now skips the
+/// upstream repo's `[uc]info/` one-line story-stub tree (previously imported
+/// alongside the real full-text tree, duplicating every story under a
+/// `[uc]info` scope) and groups `obt/<group>/...` stories under `obt:<group>`
+/// scopes (previously all lumped under `obt:obt`). v3 databases built before
+/// this fix contain stub rows that incremental updates cannot purge, so the
+/// version bump forces a clean rebuild.
+const int gamedataSchemaVersion = 4;
 
 /// Language of the Arknights knowledge base build.
 const String gamedataLanguage = 'zh';

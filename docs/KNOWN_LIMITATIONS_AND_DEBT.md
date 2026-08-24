@@ -197,7 +197,8 @@ schema 已预留 `game` 字段，未来接入不需要改表。
 - `rare_terms`：跨文件 doc_freq ≤ 20 的中文双字词，作为 P1 跨章节细节匹配的 IDF 依据；
 - `story_lines_fts`：40 万行剧情原文的行级全文索引，`read_story_lines` 工具可
   按行区间/分页直接读取原文。
-- App 安装器已把四张新表纳入必需清单并升级校验 `schema_version == '3'`。
+- App 安装器已把四张新表纳入必需清单并升级校验 `schema_version == '4'`
+  （v4：importer 跳过上游 `[uc]info/` 一行摘要桩树，`obt/<group>` 归入 `obt:<group>`）。
 
 **仍开放**：实体级关系索引（死亡/存活、归属、敌对）、组织/概念汇总实体、
 以及基于覆盖层的跨章节推理（P1），见 `AI_RETRIEVAL_OPTIMIZATION.md`。

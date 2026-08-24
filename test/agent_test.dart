@@ -603,7 +603,7 @@ void main() {
 
       final status = await installer.getStatus();
       expect(status.installed, isTrue);
-      expect(status.manifest['schema_version'], '3');
+      expect(status.manifest['schema_version'], '4');
       expect(status.entityCount, '1');
     });
 
@@ -1793,7 +1793,7 @@ Future<void> _createGameDataTestDb(String path) async {
 
   await db.insert('gamedata_manifest', {
     'key': 'schema_version',
-    'value': '3',
+    'value': '4',
   });
   await db.insert('gamedata_manifest', {
     'key': 'entity_count',
