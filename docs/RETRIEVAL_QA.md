@@ -335,7 +335,7 @@ Not verified:
 | 短关系词命中很多剧情片段，直接原文被弱相关片段挤出 | 候选原先按 `story_id/raw_id` 排序 | scope/entity/关系词取交集后，按实体名和关系词在 chunk 内的最短距离排序，再应用 `top_k` | synthetic distant-candidate test；finalized DB 固定 QA |
 | provider 输出 `。Action:` 或附加 `Action Query/Tool` 时工具名解析失败 | ReAct key parser 只接受空白边界或吸收后续 metadata | key 支持常见中英文句末标点；Action 只取首行 | punctuated action 和 action metadata tests |
 | 模型未检索就直接回答 | ReAct 默认接受首轮 Final Answer | ReAct 提供 `minimumToolCalls`；Fact-check 设置为 1，其他 Agent 默认 0 | early-final deterministic test；live QA |
-| reasoning provider 在证据返回后截断 | 2048 tokens 同时承载隐藏 reasoning 和可见 ReAct 输出 | Fact-check 单步上限设为 4096，迭代上限设为 7；截断仍作为错误而非不完整答案返回 | truncated response unit test；live QA |
+| reasoning provider 在证据返回后截断 | 2048 tokens 同时承载隐藏 reasoning 和可见 ReAct 输出 | Fact-check 单步上限设为 4096，不设迭代上限（`safetyMaxIterations=1000` 仅防失控）；截断仍作为错误而非不完整答案返回 | truncated response unit test；live QA |
 | provider 400 只显示状态码 | 标准错误正文未被解析 | Chat client 仅提取标准 `error.message`，不记录 key、请求正文或完整错误响应 | analyze/unit suite；不得把凭据写入 fixture |
 
 Live test 默认跳过，避免普通 `flutter test` 产生外部费用或引入模型波动。只有设置

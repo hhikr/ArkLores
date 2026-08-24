@@ -47,7 +47,6 @@ class SummaryAgent {
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: _toolRegistry,
-      maxIterations: 8, // Coverage + map + reading pages + final answer.
     );
 
     return loop.run(

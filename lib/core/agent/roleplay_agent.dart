@@ -74,7 +74,6 @@ class RoleplayAgent {
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: registry,
-      maxIterations: isFirstTurn ? 7 : 5,
       minimumToolCalls: 1,
       stepMaxTokens: 4096,
     );

@@ -29,7 +29,6 @@ class FactCheckAgent {
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: registry,
-      maxIterations: 7,
       minimumToolCalls: 1,
       stepMaxTokens: 4096,
     );

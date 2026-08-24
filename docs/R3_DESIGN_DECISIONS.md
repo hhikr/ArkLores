@@ -57,13 +57,17 @@ transform 快照与 loopMessages 解耦，裁剪无校验副作用。运行时�
 **理由**：speaker 扩展确定性、零模型成本，与 R1 的 speaker+content 扫描天然衔接，
 补上"有台词 NPC"的最大覆盖缺口；词频挖掘噪声与质量成本不适合混入 P1。
 
-## 决策 4：单次调查成本 —— 固定预算
+## 决策 4：单次调查成本 —— 无步数上限（安全网兜底）
 
-**决定**：固定预算，不做设置项。`StoryInvestigationAgent` 使用 `maxIterations=12`、
-`stepMaxTokens=4096`、`minimumToolCalls>=4`；`RETRIEVAL_QA.md` 记录单次调查的调用
-次数与 token 量级（随真实用例 QA 补测）。
+**决定（2026-08 修订，取代原"固定预算"）**：任何 AI 服务都不限制推理步数，
+让 Agent 一直推理到给出最终回答为止。`ReActLoop` 不再接受 `maxIterations`；
+仅保留可注入的 `safetyMaxIterations`（默认 1000）作为防失控安全网，超过时记日志
+并走兜底回答路径。`stepMaxTokens=4096`、`minimumToolCalls>=4` 保留；
+`RETRIEVAL_QA.md` 记录单次调查的调用次数与 token 量级（随真实用例 QA 补测）。
 
-**理由**：简单、可预测；调查是低频用户操作，可配置上限的 UI/状态复杂度不划算。
+**理由**：固定 12 轮在真实长线调查中会提前耗尽预算，模型被迫把未完成的分析
+作为"最终回答"输出（真机日志复现：12 轮耗尽后返回 Action 文本）；移除上限后
+成本改为由观察历史裁剪（决策 2）与上下文预算（决策 3）兜底，而非硬性截断推理。
 
 ---
 

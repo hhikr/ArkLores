@@ -43,26 +43,36 @@ class ReActEvent {
 }
 
 /// Executor for the ReAct (Reasoning and Acting) loop.
+///
+/// The loop is NOT bounded by a step limit: agents may keep reasoning and
+/// calling tools until the model produces a Final Answer (or an error
+/// terminates the session). A large internal safety cap only guards against a
+/// runaway model that never finalizes; it is not a user-facing limit.
 class ReActLoop {
 
   ReActLoop({
     required LLMClient llmClient,
     required ToolRegistry toolRegistry,
-    int maxIterations = 5,
     int minimumToolCalls = 0,
     int stepMaxTokens = 2048,
     int maxObservationHistory = 8,
+    int safetyMaxIterations = 1000,
   })  : _llmClient = llmClient,
         _toolRegistry = toolRegistry,
-        _maxIterations = maxIterations,
         _minimumToolCalls = minimumToolCalls,
         _stepMaxTokens = stepMaxTokens,
-        _maxObservationHistory = maxObservationHistory;
+        _maxObservationHistory = maxObservationHistory,
+        _safetyMaxIterations = safetyMaxIterations;
   final LLMClient _llmClient;
   final ToolRegistry _toolRegistry;
-  final int _maxIterations;
   final int _minimumToolCalls;
   final int _stepMaxTokens;
+
+  /// Runaway-model safety net, NOT a user-facing step limit. Normal sessions
+  /// finish far below this; only if a model never produces a Final Answer
+  /// does the loop stop here and surface what was gathered via the fallback.
+  /// Injectable so fallback behavior stays testable.
+  final int _safetyMaxIterations;
 
   /// Max full `Observation:` messages kept in the LLM history (R3 context
   /// budget, design decision 2). Older observations are replaced by a
@@ -125,9 +135,16 @@ Let's begin!
     final evidenceSummary = EvidenceSummary();
     final observations = <String>[];
 
-    while (iteration < _maxIterations && !completed) {
+    while (!completed) {
       iteration++;
-      logger.logIteration(iteration, _maxIterations);
+      logger.logIteration(iteration);
+      if (iteration > _safetyMaxIterations) {
+        logger.logError(
+          'SAFETY CAP: $iteration iterations without a Final Answer; '
+          'stopping to avoid a runaway loop.',
+        );
+        break;
+      }
 
       // Ask for one Thought and Action step. Keep this bounded, but leave
       // enough room for providers that include verbose reasoning text.

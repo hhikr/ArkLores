@@ -254,7 +254,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: mock,
         toolRegistry: registry,
-        maxIterations: 15,
         maxObservationHistory: 8,
       );
       await loop

@@ -41,8 +41,8 @@ P1 解决 P0 覆盖层之上的推理问题：答案需要跨章节对齐细节�
 ### 2.4 调查 Agent（`investigation_agent.dart` + prompt）
 
 `StoryInvestigationAgent` 注册全部 6 个工具（search_local_lore + 3 个覆盖层工具 +
-2 个调查工具），固定预算（决策 4）：`maxIterations=12`、`stepMaxTokens=4096`、
-`minimumToolCalls=4`、`maxObservationHistory=8`。prompt 实现 S0–S8 阶段协议 +
+2 个调查工具），无步数上限（决策 4 修订版）：`safetyMaxIterations=1000` 仅作防失控
+安全网、`stepMaxTokens=4096`、`minimumToolCalls=4`、`maxObservationHistory=8`。prompt 实现 S0–S8 阶段协议 +
 结论信封格式 + 预算规则（精读 ≤3 章、每章 ≤3 页）。
 
 ### 2.5 结论校验（`investigation_verdict.dart`）

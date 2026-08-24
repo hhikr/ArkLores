@@ -46,7 +46,6 @@ class InvestigationAgent {
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: _toolRegistry,
-      maxIterations: 12,
       minimumToolCalls: 4,
       stepMaxTokens: 4096,
       maxObservationHistory: 8,

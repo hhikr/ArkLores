@@ -68,8 +68,9 @@ operator_voice、秘录→operator record 等）。
 
 ### 1.3 Agent 编排
 
-`ReActLoop`（`lib/core/agent/react_loop.dart`）默认 5 轮迭代、单步 2048 tokens、
-`minimumToolCalls=0`；Fact-check 使用 7 轮、4096 tokens、最少 1 次工具调用。最终回答
+`ReActLoop`（`lib/core/agent/react_loop.dart`）不设迭代上限（仅 `safetyMaxIterations`
+默认 1000 作防失控安全网）、单步 2048 tokens、`minimumToolCalls=0`；Fact-check 使用
+4096 tokens、最少 1 次工具调用。最终回答
 以 120 字符分块输出。三个 Agent（Summary / Fact-check / Role-play）都只注册
 `search_local_lore`，工具注册表不提供其他来源工具。
 
@@ -263,7 +264,8 @@ S7 逐候选比较证据链完整性与矛盾（协议：先各集齐再比较�
 S8 输出结论信封 + 证据链 + 反方证据 + 已读范围报告 + 置信度 + 替代解读
 ```
 
-预算：`maxIterations` 12–15、`stepMaxTokens` 4096+、`minimumToolCalls` >= 4。
+预算：无迭代上限（`safetyMaxIterations` 默认 1000 仅防失控）、`stepMaxTokens` 4096+、
+`minimumToolCalls` >= 4。
 
 ### 5.3 结论格式与校验
 

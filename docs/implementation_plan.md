@@ -119,8 +119,9 @@ QA 已完成。事实核查仅注册 `search_local_lore`，结论经过实际 Ga
   证据 → 形成结论”的 workflow。
 - 剧情命题先分别解析 canonical `scope_id` 和 `entity_id`，再用单一关系、状态或动作词
   执行 evidence mode；普通复合关键词无结果不能被解释为反证。
-- Fact-check 最终回答前至少完成一次工具调用；其 ReAct 预算为 7 轮、单步 4096 tokens，
+- Fact-check 最终回答前至少完成一次工具调用；其单步预算为 4096 tokens，
   以容纳实体/范围解析和 reasoning provider 的输出，其他 Agent 保持默认预算。
+  所有 Agent 均不设步数上限（`safetyMaxIterations=1000` 仅作防失控安全网）。
 - scoped evidence 在候选交集内按实体名与关系词的最短文本距离排序，优先返回同句或
   邻近句的直接陈述，而不是按剧情文件名排序。
 - 在回答中区分直接证据、间接证据和证据缺失，不把 retrieval confidence 等同于

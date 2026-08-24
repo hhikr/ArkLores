@@ -62,10 +62,10 @@ class AgentLogger {
     _buf.writeln();
   }
 
-  void logIteration(int iteration, int maxIterations) {
+  void logIteration(int iteration) {
     if (!isEnabled) return;
     _buf.writeln('─' * 60);
-    _buf.writeln('[Iteration $iteration / $maxIterations]');
+    _buf.writeln('[Iteration $iteration]');
     _buf.writeln();
   }
 

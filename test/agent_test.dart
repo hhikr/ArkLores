@@ -695,7 +695,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _MockLLMClient(),
         toolRegistry: registry,
-        maxIterations: 3,
       );
 
       final events = await reactLoop
@@ -726,7 +725,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _LooseActionInputLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       final events = await reactLoop
@@ -756,7 +754,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _TrailingActionInputLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       final events = await reactLoop
@@ -786,7 +783,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _ActionMetadataLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       await loop
@@ -804,7 +800,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _PunctuatedActionLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       await loop
@@ -822,7 +817,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _EarlyFinalThenActionLLMClient(),
         toolRegistry: registry,
-        maxIterations: 3,
         minimumToolCalls: 1,
       );
 
@@ -860,7 +854,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _EmptyFinalAnswerLLMClient(),
         toolRegistry: ToolRegistry(),
-        maxIterations: 1,
       );
 
       final events = await reactLoop
@@ -882,7 +875,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _TruncatedLLMClient(),
         toolRegistry: ToolRegistry(),
-        maxIterations: 1,
       );
 
       final events = await reactLoop
@@ -907,7 +899,7 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: llm,
         toolRegistry: registry,
-        maxIterations: 1,
+        safetyMaxIterations: 1,
       );
 
       final events = await reactLoop
@@ -934,7 +926,7 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: llm,
         toolRegistry: registry,
-        maxIterations: 1,
+        safetyMaxIterations: 1,
       );
 
       await reactLoop
