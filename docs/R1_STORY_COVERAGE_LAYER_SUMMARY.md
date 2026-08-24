@@ -28,7 +28,7 @@
 | 表 | 内容 | 规模预估（真实数据） |
 | --- | --- | --- |
 | `entity_story_mentions` | 实体出场倒排：entity_id / story_id / scope_id / 行区间 run / mention_count / matched_alias | 20–50 万行级 |
-| `story_chapter_profiles` | 每 story 画像：行范围、speaker 集合、实体密度 top N、抽取式摘要、死亡/凶案词典命中（triage 提示） | 5,691 行 |
+| `story_chapter_profiles` | 每 story 画像：行范围、speaker 集合、实体密度 top N、抽取式摘要（桥段无关） | 5,691 行 |
 | `rare_terms` | 跨文件 doc_freq ≤ 20 的中文双字词（IDF 依据，供 P1 细节匹配） | 数十万行级 |
 | `story_lines_fts` | `story_lines` 的行级外部内容 FTS（tokenizer 与 `lore_chunks_fts` 一致的默认 unicode61，配套 LIKE 回退） | 40.6 万行索引 |
 
@@ -57,7 +57,7 @@ CLI 写入 manifest（`story_coverage_mention_count` / `story_profile_count` /
 | --- | --- | --- |
 | `search_story_coverage` | `query` 或 `entity_id`，可选 `scope_filter` | 实体消歧后按 scope 分组枚举全部出场；观察输出机器可读标记 `Coverage Scopes:` / `Coverage Stories:` / `Scope:` |
 | `read_story_lines` | `story_id` + `start_line`/`end_line`/`max_lines`/`page_token` | 行级原文读取，独立 4800 字符预算，`Next Page Token` 续读，`Story not found` 与无行区分；单行超预算强制截断首行保证 token 推进 |
-| `get_story_map` | `story_ids` 列表或 `scope_id` | 章节画像（行范围、speaker、Top Entities、Keyword Hits、Summary），输出 `Mapped Stories:` 标记 |
+| `get_story_map` | `story_ids` 列表或 `scope_id` | 章节画像（行范围、speaker、Top Entities、Summary），输出 `Mapped Stories:` 标记 |
 
 三个工具均为纯 SQL + 格式化，无模型调用；`GameDataKnowledgeStore` 新增对应查询方法
 （`searchStoryCoverage` / `readStoryLines` / `getStoryMap`），复用句柄失效修复与

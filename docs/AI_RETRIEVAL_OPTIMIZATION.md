@@ -164,8 +164,9 @@ CREATE TABLE story_chapter_profiles (
   line_end       INTEGER NOT NULL,
   speaker_set    TEXT,   -- JSON
   entity_density TEXT,   -- JSON: entity_id -> mention_count（top N）
-  summary        TEXT,   -- 默认 extractive 摘要
-  keyword_hits   TEXT    -- JSON: 死亡/凶案类词典命中（仅 triage 提示）
+  summary        TEXT    -- 默认 extractive 摘要（桥段无关）
+  -- keyword_hits 已废弃（2026-08）：死亡/凶案词典是桥段专项，对非凶案问题无
+  -- 普遍价值，构建不再填充；列保留仅为兼容已装 v3 库。
 );
 CREATE INDEX idx_profiles_scope ON story_chapter_profiles(scope_id);
 
@@ -191,9 +192,9 @@ CREATE TABLE rare_terms (
 1. 用实体 canonical name 与全部 alias 构建 trie，单遍扫描 `story_lines.content`，
    连续命中合并为行区间写入 `entity_story_mentions`（估计 20–50 万行，对 DB 体积
    影响可忽略）。
-2. 每个 story 文件统计 speaker 集合、实体密度、死亡/凶案类词典命中，生成章节画像
+2. 每个 story 文件统计 speaker 集合、实体密度，生成章节画像
    写入 `story_chapter_profiles`；`summary` 默认取实体密度与稀有词密度最高的句子
-   （确定性、可复现）。
+   （确定性、可复现；全部为桥段无关的通用统计，不含桥段专项词典）。
 3. 重建 `story_lines_fts`。
 4. 对 story 文件内容取字符 bigram（不做分词），统计跨文件 doc_freq，仅保留
    `doc_freq <= 20` 的条目写入 `rare_terms`。

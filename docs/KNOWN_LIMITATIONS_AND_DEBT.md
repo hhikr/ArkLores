@@ -194,7 +194,6 @@ schema 已预留 `game` 字段，未来接入不需要改表。
 - `entity_story_mentions`：实体（canonical name + 全部 alias）出场倒排，台词说话人
   与正文一并扫描，连续命中合并为行区间 run；
 - `story_chapter_profiles`：每 story 的行范围、speaker 集合、实体密度、抽取式摘要、
-  死亡/凶案词典命中（仅 triage 提示）；
 - `rare_terms`：跨文件 doc_freq ≤ 20 的中文双字词，作为 P1 跨章节细节匹配的 IDF 依据；
 - `story_lines_fts`：40 万行剧情原文的行级全文索引，`read_story_lines` 工具可
   按行区间/分页直接读取原文。

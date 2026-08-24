@@ -42,31 +42,6 @@ const int profileEntityDensityLimit = 20;
 /// `speaker:<name>` entity (R3 / P1 coverage extension).
 const int speakerEntityMinLines = 3;
 
-/// Triage-only keywords for `story_chapter_profiles.keyword_hits`.
-///
-/// Hits only flag chapters that may contain death/murder related content for
-/// the investigation workflow; they are never used as evidence themselves.
-const List<String> triageKeywords = [
-  '死亡',
-  '死去',
-  '杀死',
-  '杀害',
-  '谋杀',
-  '凶杀',
-  '遇害',
-  '丧生',
-  '致命',
-  '暗杀',
-  '身亡',
-  '惨死',
-  '猝死',
-  '凶器',
-  '尸体',
-  '血迹',
-  '血泊',
-  '毒杀',
-];
-
 /// Builds the schema v3 coverage layer tables.
 class StoryCoverageBuilder {
   StoryCoverageBuilder({
@@ -238,7 +213,6 @@ class StoryCoverageBuilder {
     final entityLines = <String, List<int>>{};
     final entityAlias = <String, String>{};
     final speakers = <String>{};
-    final keywordHits = <String, int>{};
     final storyBigrams = <String>{};
     var firstLine = 0;
     var lastLine = 0;
@@ -268,12 +242,6 @@ class StoryCoverageBuilder {
             lines.add(lineIndex);
             entityAlias.putIfAbsent(entityId, () => hit.matchedText);
           }
-        }
-      }
-
-      for (final keyword in triageKeywords) {
-        if (content.contains(keyword)) {
-          keywordHits[keyword] = (keywordHits[keyword] ?? 0) + 1;
         }
       }
 
@@ -332,7 +300,6 @@ class StoryCoverageBuilder {
       lineStart: firstLine,
       lineEnd: lastLine,
       speakers: speakers.toList()..sort(),
-      keywordHits: keywordHits,
     );
   }
 
@@ -415,7 +382,6 @@ class StoryCoverageBuilder {
           'entity_density': jsonEncode(density),
           'summary':
               bestContent != null ? _capSummary(bestContent) : null,
-          'keyword_hits': jsonEncode(draft.keywordHits),
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
@@ -562,7 +528,6 @@ class _ProfileDraft {
     required this.lineStart,
     required this.lineEnd,
     required this.speakers,
-    required this.keywordHits,
   });
   final String storyId;
   final String? scopeType;
@@ -571,5 +536,4 @@ class _ProfileDraft {
   final int lineStart;
   final int lineEnd;
   final List<String> speakers;
-  final Map<String, int> keywordHits;
 }

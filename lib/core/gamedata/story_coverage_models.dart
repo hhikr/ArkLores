@@ -66,7 +66,6 @@ class StoryChapterProfile {
     required this.lineEnd,
     required this.speakerSet,
     required this.entityDensity,
-    required this.keywordHits,
     this.title,
     this.summary,
   });
@@ -78,5 +77,4 @@ class StoryChapterProfile {
   final List<String> speakerSet;
   final Map<String, int> entityDensity;
   final String? summary;
-  final Map<String, int> keywordHits;
 }

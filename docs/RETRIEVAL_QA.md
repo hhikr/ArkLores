@@ -52,7 +52,7 @@ schema v3 DB 后，除上表 Smoke Queries 外，至少人工检查以下覆盖�
 | `search_story_coverage(query=阿米娅)` | 实体出场枚举 | 返回 `Coverage Scopes:` / `Coverage Stories:` 与逐 story 行区间、mention_count；出场包含以说话人身份出现的台词行 |
 | `read_story_lines(story_id=活动某章, max_lines=30)` | 原文行读取与分页 | 返回 `line_index \| speaker \| content`；超页时返回 `Next Page Token`，回传 `page_token` 可续读，尾部返回 `End of Story: yes` |
 | `read_story_lines(story_id=不存在)` | 缺章区分 | 返回 `Story not found`，与"范围内无行"区分 |
-| `get_story_map(scope_id=activity:act21mini)` | 章节画像 | 返回 `Mapped Stories:` 与各章行范围、speaker 集合、Top Entities、Keyword Hits、抽取式 Summary |
+| `get_story_map(scope_id=activity:act21mini)` | 章节画像 | 返回 `Mapped Stories:` 与各章行范围、speaker 集合、Top Entities、抽取式 Summary |
 | Summary 叙事回答尾部 | 已读范围报告 | 回答末尾存在 `Coverage: read=<实际精读 scope 数> \| mapped=<仅浏览画像的 scope 数> \| skipped=<未读+原因>`，且与实际工具调用一致（虚构会被 transform 改写） |
 
 自动覆盖：`test/story_coverage_test.dart`（16 项：run 合并、bigram 提取、mentions/

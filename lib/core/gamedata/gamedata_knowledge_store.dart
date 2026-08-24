@@ -480,7 +480,6 @@ class GameDataKnowledgeStore {
       speakerSet: stringList(row['speaker_set']),
       entityDensity: intMap(row['entity_density']),
       summary: row['summary'] as String?,
-      keywordHits: intMap(row['keyword_hits']),
     );
   }
 

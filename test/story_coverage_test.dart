@@ -121,7 +121,6 @@ void main() {
       final c3 = profiles.firstWhere(
         (profile) => profile.storyId.endsWith('level_fixture_c3.txt'),
       );
-      expect(c3.keywordHits.containsKey('死亡'), isTrue);
       expect(c3.entityDensity.containsKey('char_a'), isTrue);
       expect(c3.lineStart, 0);
       expect(c3.summary, isNotNull);
@@ -224,7 +223,6 @@ void main() {
         {'scope_id': 'activity:act_fixture'},
       ) as ToolExecutionResult;
       expect(result.observation, contains('Mapped Stories: 5'));
-      expect(result.observation, contains('Keyword Hits: 死亡'));
       expect(result.observation, contains('Summary:'));
     });
   });

@@ -95,12 +95,6 @@ class GetStoryMapTool extends AgentTool {
             ).join(', ');
         buffer.writeln('Top Entities: $top');
       }
-      if (profile.keywordHits.isNotEmpty) {
-        final hits = profile.keywordHits.entries
-            .map((entry) => '${entry.key}(${entry.value})')
-            .join(', ');
-        buffer.writeln('Keyword Hits: $hits');
-      }
       if (profile.summary != null && profile.summary!.isNotEmpty) {
         buffer.writeln('Summary: ${profile.summary}');
       }
