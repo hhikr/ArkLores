@@ -128,8 +128,8 @@ void main() {
     });
   });
 
-  group('AI page investigation tab', () {
-    testWidgets('shows four tabs including 剧情调查 with empty state',
+  group('AI page entry consolidation', () {
+    testWidgets('shows two tabs with the Ask mode selector and empty state',
         (tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -149,14 +149,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('事实核查'), findsOneWidget);
-      expect(find.text('剧情梗概'), findsWidgets); // AppBar title + tab
-      expect(find.text('剧情调查'), findsOneWidget);
-      expect(find.text('角色扮演'), findsOneWidget);
-
-      await tester.tap(find.text('剧情调查').last);
-      await tester.pumpAndSettle();
-      expect(find.textContaining('跨章节因果'), findsOneWidget);
+      expect(find.text('剧情智囊'), findsOneWidget); // AppBar title
+      expect(find.text('AI 问答'), findsWidgets); // tab + empty-state title
+      expect(find.text('角色扮演'), findsOneWidget); // Roleplay tab
+      expect(find.text('自动'), findsOneWidget); // mode chips
+      expect(find.text('概括'), findsOneWidget);
+      expect(find.text('查证'), findsOneWidget);
+      expect(find.text('深挖'), findsOneWidget);
+      expect(find.textContaining('直接问任何剧情问题'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

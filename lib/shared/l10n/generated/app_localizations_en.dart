@@ -253,7 +253,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importDismiss => 'Dismiss';
 
   @override
-  String get aiChatTitle => 'AI Chat';
+  String get aiChatTitle => 'Lore Advisor';
 
   @override
   String get aiChatSubtitle => 'Fact Check · Summary · Roleplay';
@@ -361,6 +361,57 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsShowOnboardingDesc => 'Replay the first-launch guide to configure the app';
+
+  @override
+  String get aiTabAsk => 'Ask AI';
+
+  @override
+  String get aiModeAuto => 'Auto';
+
+  @override
+  String get aiModeAutoDesc => 'AI picks the best mode (summarize / verify / investigate)';
+
+  @override
+  String get aiModeSummarize => 'Summarize';
+
+  @override
+  String get aiModeSummarizeDesc => 'Summarize known lore: characters, events, factions, timeline';
+
+  @override
+  String get aiModeVerify => 'Verify';
+
+  @override
+  String get aiModeVerifyDesc => 'Judge whether a claim is true (supported / refuted)';
+
+  @override
+  String get aiModeInvestigate => 'Investigate';
+
+  @override
+  String get aiModeInvestigateDesc => 'Cross-chapter reasoning: culprit, cause, foreshadowing, truth';
+
+  @override
+  String get aiAskSource => 'Answers are grounded in installed GameData story text only';
+
+  @override
+  String get aiAskEmpty => 'Ask any lore question — summarize, verify, or dig deeper; auto mode picks the approach for you.';
+
+  @override
+  String get aiAskInputPlaceholder => 'Ask any lore question...';
+
+  @override
+  String get aiAskSuggestionAmiya => 'Who is Amiya?';
+
+  @override
+  String get aiAskSuggestionVerify => 'Is Amiya the public leader of Rhodes Island?';
+
+  @override
+  String get aiAskSuggestionInvestigate => 'What happened to Miogre\'s death?';
+
+  @override
+  String get aiAskError => 'Failed to answer. Please retry.';
+
+  @override
+  String get aiAskCanceled => 'Answer canceled.';
 
   @override
   String get aiTabFactCheck => 'Fact Check';

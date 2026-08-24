@@ -542,7 +542,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiChatTitle.
   ///
   /// In en, this message translates to:
-  /// **'AI Chat'**
+  /// **'Lore Advisor'**
   String get aiChatTitle;
 
   /// No description provided for @aiChatSubtitle.
@@ -754,6 +754,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Replay the first-launch guide to configure the app'**
   String get settingsShowOnboardingDesc;
+
+  /// No description provided for @aiTabAsk.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask AI'**
+  String get aiTabAsk;
+
+  /// No description provided for @aiModeAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get aiModeAuto;
+
+  /// No description provided for @aiModeAutoDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'AI picks the best mode (summarize / verify / investigate)'**
+  String get aiModeAutoDesc;
+
+  /// No description provided for @aiModeSummarize.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize'**
+  String get aiModeSummarize;
+
+  /// No description provided for @aiModeSummarizeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize known lore: characters, events, factions, timeline'**
+  String get aiModeSummarizeDesc;
+
+  /// No description provided for @aiModeVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get aiModeVerify;
+
+  /// No description provided for @aiModeVerifyDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Judge whether a claim is true (supported / refuted)'**
+  String get aiModeVerifyDesc;
+
+  /// No description provided for @aiModeInvestigate.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigate'**
+  String get aiModeInvestigate;
+
+  /// No description provided for @aiModeInvestigateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Cross-chapter reasoning: culprit, cause, foreshadowing, truth'**
+  String get aiModeInvestigateDesc;
+
+  /// No description provided for @aiAskSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers are grounded in installed GameData story text only'**
+  String get aiAskSource;
+
+  /// No description provided for @aiAskEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask any lore question — summarize, verify, or dig deeper; auto mode picks the approach for you.'**
+  String get aiAskEmpty;
+
+  /// No description provided for @aiAskInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask any lore question...'**
+  String get aiAskInputPlaceholder;
+
+  /// No description provided for @aiAskSuggestionAmiya.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is Amiya?'**
+  String get aiAskSuggestionAmiya;
+
+  /// No description provided for @aiAskSuggestionVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Is Amiya the public leader of Rhodes Island?'**
+  String get aiAskSuggestionVerify;
+
+  /// No description provided for @aiAskSuggestionInvestigate.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened to Miogre\'s death?'**
+  String get aiAskSuggestionInvestigate;
+
+  /// No description provided for @aiAskError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to answer. Please retry.'**
+  String get aiAskError;
+
+  /// No description provided for @aiAskCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer canceled.'**
+  String get aiAskCanceled;
 
   /// No description provided for @aiTabFactCheck.
   ///

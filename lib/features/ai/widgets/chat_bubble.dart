@@ -155,6 +155,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       content = context.t.aiInvestigationError;
     } else if (content == '[INVESTIGATION_CANCELED]') {
       content = context.t.aiCancel;
+    } else if (content == '[ASK_ERROR]') {
+      content = context.t.aiAskError;
+    } else if (content == '[ASK_CANCELED]') {
+      content = context.t.aiAskCanceled;
     }
 
     // Scan for citation UUIDs

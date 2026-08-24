@@ -253,7 +253,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importDismiss => '关闭';
 
   @override
-  String get aiChatTitle => 'AI 对话';
+  String get aiChatTitle => '剧情智囊';
 
   @override
   String get aiChatSubtitle => '事实核查 · 梗概生成 · 角色扮演';
@@ -361,6 +361,57 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
+
+  @override
+  String get aiTabAsk => 'AI 问答';
+
+  @override
+  String get aiModeAuto => '自动';
+
+  @override
+  String get aiModeAutoDesc => 'AI 自动判断用哪种模式（概括 / 查证 / 深挖）';
+
+  @override
+  String get aiModeSummarize => '概括';
+
+  @override
+  String get aiModeSummarizeDesc => '整理已知剧情：人物、事件、组织、时间线';
+
+  @override
+  String get aiModeVerify => '查证';
+
+  @override
+  String get aiModeVerifyDesc => '判定一个说法的真假（对吗？是不是？）';
+
+  @override
+  String get aiModeInvestigate => '深挖';
+
+  @override
+  String get aiModeInvestigateDesc => '跨章节推理：凶手、因果、伏笔、真相';
+
+  @override
+  String get aiAskSource => '仅基于已安装的 GameData 剧情原文回答';
+
+  @override
+  String get aiAskEmpty => '直接问任何剧情问题——概括、查证、深挖都可以，自动模式会为你选择合适的方式。';
+
+  @override
+  String get aiAskInputPlaceholder => '问任何剧情问题…';
+
+  @override
+  String get aiAskSuggestionAmiya => '阿米娅是什么人';
+
+  @override
+  String get aiAskSuggestionVerify => '阿米娅是罗德岛的公开领袖吗';
+
+  @override
+  String get aiAskSuggestionInvestigate => '米格鲁的死是怎么回事';
+
+  @override
+  String get aiAskError => '回答失败，请重试。';
+
+  @override
+  String get aiAskCanceled => '已取消本次回答。';
 
   @override
   String get aiTabFactCheck => '事实核查';

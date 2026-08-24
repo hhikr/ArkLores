@@ -10,6 +10,7 @@ import 'chat_message.dart';
 import 'chat_notifier_base.dart';
 import 'fact_check_agent.dart';
 import 'investigation_agent.dart';
+import 'question_router.dart';
 import 'react_loop.dart';
 import 'roleplay_agent.dart';
 import 'roleplay_session_store.dart';
@@ -243,6 +244,162 @@ class FactCheckChatNotifier extends ChatNotifierBase {
 final factCheckChatProvider =
     StateNotifierProvider<FactCheckChatNotifier, List<ChatMessage>>((ref) {
   return FactCheckChatNotifier(ref.watch(factCheckAgentProvider));
+});
+
+/// Selected mode of the AI Ask tab (auto routes via [QuestionRouter]).
+final aiModeProvider = StateProvider<AiMode>((ref) => AiMode.auto);
+
+/// Unified Ask chat: one message list, three workflows, optional auto-routing.
+///
+/// The Ask tab merges the previous Summary / Fact-check / Investigation tabs.
+/// In [AiMode.auto] the [QuestionRouter] classifies the question first; the
+/// other modes pin the workflow directly. The ReAct event handling is shared
+/// across workflows; a fact-check verdict is parsed from the stream whenever
+/// present, other modes simply produce no verdict.
+class AskChatNotifier extends ChatNotifierBase {
+  AskChatNotifier({
+    required SummaryAgent summaryAgent,
+    required FactCheckAgent factCheckAgent,
+    required InvestigationAgent investigationAgent,
+    required QuestionRouter router,
+  })  : _summaryAgent = summaryAgent,
+        _factCheckAgent = factCheckAgent,
+        _investigationAgent = investigationAgent,
+        _router = router,
+        super([]);
+  final SummaryAgent _summaryAgent;
+  final FactCheckAgent _factCheckAgent;
+  final InvestigationAgent _investigationAgent;
+  final QuestionRouter _router;
+  AiMode _lastMode = AiMode.auto;
+
+  Future<void> sendMessage(String text, {required AiMode mode}) async {
+    final query = text.trim();
+    if (query.isEmpty || state.any((message) => message.isStreaming)) return;
+    _lastMode = mode;
+    final generation = nextGeneration();
+    final history = buildHistory(state);
+    final assistantId = newId();
+    state = [
+      ...state,
+      ChatMessage(
+        id: newId(),
+        role: MessageRole.user,
+        content: query,
+        timestamp: DateTime.now(),
+      ),
+      ChatMessage(
+        id: assistantId,
+        role: MessageRole.assistant,
+        content: '',
+        isStreaming: true,
+        timestamp: DateTime.now(),
+      ),
+    ];
+
+    var effective = mode;
+    if (effective == AiMode.auto) {
+      try {
+        effective = await _router.route(query);
+      } catch (_) {
+        effective = AiMode.summarize;
+      }
+    }
+    final effectiveMode = effective;
+
+    final stream = switch (effective) {
+      AiMode.verify =>
+        _factCheckAgent.checkClaim(claim: query, history: history),
+      AiMode.investigate =>
+        _investigationAgent.investigate(query: query, history: history),
+      AiMode.summarize || AiMode.auto => _summaryAgent.generateSummary(
+          query: query,
+          history: history,
+        ),
+    };
+
+    final steps = <ReActStep>[];
+    final finalAnswerBuffer = StringBuffer();
+    try {
+      await for (final event in stream) {
+        if (!isCurrentGeneration(generation)) return;
+        switch (event.type) {
+          case ReActEventType.thought:
+          case ReActEventType.toolCall:
+          case ReActEventType.toolObservation:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+              toolArgs: event.toolArgs,
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
+            break;
+          case ReActEventType.finalAnswerToken:
+            finalAnswerBuffer.write(event.content);
+            updateMessage(
+              assistantId,
+              content: finalAnswerBuffer.toString(),
+              // Only the fact-check workflow produces a verdict banner; other
+              // modes may still contain a marker in text, which chat_bubble
+              // strips from the markdown body.
+              factCheckVerdict: effectiveMode == AiMode.verify
+                  ? parseFactCheckVerdict(finalAnswerBuffer.toString())
+                  : null,
+              steps: List.of(steps),
+            );
+            break;
+          case ReActEventType.error:
+            steps.add(ReActStep(type: event.type, content: event.content));
+            updateMessage(
+              assistantId,
+              content: '[ASK_ERROR]',
+              isError: true,
+              steps: List.of(steps),
+            );
+            break;
+          case ReActEventType.complete:
+            updateMessage(
+              assistantId,
+              isStreaming: false,
+              steps: List.of(steps),
+            );
+            break;
+        }
+      }
+    } catch (_) {
+      if (isCurrentGeneration(generation)) {
+        updateMessage(
+          assistantId,
+          content: '[ASK_ERROR]',
+          isError: true,
+          isStreaming: false,
+        );
+      }
+    }
+  }
+
+  @override
+  String get canceledMarker => '[ASK_CANCELED]';
+
+  @override
+  Future<void> resendLast(String query) =>
+      sendMessage(query, mode: _lastMode);
+
+  @override
+  List<Message> buildHistory(List<ChatMessage> messages) =>
+      buildReactHistory(messages);
+}
+
+/// Provider for the unified Ask chat state.
+final askChatProvider =
+    StateNotifierProvider<AskChatNotifier, List<ChatMessage>>((ref) {
+  return AskChatNotifier(
+    summaryAgent: ref.watch(summaryAgentProvider),
+    factCheckAgent: ref.watch(factCheckAgentProvider),
+    investigationAgent: ref.watch(investigationAgentProvider),
+    router: QuestionRouter(llmClient: ref.watch(llmClientProvider)),
+  );
 });
 
 /// Provider for the [InvestigationAgent] instance.
