@@ -81,6 +81,29 @@ final gameDataBuildProvider =
   );
 });
 
+/// Extracts the whitelisted source subset in a background isolate.
+///
+/// Kept as a TOP-LEVEL function on purpose: closures created inside the
+/// notifier (e.g. `onProgress` callbacks) capture `this`, and Dart may share
+/// one closure-context object across closures of the same method (especially
+/// under AOT), so an in-method `Isolate.run` closure can drag the whole
+/// notifier — including its `onInstalled` callback, which captures the
+/// riverpod `ref` and therefore the provider dependency graph with its
+/// futures — into the isolate message, failing with "object is unsendable"
+/// (see dart-lang/sdk#59866). This function's closure captures only plain
+/// strings and nothing else.
+Future<void> extractWhitelistedSourceInIsolate(
+  String zipPath,
+  String sourceDirPath,
+) async {
+  await Isolate.run(
+    () => ArknightsSourceClient.extractWhitelistedZip(
+      zipPath: zipPath,
+      outputDir: Directory(sourceDirPath),
+    ),
+  );
+}
+
 class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   GameDataBuildNotifier({required this.onInstalled})
       : super(const GameDataBuildUiState(phase: GameDataBuildPhase.idle));
@@ -291,12 +314,12 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
       phase: GameDataBuildPhase.extracting,
       stage: 'zip',
     );
-    final sourceDirPath = dirs.sourceDir.path;
-    await Isolate.run(
-      () => ArknightsSourceClient.extractWhitelistedZip(
-        zipPath: zipPath,
-        outputDir: Directory(sourceDirPath),
-      ),
+    // Top-level helper: the Isolate.run closure must not capture this
+    // notifier (its closure context would drag riverpod provider futures into
+    // the isolate message and fail as "object is unsendable").
+    await extractWhitelistedSourceInIsolate(
+      zipPath,
+      dirs.sourceDir.path,
     );
     final zip = File(zipPath);
     if (await zip.exists()) await zip.delete();

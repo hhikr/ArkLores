@@ -6,6 +6,7 @@ import 'package:archive/archive.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_isolate.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/source/arknights_source_client.dart';
+import 'package:arklores/core/gamedata/gamedata_build_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -453,6 +454,29 @@ void main() {
       expect(progressStages, contains('stories'));
       await sub.cancel();
       runner.kill();
+    });
+
+    test('extractWhitelistedSourceInIsolate extracts in a background isolate',
+        () async {
+      final zipPath = p.join(tempDir.path, 'src.zip');
+      final outDir = Directory(p.join(tempDir.path, 'out'));
+      final archive = Archive();
+      final bytes = utf8.encode('{"a":1}');
+      archive.addFile(
+        ArchiveFile(
+          'ArknightsGameData-t/zh_CN/gamedata/excel/character_table.json',
+          bytes.length,
+          bytes,
+        ),
+      );
+      await File(zipPath).writeAsBytes(ZipEncoder().encode(archive)!);
+      await extractWhitelistedSourceInIsolate(zipPath, outDir.path);
+      expect(
+        await File(
+          p.join(outDir.path, 'zh_CN/gamedata/excel/character_table.json'),
+        ).exists(),
+        isTrue,
+      );
     });
   });
 }
