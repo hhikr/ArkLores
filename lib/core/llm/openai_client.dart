@@ -16,7 +16,13 @@ class OpenAICompatibleClient implements LLMClient {
     http.Client? httpClient,
     Duration? timeout,
   })  : _httpClient = httpClient ?? http.Client(),
-        _timeout = timeout ?? const Duration(seconds: 30);
+        _timeout = timeout ?? defaultRequestTimeout;
+
+  /// Default per-request timeout. Generous on purpose: ReAct agents may carry
+  /// large accumulated contexts (long investigations) whose single completion
+  /// exceeds a short HTTP timeout; a 30s default caused sessions to die with
+  /// "Request timed out" mid-investigation.
+  static const Duration defaultRequestTimeout = Duration(seconds: 120);
   final LLMConfig config;
   final http.Client _httpClient;
   final Duration _timeout;
