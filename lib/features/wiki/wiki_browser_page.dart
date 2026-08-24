@@ -74,7 +74,14 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     _resetTabState(SettingsService.defaultWikiSites);
     _tabController = TabController(length: _wikiSites.length, vsync: this);
     _tabController.addListener(_onTabChanged);
-    ref.read(wikiBackHandlerProvider.notifier).state = _handleSystemBack;
+    // Defer the provider write to after the first frame: Riverpod 2.x rejects
+    // modifying a provider during initState/build ("Tried to modify a provider
+    // while the widget tree was building"), which crashed the whole shell.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(wikiBackHandlerProvider.notifier).state = _handleSystemBack;
+      }
+    });
     _restoreBrowsingState();
   }
 
@@ -83,8 +90,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     _readerControlsTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _persistBrowsingState();
-    ref.read(wikiReaderFullscreenProvider.notifier).state = false;
-    ref.read(wikiBackHandlerProvider.notifier).state = null;
+    // Intentionally NOT writing providers here: the Wiki page lives in the
+    // MainShell IndexedStack for the whole app lifetime, so provider cleanup
+    // on dispose is unnecessary, and modifying providers during dispose is
+    // rejected by Riverpod 2.x.
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
