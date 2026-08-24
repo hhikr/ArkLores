@@ -108,6 +108,21 @@ v1.0 前需要把以下问题独立立项，不能只靠重新上传一个 `.db.
 - 每次数据刷新必须生成差异报告，至少包含实体增删、alias 改动、story scope 改动、
   记录计数变化、固定 QA 变化和 hash。
 
+### App 内构建（R2，2026-08-24 落地）
+
+除 release asset 外，App 提供第二条更新通道：直接从源仓库在设备上构建/增量更新
+知识库（实现见 `lib/core/gamedata/build/`，编排见 `gamedata_build_provider.dart`，
+总结见 `docs/R2_IN_APP_BUILD_SUMMARY.md`）。
+
+- 与桌面 release 管线共用同一份 importer / schema / coverage 构建代码（单一实现）；
+- 首次：下载源仓库 zip（codeload），按 importer 白名单（18 个 excel +
+  `zh_CN/gamedata/story/**/*.txt`，约 168 MB）选择性解压到 `gamedata_source/`；
+- 增量：compare API 对比已装 commit 与最新 commit，逐文件 raw 下载/删除变更；
+- DB 侧：全量构建或 per-file 删旧重导（按 `source_path`/`story_id`），随后全量重建
+  coverage 与 FTS；产物经与 installer 相同的 `validateGameDataDatabase` 校验后原子替换；
+- 构建在后台 isolate 运行（`sqflite_common_ffi` + `sqlite3_flutter_libs`），支持进度
+  与取消；已安装库在替换前永不修改。
+
 ### 多游戏与终末地接入
 
 当前 DB 的 `game` 字段已经存在，但 active importer 和 release asset 实际只覆盖

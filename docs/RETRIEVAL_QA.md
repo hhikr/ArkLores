@@ -42,6 +42,45 @@
 - source claim：只有 observation 中出现对应来源时，Agent 才能声称使用了该来源。
 - Book / Wiki：v0.4.5 默认不参与检索，不得把 Book 或 Wiki 说成当前 evidence。
 
+## Story Coverage Layer QA（schema v3，2026-08-24 起）
+
+schema v3 新增确定性覆盖层（`AI_RETRIEVAL_OPTIMIZATION.md` 阶段 P0）。重建或替换
+schema v3 DB 后，除上表 Smoke Queries 外，至少人工检查以下覆盖层查询：
+
+| Query / 操作 | 目的 | 预期 |
+| --- | --- | --- |
+| `search_story_coverage(query=阿米娅)` | 实体出场枚举 | 返回 `Coverage Scopes:` / `Coverage Stories:` 与逐 story 行区间、mention_count；出场包含以说话人身份出现的台词行 |
+| `read_story_lines(story_id=活动某章, max_lines=30)` | 原文行读取与分页 | 返回 `line_index \| speaker \| content`；超页时返回 `Next Page Token`，回传 `page_token` 可续读，尾部返回 `End of Story: yes` |
+| `read_story_lines(story_id=不存在)` | 缺章区分 | 返回 `Story not found`，与"范围内无行"区分 |
+| `get_story_map(scope_id=activity:act21mini)` | 章节画像 | 返回 `Mapped Stories:` 与各章行范围、speaker 集合、Top Entities、Keyword Hits、抽取式 Summary |
+| Summary 叙事回答尾部 | 已读范围报告 | 回答末尾存在 `Coverage: read=<实际精读 scope 数> \| mapped=<仅浏览画像的 scope 数> \| skipped=<未读+原因>`，且与实际工具调用一致（虚构会被 transform 改写） |
+
+自动覆盖：`test/story_coverage_test.dart`（16 项：run 合并、bigram 提取、mentions/
+profiles/rare_terms 断言、三个工具、coverage transform、Summary 叙事工作流集成）。
+回归门禁：`flutter analyze` No issues、全量 `flutter test`（86 passed / 3 opt-in
+skipped）、既有固定检索 QA 全绿。
+
+## Investigation Layer QA（P1，2026-08-24 起）
+
+schema v3 + 覆盖层之上的跨章节推理层（`AI_RETRIEVAL_OPTIMIZATION.md` 阶段 P1，
+设计决策见 `R3_DESIGN_DECISIONS.md`）。自动覆盖：`test/investigation_test.dart`
+（10 项：speaker 扩展、`find_detail_echoes` 跨章节命中与实体名过滤、
+`collect_suspect_evidence` 证据集、verdict transform 的 S6 门槛/行级引用守卫/
+single-suspect-exhausted、ReActLoop 观察历史裁剪）。回归门禁：`flutter analyze`
+No issues、全量 `flutter test`（105 passed / 3 opt-in skipped）。
+
+| 场景 | 预期 |
+| --- | --- |
+| 凶手类问题走 S0–S8 | 先 coverage 枚举出场 → map 选精读 → read 定位死亡情节 → find_detail_echoes 找跨章节伏笔 → 逐嫌疑 collect_suspect_evidence → 对比后输出结论信封 |
+| 结论信封 | `[INVESTIGATION_VERDICT: culprit=<entity_id> \| confidence=<0-1> \| basis=<multi_hypothesis_contrast\|single_suspect_exhausted>]` |
+| S6 门槛 | 少于 2 个候选有非空证据集时，culprit 自动降级为 unresolved 并附警告 |
+| 行级 provenance | 答案引用的 `story_id:line` 必须出现在 Observation 中，否则附 Source warning |
+| 已读范围 | Coverage 行与实际工具调用比对（复用 coverage transform） |
+| 上下文预算 | 精读 ≤3 章/每章 ≤3 页；ReActLoop 观察历史裁剪至 8 条（transform 校验用完整快照） |
+
+仍待验收（R3b）：调查入口 UI 接线（产品决策待定）、2–3 个真实剧情谜题固定用例与
+单次调查成本量化、`find_detail_echoes` LIKE 扫描真机延迟。
+
 ## Current Unit Coverage
 
 `test/agent_test.dart` 覆盖：

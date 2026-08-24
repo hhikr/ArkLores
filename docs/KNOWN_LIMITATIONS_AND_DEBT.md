@@ -171,7 +171,7 @@ schema 已预留 `game` 字段，未来接入不需要改表。
 **修复方向与触发条件**：完成来源协议与授权确认后，按独立 importer adapter 立项，
 并配套 Endfield 专属 content category、story scope 与固定 QA。
 
-### 4.4 schema v2 把语义压在 FTS / LIKE 上（Open）
+### 4.4 schema v2 把语义压在 FTS / LIKE 上（Mitigated，2026-08 已落地覆盖层）
 
 **现象与影响**：Story chunks 检索以 FTS / LIKE 为主，没有实体级剧情倒排；
 `entity_relations` 表存在（17,861 行）但 App 查询利用有限。
@@ -189,12 +189,19 @@ schema 已预留 `game` 字段，未来接入不需要改表。
   最短文本距离排序"在查询层模拟了倒排效果，先以确定性规则覆盖最高频的
   事实核查场景，把 schema 演进推迟到质量量化证明需要时。
 
-**当前缓解**：`story_scopes` 表、scoped evidence 检索路径、proximity ranking、
-固定 QA（`act21mini + 米格鲁 + 死亡` 命中固定行）。
+**当前缓解（2026-08-24 更新）**：schema v3 已落地确定性覆盖层（对应
+`AI_RETRIEVAL_OPTIMIZATION.md` 阶段 P0，见 `R1_STORY_COVERAGE_LAYER_SUMMARY.md`）：
+- `entity_story_mentions`：实体（canonical name + 全部 alias）出场倒排，台词说话人
+  与正文一并扫描，连续命中合并为行区间 run；
+- `story_chapter_profiles`：每 story 的行范围、speaker 集合、实体密度、抽取式摘要、
+  死亡/凶案词典命中（仅 triage 提示）；
+- `rare_terms`：跨文件 doc_freq ≤ 20 的中文双字词，作为 P1 跨章节细节匹配的 IDF 依据；
+- `story_lines_fts`：40 万行剧情原文的行级全文索引，`read_story_lines` 工具可
+  按行区间/分页直接读取原文。
+- App 安装器已把四张新表纳入必需清单并升级校验 `schema_version == '3'`。
 
-**修复方向与触发条件**：检索质量量化显示 FTS 召回不足（见 §5.1）时，规划
-schema v3：实体级剧情倒排、关系索引、组织/概念实体、质量标记，详见
-`GAMEDATA_BUILD_PIPELINE.md` 的 schema v3 候选方向。
+**仍开放**：实体级关系索引（死亡/存活、归属、敌对）、组织/概念汇总实体、
+以及基于覆盖层的跨章节推理（P1），见 `AI_RETRIEVAL_OPTIMIZATION.md`。
 
 ## 5. 检索质量
 
