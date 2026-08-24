@@ -38,7 +38,7 @@ class SearchStoryCoverageTool extends AgentTool {
           'scope_filter': {
             'type': 'string',
             'description':
-                'Optional canonical scope key to restrict to, e.g. activity:act21mini.',
+                'Optional canonical scope key to restrict to, e.g. activity:act21mini or obt:main.',
           },
         },
       };

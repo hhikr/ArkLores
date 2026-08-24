@@ -34,8 +34,9 @@ class GetStoryMapTool extends AgentTool {
           'scope_id': {
             'type': 'string',
             'description':
-                'Optional canonical scope key (e.g. activity:act21mini) to list '
-                'all its chapters. Mutually exclusive with story_ids.',
+                'Optional canonical scope key (e.g. activity:act21mini, '
+                'obt:main, obt:rogue) to list all its chapters. Mutually '
+                'exclusive with story_ids.',
           },
         },
       };

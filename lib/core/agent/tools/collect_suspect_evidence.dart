@@ -37,7 +37,7 @@ class CollectSuspectEvidenceTool extends AgentTool {
             'type': 'array',
             'items': {'type': 'string'},
             'description':
-                'Optional scope keys to restrict to (e.g. activity:act21mini).',
+                'Optional scope keys to restrict to (e.g. activity:act21mini, obt:main).',
           },
           'claim_terms': {
             'type': 'array',
@@ -87,6 +87,30 @@ class CollectSuspectEvidenceTool extends AgentTool {
       runs = entries
           .where((entry) => allowed.contains(entry.scopeId))
           .toList(growable: false);
+    }
+    if (runs.isEmpty) {
+      final data = <String, Object?>{
+        'type': 'collect_suspect_evidence',
+        'entity_id': entityId,
+        'evidence_rows': 0,
+        'scopes': <String>[],
+        'total_runs': 0,
+        'next_page_token': null,
+      };
+      final hint = entries.isEmpty
+          ? 'No appearances found for entity_id "$entityId". If you passed a '
+              'display name, it was not resolved: call search_story_coverage '
+              '(query: <name>) first to obtain the exact entity_id, then retry '
+              'this tool with it.'
+          : 'No appearances found for entity_id "$entityId" in the requested '
+              'scopes (${scopeIds?.join(', ')}). Try omitting scope_ids to '
+              'see all scopes, or pass the canonical scope key.';
+      return ToolExecutionResult(
+        observation: appendDataBlock(
+          '$hint\nNo more evidence pages for "$entityId" (page 0 of 0 runs).',
+          data,
+        ),
+      );
     }
     if (offset >= runs.length) {
       final data = <String, Object?>{
