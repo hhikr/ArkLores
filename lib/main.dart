@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/agent/agent_logger.dart';
 import 'core/llm/llm_client.dart';
 import 'features/settings/api_settings_page.dart';
 import 'features/settings/app_icon_service.dart';
@@ -64,6 +65,15 @@ void main() async {
     debugPrint('[Startup] Error applying launcher icon: $e');
   }
 
+  // Apply the user's per-session AI log toggle before any agent runs.
+  var sessionLogsEnabled = false;
+  try {
+    sessionLogsEnabled = await settingsService.loadSessionLogsEnabled();
+    AgentLogger.setEnabled(sessionLogsEnabled);
+  } catch (e) {
+    debugPrint('[Startup] Error loading session log toggle: $e');
+  }
+
   runApp(
     ProviderScope(
       overrides: [
@@ -72,6 +82,7 @@ void main() async {
         initialMainTabIndexProvider.overrideWithValue(mainTabIndex),
         initialThemeProvider.overrideWithValue(appTheme),
         initialLocaleProvider.overrideWithValue(appLocale),
+        initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
       ],
       child: const ArkLoresApp(),
     ),

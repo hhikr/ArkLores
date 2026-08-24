@@ -26,6 +26,17 @@ void main() {
     });
   });
 
+  group('SettingsService session log toggle', () {
+    test('defaults off and persists the toggle', () async {
+      final service = SettingsService();
+      expect(await service.loadSessionLogsEnabled(), isFalse);
+      await service.saveSessionLogsEnabled(true);
+      expect(await service.loadSessionLogsEnabled(), isTrue);
+      await service.saveSessionLogsEnabled(false);
+      expect(await service.loadSessionLogsEnabled(), isFalse);
+    });
+  });
+
   group('knowledge base page GitHub token section', () {
     testWidgets('renders the token input and build actions', (tester) async {
       await tester.pumpWidget(

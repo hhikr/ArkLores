@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/agent/agent_logger.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -51,6 +52,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         SnackBar(content: Text(context.t.settingsIconUnsupported)),
       );
     }
+  }
+
+  /// Switch for per-session AI logs: persists the choice and applies it to
+  /// [AgentLogger] immediately (release builds included).
+  Widget _buildSessionLogsSwitch(AppThemeTokens theme) {
+    final enabled = ref.watch(sessionLogsEnabledProvider);
+    return Switch(
+      value: enabled,
+      activeColor: theme.accentPrimary,
+      onChanged: (value) async {
+        ref.read(sessionLogsEnabledProvider.notifier).state = value;
+        AgentLogger.setEnabled(value);
+        await ref
+            .read(settingsServiceProvider)
+            .saveSessionLogsEnabled(value);
+      },
+    );
   }
 
   @override
@@ -209,6 +227,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               context,
                               '/api-settings',
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _CompactSettingWidth(
+                          child: _PreferenceRow(
+                            theme: theme,
+                            icon: Icons.receipt_long_rounded,
+                            title: context.t.settingsSessionLogs,
+                            subtitle: context.t.settingsSessionLogsDesc,
+                            control: _buildSessionLogsSwitch(theme),
                           ),
                         ),
                         const SizedBox(height: 18),

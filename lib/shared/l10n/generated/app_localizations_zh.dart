@@ -64,6 +64,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsApiSettingsDesc => '配置对话服务提供商';
 
   @override
+  String get settingsSessionLogs => '保存 AI 会话日志';
+
+  @override
+  String get settingsSessionLogsDesc => '为每次 AI 对话保存运行日志（含工具调用与检索记录）到手机存储的 agent_logs 目录，方便排查问题；默认关闭，可在文件管理器中删除。';
+
+  @override
   String get settingsKnowledgeBase => '知识库管理';
 
   @override

@@ -431,9 +431,9 @@ Fact-check 的 verdict transform 与来源守卫必须在完整文本上执行�
 发出——把流式接入请求阶段会破坏这两条约束。若未来引入结构化步骤协议
 （v0.13 方向），可以重新评估。
 
-### 6.7 debug Agent 日志敏感且无清理机制（Closed）
+### 6.7 debug Agent 日志敏感且无清理机制（Mitigated，R4 起由用户开关控制）
 
-**现象与影响**：`AgentLogger`（仅 `kDebugMode` 启用）记录完整用户 query、
+**现象与影响**：`AgentLogger`（原仅 `kDebugMode` 启用）记录用户 query、
 每轮模型原始输出、工具参数与数据库原文；release 构建 no-op，但 debug
 构建会留下敏感文件，且 App 内没有日志清理入口或用户告知。
 
@@ -443,14 +443,23 @@ Fact-check 的 verdict transform 与来源守卫必须在完整文本上执行�
 隐私工程，没有随日志功能一起立项。日志写入 app external files /
 Documents，用户卸载即清除，但没有主动管理机制。
 
-**当前缓解**：release 构建 no-op；`logs/` 不参与编译与产品数据链；
-测试环境下回退到系统临时目录。
+**当前缓解（R4 更新）**：`AgentLogger` 改为 debug 与 release 均可用，但
+**默认关闭，由用户在设置中自行开启**（"保存 AI 会话日志"开关，持久化到
+安全存储，启动时恢复并应用）。开启后每次 AI 会话的日志写入与 GameData
+数据库同级的用户可见目录（Android external storage → `agent_logs/`），
+可用于真机排查；两级防护保留：query 截断 200 字符、模型输出/observation/
+最终回答/错误截断 2000 字符，自动保留最近 20 个会话（`_pruneOldLogs`），
+`AgentLogger.clearLogs()` 可清空。权衡：开启后用户对话会写入自身设备文件
+——数据留在用户设备、可手动删除、默认关闭，隐私边界在代码注释与
+设置说明中明确。
 
 **修复记录**：`AgentLogger` 增加两级防护——(1) 脱敏：query 截断到 200
 字符、模型输出 / observation / 最终回答 / 错误正文截断到 2000 字符，
-debug 构建不再落盘完整用户问题、完整推理或完整数据库原文；
+不再落盘完整用户问题、完整推理或完整数据库原文；
 (2) 清理：flush 后自动保留最近 20 个会话日志（`_pruneOldLogs`），并新增
 `AgentLogger.clearLogs()` 静态方法供设置/隐私 UI 调用。
+R4：去除 `kDebugMode` 门控，改为 `AgentLogger.setEnabled()` 运行时开关，
+设置页新增"保存 AI 会话日志"开关（默认关），日志目录与 GameData DB 同级。
 
 ## 7. 工程化与量化
 

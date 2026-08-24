@@ -15,8 +15,16 @@ final initialApiConfigProvider =
     Provider<LLMConfig>((ref) => throw UnimplementedError());
 final initialMainTabIndexProvider =
     Provider<int>((ref) => throw UnimplementedError());
+final initialSessionLogsEnabledProvider =
+    Provider<bool>((ref) => throw UnimplementedError());
 
 final wikiSourcesRevisionProvider = StateProvider<int>((ref) => 0);
+
+/// Whether the user enabled per-session AI logs (default off; applied to
+/// [AgentLogger] at startup and on toggle in Settings).
+final sessionLogsEnabledProvider = StateProvider<bool>((ref) {
+  return ref.watch(initialSessionLogsEnabledProvider);
+});
 
 /// Active state for onboarding status.
 final onboardingStatusProvider = StateProvider<bool>((ref) {

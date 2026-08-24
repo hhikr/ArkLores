@@ -4,17 +4,21 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Debug-only agent logger.
+/// Agent session logger (debug AND release, user-controlled).
 ///
-/// Writes a human-readable log of every ReAct session to:
-///   Android external storage → ArkLores/agent_logs/session_[timestamp].log
+/// Writes a human-readable log of every ReAct session to the same user-visible
+/// area as the GameData database:
+///   Android external storage → agent_logs/session_[timestamp].log
+///   Other:                    [Documents]/ArkLores/agent_logs/
 ///
-/// Only active in debug builds (kDebugMode). No-ops in release.
+/// Since R4 the logger is active in release builds too, but only when the user
+/// enables it in Settings ("保存 AI 会话日志"); it defaults to OFF. The
+/// setting is applied at startup via [AgentLogger.setEnabled] and on toggle.
 ///
-/// Privacy constraints:
-/// - Queries and model/observation content are truncated before writing so a
-///   debug build never persists full user questions, full model reasoning, or
-///   full GameData excerpts.
+/// Privacy constraints (kept in every build mode):
+/// - Queries and model/observation content are truncated before writing so the
+///   app never persists full user questions, full model reasoning, or full
+///   GameData excerpts.
 /// - Old log files are pruned automatically (see [_maxLogFiles]); apps can
 ///   also call [clearLogs] to wipe all agent logs.
 class AgentLogger {
@@ -33,7 +37,14 @@ class AgentLogger {
   static const int _maxContentChars = 2000;
   static const int _maxLogFiles = 20;
 
-  static bool get isEnabled => kDebugMode;
+  static bool _enabled = false;
+
+  /// Logging is off by default; [setEnabled] is called from Settings when the
+  /// user toggles "保存 AI 会话日志" (persisted via SettingsService).
+  static bool get isEnabled => _enabled;
+
+  /// Turns session logging on/off at runtime (user setting).
+  static void setEnabled(bool value) => _enabled = value;
 
   static String _truncate(String text, int maxChars) {
     if (text.length <= maxChars) return text;

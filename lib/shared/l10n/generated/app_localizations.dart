@@ -206,8 +206,20 @@ abstract class AppLocalizations {
   /// No description provided for @settingsApiSettingsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Configure Chat provider'**
+  /// **'Configure the chat provider'**
   String get settingsApiSettingsDesc;
+
+  /// No description provided for @settingsSessionLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save AI session logs'**
+  String get settingsSessionLogs;
+
+  /// No description provided for @settingsSessionLogsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Save a run log (tool calls, retrieval steps) of every AI conversation to the agent_logs folder in device storage for debugging; off by default and deletable from the file manager.'**
+  String get settingsSessionLogsDesc;
 
   /// No description provided for @settingsKnowledgeBase.
   ///

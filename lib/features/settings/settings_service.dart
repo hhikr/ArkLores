@@ -88,6 +88,9 @@ class SettingsService {
   // ── GitHub keys ──────────────────────────────────────────
   static const _keyGithubToken = 'github_token';
 
+  // ── Agent session log keys ──────────────────────────────
+  static const _keySessionLogsEnabled = 'session_logs_enabled';
+
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
   static const _keyMainTabIndex = 'main_tab_index';
@@ -161,6 +164,16 @@ class SettingsService {
     } else {
       await _storage.write(key: _keyGithubToken, value: trimmed);
     }
+  }
+
+  /// Loads whether the user enabled per-session AI logs (default off).
+  Future<bool> loadSessionLogsEnabled() async {
+    return await _storage.read(key: _keySessionLogsEnabled) == 'true';
+  }
+
+  /// Persists the per-session AI log toggle.
+  Future<void> saveSessionLogsEnabled(bool enabled) async {
+    await _storage.write(key: _keySessionLogsEnabled, value: '$enabled');
   }
 
   /// Returns `true` if onboarding has been completed.

@@ -1,6 +1,7 @@
 import 'package:arklores/features/settings/settings_page.dart';
 import 'package:arklores/main.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:arklores/shared/theme/ark_theme_tokens.dart';
 import 'package:arklores/shared/theme/endfield_theme_tokens.dart';
@@ -79,6 +80,9 @@ void main() {
 
 Widget _testApp({required Locale locale, double textScale = 1}) {
   return ProviderScope(
+    overrides: [
+      initialSessionLogsEnabledProvider.overrideWithValue(false),
+    ],
     child: Consumer(
       builder: (context, ref, _) {
         final tokens = ref.watch(themeProvider);

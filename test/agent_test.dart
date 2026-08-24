@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:arklores/core/agent/agent_logger.dart';
 import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
@@ -1039,6 +1040,8 @@ void main() {
 
     test('logs the validated verdict through the shared ReAct logger',
         () async {
+      AgentLogger.setEnabled(true);
+      addTearDown(() => AgentLogger.setEnabled(false));
       final agent = FactCheckAgent(
         llmClient: _UnsupportedFactCheckLLMClient(),
         searchTool: _CurrentNoMatchTool(),

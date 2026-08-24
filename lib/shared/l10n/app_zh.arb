@@ -22,6 +22,8 @@
   "settingsAiSectionCode": "AI SERVICE",
   "settingsApiSettings": "API 设置",
   "settingsApiSettingsDesc": "配置对话服务提供商",
+  "settingsSessionLogs": "保存 AI 会话日志",
+  "settingsSessionLogsDesc": "为每次 AI 对话保存运行日志（含工具调用与检索记录）到手机存储的 agent_logs 目录，方便排查问题；默认关闭，可在文件管理器中删除。",
   "settingsKnowledgeBase": "知识库管理",
   "settingsKnowledgeSectionCode": "KNOWLEDGE BASE",
   "settingsKnowledgeBaseDesc": "管理 GameData 知识库",

@@ -61,7 +61,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsApiSettings => 'API Settings';
 
   @override
-  String get settingsApiSettingsDesc => 'Configure Chat provider';
+  String get settingsApiSettingsDesc => 'Configure the chat provider';
+
+  @override
+  String get settingsSessionLogs => 'Save AI session logs';
+
+  @override
+  String get settingsSessionLogsDesc => 'Save a run log (tool calls, retrieval steps) of every AI conversation to the agent_logs folder in device storage for debugging; off by default and deletable from the file manager.';
 
   @override
   String get settingsKnowledgeBase => 'Knowledge Base Management';
