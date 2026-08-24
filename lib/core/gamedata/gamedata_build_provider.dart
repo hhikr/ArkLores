@@ -144,12 +144,27 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           total: 0,
           error: null,
         );
-        changes = installed == null || installed == latest
-            ? const <SourceFileChange>[]
-            : await client.compareCommits(
-                baseSha: installed,
-                headSha: latest,
-              );
+        try {
+          changes = installed == null || installed == latest
+              ? const <SourceFileChange>[]
+              : await client.compareCommits(
+                  baseSha: installed,
+                  headSha: latest,
+                );
+        } on GameDataSourceRateLimitedException {
+          // GitHub API quota exhausted on this egress IP (403/429). Fall
+          // back to a full zip pull: codeload is a non-API endpoint and is
+          // not quota-limited.
+          state = state.copyWith(
+            phase: GameDataBuildPhase.downloading,
+            stage: 'zip',
+            error: null,
+          );
+          final zh = Directory(p.join(dirs.sourceDir.path, 'zh_CN'));
+          if (await zh.exists()) await zh.delete(recursive: true);
+          await _pullFullSource(client, latest, dirs);
+          changes = const <SourceFileChange>[];
+        }
         for (var i = 0; i < changes.length; i++) {
           final change = changes[i];
           final target = File(p.join(dirs.sourceDir.path, change.path));
@@ -176,32 +191,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           stage: 'zip',
           error: null,
         );
-        final zipPath = p.join(dirs.tmpDir.path, 'source.zip');
-        await client.downloadZip(
-          sha: latest,
-          outputPath: zipPath,
-          onProgress: (received, total) {
-            state = state.copyWith(
-              phase: GameDataBuildPhase.downloading,
-              stage: 'zip',
-              done: received,
-              total: total ?? 0,
-            );
-          },
-        );
-        state = state.copyWith(
-          phase: GameDataBuildPhase.extracting,
-          stage: 'zip',
-        );
-        final sourceDirPath = dirs.sourceDir.path;
-        await Isolate.run(
-          () => ArknightsSourceClient.extractWhitelistedZip(
-            zipPath: zipPath,
-            outputDir: Directory(sourceDirPath),
-          ),
-        );
-        final zip = File(zipPath);
-        if (await zip.exists()) await zip.delete();
+        await _pullFullSource(client, latest, dirs);
       }
 
       // Background build.
@@ -274,6 +264,42 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
       state = state.copyWith(phase: GameDataBuildPhase.idle, error: '$error');
       _cleanupTemp();
     }
+  }
+
+  /// Downloads the full source zip at [sha] and extracts only whitelisted
+  /// entries into the source directory (first-time pull or rate-limit
+  /// fallback). codeload is a non-API endpoint, so it is not quota-limited.
+  Future<void> _pullFullSource(
+    ArknightsSourceClient client,
+    String sha,
+    ({Directory sourceDir, Directory tmpDir, String installPath}) dirs,
+  ) async {
+    final zipPath = p.join(dirs.tmpDir.path, 'source.zip');
+    await client.downloadZip(
+      sha: sha,
+      outputPath: zipPath,
+      onProgress: (received, total) {
+        state = state.copyWith(
+          phase: GameDataBuildPhase.downloading,
+          stage: 'zip',
+          done: received,
+          total: total ?? 0,
+        );
+      },
+    );
+    state = state.copyWith(
+      phase: GameDataBuildPhase.extracting,
+      stage: 'zip',
+    );
+    final sourceDirPath = dirs.sourceDir.path;
+    await Isolate.run(
+      () => ArknightsSourceClient.extractWhitelistedZip(
+        zipPath: zipPath,
+        outputDir: Directory(sourceDirPath),
+      ),
+    );
+    final zip = File(zipPath);
+    if (await zip.exists()) await zip.delete();
   }
 
   Future<void> _swapInBuiltDatabase(

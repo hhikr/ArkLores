@@ -49,6 +49,42 @@ void main() {
       );
     });
 
+    test('fetchLatestCommit falls back to the atom feed on API 403', () async {
+      final client = ArknightsSourceClient(
+        client: MockClient((request) async {
+          if (request.url.host == 'api.github.com') {
+            return http.Response('rate limited', 403);
+          }
+          // Atom feed (non-API): include two entries; the newest is first.
+          return http.Response(
+            '<?xml version="1.0"?>'
+            '<feed><entry><id>tag:github.com,2008:Grit::Commit/'
+            'abcdef0123456789abcdef0123456789abcdef01</id></entry>'
+            '<entry><id>tag:github.com,2008:Grit::Commit/'
+            '0000000000000000000000000000000000000000</id></entry>'
+            '</feed>',
+            200,
+          );
+        }),
+      );
+      expect(
+        await client.fetchLatestCommit(),
+        'abcdef0123456789abcdef0123456789abcdef01',
+      );
+    });
+
+    test('compareCommits throws a rate-limit exception on 403', () async {
+      final client = ArknightsSourceClient(
+        client: MockClient(
+          (request) async => http.Response('{"message":"rate limit"}', 403),
+        ),
+      );
+      expect(
+        () => client.compareCommits(baseSha: 'old', headSha: 'new'),
+        throwsA(isA<GameDataSourceRateLimitedException>()),
+      );
+    });
+
     test('compareCommits filters to the importer whitelist and paginates',
         () async {
       var calls = 0;

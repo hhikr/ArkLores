@@ -82,6 +82,19 @@ class SourceFileChange {
       ];
 }
 
+/// Thrown when the GitHub REST API is rate-limited or blocked (HTTP 403/429).
+///
+/// GitHub's unauthenticated API quota (60 requests/hour per IP) is often
+/// exhausted on shared proxy egress IPs. Callers may fall back to non-API
+/// endpoints (atom feed, codeload zip) which are not quota-limited.
+class GameDataSourceRateLimitedException implements Exception {
+  const GameDataSourceRateLimitedException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// GitHub client for the ArknightsGameData source.
 class ArknightsSourceClient {
   ArknightsSourceClient({http.Client? client}) : _client = client ?? http.Client();
@@ -94,27 +107,59 @@ class ArknightsSourceClient {
       );
 
   /// Returns the current commit SHA of the default branch.
+  ///
+  /// Primary source is the GitHub REST API; on rate limiting (403/429) it
+  /// falls back to the commits Atom feed (a non-API endpoint that shares the
+  /// egress but is not quota-limited), so the builder keeps working even when
+  /// the API quota is exhausted.
   Future<String> fetchLatestCommit() async {
     final response = await _client.get(
       _api('/commits/${ArknightsSourcePaths.branch}'),
       headers: _headers,
     );
-    if (response.statusCode != 200) {
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      final sha = decoded is Map ? decoded['sha'] : null;
+      if (sha is String && sha.isNotEmpty) return sha;
+    } else if (response.statusCode == 403 || response.statusCode == 429) {
+      final atomSha = await _latestShaFromAtomFeed();
+      if (atomSha != null) return atomSha;
       throw StateError(
-        'Failed to fetch latest GameData commit: HTTP ${response.statusCode}',
+        'Failed to fetch latest GameData commit: HTTP '
+        '${response.statusCode} (GitHub API rate limit or blocked egress; '
+        'atom feed also failed). ${_shortBody(response.body)}',
       );
     }
-    final decoded = jsonDecode(response.body);
-    final sha = decoded is Map ? decoded['sha'] : null;
-    if (sha is! String || sha.isEmpty) {
-      throw StateError('Unexpected commit response: ${response.body}');
+    throw StateError(
+      'Failed to fetch latest GameData commit: HTTP '
+      '${response.statusCode}. ${_shortBody(response.body)}',
+    );
+  }
+
+  /// Parses the newest commit SHA from `commits/<branch>.atom` (non-API).
+  Future<String?> _latestShaFromAtomFeed() async {
+    final uri = Uri.https(
+      'github.com',
+      '/${ArknightsSourcePaths.repo}/commits/${ArknightsSourcePaths.branch}.atom',
+    );
+    try {
+      final response = await _client.get(uri, headers: _headers);
+      if (response.statusCode != 200) return null;
+      final match = RegExp(r'Grit::Commit/([0-9a-f]{40})').firstMatch(
+        response.body,
+      );
+      return match?.group(1);
+    } catch (_) {
+      return null;
     }
-    return sha;
   }
 
   /// Compares [baseSha]..[headSha] and returns the changed files that are
   /// importer-relevant. Handles the compare API file pagination (page size
   /// capped at 300 files per response).
+  ///
+  /// Throws [GameDataSourceRateLimitedException] on 403/429 so callers can
+  /// fall back to a full zip pull (codeload is not quota-limited).
   Future<List<SourceFileChange>> compareCommits({
     required String baseSha,
     required String headSha,
@@ -132,8 +177,17 @@ class ArknightsSourceClient {
         headers: _headers,
       );
       if (response.statusCode != 200) {
+        if (response.statusCode == 403 || response.statusCode == 429) {
+          throw GameDataSourceRateLimitedException(
+            'Failed to compare GameData commits: HTTP '
+            '${response.statusCode} (GitHub API rate limit or blocked '
+            'egress). Falling back to a full source pull is recommended. '
+            '${_shortBody(response.body)}',
+          );
+        }
         throw StateError(
-          'Failed to compare GameData commits: HTTP ${response.statusCode}',
+          'Failed to compare GameData commits: HTTP '
+          '${response.statusCode}. ${_shortBody(response.body)}',
         );
       }
       final decoded = jsonDecode(response.body);
@@ -254,6 +308,14 @@ class ArknightsSourceClient {
 
   String _encodePath(String path) =>
       path.split('/').map(Uri.encodeComponent).join('/');
+
+  /// First 200 chars of a response body, for diagnostics.
+  String _shortBody(String body) {
+    final compact = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return compact.length <= 200
+        ? compact
+        : '${compact.substring(0, 200)}…';
+  }
 
   static const _headers = {
     'Accept': 'application/vnd.github+json',
