@@ -85,6 +85,39 @@ void main() {
       );
     });
 
+    test('sends the Authorization header when a token is set', () async {
+      late http.Request captured;
+      final client = ArknightsSourceClient(
+        githubToken: 'ghp_test123',
+        client: MockClient((request) async {
+          captured = request;
+          return http.Response('{"sha":"abc"}', 200);
+        }),
+      );
+      await client.fetchLatestCommit();
+      expect(captured.headers['Authorization'], 'Bearer ghp_test123');
+    });
+
+    test('surfaces an invalid token as HTTP 401 with a diagnostic', () async {
+      final client = ArknightsSourceClient(
+        githubToken: 'ghp_bad',
+        client: MockClient(
+          (request) async =>
+              http.Response('{"message":"Bad credentials"}', 401),
+        ),
+      );
+      expect(
+        () => client.fetchLatestCommit(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => '$error',
+            'message',
+            contains('401'),
+          ),
+        ),
+      );
+    });
+
     test('compareCommits filters to the importer whitelist and paginates',
         () async {
       var calls = 0;

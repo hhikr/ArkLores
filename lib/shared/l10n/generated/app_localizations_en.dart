@@ -797,6 +797,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildError => 'Build failed';
 
   @override
+  String get kbBuildTokenTitle => 'GitHub token (optional)';
+
+  @override
+  String get kbBuildTokenDesc => 'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to raise the API quota from 60 to 5000 requests/hour and avoid rate-limit failures on shared proxy egress IPs. The token is stored in OS secure storage and never logged.';
+
+  @override
+  String get kbBuildTokenPlaceholder => 'Paste GitHub token';
+
+  @override
+  String get kbBuildTokenSave => 'Save';
+
+  @override
+  String get kbBuildTokenSaved => 'GitHub token saved.';
+
+  @override
+  String get kbBuildTokenCleared => 'GitHub token cleared.';
+
+  @override
+  String get kbBuildTokenSetHint => 'GitHub token set (quota 5000/hr)';
+
+  @override
   String get materialsPausedTitle => 'User material import is not enabled yet';
 
   @override

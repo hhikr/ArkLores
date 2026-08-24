@@ -53,3 +53,10 @@ final apiConfigProvider =
   final initial = ref.watch(initialApiConfigProvider);
   return ApiConfigNotifier(service, initial);
 });
+
+/// Loads the optional GitHub Personal Access Token from secure storage.
+///
+/// Used by the in-app GameData builder; invalidated after save/clear.
+final githubTokenProvider = FutureProvider<String>((ref) async {
+  return ref.watch(settingsServiceProvider).loadGithubToken();
+});

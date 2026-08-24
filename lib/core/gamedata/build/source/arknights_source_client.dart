@@ -97,7 +97,13 @@ class GameDataSourceRateLimitedException implements Exception {
 
 /// GitHub client for the ArknightsGameData source.
 class ArknightsSourceClient {
-  ArknightsSourceClient({http.Client? client}) : _client = client ?? http.Client();
+  ArknightsSourceClient({http.Client? client, this.githubToken})
+      : _client = client ?? http.Client();
+
+  /// Optional GitHub Personal Access Token. When set, API requests are
+  /// authenticated (quota raised from 60 to 5000 requests/hour per account).
+  /// Stored in OS secure storage; never logged.
+  final String? githubToken;
   final http.Client _client;
 
   static Uri _api(String path, [Map<String, String>? query]) => Uri.https(
@@ -106,12 +112,23 @@ class ArknightsSourceClient {
         query,
       );
 
+  Map<String, String> get _headers {
+    final token = githubToken?.trim();
+    return {
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'ArkLores',
+      if (token != null && token.isNotEmpty)
+        'Authorization': 'Bearer $token',
+    };
+  }
+
   /// Returns the current commit SHA of the default branch.
   ///
   /// Primary source is the GitHub REST API; on rate limiting (403/429) it
   /// falls back to the commits Atom feed (a non-API endpoint that shares the
   /// egress but is not quota-limited), so the builder keeps working even when
-  /// the API quota is exhausted.
+  /// the API quota is exhausted. An invalid token surfaces as HTTP 401 with
+  /// an explicit diagnostic instead of a silent fallback.
   Future<String> fetchLatestCommit() async {
     final response = await _client.get(
       _api('/commits/${ArknightsSourcePaths.branch}'),
@@ -121,6 +138,11 @@ class ArknightsSourceClient {
       final decoded = jsonDecode(response.body);
       final sha = decoded is Map ? decoded['sha'] : null;
       if (sha is String && sha.isNotEmpty) return sha;
+    } else if (response.statusCode == 401) {
+      throw StateError(
+        'GitHub Token is invalid (HTTP 401). Check the token you entered in '
+        'the knowledge base settings. ${_shortBody(response.body)}',
+      );
     } else if (response.statusCode == 403 || response.statusCode == 429) {
       final atomSha = await _latestShaFromAtomFeed();
       if (atomSha != null) return atomSha;
@@ -177,6 +199,12 @@ class ArknightsSourceClient {
         headers: _headers,
       );
       if (response.statusCode != 200) {
+        if (response.statusCode == 401) {
+          throw StateError(
+            'GitHub Token is invalid (HTTP 401). Check the token you entered '
+            'in the knowledge base settings. ${_shortBody(response.body)}',
+          );
+        }
         if (response.statusCode == 403 || response.statusCode == 429) {
           throw GameDataSourceRateLimitedException(
             'Failed to compare GameData commits: HTTP '
@@ -316,9 +344,4 @@ class ArknightsSourceClient {
         ? compact
         : '${compact.substring(0, 200)}…';
   }
-
-  static const _headers = {
-    'Accept': 'application/vnd.github+json',
-    'User-Agent': 'ArkLores',
-  };
 }

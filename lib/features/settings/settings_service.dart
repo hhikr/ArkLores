@@ -85,6 +85,9 @@ class SettingsService {
   static const _keyChatApiKey = 'chat_api_key';
   static const _keyChatModel = 'chat_model';
 
+  // ── GitHub keys ──────────────────────────────────────────
+  static const _keyGithubToken = 'github_token';
+
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
   static const _keyMainTabIndex = 'main_tab_index';
@@ -140,6 +143,24 @@ class SettingsService {
       _storage.write(key: _keyChatApiKey, value: config.chatApiKey),
       _storage.write(key: _keyChatModel, value: config.chatModel),
     ]);
+  }
+
+  /// Loads the optional GitHub Personal Access Token (empty when unset).
+  ///
+  /// Used by the in-app GameData builder to authenticate GitHub API calls
+  /// (raises the quota from 60 to 5000 requests/hour per account).
+  Future<String> loadGithubToken() async {
+    return (await _storage.read(key: _keyGithubToken)) ?? '';
+  }
+
+  /// Saves (or clears, when [token] is blank) the GitHub token.
+  Future<void> saveGithubToken(String token) async {
+    final trimmed = token.trim();
+    if (trimmed.isEmpty) {
+      await _storage.delete(key: _keyGithubToken);
+    } else {
+      await _storage.write(key: _keyGithubToken, value: trimmed);
+    }
   }
 
   /// Returns `true` if onboarding has been completed.

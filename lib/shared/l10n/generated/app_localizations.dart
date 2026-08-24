@@ -1595,6 +1595,48 @@ abstract class AppLocalizations {
   /// **'Build failed'**
   String get kbBuildError;
 
+  /// No description provided for @kbBuildTokenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token (optional)'**
+  String get kbBuildTokenTitle;
+
+  /// No description provided for @kbBuildTokenDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to raise the API quota from 60 to 5000 requests/hour and avoid rate-limit failures on shared proxy egress IPs. The token is stored in OS secure storage and never logged.'**
+  String get kbBuildTokenDesc;
+
+  /// No description provided for @kbBuildTokenPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste GitHub token'**
+  String get kbBuildTokenPlaceholder;
+
+  /// No description provided for @kbBuildTokenSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get kbBuildTokenSave;
+
+  /// No description provided for @kbBuildTokenSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token saved.'**
+  String get kbBuildTokenSaved;
+
+  /// No description provided for @kbBuildTokenCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token cleared.'**
+  String get kbBuildTokenCleared;
+
+  /// No description provided for @kbBuildTokenSetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token set (quota 5000/hr)'**
+  String get kbBuildTokenSetHint;
+
   /// No description provided for @materialsPausedTitle.
   ///
   /// In en, this message translates to:

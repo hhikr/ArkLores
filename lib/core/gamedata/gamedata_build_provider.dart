@@ -89,11 +89,11 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   GameDataBuildRunner? _runner;
   String? _outputDbPath;
 
-  Future<void> checkForUpdates() async {
+  Future<void> checkForUpdates({String? githubToken}) async {
     if (state.busy) return;
     state = state.copyWith(phase: GameDataBuildPhase.checking, error: null);
     try {
-      final client = ArknightsSourceClient();
+      final client = ArknightsSourceClient(githubToken: githubToken);
       final latest = await client.fetchLatestCommit();
       final installed = await _installedCommit();
       final changes = installed == null || installed == latest
@@ -116,7 +116,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   /// Pulls source (incremental or first-time zip) and builds/updates the
   /// knowledge base in a background isolate, then swaps the validated output
   /// over the installed database.
-  Future<void> buildFromSource() async {
+  Future<void> buildFromSource({String? githubToken}) async {
     if (state.busy) return;
     final dirs = await _dirs();
     await dirs.sourceDir.create(recursive: true);
@@ -127,7 +127,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     );
     _outputDbPath = outputDbPath;
 
-    final client = ArknightsSourceClient();
+    final client = ArknightsSourceClient(githubToken: githubToken);
     var changes = const <SourceFileChange>[];
     try {
       final latest = state.latestCommit ?? await client.fetchLatestCommit();

@@ -797,6 +797,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbBuildError => '构建失败';
 
   @override
+  String get kbBuildTokenTitle => 'GitHub Token（可选）';
+
+  @override
+  String get kbBuildTokenDesc => '填写 GitHub Personal Access Token（ghp_… 或 github_pat_…）可把 API 配额从 60 次/小时提升到 5000 次/小时，避免代理出口限流导致拉取失败。Token 仅存入系统安全存储，不会写入日志。';
+
+  @override
+  String get kbBuildTokenPlaceholder => '粘贴 GitHub Token';
+
+  @override
+  String get kbBuildTokenSave => '保存';
+
+  @override
+  String get kbBuildTokenSaved => 'GitHub Token 已保存。';
+
+  @override
+  String get kbBuildTokenCleared => 'GitHub Token 已清除。';
+
+  @override
+  String get kbBuildTokenSetHint => '已设置 GitHub Token（配额 5000/小时）';
+
+  @override
   String get materialsPausedTitle => '用户资料导入暂未启用';
 
   @override

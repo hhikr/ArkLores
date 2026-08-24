@@ -5,6 +5,7 @@ import '../../core/gamedata/gamedata_build_provider.dart';
 import '../../core/gamedata/gamedata_installer.dart';
 import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
@@ -23,10 +24,29 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   int? _gameDataTotalBytes;
   String? _gameDataDownloadError;
 
+  final TextEditingController _tokenController = TextEditingController();
+  bool _tokenVisible = false;
+  bool _tokenLoaded = false;
+
+  @override
+  void dispose() {
+    _tokenController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final gameDataStatusAsync = ref.watch(gameDataInstallStatusProvider);
+
+    // Fill the token field once from secure storage (async, outside build).
+    ref.listen(githubTokenProvider, (previous, next) {
+      final token = next.valueOrNull;
+      if (!_tokenLoaded && token != null) {
+        _tokenLoaded = true;
+        _tokenController.text = token;
+      }
+    });
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -197,8 +217,11 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           Row(
             children: [
               OutlinedButton.icon(
-                onPressed:
-                    build.busy ? null : ref.read(gameDataBuildProvider.notifier).checkForUpdates,
+                onPressed: build.busy
+                    ? null
+                    : () => ref
+                        .read(gameDataBuildProvider.notifier)
+                        .checkForUpdates(githubToken: _currentGithubToken()),
                 icon: const Icon(Icons.manage_search_rounded, size: 18),
                 label: Text(context.t.kbBuildCheckUpdates),
                 style: OutlinedButton.styleFrom(
@@ -220,8 +243,9 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 )
               else
                 ElevatedButton.icon(
-                  onPressed: () =>
-                      ref.read(gameDataBuildProvider.notifier).buildFromSource(),
+                  onPressed: () => ref
+                      .read(gameDataBuildProvider.notifier)
+                      .buildFromSource(githubToken: _currentGithubToken()),
                   icon: const Icon(Icons.build_rounded, size: 18),
                   label: Text(context.t.kbBuildFromSource),
                   style: ElevatedButton.styleFrom(
@@ -231,7 +255,132 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 ),
             ],
           ),
+          const SizedBox(height: 12),
+          _buildGithubTokenSection(context, theme),
         ],
+      ),
+    );
+  }
+
+  /// Optional GitHub Personal Access Token section: raises the GitHub API
+  /// quota from 60 to 5000 requests/hour, avoiding rate-limit failures when
+  /// pulling GameData source. Stored in OS secure storage.
+  Widget _buildGithubTokenSection(
+    BuildContext context,
+    AppThemeTokens theme,
+  ) {
+    final tokenAsync = ref.watch(githubTokenProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Divider(color: theme.divider, height: 1),
+        const SizedBox(height: 12),
+        Text(
+          context.t.kbBuildTokenTitle,
+          style: theme.titleFont.copyWith(fontSize: 13),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          context.t.kbBuildTokenDesc,
+          style: theme.bodyFont.copyWith(
+            color: theme.textSecondary,
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _tokenController,
+                obscureText: !_tokenVisible,
+                style: theme.bodyFont.copyWith(color: theme.textPrimary),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: context.t.kbBuildTokenPlaceholder,
+                  hintStyle: theme.bodyFont.copyWith(
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                  ),
+                  filled: true,
+                  fillColor: theme.bgPrimary,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: BorderSide(color: theme.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: BorderSide(color: theme.divider),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            IconButton(
+              onPressed: () => setState(() => _tokenVisible = !_tokenVisible),
+              icon: Icon(
+                _tokenVisible
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                size: 18,
+                color: theme.textSecondary,
+              ),
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed: _saveGithubToken,
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.accentPrimary,
+                foregroundColor: theme.bgPrimary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              child: Text(
+                context.t.kbBuildTokenSave,
+                style: theme.titleFont.copyWith(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        if (tokenAsync.valueOrNull?.isNotEmpty ?? false) ...[
+          const SizedBox(height: 4),
+          Text(
+            context.t.kbBuildTokenSetHint,
+            style: theme.bodyFont.copyWith(
+              color: theme.accentPrimary,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String? _currentGithubToken() {
+    final text = _tokenController.text.trim();
+    if (text.isNotEmpty) return text;
+    return ref.read(githubTokenProvider).valueOrNull;
+  }
+
+  Future<void> _saveGithubToken() async {
+    final token = _tokenController.text.trim();
+    await ref.read(settingsServiceProvider).saveGithubToken(token);
+    ref.invalidate(githubTokenProvider);
+    _tokenLoaded = false;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          token.isEmpty
+              ? context.t.kbBuildTokenCleared
+              : context.t.kbBuildTokenSaved,
+        ),
       ),
     );
   }
