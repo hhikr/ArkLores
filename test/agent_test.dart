@@ -159,6 +159,59 @@ void main() {
       expect(observation, contains('Retrieval Type: entity_document'));
     });
 
+    test('reopens cached connection after the DB file is replaced', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final store = GameDataKnowledgeStore(dbPath: dbPath);
+      final tool = SearchLocalLoreTool(gameDataStore: store);
+
+      final first = await tool.execute({'query': '阿米娅', 'top_k': 3});
+      expect(
+        (first as ToolExecutionResult).observation,
+        contains('Entity ID: char_002_amiya'),
+      );
+
+      // The original file has no entity named this way; a stale cached handle
+      // would keep reporting "no result" after the swap below.
+      final before = await tool.execute({'query': '测试新角色', 'top_k': 3});
+      expect(
+        (before as ToolExecutionResult).observation,
+        contains('No matching GameData result'),
+      );
+
+      // Simulate an installer-style swap: build a DB with an extra entity at a
+      // temp path, then replace the original file while the store still caches
+      // a handle to the old file.
+      final replacedPath = '${tempDir.path}/replaced_gamedata.db';
+      await _createGameDataTestDb(replacedPath);
+      final replacedDb = await sqflite.openDatabase(replacedPath);
+      await replacedDb.insert('entities', {
+        'id': 'char_999_test',
+        'name': '测试新角色',
+        'aliases': '[]',
+        'entity_type': 'operator',
+        'source_type': 'operator_profile',
+        'game': 'arknights',
+        'source_path': 'zh_CN/gamedata/excel/character_table.json',
+      });
+      await replacedDb.insert('entity_aliases', {
+        'alias': '测试新角色',
+        'entity_id': 'char_999_test',
+        'alias_type': 'canonical',
+        'confidence': 1.0,
+        'source_path': 'zh_CN/gamedata/excel/character_table.json',
+      });
+      await replacedDb.close();
+      await File(dbPath).delete();
+      await File(replacedPath).rename(dbPath);
+
+      final after = await tool.execute({'query': '测试新角色', 'top_k': 3});
+      expect(
+        (after as ToolExecutionResult).observation,
+        contains('Entity ID: char_999_test'),
+      );
+    });
+
     test('uses entity document FTS for compound queries', () async {
       final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
       await _createGameDataTestDb(dbPath);
@@ -549,7 +602,7 @@ void main() {
 
       final status = await installer.getStatus();
       expect(status.installed, isTrue);
-      expect(status.manifest['schema_version'], '2');
+      expect(status.manifest['schema_version'], '3');
       expect(status.entityCount, '1');
     });
 
@@ -600,6 +653,34 @@ void main() {
           (error) => '$error',
           'message',
           contains('incompatible'),
+        ),),
+      );
+    });
+
+    test('rejects invalid story_line_count before replacing the installed DB',
+        () async {
+      final invalidPath = '${tempDir.path}/invalid_counts_gamedata.db';
+      await _createGameDataTestDb(invalidPath);
+      final db = await sqflite.openDatabase(invalidPath);
+      await db.update(
+        'gamedata_manifest',
+        {'value': '0'},
+        where: 'key = ?',
+        whereArgs: ['story_line_count'],
+      );
+      await db.close();
+      final installer = GameDataInstaller(installDirectory: tempDir);
+      final invalidBytes = await File(invalidPath).readAsBytes();
+
+      expect(
+        () => installer.installFromBytes(
+          invalidBytes,
+          overwrite: true,
+        ),
+        throwsA(isA<StateError>().having(
+          (error) => '$error',
+          'message',
+          contains('story_line_count'),
         ),),
       );
     });
@@ -1673,12 +1754,51 @@ Future<void> _createGameDataTestDb(String path) async {
           tokenize='trigram'
         )
       ''');
+      // Schema v3 coverage layer tables (R1 / AI retrieval P0).
+      await db.execute('''
+        CREATE TABLE entity_story_mentions (
+          entity_id     TEXT NOT NULL,
+          story_id      TEXT NOT NULL,
+          scope_id      TEXT NOT NULL,
+          line_start    INTEGER NOT NULL,
+          line_end      INTEGER NOT NULL,
+          mention_count INTEGER NOT NULL,
+          matched_alias TEXT,
+          PRIMARY KEY (entity_id, story_id, line_start)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE story_chapter_profiles (
+          story_id       TEXT PRIMARY KEY,
+          scope_id       TEXT NOT NULL,
+          title          TEXT,
+          line_start     INTEGER NOT NULL,
+          line_end       INTEGER NOT NULL,
+          speaker_set    TEXT,
+          entity_density TEXT,
+          summary        TEXT,
+          keyword_hits   TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE rare_terms (
+          term     TEXT PRIMARY KEY,
+          doc_freq INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE VIRTUAL TABLE story_lines_fts USING fts5(
+          content,
+          content='story_lines',
+          content_rowid='rowid'
+        )
+      ''');
     },
   );
 
   await db.insert('gamedata_manifest', {
     'key': 'schema_version',
-    'value': '2',
+    'value': '3',
   });
   await db.insert('gamedata_manifest', {
     'key': 'entity_count',
@@ -1691,6 +1811,20 @@ Future<void> _createGameDataTestDb(String path) async {
   await db.insert('gamedata_manifest', {
     'key': 'lore_chunk_count',
     'value': '1',
+  });
+  await db.insert('gamedata_manifest', {
+    'key': 'story_line_count',
+    'value': '1',
+  });
+  await db.insert('story_lines', {
+    'id': 'story_line_test_0',
+    'game': 'arknights',
+    'story_id': 'activities/act_test/level_test_01.txt',
+    'line_index': 0,
+    'speaker': '阿米娅',
+    'content': '测试剧情行内容',
+    'source_path': 'zh_CN/gamedata/story/activities/act_test/level_test_01.txt',
+    'language': 'zh',
   });
   await db.insert('entities', {
     'id': 'char_002_amiya',
