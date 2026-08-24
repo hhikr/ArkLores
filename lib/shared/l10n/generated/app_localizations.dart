@@ -1571,6 +1571,36 @@ abstract class AppLocalizations {
   /// **'Building entity coverage layer'**
   String get kbBuildStageCoverage;
 
+  /// No description provided for @kbBuildStageCoverageSpeakers.
+  ///
+  /// In en, this message translates to:
+  /// **'Expanding speaker entities…'**
+  String get kbBuildStageCoverageSpeakers;
+
+  /// No description provided for @kbBuildStageCoverageTrie.
+  ///
+  /// In en, this message translates to:
+  /// **'Building entity index…'**
+  String get kbBuildStageCoverageTrie;
+
+  /// No description provided for @kbBuildStageCoverageScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning character appearances…'**
+  String get kbBuildStageCoverageScan;
+
+  /// No description provided for @kbBuildStageCoverageRare.
+  ///
+  /// In en, this message translates to:
+  /// **'Counting rare terms…'**
+  String get kbBuildStageCoverageRare;
+
+  /// No description provided for @kbBuildStageCoverageProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing chapter profiles…'**
+  String get kbBuildStageCoverageProfiles;
+
   /// No description provided for @kbBuildStageFts.
   ///
   /// In en, this message translates to:

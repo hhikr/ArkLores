@@ -785,6 +785,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildStageCoverage => 'Building entity coverage layer';
 
   @override
+  String get kbBuildStageCoverageSpeakers => 'Expanding speaker entities…';
+
+  @override
+  String get kbBuildStageCoverageTrie => 'Building entity index…';
+
+  @override
+  String get kbBuildStageCoverageScan => 'Scanning character appearances…';
+
+  @override
+  String get kbBuildStageCoverageRare => 'Counting rare terms…';
+
+  @override
+  String get kbBuildStageCoverageProfiles => 'Writing chapter profiles…';
+
+  @override
   String get kbBuildStageFts => 'Rebuilding full-text indexes';
 
   @override

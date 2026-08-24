@@ -38,6 +38,44 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
+  group('coverage builder progress (R2 UX)', () {
+    test('reports per-chapter scan and profile progress', () async {
+      final db = await databaseFactoryFfi.openDatabase(dbPath);
+      // Drop the existing coverage layer so build() runs fully again.
+      await db.delete('entity_story_mentions');
+      await db.delete('story_chapter_profiles');
+      await db.delete('rare_terms');
+      final events = <(String, int, int)>[];
+      await StoryCoverageBuilder(
+        db: db,
+        stats: BuildStats(),
+        onProgress: (stage, done, total) {
+          events.add((stage, done, total));
+        },
+      ).build();
+
+      final scanEvents = events.where((e) => e.$1 == 'coverage_scan');
+      expect(scanEvents, isNotEmpty);
+      final scanList = scanEvents.toList();
+      expect(scanList.first.$2, 1);
+      expect(scanList.last.$2, scanList.last.$3);
+      expect(scanList.last.$3, greaterThanOrEqualTo(5)); // 5 fixture chapters
+
+      final profileEvents = events.where((e) => e.$1 == 'coverage_profiles');
+      expect(profileEvents, isNotEmpty);
+      expect(profileEvents.last.$2, profileEvents.last.$3);
+      expect(
+        events.map((e) => e.$1),
+        containsAll([
+          'coverage_speakers',
+          'coverage_trie',
+          'coverage_rare',
+        ]),
+      );
+      await db.close();
+    });
+  });
+
   group('speaker entity expansion (R3)', () {
     test('promotes frequent speakers without an entity row', () async {
       final db = await databaseFactoryFfi.openDatabase(dbPath);

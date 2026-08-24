@@ -69,16 +69,31 @@ const List<String> triageKeywords = [
 
 /// Builds the schema v3 coverage layer tables.
 class StoryCoverageBuilder {
-  StoryCoverageBuilder({required this.db, required this.stats});
+  StoryCoverageBuilder({
+    required this.db,
+    required this.stats,
+    this.onProgress,
+  });
   final Database db;
   final BuildStats stats;
 
+  /// Coarse per-substage progress of the coverage build (R2 UX): stages are
+  /// `coverage_speakers`, `coverage_trie`, `coverage_scan` (done = chapters
+  /// scanned, total = chapter count), `coverage_rare`, `coverage_profiles`
+  /// (done = profiles written). Null disables reporting (desktop CLI).
+  final void Function(String stage, int done, int total)? onProgress;
+
   Future<void> build() async {
+    onProgress?.call('coverage_speakers', 0, 1);
     // R3: promote frequent story speakers without an entity row to lightweight
     // `speaker:<name>` entities so coverage includes named NPCs with dialogue.
     await _expandSpeakerEntities();
+    onProgress?.call('coverage_speakers', 1, 1);
 
+    onProgress?.call('coverage_trie', 0, 1);
     final trie = await _loadEntityTrie();
+    onProgress?.call('coverage_trie', 1, 1);
+
     final scopes = await _loadScopes();
 
     // Pass A: scan story lines, write mention runs, accumulate bigram
@@ -90,7 +105,8 @@ class StoryCoverageBuilder {
     final storyRows = await db.rawQuery(
       'SELECT story_id FROM story_scopes ORDER BY story_id',
     );
-    for (final storyRow in storyRows) {
+    for (var i = 0; i < storyRows.length; i++) {
+      final storyRow = storyRows[i];
       final storyId = storyRow['story_id'] as String;
       final draft = await _scanStory(
         trie,
@@ -100,13 +116,17 @@ class StoryCoverageBuilder {
         lastSeen,
       );
       if (draft != null) drafts.add(draft);
+      onProgress?.call('coverage_scan', i + 1, storyRows.length);
     }
 
     // Pass B: rare terms (doc_freq <= rareTermMaxDocFreq).
+    onProgress?.call('coverage_rare', 0, 1);
     final rareTerms = await _writeRareTerms(docFreq);
+    onProgress?.call('coverage_rare', 1, 1);
 
     // Pass C: chapter profiles with rare-term-aware extractive summaries.
-    await _writeProfiles(trie, rareTerms, drafts);
+    onProgress?.call('coverage_profiles', 0, drafts.length);
+    await _writeProfiles(trie, rareTerms, drafts, onProgress: onProgress);
 
     stats.storyProfiles = drafts.length;
     stats.rareTerms = rareTerms.length;
@@ -345,9 +365,12 @@ class StoryCoverageBuilder {
   Future<void> _writeProfiles(
     _EntityTrie trie,
     Set<String> rareTerms,
-    List<_ProfileDraft> drafts,
-  ) async {
-    for (final draft in drafts) {
+    List<_ProfileDraft> drafts, {
+    void Function(String stage, int done, int total)? onProgress,
+  }) async {
+    for (var i = 0; i < drafts.length; i++) {
+      final draft = drafts[i];
+      onProgress?.call('coverage_profiles', i + 1, drafts.length);
       final rows = await db.rawQuery(
         'SELECT line_index, speaker, content '
         'FROM story_lines WHERE story_id = ? ORDER BY line_index',

@@ -146,9 +146,11 @@ class GameDataBuildService {
       );
       await importer.importAll();
       _checkCancel(shouldCancel);
-      onProgress?.call('coverage', 0, 1);
-      await StoryCoverageBuilder(db: db, stats: stats).build();
-      onProgress?.call('coverage', 1, 1);
+      await StoryCoverageBuilder(
+        db: db,
+        stats: stats,
+        onProgress: onProgress,
+      ).build();
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);
@@ -193,9 +195,11 @@ class GameDataBuildService {
         onProgress?.call('incremental', i + 1, changes.length);
         await _applyChange(db, importer, changes[i]);
       }
-      onProgress?.call('coverage', 0, 1);
-      await StoryCoverageBuilder(db: db, stats: stats).build();
-      onProgress?.call('coverage', 1, 1);
+      await StoryCoverageBuilder(
+        db: db,
+        stats: stats,
+        onProgress: onProgress,
+      ).build();
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);

@@ -416,6 +416,16 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             return context.t.kbBuildStageStories;
           case 'coverage':
             return context.t.kbBuildStageCoverage;
+          case 'coverage_speakers':
+            return context.t.kbBuildStageCoverageSpeakers;
+          case 'coverage_trie':
+            return context.t.kbBuildStageCoverageTrie;
+          case 'coverage_scan':
+            return context.t.kbBuildStageCoverageScan;
+          case 'coverage_rare':
+            return context.t.kbBuildStageCoverageRare;
+          case 'coverage_profiles':
+            return context.t.kbBuildStageCoverageProfiles;
           case 'fts':
             return context.t.kbBuildStageFts;
           case 'start':
