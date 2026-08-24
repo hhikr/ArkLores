@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/gamedata_build_provider.dart';
 import '../../core/gamedata/gamedata_installer.dart';
 import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
@@ -89,9 +90,194 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
           ),
+          const SizedBox(height: 16),
+          _buildSourceBuildCard(context, theme),
         ],
       ),
     );
+  }
+
+  Widget _buildSourceBuildCard(
+    BuildContext context,
+    AppThemeTokens theme,
+  ) {
+    final build = ref.watch(gameDataBuildProvider);
+    return ThemeAwareCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.sync_rounded, color: theme.accentPrimary, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t.kbBuildSectionTitle,
+                      style: theme.titleFont.copyWith(fontSize: 15),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.t.kbBuildSectionDesc,
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (build.latestCommit != null)
+            Text(
+              '${context.t.kbBuildLatestCommit}: ${_shortCommit(build.latestCommit)}'
+              '${build.installedCommit != null ? ' (${context.t.kbBuildInstalledCommit}: ${_shortCommit(build.installedCommit)})' : ''}',
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          if (build.phase == GameDataBuildPhase.done) ...[
+            const SizedBox(height: 8),
+            Text(
+              build.incremental
+                  ? context.t.kbBuildIncrementalDone
+                  : context.t.kbBuildFullDone,
+              style: theme.bodyFont.copyWith(
+                color: theme.accentPrimary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (build.error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${context.t.kbBuildError}: ${build.error}',
+              style: theme.bodyFont.copyWith(
+                color: theme.danger,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          if (build.busy) ...[
+            const SizedBox(height: 12),
+            Text(
+              _buildStageLabel(context, build),
+              style: theme.bodyFont.copyWith(
+                color: theme.textPrimary,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: build.total > 0
+                  ? (build.done / build.total).clamp(0.0, 1.0)
+                  : null,
+              backgroundColor: theme.divider,
+              valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+              minHeight: 6,
+            ),
+            if (build.total > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${build.done} / ${build.total}',
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    build.busy ? null : ref.read(gameDataBuildProvider.notifier).checkForUpdates,
+                icon: const Icon(Icons.manage_search_rounded, size: 18),
+                label: Text(context.t.kbBuildCheckUpdates),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: theme.accentPrimary,
+                  side: BorderSide(color: theme.divider),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (build.busy)
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      ref.read(gameDataBuildProvider.notifier).cancel(),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: Text(context.t.kbBuildCancel),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.danger,
+                    side: BorderSide(color: theme.divider),
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  onPressed: () =>
+                      ref.read(gameDataBuildProvider.notifier).buildFromSource(),
+                  icon: const Icon(Icons.build_rounded, size: 18),
+                  label: Text(context.t.kbBuildFromSource),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.accentPrimary,
+                    foregroundColor: theme.bgPrimary,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _buildStageLabel(
+    BuildContext context,
+    GameDataBuildUiState build,
+  ) {
+    switch (build.phase) {
+      case GameDataBuildPhase.checking:
+        return context.t.kbBuildChecking;
+      case GameDataBuildPhase.downloading:
+        return build.stage == 'zip'
+            ? context.t.kbBuildDownloadingZip
+            : context.t.kbBuildDownloadingChanges;
+      case GameDataBuildPhase.extracting:
+        return context.t.kbBuildExtracting;
+      case GameDataBuildPhase.swapping:
+        return context.t.kbBuildSwapping;
+      case GameDataBuildPhase.building:
+        switch (build.stage) {
+          case 'copy':
+            return context.t.kbBuildStageCopy;
+          case 'incremental':
+            return context.t.kbBuildStageIncremental;
+          case 'profiles':
+            return context.t.kbBuildStageProfiles;
+          case 'voices':
+            return context.t.kbBuildStageVoices;
+          case 'structured':
+            return context.t.kbBuildStageStructured;
+          case 'stories':
+            return context.t.kbBuildStageStories;
+          case 'coverage':
+            return context.t.kbBuildStageCoverage;
+          case 'fts':
+            return context.t.kbBuildStageFts;
+          case 'start':
+            return context.t.kbBuildStageStart;
+          default:
+            return build.stage;
+        }
+      case GameDataBuildPhase.idle:
+      case GameDataBuildPhase.done:
+        return '';
+    }
   }
 
   Future<void> _downloadGameData() async {
