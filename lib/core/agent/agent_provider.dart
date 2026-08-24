@@ -9,6 +9,7 @@ import '../llm/llm_provider.dart';
 import 'chat_message.dart';
 import 'chat_notifier_base.dart';
 import 'fact_check_agent.dart';
+import 'investigation_agent.dart';
 import 'react_loop.dart';
 import 'roleplay_agent.dart';
 import 'roleplay_session_store.dart';
@@ -141,37 +142,8 @@ class SummaryChatNotifier extends ChatNotifierBase {
   Future<void> resendLast(String query) => sendMessage(query);
 
   @override
-  List<Message> buildHistory(List<ChatMessage> messages) {
-    final history = <Message>[];
-    for (final m in messages) {
-      if (m.isStreaming || m.isError) continue;
-      if (m.role == MessageRole.user) {
-        history.add(Message.user(m.content));
-      } else if (m.role == MessageRole.assistant) {
-        final buffer = StringBuffer();
-        for (final step in m.steps) {
-          if (step.type == ReActEventType.thought) {
-            buffer.writeln('Thought: ${step.content}');
-          } else if (step.type == ReActEventType.toolCall) {
-            buffer.writeln('Action: ${step.toolName}');
-            // Content matches 'Executing tool "..." with arguments: {...}'
-            final argsPart = step.content.contains('arguments: ')
-                ? step.content.split('arguments: ').last
-                : '{}';
-            buffer.writeln('Action Input: $argsPart');
-          } else if (step.type == ReActEventType.toolObservation) {
-            buffer.writeln('Observation: ${step.content}');
-          }
-        }
-        if (m.content.isNotEmpty) {
-          buffer.writeln('Thought: I have enough information to answer.');
-          buffer.writeln('Final Answer: ${m.content}');
-        }
-        history.add(Message.assistant(buffer.toString().trim()));
-      }
-    }
-    return history;
-  }
+  List<Message> buildHistory(List<ChatMessage> messages) =>
+      buildReactHistory(messages);
 }
 
 /// Provider for the Summary Chat state.
@@ -272,6 +244,119 @@ final factCheckChatProvider =
     StateNotifierProvider<FactCheckChatNotifier, List<ChatMessage>>((ref) {
   return FactCheckChatNotifier(ref.watch(factCheckAgentProvider));
 });
+
+/// Provider for the [InvestigationAgent] instance.
+final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
+  return InvestigationAgent(llmClient: ref.watch(llmClientProvider));
+});
+
+/// State notifier for the Investigation Chat (R3): cross-chapter mystery
+/// questions running the S0–S8 protocol with code-level verdict gates.
+class InvestigationChatNotifier extends ChatNotifierBase {
+  InvestigationChatNotifier(this._agent) : super([]);
+  final InvestigationAgent _agent;
+
+  /// Sends a message and triggers the investigation ReAct stream.
+  Future<void> sendMessage(String text) async {
+    if (text.trim().isEmpty || state.any((message) => message.isStreaming)) {
+      return;
+    }
+    final generation = nextGeneration();
+
+    final userMsgId = newId();
+    final assistantMsgId = newId();
+    final userMsg = ChatMessage(
+      id: userMsgId,
+      role: MessageRole.user,
+      content: text,
+      timestamp: DateTime.now(),
+    );
+    final history = buildHistory(state);
+    state = [
+      ...state,
+      userMsg,
+      ChatMessage(
+        id: assistantMsgId,
+        role: MessageRole.assistant,
+        content: '',
+        isStreaming: true,
+        timestamp: DateTime.now(),
+      ),
+    ];
+
+    try {
+      final stream = _agent.investigate(query: text, history: history);
+      final steps = <ReActStep>[];
+      final finalAnswerBuffer = StringBuffer();
+      await for (final event in stream) {
+        if (!isCurrentGeneration(generation)) return;
+        switch (event.type) {
+          case ReActEventType.thought:
+          case ReActEventType.toolCall:
+          case ReActEventType.toolObservation:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+              toolArgs: event.toolArgs,
+            ),);
+            updateMessage(assistantMsgId, steps: List.from(steps));
+            break;
+          case ReActEventType.finalAnswerToken:
+            finalAnswerBuffer.write(event.content);
+            updateMessage(
+              assistantMsgId,
+              content: finalAnswerBuffer.toString(),
+              steps: List.from(steps),
+            );
+            break;
+          case ReActEventType.error:
+            steps.add(ReActStep(type: event.type, content: event.content));
+            updateMessage(
+              assistantMsgId,
+              isError: true,
+              steps: List.from(steps),
+            );
+            break;
+          case ReActEventType.complete:
+            updateMessage(
+              assistantMsgId,
+              isStreaming: false,
+              steps: List.from(steps),
+            );
+            break;
+        }
+      }
+    } catch (e) {
+      if (isCurrentGeneration(generation)) {
+        updateMessage(
+          assistantMsgId,
+          content: '[INVESTIGATION_ERROR]',
+          isError: true,
+          isStreaming: false,
+        );
+      }
+    }
+  }
+
+  @override
+  String get canceledMarker => '[INVESTIGATION_CANCELED]';
+
+  @override
+  Future<void> resendLast(String query) => sendMessage(query);
+
+  @override
+  List<Message> buildHistory(List<ChatMessage> messages) =>
+      buildReactHistory(messages);
+}
+
+/// Provider for the Investigation Chat state.
+final investigationChatProvider =
+    StateNotifierProvider<InvestigationChatNotifier, List<ChatMessage>>(
+  (ref) {
+  return InvestigationChatNotifier(ref.watch(investigationAgentProvider));
+},
+);
 
 class RoleplayState {
 

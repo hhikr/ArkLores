@@ -767,11 +767,101 @@ abstract class AppLocalizations {
   /// **'Summary'**
   String get aiTabSummary;
 
+  /// No description provided for @aiTabInvestigation.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation'**
+  String get aiTabInvestigation;
+
   /// No description provided for @aiTabRoleplay.
   ///
   /// In en, this message translates to:
   /// **'Roleplay'**
   String get aiTabRoleplay;
+
+  /// No description provided for @aiInvestigationSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation scope: installed GameData story text only (appearance enumeration + line-level reading + cross-chapter echoes)'**
+  String get aiInvestigationSource;
+
+  /// No description provided for @aiInvestigationEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a cross-chapter causality or culprit question. The investigation enumerates appearances, reads key chapters, locates cross-chapter details, and compares evidence per suspect before concluding with an evidence chain.'**
+  String get aiInvestigationEmpty;
+
+  /// No description provided for @aiInvestigationInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Who is responsible for a character\'s death...'**
+  String get aiInvestigationInputPlaceholder;
+
+  /// No description provided for @aiInvestigationSuggestionDeath.
+  ///
+  /// In en, this message translates to:
+  /// **'What is the truth behind Theresis\'s death'**
+  String get aiInvestigationSuggestionDeath;
+
+  /// No description provided for @aiInvestigationSuggestionWeapon.
+  ///
+  /// In en, this message translates to:
+  /// **'Key weapon clues in a death scene'**
+  String get aiInvestigationSuggestionWeapon;
+
+  /// No description provided for @aiInvestigationVerdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation verdict'**
+  String get aiInvestigationVerdict;
+
+  /// No description provided for @aiInvestigationConfidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Confidence'**
+  String get aiInvestigationConfidence;
+
+  /// No description provided for @aiInvestigationBasis.
+  ///
+  /// In en, this message translates to:
+  /// **'Basis'**
+  String get aiInvestigationBasis;
+
+  /// No description provided for @aiInvestigationEvidenceChain.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence chain references'**
+  String get aiInvestigationEvidenceChain;
+
+  /// No description provided for @aiInvestigationCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage'**
+  String get aiInvestigationCoverage;
+
+  /// No description provided for @aiInvestigationRead.
+  ///
+  /// In en, this message translates to:
+  /// **'read'**
+  String get aiInvestigationRead;
+
+  /// No description provided for @aiInvestigationMapped.
+  ///
+  /// In en, this message translates to:
+  /// **'mapped'**
+  String get aiInvestigationMapped;
+
+  /// No description provided for @aiInvestigationSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'skipped'**
+  String get aiInvestigationSkipped;
+
+  /// No description provided for @aiInvestigationError.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation failed. Please retry.'**
+  String get aiInvestigationError;
 
   /// No description provided for @aiFactCheckSource.
   ///
@@ -1360,6 +1450,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Source commit'**
   String get kbStatSourceCommit;
+
+  /// No description provided for @kbBuildSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Build from source repo'**
+  String get kbBuildSectionTitle;
+
+  /// No description provided for @kbBuildSectionDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull the latest unpacked data from Kengxxiao/ArknightsGameData and build or incrementally update the knowledge base on this device. Requires network; ~1.5–2 GB free space for the first build.'**
+  String get kbBuildSectionDesc;
+
+  /// No description provided for @kbBuildLatestCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest commit'**
+  String get kbBuildLatestCommit;
+
+  /// No description provided for @kbBuildInstalledCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed commit'**
+  String get kbBuildInstalledCommit;
+
+  /// No description provided for @kbBuildCheckUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get kbBuildCheckUpdates;
+
+  /// No description provided for @kbBuildFromSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Build from source'**
+  String get kbBuildFromSource;
+
+  /// No description provided for @kbBuildCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get kbBuildCancel;
+
+  /// No description provided for @kbBuildChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking upstream commits…'**
+  String get kbBuildChecking;
+
+  /// No description provided for @kbBuildDownloadingZip.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading source bundle (first time, large)…'**
+  String get kbBuildDownloadingZip;
+
+  /// No description provided for @kbBuildDownloadingChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading incremental changes…'**
+  String get kbBuildDownloadingChanges;
+
+  /// No description provided for @kbBuildExtracting.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting and filtering source data…'**
+  String get kbBuildExtracting;
+
+  /// No description provided for @kbBuildSwapping.
+  ///
+  /// In en, this message translates to:
+  /// **'Replacing the knowledge base…'**
+  String get kbBuildSwapping;
+
+  /// No description provided for @kbBuildStageStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing build'**
+  String get kbBuildStageStart;
+
+  /// No description provided for @kbBuildStageCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying existing database'**
+  String get kbBuildStageCopy;
+
+  /// No description provided for @kbBuildStageIncremental.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying incremental changes'**
+  String get kbBuildStageIncremental;
+
+  /// No description provided for @kbBuildStageProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing character profiles'**
+  String get kbBuildStageProfiles;
+
+  /// No description provided for @kbBuildStageVoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing voices'**
+  String get kbBuildStageVoices;
+
+  /// No description provided for @kbBuildStageStructured.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing structured tables'**
+  String get kbBuildStageStructured;
+
+  /// No description provided for @kbBuildStageStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing stories'**
+  String get kbBuildStageStories;
+
+  /// No description provided for @kbBuildStageCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Building entity coverage layer'**
+  String get kbBuildStageCoverage;
+
+  /// No description provided for @kbBuildStageFts.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuilding full-text indexes'**
+  String get kbBuildStageFts;
+
+  /// No description provided for @kbBuildIncrementalDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Incremental update complete; the knowledge base has been replaced.'**
+  String get kbBuildIncrementalDone;
+
+  /// No description provided for @kbBuildFullDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Full build complete; the knowledge base has been replaced.'**
+  String get kbBuildFullDone;
+
+  /// No description provided for @kbBuildError.
+  ///
+  /// In en, this message translates to:
+  /// **'Build failed'**
+  String get kbBuildError;
 
   /// No description provided for @materialsPausedTitle.
   ///

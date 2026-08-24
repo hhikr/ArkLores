@@ -4,6 +4,43 @@ import 'package:uuid/uuid.dart';
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
 import 'fact_check_agent.dart';
+import 'react_loop.dart';
+
+/// Rebuilds ReAct step text history from UI messages (shared by the Summary
+/// and Investigation chat notifiers): user messages pass through; assistant
+/// messages are reconstructed as Thought/Action/Action Input/Observation text
+/// plus the final answer.
+List<Message> buildReactHistory(List<ChatMessage> messages) {
+  final history = <Message>[];
+  for (final m in messages) {
+    if (m.isStreaming || m.isError) continue;
+    if (m.role == MessageRole.user) {
+      history.add(Message.user(m.content));
+    } else if (m.role == MessageRole.assistant) {
+      final buffer = StringBuffer();
+      for (final step in m.steps) {
+        if (step.type == ReActEventType.thought) {
+          buffer.writeln('Thought: ${step.content}');
+        } else if (step.type == ReActEventType.toolCall) {
+          buffer.writeln('Action: ${step.toolName}');
+          // Content matches 'Executing tool "..." with arguments: {...}'
+          final argsPart = step.content.contains('arguments: ')
+              ? step.content.split('arguments: ').last
+              : '{}';
+          buffer.writeln('Action Input: $argsPart');
+        } else if (step.type == ReActEventType.toolObservation) {
+          buffer.writeln('Observation: ${step.content}');
+        }
+      }
+      if (m.content.isNotEmpty) {
+        buffer.writeln('Thought: I have enough information to answer.');
+        buffer.writeln('Final Answer: ${m.content}');
+      }
+      history.add(Message.assistant(buffer.toString().trim()));
+    }
+  }
+  return history;
+}
 
 /// Shared state-machine logic for the Summary / Fact-check / Role-play chat
 /// notifiers: request generations for cancellation, message list updates,

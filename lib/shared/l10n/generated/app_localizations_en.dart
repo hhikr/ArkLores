@@ -369,7 +369,52 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiTabSummary => 'Summary';
 
   @override
+  String get aiTabInvestigation => 'Investigation';
+
+  @override
   String get aiTabRoleplay => 'Roleplay';
+
+  @override
+  String get aiInvestigationSource => 'Investigation scope: installed GameData story text only (appearance enumeration + line-level reading + cross-chapter echoes)';
+
+  @override
+  String get aiInvestigationEmpty => 'Ask a cross-chapter causality or culprit question. The investigation enumerates appearances, reads key chapters, locates cross-chapter details, and compares evidence per suspect before concluding with an evidence chain.';
+
+  @override
+  String get aiInvestigationInputPlaceholder => 'e.g. Who is responsible for a character\'s death...';
+
+  @override
+  String get aiInvestigationSuggestionDeath => 'What is the truth behind Theresis\'s death';
+
+  @override
+  String get aiInvestigationSuggestionWeapon => 'Key weapon clues in a death scene';
+
+  @override
+  String get aiInvestigationVerdict => 'Investigation verdict';
+
+  @override
+  String get aiInvestigationConfidence => 'Confidence';
+
+  @override
+  String get aiInvestigationBasis => 'Basis';
+
+  @override
+  String get aiInvestigationEvidenceChain => 'Evidence chain references';
+
+  @override
+  String get aiInvestigationCoverage => 'Coverage';
+
+  @override
+  String get aiInvestigationRead => 'read';
+
+  @override
+  String get aiInvestigationMapped => 'mapped';
+
+  @override
+  String get aiInvestigationSkipped => 'skipped';
+
+  @override
+  String get aiInvestigationError => 'Investigation failed. Please retry.';
 
   @override
   String get aiFactCheckSource => 'Evidence: installed Chinese GameData only';
@@ -678,6 +723,78 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbStatSourceCommit => 'Source commit';
+
+  @override
+  String get kbBuildSectionTitle => 'Build from source repo';
+
+  @override
+  String get kbBuildSectionDesc => 'Pull the latest unpacked data from Kengxxiao/ArknightsGameData and build or incrementally update the knowledge base on this device. Requires network; ~1.5–2 GB free space for the first build.';
+
+  @override
+  String get kbBuildLatestCommit => 'Latest commit';
+
+  @override
+  String get kbBuildInstalledCommit => 'Installed commit';
+
+  @override
+  String get kbBuildCheckUpdates => 'Check for updates';
+
+  @override
+  String get kbBuildFromSource => 'Build from source';
+
+  @override
+  String get kbBuildCancel => 'Cancel';
+
+  @override
+  String get kbBuildChecking => 'Checking upstream commits…';
+
+  @override
+  String get kbBuildDownloadingZip => 'Downloading source bundle (first time, large)…';
+
+  @override
+  String get kbBuildDownloadingChanges => 'Downloading incremental changes…';
+
+  @override
+  String get kbBuildExtracting => 'Extracting and filtering source data…';
+
+  @override
+  String get kbBuildSwapping => 'Replacing the knowledge base…';
+
+  @override
+  String get kbBuildStageStart => 'Preparing build';
+
+  @override
+  String get kbBuildStageCopy => 'Copying existing database';
+
+  @override
+  String get kbBuildStageIncremental => 'Applying incremental changes';
+
+  @override
+  String get kbBuildStageProfiles => 'Importing character profiles';
+
+  @override
+  String get kbBuildStageVoices => 'Importing voices';
+
+  @override
+  String get kbBuildStageStructured => 'Importing structured tables';
+
+  @override
+  String get kbBuildStageStories => 'Importing stories';
+
+  @override
+  String get kbBuildStageCoverage => 'Building entity coverage layer';
+
+  @override
+  String get kbBuildStageFts => 'Rebuilding full-text indexes';
+
+  @override
+  String get kbBuildIncrementalDone => 'Incremental update complete; the knowledge base has been replaced.';
+
+  @override
+  String get kbBuildFullDone => 'Full build complete; the knowledge base has been replaced.';
+
+  @override
+  String get kbBuildError => 'Build failed';
 
   @override
   String get materialsPausedTitle => 'User material import is not enabled yet';

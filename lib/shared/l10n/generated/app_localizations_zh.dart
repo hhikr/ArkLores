@@ -369,7 +369,52 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabSummary => '剧情梗概';
 
   @override
+  String get aiTabInvestigation => '剧情调查';
+
+  @override
   String get aiTabRoleplay => '角色扮演';
+
+  @override
+  String get aiInvestigationSource => '调查范围：仅限已安装 GameData 剧情原文（出场枚举 + 行级精读 + 跨章节呼应）';
+
+  @override
+  String get aiInvestigationEmpty => '提出跨章节因果或凶手类问题。调查会枚举出场、精读关键章节、跨章节定位细节，并逐嫌疑人对比证据后给出带证据链的结论。';
+
+  @override
+  String get aiInvestigationInputPlaceholder => '例如：某角色死亡的罪魁祸首是谁…';
+
+  @override
+  String get aiInvestigationSuggestionDeath => '特蕾西娅死亡的真相是什么';
+
+  @override
+  String get aiInvestigationSuggestionWeapon => '某场死亡的关键凶器线索';
+
+  @override
+  String get aiInvestigationVerdict => '调查结论';
+
+  @override
+  String get aiInvestigationConfidence => '置信度';
+
+  @override
+  String get aiInvestigationBasis => '依据';
+
+  @override
+  String get aiInvestigationEvidenceChain => '证据链引用';
+
+  @override
+  String get aiInvestigationCoverage => '已读范围';
+
+  @override
+  String get aiInvestigationRead => '精读';
+
+  @override
+  String get aiInvestigationMapped => '画像';
+
+  @override
+  String get aiInvestigationSkipped => '未读';
+
+  @override
+  String get aiInvestigationError => '调查失败，请重试。';
 
   @override
   String get aiFactCheckSource => '证据范围：仅限已安装的中文 GameData';
@@ -678,6 +723,78 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbStatSourceCommit => '来源提交';
+
+  @override
+  String get kbBuildSectionTitle => '从源仓库构建';
+
+  @override
+  String get kbBuildSectionDesc => '从 Kengxxiao/ArknightsGameData 拉取最新解包数据，在设备上按项目规约构建或增量更新知识库。需要网络；首次构建约需 1.5–2 GB 空闲空间。';
+
+  @override
+  String get kbBuildLatestCommit => '最新提交';
+
+  @override
+  String get kbBuildInstalledCommit => '已装提交';
+
+  @override
+  String get kbBuildCheckUpdates => '检查更新';
+
+  @override
+  String get kbBuildFromSource => '从源仓库构建';
+
+  @override
+  String get kbBuildCancel => '取消';
+
+  @override
+  String get kbBuildChecking => '正在检查上游提交…';
+
+  @override
+  String get kbBuildDownloadingZip => '正在下载源包（首次，较大）…';
+
+  @override
+  String get kbBuildDownloadingChanges => '正在下载增量变更文件…';
+
+  @override
+  String get kbBuildExtracting => '正在解压并筛选源数据…';
+
+  @override
+  String get kbBuildSwapping => '正在替换知识库…';
+
+  @override
+  String get kbBuildStageStart => '准备构建';
+
+  @override
+  String get kbBuildStageCopy => '复制旧库';
+
+  @override
+  String get kbBuildStageIncremental => '应用增量变更';
+
+  @override
+  String get kbBuildStageProfiles => '导入角色档案';
+
+  @override
+  String get kbBuildStageVoices => '导入语音';
+
+  @override
+  String get kbBuildStageStructured => '导入结构化表';
+
+  @override
+  String get kbBuildStageStories => '导入剧情';
+
+  @override
+  String get kbBuildStageCoverage => '构建实体覆盖层';
+
+  @override
+  String get kbBuildStageFts => '重建全文索引';
+
+  @override
+  String get kbBuildIncrementalDone => '增量更新完成，知识库已替换。';
+
+  @override
+  String get kbBuildFullDone => '全量构建完成，知识库已替换。';
+
+  @override
+  String get kbBuildError => '构建失败';
 
   @override
   String get materialsPausedTitle => '用户资料导入暂未启用';

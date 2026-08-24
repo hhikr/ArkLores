@@ -59,7 +59,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     _dispatchInitialWikiContext(isConfigured);
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       initialIndex: _initialTabIndex,
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -79,6 +79,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             tabs: [
               Tab(text: context.t.aiTabFactCheck),
               Tab(text: context.t.aiTabSummary),
+              Tab(text: context.t.aiTabInvestigation),
               Tab(text: context.t.aiTabRoleplay),
             ],
           ),
@@ -92,6 +93,11 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             // ── Summary Tab (Functional) ─────────────────────
             isConfigured
                 ? _buildSummaryChatTab(theme)
+                : _buildConfigRequiredTab(theme),
+
+            // ── Investigation Tab (R3) ──────────────────────
+            isConfigured
+                ? _buildInvestigationTab(theme)
                 : _buildConfigRequiredTab(theme),
 
             isConfigured ? const RoleplayTab() : _buildConfigRequiredTab(theme),
@@ -221,6 +227,118 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           isCancel: isSending,
         ),
       ],
+    );
+  }
+
+  Widget _buildInvestigationTab(AppThemeTokens theme) {
+    final chatHistory = ref.watch(investigationChatProvider);
+    final chatNotifier = ref.read(investigationChatProvider.notifier);
+    final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
+
+    ref.listen(investigationChatProvider, (prev, next) {
+      if (prev?.length != next.length ||
+          (next.isNotEmpty && next.last.isStreaming)) {
+        _scrollToBottom();
+      }
+    });
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: theme.bgSecondary.withValues(alpha: 0.5),
+          child: Row(
+            children: [
+              Icon(Icons.manage_search_rounded,
+                  size: 16, color: theme.accentPrimary,),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  context.t.aiInvestigationSource,
+                  style: theme.bodyFont
+                      .copyWith(color: theme.textSecondary, fontSize: 12),
+                ),
+              ),
+              if (chatHistory.isNotEmpty)
+                IconButton(
+                  onPressed: isSending ? null : chatNotifier.retryLast,
+                  tooltip: context.t.aiRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  visualDensity: VisualDensity.compact,
+                ),
+              if (chatHistory.isNotEmpty)
+                IconButton(
+                  onPressed: chatNotifier.clearChat,
+                  tooltip: context.t.aiClearHistory,
+                  icon: Icon(Icons.delete_sweep_rounded, color: theme.danger),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: chatHistory.isEmpty
+              ? _buildInvestigationEmptyState(theme)
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: chatHistory.length,
+                  itemBuilder: (context, index) {
+                    return ChatBubble(message: chatHistory[index]);
+                  },
+                ),
+        ),
+        _buildInputArea(
+          theme,
+          isSending,
+          onSend: isSending ? chatNotifier.cancel : _handleInvestigationSend,
+          hintText: context.t.aiInvestigationInputPlaceholder,
+          isCancel: isSending,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInvestigationEmptyState(AppThemeTokens theme) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Icon(
+              Icons.manage_search_rounded,
+              size: 48,
+              color: theme.accentPrimary.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.t.aiTabInvestigation,
+              style: theme.titleFont
+                  .copyWith(fontSize: 20, color: theme.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.t.aiInvestigationEmpty,
+              style: theme.bodyFont
+                  .copyWith(color: theme.textSecondary, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildSuggestionChip(
+                    theme, context.t.aiInvestigationSuggestionDeath,),
+                _buildSuggestionChip(
+                    theme, context.t.aiInvestigationSuggestionWeapon,),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -418,6 +536,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
     _inputController.clear();
     ref.read(summaryChatProvider.notifier).sendMessage(text);
+  }
+
+  void _handleInvestigationSend() {
+    final text = _inputController.text.trim();
+    if (text.isEmpty) return;
+
+    _inputController.clear();
+    ref.read(investigationChatProvider.notifier).sendMessage(text);
   }
 
   void _handleFactCheckSend() {
