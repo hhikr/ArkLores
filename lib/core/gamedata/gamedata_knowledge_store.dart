@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -6,6 +7,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 
 import 'gamedata_models.dart';
 import 'gamedata_query_plan.dart';
+import 'story_coverage_models.dart';
 
 export 'gamedata_models.dart';
 
@@ -14,6 +16,11 @@ class GameDataKnowledgeStore {
   GameDataKnowledgeStore({this.dbPath});
   final String? dbPath;
   sqflite.Database? _db;
+
+  /// File identity captured when [_db] was opened. When the underlying DB file
+  /// is replaced (installer swap or an in-app rebuild), the cached handle would
+  /// keep serving the stale file; [_open] reopens when this stamp changes.
+  FileStat? _openedFileStat;
 
   Future<bool> get isAvailable async {
     final path = await _resolveDbPath();
@@ -294,18 +301,280 @@ class GameDataKnowledgeStore {
         .toList();
   }
 
+  /// Returns every appearance run of [entityId] across stories
+  /// (schema v3 `entity_story_mentions`), optionally limited to [scopeFilter]
+  /// (canonical scope key, e.g. `activity:act21mini`).
+  ///
+  /// Empty when the coverage tables are absent (old schema) or the entity has
+  /// no recorded mentions.
+  Future<List<StoryCoverageEntry>> searchStoryCoverage({
+    required String entityId,
+    String? scopeFilter,
+  }) async {
+    final db = await _open();
+    if (db == null || !await _hasTable(db, 'entity_story_mentions')) {
+      return const [];
+    }
+    var sql = '''
+      SELECT m.entity_id, m.story_id, m.scope_id, m.line_start, m.line_end,
+             m.mention_count, m.matched_alias, p.title
+      FROM entity_story_mentions m
+      LEFT JOIN story_chapter_profiles p ON p.story_id = m.story_id
+      WHERE m.entity_id = ?
+    ''';
+    final args = <Object?>[entityId.trim()];
+    final scope = scopeFilter?.trim();
+    if (scope != null && scope.isNotEmpty) {
+      sql += ' AND m.scope_id = ?';
+      args.add(scope);
+    }
+    sql += ' ORDER BY m.scope_id, m.story_id, m.line_start';
+    final rows = await db.rawQuery(sql, args);
+    return [
+      for (final row in rows)
+        StoryCoverageEntry(
+          entityId: '${row['entity_id']}',
+          storyId: '${row['story_id']}',
+          scopeId: '${row['scope_id']}',
+          title: row['title'] as String?,
+          lineStart: (row['line_start'] as num).toInt(),
+          lineEnd: (row['line_end'] as num).toInt(),
+          mentionCount: (row['mention_count'] as num).toInt(),
+          matchedAlias: row['matched_alias'] as String?,
+        ),
+    ];
+  }
+
+  /// Reads raw story lines (schema 2 `story_lines`) for [storyId].
+  ///
+  /// Window semantics: [startLine]/[endLine] bound the range; [maxLines]
+  /// limits the page size; [pageToken] (opaque, from a previous page)
+  /// continues from that line. Returns [StoryLinesPage] with the next
+  /// continuation token when more lines remain.
+  Future<StoryLinesPage> readStoryLines({
+    required String storyId,
+    int? startLine,
+    int? endLine,
+    int? maxLines,
+    String? pageToken,
+  }) async {
+    final db = await _open();
+    if (db == null) {
+      return const StoryLinesPage(lines: [], storyFound: false);
+    }
+    var fromLine = startLine;
+    if (pageToken != null && pageToken.trim().isNotEmpty) {
+      fromLine = int.tryParse(pageToken.trim());
+    }
+    if (fromLine == null || fromLine < 0) fromLine = 0;
+
+    final storyExists = await db.rawQuery(
+      'SELECT scope_type, scope_id FROM story_scopes WHERE story_id = ? LIMIT 1',
+      [storyId],
+    );
+    if (storyExists.isEmpty) {
+      return const StoryLinesPage(lines: [], storyFound: false);
+    }
+    final scopeType = '${storyExists.first['scope_type'] ?? ''}'.trim();
+    final scopeValue = '${storyExists.first['scope_id'] ?? ''}'.trim();
+    final scopeId = scopeType.isEmpty
+        ? null
+        : scopeValue.isEmpty
+            ? scopeType
+            : '$scopeType:$scopeValue';
+
+    final limit = (maxLines ?? 30).clamp(1, 100);
+    final windowEnd = endLine;
+    var sql = 'SELECT line_index, speaker, content FROM story_lines '
+        'WHERE story_id = ? AND line_index >= ?';
+    final args = <Object?>[storyId, fromLine];
+    if (windowEnd != null) {
+      sql += ' AND line_index <= ?';
+      args.add(windowEnd);
+    }
+    sql += ' ORDER BY line_index LIMIT ?';
+    args.add(limit + 1); // +1 to detect whether more lines follow.
+    final rows = await db.rawQuery(sql, args);
+
+    final hasMore = rows.length > limit;
+    final pageRows = hasMore ? rows.sublist(0, limit) : rows;
+    final lines = [
+      for (final row in pageRows)
+        StoryLineEntry(
+          lineIndex: (row['line_index'] as num).toInt(),
+          speaker: row['speaker'] as String?,
+          content: '${row['content'] ?? ''}',
+        ),
+    ];
+    final nextPageToken = hasMore && lines.isNotEmpty
+        ? '${lines.last.lineIndex + 1}'
+        : null;
+    return StoryLinesPage(
+      lines: lines,
+      storyFound: true,
+      scopeId: scopeId,
+      nextPageToken: nextPageToken,
+    );
+  }
+
+  /// Returns chapter profiles (schema v3 `story_chapter_profiles`) for the
+  /// given [storyIds] or all stories of [scopeId].
+  Future<List<StoryChapterProfile>> getStoryMap({
+    List<String>? storyIds,
+    String? scopeId,
+  }) async {
+    final db = await _open();
+    if (db == null || !await _hasTable(db, 'story_chapter_profiles')) {
+      return const [];
+    }
+    var sql = 'SELECT * FROM story_chapter_profiles';
+    final args = <Object?>[];
+    final ids = storyIds
+        ?.map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    final scope = scopeId?.trim();
+    if (ids != null && ids.isNotEmpty) {
+      sql +=
+          ' WHERE story_id IN (${List.filled(ids.length, '?').join(',')})';
+      args.addAll(ids);
+    } else if (scope != null && scope.isNotEmpty) {
+      sql += ' WHERE scope_id = ?';
+      args.add(scope);
+    } else {
+      return const [];
+    }
+    sql += ' ORDER BY story_id';
+    final rows = await db.rawQuery(sql, args);
+    return [
+      for (final row in rows) _profileFromRow(row),
+    ];
+  }
+
+  StoryChapterProfile _profileFromRow(Map<String, Object?> row) {
+    List<String> stringList(Object? raw) {
+      if (raw is! String) return const [];
+      final decoded = _tryDecode(raw);
+      if (decoded is! List) return const [];
+      return [
+        for (final item in decoded) '$item',
+      ];
+    }
+
+    Map<String, int> intMap(Object? raw) {
+      if (raw is! String) return const {};
+      final decoded = _tryDecode(raw);
+      if (decoded is! Map) return const {};
+      return {
+        for (final entry in decoded.entries)
+          if (entry.value is num) '${entry.key}': (entry.value as num).toInt(),
+      };
+    }
+
+    return StoryChapterProfile(
+      storyId: '${row['story_id']}',
+      scopeId: '${row['scope_id']}',
+      title: row['title'] as String?,
+      lineStart: (row['line_start'] as num).toInt(),
+      lineEnd: (row['line_end'] as num).toInt(),
+      speakerSet: stringList(row['speaker_set']),
+      entityDensity: intMap(row['entity_density']),
+      summary: row['summary'] as String?,
+      keywordHits: intMap(row['keyword_hits']),
+    );
+  }
+
+  Object? _tryDecode(String value) {
+    try {
+      return jsonDecode(value);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// Returns the subset of [bigrams] that exist in the `rare_terms` table
+  /// (schema v3). Used by `find_detail_echoes` as the IDF whitelist.
+  Future<Set<String>> filterRareTerms(Iterable<String> bigrams) async {
+    final db = await _open();
+    if (db == null || !await _hasTable(db, 'rare_terms')) return const {};
+    final unique = bigrams.toSet().toList(growable: false);
+    if (unique.isEmpty) return const {};
+    final rows = await db.rawQuery(
+      'SELECT term FROM rare_terms '
+      'WHERE term IN (${List.filled(unique.length, '?').join(',')})',
+      unique,
+    );
+    return {
+      for (final row in rows) '${row['term']}',
+    };
+  }
+
+  /// Returns all entity canonical names and aliases, used to exclude entity
+  /// names from detail-term extraction so they cannot dominate echo search.
+  Future<Set<String>> loadEntityNamesAndAliases() async {
+    final db = await _open();
+    if (db == null) return const {};
+    final names = await db.rawQuery('SELECT name FROM entities');
+    final namesSet = {
+      for (final row in names) '${row['name']}'.trim(),
+    }..remove('');
+    if (await _hasTable(db, 'entity_aliases')) {
+      final aliases = await db.rawQuery('SELECT alias FROM entity_aliases');
+      for (final row in aliases) {
+        final alias = '${row['alias']}'.trim();
+        if (alias.isNotEmpty) namesSet.add(alias);
+      }
+    }
+    return namesSet;
+  }
+
+  /// Searches `story_lines.content` with a LIKE pattern across all stories.
+  /// Returns raw rows; callers exclude the source story for echo searches.
+  Future<List<Map<String, Object?>>> searchStoryLinesContentLike(
+    String term, {
+    int limit = 50,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return db.rawQuery(
+      'SELECT story_id, line_index, speaker, content FROM story_lines '
+      'WHERE content LIKE ? ORDER BY story_id, line_index LIMIT ?',
+      ['%$term%', limit],
+    );
+  }
+
   Future<void> close() async {
     await _db?.close();
     _db = null;
+    _openedFileStat = null;
   }
 
   Future<sqflite.Database?> _open() async {
-    if (_db != null) return _db;
     final path = await _resolveDbPath();
-    if (path == null || !await File(path).exists()) return null;
+    if (path == null) return null;
+
+    // statSync reports a missing file as notFound instead of throwing.
+    final stat = File(path).statSync();
+    if (stat.type == FileSystemEntityType.notFound) return null;
+
+    if (_db != null &&
+        _openedFileStat != null &&
+        _sameFileStamp(_openedFileStat!, stat)) {
+      return _db;
+    }
+
+    await close();
     _db = await sqflite.openDatabase(path, readOnly: true);
+    _openedFileStat = stat;
     return _db;
   }
+
+  /// Returns true when [a] and [b] describe the same underlying file content.
+  ///
+  /// A replace-and-rename swap yields a new file identity: size and
+  /// modification/change timestamps differ from the replaced file.
+  bool _sameFileStamp(FileStat a, FileStat b) =>
+      a.size == b.size && a.modified == b.modified && a.changed == b.changed;
 
   Future<String?> _resolveDbPath() async {
     if (dbPath != null && dbPath!.trim().isNotEmpty) return dbPath;
