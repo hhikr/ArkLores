@@ -147,16 +147,14 @@ class GetStoryMapTool extends AgentTool {
       final profile = sorted[i];
       final remaining = _maxObservationChars - buffer.length;
       if (remaining <= 300) break;
+      // Summaries are short (avg 53 chars, max ~200) and are the chapter
+      // selection signal — keep them FULL, no truncation. A chapter list that
+      // silently cut "屠戮魔王" made the model skip the assassination scene.
       final summary =
           (profile.summary ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
-      // M-F: 80 chars so key signals like "屠戮魔王" stay visible; a longer
-      // summary is marked truncated instead of silently cut.
-      final short = summary.length > 80
-          ? '${summary.substring(0, 80)}…(截断)'
-          : summary;
       buffer.writeln(
         'Story: ${profile.storyId} | Lines: ${profile.lineStart}-${profile.lineEnd}'
-        '${short.isEmpty ? '' : ' | Summary: $short'}',
+        '${summary.isEmpty ? '' : ' | Summary: $summary'}',
       );
       index++;
     }
