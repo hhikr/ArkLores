@@ -50,7 +50,7 @@ class InvestigationAgent {
       llmClient: _llmClient,
       toolRegistry: _toolRegistry,
       minimumToolCalls: 4,
-      stepMaxTokens: 4096,
+      stepMaxTokens: 8192,
       maxObservationHistory: 8,
     );
     return loop.run(

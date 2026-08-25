@@ -180,7 +180,9 @@ void main() {
         'a1',
       );
       expect(messages[1].isError, isTrue);
-      expect(messages[1].content, '');
+      // R7-5: the recorded error text surfaces in the restored message
+      // instead of an empty bubble.
+      expect(messages[1].content, 'LLM Error: boom');
     });
 
     test('canceled turns rebuild as normal (non-error) messages', () {

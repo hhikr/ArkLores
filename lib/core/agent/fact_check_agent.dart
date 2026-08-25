@@ -32,7 +32,7 @@ class FactCheckAgent {
       llmClient: _llmClient,
       toolRegistry: registry,
       minimumToolCalls: 1,
-      stepMaxTokens: 4096,
+      stepMaxTokens: 8192,
     );
     return loop.run(
       systemPrompt: buildAgentPrompt(factCheckInstructions),

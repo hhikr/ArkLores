@@ -51,9 +51,9 @@ class SummaryAgent {
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: _toolRegistry,
-      // Reasoning providers need room for hidden reasoning plus a long final
-      // answer; 2048 caused mid-answer truncation errors (B turn2 experiment).
-      stepMaxTokens: 4096,
+      // Reasoning providers need room for hidden reasoning plus a long
+      // final answer; 2048/4096 caused mid-answer truncation errors.
+      stepMaxTokens: 8192,
     );
 
     return loop.run(

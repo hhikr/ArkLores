@@ -318,7 +318,10 @@ List<ChatMessage> chatTurnToMessages(ChatSessionTurn turn, String assistantId) {
     ChatMessage(
       id: assistantId,
       role: MessageRole.assistant,
-      content: turn.answer,
+      // R7-5: error/canceled turns carry no answer — surface the recorded
+      // error text so restored history (and the read-only viewer) shows
+      // what actually went wrong instead of an empty bubble.
+      content: turn.answer.isEmpty ? (turn.error ?? '') : turn.answer,
       steps: steps,
       isStreaming: false,
       isError: turn.status == ChatTurnStatus.error,

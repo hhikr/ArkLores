@@ -82,6 +82,13 @@ class ReActLoop {
   // ignore: unused_field
   final int _maxObservationHistory;
 
+  /// How many extra attempts after a truncated step response (R7-3).
+  static const int _maxTruncatedRetries = 2;
+
+  /// Consecutive malformed responses (no Action / Final Answer key) allowed
+  /// before giving up (R7-2).
+  static const int _maxMalformedResponses = 3;
+
   /// Runs the ReAct Loop and yields [ReActEvent]s.
   Stream<ReActEvent> run({
     required String systemPrompt,
@@ -128,23 +135,34 @@ Let's begin!
     // iteration as: base (system + chat history + query) + memory block (L1)
     // + recent window of raw turns (L2). Old turns leave the request once the
     // window slides; their key content survives in LoopMemory.
-    final baseMessages = [
-      Message.system('$systemPrompt\n\n$reactFormatPrompt'),
-      ...chatHistory,
-      Message.user(userQuery),
-    ];
+    // R7-1: the memory block lives INSIDE the system message, never as a
+    // separate user message — a standalone "调查要点" user block made the
+    // model continue writing prose without the required Thought: prefix.
+    final chatHistoryList = chatHistory;
+    final query = userQuery;
     final memory = LoopMemory();
     final recentWindow = <Message>[];
     var iteration = 0;
     var completed = false;
     var completedToolCalls = 0;
+    var truncatedRetries = 0;
+    var malformedCount = 0;
 
-    List<Message> buildRequest({List<Message>? tail}) => [
-          ...baseMessages,
-          if (!memory.isEmpty) Message.user(memory.buildBlock()),
-          ...recentWindow,
-          if (tail != null) ...tail,
-        ];
+    List<Message> buildRequest({List<Message>? tail}) {
+      final systemText = memory.isEmpty
+          ? '$systemPrompt\n\n$reactFormatPrompt'
+          : '$systemPrompt\n\n$reactFormatPrompt\n\n'
+              '【系统维护的调查记录，非对话内容，请勿续写；'
+              '严格按格式输出 Thought/Action/Final Answer】\n'
+              '${memory.buildBlock()}';
+      return [
+        Message.system(systemText),
+        ...chatHistoryList,
+        Message.user(query),
+        ...recentWindow,
+        if (tail != null) ...tail,
+      ];
+    }
 
     // Legacy debug logger: only created when the caller passes an agentName
     // (Roleplay keeps it). Ask-page agents pass null: their full transcript
@@ -191,6 +209,22 @@ Let's begin!
       final response = completion.content;
       onRawLlmResponse?.call(iteration, response);
       if (completion.wasTruncated) {
+        // R7-3: truncation is recoverable, not fatal. Retry up to
+        // [_maxTruncatedRetries] times with a "be concise" hint; only give up
+        // afterwards. The truncated response never enters the recent window.
+        if (truncatedRetries < _maxTruncatedRetries) {
+          truncatedRetries++;
+          logger?.logError(
+            'TRUNCATED_RETRY ($truncatedRetries/$_maxTruncatedRetries): '
+            'output was truncated; asking for a concise step.',
+          );
+          recentWindow.add(Message.user(
+            'Observation: Error - your previous response was truncated. '
+            'Output a short, concise Action (or Final Answer) now.',
+          ),);
+          _pruneWindow(recentWindow);
+          continue;
+        }
         final errorMsg =
             'LLM response was truncated before the ReAct step completed. Please retry with a narrower question.';
         logger?.logError('TRUNCATED_REACT_STEP: $errorMsg');
@@ -264,6 +298,30 @@ Let's begin!
       }
 
       if (action.isEmpty) {
+        // R7-2: reaching here means the response had no Action and no
+        // "Final Answer:" key (the finalAnswer branch above already handled
+        // the keyed case). Bare prose — e.g. a Thought that lost its prefix —
+        // must NOT be treated as the final answer. Ask for a proper step;
+        // give up after a few consecutive malformed responses.
+        if (finalAnswer.isEmpty) {
+          if (malformedCount >= _maxMalformedResponses) {
+            const errorMsg =
+                'The model repeatedly failed to output a valid Action or '
+                'Final Answer. Please retry with a narrower question.';
+            logger?.logError('MALFORMED_RESPONSE: $errorMsg');
+            await logger?.flush();
+            yield const ReActEvent(type: ReActEventType.error, content: errorMsg);
+            return;
+          }
+          malformedCount++;
+          final errorMsg = 'Your response did not contain a valid Action or '
+              'Final Answer key. Output "Action:" with a tool name, or '
+              '"Final Answer:" with your answer.';
+          logger?.logError('MALFORMED_RESPONSE: $errorMsg');
+          recentWindow.add(Message.user('Observation: Error - $errorMsg'));
+          _pruneWindow(recentWindow);
+          continue;
+        }
         if (completedToolCalls < _minimumToolCalls) {
           final errorMsg = 'A final answer requires at least '
               '$_minimumToolCalls completed tool call(s). Use a registered '

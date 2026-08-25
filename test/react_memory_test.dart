@@ -153,6 +153,138 @@ void main() {
       );
     });
   });
+
+  group('R7 robustness', () {
+    test('memory block lives inside the system message, not as a user message',
+        () async {
+      final mock = _ScriptedLLM(iterations: 4);
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_ReadTool()),
+      );
+      await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+
+      final last = mock.receivedMessages.last;
+      expect(last.first.role, MessageRole.system);
+      expect(last.first.content, contains('调查记忆'));
+      expect(last.first.content, contains('请勿续写'));
+      // No standalone user message may start with the memory block header.
+      final userMessages = last
+          .where((m) => m.role == MessageRole.user)
+          .map((m) => m.content);
+      expect(userMessages.any((c) => c.contains('## 调查记忆')), isFalse);
+    });
+
+    test('bare prose without Action/Final Answer is retried, not answered',
+        () async {
+      final mock = _BareProseThenActionLLM();
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_FixedObservationTool()),
+      );
+      final events = await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+
+      final answers = events
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+      // The final answer is the scripted one, NOT the bare prose.
+      expect(answers, contains('结论。'));
+      expect(answers, isNot(contains('这是裸思考')));
+      // The malformed step produced a format-error observation.
+      final joined = mock.receivedMessages
+          .expand((m) => m)
+          .map((m) => m.content)
+          .join('\n');
+      expect(joined, contains('did not contain a valid Action or Final Answer'));
+    });
+
+    test('repeated malformed responses terminate with an error', () async {
+      final mock = _AlwaysBareProseLLM();
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_FixedObservationTool()),
+      );
+      final events = await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+      expect(
+        events.any((e) =>
+            e.type == ReActEventType.error &&
+            e.content.contains('repeatedly failed to output'),),
+        isTrue,
+      );
+    });
+
+    test('a truncated step is retried with a concise hint, then completes',
+        () async {
+      final mock = _TruncateOnceLLM();
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_FixedObservationTool()),
+      );
+      final events = await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+      expect(
+        events.where((e) => e.type == ReActEventType.error),
+        isEmpty,
+      );
+      final answers = events
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+      expect(answers, contains('结论。'));
+      // The retry hint was injected after the truncation.
+      final joined = mock.receivedMessages
+          .expand((m) => m)
+          .map((m) => m.content)
+          .join('\n');
+      expect(joined, contains('your previous response was truncated'));
+    });
+
+    test('repeated truncation still terminates with the truncation error',
+        () async {
+      final mock = _AlwaysTruncateLLM();
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_FixedObservationTool()),
+      );
+      final events = await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+      expect(
+        events.any((e) =>
+            e.type == ReActEventType.error &&
+            e.content.contains('was truncated'),),
+        isTrue,
+      );
+    });
+  });
 }
 
 /// Always returns a tool action until [iterations] calls, then a final
@@ -260,5 +392,194 @@ class _FixedObservationTool extends AgentTool {
   @override
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
     return const ToolExecutionResult(observation: 'Fixed observation');
+  }
+}
+
+/// First output is bare prose (no Thought/Action/Final Answer keys), then a
+/// proper tool step, then a final answer. Records requests.
+class _BareProseThenActionLLM extends LLMClient {
+  int callCount = 0;
+  final List<List<Message>> receivedMessages = [];
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    receivedMessages.add(List.of(messages));
+    switch (callCount) {
+      case 1:
+        return '这是裸思考文本，没有任何格式键。';
+      case 2:
+        return '''
+Thought: gather more evidence.
+Action: read_story_lines
+Action Input: {"story_id": "activities/x/level_x_09_beg.txt"}
+''';
+      default:
+        return '''
+Thought: I have enough information.
+Final Answer: 结论。
+''';
+    }
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return chat(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+  }
+}
+
+/// Always outputs bare prose.
+class _AlwaysBareProseLLM extends LLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return '又是裸思考文本，还是没有格式键。';
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return chat(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+  }
+}
+
+/// First `chatCompletion` returns a truncated result, later ones succeed.
+class _TruncateOnceLLM extends LLMClient {
+  int callCount = 0;
+  final List<List<Message>> receivedMessages = [];
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    receivedMessages.add(List.of(messages));
+    if (callCount == 1) {
+      return const ChatCompletionResult(
+        content: '',
+        finishReason: 'length',
+      );
+    }
+    if (callCount == 2) {
+      return const ChatCompletionResult(
+        content: '''
+Thought: gather more evidence.
+Action: read_story_lines
+Action Input: {"story_id": "activities/x/level_x_09_beg.txt"}
+''',
+      );
+    }
+    return const ChatCompletionResult(
+      content: '''
+Thought: I have enough information.
+Final Answer: 结论。
+''',
+    );
+  }
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    final result = await chatCompletion(
+      messages,
+      tools: tools,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+    return result.content;
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return chat(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+  }
+}
+
+/// Always returns a truncated result.
+class _AlwaysTruncateLLM extends LLMClient {
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return const ChatCompletionResult(content: '', finishReason: 'length');
+  }
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return '';
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return '';
   }
 }
