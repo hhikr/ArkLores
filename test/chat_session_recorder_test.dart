@@ -66,8 +66,11 @@ void main() {
       expect(turn.status, ChatTurnStatus.completed);
       // Every iteration's raw LLM response is recorded untruncated.
       expect(turn.iterations, hasLength(5));
-      expect(turn.iterations.first.rawResponse, contains('第一步调查1。'));
-      expect(turn.iterations.last.rawResponse, contains('Final Answer:'));
+      expect(
+        turn.iterations.first.rawResponse,
+        contains('READ activities/x/level_x.txt'),
+      );
+      expect(turn.iterations.last.rawResponse, contains('VERDICT speaker:博士'));
     });
 
     test('multi-turn follow-ups append to the same session file', () async {
@@ -283,17 +286,15 @@ Final Answer: [FACT_CHECK_VERDICT:supported]
 支持：阿米娅是罗德岛的公开领袖。
 ''';
       case AiMode.investigate:
+        // Investigation runs the planner loop (intent protocol, R8):
+        // READ/SEARCH intents, then VERDICT then DONE.
         if (call <= 4) {
-          return '''
-Thought: 第一步调查$call。
-Action: search_local_lore
-Action Input: {"query": "特蕾西娅", "top_k": 5}
-''';
+          return 'READ activities/x/level_x.txt 0 100';
         }
-        return '''
-Thought: 调查完成。
-Final Answer: 调查结论：博士是下手者。
-''';
+        if (call == 5) {
+          return 'VERDICT speaker:博士 0.8 multi_hypothesis_contrast';
+        }
+        return 'DONE';
       case AiMode.summarize:
       case AiMode.auto:
         return '''

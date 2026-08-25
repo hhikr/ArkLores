@@ -69,17 +69,38 @@ class OpenAICompatibleClient implements LLMClient {
     }
 
     try {
-      final response = await _httpClient
-          .post(
-            Uri.parse(config.chatEndpoint),
-            headers: _headers(config.chatApiKey, label: 'Chat API Key'),
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout);
+      // R8 M-E: transient network errors (backgrounding closes the socket)
+      // are retried once before surfacing.
+      http.Response? response;
+      Object? lastError;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await _httpClient
+              .post(
+                Uri.parse(config.chatEndpoint),
+                headers: _headers(config.chatApiKey, label: 'Chat API Key'),
+                body: jsonEncode(body),
+              )
+              .timeout(_timeout);
+          break;
+        } on SocketException catch (e) {
+          lastError = e;
+        } on http.ClientException catch (e) {
+          lastError = e;
+        } on TimeoutException catch (e) {
+          lastError = e;
+        }
+      }
+      if (response == null) {
+        if (lastError is TimeoutException) {
+          throw const LLMException('Request timed out');
+        }
+        throw LLMException('Network error: $lastError');
+      }
 
       if (response.statusCode != 200) {
         throw LLMException(
-          _responseErrorMessage(response.body,
+          chatFailureMessage(response.body,
               fallback: 'Chat completion failed',),
           statusCode: response.statusCode,
           body: response.body,
@@ -204,6 +225,17 @@ class OpenAICompatibleClient implements LLMClient {
   void dispose() {
     _httpClient.close();
   }
+}
+
+/// Renders a user-friendly error message for a non-200 chat response.
+String chatFailureMessage(String body, {required String fallback}) {
+  final message = _responseErrorMessage(body, fallback: fallback);
+  if (message.contains('Insufficient Balance') ||
+      message.contains('insufficient_quota') ||
+      message.contains('402')) {
+    return 'Chat API 余额不足，请充值后重试。';
+  }
+  return message;
 }
 
 String _responseErrorMessage(String body, {required String fallback}) {

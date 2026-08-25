@@ -149,8 +149,10 @@ class GetStoryMapTool extends AgentTool {
       if (remaining <= 300) break;
       final summary =
           (profile.summary ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
-      final short = summary.length > 40
-          ? '${summary.substring(0, 40)}…'
+      // M-F: 80 chars so key signals like "屠戮魔王" stay visible; a longer
+      // summary is marked truncated instead of silently cut.
+      final short = summary.length > 80
+          ? '${summary.substring(0, 80)}…(截断)'
           : summary;
       buffer.writeln(
         'Story: ${profile.storyId} | Lines: ${profile.lineStart}-${profile.lineEnd}'
