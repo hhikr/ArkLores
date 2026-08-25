@@ -151,6 +151,7 @@ class ChatSessionTurn {
       status: ChatTurnStatus.fromJson('${json['status'] ?? ''}'),
       error: json['error'] as String?,
       durationMs: (json['duration_ms'] as num?)?.toInt(),
+      memory: json['memory'] as String?,
     );
   }
   const ChatSessionTurn({
@@ -168,6 +169,7 @@ class ChatSessionTurn {
     this.status = ChatTurnStatus.completed,
     this.error,
     this.durationMs,
+    this.memory,
   });
 
   final int turn;
@@ -192,6 +194,10 @@ class ChatSessionTurn {
   final String? error;
   final int? durationMs;
 
+  /// Snapshot of the loop's layered memory block at turn end (M1/M7):
+  /// read index, mapped scopes, collected evidence and Thought notes.
+  final String? memory;
+
   Map<String, dynamic> toJson() => {
         'turn': turn,
         'timestamp': timestamp.toIso8601String(),
@@ -207,6 +213,7 @@ class ChatSessionTurn {
         'status': status.jsonValue,
         if (error != null) 'error': error,
         if (durationMs != null) 'duration_ms': durationMs,
+        if (memory != null) 'memory': memory,
       };
 }
 

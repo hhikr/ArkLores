@@ -382,6 +382,7 @@ class AskChatNotifier extends ChatNotifierBase {
     // before the corresponding thought/tool events arrive, so event handling
     // below fills the same record.
     void Function(int iteration, String rawResponse)? onRaw;
+    String? turnMemory;
     if (recording) {
       onRaw = (iteration, raw) {
         currentIteration = iteration;
@@ -391,27 +392,42 @@ class AskChatNotifier extends ChatNotifierBase {
         );
       };
     }
+    void onMemory(String memoryBlock) => turnMemory = memoryBlock;
 
     final stream = switch (effectiveMode) {
       AiMode.verify => _factCheckAgent.checkClaim(
           claim: query,
           history: history,
           onRawLlmResponse: onRaw,
+          onMemoryChanged: recording ? onMemory : null,
         ),
       AiMode.investigate => _investigationAgent.investigate(
           query: query,
           history: history,
           onRawLlmResponse: onRaw,
+          onMemoryChanged: recording ? onMemory : null,
         ),
       AiMode.summarize || AiMode.auto => _summaryAgent.generateSummary(
           query: query,
           history: history,
           onRawLlmResponse: onRaw,
+          onMemoryChanged: recording ? onMemory : null,
         ),
     };
 
     final steps = <ReActStep>[];
     final finalAnswerBuffer = StringBuffer();
+
+    // Auto routing failures are surfaced to the user instead of silently
+    // degrading (M3): the step area shows why the pinned fallback mode was
+    // used. The session record keeps the router error too.
+    if (routeResult?.failed ?? false) {
+      steps.add(ReActStep(
+        type: ReActEventType.error,
+        content: '自动模式分类失败，已回退到概括模式（原因: ${routeResult!.error}）',
+      ),);
+      updateMessage(assistantId, steps: List.of(steps));
+    }
 
     try {
       await for (final event in stream) {
@@ -537,6 +553,7 @@ class AskChatNotifier extends ChatNotifierBase {
           answer: finalAnswerBuffer.toString(),
           status: canceled ? ChatTurnStatus.canceled : turnStatus,
           error: canceled ? '[ASK_CANCELED]' : turnError,
+          memory: turnMemory,
         );
       }
     }
@@ -554,6 +571,7 @@ class AskChatNotifier extends ChatNotifierBase {
     required String answer,
     required ChatTurnStatus status,
     required String? error,
+    String? memory,
   }) async {
     final sorted = iterations.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
@@ -580,6 +598,7 @@ class AskChatNotifier extends ChatNotifierBase {
       status: status,
       error: error,
       durationMs: now.difference(turnStart).inMilliseconds,
+      memory: memory,
     );
     final updated = ChatSessionFile(
       sessionId: session.sessionId,

@@ -41,6 +41,7 @@ void main() {
             answer: '结论',
             status: ChatTurnStatus.completed,
             durationMs: 99,
+            memory: '## 调查记忆\n已读章节: s1:0-103; s2:0-86',
           ),
           ChatSessionTurn(
             turn: 2,
@@ -72,6 +73,7 @@ void main() {
           contains('Thought: 调查。'),);
       expect(turn1.iterations.single.toolArgs, {'story_id': 's1'});
       expect(turn1.verdict, isNull);
+      expect(turn1.memory, contains('已读章节: s1:0-103'));
 
       final turn2 = decoded.turns[1];
       expect(turn2.router, isNull);

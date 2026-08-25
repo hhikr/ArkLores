@@ -1,4 +1,5 @@
 import '../../gamedata/gamedata_knowledge_store.dart';
+import '../../gamedata/story_coverage_models.dart';
 import 'agent_tool.dart';
 
 /// Returns chapter profiles (line range, speakers, entity density, summary,
@@ -35,8 +36,15 @@ class GetStoryMapTool extends AgentTool {
             'type': 'string',
             'description':
                 'Optional canonical scope key (e.g. activity:act21mini, '
-                'obt:main, obt:rogue) to list all its chapters. Mutually '
-                'exclusive with story_ids.',
+                'obt:main, obt:rogue) to list all its chapters (compact '
+                'one-line-per-chapter list, ordered by chapter number). '
+                'Mutually exclusive with story_ids.',
+          },
+          'page_token': {
+            'type': 'string',
+            'description':
+                'Opaque continuation token from a previous get_story_map '
+                'result (compact scope list). Echo it verbatim.',
           },
         },
       };
@@ -73,14 +81,27 @@ class GetStoryMapTool extends AgentTool {
             'Mapped Stories: 0',
       );
     }
+    // Natural (chapter-number) ordering so 09_beg sorts after 09_a1 and before
+    // 10_beg — plain lexicographic order buried the core chapters behind
+    // interlude files and the observation budget (M4a).
+    final sorted = [...profiles]
+      ..sort((a, b) => _compareNatural(a.storyId, b.storyId));
+
+    // Scope mode: compact one-line-per-chapter list so EVERY chapter of a
+    // large activity stays visible within the observation budget. Full
+    // profiles (speakers/entities/summary) are available via story_ids mode.
+    final listMode = storyIds == null || storyIds.isEmpty;
+    if (listMode) {
+      return _buildCompactList(sorted, arguments);
+    }
 
     final buffer = StringBuffer();
     var omitted = 0;
-    for (var i = 0; i < profiles.length; i++) {
-      final profile = profiles[i];
+    for (var i = 0; i < sorted.length; i++) {
+      final profile = sorted[i];
       final remaining = _maxObservationChars - buffer.length;
       if (remaining <= 600) {
-        omitted = profiles.length - i;
+        omitted = sorted.length - i;
         break;
       }
       buffer.writeln('=== Chapter #${i + 1} ===');
@@ -102,12 +123,83 @@ class GetStoryMapTool extends AgentTool {
       buffer.writeln();
     }
 
-    buffer.writeln('Mapped Stories: ${profiles.length}');
+    buffer.writeln('Mapped Stories: ${sorted.length}');
     if (omitted > 0) {
       buffer.writeln(
         'Note: $omitted additional profile(s) omitted to keep the agent context concise.',
       );
     }
     return ToolExecutionResult(observation: buffer.toString().trim());
+  }
+
+  /// Compact scope listing: one line per chapter, paged by chapter index.
+  ToolExecutionResult _buildCompactList(
+    List<StoryChapterProfile> sorted,
+    Map<String, dynamic> arguments,
+  ) {
+    final pageToken = int.tryParse(
+      '${arguments['page_token'] ?? ''}'.trim(),
+    );
+    final pageStart = pageToken == null || pageToken < 0 ? 0 : pageToken;
+    final buffer = StringBuffer();
+    var index = 0;
+    for (var i = pageStart; i < sorted.length; i++) {
+      final profile = sorted[i];
+      final remaining = _maxObservationChars - buffer.length;
+      if (remaining <= 300) break;
+      final summary =
+          (profile.summary ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+      final short = summary.length > 40
+          ? '${summary.substring(0, 40)}…'
+          : summary;
+      buffer.writeln(
+        'Story: ${profile.storyId} | Lines: ${profile.lineStart}-${profile.lineEnd}'
+        '${short.isEmpty ? '' : ' | Summary: $short'}',
+      );
+      index++;
+    }
+    final nextStart = pageStart + index;
+    final hasMore = nextStart < sorted.length;
+    buffer.writeln();
+    buffer.writeln('Chapter List: ${sorted.length}');
+    buffer.writeln(
+      '提示: 用 story_ids 参数指定章节可获取完整画像（speakers/entities/完整摘要）。',
+    );
+    if (hasMore) {
+      buffer.writeln('Next Page Token: $nextStart');
+    } else {
+      buffer.writeln('End of Chapters: yes');
+    }
+    return ToolExecutionResult(observation: buffer.toString().trim());
+  }
+
+  /// Natural comparison of story ids: digit runs compare numerically, so
+  /// `level_act33side_09_beg` < `level_act33side_10_beg`.
+  static int _compareNatural(String a, String b) {
+    final re = RegExp(r'(\d+)|(\D+)');
+    final aParts = [
+      for (final m in re.allMatches(a))
+        m.group(1) != null ? int.parse(m.group(1)!) : m.group(2)!,
+    ];
+    final bParts = [
+      for (final m in re.allMatches(b))
+        m.group(1) != null ? int.parse(m.group(1)!) : m.group(2)!,
+    ];
+    final len = aParts.length < bParts.length ? aParts.length : bParts.length;
+    for (var i = 0; i < len; i++) {
+      final x = aParts[i];
+      final y = bParts[i];
+      if (x is int && y is int) {
+        if (x != y) return x.compareTo(y);
+      } else if (x is int) {
+        return -1; // numeric segment sorts before a text segment
+      } else if (y is int) {
+        return 1;
+      } else {
+        final c = (x as String).compareTo(y as String);
+        if (c != 0) return c;
+      }
+    }
+    return aParts.length.compareTo(bParts.length);
   }
 }

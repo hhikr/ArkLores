@@ -106,6 +106,8 @@ void main() {
         {
           'activities/act_fixture/level_fixture_c4.txt',
           'activities/act_fixture/level_fixture_c5.txt',
+          'activities/act_fixture/level_fixture_c9.txt',
+          'activities/act_fixture/level_fixture_c10.txt',
         },
       );
       await store.close();
@@ -116,7 +118,7 @@ void main() {
       final profiles = await store.getStoryMap(
         scopeId: 'activity:act_fixture',
       );
-      expect(profiles, hasLength(5));
+      expect(profiles, hasLength(7));
 
       final c3 = profiles.firstWhere(
         (profile) => profile.storyId.endsWith('level_fixture_c3.txt'),
@@ -163,7 +165,7 @@ void main() {
       );
       final result = await tool.execute({'query': '角色B'}) as ToolExecutionResult;
       expect(result.observation, contains('Coverage Scopes: 1'));
-      expect(result.observation, contains('Coverage Stories: 2'));
+      expect(result.observation, contains('Coverage Stories: 4'));
       expect(result.observation, contains('Scope: activity:act_fixture'));
       expect(result.observation, contains('level_fixture_c5.txt'));
     });
@@ -222,8 +224,17 @@ void main() {
       final result = await tool.execute(
         {'scope_id': 'activity:act_fixture'},
       ) as ToolExecutionResult;
-      expect(result.observation, contains('Mapped Stories: 5'));
-      expect(result.observation, contains('Summary:'));
+      // Compact one-line-per-chapter list: every chapter visible, ordered by
+      // chapter number (c9 before c10), full profiles deferred to story_ids.
+      expect(result.observation, contains('Chapter List: 7'));
+      expect(result.observation, contains('End of Chapters: yes'));
+      expect(
+        result.observation.indexOf('level_fixture_c9.txt'),
+        lessThan(result.observation.indexOf('level_fixture_c10.txt')),
+      );
+      expect(result.observation, isNot(contains('=== Chapter #')));
+      expect(result.observation, isNot(contains('Top Entities:')));
+      expect(result.observation, contains('| Summary:'));
     });
   });
 
@@ -440,6 +451,17 @@ Future<Directory> _writeFixtureSource(Directory tempDir) async {
   writeStory(
     'activities/act_fixture/level_fixture_c5.txt',
     '[name="角色B"]当年我藏起匕首，是为了掩盖那场死亡的真相。\n',
+  );
+
+  // Chapters 9/10: lexicographic order would put c10 before c9; natural
+  // (chapter-number) order must keep c9 before c10 (M4a).
+  writeStory(
+    'activities/act_fixture/level_fixture_c9.txt',
+    '[name="角色B"]第九章：死亡现场的回响。\n',
+  );
+  writeStory(
+    'activities/act_fixture/level_fixture_c10.txt',
+    '[name="角色B"]第十章：最后的真相。\n',
   );
 
   return sourceDir;

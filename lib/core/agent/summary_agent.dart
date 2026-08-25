@@ -44,12 +44,16 @@ class SummaryAgent {
     required String query,
     List<Message> history = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
+    void Function(String memoryBlock)? onMemoryChanged,
   }) {
     final systemPrompt = buildAgentPrompt(summaryInstructions);
 
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: _toolRegistry,
+      // Reasoning providers need room for hidden reasoning plus a long final
+      // answer; 2048 caused mid-answer truncation errors (B turn2 experiment).
+      stepMaxTokens: 4096,
     );
 
     return loop.run(
@@ -58,6 +62,7 @@ class SummaryAgent {
       userQuery: query,
       finalAnswerTransform: validateCoverageReport,
       onRawLlmResponse: onRawLlmResponse,
+      onMemoryChanged: onMemoryChanged,
     );
   }
 }

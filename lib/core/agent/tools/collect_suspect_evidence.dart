@@ -1,4 +1,5 @@
 import '../../gamedata/gamedata_knowledge_store.dart';
+import '../../gamedata/story_coverage_models.dart';
 import 'agent_tool.dart';
 import 'observation_data.dart';
 
@@ -87,6 +88,29 @@ class CollectSuspectEvidenceTool extends AgentTool {
       runs = entries
           .where((entry) => allowed.contains(entry.scopeId))
           .toList(growable: false);
+    }
+    // M4b: claim terms are prioritized GLOBALLY before paging, so the first
+    // page shows the runs whose lines actually match the claim terms (a
+    // suspect with hundreds of appearance runs otherwise buries the relevant
+    // ones behind unrelated daily dialogue). Non-claim runs follow in natural
+    // story order so same-chapter runs stay grouped.
+    if (claimTerms != null && claimTerms.isNotEmpty && runs.isNotEmpty) {
+      final hitCounts = <String, int>{};
+      final storyIds = runs.map((run) => run.storyId).toSet().toList();
+      for (final term in claimTerms) {
+        final rows = await store.searchStoryLinesLikeInStories(term, storyIds);
+        for (final row in rows) {
+          final storyId = '${row['story_id']}';
+          hitCounts[storyId] = (hitCounts[storyId] ?? 0) + 1;
+        }
+      }
+      runs = List<StoryCoverageEntry>.of(runs)
+        ..sort((a, b) {
+          final ca = hitCounts[a.storyId] ?? 0;
+          final cb = hitCounts[b.storyId] ?? 0;
+          if (ca != cb) return cb.compareTo(ca);
+          return _compareNatural(a.storyId, b.storyId);
+        });
     }
     if (runs.isEmpty) {
       final data = <String, Object?>{
@@ -199,4 +223,34 @@ class CollectSuspectEvidenceTool extends AgentTool {
       observation: appendDataBlock(body.toString().trim(), data),
     );
   }
+}
+
+/// Natural comparison of story ids: digit runs compare numerically, so
+/// `level_act33side_09_beg` < `level_act33side_10_beg`.
+int _compareNatural(String a, String b) {
+  final re = RegExp(r'(\d+)|(\D+)');
+  final aParts = [
+    for (final m in re.allMatches(a))
+      m.group(1) != null ? int.parse(m.group(1)!) : m.group(2)!,
+  ];
+  final bParts = [
+    for (final m in re.allMatches(b))
+      m.group(1) != null ? int.parse(m.group(1)!) : m.group(2)!,
+  ];
+  final len = aParts.length < bParts.length ? aParts.length : bParts.length;
+  for (var i = 0; i < len; i++) {
+    final x = aParts[i];
+    final y = bParts[i];
+    if (x is int && y is int) {
+      if (x != y) return x.compareTo(y);
+    } else if (x is int) {
+      return -1;
+    } else if (y is int) {
+      return 1;
+    } else {
+      final c = (x as String).compareTo(y as String);
+      if (c != 0) return c;
+    }
+  }
+  return aParts.length.compareTo(bParts.length);
 }

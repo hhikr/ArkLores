@@ -1,0 +1,264 @@
+import 'package:arklores/core/agent/loop_memory.dart';
+import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/tools/agent_tool.dart';
+import 'package:arklores/core/agent/tools/tool_registry.dart';
+import 'package:arklores/core/llm/llm_client.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('LoopMemory', () {
+    test('read index merges paged reads of the same story', () {
+      final memory = LoopMemory();
+      memory.noteRead('activities/x/level_x_09_beg.txt', 0, 100);
+      memory.noteRead('activities/x/level_x_09_beg.txt', 100, 200);
+      memory.noteRead('activities/x/level_x_10_end.txt', 0, 50);
+      final block = memory.buildBlock();
+      expect(block, contains('activities/x/level_x_09_beg.txt:0-200'));
+      expect(block, contains('activities/x/level_x_10_end.txt:0-50'));
+    });
+
+    test('tracks mapped scopes and collected evidence', () {
+      final memory = LoopMemory();
+      memory.noteMapped('activity:act33side');
+      memory.noteMapped('obt:main');
+      memory.noteEvidence('enemy:enemy_1276_telex');
+      final block = memory.buildBlock();
+      expect(block, contains('已查地图: activity:act33side, obt:main'));
+      expect(block, contains('已收集证据: enemy:enemy_1276_telex'));
+    });
+
+    test('thought notes are truncated to a guardrail length', () {
+      final memory = LoopMemory();
+      memory.noteThought(3, '关键结论：${'很长的内容' * 100}');
+      final block = memory.buildBlock();
+      expect(block, contains('[3]'));
+      expect(block, contains('关键结论'));
+      expect(block.length, lessThan(400));
+    });
+
+    test('empty memory renders an empty block', () {
+      expect(LoopMemory().buildBlock(), isEmpty);
+    });
+  });
+
+  group('ReActLoop layered request (M1)', () {
+    test('request size stays bounded across many iterations', () async {
+      final mock = _ScriptedLLM(iterations: 14);
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_FixedObservationTool()),
+      );
+      await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+
+      final last = mock.receivedMessages.last;
+      final observationCount = last
+          .where((m) => m.content.startsWith('Observation: '))
+          .length;
+      // Recent window only: 2 turns max, regardless of iteration count.
+      expect(observationCount, lessThanOrEqualTo(LoopMemory.recentWindowSize));
+      expect(last.length, lessThan(20));
+    });
+
+    test('memory block carries read index and thought notes', () async {
+      final mock = _ScriptedLLM(iterations: 6);
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_ReadTool()),
+      );
+      await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+
+      final last = mock.receivedMessages.last;
+      final joined = last.map((m) => m.content).join('\n');
+      expect(joined, contains('已读章节: activities/x/level_x_09_beg.txt:0-100'));
+      expect(joined, contains('[1] gather more evidence.'));
+    });
+
+    test('the model still sees a chapter was read long after its raw '
+        'observation left the window (no re-read regression)', () async {
+      final mock = _ScriptedLLM(iterations: 12);
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_ReadTool()),
+      );
+      await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+
+      // Iteration 12's request: the raw 09_beg observation (read at
+      // iteration 1) is long gone, but the memory block must still list it.
+      expect(mock.receivedMessages.length, 13);
+      final last = mock.receivedMessages[12];
+      final joined = last.map((m) => m.content).join('\n');
+      expect(joined, contains('已读章节: activities/x/level_x_09_beg.txt:0-100'));
+    });
+
+    test('onMemoryChanged reports the memory block', () async {
+      final mock = _ScriptedLLM(iterations: 4);
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_ReadTool()),
+      );
+      final snapshots = <String>[];
+      await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+            onMemoryChanged: snapshots.add,
+          )
+          .toList();
+      expect(snapshots, isNotEmpty);
+      expect(snapshots.last, contains('已读章节'));
+    });
+
+    test('fallback request uses the layered context, not the full history',
+        () async {
+      final mock = _ScriptedLLM(iterations: 10, neverFinalizes: true);
+      final loop = ReActLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_FixedObservationTool()),
+      );
+      await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'investigate',
+          )
+          .toList();
+
+      final fallback = mock.receivedMessages.last;
+      final observationCount = fallback
+          .where((m) => m.content.startsWith('Observation: '))
+          .length;
+      expect(observationCount, lessThanOrEqualTo(LoopMemory.recentWindowSize));
+      expect(
+        fallback.map((m) => m.content).join('\n'),
+        contains('Please summarize'),
+      );
+    });
+  });
+}
+
+/// Always returns a tool action until [iterations] calls, then a final
+/// answer; optionally never finalizes (fallback path). Records requests.
+class _ScriptedLLM extends LLMClient {
+  _ScriptedLLM({required this.iterations, this.neverFinalizes = false});
+  final int iterations;
+  final bool neverFinalizes;
+  int callCount = 0;
+  final List<List<Message>> receivedMessages = [];
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    receivedMessages.add(List.of(messages));
+    final action = callCount <= iterations ? 'read_story_lines' : 'no_tool';
+    if (neverFinalizes) {
+      return '''
+Thought: gather more evidence.
+Action: read_story_lines
+Action Input: {"story_id": "activities/x/level_x_09_beg.txt", "start_line": 0, "max_lines": 100}
+''';
+    }
+    if (callCount <= iterations) {
+      return '''
+Thought: gather more evidence.
+Action: $action
+Action Input: ${action == 'read_story_lines' ? '{"story_id": "activities/x/level_x_09_beg.txt", "start_line": 0, "max_lines": 100}' : '{}'}
+''';
+    }
+    return '''
+Thought: I have enough information.
+Final Answer: 结论。
+''';
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return chat(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+  }
+}
+
+/// `read_story_lines`-shaped tool: returns a story-like observation.
+class _ReadTool extends AgentTool {
+  @override
+  String get name => 'read_story_lines';
+
+  @override
+  String get description => 'Reads story lines.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'story_id': {'type': 'string'},
+          'start_line': {'type': 'integer'},
+          'max_lines': {'type': 'integer'},
+        },
+        'required': ['story_id'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    final storyId = '${arguments['story_id']}';
+    return ToolExecutionResult(
+      observation: 'Story: $storyId\n0 | 角色A | 台词',
+    );
+  }
+}
+
+/// Any tool returning a fixed observation.
+class _FixedObservationTool extends AgentTool {
+  @override
+  String get name => 'read_story_lines';
+
+  @override
+  String get description => 'Reads story lines.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'story_id': {'type': 'string'},
+        },
+        'required': ['story_id'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    return const ToolExecutionResult(observation: 'Fixed observation');
+  }
+}

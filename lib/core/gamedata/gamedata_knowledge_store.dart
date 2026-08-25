@@ -542,6 +542,29 @@ class GameDataKnowledgeStore {
     );
   }
 
+  /// LIKE search restricted to a set of story ids (M4b: global claim-term
+  /// prioritization for `collect_suspect_evidence`). Escapes LIKE wildcards
+  /// in [term] so user-provided terms cannot broaden the match.
+  Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
+    String term,
+    List<String> storyIds, {
+    int limit = 500,
+  }) async {
+    final db = await _open();
+    if (db == null || storyIds.isEmpty) return const [];
+    final escaped = term
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final placeholders = List.filled(storyIds.length, '?').join(',');
+    return db.rawQuery(
+      'SELECT story_id, line_index, speaker, content FROM story_lines '
+      'WHERE content LIKE ? ESCAPE \'\\\' AND story_id IN ($placeholders) '
+      'ORDER BY story_id, line_index LIMIT ?',
+      ['%$escaped%', ...storyIds, limit],
+    );
+  }
+
   Future<void> close() async {
     await _db?.close();
     _db = null;

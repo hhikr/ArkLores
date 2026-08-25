@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arklores/core/agent/agent_prompts.dart';
 import 'package:arklores/core/agent/investigation_verdict.dart';
+import 'package:arklores/core/agent/loop_memory.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/collect_suspect_evidence.dart';
@@ -173,6 +175,42 @@ void main() {
       expect((data['evidence_rows'] as num).toInt(), greaterThan(0));
       expect((data['scopes'] as List), contains('activity:act_fixture'));
     });
+
+    test('claim terms reorder runs so matching chapters come first (M4b)',
+        () async {
+      final tool = CollectSuspectEvidenceTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+      // char_b appears in c4 ("匕首一直在我这里") then c5 ("当年我藏起匕首").
+      // Without claims the first run is c4; with the claim term 藏起 the
+      // c5 run (which matches) must be listed first even though it is the
+      // lexicographically later chapter.
+      final plain = await tool.execute({
+        'entity_id': 'char_b',
+      }) as ToolExecutionResult;
+      expect(
+        plain.observation.indexOf('level_fixture_c4.txt'),
+        lessThan(plain.observation.indexOf('level_fixture_c5.txt')),
+      );
+
+      final claimed = await tool.execute({
+        'entity_id': 'char_b',
+        'claim_terms': ['藏起'],
+      }) as ToolExecutionResult;
+      expect(
+        claimed.observation.indexOf('level_fixture_c5.txt'),
+        lessThan(claimed.observation.indexOf('level_fixture_c4.txt')),
+      );
+      expect(claimed.observation, contains('[claim]'));
+    });
+  });
+
+  group('investigation tool set (M5)', () {
+    test('prompt no longer advertises find_detail_echoes', () {
+      final prompt = buildAgentPrompt(investigationInstructions);
+      expect(prompt, isNot(contains('find_detail_echoes')));
+      expect(prompt, contains('collect_suspect_evidence'));
+    });
   });
 
   group('investigation verdict transform', () {
@@ -247,14 +285,14 @@ void main() {
     });
   });
 
-  group('observation history trimming (R3)', () {
-    test('caps Observation messages sent to the LLM', () async {
+  group('layered memory (M1)', () {
+    test('caps Observation messages to the recent window and carries the '
+        'memory block', () async {
       final mock = _RecordingLLMClient(iterations: 12);
       final registry = ToolRegistry()..register(_StaticObservationTool());
       final loop = ReActLoop(
         llmClient: mock,
         toolRegistry: registry,
-        maxObservationHistory: 8,
       );
       await loop
           .run(
@@ -266,20 +304,19 @@ void main() {
 
       expect(mock.receivedMessages, isNotEmpty);
       final last = mock.receivedMessages.last;
+      // Only the recent window of raw observations remains in the request.
       final observationCount = last
           .where(
-            (message) =>
-                message.content.startsWith('Observation: ') &&
-                !message.content.contains('[prior observation trimmed'),
+            (message) => message.content.startsWith('Observation: '),
           )
           .length;
-      expect(observationCount, lessThanOrEqualTo(8));
-      expect(
-        last.any(
-          (message) => message.content.contains('[prior observation trimmed'),
-        ),
-        isTrue,
-      );
+      expect(observationCount, lessThanOrEqualTo(LoopMemory.recentWindowSize));
+      // The memory block carries the read index + thought notes instead of
+      // placeholder text.
+      final joined = last.map((message) => message.content).join('\n');
+      expect(joined, contains('调查记忆'));
+      expect(joined, contains('调查要点'));
+      expect(joined, isNot(contains('[prior observation trimmed')));
     });
   });
 }

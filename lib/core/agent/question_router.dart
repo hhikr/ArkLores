@@ -60,8 +60,10 @@ class QuestionRouter {
 
   /// Routes [query] to a concrete mode (never returns [AiMode.auto]).
   ///
-  /// On classification failure it falls back to [AiMode.summarize] (the most
-  /// general workflow) and reports the error on the result.
+  /// On classification failure (LLM error, empty or truncated response) it
+  /// falls back to [AiMode.summarize] (the most general workflow) and reports
+  /// the failure on the result, so callers can surface it instead of treating
+  /// it as a successful "summarize" decision.
   Future<RouteResult> route(String query) async {
     try {
       final response = await _llmClient.chatCompletion(
@@ -70,9 +72,23 @@ class QuestionRouter {
           Message.user(query),
         ],
         temperature: 0,
-        maxTokens: 16,
+        // Reasoning providers spend tokens on hidden reasoning before the
+        // visible label; 16 was too small and produced empty content.
+        maxTokens: 256,
       );
       final raw = response.content;
+      if (raw.trim().isEmpty) {
+        return RouteResult(
+          mode: AiMode.summarize,
+          error: 'empty classification response',
+        );
+      }
+      if (response.wasTruncated) {
+        return RouteResult(
+          mode: AiMode.summarize,
+          error: 'truncated classification response',
+        );
+      }
       final label = raw.trim().toLowerCase();
       final mode = label.contains('verify')
           ? AiMode.verify

@@ -463,6 +463,20 @@ Documents，用户卸载即清除，但没有主动管理机制。
 `AgentLogger`（旧 `agent_logs/` .log 格式）仅保留给角色扮演 tab 使用；
 Ask 页不再产生旧格式日志。
 
+**R6 更新（分层记忆，三实验复盘修复）**：真机三实验暴露的截断问题按
+"分层而非扩窗"根治：(1) ReActLoop 改为分层记忆——请求只含记忆块 +
+最近 2 轮原文，旧观察不再以占位符驱逐（`loop_memory.dart`），消除
+重复读取；(2) `QuestionRouter` 分类失败显式化（reasoning 模型下
+maxTokens 16 会产出空 content 并静默降级为概括），现提高 token 预算、
+空/截断响应记为 error 并在 UI 步骤区提示；(3) `SummaryAgent`
+stepMaxTokens 升至 4096（2048 导致长答案截断整轮报错）；(4)
+`get_story_map` scope 模式改为按章节号自然排序的紧凑列表（全章节
+可见，原字典序 + 4800 字符预算会把核心章节如 act33side_09_beg 截掉）；
+(5) `collect_suspect_evidence` 的 claim 术语全局优先排序（高频实体
+537 runs 时首屏不再是无关日常对话）；(6) `find_detail_echoes`
+（双字 bigram 噪声）从调查工具集移除，P2 修复方向：停用字过滤 +
+3 字词候选 + 实体词保留策略。
+
 **修复记录**：`AgentLogger` 增加两级防护——(1) 脱敏：query 截断到 200
 字符、模型输出 / observation / 最终回答 / 错误正文截断到 2000 字符，
 不再落盘完整用户问题、完整推理或完整数据库原文；
@@ -473,6 +487,8 @@ R4：去除 `kDebugMode` 门控，改为 `AgentLogger.setEnabled()` 运行时开
 R5：Ask 页改用 `ChatSessionStore` JSON 会话（无截断），新增「对话记录」
 页面（列表/只读详情/继续对话/删除），`QuestionRouter` 输出原始分类
 决策，`ReActLoop` 暴露每迭代原始响应（`onRawLlmResponse`）。
+R6：`LoopMemory` 分层记忆（已读索引 + Thought 摘要 + 近程窗口），
+`onMemoryChanged` 把记忆块快照写入会话记录（`turn.memory`）。
 
 ## 7. 工程化与量化
 

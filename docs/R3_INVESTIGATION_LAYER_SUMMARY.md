@@ -57,11 +57,14 @@ P1 解决 P0 覆盖层之上的推理问题：答案需要跨章节对齐细节�
    的行级扩展）。
 3. **已读范围**：复用 `validateCoverageReport` 规范化 Coverage 行。
 
-### 2.6 ReActLoop 观察历史裁剪（`react_loop.dart`）
+### 2.6 ReActLoop 分层记忆（`react_loop.dart` + `loop_memory.dart`）
 
-决策 2 落地：新增 `maxObservationHistory`（默认 8，0 关闭）；每次追加 Observation
-后把最旧的完整观察替换为占位消息（`[prior observation trimmed...]`）。transform 侧
-的 `observations` 快照始终完整——裁剪只影响模型可见历史，不影响代码级校验。
+决策 2 最初落地为 `maxObservationHistory`（占位消息替换最旧观察）；M1（R6）升级为
+**分层记忆**：请求 = base（system+历史+query）+ `LoopMemory` 记忆块 + 近程窗口
+（最近 2 轮原文）。记忆块由代码维护（已读章节索引、已查地图、已收集证据）并保留
+每轮模型 Thought 摘要——旧观察离开窗口后其结论仍可见，消除重复读取。
+transform 侧的 `observations` 快照始终完整——分层只影响模型可见上下文，
+不影响代码级校验。`maxObservationHistory` 参数保留但不再生效。
 
 ### 2.7 UI 接线（R3b 第 1 项，决策：新增"剧情调查"tab）
 

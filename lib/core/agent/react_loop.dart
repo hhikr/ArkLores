@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../llm/llm_client.dart';
 import 'agent_logger.dart';
 import 'evidence_summary.dart';
+import 'loop_memory.dart';
 import 'react_parser.dart';
 import 'tools/agent_tool.dart';
 import 'tools/tool_registry.dart';
@@ -74,11 +75,11 @@ class ReActLoop {
   /// Injectable so fallback behavior stays testable.
   final int _safetyMaxIterations;
 
-  /// Max full `Observation:` messages kept in the LLM history (R3 context
-  /// budget, design decision 2). Older observations are replaced by a
-  /// placeholder. 0 disables trimming. The transform-side `observations`
-  /// snapshot always contains the complete list, so trimming never weakens
-  /// code-level validation.
+  /// Legacy context-budget knob (R3). Superseded by the layered memory (M1):
+  /// the request now keeps only [LoopMemory.recentWindowSize] recent raw
+  /// turns plus the compact [LoopMemory] block, so this value is no longer
+  /// consulted. Kept for constructor compatibility.
+  // ignore: unused_field
   final int _maxObservationHistory;
 
   /// Runs the ReAct Loop and yields [ReActEvent]s.
@@ -89,6 +90,7 @@ class ReActLoop {
     String? agentName,
     FinalAnswerTransform? finalAnswerTransform,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
+    void Function(String memoryBlock)? onMemoryChanged,
   }) async* {
     // 1. Build the instruction prompt specifying the ReAct format and available tools
     final toolsDesc = _toolRegistry.allTools
@@ -117,21 +119,32 @@ CRITICAL FORMATTING RULES:
 3. Action Input MUST be strict JSON with quoted keys and string values, for example {"query": "缪尔赛思", "top_k": 5}.
 4. Write ONLY one Thought, Action, and Action Input at a time. Do NOT write "Observation:" or hallucinate observations yourself. Stop generating immediately after writing "Action Input:".
 5. When you are ready to answer, output "Final Answer:" with non-empty Markdown content. Do not call more tools after "Final Answer:".
+6. Observations can be long. Briefly note in your Thought the key conclusions you draw from each Observation; later turns will only retain your Thought notes and the most recent two turns of raw text.
 
 Let's begin!
 ''';
 
-    // 2. Prepare conversation messages
-    final messages = [
+    // 2. Prepare conversation messages. The full request is rebuilt every
+    // iteration as: base (system + chat history + query) + memory block (L1)
+    // + recent window of raw turns (L2). Old turns leave the request once the
+    // window slides; their key content survives in LoopMemory.
+    final baseMessages = [
       Message.system('$systemPrompt\n\n$reactFormatPrompt'),
       ...chatHistory,
       Message.user(userQuery),
     ];
-
-    final loopMessages = List<Message>.from(messages);
+    final memory = LoopMemory();
+    final recentWindow = <Message>[];
     var iteration = 0;
     var completed = false;
     var completedToolCalls = 0;
+
+    List<Message> buildRequest({List<Message>? tail}) => [
+          ...baseMessages,
+          if (!memory.isEmpty) Message.user(memory.buildBlock()),
+          ...recentWindow,
+          if (tail != null) ...tail,
+        ];
 
     // Legacy debug logger: only created when the caller passes an agentName
     // (Roleplay keeps it). Ask-page agents pass null: their full transcript
@@ -159,7 +172,7 @@ Let's begin!
       ChatCompletionResult completion;
       try {
         completion = await _llmClient.chatCompletion(
-          loopMessages,
+          buildRequest(),
           temperature: 0.1, // Low temperature for high format compliance
           maxTokens: _stepMaxTokens,
           stop: const [
@@ -186,8 +199,8 @@ Let's begin!
         return;
       }
 
-      // Add assistant response to loop messages so it has context
-      loopMessages.add(Message.assistant(response));
+      // Add assistant response to the recent window so it has context
+      recentWindow.add(Message.assistant(response));
       logger?.logRawResponse(response);
 
       // Parse Thought, Action, Action Input
@@ -204,6 +217,7 @@ Let's begin!
       );
 
       if (thought.isNotEmpty) {
+        memory.noteThought(iteration, thought);
         yield ReActEvent(type: ReActEventType.thought, content: thought);
       }
 
@@ -221,7 +235,8 @@ Let's begin!
               '$_minimumToolCalls completed tool call(s). Use a registered '
               'tool before answering.';
           logger?.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
-          loopMessages.add(Message.user('Observation: Error - $errorMsg'));
+          recentWindow.add(Message.user('Observation: Error - $errorMsg'));
+          _pruneWindow(recentWindow);
           continue;
         }
 
@@ -254,7 +269,8 @@ Let's begin!
               '$_minimumToolCalls completed tool call(s). Use a registered '
               'tool before answering.';
           logger?.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
-          loopMessages.add(Message.user('Observation: Error - $errorMsg'));
+          recentWindow.add(Message.user('Observation: Error - $errorMsg'));
+          _pruneWindow(recentWindow);
           continue;
         }
         final effectiveAnswer = _finalizeAnswer(
@@ -277,7 +293,8 @@ Let's begin!
         logger?.logError(errorMsg);
         evidenceSummary.addError();
         yield ReActEvent(type: ReActEventType.error, content: errorMsg);
-        loopMessages.add(Message.user('Observation: Error - $errorMsg'));
+        recentWindow.add(Message.user('Observation: Error - $errorMsg'));
+        _pruneWindow(recentWindow);
         continue;
       }
 
@@ -294,16 +311,22 @@ Let's begin!
 
       // Execute tool
       String observation;
+      var toolOk = false;
       try {
         final result = await tool.execute(arguments);
         if (result is ToolExecutionResult) {
           observation = result.observation;
+          toolOk = true;
           logger?.logToolDiagnostics(result.debugLog ?? '');
         } else {
           observation = result?.toString() ?? 'No output';
+          toolOk = true;
         }
       } catch (e) {
         observation = 'Error executing tool: $e';
+      }
+      if (toolOk) {
+        _noteToolResult(memory, action, arguments);
       }
 
       logger?.logObservation(observation);
@@ -316,19 +339,22 @@ Let's begin!
         toolName: action,
       );
 
-      // Add observation to LLM history so it can think on the next iteration
-      loopMessages.add(Message.user('Observation: $observation'));
-      _trimObservationHistory(loopMessages);
+      // Add observation to the recent window so it can think on the next
+      // iteration; older turns slide out and their essence lives in memory.
+      recentWindow.add(Message.user('Observation: $observation'));
+      _pruneWindow(recentWindow);
+      onMemoryChanged?.call(memory.buildBlock());
     }
 
     if (!completed) {
-      // Loop finished without Final Answer, stream the final model response or a fallback
+      // Loop finished without Final Answer, stream the final model response
+      // or a fallback. The fallback request uses the same layered context
+      // (base + memory + recent window), never the full raw history.
       try {
         final fallbackPrompt = buildFallbackPrompt(evidenceSummary);
-        loopMessages.add(Message.user(fallbackPrompt));
 
         final completion = await _llmClient.chatCompletion(
-          loopMessages,
+          buildRequest(tail: [Message.user(fallbackPrompt)]),
           temperature: 0.2,
           maxTokens: 3072,
         );
@@ -385,36 +411,64 @@ Let's begin!
         : transform(guarded, List.unmodifiable(observations));
   }
 
-  /// Emits the final answer in chunks so the UI can render long answers
-  /// progressively instead of waiting for the whole block.
-  ///
-  /// The content is already fully available (ReAct steps require complete
-  /// responses for parsing, and verdict/source transforms must run on the
-  /// whole text); chunking is a rendering decision only. Chunks are small
-  /// enough for smooth UI updates and large enough to avoid event flooding.
-  void _trimObservationHistory(List<Message> loopMessages) {
-    if (_maxObservationHistory <= 0) return;
-    var count = 0;
-    for (final message in loopMessages) {
-      if (_isUntrimmedObservation(message)) count++;
+  /// Keeps only the [LoopMemory.recentWindowSize] most recent turns (an
+  /// assistant message plus its following messages) in [window]. Older raw
+  /// turns leave the request; their conclusions survive in [LoopMemory].
+  void _pruneWindow(List<Message> window) {
+    var assistantCount = 0;
+    for (final message in window) {
+      if (message.role == MessageRole.assistant) assistantCount++;
     }
-    final excess = count - _maxObservationHistory;
-    if (excess <= 0) return;
-    var replaced = 0;
-    for (var i = 0; i < loopMessages.length && replaced < excess; i++) {
-      if (_isUntrimmedObservation(loopMessages[i])) {
-        loopMessages[i] = Message.user(
-          'Observation: [prior observation trimmed to control context size]',
-        );
-        replaced++;
+    var excess = assistantCount - LoopMemory.recentWindowSize;
+    while (excess > 0 && window.isNotEmpty) {
+      final firstAssistant =
+          window.indexWhere((message) => message.role == MessageRole.assistant);
+      if (firstAssistant < 0) break;
+      var end = firstAssistant + 1;
+      while (end < window.length &&
+          window[end].role != MessageRole.assistant) {
+        end++;
       }
+      window.removeRange(0, end);
+      excess--;
     }
   }
 
-  bool _isUntrimmedObservation(Message message) =>
-      message.role == MessageRole.user &&
-      message.content.startsWith('Observation: ') &&
-      !message.content.contains('[prior observation trimmed');
+  /// Indexes a successful tool call into [LoopMemory] so the model can see,
+  /// after the raw observation leaves the recent window, that the chapter was
+  /// read / the scope was mapped / the suspect's evidence was collected.
+  void _noteToolResult(
+    LoopMemory memory,
+    String action,
+    Map<String, dynamic> arguments,
+  ) {
+    switch (action) {
+      case 'read_story_lines':
+        final storyId = '${arguments['story_id'] ?? ''}'.trim();
+        if (storyId.isEmpty) return;
+        final start = (arguments['start_line'] as num?)?.toInt() ?? 0;
+        final pageToken =
+            int.tryParse('${arguments['page_token'] ?? ''}'.trim());
+        final from = pageToken ?? start;
+        final maxLines = (arguments['max_lines'] as num?)?.toInt();
+        final to = from + (maxLines ?? 0);
+        memory.noteRead(storyId, from, to);
+      case 'get_story_map':
+        final scopeId = '${arguments['scope_id'] ?? ''}'.trim();
+        if (scopeId.isNotEmpty) {
+          memory.noteMapped(scopeId);
+          return;
+        }
+        final storyIds = arguments['story_ids'];
+        if (storyIds is List && storyIds.isNotEmpty) {
+          memory.noteMapped(
+            'story_ids:${storyIds.map((item) => '$item').join(',')}',
+          );
+        }
+      case 'collect_suspect_evidence':
+        memory.noteEvidence('${arguments['entity_id'] ?? ''}');
+    }
+  }
 
   Stream<ReActEvent> _emitFinalAnswer(String answer) async* {
     const chunkSize = 120;

@@ -25,6 +25,7 @@ class FactCheckAgent {
     required String claim,
     List<Message> history = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
+    void Function(String memoryBlock)? onMemoryChanged,
   }) {
     final registry = ToolRegistry()..register(_searchTool);
     final loop = ReActLoop(
@@ -42,6 +43,7 @@ class FactCheckAgent {
         return _withValidatedVerdict(answer, verdict);
       },
       onRawLlmResponse: onRawLlmResponse,
+      onMemoryChanged: onMemoryChanged,
     );
   }
 }

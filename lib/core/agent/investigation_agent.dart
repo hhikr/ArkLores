@@ -6,7 +6,6 @@ import 'agent_prompts.dart';
 import 'investigation_verdict.dart';
 import 'react_loop.dart';
 import 'tools/collect_suspect_evidence.dart';
-import 'tools/find_detail_echoes.dart';
 import 'tools/get_story_map.dart';
 import 'tools/read_story_lines.dart';
 import 'tools/search_local_lore.dart';
@@ -30,8 +29,10 @@ class InvestigationAgent {
       SearchStoryCoverageTool(gameDataStore: gameDataStore),
       GetStoryMapTool(gameDataStore: gameDataStore),
       ReadStoryLinesTool(gameDataStore: gameDataStore),
-      FindDetailEchoesTool(gameDataStore: gameDataStore),
       CollectSuspectEvidenceTool(gameDataStore: gameDataStore),
+      // find_detail_echoes removed (M5): its 2-char bigram terms produced
+      // pure noise on real passages; scheduled for a P2 rework with
+      // stop-word filtering and 3+ char candidates.
     ]);
   }
   final LLMClient _llmClient;
@@ -42,6 +43,7 @@ class InvestigationAgent {
     required String query,
     List<Message> history = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
+    void Function(String memoryBlock)? onMemoryChanged,
   }) {
     final systemPrompt = buildAgentPrompt(investigationInstructions);
     final loop = ReActLoop(
@@ -57,6 +59,7 @@ class InvestigationAgent {
       userQuery: query,
       finalAnswerTransform: validateInvestigationVerdict,
       onRawLlmResponse: onRawLlmResponse,
+      onMemoryChanged: onMemoryChanged,
     );
   }
 }
