@@ -79,11 +79,12 @@ transform 快照与 loopMessages 解耦，裁剪无校验副作用。运行时�
    term/story_id/行号/snippet + `DATA:` 块。
 3. 新工具 `collect_suspect_evidence`：经 `entity_story_mentions` 返回实体全部出场行，
    按 scope 分组、分页 + `DATA:` 块。
-4. `StoryInvestigationAgent`：S0–S8 阶段协议（门槛由 transform 代码级校验），
-   固定预算（决策 4）。
+4. `StoryInvestigationAgent`：S0–S8 阶段协议（门槛由 transform 代码级校验）；
+   预算见决策 4 修订（无步数上限；R8 起已迁移 Planner 三角色架构，见
+   `AI_REFACTOR_SUMMARY.md`）。
 5. `validateInvestigationVerdict` transform：culprit 门槛（S6）、证据链行级
    provenance、已读范围报告比对；`DATA:` 优先、文本回退。
-6. ReActLoop 观察历史裁剪（决策 2 的 K 值默认 8，可配）。
+6. ReActLoop 观察历史裁剪（决策 2 的 K 值默认 8，可配；R6 起由分层记忆取代）。
 7. UI：证据卡扩展"证据链"与"已读范围"条目（§5.4）。
 8. QA：合成 fixture（伏笔/误导/揭示三要素）+ 门槛测试（虚构已读/未达 S6 的 culprit
    拒绝）+ 回归全绿。

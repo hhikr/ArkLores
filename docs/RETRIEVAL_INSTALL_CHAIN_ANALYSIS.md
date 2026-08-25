@@ -1,3 +1,7 @@
+> ⚠️ **历史文档（R8 后过时）**：本文基于旧 `ReActLoop`（`maxIterations`/`maxObservationHistory` 参数编码，均已移除）。
+> 检索链路与安装链的分析仍有效；ReActLoop 参数、`get_story_map` 紧凑列表、`find_detail_echoes` 废弃等请以
+> `AI_REFACTOR_SUMMARY.md` 为准。
+
 # ArkLores 检索链路与 GameData 安装链路分析报告
 
 > 事实依据报告（代码级，基于当前 main 分支源码逐行核对）。

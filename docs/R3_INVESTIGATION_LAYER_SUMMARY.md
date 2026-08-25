@@ -35,7 +35,7 @@ P1 解决 P0 覆盖层之上的推理问题：答案需要跨章节对齐细节�
 
 | 工具 | 行为 | DATA 块 |
 | --- | --- | --- |
-| `find_detail_echoes` | 从已知段落（source_text 或 story_id+行区间）提取稀有特征词（`rare_terms` IDF 白名单，排除实体名/别名子串），**按"命中不同章节数"排序选词**（直接优化跨章节呼应定位），`content LIKE` 检索全库（排除源章节），返回 term/story_id/行号/snippet | `{"type":"find_detail_echoes","terms":[...],"matches":[...],"total":N}` |
+| ~~`find_detail_echoes`~~（**已于 R6 评估后废弃**，见 `AI_REFACTOR_SUMMARY.md`） | 原：从已知段落提取稀有特征词全库检索；真机 5 次调用零贡献，2 字 bigram 噪声，能力被 `search_local_lore` FTS 覆盖 | — |
 | `collect_suspect_evidence` | 经 `entity_story_mentions` 返回某嫌疑实体全部出场行（按 scope 过滤、claim_terms 标记、run 级分页） | `{"type":"collect_suspect_evidence","entity_id":...,"evidence_rows":N,"scopes":[...],"total_runs":N,"next_page_token":...}` |
 
 ### 2.4 调查 Agent（`investigation_agent.dart` + prompt）

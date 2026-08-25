@@ -1,3 +1,7 @@
+> ⚠️ **计划文档（P0/P1 多数已实现或已演进）**：P0 覆盖层、P1 调查均已落地并重构为
+> Planner 三角色架构（R8）；`find_detail_echoes` 已废弃；`maxIterations` 已移除。
+> 现状以 `AI_REFACTOR_SUMMARY.md` 为准，本文保留原始计划与设计推演。
+
 # ArkLores AI 检索优化：现状与计划
 
 > 本文档记录 AI 检索与 Agent 问答链路的现状、已识别缺陷，以及完整的优化计划。

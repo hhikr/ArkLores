@@ -1,3 +1,6 @@
+> ⚠️ **部分内容已过时（R6–R10）**：`find_detail_echoes` 已于 R6 评估后废弃（真机零贡献，见 `AI_REFACTOR_SUMMARY.md`）；
+> investigation 已迁移 Planner 三角色架构（R8）。涉及这些工具的 QA 条目仅作历史记录。
+
 # GameData Retrieval QA
 
 > 状态更新（2026-08）：开发者已在代表性 Android 真机上完成个人验收，覆盖知识库
