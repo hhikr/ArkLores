@@ -158,6 +158,29 @@ void main() {
       // The network error was retried (a second request happened).
       expect(mock.receivedRequests.length, greaterThan(1));
     });
+
+    test('HandshakeException is treated as a retryable network error',
+        () async {
+      final mock = _HandshakeOnceLLM();
+      final loop = PlannerLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_ReadTool()),
+        minimumToolCalls: 1,
+      );
+      final events = await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: 'q',
+          )
+          .toList();
+      final answer = events
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+      expect(answer, contains('INVESTIGATION_VERDICT'));
+      expect(mock.receivedRequests.length, greaterThan(1));
+    });
   });
 }
 
@@ -249,6 +272,53 @@ class _NetworkOnceLLM extends LLMClient {
     receivedRequests.add(List.of(messages));
     if (callCount == 1) {
       throw const LLMException('ClientException: Connection closed while receiving data');
+    }
+    switch (callCount) {
+      case 2:
+        return 'READ activities/x/level_x.txt 0 100';
+      case 3:
+        return 'VERDICT char_b 0.8 multi_hypothesis_contrast';
+      default:
+        return 'DONE';
+    }
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return chat(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+  }
+}
+
+/// First call throws a TLS HandshakeException (flaky provider), then works.
+class _HandshakeOnceLLM extends LLMClient {
+  int callCount = 0;
+  final List<List<Message>> receivedRequests = [];
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    receivedRequests.add(List.of(messages));
+    if (callCount == 1) {
+      throw const LLMException(
+        'HandshakeException: Connection terminated during handshake',
+      );
     }
     switch (callCount) {
       case 2:

@@ -89,6 +89,9 @@ class OpenAICompatibleClient implements LLMClient {
           lastError = e;
         } on TimeoutException catch (e) {
           lastError = e;
+        } on HandshakeException catch (e) {
+          // TLS handshake interrupted (flakey provider/network) — retry once.
+          lastError = e;
         }
       }
       if (response == null) {

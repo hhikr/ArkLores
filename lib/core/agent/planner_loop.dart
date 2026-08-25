@@ -327,5 +327,7 @@ bool _isNetworkError(String message) {
       lower.contains('socketexception') ||
       lower.contains('clientexception') ||
       lower.contains('connection refused') ||
-      lower.contains('timed out');
+      lower.contains('timed out') ||
+      lower.contains('handshakeexception') ||
+      lower.contains('connection terminated');
 }
