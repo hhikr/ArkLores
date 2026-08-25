@@ -51,6 +51,7 @@ DONE
 - READ 精读章节行区间；MAP 查看章节地图；SEARCH 全文检索；
   COLLECT 收集某实体证据（claim_terms 填案件相关词）。
 - 已读章节的要点会记录在调查状态中，不要重复精读同一区间。
+- 目标实体已在状态中消歧时，不要重复 SEARCH 原名，直接用其 entity_id。
 - 已有足够证据时输出 VERDICT，下一轮输出 DONE。
 ''';
 
@@ -197,6 +198,18 @@ DONE
         observation = 'Error executing tool: $e';
       }
       completedToolCalls++;
+      // R10: when SEARCH hits an ambiguous entity, auto-pick the top
+      // candidate into state and tell the model, so it never loops on the
+      // same ambiguous query.
+      if (intent.action == 'SEARCH' && observation.contains('Ambiguous')) {
+        final pick = _pickTopCandidate(observation);
+        if (pick != null) {
+          state.setTargetEntity(pick.$1, pick.$2);
+          observation = '实体歧义已自动消解：目标实体 = ${pick.$1}'
+              '（${pick.$2}，最高置信度候选）。后续 SEARCH/COLLECT 请直接'
+              '用该 entity_id 或继续调查，不要重复搜索原名。';
+        }
+      }
       _updateState(state, intent.action, args, observation);
       recent.add(Message.user('Observation: $observation'));
       if (recent.length > 2) recent.removeAt(0);
@@ -231,6 +244,18 @@ DONE
 
   Map<String, dynamic> _intentArgsToToolArgs(IntentRecord intent) =>
       Map<String, dynamic>.from(intent.args);
+
+  /// Extracts the top (first) candidate entity id + name from an "Ambiguous"
+  /// tool observation (compact form: "  1. `entity_id` | `name` | ...").
+  /// Returns null when the observation has no candidate.
+  (String, String)? _pickTopCandidate(String observation) {
+    final match = RegExp(
+      r'^\s*1\.\s+(\S+)\s*\|\s*([^|\n]+)',
+      multiLine: true,
+    ).firstMatch(observation);
+    if (match == null) return null;
+    return (match.group(1)!.trim(), match.group(2)!.trim());
+  }
 
   void _updateState(
     InvestigationState state,

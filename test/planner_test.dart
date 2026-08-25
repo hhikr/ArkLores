@@ -181,6 +181,33 @@ void main() {
       expect(answer, contains('INVESTIGATION_VERDICT'));
       expect(mock.receivedRequests.length, greaterThan(1));
     });
+
+    test('ambiguous SEARCH auto-resolves the top candidate into state',
+        () async {
+      final mock = _AmbiguousThenResolveLLM();
+      final loop = PlannerLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()
+          ..register(_AmbiguousSearchTool())
+          ..register(_CollectTool()),
+        minimumToolCalls: 1,
+      );
+      final states = <String>[];
+      await loop
+          .run(
+            systemPrompt: 'You are a helper.',
+            chatHistory: [],
+            userQuery: '特蕾西娅之死',
+            onStateChanged: states.add,
+          )
+          .toList();
+
+      // State now carries the auto-resolved target entity.
+      expect(
+        states.any((s) => s.contains('目标实体: enemy:enemy_1554_lrtsia')),
+        isTrue,
+      );
+    });
   });
 }
 
@@ -301,6 +328,108 @@ class _NetworkOnceLLM extends LLMClient {
 }
 
 /// First call throws a TLS HandshakeException (flaky provider), then works.
+/// First SEARCH returns an ambiguous-candidate observation; the executor
+/// auto-picks the top candidate into state, then the loop proceeds.
+class _AmbiguousThenResolveLLM extends LLMClient {
+  int callCount = 0;
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    switch (callCount) {
+      case 1:
+        return 'SEARCH 特蕾西娅 5';
+      case 2:
+        return 'COLLECT enemy:enemy_1554_lrtsia claim_terms=[杀,死亡]';
+      case 3:
+        return 'VERDICT enemy:enemy_1554_lrtsia 0.7 multi_hypothesis_contrast';
+      default:
+        return 'DONE';
+    }
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    return chat(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+  }
+}
+
+/// collect_suspect_evidence-shaped tool returning an evidence DATA block.
+class _CollectTool extends AgentTool {
+  @override
+  String get name => 'collect_suspect_evidence';
+
+  @override
+  String get description => 'Collects evidence.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'entity_id': {'type': 'string'},
+          'claim_terms': {'type': 'array', 'items': {'type': 'string'}},
+        },
+        'required': ['entity_id'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    return const ToolExecutionResult(
+      observation:
+          'Suspect: x | Total appearance runs: 5\nEnd of Evidence: yes\n'
+          'DATA: {"type":"collect_suspect_evidence","entity_id":"x",'
+          '"evidence_rows":4,"scopes":["obt:main"],"total_runs":5,'
+          '"next_page_token":null}',
+    );
+  }
+}
+
+/// search_local_lore-shaped tool that returns an ambiguous observation.
+class _AmbiguousSearchTool extends AgentTool {
+  @override
+  String get name => 'search_local_lore';
+
+  @override
+  String get description => 'Searches lore.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+          'top_k': {'type': 'integer'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    return const ToolExecutionResult(
+      observation: 'Ambiguous GameData entity query: "特蕾西娅".\n'
+          '候选实体（请用 Entity ID 消歧）:\n'
+          '  1. enemy:enemy_1554_lrtsia | 特蕾西娅 | name_exact | 1.00\n'
+          '  2. enemy:enemy_3006_tersia | 特蕾西娅，"魔王" | alias_exact | 0.80',
+    );
+  }
+}
+
 class _HandshakeOnceLLM extends LLMClient {
   int callCount = 0;
   final List<List<Message>> receivedRequests = [];

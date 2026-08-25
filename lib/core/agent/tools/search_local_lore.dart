@@ -232,32 +232,19 @@ class SearchLocalLoreTool extends AgentTool {
     String query,
     List<GameDataEntityCandidate> candidates,
   ) {
+    // R10: compact one-line-per-candidate form. The executor auto-picks the
+    // top candidate; a bloated observation would fill the planner's recent
+    // window and keep the model looping on the same ambiguous query.
     final buffer = StringBuffer()
       ..writeln('Ambiguous GameData entity query: "$query".')
-      ..writeln(
-        'Multiple exact entity candidates were found. Ask the user to choose one, or call search_local_lore again with entity_id.',
-      )
-      ..writeln();
-
+      ..writeln('候选实体（请用 Entity ID 消歧）:');
     for (var i = 0; i < candidates.length; i++) {
       final candidate = candidates[i];
-      buffer.writeln('=== Candidate #${i + 1} ===');
-      buffer.writeln('Entity ID: ${candidate.entityId}');
-      buffer.writeln('Name: ${candidate.name}');
-      buffer.writeln('Entity Type: ${candidate.entityType}');
-      buffer.writeln('Matched Alias: ${candidate.matchedAlias}');
-      buffer.writeln('Match Type: ${candidate.matchType}');
       buffer.writeln(
-        'Confidence: ${candidate.confidence.toStringAsFixed(2)}',
+        '  ${i + 1}. ${candidate.entityId} | ${candidate.name} | '
+        '${candidate.matchType} | ${candidate.confidence.toStringAsFixed(2)}',
       );
-      buffer.writeln('Source Type: ${candidate.sourceType}');
-      if (candidate.sourcePath != null) {
-        buffer.writeln('Source Path: ${candidate.sourcePath}');
-      }
-      buffer.writeln('Trust: GameData / game original text (highest).');
-      buffer.writeln();
     }
-
     return ToolExecutionResult(observation: buffer.toString().trim());
   }
 

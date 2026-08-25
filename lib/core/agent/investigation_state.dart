@@ -22,8 +22,20 @@ class InvestigationState {
   /// Mapped scopes / story-id lists (for S2 bookkeeping).
   final Set<String> mapped = {};
 
+  /// The disambiguated target entity (id + name), set by the executor when a
+  /// SEARCH hits multiple candidates (R10). Removes the need for the model to
+  /// re-resolve the same ambiguous name every turn.
+  String? _targetEntityId;
+  String? _targetEntityName;
+
   String _serialize() {
     final buffer = StringBuffer();
+    if (_targetEntityId != null) {
+      buffer.writeln(
+        '目标实体: $_targetEntityId'
+        '${_targetEntityName == null ? '' : '（$_targetEntityName）'}',
+      );
+    }
     if (stages.isNotEmpty) buffer.writeln('阶段: ${stages.join(",")}');
     if (reads.isNotEmpty) {
       buffer.writeln('已读:');
@@ -58,6 +70,12 @@ class InvestigationState {
 
   void noteStage(String stage) {
     if (!stages.contains(stage)) stages.add(stage);
+  }
+
+  /// Records the executor-resolved target entity (R10).
+  void setTargetEntity(String entityId, String name) {
+    _targetEntityId = entityId;
+    _targetEntityName = name;
   }
 
   void noteRead(String storyId, int startLine, int endLine) {

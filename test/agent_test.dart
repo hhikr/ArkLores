@@ -278,10 +278,10 @@ void main() {
       expect(result, isA<ToolExecutionResult>());
       final observation = (result as ToolExecutionResult).observation;
       expect(observation, contains('Ambiguous GameData entity query'));
-      expect(observation, contains('Entity ID: char_002_amiya'));
-      expect(observation, contains('Entity ID: token_amiya_memory'));
-      expect(
-          observation, contains('call search_local_lore again with entity_id'),);
+      // R10 compact one-line-per-candidate form.
+      expect(observation, contains('1. char_002_amiya'));
+      expect(observation, contains('2. token_amiya_memory'));
+      expect(observation, contains('候选实体（请用 Entity ID 消歧）'));
     });
 
     test('summary mode announces retrieval plan and includes story context',
