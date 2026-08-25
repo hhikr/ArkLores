@@ -40,6 +40,16 @@ void main() {
           'activity:act33side',);
     });
 
+    test('SEARCH strips surrounding quotes from the query', () {
+      final quoted = parseIntent('SEARCH "特蕾西娅" 10');
+      expect(quoted!.action, 'SEARCH');
+      expect(quoted.args['query'], '特蕾西娅');
+      expect(quoted.args['top_k'], 10);
+
+      final single = parseIntent("SEARCH '博士' 5");
+      expect(single!.args['query'], '博士');
+    });
+
     test('rejects non-intent lines', () {
       expect(parseIntent('随便说点什么'), isNull);
       expect(parseIntent(''), isNull);

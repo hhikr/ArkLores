@@ -107,7 +107,14 @@ IntentRecord? parseIntent(String line) {
             case 'SEARCH':
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;
-              args['query'] = tokens.first;
+              // Strip surrounding quotes the model may add around the query.
+              var q = tokens.first;
+              if (q.length >= 2 &&
+                  ((q.startsWith('"') && q.endsWith('"')) ||
+                      (q.startsWith("'") && q.endsWith("'")))) {
+                q = q.substring(1, q.length - 1);
+              }
+              args['query'] = q;
               if (tokens.length > 1) args['top_k'] = int.tryParse(tokens[1]);
           }
           if (args.isEmpty) return null;

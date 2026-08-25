@@ -126,7 +126,7 @@ class SearchLocalLoreTool extends AgentTool {
       }
       return ToolExecutionResult(
         observation:
-            'No matching GameData result found for "$query". The local GameData knowledge DB is installed, but structured/FTS search returned no result.',
+            'No matching GameData result found for "$query". The local GameData knowledge DB is installed, but structured/FTS search returned no result. Do not guess alternate spellings: use search_story_coverage with the exact name or a canonical alias from the DB.',
       );
     }
 

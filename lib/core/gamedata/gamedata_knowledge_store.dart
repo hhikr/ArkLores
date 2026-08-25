@@ -585,6 +585,11 @@ class GameDataKnowledgeStore {
       return _db;
     }
 
+    // The DB file was replaced (in-app rebuild): close this store's handle
+    // and reopen. Safe because R9 guarantees ONE store instance is shared by
+    // all tools; previously multiple stores each held a sqflite handle and a
+    // single stat-change close() killed the shared connection for the others
+    // (database_closed mid-investigation).
     await close();
     _db = await sqflite.openDatabase(path, readOnly: true);
     _openedFileStat = stat;

@@ -27,12 +27,18 @@ class InvestigationAgent {
   })  : _llmClient = llmClient,
         _extractorClient = extractorClient,
         _toolRegistry = ToolRegistry() {
+    // R9: ALL tools share ONE store instance. Each tool defaulting to its own
+    // GameDataKnowledgeStore() meant several sqflite connections to the same
+    // file; sqflite's singleInstance returns the same underlying connection,
+    // and one store's stat-change close() then killed the shared connection
+    // mid-investigation (database_closed after repeated SEARCH calls).
+    final store = gameDataStore ?? GameDataKnowledgeStore();
     _toolRegistry.registerAll([
-      SearchLocalLoreTool(gameDataStore: gameDataStore),
-      SearchStoryCoverageTool(gameDataStore: gameDataStore),
-      GetStoryMapTool(gameDataStore: gameDataStore),
-      ReadStoryLinesTool(gameDataStore: gameDataStore),
-      CollectSuspectEvidenceTool(gameDataStore: gameDataStore),
+      SearchLocalLoreTool(gameDataStore: store),
+      SearchStoryCoverageTool(gameDataStore: store),
+      GetStoryMapTool(gameDataStore: store),
+      ReadStoryLinesTool(gameDataStore: store),
+      CollectSuspectEvidenceTool(gameDataStore: store),
     ]);
   }
   final LLMClient _llmClient;
