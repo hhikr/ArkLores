@@ -454,6 +454,15 @@ Documents，用户卸载即清除，但没有主动管理机制。
 ——数据留在用户设备、可手动删除、默认关闭，隐私边界在代码注释与
 设置说明中明确。
 
+**R5 更新（会话持久化）**：Ask 页的会话记录迁移到新机制
+`ChatSessionStore`（`chat_sessions/` 目录，JSON，每对话一个文件），
+由同一开关控制，但**记录完整、无截断**（完整思维链、原始 LLM 响应、
+检索原文），因为该文件同时是"对话记录"功能的恢复源——恢复需要完整
+数据，截断会使恢复后上下文缺失。隐私保护改为：默认开启（功能定位，
+用户可关）、仅存本机用户可见目录、app 内可查看/删除、文件管理器可删。
+`AgentLogger`（旧 `agent_logs/` .log 格式）仅保留给角色扮演 tab 使用；
+Ask 页不再产生旧格式日志。
+
 **修复记录**：`AgentLogger` 增加两级防护——(1) 脱敏：query 截断到 200
 字符、模型输出 / observation / 最终回答 / 错误正文截断到 2000 字符，
 不再落盘完整用户问题、完整推理或完整数据库原文；
@@ -461,6 +470,9 @@ Documents，用户卸载即清除，但没有主动管理机制。
 `AgentLogger.clearLogs()` 静态方法供设置/隐私 UI 调用。
 R4：去除 `kDebugMode` 门控，改为 `AgentLogger.setEnabled()` 运行时开关，
 设置页新增"保存 AI 会话日志"开关（默认关），日志目录与 GameData DB 同级。
+R5：Ask 页改用 `ChatSessionStore` JSON 会话（无截断），新增「对话记录」
+页面（列表/只读详情/继续对话/删除），`QuestionRouter` 输出原始分类
+决策，`ReActLoop` 暴露每迭代原始响应（`onRawLlmResponse`）。
 
 ## 7. 工程化与量化
 

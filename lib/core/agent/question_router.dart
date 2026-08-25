@@ -10,6 +10,25 @@ import '../llm/llm_client.dart';
 /// - [AiMode.investigate]  -> InvestigationAgent (跨章节推理未知)
 enum AiMode { auto, summarize, verify, investigate }
 
+/// Outcome of one routing decision.
+///
+/// Carries the concrete [mode] plus the router LLM's raw classification
+/// output (untruncated) and any error, so session records can capture how
+/// auto routing decided.
+class RouteResult {
+  const RouteResult({
+    required this.mode,
+    this.rawResponse = '',
+    this.error,
+  });
+
+  final AiMode mode;
+  final String rawResponse;
+  final String? error;
+
+  bool get failed => error != null;
+}
+
 /// LLM-based question router for the Ask tab.
 ///
 /// A single lightweight classification call decides which agent workflow fits
@@ -42,19 +61,27 @@ class QuestionRouter {
   /// Routes [query] to a concrete mode (never returns [AiMode.auto]).
   ///
   /// On classification failure it falls back to [AiMode.summarize] (the most
-  /// general workflow); callers should also wrap this in their own guard.
-  Future<AiMode> route(String query) async {
-    final response = await _llmClient.chatCompletion(
-      [
-        Message.system(classificationPrompt),
-        Message.user(query),
-      ],
-      temperature: 0,
-      maxTokens: 16,
-    );
-    final label = response.content.trim().toLowerCase();
-    if (label.contains('verify')) return AiMode.verify;
-    if (label.contains('investigate')) return AiMode.investigate;
-    return AiMode.summarize;
+  /// general workflow) and reports the error on the result.
+  Future<RouteResult> route(String query) async {
+    try {
+      final response = await _llmClient.chatCompletion(
+        [
+          Message.system(classificationPrompt),
+          Message.user(query),
+        ],
+        temperature: 0,
+        maxTokens: 16,
+      );
+      final raw = response.content;
+      final label = raw.trim().toLowerCase();
+      final mode = label.contains('verify')
+          ? AiMode.verify
+          : label.contains('investigate')
+              ? AiMode.investigate
+              : AiMode.summarize;
+      return RouteResult(mode: mode, rawResponse: raw);
+    } catch (e) {
+      return RouteResult(mode: AiMode.summarize, error: '$e');
+    }
   }
 }

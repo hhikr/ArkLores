@@ -13,7 +13,7 @@ void main() {
         final router = QuestionRouter(
           llmClient: _LabelLLMClient(label),
         );
-        return router.route('测试问题');
+        return (await router.route('测试问题')).mode;
       }
 
       expect(await routeWith('verify'), AiMode.verify);
@@ -21,6 +21,23 @@ void main() {
       expect(await routeWith('summarize'), AiMode.summarize);
       // Unknown output falls back to the most general workflow.
       expect(await routeWith('garbage text'), AiMode.summarize);
+    });
+
+    test('route result carries the raw classification output', () async {
+      final router = QuestionRouter(llmClient: _LabelLLMClient('investigate'));
+      final result = await router.route('测试问题');
+      expect(result.mode, AiMode.investigate);
+      expect(result.rawResponse, 'investigate');
+      expect(result.error, isNull);
+    });
+
+    test('route failure falls back to summarize and reports the error',
+        () async {
+      final router = QuestionRouter(llmClient: _ThrowingLLMClient());
+      final result = await router.route('测试问题');
+      expect(result.mode, AiMode.summarize);
+      expect(result.rawResponse, isEmpty);
+      expect(result.error, isNotNull);
     });
   });
 
@@ -33,6 +50,7 @@ void main() {
         factCheckAgent: FactCheckAgent(llmClient: mock),
         investigationAgent: InvestigationAgent(llmClient: mock),
         router: QuestionRouter(llmClient: mock),
+        configReader: () => const LLMConfig(),
       );
 
       await notifier.sendMessage(
@@ -59,6 +77,7 @@ void main() {
         factCheckAgent: FactCheckAgent(llmClient: mock),
         investigationAgent: InvestigationAgent(llmClient: mock),
         router: QuestionRouter(llmClient: mock),
+        configReader: () => const LLMConfig(),
       );
 
       await notifier.sendMessage('阿米娅是谁', mode: AiMode.summarize);
@@ -100,6 +119,30 @@ class _LabelLLMClient extends LLMClient {
       maxTokens: maxTokens,
       stop: stop,
     );
+  }
+}
+
+class _ThrowingLLMClient extends LLMClient {
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    throw const LLMException('boom');
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    throw const LLMException('boom');
   }
 }
 

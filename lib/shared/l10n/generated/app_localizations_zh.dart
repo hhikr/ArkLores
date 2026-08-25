@@ -64,10 +64,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsApiSettingsDesc => '配置对话服务提供商';
 
   @override
-  String get settingsSessionLogs => '保存 AI 会话日志';
+  String get settingsSessionLogs => '保存 AI 对话记录';
 
   @override
-  String get settingsSessionLogsDesc => '为每次 AI 对话保存运行日志（含工具调用与检索记录）到手机存储的 agent_logs 目录，方便排查问题；默认关闭，可在文件管理器中删除。';
+  String get settingsSessionLogsDesc => '完整记录每次 AI 对话（含模式选择、自动路由决策、完整推理过程与检索原文）到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复；仅保存在本机，可在 app 内或文件管理器中删除。';
 
   @override
   String get settingsKnowledgeBase => '知识库管理';
@@ -611,6 +611,35 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiClearConfirmBtn => '清空';
+
+  @override
+  String get aiNewConversation => '新建对话';
+
+  @override
+  String get aiHistoryTitle => '对话记录';
+
+  @override
+  String get aiHistoryEmpty => '暂无对话记录。发送消息后会自动保存在本机的 chat_sessions 目录。';
+
+  @override
+  String get aiHistoryContinue => '继续对话';
+
+  @override
+  String get aiHistoryView => '查看';
+
+  @override
+  String get aiHistoryDelete => '删除';
+
+  @override
+  String get aiHistoryDeleteConfirm => '删除这条对话记录？此操作不可撤销。';
+
+  @override
+  String get aiHistoryCorrupt => '损坏的会话文件';
+
+  @override
+  String aiHistoryTurns(int count) {
+    return '$count 轮对话';
+  }
 
   @override
   String get aiRoleplayChoose => '选择角色';

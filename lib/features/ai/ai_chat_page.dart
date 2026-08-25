@@ -7,6 +7,8 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/smooth_page_route.dart';
+import 'chat_history_page.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/roleplay_tab.dart';
 import 'wiki_ai_context.dart';
@@ -185,6 +187,24 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   icon: Icon(Icons.delete_sweep_rounded, color: theme.danger),
                   visualDensity: VisualDensity.compact,
                 ),
+              IconButton(
+                onPressed: isSending
+                    ? null
+                    : () => Navigator.of(context).push(
+                        smoothPageRoute<void>(
+                          builder: (_) => const ChatHistoryPage(),
+                        ),
+                      ),
+                tooltip: context.t.aiHistoryTitle,
+                icon: const Icon(Icons.history_rounded),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: isSending ? null : chatNotifier.newSession,
+                tooltip: context.t.aiNewConversation,
+                icon: const Icon(Icons.add_comment_outlined),
+                visualDensity: VisualDensity.compact,
+              ),
             ],
           ),
         ),

@@ -24,6 +24,7 @@ class FactCheckAgent {
   Stream<ReActEvent> checkClaim({
     required String claim,
     List<Message> history = const [],
+    void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) {
     final registry = ToolRegistry()..register(_searchTool);
     final loop = ReActLoop(
@@ -36,11 +37,11 @@ class FactCheckAgent {
       systemPrompt: buildAgentPrompt(factCheckInstructions),
       chatHistory: history,
       userQuery: claim,
-      agentName: 'FactCheck',
       finalAnswerTransform: (answer, observations) {
         final verdict = validateFactCheckVerdict(answer, observations);
         return _withValidatedVerdict(answer, verdict);
       },
+      onRawLlmResponse: onRawLlmResponse,
     );
   }
 }

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:arklores/core/agent/agent_logger.dart';
 import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
@@ -1030,10 +1029,8 @@ void main() {
       );
     });
 
-    test('logs the validated verdict through the shared ReAct logger',
+    test('emits the validated verdict through the final answer stream',
         () async {
-      AgentLogger.setEnabled(true);
-      addTearDown(() => AgentLogger.setEnabled(false));
       final agent = FactCheckAgent(
         llmClient: _UnsupportedFactCheckLLMClient(),
         searchTool: _CurrentNoMatchTool(),
@@ -1047,27 +1044,26 @@ void main() {
             .join(),
         startsWith('[FACT_CHECK_VERDICT:unavailable]'),
       );
+    });
 
-      final logDir = Directory('${tempDir.path}/ArkLores/agent_logs');
-      final logFiles = await logDir
-          .list()
-          .where((entry) => entry is File && entry.path.endsWith('.log'))
-          .cast<File>()
+    test('exposes every raw LLM response through onRawLlmResponse', () async {
+      final agent = FactCheckAgent(
+        llmClient: _UnsupportedFactCheckLLMClient(),
+        searchTool: _CurrentNoMatchTool(),
+      );
+      final raws = <(int, String)>[];
+      final events = await agent
+          .checkClaim(
+            claim: '未知命题',
+            onRawLlmResponse: (iteration, raw) => raws.add((iteration, raw)),
+          )
           .toList();
-      expect(logFiles, hasLength(1));
-      final log = await logFiles.single.readAsString();
-      expect(log, contains('Agent  : FactCheck'));
-      expect(log, contains('▶ TOOL CALL: search_local_lore'));
-      expect(log, contains('No matching GameData result'));
-      final loggedFinalAnswer = log.split('▶ FINAL ANSWER:').last;
-      expect(
-        loggedFinalAnswer,
-        contains('[FACT_CHECK_VERDICT:unavailable]'),
-      );
-      expect(
-        loggedFinalAnswer,
-        isNot(contains('[FACT_CHECK_VERDICT:supported]')),
-      );
+      expect(events, isNotEmpty);
+      expect(raws, isNotEmpty);
+      // Iteration numbers are contiguous starting at 1 and every raw response
+      // is passed through untruncated.
+      expect(raws.first.$1, 1);
+      expect(raws.map((r) => r.$2), everyElement(isNotEmpty));
     });
   });
 

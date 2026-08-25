@@ -64,10 +64,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsApiSettingsDesc => 'Configure the chat provider';
 
   @override
-  String get settingsSessionLogs => 'Save AI session logs';
+  String get settingsSessionLogs => 'Save AI conversations';
 
   @override
-  String get settingsSessionLogsDesc => 'Save a run log (tool calls, retrieval steps) of every AI conversation to the agent_logs folder in device storage for debugging; off by default and deletable from the file manager.';
+  String get settingsSessionLogsDesc => 'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.';
 
   @override
   String get settingsKnowledgeBase => 'Knowledge Base Management';
@@ -611,6 +611,35 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiClearConfirmBtn => 'Clear';
+
+  @override
+  String get aiNewConversation => 'New conversation';
+
+  @override
+  String get aiHistoryTitle => 'Chat History';
+
+  @override
+  String get aiHistoryEmpty => 'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.';
+
+  @override
+  String get aiHistoryContinue => 'Continue';
+
+  @override
+  String get aiHistoryView => 'View';
+
+  @override
+  String get aiHistoryDelete => 'Delete';
+
+  @override
+  String get aiHistoryDeleteConfirm => 'Delete this conversation? This cannot be undone.';
+
+  @override
+  String get aiHistoryCorrupt => 'Corrupt session file';
+
+  @override
+  String aiHistoryTurns(int count) {
+    return '$count turns';
+  }
 
   @override
   String get aiRoleplayChoose => 'Choose a character';

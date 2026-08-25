@@ -38,9 +38,12 @@ class SummaryAgent {
   /// Runs the Summary Agent for a user query.
   ///
   /// Yields [ReActEvent]s streaming from the underlying ReAct Loop.
+  /// [onRawLlmResponse] receives the full raw LLM response of every
+  /// iteration (session recording).
   Stream<ReActEvent> generateSummary({
     required String query,
     List<Message> history = const [],
+    void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) {
     final systemPrompt = buildAgentPrompt(summaryInstructions);
 
@@ -53,8 +56,8 @@ class SummaryAgent {
       systemPrompt: systemPrompt,
       chatHistory: history,
       userQuery: query,
-      agentName: 'Summary',
       finalAnswerTransform: validateCoverageReport,
+      onRawLlmResponse: onRawLlmResponse,
     );
   }
 }

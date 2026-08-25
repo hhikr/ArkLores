@@ -86,8 +86,9 @@ class ReActLoop {
     required String systemPrompt,
     required List<Message> chatHistory,
     required String userQuery,
-    String agentName = 'ReAct',
+    String? agentName,
     FinalAnswerTransform? finalAnswerTransform,
+    void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) async* {
     // 1. Build the instruction prompt specifying the ReAct format and available tools
     final toolsDesc = _toolRegistry.allTools
@@ -131,15 +132,22 @@ Let's begin!
     var iteration = 0;
     var completed = false;
     var completedToolCalls = 0;
-    final logger = AgentLogger(userQuery, agentName: agentName);
+
+    // Legacy debug logger: only created when the caller passes an agentName
+    // (Roleplay keeps it). Ask-page agents pass null: their full transcript
+    // is recorded by the caller through [onRawLlmResponse] + the event stream
+    // into the chat session store instead, avoiding duplicate log files.
+    final AgentLogger? logger = agentName == null
+        ? null
+        : AgentLogger(userQuery, agentName: agentName);
     final evidenceSummary = EvidenceSummary();
     final observations = <String>[];
 
     while (!completed) {
       iteration++;
-      logger.logIteration(iteration);
+      logger?.logIteration(iteration);
       if (iteration > _safetyMaxIterations) {
-        logger.logError(
+        logger?.logError(
           'SAFETY CAP: $iteration iterations without a Final Answer; '
           'stopping to avoid a runaway loop.',
         );
@@ -162,24 +170,25 @@ Let's begin!
           ],
         );
       } catch (e) {
-        logger.logError('LLM_ERROR: $e');
-        await logger.flush();
+        logger?.logError('LLM_ERROR: $e');
+        await logger?.flush();
         yield ReActEvent(type: ReActEventType.error, content: 'LLM Error: $e');
         return;
       }
       final response = completion.content;
+      onRawLlmResponse?.call(iteration, response);
       if (completion.wasTruncated) {
         final errorMsg =
             'LLM response was truncated before the ReAct step completed. Please retry with a narrower question.';
-        logger.logError('TRUNCATED_REACT_STEP: $errorMsg');
-        await logger.flush();
+        logger?.logError('TRUNCATED_REACT_STEP: $errorMsg');
+        await logger?.flush();
         yield ReActEvent(type: ReActEventType.error, content: errorMsg);
         return;
       }
 
       // Add assistant response to loop messages so it has context
       loopMessages.add(Message.assistant(response));
-      logger.logRawResponse(response);
+      logger?.logRawResponse(response);
 
       // Parse Thought, Action, Action Input
       final thought = parseReActKey(response, 'Thought');
@@ -187,7 +196,7 @@ Let's begin!
       final actionInputRaw = parseReActKey(response, 'Action Input').trim();
       final finalAnswer = parseReActKey(response, 'Final Answer');
 
-      logger.logParsed(
+      logger?.logParsed(
         thought: thought,
         action: action,
         actionInput: actionInputRaw,
@@ -211,7 +220,7 @@ Let's begin!
           final errorMsg = 'A final answer requires at least '
               '$_minimumToolCalls completed tool call(s). Use a registered '
               'tool before answering.';
-          logger.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
+          logger?.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
           loopMessages.add(Message.user('Observation: Error - $errorMsg'));
           continue;
         }
@@ -219,8 +228,8 @@ Let's begin!
         if (actualAnswer.trim().isEmpty) {
           final errorMsg =
               'The model returned an empty final answer. Please retry.';
-          logger.logError('EMPTY_FINAL_ANSWER: $errorMsg');
-          await logger.flush();
+          logger?.logError('EMPTY_FINAL_ANSWER: $errorMsg');
+          await logger?.flush();
           yield ReActEvent(type: ReActEventType.error, content: errorMsg);
           completed = true;
           break;
@@ -232,8 +241,8 @@ Let's begin!
           observations,
           finalAnswerTransform,
         );
-        logger.logFinalAnswer(effectiveAnswer);
-        await logger.flush();
+        logger?.logFinalAnswer(effectiveAnswer);
+        await logger?.flush();
         yield* _emitFinalAnswer(effectiveAnswer);
         completed = true;
         break;
@@ -244,7 +253,7 @@ Let's begin!
           final errorMsg = 'A final answer requires at least '
               '$_minimumToolCalls completed tool call(s). Use a registered '
               'tool before answering.';
-          logger.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
+          logger?.logError('PREMATURE_FINAL_ANSWER: $errorMsg');
           loopMessages.add(Message.user('Observation: Error - $errorMsg'));
           continue;
         }
@@ -254,8 +263,8 @@ Let's begin!
           observations,
           finalAnswerTransform,
         );
-        logger.logFinalAnswer(effectiveAnswer);
-        await logger.flush();
+        logger?.logFinalAnswer(effectiveAnswer);
+        await logger?.flush();
         yield* _emitFinalAnswer(effectiveAnswer);
         completed = true;
         break;
@@ -265,7 +274,7 @@ Let's begin!
       final tool = _toolRegistry.getTool(action);
       if (tool == null) {
         final errorMsg = 'Tool "$action" is not registered.';
-        logger.logError(errorMsg);
+        logger?.logError(errorMsg);
         evidenceSummary.addError();
         yield ReActEvent(type: ReActEventType.error, content: errorMsg);
         loopMessages.add(Message.user('Observation: Error - $errorMsg'));
@@ -275,7 +284,7 @@ Let's begin!
       // Parse tool arguments
       final arguments = parseActionInput(actionInputRaw, tool);
 
-      logger.logToolCall(action, arguments);
+      logger?.logToolCall(action, arguments);
       yield ReActEvent(
         type: ReActEventType.toolCall,
         content: 'Executing tool "$action" with arguments: $arguments',
@@ -289,7 +298,7 @@ Let's begin!
         final result = await tool.execute(arguments);
         if (result is ToolExecutionResult) {
           observation = result.observation;
-          logger.logToolDiagnostics(result.debugLog ?? '');
+          logger?.logToolDiagnostics(result.debugLog ?? '');
         } else {
           observation = result?.toString() ?? 'No output';
         }
@@ -297,7 +306,7 @@ Let's begin!
         observation = 'Error executing tool: $e';
       }
 
-      logger.logObservation(observation);
+      logger?.logObservation(observation);
       completedToolCalls++;
       evidenceSummary.addObservation(observation);
       observations.add(observation);
@@ -332,12 +341,13 @@ Let's begin!
               : '$content\n\n> Note: the model response was truncated and may be incomplete.';
         }
 
-        logger.logFallback(fallbackPrompt, finalResponse);
+        logger?.logFallback(fallbackPrompt, finalResponse);
+        onRawLlmResponse?.call(iteration + 1, finalResponse);
         if (content.trim().isEmpty) {
           const errorMsg =
               'The model returned an empty final answer. Please retry.';
-          logger.logError('EMPTY_FINAL_ANSWER: $errorMsg');
-          await logger.flush();
+          logger?.logError('EMPTY_FINAL_ANSWER: $errorMsg');
+          await logger?.flush();
           yield const ReActEvent(type: ReActEventType.error, content: errorMsg);
           yield const ReActEvent(type: ReActEventType.complete);
           return;
@@ -348,12 +358,12 @@ Let's begin!
           observations,
           finalAnswerTransform,
         );
-        logger.logFinalAnswer(effectiveAnswer);
-        await logger.flush();
+        logger?.logFinalAnswer(effectiveAnswer);
+        await logger?.flush();
         yield* _emitFinalAnswer(effectiveAnswer);
       } catch (e) {
-        logger.logError('Failed to generate final answer: $e');
-        await logger.flush();
+        logger?.logError('Failed to generate final answer: $e');
+        await logger?.flush();
         yield ReActEvent(
             type: ReActEventType.error,
             content: 'Failed to generate final answer: $e',);

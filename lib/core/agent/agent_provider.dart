@@ -1,13 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../shared/providers/settings_provider.dart';
 import '../gamedata/gamedata_knowledge_store.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
+import 'agent_logger.dart';
 import 'chat_message.dart';
 import 'chat_notifier_base.dart';
+import 'chat_session_models.dart';
+import 'chat_session_store.dart';
 import 'fact_check_agent.dart';
 import 'investigation_agent.dart';
 import 'question_router.dart';
@@ -256,22 +261,70 @@ final aiModeProvider = StateProvider<AiMode>((ref) => AiMode.auto);
 /// other modes pin the workflow directly. The ReAct event handling is shared
 /// across workflows; a fact-check verdict is parsed from the stream whenever
 /// present, other modes simply produce no verdict.
+///
+/// Session persistence (R5): when recording is enabled ([AgentLogger.isEnabled],
+/// the "保存 AI 对话记录" setting), every turn — including the user-selected
+/// mode, the auto-routing decision and raw classification output, the complete
+/// ReAct chain (raw LLM responses, thoughts, tool calls, observations) and the
+/// final answer — is appended to one per-conversation JSON file in the
+/// user-visible `chat_sessions/` directory. Sessions can be restored through
+/// [loadSession] (history list → continue conversation).
 class AskChatNotifier extends ChatNotifierBase {
   AskChatNotifier({
     required SummaryAgent summaryAgent,
     required FactCheckAgent factCheckAgent,
     required InvestigationAgent investigationAgent,
     required QuestionRouter router,
+    ChatSessionStore sessionStore = const ChatSessionStore(),
+    required LLMConfig Function() configReader,
   })  : _summaryAgent = summaryAgent,
         _factCheckAgent = factCheckAgent,
         _investigationAgent = investigationAgent,
         _router = router,
+        _sessionStore = sessionStore,
+        _configReader = configReader,
         super([]);
   final SummaryAgent _summaryAgent;
   final FactCheckAgent _factCheckAgent;
   final InvestigationAgent _investigationAgent;
   final QuestionRouter _router;
+  final ChatSessionStore _sessionStore;
+  final LLMConfig Function() _configReader;
   AiMode _lastMode = AiMode.auto;
+  ChatSessionFile? _currentSession;
+
+  /// Whether session recording is active for the current conversation.
+  static bool get recordingEnabled => AgentLogger.isEnabled;
+
+  /// Title prefix length for the session list.
+  static const int _titleMaxChars = 40;
+
+  /// Starts a fresh conversation (clears the UI and ends the current session
+  /// file; the next message begins a new session).
+  void newSession() {
+    cancel();
+    _currentSession = null;
+    state = const [];
+  }
+
+  /// Restores a persisted session into the UI. Subsequent messages continue
+  /// the same session file.
+  void loadSession(ChatSessionFile session) {
+    _currentSession = session;
+    if (session.turns.isNotEmpty) {
+      _lastMode = session.turns.last.effectiveMode;
+    }
+    state = chatSessionToMessages(session);
+  }
+
+  ChatSessionFile? get currentSession => _currentSession;
+
+  @override
+  void clearChat() {
+    cancel();
+    _currentSession = null;
+    state = const [];
+  }
 
   Future<void> sendMessage(String text, {required AiMode mode}) async {
     final query = text.trim();
@@ -297,36 +350,93 @@ class AskChatNotifier extends ChatNotifierBase {
       ),
     ];
 
+    // Auto mode: classify the question first, keep the router's raw decision.
+    RouteResult? routeResult;
     var effective = mode;
     if (effective == AiMode.auto) {
-      try {
-        effective = await _router.route(query);
-      } catch (_) {
-        effective = AiMode.summarize;
-      }
+      routeResult = await _router.route(query);
+      effective = routeResult.mode;
     }
     final effectiveMode = effective;
 
-    final stream = switch (effective) {
-      AiMode.verify =>
-        _factCheckAgent.checkClaim(claim: query, history: history),
-      AiMode.investigate =>
-        _investigationAgent.investigate(query: query, history: history),
+    // Session recording state for this turn.
+    final recording = recordingEnabled;
+    final turnStart = DateTime.now();
+    final config = _configReader();
+    final iterations = <int, ReActIterationRecord>{};
+    var currentIteration = 0;
+    var turnStatus = ChatTurnStatus.completed;
+    String? turnError;
+    var canceled = false;
+    if (recording) {
+      _currentSession ??= ChatSessionFile(
+        sessionId: newId(),
+        createdAt: turnStart,
+        updatedAt: turnStart,
+        title: _truncateTitle(query),
+      );
+    }
+    final session = _currentSession;
+
+    // Receives the full raw LLM response of every iteration (untruncated)
+    // before the corresponding thought/tool events arrive, so event handling
+    // below fills the same record.
+    void Function(int iteration, String rawResponse)? onRaw;
+    if (recording) {
+      onRaw = (iteration, raw) {
+        currentIteration = iteration;
+        iterations[iteration] = ReActIterationRecord(
+          iteration: iteration,
+          rawResponse: raw,
+        );
+      };
+    }
+
+    final stream = switch (effectiveMode) {
+      AiMode.verify => _factCheckAgent.checkClaim(
+          claim: query,
+          history: history,
+          onRawLlmResponse: onRaw,
+        ),
+      AiMode.investigate => _investigationAgent.investigate(
+          query: query,
+          history: history,
+          onRawLlmResponse: onRaw,
+        ),
       AiMode.summarize || AiMode.auto => _summaryAgent.generateSummary(
           query: query,
           history: history,
+          onRawLlmResponse: onRaw,
         ),
     };
 
     final steps = <ReActStep>[];
     final finalAnswerBuffer = StringBuffer();
+
     try {
       await for (final event in stream) {
-        if (!isCurrentGeneration(generation)) return;
+        if (!isCurrentGeneration(generation)) {
+          canceled = true;
+          break;
+        }
         switch (event.type) {
           case ReActEventType.thought:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
+            if (recording) {
+              iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              ).thought = event.content;
+            }
+            break;
           case ReActEventType.toolCall:
-          case ReActEventType.toolObservation:
             steps.add(ReActStep(
               type: event.type,
               content: event.content,
@@ -334,6 +444,39 @@ class AskChatNotifier extends ChatNotifierBase {
               toolArgs: event.toolArgs,
             ),);
             updateMessage(assistantId, steps: List.of(steps));
+            if (recording) {
+              final record = iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              );
+              record
+                ..tool = event.toolName
+                ..toolArgs = event.toolArgs
+                ..action = event.toolName ?? ''
+                ..actionInput = event.toolArgs == null
+                    ? ''
+                    : const JsonEncoder().convert(event.toolArgs!);
+            }
+            break;
+          case ReActEventType.toolObservation:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
+            if (recording) {
+              iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              ).observation = event.content;
+            }
             break;
           case ReActEventType.finalAnswerToken:
             finalAnswerBuffer.write(event.content);
@@ -351,6 +494,8 @@ class AskChatNotifier extends ChatNotifierBase {
             break;
           case ReActEventType.error:
             steps.add(ReActStep(type: event.type, content: event.content));
+            turnError = event.content;
+            turnStatus = ChatTurnStatus.error;
             updateMessage(
               assistantId,
               content: '[ASK_ERROR]',
@@ -367,7 +512,7 @@ class AskChatNotifier extends ChatNotifierBase {
             break;
         }
       }
-    } catch (_) {
+    } catch (e) {
       if (isCurrentGeneration(generation)) {
         updateMessage(
           assistantId,
@@ -375,9 +520,81 @@ class AskChatNotifier extends ChatNotifierBase {
           isError: true,
           isStreaming: false,
         );
+        turnStatus = ChatTurnStatus.error;
+        turnError = '$e';
+      }
+    } finally {
+      if (recording && session != null) {
+        await _finalizeTurn(
+          session: session,
+          query: query,
+          userMode: mode,
+          effectiveMode: effectiveMode,
+          routeResult: routeResult,
+          config: config,
+          turnStart: turnStart,
+          iterations: iterations,
+          answer: finalAnswerBuffer.toString(),
+          status: canceled ? ChatTurnStatus.canceled : turnStatus,
+          error: canceled ? '[ASK_CANCELED]' : turnError,
+        );
       }
     }
   }
+
+  Future<void> _finalizeTurn({
+    required ChatSessionFile session,
+    required String query,
+    required AiMode userMode,
+    required AiMode effectiveMode,
+    required RouteResult? routeResult,
+    required LLMConfig config,
+    required DateTime turnStart,
+    required Map<int, ReActIterationRecord> iterations,
+    required String answer,
+    required ChatTurnStatus status,
+    required String? error,
+  }) async {
+    final sorted = iterations.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final now = DateTime.now();
+    final turn = ChatSessionTurn(
+      turn: session.turns.length + 1,
+      timestamp: turnStart,
+      query: query,
+      userMode: userMode,
+      effectiveMode: effectiveMode,
+      router: userMode == AiMode.auto
+          ? RouterRecord(
+              rawResponse: routeResult?.rawResponse ?? '',
+              error: routeResult?.error,
+            )
+          : null,
+      model: config.chatModel,
+      baseUrl: config.chatBaseUrl,
+      iterations: [for (final entry in sorted) entry.value],
+      answer: answer,
+      verdict: effectiveMode == AiMode.verify
+          ? parseFactCheckVerdict(answer)
+          : null,
+      status: status,
+      error: error,
+      durationMs: now.difference(turnStart).inMilliseconds,
+    );
+    final updated = ChatSessionFile(
+      sessionId: session.sessionId,
+      createdAt: session.createdAt,
+      updatedAt: now,
+      title: session.title,
+      turns: [...session.turns, turn],
+    );
+    _currentSession = updated;
+    await _sessionStore.save(updated);
+  }
+
+  static String _truncateTitle(String query) => query.length <= _titleMaxChars
+      ? query
+      : '${query.substring(0, _titleMaxChars)}…';
 
   @override
   String get canceledMarker => '[ASK_CANCELED]';
@@ -391,6 +608,16 @@ class AskChatNotifier extends ChatNotifierBase {
       buildReactHistory(messages);
 }
 
+/// Provider for the chat session store (persistence + history list).
+final chatSessionStoreProvider =
+    Provider<ChatSessionStore>((ref) => const ChatSessionStore());
+
+/// Session summaries for the Chat History list (newest first).
+final chatHistoryListProvider =
+    FutureProvider<List<ChatSessionSummary>>((ref) async {
+  return ref.watch(chatSessionStoreProvider).list();
+});
+
 /// Provider for the unified Ask chat state.
 final askChatProvider =
     StateNotifierProvider<AskChatNotifier, List<ChatMessage>>((ref) {
@@ -399,6 +626,8 @@ final askChatProvider =
     factCheckAgent: ref.watch(factCheckAgentProvider),
     investigationAgent: ref.watch(investigationAgentProvider),
     router: QuestionRouter(llmClient: ref.watch(llmClientProvider)),
+    sessionStore: ref.watch(chatSessionStoreProvider),
+    configReader: () => ref.read(apiConfigProvider),
   );
 });
 

@@ -212,13 +212,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsSessionLogs.
   ///
   /// In en, this message translates to:
-  /// **'Save AI session logs'**
+  /// **'Save AI conversations'**
   String get settingsSessionLogs;
 
   /// No description provided for @settingsSessionLogsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Save a run log (tool calls, retrieval steps) of every AI conversation to the agent_logs folder in device storage for debugging; off by default and deletable from the file manager.'**
+  /// **'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.'**
   String get settingsSessionLogsDesc;
 
   /// No description provided for @settingsKnowledgeBase.
@@ -1234,6 +1234,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get aiClearConfirmBtn;
+
+  /// No description provided for @aiNewConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get aiNewConversation;
+
+  /// No description provided for @aiHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat History'**
+  String get aiHistoryTitle;
+
+  /// No description provided for @aiHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.'**
+  String get aiHistoryEmpty;
+
+  /// No description provided for @aiHistoryContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get aiHistoryContinue;
+
+  /// No description provided for @aiHistoryView.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get aiHistoryView;
+
+  /// No description provided for @aiHistoryDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get aiHistoryDelete;
+
+  /// No description provided for @aiHistoryDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this conversation? This cannot be undone.'**
+  String get aiHistoryDeleteConfirm;
+
+  /// No description provided for @aiHistoryCorrupt.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrupt session file'**
+  String get aiHistoryCorrupt;
+
+  /// No description provided for @aiHistoryTurns.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} turns'**
+  String aiHistoryTurns(int count);
 
   /// No description provided for @aiRoleplayChoose.
   ///

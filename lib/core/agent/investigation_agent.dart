@@ -41,6 +41,7 @@ class InvestigationAgent {
   Stream<ReActEvent> investigate({
     required String query,
     List<Message> history = const [],
+    void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) {
     final systemPrompt = buildAgentPrompt(investigationInstructions);
     final loop = ReActLoop(
@@ -54,8 +55,8 @@ class InvestigationAgent {
       systemPrompt: systemPrompt,
       chatHistory: history,
       userQuery: query,
-      agentName: 'Investigation',
       finalAnswerTransform: validateInvestigationVerdict,
+      onRawLlmResponse: onRawLlmResponse,
     );
   }
 }
