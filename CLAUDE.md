@@ -20,6 +20,15 @@
 - 不提交 API key、token、`.env`。
 - 不直接 push `main` 或 `dev`。
 
+## 提交规范（贡献者只有 hhikr）
+
+- 提交的 author / committer 只能是 hhikr。
+- 提交信息中**禁止**出现 `Co-Authored-By` 或任何把 AI 写为作者/协作者的
+  尾注或署名（如 "Generated with ..."）；未经开发者明确许可不得添加。
+- 2026-10 已改写全部历史移除旧的 Claude 协作者尾注；不要再引入。
+- 凭据（`tools/api_info`、`tools/*apiKey*`、`tools/github_pat`）不得提交、
+  打印、写入 git 配置或 remote URL。
+
 ## 检索与数据设计原则（防桥段专项优化）
 
 背景教训：`story_chapter_profiles.keyword_hits` 曾内置 20 个死亡/凶案词做
