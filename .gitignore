@@ -44,6 +44,9 @@ secrets.dart
 tools/api_info
 tools/*apiKey*
 tools/*api_key*
+tools/github_pat
+tools/*_pat*
+tools/*token*
 
 # IDEs
 .idea/
