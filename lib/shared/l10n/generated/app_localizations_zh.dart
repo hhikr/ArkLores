@@ -1,3 +1,5 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -67,7 +69,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSessionLogs => '保存 AI 对话记录';
 
   @override
-  String get settingsSessionLogsDesc => '完整记录每次 AI 对话（含模式选择、自动路由决策、完整推理过程与检索原文）到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复；仅保存在本机，可在 app 内或文件管理器中删除。';
+  String get settingsSessionLogsDesc =>
+      '完整记录每次 AI 对话（含模式选择、自动路由决策、完整推理过程与检索原文）到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复；仅保存在本机，可在 app 内或文件管理器中删除。';
 
   @override
   String get settingsKnowledgeBase => '知识库管理';
@@ -86,6 +89,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get apiSettingsChatDesc => '用于 AI 对话（事实核查、梗概生成、角色扮演）。';
+
+  @override
+  String get apiSettingsEmbeddingSection => '向量 API（可选）';
+
+  @override
+  String get apiSettingsEmbeddingDesc =>
+      '用于剧情调查的语义原文召回。模型需与已安装知识库的向量一致（如阿里云百炼 qwen3.7-text-embedding）。不填 Key 时只用关键词检索。';
 
   @override
   String get apiSettingsUseSameProvider => '使用与对话相同的提供商';
@@ -165,7 +175,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsTitle => '资料';
 
   @override
-  String get materialsWarning => '⚠️ 资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。AI 将小心引用并以 Wiki 内容为优先参考。';
+  String get materialsWarning =>
+      '⚠️ 资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。AI 将小心引用并以 Wiki 内容为优先参考。';
 
   @override
   String get materialsNoBooks => '还没有书籍';
@@ -327,7 +338,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingWelcomeTitle => '欢迎使用 ArkLores';
 
   @override
-  String get onboardingWelcomeDesc => '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 事实核查与梗概生成\n• 导入你的剧情书籍\n• 沉浸式角色扮演对话';
+  String get onboardingWelcomeDesc =>
+      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 事实核查与梗概生成\n• 导入你的剧情书籍\n• 沉浸式角色扮演对话';
 
   @override
   String get onboardingGetStarted => '开始使用';
@@ -336,7 +348,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingApiTitle => '配置对话 API';
 
   @override
-  String get onboardingApiDesc => 'ArkLores 使用你自己的 AI API 密钥。\n请配置一个对话提供商以使用 AI 功能。';
+  String get onboardingApiDesc =>
+      'ArkLores 使用你自己的 AI API 密钥。\n请配置一个对话提供商以使用 AI 功能。';
 
   @override
   String get onboardingSaveContinue => '保存并继续';
@@ -348,7 +361,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingDoneTitle => '准备就绪！';
 
   @override
-  String get onboardingDoneDesc => '你已经准备好探索明日方舟与终末地的世界了。\n\n可前往设置安装 GameData 知识库，\n或直接开始浏览 Wiki！';
+  String get onboardingDoneDesc =>
+      '你已经准备好探索明日方舟与终末地的世界了。\n\n可前往设置安装 GameData 知识库，\n或直接开始浏览 Wiki！';
 
   @override
   String get onboardingStartExploring => '开始探索';
@@ -432,10 +446,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabRoleplay => '角色扮演';
 
   @override
-  String get aiInvestigationSource => '调查范围：仅限已安装 GameData 剧情原文（出场枚举 + 行级精读 + 跨章节呼应）';
+  String get aiInvestigationSource =>
+      '调查范围：仅限已安装 GameData 剧情原文（出场枚举 + 行级精读 + 跨章节呼应）';
 
   @override
-  String get aiInvestigationEmpty => '提出跨章节因果或凶手类问题。调查会枚举出场、精读关键章节、跨章节定位细节，并逐嫌疑人对比证据后给出带证据链的结论。';
+  String get aiInvestigationEmpty =>
+      '提出跨章节因果或凶手类问题。调查会枚举出场、精读关键章节、跨章节定位细节，并逐嫌疑人对比证据后给出带证据链的结论。';
 
   @override
   String get aiInvestigationInputPlaceholder => '例如：某角色死亡的罪魁祸首是谁…';
@@ -678,7 +694,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiRoleplayRestart => '重新开始';
 
   @override
-  String get aiRoleplayGeneratedNotice => '角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。';
+  String get aiRoleplayGeneratedNotice =>
+      '角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。';
 
   @override
   String get aiRoleplayEmpty => '输入第一句话。首轮会先检索角色档案、语音、秘录、模组及相关任务剧情。';
@@ -756,7 +773,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbStructuredTitle => 'GameData 结构化知识库';
 
   @override
-  String get kbScopeDescription => 'v0.4.5 只使用中文 GameData 结构化库：实体、别名、原始记录、剧情行、文档片段和 FTS。旧 Wiki seed 与资料导入索引链路已移除。';
+  String get kbScopeDescription =>
+      'v0.4.5 只使用中文 GameData 结构化库：实体、别名、原始记录、剧情行、文档片段和 FTS。旧 Wiki seed 与资料导入索引链路已移除。';
 
   @override
   String kbStatusError(String error) {
@@ -776,7 +794,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbErrorTimeout => '连接超时。请切换网络，或确认临时 HTTP 服务和手机在同一网络。';
 
   @override
-  String get kbErrorNotFound => '未找到 GameData DB 文件。未正式发布时请使用预发布 asset 或 --dart-define 指向临时 URL。';
+  String get kbErrorNotFound =>
+      '未找到 GameData DB 文件。未正式发布时请使用预发布 asset 或 --dart-define 指向临时 URL。';
 
   @override
   String get kbErrorChecksum => 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
@@ -790,7 +809,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbNotInstalled => '未安装';
 
   @override
-  String get kbDevAssetHint => '正式发布前可用 --dart-define=ARKLORES_GAMEDATA_DB_URL 指向预发布 asset 或局域网临时 .db.gz。';
+  String get kbDevAssetHint =>
+      '正式发布前可用 --dart-define=ARKLORES_GAMEDATA_DB_URL 指向预发布 asset 或局域网临时 .db.gz。';
 
   @override
   String get kbDownloading => '下载中';
@@ -814,7 +834,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbBuildSectionTitle => '从源仓库构建';
 
   @override
-  String get kbBuildSectionDesc => '从 Kengxxiao/ArknightsGameData 拉取最新解包数据，在设备上按项目规约构建或增量更新知识库。需要网络；首次构建约需 1.5–2 GB 空闲空间。';
+  String get kbBuildSectionDesc =>
+      '从 Kengxxiao/ArknightsGameData 拉取最新解包数据，在设备上按项目规约构建或增量更新知识库。需要网络；首次构建约需 1.5–2 GB 空闲空间。';
 
   @override
   String get kbBuildLatestCommit => '最新提交';
@@ -901,7 +922,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbBuildTokenTitle => 'GitHub Token（可选）';
 
   @override
-  String get kbBuildTokenDesc => '填写 GitHub Personal Access Token（ghp_… 或 github_pat_…）可把 API 配额从 60 次/小时提升到 5000 次/小时，避免代理出口限流导致拉取失败。Token 仅存入系统安全存储，不会写入日志。';
+  String get kbBuildTokenDesc =>
+      '填写 GitHub Personal Access Token（ghp_… 或 github_pat_…）可把 API 配额从 60 次/小时提升到 5000 次/小时，避免代理出口限流导致拉取失败。Token 仅存入系统安全存储，不会写入日志。';
 
   @override
   String get kbBuildTokenPlaceholder => '粘贴 GitHub Token';
@@ -922,7 +944,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsPausedTitle => '用户资料导入暂未启用';
 
   @override
-  String get materialsPausedDesc => '旧版 PDF/TXT 导入链路已暂停。v0.4.5 当前 Agent 只使用 GameData 结构化知识库、FTS 和精确匹配。';
+  String get materialsPausedDesc =>
+      '旧版 PDF/TXT 导入链路已暂停。v0.4.5 当前 Agent 只使用 GameData 结构化知识库、FTS 和精确匹配。';
 
   @override
   String get wikiLoadFailed => 'Wiki 页面加载失败';

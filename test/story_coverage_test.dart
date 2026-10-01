@@ -246,13 +246,14 @@ void main() {
 
       final none = await tool.execute({'query': '不存在的短语'})
           as ToolExecutionResult;
-      expect(none.observation, contains('No story line contains'));
+      expect(none.observation, contains('No story line matches'));
+      expect(none.observation, contains('no embedding API configured'));
 
       final scoped = await tool.execute({
         'query': '匕首',
         'scope_id': 'activity:no_such_scope',
       }) as ToolExecutionResult;
-      expect(scoped.observation, contains('No story line contains'));
+      expect(scoped.observation, contains('No story line matches'));
     });
 
     test('read_story_lines DATA block reports the returned range (R12)',

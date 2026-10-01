@@ -31,6 +31,8 @@
   "apiSettingsTitle": "API Settings",
   "apiSettingsChatSection": "Chat API",
   "apiSettingsChatDesc": "Used for AI conversations (Fact Check, Summary, Roleplay).",
+  "apiSettingsEmbeddingSection": "Embedding API (optional)",
+  "apiSettingsEmbeddingDesc": "Enables semantic story-line recall for investigations. Must use the same model as the installed knowledge base vectors (e.g. Alibaba Cloud Bailian qwen3.7-text-embedding). Leave the key empty to use keyword search only.",
   "apiSettingsUseSameProvider": "Use same provider as Chat",
   "apiSettingsLabelBaseUrl": "Base URL",
   "apiSettingsLabelApiKey": "API Key",

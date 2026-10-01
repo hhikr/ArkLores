@@ -42,6 +42,8 @@ logs/
 api_keys.dart
 secrets.dart
 tools/api_info
+tools/*apiKey*
+tools/*api_key*
 
 # IDEs
 .idea/

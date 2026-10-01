@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -85,6 +86,12 @@ class SettingsService {
   static const _keyChatApiKey = 'chat_api_key';
   static const _keyChatModel = 'chat_model';
 
+  // ── Embedding keys (R12 vector recall) ───────────────────
+  static const _keyEmbeddingBaseUrl = 'embedding_base_url';
+  static const _keyEmbeddingApiKey = 'embedding_api_key';
+  static const _keyEmbeddingModel = 'embedding_model';
+  static const _keyEmbeddingDims = 'embedding_dims';
+
   // ── GitHub keys ──────────────────────────────────────────
   static const _keyGithubToken = 'github_token';
 
@@ -145,6 +152,30 @@ class SettingsService {
       _storage.write(key: _keyChatBaseUrl, value: config.chatBaseUrl),
       _storage.write(key: _keyChatApiKey, value: config.chatApiKey),
       _storage.write(key: _keyChatModel, value: config.chatModel),
+    ]);
+  }
+
+  /// Loads the optional embedding endpoint (R12). Unset key -> vector recall
+  /// stays off and `FIND` uses keyword search only.
+  Future<EmbeddingConfig> loadEmbeddingConfig() async {
+    final dims = int.tryParse(await _storage.read(key: _keyEmbeddingDims) ?? '');
+    return EmbeddingConfig(
+      baseUrl: await _storage.read(key: _keyEmbeddingBaseUrl) ??
+          defaultEmbeddingConfig.baseUrl,
+      apiKey: await _storage.read(key: _keyEmbeddingApiKey) ?? '',
+      model: await _storage.read(key: _keyEmbeddingModel) ??
+          defaultEmbeddingConfig.model,
+      dimensions: dims ?? defaultEmbeddingConfig.dimensions,
+    );
+  }
+
+  /// Saves the embedding endpoint configuration.
+  Future<void> saveEmbeddingConfig(EmbeddingConfig config) async {
+    await Future.wait([
+      _storage.write(key: _keyEmbeddingBaseUrl, value: config.baseUrl.trim()),
+      _storage.write(key: _keyEmbeddingApiKey, value: config.apiKey.trim()),
+      _storage.write(key: _keyEmbeddingModel, value: config.model.trim()),
+      _storage.write(key: _keyEmbeddingDims, value: '${config.dimensions}'),
     ]);
   }
 

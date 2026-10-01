@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../features/settings/settings_service.dart';
 
@@ -60,6 +61,30 @@ final apiConfigProvider =
   final service = ref.watch(settingsServiceProvider);
   final initial = ref.watch(initialApiConfigProvider);
   return ApiConfigNotifier(service, initial);
+});
+
+/// Embedding endpoint loaded at startup (R12); overridden in main().
+final initialEmbeddingConfigProvider =
+    Provider<EmbeddingConfig>((ref) => defaultEmbeddingConfig);
+
+/// Holds the embedding config and persists changes to secure storage.
+class EmbeddingConfigNotifier extends StateNotifier<EmbeddingConfig> {
+  EmbeddingConfigNotifier(this._service, EmbeddingConfig initial)
+      : super(initial);
+  final SettingsService _service;
+
+  Future<void> save(EmbeddingConfig config) async {
+    await _service.saveEmbeddingConfig(config);
+    state = config;
+  }
+}
+
+final embeddingConfigProvider =
+    StateNotifierProvider<EmbeddingConfigNotifier, EmbeddingConfig>((ref) {
+  return EmbeddingConfigNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialEmbeddingConfigProvider),
+  );
 });
 
 /// Loads the optional GitHub Personal Access Token from secure storage.

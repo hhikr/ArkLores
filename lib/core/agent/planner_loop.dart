@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../gamedata/gamedata_models.dart';
+import '../llm/completion_budget.dart';
 import '../llm/llm_client.dart';
 import 'entity_disambiguator.dart';
 import 'evidence_notebook.dart';
@@ -118,7 +119,11 @@ DONE
 
       ChatCompletionResult completion;
       try {
-        completion = await _llmClient.chatCompletion(
+        // R12: a reasoning model may spend the whole ceiling on hidden
+        // reasoning and return empty content; retry with headroom before
+        // treating the reply as empty.
+        completion = await completeWithHeadroom(
+          _llmClient,
           buildRequest(),
           temperature: 0.1,
           maxTokens: _stepMaxTokens,
@@ -691,7 +696,8 @@ DONE
         ? ''
         : '\n\n上一版答案引用了未读取的行：${invalidCitations.join('、')}。'
             '请重写，只引用下方“已读原文”中出现的 story_id:行号。';
-    final result = await _llmClient.chatCompletion(
+    final result = await completeWithHeadroom(
+      _llmClient,
       [
         Message.system(
           '你是剧情调查员。只根据下方“证据笔记”和“已读原文”写最终答案：'
@@ -707,7 +713,8 @@ DONE
         ),
       ],
       temperature: 0.2,
-      maxTokens: 2048,
+      maxTokens: 4096,
+      retryPartial: true, // a cut-off answer is not an answer
     );
     return result.content.trim();
   }

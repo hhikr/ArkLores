@@ -7,6 +7,7 @@
 /// line number outside the returned page is dropped.
 library;
 
+import '../llm/completion_budget.dart';
 import '../llm/llm_client.dart';
 import 'investigation_state.dart';
 import 'tools/observation_data.dart';
@@ -96,7 +97,8 @@ Future<List<EvidenceNote>> extractEvidenceNotes(
   final numbered = page.lines.map((l) => '${l.index} | ${l.text}').join('\n');
   final ChatCompletionResult result;
   try {
-    result = await client.chatCompletion(
+    result = await completeWithHeadroom(
+      client,
       [
         Message.system(
           '你是剧情证据摘录员。给定用户问题和一段带行号的剧情原文，找出与回答该问题'
@@ -107,7 +109,7 @@ Future<List<EvidenceNote>> extractEvidenceNotes(
         Message.user('问题：$userQuery\n\n剧情 ${page.storyId}：\n$numbered'),
       ],
       temperature: 0,
-      maxTokens: 512,
+      maxTokens: 2048,
     );
   } catch (_) {
     return const [];

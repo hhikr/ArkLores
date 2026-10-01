@@ -1,6 +1,7 @@
 # ArkLores Developer Notes
 
-当前主线：中文 GameData release asset + SQLite structured retrieval + FTS。
+当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
++ 可选剧情向量召回（R12，只作定位线索，不作证据）。
 当前版本与最新 release：v0.9.0；GameData schema：4（含确定性覆盖层）。
 
 ## Do
@@ -72,25 +73,42 @@ HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
   --db=build/gamedata_mobile/arklores_gamedata_zh.db
 ```
 
-### 电脑端调查复现（不需真机）
+### 电脑端调查复现（不需真机，与 App 同一条链路）
 
-改完 agent/检索层后，先在电脑上用真实 GameData DB + 真实 LLM 跑一轮完整调查，
-确认无死循环/无失败，再真机验证。CLI 驱动器：
+改完 agent/检索层后，先在电脑上用真实 GameData DB + 真实 LLM 跑一轮，
+再真机验证。复现工具是 opt-in 的 live 测试（R12 起取代旧的
+`tools/run_investigation.dart`，后者重写了数据层、与 App 不一致，已删除）：
 
 ```bash
-HOME=/tmp /home/hhikr/flutter/bin/dart run tools/run_investigation.dart \
-  --db=build/gamedata_mobile/arklores_gamedata_zh.db \
-  --query="导致特蕾西娅死亡的罪魁祸首是谁" \
-  --out=build/investigation_run.json
+ARKLORES_RUN_LIVE_ASK=true \
+ARKLORES_LIVE_QUERIES="导致特蕾西娅死亡的罪魁祸首是谁||另一个问题" \
+flutter test test/live/ask_pipeline_live_test.dart
 ```
 
-API 配置从 gitignored `tools/api_info`（API_KEY=/MODEL=/URL=）读取，或用
-`--api-key / --model / --url` 或环境变量 `ARKLORES_API_KEY/MODEL/URL` 覆盖。
-**绝不提交有效 API key**——`tools/api_info` 只在本地存在，示例用占位 key，
-真实 key 由开发者本机提供。输出写入 `build/investigation_run.json`，
-可与 `logs/conversation_*.json` 对比行为。
+- 驱动的是 App 的 `askChatProvider`（`AskChatNotifier.sendMessage`，默认
+  auto 模式 → `QuestionRouter` → 各 Agent → `GameDataKnowledgeStore` →
+  `ChatSessionStore`）；只覆盖 `main.dart` 启动时注入的 provider（API 配置、
+  向量配置、会话日志开关）和两个平台路径（DB、会话目录）。SQL 引擎换成
+  sqflite FFI，其余每个 Dart 类都是 App 代码。
+- 输出：`build/live_sessions/<...>/conversation_*.json`（与 App
+  `chat_sessions/`、`logs/` 同格式）+ 每题 `*.summary.json` 指标。
+- 可选：`ARKLORES_LIVE_MODE=investigate|summarize|verify`、
+  `ARKLORES_LIVE_EVAL=test/fixtures/investigation_eval.json`（批量评测）、
+  `ARKLORES_LIVE_IDS=a,b`、`ARKLORES_LIVE_NO_EMBEDDING=true`（模拟无向量 key）、
+  `ARKLORES_GAMEDATA_DB`、`ARKLORES_LIVE_OUT`。
+- 配置从 gitignored 的 `tools/api_info`（API_KEY=/MODEL=/URL=）和
+  `tools/embedding-apiKey.csv`（`openAiCompatible`、`apiKey`）读取。
+  **绝不提交有效 key**；`tools/*apiKey*` 已加入 .gitignore。
 
-注意：`run_investigation.dart` 只 import 纯 Dart 模块（`planner_loop`、
-`react_event`、`entity_disambiguator`、`llm`），用 `sqflite_common_ffi` 直开
-DB，不依赖 Flutter-bound 的 `GameDataKnowledgeStore`。若新增工具要进 CLI，
-改用 FFI 实现或以纯 Dart 注入。
+### 剧情向量（可选表，R12）
+
+`story_chunk_vectors` 是 schema 4 上的**可选附加表**（`schema_version` 不变，
+没有该表的库照常可用，FIND 退化为关键词检索）。构建（可续跑、按内容哈希缓存）：
+
+```bash
+dart run tools/build_story_embeddings.dart --db=build/gamedata_mobile/arklores_gamedata_zh.db
+```
+
+manifest 记录 `embedding_model / embedding_dims / embedding_chunking`；App 只在
+所配置的向量模型和维度与 manifest 一致时才启用语义检索。向量命中只是定位线索，
+必须 READ 原文后才能作为证据（检索原则 5）。

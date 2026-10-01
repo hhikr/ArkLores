@@ -1,4 +1,5 @@
 import '../gamedata/gamedata_models.dart';
+import '../llm/completion_budget.dart';
 import '../llm/llm_client.dart';
 
 /// Outcome of one disambiguation decision.
@@ -86,16 +87,19 @@ $excludeLine
 
   Future<int?> _tryPick(String prompt, int count) async {
     try {
-      final result = await _llmClient.chatCompletion(
+      // R12: 32 tokens left reasoning models no room to answer (empty,
+      // finish_reason=length), so the helper silently fell back to #1.
+      final result = await completeWithHeadroom(
+        _llmClient,
         [
           Message.system(_formatInstructions),
           Message.user(prompt),
         ],
         temperature: 0,
-        maxTokens: 32,
+        maxTokens: 1024,
       );
       final raw = result.content.trim();
-      if (raw.isEmpty || result.wasTruncated) return null;
+      if (raw.isEmpty) return null;
       final match = RegExp(r'^\s*(\d+)\s*$').firstMatch(raw);
       if (match == null) return null;
       final index = int.tryParse(match.group(1)!);

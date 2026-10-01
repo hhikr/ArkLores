@@ -8,6 +8,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import 'game_retrieval.dart';
 import 'gamedata_query_plan.dart';
 import 'story_line_search.dart';
+import 'story_vectors.dart';
 
 export 'gamedata_models.dart';
 
@@ -619,6 +620,33 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     );
   }
 
+  /// Vector index of the currently open DB (R12); loaded on first use and
+  /// dropped whenever the connection is reopened for a replaced file.
+  Future<StoryVectorIndex?>? _vectorIndex;
+
+  Future<StoryVectorIndex?> _loadVectorIndex() async {
+    final db = await _open();
+    if (db == null) return null;
+    return _vectorIndex ??= StoryVectorIndex.load(db);
+  }
+
+  @override
+  Future<({String model, int dims})?> get storyVectorInfo async {
+    final index = await _loadVectorIndex();
+    return index == null ? null : (model: index.model, dims: index.dims);
+  }
+
+  @override
+  Future<List<StoryChunkHit>> searchStoryChunksByVector(
+    List<double> queryVector, {
+    String? scopeId,
+    int topK = 20,
+  }) async {
+    final index = await _loadVectorIndex();
+    if (index == null) return const [];
+    return index.search(queryVector, topK: topK, scopeId: scopeId);
+  }
+
   /// LIKE search restricted to a set of story ids (M4b: global claim-term
   /// prioritization for `collect_suspect_evidence`). Escapes LIKE wildcards
   /// in [term] so user-provided terms cannot broaden the match.
@@ -647,6 +675,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     await _db?.close();
     _db = null;
     _openedFileStat = null;
+    _vectorIndex = null;
   }
 
   Future<sqflite.Database?> _open() async {

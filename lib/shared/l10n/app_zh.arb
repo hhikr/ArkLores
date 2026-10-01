@@ -31,6 +31,8 @@
   "apiSettingsTitle": "API 设置",
   "apiSettingsChatSection": "对话 API",
   "apiSettingsChatDesc": "用于 AI 对话（事实核查、梗概生成、角色扮演）。",
+  "apiSettingsEmbeddingSection": "向量 API（可选）",
+  "apiSettingsEmbeddingDesc": "用于剧情调查的语义原文召回。模型需与已安装知识库的向量一致（如阿里云百炼 qwen3.7-text-embedding）。不填 Key 时只用关键词检索。",
   "apiSettingsUseSameProvider": "使用与对话相同的提供商",
   "apiSettingsLabelBaseUrl": "接口地址",
   "apiSettingsLabelApiKey": "API 密钥",

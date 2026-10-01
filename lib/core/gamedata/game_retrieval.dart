@@ -10,9 +10,11 @@ library;
 
 import 'gamedata_models.dart';
 import 'story_coverage_models.dart';
+import 'story_vectors.dart';
 
 export 'gamedata_models.dart';
 export 'story_coverage_models.dart';
+export 'story_vectors.dart' show StoryChunkHit;
 
 /// The retrieval surface the investigation tools depend on.
 abstract interface class GameDataRetrieval {
@@ -68,6 +70,18 @@ abstract interface class GameDataRetrieval {
     String? scopeId,
     int storyLimit,
     int linesPerStory,
+  });
+
+  /// R12: model/dims of the DB's optional story-chunk vectors, or null when
+  /// the DB has none (vector recall then stays off).
+  Future<({String model, int dims})?> get storyVectorInfo;
+
+  /// R12: top story-line chunks by cosine similarity to [queryVector]
+  /// (from the model in [storyVectorInfo]). Locating hints, not evidence.
+  Future<List<StoryChunkHit>> searchStoryChunksByVector(
+    List<double> queryVector, {
+    String? scopeId,
+    int topK,
   });
 
   /// LIKE search of story-line content restricted to some story ids.

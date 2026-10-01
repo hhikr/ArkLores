@@ -667,6 +667,7 @@ final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
   return InvestigationAgent(
     llmClient: ref.watch(llmClientProvider),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
+    embeddingClient: ref.watch(embeddingClientProvider),
   );
 });
 

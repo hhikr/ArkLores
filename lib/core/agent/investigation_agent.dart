@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../gamedata/game_retrieval.dart';
+import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'entity_disambiguator.dart';
@@ -27,6 +28,7 @@ class InvestigationAgent {
     GameDataRetrieval? gameDataStore,
     LLMClient? extractorClient,
     LLMClient? disambiguatorClient,
+    EmbeddingClient? embeddingClient,
   })  : _llmClient = llmClient,
         // R12: extraction was never wired in the app (no caller passed an
         // extractor), so read content never reached the answer. Default to
@@ -44,7 +46,10 @@ class InvestigationAgent {
     _toolRegistry.registerAll([
       SearchLocalLoreTool(gameDataStore: store),
       SearchStoryCoverageTool(gameDataStore: store),
-      SearchStoryLinesTool(gameDataStore: store),
+      SearchStoryLinesTool(
+        gameDataStore: store,
+        embeddingClient: embeddingClient,
+      ),
       GetStoryMapTool(gameDataStore: store),
       ReadStoryLinesTool(gameDataStore: store),
       CollectSuspectEvidenceTool(gameDataStore: store),
@@ -69,7 +74,9 @@ class InvestigationAgent {
       extractorClient: _extractorClient,
       disambiguator: _disambiguator,
       minimumToolCalls: 3,
-      stepMaxTokens: 1024,
+      // R12: ceiling, not cost — reasoning models need room before the
+      // one-line intent (completeWithHeadroom escalates when truncated).
+      stepMaxTokens: 4096,
     );
     return loop.run(
       systemPrompt: systemPrompt,

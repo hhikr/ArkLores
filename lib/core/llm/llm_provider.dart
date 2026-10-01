@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/providers/settings_provider.dart';
+import 'embedding_client.dart';
 import 'llm_client.dart';
 import 'openai_client.dart';
 
@@ -16,5 +17,15 @@ final llmClientProvider = Provider<LLMClient>((ref) {
   // Dispose the client when the provider is disposed.
   ref.onDispose(() => client.dispose());
 
+  return client;
+});
+
+/// Embedding client for vector recall (R12); null when no key is set, in
+/// which case `FIND` runs keyword-only.
+final embeddingClientProvider = Provider<EmbeddingClient?>((ref) {
+  final config = ref.watch(embeddingConfigProvider);
+  if (!config.isValid) return null;
+  final client = OpenAICompatibleEmbeddingClient(config: config);
+  ref.onDispose(client.dispose);
   return client;
 });

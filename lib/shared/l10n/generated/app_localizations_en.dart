@@ -1,3 +1,5 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -67,7 +69,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSessionLogs => 'Save AI conversations';
 
   @override
-  String get settingsSessionLogsDesc => 'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.';
+  String get settingsSessionLogsDesc =>
+      'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.';
 
   @override
   String get settingsKnowledgeBase => 'Knowledge Base Management';
@@ -85,7 +88,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get apiSettingsChatSection => 'Chat API';
 
   @override
-  String get apiSettingsChatDesc => 'Used for AI conversations (Fact Check, Summary, Roleplay).';
+  String get apiSettingsChatDesc =>
+      'Used for AI conversations (Fact Check, Summary, Roleplay).';
+
+  @override
+  String get apiSettingsEmbeddingSection => 'Embedding API (optional)';
+
+  @override
+  String get apiSettingsEmbeddingDesc =>
+      'Enables semantic story-line recall for investigations. Must use the same model as the installed knowledge base vectors (e.g. Alibaba Cloud Bailian qwen3.7-text-embedding). Leave the key empty to use keyword search only.';
 
   @override
   String get apiSettingsUseSameProvider => 'Use same provider as Chat';
@@ -109,7 +120,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbTitle => 'Knowledge Base';
 
   @override
-  String get kbConfigWarning => 'Please configure your API Key in Settings before building the knowledge base.';
+  String get kbConfigWarning =>
+      'Please configure your API Key in Settings before building the knowledge base.';
 
   @override
   String get kbIndexOverview => 'Index Overview';
@@ -165,16 +177,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsTitle => 'Materials';
 
   @override
-  String get materialsWarning => '⚠️ Imported book content may contain unofficial interpretations, translation errors, or personal summaries. AI will prioritize Wiki content and cite book sources with caution.';
+  String get materialsWarning =>
+      '⚠️ Imported book content may contain unofficial interpretations, translation errors, or personal summaries. AI will prioritize Wiki content and cite book sources with caution.';
 
   @override
   String get materialsNoBooks => 'No books yet';
 
   @override
-  String get materialsEmptyDesc => 'Import PDF or TXT files to build your personal lore reference library.';
+  String get materialsEmptyDesc =>
+      'Import PDF or TXT files to build your personal lore reference library.';
 
   @override
-  String get materialsNoApiKeyHint => 'Configure your API Key in Settings to enable import.';
+  String get materialsNoApiKeyHint =>
+      'Configure your API Key in Settings to enable import.';
 
   @override
   String get materialsImportButton => 'Import Books';
@@ -268,7 +283,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiChatComingSoon => 'Coming in v0.4';
 
   @override
-  String get aiChatComingSoonDesc => 'Three AI agent modes with citation cards and streaming markdown responses.';
+  String get aiChatComingSoonDesc =>
+      'Three AI agent modes with citation cards and streaming markdown responses.';
 
   @override
   String get wikiTabPrts => 'PRTS Wiki';
@@ -280,13 +296,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wikiSendToAi => 'Send to AI';
 
   @override
-  String get wikiSendToAiDesc => 'Selected Wiki text is reading context only; factual claims are verified separately with GameData.';
+  String get wikiSendToAiDesc =>
+      'Selected Wiki text is reading context only; factual claims are verified separately with GameData.';
 
   @override
-  String get wikiSendToSummaryDesc => 'Summarize from the page and selected text';
+  String get wikiSendToSummaryDesc =>
+      'Summarize from the page and selected text';
 
   @override
-  String get wikiSendToFactCheckDesc => 'Use the selected text as the claim to check';
+  String get wikiSendToFactCheckDesc =>
+      'Use the selected text as the claim to check';
 
   @override
   String get wikiReaderMode => 'Reader mode';
@@ -327,7 +346,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingWelcomeTitle => 'Welcome to ArkLores';
 
   @override
-  String get onboardingWelcomeDesc => 'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• AI-powered fact checking & summaries\n• Import your lore books\n• Immersive character roleplay';
+  String get onboardingWelcomeDesc =>
+      'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• AI-powered fact checking & summaries\n• Import your lore books\n• Immersive character roleplay';
 
   @override
   String get onboardingGetStarted => 'Get Started';
@@ -336,7 +356,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingApiTitle => 'Configure Chat API';
 
   @override
-  String get onboardingApiDesc => 'ArkLores uses your own AI API key.\nConfigure a Chat provider to use AI features.';
+  String get onboardingApiDesc =>
+      'ArkLores uses your own AI API key.\nConfigure a Chat provider to use AI features.';
 
   @override
   String get onboardingSaveContinue => 'Save & Continue';
@@ -348,7 +369,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingDoneTitle => 'All Set!';
 
   @override
-  String get onboardingDoneDesc => 'You\'re ready to explore the world of Arknights and Endfield.\n\nInstall the GameData knowledge base in Settings,\nor start browsing the Wiki!';
+  String get onboardingDoneDesc =>
+      'You\'re ready to explore the world of Arknights and Endfield.\n\nInstall the GameData knowledge base in Settings,\nor start browsing the Wiki!';
 
   @override
   String get onboardingStartExploring => 'Start Exploring';
@@ -366,7 +388,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsShowOnboarding => 'Show Onboarding Guide';
 
   @override
-  String get settingsShowOnboardingDesc => 'Replay the first-launch guide to configure the app';
+  String get settingsShowOnboardingDesc =>
+      'Replay the first-launch guide to configure the app';
 
   @override
   String get aiTabAsk => 'Ask AI';
@@ -375,31 +398,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiModeAuto => 'Auto';
 
   @override
-  String get aiModeAutoDesc => 'AI picks the best mode (summarize / verify / investigate)';
+  String get aiModeAutoDesc =>
+      'AI picks the best mode (summarize / verify / investigate)';
 
   @override
   String get aiModeSummarize => 'Summarize';
 
   @override
-  String get aiModeSummarizeDesc => 'Summarize known lore: characters, events, factions, timeline';
+  String get aiModeSummarizeDesc =>
+      'Summarize known lore: characters, events, factions, timeline';
 
   @override
   String get aiModeVerify => 'Verify';
 
   @override
-  String get aiModeVerifyDesc => 'Judge whether a claim is true (supported / refuted)';
+  String get aiModeVerifyDesc =>
+      'Judge whether a claim is true (supported / refuted)';
 
   @override
   String get aiModeInvestigate => 'Investigate';
 
   @override
-  String get aiModeInvestigateDesc => 'Cross-chapter reasoning: culprit, cause, foreshadowing, truth';
+  String get aiModeInvestigateDesc =>
+      'Cross-chapter reasoning: culprit, cause, foreshadowing, truth';
 
   @override
-  String get aiAskSource => 'Answers are grounded in installed GameData story text only';
+  String get aiAskSource =>
+      'Answers are grounded in installed GameData story text only';
 
   @override
-  String get aiAskEmpty => 'Ask any lore question — summarize, verify, or dig deeper; auto mode picks the approach for you.';
+  String get aiAskEmpty =>
+      'Ask any lore question — summarize, verify, or dig deeper; auto mode picks the approach for you.';
 
   @override
   String get aiAskInputPlaceholder => 'Ask any lore question...';
@@ -408,7 +437,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiAskSuggestionAmiya => 'Who is Amiya?';
 
   @override
-  String get aiAskSuggestionVerify => 'Is Amiya the public leader of Rhodes Island?';
+  String get aiAskSuggestionVerify =>
+      'Is Amiya the public leader of Rhodes Island?';
 
   @override
   String get aiAskSuggestionInvestigate => 'What happened to Miogre\'s death?';
@@ -432,19 +462,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiTabRoleplay => 'Roleplay';
 
   @override
-  String get aiInvestigationSource => 'Investigation scope: installed GameData story text only (appearance enumeration + line-level reading + cross-chapter echoes)';
+  String get aiInvestigationSource =>
+      'Investigation scope: installed GameData story text only (appearance enumeration + line-level reading + cross-chapter echoes)';
 
   @override
-  String get aiInvestigationEmpty => 'Ask a cross-chapter causality or culprit question. The investigation enumerates appearances, reads key chapters, locates cross-chapter details, and compares evidence per suspect before concluding with an evidence chain.';
+  String get aiInvestigationEmpty =>
+      'Ask a cross-chapter causality or culprit question. The investigation enumerates appearances, reads key chapters, locates cross-chapter details, and compares evidence per suspect before concluding with an evidence chain.';
 
   @override
-  String get aiInvestigationInputPlaceholder => 'e.g. Who is responsible for a character\'s death...';
+  String get aiInvestigationInputPlaceholder =>
+      'e.g. Who is responsible for a character\'s death...';
 
   @override
-  String get aiInvestigationSuggestionDeath => 'What is the truth behind Theresis\'s death';
+  String get aiInvestigationSuggestionDeath =>
+      'What is the truth behind Theresis\'s death';
 
   @override
-  String get aiInvestigationSuggestionWeapon => 'Key weapon clues in a death scene';
+  String get aiInvestigationSuggestionWeapon =>
+      'Key weapon clues in a death scene';
 
   @override
   String get aiInvestigationVerdict => 'Investigation verdict';
@@ -477,7 +512,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiFactCheckSource => 'Evidence: installed Chinese GameData only';
 
   @override
-  String get aiFactCheckEmpty => 'Enter a lore claim to check it against local GameData evidence.';
+  String get aiFactCheckEmpty =>
+      'Enter a lore claim to check it against local GameData evidence.';
 
   @override
   String get aiFactCheckInputPlaceholder => 'Enter a claim to verify...';
@@ -571,13 +607,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiInputPlaceholder => 'Enter lore query or claim...';
 
   @override
-  String get aiSummaryInputPlaceholder => 'Enter character, event, location or faction to summarize...';
+  String get aiSummaryInputPlaceholder =>
+      'Enter character, event, location or faction to summarize...';
 
   @override
   String get aiSummarySource => 'Evidence: installed Chinese GameData only';
 
   @override
-  String get aiSummaryEmpty => 'Enter an Arknights character, event, location, or faction to summarize from local GameData evidence.';
+  String get aiSummaryEmpty =>
+      'Enter an Arknights character, event, location, or faction to summarize from local GameData evidence.';
 
   @override
   String get aiSummarySuggestionAmiya => 'Amiya';
@@ -598,7 +636,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiSummaryCanceled => 'Summary generation canceled.';
 
   @override
-  String get aiSettingsRequired => 'Please configure your Chat API Key in settings first to use AI features.';
+  String get aiSettingsRequired =>
+      'Please configure your Chat API Key in settings first to use AI features.';
 
   @override
   String get aiSettingsGoTo => 'Go to Settings';
@@ -607,7 +646,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiClearHistory => 'Clear Chat';
 
   @override
-  String get aiClearHistoryConfirm => 'Are you sure you want to clear the chat history for this tab?';
+  String get aiClearHistoryConfirm =>
+      'Are you sure you want to clear the chat history for this tab?';
 
   @override
   String get aiClearConfirmBtn => 'Clear';
@@ -619,7 +659,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiHistoryTitle => 'Chat History';
 
   @override
-  String get aiHistoryEmpty => 'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.';
+  String get aiHistoryEmpty =>
+      'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.';
 
   @override
   String get aiHistoryContinue => 'Continue';
@@ -631,7 +672,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiHistoryDelete => 'Delete';
 
   @override
-  String get aiHistoryDeleteConfirm => 'Delete this conversation? This cannot be undone.';
+  String get aiHistoryDeleteConfirm =>
+      'Delete this conversation? This cannot be undone.';
 
   @override
   String get aiHistoryCorrupt => 'Corrupt session file';
@@ -645,7 +687,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiRoleplayChoose => 'Choose a character';
 
   @override
-  String get aiRoleplayChooseDesc => 'The character is resolved to a stable GameData entity before dialogue begins.';
+  String get aiRoleplayChooseDesc =>
+      'The character is resolved to a stable GameData entity before dialogue begins.';
 
   @override
   String get aiRoleplayCharacter => 'Character name or alias';
@@ -654,7 +697,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiRoleplayScene => 'Scene (optional)';
 
   @override
-  String get aiRoleplaySceneContext => 'The scene is session context, not GameData evidence';
+  String get aiRoleplaySceneContext =>
+      'The scene is session context, not GameData evidence';
 
   @override
   String get aiRoleplayStart => 'Resolve character and start';
@@ -663,10 +707,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiRoleplayResolving => 'Resolving…';
 
   @override
-  String get aiRoleplayNoDatabase => 'The Chinese GameData knowledge base is not installed. Install it in Settings first.';
+  String get aiRoleplayNoDatabase =>
+      'The Chinese GameData knowledge base is not installed. Install it in Settings first.';
 
   @override
-  String get aiRoleplayNotFound => 'No matching character was found in GameData. Check the name or alias.';
+  String get aiRoleplayNotFound =>
+      'No matching character was found in GameData. Check the name or alias.';
 
   @override
   String get aiRoleplayDisambiguate => 'Choose the matching GameData entity';
@@ -678,10 +724,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiRoleplayRestart => 'Restart';
 
   @override
-  String get aiRoleplayGeneratedNotice => 'Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.';
+  String get aiRoleplayGeneratedNotice =>
+      'Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.';
 
   @override
-  String get aiRoleplayEmpty => 'Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.';
+  String get aiRoleplayEmpty =>
+      'Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.';
 
   @override
   String get aiRoleplayInputPlaceholder => 'Talk to the character…';
@@ -708,13 +756,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsIconDarkShort => 'DARK';
 
   @override
-  String get settingsIconUnsupported => 'Runtime icon switching is not supported on this platform. Settings were saved.';
+  String get settingsIconUnsupported =>
+      'Runtime icon switching is not supported on this platform. Settings were saved.';
 
   @override
   String get settingsWikiSources => 'Wiki Sources';
 
   @override
-  String get settingsWikiSourcesDesc => 'Edit built-in Wiki URLs or add custom Wiki entries.';
+  String get settingsWikiSourcesDesc =>
+      'Edit built-in Wiki URLs or add custom Wiki entries.';
 
   @override
   String get wikiSourcesAddTitle => 'Add Wiki';
@@ -756,7 +806,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbStructuredTitle => 'GameData structured knowledge base';
 
   @override
-  String get kbScopeDescription => 'Since v0.4.5 the Agent uses the structured Chinese GameData library only: entities, aliases, raw records, story lines, document chunks, and FTS. The old Wiki seed and material import indexing pipelines were removed.';
+  String get kbScopeDescription =>
+      'Since v0.4.5 the Agent uses the structured Chinese GameData library only: entities, aliases, raw records, story lines, document chunks, and FTS. The old Wiki seed and material import indexing pipelines were removed.';
 
   @override
   String kbStatusError(String error) {
@@ -767,19 +818,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbInstalled => 'GameData main knowledge base installed';
 
   @override
-  String get kbNoAssetUrl => 'This build has no GameData release asset URL configured';
+  String get kbNoAssetUrl =>
+      'This build has no GameData release asset URL configured';
 
   @override
-  String get kbErrorInvalidUrl => 'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.';
+  String get kbErrorInvalidUrl =>
+      'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.';
 
   @override
-  String get kbErrorTimeout => 'Connection timed out. Switch networks, or make sure the temporary HTTP server and the phone are on the same network.';
+  String get kbErrorTimeout =>
+      'Connection timed out. Switch networks, or make sure the temporary HTTP server and the phone are on the same network.';
 
   @override
-  String get kbErrorNotFound => 'GameData DB file not found. Before release, use a pre-release asset or point --dart-define at a temporary URL.';
+  String get kbErrorNotFound =>
+      'GameData DB file not found. Before release, use a pre-release asset or point --dart-define at a temporary URL.';
 
   @override
-  String get kbErrorChecksum => 'GameData DB checksum failed. The file may be corrupted or the SHA256 does not match the build parameters.';
+  String get kbErrorChecksum =>
+      'GameData DB checksum failed. The file may be corrupted or the SHA256 does not match the build parameters.';
 
   @override
   String kbDownloadFailed(String error) {
@@ -790,7 +846,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbNotInstalled => 'Not installed';
 
   @override
-  String get kbDevAssetHint => 'Before release, use --dart-define=ARKLORES_GAMEDATA_DB_URL to point to a pre-release asset or a LAN temporary .db.gz.';
+  String get kbDevAssetHint =>
+      'Before release, use --dart-define=ARKLORES_GAMEDATA_DB_URL to point to a pre-release asset or a LAN temporary .db.gz.';
 
   @override
   String get kbDownloading => 'Downloading';
@@ -814,7 +871,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildSectionTitle => 'Build from source repo';
 
   @override
-  String get kbBuildSectionDesc => 'Pull the latest unpacked data from Kengxxiao/ArknightsGameData and build or incrementally update the knowledge base on this device. Requires network; ~1.5–2 GB free space for the first build.';
+  String get kbBuildSectionDesc =>
+      'Pull the latest unpacked data from Kengxxiao/ArknightsGameData and build or incrementally update the knowledge base on this device. Requires network; ~1.5–2 GB free space for the first build.';
 
   @override
   String get kbBuildLatestCommit => 'Latest commit';
@@ -835,7 +893,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildChecking => 'Checking upstream commits…';
 
   @override
-  String get kbBuildDownloadingZip => 'Downloading source bundle (first time, large)…';
+  String get kbBuildDownloadingZip =>
+      'Downloading source bundle (first time, large)…';
 
   @override
   String get kbBuildDownloadingChanges => 'Downloading incremental changes…';
@@ -889,10 +948,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildStageFts => 'Rebuilding full-text indexes';
 
   @override
-  String get kbBuildIncrementalDone => 'Incremental update complete; the knowledge base has been replaced.';
+  String get kbBuildIncrementalDone =>
+      'Incremental update complete; the knowledge base has been replaced.';
 
   @override
-  String get kbBuildFullDone => 'Full build complete; the knowledge base has been replaced.';
+  String get kbBuildFullDone =>
+      'Full build complete; the knowledge base has been replaced.';
 
   @override
   String get kbBuildError => 'Build failed';
@@ -901,7 +962,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildTokenTitle => 'GitHub token (optional)';
 
   @override
-  String get kbBuildTokenDesc => 'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to raise the API quota from 60 to 5000 requests/hour and avoid rate-limit failures on shared proxy egress IPs. The token is stored in OS secure storage and never logged.';
+  String get kbBuildTokenDesc =>
+      'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to raise the API quota from 60 to 5000 requests/hour and avoid rate-limit failures on shared proxy egress IPs. The token is stored in OS secure storage and never logged.';
 
   @override
   String get kbBuildTokenPlaceholder => 'Paste GitHub token';
@@ -922,7 +984,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsPausedTitle => 'User material import is not enabled yet';
 
   @override
-  String get materialsPausedDesc => 'The legacy PDF/TXT import pipeline is paused. Since v0.4.5 the Agent uses the structured GameData knowledge base, FTS, and exact matching only.';
+  String get materialsPausedDesc =>
+      'The legacy PDF/TXT import pipeline is paused. Since v0.4.5 the Agent uses the structured GameData knowledge base, FTS, and exact matching only.';
 
   @override
   String get wikiLoadFailed => 'Wiki page failed to load';
@@ -931,11 +994,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wikiRetry => 'Retry';
 
   @override
-  String get wikiErrorDns => 'Could not resolve the Wiki domain. Check your network, DNS, or proxy and retry.';
+  String get wikiErrorDns =>
+      'Could not resolve the Wiki domain. Check your network, DNS, or proxy and retry.';
 
   @override
-  String get wikiErrorTimeout => 'Connection timed out. Switch networks or check that your proxy/VPN is connected, then retry.';
+  String get wikiErrorTimeout =>
+      'Connection timed out. Switch networks or check that your proxy/VPN is connected, then retry.';
 
   @override
-  String get wikiErrorOffline => 'The device currently has no network connection.';
+  String get wikiErrorOffline =>
+      'The device currently has no network connection.';
 }

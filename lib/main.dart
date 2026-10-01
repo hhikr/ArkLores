@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/agent/agent_logger.dart';
+import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
 import 'features/settings/api_settings_page.dart';
 import 'features/settings/app_icon_service.dart';
@@ -36,6 +37,13 @@ void main() async {
     apiConfig = await settingsService.loadApiConfig();
   } catch (e) {
     debugPrint('[Startup] Error loading API config: $e');
+  }
+
+  var embeddingConfig = defaultEmbeddingConfig;
+  try {
+    embeddingConfig = await settingsService.loadEmbeddingConfig();
+  } catch (e) {
+    debugPrint('[Startup] Error loading embedding config: $e');
   }
 
   var mainTabIndex = 0;
@@ -79,6 +87,7 @@ void main() async {
       overrides: [
         onboardingDoneProvider.overrideWithValue(onboardingDone),
         initialApiConfigProvider.overrideWithValue(apiConfig),
+        initialEmbeddingConfigProvider.overrideWithValue(embeddingConfig),
         initialMainTabIndexProvider.overrideWithValue(mainTabIndex),
         initialThemeProvider.overrideWithValue(appTheme),
         initialLocaleProvider.overrideWithValue(appLocale),
