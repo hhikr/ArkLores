@@ -160,7 +160,12 @@ IntentRecord? parseIntent(String line) {
                 } else if (t.startsWith('top_k=')) {
                   final k = int.tryParse(t.substring(6).trim());
                   if (k != null) args['top_k'] = k;
-                } else if (queryParts.isNotEmpty && int.tryParse(t) != null) {
+                } else if (queryParts.isNotEmpty &&
+                    (int.tryParse(t) ?? 0) > 0 &&
+                    int.parse(t) <= _maxBareTopK) {
+                  // A small bare number is a result count; a larger one
+                  // (a year, an id) is part of the query (R13: `FIND 罗德岛
+                  // 庆典 2030` used to search with top_k=2030).
                   args['top_k'] = int.parse(t);
                 } else {
                   queryParts.add(t);
@@ -265,6 +270,9 @@ IntentRecord? parseIntent(String line) {
   }
   return null;
 }
+
+/// Largest bare trailing number read as FIND's result count.
+const int _maxBareTopK = 50;
 
 /// Strips one pair of surrounding ASCII/CJK quotes.
 String _unquote(String value) {

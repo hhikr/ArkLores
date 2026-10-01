@@ -80,6 +80,13 @@ void main() {
       expect(phrase!.args['query'], '特蕾西娅 王冠');
     });
 
+    test('FIND keeps large numbers (years) in the query', () {
+      final year = parseIntent('FIND 罗德岛 庆典 2030');
+      expect(year!.args['query'], '罗德岛 庆典 2030');
+      expect(year.args.containsKey('top_k'), isFalse);
+      expect(parseIntent('FIND 罗德岛 庆典 8')!.args['top_k'], 8);
+    });
+
     test('RESELECT parses entity_id', () {
       final reselect = parseIntent('RESELECT enemy:enemy_3006_tersia');
       expect(reselect!.action, 'RESELECT');
@@ -336,6 +343,24 @@ void main() {
       expect(events.any((e) => e.type == ReActEventType.complete), isTrue);
       expect(mock.callCount, greaterThanOrEqualTo(8));
       expect(mock.callCount, lessThan(30));
+    });
+
+    test('semantic-only FIND hits are not progress, so re-phrased searches '
+        'stall out', () async {
+      final mock = _RephrasedFindLLM();
+      final loop = PlannerLoop(
+        llmClient: mock,
+        toolRegistry: ToolRegistry()..register(_SemanticOnlyFindTool()),
+        minimumToolCalls: 1,
+        safetyMaxIterations: 40,
+      );
+      final events = await loop
+          .run(systemPrompt: 's', chatHistory: [], userQuery: 'q')
+          .toList();
+      expect(answerOf(events), startsWith('[STORY_ANSWER: status=not_covered'));
+      // 1 step + 8 stalled steps (+ the writer call), well under the
+      // 24-step budget that the live negative case used to exhaust.
+      expect(mock.callCount, lessThanOrEqualTo(11));
     });
 
     test('a stalled run that read something ends partial via the writer',
@@ -1131,6 +1156,64 @@ class _EmptyResponseLLM extends LLMClient {
       temperature: temperature,
       maxTokens: maxTokens,
       stop: stop,
+    );
+  }
+}
+
+/// Re-phrases a fruitless FIND every step (fresh signature each time).
+class _RephrasedFindLLM extends LLMClient {
+  int callCount = 0;
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    return 'FIND 无此事 变体$callCount';
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
+}
+
+/// search_story_lines-shaped tool: every call returns DIFFERENT stories,
+/// all marked as semantic-only neighbours (no literal hit).
+class _SemanticOnlyFindTool extends AgentTool {
+  int calls = 0;
+
+  @override
+  String get name => 'search_story_lines';
+
+  @override
+  String get description => 'Finds story lines.';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    calls++;
+    return ToolExecutionResult(
+      observation: 'Story line hits:\n'
+          'Story: s$calls.txt | Scope: x | 无字面命中（仅语义相近）\n'
+          '  Lines 0-11 (semantic 0.5)',
     );
   }
 }

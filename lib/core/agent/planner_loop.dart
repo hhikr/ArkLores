@@ -387,6 +387,7 @@ DONE
         state.noteSearchLog(
           _searchLogKey(intent.action, args),
           _storyIdsIn(observation),
+          leads: _storyIdsIn(observation, literalOnly: true),
         );
       }
       recent.add(Message.user('Observation: $observation'));
@@ -447,10 +448,16 @@ DONE
   }
 
   /// First story ids listed in a FIND/COVER observation (`Story: <id> | …`).
-  static List<String> _storyIdsIn(String observation, {int limit = 5}) {
+  /// [literalOnly] skips stories FIND marked as semantic-only neighbours.
+  static List<String> _storyIdsIn(
+    String observation, {
+    int limit = 5,
+    bool literalOnly = false,
+  }) {
     final ids = <String>[];
     for (final match
-        in RegExp(r'^Story: (\S+)', multiLine: true).allMatches(observation)) {
+        in RegExp(r'^Story: (\S+)(.*)$', multiLine: true).allMatches(observation)) {
+      if (literalOnly && match.group(2)!.contains('仅语义相近')) continue;
       final id = match.group(1)!;
       if (!ids.contains(id)) ids.add(id);
       if (ids.length >= limit) break;

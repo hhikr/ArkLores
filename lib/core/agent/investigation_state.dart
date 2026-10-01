@@ -185,11 +185,18 @@ class InvestigationState {
   /// Stories any FIND/COVER has surfaced so far.
   final Set<String> discoveredStories = {};
 
-  /// Records an executed FIND/COVER and the story ids it surfaced.
-  void noteSearchLog(String key, List<String> storyIds) {
+  /// Records an executed FIND/COVER and the story ids it surfaced. Only
+  /// [leads] — stories with a literal match — count as discovered: a
+  /// semantic-only neighbour always exists, so counting those let a
+  /// fruitless run look productive forever (R13 negative live case).
+  void noteSearchLog(
+    String key,
+    List<String> storyIds, {
+    Iterable<String>? leads,
+  }) {
     if (key.trim().isEmpty) return;
     searchLog[key.trim()] = storyIds;
-    discoveredStories.addAll(storyIds);
+    discoveredStories.addAll(leads ?? storyIds);
   }
 
   /// R12 progress fingerprint: changes whenever the investigation learned
