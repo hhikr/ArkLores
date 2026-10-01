@@ -39,6 +39,28 @@
 5. **不制造隐性证据**：检索/画像字段只能是"浏览提示或定位线索"，绝不参与事实
    判定或推理打分；判定只能由 Agent 基于检索到的原文形成。
 
+## 禁止针对验收样例编程（anti-fixture-hardcoding）
+
+背景教训（R11，2026-08）：调查死循环修复曾以"导致特蕾西娅死亡的罪魁祸首是谁"
+为真机验收样例。该样例必须只作为**测试 fixture 与人工验收场景**，绝不进入
+产品逻辑。任何 agent 改动 agent/检索/数据层前必须自查：
+
+1. **产品代码（`lib/`）不得出现具体实体名/实体 id/剧情桥段字面量作为判定分支
+   或特征**：如"特蕾西娅→选魔王候选""凶手问题→xx"这类针对特定问题的特判。
+   实体名只能出现在注释/示例文案/测试 fixture 中；判定必须消费运行时输入
+   （当前 query、候选列表、状态），而非固定值。
+2. **通用机制验证方法**：新逻辑若只对某个样例有效而对"任意剧情问题"无意义，
+   一律拒绝（与上方第 1 条同理）。修改后可自测：把样例换成一个不相关实体
+   （如"阿米娅的某件事是谁做的"）或虚构实体，逻辑路径应同样成立。
+3. **测试 fixture 允许具体实体**（它们是模拟输入，不是产品逻辑），但不得把
+   fixture 里的具体 id/名字复制进 `lib/` 的判定条件；测试断言只验证通用行为
+   （如"选了候选而非无脑选第一个""重复搜索被终结"），不验证某个具体实体
+   被特殊对待。
+4. **自查命令**：改动后运行
+   `grep -rn "特蕾西娅\|enemy_1554\|enemy_3006\|trap_762" lib/`，
+   结果应只有注释/文案；任何出现在 `if`/`switch`/数据结构键/检索参数中的
+   具体实体，都必须证明其通用性（如来自运行时候选列表）。
+
 ## Useful Commands
 
 ```bash
@@ -49,3 +71,26 @@
 HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
   --db=build/gamedata_mobile/arklores_gamedata_zh.db
 ```
+
+### 电脑端调查复现（不需真机）
+
+改完 agent/检索层后，先在电脑上用真实 GameData DB + 真实 LLM 跑一轮完整调查，
+确认无死循环/无失败，再真机验证。CLI 驱动器：
+
+```bash
+HOME=/tmp /home/hhikr/flutter/bin/dart run tools/run_investigation.dart \
+  --db=build/gamedata_mobile/arklores_gamedata_zh.db \
+  --query="导致特蕾西娅死亡的罪魁祸首是谁" \
+  --out=build/investigation_run.json
+```
+
+API 配置从 gitignored `tools/api_info`（API_KEY=/MODEL=/URL=）读取，或用
+`--api-key / --model / --url` 或环境变量 `ARKLORES_API_KEY/MODEL/URL` 覆盖。
+**绝不提交有效 API key**——`tools/api_info` 只在本地存在，示例用占位 key，
+真实 key 由开发者本机提供。输出写入 `build/investigation_run.json`，
+可与 `logs/conversation_*.json` 对比行为。
+
+注意：`run_investigation.dart` 只 import 纯 Dart 模块（`planner_loop`、
+`react_event`、`entity_disambiguator`、`llm`），用 `sqflite_common_ffi` 直开
+DB，不依赖 Flutter-bound 的 `GameDataKnowledgeStore`。若新增工具要进 CLI，
+改用 FFI 实现或以纯 Dart 注入。

@@ -1,15 +1,15 @@
-import '../../gamedata/gamedata_knowledge_store.dart';
+import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
 
 /// Enumerates every appearance of an entity across stories (schema v3
 /// `entity_story_mentions`). Deterministic coverage: independent of query
 /// phrasing, so a narrow compound query can never silently miss appearances.
 class SearchStoryCoverageTool extends AgentTool {
-  SearchStoryCoverageTool({GameDataKnowledgeStore? gameDataStore})
-      : _gameDataStore = gameDataStore ?? GameDataKnowledgeStore();
+  SearchStoryCoverageTool({GameDataRetrieval? gameDataStore})
+      : _gameDataStore = gameDataStore;
   static const int _maxObservationChars = 4800;
 
-  final GameDataKnowledgeStore? _gameDataStore;
+  final GameDataRetrieval? _gameDataStore;
 
   @override
   String get name => 'search_story_coverage';

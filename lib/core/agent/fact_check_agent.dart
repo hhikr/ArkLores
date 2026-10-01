@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../gamedata/game_retrieval.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'react_loop.dart';
@@ -15,9 +16,13 @@ extension FactCheckVerdictWireValue on FactCheckVerdict {
 
 class FactCheckAgent {
 
-  FactCheckAgent({required LLMClient llmClient, AgentTool? searchTool})
-      : _llmClient = llmClient,
-        _searchTool = searchTool ?? SearchLocalLoreTool();
+  FactCheckAgent({
+    required LLMClient llmClient,
+    GameDataRetrieval? gameDataStore,
+    AgentTool? searchTool,
+  })  : _llmClient = llmClient,
+        _searchTool = searchTool ??
+            SearchLocalLoreTool(gameDataStore: gameDataStore);
   final LLMClient _llmClient;
   final AgentTool _searchTool;
 

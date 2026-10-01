@@ -1,4 +1,4 @@
-import '../gamedata/gamedata_knowledge_store.dart';
+import '../gamedata/game_retrieval.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'react_loop.dart';
@@ -21,21 +21,22 @@ class RoleplayAgent {
 
   RoleplayAgent({
     required LLMClient llmClient,
-    GameDataKnowledgeStore? gameDataStore,
+    GameDataRetrieval? gameDataStore,
     AgentTool? searchTool,
   })  : _llmClient = llmClient,
-        _store = gameDataStore ?? GameDataKnowledgeStore(),
+        _store = gameDataStore,
         _searchTool =
             searchTool ?? SearchLocalLoreTool(gameDataStore: gameDataStore);
   final LLMClient _llmClient;
-  final GameDataKnowledgeStore _store;
+  final GameDataRetrieval? _store;
   final AgentTool _searchTool;
 
   Future<CharacterResolution> resolveCharacter(String query) async {
-    if (!await _store.isAvailable) {
+    final store = _store;
+    if (store == null || !await store.isAvailable) {
       return const CharacterResolution(CharacterResolutionStatus.unavailable);
     }
-    final candidates = await _store.findEntityCandidates(query);
+    final candidates = await store.findEntityCandidates(query);
     final exact = candidates
         .where((candidate) =>
             candidate.matchType == 'name_exact' ||

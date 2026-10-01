@@ -1,10 +1,11 @@
 import 'dart:async';
 
-import '../gamedata/gamedata_knowledge_store.dart';
+import '../gamedata/game_retrieval.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
+import 'entity_disambiguator.dart';
 import 'planner_loop.dart';
-import 'react_loop.dart';
+import 'react_event.dart';
 import 'tools/collect_suspect_evidence.dart';
 import 'tools/get_story_map.dart';
 import 'tools/read_story_lines.dart';
@@ -22,17 +23,20 @@ import 'tools/tool_registry.dart';
 class InvestigationAgent {
   InvestigationAgent({
     required LLMClient llmClient,
-    GameDataKnowledgeStore? gameDataStore,
+    GameDataRetrieval? gameDataStore,
     LLMClient? extractorClient,
+    LLMClient? disambiguatorClient,
   })  : _llmClient = llmClient,
         _extractorClient = extractorClient,
+        _disambiguator =
+            EntityDisambiguator(llmClient: disambiguatorClient ?? llmClient),
         _toolRegistry = ToolRegistry() {
     // R9: ALL tools share ONE store instance. Each tool defaulting to its own
     // GameDataKnowledgeStore() meant several sqflite connections to the same
     // file; sqflite's singleInstance returns the same underlying connection,
     // and one store's stat-change close() then killed the shared connection
     // mid-investigation (database_closed after repeated SEARCH calls).
-    final store = gameDataStore ?? GameDataKnowledgeStore();
+    final store = gameDataStore;
     _toolRegistry.registerAll([
       SearchLocalLoreTool(gameDataStore: store),
       SearchStoryCoverageTool(gameDataStore: store),
@@ -43,6 +47,7 @@ class InvestigationAgent {
   }
   final LLMClient _llmClient;
   final LLMClient? _extractorClient;
+  final EntityDisambiguator _disambiguator;
   final ToolRegistry _toolRegistry;
 
   /// Runs an investigation for [query] via the planner loop.
@@ -57,6 +62,7 @@ class InvestigationAgent {
       llmClient: _llmClient,
       toolRegistry: _toolRegistry,
       extractorClient: _extractorClient,
+      disambiguator: _disambiguator,
       minimumToolCalls: 3,
       stepMaxTokens: 1024,
     );

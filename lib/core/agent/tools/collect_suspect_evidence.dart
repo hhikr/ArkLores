@@ -1,5 +1,4 @@
-import '../../gamedata/gamedata_knowledge_store.dart';
-import '../../gamedata/story_coverage_models.dart';
+import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
 import 'observation_data.dart';
 
@@ -8,12 +7,12 @@ import 'observation_data.dart';
 /// multi-candidate comparison protocol: run it per suspect and compare the
 /// evidence sets (S6 gate counts candidates with non-empty evidence).
 class CollectSuspectEvidenceTool extends AgentTool {
-  CollectSuspectEvidenceTool({GameDataKnowledgeStore? gameDataStore})
-      : _gameDataStore = gameDataStore ?? GameDataKnowledgeStore();
+  CollectSuspectEvidenceTool({GameDataRetrieval? gameDataStore})
+      : _gameDataStore = gameDataStore;
   static const int _maxObservationChars = 4800;
   static const int _pageSize = 4; // runs per page
 
-  final GameDataKnowledgeStore? _gameDataStore;
+  final GameDataRetrieval? _gameDataStore;
 
   @override
   String get name => 'collect_suspect_evidence';

@@ -1,15 +1,15 @@
-import '../../gamedata/gamedata_knowledge_store.dart';
+import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
 
 /// Reads raw story lines by story id with window + pagination. Exposes the
 /// original text so the agent can read key chapters directly instead of
 /// relying only on similarity-ranked excerpts.
 class ReadStoryLinesTool extends AgentTool {
-  ReadStoryLinesTool({GameDataKnowledgeStore? gameDataStore})
-      : _gameDataStore = gameDataStore ?? GameDataKnowledgeStore();
+  ReadStoryLinesTool({GameDataRetrieval? gameDataStore})
+      : _gameDataStore = gameDataStore;
   static const int _maxObservationChars = 4800;
 
-  final GameDataKnowledgeStore? _gameDataStore;
+  final GameDataRetrieval? _gameDataStore;
 
   @override
   String get name => 'read_story_lines';

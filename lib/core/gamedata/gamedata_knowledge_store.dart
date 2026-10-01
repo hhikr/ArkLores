@@ -5,13 +5,12 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
-import 'gamedata_models.dart';
+import 'game_retrieval.dart';
 import 'gamedata_query_plan.dart';
-import 'story_coverage_models.dart';
 
 export 'gamedata_models.dart';
 
-class GameDataKnowledgeStore {
+class GameDataKnowledgeStore implements GameDataRetrieval {
 
   GameDataKnowledgeStore({this.dbPath});
   final String? dbPath;
@@ -22,11 +21,13 @@ class GameDataKnowledgeStore {
   /// keep serving the stale file; [_open] reopens when this stamp changes.
   FileStat? _openedFileStat;
 
+  @override
   Future<bool> get isAvailable async {
     final path = await _resolveDbPath();
     return path != null && File(path).existsSync();
   }
 
+  @override
   Future<List<GameDataSearchResult>> search({
     required String query,
     int topK = 5,
@@ -214,6 +215,60 @@ class GameDataKnowledgeStore {
     return results.take(limit).toList();
   }
 
+  /// Resolves [raw] (an entity id, possibly suffix-only, or an exact entity
+  /// name/alias) to a canonical entity id.
+  ///
+  /// Order of attempt:
+  ///   1. exact `entities.id` match;
+  ///   2. if [raw] contains no namespace prefix (`:`), try prefixing each known
+  ///      namespace (`enemy:`, `char:` …) at most once;
+  ///   3. exact `entities.name` / `entity_aliases.alias` match.
+  /// Returns null when nothing resolves.
+  @override
+  Future<String?> resolveEntityId(String raw) async {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    final db = await _open();
+    if (db == null) return null;
+
+    final direct = await db.rawQuery(
+      'SELECT id FROM entities WHERE id = ? LIMIT 1',
+      [value],
+    );
+    if (direct.isNotEmpty) return '${direct.first['id']}';
+
+    if (!value.contains(':')) {
+      // Suffix-only id: match any namespace prefix once (e.g. `enemy_1554_lrtsia`
+      // -> `enemy:enemy_1554_lrtsia`). Substring LIKE would over-match
+      // (`char_002` matching `char_002_amiya`); anchor to the suffix end.
+      final suffix = value.replaceAll('%', r'\%').replaceAll('_', r'\_');
+      final prefixed = await db.rawQuery(
+        "SELECT id FROM entities WHERE id = ? OR id LIKE ? ESCAPE '\\' LIMIT 1",
+        [value, '%:$suffix'],
+      );
+      if (prefixed.isNotEmpty) return '${prefixed.first['id']}';
+    }
+
+    final hasAliasTable = await _hasTable(db, 'entity_aliases');
+    if (hasAliasTable) {
+      final byName = await db.rawQuery(
+        '''
+        SELECT e.id
+        FROM entities e
+        LEFT JOIN entity_aliases ea ON ea.entity_id = e.id
+        WHERE e.name = ? OR ea.alias = ?
+        GROUP BY e.id
+        ORDER BY CASE WHEN e.name = ? THEN 0 ELSE 1 END
+        LIMIT 1
+        ''',
+        [value, value, value],
+      );
+      if (byName.isNotEmpty) return '${byName.first['id']}';
+    }
+    return null;
+  }
+
+  @override
   Future<List<GameDataEntityCandidate>> findEntityCandidates(
     String query, {
     int limit = 8,
@@ -307,6 +362,7 @@ class GameDataKnowledgeStore {
   ///
   /// Empty when the coverage tables are absent (old schema) or the entity has
   /// no recorded mentions.
+  @override
   Future<List<StoryCoverageEntry>> searchStoryCoverage({
     required String entityId,
     String? scopeFilter,
@@ -351,6 +407,7 @@ class GameDataKnowledgeStore {
   /// limits the page size; [pageToken] (opaque, from a previous page)
   /// continues from that line. Returns [StoryLinesPage] with the next
   /// continuation token when more lines remain.
+  @override
   Future<StoryLinesPage> readStoryLines({
     required String storyId,
     int? startLine,
@@ -419,6 +476,7 @@ class GameDataKnowledgeStore {
 
   /// Returns chapter profiles (schema v3 `story_chapter_profiles`) for the
   /// given [storyIds] or all stories of [scopeId].
+  @override
   Future<List<StoryChapterProfile>> getStoryMap({
     List<String>? storyIds,
     String? scopeId,
@@ -545,6 +603,7 @@ class GameDataKnowledgeStore {
   /// LIKE search restricted to a set of story ids (M4b: global claim-term
   /// prioritization for `collect_suspect_evidence`). Escapes LIKE wildcards
   /// in [term] so user-provided terms cannot broaden the match.
+  @override
   Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
     String term,
     List<String> storyIds, {

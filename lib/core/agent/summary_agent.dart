@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../gamedata/gamedata_knowledge_store.dart';
+import '../gamedata/game_retrieval.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'react_loop.dart';
@@ -22,7 +22,7 @@ import 'tools/tool_registry.dart';
 class SummaryAgent {
   SummaryAgent({
     required LLMClient llmClient,
-    GameDataKnowledgeStore? gameDataStore,
+    GameDataRetrieval? gameDataStore,
   })  : _llmClient = llmClient,
         _toolRegistry = ToolRegistry() {
     _toolRegistry.registerAll([

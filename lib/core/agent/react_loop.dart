@@ -5,43 +5,13 @@ import '../llm/llm_client.dart';
 import 'agent_logger.dart';
 import 'evidence_summary.dart';
 import 'loop_memory.dart';
+import 'react_event.dart';
 import 'react_parser.dart';
 import 'tools/agent_tool.dart';
 import 'tools/tool_registry.dart';
 
-typedef FinalAnswerTransform = String Function(
-  String answer,
-  List<String> observations,
-);
-
-/// Types of events emitted by the ReAct Loop.
-enum ReActEventType {
-  thought,
-  toolCall,
-  toolObservation,
-  finalAnswerToken,
-  error,
-  complete,
-}
-
-/// Event emitted by the ReAct Loop for UI subscription.
-class ReActEvent {
-
-  const ReActEvent({
-    required this.type,
-    this.content = '',
-    this.toolName,
-    this.toolArgs,
-  });
-  final ReActEventType type;
-  final String content;
-  final String? toolName;
-  final Map<String, dynamic>? toolArgs;
-
-  @override
-  String toString() =>
-      'ReActEvent(type: $type, content: $content, toolName: $toolName, toolArgs: $toolArgs)';
-}
+/// Types of events emitted by the ReAct Loop. (Re)exported for compatibility.
+export 'react_event.dart' show FinalAnswerTransform, ReActEvent, ReActEventType;
 
 /// Executor for the ReAct (Reasoning and Acting) loop.
 ///

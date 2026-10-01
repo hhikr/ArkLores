@@ -23,17 +23,29 @@ import 'summary_agent.dart';
 
 export 'chat_message.dart';
 
+/// Shared GameData retrieval store injected into every agent (R11.2): agents
+/// type their store as the `GameDataRetrieval` interface so the same tool
+/// classes also run on the desktop CLI with an FFI-backed store. The mobile
+/// provider supplies the concrete Sqlite store.
+final sharedGameDataStoreProvider = Provider<GameDataKnowledgeStore>((ref) {
+  return GameDataKnowledgeStore();
+});
+
 /// Provider for the [SummaryAgent] instance.
 final summaryAgentProvider = Provider<SummaryAgent>((ref) {
   final llm = ref.watch(llmClientProvider);
 
   return SummaryAgent(
     llmClient: llm,
+    gameDataStore: ref.watch(sharedGameDataStoreProvider),
   );
 });
 
 final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
-  return FactCheckAgent(llmClient: ref.watch(llmClientProvider));
+  return FactCheckAgent(
+    llmClient: ref.watch(llmClientProvider),
+    gameDataStore: ref.watch(sharedGameDataStoreProvider),
+  );
 });
 
 /// State notifier for Summary Chat history and processing.
@@ -652,7 +664,10 @@ final askChatProvider =
 
 /// Provider for the [InvestigationAgent] instance.
 final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
-  return InvestigationAgent(llmClient: ref.watch(llmClientProvider));
+  return InvestigationAgent(
+    llmClient: ref.watch(llmClientProvider),
+    gameDataStore: ref.watch(sharedGameDataStoreProvider),
+  );
 });
 
 /// State notifier for the Investigation Chat (R3): cross-chapter mystery

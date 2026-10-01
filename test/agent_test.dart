@@ -284,6 +284,45 @@ void main() {
       expect(observation, contains('候选实体（请用 Entity ID 消歧）'));
     });
 
+    test('explicit entity_id skips the disambiguation branch (R11)',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      await _insertAmbiguousAmiyaCandidate(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      // Same ambiguous name, but with an explicit entity_id: must NOT return
+      // the ambiguity list — it goes straight to entity-scoped retrieval.
+      final result = await tool.execute({
+        'query': 'Amiya',
+        'top_k': 3,
+        'entity_id': 'char_002_amiya',
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, isNot(contains('Ambiguous')));
+    });
+
+    test('entity-id literal query resolves and searches by id (R11)',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      // `SEARCH char_002_amiya` — suffix-only id literal. Must resolve to the
+      // canonical id and search by it, not treat the id as free text.
+      final result = await tool.execute({'query': 'char_002_amiya', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, contains('Entity ID: char_002_amiya'));
+    });
+
     test('summary mode announces retrieval plan and includes story context',
         () async {
       final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';

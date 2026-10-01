@@ -12,13 +12,15 @@ import 'dart:convert';
 /// A parsed intent.
 class IntentRecord {
   const IntentRecord({required this.action, required this.args});
-  final String action; // READ | SEARCH | MAP | COLLECT | SUMMARIZE | VERDICT | DONE
+  final String action; // READ | SEARCH | MAP | COLLECT | SUMMARIZE | VERDICT | DONE | RESELECT
   final Map<String, dynamic> args;
 }
 
 /// Parses one intent line (or a JSON-ish object) into an [IntentRecord].
 ///
-/// Returns null when the line is not a valid intent.
+/// Returns null when the line is not a valid intent — including a line that
+/// contains more than one intent (multi-intent lines are rejected wholesale so
+/// the model cannot silently drop actions; R11).
 IntentRecord? parseIntent(String line) {
   final trimmed = line.trim();
   if (trimmed.isEmpty) return null;
@@ -33,9 +35,18 @@ IntentRecord? parseIntent(String line) {
     'COLLECT',
     'SUMMARIZE',
     'VERDICT',
+    'RESELECT',
   ]) {
     if (upper == prefix || upper.startsWith('$prefix ')) {
+      // Reject multi-intent lines: after the matched prefix the rest must be
+      // a single line with no other intent keyword.
       final rest = trimmed.substring(prefix.length).trim();
+      if (RegExp(
+        r'^(READ|SEARCH|MAP|COLLECT|SUMMARIZE|VERDICT|RESELECT|DONE)\b',
+        multiLine: true,
+      ).hasMatch(rest)) {
+        return null;
+      }
       final args = <String, dynamic>{};
       try {
         // Intent lines are strict space-separated, but tolerate a leading
@@ -104,18 +115,89 @@ IntentRecord? parseIntent(String line) {
               args['culprit'] = tokens.first;
               if (tokens.length > 1) args['confidence'] = tokens[1];
               if (tokens.length > 2) args['basis'] = tokens[2];
-            case 'SEARCH':
+            case 'RESELECT':
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;
-              // Strip surrounding quotes the model may add around the query.
-              var q = tokens.first;
-              if (q.length >= 2 &&
-                  ((q.startsWith('"') && q.endsWith('"')) ||
-                      (q.startsWith("'") && q.endsWith("'")))) {
-                q = q.substring(1, q.length - 1);
+              args['entity_id'] = tokens.first;
+            case 'SEARCH':
+              // R11.2: the query may be a multi-word phrase. Collect tokens as
+              // the query until an explicit `id=` or a trailing bare number
+              // (top_k), so `SEARCH 特蕾西娅 死亡 id=enemy:...` keeps the full
+              // phrase instead of dropping everything after the first token.
+              // A quoted phrase (`SEARCH "特蕾西娅 死亡"`) is kept verbatim.
+              final rawTokens = rest.split(RegExp(r'\s+'));
+              if (rawTokens.isEmpty || rawTokens.first.isEmpty) return null;
+
+              // Extract a trailing `id=` argument (anywhere after the query).
+              String? explicitId;
+              int? topK;
+              for (final t in rawTokens.skip(1)) {
+                if (t.startsWith('id=')) {
+                  final id = t.substring(3).trim();
+                  if (id.isNotEmpty) explicitId = id;
+                }
               }
-              args['query'] = q;
-              if (tokens.length > 1) args['top_k'] = int.tryParse(tokens[1]);
+
+              final first = rawTokens.first;
+              if (first.startsWith('id=')) {
+                final id = first.substring(3).trim();
+                if (id.isEmpty) return null;
+                args['entity_id'] = id;
+                args['query'] = id;
+                if (rawTokens.length > 1) {
+                  topK = int.tryParse(rawTokens[1]);
+                }
+              } else if (first.startsWith('"') || first.startsWith("'")) {
+                // Quoted phrase: preserve inner spaces verbatim.
+                final quote = first[0];
+                final parts = <String>[];
+                var closed = false;
+                if (first.length >= 2 && first.endsWith(quote)) {
+                  parts.add(first.substring(1, first.length - 1));
+                  closed = true;
+                } else {
+                  parts.add(first.substring(1));
+                }
+                for (final t in rawTokens.skip(1)) {
+                  if (!closed) {
+                    if (t.endsWith(quote)) {
+                      parts.add(t.substring(0, t.length - 1));
+                      closed = true;
+                    } else {
+                      parts.add(t);
+                    }
+                  } else if (t.startsWith('id=')) {
+                    final id = t.substring(3).trim();
+                    if (id.isNotEmpty) explicitId = id;
+                  } else if (t.startsWith('top_k=')) {
+                    topK = int.tryParse(t.substring(6).trim());
+                  } else if (int.tryParse(t) != null) {
+                    topK = int.tryParse(t);
+                  }
+                }
+                args['query'] = parts.join(' ');
+              } else {
+                // Unquoted multi-word query: join tokens until the first that
+                // is an `id=`, a `top_k=` argument, or a standalone number.
+                final queryParts = <String>[first];
+                for (final t in rawTokens.skip(1)) {
+                  if (t.startsWith('id=')) continue;
+                  if (t.startsWith('top_k=')) {
+                    topK = int.tryParse(t.substring(6).trim());
+                    break;
+                  }
+                  final num = int.tryParse(t);
+                  if (num != null) {
+                    topK = num;
+                    break;
+                  }
+                  queryParts.add(t);
+                }
+                args['query'] = queryParts.join(' ');
+              }
+              if (explicitId != null) args['entity_id'] = explicitId;
+              if (topK != null) args['top_k'] = topK;
+              // Fall back to no top_k when absent (tool defaults to 5).
           }
           if (args.isEmpty) return null;
         }

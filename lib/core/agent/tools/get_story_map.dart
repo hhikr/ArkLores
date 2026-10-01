@@ -1,16 +1,15 @@
-import '../../gamedata/gamedata_knowledge_store.dart';
-import '../../gamedata/story_coverage_models.dart';
+import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
 
 /// Returns chapter profiles (line range, speakers, entity density, summary,
 /// triage keyword hits) for choosing which stories to read closely.
 /// Profiles are browsing aids, not evidence.
 class GetStoryMapTool extends AgentTool {
-  GetStoryMapTool({GameDataKnowledgeStore? gameDataStore})
-      : _gameDataStore = gameDataStore ?? GameDataKnowledgeStore();
+  GetStoryMapTool({GameDataRetrieval? gameDataStore})
+      : _gameDataStore = gameDataStore;
   static const int _maxObservationChars = 4800;
 
-  final GameDataKnowledgeStore? _gameDataStore;
+  final GameDataRetrieval? _gameDataStore;
 
   @override
   String get name => 'get_story_map';
