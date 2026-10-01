@@ -248,7 +248,7 @@ schema 已预留 `game` 字段，未来接入不需要改表。
 **修复方向与触发条件**：检索质量量化显示"俗称召回"缺口后，把规则表升级为
 可维护的同义词表（带来源与置信度），并接入 alias 构建流程。
 
-### 5.3 歧义候选展示依赖 Agent 调用（Mitigated）
+### 5.3 歧义候选展示依赖 Agent 调用（Closed，R11）
 
 **现象与影响**："特蕾西娅"有 3 个 alias 候选（两个 enemy 实体 + 一个 trap），
 工具层会返回带 entity_id、类型、来源与 confidence 的候选块；但用户是否
@@ -265,12 +265,18 @@ schema 已预留 `game` 字段，未来接入不需要改表。
 - 项目已把 Fact-check 的 supported/refuted 结论用 observation 二次校验
   代码化（verdict transform），但候选展示仍是行为层。
 
-**当前缓解**：Fact-check prompt 明确要求歧义时输出存疑并要求用户消歧；
+**当前缓解（R11 前）**：Fact-check prompt 明确要求歧义时输出存疑并要求用户消歧；
 `agent_test.dart` 覆盖实体歧义场景；live QA 验证过真实 provider 下的歧义处理。
 
-**修复方向与触发条件**：Agent 质量迭代（共享 story evidence layer、结构化
-步骤协议、deterministic post-check）时将"歧义必须展示候选"升级为可执行的
-结构化协议字段，而不是 prompt 期望。
+**R11 修复（2026-08-26）**：消歧从"prompt 期望"升级为**代码协议**：
+调查 Agent 的歧义分支由执行器自动处理——`EntityDisambiguator`（辅助 Agent，
+一次轻量 LLM 调用）按用户问题语义 + 候选列表选择实体（失败回退最高置信度
+候选#1），选择写入 `InvestigationState.targetEntity`；候选清单与已尝试集合
+进入状态，`RESELECT <entity_id>` 可切换未尝试候选且拒绝重复选择；`SEARCH`
+对已消歧名字自动注入 entity_id、支持 `id=` 语法与实体 id 字面量检索；
+重复 SEARCH 无进展时执行器自动转 `search_story_coverage`，仍无覆盖则以
+`unresolved` 收场（循环在代码层面终结，不再依赖模型自觉）。详见
+`docs/AI_REFACTOR_SUMMARY.md` R11 小节。
 
 ## 6. 代码结构与维护性
 
@@ -594,10 +600,11 @@ v0.7 之后演进为右下角可展开托盘，旧组件未随演进删除。
 | 4.1 | 无 update manifest | Open | 数据产品化 | 数据需按游戏节奏刷新 |
 | 4.2 | 无增量包/差异报告 | Open | 数据产品化 | 刷新频率或下载成本反馈 |
 | 4.3 | 终末地无 active 数据源 | Open/Mitigated | 授权与契约 | 来源协议确认 |
-| 4.4 | schema v2 语义压在 FTS/LIKE | Open | 检索架构 | 质量量化证明不足 |
+| 4.4 | schema v2 语义压在 FTS/LIKE | Open（R12 补充：story_lines/lore_chunks FTS 为 unicode61，中文无效） | 检索架构 | R12 P1 向量召回 |
 | 5.1 | 组织/概念汇总实体缺失 | Open | 数据构建 | schema v3 立项 |
 | 5.2 | 同义词归一化为规则表 | Open | 数据维护 | 俗称召回缺口量化 |
-| 5.3 | 歧义展示依赖 Agent 行为 | Mitigated | LLM 编排不确定性 | 结构化步骤协议 |
+| 5.3 | 歧义展示依赖 Agent 行为 | Reopened（R12：消歧器收到硬编码 type；同名出场可能相同） | LLM 编排不确定性 | R12 P0 消歧修正 |
+| R12 | 调查链路信息流断裂（原文不进答案、缺剧情检索意图、CLI 不等价、无评测） | Open | Agent 架构 | 见 `R12_BOTTLENECK_ANALYSIS.md` |
 | 6.1 | 大文件职责集中 | Closed | 重构未立项 | 五个大文件全部拆出独立模块 |
 | 6.2 | 重复路由实现 | Closed | 清理未立项 | 已删除重复实现 |
 | 6.3 | analyzer 规则未收紧 | Closed | 规则配套重构 | 已启用 strict + 10 条 lint，0 issues |
@@ -628,3 +635,38 @@ G 重复调用烧光余额。修复：引入**PlannerLoop（三角色分工）**
 [InvestigationState]（阶段/已读要点/证据）；提取 Agent 把读到的章节压成 ≤150 字要点
 存入状态（模型不再重读回忆）。配套：git 摘要 80 字、网络异常自动重试、402 余额提示。
 investigation 切到 PlannerLoop；summary/factcheck/roleplay 保留旧 ReActLoop。
+
+**R11 更新（SEARCH 死路消除 + 问题语义消歧 + 防重选记忆）**：R10 后真机复现
+（`logs/conversation_0beaa9fd*.json`）显示调查仍在 SEARCH 上无限自我重复
+（13 步里 8 步重复 `SEARCH 特蕾西娅`、4 步 `SEARCH enemy:...` 永远 No matching）。
+根因三条死路：① 消歧结果不进下一次检索（已消歧名再 SEARCH 仍重新歧义）；
+② 意图协议无 entity_id、按 id 检索无路可走；③ 自动选#1 选错不可纠、状态无
+重复计数 → 循环无代码终点。修复：**EntityDisambiguator** 辅助 Agent 按问题
+语义选候选（失败回退#1）；消歧结果进状态（候选清单/已尝试集合/名字→id 映射/
+重复与无结果计数/覆盖兜底标记）；SEARCH 支持 `id=` 与 id 字面量、已消歧名
+自动注入 id、显式 entity_id 跳过歧义；新意图 **RESELECT** 切换未尝试候选且
+拒绝重复；同一搜索键第 3 次重复自动转 search_story_coverage，已兜底仍重复
+或空覆盖则直接 `unresolved` 收场；多意图行拒绝、引号短语保留。测试 200 全绿。
+
+**R11.1 更新（重复终结误判修正）**：R11 后真机复现
+（`logs/conversation_284c0267-*.json`）显示重复终结**生效但误杀**——模型已精读
+4 个章节（含"巴别塔意外"关键线索）、调查仍有实质进展时被 `unresolved` 抢先终止。
+四个代码缺陷：① 有结果的重复也被判死循环（计数在工具执行前无条件递增）；
+② key 注入后不一致（原名/id 分散计数、覆盖兜底重复注入）；③ 终止不看整体进展
+（无视已读章节/证据）；④ RESELECT 换候选不隔离计数（新候选继承旧候选的计数，
+"看第 2/3 个候选"会被误杀）。修复：**无进展计数**（有结果重置计数，只有无结果
+才递增）；**key 归一化**（计数/兜底标记统一用规范 id）；**进展门控**（有已读章节
+或证据时注入"请 COLLECT/VERDICT"引导而非终止，仅既无 SEARCH 进展又无任何
+已读/证据时才 unresolved）；**RESELECT 重置计数**（`resetSearchTrackingFor(id)`，
+换候选后各自独立基线）。测试 200 → 205 全绿。
+
+**R12 复盘（2026-10-01，信息流瓶颈）**：R8→R11.2 四轮修复集中在终止控制，
+计数规则三次改向，真机失败形态每轮都变，但从未产出基于原文的有效答案。
+根因不在循环控制：① App 未接入提取器，Writer 只拿到 story_id + 行号，
+R3 引用校验在 R8 后失联——原文进不了答案；② 意图协议无 coverage / 行级原文检索，
+SEARCH 只能拿实体档案——这是重复 SEARCH 的结构根源；③ 消歧器收到硬编码
+type，且同名候选出场可能相同；④ `consecutiveNoResult` 全局连坐；⑤ CLI 数据层
+是简化重写；⑥ 无评测集；另发现 `story_lines_fts` / `lore_chunks_fts` 为
+unicode61 分词，中文无效。详见 `docs/R12_BOTTLENECK_ANALYSIS.md`，修复按
+P0（证据笔记本、COVER/FIND 意图、消歧与计数修正）→ P1（CLI 用真 store、
+行级向量召回、评测集、循环控制简化）推进。
