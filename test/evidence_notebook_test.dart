@@ -225,7 +225,7 @@ void main() {
       ).run(systemPrompt: 'sys', chatHistory: const [], userQuery: 'q').toList();
 
       final answer = _answer(events);
-      expect(answer, contains('basis=stalled'));
+      expect(answer, startsWith('[STORY_ANSWER: status=partial'));
       expect(answer, contains('部分回答'));
       expect(llm.writerRequests, hasLength(1));
     });
@@ -246,7 +246,7 @@ void main() {
       ).run(systemPrompt: 'sys', chatHistory: const [], userQuery: 'q').toList();
 
       final answer = _answer(events);
-      expect(answer, contains('没有获得新信息'));
+      expect(answer, startsWith('[STORY_ANSWER: status=not_covered'));
       // 1 productive search + 8 stalled steps, far below the 24/40 budgets.
       expect(llm.plannerRequests.length, lessThanOrEqualTo(10));
     });
@@ -268,7 +268,7 @@ void main() {
           ..registerAll([_DataReadTool(), _RecordingTool('search_story_lines')]),
       ).run(systemPrompt: 'sys', chatHistory: const [], userQuery: 'q').toList();
 
-      expect(_answer(events), contains('basis=step_budget'));
+      expect(_answer(events), startsWith('[STORY_ANSWER: status=partial'));
       expect(_answer(events), contains('按预算结束的回答'));
     });
 

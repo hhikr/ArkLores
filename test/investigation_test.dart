@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/agent/agent_prompts.dart';
-import 'package:arklores/core/agent/investigation_verdict.dart';
 import 'package:arklores/core/agent/loop_memory.dart';
 import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/collect_suspect_evidence.dart';
+import 'package:arklores/core/agent/tools/collect_entity_evidence.dart';
 import 'package:arklores/core/agent/tools/find_detail_echoes.dart';
 import 'package:arklores/core/agent/tools/observation_data.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
@@ -159,34 +159,32 @@ void main() {
     });
   });
 
-  group('collect_suspect_evidence tool', () {
+  group('collect_entity_evidence tool', () {
     test('returns evidence rows and DATA counts', () async {
-      final tool = CollectSuspectEvidenceTool(
+      final tool = CollectEntityEvidenceTool(
         gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
       );
       final result = await tool.execute({
         'entity_id': 'char_b',
       }) as ToolExecutionResult;
-      expect(result.observation, contains('Suspect: char_b'));
+      expect(result.observation, contains('Entity: char_b'));
       expect(result.observation, contains('End of Evidence: yes'));
 
       final blocks = parseDataBlocks(result.observation);
       final data = blocks.first;
-      expect(data['type'], 'collect_suspect_evidence');
+      expect(data['type'], 'collect_entity_evidence');
       expect(data['entity_id'], 'char_b');
       expect((data['evidence_rows'] as num).toInt(), greaterThan(0));
       expect((data['scopes'] as List), contains('activity:act_fixture'));
     });
 
-    test('claim terms reorder runs so matching chapters come first (M4b)',
+    test('terms reorder runs so matching chapters come first (M4b)',
         () async {
-      final tool = CollectSuspectEvidenceTool(
+      final tool = CollectEntityEvidenceTool(
         gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
       );
-      // char_b appears in c4 ("匕首一直在我这里") then c5 ("当年我藏起匕首").
-      // Without claims the first run is c4; with the claim term 藏起 the
-      // c5 run (which matches) must be listed first even though it is the
-      // lexicographically later chapter.
+      // char_b appears in c4 then c5. Without terms the first run is c4;
+      // with the term 藏起 the c5 run (which matches) must come first.
       final plain = await tool.execute({
         'entity_id': 'char_b',
       }) as ToolExecutionResult;
@@ -195,95 +193,57 @@ void main() {
         lessThan(plain.observation.indexOf('level_fixture_c5.txt')),
       );
 
-      final claimed = await tool.execute({
-        'entity_id': 'char_b',
-        'claim_terms': ['藏起'],
-      }) as ToolExecutionResult;
-      expect(
-        claimed.observation.indexOf('level_fixture_c5.txt'),
-        lessThan(claimed.observation.indexOf('level_fixture_c4.txt')),
-      );
-      expect(claimed.observation, contains('[claim]'));
-    });
-  });
-
-  group('investigation tool set (M5)', () {
-    test('prompt no longer advertises find_detail_echoes', () {
-      final prompt = buildAgentPrompt(investigationInstructions);
-      expect(prompt, isNot(contains('find_detail_echoes')));
-      expect(prompt, contains('collect_suspect_evidence'));
-    });
-  });
-
-  group('investigation verdict transform', () {
-    List<String> twoSuspectObservations() => [
-          'Story: activities/act_fixture/level_fixture_c5.txt\n'
-              'Scope: activity:act_fixture\n0 | 角色B | 当年我藏起匕首。\n'
-              'Read Lines: 1\nEnd of Story: yes',
-          appendDataBlock('Suspect evidence for char_a', {
-            'type': 'collect_suspect_evidence',
-            'entity_id': 'char_a',
-            'evidence_rows': 5,
-            'scopes': ['activity:act_fixture'],
-            'total_runs': 2,
-            'next_page_token': null,
-          }),
-          appendDataBlock('Suspect evidence for char_b', {
-            'type': 'collect_suspect_evidence',
-            'entity_id': 'char_b',
-            'evidence_rows': 3,
-            'scopes': ['activity:act_fixture'],
-            'total_runs': 2,
-            'next_page_token': null,
-          }),
-        ];
-
-    test('keeps a culprit when the S6 gate is satisfied', () {
-      final out = validateInvestigationVerdict(
-        '角色B是凶手。证据链：activities/act_fixture/level_fixture_c5.txt:0。\n\n'
-            '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.8 | basis=multi_hypothesis_contrast]',
-        twoSuspectObservations(),
-      );
-      expect(out, contains('culprit=char_b'));
-      expect(out, isNot(contains('S6 gate')));
-      expect(out, isNot(contains('Source warning')));
-    });
-
-    test('downgrades a culprit when fewer than two suspects have evidence',
-        () {
-      final observations = twoSuspectObservations().sublist(0, 2);
-      final out = validateInvestigationVerdict(
-        '角色B是凶手。\n\n'
-            '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.9 | basis=multi_hypothesis_contrast]',
-        observations,
-      );
-      expect(out, contains('culprit=unresolved'));
-      expect(out, contains('S6 gate'));
-    });
-
-    test('allows single-suspect-exhausted declarations', () {
-      final observations = twoSuspectObservations().sublist(0, 1)..add(
-          'Explicit: single-suspect-exhausted — only one suspect appears.',
+      for (final key in const ['terms', 'claim_terms']) {
+        final ordered = await tool.execute({
+          'entity_id': 'char_b',
+          key: ['藏起'],
+        }) as ToolExecutionResult;
+        expect(
+          ordered.observation.indexOf('level_fixture_c5.txt'),
+          lessThan(ordered.observation.indexOf('level_fixture_c4.txt')),
+          reason: key,
         );
-      final out = validateInvestigationVerdict(
-        '角色B是唯一嫌疑人。\n\n'
-            '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.6 | basis=single_suspect_exhausted]',
-        observations,
-      );
-      expect(out, contains('culprit=char_b'));
-      expect(out, isNot(contains('S6 gate')));
+        expect(ordered.observation, contains('[term]'));
+      }
+    });
+  });
+
+  group('story planner prompt (R13)', () {
+    test('is question-type neutral and advertises the current tools', () {
+      expect(storyPlannerInstructions, isNot(contains('find_detail_echoes')));
+      expect(storyPlannerInstructions, contains('ANSWER'));
+      expect(storyPlannerInstructions, isNot(contains('VERDICT')));
+    });
+  });
+
+  group('story answer envelope (R13)', () {
+    test('formats and parses the code-decided status', () {
+      for (final status in StoryAnswerStatus.values) {
+        final line = formatStoryAnswerEnvelope(status, confidence: '0.7');
+        final parsed = parseStoryAnswerEnvelope('$line\n正文')!;
+        expect(parsed.status, status);
+        expect(parsed.confidence, '0.7');
+      }
+      final bare = parseStoryAnswerEnvelope(
+        formatStoryAnswerEnvelope(StoryAnswerStatus.notCovered),
+      )!;
+      expect(bare.status, StoryAnswerStatus.notCovered);
+      expect(bare.confidence, isNull);
+      expect(parseStoryAnswerEnvelope('no envelope here'), isNull);
     });
 
-    test('warns on line references missing from observations', () {
-      final out = validateInvestigationVerdict(
-        '证据链：activities/act_fixture/level_fixture_c5.txt:0 和 '
-            'activities/act_fixture/level_fixture_c9.txt:99。\n\n'
-            '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.8 | basis=multi_hypothesis_contrast]',
-        twoSuspectObservations(),
-      );
-      expect(out, contains('Source warning'));
-      expect(out, contains('level_fixture_c9.txt:99'));
-      expect(out, isNot(contains('level_fixture_c5.txt:0,')));
+    test('still reads pre-R13 envelopes of saved conversations', () {
+      final answered = parseStoryAnswerEnvelope(
+        '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.8 | '
+        'basis=multi_hypothesis_contrast]\n正文',
+      )!;
+      expect(answered.status, StoryAnswerStatus.answered);
+      expect(answered.confidence, '0.8');
+      final unresolved = parseStoryAnswerEnvelope(
+        '[INVESTIGATION_VERDICT: culprit=unresolved | confidence=0 | '
+        'basis=insufficient_evidence]',
+      )!;
+      expect(unresolved.status, StoryAnswerStatus.partial);
     });
   });
 

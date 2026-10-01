@@ -833,7 +833,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiModeInvestigateDesc.
   ///
   /// In en, this message translates to:
-  /// **'Cross-chapter reasoning: culprit, cause, foreshadowing, truth'**
+  /// **'Answer a specific question (who, why, how, relationships) with cited story text'**
   String get aiModeInvestigateDesc;
 
   /// No description provided for @aiAskSource.
@@ -869,7 +869,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiAskSuggestionInvestigate.
   ///
   /// In en, this message translates to:
-  /// **'What happened to Miogre\'s death?'**
+  /// **'How was Reunion founded?'**
   String get aiAskSuggestionInvestigate;
 
   /// No description provided for @aiAskError.
@@ -908,53 +908,35 @@ abstract class AppLocalizations {
   /// **'Roleplay'**
   String get aiTabRoleplay;
 
-  /// No description provided for @aiInvestigationSource.
+  /// No description provided for @aiAnswerStatus.
   ///
   /// In en, this message translates to:
-  /// **'Investigation scope: installed GameData story text only (appearance enumeration + line-level reading + cross-chapter echoes)'**
-  String get aiInvestigationSource;
+  /// **'Answer status'**
+  String get aiAnswerStatus;
 
-  /// No description provided for @aiInvestigationEmpty.
+  /// No description provided for @aiAnswerStatusAnswered.
   ///
   /// In en, this message translates to:
-  /// **'Ask a cross-chapter causality or culprit question. The investigation enumerates appearances, reads key chapters, locates cross-chapter details, and compares evidence per suspect before concluding with an evidence chain.'**
-  String get aiInvestigationEmpty;
+  /// **'Answered'**
+  String get aiAnswerStatusAnswered;
 
-  /// No description provided for @aiInvestigationInputPlaceholder.
+  /// No description provided for @aiAnswerStatusPartial.
   ///
   /// In en, this message translates to:
-  /// **'e.g. Who is responsible for a character\'s death...'**
-  String get aiInvestigationInputPlaceholder;
+  /// **'Partial (limited evidence)'**
+  String get aiAnswerStatusPartial;
 
-  /// No description provided for @aiInvestigationSuggestionDeath.
+  /// No description provided for @aiAnswerStatusNotCovered.
   ///
   /// In en, this message translates to:
-  /// **'What is the truth behind Theresis\'s death'**
-  String get aiInvestigationSuggestionDeath;
-
-  /// No description provided for @aiInvestigationSuggestionWeapon.
-  ///
-  /// In en, this message translates to:
-  /// **'Key weapon clues in a death scene'**
-  String get aiInvestigationSuggestionWeapon;
-
-  /// No description provided for @aiInvestigationVerdict.
-  ///
-  /// In en, this message translates to:
-  /// **'Investigation verdict'**
-  String get aiInvestigationVerdict;
+  /// **'Not covered by the knowledge base'**
+  String get aiAnswerStatusNotCovered;
 
   /// No description provided for @aiInvestigationConfidence.
   ///
   /// In en, this message translates to:
   /// **'Confidence'**
   String get aiInvestigationConfidence;
-
-  /// No description provided for @aiInvestigationBasis.
-  ///
-  /// In en, this message translates to:
-  /// **'Basis'**
-  String get aiInvestigationBasis;
 
   /// No description provided for @aiInvestigationEvidenceChain.
   ///

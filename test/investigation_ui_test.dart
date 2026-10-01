@@ -1,6 +1,5 @@
 import 'package:arklores/core/agent/chat_message.dart';
-import 'package:arklores/core/agent/investigation_verdict.dart';
-import 'package:arklores/core/agent/story_coverage_transform.dart';
+import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
@@ -13,22 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('investigation UI parsing helpers', () {
-    test('parses the verdict envelope', () {
-      final envelope = parseInvestigationVerdictLine(
-        '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.8 | basis=multi_hypothesis_contrast]',
-      );
-      expect(envelope, isNotNull);
-      expect(envelope!.culprit, 'char_b');
-      expect(envelope.confidence, '0.8');
-      expect(envelope.basis, 'multi_hypothesis_contrast');
-      expect(
-        parseInvestigationVerdictLine('no verdict here'),
-        isNull,
-      );
-    });
-
-    test('parses the coverage line', () {
+  group('story answer UI parsing helpers', () {
+    test('parses the legacy coverage line of old sessions', () {
       final line = parseCoverageReportLine(
         'Coverage: read=2 | mapped=1 | skipped=0',
       );
@@ -39,42 +24,36 @@ void main() {
     });
 
     test('extracts line references and strips markers', () {
-      const content =
-          '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.8 | basis=multi_hypothesis_contrast]\n'
-          '证据链：activities/act_fixture/level_fixture_c5.txt:0 与 '
+      final content =
+          '${formatStoryAnswerEnvelope(StoryAnswerStatus.answered, confidence: '0.8')}\n'
+          '证据：activities/act_fixture/level_fixture_c5.txt:0 与 '
           'activities/act_fixture/level_fixture_c1.txt:2。\n\n'
           'Coverage: read=1 | mapped=1 | skipped=0';
-      expect(isInvestigationAnswer(content), isTrue);
+      expect(isStoryAnswer(content), isTrue);
       expect(extractLineReferences(content), [
         'activities/act_fixture/level_fixture_c1.txt:2',
         'activities/act_fixture/level_fixture_c5.txt:0',
       ]);
-      final stripped = stripInvestigationMarkers(content);
-      expect(stripped, isNot(contains('INVESTIGATION_VERDICT')));
+      final stripped = stripStoryAnswerMarkers(content);
+      expect(stripped, isNot(contains('STORY_ANSWER')));
       expect(stripped, isNot(contains('Coverage: read=')));
-      expect(stripped, contains('证据链'));
+      expect(stripped, contains('证据'));
+
+      const legacy = '[INVESTIGATION_VERDICT: culprit=x | confidence=0.5 | '
+          'basis=b]\n正文';
+      expect(isStoryAnswer(legacy), isTrue);
+      expect(stripStoryAnswerMarkers(legacy), '正文');
     });
   });
 
-  group('investigation chat bubble rendering', () {
-    testWidgets('shows verdict, evidence chain refs and coverage bar',
-        (tester) async {
-      tester.view.physicalSize = const Size(640, 1280);
-      tester.view.devicePixelRatio = 2;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
+  group('story answer chat bubble rendering', () {
+    Future<void> pumpBubble(WidgetTester tester, String content) async {
       final message = ChatMessage(
-        id: 'investigation-answer',
+        id: 'story-answer',
         role: MessageRole.assistant,
-        content:
-            '[INVESTIGATION_VERDICT: culprit=char_b | confidence=0.8 | basis=multi_hypothesis_contrast]\n'
-            '角色B是凶手。证据链：'
-            'activities/act_fixture/level_fixture_c5.txt:0。\n\n'
-            'Coverage: read=1 | mapped=1 | skipped=0',
+        content: content,
         timestamp: DateTime(2026),
       );
-
       await tester.pumpWidget(
         ProviderScope(
           child: MaterialApp(
@@ -86,44 +65,49 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+    }
 
-      expect(find.textContaining('调查结论'), findsOneWidget);
-      expect(find.textContaining('char_b'), findsWidgets);
+    testWidgets('shows status, confidence and cited lines', (tester) async {
+      tester.view.physicalSize = const Size(640, 1280);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpBubble(
+        tester,
+        '${formatStoryAnswerEnvelope(StoryAnswerStatus.answered, confidence: '0.8')}\n'
+        '答案正文。证据：activities/act_fixture/level_fixture_c5.txt:0。',
+      );
+
+      expect(find.textContaining('回答状态: 已作答'), findsOneWidget);
       expect(find.textContaining('置信度: 0.8'), findsOneWidget);
       expect(find.text('证据链引用'), findsOneWidget);
       expect(
         find.text('activities/act_fixture/level_fixture_c5.txt:0'),
         findsOneWidget,
       );
-      expect(find.textContaining('已读范围'), findsOneWidget);
-      expect(find.textContaining('精读=1'), findsOneWidget);
-      // Markers are stripped from the markdown body.
-      expect(find.textContaining('INVESTIGATION_VERDICT'), findsNothing);
+      // The envelope is stripped from the markdown body.
+      expect(find.textContaining('STORY_ANSWER'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('marks unresolved verdicts with the warning accent',
-        (tester) async {
-      final message = ChatMessage(
-        id: 'investigation-unresolved',
-        role: MessageRole.assistant,
-        content:
-            '[INVESTIGATION_VERDICT: culprit=unresolved | confidence=0 | basis=insufficient_evidence]\n'
-            '证据不足。',
-        timestamp: DateTime(2026),
+    testWidgets('renders not-covered and legacy answers', (tester) async {
+      await pumpBubble(
+        tester,
+        '${formatStoryAnswerEnvelope(StoryAnswerStatus.notCovered, confidence: '0')}\n'
+        '知识库未找到相关内容。',
       );
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            locale: const Locale('zh'),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(body: ChatBubble(message: message)),
-          ),
-        ),
+      expect(find.textContaining('知识库未覆盖'), findsWidgets);
+
+      await pumpBubble(
+        tester,
+        '[INVESTIGATION_VERDICT: culprit=unresolved | confidence=0 | '
+        'basis=insufficient_evidence]\n证据不足。\n\n'
+        'Coverage: read=1 | mapped=1 | skipped=0',
       );
-      await tester.pumpAndSettle();
-      expect(find.textContaining('unresolved'), findsWidgets);
+      expect(find.textContaining('部分作答'), findsOneWidget);
+      expect(find.textContaining('精读=1'), findsOneWidget);
+      expect(find.textContaining('INVESTIGATION_VERDICT'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

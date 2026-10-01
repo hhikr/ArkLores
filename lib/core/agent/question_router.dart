@@ -5,9 +5,12 @@ import '../llm/llm_client.dart';
 /// `auto` lets the [QuestionRouter] pick the workflow; the other three map
 /// one-to-one to the existing agents:
 ///
-/// - [AiMode.summarize]    -> SummaryAgent (整理已知信息)
-/// - [AiMode.verify]       -> FactCheckAgent (判定说法真假)
-/// - [AiMode.investigate]  -> InvestigationAgent (跨章节推理未知)
+/// - [AiMode.summarize]    -> SummaryAgent (梗概)
+/// - [AiMode.verify]       -> FactCheckAgent (核查一个说法)
+/// - [AiMode.investigate]  -> InvestigationAgent (直接回答一个具体问题)
+///
+/// Since R13 all three run the same retrieval pipeline; the mode only picks
+/// the answer format.
 enum AiMode { auto, summarize, verify, investigate }
 
 /// Outcome of one routing decision.
@@ -44,18 +47,19 @@ class QuestionRouter {
   static const String classificationPrompt = '''
 你是明日方舟剧情问题的模式分类器。只输出一个单词，不要任何其他文字。
 
-根据用户想得到什么来选择模式，而不是看表面词：
-- summarize（概括）：用户想了解"已知信息"——人物/事件/组织是什么、经历、时间线、
-  剧情回顾、档案资料、语音等。输出是对既有剧情的整理总结。
+根据用户想要的回答形式来选择模式，而不是看表面词：
+- summarize（概括）：用户想要关于某个人物/事件/组织/章节的整体梗概——是什么、
+  经历、时间线、剧情回顾。输出是概述 + 时间线。
 - verify（查证）：用户给出了一个"说法/断言"，想知道它对不对——含"对吗、真的吗、
-  是不是、据说、属实、真假"等判断意图。输出是 supported/refuted 式的真假判定。
-- investigate（深挖）：用户想推出"剧情没直说的信息"——跨章节因果、凶手、动机、
-  伏笔、真相、谁干的、怎么发生的。输出是带证据链的推理结论。
+  是不是、据说、属实"等判断意图。输出是真假判定。
+- investigate（深挖）：用户问了一个具体问题，想要直接答案——谁、为什么、怎样、
+  在哪、何时、有什么关系。输出是直接回答 + 证据。
 
 边界示例：
 - "阿米娅是谁" → summarize
 - "阿米娅是罗德岛的公开领袖吗" → verify
-- "米格鲁的死到底是谁造成的" → investigate
+- "<某角色>最后怎么样了" → investigate
+- "<某角色>和<另一角色>是什么关系" → investigate
 ''';
 
   /// Routes [query] to a concrete mode (never returns [AiMode.auto]).

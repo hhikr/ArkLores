@@ -12,7 +12,7 @@ import 'dart:convert';
 /// A parsed intent.
 class IntentRecord {
   const IntentRecord({required this.action, required this.args});
-  final String action; // READ | SEARCH | COVER | FIND | MAP | COLLECT | SUMMARIZE | VERDICT | DONE | RESELECT
+  final String action; // READ | SEARCH | COVER | FIND | MAP | COLLECT | SUMMARIZE | ANSWER | DONE | RESELECT
   final Map<String, dynamic> args;
 }
 
@@ -36,6 +36,7 @@ IntentRecord? parseIntent(String line) {
     'MAP',
     'COLLECT',
     'SUMMARIZE',
+    'ANSWER',
     'VERDICT',
     'RESELECT',
   ]) {
@@ -44,7 +45,7 @@ IntentRecord? parseIntent(String line) {
       // a single line with no other intent keyword.
       final rest = trimmed.substring(prefix.length).trim();
       if (RegExp(
-        r'^(READ|SEARCH|COVER|FIND|MAP|COLLECT|SUMMARIZE|VERDICT|RESELECT|DONE)\b',
+        r'^(READ|SEARCH|COVER|FIND|MAP|COLLECT|SUMMARIZE|ANSWER|VERDICT|RESELECT|DONE)\b',
         multiLine: true,
       ).hasMatch(rest)) {
         return null;
@@ -85,7 +86,8 @@ IntentRecord? parseIntent(String line) {
               if (tokens.isEmpty || tokens.first.isEmpty) return null;
               args['entity_id'] = tokens.first;
               if (tokens.length > 1) {
-                // claim_terms=[杀,特蕾西娅,血] scope_ids=[a,b]
+                // terms=[a,b] scope_ids=[c,d] (`claim_terms=` is the pre-R13
+                // spelling of `terms=`)
                 for (final token in tokens.skip(1)) {
                   final kv = RegExp(r'^([a-z_]+)=\[(.+)\]$')
                       .firstMatch(token.trim());
@@ -97,26 +99,35 @@ IntentRecord? parseIntent(String line) {
                         .map((t) => t.trim())
                         .where((t) => t.isNotEmpty)
                         .toList();
-                    if (key == 'claim_terms') {
-                      args['claim_terms'] = values;
+                    if (key == 'terms' || key == 'claim_terms') {
+                      args['terms'] = values;
                     } else if (key == 'scope_ids') {
                       args['scope_ids'] = values;
                     }
                   }
                 }
-                if (!args.containsKey('claim_terms')) {
-                  final claims = tokens
+                if (!args.containsKey('terms') &&
+                    !args.containsKey('scope_ids')) {
+                  args['terms'] = tokens
                       .skip(1)
-                      .map((t) => t.replaceAll(',', ''));
-                  args['claim_terms'] = claims.toList();
+                      .map((t) => t.replaceAll(',', ''))
+                      .toList();
                 }
               }
+            case 'ANSWER':
             case 'VERDICT':
-              final tokens = rest.split(RegExp(r'\s+'));
-              if (tokens.isEmpty || tokens.first.isEmpty) return null;
-              args['culprit'] = tokens.first;
-              if (tokens.length > 1) args['confidence'] = tokens[1];
-              if (tokens.length > 2) args['basis'] = tokens[2];
+              // R13: `ANSWER [confidence]` only says "the evidence is enough";
+              // the writer decides the answer. `VERDICT …` is the pre-R13
+              // spelling: its first number-like token is kept as the
+              // confidence, everything else is ignored.
+              for (final t in rest.split(RegExp(r'\s+'))) {
+                final value = double.tryParse(t);
+                if (value != null && value >= 0 && value <= 1) {
+                  args['confidence'] = t;
+                  break;
+                }
+              }
+              return IntentRecord(action: 'ANSWER', args: args);
             case 'RESELECT':
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;

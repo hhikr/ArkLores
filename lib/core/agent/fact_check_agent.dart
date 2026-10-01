@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import '../gamedata/game_retrieval.dart';
+import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
-import 'agent_prompts.dart';
-import 'react_loop.dart';
+import 'react_event.dart';
+import 'story_answer.dart';
+import 'story_qa_agent.dart';
 import 'tools/agent_tool.dart';
-import 'tools/search_local_lore.dart';
-import 'tools/tool_registry.dart';
 
 enum FactCheckVerdict { supported, refuted, uncertain, unavailable }
 
@@ -14,89 +14,40 @@ extension FactCheckVerdictWireValue on FactCheckVerdict {
   String get wireValue => name;
 }
 
+/// Ask "verify" mode: a `[FACT_CHECK_VERDICT:…]` line, claim breakdown and
+/// cited evidence. Runs the shared [StoryQaAgent] pipeline with
+/// [AnswerStyle.factCheck] (R13); a definite verdict without cited read text
+/// is downgraded by code (`normalizeFactCheckBody`).
 class FactCheckAgent {
-
   FactCheckAgent({
     required LLMClient llmClient,
+    LLMClient? auxClient,
     GameDataRetrieval? gameDataStore,
+    EmbeddingClient? embeddingClient,
     AgentTool? searchTool,
-  })  : _llmClient = llmClient,
-        _searchTool = searchTool ??
-            SearchLocalLoreTool(gameDataStore: gameDataStore);
-  final LLMClient _llmClient;
-  final AgentTool _searchTool;
+  }) : _agent = StoryQaAgent(
+          llmClient: llmClient,
+          auxClient: auxClient,
+          gameDataStore: gameDataStore,
+          embeddingClient: embeddingClient,
+          searchTool: searchTool,
+        );
+
+  final StoryQaAgent _agent;
 
   Stream<ReActEvent> checkClaim({
     required String claim,
     List<Message> history = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
-  }) {
-    final registry = ToolRegistry()..register(_searchTool);
-    final loop = ReActLoop(
-      llmClient: _llmClient,
-      toolRegistry: registry,
-      minimumToolCalls: 1,
-      stepMaxTokens: 8192,
-    );
-    return loop.run(
-      systemPrompt: buildAgentPrompt(factCheckInstructions),
-      chatHistory: history,
-      userQuery: claim,
-      finalAnswerTransform: (answer, observations) {
-        final verdict = validateFactCheckVerdict(answer, observations);
-        return _withValidatedVerdict(answer, verdict);
-      },
-      onRawLlmResponse: onRawLlmResponse,
-      onMemoryChanged: onMemoryChanged,
-    );
-  }
-}
-
-FactCheckVerdict validateFactCheckVerdict(
-  String answer,
-  Iterable<String> observations,
-) {
-  final match = RegExp(
-    r'\[FACT_CHECK_VERDICT:(supported|refuted|uncertain|unavailable)\]',
-    caseSensitive: false,
-  ).firstMatch(answer);
-  final requested = FactCheckVerdict.values.firstWhere(
-    (value) => value.name == match?.group(1)?.toLowerCase(),
-    orElse: () => FactCheckVerdict.uncertain,
-  );
-  final joined = observations.join('\n');
-  final hasGameDataEvidence = joined.contains('Source Kind: GameData') &&
-      joined.contains('=== Result #');
-  final hasScopedDirectCandidate =
-      joined.contains('Evidence Scope Match: yes') &&
-          joined.contains('Evidence Level: direct candidate');
-  final noCoverage = joined.isEmpty ||
-      joined.contains('No matching GameData result') ||
-      joined.contains('No scoped direct candidate') ||
-      joined.contains('GameData knowledge DB is not installed');
-
-  if (requested == FactCheckVerdict.supported ||
-      requested == FactCheckVerdict.refuted) {
-    if (hasScopedDirectCandidate) return requested;
-    return hasGameDataEvidence
-        ? FactCheckVerdict.uncertain
-        : FactCheckVerdict.unavailable;
-  }
-  if (requested == FactCheckVerdict.uncertain &&
-      !hasGameDataEvidence &&
-      noCoverage) {
-    return FactCheckVerdict.unavailable;
-  }
-  return requested;
-}
-
-String _withValidatedVerdict(String answer, FactCheckVerdict verdict) {
-  final marker = RegExp(
-    r'\[FACT_CHECK_VERDICT:(supported|refuted|uncertain|unavailable)\]\s*',
-    caseSensitive: false,
-  );
-  return '[FACT_CHECK_VERDICT:${verdict.wireValue}]\n${answer.replaceFirst(marker, '').trim()}';
+  }) =>
+      _agent.run(
+        query: claim,
+        style: AnswerStyle.factCheck,
+        history: history,
+        onRawLlmResponse: onRawLlmResponse,
+        onMemoryChanged: onMemoryChanged,
+      );
 }
 
 FactCheckVerdict? parseFactCheckVerdict(String content) {

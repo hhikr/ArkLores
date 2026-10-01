@@ -464,7 +464,7 @@ Let's begin!
 
   /// Indexes a successful tool call into [LoopMemory] so the model can see,
   /// after the raw observation leaves the recent window, that the chapter was
-  /// read / the scope was mapped / the suspect's evidence was collected.
+  /// read / the scope was mapped / an entity's appearances were collected.
   void _noteToolResult(
     LoopMemory memory,
     String action,
@@ -493,7 +493,7 @@ Let's begin!
             'story_ids:${storyIds.map((item) => '$item').join(',')}',
           );
         }
-      case 'collect_suspect_evidence':
+      case 'collect_entity_evidence':
         memory.noteEvidence('${arguments['entity_id'] ?? ''}');
     }
   }

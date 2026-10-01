@@ -647,8 +647,8 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     return index.search(queryVector, topK: topK, scopeId: scopeId);
   }
 
-  /// LIKE search restricted to a set of story ids (M4b: global claim-term
-  /// prioritization for `collect_suspect_evidence`). Escapes LIKE wildcards
+  /// LIKE search restricted to a set of story ids (M4b: global term
+  /// prioritization for `collect_entity_evidence`). Escapes LIKE wildcards
   /// in [term] so user-provided terms cannot broaden the match.
   @override
   Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
