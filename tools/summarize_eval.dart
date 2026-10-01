@@ -64,22 +64,54 @@ List<Map<String, dynamic>> _load(String dir) {
     ..sort((a, b) => a.path.compareTo(b.path));
   return [
     for (final f in files)
-      jsonDecode(f.readAsStringSync()) as Map<String, dynamic>,
+      _classify(jsonDecode(f.readAsStringSync()) as Map<String, dynamic>),
   ];
+}
+
+final RegExp _citation =
+    RegExp(r'([\w\-/\.\[\]]+\.txt)\s*[:：]\s*(\d+)(?:\s*[-–~]\s*(\d+))?');
+
+/// Re-derives the outcome from the recorded answer so every run (including
+/// summaries written by older harness versions) is scored the same way:
+/// - `error`: the turn failed;
+/// - `no_answer`: a state dump without an answer body (`调查无法推进`) or
+///   an empty answer — its `x.txt:a-b` read ranges are NOT citations;
+/// - `partial`: stopped (budget/stall/unresolved) but the writer answered
+///   from what was read;
+/// - `answered`: a verdict with an answer body.
+Map<String, dynamic> _classify(Map<String, dynamic> row) {
+  final answer = '${row['answer'] ?? ''}';
+  final String terminal;
+  if (row['status'] != 'completed') {
+    terminal = 'error';
+  } else if (answer.trim().isEmpty || answer.contains('调查无法推进')) {
+    terminal = 'no_answer';
+  } else if (answer.contains('culprit=unresolved')) {
+    terminal = 'partial';
+  } else {
+    terminal = 'answered';
+  }
+  final citations = terminal == 'no_answer' || terminal == 'error'
+      ? 0
+      : {for (final m in _citation.allMatches(answer)) m.group(0)!}.length;
+  return {...row, 'terminal': terminal, 'citations': citations};
 }
 
 Map<String, double> _metrics(List<Map<String, dynamic>> rows) {
   double mean(Iterable<num> xs) =>
       xs.isEmpty ? 0 : xs.fold<num>(0, (a, b) => a + b) / xs.length;
   final withGold = rows.where((r) => r['gold_recall'] != null);
-  final answered = rows.where((r) => r['terminal'] == 'answered');
+  bool hasBody(Map<String, dynamic> r) =>
+      r['terminal'] == 'answered' || r['terminal'] == 'partial';
+  final answered = rows.where(hasBody);
   final cited = rows.where((r) => (r['citations'] as num? ?? 0) > 0);
   return {
     'cases': rows.length.toDouble(),
     'gold_recall_mean': mean(withGold.map((r) => r['gold_recall'] as num)),
     'gold_any_hit_rate': mean(withGold.map((r) => (r['gold_recall'] as num) > 0 ? 1 : 0)),
     'answered_rate': mean(rows.map((r) => r['terminal'] == 'answered' ? 1 : 0)),
-    'unresolved_rate': mean(rows.map((r) => r['terminal'] == 'unresolved' ? 1 : 0)),
+    'partial_rate': mean(rows.map((r) => r['terminal'] == 'partial' ? 1 : 0)),
+    'no_answer_rate': mean(rows.map((r) => r['terminal'] == 'no_answer' ? 1 : 0)),
     'error_rate': mean(rows.map((r) => r['terminal'] == 'error' ? 1 : 0)),
     'cited_answer_rate': answered.isEmpty
         ? 0

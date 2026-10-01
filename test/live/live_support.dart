@@ -86,20 +86,23 @@ Map<String, Object?> summarizeTurn(
     }
     if (it.rawResponse.trim().isEmpty) emptyResponses++;
   }
-  final citations = <String>{
-    for (final m in _citation.allMatches(turn.answer)) m.group(0)!,
-  };
   final goldHit = [
     for (final g in liveCase.goldStories)
       if (readStories.contains(g)) g,
   ];
+  // Same scheme as tools/summarize_eval.dart: a state dump (`调查无法推进`)
+  // is not an answer and its read ranges are not citations.
+  final answer = turn.answer;
   final terminal = turn.status != ChatTurnStatus.completed
       ? 'error'
-      : turn.answer.contains('culprit=unresolved')
-          ? 'unresolved'
-          : turn.answer.trim().isEmpty
-              ? 'empty'
+      : answer.trim().isEmpty || answer.contains('调查无法推进')
+          ? 'no_answer'
+          : answer.contains('culprit=unresolved')
+              ? 'partial'
               : 'answered';
+  final citations = terminal == 'no_answer' || terminal == 'error'
+      ? const <String>{}
+      : {for (final m in _citation.allMatches(answer)) m.group(0)!};
   return {
     'id': liveCase.id,
     'type': liveCase.type,
