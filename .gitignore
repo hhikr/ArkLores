@@ -47,6 +47,11 @@ tools/*api_key*
 tools/github_pat
 tools/*_pat*
 tools/*token*
+tools/*.jks
+tools/*signing*
+*.jks
+*.keystore
+android/key.properties
 
 # IDEs
 .idea/

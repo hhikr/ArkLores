@@ -54,7 +54,21 @@ Covers development rounds R0–R12 since v0.9.0. Architecture: `docs/AI_ARCHITEC
   `6c331cda39f2756762e0b0ea927a58b0baaf559bc2080c2303b52d915a721c50`).
 - `gamedata_manifest.json`: 1348 bytes, SHA-256
   `0e78c79c7fc0735eab926913bb4a283608cfeba770383e4dad6e8d8d696aecb4`.
-- APK: built and attached by the maintainer; release-mode, Android Debug certificate.
+- APK: built by GitHub Actions (`.github/workflows/android-release.yml`) and signed with the
+  new project release key (certificate SHA-256
+  `b1b09ebfd22659b4b246ea87d67ff340a277e8031c14577caa5715519923e364`).
+
+### Upgrade note
+
+- Earlier APKs were signed with a developer machine's debug key. Android refuses to install an
+  APK signed with a different key over an existing install, so **uninstall the old app once
+  before installing v0.10.0** (local chats and the downloaded knowledge base are removed).
+  Later versions signed with the same project key upgrade in place.
+
+### CI
+
+- `.github/workflows/ci.yml` runs `flutter analyze` and `flutter test` on pull requests and on
+  pushes to `dev`/`main`.
 
 ## [0.9.0] - 2026-07-15
 

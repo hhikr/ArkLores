@@ -30,6 +30,18 @@
 - 不提交 API key、token、`.env`。
 - 不直接 push `main` 或 `dev`。
 
+## 发布与签名（v0.10.0 起）
+
+- APK 由 GitHub Actions 构建：把要发布的提交推到 `release/<版本>` 分支即触发
+  `android-release.yml`，产物在该次运行的 artifact 中。GameData 资产的 URL/SHA 在
+  `tools/release_gamedata.env`，每次数据发版都要更新。
+- 签名用项目 release keystore（仓库 secrets：`ANDROID_KEYSTORE_BASE64` 等）；workflow
+  会校验证书 SHA-256 为 `b1b09ebf…e364`。本地备份 `tools/arklores-release.jks` +
+  `tools/android_signing.properties`（gitignored），绝不提交、绝不打印。
+- 本地 `flutter build apk --release` 没有 `android/key.properties` 时会退回 debug key，
+  这样的包不能发布。
+- CI（`ci.yml`）在 PR 上跑 analyze 与 test。
+
 ## 提交规范（贡献者只有 hhikr）
 
 - 提交的 author / committer 只能是 hhikr。

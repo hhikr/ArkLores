@@ -29,7 +29,7 @@ Latest release: [v0.10.0](https://github.com/hhikr/ArkLores/releases/tag/v0.10.0
 
 v0.10.0 GitHub Release 包含：
 
-- `ArkLores-0.10.0.apk`：Android release-mode debug-certificate 验收包。
+- `ArkLores-0.10.0.apk`：Android release 包，使用项目签名密钥（从 v0.9 及更早版本升级需先卸载一次）。
 - `arklores_gamedata_zh.db.gz`：schema 4 中文 GameData DB（含可选剧情向量表），SHA-256
   `aa1c3650e37f1ec53281dc5c35e7e909da82ad752c05b2cb64b80ea3717ff968`。
 - `gamedata_manifest.json`：来源、计数、大小、hash 与向量元数据。

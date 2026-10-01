@@ -52,7 +52,14 @@ TalkBack 与横屏，结果符合预期。历史文档中的 "Not verified: Andr
 
 ## 3. 发布工程
 
-### 3.1 Android release 使用 debug certificate 签名（Open）
+### 3.1 Android release 使用 debug certificate 签名（Closed，v0.10.0）
+
+**修复（2026-10）**：生成项目专用 release keystore（RSA 4096，有效期约 27 年，证书
+SHA-256 `b1b09ebf…e364`），以加密 secrets 存入仓库，由 `android-release.yml` 在
+GitHub Actions 中签名，并校验证书指纹。v0.9 及更早版本到 v0.10.0 需要卸载重装一次，
+之后同一把钥匙签名的版本可以直接覆盖升级。keystore 与密码的唯一备份由维护者保管
+（`tools/arklores-release.jks`、`tools/android_signing.properties`，均被 git 忽略），
+丢失后将无法再发布可升级的版本。商店上架仍需另行处理。以下为历史分析。
 
 **现象与影响**：GitHub Release 中的 APK 是 release-mode（优化构建）但使用 Android
 Debug 证书签名。它不是商店正式包；用户未来从 debug 证书版升级到正式签名版时，
@@ -76,7 +83,11 @@ Debug 证书签名。它不是商店正式包；用户未来从 debug 证书版�
 保管流程、签名切换的升级路径（提前发布正式签名版过渡包）与可重复 release checklist；
 若引入 CI，keystore 以加密方式存入 CI secrets。
 
-### 3.2 无正式 CI workflow（Open）
+### 3.2 无正式 CI workflow（Mitigated，v0.10.0）
+
+**修复（2026-10）**：`.github/workflows/ci.yml` 在 PR 以及 dev/main 的推送上运行
+analyze 与 test；`android-release.yml` 构建签名 APK。尚未覆盖：固定检索 QA（需要完整
+DB）、secrets 扫描。以下为历史分析。
 
 **现象与影响**：`.github/` 只有工具 hooks，没有自动执行 test / analyze / 固定 QA /
 release 资产校验的 workflow。所有验证依赖开发者本地手动执行，存在漏跑或
