@@ -186,7 +186,8 @@ Additional smoke check:
 - `肉鸽`、`秘录`、`模组` 等归一化是规则表，不是完整同义词知识库。
 - `莱茵生命`、`萨卡兹王庭` 等宽泛组织 query 当前可命中相关干员档案，但 GameData DB 尚未构建组织级汇总实体。
 - 评测集 `test/fixtures/investigation_eval.json` 的标准答案章节是草稿，尚未人工审核。
-- 概括 / 事实核查仍走旧 ReActLoop（R13 迁移）。
+- 宽问题（梗概、跨多章的“谁”）常在 24 步预算内读不全，以 `partial` 收尾。
+- 只靠档案记录（非剧情原文）能核查的说法目前无法被引用，核查结论会偏保守。
 
 以上仍开放项的根因分析与修复方向见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
 

@@ -1,6 +1,6 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前状态：R12（v0.10.0）。本文档是 Agent 层与检索层的**唯一总括文档**，
+> 当前状态：R13（`feature/r13-unified-qa`，在 v0.10.0 / R12 之上）。本文档是 Agent 层与检索层的**唯一总括文档**，
 > 取代旧的 `AI_REFACTOR_SUMMARY.md`、`R0`–`R3` 阶段总结、`AI_RETRIEVAL_OPTIMIZATION.md`、
 > `FEASIBILITY_ANALYSIS.md`、`RETRIEVAL_INSTALL_CHAIN_ANALYSIS.md`（均已删除，原文在 git 历史中）。
 > R12 的决策过程见 `R12_BOTTLENECK_ANALYSIS.md`；已知缺口见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
@@ -14,10 +14,10 @@
               │
               ├─ auto：QuestionRouter（一次短 LLM 调用）选出模式
               │
-              ├─ investigate ─► InvestigationAgent ─► PlannerLoop（本文 §2）
-              ├─ summarize   ─► SummaryAgent      ─► ReActLoop（旧流程，R13 迁移）
-              ├─ verify      ─► FactCheckAgent    ─► ReActLoop（旧流程，R13 迁移）
-              └─ Roleplay tab ► RoleplayAgent     ─► ReActLoop（不在迁移范围）
+              ├─ investigate ─► InvestigationAgent ┐
+              ├─ summarize   ─► SummaryAgent       ├─► StoryQaAgent ─► PlannerLoop（§2）
+              ├─ verify      ─► FactCheckAgent     ┘   （AnswerStyle 只决定输出格式）
+              └─ Roleplay tab ► RoleplayAgent     ─► ReActLoop（不在统一范围）
                                          │
                        工具 ──► GameDataKnowledgeStore（共享只读 SQLite 连接）
                                          │
@@ -30,7 +30,7 @@
   记录用户模式 / 生效模式 / router 原始输出 / 模型 / 每步原始响应 / 工具与观察 / 最终答案 /
   状态与耗时。开发日志开关打开时额外写入 `logs/`。所有真机问题都应能用这些 JSON 回放。
 
-## 2. PlannerLoop（调查流程）
+## 2. PlannerLoop（所有剧情问答的统一流程）
 
 ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文必然膨胀，只能靠截断，
 截断又导致重复与遗忘（R6–R7 的教训）。PlannerLoop 把职责拆开：
@@ -56,9 +56,9 @@ ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文�
 | `MAP <scope_id>` | `get_story_map` | 章节画像（行范围、speaker、高密度实体、抽取式摘要） |
 | `READ <story_id> [start] [end]` | `read_story_lines` | 读剧情原文（行号、分页） |
 | `FIND <短语> [scope=] [top_k]` | `search_story_lines` | 在原文里找线索：关键词 LIKE + 可选向量召回，RRF 融合 |
-| `COLLECT <entity_id> [...]` | `collect_suspect_evidence`（R13 改名） | 列出某实体的全部出场行 |
+| `COLLECT <entity_id> [terms=[..]]` | `collect_entity_evidence` | 列出某实体的全部出场行（命中 terms 的章节排前） |
 | `RESELECT <entity_id>` | – | 切换消歧候选；已尝试的候选不会再选 |
-| `SUMMARIZE` / `VERDICT` / `DONE` | – | 收尾，交给 writer |
+| `ANSWER [confidence]` / `DONE` | – | 证据够了，交给 writer（`VERDICT` 是旧写法别名，只取置信度） |
 
 - 一行只能有一个意图，多意图行整体拒绝；空输出单独计数，3 次后温和收尾。
 - 工具观察 = 人类可读正文 + 末尾 `DATA: <json>`（由工具生成，代码解析，失败回退文本标记）。
@@ -75,8 +75,11 @@ ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文�
 
 ### 2.3 进展控制
 
-- 完全相同的 FIND / COVER / MAP / COLLECT / READ / SUMMARIZE 不重复执行（直接返回“已执行过”）。
-- “进展” = 状态指纹有变化（新读到的行、新证据、新发现的章节）；单纯换说法检索不算进展。
+- 完全相同的 SEARCH / FIND / COVER / MAP / COLLECT / READ 不重复执行（直接返回“已执行过”）；
+  已消歧的名字再次 SEARCH 时自动带上 entity_id。
+- “进展” = 状态指纹有变化（新读到的行、新证据、有字面命中的新章节）；单纯换说法检索、
+  只带来“仅语义相近”章节的 FIND 都不算进展（R13：否则负例会一直跑满预算）。
+- FIND 末尾 ≤50 的裸数字才当 top_k，更大的数字（如年份）留在查询里。
 - 连续 4 步无进展 → 提醒；连续 8 步无进展或用满 24 步 → `_finishFromState`，由 writer
   基于已读内容收尾，不再“状态转储”。
 - 近程窗口中，除最新一条观察外都截到 600 字。
@@ -90,11 +93,22 @@ ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文�
 - `completeWithHeadroom`：reasoning 模型的隐藏推理也占 `max_tokens`；遇到截断时把上限
   放大 4 倍重试一次，而不是返回空串。
 
-### 2.5 结论信封（R13 将替换）
+### 2.5 结论信封与输出格式（R13）
 
-当前 writer 前面附 `[INVESTIGATION_VERDICT: culprit=… | confidence=… | basis=…]`，
-`investigation_verdict.dart` 对 culprit 做“≥2 个候选有证据”门槛。这是为“凶手类”问题
-写的特判，R13 会换成与问题类型无关的 `[STORY_ANSWER: status=… | confidence=…]`。
+每个答案第一行是 `[STORY_ANSWER: status=answered|partial|not_covered | confidence=x]`
+（`story_answer.dart`），status 由代码决定，与问题类型无关：
+
+- `answered`：决策器输出 ANSWER/DONE；
+- `partial`：预算用尽、停滞或多次空输出后，由 writer 基于已读内容作答；
+- `not_covered`：整个过程没有读到任何原文（因此无从引用）。
+
+`AnswerStyle` 只改变 writer 的输出格式：`answer`（直接回答 + 证据 + 反方证据 + 置信度）、
+`summary`（概述 + 时间线 + 覆盖说明）、`factCheck`（第一行 `[FACT_CHECK_VERDICT:…]` +
+主张拆解 + 证据）。核查结论由代码规范化：没读到原文 → `unavailable`；`supported/refuted`
+但没有合法引用 → `uncertain`。
+
+旧会话里的 `[INVESTIGATION_VERDICT: …]` 和 `Coverage:` 行仍能解析显示（仅格式兼容）。
+R13 起禁止任何问题类型特判，由 `test/no_special_case_test.dart` 守卫（见 CLAUDE.md）。
 
 ## 3. 检索层（GameData SQLite，schema 4）
 
@@ -157,6 +171,20 @@ App 内构建共用同一份实现：
 中期评测（investigate 模式，样本不完整）：有引用答案 6% → 100%，无答案 88% → 0%，
 标准答案章节召回 0 → 0.63。
 
+### R13 真机验收（2026-10-02，同配置，统一流程，5 次）
+
+| 方面 | 用例 / 模式 | status | 步数 | 耗时 | 输入 / 输出 token | 结果 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 回答 | theresa_death / investigate | partial | 25 | 68 s | 97k / 8k | 9 条引用全部合法，含反方证据与资料缺口说明；用满 24 步 |
+| 回答 | frostnova_end / investigate | answered | 9 | 29 s | 27k / 4k | 正确，读到标准答案章节，7 条引用 |
+| 梗概 | “霜星是谁？概括一下她的经历” / auto→summarize | partial | 25 | 83 s | 79k / 13k | 路由正确；43 条引用合法；预算花在早期经历，结局写“资料未覆盖” |
+| 核查（支持） | “霜星最后死去了，对吗？” / auto→verify | answered | 7 | 19 s | 23k / 3k | supported，11 条引用合法 |
+| 核查（负例） | neg_future / auto→verify | partial | 25 | 33 s | 70k / 2k | unavailable，说明正确；但跑满预算 |
+
+负例跑满预算的两个原因已离线修复（`a246b79`，未真机复测）：`FIND 罗德岛 庆典 2030` 的
+`2030` 被当成 top_k；“仅语义相近”的新章节被算作进展。宽问题（梗概、多章节的“谁”）在
+24 步内常常读不全，见 `KNOWN_LIMITATIONS_AND_DEBT.md` §5.6。
+
 ## 5. 演进简史
 
 | 轮次 | 做了什么 | 为什么 |
@@ -172,4 +200,4 @@ App 内构建共用同一份实现：
 | R9 | 共享 DB 连接、SEARCH 去引号 | `database_closed`；引号被当字面量 |
 | R10–R11.2 | 自动消歧、RESELECT、SEARCH 重复终结的多轮修正 | 同名实体导致 SEARCH 死循环（这些 SEARCH 专用补丁 R13 删除，由通用进展控制取代） |
 | R12 | 证据笔记、writer 读原文 + 引用校验、COVER/FIND、向量召回、通用进展控制、机械角色关推理、同链路 live 测试 | R8–R11 只修终止，没修信息流：提取器未接线、writer 看不到原文 |
-| R13（进行中） | 删除全部特判；概括/核查迁移到 PlannerLoop | 见 KNOWN_LIMITATIONS 与开发计划 |
+| R13 | 三种模式统一到 `StoryQaAgent` → PlannerLoop；删除全部问题类型特判（结论信封、嫌疑人门槛、R11 SEARCH 补丁）；代码判定 status；核查结论需引用；特判守卫测试 | 概括/核查仍是旧 ReAct；结论协议锚定单一问题类型 |

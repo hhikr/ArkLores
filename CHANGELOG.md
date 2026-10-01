@@ -4,6 +4,21 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- R13: investigate, summarize and verify run one pipeline (`StoryQaAgent` → PlannerLoop);
+  the mode only changes the answer format. Answers start with a code-decided
+  `[STORY_ANSWER: status=answered|partial|not_covered | confidence=x]` line; fact-check
+  verdicts need cited, actually-read lines.
+- Removed every question-type special case (culprit envelope, two-suspect gate, suspect
+  prompt steps, SEARCH-only repeat patches); a test guards against new ones.
+- `collect_suspect_evidence` is now `collect_entity_evidence` (`terms=`).
+
+### Fixed
+
+- Years in `FIND` queries are no longer read as a result count; semantic-only hits no longer
+  count as progress, so fruitless runs stop early.
+
 ## [0.10.0] - 2026-10-02
 
 Covers development rounds R0–R12 since v0.9.0. Architecture: `docs/AI_ARCHITECTURE.md`.
