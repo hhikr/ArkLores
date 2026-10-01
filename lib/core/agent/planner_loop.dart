@@ -26,7 +26,9 @@ class PlannerLoop {
     int minimumToolCalls = 0,
     int stepMaxTokens = 1024,
     int safetyMaxIterations = 100,
-  })  : _llmClient = llmClient,
+    int maxToolSteps = 40,
+  })  : _maxToolSteps = maxToolSteps,
+        _llmClient = llmClient,
         _toolRegistry = toolRegistry,
         _extractorClient = extractorClient,
         _disambiguator = disambiguator,
@@ -41,6 +43,25 @@ class PlannerLoop {
   final int _minimumToolCalls;
   final int _stepMaxTokens;
   final int _safetyMaxIterations;
+
+  /// R12: total tool-step budget; when spent, the answer is written from the
+  /// evidence gathered so far (eval: one question looped 54 steps).
+  final int _maxToolSteps;
+
+  /// R12: consecutive steps without state growth before a nudge / a finish.
+  static const int _stallNudge = 4;
+  static const int _stallFinish = 8;
+
+  /// Intents that are deterministic lookups: re-running one with identical
+  /// arguments can only return what the state already holds.
+  static const Set<String> _dedupActions = {
+    'FIND',
+    'COVER',
+    'MAP',
+    'COLLECT',
+    'READ',
+    'SUMMARIZE',
+  };
 
   /// R11: how many times the same search key may repeat before the executor
   /// forces a coverage fallback / unresolved termination.
@@ -97,6 +118,12 @@ DONE
     var malformed = 0;
     var emptyResponses = 0;
     var networkRetries = 0;
+    // R12 progress control: tool steps, consecutive steps without state
+    // growth, and the signatures of deterministic lookups already executed.
+    var toolSteps = 0;
+    var stalled = 0;
+    var lastFingerprint = '';
+    final executed = <String, int>{};
 
     List<Message> buildRequest() => [
           Message.system('$systemPrompt\n\n$intentFormat'),
@@ -156,10 +183,12 @@ DONE
         if (response.trim().isEmpty) {
           emptyResponses++;
           if (emptyResponses >= _maxEmptyResponses) {
-            yield* _terminateUnresolved(
+            yield* _finishFromState(
               state,
-              '模型多次无输出（可能是对重复观察无话可说），'
-                  '已温和结束调查。',
+              readPages,
+              userQuery,
+              basis: 'empty_replies',
+              reason: '模型多次无输出，已基于已读内容结束调查。',
             );
             return;
           }
@@ -204,47 +233,14 @@ DONE
           recent.add(Message.user('Observation: VERDICT 缺 culprit。'));
           continue;
         }
-        final basis = '${intent.args['basis'] ?? 'multi_hypothesis_contrast'}';
-        final confidence = '${intent.args['confidence'] ?? '0.7'}';
-        // Writer role (M-C): compose the answer body from the state — one
-        // bounded call citing what was actually read/collected.
-        String body;
-        try {
-          body = await _composeAnswer(
-            culprit: culprit,
-            confidence: confidence,
-            basis: basis,
-            state: state,
-            readPages: readPages,
-            userQuery: userQuery,
-          );
-          // R12: restore line-level provenance — every cited line must have
-          // been actually read. One rewrite with the offending citations;
-          // still invalid -> keep the answer but flag it.
-          var invalid = unreadCitations(body, state);
-          if (invalid.isNotEmpty) {
-            body = await _composeAnswer(
-              culprit: culprit,
-              confidence: confidence,
-              basis: basis,
-              state: state,
-              readPages: readPages,
-              userQuery: userQuery,
-              invalidCitations: invalid,
-            );
-            invalid = unreadCitations(body, state);
-          }
-          if (invalid.isNotEmpty) {
-            body = '$body\n\n> 来源警告：以下引用的行未在本次调查中实际读取，'
-                '可能不准确：${invalid.join('、')}';
-          }
-        } catch (e) {
-          body = '（无法生成答案正文：$e）';
-        }
-        final answer = '[INVESTIGATION_VERDICT: culprit=$culprit | '
-            'confidence=$confidence | basis=$basis]\n$body';
-        yield* _emitFinal(answer);
-        yield const ReActEvent(type: ReActEventType.complete);
+        yield* _finish(
+          culprit: culprit,
+          confidence: '${intent.args['confidence'] ?? '0.7'}',
+          basis: '${intent.args['basis'] ?? 'multi_hypothesis_contrast'}',
+          state: state,
+          readPages: readPages,
+          userQuery: userQuery,
+        );
         return;
       }
 
@@ -294,6 +290,63 @@ DONE
         continue;
       }
       final args = _intentArgsToToolArgs(intent);
+
+      // ── R12 progress control ────────────────────────────────────────
+      // Measured at the start of each tool step against the state after the
+      // previous one, so every path (including early `continue`s) counts.
+      toolSteps++;
+      final fingerprint = state.progressFingerprint;
+      stalled = fingerprint == lastFingerprint ? stalled + 1 : 0;
+      lastFingerprint = fingerprint;
+      if (toolSteps > _maxToolSteps || stalled >= _stallFinish) {
+        yield* _finishFromState(
+          state,
+          readPages,
+          userQuery,
+          basis: toolSteps > _maxToolSteps ? 'step_budget' : 'stalled',
+          reason: toolSteps > _maxToolSteps
+              ? '已用完 $_maxToolSteps 步调查预算。'
+              : '连续 $stalled 步没有获得新信息。',
+        );
+        return;
+      }
+      if (stalled == _stallNudge) {
+        recent.add(Message.user(
+          'Observation: 最近 $_stallNudge 步没有获得新信息。请 READ 尚未读过的'
+          '章节、换一个检索方向，或基于证据笔记输出 VERDICT。',
+        ),);
+      }
+
+      // R12: a deterministic lookup with identical arguments can only return
+      // what the state already holds — answer from state instead of re-running.
+      if (_dedupActions.contains(intent.action)) {
+        final signature = '${intent.action} ${_canonicalArgs(args)}';
+        final previous = executed[signature];
+        final storyId = '${args['story_id'] ?? ''}';
+        final start = (args['start_line'] as num?)?.toInt();
+        final end = (args['end_line'] as num?)?.toInt();
+        final rangeRead = intent.action == 'READ' &&
+            start != null &&
+            end != null &&
+            state.wasRangeRead(storyId, start, end);
+        if (previous != null || rangeRead) {
+          final note = rangeRead
+              ? 'READ $storyId $start-$end 的内容已经读过，要点在“证据笔记”中。'
+              : '该命令在第 $previous 步已执行过，结果已记录在调查状态'
+                  '（已检索/已读/证据笔记）中。';
+          recent.add(Message.user(
+            'Observation: $note请换关键词、READ 未读的章节，或输出 VERDICT。',
+          ),);
+          if (recent.length > 2) recent.removeAt(0);
+          yield ReActEvent(
+            type: ReActEventType.toolObservation,
+            content: note,
+            toolName: toolName,
+          );
+          continue;
+        }
+        executed[signature] = iteration;
+      }
 
       // ── R11.1 SEARCH key normalization ──────────────────────────────
       // Resolve the canonical entity id BEFORE the call so counts and
@@ -430,6 +483,9 @@ DONE
         }
       }
       _updateState(state, intent.action, args, observation);
+      if (intent.action == 'FIND' || intent.action == 'COVER') {
+        state.noteSearchLog(_searchLogKey(intent.action, args), _storyIdsIn(observation));
+      }
       recent.add(Message.user('Observation: $observation'));
       if (recent.length > 2) recent.removeAt(0);
       onStateChanged?.call(state.serialize());
@@ -476,6 +532,31 @@ DONE
 
   Map<String, dynamic> _intentArgsToToolArgs(IntentRecord intent) =>
       Map<String, dynamic>.from(intent.args);
+
+  /// Order-independent rendering of tool args for duplicate detection.
+  static String _canonicalArgs(Map<String, dynamic> args) {
+    final keys = args.keys.toList()..sort();
+    return keys.map((k) => '$k=${args[k]}').join(';');
+  }
+
+  /// `FIND 匕首 @scope` / `COVER 角色名` — the state's search-log key.
+  static String _searchLogKey(String action, Map<String, dynamic> args) {
+    final target = args['query'] ?? args['entity_id'] ?? '';
+    final scope = args['scope_id'] ?? args['scope_filter'];
+    return '$action $target${scope == null ? '' : ' @$scope'}';
+  }
+
+  /// First story ids listed in a FIND/COVER observation (`Story: <id> | …`).
+  static List<String> _storyIdsIn(String observation, {int limit = 5}) {
+    final ids = <String>[];
+    for (final match
+        in RegExp(r'^Story: (\S+)', multiLine: true).allMatches(observation)) {
+      final id = match.group(1)!;
+      if (!ids.contains(id)) ids.add(id);
+      if (ids.length >= limit) break;
+    }
+    return ids;
+  }
 
   /// Extracts candidate entities from a compact "Ambiguous" observation
   /// (R10/R11 form: "  1. id | name | type | source | match_type | conf").
@@ -558,6 +639,78 @@ DONE
       if (id == value || id.endsWith(':$value')) return id;
     }
     return value.isEmpty ? null : value;
+  }
+
+  /// Writer role (M-C) + R12 provenance: composes the answer from the
+  /// notebook and read lines, checks every cited line was actually read
+  /// (one corrective rewrite, then a source warning), emits it and completes.
+  Stream<ReActEvent> _finish({
+    required String culprit,
+    required String confidence,
+    required String basis,
+    required InvestigationState state,
+    required List<ReadPage> readPages,
+    required String userQuery,
+  }) async* {
+    String body;
+    try {
+      body = await _composeAnswer(
+        culprit: culprit,
+        confidence: confidence,
+        basis: basis,
+        state: state,
+        readPages: readPages,
+        userQuery: userQuery,
+      );
+      var invalid = unreadCitations(body, state);
+      if (invalid.isNotEmpty) {
+        body = await _composeAnswer(
+          culprit: culprit,
+          confidence: confidence,
+          basis: basis,
+          state: state,
+          readPages: readPages,
+          userQuery: userQuery,
+          invalidCitations: invalid,
+        );
+        invalid = unreadCitations(body, state);
+      }
+      if (invalid.isNotEmpty) {
+        body = '$body\n\n> 来源警告：以下引用的行未在本次调查中实际读取，'
+            '可能不准确：${invalid.join('、')}';
+      }
+    } catch (e) {
+      body = '（无法生成答案正文：$e）';
+    }
+    yield* _emitFinal(
+      '[INVESTIGATION_VERDICT: culprit=$culprit | '
+      'confidence=$confidence | basis=$basis]\n$body',
+    );
+    yield const ReActEvent(type: ReActEventType.complete);
+  }
+
+  /// R12: ends a run that stopped making progress (stall, step budget,
+  /// repeated empty replies). With anything read, the writer still answers
+  /// from the evidence gathered — an honest partial answer beats discarding
+  /// read lines; with nothing read it is a plain unresolved.
+  Stream<ReActEvent> _finishFromState(
+    InvestigationState state,
+    List<ReadPage> readPages,
+    String userQuery, {
+    required String basis,
+    required String reason,
+  }) {
+    if (readPages.isEmpty && state.notes.isEmpty) {
+      return _terminateUnresolved(state, reason);
+    }
+    return _finish(
+      culprit: 'unresolved',
+      confidence: '0',
+      basis: basis,
+      state: state,
+      readPages: readPages,
+      userQuery: userQuery,
+    );
   }
 
   /// Emits a final `culprit=unresolved` answer with [reason] and ends the
@@ -700,12 +853,15 @@ DONE
       _llmClient,
       [
         Message.system(
-          '你是剧情调查员。只根据下方“证据笔记”和“已读原文”写最终答案：'
-          '开头一行结论（$culprit，置信度 $confidence，依据 $basis），'
-          '然后 2-4 条证据，每条附引用，格式为 story_id:行号（或 '
-          'story_id:起-止），只能引用已读原文中出现的行；如有反方证据也列出。'
-          '原文没有支持的内容要明确说“资料未覆盖”，不得用记忆补充。'
-          '用 Markdown。',
+          '你是剧情调查员。只根据下方“证据笔记”和“已读原文”回答用户问题：\n'
+          '1. 开头一行直接回答问题。调查决策器给出的结论主体是 $culprit'
+          '（置信度 $confidence，依据 $basis）；若原文不支持它，直接说明并给出'
+          '原文真正支持的答案。\n'
+          '2. 然后 2-5 条证据，每条附引用，格式为 story_id:行号（或 '
+          'story_id:起-止），只能引用已读原文中出现的行。\n'
+          '3. 列出与结论矛盾或削弱结论的原文（如有）。\n'
+          '4. 最后一段写置信度（0-1）与可能的替代解读。\n'
+          '原文没有覆盖的部分明确写“资料未覆盖”，不得用记忆补充。用 Markdown。',
         ),
         Message.user(
           '问题: $userQuery\n\n调查状态:\n${state.serialize()}'

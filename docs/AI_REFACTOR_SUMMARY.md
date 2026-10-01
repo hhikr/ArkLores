@@ -287,6 +287,26 @@ type；计数全局连坐；CLI 数据层不等价；没有评测集。完整证
 - 测试：新增 `test/evidence_notebook_test.dart`（10 项）和 story_coverage 的 3 项 DB 级用例。
   Windows 下全量结果为 219 passed / 4 skipped。
 
+**P1 改动（Phase 2）**：
+- **电脑端复现与 App 走同一条链路**：新增 `test/live/ask_pipeline_live_test.dart`，默认不运行，
+  需设置环境变量开启。它驱动 App 的 `askChatProvider`，经过真实的 provider 图（router、
+  各 Agent、`GameDataKnowledgeStore`、`ChatSessionStore`）；只覆盖 `main.dart` 启动时
+  注入的 provider 和平台路径。输出与 App 同格式的会话 JSON，外加每题的指标。
+  旧的 `tools/run_investigation.dart` 自己重写了 FFI 数据层，与 App 不一致，已删除。
+  原计划 2.1 的“store 去 Flutter 化”因此不再需要。
+- **reasoning 截断修复**（见分析文档 B8）：新增 `completeWithHeadroom`，并调高各处
+  token 上限（消歧器 32 → 1024、提取器 512 → 2048、planner 1024 → 4096、writer
+  2048 → 4096）。
+- **剧情向量召回**：新增可选表 `story_chunk_vectors`。schema 仍为 4，没有这张表的库照常可用
+  （偏离原计划的 schema 5，好处是保持兼容）。切块规则固定为 12 行一块、步长 8；
+  向量做 int8 量化，在内存里暴力计算 cosine（约 51k 块、512 维、25MB）。
+  构建工具 `tools/build_story_embeddings.dart` 可续跑，并按内容哈希缓存（全量约 11 分钟）。
+  `FIND` 把语义检索和关键词检索的结果按章节用 RRF 融合。没有 key、库里没有向量、
+  或配置的模型/维度与库不一致时，自动退回纯关键词检索，并在观察里写明原因。
+  向量 API 在设置页配置（secure storage，启动时注入）。
+- **评测**：`test/fixtures/investigation_eval.json` 是 30 题草稿，其中 28 道有标准答案章节，
+  2 道负例；`tools/summarize_eval.dart` 负责汇总指标并和基线对比。
+
 ---
 
 ## 当前已知边界（未做）

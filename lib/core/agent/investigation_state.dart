@@ -30,6 +30,11 @@ class InvestigationState {
   /// Mapped scopes / story-id lists (for S2 bookkeeping).
   final Set<String> mapped = {};
 
+  /// R12: executed FIND/COVER searches -> top story ids they returned, so the
+  /// model sees what it already searched (it re-ran `FIND 王冠` 8 times when
+  /// only the last 2 observations were visible).
+  final Map<String, List<String>> searchLog = {};
+
   /// The disambiguated target entity (id + name), set by the executor when a
   /// SEARCH hits multiple candidates (R10). Removes the need for the model to
   /// re-resolve the same ambiguous name every turn.
@@ -100,6 +105,15 @@ class InvestigationState {
     }
     if (mapped.isNotEmpty) {
       buffer.writeln('已查地图: ${mapped.join(", ")}');
+    }
+    if (searchLog.isNotEmpty) {
+      buffer.writeln('已检索:');
+      for (final entry in searchLog.entries) {
+        buffer.writeln(
+          '  ${entry.key} → '
+          '${entry.value.isEmpty ? '无结果' : entry.value.join(', ')}',
+        );
+      }
     }
     return buffer.toString().trimRight();
   }
@@ -276,6 +290,33 @@ class InvestigationState {
     } else {
       reads.add(entry);
     }
+  }
+
+  /// Records an executed FIND/COVER and the story ids it surfaced.
+  void noteSearchLog(String key, List<String> storyIds) {
+    if (key.trim().isEmpty) return;
+    searchLog[key.trim()] = storyIds;
+  }
+
+  /// R12 progress fingerprint: changes whenever the investigation learned
+  /// something new (lines read, notes, searches, evidence, maps, target).
+  String get progressFingerprint {
+    var readLines = 0;
+    for (final r in reads) {
+      for (final s in r.segments) {
+        readLines += s.end - s.start + 1;
+      }
+    }
+    final evidenceRows = evidence.fold<int>(0, (sum, e) => sum + e.evidenceRows);
+    return '$readLines|${notes.length}|${searchLog.length}|$evidenceRows|'
+        '${mapped.length}|$_targetEntityId';
+  }
+
+  /// Whether every line in [start]..[end] of [storyId] was already read.
+  bool wasRangeRead(String storyId, int start, int end) {
+    final index = reads.indexWhere((r) => r.storyId == storyId);
+    if (index < 0) return false;
+    return reads[index].segments.any((s) => s.start <= start && s.end >= end);
   }
 
   /// Whether line [line] of [storyId] lies inside an actually-read segment.

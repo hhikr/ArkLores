@@ -172,6 +172,80 @@ void main() {
       expect(lines.calls.single['query'], '染血 匕首');
     });
 
+    test('identical lookups and already-read ranges are not re-executed',
+        () async {
+      final lines = _RecordingTool('search_story_lines');
+      final read = _CountingReadTool();
+      final llm = _RoleLLM(
+        planner: [
+          'FIND 染血 匕首',
+          'FIND 染血 匕首', // identical -> answered from state
+          'READ activities/x/level_x_05.txt 10 12',
+          'READ activities/x/level_x_05.txt 11 12', // inside read segment
+          'DONE',
+        ],
+        extractor: 'NONE',
+        writer: const [],
+      );
+      await PlannerLoop(
+        llmClient: llm,
+        toolRegistry: ToolRegistry()..registerAll([lines, read]),
+      ).run(systemPrompt: 'sys', chatHistory: const [], userQuery: 'q').toList();
+
+      expect(lines.calls, hasLength(1));
+      expect(read.calls, 1);
+      final lastRequest =
+          llm.plannerRequests.last.map((m) => m.content).join('\n');
+      expect(lastRequest, contains('已检索:'));
+      expect(lastRequest, contains('FIND 染血 匕首'));
+      expect(lastRequest, contains('已经读过'));
+    });
+
+    test('a stalled run is answered from what was read, via the writer',
+        () async {
+      final llm = _RoleLLM(
+        planner: [
+          'READ activities/x/level_x_05.txt 10 12',
+          // Afterwards the model keeps issuing searches that add nothing.
+          for (var i = 0; i < 20; i++) 'SEARCH 无此人',
+        ],
+        extractor: 'L11: 角色B承认藏起匕首',
+        writer: ['部分回答：activities/x/level_x_05.txt:11'],
+      );
+      final events = await PlannerLoop(
+        llmClient: llm,
+        extractorClient: llm,
+        toolRegistry: ToolRegistry()
+          ..registerAll([_DataReadTool(), _NoResultSearchTool()]),
+      ).run(systemPrompt: 'sys', chatHistory: const [], userQuery: 'q').toList();
+
+      final answer = _answer(events);
+      expect(answer, contains('basis=stalled'));
+      expect(answer, contains('部分回答'));
+      expect(llm.writerRequests, hasLength(1));
+    });
+
+    test('the step budget ends a busy run through the writer', () async {
+      final llm = _RoleLLM(
+        planner: [
+          'READ activities/x/level_x_05.txt 10 12',
+          for (var i = 0; i < 20; i++) 'FIND 线索$i', // each adds a log entry
+        ],
+        extractor: 'NONE',
+        writer: ['按预算结束的回答'],
+      );
+      final events = await PlannerLoop(
+        llmClient: llm,
+        extractorClient: llm,
+        maxToolSteps: 6,
+        toolRegistry: ToolRegistry()
+          ..registerAll([_DataReadTool(), _RecordingTool('search_story_lines')]),
+      ).run(systemPrompt: 'sys', chatHistory: const [], userQuery: 'q').toList();
+
+      expect(_answer(events), contains('basis=step_budget'));
+      expect(_answer(events), contains('按预算结束的回答'));
+    });
+
     test('the disambiguator receives each candidate type and source',
         () async {
       final picker = _CapturingPicker();
@@ -277,6 +351,28 @@ class _DataReadTool extends AgentTool {
   @override
   Future<dynamic> execute(Map<String, dynamic> arguments) async =>
       ToolExecutionResult(observation: _readObservation);
+}
+
+class _NoResultSearchTool extends AgentTool {
+  @override
+  String get name => 'search_local_lore';
+  @override
+  String get description => 'search';
+  @override
+  Map<String, dynamic> get parameters => const {'type': 'object'};
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async =>
+      const ToolExecutionResult(observation: 'No matching GameData result found.');
+}
+
+/// [_DataReadTool] that counts executions.
+class _CountingReadTool extends _DataReadTool {
+  int calls = 0;
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) {
+    calls++;
+    return super.execute(arguments);
+  }
 }
 
 class _RecordingTool extends AgentTool {

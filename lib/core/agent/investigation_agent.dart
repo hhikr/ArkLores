@@ -67,7 +67,10 @@ class InvestigationAgent {
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
   }) {
-    final systemPrompt = buildAgentPrompt(investigationInstructions);
+    // R12: the decision model gets the trust rules + protocol only; the
+    // answer format belongs to the writer (basePrompt asks for Markdown
+    // answers, which pulled the planner into writing them itself).
+    const systemPrompt = '$knowledgeBaseRules\n\n$investigationInstructions';
     final loop = PlannerLoop(
       llmClient: _llmClient,
       toolRegistry: _toolRegistry,

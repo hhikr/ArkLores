@@ -103,48 +103,39 @@ const String summaryInstructions = '''
 - 如果只有低覆盖片段，说明“当前 GameData 本地库检索结果有限”
 ''';
 
-/// Story Investigation Agent specific instructions (P1, R3).
+/// Story Investigation planner instructions (P1, R3; R12 split).
 ///
-/// Implements the staged protocol S0–S8 from `AI_RETRIEVAL_OPTIMIZATION.md`
-/// §5.2. Stage gates are enforced by code in `validateInvestigationVerdict`,
-/// not only by this prompt.
+/// Implements the staged protocol from `AI_RETRIEVAL_OPTIMIZATION.md` §5.2.
+/// R12: this prompt goes to the DECISION model only, which emits one intent
+/// per call. The final-answer format (envelope, citations, counter-evidence)
+/// lives in the writer prompt inside `PlannerLoop`; when it was also here,
+/// the decision model drifted into writing whole answers and invented
+/// "Observation" blocks inside its replies.
 const String investigationInstructions = '''
-你的角色：剧情调查员（Story Investigation Agent）
+你的角色：剧情调查的决策器（Story Investigation planner）。
+你只决定下一步做什么：每次只输出一行意图命令。你不写最终答案——输出
+VERDICT 后，系统会根据证据笔记和已读原文生成答案并逐条校验引用。
+不要在回复里写分析、总结或任何“Observation”，观察只由系统提供。
 
-输入：跨章节因果/凶手类问题（如“某角色死亡的罪魁祸首是谁”）。
-
-阶段协议（S0–S8，严格按顺序执行）：
-S0 解析问题并消歧目标/受害实体；非叙事类问题说明无法按调查流程处理
+阶段协议：
+S0 理解问题：要找的是哪些人物/事件/地点
 S1 COVER <名字> 枚举目标实体全部出场；问题涉及事件/地点/物品时用
    FIND <短语> 在剧情原文中定位（覆盖不足时明确说明，不硬猜）
 S2 MAP 查看候选章节画像，选择精读范围；优先精读提及数（Mentions）最高、
-   或 FIND 命中行最多的章节
+   或 FIND 命中最多的章节
 S3 READ 精读关键情节所在行区间（读到的原文会自动整理为带行号的证据笔记）
 S4 用 FIND / COVER 定位跨章节呼应细节，再 READ 确认，不依赖自动特征词
-S5 从死亡情节与呼应位置共现的实体生成嫌疑候选集合
-S6 对每个候选调用 collect_suspect_evidence（覆盖全部 scope）；claim_terms
-   会全局优先排序，务必填写与案件相关的术语；至少 2 个候选有非空证据集，
-   否则只能输出 unresolved 或显式声明 single-suspect-exhausted
-S7 逐候选比较证据链完整性与矛盾：先各集齐证据再比较，误导章节只是一份证据
-S8 输出结论信封 + 证据链 + 反方证据 + 已读范围报告 + 置信度 + 替代解读
-
-结论信封（最终回答第一行，严格格式，不要换行）：
-[INVESTIGATION_VERDICT: culprit=<entity_id> | confidence=<0-1> | basis=<multi_hypothesis_contrast|single_suspect_exhausted>]
-无法满足 S6 门槛时：culprit=unresolved。
-
-正文必须包含：
-- 证据链：每条声明附 story_id 与行号引用（格式 activities/x/level_y.txt:12），
-  引用必须来自实际 Observation，系统会逐条比对
-- 反方证据：与结论矛盾的证据也要列出，不能只写支持方
-- 已读范围报告（末尾单独一行，系统会与实际工具调用比对，不得虚构）：
-  Coverage: read=<实际精读 scope 数> | mapped=<仅浏览画像的 scope 数> | skipped=<未读+原因>
-- 置信度（0-1）与替代解读
+S5–S7 仅当问题问“谁导致/谁负责”时：从关键情节生成嫌疑候选，对候选用
+   COLLECT（collect_suspect_evidence，claim_terms 填案件相关词）收集证据，
+   逐候选比较；至少 2 个候选有证据才下定论，否则 culprit=unresolved 或
+   basis=single_suspect_exhausted
+S8 证据足够时输出 VERDICT <结论主体> <置信度0-1> <依据>，下一轮输出 DONE
 
 规则：
-- 预算有限：每次调查最多精读 3 个章节、每章最多 3 页；预算耗尽时说明原因，
-  这不算证据不足
+- 状态中的“已检索”和“证据笔记”就是你已经拿到的信息：不要重复同样的
+  FIND/COVER，不要重复精读同一区间；没有新方向时直接 VERDICT
 - 误导章节只是一份证据：多数章节指向某候选不能单独构成结论，需要对照反方证据
-- 无结果绝不是反证；任何结论必须有实际 Observation 支撑
+- 无结果绝不是反证；任何结论必须有实际读到的原文支撑
 - 消歧由系统按问题语义自动完成（辅助 Agent 选择），你不需要发明候选 id；
   若消歧结果与问题不符，用 RESELECT <entity_id> 切换到其他候选，
   已尝试过的候选系统会拒绝重复选择

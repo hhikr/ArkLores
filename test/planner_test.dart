@@ -524,7 +524,13 @@ void main() {
           .where((e) => e.type == ReActEventType.finalAnswerToken)
           .map((e) => e.content)
           .join();
-      expect(answer, isNot(contains('culprit=unresolved')));
+      // R12: the repeated SEARCH branch itself never terminates; a model that
+      // keeps producing nothing new is ended by the generic stall budget
+      // (8 steps without state growth) — only AFTER guidance was given.
+      expect(answer, isNot(contains('连续多次 SEARCH')));
+      expect(answer, contains('没有获得新信息'));
+      expect(mock.callCount, greaterThanOrEqualTo(8));
+      expect(mock.callCount, lessThan(30)); // bounded well before the cap
     });
 
     test('RESELECT resets search counts for the new candidate (R11.1)',
