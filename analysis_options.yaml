@@ -10,6 +10,10 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
   language:
     # Strict mode surfaces implicit dynamic casts and raw generics so they can
     # be fixed instead of silently weakening type safety.
