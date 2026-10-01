@@ -37,6 +37,21 @@ class StoryLineEntry {
   final String content;
 }
 
+/// One story whose raw lines matched a keyword search (R12 `FIND`): total
+/// matching line count plus the first few matching lines as locating hints.
+class StoryLineHit {
+  const StoryLineHit({
+    required this.storyId,
+    required this.hits,
+    required this.lines,
+    this.scopeId,
+  });
+  final String storyId;
+  final String? scopeId;
+  final int hits;
+  final List<StoryLineEntry> lines;
+}
+
 /// A page of story lines plus the opaque continuation token.
 class StoryLinesPage {
   const StoryLinesPage({

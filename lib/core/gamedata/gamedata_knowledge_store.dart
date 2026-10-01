@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 
 import 'game_retrieval.dart';
 import 'gamedata_query_plan.dart';
+import 'story_line_search.dart';
 
 export 'gamedata_models.dart';
 
@@ -597,6 +598,24 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       'SELECT story_id, line_index, speaker, content FROM story_lines '
       'WHERE content LIKE ? ORDER BY story_id, line_index LIMIT ?',
       ['%$term%', limit],
+    );
+  }
+
+  @override
+  Future<List<StoryLineHit>> searchStoryLinesLike(
+    List<String> terms, {
+    String? scopeId,
+    int storyLimit = 8,
+    int linesPerStory = 3,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryStoryLinesLike(
+      db,
+      terms,
+      scopeId: scopeId,
+      storyLimit: storyLimit,
+      linesPerStory: linesPerStory,
     );
   }
 

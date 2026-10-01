@@ -12,7 +12,7 @@ import 'dart:convert';
 /// A parsed intent.
 class IntentRecord {
   const IntentRecord({required this.action, required this.args});
-  final String action; // READ | SEARCH | MAP | COLLECT | SUMMARIZE | VERDICT | DONE | RESELECT
+  final String action; // READ | SEARCH | COVER | FIND | MAP | COLLECT | SUMMARIZE | VERDICT | DONE | RESELECT
   final Map<String, dynamic> args;
 }
 
@@ -31,6 +31,8 @@ IntentRecord? parseIntent(String line) {
   for (final prefix in const [
     'READ',
     'SEARCH',
+    'COVER',
+    'FIND',
     'MAP',
     'COLLECT',
     'SUMMARIZE',
@@ -42,7 +44,7 @@ IntentRecord? parseIntent(String line) {
       // a single line with no other intent keyword.
       final rest = trimmed.substring(prefix.length).trim();
       if (RegExp(
-        r'^(READ|SEARCH|MAP|COLLECT|SUMMARIZE|VERDICT|RESELECT|DONE)\b',
+        r'^(READ|SEARCH|COVER|FIND|MAP|COLLECT|SUMMARIZE|VERDICT|RESELECT|DONE)\b',
         multiLine: true,
       ).hasMatch(rest)) {
         return null;
@@ -119,6 +121,43 @@ IntentRecord? parseIntent(String line) {
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;
               args['entity_id'] = tokens.first;
+            case 'COVER':
+              // R12: `COVER <name|entity_id> [scope=<scope_id>]` enumerates
+              // story appearances (search_story_coverage).
+              final tokens = rest.split(RegExp(r'\s+'));
+              if (tokens.isEmpty || tokens.first.isEmpty) return null;
+              final target = _unquote(tokens.first);
+              if (target.contains(':')) {
+                args['entity_id'] = target;
+              } else {
+                args['query'] = target;
+              }
+              for (final t in tokens.skip(1)) {
+                if (t.startsWith('scope=')) {
+                  args['scope_filter'] = t.substring(6).trim();
+                }
+              }
+            case 'FIND':
+              // R12: `FIND <phrase> [scope=<scope_id>] [top_k]` searches the
+              // raw story lines (search_story_lines).
+              final tokens = rest.split(RegExp(r'\s+'));
+              if (tokens.isEmpty || tokens.first.isEmpty) return null;
+              final queryParts = <String>[];
+              for (final t in tokens) {
+                if (t.startsWith('scope=')) {
+                  args['scope_id'] = t.substring(6).trim();
+                } else if (t.startsWith('top_k=')) {
+                  final k = int.tryParse(t.substring(6).trim());
+                  if (k != null) args['top_k'] = k;
+                } else if (queryParts.isNotEmpty && int.tryParse(t) != null) {
+                  args['top_k'] = int.parse(t);
+                } else {
+                  queryParts.add(t);
+                }
+              }
+              final query = _unquote(queryParts.join(' '));
+              if (query.isEmpty) return null;
+              args['query'] = query;
             case 'SEARCH':
               // R11.2: the query may be a multi-word phrase. Collect tokens as
               // the query until an explicit `id=` or a trailing bare number
@@ -208,6 +247,19 @@ IntentRecord? parseIntent(String line) {
     }
   }
   return null;
+}
+
+/// Strips one pair of surrounding ASCII/CJK quotes.
+String _unquote(String value) {
+  final v = value.trim();
+  if (v.length >= 2) {
+    const pairs = {'"': '"', "'": "'", '“': '”', '「': '」'};
+    final close = pairs[v[0]];
+    if (close != null && v.endsWith(close)) {
+      return v.substring(1, v.length - 1).trim();
+    }
+  }
+  return v;
 }
 
 int _findJsonEnd(String s) {

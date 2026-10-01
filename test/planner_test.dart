@@ -113,26 +113,43 @@ void main() {
       state.noteStage('S1');
       state.noteStage('S3');
       state.noteRead('activities/x/level_x_09_beg.txt', 0, 103);
-      state.setKeyPoints('activities/x/level_x_09_beg.txt', '刺客受摄政王派遣');
+      state.addNotes(const [
+        EvidenceNote(
+          storyId: 'activities/x/level_x_09_beg.txt',
+          line: 42,
+          fact: '刺客受摄政王派遣',
+          quote: '刺客：是摄政王派我来的。',
+        ),
+      ]);
       state.noteEvidence('speaker:博士', evidenceRows: 14, scopes: ['obt:main']);
       state.noteMapped('activity:act33side');
 
       final text = state.serialize();
       expect(text, contains('阶段: S1,S3'));
       expect(text, contains('09_beg.txt:0-103'));
-      expect(text, contains('刺客受摄政王派遣'));
+      expect(text, contains('09_beg.txt:42 刺客受摄政王派遣 「刺客：是摄政王派我来的。」'));
       expect(text, contains('speaker:博士: 14行'));
       expect(text, contains('act33side'));
     });
 
-    test('read merges ranges and keeps key points', () {
+    test('read merges adjacent ranges but keeps gaps unread (R12)', () {
       final state = InvestigationState();
-      state.noteRead('s1', 0, 100);
-      state.setKeyPoints('s1', '要点A');
+      state.noteRead('s1', 0, 99);
       state.noteRead('s1', 100, 200);
-      final text = state.serialize();
-      expect(text, contains('s1:0-200'));
-      expect(text, contains('要点A'));
+      state.noteRead('s1', 300, 320);
+      expect(state.serialize(), contains('s1:0-200,300-320'));
+      expect(state.wasLineRead('s1', 150), isTrue);
+      expect(state.wasLineRead('s1', 250), isFalse);
+      expect(state.wasLineRead('s2', 0), isFalse);
+    });
+
+    test('no-result counts are per key, not global (R12)', () {
+      final state = InvestigationState();
+      state.noteSearchProgress(key: 'a', hadResult: false, contentChanged: true);
+      state.noteSearchProgress(key: 'a', hadResult: false, contentChanged: true);
+      state.noteSearchProgress(key: 'b', hadResult: false, contentChanged: true);
+      expect(state.consecutiveNoResult('a'), 2);
+      expect(state.consecutiveNoResult('b'), 1);
     });
   });
 

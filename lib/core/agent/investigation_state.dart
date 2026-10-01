@@ -13,8 +13,16 @@ class InvestigationState {
   /// Stages (S0..S8) completed so far, in order, deduplicated.
   final List<String> stages = [];
 
-  /// One read chapter: range + optional key points from the extractor.
+  /// One read chapter: the line segments the tool ACTUALLY returned (R12).
   final List<ReadEntry> reads = [];
+
+  /// R12 evidence notebook: line-anchored facts extracted from READ pages.
+  /// Quotes are copied from the returned story lines by code (never written
+  /// by the model), so the writer cites real text.
+  final List<EvidenceNote> notes = [];
+
+  /// Upper bound of [notes] kept in state (oldest dropped first).
+  static const int maxNotes = 30;
 
   /// Evidence sets collected per suspect entity.
   final List<EvidenceEntry> evidence = [];
@@ -43,10 +51,11 @@ class InvestigationState {
   final Map<String, String> _candidateNames = {};
 
   /// R11: how many times each search key (name or id) was repeated, plus the
-  /// count of consecutive no-result searches — used by the executor to break
-  /// repeated dead loops deterministically.
+  /// count of consecutive no-result searches PER KEY (R12: a global counter
+  /// penalized a fresh query for earlier queries' misses) — used by the
+  /// executor to break repeated dead loops deterministically.
   final Map<String, int> _searchRepeatCount = {};
-  int _consecutiveNoResult = 0;
+  final Map<String, int> _consecutiveNoResult = {};
 
   /// R11: search keys for which the executor already ran a coverage fallback.
   /// A repeated SEARCH of such a key means the model ignored the enumerated
@@ -71,9 +80,14 @@ class InvestigationState {
       buffer.writeln('已读:');
       for (final r in reads) {
         buffer.writeln(
-          '  ${r.storyId}:${r.startLine}-${r.endLine}'
-          '${r.keyPoints.isEmpty ? "" : " [要点: ${r.keyPoints}]"}',
+          '  ${r.storyId}:${r.segments.map((s) => '${s.start}-${s.end}').join(',')}',
         );
+      }
+    }
+    if (notes.isNotEmpty) {
+      buffer.writeln('证据笔记:');
+      for (final n in notes) {
+        buffer.writeln('  ${n.storyId}:${n.line} ${n.fact} 「${n.quote}」');
       }
     }
     if (evidence.isNotEmpty) {
@@ -170,10 +184,13 @@ class InvestigationState {
     final normalized = key.trim();
     if (normalized.isEmpty) return;
     if (hadResult && contentChanged) {
-      _consecutiveNoResult = 0;
+      _consecutiveNoResult[normalized] = 0;
       _searchRepeatCount[normalized] = 0;
     } else {
-      _consecutiveNoResult++;
+      if (!hadResult) {
+        _consecutiveNoResult[normalized] =
+            (_consecutiveNoResult[normalized] ?? 0) + 1;
+      }
       _searchRepeatCount[normalized] =
           (_searchRepeatCount[normalized] ?? 0) + 1;
     }
@@ -196,8 +213,8 @@ class InvestigationState {
   /// Number of times [key] was searched without fresh progress.
   int searchRepeatCount(String key) => _searchRepeatCount[key.trim()] ?? 0;
 
-  /// Consecutive searches that produced no result (across the current target).
-  int get consecutiveNoResult => _consecutiveNoResult;
+  /// Consecutive searches of [key] that produced no result.
+  int consecutiveNoResult(String key) => _consecutiveNoResult[key.trim()] ?? 0;
 
   /// Marks [key] as already coverage-fallen-back; a later SEARCH of the same
   /// key with no progress hits the terminal branch instead of looping.
@@ -217,7 +234,7 @@ class InvestigationState {
     _searchRepeatCount.remove(normalized);
     _lastSearchObservation.remove(normalized);
     _coverageFallbackKeys.remove(normalized);
-    _consecutiveNoResult = 0;
+    _consecutiveNoResult.remove(normalized);
   }
 
   /// True when the investigation has made non-search progress (read chapters
@@ -228,42 +245,57 @@ class InvestigationState {
 
   void resetSearchTracking() {
     _searchRepeatCount.clear();
-    _consecutiveNoResult = 0;
+    _consecutiveNoResult.clear();
     _coverageFallbackKeys.clear();
     _lastSearchObservation.clear();
   }
 
+  /// Records that lines [startLine]..[endLine] (inclusive) of [storyId] were
+  /// actually returned by a read. Overlapping or adjacent segments merge;
+  /// gaps stay gaps (R12: a min..max merge marked unread lines as read).
   void noteRead(String storyId, int startLine, int endLine) {
-    final existing = reads.indexWhere((r) => r.storyId == storyId);
-    if (existing < 0) {
-      reads.add(ReadEntry(
-        storyId: storyId,
-        startLine: startLine,
-        endLine: endLine,
-      ),);
-      return;
+    final start = startLine <= endLine ? startLine : endLine;
+    final end = startLine <= endLine ? endLine : startLine;
+    final index = reads.indexWhere((r) => r.storyId == storyId);
+    final segments = [
+      if (index >= 0) ...reads[index].segments,
+      LineSegment(start, end),
+    ]..sort((a, b) => a.start.compareTo(b.start));
+    final merged = <LineSegment>[];
+    for (final s in segments) {
+      if (merged.isNotEmpty && s.start <= merged.last.end + 1) {
+        final last = merged.removeLast();
+        merged.add(LineSegment(last.start, s.end > last.end ? s.end : last.end));
+      } else {
+        merged.add(s);
+      }
     }
-    final r = reads[existing];
-    final mergedStart = startLine < r.startLine ? startLine : r.startLine;
-    final mergedEnd = endLine > r.endLine ? endLine : r.endLine;
-    reads[existing] = ReadEntry(
-      storyId: storyId,
-      startLine: mergedStart,
-      endLine: mergedEnd,
-      keyPoints: r.keyPoints,
-    );
+    final entry = ReadEntry(storyId: storyId, segments: merged);
+    if (index >= 0) {
+      reads[index] = entry;
+    } else {
+      reads.add(entry);
+    }
   }
 
-  void setKeyPoints(String storyId, String keyPoints) {
+  /// Whether line [line] of [storyId] lies inside an actually-read segment.
+  bool wasLineRead(String storyId, int line) {
     final index = reads.indexWhere((r) => r.storyId == storyId);
-    if (index < 0) return;
-    final r = reads[index];
-    reads[index] = ReadEntry(
-      storyId: storyId,
-      startLine: r.startLine,
-      endLine: r.endLine,
-      keyPoints: keyPoints,
-    );
+    if (index < 0) return false;
+    return reads[index].segments.any((s) => line >= s.start && line <= s.end);
+  }
+
+  /// Adds evidence notes, skipping exact duplicates and keeping the newest
+  /// [maxNotes].
+  void addNotes(Iterable<EvidenceNote> newNotes) {
+    for (final note in newNotes) {
+      final duplicate = notes.any((n) =>
+          n.storyId == note.storyId && n.line == note.line && n.fact == note.fact,);
+      if (!duplicate) notes.add(note);
+    }
+    if (notes.length > maxNotes) {
+      notes.removeRange(0, notes.length - maxNotes);
+    }
   }
 
   void noteMapped(String key) {
@@ -294,18 +326,36 @@ class InvestigationState {
   }
 }
 
-/// One read chapter in state.
+/// One read chapter in state: the line segments actually returned.
 class ReadEntry {
-  const ReadEntry({
+  const ReadEntry({required this.storyId, required this.segments});
+  final String storyId;
+  final List<LineSegment> segments;
+}
+
+/// An inclusive line range.
+class LineSegment {
+  const LineSegment(this.start, this.end);
+  final int start;
+  final int end;
+}
+
+/// One line-anchored fact from a read page (R12 evidence notebook).
+class EvidenceNote {
+  const EvidenceNote({
     required this.storyId,
-    required this.startLine,
-    required this.endLine,
-    this.keyPoints = '',
+    required this.line,
+    required this.fact,
+    required this.quote,
   });
   final String storyId;
-  final int startLine;
-  final int endLine;
-  final String keyPoints;
+  final int line;
+
+  /// The extractor's one-sentence statement of what this line shows.
+  final String fact;
+
+  /// Original line text copied by code from the read page.
+  final String quote;
 }
 
 /// Evidence collected for one suspect.

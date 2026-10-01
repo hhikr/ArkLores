@@ -1,5 +1,6 @@
 import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
+import 'observation_data.dart';
 
 /// Reads raw story lines by story id with window + pagination. Exposes the
 /// original text so the agent can read key chapters directly instead of
@@ -130,6 +131,17 @@ class ReadStoryLinesTool extends AgentTool {
       buffer.writeln('End of Story: yes');
     }
 
-    return ToolExecutionResult(observation: buffer.toString().trim());
+    // R12: the range ACTUALLY returned (after the observation budget), so the
+    // executor records real coverage instead of the requested window.
+    return ToolExecutionResult(
+      observation: appendDataBlock(buffer.toString().trim(), {
+        'type': 'read_story_lines',
+        'story_id': storyId,
+        'scope_id': page.scopeId,
+        'first_line': page.lines.first.lineIndex,
+        'last_line': page.lines[included - 1].lineIndex,
+        'read_lines': included,
+      }),
+    );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import '../gamedata/gamedata_models.dart';
 import '../llm/llm_client.dart';
 import 'entity_disambiguator.dart';
+import 'evidence_notebook.dart';
 import 'investigation_state.dart';
 import 'planner_intent.dart';
 import 'react_event.dart' show ReActEvent, ReActEventType;
@@ -51,6 +52,8 @@ class PlannerLoop {
   static const String intentFormat = '''
 你是剧情调查决策器。每次只输出一行意图命令，严格按以下格式，不要任何其他文字：
 
+COVER <名字|entity_id> [scope=<scope_id>]
+FIND <短语或空格分隔的词> [scope=<scope_id>] [top_k]
 READ <story_id> [start_line end_line] [max_lines] [page_token]
 SEARCH <query> [id=<entity_id>] [top_k]
 MAP <scope_id>
@@ -62,9 +65,12 @@ DONE
 
 规则：
 - 一次只输出一行，无前后缀。
-- READ 精读章节行区间；MAP 查看章节地图；SEARCH 全文检索；
-  COLLECT 收集某实体证据（claim_terms 填案件相关词）。
-- 已读章节的要点会记录在调查状态中，不要重复精读同一区间。
+- 找剧情：COVER 列出某人物/实体在哪些章节、哪些行出场；FIND 在剧情原文
+  中检索短语（事件、地点、物品、台词关键词），返回章节与行号线索。
+- READ 精读章节行区间：只有 READ 读到的原文才会记为证据笔记。
+- SEARCH 只查实体档案/资料（干员档案、敌人图鉴等），不检索剧情原文。
+- MAP 查看章节地图；COLLECT 收集某实体证据（claim_terms 填相关词）。
+- 已读区间与证据笔记记录在调查状态中，不要重复精读同一区间。
 - 目标实体已在状态中消歧时，不要重复 SEARCH 原名，直接用其 entity_id；
   SEARCH 支持 id=<entity_id> 直接按 id 检索。
 - 消歧结果不对时用 RESELECT <entity_id> 切换到其他候选，不要反复搜索原名。
@@ -81,6 +87,9 @@ DONE
     void Function(String state)? onStateChanged,
   }) async* {
     final state = InvestigationState();
+    // R12: the lines READ actually returned, for the writer when the
+    // notebook is thin (e.g. the extractor found nothing or failed).
+    final readPages = <ReadPage>[];
     final recent = <Message>[];
     var iteration = 0;
     var completedToolCalls = 0;
@@ -166,7 +175,7 @@ DONE
         }
         recent.add(Message.user(
           'Observation: 无效意图："$response"。请只输出一行 intent '
-          '(READ/SEARCH/MAP/COLLECT/SUMMARIZE/VERDICT/DONE)。',
+          '(COVER/FIND/READ/SEARCH/MAP/COLLECT/SUMMARIZE/RESELECT/VERDICT/DONE)。',
         ),);
         continue;
       }
@@ -201,8 +210,29 @@ DONE
             confidence: confidence,
             basis: basis,
             state: state,
+            readPages: readPages,
             userQuery: userQuery,
           );
+          // R12: restore line-level provenance — every cited line must have
+          // been actually read. One rewrite with the offending citations;
+          // still invalid -> keep the answer but flag it.
+          var invalid = unreadCitations(body, state);
+          if (invalid.isNotEmpty) {
+            body = await _composeAnswer(
+              culprit: culprit,
+              confidence: confidence,
+              basis: basis,
+              state: state,
+              readPages: readPages,
+              userQuery: userQuery,
+              invalidCitations: invalid,
+            );
+            invalid = unreadCitations(body, state);
+          }
+          if (invalid.isNotEmpty) {
+            body = '$body\n\n> 来源警告：以下引用的行未在本次调查中实际读取，'
+                '可能不准确：${invalid.join('、')}';
+          }
         } catch (e) {
           body = '（无法生成答案正文：$e）';
         }
@@ -314,7 +344,8 @@ DONE
 
         final repeats = state.searchRepeatCount(key);
         final alreadyFellBack = state.hasCoverageFallback(key);
-        if (repeats > _maxSearchRepeats || state.consecutiveNoResult >= 2) {
+        if (repeats > _maxSearchRepeats ||
+            state.consecutiveNoResult(key) >= 2) {
           // Same key keeps producing NO progress. Before terminating, check
           // whether the investigation has made non-search progress: if it
           // has, guide the model to use it (COLLECT / VERDICT) instead of
@@ -347,12 +378,18 @@ DONE
             return;
           }
           // Has read/evidence (or already fell back): guide, do not kill.
-          final guide = 'SEARCH「$key」连续无新信息，但调查已有'
-              '${state.reads.length} 个已读章节'
-              '${state.evidence.any((e) => e.evidenceRows > 0) ? '与证据' : ''}。'
-              '请停止重复搜索，改为：对已读章节中的嫌疑人调用 '
-              'COLLECT <entity_id> claim_terms=[...] 收集证据，'
-              '或基于已读内容直接输出 VERDICT。';
+          // R12: the guide must match the actual state — with nothing read
+          // yet, point at the story-finding intents instead of "已读章节".
+          final guide = progressed
+              ? 'SEARCH「$key」连续无新信息，但调查已有'
+                  '${state.reads.length} 个已读章节'
+                  '${state.evidence.any((e) => e.evidenceRows > 0) ? '与证据' : ''}。'
+                  '请停止重复搜索，改为：基于证据笔记继续 READ/FIND，对相关'
+                  '人物 COLLECT <entity_id> claim_terms=[...]，'
+                  '或直接输出 VERDICT。'
+              : 'SEARCH「$key」连续无新信息，且已做过出场枚举。SEARCH 只查'
+                  '实体档案；请改用 FIND <短语> 检索剧情原文，或 READ 出场'
+                  '枚举中的章节。';
           state.noteCoverageFallback(key);
           recent.add(Message.user('Observation: $guide'));
           onStateChanged?.call(state.serialize());
@@ -397,14 +434,25 @@ DONE
         toolName: toolName,
       );
 
-      // Automatic extraction after READ so key points live in state and the
-      // model never re-reads to recall content (M-C).
-      if (intent.action == 'READ' && _extractorClient != null) {
-        try {
-          final points = await extractKeyPoints(_extractorClient, observation);
-          state.setKeyPoints('${args['story_id']}', points);
-        } catch (_) {
-          // Extraction failure is non-fatal; the read index remains.
+      // R12: after READ, question-aware extraction turns the returned lines
+      // into line-anchored notes in state, so read content survives the
+      // 2-message recent window and reaches the writer (M-C).
+      final page = (intent.action == 'READ' || intent.action == 'SUMMARIZE')
+          ? parseReadObservation(observation)
+          : null;
+      if (page != null) {
+        readPages.add(page);
+        final extractor = _extractorClient;
+        if (extractor != null) {
+          final notes = await extractEvidenceNotes(
+            extractor,
+            userQuery: userQuery,
+            page: page,
+          );
+          if (notes.isNotEmpty) {
+            state.addNotes(notes);
+            onStateChanged?.call(state.serialize());
+          }
         }
       }
     }
@@ -413,6 +461,8 @@ DONE
   String _toolNameFor(String action) => switch (action) {
         'READ' => 'read_story_lines',
         'SEARCH' => 'search_local_lore',
+        'COVER' => 'search_story_coverage',
+        'FIND' => 'search_story_lines',
         'MAP' => 'get_story_map',
         'COLLECT' => 'collect_suspect_evidence',
         'SUMMARIZE' => 'read_story_lines',
@@ -423,17 +473,23 @@ DONE
       Map<String, dynamic>.from(intent.args);
 
   /// Extracts candidate entities from a compact "Ambiguous" observation
-  /// (R10/R11 form: "  1. `entity_id` | `name` | `type` | `source` | ...").
+  /// (R10/R11 form: "  1. id | name | type | source | match_type | conf").
+  /// R12: the type/source/match columns are kept — the disambiguation helper
+  /// previously received a hard-coded `entity`/`game_data` for every
+  /// candidate and could only judge by id and name.
   List<_Candidate> _parseCandidates(String observation) {
-    final linePattern = RegExp(
-      r'^\s*(\d+)\.\s+(\S+)\s*\|\s*([^|\n]+)',
-      multiLine: true,
-    );
+    final linePattern = RegExp(r'^\s*(\d+)\.\s+(\S+)\s*\|(.*)$', multiLine: true);
     final candidates = <_Candidate>[];
     for (final match in linePattern.allMatches(observation)) {
+      final cols = match.group(3)!.split('|').map((c) => c.trim()).toList();
+      String col(int i) => i < cols.length ? cols[i] : '';
       candidates.add(_Candidate(
         entityId: match.group(2)!.trim(),
-        name: match.group(3)!.trim(),
+        name: col(0),
+        entityType: col(1),
+        sourceType: col(2),
+        matchType: col(3),
+        confidence: double.tryParse(col(4)),
       ),);
     }
     return candidates;
@@ -474,11 +530,11 @@ DONE
         GameDataEntityCandidate(
           entityId: c.entityId,
           name: c.name,
-          entityType: 'entity',
-          sourceType: 'game_data',
+          entityType: c.entityType.isEmpty ? 'entity' : c.entityType,
+          sourceType: c.sourceType.isEmpty ? 'game_data' : c.sourceType,
           matchedAlias: '',
-          matchType: 'name_exact',
-          confidence: 1.0,
+          matchType: c.matchType.isEmpty ? 'name_exact' : c.matchType,
+          confidence: c.confidence ?? 1.0,
         ),
     ];
   }
@@ -566,13 +622,18 @@ DONE
   ) {
     switch (action) {
       case 'READ':
-        final storyId = '${args['story_id'] ?? ''}';
-        if (storyId.isEmpty) return;
-        final start = (args['start_line'] as num?)?.toInt() ?? 0;
-        final end = (args['end_line'] as num?)?.toInt() ??
-            (start + ((args['max_lines'] as num?)?.toInt() ?? 60));
-        state.noteRead(storyId, start, end);
-        state.noteStage('S3');
+      case 'SUMMARIZE':
+        // R12: record the lines the tool ACTUALLY returned (DATA block /
+        // row numbers), not the requested window — the observation budget
+        // may cut a page short, and nothing unread may count as read.
+        final page = parseReadObservation(observation);
+        if (page == null) return;
+        state.noteRead(page.storyId, page.firstLine, page.lastLine);
+        state.noteStage(action == 'READ' ? 'S3' : 'S4');
+      case 'COVER':
+        state.noteStage('S1');
+      case 'FIND':
+        state.noteStage('S1');
       case 'MAP':
         final scopeId = '${args['scope_id'] ?? ''}';
         if (scopeId.isNotEmpty) state.noteMapped(scopeId);
@@ -586,8 +647,6 @@ DONE
         state.noteStage('S6');
       case 'SEARCH':
         state.noteStage('S1');
-      case 'SUMMARIZE':
-        state.noteStage('S4');
       case 'RESELECT':
         state.noteStage('S1');
     }
@@ -604,49 +663,54 @@ DONE
     }
   }
 
-  /// Writer role: turns the final verdict + state into a structured answer
-  /// with line-level citations drawn from what was actually read/collected.
+  /// Upper bound of raw read text handed to the writer.
+  static const int _maxWriterSourceChars = 8000;
+
+  /// Writer role: turns the final verdict + state into a structured answer.
+  /// R12: the writer sees the evidence notebook AND the raw lines READ
+  /// returned, so the answer rests on original text instead of the planner
+  /// model's memory; [invalidCitations] drives a corrective rewrite.
   Future<String> _composeAnswer({
     required String culprit,
     required String confidence,
     required String basis,
     required InvestigationState state,
+    required List<ReadPage> readPages,
     required String userQuery,
+    List<String> invalidCitations = const [],
   }) async {
+    final source = StringBuffer();
+    for (final page in readPages) {
+      for (final line in page.lines) {
+        final row = '${page.storyId}:${line.index} ${line.text}\n';
+        if (source.length + row.length > _maxWriterSourceChars) break;
+        source.write(row);
+      }
+    }
+    final correction = invalidCitations.isEmpty
+        ? ''
+        : '\n\n上一版答案引用了未读取的行：${invalidCitations.join('、')}。'
+            '请重写，只引用下方“已读原文”中出现的 story_id:行号。';
     final result = await _llmClient.chatCompletion(
       [
         Message.system(
-          '你是剧情调查员。基于调查状态写最终答案：开头一行结论（凶手/主犯是 '
-          '$culprit，置信度 $confidence，依据 $basis），然后 2-4 条证据'
-          '（引用实际读取的章节与行区间），如有可能列出反方证据。'
-          '每条证据必须来自"已读"列表中的章节。用 Markdown。',
+          '你是剧情调查员。只根据下方“证据笔记”和“已读原文”写最终答案：'
+          '开头一行结论（$culprit，置信度 $confidence，依据 $basis），'
+          '然后 2-4 条证据，每条附引用，格式为 story_id:行号（或 '
+          'story_id:起-止），只能引用已读原文中出现的行；如有反方证据也列出。'
+          '原文没有支持的内容要明确说“资料未覆盖”，不得用记忆补充。'
+          '用 Markdown。',
         ),
-        Message.user('问题: $userQuery\n\n调查状态:\n${state.serialize()}'),
+        Message.user(
+          '问题: $userQuery\n\n调查状态:\n${state.serialize()}'
+          '\n\n已读原文:\n${source.isEmpty ? '（无）' : source}$correction',
+        ),
       ],
       temperature: 0.2,
       maxTokens: 2048,
     );
     return result.content.trim();
   }
-}
-
-/// Condenses a raw read observation into ≤150-char key points (M-C).
-Future<String> extractKeyPoints(LLMClient client, String passage) async {
-  final limited = passage.length > 3000
-      ? passage.substring(0, 3000)
-      : passage;
-  final result = await client.chatCompletion(
-    [
-      Message.system(
-        '用不超过150个字提取这段剧情的关键要点：谁、发生了什么、任何直接指认/动作/证据。不要总结评价，只要事实要点。',
-      ),
-      Message.user(limited),
-    ],
-    temperature: 0,
-    maxTokens: 256,
-  );
-  final points = result.content.trim();
-  return points.length > 150 ? points.substring(0, 150) : points;
 }
 
 bool _isNetworkError(String message) {
@@ -665,9 +729,17 @@ class _Candidate {
   const _Candidate({
     required this.entityId,
     required this.name,
+    this.entityType = '',
+    this.sourceType = '',
+    this.matchType = '',
+    this.confidence,
     this.choseTopFallback = false,
   });
   final String entityId;
   final String name;
+  final String entityType;
+  final String sourceType;
+  final String matchType;
+  final double? confidence;
   final bool choseTopFallback;
 }

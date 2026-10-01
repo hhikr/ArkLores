@@ -63,6 +63,7 @@ class SearchStoryCoverageTool extends AgentTool {
 
     var entityId = entityIdArg;
     String? matchedEntityLabel;
+    final List<StoryCoverageEntry> entries;
     if (entityId == null || entityId.isEmpty) {
       final candidates = await store.findEntityCandidates(query!);
       final exact = candidates
@@ -71,24 +72,37 @@ class SearchStoryCoverageTool extends AgentTool {
               candidate.matchType == 'canonical_alias_exact' ||
               candidate.matchType == 'alias_exact',)
           .toList(growable: false);
-      if (exact.length > 1) {
-        return _formatDisambiguationCandidates(query, exact);
-      }
       if (candidates.isEmpty) {
         return ToolExecutionResult(
           observation:
               'No entity found for "$query" in the local GameData knowledge base.',
         );
       }
-      final chosen = exact.isNotEmpty ? exact.first : candidates.first;
-      entityId = chosen.entityId;
-      matchedEntityLabel = '${chosen.name} (${chosen.entityId})';
+      if (exact.length > 1) {
+        // R12: same-name entities share their alias in the coverage trie, so
+        // their appearances are (almost always) the same story lines — on
+        // the v4 DB 499 of 515 shared aliases with coverage were identical.
+        // Appearances are locating hints, so merge them instead of forcing a
+        // disambiguation that cannot change what the agent can read.
+        entityId = exact.first.entityId;
+        matchedEntityLabel = '$query（合并 ${exact.length} 个同名实体: '
+            '${exact.map((c) => c.entityId).join(', ')}）';
+        entries = await _mergedCoverage(store, exact, scopeFilter);
+      } else {
+        final chosen = exact.isNotEmpty ? exact.first : candidates.first;
+        entityId = chosen.entityId;
+        matchedEntityLabel = '${chosen.name} (${chosen.entityId})';
+        entries = await store.searchStoryCoverage(
+          entityId: entityId,
+          scopeFilter: scopeFilter,
+        );
+      }
+    } else {
+      entries = await store.searchStoryCoverage(
+        entityId: entityId,
+        scopeFilter: scopeFilter,
+      );
     }
-
-    final entries = await store.searchStoryCoverage(
-      entityId: entityId,
-      scopeFilter: scopeFilter,
-    );
     if (entries.isEmpty) {
       return ToolExecutionResult(
         observation:
@@ -141,37 +155,32 @@ class SearchStoryCoverageTool extends AgentTool {
     return ToolExecutionResult(observation: buffer.toString().trim());
   }
 
-  ToolExecutionResult _formatDisambiguationCandidates(
-    String query,
+  /// Union of the appearance runs of [candidates], de-duplicated by story and
+  /// line range, in the store's scope/story/line order.
+  Future<List<StoryCoverageEntry>> _mergedCoverage(
+    GameDataRetrieval store,
     List<GameDataEntityCandidate> candidates,
-  ) {
-    final buffer = StringBuffer()
-      ..writeln('Ambiguous GameData entity query: "$query".')
-      ..writeln(
-        'Multiple exact entity candidates were found. Ask the user to choose '
-        'one, or call search_story_coverage again with entity_id.',
-      )
-      ..writeln();
-
-    for (var i = 0; i < candidates.length; i++) {
-      final candidate = candidates[i];
-      buffer.writeln('=== Candidate #${i + 1} ===');
-      buffer.writeln('Entity ID: ${candidate.entityId}');
-      buffer.writeln('Name: ${candidate.name}');
-      buffer.writeln('Entity Type: ${candidate.entityType}');
-      buffer.writeln('Matched Alias: ${candidate.matchedAlias}');
-      buffer.writeln('Match Type: ${candidate.matchType}');
-      buffer.writeln(
-        'Confidence: ${candidate.confidence.toStringAsFixed(2)}',
-      );
-      buffer.writeln('Source Type: ${candidate.sourceType}');
-      if (candidate.sourcePath != null) {
-        buffer.writeln('Source Path: ${candidate.sourcePath}');
+    String? scopeFilter,
+  ) async {
+    final seen = <String>{};
+    final merged = <StoryCoverageEntry>[];
+    for (final candidate in candidates) {
+      for (final entry in await store.searchStoryCoverage(
+        entityId: candidate.entityId,
+        scopeFilter: scopeFilter,
+      )) {
+        if (seen.add('${entry.storyId}#${entry.lineStart}-${entry.lineEnd}')) {
+          merged.add(entry);
+        }
       }
-      buffer.writeln('Trust: GameData / game original text (highest).');
-      buffer.writeln();
     }
-
-    return ToolExecutionResult(observation: buffer.toString().trim());
+    merged.sort((a, b) {
+      final scope = a.scopeId.compareTo(b.scopeId);
+      if (scope != 0) return scope;
+      final story = a.storyId.compareTo(b.storyId);
+      if (story != 0) return story;
+      return a.lineStart.compareTo(b.lineStart);
+    });
+    return merged;
   }
 }

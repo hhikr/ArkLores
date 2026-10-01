@@ -115,13 +115,12 @@ const String investigationInstructions = '''
 
 阶段协议（S0–S8，严格按顺序执行）：
 S0 解析问题并消歧目标/受害实体；非叙事类问题说明无法按调查流程处理
-S1 search_story_coverage 枚举目标实体全部出场（覆盖不足时明确说明，不硬猜）
-S2 get_story_map 查看候选章节画像，选择精读范围（先取地图再精读）；
-   优先精读实体提及数（Mentions）最高的章节；get_story_map 返回紧凑章节列表
-   时用 story_ids 参数获取候选章节的完整画像
-S3 read_story_lines 定位死亡/关键情节所在行区间并通读原文
-S4 用 read_story_lines / search_story_coverage 定位跨章节呼应细节，
-   不依赖自动特征词
+S1 COVER <名字> 枚举目标实体全部出场；问题涉及事件/地点/物品时用
+   FIND <短语> 在剧情原文中定位（覆盖不足时明确说明，不硬猜）
+S2 MAP 查看候选章节画像，选择精读范围；优先精读提及数（Mentions）最高、
+   或 FIND 命中行最多的章节
+S3 READ 精读关键情节所在行区间（读到的原文会自动整理为带行号的证据笔记）
+S4 用 FIND / COVER 定位跨章节呼应细节，再 READ 确认，不依赖自动特征词
 S5 从死亡情节与呼应位置共现的实体生成嫌疑候选集合
 S6 对每个候选调用 collect_suspect_evidence（覆盖全部 scope）；claim_terms
    会全局优先排序，务必填写与案件相关的术语；至少 2 个候选有非空证据集，
@@ -149,8 +148,9 @@ S8 输出结论信封 + 证据链 + 反方证据 + 已读范围报告 + 置信�
 - 消歧由系统按问题语义自动完成（辅助 Agent 选择），你不需要发明候选 id；
   若消歧结果与问题不符，用 RESELECT <entity_id> 切换到其他候选，
   已尝试过的候选系统会拒绝重复选择
-- SEARCH 支持 id=<entity_id> 直接按 id 检索；系统也会把你的原名自动映射到
-  已消歧实体，不要为同一个人反复搜索原名
+- SEARCH 只查实体档案（不含剧情原文），支持 id=<entity_id> 直接按 id 检索；
+  系统会把原名自动映射到已消歧实体，不要为同一个人反复搜索原名
+- FIND / COVER 的命中只是定位线索，必须 READ 原文后才能作为证据
 ''';
 
 /// Roleplay Agent specific instructions.

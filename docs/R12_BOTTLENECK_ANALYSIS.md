@@ -114,7 +114,8 @@ S0–S8 流程、`VERDICT culprit`、“至少 2 个嫌疑人有证据”门槛�
 
 附带发现：`sqflite_common_ffi` 会把**相对路径**解析到
 `.dart_tool/sqflite_common_ffi/databases/` 下。本机这个目录里还残留着一个
-schema 1 的旧库，用相对 `--db` 运行 CLI 会静默打开错误的库。CLI 需要先把路径转成绝对路径。
+schema 1 的旧库，临时脚本用相对路径打开时会静默打开这个错误的库。
+`run_investigation.dart` 已经先把路径转成绝对路径，不受影响；新增的 FFI 工具也必须这样做。
 
 ## 3. 上一轮会话时间线（摘要）
 

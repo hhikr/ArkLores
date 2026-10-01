@@ -59,6 +59,17 @@ abstract interface class GameDataRetrieval {
     String? scopeId,
   });
 
+  /// R12: stories whose lines (content or speaker) contain EVERY term in
+  /// [terms], ordered by matching line count, each with up to
+  /// [linesPerStory] sample matching lines. [scopeId] is a canonical scope
+  /// key (e.g. `activity:act21mini`). Locating hints, not evidence.
+  Future<List<StoryLineHit>> searchStoryLinesLike(
+    List<String> terms, {
+    String? scopeId,
+    int storyLimit,
+    int linesPerStory,
+  });
+
   /// LIKE search of story-line content restricted to some story ids.
   Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
     String term,

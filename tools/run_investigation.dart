@@ -25,6 +25,7 @@ import 'dart:io';
 import 'package:arklores/core/agent/investigation_agent.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/gamedata/game_retrieval.dart';
+import 'package:arklores/core/gamedata/story_line_search.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -458,6 +459,21 @@ class _FfiGameDataRetrieval implements GameDataRetrieval {
       ['%$escaped%', ...storyIds, limit],
     );
   }
+
+  @override
+  Future<List<StoryLineHit>> searchStoryLinesLike(
+    List<String> terms, {
+    String? scopeId,
+    int storyLimit = 8,
+    int linesPerStory = 3,
+  }) =>
+      queryStoryLinesLike(
+        db,
+        terms,
+        scopeId: scopeId,
+        storyLimit: storyLimit,
+        linesPerStory: linesPerStory,
+      );
 }
 
 List<String> _stringList(Object? raw) {

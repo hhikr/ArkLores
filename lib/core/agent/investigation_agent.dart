@@ -11,6 +11,7 @@ import 'tools/get_story_map.dart';
 import 'tools/read_story_lines.dart';
 import 'tools/search_local_lore.dart';
 import 'tools/search_story_coverage.dart';
+import 'tools/search_story_lines.dart';
 import 'tools/tool_registry.dart';
 
 /// Story Investigation Agent (R8): cross-chapter causal/mystery questions.
@@ -27,7 +28,10 @@ class InvestigationAgent {
     LLMClient? extractorClient,
     LLMClient? disambiguatorClient,
   })  : _llmClient = llmClient,
-        _extractorClient = extractorClient,
+        // R12: extraction was never wired in the app (no caller passed an
+        // extractor), so read content never reached the answer. Default to
+        // the main client; pass a cheaper model explicitly to override.
+        _extractorClient = extractorClient ?? llmClient,
         _disambiguator =
             EntityDisambiguator(llmClient: disambiguatorClient ?? llmClient),
         _toolRegistry = ToolRegistry() {
@@ -40,13 +44,14 @@ class InvestigationAgent {
     _toolRegistry.registerAll([
       SearchLocalLoreTool(gameDataStore: store),
       SearchStoryCoverageTool(gameDataStore: store),
+      SearchStoryLinesTool(gameDataStore: store),
       GetStoryMapTool(gameDataStore: store),
       ReadStoryLinesTool(gameDataStore: store),
       CollectSuspectEvidenceTool(gameDataStore: store),
     ]);
   }
   final LLMClient _llmClient;
-  final LLMClient? _extractorClient;
+  final LLMClient _extractorClient;
   final EntityDisambiguator _disambiguator;
   final ToolRegistry _toolRegistry;
 
