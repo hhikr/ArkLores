@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/temp_dir.dart';
+
 /// Synthetic 5-chapter fixture mirroring docs/AI_RETRIEVAL_OPTIMIZATION.md
 /// §4.5: chapter 1 holds a foreshadowing line without the victim name or the
 /// word 死亡; chapters 2-3 mislead toward 角色A; chapter 5 (past timeline)
@@ -42,7 +44,7 @@ void main() {
   });
 
   tearDown(() async {
-    await tempDir.delete(recursive: true);
+    await deleteTempDir(tempDir);
   });
 
   group('pure coverage helpers', () {

@@ -19,6 +19,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/temp_dir.dart';
+
 void main() {
   late Directory tempDir;
   late Directory sourceDir;
@@ -37,7 +39,7 @@ void main() {
   });
 
   tearDown(() async {
-    await tempDir.delete(recursive: true);
+    await deleteTempDir(tempDir);
   });
 
   group('coverage builder progress (R2 UX)', () {

@@ -13,6 +13,8 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/temp_dir.dart';
+
 void main() {
   late Directory tempDir;
 
@@ -26,7 +28,7 @@ void main() {
   });
 
   tearDown(() async {
-    await tempDir.delete(recursive: true);
+    await deleteTempDir(tempDir);
   });
 
   group('ArknightsSourceClient', () {

@@ -20,6 +20,8 @@ import 'package:http/testing.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/temp_dir.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -55,7 +57,7 @@ void main() {
     if (previousDatabaseFactory != null) {
       sqflite.databaseFactory = previousDatabaseFactory!;
     }
-    await tempDir.delete(recursive: true);
+    await deleteTempDir(tempDir);
   });
 
   group('Wiki AI context handoff', () {
@@ -210,7 +212,10 @@ void main() {
         (after as ToolExecutionResult).observation,
         contains('Entity ID: char_999_test'),
       );
-    });
+    },
+        // Replacing a file that another handle keeps open needs POSIX
+        // semantics (the app runs on Android); Windows locks open files.
+        skip: Platform.isWindows ? 'requires POSIX open-file replacement' : false,);
 
     test('uses entity document FTS for compound queries', () async {
       final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
