@@ -69,9 +69,13 @@ Covers development rounds R0–R12 since v0.9.0. Architecture: `docs/AI_ARCHITEC
   `6c331cda39f2756762e0b0ea927a58b0baaf559bc2080c2303b52d915a721c50`).
 - `gamedata_manifest.json`: 1348 bytes, SHA-256
   `0e78c79c7fc0735eab926913bb4a283608cfeba770383e4dad6e8d8d696aecb4`.
-- APK: built by GitHub Actions (`.github/workflows/android-release.yml`) and signed with the
+- `ArkLores-0.10.0.apk`: 40356559 bytes, SHA-256
+  `6cf65a1e0be41cc06649bca98a0d3ee35f87ba5beccf1bb293b2ffff26bfa514`; ARM 32/64-bit, built by
+  GitHub Actions (`.github/workflows/android-release.yml`) from `13cf48e` and signed with the
   new project release key (certificate SHA-256
   `b1b09ebfd22659b4b246ea87d67ff340a277e8031c14577caa5715519923e364`).
+- Android build toolchain raised to Flutter 3.47's minimums: Gradle 8.14.3, AGP 8.11.1,
+  Kotlin 2.2.20, Java 17.
 
 ### Upgrade note
 
