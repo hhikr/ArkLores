@@ -1,5 +1,5 @@
-/// Machine-readable DATA block contract for investigation tools (R3,
-/// design decision 1 in `docs/R3_DESIGN_DECISIONS.md`).
+/// Machine-readable DATA block contract for investigation tools (R3; see
+/// `docs/AI_ARCHITECTURE.md` §2.1).
 ///
 /// Tools append a single-line `DATA: <json>` block at the end of their
 /// observation. Transforms parse the JSON with priority and fall back to text

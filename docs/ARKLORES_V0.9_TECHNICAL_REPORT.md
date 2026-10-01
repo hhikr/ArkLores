@@ -1,5 +1,9 @@
 # ArkLores v0.9 技术与运行原理报告
 
+> **快照说明（2026-10）**：本文是 v0.9.0 的审计快照，不随后续版本逐段更新。
+> Agent 层（PlannerLoop、证据笔记、可选向量召回等）与 schema 3/4 的现状以
+> `AI_ARCHITECTURE.md` 为准，已知缺口以 `KNOWN_LIMITATIONS_AND_DEBT.md` 为准。
+
 > 审计基准：v0.9.0 release line，工程版本 `0.9.0+9`<br>
 > 审计日期：2026-07-15<br>
 > 报告范围：Git 跟踪的源码、平台工程、工具、测试与全部维护文档<br>

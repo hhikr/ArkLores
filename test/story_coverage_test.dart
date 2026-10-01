@@ -22,8 +22,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'support/temp_dir.dart';
 
-/// Synthetic 5-chapter fixture mirroring docs/AI_RETRIEVAL_OPTIMIZATION.md
-/// §4.5: chapter 1 holds a foreshadowing line without the victim name or the
+/// Synthetic 5-chapter fixture (from the R1 retrieval design, see git
+/// history): chapter 1 holds a foreshadowing line without the victim name or the
 /// word 死亡; chapters 2-3 mislead toward 角色A; chapter 5 (past timeline)
 /// reveals 角色B. R1 asserts the deterministic coverage layer (all
 /// appearances, pagination, profiles, rare terms) and the coverage report

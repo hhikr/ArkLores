@@ -1,6 +1,3 @@
-> ⚠️ **部分内容已过时（R6–R10）**：`find_detail_echoes` 已于 R6 评估后废弃（真机零贡献，见 `AI_REFACTOR_SUMMARY.md`）；
-> investigation 已迁移 Planner 三角色架构（R8）。涉及这些工具的 QA 条目仅作历史记录。
-
 # GameData Retrieval QA
 
 > 状态更新（2026-08）：开发者已在代表性 Android 真机上完成个人验收，覆盖知识库
@@ -16,8 +13,12 @@
 3. `entity_documents_fts` 全文检索。
 4. `normalized_records` / `lore_chunks` 结构化与 LIKE fallback。
 5. `lore_chunks_fts` 全文检索。
+6. 剧情层（schema 3+）：确定性覆盖层（出场枚举、章节画像、行级原文读取）与
+   `search_story_lines` 原文检索（LIKE；可选向量召回，R12）。
 
-当前主线不使用向量、embedding、TFLite、旧 Wiki seed 或用户 Book 索引。
+向量只用于剧情原文定位（可选表 `story_chunk_vectors`，需在设置中配置向量 API），
+命中后必须读原文才能作为证据。不使用 TFLite、旧 Wiki seed 或用户 Book 索引。
+架构细节见 `AI_ARCHITECTURE.md`。
 
 ## Smoke Queries
 
@@ -47,7 +48,7 @@
 
 ## Story Coverage Layer QA（schema v3，2026-08-24 起）
 
-schema v3 新增确定性覆盖层（`AI_RETRIEVAL_OPTIMIZATION.md` 阶段 P0）。重建或替换
+schema v3 新增确定性覆盖层（构建规则见 `AI_ARCHITECTURE.md` §3.1）。重建或替换
 schema v3 DB 后，除上表 Smoke Queries 外，至少人工检查以下覆盖层查询：
 
 | Query / 操作 | 目的 | 预期 |
@@ -63,26 +64,35 @@ profiles/rare_terms 断言、三个工具、coverage transform、Summary 叙事�
 回归门禁：`flutter analyze` No issues、全量 `flutter test`（86 passed / 3 opt-in
 skipped）、既有固定检索 QA 全绿。
 
-## Investigation Layer QA（P1，2026-08-24 起）
+## Ask 问答流程 QA（R12 起）
 
-schema v3 + 覆盖层之上的跨章节推理层（`AI_RETRIEVAL_OPTIMIZATION.md` 阶段 P1，
-设计决策见 `R3_DESIGN_DECISIONS.md`）。自动覆盖：`test/investigation_test.dart`
-（10 项：speaker 扩展、`find_detail_echoes` 跨章节命中与实体名过滤、
-`collect_suspect_evidence` 证据集、verdict transform 的 S6 门槛/行级引用守卫/
-single-suspect-exhausted、ReActLoop 观察历史裁剪）。回归门禁：`flutter analyze`
-No issues、全量 `flutter test`（105 passed / 3 opt-in skipped）。
+### 离线（每次改动 Agent/检索层都要跑）
 
-| 场景 | 预期 |
+- `test/planner_test.dart`：意图解析、去重、进展控制（4 步提醒 / 8 步收尾 / 步数预算）、
+  消歧与 RESELECT、空输出温和收尾。
+- `test/evidence_notebook_test.dart`：READ 实际区间、证据笔记行号校验、引文由代码复制、
+  `unreadCitations`。
+- `test/story_coverage_test.dart`、`test/story_vectors_test.dart`：覆盖层工具、
+  `search_story_lines` 关键词/向量/RRF、向量切块与量化、无向量时的回退。
+- `test/investigation_test.dart`、`test/investigation_ui_test.dart`：结论信封解析与渲染。
+
+### 真机同链路（opt-in，花钱）
+
+`test/live/ask_pipeline_live_test.dart` 驱动 App 的 `askChatProvider`，只替换启动注入的
+provider 和平台路径（命令与环境变量见 CLAUDE.md）。每题输出会话 JSON 与
+`*.summary.json`（生效模式、步数、工具次数、已读章节、标准答案召回、引用数、来源警告、
+token 用量）。
+
+成本规则：先离线复现；每个方面最多 2 个代表性用例，用 `ARKLORES_LIVE_IDS` 逐题串行，
+看完一题再跑下一题；不整批跑 30 题评测。遇到 provider 错误（如 402）harness 自动停止。
+
+| 验收项 | 预期 |
 | --- | --- |
-| 凶手类问题走 S0–S8 | 先 coverage 枚举出场 → map 选精读 → read 定位死亡情节 → find_detail_echoes 找跨章节伏笔 → 逐嫌疑 collect_suspect_evidence → 对比后输出结论信封 |
-| 结论信封 | `[INVESTIGATION_VERDICT: culprit=<entity_id> \| confidence=<0-1> \| basis=<multi_hypothesis_contrast\|single_suspect_exhausted>]` |
-| S6 门槛 | 少于 2 个候选有非空证据集时，culprit 自动降级为 unresolved 并附警告 |
-| 行级 provenance | 答案引用的 `story_id:line` 必须出现在 Observation 中，否则附 Source warning |
-| 已读范围 | Coverage 行与实际工具调用比对（复用 coverage transform） |
-| 上下文预算 | 精读 ≤3 章/每章 ≤3 页；ReActLoop 观察历史裁剪至 8 条（transform 校验用完整快照） |
-
-仍待验收（R3b）：调查入口 UI 接线（产品决策待定）、2–3 个真实剧情谜题固定用例与
-单次调查成本量化、`find_detail_echoes` LIKE 扫描真机延迟。
+| 答案有引用 | 至少一条 `story_id.txt:行号` 引用，且全部落在已读区间内（否则重写一次，仍不合法附警告） |
+| 不状态转储 | 预算用尽或停滞时由 writer 基于已读内容作答，不输出内部状态 |
+| 负例 | 未覆盖的实体/事件明确说“未覆盖”，不用模型记忆补齐 |
+| 无向量 key | `ARKLORES_LIVE_NO_EMBEDDING=true` 时 FIND 退回关键词，观察写明原因 |
+| 成本 | 记录 `usage`；R12 参考值见 `AI_ARCHITECTURE.md` §4 |
 
 ## Current Unit Coverage
 
@@ -172,10 +182,11 @@ Additional smoke check:
 - 正式商店签名；既有 GitHub APK 使用 Android Debug certificate。
 - v0.9 双主题/双语自动截图回读（自动化截图对比管线）。
 
-- Story chunks 当前仍以 FTS / LIKE 为主，没有实体级剧情索引。
+- 中文 FTS（unicode61）基本无效；剧情原文检索依赖 LIKE + 可选向量召回。
 - `肉鸽`、`秘录`、`模组` 等归一化是规则表，不是完整同义词知识库。
 - `莱茵生命`、`萨卡兹王庭` 等宽泛组织 query 当前可命中相关干员档案，但 GameData DB 尚未构建组织级汇总实体。
-- `特蕾西娅` 等变体名现在有基础 alias 候选，但用户提问时是否需要展示候选仍取决于 Agent 调用 `search_local_lore` 的 disambiguation 分支。
+- 评测集 `test/fixtures/investigation_eval.json` 的标准答案章节是草稿，尚未人工审核。
+- 概括 / 事实核查仍走旧 ReActLoop（R13 迁移）。
 
 以上仍开放项的根因分析与修复方向见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
 
@@ -202,7 +213,8 @@ v0.9 的 QA 证明了当前 GameData-first MVP 可以工作，但还不能证明
 
 ### Hybrid / Vector Retrieval
 
-若引入向量化，必须新增与现有 SQLite 检索并排的 benchmark，而不是只验证“能查到结果”：
+R12 已引入剧情向量召回（可选）。目前只有中期评测（召回 0 → 0.63，样本 4 题）和
+2 个代表性真机用例，下面的完整 benchmark 仍未做：
 
 - baseline：当前 structured lookup、alias、FTS、LIKE fallback。
 - candidate：embedding top-k、hybrid merge、reranker 或 proximity rerank。

@@ -3,7 +3,8 @@
 ## 2026-07 Architecture Decision
 
 ArkLores 自 v0.4.5 起使用中文 GameData release asset 作为主知识源；当前 release 为
-v0.9.0，兼容 GameData schema 2。
+v0.10.0，GameData schema 4（含确定性覆盖层与可选剧情向量）。下文 v0.4.5–v0.9 各节是
+历史路线记录；当前 Agent 与检索架构以 `AI_ARCHITECTURE.md` 为准。
 
 可信度策略：
 
@@ -314,6 +315,17 @@ v0.9 不是最后的测试版本；v0.10 及之后的逐版本详细计划不再
 上述方向的详细 backlog 与根因分析统一维护在
 `KNOWN_LIMITATIONS_AND_DEBT.md`；验收缺口维护在 `RETRIEVAL_QA.md`。
 
+### 开发轮次（2026-08 起，按 R 编号）
+
+| 轮次 | 状态 | 内容 |
+| --- | --- | --- |
+| R0–R3 | 完成 | 构建层进 lib、schema 3 覆盖层、App 内构建、调查 Agent |
+| R5–R11.2 | 完成 | 会话持久化、分层记忆、PlannerLoop、消歧与终止控制 |
+| R12（v0.10.0） | 完成 | 证据笔记、引用校验、COVER/FIND、可选剧情向量、通用进展控制、同链路 live 测试、成本控制 |
+| R13 | 进行中 | 删除全部问题类型特判（结论信封、嫌疑人门槛等）；概括与事实核查迁移到 PlannerLoop |
+
+各轮细节见 `AI_ARCHITECTURE.md` §5。
+
 ## 旧路线映射
 
 | 版本 | 保留的产品方向 | 已废止的实现前提 |
@@ -329,8 +341,8 @@ v0.9 不是最后的测试版本；v0.10 及之后的逐版本详细计划不再
 Required for relevant changes:
 
 ```bash
-/home/hhikr/flutter/bin/flutter test test/agent_test.dart
-/home/hhikr/flutter/bin/dart analyze <changed files>
+/home/hhikr/flutter/bin/flutter test
+/home/hhikr/flutter/bin/flutter analyze
 /home/hhikr/flutter/bin/dart run tools/build_gamedata_database.dart --help
 ```
 

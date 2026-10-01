@@ -1,7 +1,8 @@
 # ArkLores GameData Build Pipeline
 
-> 本文档定义当前 schema 2 中文 GameData DB 的构建、FTS 索引、验收和 GitHub Release
-> 分发规范。v0.4.5 是 GameData-first 架构起点，不是本规范的版本上限。
+> 本文档定义中文 GameData DB（当前 schema 4，可选剧情向量表）的构建、索引、验收和
+> GitHub Release 分发规范。v0.4.5 是 GameData-first 架构起点，不是本规范的版本上限。
+> Agent 如何使用这些表见 `AI_ARCHITECTURE.md`。
 
 内容分类、普查和 importer 覆盖范围由本文统一定义。
 
@@ -111,8 +112,8 @@ v1.0 前需要把以下问题独立立项，不能只靠重新上传一个 `.db.
 ### App 内构建（R2，2026-08-24 落地）
 
 除 release asset 外，App 提供第二条更新通道：直接从源仓库在设备上构建/增量更新
-知识库（实现见 `lib/core/gamedata/build/`，编排见 `gamedata_build_provider.dart`，
-总结见 `docs/R2_IN_APP_BUILD_SUMMARY.md`）。
+知识库（实现见 `lib/core/gamedata/build/`，编排见 `gamedata_build_provider.dart`）。
+App 内构建不生成向量表（需要向量 API 与较长时间）；需要语义检索时使用 release 资产。
 
 - 与桌面 release 管线共用同一份 importer / schema / coverage 构建代码（单一实现）；
 - 首次：下载源仓库 zip（codeload），按 importer 白名单（18 个 excel +
@@ -136,35 +137,40 @@ Arknights `zh_CN`。终末地接入不能只把文件塞进同一张表：
 - 在 Endfield GameData 未完成前，终末地主题和 Wiki 浏览只代表阅读体验，不代表 AI
   已有终末地官方数据支持。
 
-### schema v3 候选方向
+### 后续 schema 方向
 
-schema v2 仍大量依赖 FTS / LIKE 和规则归一化。若要支撑 v1.0 后的高质量检索，schema v3
-候选应优先考虑：
+schema 3 已落地实体级剧情倒排（`entity_story_mentions`）、章节画像与行级原文 FTS；
+schema 4 跳过上游 `[uc]info/` 摘要桩树。仍待立项：
 
 - 组织、阵营、概念和地点的汇总实体，而不只依赖干员档案里偶然出现的词。
-- 实体级剧情倒排表，记录 entity_id、story_id、scope_id、line range、speaker 和提及强度。
-- 关系索引，区分同场出现、称谓、身份、归属、敌对、死亡/存活、时间线状态等可核查关系。
+- 关系索引，区分同场出现、称谓、身份、归属、敌对、时间线状态等可核查关系。
+- 中文可用的 FTS（trigram 或分词器）；当前 unicode61 对中文基本无效。
 - 更新质量标记，如 low coverage、ambiguous alias、generated aggregate、manual review needed。
 - 多游戏、多语言和跨版本兼容字段，避免后续 Endfield 或其他语言接入时破坏现有 App。
 
-### 向量索引资产
+### 剧情向量（可选表，R12）
 
-向量化必须作为 GameData 派生产物，而不是无来源的第二知识库。任何 embedding / ANN asset
-至少需要：
+向量是 GameData 的派生产物，与原文同库，不是第二知识库：
 
-- embedding model id/version、维度、量化方式和生成命令。
-- chunk/record id 到向量行号的稳定映射。
-- 索引文件 hash、大小、schema compatibility 和 source DB hash。
-- 与 SQLite structured/FTS 的 hybrid retrieval contract。
-- 索引缺失或不兼容时的回退行为。
+- 表 `story_chunk_vectors`：每块记录 `story_id`、起止行号、int8 量化向量与缩放系数；
+  切块规则固定为 12 行一块、步长 8。schema 版本不变，没有该表的库照常可用。
+- DB 内 `gamedata_manifest` 表写入 `embedding_model` / `embedding_dims` /
+  `embedding_chunking`。App 只在设置中的向量配置与之一致时启用语义召回，否则回退关键词。
+- 生成命令（可续跑，按内容哈希缓存到 `build/embedding_cache/`；API key 从
+  gitignored 的 `tools/embedding-apiKey.csv` 读取）：
 
-向量结果只能改善召回和排序；最终证据仍必须回到 `source_path`、`raw_id`、
-`content_type` 和 GameData chunk/record。
+```bash
+dart run tools/build_story_embeddings.dart --db=build/gamedata_mobile/arklores_gamedata_zh.db
+```
+
+向量命中只是定位线索；最终证据仍必须回到 `story_id` 与行号对应的原文。
 
 ## SQLite Schema
 
-当前 schema version 为 `2`。v2 为剧情 chunk 增加通用 `scope_type/scope_id`，并新增
-`story_scopes`；旧 schema DB 不包含可靠剧情范围，App 安装器会拒绝替换。
+当前 schema version 为 `4`，App 安装器拒绝其他版本。下面列出 v2 起的基础表；
+v3 新增的覆盖层表（`entity_story_mentions`、`story_chapter_profiles`、`rare_terms`、
+`story_lines_fts`）与可选向量表的 DDL 以 `lib/core/gamedata/build/gamedata_schema.dart`
+和 `lib/core/gamedata/story_vectors.dart` 为准。
 
 ### `story_scopes`
 
@@ -333,6 +339,10 @@ CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
   --output=build/gamedata_mobile \
   --force
 
+# 可选：剧情向量（v0.10.0 起 release 资产包含该表）
+/home/hhikr/flutter/bin/dart run tools/build_story_embeddings.dart \
+  --db=build/gamedata_mobile/arklores_gamedata_zh.db
+
 gzip -c build/gamedata_mobile/arklores_gamedata_zh.db \
   > build/gamedata_mobile/arklores_gamedata_zh.db.gz
 
@@ -354,6 +364,20 @@ finalized 完整 DB retrieval QA。
 - compressed / uncompressed SHA-256
 - release asset file names
 - finalization timestamp
+- 库内含向量表时：`embedding` 段（model / dims / chunking / 向量行数）
+
+Windows 上命令相同，把 `/home/hhikr/flutter/bin/` 换成 `C:\src\flutter\bin\`（已在 PATH 中，
+可直接写 `dart` / `flutter`）；Windows 没有 gzip，用 PowerShell 的 .NET `GZipStream` 压缩。
+
+### v0.10.0 发布步骤（R12）
+
+1. 以 schema 4 库（2026-08-24 构建）为基础运行 `build_story_embeddings`，得到含 51,264 条
+   向量的库；固定检索 QA 与 `flutter test` 通过。
+2. gzip → `finalize_gamedata_assets.dart` 写入 SHA-256 与 `embedding` 段。
+3. 用 API 创建 **draft** release，上传 `.db.gz` 与 `gamedata_manifest.json`。
+4. 以资产 URL 和 SHA 构建 APK（`--dart-define=ARKLORES_GAMEDATA_DB_URL=… --dart-define=ARKLORES_GAMEDATA_DB_SHA256=…`），
+   上传后由开发者发布。向量是可选功能：设置中配置百炼 key（`qwen3.7-text-embedding@512`）
+   才启用语义召回，否则自动退回关键词检索。
 
 ## 未发布版本的真机测试
 

@@ -2,11 +2,21 @@
 
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12，只作定位线索，不作证据）。
-当前版本与最新 release：v0.9.0；GameData schema：4（含确定性覆盖层）。
+当前版本与最新 release：v0.10.0；GameData schema：4（含确定性覆盖层，可选剧情向量表）。
+
+## 文档索引
+
+- `docs/AI_ARCHITECTURE.md`：Agent 与检索架构（当前状态 + 演进简史）——改 agent/检索层前先读。
+- `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：已知限制与根因。
+- `docs/RETRIEVAL_QA.md`：验收清单（离线 + 真机同链路）。
+- `docs/GAMEDATA_BUILD_PIPELINE.md`：数据构建、向量、发布。
+- `docs/R12_BOTTLENECK_ANALYSIS.md`：R12 决策记录。
+- `docs/ARKLORES_V0.9_TECHNICAL_REPORT.md`：v0.9 审计快照（不再更新）。
 
 ## Do
 
-- 使用 `/home/hhikr/flutter/bin/flutter`。
+- Linux 使用 `/home/hhikr/flutter/bin/flutter`；Windows 使用 `C:\src\flutter\bin\flutter`
+  （已在 PATH）。
 - 保护 `logs/`。
 - 保持 GameData 为 Agent 主知识源。
 - 保留 source path、raw id、content type、entity id。
@@ -81,6 +91,31 @@
 HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
   --db=build/gamedata_mobile/arklores_gamedata_zh.db
 ```
+
+### Windows（开发机 2026-10 起）
+
+- flutter / dart：`C:\src\flutter\bin`；git：codex 自带
+  `C:\Users\hhikr\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe`
+  （同目录 `..\usr\bin` 下有 sh、sed；没有 gzip，压缩用 .NET `GZipStream`）。两者已加入用户 PATH；若当前 shell 没刷新，先执行
+  `$env:Path = "C:\src\flutter\bin;<git cmd 目录>;$env:Path"`。
+- 没有 `gh` 和 Android SDK：GitHub 操作用 REST API；APK 在 Linux 上构建。
+- PowerShell 设置环境变量用 `$env:NAME='value'`，不支持 `NAME=value cmd` 前缀。
+- sqflite FFI 会把相对 DB 路径解析到 `.dart_tool` 下，`ARKLORES_GAMEDATA_DB` 等路径要写绝对路径。
+- 依赖 POSIX 文件替换语义的测试在 Windows 上跳过；临时目录用 `test/support/temp_dir.dart`
+  的 `deleteTempDir`（文件锁时重试）。
+
+```powershell
+flutter test
+flutter analyze
+$env:ARKLORES_RUN_LIVE_ASK='true'; $env:ARKLORES_LIVE_EVAL='test/fixtures/investigation_eval.json'
+$env:ARKLORES_LIVE_IDS='frostnova_end'
+$env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_mobile\arklores_gamedata_zh_vec.db"
+flutter test test/live/ask_pipeline_live_test.dart
+```
+
+GitHub PAT 在 gitignored 的 `tools/github_pat`：只在单条命令内用
+`git -c "http.extraHeader=Authorization: Basic <base64(x-access-token:PAT)>" ...` 或 REST
+请求头使用；不得打印、写入 git 配置或 remote URL。
 
 ### 电脑端调查复现（不需真机，与 App 同一条链路）
 
