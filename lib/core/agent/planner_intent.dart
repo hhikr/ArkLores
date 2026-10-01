@@ -155,9 +155,15 @@ IntentRecord? parseIntent(String line) {
                   queryParts.add(t);
                 }
               }
-              final query = _unquote(queryParts.join(' '));
-              if (query.isEmpty) return null;
-              args['query'] = query;
+              // Terms are AND-ed, so repeats are meaningless; drop them so a
+              // degenerate "FIND x x x" is the same (deduplicated) command as
+              // "FIND x" (R12: seen live with reasoning off).
+              final terms = <String>[];
+              for (final t in _unquote(queryParts.join(' ')).split(RegExp(r'\s+'))) {
+                if (t.isNotEmpty && !terms.contains(t)) terms.add(t);
+              }
+              if (terms.isEmpty) return null;
+              args['query'] = terms.join(' ');
             case 'SEARCH':
               // R11.2: the query may be a multi-word phrase. Collect tokens as
               // the query until an explicit `id=` or a trailing bare number

@@ -30,6 +30,8 @@ import 'package:arklores/core/agent/question_router.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
+import 'package:arklores/core/llm/llm_provider.dart';
+import 'package:arklores/core/llm/openai_client.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,6 +69,10 @@ void main() {
                   : false;
 
   late ProviderContainer container;
+  final usage = UsageMeter();
+  // Cost guard: after a provider failure (402 balance, auth, network) the
+  // remaining questions are skipped instead of burning more requests.
+  String? providerFailure;
   HttpOverrides? previousHttpOverrides;
 
   setUpAll(() {
@@ -89,6 +95,25 @@ void main() {
             .overrideWithValue(GameDataKnowledgeStore(dbPath: dbPath)),
         chatSessionStoreProvider
             .overrideWithValue(ChatSessionStore(filePath: outDir.path)),
+        // Same construction as llm_provider.dart plus a passive token meter
+        // (cost control); the observer never alters results.
+        llmClientProvider.overrideWith((ref) {
+          final client = OpenAICompatibleClient(
+            config: ref.watch(apiConfigProvider),
+            onCompletion: usage.add,
+          );
+          ref.onDispose(client.dispose);
+          return client;
+        }),
+        auxLlmClientProvider.overrideWith((ref) {
+          final client = OpenAICompatibleClient(
+            config: ref.watch(apiConfigProvider),
+            reasoning: false,
+            onCompletion: usage.add,
+          );
+          ref.onDispose(client.dispose);
+          return client;
+        }),
       ],
     );
   });
@@ -104,18 +129,24 @@ void main() {
     test(
       'ask[${mode.name}] ${liveCase.id}: ${liveCase.query}',
       () async {
+        if (providerFailure != null) {
+          markTestSkipped('skipped after provider failure: $providerFailure');
+          return;
+        }
         final notifier = container.read(askChatProvider.notifier);
         notifier.newSession(); // one session file per question
+        usage.reset();
         await notifier.sendMessage(liveCase.query, mode: mode);
         final session = notifier.currentSession;
         expect(session, isNotNull, reason: 'session recording produced no file');
         final turn = session!.turns.last;
-        final report = summarizeTurn(liveCase, session, turn);
+        final report = summarizeTurn(liveCase, session, turn, usage: usage);
         File('${outDir.path}/${liveCase.id}.summary.json').writeAsStringSync(
           const JsonEncoder.withIndent('  ').convert(report),
         );
         // ignore: avoid_print
         print(const JsonEncoder.withIndent('  ').convert(report));
+        if ((turn.error ?? '').contains('LLM Error')) providerFailure = turn.error;
         // A live run must reach an answer; quality is judged from the report.
         expect(turn.status, ChatTurnStatus.completed, reason: turn.error);
       },

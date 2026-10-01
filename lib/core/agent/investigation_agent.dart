@@ -28,8 +28,10 @@ class InvestigationAgent {
     GameDataRetrieval? gameDataStore,
     LLMClient? extractorClient,
     LLMClient? disambiguatorClient,
+    LLMClient? plannerClient,
     EmbeddingClient? embeddingClient,
   })  : _llmClient = llmClient,
+        _plannerClient = plannerClient ?? llmClient,
         // R12: extraction was never wired in the app (no caller passed an
         // extractor), so read content never reached the answer. Default to
         // the main client; pass a cheaper model explicitly to override.
@@ -56,6 +58,10 @@ class InvestigationAgent {
     ]);
   }
   final LLMClient _llmClient;
+
+  /// Per-step decision model (defaults to [_llmClient], which writes the
+  /// answer).
+  final LLMClient _plannerClient;
   final LLMClient _extractorClient;
   final EntityDisambiguator _disambiguator;
   final ToolRegistry _toolRegistry;
@@ -72,7 +78,8 @@ class InvestigationAgent {
     // answers, which pulled the planner into writing them itself).
     const systemPrompt = '$knowledgeBaseRules\n\n$investigationInstructions';
     final loop = PlannerLoop(
-      llmClient: _llmClient,
+      llmClient: _plannerClient,
+      writerClient: _llmClient,
       toolRegistry: _toolRegistry,
       extractorClient: _extractorClient,
       disambiguator: _disambiguator,
@@ -80,6 +87,9 @@ class InvestigationAgent {
       // R12: ceiling, not cost — reasoning models need room before the
       // one-line intent (completeWithHeadroom escalates when truncated).
       stepMaxTokens: 4096,
+      // R12 cost control: useful reads happen early (eval transcripts); a
+      // spent budget still ends through the writer with what was read.
+      maxToolSteps: 24,
     );
     return loop.run(
       systemPrompt: systemPrompt,

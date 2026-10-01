@@ -292,14 +292,20 @@ class InvestigationState {
     }
   }
 
+  /// Stories any FIND/COVER has surfaced so far.
+  final Set<String> discoveredStories = {};
+
   /// Records an executed FIND/COVER and the story ids it surfaced.
   void noteSearchLog(String key, List<String> storyIds) {
     if (key.trim().isEmpty) return;
     searchLog[key.trim()] = storyIds;
+    discoveredStories.addAll(storyIds);
   }
 
   /// R12 progress fingerprint: changes whenever the investigation learned
-  /// something new (lines read, notes, searches, evidence, maps, target).
+  /// something new (lines read, notes, newly surfaced stories, evidence,
+  /// maps, target). A search that only re-surfaces known stories is NOT
+  /// progress (a live run re-phrased one fruitless FIND 15 times).
   String get progressFingerprint {
     var readLines = 0;
     for (final r in reads) {
@@ -308,7 +314,7 @@ class InvestigationState {
       }
     }
     final evidenceRows = evidence.fold<int>(0, (sum, e) => sum + e.evidenceRows);
-    return '$readLines|${notes.length}|${searchLog.length}|$evidenceRows|'
+    return '$readLines|${notes.length}|${discoveredStories.length}|$evidenceRows|'
         '${mapped.length}|$_targetEntityId';
   }
 

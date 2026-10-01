@@ -119,11 +119,19 @@ class SearchStoryLinesTool extends AgentTool {
     final buffer = StringBuffer()
       ..writeln('Story line hits for "$query" (${semantic.mode}; locating '
           'hints — READ the lines before using them as evidence):');
+    // R12: nearest-neighbour search always returns *something*, even for a
+    // name that never occurs (live negative case: a fictional name "hit"
+    // unrelated chapters). Scores of related and unrelated chunks overlap,
+    // so instead of a threshold the observation states it plainly.
+    if (keywordHits.isEmpty) {
+      buffer.writeln('注意：原文中没有任何一行包含这些词。以下只是语义相近的段落，'
+          '可能与问题无关；若要找的是专有名词，这通常意味着资料未覆盖。');
+    }
     for (final result in top) {
       final keyword = result.keyword;
       buffer.writeln(
         'Story: ${result.storyId} | Scope: ${result.scopeId ?? '-'}'
-        '${keyword == null ? '' : ' | Keyword lines: ${keyword.hits}'}',
+        '${keyword == null ? ' | 无字面命中（仅语义相近）' : ' | Keyword lines: ${keyword.hits}'}',
       );
       for (final chunk in result.chunks) {
         buffer.writeln(

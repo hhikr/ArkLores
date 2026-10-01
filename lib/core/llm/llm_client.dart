@@ -116,9 +116,18 @@ class ChatCompletionResult {
   const ChatCompletionResult({
     required this.content,
     this.finishReason,
+    this.promptTokens,
+    this.completionTokens,
+    this.cachedPromptTokens,
   });
   final String content;
   final String? finishReason;
+
+  /// Provider-reported usage (null when the provider omits it). Hidden
+  /// reasoning tokens are included in [completionTokens].
+  final int? promptTokens;
+  final int? completionTokens;
+  final int? cachedPromptTokens;
 
   bool get wasTruncated => finishReason == 'length';
 }

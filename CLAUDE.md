@@ -100,6 +100,14 @@ flutter test test/live/ask_pipeline_live_test.dart
   `tools/embedding-apiKey.csv`（`openAiCompatible`、`apiKey`）读取。
   **绝不提交有效 key**；`tools/*apiKey*` 已加入 .gitignore。
 
+**真实 API 测试的成本约束**（开发者要求，2026-10）：
+- 先跑离线测试（mock LLM 复现问题），离线确认之后才动用真实 API。
+- 每个方面最多挑 2 个最有代表性的用例（用 `ARKLORES_LIVE_IDS` 过滤），逐题串行跑；
+  每题跑完先看结果，有问题立即停止。复杂和边际情况等基础用例通过后再测。
+- 不要整批跑 30 题评测，也不要并行开多组评测，除非开发者明确要求。
+- 每题的 `*.summary.json` 会记录 `usage`（调用次数和 token 数），用它评估成本。
+- 遇到 provider 错误（如 402 余额不足）时，harness 会自动跳过剩余题目。
+
 ### 剧情向量（可选表，R12）
 
 `story_chunk_vectors` 是 schema 4 上的**可选附加表**（`schema_version` 不变，

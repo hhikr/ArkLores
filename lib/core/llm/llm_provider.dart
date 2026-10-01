@@ -20,6 +20,18 @@ final llmClientProvider = Provider<LLMClient>((ref) {
   return client;
 });
 
+/// Same endpoint/model as [llmClientProvider] but asking hybrid reasoning
+/// models to skip hidden reasoning (R12 cost control) — for mechanical roles
+/// (evidence extraction, candidate picking, per-step intents).
+final auxLlmClientProvider = Provider<LLMClient>((ref) {
+  final client = OpenAICompatibleClient(
+    config: ref.watch(apiConfigProvider),
+    reasoning: false,
+  );
+  ref.onDispose(client.dispose);
+  return client;
+});
+
 /// Embedding client for vector recall (R12); null when no key is set, in
 /// which case `FIND` runs keyword-only.
 final embeddingClientProvider = Provider<EmbeddingClient?>((ref) {

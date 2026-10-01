@@ -15,8 +15,40 @@ class OpenAICompatibleClient implements LLMClient {
     required this.config,
     http.Client? httpClient,
     Duration? timeout,
+    this.onCompletion,
+    this.reasoning = true,
   })  : _httpClient = httpClient ?? http.Client(),
         _timeout = timeout ?? defaultRequestTimeout;
+
+  /// Optional observer of every successful completion (e.g. a token meter in
+  /// the live test harness). Never alters the result.
+  final void Function(ChatCompletionResult result)? onCompletion;
+
+  /// R12 cost control: false asks hybrid reasoning models to answer without
+  /// hidden reasoning (measured on deepseek flash: 298 -> 9 output tokens for
+  /// a one-line intent). Mapped to each provider's own switch; for unknown
+  /// providers nothing is sent, so the request can never be rejected.
+  final bool reasoning;
+
+  /// Provider-specific body fields that disable hidden reasoning.
+  Map<String, dynamic> get _noReasoningFields {
+    final endpoint = config.chatEndpoint.toLowerCase();
+    final model = config.chatModel.toLowerCase();
+    if (endpoint.contains('deepseek.com')) {
+      return {
+        'thinking': {'type': 'disabled'},
+      };
+    }
+    if (endpoint.contains('dashscope') || endpoint.contains('aliyuncs.com')) {
+      return {'enable_thinking': false};
+    }
+    if (model.contains('deepseek')) {
+      return {
+        'thinking': {'type': 'disabled'},
+      };
+    }
+    return const {};
+  }
 
   /// Default per-request timeout. Generous on purpose: ReAct agents may carry
   /// large accumulated contexts (long investigations) whose single completion
@@ -62,6 +94,7 @@ class OpenAICompatibleClient implements LLMClient {
       'temperature': temperature,
       'max_tokens': maxTokens,
       if (stop != null) 'stop': stop,
+      if (!reasoning) ..._noReasoningFields,
     };
 
     if (tools != null && tools.isNotEmpty) {
@@ -118,10 +151,23 @@ class OpenAICompatibleClient implements LLMClient {
 
       final firstChoice = choices[0] as Map<String, dynamic>;
       final message = firstChoice['message'] as Map<String, dynamic>;
-      return ChatCompletionResult(
+      final usage = data['usage'];
+      int? usageInt(String key) =>
+          usage is Map ? (usage[key] as num?)?.toInt() : null;
+      final cached = usageInt('prompt_cache_hit_tokens') ??
+          (usage is Map && usage['prompt_tokens_details'] is Map
+              ? ((usage['prompt_tokens_details'] as Map)['cached_tokens'] as num?)
+                  ?.toInt()
+              : null);
+      final result = ChatCompletionResult(
         content: (message['content'] as String?) ?? '',
         finishReason: firstChoice['finish_reason'] as String?,
+        promptTokens: usageInt('prompt_tokens'),
+        completionTokens: usageInt('completion_tokens'),
+        cachedPromptTokens: cached,
       );
+      onCompletion?.call(result);
+      return result;
     } on SocketException catch (e) {
       throw LLMException('Network error: ${e.message}');
     } on TimeoutException {

@@ -122,6 +122,9 @@ void main() {
       expect(result.observation, contains('semantic + keyword'));
       expect(result.observation, contains('level_x_02.txt'));
       expect(result.observation, contains('(semantic '));
+      // No literal hit anywhere -> stated plainly, per story too.
+      expect(result.observation, contains('没有任何一行包含这些词'));
+      expect(result.observation, contains('无字面命中'));
     });
 
     test('FIND falls back to keyword when the model does not match', () async {
@@ -133,6 +136,7 @@ void main() {
           await tool.execute({'query': '匕首'}) as ToolExecutionResult;
       expect(result.observation, contains('keyword only: vectors are'));
       expect(result.observation, contains('L1: 角色B：当年我藏起了匕首。'));
+      expect(result.observation, isNot(contains('没有任何一行包含这些词')));
     });
   });
 }

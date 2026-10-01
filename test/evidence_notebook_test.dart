@@ -37,6 +37,11 @@ void main() {
       expect(parseIntent('FIND'), isNull);
     });
 
+    test('FIND drops repeated terms (degenerate repetition)', () {
+      expect(parseIntent('FIND 某名 某名 某名')!.args['query'], '某名');
+      expect(parseIntent('FIND 甲 乙 甲 scope=obt:main')!.args['query'], '甲 乙');
+    });
+
     test('a line carrying two intents is still rejected', () {
       expect(parseIntent('FIND 匕首\nREAD s.txt 0 10'), isNull);
     });
@@ -225,6 +230,27 @@ void main() {
       expect(llm.writerRequests, hasLength(1));
     });
 
+    test('re-phrased searches that surface only known stories stall out',
+        () async {
+      // Live negative case: the same fruitless search re-phrased many times.
+      final llm = _RoleLLM(
+        planner: [
+          for (var i = 0; i < 30; i++) 'FIND 无此名 变体$i',
+        ],
+        extractor: 'NONE',
+        writer: const [],
+      );
+      final events = await PlannerLoop(
+        llmClient: llm,
+        toolRegistry: ToolRegistry()..register(_SameStoriesFindTool()),
+      ).run(systemPrompt: 'sys', chatHistory: const [], userQuery: 'q').toList();
+
+      final answer = _answer(events);
+      expect(answer, contains('没有获得新信息'));
+      // 1 productive search + 8 stalled steps, far below the 24/40 budgets.
+      expect(llm.plannerRequests.length, lessThanOrEqualTo(10));
+    });
+
     test('the step budget ends a busy run through the writer', () async {
       final llm = _RoleLLM(
         planner: [
@@ -351,6 +377,23 @@ class _DataReadTool extends AgentTool {
   @override
   Future<dynamic> execute(Map<String, dynamic> arguments) async =>
       ToolExecutionResult(observation: _readObservation);
+}
+
+/// FIND that always surfaces the same two (unrelated) stories.
+class _SameStoriesFindTool extends AgentTool {
+  @override
+  String get name => 'search_story_lines';
+  @override
+  String get description => 'find';
+  @override
+  Map<String, dynamic> get parameters => const {'type': 'object'};
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async =>
+      const ToolExecutionResult(
+        observation: 'Story line hits:\n注意：原文中没有任何一行包含这些词。\n'
+            'Story: a/x_01.txt | Scope: activity:x | 无字面命中（仅语义相近）\n'
+            'Story: a/x_02.txt | Scope: activity:x | 无字面命中（仅语义相近）',
+      );
 }
 
 class _NoResultSearchTool extends AgentTool {

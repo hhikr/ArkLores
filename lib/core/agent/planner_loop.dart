@@ -21,6 +21,7 @@ class PlannerLoop {
   PlannerLoop({
     required LLMClient llmClient,
     required ToolRegistry toolRegistry,
+    LLMClient? writerClient,
     LLMClient? extractorClient,
     EntityDisambiguator? disambiguator,
     int minimumToolCalls = 0,
@@ -29,6 +30,7 @@ class PlannerLoop {
     int maxToolSteps = 40,
   })  : _maxToolSteps = maxToolSteps,
         _llmClient = llmClient,
+        _writerClient = writerClient ?? llmClient,
         _toolRegistry = toolRegistry,
         _extractorClient = extractorClient,
         _disambiguator = disambiguator,
@@ -37,6 +39,10 @@ class PlannerLoop {
         _safetyMaxIterations = safetyMaxIterations;
 
   final LLMClient _llmClient;
+
+  /// Writes the final answer (defaults to [_llmClient]); kept separate so
+  /// the per-step decision model can run cheaper than the writer (R12).
+  final LLMClient _writerClient;
   final ToolRegistry _toolRegistry;
   final LLMClient? _extractorClient;
   final EntityDisambiguator? _disambiguator;
@@ -47,6 +53,9 @@ class PlannerLoop {
   /// R12: total tool-step budget; when spent, the answer is written from the
   /// evidence gathered so far (eval: one question looped 54 steps).
   final int _maxToolSteps;
+
+  /// R12: older recent-window messages are clipped to this many characters.
+  static const int _clipOlder = 600;
 
   /// R12: consecutive steps without state growth before a nudge / a finish.
   static const int _stallNudge = 4;
@@ -125,13 +134,22 @@ DONE
     var lastFingerprint = '';
     final executed = <String, int>{};
 
+    // R12 cost control: only the latest observation is sent in full; older
+    // window entries are clipped (read text already lives in the notebook,
+    // searches in the search log). Input tokens dominated after reasoning
+    // was turned off for the planner.
     List<Message> buildRequest() => [
           Message.system('$systemPrompt\n\n$intentFormat'),
           ...chatHistory,
           Message.user(
             '目标: $userQuery\n\n当前调查状态:\n${state.serialize()}',
           ),
-          ...recent,
+          for (var i = 0; i < recent.length; i++)
+            i == recent.length - 1 || recent[i].content.length <= _clipOlder
+                ? recent[i]
+                : Message.user(
+                    '${recent[i].content.substring(0, _clipOlder)}…（已截断）',
+                  ),
         ];
 
     while (true) {
@@ -233,10 +251,16 @@ DONE
           recent.add(Message.user('Observation: VERDICT 缺 culprit。'));
           continue;
         }
+        // R12: envelope fields are short tokens; a model may put a whole
+        // sentence in `basis` (seen with reasoning off) — the writer explains
+        // the reasoning in the body instead.
+        final rawBasis = '${intent.args['basis'] ?? 'multi_hypothesis_contrast'}';
         yield* _finish(
           culprit: culprit,
           confidence: '${intent.args['confidence'] ?? '0.7'}',
-          basis: '${intent.args['basis'] ?? 'multi_hypothesis_contrast'}',
+          basis: RegExp(r'^[A-Za-z_\-]{1,40}$').hasMatch(rawBasis)
+              ? rawBasis
+              : 'stated_in_answer',
           state: state,
           readPages: readPages,
           userQuery: userQuery,
@@ -850,7 +874,7 @@ DONE
         : '\n\n上一版答案引用了未读取的行：${invalidCitations.join('、')}。'
             '请重写，只引用下方“已读原文”中出现的 story_id:行号。';
     final result = await completeWithHeadroom(
-      _llmClient,
+      _writerClient,
       [
         Message.system(
           '你是剧情调查员。只根据下方“证据笔记”和“已读原文”回答用户问题：\n'

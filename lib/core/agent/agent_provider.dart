@@ -664,8 +664,15 @@ final askChatProvider =
 
 /// Provider for the [InvestigationAgent] instance.
 final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
+  // R12 cost control: hidden reasoning was ~90% of investigation output
+  // tokens. Mechanical roles (extract notes, pick a candidate, emit one-line
+  // intents) run without it; the answer writer keeps the reasoning model.
+  final aux = ref.watch(auxLlmClientProvider);
   return InvestigationAgent(
     llmClient: ref.watch(llmClientProvider),
+    plannerClient: aux,
+    extractorClient: aux,
+    disambiguatorClient: aux,
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );

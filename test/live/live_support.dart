@@ -7,6 +7,36 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/agent/chat_session_models.dart';
+import 'package:arklores/core/llm/llm_client.dart';
+
+/// Sums provider-reported token usage of chat completions (cost control).
+class UsageMeter {
+  int calls = 0;
+  int promptTokens = 0;
+  int completionTokens = 0;
+  int cachedPromptTokens = 0;
+
+  void add(ChatCompletionResult result) {
+    calls++;
+    promptTokens += result.promptTokens ?? 0;
+    completionTokens += result.completionTokens ?? 0;
+    cachedPromptTokens += result.cachedPromptTokens ?? 0;
+  }
+
+  void reset() {
+    calls = 0;
+    promptTokens = 0;
+    completionTokens = 0;
+    cachedPromptTokens = 0;
+  }
+
+  Map<String, int> toJson() => {
+        'llm_calls': calls,
+        'prompt_tokens': promptTokens,
+        'cached_prompt_tokens': cachedPromptTokens,
+        'completion_tokens': completionTokens,
+      };
+}
 
 /// One live question, optionally with gold story ids for recall scoring.
 class LiveCase {
@@ -70,8 +100,9 @@ final RegExp _citation =
 Map<String, Object?> summarizeTurn(
   LiveCase liveCase,
   ChatSessionFile session,
-  ChatSessionTurn turn,
-) {
+  ChatSessionTurn turn, {
+  UsageMeter? usage,
+}) {
   final toolCounts = <String, int>{};
   final readStories = <String>{};
   var emptyResponses = 0;
@@ -126,6 +157,7 @@ Map<String, Object?> summarizeTurn(
     'citations': citations.length,
     'source_warning': turn.answer.contains('来源警告'),
     'answer_chars': turn.answer.length,
+    if (usage != null) 'usage': usage.toJson(),
     'answer': turn.answer,
   };
 }
