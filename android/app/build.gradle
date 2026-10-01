@@ -35,6 +35,14 @@ android {
         versionName = flutter.versionName
     }
 
+    // Store native libraries compressed in the APK (AGP default since 4.2 is
+    // uncompressed, which roughly doubled the download size).
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     signingConfigs {
         release {
             if (keystorePropertiesFile.exists()) {
