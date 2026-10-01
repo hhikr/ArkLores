@@ -41,6 +41,9 @@
 - 本地 `flutter build apk --release` 没有 `android/key.properties` 时会退回 debug key，
   这样的包不能发布。
 - CI（`ci.yml`）在 PR 上跑 analyze 与 test。
+- Android 工具链：Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17
+  （Flutter 3.47 的最低要求）；Linux 本地构建也需要升级到同一 Flutter 版本。
+- `release/<版本>` 分支只放构建 APK 的那个提交：再推送会重新构建，产出的 APK 哈希也会变。
 
 ## 提交规范（贡献者只有 hhikr）
 
