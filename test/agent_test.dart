@@ -1,15 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
-import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/fact_check_agent.dart';
+import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
 import 'package:arklores/core/agent/roleplay_session_store.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
@@ -20,6 +12,15 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
 import 'package:arklores/features/ai/wiki_ai_context.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'support/temp_dir.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -56,7 +57,7 @@ void main() {
     if (previousDatabaseFactory != null) {
       sqflite.databaseFactory = previousDatabaseFactory!;
     }
-    await tempDir.delete(recursive: true);
+    await deleteTempDir(tempDir);
   });
 
   group('Wiki AI context handoff', () {
@@ -160,6 +161,62 @@ void main() {
       expect(observation, contains('Retrieval Type: entity_document'));
     });
 
+    test('reopens cached connection after the DB file is replaced', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final store = GameDataKnowledgeStore(dbPath: dbPath);
+      final tool = SearchLocalLoreTool(gameDataStore: store);
+
+      final first = await tool.execute({'query': '阿米娅', 'top_k': 3});
+      expect(
+        (first as ToolExecutionResult).observation,
+        contains('Entity ID: char_002_amiya'),
+      );
+
+      // The original file has no entity named this way; a stale cached handle
+      // would keep reporting "no result" after the swap below.
+      final before = await tool.execute({'query': '测试新角色', 'top_k': 3});
+      expect(
+        (before as ToolExecutionResult).observation,
+        contains('No matching GameData result'),
+      );
+
+      // Simulate an installer-style swap: build a DB with an extra entity at a
+      // temp path, then replace the original file while the store still caches
+      // a handle to the old file.
+      final replacedPath = '${tempDir.path}/replaced_gamedata.db';
+      await _createGameDataTestDb(replacedPath);
+      final replacedDb = await sqflite.openDatabase(replacedPath);
+      await replacedDb.insert('entities', {
+        'id': 'char_999_test',
+        'name': '测试新角色',
+        'aliases': '[]',
+        'entity_type': 'operator',
+        'source_type': 'operator_profile',
+        'game': 'arknights',
+        'source_path': 'zh_CN/gamedata/excel/character_table.json',
+      });
+      await replacedDb.insert('entity_aliases', {
+        'alias': '测试新角色',
+        'entity_id': 'char_999_test',
+        'alias_type': 'canonical',
+        'confidence': 1.0,
+        'source_path': 'zh_CN/gamedata/excel/character_table.json',
+      });
+      await replacedDb.close();
+      await File(dbPath).delete();
+      await File(replacedPath).rename(dbPath);
+
+      final after = await tool.execute({'query': '测试新角色', 'top_k': 3});
+      expect(
+        (after as ToolExecutionResult).observation,
+        contains('Entity ID: char_999_test'),
+      );
+    },
+        // Replacing a file that another handle keeps open needs POSIX
+        // semantics (the app runs on Android); Windows locks open files.
+        skip: Platform.isWindows ? 'requires POSIX open-file replacement' : false,);
+
     test('uses entity document FTS for compound queries', () async {
       final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
       await _createGameDataTestDb(dbPath);
@@ -226,10 +283,49 @@ void main() {
       expect(result, isA<ToolExecutionResult>());
       final observation = (result as ToolExecutionResult).observation;
       expect(observation, contains('Ambiguous GameData entity query'));
+      // R10 compact one-line-per-candidate form.
+      expect(observation, contains('1. char_002_amiya'));
+      expect(observation, contains('2. token_amiya_memory'));
+      expect(observation, contains('候选实体（请用 Entity ID 消歧）'));
+    });
+
+    test('explicit entity_id skips the disambiguation branch (R11)',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      await _insertAmbiguousAmiyaCandidate(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      // Same ambiguous name, but with an explicit entity_id: must NOT return
+      // the ambiguity list — it goes straight to entity-scoped retrieval.
+      final result = await tool.execute({
+        'query': 'Amiya',
+        'top_k': 3,
+        'entity_id': 'char_002_amiya',
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, isNot(contains('Ambiguous')));
+    });
+
+    test('entity-id literal query resolves and searches by id (R11)',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      // `SEARCH char_002_amiya` — suffix-only id literal. Must resolve to the
+      // canonical id and search by it, not treat the id as free text.
+      final result = await tool.execute({'query': 'char_002_amiya', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
       expect(observation, contains('Entity ID: char_002_amiya'));
-      expect(observation, contains('Entity ID: token_amiya_memory'));
-      expect(
-          observation, contains('call search_local_lore again with entity_id'));
     });
 
     test('summary mode announces retrieval plan and includes story context',
@@ -550,7 +646,7 @@ void main() {
 
       final status = await installer.getStatus();
       expect(status.installed, isTrue);
-      expect(status.manifest['schema_version'], '2');
+      expect(status.manifest['schema_version'], '4');
       expect(status.entityCount, '1');
     });
 
@@ -601,7 +697,35 @@ void main() {
           (error) => '$error',
           'message',
           contains('incompatible'),
-        )),
+        ),),
+      );
+    });
+
+    test('rejects invalid story_line_count before replacing the installed DB',
+        () async {
+      final invalidPath = '${tempDir.path}/invalid_counts_gamedata.db';
+      await _createGameDataTestDb(invalidPath);
+      final db = await sqflite.openDatabase(invalidPath);
+      await db.update(
+        'gamedata_manifest',
+        {'value': '0'},
+        where: 'key = ?',
+        whereArgs: ['story_line_count'],
+      );
+      await db.close();
+      final installer = GameDataInstaller(installDirectory: tempDir);
+      final invalidBytes = await File(invalidPath).readAsBytes();
+
+      expect(
+        () => installer.installFromBytes(
+          invalidBytes,
+          overwrite: true,
+        ),
+        throwsA(isA<StateError>().having(
+          (error) => '$error',
+          'message',
+          contains('story_line_count'),
+        ),),
       );
     });
   });
@@ -614,7 +738,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _MockLLMClient(),
         toolRegistry: registry,
-        maxIterations: 3,
       );
 
       final events = await reactLoop
@@ -645,7 +768,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _LooseActionInputLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       final events = await reactLoop
@@ -661,8 +783,8 @@ void main() {
       expect(
         events
             .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((e) => e.content)
+            .join(),
         contains('done'),
       );
     });
@@ -675,7 +797,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _TrailingActionInputLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       final events = await reactLoop
@@ -691,8 +812,8 @@ void main() {
       expect(
         events
             .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((e) => e.content)
+            .join(),
         contains('done'),
       );
     });
@@ -705,7 +826,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _ActionMetadataLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       await loop
@@ -723,7 +843,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _PunctuatedActionLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       await loop
@@ -741,7 +860,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _EarlyFinalThenActionLLMClient(),
         toolRegistry: registry,
-        maxIterations: 3,
         minimumToolCalls: 1,
       );
 
@@ -753,8 +871,8 @@ void main() {
       expect(
         events
             .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((event) => event.content)
+            .join(),
         'verified',
       );
     });
@@ -769,8 +887,8 @@ void main() {
           .toList();
       final answer = events
           .where((event) => event.type == ReActEventType.finalAnswerToken)
-          .single
-          .content;
+          .map((event) => event.content)
+          .join();
       expect(answer, contains('operator_handbook_profile'));
       expect(answer, isNot(contains('mentions Book evidence')));
     });
@@ -779,7 +897,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _EmptyFinalAnswerLLMClient(),
         toolRegistry: ToolRegistry(),
-        maxIterations: 1,
       );
 
       final events = await reactLoop
@@ -801,7 +918,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _TruncatedLLMClient(),
         toolRegistry: ToolRegistry(),
-        maxIterations: 1,
       );
 
       final events = await reactLoop
@@ -826,7 +942,7 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: llm,
         toolRegistry: registry,
-        maxIterations: 1,
+        safetyMaxIterations: 1,
       );
 
       final events = await reactLoop
@@ -840,8 +956,8 @@ void main() {
       expect(llm.fallbackPrompt, contains('Wiki evidence available: no'));
       final answer = events
           .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .single
-          .content;
+          .map((e) => e.content)
+          .join();
       expect(answer, contains('Source warning'));
       expect(answer, contains('did not retrieve any observation'));
     });
@@ -853,7 +969,7 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: llm,
         toolRegistry: registry,
-        maxIterations: 1,
+        safetyMaxIterations: 1,
       );
 
       await reactLoop
@@ -885,8 +1001,8 @@ void main() {
       expect(
         events
             .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((event) => event.content)
+            .join(),
         startsWith('[FACT_CHECK_VERDICT:supported]'),
       );
       expect(llm.systemPrompt, contains('仅使用 search_local_lore'));
@@ -957,7 +1073,7 @@ void main() {
       );
     });
 
-    test('logs the validated verdict through the shared ReAct logger',
+    test('emits the validated verdict through the final answer stream',
         () async {
       final agent = FactCheckAgent(
         llmClient: _UnsupportedFactCheckLLMClient(),
@@ -968,31 +1084,30 @@ void main() {
       expect(
         events
             .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+            .map((event) => event.content)
+            .join(),
         startsWith('[FACT_CHECK_VERDICT:unavailable]'),
       );
+    });
 
-      final logDir = Directory('${tempDir.path}/ArkLores/agent_logs');
-      final logFiles = await logDir
-          .list()
-          .where((entry) => entry is File && entry.path.endsWith('.log'))
-          .cast<File>()
+    test('exposes every raw LLM response through onRawLlmResponse', () async {
+      final agent = FactCheckAgent(
+        llmClient: _UnsupportedFactCheckLLMClient(),
+        searchTool: _CurrentNoMatchTool(),
+      );
+      final raws = <(int, String)>[];
+      final events = await agent
+          .checkClaim(
+            claim: '未知命题',
+            onRawLlmResponse: (iteration, raw) => raws.add((iteration, raw)),
+          )
           .toList();
-      expect(logFiles, hasLength(1));
-      final log = await logFiles.single.readAsString();
-      expect(log, contains('Agent  : FactCheck'));
-      expect(log, contains('▶ TOOL CALL: search_local_lore'));
-      expect(log, contains('No matching GameData result'));
-      final loggedFinalAnswer = log.split('▶ FINAL ANSWER:').last;
-      expect(
-        loggedFinalAnswer,
-        contains('[FACT_CHECK_VERDICT:unavailable]'),
-      );
-      expect(
-        loggedFinalAnswer,
-        isNot(contains('[FACT_CHECK_VERDICT:supported]')),
-      );
+      expect(events, isNotEmpty);
+      expect(raws, isNotEmpty);
+      // Iteration numbers are contiguous starting at 1 and every raw response
+      // is passed through untruncated.
+      expect(raws.first.$1, 1);
+      expect(raws.map((r) => r.$2), everyElement(isNotEmpty));
     });
   });
 
@@ -1087,7 +1202,7 @@ void main() {
       expect(llm.systemPrompt, contains('NOT GameData evidence'));
       expect(llm.systemPrompt, contains('不得用模型记忆补齐'));
       expect(
-          events.where((e) => e.type == ReActEventType.toolCall), isNotEmpty);
+          events.where((e) => e.type == ReActEventType.toolCall), isNotEmpty,);
     });
 
     test('session store handles empty, save, load, clear and corrupt data',
@@ -1204,7 +1319,7 @@ class _FactCheckLLMClient extends LLMClient {
     List<String>? stop,
   }) =>
       chat(messages,
-          temperature: temperature, maxTokens: maxTokens, stop: stop);
+          temperature: temperature, maxTokens: maxTokens, stop: stop,);
 }
 
 class _FactCheckSearchTool extends AgentTool {
@@ -1674,12 +1789,51 @@ Future<void> _createGameDataTestDb(String path) async {
           tokenize='trigram'
         )
       ''');
+      // Schema v3 coverage layer tables (R1 / AI retrieval P0).
+      await db.execute('''
+        CREATE TABLE entity_story_mentions (
+          entity_id     TEXT NOT NULL,
+          story_id      TEXT NOT NULL,
+          scope_id      TEXT NOT NULL,
+          line_start    INTEGER NOT NULL,
+          line_end      INTEGER NOT NULL,
+          mention_count INTEGER NOT NULL,
+          matched_alias TEXT,
+          PRIMARY KEY (entity_id, story_id, line_start)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE story_chapter_profiles (
+          story_id       TEXT PRIMARY KEY,
+          scope_id       TEXT NOT NULL,
+          title          TEXT,
+          line_start     INTEGER NOT NULL,
+          line_end       INTEGER NOT NULL,
+          speaker_set    TEXT,
+          entity_density TEXT,
+          summary        TEXT,
+          keyword_hits   TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE rare_terms (
+          term     TEXT PRIMARY KEY,
+          doc_freq INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE VIRTUAL TABLE story_lines_fts USING fts5(
+          content,
+          content='story_lines',
+          content_rowid='rowid'
+        )
+      ''');
     },
   );
 
   await db.insert('gamedata_manifest', {
     'key': 'schema_version',
-    'value': '2',
+    'value': '4',
   });
   await db.insert('gamedata_manifest', {
     'key': 'entity_count',
@@ -1692,6 +1846,20 @@ Future<void> _createGameDataTestDb(String path) async {
   await db.insert('gamedata_manifest', {
     'key': 'lore_chunk_count',
     'value': '1',
+  });
+  await db.insert('gamedata_manifest', {
+    'key': 'story_line_count',
+    'value': '1',
+  });
+  await db.insert('story_lines', {
+    'id': 'story_line_test_0',
+    'game': 'arknights',
+    'story_id': 'activities/act_test/level_test_01.txt',
+    'line_index': 0,
+    'speaker': '阿米娅',
+    'content': '测试剧情行内容',
+    'source_path': 'zh_CN/gamedata/story/activities/act_test/level_test_01.txt',
+    'language': 'zh',
   });
   await db.insert('entities', {
     'id': 'char_002_amiya',

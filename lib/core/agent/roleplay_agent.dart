@@ -1,4 +1,4 @@
-import '../gamedata/gamedata_knowledge_store.dart';
+import '../gamedata/game_retrieval.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'react_loop.dart';
@@ -9,50 +9,51 @@ import 'tools/tool_registry.dart';
 enum CharacterResolutionStatus { resolved, ambiguous, notFound, unavailable }
 
 class CharacterResolution {
+
+  const CharacterResolution(this.status,
+      {this.character, this.candidates = const [],});
   final CharacterResolutionStatus status;
   final GameDataEntityCandidate? character;
   final List<GameDataEntityCandidate> candidates;
-
-  const CharacterResolution(this.status,
-      {this.character, this.candidates = const []});
 }
 
 class RoleplayAgent {
-  final LLMClient _llmClient;
-  final GameDataKnowledgeStore _store;
-  final AgentTool _searchTool;
 
   RoleplayAgent({
     required LLMClient llmClient,
-    GameDataKnowledgeStore? gameDataStore,
+    GameDataRetrieval? gameDataStore,
     AgentTool? searchTool,
   })  : _llmClient = llmClient,
-        _store = gameDataStore ?? GameDataKnowledgeStore(),
+        _store = gameDataStore,
         _searchTool =
             searchTool ?? SearchLocalLoreTool(gameDataStore: gameDataStore);
+  final LLMClient _llmClient;
+  final GameDataRetrieval? _store;
+  final AgentTool _searchTool;
 
   Future<CharacterResolution> resolveCharacter(String query) async {
-    if (!await _store.isAvailable) {
+    final store = _store;
+    if (store == null || !await store.isAvailable) {
       return const CharacterResolution(CharacterResolutionStatus.unavailable);
     }
-    final candidates = await _store.findEntityCandidates(query);
+    final candidates = await store.findEntityCandidates(query);
     final exact = candidates
         .where((candidate) =>
             candidate.matchType == 'name_exact' ||
             candidate.matchType == 'canonical_alias_exact' ||
-            candidate.matchType == 'alias_exact')
+            candidate.matchType == 'alias_exact',)
         .toList(growable: false);
     if (exact.length == 1) {
       return CharacterResolution(CharacterResolutionStatus.resolved,
-          character: exact.single);
+          character: exact.single,);
     }
     if (exact.length > 1) {
       return CharacterResolution(CharacterResolutionStatus.ambiguous,
-          candidates: exact);
+          candidates: exact,);
     }
     if (candidates.length == 1) {
       return CharacterResolution(CharacterResolutionStatus.resolved,
-          character: candidates.single);
+          character: candidates.single,);
     }
     return CharacterResolution(
       candidates.isEmpty
@@ -74,7 +75,6 @@ class RoleplayAgent {
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: registry,
-      maxIterations: isFirstTurn ? 7 : 5,
       minimumToolCalls: 1,
       stepMaxTokens: 4096,
     );
@@ -98,10 +98,10 @@ ${isFirstTurn ? 'This is the first turn. Build broad character memory by retriev
 }
 
 class _CharacterBoundSearchTool extends AgentTool {
-  final AgentTool delegate;
-  final String entityId;
 
   _CharacterBoundSearchTool(this.delegate, this.entityId);
+  final AgentTool delegate;
+  final String entityId;
 
   @override
   String get name => delegate.name;

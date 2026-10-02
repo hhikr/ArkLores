@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
-import '../../shared/theme/app_theme.dart';
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'bookmark_service.dart';
 
@@ -69,9 +69,9 @@ class BookmarkPage extends ConsumerWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  final AppThemeTokens theme;
 
   const _EmptyState({required this.theme});
+  final AppThemeTokens theme;
 
   @override
   Widget build(BuildContext context) {
@@ -82,15 +82,15 @@ class _EmptyState extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.bookmark_border_rounded,
-                size: 64, color: theme.accentPrimary.withValues(alpha: 0.3)),
+                size: 64, color: theme.accentPrimary.withValues(alpha: 0.3),),
             const SizedBox(height: 16),
             Text(context.t.bookmarksEmpty,
-                style: theme.titleFont.copyWith(fontSize: 20)),
+                style: theme.titleFont.copyWith(fontSize: 20),),
             const SizedBox(height: 8),
             Text(context.t.bookmarksEmptyDesc,
                 textAlign: TextAlign.center,
                 style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary, fontSize: 14, height: 1.4)),
+                    color: theme.textSecondary, fontSize: 14, height: 1.4,),),
           ],
         ),
       ),
@@ -99,10 +99,6 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _BookmarkListItem extends StatelessWidget {
-  final Bookmark bookmark;
-  final AppThemeTokens theme;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
 
   const _BookmarkListItem({
     required this.bookmark,
@@ -110,6 +106,10 @@ class _BookmarkListItem extends StatelessWidget {
     required this.onTap,
     required this.onDelete,
   });
+  final Bookmark bookmark;
+  final AppThemeTokens theme;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -139,16 +139,16 @@ class _BookmarkListItem extends StatelessWidget {
                   Text(bookmark.title,
                       style: theme.titleFont.copyWith(fontSize: 15),
                       maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                      overflow: TextOverflow.ellipsis,),
                   const SizedBox(height: 2),
                   Text(bookmark.siteLabel,
                       style: theme.bodyFont
-                          .copyWith(color: theme.textSecondary, fontSize: 12)),
+                          .copyWith(color: theme.textSecondary, fontSize: 12),),
                 ],
               ),
             ),
             Icon(Icons.chevron_right_rounded,
-                color: theme.textSecondary, size: 20),
+                color: theme.textSecondary, size: 20,),
           ],
         ),
       ),

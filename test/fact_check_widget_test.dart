@@ -9,9 +9,9 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
-import 'package:arklores/features/ai/wiki_ai_context.dart';
 import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/features/ai/widgets/roleplay_tab.dart';
+import 'package:arklores/features/ai/wiki_ai_context.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
@@ -104,7 +104,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('剧情梗概').last);
+    // Pin the Summarize mode so the auto router is not invoked.
+    await tester.tap(find.text('概括'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '阿米娅');
     await tester.tap(find.byTooltip('发送'));
@@ -112,7 +113,7 @@ void main() {
     expect(find.byTooltip('取消'), findsOneWidget);
     await tester.tap(find.byTooltip('取消'));
     await tester.pump();
-    expect(find.text('已取消本次梗概生成。'), findsOneWidget);
+    expect(find.text('已取消本次回答。'), findsOneWidget);
     expect(find.byTooltip('重试'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -181,7 +182,7 @@ void main() {
     expect(find.text('阿米娅'), findsWidgets);
     expect(find.textContaining('char_002_amiya'), findsWidgets);
     expect(find.text('角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。'),
-        findsOneWidget);
+        findsOneWidget,);
     expect(find.text('你好'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -216,7 +217,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('剧情梗概'), findsWidgets);
+    expect(find.text('剧情智囊'), findsOneWidget); // AppBar title
+    expect(find.text('AI 问答'), findsOneWidget); // Ask tab
     expect(find.textContaining('Wiki reading context'), findsOneWidget);
     expect(find.textContaining('not GameData evidence'), findsOneWidget);
     expect(find.textContaining('阿米娅是罗德岛的公开领袖。'), findsOneWidget);

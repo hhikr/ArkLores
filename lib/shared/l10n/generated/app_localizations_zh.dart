@@ -1,3 +1,5 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -64,6 +66,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsApiSettingsDesc => '配置对话服务提供商';
 
   @override
+  String get settingsSessionLogs => '保存 AI 对话记录';
+
+  @override
+  String get settingsSessionLogsDesc =>
+      '完整记录每次 AI 对话（含模式选择、自动路由决策、完整推理过程与检索原文）到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复；仅保存在本机，可在 app 内或文件管理器中删除。';
+
+  @override
   String get settingsKnowledgeBase => '知识库管理';
 
   @override
@@ -80,6 +89,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get apiSettingsChatDesc => '用于 AI 对话（事实核查、梗概生成、角色扮演）。';
+
+  @override
+  String get apiSettingsEmbeddingSection => '向量 API（可选）';
+
+  @override
+  String get apiSettingsEmbeddingDesc =>
+      '用于剧情调查的语义原文召回。模型需与已安装知识库的向量一致（如阿里云百炼 qwen3.7-text-embedding）。不填 Key 时只用关键词检索。';
 
   @override
   String get apiSettingsUseSameProvider => '使用与对话相同的提供商';
@@ -159,7 +175,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsTitle => '资料';
 
   @override
-  String get materialsWarning => '⚠️ 资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。AI 将小心引用并以 Wiki 内容为优先参考。';
+  String get materialsWarning =>
+      '⚠️ 资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。AI 将小心引用并以 Wiki 内容为优先参考。';
 
   @override
   String get materialsNoBooks => '还没有书籍';
@@ -253,7 +270,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importDismiss => '关闭';
 
   @override
-  String get aiChatTitle => 'AI 对话';
+  String get aiChatTitle => '剧情智囊';
 
   @override
   String get aiChatSubtitle => '事实核查 · 梗概生成 · 角色扮演';
@@ -283,6 +300,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wikiSendToFactCheckDesc => '把选中文字作为待核查主张';
 
   @override
+  String get wikiReaderMode => '阅读模式';
+
+  @override
+  String get wikiReaderFontSmaller => '缩小文字';
+
+  @override
+  String get wikiReaderFontLarger => '放大文字';
+
+  @override
   String get bookmarksTitle => '书签';
 
   @override
@@ -306,13 +332,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get citationViewInWiki => '在 Wiki 中查看';
 
   @override
-  String get onboardingSkip => '跳过';
+  String get onboardingNotNow => '以后再说';
 
   @override
   String get onboardingWelcomeTitle => '欢迎使用 ArkLores';
 
   @override
-  String get onboardingWelcomeDesc => '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 事实核查与梗概生成\n• 导入你的剧情书籍\n• 沉浸式角色扮演对话';
+  String get onboardingWelcomeDesc =>
+      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 事实核查与梗概生成\n• 导入你的剧情书籍\n• 沉浸式角色扮演对话';
 
   @override
   String get onboardingGetStarted => '开始使用';
@@ -321,7 +348,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingApiTitle => '配置对话 API';
 
   @override
-  String get onboardingApiDesc => 'ArkLores 使用你自己的 AI API 密钥。\n请配置一个对话提供商以使用 AI 功能。';
+  String get onboardingApiDesc =>
+      'ArkLores 使用你自己的 AI API 密钥。\n请配置一个对话提供商以使用 AI 功能。';
 
   @override
   String get onboardingSaveContinue => '保存并继续';
@@ -333,7 +361,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingDoneTitle => '准备就绪！';
 
   @override
-  String get onboardingDoneDesc => '你已经准备好探索明日方舟与终末地的世界了。\n\n可前往设置安装 GameData 知识库，\n或直接开始浏览 Wiki！';
+  String get onboardingDoneDesc =>
+      '你已经准备好探索明日方舟与终末地的世界了。\n\n可前往设置安装 GameData 知识库，\n或直接开始浏览 Wiki！';
 
   @override
   String get onboardingStartExploring => '开始探索';
@@ -354,13 +383,111 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
 
   @override
+  String get aiTabAsk => 'AI 问答';
+
+  @override
+  String get aiModeAuto => '自动';
+
+  @override
+  String get aiModeAutoDesc => 'AI 自动判断用哪种模式（概括 / 查证 / 深挖）';
+
+  @override
+  String get aiModeSummarize => '概括';
+
+  @override
+  String get aiModeSummarizeDesc => '整理已知剧情：人物、事件、组织、时间线';
+
+  @override
+  String get aiModeVerify => '查证';
+
+  @override
+  String get aiModeVerifyDesc => '判定一个说法的真假（对吗？是不是？）';
+
+  @override
+  String get aiModeInvestigate => '深挖';
+
+  @override
+  String get aiModeInvestigateDesc => '跨章节推理：凶手、因果、伏笔、真相';
+
+  @override
+  String get aiAskSource => '仅基于已安装的 GameData 剧情原文回答';
+
+  @override
+  String get aiAskEmpty => '直接问任何剧情问题——概括、查证、深挖都可以，自动模式会为你选择合适的方式。';
+
+  @override
+  String get aiAskInputPlaceholder => '问任何剧情问题…';
+
+  @override
+  String get aiAskSuggestionAmiya => '阿米娅是什么人';
+
+  @override
+  String get aiAskSuggestionVerify => '阿米娅是罗德岛的公开领袖吗';
+
+  @override
+  String get aiAskSuggestionInvestigate => '米格鲁的死是怎么回事';
+
+  @override
+  String get aiAskError => '回答失败，请重试。';
+
+  @override
+  String get aiAskCanceled => '已取消本次回答。';
+
+  @override
   String get aiTabFactCheck => '事实核查';
 
   @override
   String get aiTabSummary => '剧情梗概';
 
   @override
+  String get aiTabInvestigation => '剧情调查';
+
+  @override
   String get aiTabRoleplay => '角色扮演';
+
+  @override
+  String get aiInvestigationSource =>
+      '调查范围：仅限已安装 GameData 剧情原文（出场枚举 + 行级精读 + 跨章节呼应）';
+
+  @override
+  String get aiInvestigationEmpty =>
+      '提出跨章节因果或凶手类问题。调查会枚举出场、精读关键章节、跨章节定位细节，并逐嫌疑人对比证据后给出带证据链的结论。';
+
+  @override
+  String get aiInvestigationInputPlaceholder => '例如：某角色死亡的罪魁祸首是谁…';
+
+  @override
+  String get aiInvestigationSuggestionDeath => '特蕾西娅死亡的真相是什么';
+
+  @override
+  String get aiInvestigationSuggestionWeapon => '某场死亡的关键凶器线索';
+
+  @override
+  String get aiInvestigationVerdict => '调查结论';
+
+  @override
+  String get aiInvestigationConfidence => '置信度';
+
+  @override
+  String get aiInvestigationBasis => '依据';
+
+  @override
+  String get aiInvestigationEvidenceChain => '证据链引用';
+
+  @override
+  String get aiInvestigationCoverage => '已读范围';
+
+  @override
+  String get aiInvestigationRead => '精读';
+
+  @override
+  String get aiInvestigationMapped => '画像';
+
+  @override
+  String get aiInvestigationSkipped => '未读';
+
+  @override
+  String get aiInvestigationError => '调查失败，请重试。';
 
   @override
   String get aiFactCheckSource => '证据范围：仅限已安装的中文 GameData';
@@ -502,6 +629,35 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiClearConfirmBtn => '清空';
 
   @override
+  String get aiNewConversation => '新建对话';
+
+  @override
+  String get aiHistoryTitle => '对话记录';
+
+  @override
+  String get aiHistoryEmpty => '暂无对话记录。发送消息后会自动保存在本机的 chat_sessions 目录。';
+
+  @override
+  String get aiHistoryContinue => '继续对话';
+
+  @override
+  String get aiHistoryView => '查看';
+
+  @override
+  String get aiHistoryDelete => '删除';
+
+  @override
+  String get aiHistoryDeleteConfirm => '删除这条对话记录？此操作不可撤销。';
+
+  @override
+  String get aiHistoryCorrupt => '损坏的会话文件';
+
+  @override
+  String aiHistoryTurns(int count) {
+    return '$count 轮对话';
+  }
+
+  @override
   String get aiRoleplayChoose => '选择角色';
 
   @override
@@ -538,7 +694,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiRoleplayRestart => '重新开始';
 
   @override
-  String get aiRoleplayGeneratedNotice => '角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。';
+  String get aiRoleplayGeneratedNotice =>
+      '角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。';
 
   @override
   String get aiRoleplayEmpty => '输入第一句话。首轮会先检索角色档案、语音、秘录、模组及相关任务剧情。';
@@ -551,4 +708,255 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiRoleplayCanceled => '已取消本次生成。';
+
+  @override
+  String get settingsAppIcon => '应用图标';
+
+  @override
+  String get settingsIconLightLabel => '白天图标';
+
+  @override
+  String get settingsIconDarkLabel => '夜间图标';
+
+  @override
+  String get settingsIconLightShort => '浅色';
+
+  @override
+  String get settingsIconDarkShort => '深色';
+
+  @override
+  String get settingsIconUnsupported => '当前平台暂不支持运行时切换图标，设置已保存。';
+
+  @override
+  String get settingsWikiSources => 'Wiki 来源';
+
+  @override
+  String get settingsWikiSourcesDesc => '修改内置 Wiki URL，添加自定义 Wiki 入口';
+
+  @override
+  String get wikiSourcesAddTitle => '添加 Wiki';
+
+  @override
+  String get wikiSourcesEditTitle => '编辑 Wiki';
+
+  @override
+  String get wikiSourcesNameLabel => '名称';
+
+  @override
+  String get wikiSourcesIconUrlLabel => '图标 URL（可选）';
+
+  @override
+  String get wikiSourcesEndfieldPreset => '终末地 Wiki 预设';
+
+  @override
+  String get wikiSourcesReset => '重置';
+
+  @override
+  String get wikiSourcesEdit => '编辑';
+
+  @override
+  String get wikiSourcesDelete => '删除';
+
+  @override
+  String get wikiSourcesCancel => '取消';
+
+  @override
+  String get wikiSourcesSave => '保存';
+
+  @override
+  String get wikiSourcesNameRequired => '请输入 Wiki 名称';
+
+  @override
+  String get wikiSourcesUrlRequired => '请输入有效 URL';
+
+  @override
+  String get kbStructuredTitle => 'GameData 结构化知识库';
+
+  @override
+  String get kbScopeDescription =>
+      'AI 只使用中文 GameData 知识库作为证据：实体、别名、原始记录、剧情原文与检索索引，以及可选的剧情向量。Wiki 与导入资料不作为 AI 的证据来源。';
+
+  @override
+  String kbStatusError(String error) {
+    return 'GameData 状态读取失败：$error';
+  }
+
+  @override
+  String get kbInstalled => 'GameData 主知识库已安装';
+
+  @override
+  String get kbNoAssetUrl => '当前构建未配置 GameData release asset URL';
+
+  @override
+  String get kbErrorInvalidUrl => '无法解析下载地址。真机测试请确认手机能访问该 GitHub / 局域网 URL。';
+
+  @override
+  String get kbErrorTimeout => '连接超时。请切换网络，或确认临时 HTTP 服务和手机在同一网络。';
+
+  @override
+  String get kbErrorNotFound => '服务器上没有找到知识库文件（新版本可能尚未公开发布），请稍后再试。';
+
+  @override
+  String get kbErrorChecksum => 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
+
+  @override
+  String kbDownloadFailed(String error) {
+    return '下载 GameData 主知识库失败：$error';
+  }
+
+  @override
+  String get kbNotInstalled => '未安装';
+
+  @override
+  String get kbDevAssetHint => '下载官方发布的知识库（压缩包下载后会解压，请预留约 1 GB 空闲空间）。';
+
+  @override
+  String get kbDownloading => '下载中';
+
+  @override
+  String get kbDownload => '下载';
+
+  @override
+  String get kbStatEntities => '实体';
+
+  @override
+  String get kbStatRecords => '原始记录';
+
+  @override
+  String get kbStatChunks => '文档片段';
+
+  @override
+  String get kbStatSourceCommit => '来源提交';
+
+  @override
+  String get kbBuildSectionTitle => '从源仓库构建';
+
+  @override
+  String get kbBuildSectionDesc =>
+      '从 Kengxxiao/ArknightsGameData 拉取最新解包数据，在设备上按项目规约构建或增量更新知识库。需要网络；首次构建约需 1.5–2 GB 空闲空间。';
+
+  @override
+  String get kbBuildLatestCommit => '最新提交';
+
+  @override
+  String get kbBuildInstalledCommit => '已装提交';
+
+  @override
+  String get kbBuildCheckUpdates => '检查更新';
+
+  @override
+  String get kbBuildFromSource => '从源仓库构建';
+
+  @override
+  String get kbBuildCancel => '取消';
+
+  @override
+  String get kbBuildChecking => '正在检查上游提交…';
+
+  @override
+  String get kbBuildDownloadingZip => '正在下载源包（首次，较大）…';
+
+  @override
+  String get kbBuildDownloadingChanges => '正在下载增量变更文件…';
+
+  @override
+  String get kbBuildExtracting => '正在解压并筛选源数据…';
+
+  @override
+  String get kbBuildSwapping => '正在替换知识库…';
+
+  @override
+  String get kbBuildStageStart => '准备构建';
+
+  @override
+  String get kbBuildStageCopy => '复制旧库';
+
+  @override
+  String get kbBuildStageIncremental => '应用增量变更';
+
+  @override
+  String get kbBuildStageProfiles => '导入角色档案';
+
+  @override
+  String get kbBuildStageVoices => '导入语音';
+
+  @override
+  String get kbBuildStageStructured => '导入结构化表';
+
+  @override
+  String get kbBuildStageStories => '导入剧情';
+
+  @override
+  String get kbBuildStageCoverage => '构建实体覆盖层';
+
+  @override
+  String get kbBuildStageCoverageSpeakers => '正在补全说话人实体…';
+
+  @override
+  String get kbBuildStageCoverageTrie => '正在构建实体索引…';
+
+  @override
+  String get kbBuildStageCoverageScan => '正在扫描角色出场…';
+
+  @override
+  String get kbBuildStageCoverageRare => '正在统计稀有词…';
+
+  @override
+  String get kbBuildStageCoverageProfiles => '正在生成章节画像…';
+
+  @override
+  String get kbBuildStageFts => '重建全文索引';
+
+  @override
+  String get kbBuildIncrementalDone => '增量更新完成，知识库已替换。';
+
+  @override
+  String get kbBuildFullDone => '全量构建完成，知识库已替换。';
+
+  @override
+  String get kbBuildError => '构建失败';
+
+  @override
+  String get kbBuildTokenTitle => 'GitHub Token（可选）';
+
+  @override
+  String get kbBuildTokenDesc =>
+      '填写 GitHub Personal Access Token（ghp_… 或 github_pat_…）可把 API 配额从 60 次/小时提升到 5000 次/小时，避免代理出口限流导致拉取失败。Token 仅存入系统安全存储，不会写入日志。';
+
+  @override
+  String get kbBuildTokenPlaceholder => '粘贴 GitHub Token';
+
+  @override
+  String get kbBuildTokenSave => '保存';
+
+  @override
+  String get kbBuildTokenSaved => 'GitHub Token 已保存。';
+
+  @override
+  String get kbBuildTokenCleared => 'GitHub Token 已清除。';
+
+  @override
+  String get kbBuildTokenSetHint => '已设置 GitHub Token（配额 5000/小时）';
+
+  @override
+  String get materialsPausedTitle => '用户资料导入暂未启用';
+
+  @override
+  String get materialsPausedDesc =>
+      '旧版 PDF/TXT 导入链路已暂停。当前 AI 只使用 GameData 知识库作为证据。';
+
+  @override
+  String get wikiLoadFailed => 'Wiki 页面加载失败';
+
+  @override
+  String get wikiRetry => '重试';
+
+  @override
+  String get wikiErrorDns => '无法解析 Wiki 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
+
+  @override
+  String get wikiErrorTimeout => '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+
+  @override
+  String get wikiErrorOffline => '设备当前没有可用网络连接。';
 }

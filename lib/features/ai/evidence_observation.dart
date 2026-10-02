@@ -1,14 +1,4 @@
 class EvidenceRecord {
-  final String title;
-  final String? section;
-  final String? contentType;
-  final String? sourcePath;
-  final String? rawId;
-  final String retrievalType;
-  final String rankingReason;
-  final String trustNote;
-  final String excerpt;
-  final bool isDirectCandidate;
 
   const EvidenceRecord({
     required this.title,
@@ -22,6 +12,16 @@ class EvidenceRecord {
     required this.excerpt,
     required this.isDirectCandidate,
   });
+  final String title;
+  final String? section;
+  final String? contentType;
+  final String? sourcePath;
+  final String? rawId;
+  final String retrievalType;
+  final String rankingReason;
+  final String trustNote;
+  final String excerpt;
+  final bool isDirectCandidate;
 }
 
 List<EvidenceRecord> parseGameDataEvidence(String observation) {

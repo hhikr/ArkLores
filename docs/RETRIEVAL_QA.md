@@ -1,5 +1,11 @@
 # GameData Retrieval QA
 
+> 状态更新（2026-08）：开发者已在代表性 Android 真机上完成个人验收，覆盖知识库
+> 下载/安装/替换、检索、Summary / Fact-check / Role-play 对话、Wiki 双站浏览与
+> 阅读器、双主题/双语、TalkBack 与横屏等主路径，结果符合预期。下文历史版本记录
+> 中的 "Not verified: Android 真机…" 条目视为已被该轮个人验收关闭；仍开放项统一
+> 维护在本文档 Known Limits。
+
 当前主线使用中文 GameData release DB 作为唯一默认知识源。检索路线是结构化 RAG：
 
 1. 实体 / 别名结构化查询。
@@ -7,8 +13,12 @@
 3. `entity_documents_fts` 全文检索。
 4. `normalized_records` / `lore_chunks` 结构化与 LIKE fallback。
 5. `lore_chunks_fts` 全文检索。
+6. 剧情层（schema 3+）：确定性覆盖层（出场枚举、章节画像、行级原文读取）与
+   `search_story_lines` 原文检索（LIKE；可选向量召回，R12）。
 
-当前主线不使用向量、embedding、TFLite、旧 Wiki seed 或用户 Book 索引。
+向量只用于剧情原文定位（可选表 `story_chunk_vectors`，需在设置中配置向量 API），
+命中后必须读原文才能作为证据。不使用 TFLite、旧 Wiki seed 或用户 Book 索引。
+架构细节见 `AI_ARCHITECTURE.md`。
 
 ## Smoke Queries
 
@@ -35,6 +45,54 @@
 - 低覆盖：回答必须说明“当前知识库只检索到以下片段”。
 - source claim：只有 observation 中出现对应来源时，Agent 才能声称使用了该来源。
 - Book / Wiki：v0.4.5 默认不参与检索，不得把 Book 或 Wiki 说成当前 evidence。
+
+## Story Coverage Layer QA（schema v3，2026-08-24 起）
+
+schema v3 新增确定性覆盖层（构建规则见 `AI_ARCHITECTURE.md` §3.1）。重建或替换
+schema v3 DB 后，除上表 Smoke Queries 外，至少人工检查以下覆盖层查询：
+
+| Query / 操作 | 目的 | 预期 |
+| --- | --- | --- |
+| `search_story_coverage(query=阿米娅)` | 实体出场枚举 | 返回 `Coverage Scopes:` / `Coverage Stories:` 与逐 story 行区间、mention_count；出场包含以说话人身份出现的台词行 |
+| `read_story_lines(story_id=活动某章, max_lines=30)` | 原文行读取与分页 | 返回 `line_index \| speaker \| content`；超页时返回 `Next Page Token`，回传 `page_token` 可续读，尾部返回 `End of Story: yes` |
+| `read_story_lines(story_id=不存在)` | 缺章区分 | 返回 `Story not found`，与"范围内无行"区分 |
+| `get_story_map(scope_id=activity:act21mini)` | 章节画像 | 返回 `Mapped Stories:` 与各章行范围、speaker 集合、Top Entities、抽取式 Summary |
+| Summary 叙事回答尾部 | 已读范围报告 | 回答末尾存在 `Coverage: read=<实际精读 scope 数> \| mapped=<仅浏览画像的 scope 数> \| skipped=<未读+原因>`，且与实际工具调用一致（虚构会被 transform 改写） |
+
+自动覆盖：`test/story_coverage_test.dart`（16 项：run 合并、bigram 提取、mentions/
+profiles/rare_terms 断言、三个工具、coverage transform、Summary 叙事工作流集成）。
+回归门禁：`flutter analyze` No issues、全量 `flutter test`（86 passed / 3 opt-in
+skipped）、既有固定检索 QA 全绿。
+
+## Ask 问答流程 QA（R12 起）
+
+### 离线（每次改动 Agent/检索层都要跑）
+
+- `test/planner_test.dart`：意图解析、去重、进展控制（4 步提醒 / 8 步收尾 / 步数预算）、
+  消歧与 RESELECT、空输出温和收尾。
+- `test/evidence_notebook_test.dart`：READ 实际区间、证据笔记行号校验、引文由代码复制、
+  `unreadCitations`。
+- `test/story_coverage_test.dart`、`test/story_vectors_test.dart`：覆盖层工具、
+  `search_story_lines` 关键词/向量/RRF、向量切块与量化、无向量时的回退。
+- `test/investigation_test.dart`、`test/investigation_ui_test.dart`：结论信封解析与渲染。
+
+### 真机同链路（opt-in，花钱）
+
+`test/live/ask_pipeline_live_test.dart` 驱动 App 的 `askChatProvider`，只替换启动注入的
+provider 和平台路径（命令与环境变量见 CLAUDE.md）。每题输出会话 JSON 与
+`*.summary.json`（生效模式、步数、工具次数、已读章节、标准答案召回、引用数、来源警告、
+token 用量）。
+
+成本规则：先离线复现；每个方面最多 2 个代表性用例，用 `ARKLORES_LIVE_IDS` 逐题串行，
+看完一题再跑下一题；不整批跑 30 题评测。遇到 provider 错误（如 402）harness 自动停止。
+
+| 验收项 | 预期 |
+| --- | --- |
+| 答案有引用 | 至少一条 `story_id.txt:行号` 引用，且全部落在已读区间内（否则重写一次，仍不合法附警告） |
+| 不状态转储 | 预算用尽或停滞时由 writer 基于已读内容作答，不输出内部状态 |
+| 负例 | 未覆盖的实体/事件明确说“未覆盖”，不用模型记忆补齐 |
+| 无向量 key | `ARKLORES_LIVE_NO_EMBEDDING=true` 时 FIND 退回关键词，观察写明原因 |
+| 成本 | 记录 `usage`；R12 参考值见 `AI_ARCHITECTURE.md` §4 |
 
 ## Current Unit Coverage
 
@@ -107,21 +165,91 @@ Additional smoke check:
 
 ## Known Limits
 
-跨 v0.6-v0.9 仍持续有效的 deferred 验收统一维护在此：
+### 已关闭（2026-08 开发者个人真机验收）
 
-- Android 真机上的 Role-play 存档恢复、长对话、取消、双语与 TalkBack。
+以下 Android 真机验收项已由开发者个人完成，结果符合预期：
+
+- Role-play 存档恢复、长对话、取消、双语与 TalkBack。
 - Wiki WebView 原生选区、底部托盘、返回浏览、软键盘及系统选区行为。
-- Summary/Fact-check Wiki context 的真实外部 Chat 与完整 DB 检索矩阵。
 - 证据卡在横屏、极端文字缩放和 TalkBack 下的朗读/操作顺序。
+- 知识库下载、安装、替换、检索与 Summary / Fact-check / Role-play 全链路。
+- v0.9 双主题/双语在代表性 Android 真机上的渲染。
+
+### 仍开放
+
+- Summary / Fact-check Wiki context 的真实外部 Chat 与完整 DB 检索矩阵。
 - 多角色任务参与检索矩阵、低覆盖量化和 `source_path` 到原始文件的可信导航。
 - 正式商店签名；既有 GitHub APK 使用 Android Debug certificate。
-- v0.9 双主题/双语自动截图回读与代表性 Android 真机截图。
+- v0.9 双主题/双语自动截图回读（自动化截图对比管线）。
 
-- Story chunks 当前仍以 FTS / LIKE 为主，没有实体级剧情索引。
+- 中文 FTS（unicode61）基本无效；剧情原文检索依赖 LIKE + 可选向量召回。
 - `肉鸽`、`秘录`、`模组` 等归一化是规则表，不是完整同义词知识库。
 - `莱茵生命`、`萨卡兹王庭` 等宽泛组织 query 当前可命中相关干员档案，但 GameData DB 尚未构建组织级汇总实体。
-- `特蕾西娅` 等变体名现在有基础 alias 候选，但用户提问时是否需要展示候选仍取决于 Agent 调用 `search_local_lore` 的 disambiguation 分支。
-- 真机端到端仍需要用 release asset 或临时 HTTP asset 验证下载、安装、检索、Summary Agent 全链路。
+- 评测集 `test/fixtures/investigation_eval.json` 的标准答案章节是草稿，尚未人工审核。
+- 概括 / 事实核查仍走旧 ReActLoop（R13 迁移）。
+
+以上仍开放项的根因分析与修复方向见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
+
+## 持续 QA Backlog
+
+v0.10 之后的逐版本详细计划已不再在 `implementation_plan.md` 维护；本 backlog 作为
+持续质量清单保留，与 `KNOWN_LIMITATIONS_AND_DEBT.md` 的根因分析配套使用。
+
+v0.9 的 QA 证明了当前 GameData-first MVP 可以工作，但还不能证明它已经是正式可用版本。
+以下 backlog 用于约束正式发布前的质量提升，避免把“单次测试通过”误写成“产品稳定”。
+
+### 数据更新与覆盖
+
+- 检查 App 能展示当前安装 DB 的 game、language、schema version、source commit、
+  finalized time、hash 和记录计数。
+- 验证远程 update manifest 的发现、下载、取消、重试、hash mismatch、gzip 损坏、
+  schema 不兼容和旧 DB 保留。
+- 每次 GameData source commit 更新后运行差异报告，并人工审查实体/alias/story scope 的
+  异常变化。
+- 增加组织、阵营、地点、概念、活动、敌人、材料、语音、秘录、模组、肉鸽和主线剧情的
+  固定 query 矩阵。
+- 明确 Endfield 当前状态：在 Endfield importer 和 QA 未完成前，AI 不能声称使用
+  Endfield GameData 证据。
+
+### Hybrid / Vector Retrieval
+
+R12 已引入剧情向量召回（可选）。目前只有中期评测（召回 0 → 0.63，样本 4 题）和
+2 个代表性真机用例，下面的完整 benchmark 仍未做：
+
+- baseline：当前 structured lookup、alias、FTS、LIKE fallback。
+- candidate：embedding top-k、hybrid merge、reranker 或 proximity rerank。
+- 指标：direct evidence recall、false evidence rate、歧义处理、p50/p95 latency、
+  memory peak、index size、cold start impact。
+- 场景：模糊剧情描述、跨章节角色经历、组织/概念宽泛问题、反事实命题、同名实体、
+  无覆盖问题和长篇梗概。
+- 回退：向量索引缺失、不兼容、损坏或设备不支持时，结果应与现有 SQLite 路线一致可用。
+
+通过标准不是“向量分数更高”，而是固定 QA 的有效证据召回提升，并且不增加不能接受的
+误证据或来源缺失。
+
+### Agent Quality Matrix
+
+Agent QA 需要逐步从 prompt snapshot 扩展为 workflow 质量矩阵：
+
+- Summary：普通角色梗概、指定活动梗概、长剧情压缩、低覆盖提示、引用完整性。
+- Fact-check：支持、反驳、存疑、无法确认、范围/实体双消歧、关系词重试、后续追问。
+- Role-play：角色解析、设定冲突、无证据经历、用户场景隔离、会话记忆压缩、多轮漂移。
+- Provider matrix：至少覆盖不同 OpenAI-compatible provider、reasoning provider 和低成本模型，
+  记录格式遵循、截断、中文表达、工具调用稳定性、延迟和错误正文。
+- Post-check：最终回答中的每个 GameData 来源声明都必须能在 observation 中找到对应
+  `source_path/raw_id/content_type`。
+
+### 性能与正式应用体验
+
+功能真机验收已由开发者个人完成并符合预期（见 Known Limits 已关闭项）；以下性能
+指标量化与正式发布工程仍作为持续工作，在代表性 Android 设备上记录：
+
+- 首次启动、进入 AI 页、知识库状态读取、DB 下载/解压/校验/替换耗时。
+- 常见检索 query 的 p50/p95 延迟和长 query 超时行为。
+- Summary / Fact-check / Role-play 长会话内存、滚动、Markdown 渲染和取消响应。
+- Wiki WebView 双标签切换、返回/前进、选区转交、软键盘和低内存恢复。
+- 横屏、TalkBack、1.6x 及更高文字缩放、中英文、双主题截图回读。
+- release keystore 签名、升级安装、保留设置/会话/DB、隐私与日志策略。
 
 ## v0.6 Role-play QA
 
@@ -222,7 +350,7 @@ Not verified:
 | 短关系词命中很多剧情片段，直接原文被弱相关片段挤出 | 候选原先按 `story_id/raw_id` 排序 | scope/entity/关系词取交集后，按实体名和关系词在 chunk 内的最短距离排序，再应用 `top_k` | synthetic distant-candidate test；finalized DB 固定 QA |
 | provider 输出 `。Action:` 或附加 `Action Query/Tool` 时工具名解析失败 | ReAct key parser 只接受空白边界或吸收后续 metadata | key 支持常见中英文句末标点；Action 只取首行 | punctuated action 和 action metadata tests |
 | 模型未检索就直接回答 | ReAct 默认接受首轮 Final Answer | ReAct 提供 `minimumToolCalls`；Fact-check 设置为 1，其他 Agent 默认 0 | early-final deterministic test；live QA |
-| reasoning provider 在证据返回后截断 | 2048 tokens 同时承载隐藏 reasoning 和可见 ReAct 输出 | Fact-check 单步上限设为 4096，迭代上限设为 7；截断仍作为错误而非不完整答案返回 | truncated response unit test；live QA |
+| reasoning provider 在证据返回后截断 | 2048 tokens 同时承载隐藏 reasoning 和可见 ReAct 输出 | Fact-check 单步上限设为 4096，不设迭代上限（`safetyMaxIterations=1000` 仅防失控）；截断仍作为错误而非不完整答案返回 | truncated response unit test；live QA |
 | provider 400 只显示状态码 | 标准错误正文未被解析 | Chat client 仅提取标准 `error.message`，不记录 key、请求正文或完整错误响应 | analyze/unit suite；不得把凭据写入 fixture |
 
 Live test 默认跳过，避免普通 `flutter test` 产生外部费用或引入模型波动。只有设置

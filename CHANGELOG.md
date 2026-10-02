@@ -4,6 +4,76 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-02
+
+Covers development rounds R0–R12 since v0.9.0. Architecture: `docs/AI_ARCHITECTURE.md`.
+
+### Added
+
+- GameData schema 3/4: deterministic story coverage layer (entity appearance runs over
+  speaker + content, chapter profiles, rare terms, line-level story FTS), speaker entities
+  for NPCs with dialogue; schema 4 skips upstream `[uc]info/` stub trees.
+- Story tools for the Agent: `search_story_coverage`, `get_story_map`, `read_story_lines`,
+  `search_story_lines`, `collect_suspect_evidence`.
+- In-app knowledge base build from the source repository (first download or incremental
+  compare), in a background isolate, validated and atomically swapped.
+- Ask entry with auto / summarize / verify / investigate modes; story investigation mode.
+- Persistent chat sessions (`chat_sessions/` JSON) with history page, resume and delete;
+  optional AI session log toggle.
+- Optional story vector recall: `story_chunk_vectors` table (51,264 chunks, 512-dim int8),
+  configurable embedding API in Settings (default Bailian `qwen3.7-text-embedding`).
+  Without a key, or when the model does not match the DB, search falls back to keywords.
+- Opt-in live test that drives the app's own Ask pipeline (`test/live/ask_pipeline_live_test.dart`)
+  and records token usage per question.
+
+### Changed
+
+- Investigation runs on PlannerLoop (planner / executor / extractor / writer). R12: evidence
+  notes with code-copied quotes, the writer reads the original lines, every line citation is
+  checked against what was actually read, duplicate searches are not re-run, and stalls end
+  in an answer built from what was read instead of a state dump.
+- Mechanical roles (planner, extractor, disambiguator) run with reasoning disabled; the writer
+  keeps reasoning. Output tokens per investigation dropped about 88% at equal answer quality.
+- Shared DB connection for all tools; the store reopens after the DB file is replaced.
+- Removed the death/murder keyword features and the `find_detail_echoes` tool.
+
+### Verification
+
+- Offline suite on Windows: 231 passed, 5 skipped (opt-in live / POSIX-only); `flutter analyze`
+  has one known deprecation info.
+- Fixed GameData retrieval QA passed on the release DB; installer validator accepts it.
+- Live (deepseek flash, vectors on): "who" question 23 steps / 82 s / 11 valid citations;
+  "how" question 8 steps / 31 s, read the gold chapter; fictional-entity negative answered
+  "not covered".
+
+### Release Assets
+
+- `arklores_gamedata_zh.db.gz`: 184507479 bytes, schema 4 with optional vectors, SHA-256
+  `aa1c3650e37f1ec53281dc5c35e7e909da82ad752c05b2cb64b80ea3717ff968`
+  (uncompressed 622948352 bytes, SHA-256
+  `6c331cda39f2756762e0b0ea927a58b0baaf559bc2080c2303b52d915a721c50`).
+- `gamedata_manifest.json`: 1348 bytes, SHA-256
+  `0e78c79c7fc0735eab926913bb4a283608cfeba770383e4dad6e8d8d696aecb4`.
+- `ArkLores-0.10.0.apk`: 40349995 bytes, SHA-256
+  `bc501b1962c6debc2de8788ce21e7cd0d0bd44c52d2f6498cb1281fe14e0f45a`; ARM 32/64-bit, built by
+  GitHub Actions (`.github/workflows/android-release.yml`) from `2353d95` and signed with the
+  new project release key (certificate SHA-256
+  `b1b09ebfd22659b4b246ea87d67ff340a277e8031c14577caa5715519923e364`).
+- Android build toolchain raised to Flutter 3.47's minimums: Gradle 8.14.3, AGP 8.11.1,
+  Kotlin 2.2.20, Java 17.
+
+### Upgrade note
+
+- Earlier APKs were signed with a developer machine's debug key. Android refuses to install an
+  APK signed with a different key over an existing install, so **uninstall the old app once
+  before installing v0.10.0** (local chats and the downloaded knowledge base are removed).
+  Later versions signed with the same project key upgrade in place.
+
+### CI
+
+- `.github/workflows/ci.yml` runs `flutter analyze` and `flutter test` on pull requests and on
+  pushes to `dev`/`main`.
+
 ## [0.9.0] - 2026-07-15
 
 ### Added

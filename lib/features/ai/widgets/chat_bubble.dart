@@ -4,19 +4,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/fact_check_agent.dart';
+import '../../../core/agent/investigation_verdict.dart';
 import '../../../core/agent/react_loop.dart';
+import '../../../core/agent/story_coverage_transform.dart';
 import '../../../core/llm/llm_client.dart';
-import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/l10n/l10n.dart';
+import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../evidence_observation.dart';
+import '../investigation_ui.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
 /// and lazy loading of citations.
 class ChatBubble extends ConsumerStatefulWidget {
-  final ChatMessage message;
 
   const ChatBubble({super.key, required this.message});
+  final ChatMessage message;
 
   @override
   ConsumerState<ChatBubble> createState() => _ChatBubbleState();
@@ -55,6 +58,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 ],
                 if (!isUser && msg.factCheckVerdict != null) ...[
                   _buildVerdictBanner(theme, msg.factCheckVerdict!),
+                  const SizedBox(height: 6),
+                ],
+                if (!isUser && isInvestigationAnswer(msg.content)) ...[
+                  _buildInvestigationSection(theme),
                   const SizedBox(height: 6),
                 ],
 
@@ -129,6 +136,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       RegExp(r'\[FACT_CHECK_VERDICT:[a-z]+\]\s*', caseSensitive: false),
       '',
     );
+    if (isInvestigationAnswer(content)) {
+      content = stripInvestigationMarkers(content);
+    }
     if (content == '[FACT_CHECK_ERROR]') {
       content = context.t.importErrorOccurred;
     } else if (content == '[FACT_CHECK_CANCELED]') {
@@ -141,11 +151,19 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       content = context.t.aiSummaryError;
     } else if (content == '[SUMMARY_CANCELED]') {
       content = context.t.aiSummaryCanceled;
+    } else if (content == '[INVESTIGATION_ERROR]') {
+      content = context.t.aiInvestigationError;
+    } else if (content == '[INVESTIGATION_CANCELED]') {
+      content = context.t.aiCancel;
+    } else if (content == '[ASK_ERROR]') {
+      content = context.t.aiAskError;
+    } else if (content == '[ASK_CANCELED]') {
+      content = context.t.aiAskCanceled;
     }
 
     // Scan for citation UUIDs
     final uuidRegex = RegExp(
-        r'\[([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\]');
+        r'\[([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\]',);
     final matches = uuidRegex.allMatches(content);
     final citationIds = matches.map((m) => m.group(1)!).toSet().toList();
 
@@ -218,7 +236,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   List<String> get _evidenceObservations => widget.message.steps
       .where((step) =>
           step.type == ReActEventType.toolObservation &&
-          step.content.contains('Source Kind: GameData'))
+          step.content.contains('Source Kind: GameData'),)
       .map((step) => step.content)
       .toList(growable: false);
 
@@ -268,10 +286,117 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   color: config.$2,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                )),
+                ),),
           ],
         ),
       ),
+    );
+  }
+
+  /// Investigation answer section (R3b): verdict envelope bar, evidence-chain
+  /// line references and the read-coverage bar.
+  Widget _buildInvestigationSection(AppThemeTokens theme) {
+    final content = widget.message.content;
+    final envelope = parseInvestigationVerdictLine(content);
+    final coverage = parseCoverageReportLine(content);
+    final refs = extractLineReferences(content);
+    final unresolved = envelope == null || envelope.culprit == 'unresolved';
+    final accent = unresolved ? theme.warning : theme.accentPrimary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.12),
+            border: Border(left: BorderSide(color: accent, width: 3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.manage_search_rounded, size: 18, color: accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${context.t.aiInvestigationVerdict}: '
+                      '${envelope?.culprit ?? '-'}',
+                      style: theme.titleFont.copyWith(
+                        color: accent,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (envelope != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '${context.t.aiInvestigationConfidence}: ${envelope.confidence} · '
+                  '${context.t.aiInvestigationBasis}: ${envelope.basis}',
+                  style: theme.bodyFont.copyWith(
+                    color: theme.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (refs.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            context.t.aiInvestigationEvidenceChain,
+            style: theme.bodyFont.copyWith(
+              color: theme.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final ref in refs)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.bgSecondary,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: theme.divider, width: 0.5),
+                  ),
+                  child: Text(
+                    ref,
+                    style: theme.bodyFont.copyWith(
+                      color: theme.textPrimary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+        if (coverage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${context.t.aiInvestigationCoverage}: '
+            '${context.t.aiInvestigationRead}=${coverage.read} · '
+            '${context.t.aiInvestigationMapped}=${coverage.mapped} · '
+            '${context.t.aiInvestigationSkipped}=${coverage.skipped}',
+            style: theme.bodyFont.copyWith(
+              color: theme.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -436,7 +561,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                     style: theme.titleFont.copyWith(
                         color: theme.textPrimary,
                         fontSize: 13,
-                        fontWeight: FontWeight.bold)),
+                        fontWeight: FontWeight.bold,),),
                 _evidenceBadge(theme, coverage),
               ],
             ),
@@ -444,14 +569,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               _metadata(context.t.aiEvidenceSection, record.section!, theme),
             if (record.contentType != null)
               _metadata(
-                  context.t.aiEvidenceContentType, record.contentType!, theme),
+                  context.t.aiEvidenceContentType, record.contentType!, theme,),
             _metadata(
-                context.t.aiEvidenceRetrievalType, record.retrievalType, theme),
+                context.t.aiEvidenceRetrievalType, record.retrievalType, theme,),
             _metadata(
-                context.t.aiEvidenceRankingReason, record.rankingReason, theme),
+                context.t.aiEvidenceRankingReason, record.rankingReason, theme,),
             if (record.sourcePath != null)
               _metadata(
-                  context.t.aiEvidenceSourcePath, record.sourcePath!, theme),
+                  context.t.aiEvidenceSourcePath, record.sourcePath!, theme,),
             if (record.rawId != null)
               _metadata(context.t.aiEvidenceRawId, record.rawId!, theme),
             _metadata(context.t.aiEvidenceTrustNote, record.trustNote, theme),
@@ -459,7 +584,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               const SizedBox(height: 6),
               SelectableText(record.excerpt,
                   style: theme.bodyFont.copyWith(
-                      color: theme.textPrimary, fontSize: 12, height: 1.4)),
+                      color: theme.textPrimary, fontSize: 12, height: 1.4,),),
             ],
           ],
         ),
@@ -471,7 +596,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         padding: const EdgeInsets.only(top: 4),
         child: SelectableText('$label: $value',
             style: theme.bodyFont.copyWith(
-                color: theme.textSecondary, fontSize: 11, height: 1.35)),
+                color: theme.textSecondary, fontSize: 11, height: 1.35,),),
       );
 
   Widget _evidenceBadge(AppThemeTokens theme, String label) => Container(
@@ -485,7 +610,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             style: theme.bodyFont.copyWith(
                 color: theme.accentPrimary,
                 fontSize: 10,
-                fontWeight: FontWeight.bold)),
+                fontWeight: FontWeight.bold,),),
       );
 
   Widget _buildStepRow(AppThemeTokens theme, ReActStep step) {

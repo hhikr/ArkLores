@@ -3,10 +3,10 @@ enum WikiSite {
   prts('prts', 'https://prts.wiki/api.php'),
   endfield('endfield', 'https://warfarin.wiki/cn');
 
+  const WikiSite(this.key, this.apiUrl);
+
   final String key;
   final String apiUrl;
-
-  const WikiSite(this.key, this.apiUrl);
 
   String get displayName {
     switch (this) {
@@ -20,9 +20,6 @@ enum WikiSite {
 
 /// A single Wiki page with its title and extracted text content.
 class WikiPage {
-  final int pageId;
-  final String title;
-  final String content;
 
   const WikiPage({
     required this.pageId,
@@ -30,26 +27,24 @@ class WikiPage {
     required this.content,
   });
 
-  Map<String, dynamic> toMap() => {
-        'page_id': pageId,
-        'title': title,
-        'content': content,
-      };
-
   factory WikiPage.fromMap(Map<String, dynamic> map) => WikiPage(
         pageId: map['page_id'] as int,
         title: map['title'] as String,
         content: map['content'] as String,
       );
+  final int pageId;
+  final String title;
+  final String content;
+
+  Map<String, dynamic> toMap() => {
+        'page_id': pageId,
+        'title': title,
+        'content': content,
+      };
 }
 
 /// Progress reported during a crawl operation.
 class CrawlProgress {
-  final int pagesFetched;
-  final int totalPages;
-  final String currentTitle;
-  final bool isComplete;
-  final String? error;
 
   const CrawlProgress({
     this.pagesFetched = 0,
@@ -58,6 +53,11 @@ class CrawlProgress {
     this.isComplete = false,
     this.error,
   });
+  final int pagesFetched;
+  final int totalPages;
+  final String currentTitle;
+  final bool isComplete;
+  final String? error;
 
   double get fraction =>
       totalPages > 0 ? (pagesFetched / totalPages).clamp(0.0, 1.0) : 0.0;

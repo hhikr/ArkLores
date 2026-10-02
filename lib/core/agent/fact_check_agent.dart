@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../gamedata/game_retrieval.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'react_loop.dart';
@@ -14,34 +15,40 @@ extension FactCheckVerdictWireValue on FactCheckVerdict {
 }
 
 class FactCheckAgent {
+
+  FactCheckAgent({
+    required LLMClient llmClient,
+    GameDataRetrieval? gameDataStore,
+    AgentTool? searchTool,
+  })  : _llmClient = llmClient,
+        _searchTool = searchTool ??
+            SearchLocalLoreTool(gameDataStore: gameDataStore);
   final LLMClient _llmClient;
   final AgentTool _searchTool;
-
-  FactCheckAgent({required LLMClient llmClient, AgentTool? searchTool})
-      : _llmClient = llmClient,
-        _searchTool = searchTool ?? SearchLocalLoreTool();
 
   Stream<ReActEvent> checkClaim({
     required String claim,
     List<Message> history = const [],
+    void Function(int iteration, String rawResponse)? onRawLlmResponse,
+    void Function(String memoryBlock)? onMemoryChanged,
   }) {
     final registry = ToolRegistry()..register(_searchTool);
     final loop = ReActLoop(
       llmClient: _llmClient,
       toolRegistry: registry,
-      maxIterations: 7,
       minimumToolCalls: 1,
-      stepMaxTokens: 4096,
+      stepMaxTokens: 8192,
     );
     return loop.run(
       systemPrompt: buildAgentPrompt(factCheckInstructions),
       chatHistory: history,
       userQuery: claim,
-      agentName: 'FactCheck',
       finalAnswerTransform: (answer, observations) {
         final verdict = validateFactCheckVerdict(answer, observations);
         return _withValidatedVerdict(answer, verdict);
       },
+      onRawLlmResponse: onRawLlmResponse,
+      onMemoryChanged: onMemoryChanged,
     );
   }
 }

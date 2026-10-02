@@ -273,7 +273,7 @@ String assembleOperatorMarkdown(
         sb.writeln('### 模组：$name');
         if (info.isNotEmpty) {
           final cleanInfo = cleanFormattedText(
-              info.replaceAll('<br>', '\n').replaceAll('<br/>', '\n'));
+              info.replaceAll('<br>', '\n').replaceAll('<br/>', '\n'),);
           sb.writeln('$cleanInfo\n');
         }
       }

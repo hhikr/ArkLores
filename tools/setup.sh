@@ -24,6 +24,14 @@ readonly DEFAULT_GAMEDATA_OUTPUT="build/gamedata_mobile"
 readonly ANDROID_API_LEVEL="36"
 readonly ANDROID_BUILD_TOOLS="34.0.0"
 
+# GameData schema version required by the current App (schema 4, R3 follow-up
+# data fix: importer skips the `[uc]info` story-stub tree and groups obt
+# stories under obt:<group>). The App installer rejects any DB whose
+# gamedata_manifest schema_version differs from this value, so old schema-3
+# builds (which may contain duplicated `[uc]info` stub rows) cannot be
+# installed.
+readonly REQUIRED_GAMEDATA_SCHEMA="4"
+
 # ─── 颜色输出 ────────────────────────────────────────────────────
 
 RED='\033[0;31m';     GREEN='\033[0;32m'
@@ -158,6 +166,62 @@ sha256_file() {
   fi
 }
 
+# Reads gamedata_manifest.schema_version from a gzip-compressed SQLite DB.
+# Prints the schema string; exits 1 when it cannot be determined.
+gamedata_schema_version() {
+  local gz_path="$1"
+  python3 - "$gz_path" <<'PY'
+import gzip, sqlite3, sys, tempfile, os
+path = sys.argv[1]
+try:
+    db = gzip.GzipFile(path, 'rb').read()
+    fd, tmp = tempfile.mkstemp(suffix='.db')
+    with os.fdopen(fd, 'wb') as f:
+        f.write(db)
+    con = sqlite3.connect(tmp)
+    try:
+        rows = con.execute(
+            "SELECT value FROM gamedata_manifest WHERE key='schema_version'"
+        ).fetchall()
+        if rows:
+            print(rows[0][0])
+        else:
+            print('')
+            sys.exit(1)
+    finally:
+        con.close()
+        os.unlink(tmp)
+except Exception as e:
+    sys.stderr.write(f"无法读取 GameData schema_version: {e}\n")
+    sys.exit(1)
+PY
+}
+
+# Verifies a local (reused or freshly built) gzip DB matches the schema
+# required by the current App (REQUIRED_GAMEDATA_SCHEMA). Exits when it does
+# not, guiding the user to rebuild a schema-4 database.
+check_gamedata_schema() {
+  local gz_path="$1"
+  if [ ! -f "$gz_path" ]; then
+    log_err "GameData 压缩包不存在: $gz_path"
+    exit 1
+  fi
+  local schema
+  schema="$(gamedata_schema_version "$gz_path" 2>/dev/null || true)"
+  if [ -z "$schema" ]; then
+    log_err "无法确定 GameData 压缩包的 schema_version: $gz_path"
+    exit 1
+  fi
+  if [ "$schema" != "$REQUIRED_GAMEDATA_SCHEMA" ]; then
+    log_err "GameData schema 不兼容: 当前 App 需要 schema $REQUIRED_GAMEDATA_SCHEMA，"
+    log_err "但此数据库是 schema $schema（旧版本构建）。"
+    log_err "请用当前分支的 build_gamedata_database.dart 重新构建 schema $REQUIRED_GAMEDATA_SCHEMA DB，"
+    log_err "或复用已用当前分支构建的 v$REQUIRED_GAMEDATA_SCHEMA .db.gz。"
+    exit 1
+  fi
+  log_ok "GameData schema $schema 通过校验"
+}
+
 detect_host_ip() {
   if command -v ip &>/dev/null; then
     ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}'
@@ -275,6 +339,9 @@ prepare_gamedata_defines() {
         exit 1
       fi
     fi
+    log_warn "远程 GameData URL 无法在本地读取其 schema_version；"
+    log_warn "请确保该地址指向 schema $REQUIRED_GAMEDATA_SCHEMA 的 .db.gz"
+    log_warn "(旧 schema 2 库会被 App 安装器拒绝)。"
     if [ "$ALLOW_UNVERIFIED_GAMEDATA" = true ]; then
       log_warn "已显式允许跳过 GameData SHA256 校验；此模式仅限临时开发。"
     fi
@@ -305,6 +372,7 @@ prepare_gamedata_defines() {
       log_err "已有 GameData gzip 校验失败: $asset_path"
       exit 1
     fi
+    check_gamedata_schema "$asset_path"
     GAMEDATA_SHA="$(sha256_file "$asset_path")"
     start_gamedata_http_server "$(dirname "$asset_path")" "$GAMEDATA_PORT"
     if setup_gamedata_adb_reverse; then
@@ -354,6 +422,7 @@ prepare_gamedata_defines() {
   log_info "正在压缩 GameData DB..."
   gzip -c "$db_path" > "$gz_path"
   GAMEDATA_SHA="$(sha256_file "$gz_path")"
+  check_gamedata_schema "$gz_path"
 
   start_gamedata_http_server "$output_dir" "$GAMEDATA_PORT"
   if setup_gamedata_adb_reverse; then

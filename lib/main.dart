@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/agent/agent_logger.dart';
+import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
 import 'features/settings/api_settings_page.dart';
+import 'features/settings/app_icon_service.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
 import 'features/settings/settings_service.dart';
@@ -13,6 +16,7 @@ import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/industrial_ui.dart';
+import 'shared/widgets/smooth_page_route.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,11 +39,59 @@ void main() async {
     debugPrint('[Startup] Error loading API config: $e');
   }
 
+  var embeddingConfig = defaultEmbeddingConfig;
+  try {
+    embeddingConfig = await settingsService.loadEmbeddingConfig();
+  } catch (e) {
+    debugPrint('[Startup] Error loading embedding config: $e');
+  }
+
+  var mainTabIndex = 0;
+  try {
+    mainTabIndex = await settingsService.loadMainTabIndex();
+  } catch (e) {
+    debugPrint('[Startup] Error loading main tab index: $e');
+  }
+
+  var appTheme = AppTheme.ark;
+  try {
+    appTheme = await settingsService.loadTheme();
+  } catch (e) {
+    debugPrint('[Startup] Error loading theme: $e');
+  }
+
+  var appLocale = SupportedLocale.zh;
+  try {
+    appLocale = await settingsService.loadLocale();
+  } catch (e) {
+    debugPrint('[Startup] Error loading locale: $e');
+  }
+
+  try {
+    await AppIconService.setIcon(await settingsService.loadAppLauncherIcon());
+  } catch (e) {
+    debugPrint('[Startup] Error applying launcher icon: $e');
+  }
+
+  // Apply the user's per-session AI log toggle before any agent runs.
+  var sessionLogsEnabled = false;
+  try {
+    sessionLogsEnabled = await settingsService.loadSessionLogsEnabled();
+    AgentLogger.setEnabled(sessionLogsEnabled);
+  } catch (e) {
+    debugPrint('[Startup] Error loading session log toggle: $e');
+  }
+
   runApp(
     ProviderScope(
       overrides: [
         onboardingDoneProvider.overrideWithValue(onboardingDone),
         initialApiConfigProvider.overrideWithValue(apiConfig),
+        initialEmbeddingConfigProvider.overrideWithValue(embeddingConfig),
+        initialMainTabIndexProvider.overrideWithValue(mainTabIndex),
+        initialThemeProvider.overrideWithValue(appTheme),
+        initialLocaleProvider.overrideWithValue(appLocale),
+        initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
       ],
       child: const ArkLoresApp(),
     ),
@@ -61,7 +113,7 @@ class ArkLoresApp extends ConsumerWidget {
     return MaterialApp(
       title: 'ArkLores',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
+      themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
       darkTheme: appTheme,
       theme: appTheme,
       locale: locale.flutterLocale,
@@ -81,14 +133,14 @@ class ArkLoresApp extends ConsumerWidget {
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/knowledge-base':
-            return MaterialPageRoute(
-              builder: (_) => const KnowledgeBasePage(),
+            return smoothPageRoute(
               settings: settings,
+              builder: (_) => const KnowledgeBasePage(),
             );
           case '/api-settings':
-            return MaterialPageRoute(
-              builder: (_) => const ApiSettingsPage(),
+            return smoothPageRoute(
               settings: settings,
+              builder: (_) => const ApiSettingsPage(),
             );
           default:
             return null;

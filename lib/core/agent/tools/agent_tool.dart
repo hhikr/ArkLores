@@ -1,13 +1,13 @@
 /// Result returned by a tool when it needs to separate LLM-visible output from
 /// developer diagnostics.
 class ToolExecutionResult {
-  final String observation;
-  final String? debugLog;
 
   const ToolExecutionResult({
     required this.observation,
     this.debugLog,
   });
+  final String observation;
+  final String? debugLog;
 }
 
 /// Abstract class representing a tool that can be used by AI agents.

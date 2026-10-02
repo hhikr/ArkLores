@@ -62,7 +62,8 @@ import 'app_localizations_zh.dart';
 /// be consistent with the languages listed in the AppLocalizations.supportedLocales
 /// property.
 abstract class AppLocalizations {
-  AppLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  AppLocalizations(String locale)
+      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -70,7 +71,8 @@ abstract class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -82,7 +84,8 @@ abstract class AppLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
+      <LocalizationsDelegate<dynamic>>[
     delegate,
     GlobalMaterialLocalizations.delegate,
     GlobalCupertinoLocalizations.delegate,
@@ -206,8 +209,20 @@ abstract class AppLocalizations {
   /// No description provided for @settingsApiSettingsDesc.
   ///
   /// In en, this message translates to:
-  /// **'Configure Chat provider'**
+  /// **'Configure the chat provider'**
   String get settingsApiSettingsDesc;
+
+  /// No description provided for @settingsSessionLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'Save AI conversations'**
+  String get settingsSessionLogs;
+
+  /// No description provided for @settingsSessionLogsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.'**
+  String get settingsSessionLogsDesc;
 
   /// No description provided for @settingsKnowledgeBase.
   ///
@@ -244,6 +259,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Used for AI conversations (Fact Check, Summary, Roleplay).'**
   String get apiSettingsChatDesc;
+
+  /// No description provided for @apiSettingsEmbeddingSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Embedding API (optional)'**
+  String get apiSettingsEmbeddingSection;
+
+  /// No description provided for @apiSettingsEmbeddingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enables semantic story-line recall for investigations. Must use the same model as the installed knowledge base vectors (e.g. Alibaba Cloud Bailian qwen3.7-text-embedding). Leave the key empty to use keyword search only.'**
+  String get apiSettingsEmbeddingDesc;
 
   /// No description provided for @apiSettingsUseSameProvider.
   ///
@@ -542,7 +569,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiChatTitle.
   ///
   /// In en, this message translates to:
-  /// **'AI Chat'**
+  /// **'Lore Advisor'**
   String get aiChatTitle;
 
   /// No description provided for @aiChatSubtitle.
@@ -599,6 +626,24 @@ abstract class AppLocalizations {
   /// **'Use the selected text as the claim to check'**
   String get wikiSendToFactCheckDesc;
 
+  /// No description provided for @wikiReaderMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Reader mode'**
+  String get wikiReaderMode;
+
+  /// No description provided for @wikiReaderFontSmaller.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller text'**
+  String get wikiReaderFontSmaller;
+
+  /// No description provided for @wikiReaderFontLarger.
+  ///
+  /// In en, this message translates to:
+  /// **'Larger text'**
+  String get wikiReaderFontLarger;
+
   /// No description provided for @bookmarksTitle.
   ///
   /// In en, this message translates to:
@@ -641,11 +686,11 @@ abstract class AppLocalizations {
   /// **'View in Wiki'**
   String get citationViewInWiki;
 
-  /// No description provided for @onboardingSkip.
+  /// No description provided for @onboardingNotNow.
   ///
   /// In en, this message translates to:
-  /// **'Skip'**
-  String get onboardingSkip;
+  /// **'Not now'**
+  String get onboardingNotNow;
 
   /// No description provided for @onboardingWelcomeTitle.
   ///
@@ -737,6 +782,108 @@ abstract class AppLocalizations {
   /// **'Replay the first-launch guide to configure the app'**
   String get settingsShowOnboardingDesc;
 
+  /// No description provided for @aiTabAsk.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask AI'**
+  String get aiTabAsk;
+
+  /// No description provided for @aiModeAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get aiModeAuto;
+
+  /// No description provided for @aiModeAutoDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'AI picks the best mode (summarize / verify / investigate)'**
+  String get aiModeAutoDesc;
+
+  /// No description provided for @aiModeSummarize.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize'**
+  String get aiModeSummarize;
+
+  /// No description provided for @aiModeSummarizeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize known lore: characters, events, factions, timeline'**
+  String get aiModeSummarizeDesc;
+
+  /// No description provided for @aiModeVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify'**
+  String get aiModeVerify;
+
+  /// No description provided for @aiModeVerifyDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Judge whether a claim is true (supported / refuted)'**
+  String get aiModeVerifyDesc;
+
+  /// No description provided for @aiModeInvestigate.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigate'**
+  String get aiModeInvestigate;
+
+  /// No description provided for @aiModeInvestigateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Cross-chapter reasoning: culprit, cause, foreshadowing, truth'**
+  String get aiModeInvestigateDesc;
+
+  /// No description provided for @aiAskSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers are grounded in installed GameData story text only'**
+  String get aiAskSource;
+
+  /// No description provided for @aiAskEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask any lore question — summarize, verify, or dig deeper; auto mode picks the approach for you.'**
+  String get aiAskEmpty;
+
+  /// No description provided for @aiAskInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask any lore question...'**
+  String get aiAskInputPlaceholder;
+
+  /// No description provided for @aiAskSuggestionAmiya.
+  ///
+  /// In en, this message translates to:
+  /// **'Who is Amiya?'**
+  String get aiAskSuggestionAmiya;
+
+  /// No description provided for @aiAskSuggestionVerify.
+  ///
+  /// In en, this message translates to:
+  /// **'Is Amiya the public leader of Rhodes Island?'**
+  String get aiAskSuggestionVerify;
+
+  /// No description provided for @aiAskSuggestionInvestigate.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened to Miogre\'s death?'**
+  String get aiAskSuggestionInvestigate;
+
+  /// No description provided for @aiAskError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to answer. Please retry.'**
+  String get aiAskError;
+
+  /// No description provided for @aiAskCanceled.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer canceled.'**
+  String get aiAskCanceled;
+
   /// No description provided for @aiTabFactCheck.
   ///
   /// In en, this message translates to:
@@ -749,11 +896,101 @@ abstract class AppLocalizations {
   /// **'Summary'**
   String get aiTabSummary;
 
+  /// No description provided for @aiTabInvestigation.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation'**
+  String get aiTabInvestigation;
+
   /// No description provided for @aiTabRoleplay.
   ///
   /// In en, this message translates to:
   /// **'Roleplay'**
   String get aiTabRoleplay;
+
+  /// No description provided for @aiInvestigationSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation scope: installed GameData story text only (appearance enumeration + line-level reading + cross-chapter echoes)'**
+  String get aiInvestigationSource;
+
+  /// No description provided for @aiInvestigationEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a cross-chapter causality or culprit question. The investigation enumerates appearances, reads key chapters, locates cross-chapter details, and compares evidence per suspect before concluding with an evidence chain.'**
+  String get aiInvestigationEmpty;
+
+  /// No description provided for @aiInvestigationInputPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Who is responsible for a character\'s death...'**
+  String get aiInvestigationInputPlaceholder;
+
+  /// No description provided for @aiInvestigationSuggestionDeath.
+  ///
+  /// In en, this message translates to:
+  /// **'What is the truth behind Theresis\'s death'**
+  String get aiInvestigationSuggestionDeath;
+
+  /// No description provided for @aiInvestigationSuggestionWeapon.
+  ///
+  /// In en, this message translates to:
+  /// **'Key weapon clues in a death scene'**
+  String get aiInvestigationSuggestionWeapon;
+
+  /// No description provided for @aiInvestigationVerdict.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation verdict'**
+  String get aiInvestigationVerdict;
+
+  /// No description provided for @aiInvestigationConfidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Confidence'**
+  String get aiInvestigationConfidence;
+
+  /// No description provided for @aiInvestigationBasis.
+  ///
+  /// In en, this message translates to:
+  /// **'Basis'**
+  String get aiInvestigationBasis;
+
+  /// No description provided for @aiInvestigationEvidenceChain.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence chain references'**
+  String get aiInvestigationEvidenceChain;
+
+  /// No description provided for @aiInvestigationCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Coverage'**
+  String get aiInvestigationCoverage;
+
+  /// No description provided for @aiInvestigationRead.
+  ///
+  /// In en, this message translates to:
+  /// **'read'**
+  String get aiInvestigationRead;
+
+  /// No description provided for @aiInvestigationMapped.
+  ///
+  /// In en, this message translates to:
+  /// **'mapped'**
+  String get aiInvestigationMapped;
+
+  /// No description provided for @aiInvestigationSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'skipped'**
+  String get aiInvestigationSkipped;
+
+  /// No description provided for @aiInvestigationError.
+  ///
+  /// In en, this message translates to:
+  /// **'Investigation failed. Please retry.'**
+  String get aiInvestigationError;
 
   /// No description provided for @aiFactCheckSource.
   ///
@@ -1013,6 +1250,60 @@ abstract class AppLocalizations {
   /// **'Clear'**
   String get aiClearConfirmBtn;
 
+  /// No description provided for @aiNewConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get aiNewConversation;
+
+  /// No description provided for @aiHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat History'**
+  String get aiHistoryTitle;
+
+  /// No description provided for @aiHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.'**
+  String get aiHistoryEmpty;
+
+  /// No description provided for @aiHistoryContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get aiHistoryContinue;
+
+  /// No description provided for @aiHistoryView.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get aiHistoryView;
+
+  /// No description provided for @aiHistoryDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get aiHistoryDelete;
+
+  /// No description provided for @aiHistoryDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this conversation? This cannot be undone.'**
+  String get aiHistoryDeleteConfirm;
+
+  /// No description provided for @aiHistoryCorrupt.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrupt session file'**
+  String get aiHistoryCorrupt;
+
+  /// No description provided for @aiHistoryTurns.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} turns'**
+  String aiHistoryTurns(int count);
+
   /// No description provided for @aiRoleplayChoose.
   ///
   /// In en, this message translates to:
@@ -1114,9 +1405,496 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Generation canceled.'**
   String get aiRoleplayCanceled;
+
+  /// No description provided for @settingsAppIcon.
+  ///
+  /// In en, this message translates to:
+  /// **'App icon'**
+  String get settingsAppIcon;
+
+  /// No description provided for @settingsIconLightLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Light icon'**
+  String get settingsIconLightLabel;
+
+  /// No description provided for @settingsIconDarkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark icon'**
+  String get settingsIconDarkLabel;
+
+  /// No description provided for @settingsIconLightShort.
+  ///
+  /// In en, this message translates to:
+  /// **'LIGHT'**
+  String get settingsIconLightShort;
+
+  /// No description provided for @settingsIconDarkShort.
+  ///
+  /// In en, this message translates to:
+  /// **'DARK'**
+  String get settingsIconDarkShort;
+
+  /// No description provided for @settingsIconUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime icon switching is not supported on this platform. Settings were saved.'**
+  String get settingsIconUnsupported;
+
+  /// No description provided for @settingsWikiSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Wiki Sources'**
+  String get settingsWikiSources;
+
+  /// No description provided for @settingsWikiSourcesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit built-in Wiki URLs or add custom Wiki entries.'**
+  String get settingsWikiSourcesDesc;
+
+  /// No description provided for @wikiSourcesAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Wiki'**
+  String get wikiSourcesAddTitle;
+
+  /// No description provided for @wikiSourcesEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Wiki'**
+  String get wikiSourcesEditTitle;
+
+  /// No description provided for @wikiSourcesNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get wikiSourcesNameLabel;
+
+  /// No description provided for @wikiSourcesIconUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Icon URL (optional)'**
+  String get wikiSourcesIconUrlLabel;
+
+  /// No description provided for @wikiSourcesEndfieldPreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield Wiki presets'**
+  String get wikiSourcesEndfieldPreset;
+
+  /// No description provided for @wikiSourcesReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get wikiSourcesReset;
+
+  /// No description provided for @wikiSourcesEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get wikiSourcesEdit;
+
+  /// No description provided for @wikiSourcesDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get wikiSourcesDelete;
+
+  /// No description provided for @wikiSourcesCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get wikiSourcesCancel;
+
+  /// No description provided for @wikiSourcesSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get wikiSourcesSave;
+
+  /// No description provided for @wikiSourcesNameRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a Wiki name.'**
+  String get wikiSourcesNameRequired;
+
+  /// No description provided for @wikiSourcesUrlRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid URL.'**
+  String get wikiSourcesUrlRequired;
+
+  /// No description provided for @kbStructuredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData structured knowledge base'**
+  String get kbStructuredTitle;
+
+  /// No description provided for @kbScopeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The AI uses only the Chinese GameData knowledge base as evidence: entities, aliases, raw records, story text and search indexes, plus optional story vectors. Wiki pages and imported materials are not used as evidence.'**
+  String get kbScopeDescription;
+
+  /// No description provided for @kbStatusError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to read GameData status: {error}'**
+  String kbStatusError(String error);
+
+  /// No description provided for @kbInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData main knowledge base installed'**
+  String get kbInstalled;
+
+  /// No description provided for @kbNoAssetUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'This build has no GameData release asset URL configured'**
+  String get kbNoAssetUrl;
+
+  /// No description provided for @kbErrorInvalidUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.'**
+  String get kbErrorInvalidUrl;
+
+  /// No description provided for @kbErrorTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Switch networks, or make sure the temporary HTTP server and the phone are on the same network.'**
+  String get kbErrorTimeout;
+
+  /// No description provided for @kbErrorNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'The knowledge base file was not found on the server (the new version may not be public yet). Please try again later.'**
+  String get kbErrorNotFound;
+
+  /// No description provided for @kbErrorChecksum.
+  ///
+  /// In en, this message translates to:
+  /// **'GameData DB checksum failed. The file may be corrupted or the SHA256 does not match the build parameters.'**
+  String get kbErrorChecksum;
+
+  /// No description provided for @kbDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to download the GameData main knowledge base: {error}'**
+  String kbDownloadFailed(String error);
+
+  /// No description provided for @kbNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed'**
+  String get kbNotInstalled;
+
+  /// No description provided for @kbDevAssetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Download the published knowledge base (it is unpacked after download; keep about 1 GB of free space).'**
+  String get kbDevAssetHint;
+
+  /// No description provided for @kbDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get kbDownloading;
+
+  /// No description provided for @kbDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get kbDownload;
+
+  /// No description provided for @kbStatEntities.
+  ///
+  /// In en, this message translates to:
+  /// **'Entities'**
+  String get kbStatEntities;
+
+  /// No description provided for @kbStatRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw records'**
+  String get kbStatRecords;
+
+  /// No description provided for @kbStatChunks.
+  ///
+  /// In en, this message translates to:
+  /// **'Document chunks'**
+  String get kbStatChunks;
+
+  /// No description provided for @kbStatSourceCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Source commit'**
+  String get kbStatSourceCommit;
+
+  /// No description provided for @kbBuildSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Build from source repo'**
+  String get kbBuildSectionTitle;
+
+  /// No description provided for @kbBuildSectionDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull the latest unpacked data from Kengxxiao/ArknightsGameData and build or incrementally update the knowledge base on this device. Requires network; ~1.5–2 GB free space for the first build.'**
+  String get kbBuildSectionDesc;
+
+  /// No description provided for @kbBuildLatestCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest commit'**
+  String get kbBuildLatestCommit;
+
+  /// No description provided for @kbBuildInstalledCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed commit'**
+  String get kbBuildInstalledCommit;
+
+  /// No description provided for @kbBuildCheckUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get kbBuildCheckUpdates;
+
+  /// No description provided for @kbBuildFromSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Build from source'**
+  String get kbBuildFromSource;
+
+  /// No description provided for @kbBuildCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get kbBuildCancel;
+
+  /// No description provided for @kbBuildChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking upstream commits…'**
+  String get kbBuildChecking;
+
+  /// No description provided for @kbBuildDownloadingZip.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading source bundle (first time, large)…'**
+  String get kbBuildDownloadingZip;
+
+  /// No description provided for @kbBuildDownloadingChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading incremental changes…'**
+  String get kbBuildDownloadingChanges;
+
+  /// No description provided for @kbBuildExtracting.
+  ///
+  /// In en, this message translates to:
+  /// **'Extracting and filtering source data…'**
+  String get kbBuildExtracting;
+
+  /// No description provided for @kbBuildSwapping.
+  ///
+  /// In en, this message translates to:
+  /// **'Replacing the knowledge base…'**
+  String get kbBuildSwapping;
+
+  /// No description provided for @kbBuildStageStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing build'**
+  String get kbBuildStageStart;
+
+  /// No description provided for @kbBuildStageCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying existing database'**
+  String get kbBuildStageCopy;
+
+  /// No description provided for @kbBuildStageIncremental.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying incremental changes'**
+  String get kbBuildStageIncremental;
+
+  /// No description provided for @kbBuildStageProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing character profiles'**
+  String get kbBuildStageProfiles;
+
+  /// No description provided for @kbBuildStageVoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing voices'**
+  String get kbBuildStageVoices;
+
+  /// No description provided for @kbBuildStageStructured.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing structured tables'**
+  String get kbBuildStageStructured;
+
+  /// No description provided for @kbBuildStageStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing stories'**
+  String get kbBuildStageStories;
+
+  /// No description provided for @kbBuildStageCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Building entity coverage layer'**
+  String get kbBuildStageCoverage;
+
+  /// No description provided for @kbBuildStageCoverageSpeakers.
+  ///
+  /// In en, this message translates to:
+  /// **'Expanding speaker entities…'**
+  String get kbBuildStageCoverageSpeakers;
+
+  /// No description provided for @kbBuildStageCoverageTrie.
+  ///
+  /// In en, this message translates to:
+  /// **'Building entity index…'**
+  String get kbBuildStageCoverageTrie;
+
+  /// No description provided for @kbBuildStageCoverageScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning character appearances…'**
+  String get kbBuildStageCoverageScan;
+
+  /// No description provided for @kbBuildStageCoverageRare.
+  ///
+  /// In en, this message translates to:
+  /// **'Counting rare terms…'**
+  String get kbBuildStageCoverageRare;
+
+  /// No description provided for @kbBuildStageCoverageProfiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing chapter profiles…'**
+  String get kbBuildStageCoverageProfiles;
+
+  /// No description provided for @kbBuildStageFts.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuilding full-text indexes'**
+  String get kbBuildStageFts;
+
+  /// No description provided for @kbBuildIncrementalDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Incremental update complete; the knowledge base has been replaced.'**
+  String get kbBuildIncrementalDone;
+
+  /// No description provided for @kbBuildFullDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Full build complete; the knowledge base has been replaced.'**
+  String get kbBuildFullDone;
+
+  /// No description provided for @kbBuildError.
+  ///
+  /// In en, this message translates to:
+  /// **'Build failed'**
+  String get kbBuildError;
+
+  /// No description provided for @kbBuildTokenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token (optional)'**
+  String get kbBuildTokenTitle;
+
+  /// No description provided for @kbBuildTokenDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a GitHub Personal Access Token (ghp_… or github_pat_…) to raise the API quota from 60 to 5000 requests/hour and avoid rate-limit failures on shared proxy egress IPs. The token is stored in OS secure storage and never logged.'**
+  String get kbBuildTokenDesc;
+
+  /// No description provided for @kbBuildTokenPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste GitHub token'**
+  String get kbBuildTokenPlaceholder;
+
+  /// No description provided for @kbBuildTokenSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get kbBuildTokenSave;
+
+  /// No description provided for @kbBuildTokenSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token saved.'**
+  String get kbBuildTokenSaved;
+
+  /// No description provided for @kbBuildTokenCleared.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token cleared.'**
+  String get kbBuildTokenCleared;
+
+  /// No description provided for @kbBuildTokenSetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub token set (quota 5000/hr)'**
+  String get kbBuildTokenSetHint;
+
+  /// No description provided for @materialsPausedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'User material import is not enabled yet'**
+  String get materialsPausedTitle;
+
+  /// No description provided for @materialsPausedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The legacy PDF/TXT import pipeline is paused. The AI currently uses only the GameData knowledge base as evidence.'**
+  String get materialsPausedDesc;
+
+  /// No description provided for @wikiLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Wiki page failed to load'**
+  String get wikiLoadFailed;
+
+  /// No description provided for @wikiRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get wikiRetry;
+
+  /// No description provided for @wikiErrorDns.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not resolve the Wiki domain. Check your network, DNS, or proxy and retry.'**
+  String get wikiErrorDns;
+
+  /// No description provided for @wikiErrorTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Switch networks or check that your proxy/VPN is connected, then retry.'**
+  String get wikiErrorTimeout;
+
+  /// No description provided for @wikiErrorOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'The device currently has no network connection.'**
+  String get wikiErrorOffline;
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -1125,25 +1903,25 @@ class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> 
   }
 
   @override
-  bool isSupported(Locale locale) => <String>['en', 'zh'].contains(locale.languageCode);
+  bool isSupported(Locale locale) =>
+      <String>['en', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
-
-
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en': return AppLocalizationsEn();
-    case 'zh': return AppLocalizationsZh();
+    case 'en':
+      return AppLocalizationsEn();
+    case 'zh':
+      return AppLocalizationsZh();
   }
 
   throw FlutterError(
-    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-    'an issue with the localizations generation tool. Please file an issue '
-    'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.'
-  );
+      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+      'an issue with the localizations generation tool. Please file an issue '
+      'on GitHub with a reproducible sample app and the gen-l10n configuration '
+      'that was used.');
 }

@@ -11,6 +11,12 @@ import 'wiki_crawler.dart' show CrawlerException;
 /// Fetches structured data directly from the Remix `.data` JSON endpoints
 /// to prevent scraping fragile HTML pages.
 class WarfarinWikiCrawler {
+
+  WarfarinWikiCrawler({
+    http.Client? client,
+    Duration? requestDelay,
+  })  : _client = client ?? http.Client(),
+        _requestDelay = requestDelay ?? const Duration(milliseconds: 200);
   final http.Client _client;
   final Duration _requestDelay;
 
@@ -20,12 +26,6 @@ class WarfarinWikiCrawler {
 
   Duration get requestDelay => _requestDelay;
 
-  WarfarinWikiCrawler({
-    http.Client? client,
-    Duration? requestDelay,
-  })  : _client = client ?? http.Client(),
-        _requestDelay = requestDelay ?? const Duration(milliseconds: 200);
-
   // ────────────────────────────────────────────────────────────────
   // Response Extraction Helpers
   // ────────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ class WarfarinWikiCrawler {
   /// Extracts listing items from a decoded Remix index response,
   /// handling both `response` as direct List and `response.data` as List.
   List<WarfarinListingItem> _extractListingItems(
-      Map<String, dynamic>? indexData) {
+      Map<String, dynamic>? indexData,) {
     if (indexData == null) return [];
     final rawResponse = _unwrapRemixResponse(indexData);
     List<dynamic> rawList;
@@ -507,9 +507,9 @@ class WarfarinWikiCrawler {
 
 /// A listing item from Warfarin Wiki index endpoints.
 class WarfarinListingItem {
+  const WarfarinListingItem({required this.slug, required this.name});
   final String slug;
   final String name;
-  const WarfarinListingItem({required this.slug, required this.name});
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -546,7 +546,7 @@ Map<String, dynamic> decodeRemixStream(List<dynamic> arr) {
 
     if (val is Map) {
       final refKeys =
-          val.keys.where((k) => k is String && k.startsWith('_')).toList();
+          val.keys.whereType<String>().where((k) => k.startsWith('_')).toList();
 
       if (refKeys.isNotEmpty) {
         final built = <String, dynamic>{};
@@ -563,7 +563,7 @@ Map<String, dynamic> decodeRemixStream(List<dynamic> arr) {
       return val.map((k, v) => MapEntry<String, dynamic>(
             k.toString(),
             resolve(v, depth + 1),
-          ));
+          ),);
     }
 
     if (val is List) {

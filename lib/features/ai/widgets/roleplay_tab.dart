@@ -67,10 +67,10 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
         ],
         Text(context.t.aiRoleplayChoose,
             style: theme.titleFont
-                .copyWith(fontSize: 18, color: theme.textPrimary)),
+                .copyWith(fontSize: 18, color: theme.textPrimary),),
         const SizedBox(height: 6),
         Text(context.t.aiRoleplayChooseDesc,
-            style: theme.bodyFont.copyWith(color: theme.textSecondary)),
+            style: theme.bodyFont.copyWith(color: theme.textSecondary),),
         const SizedBox(height: 16),
         TextField(
           controller: _characterController,
@@ -104,11 +104,11 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
           icon: state.isResolving
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
+                  child: CircularProgressIndicator(strokeWidth: 2),)
               : const Icon(Icons.check_rounded),
           label: Text(state.isResolving
               ? context.t.aiRoleplayResolving
-              : context.t.aiRoleplayStart),
+              : context.t.aiRoleplayStart,),
         ),
         if (state.resolutionStatus == CharacterResolutionStatus.unavailable)
           _status(theme, context.t.aiRoleplayNoDatabase),
@@ -117,7 +117,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
         if (state.candidates.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(context.t.aiRoleplayDisambiguate,
-              style: theme.titleFont.copyWith(color: theme.textPrimary)),
+              style: theme.titleFont.copyWith(color: theme.textPrimary),),
           const SizedBox(height: 8),
           for (final candidate in state.candidates)
             ListTile(
@@ -127,7 +127,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
               subtitle: Text('${candidate.entityType} · ${candidate.entityId}'),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => notifier.selectCandidate(candidate,
-                  scene: _sceneController.text),
+                  scene: _sceneController.text,),
             ),
         ],
       ],
@@ -138,7 +138,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
         padding: const EdgeInsets.only(top: 16),
         child: Text(text,
             style: theme.bodyFont.copyWith(color: theme.danger),
-            textAlign: TextAlign.center),
+            textAlign: TextAlign.center,),
       );
 
   Widget _buildConversation(AppThemeTokens theme, RoleplayState state) {
@@ -153,7 +153,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
           child: Row(
             children: [
               Icon(Icons.verified_user_outlined,
-                  size: 20, color: theme.accentPrimary),
+                  size: 20, color: theme.accentPrimary,),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -161,11 +161,11 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
                   children: [
                     Text(character.name,
                         style: theme.titleFont
-                            .copyWith(color: theme.textPrimary, fontSize: 15)),
+                            .copyWith(color: theme.textPrimary, fontSize: 15),),
                     Text('${character.entityId} · GameData',
                         overflow: TextOverflow.ellipsis,
                         style: theme.bodyFont.copyWith(
-                            color: theme.textSecondary, fontSize: 11)),
+                            color: theme.textSecondary, fontSize: 11,),),
                   ],
                 ),
               ),
@@ -183,7 +183,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
           color: theme.accentPrimary.withValues(alpha: 0.08),
           child: Text(context.t.aiRoleplayGeneratedNotice,
               style: theme.bodyFont
-                  .copyWith(color: theme.textSecondary, fontSize: 11)),
+                  .copyWith(color: theme.textSecondary, fontSize: 11),),
         ),
         Expanded(
           child: state.messages.isEmpty
@@ -193,7 +193,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
                     child: Text(context.t.aiRoleplayEmpty,
                         textAlign: TextAlign.center,
                         style: theme.bodyFont
-                            .copyWith(color: theme.textSecondary)),
+                            .copyWith(color: theme.textSecondary),),
                   ),
                 )
               : ListView.builder(
@@ -223,7 +223,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(notifier),
                     decoration: InputDecoration(
-                        hintText: context.t.aiRoleplayInputPlaceholder),
+                        hintText: context.t.aiRoleplayInputPlaceholder,),
                   ),
                 ),
                 IconButton(
@@ -233,7 +233,7 @@ class _RoleplayTabState extends ConsumerState<RoleplayTab> {
                       state.isSending ? context.t.aiCancel : context.t.aiSend,
                   icon: Icon(state.isSending
                       ? Icons.stop_rounded
-                      : Icons.send_rounded),
+                      : Icons.send_rounded,),
                 ),
               ],
             ),

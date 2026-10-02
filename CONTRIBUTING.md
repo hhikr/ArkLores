@@ -47,17 +47,44 @@ fix(agent): handle empty final answer in react loop
 
 ## Knowledge Base
 
-- 当前版本与最新 release 为 v0.9.0。主知识源是中文 GameData
-  release asset，当前兼容 schema version 为 2。
-- 知识库 DB 由 `tools/build_gamedata_database.dart` 构建。
-- App 端检索使用结构化 lookup、别名、LIKE 和 FTS。
+- 当前版本与最新 release 为 v0.10.0。主知识源是中文 GameData
+  release asset，当前兼容 schema version 为 4。
+- 知识库 DB 由 `tools/build_gamedata_database.dart` 构建；可选剧情向量由
+  `tools/build_story_embeddings.dart` 写入同一个库。
+- App 端检索使用结构化 lookup、别名、LIKE、FTS、确定性覆盖层，以及可选的剧情向量召回
+  （只作定位线索，命中后必须读原文）。架构见 `docs/AI_ARCHITECTURE.md`。
 - Wiki 与用户资料不得被表述为官方游戏原文。
 - Book/用户资料链路当前暂停，恢复前需要重新设计来源标注和可信度策略。
 - scoped story evidence 必须使用稳定 scope/entity ID；普通复合关键词无结果不能作为反证。
-- 默认 Agent 检索只注册 `search_local_lore`；不得恢复 Wiki seed、Book indexing、embedding、
-  vector 或 TFLite 主线，除非另行立项。
-- 真实 Chat 测试必须显式 opt-in，凭据只放在 Git ignored 的 `tools/api_info`，不得写入
-  test fixture、日志、文档或提交历史。
+- 不得恢复 Wiki seed、Book indexing 或 TFLite 主线；向量只用于 GameData 剧情原文的定位。
+- 真实 API 测试必须显式 opt-in，凭据只放在 Git ignored 的 `tools/api_info`、
+  `tools/embedding-apiKey.csv`，不得写入 test fixture、日志、文档或提交历史。
+- 不写针对某类问题或剧情桥段的特判（见 CLAUDE.md）。
+
+## 测试命令
+
+```bash
+flutter test
+flutter analyze
+```
+
+Linux 上 flutter 在 `/home/hhikr/flutter/bin/`；Windows 上在 `C:\src\flutter\bin\`（已加入 PATH）。
+
+真机同链路测试（会产生 API 费用）：
+
+```bash
+ARKLORES_RUN_LIVE_ASK=true ARKLORES_LIVE_EVAL=test/fixtures/investigation_eval.json ARKLORES_LIVE_IDS=frostnova_end flutter test test/live/ask_pipeline_live_test.dart
+```
+
+PowerShell 写法：先 `$env:ARKLORES_RUN_LIVE_ASK='true'` 等逐个设置环境变量，再运行
+`flutter test test/live/ask_pipeline_live_test.dart`。
+
+成本规则：先用 mock 离线复现；每个方面最多 2 个代表性用例，逐题串行，看完结果再跑下一题；
+不整批跑评测。
+
+## 提交署名
+
+- 作者与提交者只能是仓库维护者本人；提交信息不得包含 `Co-Authored-By` 或 AI 署名尾注。
 
 ## PR Checklist
 

@@ -3,11 +3,6 @@ import 'package:uuid/uuid.dart';
 
 /// A single bookmark entry for a Wiki page.
 class Bookmark {
-  final String id;
-  final String title;
-  final String url;
-  final String site;
-  final int createdAt;
 
   const Bookmark({
     required this.id,
@@ -41,6 +36,11 @@ class Bookmark {
       createdAt: map['created_at'] as int,
     );
   }
+  final String id;
+  final String title;
+  final String url;
+  final String site;
+  final int createdAt;
 
   Map<String, dynamic> toMap() {
     return {
@@ -53,7 +53,18 @@ class Bookmark {
   }
 
   /// Human-readable site label.
-  String get siteLabel => site == 'prts' ? 'PRTS Wiki' : 'Endfield Wiki';
+  String get siteLabel {
+    switch (site) {
+      case 'prts':
+        return 'PRTS Wiki';
+      case 'endfield-warfarin':
+      case 'endfield':
+      case 'endfield-fz':
+        return 'Endfield Wiki';
+      default:
+        return site;
+    }
+  }
 
   @override
   String toString() => 'Bookmark($title — $siteLabel)';
@@ -71,10 +82,10 @@ class Bookmark {
 ///
 /// Uses a local `arklores_bookmarks.db` database with a `bookmarks` table.
 class BookmarkService {
-  /// Singleton instance.
-  static final BookmarkService _instance = BookmarkService._();
   factory BookmarkService() => _instance;
   BookmarkService._();
+  /// Singleton instance.
+  static final BookmarkService _instance = BookmarkService._();
 
   Database? _db;
 

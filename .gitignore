@@ -18,7 +18,9 @@
 .packages
 .pub-cache/
 .pub/
-build/
+# Top-level generated output only; nested build/ directories (e.g.
+# lib/core/gamedata/build/) are source code and must stay tracked.
+/build/
 
 # Local databases
 *.db
@@ -40,6 +42,16 @@ logs/
 api_keys.dart
 secrets.dart
 tools/api_info
+tools/*apiKey*
+tools/*api_key*
+tools/github_pat
+tools/*_pat*
+tools/*token*
+tools/*.jks
+tools/*signing*
+*.jks
+*.keystore
+android/key.properties
 
 # IDEs
 .idea/

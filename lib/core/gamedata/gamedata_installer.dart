@@ -7,11 +7,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
+import 'build/gamedata_db_validator.dart';
+
 class GameDataInstallStatus {
-  final bool installed;
-  final String dbPath;
-  final int bytes;
-  final Map<String, String> manifest;
 
   const GameDataInstallStatus({
     required this.installed,
@@ -19,19 +17,20 @@ class GameDataInstallStatus {
     required this.bytes,
     required this.manifest,
   });
+  final bool installed;
+  final String dbPath;
+  final int bytes;
+  final Map<String, String> manifest;
 
   String? get sourceCommit => manifest['source_arknights_commit'];
   String? get builtAt => manifest['built_at'];
   String? get entityCount => manifest['entity_count'];
   String? get recordCount => manifest['normalized_record_count'];
   String? get chunkCount => manifest['lore_chunk_count'];
+  String? get storyLineCount => manifest['story_line_count'];
 }
 
 class GameDataReleaseAsset {
-  final Uri url;
-  final String? sha256;
-  final int? compressedBytes;
-  final int? uncompressedBytes;
 
   const GameDataReleaseAsset({
     required this.url,
@@ -39,9 +38,15 @@ class GameDataReleaseAsset {
     this.compressedBytes,
     this.uncompressedBytes,
   });
+  final Uri url;
+  final String? sha256;
+  final int? compressedBytes;
+  final int? uncompressedBytes;
 }
 
 class GameDataInstaller {
+
+  const GameDataInstaller({this.installDirectory});
   static const _dbFileName = 'arklores_gamedata_zh.db';
   final Directory? installDirectory;
 
@@ -50,8 +55,6 @@ class GameDataInstaller {
   static const _definedUrl = String.fromEnvironment('ARKLORES_GAMEDATA_DB_URL');
   static const _definedSha =
       String.fromEnvironment('ARKLORES_GAMEDATA_DB_SHA256');
-
-  const GameDataInstaller({this.installDirectory});
 
   Future<GameDataInstallStatus> getStatus() async {
     final file = await _dbFile();
@@ -191,64 +194,7 @@ class GameDataInstaller {
     sqflite.Database? db;
     try {
       db = await sqflite.openDatabase(dbPath, readOnly: true);
-      const requiredTables = {
-        'gamedata_manifest',
-        'entities',
-        'entity_aliases',
-        'entity_documents',
-        'normalized_records',
-        'story_lines',
-        'story_scopes',
-        'lore_chunks',
-        'entity_documents_fts',
-        'lore_chunks_fts',
-      };
-      final tableRows = await db.rawQuery(
-        '''
-        SELECT name
-        FROM sqlite_master
-        WHERE type IN ('table', 'virtual') AND name IN (${List.filled(requiredTables.length, '?').join(',')})
-        ''',
-        requiredTables.toList(growable: false),
-      );
-      final presentTables = {
-        for (final row in tableRows) '${row['name']}',
-      };
-      final missingTables = requiredTables.difference(presentTables);
-      if (missingTables.isNotEmpty) {
-        throw StateError(
-          'Downloaded GameData database is missing required table(s): ${missingTables.join(', ')}',
-        );
-      }
-
-      final manifest = {
-        for (final row in await db.query('gamedata_manifest'))
-          '${row['key']}': '${row['value']}',
-      };
-      final schemaVersion = manifest['schema_version'];
-      if (schemaVersion == null || schemaVersion.trim().isEmpty) {
-        throw StateError(
-          'Downloaded GameData database manifest is missing schema_version.',
-        );
-      }
-      if (schemaVersion != '2') {
-        throw StateError(
-          'Downloaded GameData database schema_version $schemaVersion is incompatible; expected 2.',
-        );
-      }
-
-      for (final entry in const {
-        'entity_count': 'entities',
-        'normalized_record_count': 'records',
-        'lore_chunk_count': 'chunks',
-      }.entries) {
-        final value = int.tryParse(manifest[entry.key] ?? '');
-        if (value == null || value <= 0) {
-          throw StateError(
-            'Downloaded GameData database manifest has invalid ${entry.key} ${entry.value} count.',
-          );
-        }
-      }
+      await validateGameDataDatabase(db);
     } finally {
       await db?.close();
     }

@@ -1,6 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arklores/features/wiki/bookmark_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Bookmark model', () {

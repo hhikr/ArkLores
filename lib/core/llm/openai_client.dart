@@ -10,16 +10,55 @@ import 'llm_client.dart';
 ///
 /// Supports custom Base URL for chat-completion providers.
 class OpenAICompatibleClient implements LLMClient {
-  final LLMConfig config;
-  final http.Client _httpClient;
-  final Duration _timeout;
 
   OpenAICompatibleClient({
     required this.config,
     http.Client? httpClient,
     Duration? timeout,
+    this.onCompletion,
+    this.reasoning = true,
   })  : _httpClient = httpClient ?? http.Client(),
-        _timeout = timeout ?? const Duration(seconds: 30);
+        _timeout = timeout ?? defaultRequestTimeout;
+
+  /// Optional observer of every successful completion (e.g. a token meter in
+  /// the live test harness). Never alters the result.
+  final void Function(ChatCompletionResult result)? onCompletion;
+
+  /// R12 cost control: false asks hybrid reasoning models to answer without
+  /// hidden reasoning (measured on deepseek flash: 298 -> 9 output tokens for
+  /// a one-line intent). Mapped to each provider's own switch; for unknown
+  /// providers nothing is sent, so the request can never be rejected.
+  final bool reasoning;
+
+  /// Provider-specific body fields that disable hidden reasoning.
+  Map<String, dynamic> get _noReasoningFields {
+    final endpoint = config.chatEndpoint.toLowerCase();
+    final model = config.chatModel.toLowerCase();
+    if (endpoint.contains('deepseek.com')) {
+      return {
+        'thinking': {'type': 'disabled'},
+      };
+    }
+    if (endpoint.contains('dashscope') || endpoint.contains('aliyuncs.com')) {
+      return {'enable_thinking': false};
+    }
+    if (model.contains('deepseek')) {
+      return {
+        'thinking': {'type': 'disabled'},
+      };
+    }
+    return const {};
+  }
+
+  /// Default per-request timeout. Generous on purpose: ReAct agents may carry
+  /// large accumulated contexts (long investigations) whose single completion
+  /// exceeds a short HTTP timeout; a 30s default caused sessions to die with
+  /// "Request timed out" mid-investigation. 180s pairs with the 8192-token
+  /// step budget (R7-4): a full step can take minutes on slower providers.
+  static const Duration defaultRequestTimeout = Duration(seconds: 180);
+  final LLMConfig config;
+  final http.Client _httpClient;
+  final Duration _timeout;
 
   @override
   Future<String> chat(
@@ -55,6 +94,7 @@ class OpenAICompatibleClient implements LLMClient {
       'temperature': temperature,
       'max_tokens': maxTokens,
       if (stop != null) 'stop': stop,
+      if (!reasoning) ..._noReasoningFields,
     };
 
     if (tools != null && tools.isNotEmpty) {
@@ -62,18 +102,42 @@ class OpenAICompatibleClient implements LLMClient {
     }
 
     try {
-      final response = await _httpClient
-          .post(
-            Uri.parse(config.chatEndpoint),
-            headers: _headers(config.chatApiKey, label: 'Chat API Key'),
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout);
+      // R8 M-E: transient network errors (backgrounding closes the socket)
+      // are retried once before surfacing.
+      http.Response? response;
+      Object? lastError;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await _httpClient
+              .post(
+                Uri.parse(config.chatEndpoint),
+                headers: _headers(config.chatApiKey, label: 'Chat API Key'),
+                body: jsonEncode(body),
+              )
+              .timeout(_timeout);
+          break;
+        } on SocketException catch (e) {
+          lastError = e;
+        } on http.ClientException catch (e) {
+          lastError = e;
+        } on TimeoutException catch (e) {
+          lastError = e;
+        } on HandshakeException catch (e) {
+          // TLS handshake interrupted (flakey provider/network) — retry once.
+          lastError = e;
+        }
+      }
+      if (response == null) {
+        if (lastError is TimeoutException) {
+          throw const LLMException('Request timed out');
+        }
+        throw LLMException('Network error: $lastError');
+      }
 
       if (response.statusCode != 200) {
         throw LLMException(
-          _responseErrorMessage(response.body,
-              fallback: 'Chat completion failed'),
+          chatFailureMessage(response.body,
+              fallback: 'Chat completion failed',),
           statusCode: response.statusCode,
           body: response.body,
         );
@@ -85,11 +149,25 @@ class OpenAICompatibleClient implements LLMClient {
         throw const LLMException('Empty response from chat completion');
       }
 
-      final message = choices[0]['message'] as Map<String, dynamic>;
-      return ChatCompletionResult(
+      final firstChoice = choices[0] as Map<String, dynamic>;
+      final message = firstChoice['message'] as Map<String, dynamic>;
+      final usage = data['usage'];
+      int? usageInt(String key) =>
+          usage is Map ? (usage[key] as num?)?.toInt() : null;
+      final cached = usageInt('prompt_cache_hit_tokens') ??
+          (usage is Map && usage['prompt_tokens_details'] is Map
+              ? ((usage['prompt_tokens_details'] as Map)['cached_tokens'] as num?)
+                  ?.toInt()
+              : null);
+      final result = ChatCompletionResult(
         content: (message['content'] as String?) ?? '',
-        finishReason: choices[0]['finish_reason'] as String?,
+        finishReason: firstChoice['finish_reason'] as String?,
+        promptTokens: usageInt('prompt_tokens'),
+        completionTokens: usageInt('completion_tokens'),
+        cachedPromptTokens: cached,
       );
+      onCompletion?.call(result);
+      return result;
     } on SocketException catch (e) {
       throw LLMException('Network error: ${e.message}');
     } on TimeoutException {
@@ -147,7 +225,8 @@ class OpenAICompatibleClient implements LLMClient {
             final choices = json['choices'] as List<dynamic>?;
             if (choices == null || choices.isEmpty) continue;
 
-            final delta = choices[0]['delta'] as Map<String, dynamic>?;
+            final firstChoice = choices[0] as Map<String, dynamic>;
+            final delta = firstChoice['delta'] as Map<String, dynamic>?;
             final content = delta?['content'] as String?;
             if (content != null && content.isNotEmpty) {
               buffer.write(content);
@@ -195,6 +274,17 @@ class OpenAICompatibleClient implements LLMClient {
   void dispose() {
     _httpClient.close();
   }
+}
+
+/// Renders a user-friendly error message for a non-200 chat response.
+String chatFailureMessage(String body, {required String fallback}) {
+  final message = _responseErrorMessage(body, fallback: fallback);
+  if (message.contains('Insufficient Balance') ||
+      message.contains('insufficient_quota') ||
+      message.contains('402')) {
+    return 'Chat API 余额不足，请充值后重试。';
+  }
+  return message;
 }
 
 String _responseErrorMessage(String body, {required String fallback}) {

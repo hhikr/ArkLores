@@ -3,7 +3,8 @@
 ## 2026-07 Architecture Decision
 
 ArkLores 自 v0.4.5 起使用中文 GameData release asset 作为主知识源；当前 release 为
-v0.9.0，兼容 GameData schema 2。
+v0.10.0，GameData schema 4（含确定性覆盖层与可选剧情向量）。下文 v0.4.5–v0.9 各节是
+历史路线记录；当前 Agent 与检索架构以 `AI_ARCHITECTURE.md` 为准。
 
 可信度策略：
 
@@ -84,7 +85,7 @@ ReAct Loop requirements:
 - Materials: paused state until user material source strategy is redesigned.
 - AI Summary: GameData structured local search.
 
-## GameData 转向后的 v0.5-v1.0 路线
+## GameData 转向后的版本路线（v0.5 起）
 
 旧路线的产品演进顺序仍有价值，但其中 Wiki seed、Book indexing、embedding、
 向量检索与 TFLite 的实现前提已被 v0.4.5 架构决策废止。后续版本必须建立在
@@ -119,8 +120,9 @@ QA 已完成。事实核查仅注册 `search_local_lore`，结论经过实际 Ga
   证据 → 形成结论”的 workflow。
 - 剧情命题先分别解析 canonical `scope_id` 和 `entity_id`，再用单一关系、状态或动作词
   执行 evidence mode；普通复合关键词无结果不能被解释为反证。
-- Fact-check 最终回答前至少完成一次工具调用；其 ReAct 预算为 7 轮、单步 4096 tokens，
+- Fact-check 最终回答前至少完成一次工具调用；其单步预算为 4096 tokens，
   以容纳实体/范围解析和 reasoning provider 的输出，其他 Agent 保持默认预算。
+  所有 Agent 均不设步数上限（`safetyMaxIterations=1000` 仅作防失控安全网）。
 - scoped evidence 在候选交集内按实体名与关系词的最短文本距离排序，优先返回同句或
   邻近句的直接陈述，而不是按剧情文件名排序。
 - 在回答中区分直接证据、间接证据和证据缺失，不把 retrieval confidence 等同于
@@ -242,6 +244,11 @@ TalkBack、横屏和来源路径导航仍 deferred，详见
 tag、推送与 GitHub Release。完整实现审计见 `ARKLORES_V0.9_TECHNICAL_REPORT.md`，持续验收
 缺口统一维护在 `RETRIEVAL_QA.md`。
 
+2026-08 状态更新：开发者已在代表性 Android 真机上完成个人验收，覆盖知识库
+下载/安装/替换、检索、Summary / Fact-check / Role-play 对话、Wiki 双站浏览与
+阅读器、双主题与双语等主路径，结果符合预期；v0.9.0 之后 dev 分支仍在持续迭代，
+v0.9 不是最后的测试版本。
+
 目标：在核心功能和证据交互稳定后，以《明日方舟》和《明日方舟：终末地》的
 真实 UI 图片为视觉研究依据，系统重做 App 界面，并同步偿还影响 v1.0 维护性的
 代码质量债务。
@@ -289,50 +296,35 @@ tag、推送与 GitHub Release。完整实现审计见 `ARKLORES_V0.9_TECHNICAL_
 - `flutter analyze`、相关单元/Widget 测试和既有 GameData retrieval QA 全部通过。
 - 重构前后的固定 Agent / retrieval QA 结果没有非预期行为变化。
 
-### v0.10 - 真机验证、检索质量与发布工程
+## 持续更新计划（v0.9 之后）
 
-目标：在 v1.0 前验证完整产品链路，并使 GameData 发布资产可复现。
+v0.9 不是最后的测试版本；v0.10 及之后的逐版本详细计划不再在本文件维护，
+后续版本按实际开发节奏迭代。持续更新方向包括：
 
-交付内容：
+- **真机与端到端验收**：代表性 Android 真机上的知识库安装/替换、检索、Agent
+  对话、Wiki 双站浏览与阅读器、双主题与双语主路径。开发者已完成个人真机
+  验收，结果符合预期；后续每个版本继续按此标准验收。
+- **检索质量**：扩充固定 retrieval / Agent QA；根据量化缺口增强剧情实体关系、
+  组织/概念汇总与同义词归一化。
+- **数据产品化**：GameData update manifest、全量/增量策略、差异报告、schema v3
+  候选方向与《终末地》数据源立项，详见 `GAMEDATA_BUILD_PIPELINE.md`。
+- **Agent 质量**：共享 story evidence layer、结构化步骤协议、deterministic
+  post-check 与 provider compatibility matrix。
+- **性能与正式发布**：性能预算、离线恢复、正式签名与发布 checklist。
 
-- 完成真机 asset 下载、checksum 校验、安装、替换、失败保留、检索和 Agent 对话。
-- 覆盖下载中断、坏资产、空间不足、离线启动、schema 不兼容及旧有效 DB 保留。
-- 扩充角色、组织、概念、剧情、歧义别名和意图归一化的固定 retrieval / Agent QA。
-- 根据量化 QA 缺口增强剧情实体关系、组织/概念汇总和同义词归一化。
-- 固定 GameData 源元数据，记录可复现的 builder、finalization、manifest、checksum
-  和 release asset 流程。
-- 在代表性 Android 设备上测量安装时间、DB 体积、查询延迟、内存和长对话表现。
-- 进行小规模 beta，按严重级别处理正确性、检索、安装和 UI 问题。
+上述方向的详细 backlog 与根因分析统一维护在
+`KNOWN_LIMITATIONS_AND_DEBT.md`；验收缺口维护在 `RETRIEVAL_QA.md`。
 
-验收标准：
+### 开发轮次（2026-08 起，按 R 编号）
 
-- 自动测试、Flutter analyze、完整 DB 固定 QA、schema smoke build 和 release
-  dry-run 能在文档化的干净环境中通过。
-- 至少一台受支持 Android 真机完成从 release asset 到 Agent 回答的完整流程。
-- 发布资产可由固定 GameData commit 重建，hash 与 finalized metadata 一致。
-- 不存在未解决的发布阻断级正确性、数据丢失或来源归属问题。
+| 轮次 | 状态 | 内容 |
+| --- | --- | --- |
+| R0–R3 | 完成 | 构建层进 lib、schema 3 覆盖层、App 内构建、调查 Agent |
+| R5–R11.2 | 完成 | 会话持久化、分层记忆、PlannerLoop、消歧与终止控制 |
+| R12（v0.10.0） | 完成 | 证据笔记、引用校验、COVER/FIND、可选剧情向量、通用进展控制、同链路 live 测试、成本控制 |
+| R13 | 进行中 | 删除全部问题类型特判（结论信封、嫌疑人门槛等）；概括与事实核查迁移到 PlannerLoop |
 
-### v1.0 - 稳定 GameData-first 发布
-
-目标：发布行为、文档和资产均与 GameData-first 架构一致的稳定版本。
-
-交付内容：
-
-- 稳定交付 Summary 和 Fact-check；Role-play 与 Wiki 联动只有在满足对应证据和
-  稳定性验收标准后才进入 v1.0。
-- 发布签名应用、finalized 中文 GameData DB、manifest、build report、checksums
-  和 release notes。
-- 完善安装、API 配置、GameData 下载、存储需求、来源信任、隐私、限制与排障文档。
-- 完善 tests、analyze、asset metadata 校验和 release packaging 的 CI，禁止提交
-  secrets。
-- 定义 GameData schema 升级、数据源刷新和不兼容已安装 DB 的支持策略。
-
-验收标准：
-
-- 全新安装和从最近受支持的 pre-1.0 版本升级均不会丢失有效设置或会话。
-- 发布 hash、manifest、tag 和 release assets 相互一致。
-- 产品文案与 Agent 行为始终区分 GameData 证据、Wiki 上下文、用户上下文和
-  生成文本。
+各轮细节见 `AI_ARCHITECTURE.md` §5。
 
 ## 旧路线映射
 
@@ -343,16 +335,14 @@ tag、推送与 GitHub Release。完整实现审计见 `ARKLORES_V0.9_TECHNICAL_
 | v0.7 | Wiki 阅读到 AI 的联动 | 把 Wiki 文本送入隐藏索引证据源 |
 | v0.8 | 交互和视觉完善 | 缺少 evidence UX 要求的动画优先范围 |
 | v0.9 | UI 精修与工程质量提升 | 仅凭抽象主题描述进行动画优先的视觉修改 |
-| v0.10 | 测试、性能、beta、错误处理 | 向量索引 benchmark 和 seed index 健康检查 |
-| v1.0 | 稳定开源发布 | 依赖已废止 seed DB 的打包假设 |
 
 ## Verification
 
 Required for relevant changes:
 
 ```bash
-/home/hhikr/flutter/bin/flutter test test/agent_test.dart
-/home/hhikr/flutter/bin/dart analyze <changed files>
+/home/hhikr/flutter/bin/flutter test
+/home/hhikr/flutter/bin/flutter analyze
 /home/hhikr/flutter/bin/dart run tools/build_gamedata_database.dart --help
 ```
 

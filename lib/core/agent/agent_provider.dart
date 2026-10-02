@@ -1,77 +1,35 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../shared/providers/settings_provider.dart';
 import '../gamedata/gamedata_knowledge_store.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
-import 'react_loop.dart';
+import 'agent_logger.dart';
+import 'chat_message.dart';
+import 'chat_notifier_base.dart';
+import 'chat_session_models.dart';
+import 'chat_session_store.dart';
 import 'fact_check_agent.dart';
+import 'investigation_agent.dart';
+import 'question_router.dart';
+import 'react_loop.dart';
 import 'roleplay_agent.dart';
 import 'roleplay_session_store.dart';
 import 'summary_agent.dart';
 
-const _uuid = Uuid();
+export 'chat_message.dart';
 
-/// One step in the ReAct loop process.
-class ReActStep {
-  final ReActEventType type;
-  final String content;
-  final String? toolName;
-  final Map<String, dynamic>? toolArgs;
-
-  const ReActStep({
-    required this.type,
-    required this.content,
-    this.toolName,
-    this.toolArgs,
-  });
-}
-
-/// Message model for AI chats.
-class ChatMessage {
-  final String id;
-  final MessageRole role;
-  final String content;
-  final List<ReActStep> steps;
-  final bool isStreaming;
-  final bool isError;
-  final FactCheckVerdict? factCheckVerdict;
-  final DateTime timestamp;
-
-  const ChatMessage({
-    required this.id,
-    required this.role,
-    required this.content,
-    this.steps = const [],
-    this.isStreaming = false,
-    this.isError = false,
-    this.factCheckVerdict,
-    required this.timestamp,
-  });
-
-  ChatMessage copyWith({
-    String? id,
-    MessageRole? role,
-    String? content,
-    List<ReActStep>? steps,
-    bool? isStreaming,
-    bool? isError,
-    FactCheckVerdict? factCheckVerdict,
-    DateTime? timestamp,
-  }) {
-    return ChatMessage(
-      id: id ?? this.id,
-      role: role ?? this.role,
-      content: content ?? this.content,
-      steps: steps ?? this.steps,
-      isStreaming: isStreaming ?? this.isStreaming,
-      isError: isError ?? this.isError,
-      factCheckVerdict: factCheckVerdict ?? this.factCheckVerdict,
-      timestamp: timestamp ?? this.timestamp,
-    );
-  }
-}
+/// Shared GameData retrieval store injected into every agent (R11.2): agents
+/// type their store as the `GameDataRetrieval` interface so the same tool
+/// classes also run on the desktop CLI with an FFI-backed store. The mobile
+/// provider supplies the concrete Sqlite store.
+final sharedGameDataStoreProvider = Provider<GameDataKnowledgeStore>((ref) {
+  return GameDataKnowledgeStore();
+});
 
 /// Provider for the [SummaryAgent] instance.
 final summaryAgentProvider = Provider<SummaryAgent>((ref) {
@@ -79,29 +37,32 @@ final summaryAgentProvider = Provider<SummaryAgent>((ref) {
 
   return SummaryAgent(
     llmClient: llm,
+    gameDataStore: ref.watch(sharedGameDataStoreProvider),
   );
 });
 
 final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
-  return FactCheckAgent(llmClient: ref.watch(llmClientProvider));
+  return FactCheckAgent(
+    llmClient: ref.watch(llmClientProvider),
+    gameDataStore: ref.watch(sharedGameDataStoreProvider),
+  );
 });
 
 /// State notifier for Summary Chat history and processing.
-class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
-  final SummaryAgent _agent;
-  int _requestGeneration = 0;
+class SummaryChatNotifier extends ChatNotifierBase {
 
   SummaryChatNotifier(this._agent) : super([]);
+  final SummaryAgent _agent;
 
   /// Sends a message and triggers the Summary Agent ReAct stream.
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty || state.any((message) => message.isStreaming)) {
       return;
     }
-    final generation = ++_requestGeneration;
+    final generation = nextGeneration();
 
-    final userMsgId = _uuid.v4();
-    final assistantMsgId = _uuid.v4();
+    final userMsgId = newId();
+    final assistantMsgId = newId();
     final now = DateTime.now();
 
     final userMsg = ChatMessage(
@@ -112,34 +73,7 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
     );
 
     // Build history for the LLM before adding the new user message to the state
-    final history = <Message>[];
-    for (final m in state) {
-      if (m.isStreaming || m.isError) continue;
-      if (m.role == MessageRole.user) {
-        history.add(Message.user(m.content));
-      } else if (m.role == MessageRole.assistant) {
-        final buffer = StringBuffer();
-        for (final step in m.steps) {
-          if (step.type == ReActEventType.thought) {
-            buffer.writeln('Thought: ${step.content}');
-          } else if (step.type == ReActEventType.toolCall) {
-            buffer.writeln('Action: ${step.toolName}');
-            // Content matches 'Executing tool "..." with arguments: {...}'
-            final argsPart = step.content.contains('arguments: ')
-                ? step.content.split('arguments: ').last
-                : '{}';
-            buffer.writeln('Action Input: $argsPart');
-          } else if (step.type == ReActEventType.toolObservation) {
-            buffer.writeln('Observation: ${step.content}');
-          }
-        }
-        if (m.content.isNotEmpty) {
-          buffer.writeln('Thought: I have enough information to answer.');
-          buffer.writeln('Final Answer: ${m.content}');
-        }
-        history.add(Message.assistant(buffer.toString().trim()));
-      }
-    }
+    final history = buildHistory(state);
 
     state = [...state, userMsg];
 
@@ -156,14 +90,14 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
     try {
       final stream = _agent.generateSummary(query: text, history: history);
       final steps = <ReActStep>[];
-      var finalAnswerBuffer = StringBuffer();
+      final finalAnswerBuffer = StringBuffer();
 
       await for (final event in stream) {
-        if (generation != _requestGeneration) return;
+        if (!isCurrentGeneration(generation)) return;
         switch (event.type) {
           case ReActEventType.thought:
             steps.add(ReActStep(type: event.type, content: event.content));
-            _updateAssistantMessage(assistantMsgId, steps: List.from(steps));
+            updateMessage(assistantMsgId, steps: List.from(steps));
             break;
           case ReActEventType.toolCall:
             steps.add(ReActStep(
@@ -171,20 +105,20 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
               content: event.content,
               toolName: event.toolName,
               toolArgs: event.toolArgs,
-            ));
-            _updateAssistantMessage(assistantMsgId, steps: List.from(steps));
+            ),);
+            updateMessage(assistantMsgId, steps: List.from(steps));
             break;
           case ReActEventType.toolObservation:
             steps.add(ReActStep(
               type: event.type,
               content: event.content,
               toolName: event.toolName,
-            ));
-            _updateAssistantMessage(assistantMsgId, steps: List.from(steps));
+            ),);
+            updateMessage(assistantMsgId, steps: List.from(steps));
             break;
           case ReActEventType.finalAnswerToken:
             finalAnswerBuffer.write(event.content);
-            _updateAssistantMessage(
+            updateMessage(
               assistantMsgId,
               content: finalAnswerBuffer.toString(),
               steps: List.from(steps),
@@ -192,14 +126,14 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
             break;
           case ReActEventType.error:
             steps.add(ReActStep(type: event.type, content: event.content));
-            _updateAssistantMessage(
+            updateMessage(
               assistantMsgId,
               isError: true,
               steps: List.from(steps),
             );
             break;
           case ReActEventType.complete:
-            _updateAssistantMessage(
+            updateMessage(
               assistantMsgId,
               isStreaming: false,
               steps: List.from(steps),
@@ -208,8 +142,8 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
         }
       }
     } catch (e) {
-      if (generation == _requestGeneration) {
-        _updateAssistantMessage(
+      if (isCurrentGeneration(generation)) {
+        updateMessage(
           assistantMsgId,
           content: '[SUMMARY_ERROR]',
           isError: true,
@@ -219,60 +153,15 @@ class SummaryChatNotifier extends StateNotifier<List<ChatMessage>> {
     }
   }
 
-  void cancel() {
-    _requestGeneration++;
-    state = [
-      for (final message in state)
-        if (message.isStreaming)
-          message.copyWith(
-            content: '[SUMMARY_CANCELED]',
-            isStreaming: false,
-            isError: true,
-          )
-        else
-          message,
-    ];
-  }
+  @override
+  String get canceledMarker => '[SUMMARY_CANCELED]';
 
-  Future<void> retryLast() async {
-    final users = state.where((message) => message.role == MessageRole.user);
-    if (users.isEmpty || state.any((message) => message.isStreaming)) return;
-    final query = users.last.content;
-    if (state.isNotEmpty && state.last.role == MessageRole.assistant) {
-      state = state.sublist(0, state.length - 1);
-    }
-    if (state.isNotEmpty && state.last.role == MessageRole.user) {
-      state = state.sublist(0, state.length - 1);
-    }
-    await sendMessage(query);
-  }
+  @override
+  Future<void> resendLast(String query) => sendMessage(query);
 
-  /// Clears the chat history.
-  void clearChat() {
-    cancel();
-    state = [];
-  }
-
-  void _updateAssistantMessage(
-    String id, {
-    String? content,
-    List<ReActStep>? steps,
-    bool? isStreaming,
-    bool? isError,
-  }) {
-    state = [
-      for (final m in state)
-        if (m.id == id)
-          m.copyWith(
-            content: content ?? m.content,
-            steps: steps ?? m.steps,
-            isStreaming: isStreaming ?? m.isStreaming,
-            isError: isError ?? m.isError,
-          )
-        else
-          m
-    ];
-  }
+  @override
+  List<Message> buildHistory(List<ChatMessage> messages) =>
+      buildReactHistory(messages);
 }
 
 /// Provider for the Summary Chat state.
@@ -282,22 +171,21 @@ final summaryChatProvider =
   return SummaryChatNotifier(agent);
 });
 
-class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
-  final FactCheckAgent _agent;
-  int _requestGeneration = 0;
+class FactCheckChatNotifier extends ChatNotifierBase {
 
   FactCheckChatNotifier(this._agent) : super([]);
+  final FactCheckAgent _agent;
 
   Future<void> sendMessage(String text) async {
     final claim = text.trim();
     if (claim.isEmpty || state.any((message) => message.isStreaming)) return;
-    final generation = ++_requestGeneration;
-    final history = _buildHistory(state);
-    final assistantId = _uuid.v4();
+    final generation = nextGeneration();
+    final history = buildHistory(state);
+    final assistantId = newId();
     state = [
       ...state,
       ChatMessage(
-        id: _uuid.v4(),
+        id: newId(),
         role: MessageRole.user,
         content: claim,
         timestamp: DateTime.now(),
@@ -315,7 +203,7 @@ class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
     try {
       await for (final event
           in _agent.checkClaim(claim: claim, history: history)) {
-        if (generation != _requestGeneration) return;
+        if (!isCurrentGeneration(generation)) return;
         switch (event.type) {
           case ReActEventType.thought:
           case ReActEventType.toolObservation:
@@ -324,8 +212,8 @@ class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
               type: event.type,
               content: event.content,
               toolName: event.toolName,
-            ));
-            _update(
+            ),);
+            updateMessage(
               assistantId,
               content: event.type == ReActEventType.error
                   ? '[FACT_CHECK_ERROR]'
@@ -340,92 +228,34 @@ class FactCheckChatNotifier extends StateNotifier<List<ChatMessage>> {
               content: event.content,
               toolName: event.toolName,
               toolArgs: event.toolArgs,
-            ));
-            _update(assistantId, steps: List.of(steps));
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
             break;
           case ReActEventType.finalAnswerToken:
-            _update(
+            updateMessage(
               assistantId,
               content: event.content,
               factCheckVerdict: parseFactCheckVerdict(event.content),
             );
             break;
           case ReActEventType.complete:
-            _update(assistantId, isStreaming: false);
+            updateMessage(assistantId, isStreaming: false);
             break;
         }
       }
     } catch (_) {
-      if (generation == _requestGeneration) {
-        _update(assistantId,
-            content: '[FACT_CHECK_ERROR]', isError: true, isStreaming: false);
+      if (isCurrentGeneration(generation)) {
+        updateMessage(assistantId,
+            content: '[FACT_CHECK_ERROR]', isError: true, isStreaming: false,);
       }
     }
   }
 
-  void cancel() {
-    _requestGeneration++;
-    state = [
-      for (final message in state)
-        if (message.isStreaming)
-          message.copyWith(
-            content: '[FACT_CHECK_CANCELED]',
-            isStreaming: false,
-            isError: true,
-          )
-        else
-          message,
-    ];
-  }
+  @override
+  String get canceledMarker => '[FACT_CHECK_CANCELED]';
 
-  Future<void> retryLast() async {
-    final users = state.where((message) => message.role == MessageRole.user);
-    if (users.isEmpty || state.any((message) => message.isStreaming)) return;
-    final claim = users.last.content;
-    if (state.isNotEmpty && state.last.role == MessageRole.assistant) {
-      state = state.sublist(0, state.length - 1);
-    }
-    if (state.isNotEmpty && state.last.role == MessageRole.user) {
-      state = state.sublist(0, state.length - 1);
-    }
-    await sendMessage(claim);
-  }
-
-  void clearChat() {
-    cancel();
-    state = [];
-  }
-
-  List<Message> _buildHistory(List<ChatMessage> messages) => [
-        for (final message in messages)
-          if (!message.isStreaming && !message.isError)
-            message.role == MessageRole.user
-                ? Message.user(message.content)
-                : Message.assistant(message.content),
-      ];
-
-  void _update(
-    String id, {
-    String? content,
-    List<ReActStep>? steps,
-    bool? isStreaming,
-    bool? isError,
-    FactCheckVerdict? factCheckVerdict,
-  }) {
-    state = [
-      for (final message in state)
-        if (message.id == id)
-          message.copyWith(
-            content: content,
-            steps: steps,
-            isStreaming: isStreaming,
-            isError: isError,
-            factCheckVerdict: factCheckVerdict,
-          )
-        else
-          message,
-    ];
-  }
+  @override
+  Future<void> resendLast(String query) => sendMessage(query);
 }
 
 final factCheckChatProvider =
@@ -433,14 +263,530 @@ final factCheckChatProvider =
   return FactCheckChatNotifier(ref.watch(factCheckAgentProvider));
 });
 
+/// Selected mode of the AI Ask tab (auto routes via [QuestionRouter]).
+final aiModeProvider = StateProvider<AiMode>((ref) => AiMode.auto);
+
+/// Unified Ask chat: one message list, three workflows, optional auto-routing.
+///
+/// The Ask tab merges the previous Summary / Fact-check / Investigation tabs.
+/// In [AiMode.auto] the [QuestionRouter] classifies the question first; the
+/// other modes pin the workflow directly. The ReAct event handling is shared
+/// across workflows; a fact-check verdict is parsed from the stream whenever
+/// present, other modes simply produce no verdict.
+///
+/// Session persistence (R5): when recording is enabled ([AgentLogger.isEnabled],
+/// the "保存 AI 对话记录" setting), every turn — including the user-selected
+/// mode, the auto-routing decision and raw classification output, the complete
+/// ReAct chain (raw LLM responses, thoughts, tool calls, observations) and the
+/// final answer — is appended to one per-conversation JSON file in the
+/// user-visible `chat_sessions/` directory. Sessions can be restored through
+/// [loadSession] (history list → continue conversation).
+class AskChatNotifier extends ChatNotifierBase {
+  AskChatNotifier({
+    required SummaryAgent summaryAgent,
+    required FactCheckAgent factCheckAgent,
+    required InvestigationAgent investigationAgent,
+    required QuestionRouter router,
+    ChatSessionStore sessionStore = const ChatSessionStore(),
+    required LLMConfig Function() configReader,
+  })  : _summaryAgent = summaryAgent,
+        _factCheckAgent = factCheckAgent,
+        _investigationAgent = investigationAgent,
+        _router = router,
+        _sessionStore = sessionStore,
+        _configReader = configReader,
+        super([]);
+  final SummaryAgent _summaryAgent;
+  final FactCheckAgent _factCheckAgent;
+  final InvestigationAgent _investigationAgent;
+  final QuestionRouter _router;
+  final ChatSessionStore _sessionStore;
+  final LLMConfig Function() _configReader;
+  AiMode _lastMode = AiMode.auto;
+  ChatSessionFile? _currentSession;
+
+  /// Whether session recording is active for the current conversation.
+  static bool get recordingEnabled => AgentLogger.isEnabled;
+
+  /// Title prefix length for the session list.
+  static const int _titleMaxChars = 40;
+
+  /// Starts a fresh conversation (clears the UI and ends the current session
+  /// file; the next message begins a new session).
+  void newSession() {
+    cancel();
+    _currentSession = null;
+    state = const [];
+  }
+
+  /// Restores a persisted session into the UI. Subsequent messages continue
+  /// the same session file.
+  void loadSession(ChatSessionFile session) {
+    _currentSession = session;
+    if (session.turns.isNotEmpty) {
+      _lastMode = session.turns.last.effectiveMode;
+    }
+    state = chatSessionToMessages(session);
+  }
+
+  ChatSessionFile? get currentSession => _currentSession;
+
+  @override
+  void clearChat() {
+    cancel();
+    _currentSession = null;
+    state = const [];
+  }
+
+  Future<void> sendMessage(String text, {required AiMode mode}) async {
+    final query = text.trim();
+    if (query.isEmpty || state.any((message) => message.isStreaming)) return;
+    _lastMode = mode;
+    final generation = nextGeneration();
+    final history = buildHistory(state);
+    final assistantId = newId();
+    state = [
+      ...state,
+      ChatMessage(
+        id: newId(),
+        role: MessageRole.user,
+        content: query,
+        timestamp: DateTime.now(),
+      ),
+      ChatMessage(
+        id: assistantId,
+        role: MessageRole.assistant,
+        content: '',
+        isStreaming: true,
+        timestamp: DateTime.now(),
+      ),
+    ];
+
+    // Auto mode: classify the question first, keep the router's raw decision.
+    RouteResult? routeResult;
+    var effective = mode;
+    if (effective == AiMode.auto) {
+      routeResult = await _router.route(query);
+      effective = routeResult.mode;
+    }
+    final effectiveMode = effective;
+
+    // Session recording state for this turn.
+    final recording = recordingEnabled;
+    final turnStart = DateTime.now();
+    final config = _configReader();
+    final iterations = <int, ReActIterationRecord>{};
+    var currentIteration = 0;
+    var turnStatus = ChatTurnStatus.completed;
+    String? turnError;
+    var canceled = false;
+    if (recording) {
+      _currentSession ??= ChatSessionFile(
+        sessionId: newId(),
+        createdAt: turnStart,
+        updatedAt: turnStart,
+        title: _truncateTitle(query),
+      );
+    }
+    final session = _currentSession;
+
+    // Receives the full raw LLM response of every iteration (untruncated)
+    // before the corresponding thought/tool events arrive, so event handling
+    // below fills the same record.
+    void Function(int iteration, String rawResponse)? onRaw;
+    String? turnMemory;
+    if (recording) {
+      onRaw = (iteration, raw) {
+        currentIteration = iteration;
+        iterations[iteration] = ReActIterationRecord(
+          iteration: iteration,
+          rawResponse: raw,
+        );
+      };
+    }
+    void onMemory(String memoryBlock) => turnMemory = memoryBlock;
+
+    final stream = switch (effectiveMode) {
+      AiMode.verify => _factCheckAgent.checkClaim(
+          claim: query,
+          history: history,
+          onRawLlmResponse: onRaw,
+          onMemoryChanged: recording ? onMemory : null,
+        ),
+      AiMode.investigate => _investigationAgent.investigate(
+          query: query,
+          history: history,
+          onRawLlmResponse: onRaw,
+          onMemoryChanged: recording ? onMemory : null,
+        ),
+      AiMode.summarize || AiMode.auto => _summaryAgent.generateSummary(
+          query: query,
+          history: history,
+          onRawLlmResponse: onRaw,
+          onMemoryChanged: recording ? onMemory : null,
+        ),
+    };
+
+    final steps = <ReActStep>[];
+    final finalAnswerBuffer = StringBuffer();
+
+    // Auto routing failures are surfaced to the user instead of silently
+    // degrading (M3): the step area shows why the pinned fallback mode was
+    // used. The session record keeps the router error too.
+    if (routeResult?.failed ?? false) {
+      steps.add(ReActStep(
+        type: ReActEventType.error,
+        content: '自动模式分类失败，已回退到概括模式（原因: ${routeResult!.error}）',
+      ),);
+      updateMessage(assistantId, steps: List.of(steps));
+    }
+
+    try {
+      await for (final event in stream) {
+        if (!isCurrentGeneration(generation)) {
+          canceled = true;
+          break;
+        }
+        switch (event.type) {
+          case ReActEventType.thought:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
+            if (recording) {
+              iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              ).thought = event.content;
+            }
+            break;
+          case ReActEventType.toolCall:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+              toolArgs: event.toolArgs,
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
+            if (recording) {
+              final record = iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              );
+              record
+                ..tool = event.toolName
+                ..toolArgs = event.toolArgs
+                ..action = event.toolName ?? ''
+                ..actionInput = event.toolArgs == null
+                    ? ''
+                    : const JsonEncoder().convert(event.toolArgs!);
+            }
+            break;
+          case ReActEventType.toolObservation:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+            ),);
+            updateMessage(assistantId, steps: List.of(steps));
+            if (recording) {
+              iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              ).observation = event.content;
+            }
+            break;
+          case ReActEventType.finalAnswerToken:
+            finalAnswerBuffer.write(event.content);
+            updateMessage(
+              assistantId,
+              content: finalAnswerBuffer.toString(),
+              // Only the fact-check workflow produces a verdict banner; other
+              // modes may still contain a marker in text, which chat_bubble
+              // strips from the markdown body.
+              factCheckVerdict: effectiveMode == AiMode.verify
+                  ? parseFactCheckVerdict(finalAnswerBuffer.toString())
+                  : null,
+              steps: List.of(steps),
+            );
+            break;
+          case ReActEventType.error:
+            steps.add(ReActStep(type: event.type, content: event.content));
+            turnError = event.content;
+            turnStatus = ChatTurnStatus.error;
+            updateMessage(
+              assistantId,
+              content: '[ASK_ERROR]',
+              isError: true,
+              steps: List.of(steps),
+            );
+            break;
+          case ReActEventType.complete:
+            updateMessage(
+              assistantId,
+              isStreaming: false,
+              steps: List.of(steps),
+            );
+            break;
+        }
+      }
+    } catch (e) {
+      if (isCurrentGeneration(generation)) {
+        updateMessage(
+          assistantId,
+          content: '[ASK_ERROR]',
+          isError: true,
+          isStreaming: false,
+        );
+        turnStatus = ChatTurnStatus.error;
+        turnError = '$e';
+      }
+    } finally {
+      if (recording && session != null) {
+        await _finalizeTurn(
+          session: session,
+          query: query,
+          userMode: mode,
+          effectiveMode: effectiveMode,
+          routeResult: routeResult,
+          config: config,
+          turnStart: turnStart,
+          iterations: iterations,
+          answer: finalAnswerBuffer.toString(),
+          status: canceled ? ChatTurnStatus.canceled : turnStatus,
+          error: canceled ? '[ASK_CANCELED]' : turnError,
+          memory: turnMemory,
+        );
+      }
+    }
+  }
+
+  Future<void> _finalizeTurn({
+    required ChatSessionFile session,
+    required String query,
+    required AiMode userMode,
+    required AiMode effectiveMode,
+    required RouteResult? routeResult,
+    required LLMConfig config,
+    required DateTime turnStart,
+    required Map<int, ReActIterationRecord> iterations,
+    required String answer,
+    required ChatTurnStatus status,
+    required String? error,
+    String? memory,
+  }) async {
+    final sorted = iterations.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final now = DateTime.now();
+    final turn = ChatSessionTurn(
+      turn: session.turns.length + 1,
+      timestamp: turnStart,
+      query: query,
+      userMode: userMode,
+      effectiveMode: effectiveMode,
+      router: userMode == AiMode.auto
+          ? RouterRecord(
+              rawResponse: routeResult?.rawResponse ?? '',
+              error: routeResult?.error,
+            )
+          : null,
+      model: config.chatModel,
+      baseUrl: config.chatBaseUrl,
+      iterations: [for (final entry in sorted) entry.value],
+      answer: answer,
+      verdict: effectiveMode == AiMode.verify
+          ? parseFactCheckVerdict(answer)
+          : null,
+      status: status,
+      error: error,
+      durationMs: now.difference(turnStart).inMilliseconds,
+      memory: memory,
+    );
+    final updated = ChatSessionFile(
+      sessionId: session.sessionId,
+      createdAt: session.createdAt,
+      updatedAt: now,
+      title: session.title,
+      turns: [...session.turns, turn],
+    );
+    _currentSession = updated;
+    await _sessionStore.save(updated);
+  }
+
+  static String _truncateTitle(String query) => query.length <= _titleMaxChars
+      ? query
+      : '${query.substring(0, _titleMaxChars)}…';
+
+  @override
+  String get canceledMarker => '[ASK_CANCELED]';
+
+  @override
+  Future<void> resendLast(String query) =>
+      sendMessage(query, mode: _lastMode);
+
+  @override
+  List<Message> buildHistory(List<ChatMessage> messages) =>
+      buildReactHistory(messages);
+}
+
+/// Provider for the chat session store (persistence + history list).
+final chatSessionStoreProvider =
+    Provider<ChatSessionStore>((ref) => const ChatSessionStore());
+
+/// Session summaries for the Chat History list (newest first).
+final chatHistoryListProvider =
+    FutureProvider<List<ChatSessionSummary>>((ref) async {
+  return ref.watch(chatSessionStoreProvider).list();
+});
+
+/// Provider for the unified Ask chat state.
+final askChatProvider =
+    StateNotifierProvider<AskChatNotifier, List<ChatMessage>>((ref) {
+  return AskChatNotifier(
+    summaryAgent: ref.watch(summaryAgentProvider),
+    factCheckAgent: ref.watch(factCheckAgentProvider),
+    investigationAgent: ref.watch(investigationAgentProvider),
+    router: QuestionRouter(llmClient: ref.watch(llmClientProvider)),
+    sessionStore: ref.watch(chatSessionStoreProvider),
+    configReader: () => ref.read(apiConfigProvider),
+  );
+});
+
+/// Provider for the [InvestigationAgent] instance.
+final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
+  // R12 cost control: hidden reasoning was ~90% of investigation output
+  // tokens. Mechanical roles (extract notes, pick a candidate, emit one-line
+  // intents) run without it; the answer writer keeps the reasoning model.
+  final aux = ref.watch(auxLlmClientProvider);
+  return InvestigationAgent(
+    llmClient: ref.watch(llmClientProvider),
+    plannerClient: aux,
+    extractorClient: aux,
+    disambiguatorClient: aux,
+    gameDataStore: ref.watch(sharedGameDataStoreProvider),
+    embeddingClient: ref.watch(embeddingClientProvider),
+  );
+});
+
+/// State notifier for the Investigation Chat (R3): cross-chapter mystery
+/// questions running the S0–S8 protocol with code-level verdict gates.
+class InvestigationChatNotifier extends ChatNotifierBase {
+  InvestigationChatNotifier(this._agent) : super([]);
+  final InvestigationAgent _agent;
+
+  /// Sends a message and triggers the investigation ReAct stream.
+  Future<void> sendMessage(String text) async {
+    if (text.trim().isEmpty || state.any((message) => message.isStreaming)) {
+      return;
+    }
+    final generation = nextGeneration();
+
+    final userMsgId = newId();
+    final assistantMsgId = newId();
+    final userMsg = ChatMessage(
+      id: userMsgId,
+      role: MessageRole.user,
+      content: text,
+      timestamp: DateTime.now(),
+    );
+    final history = buildHistory(state);
+    state = [
+      ...state,
+      userMsg,
+      ChatMessage(
+        id: assistantMsgId,
+        role: MessageRole.assistant,
+        content: '',
+        isStreaming: true,
+        timestamp: DateTime.now(),
+      ),
+    ];
+
+    try {
+      final stream = _agent.investigate(query: text, history: history);
+      final steps = <ReActStep>[];
+      final finalAnswerBuffer = StringBuffer();
+      await for (final event in stream) {
+        if (!isCurrentGeneration(generation)) return;
+        switch (event.type) {
+          case ReActEventType.thought:
+          case ReActEventType.toolCall:
+          case ReActEventType.toolObservation:
+            steps.add(ReActStep(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+              toolArgs: event.toolArgs,
+            ),);
+            updateMessage(assistantMsgId, steps: List.from(steps));
+            break;
+          case ReActEventType.finalAnswerToken:
+            finalAnswerBuffer.write(event.content);
+            updateMessage(
+              assistantMsgId,
+              content: finalAnswerBuffer.toString(),
+              steps: List.from(steps),
+            );
+            break;
+          case ReActEventType.error:
+            steps.add(ReActStep(type: event.type, content: event.content));
+            updateMessage(
+              assistantMsgId,
+              isError: true,
+              steps: List.from(steps),
+            );
+            break;
+          case ReActEventType.complete:
+            updateMessage(
+              assistantMsgId,
+              isStreaming: false,
+              steps: List.from(steps),
+            );
+            break;
+        }
+      }
+    } catch (e) {
+      if (isCurrentGeneration(generation)) {
+        updateMessage(
+          assistantMsgId,
+          content: '[INVESTIGATION_ERROR]',
+          isError: true,
+          isStreaming: false,
+        );
+      }
+    }
+  }
+
+  @override
+  String get canceledMarker => '[INVESTIGATION_CANCELED]';
+
+  @override
+  Future<void> resendLast(String query) => sendMessage(query);
+
+  @override
+  List<Message> buildHistory(List<ChatMessage> messages) =>
+      buildReactHistory(messages);
+}
+
+/// Provider for the Investigation Chat state.
+final investigationChatProvider =
+    StateNotifierProvider<InvestigationChatNotifier, List<ChatMessage>>(
+  (ref) {
+  return InvestigationChatNotifier(ref.watch(investigationAgentProvider));
+},
+);
+
 class RoleplayState {
-  final GameDataEntityCandidate? character;
-  final List<GameDataEntityCandidate> candidates;
-  final String scene;
-  final List<ChatMessage> messages;
-  final bool isResolving;
-  final bool hasSavedSession;
-  final CharacterResolutionStatus? resolutionStatus;
 
   const RoleplayState({
     this.character,
@@ -451,6 +797,13 @@ class RoleplayState {
     this.hasSavedSession = false,
     this.resolutionStatus,
   });
+  final GameDataEntityCandidate? character;
+  final List<GameDataEntityCandidate> candidates;
+  final String scene;
+  final List<ChatMessage> messages;
+  final bool isResolving;
+  final bool hasSavedSession;
+  final CharacterResolutionStatus? resolutionStatus;
 
   bool get isSending => messages.any((message) => message.isStreaming);
 
@@ -486,14 +839,15 @@ final roleplayAgentProvider = Provider<RoleplayAgent>((ref) {
 });
 
 class RoleplayNotifier extends StateNotifier<RoleplayState> {
-  final RoleplayAgent _agent;
-  final RoleplaySessionStore _sessionStore;
-  int _requestGeneration = 0;
 
   RoleplayNotifier(this._agent, this._sessionStore)
       : super(const RoleplayState()) {
     _checkSavedSession();
   }
+  final RoleplayAgent _agent;
+  final RoleplaySessionStore _sessionStore;
+  final Uuid _uuid = Uuid();
+  int _requestGeneration = 0;
 
   Future<void> _checkSavedSession() async {
     final saved = await _sessionStore.load();
@@ -552,7 +906,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
         isStreaming: true,
         timestamp: DateTime.now(),
       ),
-    ]);
+    ],);
     final steps = <ReActStep>[];
     try {
       await for (final event in _agent.reply(
@@ -570,10 +924,10 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
             steps.add(ReActStep(
                 type: event.type,
                 content: event.content,
-                toolName: event.toolName));
+                toolName: event.toolName,),);
             _updateMessage(assistantId,
                 steps: List.of(steps),
-                isError: event.type == ReActEventType.error);
+                isError: event.type == ReActEventType.error,);
             break;
           case ReActEventType.toolCall:
             steps.add(ReActStep(
@@ -581,7 +935,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
               content: event.content,
               toolName: event.toolName,
               toolArgs: event.toolArgs,
-            ));
+            ),);
             _updateMessage(assistantId, steps: List.of(steps));
             break;
           case ReActEventType.finalAnswerToken:
@@ -596,7 +950,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
     } catch (_) {
       if (generation == _requestGeneration) {
         _updateMessage(assistantId,
-            content: '[ROLEPLAY_ERROR]', isError: true, isStreaming: false);
+            content: '[ROLEPLAY_ERROR]', isError: true, isStreaming: false,);
       }
     }
   }
@@ -607,10 +961,10 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
       for (final message in state.messages)
         if (message.isStreaming)
           message.copyWith(
-              content: '[ROLEPLAY_CANCELED]', isStreaming: false, isError: true)
+              content: '[ROLEPLAY_CANCELED]', isStreaming: false, isError: true,)
         else
           message,
-    ]);
+    ],);
   }
 
   Future<void> retryLast() async {
@@ -667,7 +1021,7 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
       {String? content,
       List<ReActStep>? steps,
       bool? isStreaming,
-      bool? isError}) {
+      bool? isError,}) {
     state = state.copyWith(messages: [
       for (final message in state.messages)
         if (message.id == id)
@@ -675,10 +1029,10 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
               content: content,
               steps: steps,
               isStreaming: isStreaming,
-              isError: isError)
+              isError: isError,)
         else
           message,
-    ]);
+    ],);
   }
 
   Future<void> _persist() async {
