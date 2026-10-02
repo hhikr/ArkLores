@@ -2,7 +2,8 @@
 library;
 
 import '../../core/agent/story_answer.dart';
-import '../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
+import '../../core/gamedata/story_catalog.dart'
+    show StoryCatalogEntry, fallbackStoryLabel;
 
 final RegExp _lineRefPattern = RegExp(r'([\w\-/\.\[\]]+\.txt):(\d+)');
 
@@ -98,6 +99,108 @@ String humanizeCitations(
       return '〔${storyDisplayName(m.group(1)!, labels)} '
           '${_lineText(m.group(2)!, m.group(3), lineText)}〕';
     });
+
+/// R15: one cited line range (0-based, inclusive) of a chapter.
+class CitedRange {
+  const CitedRange(this.start, this.end);
+  final int start;
+  final int end;
+
+  /// Raw reference as the answer stores it (`story_id:start[-end]`).
+  String rawRef(String storyId) =>
+      start == end ? '$storyId:$start' : '$storyId:$start-$end';
+}
+
+/// R15: the cited ranges of one chapter.
+class CitedChapter {
+  CitedChapter({required this.storyId, required this.label, required this.order});
+  final String storyId;
+
+  /// Chapter part of the label (`BB-9 行动前《尘埃落定》`), or the file part
+  /// of a path-derived name.
+  final String label;
+  final int order;
+  final List<CitedRange> ranges = [];
+}
+
+/// R15: the cited chapters of one collection.
+class CitedCollection {
+  CitedCollection(this.label);
+  final String label;
+  final List<CitedChapter> chapters = [];
+
+  int get citationCount =>
+      chapters.fold<int>(0, (n, c) => n + c.ranges.length);
+}
+
+/// R15: groups the citations of [content] by collection, then chapter
+/// (catalog order), then line range (overlapping or adjacent ranges of a
+/// chapter merged). Collections keep the order in which the answer first
+/// cites them. Without a catalog entry the path-derived name is split into
+/// a collection part and a chapter part.
+List<CitedCollection> groupCitations(
+  String content,
+  Map<String, StoryCatalogEntry> entries,
+) {
+  final collections = <String, CitedCollection>{};
+  final chapters = <String, CitedChapter>{};
+  final rangesByStory = <String, List<CitedRange>>{};
+  for (final m in _citationPattern.allMatches(content)) {
+    final storyId = m.group(1)!;
+    final a = int.parse(m.group(2)!);
+    final b = m.group(3) == null ? a : int.parse(m.group(3)!);
+    rangesByStory
+        .putIfAbsent(storyId, () => [])
+        .add(CitedRange(a <= b ? a : b, a <= b ? b : a));
+    if (chapters.containsKey(storyId)) continue;
+    final entry = entries[storyId];
+    final String collectionLabel;
+    final String chapterLabel;
+    if (entry != null) {
+      collectionLabel = entry.collectionLabel;
+      chapterLabel = entry.chapterLabel;
+    } else {
+      final fallback = fallbackStoryLabel(storyId);
+      final cut = fallback.indexOf(' · ');
+      collectionLabel = cut < 0 ? fallback : fallback.substring(0, cut);
+      chapterLabel = cut < 0 ? '' : fallback.substring(cut + 3);
+    }
+    final chapter = CitedChapter(
+      storyId: storyId,
+      label: chapterLabel,
+      order: entry?.storySort ?? 1 << 30,
+    );
+    chapters[storyId] = chapter;
+    collections
+        .putIfAbsent(collectionLabel, () => CitedCollection(collectionLabel))
+        .chapters
+        .add(chapter);
+  }
+  for (final chapter in chapters.values) {
+    final ranges = rangesByStory[chapter.storyId]!
+      ..sort((x, y) => x.start.compareTo(y.start));
+    for (final r in ranges) {
+      final last = chapter.ranges.isEmpty ? null : chapter.ranges.last;
+      if (last != null && r.start <= last.end + 1) {
+        chapter.ranges[chapter.ranges.length - 1] =
+            CitedRange(last.start, r.end > last.end ? r.end : last.end);
+      } else {
+        chapter.ranges.add(r);
+      }
+    }
+  }
+  for (final collection in collections.values) {
+    collection.chapters.sort((x, y) {
+      final byOrder = x.order.compareTo(y.order);
+      return byOrder != 0 ? byOrder : x.storyId.compareTo(y.storyId);
+    });
+  }
+  return collections.values.toList(growable: false);
+}
+
+/// 1-based display text of a cited range.
+String citedRangeText(CitedRange range, LineRangeText lineText) =>
+    lineText(range.start + 1, range.end == range.start ? null : range.end + 1);
 
 /// True when [content] carries a story answer envelope (new or legacy).
 bool isStoryAnswer(String content) => parseStoryAnswerEnvelope(content) != null;

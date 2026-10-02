@@ -36,7 +36,7 @@ class CollectEntityEvidenceTool extends AgentTool {
             'type': 'array',
             'items': {'type': 'string'},
             'description':
-                'Optional scope keys to restrict to (e.g. activity:act21mini, obt:main).',
+                'Optional scope keys to restrict to (e.g. activity:<activity_id>, obt:main).',
           },
           'terms': {
             'type': 'array',

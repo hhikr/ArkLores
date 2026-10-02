@@ -6,6 +6,7 @@ import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/fact_check_agent.dart';
 import '../../../core/agent/react_loop.dart';
 import '../../../core/agent/story_answer.dart';
+import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
@@ -35,95 +36,58 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final msg = widget.message;
     final isUser = msg.role == MessageRole.user;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            _buildAvatar(theme, isRobot: true),
-            const SizedBox(width: 8),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                // ── Assistant ReAct Steps (collapsible) ──────
-                if (!isUser && msg.steps.isNotEmpty) ...[
-                  _buildReActStepsSection(theme),
-                  const SizedBox(height: 4),
-                ],
-                if (!isUser && msg.factCheckVerdict != null) ...[
-                  _buildVerdictBanner(theme, msg.factCheckVerdict!),
-                  const SizedBox(height: 6),
-                ],
-                if (!isUser && isStoryAnswer(msg.content)) ...[
-                  _buildStoryAnswerSection(theme),
-                  const SizedBox(height: 6),
-                ],
-
-                // ── Message Content Box ──────────────────────
-                if (isUser)
-                  _buildUserContentBox(theme)
-                else
-                  _buildAssistantContentBox(theme),
-              ],
+    // R15: no avatars. The user's message is a right-aligned bubble; the
+    // answer uses the full width without a frame, with its status, steps
+    // and evidence folded into single lines above / below it.
+    if (isUser) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: LayoutBuilder(
+            builder: (context, constraints) => ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.8),
+              child: _buildUserContentBox(theme),
             ),
           ),
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            _buildAvatar(theme, isRobot: false),
+        ),
+      );
+    }
+    final storyAnswer = isStoryAnswer(msg.content);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (storyAnswer)
+            _buildStoryAnswerHeader(theme)
+          else if (msg.steps.isNotEmpty)
+            _buildReActStepsSection(theme),
+          if (storyAnswer || msg.steps.isNotEmpty) const SizedBox(height: 6),
+          if (msg.factCheckVerdict != null) ...[
+            _buildVerdictBanner(theme, msg.factCheckVerdict!),
+            const SizedBox(height: 6),
           ],
+          _buildAssistantContentBox(theme),
+          if (storyAnswer) _buildCitationTree(theme),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAvatar(AppThemeTokens theme, {required bool isRobot}) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: isRobot
-            ? theme.accentPrimary.withValues(alpha: 0.15)
-            : theme.bgSecondary,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isRobot
-              ? theme.accentPrimary.withValues(alpha: 0.4)
-              : theme.divider,
-          width: 1,
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          isRobot ? Icons.psychology_rounded : Icons.person_rounded,
-          size: 20,
-          color: isRobot ? theme.accentPrimary : theme.textPrimary,
-        ),
       ),
     );
   }
 
   Widget _buildUserContentBox(AppThemeTokens theme) {
     return Container(
+      key: const ValueKey('user-bubble'),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: theme.accentPrimary.withValues(alpha: 0.15),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          bottomLeft: Radius.circular(12),
-          bottomRight: Radius.circular(12),
-        ),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: theme.accentPrimary.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
-      child: Text(
+      child: SelectableText(
         widget.message.content,
         style: theme.bodyFont.copyWith(color: theme.textPrimary),
       ),
@@ -184,21 +148,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
+        SizedBox(
+          key: const ValueKey('assistant-content'),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: theme.cardSurface,
-            borderRadius: const BorderRadius.only(
-              topRight: Radius.circular(12),
-              bottomLeft: Radius.circular(12),
-              bottomRight: Radius.circular(12),
-            ),
-            border: Border.all(
-              color: theme.cardBorder,
-              width: 1,
-            ),
-          ),
           child: formattedContent.trim().isEmpty && msg.isStreaming
               ? _buildTypingIndicator(theme)
               : MarkdownBody(
@@ -243,13 +195,23 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
   /// R14: catalog labels of the stories cited in [content]; empty while
   /// loading or without a catalog (names then come from the path). Looked
-  /// up once the answer has finished streaming.
+  /// up once the answer has finished streaming. R15: inline citations use
+  /// the chapter part only (`BB-9 行动前《…》`) — the evidence tree below the
+  /// answer names the collection.
   Map<String, String> _storyLabels(String content) {
     if (widget.message.isStreaming) return const {};
     final ids = extractCitedStoryIds(content);
     if (ids.isEmpty) return const {};
-    return ref.watch(storyLabelsProvider(storyLabelsKey(ids))).valueOrNull ??
-        const {};
+    final entries = ref
+            .watch(storyCatalogEntriesProvider(storyLabelsKey(ids)))
+            .valueOrNull ??
+        const <String, StoryCatalogEntry>{};
+    return {
+      for (final e in entries.entries)
+        e.key: e.value.chapterLabel.isEmpty
+            ? e.value.label
+            : e.value.chapterLabel,
+    };
   }
 
   List<String> get _evidenceObservations => widget.message.steps
@@ -312,14 +274,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// Story answer section (R3b; R13 neutral envelope): status bar, cited
-  /// line references and, for pre-R13 answers, the read-coverage bar.
-  Widget _buildStoryAnswerSection(AppThemeTokens theme) {
-    final content = widget.message.content;
-    final envelope = parseStoryAnswerEnvelope(content);
-    final coverage = parseCoverageReportLine(content);
-    final refs = extractLineReferences(content);
-    final labels = _storyLabels(content);
+  /// R15: one tappable line for a story answer — status, confidence and
+  /// the reasoning steps (expanded on tap), instead of a status card above
+  /// a separate steps box. The pre-R13 coverage line stays below it.
+  Widget _buildStoryAnswerHeader(AppThemeTokens theme) {
+    final msg = widget.message;
+    final envelope = parseStoryAnswerEnvelope(msg.content);
+    final coverage = parseCoverageReportLine(msg.content);
     final status = envelope?.status;
     final accent = status == StoryAnswerStatus.answered
         ? theme.accentPrimary
@@ -330,94 +291,55 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       StoryAnswerStatus.notCovered => context.t.aiAnswerStatusNotCovered,
       null => '-',
     };
-
+    final parts = [
+      statusLabel,
+      if (envelope?.confidence != null)
+        '${context.t.aiInvestigationConfidence} ${envelope!.confidence}',
+      if (msg.steps.isNotEmpty)
+        context.t.aiStepsStatus(context.t.aiReasoningComplete, msg.steps.length),
+    ];
+    final icon = status == StoryAnswerStatus.answered
+        ? Icons.check_circle_outline_rounded
+        : Icons.error_outline_rounded;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha: 0.12),
-            border: Border(left: BorderSide(color: accent, width: 3)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.manage_search_rounded, size: 18, color: accent),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '${context.t.aiAnswerStatus}: $statusLabel',
-                      style: theme.titleFont.copyWith(
-                        color: accent,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
+        InkWell(
+          key: const ValueKey('answer-header'),
+          onTap: msg.steps.isEmpty
+              ? null
+              : () => setState(() => _showSteps = !_showSteps),
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Icon(icon, size: 15, color: accent),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    parts.join(' · '),
+                    style: theme.bodyFont.copyWith(
+                      color: accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
-              ),
-              if (envelope?.confidence != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  '${context.t.aiInvestigationConfidence}: '
-                  '${envelope!.confidence}',
-                  style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 11,
-                  ),
                 ),
+                if (msg.steps.isNotEmpty)
+                  Icon(
+                    _showSteps
+                        ? Icons.expand_less_rounded
+                        : Icons.chevron_right_rounded,
+                    size: 16,
+                    color: theme.textSecondary,
+                  ),
               ],
-            ],
-          ),
-        ),
-        if (refs.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            context.t.aiInvestigationEvidenceChain,
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 11,
             ),
           ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final ref in refs)
-                // Readable name; the raw source id stays available on
-                // long-press (tooltip).
-                Tooltip(
-                  message: ref,
-                  triggerMode: TooltipTriggerMode.longPress,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.bgSecondary,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: theme.divider, width: 0.5),
-                    ),
-                    child: Text(
-                      formatLineReference(ref, labels, lineText: _lineText),
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textPrimary,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-        if (coverage != null) ...[
-          const SizedBox(height: 8),
+        ),
+        if (_showSteps) _buildStepsList(theme),
+        if (coverage != null)
           Text(
             '${context.t.aiInvestigationCoverage}: '
             '${context.t.aiInvestigationRead}=${coverage.read} · '
@@ -428,11 +350,138 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               fontSize: 11,
             ),
           ),
-        ],
       ],
     );
   }
 
+  /// Expanded keys of the citation tree (`*` = the tree itself, then
+  /// collection labels and story ids).
+  final Set<String> _expanded = {};
+
+  bool _isOpen(String key, {bool byDefault = false}) =>
+      _expanded.contains(key) != byDefault;
+
+  void _toggle(String key) => setState(() {
+        if (!_expanded.remove(key)) _expanded.add(key);
+      });
+
+  /// R15: cited lines, folded by default: collection → chapter → line
+  /// chips (raw id on long-press). Collections start open, chapters start
+  /// open only when the collection has a single chapter.
+  Widget _buildCitationTree(AppThemeTokens theme) {
+    final msg = widget.message;
+    if (msg.isStreaming) return const SizedBox.shrink();
+    final ids = extractCitedStoryIds(msg.content);
+    if (ids.isEmpty) return const SizedBox.shrink();
+    final entries = ref
+            .watch(storyCatalogEntriesProvider(storyLabelsKey(ids)))
+            .valueOrNull ??
+        const <String, StoryCatalogEntry>{};
+    final groups = groupCitations(msg.content, entries);
+    final total = groups.fold<int>(0, (n, g) => n + g.citationCount);
+    final open = _isOpen('*');
+    final muted = theme.bodyFont.copyWith(
+      color: theme.textSecondary,
+      fontSize: 12,
+    );
+
+    Widget row(String key, String text, {required bool isOpen, double indent = 0, TextStyle? style}) =>
+        InkWell(
+          key: ValueKey('cite:$key'),
+          onTap: () => _toggle(key),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(indent, 5, 0, 5),
+            child: Row(
+              children: [
+                Icon(
+                  isOpen ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
+                  size: 16,
+                  color: theme.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Expanded(child: Text(text, style: style ?? muted)),
+              ],
+            ),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Divider(height: 1, color: theme.divider),
+          row(
+            '*',
+            context.t.aiEvidenceSummary(total, groups.length),
+            isOpen: open,
+          ),
+          if (open)
+            for (final group in groups) ...[
+              row(
+                'c:${group.label}',
+                '${group.label} · ${context.t.aiChapterCount(group.citationCount)}',
+                isOpen: _isOpen('c:${group.label}', byDefault: true),
+                indent: 14,
+                style: muted.copyWith(color: theme.textPrimary),
+              ),
+              if (_isOpen('c:${group.label}', byDefault: true))
+                for (final chapter in group.chapters) ...[
+                  row(
+                    's:${chapter.storyId}',
+                    '${chapter.label.isEmpty ? chapter.storyId.split('/').last : chapter.label}'
+                        ' · ${context.t.aiChapterCount(chapter.ranges.length)}',
+                    isOpen: _isOpen(
+                      's:${chapter.storyId}',
+                      byDefault: group.chapters.length == 1,
+                    ),
+                    indent: 28,
+                  ),
+                  if (_isOpen(
+                    's:${chapter.storyId}',
+                    byDefault: group.chapters.length == 1,
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(48, 2, 0, 6),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final range in chapter.ranges)
+                            Tooltip(
+                              message: range.rawRef(chapter.storyId),
+                              triggerMode: TooltipTriggerMode.longPress,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.bgSecondary,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: theme.divider,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Text(
+                                  citedRangeText(range, _lineText),
+                                  style: theme.bodyFont.copyWith(
+                                    color: theme.textPrimary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+            ],
+        ],
+      ),
+    );
+  }
   Widget _buildEvidenceSection(AppThemeTokens theme) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -548,23 +597,23 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               ),
             ),
           ),
-          if (_showSteps)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Divider(height: 10),
-                  ...widget.message.steps
-                      .map((step) => _buildStepRow(theme, step)),
-                ],
-              ),
-            ),
+          if (_showSteps) _buildStepsList(theme),
         ],
       ),
     );
   }
+
+  Widget _buildStepsList(AppThemeTokens theme) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Divider(height: 10),
+            ...widget.message.steps.map((step) => _buildStepRow(theme, step)),
+          ],
+        ),
+      );
 
   Widget _buildEvidenceRecord(AppThemeTokens theme, EvidenceRecord record) {
     final coverage = record.isDirectCandidate

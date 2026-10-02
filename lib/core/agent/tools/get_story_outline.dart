@@ -28,7 +28,7 @@ class GetStoryOutlineTool extends AgentTool {
       'Outline one story collection (event / main chapter / operator record) '
       'in game order: code, name, tag, official synopsis and story_id of '
       'every chapter. Target: a collection name, a scope id '
-      '(activity:act21mini) or a story_id (outlines its collection).';
+      '(activity:<activity_id>) or a story_id (outlines its collection).';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -107,6 +107,7 @@ class GetStoryOutlineTool extends AgentTool {
 
     final buffer = StringBuffer()
       ..writeln('Outline: 《${collection.label}》（${collection.collectionId}，'
+          '${collection.releaseMonth == null ? '' : '上线 ${collection.releaseMonth}，'}'
           '共 ${entries.length} 章，按游戏内顺序）')
       ..writeln('梗概是官方剧情回顾的简介，只是定位线索：要用作证据必须 READ 原文。');
     // Full rows for every chapter when they fit; otherwise full rows in a

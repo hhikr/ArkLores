@@ -490,6 +490,22 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String aiEvidenceSummary(int count, int stories) {
+    return '$count citations · $stories stories';
+  }
+
+  @override
+  String aiChapterCount(int count) {
+    return '$count cited';
+  }
+
+  @override
+  String get aiMoreActions => 'More';
+
+  @override
+  String get aiModeMenuTooltip => 'Answer mode';
+
+  @override
   String get aiInvestigationCoverage => 'Coverage';
 
   @override

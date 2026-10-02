@@ -169,7 +169,9 @@ void main() {
       final result = await tool.execute({'query': '角色B'}) as ToolExecutionResult;
       expect(result.observation, contains('Coverage Scopes: 1'));
       expect(result.observation, contains('Coverage Stories: 4'));
-      expect(result.observation, contains('Scope: activity:act_fixture'));
+      // R15: an overview of every collection comes first.
+      expect(result.observation, contains('出场总览（共 1 个故事集 / 4 章'));
+      expect(result.observation, contains('activity:act_fixture'));
       expect(result.observation, contains('level_fixture_c5.txt'));
     });
 

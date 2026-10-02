@@ -956,6 +956,30 @@ abstract class AppLocalizations {
   /// **'lines {start}–{end}'**
   String aiCitationLines(int start, int end);
 
+  /// No description provided for @aiEvidenceSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} citations · {stories} stories'**
+  String aiEvidenceSummary(int count, int stories);
+
+  /// No description provided for @aiChapterCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} cited'**
+  String aiChapterCount(int count);
+
+  /// No description provided for @aiMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get aiMoreActions;
+
+  /// No description provided for @aiModeMenuTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer mode'**
+  String get aiModeMenuTooltip;
+
   /// No description provided for @aiInvestigationCoverage.
   ///
   /// In en, this message translates to:

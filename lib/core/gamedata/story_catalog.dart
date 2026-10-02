@@ -41,7 +41,8 @@ const String storyCatalogDdl = '''
     avg_tag         TEXT,
     story_sort      INTEGER NOT NULL,
     synopsis        TEXT,
-    synopsis_path   TEXT
+    synopsis_path   TEXT,
+    start_time      INTEGER
   )
 ''';
 
@@ -58,8 +59,11 @@ class StoryCatalogEntry {
     this.avgTag,
     this.synopsis,
     this.synopsisPath,
+    this.startTime,
   });
 
+  // `start_time` is absent from R14 catalogs (R15 column); fromRow then
+  // leaves it null.
   factory StoryCatalogEntry.fromRow(Map<String, Object?> row) =>
       StoryCatalogEntry(
         storyId: '${row['story_id']}',
@@ -72,6 +76,7 @@ class StoryCatalogEntry {
         avgTag: row['avg_tag'] as String?,
         synopsis: row['synopsis'] as String?,
         synopsisPath: row['synopsis_path'] as String?,
+        startTime: (row['start_time'] as num?)?.toInt(),
       );
 
   /// Story file id as in `story_lines.story_id` (e.g.
@@ -90,6 +95,14 @@ class StoryCatalogEntry {
   final String? synopsis;
   final String? synopsisPath;
 
+  /// R15: the collection's release time (`startTime` of the review table,
+  /// unix seconds); null for collections without one (main story, operator
+  /// records) and for R14 catalogs.
+  final int? startTime;
+
+  /// `2024-06` (China time) of [startTime], or null.
+  String? get releaseMonth => releaseMonthOf(startTime);
+
   Map<String, Object?> toRow() => {
         'story_id': storyId,
         'collection_id': collectionId,
@@ -101,6 +114,7 @@ class StoryCatalogEntry {
         'story_sort': storySort,
         'synopsis': synopsis,
         'synopsis_path': synopsisPath,
+        'start_time': startTime,
       };
 
   /// Readable collection name with its kind, e.g. `巴别塔`, `主线·慈悲灯塔`,
@@ -132,6 +146,40 @@ class StoryCatalogEntry {
 
 bool _present(String? value) => value != null && value.trim().isNotEmpty;
 
+/// `yyyy-MM` in China time (UTC+8, the server's release clock) of a unix
+/// timestamp in seconds; null for missing / non-positive values.
+String? releaseMonthOf(int? startTime) {
+  if (startTime == null || startTime <= 0) return null;
+  final time = DateTime.fromMillisecondsSinceEpoch(startTime * 1000, isUtc: true)
+      .add(const Duration(hours: 8));
+  return '${time.year}-${time.month.toString().padLeft(2, '0')}';
+}
+
+/// Sort key of a collection in release order: dated collections by date,
+/// then main-story chapters by number, then the rest (operator records…).
+/// Ties fall back to the collection id.
+(int, int, String) collectionReleaseKey({
+  required String collectionId,
+  required String collectionType,
+  int? startTime,
+}) {
+  if (startTime != null && startTime > 0) return (0, startTime, collectionId);
+  if (collectionType == 'MAINLINE') {
+    final number = int.tryParse(
+          RegExp(r'(\d+)').firstMatch(collectionId)?.group(1) ?? '',
+        ) ??
+        0;
+    return (1, number, collectionId);
+  }
+  return (2, 0, collectionId);
+}
+
+int compareReleaseKeys((int, int, String) a, (int, int, String) b) {
+  if (a.$1 != b.$1) return a.$1.compareTo(b.$1);
+  if (a.$2 != b.$2) return a.$2.compareTo(b.$2);
+  return a.$3.compareTo(b.$3);
+}
+
 /// Parses `story_review_table.json` into catalog entries. [readSynopsis]
 /// receives the `storyInfo` value (e.g. `info/obt/main/level_st_14-01`) and
 /// returns the synopsis text or null. A story file listed in several
@@ -147,6 +195,7 @@ List<StoryCatalogEntry> parseStoryReviewTable(
     if (value is! Map) continue;
     final name = '${value['name'] ?? ''}'.trim();
     final type = '${value['entryType'] ?? ''}'.trim();
+    final start = (value['startTime'] as num?)?.toInt();
     final stories = value['infoUnlockDatas'];
     if (name.isEmpty || stories is! List) continue;
     for (final story in stories) {
@@ -168,6 +217,7 @@ List<StoryCatalogEntry> parseStoryReviewTable(
         avgTag: _nonEmpty(story['avgTag']),
         synopsis: synopsis == null ? null : normalizeSynopsis(synopsis),
         synopsisPath: info.isEmpty ? null : synopsisPathFor(info),
+        startTime: start != null && start > 0 ? start : null,
       ),);
     }
   }
@@ -462,6 +512,110 @@ class StoryCollection {
 
   String get label =>
       entries.isEmpty ? collectionId : entries.first.collectionLabel;
+
+  /// R15: release month of the collection, when the catalog has one.
+  String? get releaseMonth =>
+      entries.isEmpty ? null : entries.first.releaseMonth;
+}
+
+/// R15: a collection or chapter whose name appears in a question.
+class NamedStoryTarget {
+  const NamedStoryTarget({
+    required this.name,
+    required this.collectionId,
+    required this.label,
+    required this.chapters,
+    this.storyId,
+    this.releaseMonth,
+  });
+
+  /// The name as written in the question.
+  final String name;
+  final String collectionId;
+
+  /// Collection label, or the chapter label when [storyId] is set.
+  final String label;
+  final int chapters;
+
+  /// Set when the name is a chapter name.
+  final String? storyId;
+  final String? releaseMonth;
+}
+
+/// Collections and chapters whose names occur verbatim in [text], longest
+/// names first and non-overlapping. Short names are ambiguous with ordinary
+/// words, so a name must be at least 2 characters for an event / main
+/// collection and at least 3 for an operator-record collection or a chapter,
+/// unless the question puts it in 《》. Locating hints only.
+Future<List<NamedStoryTarget>> queryNamedStoryTargets(
+  DatabaseExecutor db,
+  String text, {
+  int limit = 4,
+}) async {
+  if (text.trim().isEmpty || !await hasStoryCatalog(db)) return const [];
+  final quoted = {
+    for (final m in RegExp('《([^》]+)》').allMatches(text)) m.group(1)!.trim(),
+  };
+  bool long(String name, int min) =>
+      name.runes.length >= min || quoted.contains(name);
+
+  final candidates = <NamedStoryTarget>[];
+  final collections = await db.rawQuery(
+    'SELECT * , COUNT(*) AS n FROM $storyCatalogTable '
+    'GROUP BY collection_id',
+  );
+  for (final row in collections) {
+    final entry = StoryCatalogEntry.fromRow(row);
+    final name = entry.collectionName.trim();
+    final min = entry.collectionType == 'NONE' ? 3 : 2;
+    if (!long(name, min) || !text.contains(name)) continue;
+    candidates.add(NamedStoryTarget(
+      name: name,
+      collectionId: entry.collectionId,
+      label: entry.collectionLabel,
+      chapters: (row['n'] as num).toInt(),
+      releaseMonth: entry.releaseMonth,
+    ),);
+  }
+  final chapters = await db.rawQuery(
+    'SELECT * FROM $storyCatalogTable WHERE story_name IS NOT NULL '
+    'AND story_name != collection_name',
+  );
+  final seenChapterNames = <String>{};
+  for (final row in chapters) {
+    final entry = StoryCatalogEntry.fromRow(row);
+    final name = entry.storyName!.trim();
+    if (!long(name, 3) || !text.contains(name)) continue;
+    // A chapter name shared by 行动前/行动后 (or reused across collections)
+    // is listed once per collection, at its first chapter.
+    if (!seenChapterNames.add('${entry.collectionId}#$name')) continue;
+    candidates.add(NamedStoryTarget(
+      name: name,
+      collectionId: entry.collectionId,
+      label: entry.label,
+      chapters: 1,
+      storyId: entry.storyId,
+      releaseMonth: entry.releaseMonth,
+    ),);
+  }
+  candidates.sort((a, b) {
+    final byLength = b.name.runes.length.compareTo(a.name.runes.length);
+    if (byLength != 0) return byLength;
+    return a.collectionId.compareTo(b.collectionId);
+  });
+  final taken = <(int, int)>[];
+  final result = <NamedStoryTarget>[];
+  for (final candidate in candidates) {
+    final start = text.indexOf(candidate.name);
+    final span = (start, start + candidate.name.length);
+    final overlaps = taken.any((t) => span.$1 < t.$2 && t.$1 < span.$2) &&
+        !taken.contains(span);
+    if (overlaps) continue;
+    taken.add(span);
+    result.add(candidate);
+    if (result.length >= limit) break;
+  }
+  return result;
 }
 
 /// Escapes LIKE wildcards (`\` is the ESCAPE character).

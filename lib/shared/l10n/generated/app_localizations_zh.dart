@@ -474,6 +474,22 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String aiEvidenceSummary(int count, int stories) {
+    return '证据 $count 处 · 来自 $stories 个故事';
+  }
+
+  @override
+  String aiChapterCount(int count) {
+    return '$count 处';
+  }
+
+  @override
+  String get aiMoreActions => '更多';
+
+  @override
+  String get aiModeMenuTooltip => '回答方式';
+
+  @override
   String get aiInvestigationCoverage => '已读范围';
 
   @override

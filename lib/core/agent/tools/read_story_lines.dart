@@ -36,7 +36,7 @@ class ReadStoryLinesTool extends AgentTool {
           'story_id': {
             'type': 'string',
             'description':
-                'Story file id as returned by search_story_coverage, e.g. activities/act21mini/level_act21mini_st07.txt.',
+                'Story file id as returned by search_story_coverage, e.g. activities/<activity_id>/<file>.txt.',
           },
           'start_line': {
             'type': 'integer',

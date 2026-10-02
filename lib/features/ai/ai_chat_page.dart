@@ -25,15 +25,20 @@ class AiChatPage extends ConsumerStatefulWidget {
   ConsumerState<AiChatPage> createState() => _AiChatPageState();
 }
 
-class _AiChatPageState extends ConsumerState<AiChatPage> {
+class _AiChatPageState extends ConsumerState<AiChatPage>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  // Ask tab first; the wiki handoff sets the mode, not the tab.
+  late final TabController _tabController = TabController(length: 2, vsync: this)
+    ..addListener(() {
+      if (!_tabController.indexIsChanging && mounted) setState(() {});
+    });
   bool _handledInitialWikiContext = false;
-
-  int get _initialTabIndex => 0; // Ask tab; wiki handoff sets the mode.
 
   @override
   void dispose() {
+    _tabController.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -57,40 +62,103 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     final isConfigured = ref.watch(apiConfigProvider).isValid;
     _dispatchInitialWikiContext(isConfigured);
 
-    return DefaultTabController(
-      length: 2,
-      initialIndex: _initialTabIndex,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: theme.bgSecondary,
-          elevation: 0,
-          title: Text(
-            context.t.aiChatTitle,
-            style: theme.titleFont.copyWith(fontSize: 20),
+    // R15: one bar — the Ask / Roleplay switch where the title was, the
+    // conversation actions on the right (Ask tab only).
+    final onAsk = _tabController.index == 0;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: theme.bgSecondary,
+        elevation: 0,
+        titleSpacing: 4,
+        title: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          dividerColor: Colors.transparent,
+          indicatorColor: theme.accentPrimary,
+          labelColor: theme.accentPrimary,
+          unselectedLabelColor: theme.textSecondary,
+          labelStyle: theme.titleFont.copyWith(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
           ),
-          bottom: TabBar(
-            indicatorColor: theme.accentPrimary,
-            labelColor: theme.accentPrimary,
-            unselectedLabelColor: theme.textSecondary,
-            labelStyle: theme.titleFont.copyWith(fontWeight: FontWeight.bold),
-            unselectedLabelStyle: theme.titleFont,
-            tabs: [
-              Tab(text: context.t.aiTabAsk),
-              Tab(text: context.t.aiTabRoleplay),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            // ── Ask Tab (unified: summarize / verify / investigate) ──
-            isConfigured ? _buildAskTab(theme) : _buildConfigRequiredTab(theme),
-
-            isConfigured ? const RoleplayTab() : _buildConfigRequiredTab(theme),
+          unselectedLabelStyle: theme.titleFont.copyWith(fontSize: 17),
+          tabs: [
+            Tab(text: context.t.aiTabAsk),
+            Tab(text: context.t.aiTabRoleplay),
           ],
         ),
+        actions: [
+          if (onAsk && isConfigured) ..._buildAskActions(theme),
+        ],
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // ── Ask Tab (unified: summarize / verify / investigate) ──
+          isConfigured ? _buildAskTab(theme) : _buildConfigRequiredTab(theme),
+
+          isConfigured ? const RoleplayTab() : _buildConfigRequiredTab(theme),
+        ],
       ),
     );
+  }
+
+  /// History and new-conversation buttons plus a menu with retry / clear.
+  List<Widget> _buildAskActions(AppThemeTokens theme) {
+    final chatHistory = ref.watch(askChatProvider);
+    final chatNotifier = ref.read(askChatProvider.notifier);
+    final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
+    return [
+      IconButton(
+        onPressed: isSending
+            ? null
+            : () => Navigator.of(context).push(
+                  smoothPageRoute<void>(
+                    builder: (_) => const ChatHistoryPage(),
+                  ),
+                ),
+        tooltip: context.t.aiHistoryTitle,
+        icon: const Icon(Icons.history_rounded),
+      ),
+      IconButton(
+        onPressed: isSending ? null : chatNotifier.newSession,
+        tooltip: context.t.aiNewConversation,
+        icon: const Icon(Icons.add_comment_outlined),
+      ),
+      if (chatHistory.isNotEmpty)
+        PopupMenuButton<String>(
+          tooltip: context.t.aiMoreActions,
+          icon: const Icon(Icons.more_vert_rounded),
+          color: theme.cardSurface,
+          onSelected: (value) {
+            if (value == 'retry') chatNotifier.retryLast();
+            if (value == 'clear') _confirmClearHistory(context, chatNotifier);
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'retry',
+              enabled: !isSending,
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.refresh_rounded),
+                title: Text(context.t.aiRetry),
+              ),
+            ),
+            PopupMenuItem(
+              value: 'clear',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.delete_sweep_rounded, color: theme.danger),
+                title: Text(context.t.aiClearHistory),
+              ),
+            ),
+          ],
+        ),
+    ];
   }
 
   Widget _buildConfigRequiredTab(AppThemeTokens theme) {
@@ -154,60 +222,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       }
     });
 
+    // R15: the conversation fills the tab; actions live in the app bar and
+    // the mode picker sits in the input row.
     return Column(
       children: [
-        _buildModeSelector(theme),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: theme.bgSecondary.withValues(alpha: 0.5),
-          child: Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded,
-                  size: 16, color: theme.accentPrimary,),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  context.t.aiAskSource,
-                  style: theme.bodyFont
-                      .copyWith(color: theme.textSecondary, fontSize: 12),
-                ),
-              ),
-              if (chatHistory.isNotEmpty)
-                IconButton(
-                  onPressed: isSending ? null : chatNotifier.retryLast,
-                  tooltip: context.t.aiRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  visualDensity: VisualDensity.compact,
-                ),
-              if (chatHistory.isNotEmpty)
-                IconButton(
-                  onPressed: () =>
-                      _confirmClearHistory(context, chatNotifier),
-                  tooltip: context.t.aiClearHistory,
-                  icon: Icon(Icons.delete_sweep_rounded, color: theme.danger),
-                  visualDensity: VisualDensity.compact,
-                ),
-              IconButton(
-                onPressed: isSending
-                    ? null
-                    : () => Navigator.of(context).push(
-                        smoothPageRoute<void>(
-                          builder: (_) => const ChatHistoryPage(),
-                        ),
-                      ),
-                tooltip: context.t.aiHistoryTitle,
-                icon: const Icon(Icons.history_rounded),
-                visualDensity: VisualDensity.compact,
-              ),
-              IconButton(
-                onPressed: isSending ? null : chatNotifier.newSession,
-                tooltip: context.t.aiNewConversation,
-                icon: const Icon(Icons.add_comment_outlined),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
-        ),
         Expanded(
           child: chatHistory.isEmpty
               ? _buildEmptyState(theme)
@@ -227,63 +245,88 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           onSend: isSending ? chatNotifier.cancel : _handleAskSend,
           hintText: context.t.aiAskInputPlaceholder,
           isCancel: isSending,
+          leading: _buildModeMenu(theme),
         ),
       ],
     );
   }
 
-  /// Mode picker: Auto (LLM-routed) or one of the three pinned workflows.
-  Widget _buildModeSelector(AppThemeTokens theme) {
+  String _modeLabel(AiMode mode) => switch (mode) {
+        AiMode.auto => context.t.aiModeAuto,
+        AiMode.summarize => context.t.aiModeSummarize,
+        AiMode.verify => context.t.aiModeVerify,
+        AiMode.investigate => context.t.aiModeInvestigate,
+      };
+
+  /// R15: compact mode picker in the input row ("自动 ▾"); the mode
+  /// descriptions moved into the menu.
+  Widget _buildModeMenu(AppThemeTokens theme) {
     final mode = ref.watch(aiModeProvider);
-    final desc = switch (mode) {
-      AiMode.auto => context.t.aiModeAutoDesc,
-      AiMode.summarize => context.t.aiModeSummarizeDesc,
-      AiMode.verify => context.t.aiModeVerifyDesc,
-      AiMode.investigate => context.t.aiModeInvestigateDesc,
-    };
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-      color: theme.bgSecondary.withValues(alpha: 0.3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final candidate in AiMode.values)
-                ChoiceChip(
-                  label: Text(
-                    switch (candidate) {
-                      AiMode.auto => context.t.aiModeAuto,
-                      AiMode.summarize => context.t.aiModeSummarize,
-                      AiMode.verify => context.t.aiModeVerify,
-                      AiMode.investigate => context.t.aiModeInvestigate,
-                    },
-                  ),
-                  selected: candidate == mode,
-                  onSelected: (_) {
-                    ref.read(aiModeProvider.notifier).state = candidate;
-                  },
-                  labelStyle: theme.bodyFont.copyWith(fontSize: 12),
-                  selectedColor: theme.accentPrimary.withValues(alpha: 0.2),
-                  backgroundColor: theme.bgPrimary,
-                  side: BorderSide(color: theme.divider, width: 0.5),
-                  visualDensity: VisualDensity.compact,
-                  showCheckmark: false,
+    return PopupMenuButton<AiMode>(
+      key: const ValueKey('ask-mode-menu'),
+      tooltip: context.t.aiModeMenuTooltip,
+      color: theme.cardSurface,
+      initialValue: mode,
+      onSelected: (value) => ref.read(aiModeProvider.notifier).state = value,
+      itemBuilder: (context) => [
+        for (final candidate in AiMode.values)
+          PopupMenuItem(
+            value: candidate,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                _modeLabel(candidate),
+                style: theme.bodyFont.copyWith(
+                  color: candidate == mode
+                      ? theme.accentPrimary
+                      : theme.textPrimary,
+                  fontWeight: FontWeight.w600,
                 ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            desc,
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 11,
+              ),
+              subtitle: Text(
+                switch (candidate) {
+                  AiMode.auto => context.t.aiModeAutoDesc,
+                  AiMode.summarize => context.t.aiModeSummarizeDesc,
+                  AiMode.verify => context.t.aiModeVerifyDesc,
+                  AiMode.investigate => context.t.aiModeInvestigateDesc,
+                },
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
             ),
           ),
-        ],
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.accentPrimary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: theme.accentPrimary.withValues(alpha: 0.35),
+            width: 0.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _modeLabel(mode),
+              style: theme.bodyFont.copyWith(
+                color: theme.accentPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            Icon(
+              Icons.arrow_drop_down_rounded,
+              size: 18,
+              color: theme.accentPrimary,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -310,6 +353,13 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               context.t.aiAskEmpty,
               style: theme.bodyFont
                   .copyWith(color: theme.textSecondary, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.t.aiAskSource,
+              style: theme.bodyFont
+                  .copyWith(color: theme.textSecondary, fontSize: 11),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -348,9 +398,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     required VoidCallback onSend,
     required String hintText,
     bool isCancel = false,
+    Widget? leading,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
       decoration: BoxDecoration(
         color: theme.bgSecondary,
         border: Border(top: BorderSide(color: theme.divider, width: 0.5)),
@@ -358,6 +409,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       child: SafeArea(
         child: Row(
           children: [
+            if (leading != null) ...[leading, const SizedBox(width: 8)],
             Expanded(
               child: Container(
                 decoration: BoxDecoration(

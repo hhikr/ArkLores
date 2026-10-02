@@ -50,7 +50,7 @@ class SearchLocalLoreTool extends AgentTool {
           'scope_id': {
             'type': 'string',
             'description':
-                'Optional resolved story scope id, e.g. activity:act21mini. Use with entity_id and evidence mode.',
+                'Optional resolved story scope id, e.g. activity:<activity_id>. Use with entity_id and evidence mode.',
           },
           'search_mode': {
             'type': 'string',

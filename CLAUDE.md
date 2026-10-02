@@ -3,7 +3,7 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`，OUTLINE）；
 向量、目录、梗概都只作定位线索，不作证据。
-当前版本：v0.11.0（R13 + R14，release 草稿）；最新已发布 release：v0.10.0。
+当前版本：v0.11.0（R13–R15，预发布版，真机测试中）；最新正式 release：v0.10.0。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
@@ -200,6 +200,14 @@ dart run tools/build_story_catalog.dart --db=<db> --source=<ArknightsGameData �
 ```
 
 planner 用 `OUTLINE` 看整个故事集的章节梗概；App 用它把引用显示为故事名。
+R15 起目录带 `start_time`（活动上线时间；主线、密录为空），COVER 总览与 OUTLINE 按它显示"上线 yyyy-MM"。
+
+### 名字与身份（R15）
+
+知识库**不判定"谁是谁"**（代号/真名、"？？？"、冒名、夺舍都是剧情解读，写死的身份标注会把错误
+当事实喂给模型）。数据层只保证每一跳检索能走通：库中没有的写法给出读音感知的近似名
+（`name_similarity.dart`，只陈述"字符串相近"）、scope 内 0 命中时报告范围外命中、COVER 先给
+全部故事集总览；身份由 Agent 在问答时读原文确认。不要新增别名/身份表来"修"某个具体角色。
 没有该表的库照常可用（OUTLINE 提示改用 MAP，引用显示由路径推出的名字）。
 
 ### 剧情向量（可选表，R12）

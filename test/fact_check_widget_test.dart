@@ -104,7 +104,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // Pin the Summarize mode so the auto router is not invoked.
+    // Pin the Summarize mode so the auto router is not invoked (R15: the
+    // modes live in the input row's menu).
+    await tester.tap(find.byTooltip('回答方式'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('概括'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '阿米娅');
@@ -114,7 +117,10 @@ void main() {
     await tester.tap(find.byTooltip('取消'));
     await tester.pump();
     expect(find.text('已取消本次回答。'), findsOneWidget);
-    expect(find.byTooltip('重试'), findsOneWidget);
+    // R15: retry sits in the app bar's overflow menu.
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    expect(find.text('重试'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -217,8 +223,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('剧情智囊'), findsOneWidget); // AppBar title
-    expect(find.text('AI 问答'), findsOneWidget); // Ask tab
+    expect(find.text('AI 问答'), findsOneWidget); // Ask tab in the app bar
     expect(find.textContaining('Wiki reading context'), findsOneWidget);
     expect(find.textContaining('not GameData evidence'), findsOneWidget);
     expect(find.textContaining('阿米娅是罗德岛的公开领袖。'), findsOneWidget);

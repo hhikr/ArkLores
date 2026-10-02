@@ -174,7 +174,9 @@ dart run tools/build_story_embeddings.dart --db=build/gamedata_mobile/arklores_g
   `story/[uc]info/<storyInfo>.txt`（游戏剧情回顾里的一段官方简介）。`story_id = storyTxt + ".txt"`；
   同一文件出现在多个故事集时按 JSON 顺序取第一个，结果确定。
 - 列：`story_id`、`collection_id`、`collection_name`、`collection_type`（ACTIVITY / MINI_ACTIVITY /
-  MAINLINE / NONE=干员密录）、`story_code`、`story_name`、`avg_tag`、`story_sort`、`synopsis`、`synopsis_path`。
+  MAINLINE / NONE=干员密录）、`story_code`、`story_name`、`avg_tag`、`story_sort`、`synopsis`、`synopsis_path`、
+  `start_time`（R15：故事集的 `startTime`，unix 秒；≤0 记为 NULL，主线与密录没有。R14 的旧目录
+  没有这一列，读取时按 NULL 处理；补表工具重写整表即带上）。
 - 构建：全量与增量构建都在覆盖层之后整表重建（约 2000 行），并把章节名、梗概写进
   `story_chapter_profiles` 的 title / summary；manifest 记 `story_catalog_count`。
   `story_review_table.json` 已加入源白名单；`[uc]info` 变更只触发目录重建，绝不当剧情导入。

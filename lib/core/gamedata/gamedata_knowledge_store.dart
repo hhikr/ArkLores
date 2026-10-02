@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 
 import 'game_retrieval.dart';
 import 'gamedata_query_plan.dart';
+import 'name_similarity.dart';
 import 'story_catalog.dart';
 import 'story_line_search.dart';
 import 'story_vectors.dart';
@@ -714,11 +715,49 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     );
   }
 
+  /// R15: name inventory of the currently open DB, loaded on first use and
+  /// dropped with the connection (like [_vectorIndex]).
+  Future<List<NameOccurrence>>? _nameInventory;
+
+  @override
+  Future<List<SimilarName>> similarNames(String term, {int limit = 3}) async {
+    final db = await _open();
+    if (db == null || term.trim().isEmpty) return const [];
+    final inventory = await (_nameInventory ??= loadNameInventory(db));
+    return rankSimilarNames(term, inventory, limit: limit);
+  }
+
+  @override
+  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
+    List<String> terms, {
+    String? scopeId,
+  }) async {
+    final db = await _open();
+    if (db == null) return const {};
+    return queryTermLineCounts(db, terms, scopeId: scopeId);
+  }
+
+  @override
+  Future<List<String>> namesInText(String text) async {
+    final db = await _open();
+    if (db == null || text.trim().isEmpty) return const [];
+    final inventory = await (_nameInventory ??= loadNameInventory(db));
+    return namesMentionedIn(text, inventory);
+  }
+
+  @override
+  Future<List<NamedStoryTarget>> namedStoryTargets(String text) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryNamedStoryTargets(db, text);
+  }
+
   Future<void> close() async {
     await _db?.close();
     _db = null;
     _openedFileStat = null;
     _vectorIndex = null;
+    _nameInventory = null;
   }
 
   Future<sqflite.Database?> _open() async {

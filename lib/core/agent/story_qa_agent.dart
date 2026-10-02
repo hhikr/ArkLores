@@ -42,6 +42,12 @@ class StoryQaAgent {
           llmClient: disambiguatorClient ?? auxClient ?? llmClient,
         ),
         _storyCatalogLookup = gameDataStore?.storyCatalogEntries,
+        _questionContextLookup = gameDataStore == null
+            ? null
+            : ((question) async => (
+                  names: await gameDataStore.namesInText(question),
+                  targets: await gameDataStore.namedStoryTargets(question),
+                )),
         _toolRegistry = ToolRegistry() {
     // R9: ALL tools share ONE store instance (separate stores closed each
     // other's shared sqflite connection).
@@ -61,6 +67,7 @@ class StoryQaAgent {
   }
 
   final StoryCatalogLookup? _storyCatalogLookup;
+  final QuestionContextLookup? _questionContextLookup;
   final LLMClient _llmClient;
   final LLMClient _plannerClient;
   final LLMClient _extractorClient;
@@ -95,6 +102,7 @@ class StoryQaAgent {
       // ends through the writer with what was read.
       maxToolSteps: 24,
       storyCatalogLookup: _storyCatalogLookup,
+      questionContextLookup: _questionContextLookup,
     );
     return loop.run(
       // The planner gets the trust rules + protocol only; the answer format

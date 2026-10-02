@@ -48,7 +48,7 @@ class SearchStoryLinesTool extends AgentTool {
           'scope_id': {
             'type': 'string',
             'description':
-                'Optional canonical scope key, e.g. activity:act21mini or obt:main.',
+                'Optional canonical scope key, e.g. activity:<activity_id> or obt:main.',
           },
           'top_k': {
             'type': 'integer',
@@ -62,6 +62,22 @@ class SearchStoryLinesTool extends AgentTool {
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
     final query = (arguments['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) return 'Error: query parameter is empty';
+    // R15: a single chapter is not a search scope (a live run repeated
+    // `FIND x @<file>.txt` seven times, matching nothing); lines inside a
+    // known chapter are read with READ.
+    var rawScope = '${arguments['scope_id'] ?? ''}'.trim();
+    if (rawScope.startsWith('@')) rawScope = rawScope.substring(1).trim();
+    final isFile = rawScope.endsWith('.txt') ||
+        (rawScope.contains('/') &&
+            !RegExp(r'^activities/[^/]+/?$').hasMatch(rawScope));
+    if (isFile) {
+      final file = rawScope.endsWith('.txt') ? rawScope : '$rawScope.txt';
+      return ToolExecutionResult(
+        observation: '“$file”是单个章节文件，不是检索范围。要看这一章里的内容，'
+            '直接 READ $file <起始行> <结束行>（检索结果已给出行号）；要在整个故事集'
+            '里检索，scope 用 activity:<活动id>，或去掉 scope 检索全库。',
+      );
+    }
     final scopeId = normalizeScopeId(arguments['scope_id'] as String?);
     final topK = ((arguments['top_k'] as num?)?.toInt() ?? 6).clamp(1, 10);
 
@@ -88,12 +104,20 @@ class SearchStoryLinesTool extends AgentTool {
     final semantic = await _semanticHits(store, query, scopeId, topK * 4);
     final vectorHits = semantic.hits;
 
+    // R15: terms with no literal line — near names for a term the DB lacks,
+    // hits outside the scope for a term the scope lacks.
+    final termNotes = await _termNotes(store, terms, scopeId);
+    final anyLiteralElsewhere = termNotes.elsewhere;
+
     if (keywordHits.isEmpty && vectorHits.isEmpty) {
       return ToolExecutionResult(
-        observation: 'No story line matches "$query"'
-            '${scopeId == null ? '' : ' in $scopeId'} '
-            '(${semantic.mode}). Try other wording, fewer terms, or COVER an '
-            'entity name.',
+        observation: [
+          'No story line matches "$query"'
+              '${scopeId == null ? '' : ' in $scopeId'} '
+              '(${semantic.mode}). Try other wording, fewer terms, or COVER an '
+              'entity name.',
+          ...termNotes.lines,
+        ].join('\n'),
       );
     }
 
@@ -145,9 +169,13 @@ class SearchStoryLinesTool extends AgentTool {
     // name that never occurs (live negative case: a fictional name "hit"
     // unrelated chapters). Scores of related and unrelated chunks overlap,
     // so instead of a threshold the observation states it plainly.
+    for (final note in termNotes.lines) {
+      buffer.writeln(note);
+    }
     if (keywordHits.isEmpty) {
-      buffer.writeln('注意：原文中没有任何一行包含这些词中的任何一个。以下只是语义'
-          '相近的段落，可能与问题无关；若要找的是专有名词，这通常意味着资料未覆盖。');
+      buffer.writeln('注意：${scopeId == null ? '' : '范围内'}原文中没有任何一行包含'
+          '这些词中的任何一个。以下只是语义相近的段落，可能与问题无关'
+          '${anyLiteralElsewhere || termNotes.hasSuggestions ? '；先看上面的近似名或范围外命中' : '；若要找的是专有名词，这通常意味着资料未覆盖'}。');
     } else if (terms.length > 1 &&
         keywordHits.every((h) => h.bestTermCount < terms.length)) {
       buffer.writeln('注意：没有一行同时包含全部 ${terms.length} 个词；结果按单行'
@@ -200,6 +228,52 @@ class SearchStoryLinesTool extends AgentTool {
         ],
       }),
     );
+  }
+
+  /// Notes for terms without a literal line: near names when the whole DB
+  /// lacks a term (a misspelt name), where else it occurs when only the
+  /// scope lacks it.
+  Future<({List<String> lines, bool elsewhere, bool hasSuggestions})>
+      _termNotes(
+    GameDataRetrieval store,
+    List<String> terms,
+    String? scopeId,
+  ) async {
+    final lines = <String>[];
+    var elsewhere = false;
+    var suggestions = false;
+    final Map<String, ({int all, int inScope})> counts;
+    try {
+      counts = await store.storyLineTermCounts(terms, scopeId: scopeId);
+    } catch (_) {
+      return (lines: lines, elsewhere: false, hasSuggestions: false);
+    }
+    for (final entry in counts.entries) {
+      final term = entry.key;
+      final count = entry.value;
+      if (count.all == 0) {
+        final hint = describeSimilarNames(term, await store.similarNames(term));
+        lines.add(hint ?? '库中没有“$term”这个写法，也没有字形或读音相近的名字。');
+        suggestions = suggestions || hint != null;
+      } else if (scopeId != null && count.inScope == 0) {
+        elsewhere = true;
+        final outside = await store.searchStoryLinesLike(
+          [term],
+          storyLimit: 3,
+          linesPerStory: 1,
+        );
+        final labels = await store.storyCatalogEntries(
+          [for (final h in outside) h.storyId],
+        );
+        final where = [
+          for (final h in outside)
+            '${h.storyId}（${labels[h.storyId]?.label ?? fallbackStoryLabel(h.storyId)}，${h.hits} 行）',
+        ].join('、');
+        lines.add('范围外命中：“$term”在 $scopeId 内 0 行，全库 ${count.all} 行，'
+            '例如 $where。去掉 scope 再 FIND 可看全部。');
+      }
+    }
+    return (lines: lines, elsewhere: elsewhere, hasSuggestions: suggestions);
   }
 
   /// Collection id of an activity scope key (`activity:act33side` →
@@ -258,6 +332,10 @@ String? normalizeScopeId(String? raw) {
   if (scope.startsWith('activities:')) {
     scope = 'activity:${scope.substring('activities:'.length)}';
   }
+  // R15: a story-path spelling (`activities/<id>` or `activities/<id>/`)
+  // names the activity, as in OUTLINE.
+  final path = RegExp(r'^activities/([^/]+)/?$').firstMatch(scope);
+  if (path != null) return 'activity:${path.group(1)}';
   if (!scope.contains(':') && scope != 'obt') scope = 'activity:$scope';
   return scope;
 }

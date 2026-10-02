@@ -19,10 +19,17 @@ typedef StoryCatalogLookup = Future<Map<String, StoryCatalogEntry>> Function(
   Iterable<String> storyIds,
 );
 
+/// R15: names (characters / speakers) and catalog collections / chapters
+/// written in a question.
+typedef QuestionContextLookup
+    = Future<({List<String> names, List<NamedStoryTarget> targets})> Function(
+  String question,
+);
+
 /// Compacts an OUTLINE observation for the state: one line per chapter
 /// (`label | story_id`) followed by its synopsis clipped to
 /// [synopsisChars]; DATA block and notes dropped. Exposed for tests.
-String compactOutline(String observation, {int synopsisChars = 70}) {
+String compactOutline(String observation, {int synopsisChars = 120}) {
   final out = StringBuffer();
   final lines = observation.split('\n');
   for (final raw in lines) {
@@ -68,8 +75,10 @@ class PlannerLoop {
     int safetyMaxIterations = 100,
     int maxToolSteps = 40,
     StoryCatalogLookup? storyCatalogLookup,
+    QuestionContextLookup? questionContextLookup,
   })  : _maxToolSteps = maxToolSteps,
         _storyCatalogLookup = storyCatalogLookup,
+        _questionContextLookup = questionContextLookup,
         _llmClient = llmClient,
         _writerClient = writerClient ?? llmClient,
         _toolRegistry = toolRegistry,
@@ -98,6 +107,63 @@ class PlannerLoop {
   /// R14: resolves story ids to catalog entries (readable chapter names) for
   /// the state the planner and the writer see; null leaves raw ids.
   final StoryCatalogLookup? _storyCatalogLookup;
+
+  /// R15: names / collections in the question (null: none detected).
+  final QuestionContextLookup? _questionContextLookup;
+
+  Future<({List<String> names, List<NamedStoryTarget> targets})>
+      _questionContext(String question) async {
+    final lookup = _questionContextLookup;
+    if (lookup == null) {
+      return (names: <String>[], targets: <NamedStoryTarget>[]);
+    }
+    try {
+      return await lookup(question);
+    } catch (_) {
+      // A hint only; the run works without it.
+      return (names: <String>[], targets: <NamedStoryTarget>[]);
+    }
+  }
+
+  /// R15: people of the question whose COVER overview goes into state.
+  static const int _maxOverviewNames = 2;
+  static const int _maxOverviewRows = 15;
+
+  /// Overview lines of a COVER for [name] (`出场总览…` up to the details), or
+  /// null when the tool is not registered or finds nothing.
+  Future<String?> _coverageOverview(String name) async {
+    final tool = _toolRegistry.getTool('search_story_coverage');
+    if (tool == null) return null;
+    try {
+      final result = await tool.execute({'query': name});
+      final text = result is ToolExecutionResult ? result.observation : '$result';
+      final start = text.indexOf('出场总览');
+      if (start < 0) return null;
+      final end = text.indexOf('出场明细', start);
+      final lines = text
+          .substring(start, end < 0 ? text.length : end)
+          .trimRight()
+          .split('\n');
+      final rows = lines.skip(1).toList();
+      if (rows.length <= _maxOverviewRows) return lines.join('\n');
+      // Keep the collections with the most mentions, still in release
+      // order, so a frequent name does not flood the state.
+      int mentions(String row) =>
+          int.tryParse(RegExp(r'提及 (\d+) 次').firstMatch(row)?.group(1) ?? '') ??
+          0;
+      final keep = ([...rows]..sort((a, b) => mentions(b).compareTo(mentions(a))))
+          .take(_maxOverviewRows)
+          .toSet();
+      return [
+        lines.first,
+        for (final row in rows)
+          if (keep.contains(row)) row,
+        '  （另有 ${rows.length - _maxOverviewRows} 个提及较少的故事集未列出）',
+      ].join('\n');
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// R12: older recent-window messages are clipped to this many characters.
   static const int _clipOlder = 600;
@@ -171,23 +237,57 @@ DONE
     final state = InvestigationState();
     // R12: the lines READ actually returned, for the writer.
     final readPages = <ReadPage>[];
-    // R14: a follow-up question inherits the original text the previous turn
-    // read: it counts as read (no re-reading, citable) and reaches the
-    // writer after this turn's own pages.
-    for (final page in priorPages) {
-      state.noteRead(page.storyId, page.firstLine, page.lastLine);
-    }
-    state.priorReadStories.addAll(priorPages.map((p) => p.storyId));
-    await _refreshLabels(state);
-    // R14: the extractor sees no chat history; a follow-up ("那根本原因
-    // 呢？") is only meaningful with the previous question attached.
     final previousQuestions = [
       for (final m in chatHistory)
         if (m.role == MessageRole.user) m.content,
     ];
-    final extractorQuery = previousQuestions.isEmpty
-        ? userQuery
-        : '$userQuery（承接上一问：${previousQuestions.last}）';
+    final previousAnswers = [
+      for (final m in chatHistory)
+        if (m.role == MessageRole.assistant) m.content,
+    ];
+    // R15: names and collections the question brings up. A question that
+    // names someone or some story the previous turn never mentioned starts
+    // a new topic: the previous turn's pages would only anchor the search
+    // where the last answer was.
+    final context = await _questionContext(userQuery);
+    state.namedTargets.addAll(context.targets);
+    final previousTurn = previousQuestions.isEmpty
+        ? ''
+        : '${previousQuestions.last}\n'
+            '${previousAnswers.isEmpty ? '' : previousAnswers.last}';
+    final newNames = [
+      for (final name in [
+        ...context.names,
+        for (final t in context.targets) t.name,
+      ])
+        if (!previousTurn.contains(name)) name,
+    ];
+    final followUp = previousQuestions.isNotEmpty && newNames.isEmpty;
+    // R15: every collection the people in the question appear in, in
+    // release order, stays in state from the first step — a planner that
+    // only sees the chapters it already read (or the previous answer's
+    // story) cannot know the person also appears elsewhere.
+    for (final name in context.names.take(_maxOverviewNames)) {
+      final overview = await _coverageOverview(name);
+      if (overview != null) state.entityOverviews[name] = overview;
+    }
+    if (previousQuestions.isNotEmpty && !followUp) {
+      state.newTopicNames.addAll(newNames.toSet());
+    }
+    // R14: a follow-up question inherits the original text the previous turn
+    // read: it counts as read (no re-reading, citable) and reaches the
+    // writer after this turn's own pages.
+    final inheritedPages = followUp ? priorPages : const <ReadPage>[];
+    for (final page in inheritedPages) {
+      state.noteRead(page.storyId, page.firstLine, page.lastLine);
+    }
+    state.priorReadStories.addAll(inheritedPages.map((p) => p.storyId));
+    await _refreshLabels(state);
+    // R14: the extractor sees no chat history; a follow-up ("那根本原因
+    // 呢？") is only meaningful with the previous question attached.
+    final extractorQuery = followUp
+        ? '$userQuery（承接上一问：${previousQuestions.last}）'
+        : userQuery;
     final recent = <Message>[];
     var iteration = 0;
     var completedToolCalls = 0;
@@ -200,6 +300,7 @@ DONE
     var stalled = 0;
     var lastFingerprint = '';
     final executed = <String, int>{};
+    final outlineCache = <String, String>{};
     var duplicates = 0;
     var onlyRereads = true;
 
@@ -209,7 +310,7 @@ DONE
           confidence: confidence,
           style: style,
           state: state,
-          readPages: [...readPages, ...priorPages],
+          readPages: [...readPages, ...inheritedPages],
           userQuery: userQuery,
           chatHistory: chatHistory,
         );
@@ -408,7 +509,42 @@ DONE
             start != null &&
             end != null &&
             state.wasRangeRead(storyId, start, end);
-        if (previous != null || rangeRead) {
+        // R15: a search made only of spellings the DB is known not to
+        // contain cannot find anything, whatever scope or top_k it uses.
+        final searchTerms = intent.action == 'FIND' || intent.action == 'COVER'
+            ? '${args['query'] ?? ''}'
+                .split(RegExp(r'\s+'))
+                .where((t) => t.isNotEmpty)
+                .toList()
+            : const <String>[];
+        final missingOnly = searchTerms.isNotEmpty &&
+            searchTerms.every(state.missingTerms.containsKey);
+        // R15: an outline asked for again is served from cache (the state
+        // keeps only a clipped copy). It costs a tool step but is not a
+        // stall: live runs re-opened the outline between reads to pick the
+        // next chapter, and blocking it ended the run early.
+        final cachedOutline = outlineCache[signature];
+        if (cachedOutline != null) {
+          final cachedData = parseDataBlocks(cachedOutline)
+              .where((d) => d['type'] == 'get_story_outline')
+              .firstOrNull;
+          final inState = state.outlines
+              .containsKey('${cachedData?['collection_id'] ?? ''}');
+          recent.add(Message.user(
+            inState
+                ? 'Observation: 这个故事集的梗概第 $previous 步已获取，完整列在状态'
+                    '“已看梗概”里，不必再 OUTLINE：从中挑还没读的章节 READ。'
+                : 'Observation: （与第 $previous 步相同的梗概）\n$cachedOutline',
+          ),);
+          if (recent.length > 2) recent.removeAt(0);
+          yield ReActEvent(
+            type: ReActEventType.toolObservation,
+            content: cachedOutline,
+            toolName: toolName,
+          );
+          continue;
+        }
+        if (previous != null || rangeRead || missingOnly) {
           // R14: nothing ran, so the tool budget is not spent; but a planner
           // that only repeats itself has nothing left to look up — finish.
           toolSteps--;
@@ -430,8 +566,11 @@ DONE
           final note = rangeRead
               ? 'READ $storyId $start-$end 的内容已经读过：已读原文会完整交给写答案'
                   '的环节，不必重读。'
-              : '该命令在第 $previous 步已执行过，结果已记录在状态'
-                  '（已检索/已读/证据笔记）中。';
+              : missingOnly && previous == null
+                  ? '库中没有“${searchTerms.join(' ')}”这个写法（之前的检索已确认），'
+                      '换范围或数量也不会有结果；看状态里列出的相近名字。'
+                  : '该命令在第 $previous 步已执行过，结果已记录在状态'
+                      '（已检索/已读/证据笔记）中。';
           recent.add(Message.user(
             'Observation: $note如果还有没读过、与问题相关的章节（看“已看梗概”），'
             '就 READ 它；如果没有新的方向，现在就输出 ANSWER。',
@@ -487,8 +626,12 @@ DONE
               '后续请直接用该 entity_id；若选择不对，可用 RESELECT 切换其他候选。';
         }
       }
+      if (intent.action == 'OUTLINE' && !observation.startsWith('Error')) {
+        outlineCache['${intent.action} ${_canonicalArgs(args)}'] = observation;
+      }
       _updateState(state, intent.action, args, observation);
       if (intent.action == 'FIND' || intent.action == 'COVER') {
+        state.noteMissingTerms(observation);
         state.noteSearchLog(
           _searchLogKey(intent.action, args),
           _storyIdsIn(observation),

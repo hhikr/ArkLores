@@ -79,15 +79,21 @@ void main() {
         '答案正文。证据：activities/act_fixture/level_fixture_c5.txt:0。',
       );
 
-      expect(find.textContaining('回答状态: 已作答'), findsOneWidget);
-      expect(find.textContaining('置信度: 0.8'), findsOneWidget);
-      expect(find.text('证据链引用'), findsOneWidget);
-      // R14: chips and body show a readable source (no catalog in this test,
-      // so the name comes from the path) and a 1-based line number.
-      expect(
-        find.text('活动 act_fixture · level_fixture_c5 · 第 1 行'),
-        findsOneWidget,
-      );
+      // R15: status and confidence share one line; no avatars.
+      expect(find.text('已作答 · 置信度 0.8'), findsOneWidget);
+      expect(find.byIcon(Icons.psychology_rounded), findsNothing);
+      expect(find.byIcon(Icons.person_rounded), findsNothing);
+      // R15: evidence is folded to one line until tapped.
+      expect(find.text('证据 1 处 · 来自 1 个故事'), findsOneWidget);
+      expect(find.text('第 1 行'), findsNothing);
+      await tester.tap(find.text('证据 1 处 · 来自 1 个故事'));
+      await tester.pumpAndSettle();
+      // Collection → chapter → line chip (no catalog in this test, so the
+      // names come from the path); a single chapter starts open.
+      expect(find.text('活动 act_fixture · 1 处'), findsOneWidget);
+      expect(find.text('level_fixture_c5 · 1 处'), findsOneWidget);
+      expect(find.text('第 1 行'), findsOneWidget);
+      // R14: the body shows a readable source and a 1-based line number.
       expect(
         find.textContaining('activities/act_fixture/level_fixture_c5.txt'),
         findsNothing,
@@ -139,14 +145,19 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('剧情智囊'), findsOneWidget); // AppBar title
+      // R15: the tabs are the app bar; the mode picker is one chip in the
+      // input row whose menu lists the modes with their descriptions.
       expect(find.text('AI 问答'), findsWidgets); // tab + empty-state title
       expect(find.text('角色扮演'), findsOneWidget); // Roleplay tab
-      expect(find.text('自动'), findsOneWidget); // mode chips
+      expect(find.text('自动'), findsOneWidget); // mode chip
+      expect(find.text('概括'), findsNothing);
+      expect(find.textContaining('直接问任何剧情问题'), findsOneWidget);
+      await tester.tap(find.byTooltip('回答方式'));
+      await tester.pumpAndSettle();
       expect(find.text('概括'), findsOneWidget);
       expect(find.text('查证'), findsOneWidget);
       expect(find.text('深挖'), findsOneWidget);
-      expect(find.textContaining('直接问任何剧情问题'), findsOneWidget);
+      expect(find.textContaining('判定一个说法的真假'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

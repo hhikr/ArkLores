@@ -9,13 +9,22 @@
 library;
 
 import 'gamedata_models.dart';
+import 'name_similarity.dart';
 import 'story_catalog.dart';
 import 'story_coverage_models.dart';
 import 'story_vectors.dart';
 
 export 'gamedata_models.dart';
+export 'name_similarity.dart' show SimilarName, describeSimilarNames;
 export 'story_catalog.dart'
-    show StoryCatalogEntry, StoryCollection, fallbackStoryLabel;
+    show
+        NamedStoryTarget,
+        StoryCatalogEntry,
+        StoryCollection,
+        collectionReleaseKey,
+        compareReleaseKeys,
+        fallbackStoryLabel,
+        releaseMonthOf;
 export 'story_coverage_models.dart';
 export 'story_vectors.dart' show StoryChunkHit;
 
@@ -118,4 +127,22 @@ abstract interface class GameDataRetrieval {
     String? collectionId,
     int limit,
   });
+
+  /// R15: names in the DB that are spelled or pronounced like [term] (a
+  /// name the DB does not contain), best first. String similarity only —
+  /// never a claim that they refer to the same person.
+  Future<List<SimilarName>> similarNames(String term, {int limit});
+
+  /// R15: per term, story lines containing it in the whole DB and inside
+  /// [scopeId] (equal to the total without a scope).
+  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
+    List<String> terms, {
+    String? scopeId,
+  });
+
+  /// R15: character / speaker names written verbatim in [text].
+  Future<List<String>> namesInText(String text);
+
+  /// R15: catalog collections / chapters named verbatim in [text].
+  Future<List<NamedStoryTarget>> namedStoryTargets(String text);
 }

@@ -25,11 +25,45 @@ class InvestigationState {
   /// planner fetched with OUTLINE, kept in state so the whole-story picture
   /// survives the 2-observation window. Oldest dropped beyond [maxOutlines].
   final Map<String, String> outlines = {};
-  static const int maxOutlines = 2;
+  static const int maxOutlines = 3;
+
+  /// R15: every collection outlined in this run, including outlines
+  /// dropped from [outlines] — the missing-outline hint must not send the
+  /// planner back to one it has seen (a live run ping-ponged between three
+  /// collections with two outline slots).
+  final Set<String> outlinedCollections = {};
 
   /// R14: stories whose read lines were inherited from the previous turn of
   /// the conversation.
   final Set<String> priorReadStories = {};
+
+  /// R15: catalog collections / chapters the question names verbatim.
+  final List<NamedStoryTarget> namedTargets = [];
+
+  /// R15: names in the question that the previous turn never mentioned
+  /// (the question changed topic; nothing was inherited).
+  final Set<String> newTopicNames = {};
+
+  /// R15: name → COVER overview (every collection the person appears in,
+  /// release order) of the people named in the question.
+  final Map<String, String> entityOverviews = {};
+
+  /// R15: spellings a search found nowhere in the DB → the similar names
+  /// it suggested ('' when none). A live run re-searched a misspelt name
+  /// eight times with other scopes after the first search had already
+  /// pointed to the right spelling.
+  final Map<String, String> missingTerms = {};
+
+  /// Records the "not in the DB" notes of a FIND / COVER observation.
+  void noteMissingTerms(String observation) {
+    for (final m in _missingTermPattern.allMatches(observation)) {
+      missingTerms[m.group(1)!] = (m.group(2) ?? '').trim();
+    }
+  }
+
+  static final RegExp _missingTermPattern = RegExp(
+    '库中没有“([^”]+)”这个写法(?:；字形或读音相近的名字：([^。]+))?',
+  );
 
   /// One read chapter: the line segments the tool ACTUALLY returned (R12).
   final List<ReadEntry> reads = [];
@@ -75,6 +109,27 @@ class InvestigationState {
 
   String _serialize() {
     final buffer = StringBuffer();
+    if (namedTargets.isNotEmpty) {
+      buffer.writeln('问题提到的故事: ${namedTargets.map((t) {
+        final pending = !outlinedCollections.contains(t.collectionId);
+        return '《${t.label}》（${t.storyId ?? t.collectionId}'
+            '${t.releaseMonth == null ? '' : '，上线 ${t.releaseMonth}'}'
+            '${t.storyId == null ? '，${t.chapters} 章' : ''}'
+            '${pending ? '，可 OUTLINE ${t.collectionId}' : ''}）';
+      }).join('、')}');
+    }
+    for (final overview in entityOverviews.entries) {
+      buffer.writeln('${overview.key} 的${overview.value}');
+    }
+    if (missingTerms.isNotEmpty) {
+      buffer.writeln('库中没有的写法（再搜也不会有结果）: ${missingTerms.entries.map(
+        (e) => e.value.isEmpty ? e.key : '${e.key}（相近：${e.value}）',
+      ).join('；')}');
+    }
+    if (newTopicNames.isNotEmpty) {
+      buffer.writeln('本问提到上一轮没有涉及的: ${newTopicNames.join('、')}'
+          '——按本问重新定位，不沿用上一轮的故事范围');
+    }
     if (_targetEntityId != null) {
       buffer.writeln(
         '目标实体: $_targetEntityId'
@@ -147,7 +202,9 @@ class InvestigationState {
     final result = <({String id, String label})>[];
     for (final r in reads) {
       final entry = storyEntries[r.storyId];
-      if (entry == null || outlines.containsKey(entry.collectionId)) continue;
+      if (entry == null || outlinedCollections.contains(entry.collectionId)) {
+        continue;
+      }
       if (result.any((c) => c.id == entry.collectionId)) continue;
       result.add((id: entry.collectionId, label: entry.collectionLabel));
     }
@@ -177,6 +234,7 @@ class InvestigationState {
   /// Records an OUTLINE result for [collectionId].
   void noteOutline(String collectionId, String compact) {
     if (collectionId.trim().isEmpty || compact.trim().isEmpty) return;
+    outlinedCollections.add(collectionId);
     outlines.remove(collectionId);
     outlines[collectionId] = compact;
     while (outlines.length > maxOutlines) {

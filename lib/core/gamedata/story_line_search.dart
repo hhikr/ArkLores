@@ -141,6 +141,55 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   return hits;
 }
 
+/// R15: for each of [terms], how many story lines (content or speaker)
+/// contain it in the whole DB and, when [scopeId] is given, inside that
+/// scope — one scan. Lets FIND say "0 here but N elsewhere" instead of
+/// letting a scoped miss read as "not covered".
+Future<Map<String, ({int all, int inScope})>> queryTermLineCounts(
+  DatabaseExecutor db,
+  List<String> terms, {
+  String? scopeId,
+}) async {
+  final cleaned = <String>[];
+  for (final t in terms) {
+    final term = t.trim();
+    if (term.isNotEmpty && !cleaned.contains(term)) cleaned.add(term);
+    if (cleaned.length >= maxKeywordTerms) break;
+  }
+  if (cleaned.isEmpty) return const {};
+  const scopeKey = "CASE WHEN s.scope_id IS NULL OR s.scope_id = '' "
+      "THEN s.scope_type ELSE s.scope_type || ':' || s.scope_id END";
+  final scope = scopeId?.trim();
+  final scoped = scope != null && scope.isNotEmpty;
+  const match = "(l.content LIKE ? ESCAPE '\\' OR l.speaker LIKE ? ESCAPE '\\')";
+  final sql = StringBuffer('SELECT 0 AS z');
+  final args = <Object?>[];
+  for (var i = 0; i < cleaned.length; i++) {
+    final pattern = '%${_escapeLike(cleaned[i])}%';
+    sql.write(', SUM(CASE WHEN $match THEN 1 ELSE 0 END) AS a$i');
+    args.addAll([pattern, pattern]);
+    if (scoped) {
+      sql.write(', SUM(CASE WHEN $match AND $scopeKey = ? THEN 1 ELSE 0 END) AS s$i');
+      args.addAll([pattern, pattern, scope]);
+    }
+  }
+  sql.write(
+    scoped
+        ? ' FROM story_lines l LEFT JOIN story_scopes s ON s.story_id = l.story_id'
+        : ' FROM story_lines l',
+  );
+  final row = (await db.rawQuery(sql.toString(), args)).first;
+  return {
+    for (var i = 0; i < cleaned.length; i++)
+      cleaned[i]: (
+        all: (row['a$i'] as num?)?.toInt() ?? 0,
+        inScope: scoped
+            ? (row['s$i'] as num?)?.toInt() ?? 0
+            : (row['a$i'] as num?)?.toInt() ?? 0,
+      ),
+  };
+}
+
 String _escapeLike(String term) => term
     .replaceAll(r'\', r'\\')
     .replaceAll('%', r'\%')

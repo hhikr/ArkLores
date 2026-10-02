@@ -8,8 +8,8 @@ All notable changes to ArkLores will be documented in this file.
 
 Covers R13 (one QA pipeline, no question-type special cases) and R14 (whole-story grasp).
 Knowledge base: same story text and vectors as v0.10.0 plus the optional `story_catalog`
-table (`arklores_gamedata_zh.db.gz` 184,838,820 B, SHA-256
-`922e1a8159b7e097f2b0978cc895b7012c17009f0c91f15b98d384dd3b2e4bfa`). The APK installs over
+table (`arklores_gamedata_zh.db.gz` 184,850,215 B, SHA-256
+`f5f14283a42f9b678a598354e74033c2393da64e4e1b4bc470303f279c9aed53`). The APK installs over
 v0.10.0 (same signing key); download the new knowledge base in the app to get story names.
 
 ### Changed
@@ -47,11 +47,29 @@ v0.10.0 (same signing key); download the new knowledge base in the app to get st
 - Answers show sources as "巴别塔 BB-7 行动前《阴影显现》 第 N 行" (chips keep the raw id on
   long-press); stored answers keep raw ids for citation checks.
 - `tools/build_story_catalog.dart` adds the catalog to an existing DB in place.
+- R15 Ask page: one top bar (Ask / Roleplay switch, history, new conversation, a menu with
+  retry / clear); the mode picker is a chip in the input row; no avatars — the question is
+  a right-aligned bubble, the answer uses the full width. Status, confidence and reasoning
+  steps share one tappable line; cited lines fold into "证据 N 处 · 来自 M 个故事" and open as
+  collection → chapter → line chips. Inline citations show the chapter only.
+- R15 names: a name the knowledge base does not contain (a typo, a homophone) gets the
+  closest names it does contain, ranked by a pinyin-aware edit distance (`lpinyin`), in
+  COVER and FIND; spellings found nowhere are remembered and not searched again. Only
+  string similarity is stated — who a name refers to is settled from the lines read.
+- R15 reach: COVER starts with an overview of every collection an entity appears in, in
+  release order (new `story_catalog.start_time`), with details shared between collections;
+  the overview of the people a question names is in the planner state from the first step.
+  Collections named in the question are recognised; a question about someone the previous
+  turn did not mention no longer inherits that turn's pages. FIND says when a term occurs
+  only outside its scope, accepts `activities/<id>` as a scope and redirects a chapter-file
+  scope to READ. OUTLINE shows the release month; an outline asked for again is answered
+  from cache.
 
 ### Fixed
 
 - Years in `FIND` queries are no longer read as a result count; semantic-only hits no longer
   count as progress, so fruitless runs stop early.
+- Tool parameter examples no longer use a real story id (they reached the roleplay prompt).
 
 ## [0.10.0] - 2026-10-02
 

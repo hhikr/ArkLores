@@ -25,4 +25,38 @@ void main() {
     }
     expect(hits, isEmpty, reason: hits.join('\n'));
   });
+
+  // Anti-fixture rule (CLAUDE.md): names from the live acceptance questions
+  // may appear in comments only — never in code, prompts or ARB text, where
+  // they would steer the model toward those questions.
+  test('acceptance-case names appear in lib/ comments only', () {
+    const caseNames = [
+      '特蕾西娅', '特雷西斯', '特雷西亚', '巴别塔', '米格鲁', '谬因', '缪因',
+      '洛伦茨', '艾丽妮', '审判官', '生路', '愚人号', '丛林症结',
+      'act33side', 'act21mini', 'act17side', 'act34side',
+      'enemy_1554', 'enemy_3006', 'trap_762', 'char_4229', 'char_4009',
+    ];
+    final hits = <String>[];
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is! File) continue;
+      final path = entity.path;
+      if (!path.endsWith('.dart') && !path.endsWith('.arb')) continue;
+      final lines = entity.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i].trim();
+        if (line.startsWith('//')) continue;
+        // A trailing comment after code is still a comment.
+        final code = line.contains(' // ')
+            ? line.substring(0, line.indexOf(' // '))
+            : line;
+        for (final name in caseNames) {
+          if (code.contains(name)) {
+            hits.add('$path:${i + 1}: $line');
+            break;
+          }
+        }
+      }
+    }
+    expect(hits, isEmpty, reason: hits.join('\n'));
+  });
 }
