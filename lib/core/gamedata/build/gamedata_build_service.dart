@@ -21,6 +21,7 @@ import 'dart:io';
 
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../story_vectors.dart';
 import 'arknights_importer.dart';
 import 'gamedata_db_validator.dart';
 import 'gamedata_schema.dart';
@@ -284,6 +285,21 @@ class GameDataBuildService {
         where: 'source_path = ?',
         whereArgs: [path],
       );
+      // Optional vectors (R12) of a changed story point at the old line
+      // numbers; drop them so semantic recall never hints at stale ranges.
+      // Other stories keep their vectors (the in-app build cannot embed).
+      final hasVectors = (await db.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        [storyChunkVectorsTable],
+      ))
+          .isNotEmpty;
+      if (hasVectors) {
+        await db.delete(
+          storyChunkVectorsTable,
+          where: 'story_id = ?',
+          whereArgs: [storyId],
+        );
+      }
     } else {
       await db.delete(
         'normalized_records',
