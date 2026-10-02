@@ -340,7 +340,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get citationViewInWiki => 'View in Wiki';
 
   @override
-  String get onboardingSkip => 'Skip';
+  String get onboardingNotNow => 'Not now';
 
   @override
   String get onboardingWelcomeTitle => 'Welcome to ArkLores';

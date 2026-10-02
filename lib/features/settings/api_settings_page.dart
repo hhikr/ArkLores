@@ -25,8 +25,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   late TextEditingController _embedApiKeyCtrl;
   late TextEditingController _embedModelCtrl;
 
-  bool _obscureChatKey = true;
-  bool _obscureEmbedKey = true;
   bool _saved = false;
   bool _synced = false;
 
@@ -174,18 +172,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                   theme: theme,
                   controller: _chatApiKeyCtrl,
                   hint: 'sk-...',
-                  obscure: _obscureChatKey,
-                  suffix: IconButton(
-                    icon: Icon(
-                      _obscureChatKey
-                          ? Icons.visibility_off_rounded
-                          : Icons.visibility_rounded,
-                      color: theme.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureChatKey = !_obscureChatKey),
-                  ),
+                  secret: true,
                 ),
                 const SizedBox(height: 14),
                 _inputLabel(theme, context.t.apiSettingsLabelModel),
@@ -228,18 +215,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                   theme: theme,
                   controller: _embedApiKeyCtrl,
                   hint: 'sk-...',
-                  obscure: _obscureEmbedKey,
-                  suffix: IconButton(
-                    icon: Icon(
-                      _obscureEmbedKey
-                          ? Icons.visibility_off_rounded
-                          : Icons.visibility_rounded,
-                      color: theme.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureEmbedKey = !_obscureEmbedKey),
-                  ),
+                  secret: true,
                 ),
                 const SizedBox(height: 14),
                 _inputLabel(theme, context.t.apiSettingsLabelModel),
@@ -307,8 +283,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     required AppThemeTokens theme,
     required TextEditingController controller,
     required String hint,
-    bool obscure = false,
-    Widget? suffix,
+    bool secret = false,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -318,7 +293,11 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
       ),
       child: TextField(
         controller: controller,
-        obscureText: obscure,
+        // Keys stay visible, but the keyboard must not learn, suggest or
+        // autocorrect them.
+        keyboardType: secret ? TextInputType.visiblePassword : null,
+        autocorrect: !secret,
+        enableSuggestions: !secret,
         style: theme.bodyFont.copyWith(
           color: theme.textPrimary,
           fontSize: 14,
@@ -330,7 +309,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          suffixIcon: suffix,
         ),
       ),
     );

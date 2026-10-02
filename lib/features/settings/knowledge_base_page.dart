@@ -25,7 +25,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   String? _gameDataDownloadError;
 
   final TextEditingController _tokenController = TextEditingController();
-  bool _tokenVisible = false;
   bool _tokenLoaded = false;
 
   @override
@@ -294,7 +293,10 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             Expanded(
               child: TextField(
                 controller: _tokenController,
-                obscureText: !_tokenVisible,
+                // Visible, but the keyboard must not learn or autocorrect it.
+                keyboardType: TextInputType.visiblePassword,
+                autocorrect: false,
+                enableSuggestions: false,
                 style: theme.bodyFont.copyWith(color: theme.textPrimary),
                 decoration: InputDecoration(
                   isDense: true,
@@ -321,18 +323,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               ),
             ),
             const SizedBox(width: 6),
-            IconButton(
-              onPressed: () => setState(() => _tokenVisible = !_tokenVisible),
-              icon: Icon(
-                _tokenVisible
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                size: 18,
-                color: theme.textSecondary,
-              ),
-              visualDensity: VisualDensity.compact,
-            ),
-            const SizedBox(width: 4),
             FilledButton(
               onPressed: _saveGithubToken,
               style: FilledButton.styleFrom(

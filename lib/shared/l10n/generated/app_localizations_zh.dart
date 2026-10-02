@@ -332,7 +332,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get citationViewInWiki => '在 Wiki 中查看';
 
   @override
-  String get onboardingSkip => '跳过';
+  String get onboardingNotNow => '以后再说';
 
   @override
   String get onboardingWelcomeTitle => '欢迎使用 ArkLores';

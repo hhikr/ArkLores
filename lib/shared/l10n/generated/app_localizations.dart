@@ -686,11 +686,11 @@ abstract class AppLocalizations {
   /// **'View in Wiki'**
   String get citationViewInWiki;
 
-  /// No description provided for @onboardingSkip.
+  /// No description provided for @onboardingNotNow.
   ///
   /// In en, this message translates to:
-  /// **'Skip'**
-  String get onboardingSkip;
+  /// **'Not now'**
+  String get onboardingNotNow;
 
   /// No description provided for @onboardingWelcomeTitle.
   ///

@@ -30,7 +30,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   late TextEditingController _baseUrlController;
   late TextEditingController _apiKeyController;
   late TextEditingController _chatModelController;
-  bool _obscureApiKey = true;
 
   @override
   void initState() {
@@ -132,13 +131,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       ),
                     ),
                   ),
-                  // Skip button (top right)
-                  if (_currentStep > 0)
+                  // "Not now" (top right), only on the API step: the last
+                  // step's main button already finishes onboarding.
+                  if (_currentStep == 1)
                     ExcludeFocus(
                       child: TextButton(
                         onPressed: _skip,
                         child: Text(
-                          context.t.onboardingSkip,
+                          context.t.onboardingNotNow,
                           style: theme.bodyFont.copyWith(
                             color: theme.textSecondary,
                             fontSize: 14,
@@ -157,9 +157,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               child: PageView(
                 controller: _pageController,
                 onPageChanged: (i) => setState(() => _currentStep = i),
-                physics: _currentStep == 1
-                    ? const NeverScrollableScrollPhysics()
-                    : null,
+                // Steps advance only through their buttons, never by swiping.
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _buildWelcomeStep(theme),
                   _buildApiConfigStep(theme),
@@ -288,17 +287,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             controller: _apiKeyController,
             hint: 'sk-...',
             theme: theme,
-            obscureText: _obscureApiKey,
-            suffix: IconButton(
-              icon: Icon(
-                _obscureApiKey
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: theme.textSecondary,
-                size: 20,
-              ),
-              onPressed: () => setState(() => _obscureApiKey = !_obscureApiKey),
-            ),
+            secret: true,
           ),
           const SizedBox(height: 14),
           _buildInputField(
@@ -392,8 +381,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required TextEditingController controller,
     required String hint,
     required AppThemeTokens theme,
-    bool obscureText = false,
-    Widget? suffix,
+    bool secret = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,7 +404,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           child: TextField(
             controller: controller,
-            obscureText: obscureText,
+            // Keys stay visible, but the keyboard must not learn, suggest or
+            // autocorrect them.
+            keyboardType: secret ? TextInputType.visiblePassword : null,
+            autocorrect: !secret,
+            enableSuggestions: !secret,
             style: theme.bodyFont.copyWith(
               color: theme.textPrimary,
               fontSize: 14,
@@ -431,7 +423,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 horizontal: 14,
                 vertical: 12,
               ),
-              suffixIcon: suffix,
             ),
           ),
         ),

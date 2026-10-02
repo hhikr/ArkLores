@@ -110,7 +110,7 @@
   "citationBook": "书籍",
   "citationViewInWiki": "在 Wiki 中查看",
 
-  "onboardingSkip": "跳过",
+  "onboardingNotNow": "以后再说",
   "onboardingWelcomeTitle": "欢迎使用 ArkLores",
   "onboardingWelcomeDesc": "专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 事实核查与梗概生成\n• 导入你的剧情书籍\n• 沉浸式角色扮演对话",
   "onboardingGetStarted": "开始使用",

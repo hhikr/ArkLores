@@ -110,7 +110,7 @@
   "citationBook": "Book",
   "citationViewInWiki": "View in Wiki",
 
-  "onboardingSkip": "Skip",
+  "onboardingNotNow": "Not now",
   "onboardingWelcomeTitle": "Welcome to ArkLores",
   "onboardingWelcomeDesc": "Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• AI-powered fact checking & summaries\n• Import your lore books\n• Immersive character roleplay",
   "onboardingGetStarted": "Get Started",
