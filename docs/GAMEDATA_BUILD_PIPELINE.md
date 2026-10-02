@@ -165,6 +165,33 @@ dart run tools/build_story_embeddings.dart --db=build/gamedata_mobile/arklores_g
 
 向量命中只是定位线索；最终证据仍必须回到 `story_id` 与行号对应的原文。
 
+### 故事目录（可选表，R14）
+
+`story_catalog` 给每个剧情文件补上人能读懂的位置和官方简介：
+
+- 来源：`excel/story_review_table.json`（每个故事集的 `name` / `entryType`，每章的
+  `storyCode`、`storyName`、`avgTag`、`storySort`、`storyTxt`、`storyInfo`）与
+  `story/[uc]info/<storyInfo>.txt`（游戏剧情回顾里的一段官方简介）。`story_id = storyTxt + ".txt"`；
+  同一文件出现在多个故事集时按 JSON 顺序取第一个，结果确定。
+- 列：`story_id`、`collection_id`、`collection_name`、`collection_type`（ACTIVITY / MINI_ACTIVITY /
+  MAINLINE / NONE=干员密录）、`story_code`、`story_name`、`avg_tag`、`story_sort`、`synopsis`、`synopsis_path`。
+- 构建：全量与增量构建都在覆盖层之后整表重建（约 2000 行），并把章节名、梗概写进
+  `story_chapter_profiles` 的 title / summary；manifest 记 `story_catalog_count`。
+  `story_review_table.json` 已加入源白名单；`[uc]info` 变更只触发目录重建，绝不当剧情导入。
+  源树里没有目录表（旧 App 内源码缓存）时保留库里现有目录。
+- 给现有库补表（不重建、不动向量）：
+
+```bash
+git clone --depth 1 --filter=blob:none --sparse --no-checkout \
+  https://github.com/Kengxxiao/ArknightsGameData.git agd
+cd agd && git sparse-checkout set --no-cone \
+  "/zh_CN/gamedata/excel/story_review_table.json" "/zh_CN/gamedata/story/[[]uc]info/" \
+  && git checkout && cd ..
+dart run tools/build_story_catalog.dart --db=build/gamedata_mobile/arklores_gamedata_zh.db --source=agd
+```
+
+目录与梗概只是浏览/定位线索，不参与事实判定。
+
 ## SQLite Schema
 
 当前 schema version 为 `4`，App 安装器拒绝其他版本。下面列出 v2 起的基础表；
@@ -339,6 +366,7 @@ CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
   --output=build/gamedata_mobile \
   --force
 
+# 全量构建已包含故事目录（R14）；给旧库补目录用 tools/build_story_catalog.dart
 # 可选：剧情向量（v0.10.0 起 release 资产包含该表）
 /home/hhikr/flutter/bin/dart run tools/build_story_embeddings.dart \
   --db=build/gamedata_mobile/arklores_gamedata_zh.db

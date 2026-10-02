@@ -12,7 +12,7 @@ import 'dart:convert';
 /// A parsed intent.
 class IntentRecord {
   const IntentRecord({required this.action, required this.args});
-  final String action; // READ | SEARCH | COVER | FIND | MAP | COLLECT | SUMMARIZE | ANSWER | DONE | RESELECT
+  final String action; // READ | SEARCH | COVER | FIND | MAP | OUTLINE | COLLECT | SUMMARIZE | ANSWER | DONE | RESELECT
   final Map<String, dynamic> args;
 }
 
@@ -34,6 +34,7 @@ IntentRecord? parseIntent(String line) {
     'COVER',
     'FIND',
     'MAP',
+    'OUTLINE',
     'COLLECT',
     'SUMMARIZE',
     'ANSWER',
@@ -45,7 +46,7 @@ IntentRecord? parseIntent(String line) {
       // a single line with no other intent keyword.
       final rest = trimmed.substring(prefix.length).trim();
       if (RegExp(
-        r'^(READ|SEARCH|COVER|FIND|MAP|COLLECT|SUMMARIZE|ANSWER|VERDICT|RESELECT|DONE)\b',
+        r'^(READ|SEARCH|COVER|FIND|MAP|OUTLINE|COLLECT|SUMMARIZE|ANSWER|VERDICT|RESELECT|DONE)\b',
         multiLine: true,
       ).hasMatch(rest)) {
         return null;
@@ -70,7 +71,15 @@ IntentRecord? parseIntent(String line) {
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;
               args['story_id'] = tokens.first;
-              if (tokens.length >= 3) {
+              // R14: `READ id 30-90` (one range token) is as common as
+              // `READ id 30 90`; it used to be dropped, restarting at line 0.
+              final range = tokens.length >= 2
+                  ? RegExp(r'^(\d+)\s*[-–~]\s*(\d+)$').firstMatch(tokens[1])
+                  : null;
+              if (range != null) {
+                args['start_line'] = int.parse(range.group(1)!);
+                args['end_line'] = int.parse(range.group(2)!);
+              } else if (tokens.length >= 3) {
                 args['start_line'] = int.tryParse(tokens[1]);
                 args['end_line'] = int.tryParse(tokens[2]);
               } else if (tokens.length >= 2) {
@@ -81,6 +90,16 @@ IntentRecord? parseIntent(String line) {
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;
               args['scope_id'] = tokens.first;
+            case 'OUTLINE':
+              // R14: `OUTLINE <故事集名|scope_id|story_id>` — a collection
+              // name may contain spaces, so the whole rest is the target.
+              final target = _unquote(
+                rest
+                    .replaceAll(RegExp(r'^[《「]'), '')
+                    .replaceAll(RegExp(r'[》」]$'), ''),
+              );
+              if (target.isEmpty) return null;
+              args['target'] = target;
             case 'COLLECT':
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;
@@ -157,6 +176,10 @@ IntentRecord? parseIntent(String line) {
               for (final t in tokens) {
                 if (t.startsWith('scope=')) {
                   args['scope_id'] = t.substring(6).trim();
+                } else if (t.startsWith('@') && t.length > 1) {
+                  // R14: `@activity:x` (the search-log spelling) is a scope,
+                  // not a search term.
+                  args['scope_id'] = t.substring(1).trim();
                 } else if (t.startsWith('top_k=')) {
                   final k = int.tryParse(t.substring(6).trim());
                   if (k != null) args['top_k'] = k;
@@ -171,7 +194,7 @@ IntentRecord? parseIntent(String line) {
                   queryParts.add(t);
                 }
               }
-              // Terms are AND-ed, so repeats are meaningless; drop them so a
+              // Repeated terms add nothing; drop them so a
               // degenerate "FIND x x x" is the same (deduplicated) command as
               // "FIND x" (R12: seen live with reasoning off).
               final terms = <String>[];

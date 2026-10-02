@@ -325,8 +325,8 @@ void main() {
       expect(states.last, contains('目标实体: trap_762_skztxy'));
     });
 
-    test('identical searches run once; a run that learns nothing ends '
-        'not_covered through the generic stall budget', () async {
+    test('identical searches run once; a run that only repeats itself ends '
+        'not_covered through the duplicate guard', () async {
       final search = _HitSearchTool();
       final mock = _AlwaysSearchNoResultLLM();
       final loop = PlannerLoop(
@@ -341,8 +341,8 @@ void main() {
       expect(search.calls, 1);
       expect(answerOf(events), startsWith('[STORY_ANSWER: status=not_covered'));
       expect(events.any((e) => e.type == ReActEventType.complete), isTrue);
-      expect(mock.callCount, greaterThanOrEqualTo(8));
-      expect(mock.callCount, lessThan(30));
+      // 1 search + 3 blocked repeats (R14 duplicate guard) + the writer.
+      expect(mock.callCount, lessThanOrEqualTo(6));
     });
 
     test('semantic-only FIND hits are not progress, so re-phrased searches '

@@ -13,6 +13,24 @@ All notable changes to ArkLores will be documented in this file.
 - Removed every question-type special case (culprit envelope, two-suspect gate, suspect
   prompt steps, SEARCH-only repeat patches); a test guards against new ones.
 - `collect_suspect_evidence` is now `collect_entity_evidence` (`terms=`).
+- R14 whole-story grasp: new optional `story_catalog` table built from
+  `story_review_table.json` + the official `[uc]info` synopses (story collection name,
+  level code, chapter name, 行动前/后, order). Chapter profiles are relabelled with these
+  names and synopses. New planner command `OUTLINE` lists a collection's chapters in game
+  order with synopses; the planner prompt asks for the outline and for set-up chapters, not
+  only the scene where an event happens.
+- FIND keyword search ORs terms and ranks by IDF-weighted matched terms (it used to need
+  every term in one line, so mixed queries silently returned nothing); it also lists
+  official-synopsis hits.
+- Follow-up questions: the router sees the previous question; history carries answers and
+  the chapters read instead of replaying tool observations; the previous turn's read pages
+  are inherited (already read, citable); the extractor gets the previous question too.
+- Reading: a READ window is read whole (up to ~150 lines per page), `READ id a-b` ranges
+  parse, overlapping READs continue at the first unread line, blocked duplicates no longer
+  spend the step budget but three in a row end the run.
+- Answers show sources as "巴别塔 BB-7 行动前《阴影显现》 第 N 行" (chips keep the raw id on
+  long-press); stored answers keep raw ids for citation checks.
+- `tools/build_story_catalog.dart` adds the catalog to an existing DB in place.
 
 ### Fixed
 

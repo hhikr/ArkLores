@@ -9,10 +9,13 @@
 library;
 
 import 'gamedata_models.dart';
+import 'story_catalog.dart';
 import 'story_coverage_models.dart';
 import 'story_vectors.dart';
 
 export 'gamedata_models.dart';
+export 'story_catalog.dart'
+    show StoryCatalogEntry, StoryCollection, fallbackStoryLabel;
 export 'story_coverage_models.dart';
 export 'story_vectors.dart' show StoryChunkHit;
 
@@ -61,10 +64,11 @@ abstract interface class GameDataRetrieval {
     String? scopeId,
   });
 
-  /// R12: stories whose lines (content or speaker) contain EVERY term in
-  /// [terms], ordered by matching line count, each with up to
-  /// [linesPerStory] sample matching lines. [scopeId] is a canonical scope
-  /// key (e.g. `activity:act21mini`). Locating hints, not evidence.
+  /// R12/R14: stories whose lines (content or speaker) contain any of
+  /// [terms], ranked by their best line (IDF-weighted matched terms, so lines
+  /// with every term come first), each with up to [linesPerStory] best
+  /// matching lines. [scopeId] is a canonical scope key (e.g.
+  /// `activity:act21mini`). Locating hints, not evidence.
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
     String? scopeId,
@@ -88,6 +92,30 @@ abstract interface class GameDataRetrieval {
   Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
     String term,
     List<String> storyIds, {
+    int limit,
+  });
+
+  /// R14: catalog entries (readable names, order, official synopsis) of
+  /// [storyIds]; empty when the DB has no story catalog.
+  Future<Map<String, StoryCatalogEntry>> storyCatalogEntries(
+    Iterable<String> storyIds,
+  );
+
+  /// R14: the ordered chapters of the collection named/identified by
+  /// [query] (collection name, collection id, scope key or story id).
+  Future<StoryCollection?> storyCollection(String query);
+
+  /// R14: collections whose name contains [like] and/or of [type].
+  Future<List<({String id, String label, int chapters})>> storyCollectionIndex({
+    String? like,
+    String? type,
+  });
+
+  /// R14: catalog entries whose official synopsis / chapter name contains
+  /// any of [terms], best first. Locating hints, not evidence.
+  Future<List<StoryCatalogEntry>> searchStorySynopses(
+    List<String> terms, {
+    String? collectionId,
     int limit,
   });
 }

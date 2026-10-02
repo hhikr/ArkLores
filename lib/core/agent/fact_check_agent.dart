@@ -3,6 +3,7 @@ import 'dart:async';
 import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
+import 'evidence_notebook.dart' show ReadPage;
 import 'react_event.dart';
 import 'story_answer.dart';
 import 'story_qa_agent.dart';
@@ -38,6 +39,7 @@ class FactCheckAgent {
   Stream<ReActEvent> checkClaim({
     required String claim,
     List<Message> history = const [],
+    List<ReadPage> priorPages = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
   }) =>
@@ -45,6 +47,7 @@ class FactCheckAgent {
         query: claim,
         style: AnswerStyle.factCheck,
         history: history,
+        priorPages: priorPages,
         onRawLlmResponse: onRawLlmResponse,
         onMemoryChanged: onMemoryChanged,
       );

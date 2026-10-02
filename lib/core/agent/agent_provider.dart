@@ -133,6 +133,7 @@ class AskChatNotifier extends ChatNotifierBase {
     _lastMode = mode;
     final generation = nextGeneration();
     final history = buildHistory(state);
+    final priorPages = lastTurnReadPages(state);
     final assistantId = newId();
     state = [
       ...state,
@@ -155,7 +156,16 @@ class AskChatNotifier extends ChatNotifierBase {
     RouteResult? routeResult;
     var effective = mode;
     if (effective == AiMode.auto) {
-      routeResult = await _router.route(query);
+      // R14: a follow-up ("那根本原因呢？") is classified with the previous
+      // question as context.
+      final previous = [
+        for (final m in history)
+          if (m.role == MessageRole.user) m.content,
+      ];
+      routeResult = await _router.route(
+        query,
+        previousQuestion: previous.isEmpty ? null : previous.last,
+      );
       effective = routeResult.mode;
     }
     final effectiveMode = effective;
@@ -199,18 +209,21 @@ class AskChatNotifier extends ChatNotifierBase {
       AiMode.verify => _factCheckAgent.checkClaim(
           claim: query,
           history: history,
+          priorPages: priorPages,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
         ),
       AiMode.investigate => _investigationAgent.investigate(
           query: query,
           history: history,
+          priorPages: priorPages,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
         ),
       AiMode.summarize || AiMode.auto => _summaryAgent.generateSummary(
           query: query,
           history: history,
+          priorPages: priorPages,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
         ),
@@ -425,7 +438,7 @@ class AskChatNotifier extends ChatNotifierBase {
 
   @override
   List<Message> buildHistory(List<ChatMessage> messages) =>
-      buildReactHistory(messages);
+      buildStoryQaHistory(messages);
 }
 
 /// Provider for the chat session store (persistence + history list).

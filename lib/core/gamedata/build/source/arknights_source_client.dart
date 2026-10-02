@@ -49,6 +49,8 @@ class ArknightsSourcePaths {
     'zh_CN/gamedata/excel/roguelike_topic_table.json',
     'zh_CN/gamedata/excel/sandbox_table.json',
     'zh_CN/gamedata/excel/sandbox_perm_table.json',
+    // R14: story names / order / synopsis paths for the story catalog.
+    'zh_CN/gamedata/excel/story_review_table.json',
   ];
 
   static bool isStoryFile(String path) =>

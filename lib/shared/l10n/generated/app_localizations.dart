@@ -944,6 +944,18 @@ abstract class AppLocalizations {
   /// **'Evidence chain references'**
   String get aiInvestigationEvidenceChain;
 
+  /// No description provided for @aiCitationLine.
+  ///
+  /// In en, this message translates to:
+  /// **'line {line}'**
+  String aiCitationLine(int line);
+
+  /// No description provided for @aiCitationLines.
+  ///
+  /// In en, this message translates to:
+  /// **'lines {start}–{end}'**
+  String aiCitationLines(int start, int end);
+
   /// No description provided for @aiInvestigationCoverage.
   ///
   /// In en, this message translates to:

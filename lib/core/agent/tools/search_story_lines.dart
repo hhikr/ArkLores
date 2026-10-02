@@ -10,7 +10,9 @@ import 'observation_data.dart';
 /// Two legs fused per story with reciprocal-rank fusion:
 /// - semantic: query embedding vs `story_chunk_vectors` (when an embedding
 ///   client is configured AND the DB carries vectors from the same model);
-/// - keyword: every term in one line (LIKE; exact names and wording).
+/// - keyword: any term per line, ranked by IDF-weighted matched terms (LIKE;
+///   exact names and wording; R14 — was every term in one line).
+/// R14: official chapter synopses that contain a term are listed first.
 /// Either leg alone still works. All hits are LOCATING HINTS (CLAUDE.md
 /// principle 5): only lines returned by `read_story_lines` become evidence.
 class SearchStoryLinesTool extends AgentTool {
@@ -60,8 +62,7 @@ class SearchStoryLinesTool extends AgentTool {
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
     final query = (arguments['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) return 'Error: query parameter is empty';
-    final rawScope = (arguments['scope_id'] as String?)?.trim();
-    final scopeId = rawScope == null || rawScope.isEmpty ? null : rawScope;
+    final scopeId = normalizeScopeId(arguments['scope_id'] as String?);
     final topK = ((arguments['top_k'] as num?)?.toInt() ?? 6).clamp(1, 10);
 
     final store = _gameDataStore;
@@ -73,8 +74,12 @@ class SearchStoryLinesTool extends AgentTool {
     }
 
     // Keyword leg.
+    final terms = [
+      for (final t in query.split(RegExp(r'\s+')))
+        if (t.isNotEmpty) t,
+    ];
     final keywordHits = await store.searchStoryLinesLike(
-      query.split(RegExp(r'\s+')),
+      terms,
       scopeId: scopeId,
       storyLimit: topK * 2,
     );
@@ -115,23 +120,48 @@ class SearchStoryLinesTool extends AgentTool {
     final ranked = fused.values.toList()
       ..sort((a, b) => b.score.compareTo(a.score));
     final top = ranked.take(topK).toList();
+    final labels = await store.storyCatalogEntries(
+      [for (final r in top) r.storyId],
+    );
+    // R14: official chapter synopses that mention the terms point at the
+    // chapters where an event is set up, not only where it is spoken of.
+    final synopsisHits = await store.searchStorySynopses(
+      terms,
+      collectionId: _collectionOf(scopeId),
+      limit: 4,
+    );
 
     final buffer = StringBuffer()
       ..writeln('Story line hits for "$query" (${semantic.mode}; locating '
           'hints — READ the lines before using them as evidence):');
+    if (synopsisHits.isNotEmpty) {
+      buffer.writeln('官方章节梗概命中（只是定位线索）:');
+      for (final entry in synopsisHits) {
+        buffer.writeln('  ${entry.storyId} 《${entry.label}》: '
+            '${_clip(entry.synopsis ?? '', 80)}');
+      }
+    }
     // R12: nearest-neighbour search always returns *something*, even for a
     // name that never occurs (live negative case: a fictional name "hit"
     // unrelated chapters). Scores of related and unrelated chunks overlap,
     // so instead of a threshold the observation states it plainly.
     if (keywordHits.isEmpty) {
-      buffer.writeln('注意：原文中没有任何一行包含这些词。以下只是语义相近的段落，'
-          '可能与问题无关；若要找的是专有名词，这通常意味着资料未覆盖。');
+      buffer.writeln('注意：原文中没有任何一行包含这些词中的任何一个。以下只是语义'
+          '相近的段落，可能与问题无关；若要找的是专有名词，这通常意味着资料未覆盖。');
+    } else if (terms.length > 1 &&
+        keywordHits.every((h) => h.bestTermCount < terms.length)) {
+      buffer.writeln('注意：没有一行同时包含全部 ${terms.length} 个词；结果按单行'
+          '命中词数和词的稀有度排序。问题里的抽象词（如“原因”“谁”）通常不会出现在'
+          '原文中，可改搜人物、动作、物件。');
     }
     for (final result in top) {
       final keyword = result.keyword;
+      final label = labels[result.storyId]?.label;
       buffer.writeln(
-        'Story: ${result.storyId} | Scope: ${result.scopeId ?? '-'}'
-        '${keyword == null ? ' | 无字面命中（仅语义相近）' : ' | Keyword lines: ${keyword.hits}'}',
+        'Story: ${result.storyId}'
+        '${label == null ? '' : ' | 《$label》'} | Scope: ${result.scopeId ?? '-'}'
+        '${keyword == null ? ' | 无字面命中（仅语义相近）' : ' | Keyword lines: ${keyword.hits}'
+            '${terms.length > 1 ? '（单行最多命中 ${keyword.bestTermCount}/${terms.length} 词）' : ''}'}',
       );
       for (final chunk in result.chunks) {
         buffer.writeln(
@@ -172,6 +202,16 @@ class SearchStoryLinesTool extends AgentTool {
     );
   }
 
+  /// Collection id of an activity scope key (`activity:act33side` →
+  /// `act33side`); other scopes span several collections.
+  static String? _collectionOf(String? scopeId) {
+    if (scopeId == null || !scopeId.startsWith('activity:')) return null;
+    return scopeId.substring('activity:'.length);
+  }
+
+  static String _clip(String text, int max) =>
+      text.length > max ? '${text.substring(0, max)}…' : text;
+
   /// Embeds [query] and searches the vector index; reports which mode ran.
   Future<({List<StoryChunkHit> hits, String mode})> _semanticHits(
     GameDataRetrieval store,
@@ -206,6 +246,20 @@ class SearchStoryLinesTool extends AgentTool {
       return (hits: const <StoryChunkHit>[], mode: 'keyword only: embedding failed ($e)');
     }
   }
+}
+
+/// R14: canonical scope key from what the planner wrote: `@` prefix and
+/// `activities:` spelling tolerated, and a bare id (`act21mini`) is an
+/// activity scope, since `obt` scopes are always written with their prefix.
+String? normalizeScopeId(String? raw) {
+  var scope = raw?.trim() ?? '';
+  if (scope.startsWith('@')) scope = scope.substring(1).trim();
+  if (scope.isEmpty) return null;
+  if (scope.startsWith('activities:')) {
+    scope = 'activity:${scope.substring('activities:'.length)}';
+  }
+  if (!scope.contains(':') && scope != 'obt') scope = 'activity:$scope';
+  return scope;
 }
 
 class _StoryResult {

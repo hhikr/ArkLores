@@ -68,12 +68,19 @@ class QuestionRouter {
   /// falls back to [AiMode.summarize] (the most general workflow) and reports
   /// the failure on the result, so callers can surface it instead of treating
   /// it as a successful "summarize" decision.
-  Future<RouteResult> route(String query) async {
+  ///
+  /// [previousQuestion] (R14) is the user's previous question in the same
+  /// conversation, so a follow-up is classified in context.
+  Future<RouteResult> route(String query, {String? previousQuestion}) async {
     try {
       final response = await _llmClient.chatCompletion(
         [
           Message.system(classificationPrompt),
-          Message.user(query),
+          Message.user(
+            previousQuestion == null || previousQuestion.trim().isEmpty
+                ? query
+                : '（上一个问题：${previousQuestion.trim()}）\n当前问题：$query',
+          ),
         ],
         temperature: 0,
         // Reasoning providers spend tokens on hidden reasoning before the

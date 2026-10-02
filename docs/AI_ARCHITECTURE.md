@@ -1,6 +1,6 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前状态：R13（`feature/r13-unified-qa`，在 v0.10.0 / R12 之上）。本文档是 Agent 层与检索层的**唯一总括文档**，
+> 当前状态：R14（`feature/r14-story-grasp`，在 R13 之上：故事目录 + OUTLINE + 追问承接）。本文档是 Agent 层与检索层的**唯一总括文档**，
 > 取代旧的 `AI_REFACTOR_SUMMARY.md`、`R0`–`R3` 阶段总结、`AI_RETRIEVAL_OPTIMIZATION.md`、
 > `FEASIBILITY_ANALYSIS.md`、`RETRIEVAL_INSTALL_CHAIN_ANALYSIS.md`（均已删除，原文在 git 历史中）。
 > R12 的决策过程见 `R12_BOTTLENECK_ANALYSIS.md`；已知缺口见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
@@ -53,9 +53,10 @@ ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文�
 | --- | --- | --- |
 | `SEARCH <名字> [id=<id>] [top_k]` | `search_local_lore` | 查实体档案（FTS + LIKE） |
 | `COVER <名字\|id> [scope=]` | `search_story_coverage` | 确定性枚举实体在哪些章节、哪些行出场 |
-| `MAP <scope_id>` | `get_story_map` | 章节画像（行范围、speaker、高密度实体、抽取式摘要） |
-| `READ <story_id> [start] [end]` | `read_story_lines` | 读剧情原文（行号、分页） |
-| `FIND <短语> [scope=] [top_k]` | `search_story_lines` | 在原文里找线索：关键词 LIKE + 可选向量召回，RRF 融合 |
+| `MAP <scope_id>` | `get_story_map` | 章节画像（行范围、speaker、高密度实体；有目录时为故事名与官方梗概） |
+| `OUTLINE <故事集名\|scope\|story_id>` | `get_story_outline` | R14：整个故事集按游戏内顺序的章节（关卡号、行动前/后、章名、官方梗概、story_id），用来把握前因后果 |
+| `READ <story_id> [start end \| start-end]` | `read_story_lines` | 读剧情原文（行号；给出区间时整段读，一页最多约 150 行） |
+| `FIND <词…> [scope=\|@scope] [top_k]` | `search_story_lines` | 在原文里找线索：关键词（各词 OR，按 IDF 加权的单行命中排序）+ 可选向量召回，RRF 融合；顶部列出官方梗概命中 |
 | `COLLECT <entity_id> [terms=[..]]` | `collect_entity_evidence` | 列出某实体的全部出场行（命中 terms 的章节排前） |
 | `RESELECT <entity_id>` | – | 切换消歧候选；已尝试的候选不会再选 |
 | `ANSWER [confidence]` / `DONE` | – | 证据够了，交给 writer（`VERDICT` 是旧写法别名，只取置信度） |
@@ -69,9 +70,14 @@ ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文�
 `InvestigationState`（代码维护，序列化有界）：
 
 - **已读**：按实际返回的行段记录（保留空洞），所以“读过 1–40 和 80–120”不会被当成读过 1–120。
-- **证据笔记** `EvidenceNote`（最多 30 条）：行号必须落在本页内，引用原文由代码从原行复制，
+- **证据笔记** `EvidenceNote`（最多 40 条，每页最多 10 条）：行号必须落在本页内，引用原文由代码从原行复制，
   模型无法伪造引文。
 - **检索记录** `searchLog`、**已发现章节** `discoveredStories`、目标实体与候选清单。
+- R14 **章节名**：状态里的 story_id 由执行器查 `story_catalog` 附上“故事集 关卡号 标签《章名》”；
+  **已看梗概**（最近 2 个 OUTLINE 的精简版）常驻状态；已读章节所属故事集尚未看梗概时给一行提示。
+- R14 **追问承接**：上一轮实际 READ 到的原文页（从会话步骤的观察里解析）作为本轮“已读”注入，
+  可直接引用、不必重读，并送到 writer；对话历史只保留问题、答案和已读章节列表，不再回放
+  工具观察；router 与提取器都会看到上一个问题。
 
 ### 2.3 进展控制
 
@@ -80,14 +86,19 @@ ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文�
 - “进展” = 状态指纹有变化（新读到的行、新证据、有字面命中的新章节）；单纯换说法检索、
   只带来“仅语义相近”章节的 FIND 都不算进展（R13：否则负例会一直跑满预算）。
 - FIND 末尾 ≤50 的裸数字才当 top_k，更大的数字（如年份）留在查询里。
+- R14：READ 的起点落在已读区间内时自动推到第一行未读行；被拦下的重复命令不消耗步数预算，
+  但连续 3 条重复命令即收尾（决策器已无新方向）。
 - 连续 4 步无进展 → 提醒；连续 8 步无进展或用满 24 步 → `_finishFromState`，由 writer
   基于已读内容收尾，不再“状态转储”。
 - 近程窗口中，除最新一条观察外都截到 600 字。
 
 ### 2.4 Writer 与引用校验
 
-- 输入：用户问题 + 证据笔记 + 已读原文（≤8000 字）。要求直接回答、行级引用
-  `story_id.txt:行号`、反方证据、置信度；可以否定决策器选定的主体。
+- 输入：用户问题 + 证据笔记 + 已读原文（≤30000 字，同一行只送一次；本轮页在前、上一轮页在后，
+  每页前标注章节名）。要求直接回答（背景性、更抽象的动因放到替代解读，不能用来代替回答）、
+  行级引用 `story_id.txt:行号`、反方证据、置信度；正文用章节名指代章节，story_id 只出现在引用里。
+- 显示：App 把引用渲染成“巴别塔 BB-7 行动前《阴影显现》 第 N 行”（行号从 1 起；无目录时由路径
+  推出名字），证据链 chip 长按显示原始 id；存储的答案保留原始 id，供校验与日志。
 - `unreadCitations`：每条引用必须落在已读区间内。不合法 → 重写一次；仍不合法 →
   附加来源警告。
 - `completeWithHeadroom`：reasoning 模型的隐藏推理也占 `max_tokens`；遇到截断时把上限
@@ -150,6 +161,17 @@ App 内构建共用同一份实现：
   才能当证据。
 - 构建：`dart run tools/build_story_embeddings.dart --db=...`（可续跑，按内容哈希缓存，全量约 11 分钟）。
 
+### 3.4 故事目录（可选，R14）
+
+- 表 `story_catalog`：来自 `excel/story_review_table.json`（故事集名、`storyCode` 关卡号、`storyName`、
+  `avgTag` 行动前/后/幕间、`storySort` 顺序、`storyTxt`）+ `story/[uc]info/**` 官方剧情回顾简介。
+  2009 条，1992 条对上 `story_lines`（其余为关卡内对话、引导等，没有目录项，界面用路径推出的名字）。
+- 构建时写入目录后，`story_chapter_profiles` 的 title/summary 改为章节名与官方梗概
+  （覆盖层每次重建 profile 后重新套用）。manifest 记 `story_catalog_count`。
+- 旧库没有这张表时一切照旧：OUTLINE 提示用 MAP，标签退回原始 id。
+- 梗概与章节名同样只是**定位线索**，不能当证据（检索原则 5）。
+- 给现有库补表：`dart run tools/build_story_catalog.dart --db=... --source=...`（稀疏检出即可）。
+
 ## 4. 测试与成本
 
 - 离线：`flutter test`（mock LLM 复现 Agent 行为，DB 级用例用 FFI 建临时库）。
@@ -185,6 +207,28 @@ App 内构建共用同一份实现：
 `2030` 被当成 top_k；“仅语义相近”的新章节被算作进展。宽问题（梗概、多章节的“谁”）在
 24 步内常常读不全，见 `KNOWN_LIMITATIONS_AND_DEBT.md` §5.6。
 
+### R14 真机验收（2026-10-02，同配置，同一会话连续两问，原样复用真机日志的问题）
+
+问题：“杀死特蕾西娅的凶手是谁” → 追问“导致死亡的根本性的罪魁祸首是谁？”（auto→investigate）。
+v0.10.0 真机（R12）两问都没有指出博士：只读了死亡发生的 09/10 章，没读到 BB-7 博士与特雷西斯的
+交易和 BB-8 博士控制防御系统。验收标准（人工判读）：第 2 问指出博士是根本责任者并引用已读原文；
+第 1 问在直接行凶者之外指出博士的作用。
+
+| 运行 | 代码 | 第 1 问 | 第 2 问 | 输入 token（问 1 / 问 2） |
+| --- | --- | --- | --- | --- |
+| 1 | 目录 + OUTLINE + FIND OR | 博士为内应/共谋 | 博士为关键背叛者（partial） | 152k / 164k |
+| 2 | + READ 整段 | 博士为背叛者/内应 | **偏到普瑞赛斯/源石计划**（未承接上一轮原文） | 139k / 264k |
+| 3 | + 追问承接 | 博士为内应与主谋之一 | **只说“阳谋”**（第 1 问没读到交易原文） | 178k / 196k |
+| 4 | + 大页、writer 直接作答、提取器带上一问 | 博士为背叛内应（0.9） | 博士是根本罪魁（answered，7 步） | 129k / 81k |
+| 5 | 同上 | 博士为内应与共谋 | 博士是根本责任点（重复 READ 多） | 210k / 266k |
+| 6 | + 连续 3 条重复命令收尾（最终代码） | 博士为内部背叛者 | 博士是根本罪魁 | 87k / 199k |
+| 7 | 最终代码 | 博士为解除防御的内应/共谋 | 博士是根本罪魁（answered） | 141k / 123k |
+| 8 | 最终代码 | 博士为内应与背叛者 | 博士是根本主观元凶 | 107k / 162k |
+
+最终代码连续 3 次（6–8）两问全部满足标准。之后又加了 FIND 的 scope 写法规范化
+（`@activity:x`、裸 `act33side`），只做了离线测试。第 1 问多以 partial 收尾（读完直接现场后
+仍在补读），宽问题的预算问题见 `KNOWN_LIMITATIONS_AND_DEBT.md` §5.6。
+
 ## 5. 演进简史
 
 | 轮次 | 做了什么 | 为什么 |
@@ -201,3 +245,4 @@ App 内构建共用同一份实现：
 | R10–R11.2 | 自动消歧、RESELECT、SEARCH 重复终结的多轮修正 | 同名实体导致 SEARCH 死循环（这些 SEARCH 专用补丁 R13 删除，由通用进展控制取代） |
 | R12 | 证据笔记、writer 读原文 + 引用校验、COVER/FIND、向量召回、通用进展控制、机械角色关推理、同链路 live 测试 | R8–R11 只修终止，没修信息流：提取器未接线、writer 看不到原文 |
 | R13 | 三种模式统一到 `StoryQaAgent` → PlannerLoop；删除全部问题类型特判（结论信封、嫌疑人门槛、R11 SEARCH 补丁）；代码判定 status；核查结论需引用；特判守卫测试 | 概括/核查仍是旧 ReAct；结论协议锚定单一问题类型 |
+| R14 | `story_catalog`（故事名/关卡号/顺序/官方梗概）+ OUTLINE；FIND 关键词 OR 排序 + 梗概命中；状态带章节名；追问承接上一轮原文与问题；READ 整段与续读；重复命令收尾；引用显示为故事名 | 只看得到文件名、找不到铺垫章节，全局剧情把握差（真机两问都没指出博士）；FIND 多词 AND 常年 0 命中；追问从零开始 |

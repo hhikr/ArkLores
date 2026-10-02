@@ -14,6 +14,7 @@
 //   ARKLORES_RUN_LIVE_ASK=true
 //   ARKLORES_LIVE_QUERIES="问题1||问题2"      (or ARKLORES_LIVE_EVAL=<json>)
 //   ARKLORES_LIVE_MODE=auto|investigate|summarize|verify   (default auto)
+//   ARKLORES_LIVE_CONVERSATION=true  (all queries as turns of ONE session)
 //   ARKLORES_GAMEDATA_DB=<db path>  (default build/gamedata_mobile/...)
 //   ARKLORES_LIVE_OUT=<dir>         (default build/live_sessions)
 // API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL).
@@ -51,6 +52,8 @@ void main() {
       : readEmbeddingCsv(File('tools/embedding-apiKey.csv'));
   final cases = loadLiveCases(env);
   final mode = parseAiMode(env['ARKLORES_LIVE_MODE']);
+  final conversation =
+      env['ARKLORES_LIVE_CONVERSATION']?.toLowerCase() == 'true';
   final dbPath = File(
     env['ARKLORES_GAMEDATA_DB'] ??
         'build/gamedata_mobile/arklores_gamedata_zh.db',
@@ -134,7 +137,12 @@ void main() {
           return;
         }
         final notifier = container.read(askChatProvider.notifier);
-        notifier.newSession(); // one session file per question
+        // One session file per question, or (R14,
+        // ARKLORES_LIVE_CONVERSATION=true) all questions as consecutive turns
+        // of one conversation, the way a user asks follow-ups in the app.
+        if (!conversation || identical(liveCase, cases.first)) {
+          notifier.newSession();
+        }
         usage.reset();
         await notifier.sendMessage(liveCase.query, mode: mode);
         final session = notifier.currentSession;

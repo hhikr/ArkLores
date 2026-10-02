@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 
 import 'game_retrieval.dart';
 import 'gamedata_query_plan.dart';
+import 'story_catalog.dart';
 import 'story_line_search.dart';
 import 'story_vectors.dart';
 
@@ -442,7 +443,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
             ? scopeType
             : '$scopeType:$scopeValue';
 
-    final limit = (maxLines ?? 30).clamp(1, 100);
+    final limit = (maxLines ?? 30).clamp(1, 200);
     final windowEnd = endLine;
     var sql = 'SELECT line_index, speaker, content FROM story_lines '
         'WHERE story_id = ? AND line_index >= ?';
@@ -668,6 +669,48 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       'WHERE content LIKE ? ESCAPE \'\\\' AND story_id IN ($placeholders) '
       'ORDER BY story_id, line_index LIMIT ?',
       ['%$escaped%', ...storyIds, limit],
+    );
+  }
+
+  @override
+  Future<Map<String, StoryCatalogEntry>> storyCatalogEntries(
+    Iterable<String> storyIds,
+  ) async {
+    final db = await _open();
+    if (db == null) return const {};
+    return queryCatalogEntries(db, storyIds);
+  }
+
+  @override
+  Future<StoryCollection?> storyCollection(String query) async {
+    final db = await _open();
+    if (db == null) return null;
+    return queryStoryCollection(db, query);
+  }
+
+  @override
+  Future<List<({String id, String label, int chapters})>> storyCollectionIndex({
+    String? like,
+    String? type,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryCollectionIndex(db, like: like, type: type);
+  }
+
+  @override
+  Future<List<StoryCatalogEntry>> searchStorySynopses(
+    List<String> terms, {
+    String? collectionId,
+    int limit = 5,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return querySynopsisHits(
+      db,
+      terms,
+      collectionId: collectionId,
+      limit: limit,
     );
   }
 

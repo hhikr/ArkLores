@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../gamedata/gamedata_models.dart';
+import '../gamedata/story_catalog.dart';
 import '../llm/completion_budget.dart';
 import '../llm/llm_client.dart';
 import 'entity_disambiguator.dart';
@@ -10,7 +11,40 @@ import 'planner_intent.dart';
 import 'react_event.dart' show ReActEvent, ReActEventType;
 import 'story_answer.dart';
 import 'tools/agent_tool.dart';
+import 'tools/observation_data.dart';
 import 'tools/tool_registry.dart';
+
+/// R14: story id → catalog entry lookup (readable chapter names).
+typedef StoryCatalogLookup = Future<Map<String, StoryCatalogEntry>> Function(
+  Iterable<String> storyIds,
+);
+
+/// Compacts an OUTLINE observation for the state: one line per chapter
+/// (`label | story_id`) followed by its synopsis clipped to
+/// [synopsisChars]; DATA block and notes dropped. Exposed for tests.
+String compactOutline(String observation, {int synopsisChars = 70}) {
+  final out = StringBuffer();
+  final lines = observation.split('\n');
+  for (final raw in lines) {
+    final line = raw.trimRight();
+    if (line.startsWith('Outline:')) {
+      out.writeln('  ${line.substring('Outline:'.length).trim()}');
+      continue;
+    }
+    final row = RegExp(r'^(\d+)\. (.+?) \| (\S+) \|').firstMatch(line);
+    if (row != null) {
+      out.writeln('   ${row.group(1)}. ${row.group(2)} | ${row.group(3)}'
+          '${line.contains('← 当前章') ? ' ←' : ''}');
+      continue;
+    }
+    final synopsis = RegExp(r'^\s+梗概: (.*)$').firstMatch(line);
+    if (synopsis != null) {
+      final text = synopsis.group(1)!.replaceAll('…', '');
+      out.writeln('      ${text.length > synopsisChars ? '${text.substring(0, synopsisChars)}…' : text}');
+    }
+  }
+  return out.toString().trimRight();
+}
 
 /// Planner loop (R8, M-A): the decision agent outputs a single short intent
 /// per call; a code executor runs the tool, parses the result and updates the
@@ -33,7 +67,9 @@ class PlannerLoop {
     int stepMaxTokens = 1024,
     int safetyMaxIterations = 100,
     int maxToolSteps = 40,
+    StoryCatalogLookup? storyCatalogLookup,
   })  : _maxToolSteps = maxToolSteps,
+        _storyCatalogLookup = storyCatalogLookup,
         _llmClient = llmClient,
         _writerClient = writerClient ?? llmClient,
         _toolRegistry = toolRegistry,
@@ -59,12 +95,20 @@ class PlannerLoop {
   /// evidence gathered so far.
   final int _maxToolSteps;
 
+  /// R14: resolves story ids to catalog entries (readable chapter names) for
+  /// the state the planner and the writer see; null leaves raw ids.
+  final StoryCatalogLookup? _storyCatalogLookup;
+
   /// R12: older recent-window messages are clipped to this many characters.
   static const int _clipOlder = 600;
 
   /// R12: consecutive steps without state growth before a nudge / a finish.
   static const int _stallNudge = 4;
   static const int _stallFinish = 8;
+
+  /// R14: consecutive commands blocked as duplicates before the run is
+  /// written up from what it gathered.
+  static const int _maxConsecutiveDuplicates = 3;
 
   /// Intents that are deterministic lookups: re-running one with identical
   /// arguments can only return what the state already holds.
@@ -73,6 +117,7 @@ class PlannerLoop {
     'FIND',
     'COVER',
     'MAP',
+    'OUTLINE',
     'COLLECT',
     'READ',
     'SUMMARIZE',
@@ -87,6 +132,7 @@ class PlannerLoop {
 
 COVER <名字|entity_id> [scope=<scope_id>]
 FIND <短语或空格分隔的词> [scope=<scope_id>] [top_k]
+OUTLINE <故事集名|scope_id|story_id>
 READ <story_id> [start_line end_line] [max_lines] [page_token]
 SEARCH <query> [id=<entity_id>] [top_k]
 MAP <scope_id>
@@ -99,7 +145,10 @@ DONE
 规则：
 - 一次只输出一行，无前后缀。
 - 找剧情：COVER 列出某人物/实体在哪些章节、哪些行出场；FIND 在剧情原文
-  中检索短语（事件、地点、物品、台词关键词），返回章节与行号线索。
+  中检索词语（人物、动作、地点、物品、台词里会出现的词），返回章节与行号线索；
+  各词分别匹配，同时命中多个词的行排在前面。
+- OUTLINE 列出一个故事集（活动/主线章节/干员密录）全部章节的名称、顺序和官方
+  梗概，用来把握整个故事的前因后果、决定读哪些章节。
 - READ 精读章节行区间：只有 READ 读到的原文才会记为证据笔记。
 - SEARCH 只查实体档案/资料（干员档案、敌人图鉴等），不检索剧情原文。
 - MAP 查看章节地图；COLLECT 列出某实体的全部出场行（terms 填相关词，命中的排前面）。
@@ -115,12 +164,30 @@ DONE
     required List<Message> chatHistory,
     required String userQuery,
     AnswerStyle style = AnswerStyle.answer,
+    List<ReadPage> priorPages = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String state)? onStateChanged,
   }) async* {
     final state = InvestigationState();
     // R12: the lines READ actually returned, for the writer.
     final readPages = <ReadPage>[];
+    // R14: a follow-up question inherits the original text the previous turn
+    // read: it counts as read (no re-reading, citable) and reaches the
+    // writer after this turn's own pages.
+    for (final page in priorPages) {
+      state.noteRead(page.storyId, page.firstLine, page.lastLine);
+    }
+    state.priorReadStories.addAll(priorPages.map((p) => p.storyId));
+    await _refreshLabels(state);
+    // R14: the extractor sees no chat history; a follow-up ("那根本原因
+    // 呢？") is only meaningful with the previous question attached.
+    final previousQuestions = [
+      for (final m in chatHistory)
+        if (m.role == MessageRole.user) m.content,
+    ];
+    final extractorQuery = previousQuestions.isEmpty
+        ? userQuery
+        : '$userQuery（承接上一问：${previousQuestions.last}）';
     final recent = <Message>[];
     var iteration = 0;
     var completedToolCalls = 0;
@@ -133,6 +200,7 @@ DONE
     var stalled = 0;
     var lastFingerprint = '';
     final executed = <String, int>{};
+    var duplicates = 0;
 
     Stream<ReActEvent> finish(StoryAnswerStatus status, {String? confidence}) =>
         _finish(
@@ -140,7 +208,7 @@ DONE
           confidence: confidence,
           style: style,
           state: state,
-          readPages: readPages,
+          readPages: [...readPages, ...priorPages],
           userQuery: userQuery,
           chatHistory: chatHistory,
         );
@@ -224,7 +292,7 @@ DONE
         }
         recent.add(Message.user(
           'Observation: 无效意图："$response"。请只输出一行 intent '
-          '(COVER/FIND/READ/SEARCH/MAP/COLLECT/SUMMARIZE/RESELECT/ANSWER/DONE)。',
+          '(COVER/FIND/OUTLINE/READ/SEARCH/MAP/COLLECT/SUMMARIZE/RESELECT/ANSWER/DONE)。',
         ),);
         continue;
       }
@@ -313,6 +381,20 @@ DONE
         ),);
       }
 
+      // R14: a READ that starts inside already-read lines continues at the
+      // first unread line (live runs re-read 30-line windows of the same
+      // chapter many times over).
+      if ((intent.action == 'READ' || intent.action == 'SUMMARIZE') &&
+          args['page_token'] == null) {
+        final storyId = '${args['story_id'] ?? ''}';
+        final start = (args['start_line'] as num?)?.toInt() ?? 0;
+        final end = (args['end_line'] as num?)?.toInt();
+        final unread = state.firstUnreadLine(storyId, start);
+        if (unread > start && (end == null || unread <= end)) {
+          args['start_line'] = unread;
+        }
+      }
+
       // R12: a deterministic lookup with identical arguments can only return
       // what the state already holds — answer from state instead of re-running.
       if (_dedupActions.contains(intent.action)) {
@@ -326,6 +408,14 @@ DONE
             end != null &&
             state.wasRangeRead(storyId, start, end);
         if (previous != null || rangeRead) {
+          // R14: nothing ran, so the tool budget is not spent; but a planner
+          // that only repeats itself has nothing left to look up — finish.
+          toolSteps--;
+          duplicates++;
+          if (duplicates >= _maxConsecutiveDuplicates) {
+            yield* finish(StoryAnswerStatus.partial);
+            return;
+          }
           final note = rangeRead
               ? 'READ $storyId $start-$end 的内容已经读过，要点在“证据笔记”中。'
               : '该命令在第 $previous 步已执行过，结果已记录在状态'
@@ -343,6 +433,7 @@ DONE
         }
         executed[signature] = iteration;
       }
+      duplicates = 0;
 
       yield ReActEvent(
         type: ReActEventType.toolCall,
@@ -390,6 +481,7 @@ DONE
           leads: _storyIdsIn(observation, literalOnly: true),
         );
       }
+      await _refreshLabels(state);
       recent.add(Message.user('Observation: $observation'));
       if (recent.length > 2) recent.removeAt(0);
       onStateChanged?.call(state.serialize());
@@ -411,8 +503,10 @@ DONE
         if (extractor != null) {
           final notes = await extractEvidenceNotes(
             extractor,
-            userQuery: userQuery,
+            userQuery: extractorQuery,
             page: page,
+            // R14: pages are up to ~150 lines now.
+            maxNotes: 10,
           );
           if (notes.isNotEmpty) {
             state.addNotes(notes);
@@ -423,12 +517,26 @@ DONE
     }
   }
 
+  /// R14: labels the story ids that entered the state since the last step.
+  Future<void> _refreshLabels(InvestigationState state) async {
+    final lookup = _storyCatalogLookup;
+    if (lookup == null) return;
+    final ids = state.storyIdsWithoutLabel;
+    if (ids.isEmpty) return;
+    try {
+      state.addStoryEntries(ids, await lookup(ids));
+    } catch (_) {
+      // Labels are a convenience; raw ids still work.
+    }
+  }
+
   String _toolNameFor(String action) => switch (action) {
         'READ' => 'read_story_lines',
         'SEARCH' => 'search_local_lore',
         'COVER' => 'search_story_coverage',
         'FIND' => 'search_story_lines',
         'MAP' => 'get_story_map',
+        'OUTLINE' => 'get_story_outline',
         'COLLECT' => 'collect_entity_evidence',
         'SUMMARIZE' => 'read_story_lines',
         _ => '',
@@ -608,6 +716,14 @@ DONE
       case 'MAP':
         final scopeId = '${args['scope_id'] ?? ''}';
         if (scopeId.isNotEmpty) state.noteMapped(scopeId);
+      case 'OUTLINE':
+        final data = parseDataBlocks(observation)
+            .where((b) => b['type'] == 'get_story_outline')
+            .firstOrNull;
+        final collectionId = '${data?['collection_id'] ?? ''}';
+        if (collectionId.isNotEmpty) {
+          state.noteOutline(collectionId, compactOutline(observation));
+        }
       case 'COLLECT':
         final entityId = '${args['entity_id'] ?? ''}';
         final rowsMatch = RegExp(r'evidence_rows[":\s]+(\d+)')
@@ -628,8 +744,10 @@ DONE
     }
   }
 
-  /// Upper bound of raw read text handed to the writer.
-  static const int _maxWriterSourceChars = 8000;
+  /// Upper bound of raw read text handed to the writer (R14: raised from
+  /// 8000 so set-up chapters and the previous turn's pages are not cut when
+  /// the event chapter is read later).
+  static const int _maxWriterSourceChars = 30000;
 
   /// Writer role: the evidence notebook AND the raw lines READ returned go
   /// to the writer, so the answer rests on original text instead of model
@@ -644,8 +762,16 @@ DONE
     List<String> invalidCitations = const [],
   }) async {
     final source = StringBuffer();
+    // Overlapping reads (and pages inherited from the previous turn) repeat
+    // lines; each line goes to the writer once.
+    final emitted = <String>{};
     for (final page in readPages) {
+      final label = state.storyEntries[page.storyId]?.label;
+      if (label != null && source.length < _maxWriterSourceChars) {
+        source.write('〔${page.storyId} = $label〕\n');
+      }
       for (final line in page.lines) {
+        if (!emitted.add('${page.storyId}:${line.index}')) continue;
         final row = '${page.storyId}:${line.index} ${line.text}\n';
         if (source.length + row.length > _maxWriterSourceChars) break;
         source.write(row);
@@ -670,6 +796,10 @@ DONE
         Message.system(
           '你是明日方舟剧情资料员。只根据下方“证据笔记”和“已读原文”回答，'
           '引用格式为 story_id:行号（或 story_id:起-止），只能引用已读原文中出现的行。'
+          '正文提到章节时用读者看得懂的名称（如〔〕中给出的“故事集 关卡号 标签《章名》”），'
+          '不要把 story_id 当作章节名写进句子；story_id 只出现在引用里。'
+          '“已看梗概”是官方简介，只能帮助理解前后文和事件顺序，不能代替原文作为证据。'
+          '回答要考虑整个故事的前因后果，而不只是事件发生的那一幕。'
           '原文没有覆盖的部分明确写“资料未覆盖”，不得用记忆补充。用 Markdown。\n'
           '${_styleInstructions(style)}$statusNote',
         ),
@@ -688,7 +818,8 @@ DONE
 
   static String _styleInstructions(AnswerStyle style) => switch (style) {
         AnswerStyle.answer => '输出格式：\n'
-            '1. 开头一行直接回答问题。\n'
+            '1. 开头一行直接回答问题：给出已读原文最能支持的答案。背景因素、更抽象的'
+            '动因放到第 4 条的替代解读里，不要用它们代替对问题本身的回答。\n'
             '2. 然后 2-5 条证据，每条附引用。\n'
             '3. 列出与结论矛盾或削弱结论的原文（如有）。\n'
             '4. 最后一段写置信度（0-1）与可能的替代解读。',

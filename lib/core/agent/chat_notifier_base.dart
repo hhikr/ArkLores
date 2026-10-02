@@ -3,8 +3,11 @@ import 'package:uuid/uuid.dart';
 
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
+import 'evidence_notebook.dart';
 import 'fact_check_agent.dart';
 import 'react_loop.dart';
+import 'story_answer.dart';
+import 'tools/observation_data.dart';
 
 /// Rebuilds ReAct step text history from UI messages (shared by the Summary
 /// and Investigation chat notifiers): user messages pass through; assistant
@@ -40,6 +43,80 @@ List<Message> buildReactHistory(List<ChatMessage> messages) {
     }
   }
   return history;
+}
+
+/// R14: compact history for the story QA pipeline. Each earlier turn is the
+/// user question plus the final answer (envelope stripped) and the chapters
+/// that turn actually READ, so a follow-up question knows the context and
+/// can re-read those chapters directly. Tool observations are NOT replayed
+/// (they bloated every planner request and duplicated what the answer and
+/// the read list already say). Only the last [maxTurns] turns are kept.
+List<Message> buildStoryQaHistory(
+  List<ChatMessage> messages, {
+  int maxTurns = 3,
+}) {
+  final history = <Message>[];
+  for (final m in messages) {
+    if (m.isStreaming || m.isError) continue;
+    if (m.role == MessageRole.user) {
+      history.add(Message.user(m.content));
+      continue;
+    }
+    if (m.role != MessageRole.assistant) continue;
+    final reads = <String, List<(int, int)>>{};
+    for (final step in m.steps) {
+      if (step.type != ReActEventType.toolObservation) continue;
+      for (final block in parseDataBlocks(step.content)) {
+        if (block['type'] != 'read_story_lines') continue;
+        final storyId = '${block['story_id'] ?? ''}';
+        final first = (block['first_line'] as num?)?.toInt();
+        final last = (block['last_line'] as num?)?.toInt();
+        if (storyId.isEmpty || first == null || last == null) continue;
+        reads.putIfAbsent(storyId, () => []).add((first, last));
+      }
+    }
+    final buffer = StringBuffer(
+      m.content.replaceAll(storyAnswerEnvelopePattern, '').trim(),
+    );
+    if (reads.isNotEmpty) {
+      final list = reads.entries
+          .map((e) =>
+              '${e.key}:${e.value.map((r) => '${r.$1}-${r.$2}').join(',')}',)
+          .join('；');
+      buffer.write('\n\n（这一轮已读原文: $list）');
+    }
+    history.add(Message.assistant(buffer.toString().trim()));
+  }
+  // Keep whole turns: drop from the front until at most maxTurns user turns.
+  var users = history.where((m) => m.role == MessageRole.user).length;
+  while (users > maxTurns && history.isNotEmpty) {
+    final removed = history.removeAt(0);
+    if (removed.role == MessageRole.user) users--;
+    while (history.isNotEmpty && history.first.role != MessageRole.user) {
+      history.removeAt(0);
+    }
+  }
+  return history;
+}
+
+/// R14: the original-text pages the most recent finished assistant turn
+/// actually READ (parsed back from its tool observations), so a follow-up
+/// question starts from the evidence already gathered.
+List<ReadPage> lastTurnReadPages(List<ChatMessage> messages) {
+  for (final m in messages.reversed) {
+    if (m.role != MessageRole.assistant || m.isStreaming || m.isError) continue;
+    final pages = <ReadPage>[];
+    for (final step in m.steps) {
+      if (step.type != ReActEventType.toolObservation ||
+          step.toolName != 'read_story_lines') {
+        continue;
+      }
+      final page = parseReadObservation(step.content);
+      if (page != null) pages.add(page);
+    }
+    return pages;
+  }
+  return const [];
 }
 
 /// Shared state-machine logic for the Summary / Fact-check / Role-play chat

@@ -65,7 +65,7 @@ void main() {
       expect(turn.baseUrl, 'https://example.com/v1');
       expect(turn.status, ChatTurnStatus.completed);
       // Every iteration's raw LLM response is recorded untruncated.
-      expect(turn.iterations, hasLength(5));
+      expect(turn.iterations, hasLength(3));
       expect(
         turn.iterations.first.rawResponse,
         contains('READ activities/x/level_x.txt'),
@@ -278,7 +278,9 @@ class _RecorderLLM extends LLMClient {
 
   String _plannerResponse(int call) {
     if (mode == AiMode.investigate) {
-      if (call <= 4) return 'READ activities/x/level_x.txt 0 100';
+      // One read plus one repeat (blocked as a duplicate), then the answer;
+      // R14 ends a run after 3 consecutive duplicates.
+      if (call <= 2) return 'READ activities/x/level_x.txt 0 100';
       return 'VERDICT speaker:博士 0.8 multi_hypothesis_contrast';
     }
     return call == 1 ? 'SEARCH 阿米娅' : 'ANSWER';

@@ -82,9 +82,15 @@ void main() {
       expect(find.textContaining('回答状态: 已作答'), findsOneWidget);
       expect(find.textContaining('置信度: 0.8'), findsOneWidget);
       expect(find.text('证据链引用'), findsOneWidget);
+      // R14: chips and body show a readable source (no catalog in this test,
+      // so the name comes from the path) and a 1-based line number.
       expect(
-        find.text('activities/act_fixture/level_fixture_c5.txt:0'),
+        find.text('活动 act_fixture · level_fixture_c5 · 第 1 行'),
         findsOneWidget,
+      );
+      expect(
+        find.textContaining('activities/act_fixture/level_fixture_c5.txt'),
+        findsNothing,
       );
       // The envelope is stripped from the markdown body.
       expect(find.textContaining('STORY_ANSWER'), findsNothing);

@@ -151,8 +151,12 @@ class GetStoryMapTool extends AgentTool {
       // silently cut "屠戮魔王" made the model skip the assassination scene.
       final summary =
           (profile.summary ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+      // R14: catalog-built DBs carry a readable title (event, code, name).
+      final title = profile.title ?? '';
+      final named = title.isNotEmpty && !title.endsWith('.txt');
       buffer.writeln(
-        'Story: ${profile.storyId} | Lines: ${profile.lineStart}-${profile.lineEnd}'
+        'Story: ${profile.storyId}${named ? ' | 《$title》' : ''}'
+        ' | Lines: ${profile.lineStart}-${profile.lineEnd}'
         '${summary.isEmpty ? '' : ' | Summary: $summary'}',
       );
       index++;

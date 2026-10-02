@@ -19,6 +19,7 @@ import 'dart:io';
 import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
+import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
 import 'package:arklores/core/gamedata/build/story_coverage_builder.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -68,6 +69,17 @@ Future<void> main(List<String> args) async {
     // Schema v3 coverage layer: entity mention runs, chapter profiles and
     // rare character bigrams (AI retrieval P0).
     await StoryCoverageBuilder(db: db, stats: stats).build();
+
+    // R14: story names / order / official synopses (optional table).
+    final catalog =
+        await importStoryCatalog(db, Directory(cfg.arknightsSource));
+    stdout.writeln(
+      catalog == null
+          ? 'Story catalog: skipped (no story_review_table.json)'
+          : 'Story catalog: ${catalog.entries} entries, '
+              '${catalog.withSynopsis} with synopsis, '
+              '${catalog.matchedStories} matched story files',
+    );
 
     await rebuildGamedataFts(db);
     await stats.refreshFrom(db);

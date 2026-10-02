@@ -5,12 +5,14 @@ import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'entity_disambiguator.dart';
+import 'evidence_notebook.dart' show ReadPage;
 import 'planner_loop.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
 import 'tools/agent_tool.dart';
 import 'tools/collect_entity_evidence.dart';
 import 'tools/get_story_map.dart';
+import 'tools/get_story_outline.dart';
 import 'tools/read_story_lines.dart';
 import 'tools/search_local_lore.dart';
 import 'tools/search_story_coverage.dart';
@@ -39,6 +41,7 @@ class StoryQaAgent {
         _disambiguator = EntityDisambiguator(
           llmClient: disambiguatorClient ?? auxClient ?? llmClient,
         ),
+        _storyCatalogLookup = gameDataStore?.storyCatalogEntries,
         _toolRegistry = ToolRegistry() {
     // R9: ALL tools share ONE store instance (separate stores closed each
     // other's shared sqflite connection).
@@ -51,11 +54,13 @@ class StoryQaAgent {
         embeddingClient: embeddingClient,
       ),
       GetStoryMapTool(gameDataStore: store),
+      GetStoryOutlineTool(gameDataStore: store),
       ReadStoryLinesTool(gameDataStore: store),
       CollectEntityEvidenceTool(gameDataStore: store),
     ]);
   }
 
+  final StoryCatalogLookup? _storyCatalogLookup;
   final LLMClient _llmClient;
   final LLMClient _plannerClient;
   final LLMClient _extractorClient;
@@ -67,6 +72,7 @@ class StoryQaAgent {
     required String query,
     required AnswerStyle style,
     List<Message> history = const [],
+    List<ReadPage> priorPages = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
   }) {
@@ -88,12 +94,14 @@ class StoryQaAgent {
       // R12 cost control: useful reads happen early; a spent budget still
       // ends through the writer with what was read.
       maxToolSteps: 24,
+      storyCatalogLookup: _storyCatalogLookup,
     );
     return loop.run(
       // The planner gets the trust rules + protocol only; the answer format
       // belongs to the writer.
       systemPrompt: '$knowledgeBaseRules\n\n$storyPlannerInstructions\n\n$task',
       chatHistory: history,
+      priorPages: priorPages,
       userQuery: query,
       style: style,
       onRawLlmResponse: onRawLlmResponse,

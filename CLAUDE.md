@@ -1,8 +1,10 @@
 # ArkLores Developer Notes
 
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
-+ 可选剧情向量召回（R12，只作定位线索，不作证据）。
-当前版本与最新 release：v0.10.0；GameData schema：4（含确定性覆盖层，可选剧情向量表）。
++ 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`，OUTLINE）；
+向量、目录、梗概都只作定位线索，不作证据。
+当前版本与最新 release：v0.10.0；GameData schema：4（含确定性覆盖层，可选剧情向量表、
+可选故事目录表）。
 
 ## 文档索引
 
@@ -170,6 +172,7 @@ flutter test test/live/ask_pipeline_live_test.dart
   sqflite FFI，其余每个 Dart 类都是 App 代码。
 - 输出：`build/live_sessions/<...>/conversation_*.json`（与 App
   `chat_sessions/`、`logs/` 同格式）+ 每题 `*.summary.json` 指标。
+- 追问类用例用 `ARKLORES_LIVE_CONVERSATION=true`：`||` 分隔的问题作为同一会话的连续轮次。
 - 可选：`ARKLORES_LIVE_MODE=investigate|summarize|verify`、
   `ARKLORES_LIVE_EVAL=test/fixtures/investigation_eval.json`（批量评测）、
   `ARKLORES_LIVE_IDS=a,b`、`ARKLORES_LIVE_NO_EMBEDDING=true`（模拟无向量 key）、
@@ -185,6 +188,18 @@ flutter test test/live/ask_pipeline_live_test.dart
 - 不要整批跑 30 题评测，也不要并行开多组评测，除非开发者明确要求。
 - 每题的 `*.summary.json` 会记录 `usage`（调用次数和 token 数），用它评估成本。
 - 遇到 provider 错误（如 402 余额不足）时，harness 会自动跳过剩余题目。
+
+### 故事目录（可选表，R14）
+
+`story_catalog`（故事集名、关卡号、章名、行动前/后、顺序、官方梗概）来自
+`story_review_table.json` + `story/[uc]info/**`，全量/增量构建自动生成；给现有库补表：
+
+```bash
+dart run tools/build_story_catalog.dart --db=<db> --source=<ArknightsGameData 稀疏检出>
+```
+
+planner 用 `OUTLINE` 看整个故事集的章节梗概；App 用它把引用显示为故事名。
+没有该表的库照常可用（OUTLINE 提示改用 MAP，引用显示由路径推出的名字）。
 
 ### 剧情向量（可选表，R12）
 

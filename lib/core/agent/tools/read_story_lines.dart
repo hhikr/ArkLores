@@ -8,7 +8,13 @@ import 'observation_data.dart';
 class ReadStoryLinesTool extends AgentTool {
   ReadStoryLinesTool({GameDataRetrieval? gameDataStore})
       : _gameDataStore = gameDataStore;
-  static const int _maxObservationChars = 4800;
+  /// R14: raised from 4800 so one READ covers most of a chapter scene
+  /// (~150 lines) instead of 30-line slices.
+  static const int _maxObservationChars = 9000;
+
+  /// Page size of an open-ended READ (the observation budget still bounds
+  /// it); R14 raised from the store's 30-line default.
+  static const int _defaultPageLines = 150;
 
   final GameDataRetrieval? _gameDataStore;
 
@@ -42,7 +48,7 @@ class ReadStoryLinesTool extends AgentTool {
           },
           'max_lines': {
             'type': 'integer',
-            'description': 'Optional page size. Default 30, max 100.',
+            'description': 'Optional page size. Default 150, max 200.',
           },
           'page_token': {
             'type': 'string',
@@ -69,7 +75,13 @@ class ReadStoryLinesTool extends AgentTool {
 
     final startLine = (arguments['start_line'] as num?)?.toInt();
     final endLine = (arguments['end_line'] as num?)?.toInt();
-    final maxLines = (arguments['max_lines'] as num?)?.toInt();
+    // R14: an explicit window is read whole (up to the 100-line page and the
+    // observation budget) instead of the 30-line default page, which made
+    // the planner re-request the rest of its window piece by piece.
+    final maxLines = (arguments['max_lines'] as num?)?.toInt() ??
+        (startLine != null && endLine != null && endLine >= startLine
+            ? endLine - startLine + 1
+            : _defaultPageLines);
     final pageToken = arguments['page_token'] as String?;
 
     final page = await store.readStoryLines(
@@ -92,9 +104,12 @@ class ReadStoryLinesTool extends AgentTool {
       );
     }
 
+    final entry = (await store.storyCatalogEntries([storyId]))[storyId];
     final buffer = StringBuffer()
       ..writeln('Story: $storyId')
       ..writeln('Scope: ${page.scopeId ?? 'unknown'}');
+    // R14: where the chapter sits in its story (name, code, order).
+    if (entry != null) buffer.writeln('Chapter: 《${entry.label}》');
 
     var included = 0;
     for (var i = 0; i < page.lines.length; i++) {

@@ -38,18 +38,25 @@ class StoryLineEntry {
 }
 
 /// One story whose raw lines matched a keyword search (R12 `FIND`): total
-/// matching line count plus the first few matching lines as locating hints.
+/// matching line count plus the best matching lines as locating hints.
 class StoryLineHit {
   const StoryLineHit({
     required this.storyId,
     required this.hits,
     required this.lines,
     this.scopeId,
+    this.bestTermCount = 0,
+    this.termCount = 0,
   });
   final String storyId;
   final String? scopeId;
   final int hits;
   final List<StoryLineEntry> lines;
+
+  /// R14: most query terms found together in one line of this story, out of
+  /// [termCount] searched terms (0 when unknown).
+  final int bestTermCount;
+  final int termCount;
 }
 
 /// A page of story lines plus the opaque continuation token.

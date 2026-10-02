@@ -9,7 +9,28 @@
 /// State is maintained by CODE (the executor parses tool DATA blocks), not by
 /// the model, so it never drifts or loses the "what have I done" facts that
 /// caused the 103-iteration repeat loop.
+library;
+
+import '../gamedata/story_catalog.dart';
+
 class InvestigationState {
+  /// R14: catalog entries (readable chapter names, collection) of the story
+  /// ids in state, filled by the executor; absent for uncatalogued stories.
+  final Map<String, StoryCatalogEntry> storyEntries = {};
+
+  /// Story ids already looked up without a catalog entry.
+  final Set<String> _labelMisses = {};
+
+  /// R14: compact outlines (collection id → chapter list with synopses) the
+  /// planner fetched with OUTLINE, kept in state so the whole-story picture
+  /// survives the 2-observation window. Oldest dropped beyond [maxOutlines].
+  final Map<String, String> outlines = {};
+  static const int maxOutlines = 2;
+
+  /// R14: stories whose read lines were inherited from the previous turn of
+  /// the conversation.
+  final Set<String> priorReadStories = {};
+
   /// One read chapter: the line segments the tool ACTUALLY returned (R12).
   final List<ReadEntry> reads = [];
 
@@ -19,7 +40,7 @@ class InvestigationState {
   final List<EvidenceNote> notes = [];
 
   /// Upper bound of [notes] kept in state (oldest dropped first).
-  static const int maxNotes = 30;
+  static const int maxNotes = 40;
 
   /// Appearance rows collected per entity (COLLECT).
   final List<EvidenceEntry> evidence = [];
@@ -65,11 +86,23 @@ class InvestigationState {
         '已消歧名字: ${_searchedNames.entries.map((e) => '${e.key}->${e.value}').join(', ')}',
       );
     }
+    if (outlines.isNotEmpty) {
+      buffer.writeln('已看梗概（官方章节简介，按游戏内顺序；只是定位线索）:');
+      for (final outline in outlines.values) {
+        buffer.writeln(outline);
+      }
+    }
     if (reads.isNotEmpty) {
-      buffer.writeln('已读:');
+      buffer.writeln(
+        priorReadStories.isEmpty
+            ? '已读:'
+            : '已读（含上一轮对话已读的原文，可直接引用，不必重读）:',
+      );
       for (final r in reads) {
+        final label = storyEntries[r.storyId]?.label;
         buffer.writeln(
-          '  ${r.storyId}:${r.segments.map((s) => '${s.start}-${s.end}').join(',')}',
+          '  ${r.storyId}${label == null ? '' : '［$label］'}:'
+          '${r.segments.map((s) => '${s.start}-${s.end}').join(',')}',
         );
       }
     }
@@ -99,7 +132,56 @@ class InvestigationState {
         );
       }
     }
+    final pending = collectionsWithoutOutline;
+    if (pending.isNotEmpty) {
+      buffer.writeln(
+        '提示: 已读章节所属故事集尚未看梗概: '
+        '${pending.map((c) => '《${c.label}》(OUTLINE ${c.id})').join('、')}',
+      );
+    }
     return buffer.toString().trimRight();
+  }
+
+  /// R14: collections of READ chapters whose outline was not fetched yet.
+  List<({String id, String label})> get collectionsWithoutOutline {
+    final result = <({String id, String label})>[];
+    for (final r in reads) {
+      final entry = storyEntries[r.storyId];
+      if (entry == null || outlines.containsKey(entry.collectionId)) continue;
+      if (result.any((c) => c.id == entry.collectionId)) continue;
+      result.add((id: entry.collectionId, label: entry.collectionLabel));
+    }
+    return result;
+  }
+
+  /// Story ids in state (reads, notes, search results) not yet labelled.
+  Set<String> get storyIdsWithoutLabel => {
+        for (final r in reads) r.storyId,
+        for (final n in notes) n.storyId,
+        for (final ids in searchLog.values) ...ids,
+      }
+        ..removeAll(storyEntries.keys)
+        ..removeAll(_labelMisses);
+
+  /// Records catalog lookups for [requested] ids ([found] may be partial).
+  void addStoryEntries(
+    Iterable<String> requested,
+    Map<String, StoryCatalogEntry> found,
+  ) {
+    storyEntries.addAll(found);
+    for (final id in requested) {
+      if (!found.containsKey(id)) _labelMisses.add(id);
+    }
+  }
+
+  /// Records an OUTLINE result for [collectionId].
+  void noteOutline(String collectionId, String compact) {
+    if (collectionId.trim().isEmpty || compact.trim().isEmpty) return;
+    outlines.remove(collectionId);
+    outlines[collectionId] = compact;
+    while (outlines.length > maxOutlines) {
+      outlines.remove(outlines.keys.first);
+    }
   }
 
   /// Full serialization injected into the planner request.
@@ -212,7 +294,7 @@ class InvestigationState {
     }
     final evidenceRows = evidence.fold<int>(0, (sum, e) => sum + e.evidenceRows);
     return '$readLines|${notes.length}|${discoveredStories.length}|$evidenceRows|'
-        '${mapped.length}|$_targetEntityId';
+        '${mapped.length}|${outlines.keys.join(',')}|$_targetEntityId';
   }
 
   /// Whether every line in [start]..[end] of [storyId] was already read.
@@ -220,6 +302,19 @@ class InvestigationState {
     final index = reads.indexWhere((r) => r.storyId == storyId);
     if (index < 0) return false;
     return reads[index].segments.any((s) => s.start <= start && s.end >= end);
+  }
+
+  /// R14: first line at or after [from] of [storyId] that was not read yet
+  /// (segments are merged and sorted), so a READ overlapping what was read
+  /// continues where reading stopped instead of re-reading.
+  int firstUnreadLine(String storyId, int from) {
+    final index = reads.indexWhere((r) => r.storyId == storyId);
+    if (index < 0) return from;
+    var line = from;
+    for (final s in reads[index].segments) {
+      if (s.start <= line && s.end >= line) line = s.end + 1;
+    }
+    return line;
   }
 
   /// Whether line [line] of [storyId] lies inside an actually-read segment.

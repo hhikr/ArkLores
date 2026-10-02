@@ -464,6 +464,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiInvestigationEvidenceChain => '证据链引用';
 
   @override
+  String aiCitationLine(int line) {
+    return '第 $line 行';
+  }
+
+  @override
+  String aiCitationLines(int start, int end) {
+    return '第 $start–$end 行';
+  }
+
+  @override
   String get aiInvestigationCoverage => '已读范围';
 
   @override

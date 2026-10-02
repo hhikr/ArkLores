@@ -12,6 +12,7 @@ import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../evidence_observation.dart';
 import '../investigation_ui.dart';
+import '../story_labels_provider.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
 /// and lazy loading of citations.
@@ -136,7 +137,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       '',
     );
     if (isStoryAnswer(content)) {
-      content = stripStoryAnswerMarkers(content);
+      content = humanizeCitations(
+        stripStoryAnswerMarkers(content),
+        _storyLabels(msg.content),
+        lineText: _lineText,
+      );
     }
     if (content == '[FACT_CHECK_ERROR]') {
       content = context.t.importErrorOccurred;
@@ -232,6 +237,21 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
+  String _lineText(int start, int? end) => end == null
+      ? context.t.aiCitationLine(start)
+      : context.t.aiCitationLines(start, end);
+
+  /// R14: catalog labels of the stories cited in [content]; empty while
+  /// loading or without a catalog (names then come from the path). Looked
+  /// up once the answer has finished streaming.
+  Map<String, String> _storyLabels(String content) {
+    if (widget.message.isStreaming) return const {};
+    final ids = extractCitedStoryIds(content);
+    if (ids.isEmpty) return const {};
+    return ref.watch(storyLabelsProvider(storyLabelsKey(ids))).valueOrNull ??
+        const {};
+  }
+
   List<String> get _evidenceObservations => widget.message.steps
       .where((step) =>
           step.type == ReActEventType.toolObservation &&
@@ -299,6 +319,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final envelope = parseStoryAnswerEnvelope(content);
     final coverage = parseCoverageReportLine(content);
     final refs = extractLineReferences(content);
+    final labels = _storyLabels(content);
     final status = envelope?.status;
     final accent = status == StoryAnswerStatus.answered
         ? theme.accentPrimary
@@ -368,21 +389,27 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             runSpacing: 6,
             children: [
               for (final ref in refs)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.bgSecondary,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: theme.divider, width: 0.5),
-                  ),
-                  child: Text(
-                    ref,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textPrimary,
-                      fontSize: 10,
+                // Readable name; the raw source id stays available on
+                // long-press (tooltip).
+                Tooltip(
+                  message: ref,
+                  triggerMode: TooltipTriggerMode.longPress,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.bgSecondary,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: theme.divider, width: 0.5),
+                    ),
+                    child: Text(
+                      formatLineReference(ref, labels, lineText: _lineText),
+                      style: theme.bodyFont.copyWith(
+                        color: theme.textPrimary,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ),

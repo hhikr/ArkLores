@@ -21,11 +21,13 @@ import 'dart:io';
 
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../story_catalog.dart';
 import '../story_vectors.dart';
 import 'arknights_importer.dart';
 import 'gamedata_db_validator.dart';
 import 'gamedata_schema.dart';
 import 'source/arknights_source_client.dart';
+import 'story_catalog_importer.dart';
 import 'story_coverage_builder.dart';
 
 /// Thrown when the user cancels a running build.
@@ -152,6 +154,7 @@ class GameDataBuildService {
         stats: stats,
         onProgress: onProgress,
       ).build();
+      await _refreshStoryCatalog(db, sourceDir);
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);
@@ -201,6 +204,7 @@ class GameDataBuildService {
         stats: stats,
         onProgress: onProgress,
       ).build();
+      await _refreshStoryCatalog(db, sourceDir);
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);
@@ -240,6 +244,10 @@ class GameDataBuildService {
     if (change.isRemoval) return;
 
     final path = change.path;
+    // R14: catalog sources are rebuilt wholesale after the per-file changes;
+    // the [uc]info synopsis stubs are not story text and must never be
+    // imported as a story.
+    if (isStoryCatalogSource(path)) return;
     if (ArknightsSourcePaths.isStoryFile(path)) {
       await importer.importStoryFile(path);
     } else if (path == 'zh_CN/gamedata/excel/character_table.json' ||
@@ -253,6 +261,7 @@ class GameDataBuildService {
   }
 
   Future<void> _deletePathRows(Database db, String path) async {
+    if (isStoryCatalogSource(path)) return;
     if (ArknightsSourcePaths.isStoryFile(path)) {
       final storyId = path.substring('zh_CN/gamedata/story/'.length);
       await db.delete(
@@ -320,6 +329,20 @@ class GameDataBuildService {
         whereArgs: ['%$path%'],
       );
     }
+  }
+
+  /// R14: rebuilds the optional story catalog from the source tree and
+  /// relabels the chapter profiles (the coverage build rewrites them with
+  /// file names). A source tree without the review table keeps the DB's
+  /// existing catalog and only re-applies its labels.
+  Future<void> _refreshStoryCatalog(Database db, Directory sourceDir) async {
+    final result = await importStoryCatalog(db, sourceDir);
+    if (result != null || !await hasStoryCatalog(db)) return;
+    final rows = await db.query(storyCatalogTable);
+    await applyStoryCatalogToProfiles(
+      db,
+      [for (final row in rows) StoryCatalogEntry.fromRow(row)],
+    );
   }
 
   Future<bool> _isSchemaV3(String dbPath) async {

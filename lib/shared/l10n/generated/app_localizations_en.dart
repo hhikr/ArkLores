@@ -480,6 +480,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiInvestigationEvidenceChain => 'Evidence chain references';
 
   @override
+  String aiCitationLine(int line) {
+    return 'line $line';
+  }
+
+  @override
+  String aiCitationLines(int start, int end) {
+    return 'lines $start–$end';
+  }
+
+  @override
   String get aiInvestigationCoverage => 'Coverage';
 
   @override

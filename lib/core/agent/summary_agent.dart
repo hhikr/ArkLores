@@ -3,6 +3,7 @@ import 'dart:async';
 import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
+import 'evidence_notebook.dart' show ReadPage;
 import 'react_event.dart';
 import 'story_answer.dart';
 import 'story_qa_agent.dart';
@@ -30,6 +31,7 @@ class SummaryAgent {
   Stream<ReActEvent> generateSummary({
     required String query,
     List<Message> history = const [],
+    List<ReadPage> priorPages = const [],
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
   }) =>
@@ -37,6 +39,7 @@ class SummaryAgent {
         query: query,
         style: AnswerStyle.summary,
         history: history,
+        priorPages: priorPages,
         onRawLlmResponse: onRawLlmResponse,
         onMemoryChanged: onMemoryChanged,
       );
