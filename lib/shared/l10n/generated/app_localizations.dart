@@ -686,11 +686,11 @@ abstract class AppLocalizations {
   /// **'View in Wiki'**
   String get citationViewInWiki;
 
-  /// No description provided for @onboardingSkip.
+  /// No description provided for @onboardingNotNow.
   ///
   /// In en, this message translates to:
-  /// **'Skip'**
-  String get onboardingSkip;
+  /// **'Not now'**
+  String get onboardingNotNow;
 
   /// No description provided for @onboardingWelcomeTitle.
   ///
@@ -1517,7 +1517,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbScopeDescription.
   ///
   /// In en, this message translates to:
-  /// **'Since v0.4.5 the Agent uses the structured Chinese GameData library only: entities, aliases, raw records, story lines, document chunks, and FTS. The old Wiki seed and material import indexing pipelines were removed.'**
+  /// **'The AI uses only the Chinese GameData knowledge base as evidence: entities, aliases, raw records, story text and search indexes, plus optional story vectors. Wiki pages and imported materials are not used as evidence.'**
   String get kbScopeDescription;
 
   /// No description provided for @kbStatusError.
@@ -1553,7 +1553,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbErrorNotFound.
   ///
   /// In en, this message translates to:
-  /// **'GameData DB file not found. Before release, use a pre-release asset or point --dart-define at a temporary URL.'**
+  /// **'The knowledge base file was not found on the server (the new version may not be public yet). Please try again later.'**
   String get kbErrorNotFound;
 
   /// No description provided for @kbErrorChecksum.
@@ -1577,7 +1577,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbDevAssetHint.
   ///
   /// In en, this message translates to:
-  /// **'Before release, use --dart-define=ARKLORES_GAMEDATA_DB_URL to point to a pre-release asset or a LAN temporary .db.gz.'**
+  /// **'Download the published knowledge base (it is unpacked after download; keep about 1 GB of free space).'**
   String get kbDevAssetHint;
 
   /// No description provided for @kbDownloading.
@@ -1841,7 +1841,7 @@ abstract class AppLocalizations {
   /// No description provided for @materialsPausedDesc.
   ///
   /// In en, this message translates to:
-  /// **'The legacy PDF/TXT import pipeline is paused. Since v0.4.5 the Agent uses the structured GameData knowledge base, FTS, and exact matching only.'**
+  /// **'The legacy PDF/TXT import pipeline is paused. The AI currently uses only the GameData knowledge base as evidence.'**
   String get materialsPausedDesc;
 
   /// No description provided for @wikiLoadFailed.
