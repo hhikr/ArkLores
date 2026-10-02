@@ -774,7 +774,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbScopeDescription =>
-      'v0.4.5 只使用中文 GameData 结构化库：实体、别名、原始记录、剧情行、文档片段和 FTS。旧 Wiki seed 与资料导入索引链路已移除。';
+      'AI 只使用中文 GameData 知识库作为证据：实体、别名、原始记录、剧情原文与检索索引，以及可选的剧情向量。Wiki 与导入资料不作为 AI 的证据来源。';
 
   @override
   String kbStatusError(String error) {
@@ -794,8 +794,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbErrorTimeout => '连接超时。请切换网络，或确认临时 HTTP 服务和手机在同一网络。';
 
   @override
-  String get kbErrorNotFound =>
-      '未找到 GameData DB 文件。未正式发布时请使用预发布 asset 或 --dart-define 指向临时 URL。';
+  String get kbErrorNotFound => '服务器上没有找到知识库文件（新版本可能尚未公开发布），请稍后再试。';
 
   @override
   String get kbErrorChecksum => 'GameData DB 校验失败，文件可能损坏或 SHA256 与构建参数不一致。';
@@ -809,8 +808,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbNotInstalled => '未安装';
 
   @override
-  String get kbDevAssetHint =>
-      '正式发布前可用 --dart-define=ARKLORES_GAMEDATA_DB_URL 指向预发布 asset 或局域网临时 .db.gz。';
+  String get kbDevAssetHint => '下载官方发布的知识库（压缩包下载后会解压，请预留约 1 GB 空闲空间）。';
 
   @override
   String get kbDownloading => '下载中';
@@ -945,7 +943,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get materialsPausedDesc =>
-      '旧版 PDF/TXT 导入链路已暂停。v0.4.5 当前 Agent 只使用 GameData 结构化知识库、FTS 和精确匹配。';
+      '旧版 PDF/TXT 导入链路已暂停。当前 AI 只使用 GameData 知识库作为证据。';
 
   @override
   String get wikiLoadFailed => 'Wiki 页面加载失败';
