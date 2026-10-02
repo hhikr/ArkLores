@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -47,6 +47,23 @@ class GameDataInstallStatus {
   String? get storyLineCount => manifest['story_line_count'];
 }
 
+/// Network failures worth retrying (and resuming): TLS handshakes cut by the
+/// network, dropped sockets, stalled streams.
+bool isTransientNetworkError(Object error) {
+  if (error is SocketException ||
+      error is HandshakeException ||
+      error is TlsException ||
+      error is HttpException ||
+      error is TimeoutException ||
+      error is http.ClientException) {
+    return true;
+  }
+  final text = '$error';
+  return text.contains('Connection terminated') ||
+      text.contains('Connection reset') ||
+      text.contains('Connection closed');
+}
+
 class GameDataReleaseAsset {
 
   const GameDataReleaseAsset({
@@ -72,6 +89,9 @@ class GameDataInstaller {
 
   /// Sidecar recording which official asset (gz SHA-256) was installed.
   static const _assetMarkerSuffix = '.asset_sha256';
+
+  /// Partial download of the compressed asset (resumed across attempts).
+  static const _partialSuffix = '.download.gz';
   final Directory? installDirectory;
 
   /// Official asset this build downloads (dart-define; injectable in tests).
@@ -110,64 +130,135 @@ class GameDataInstaller {
     );
   }
 
+  /// Downloads, verifies and installs the official asset.
+  ///
+  /// The compressed file is streamed to `<db>.download.gz` (never held in
+  /// memory: the DB is ~600 MB), so an interrupted download resumes with an
+  /// HTTP Range request on the next attempt or the next tap. Transient
+  /// network errors (TLS handshake, socket, stalled stream) are retried up
+  /// to [maxAttempts] times. The gz is checked against the expected SHA-256,
+  /// then decompressed by streaming into a temp file, validated and swapped
+  /// in; the installed DB is untouched until then.
   Future<bool> installFromReleaseAsset({
     http.Client? client,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
     bool overwrite = false,
+    int maxAttempts = 4,
+    Duration retryDelay = const Duration(seconds: 3),
+    Duration stallTimeout = const Duration(seconds: 60),
   }) async {
     final asset = await getReleaseAsset();
     if (asset == null) return false;
 
     final dbFile = await _dbFile();
     if (!overwrite && await dbFile.exists()) return false;
+    await dbFile.parent.create(recursive: true);
 
-    final ownsClient = client == null;
-    final httpClient = client ?? http.Client();
-    try {
-      final request = http.Request('GET', asset.url);
-      final response = await httpClient.send(request);
-      if (response.statusCode != 200) {
-        throw StateError(
-          'Failed to download GameData database: HTTP ${response.statusCode}',
+    // A partial download only resumes for the same asset.
+    final part = File('${dbFile.path}$_partialSuffix');
+    final partKey = File('${part.path}.key');
+    final key = asset.sha256 ?? asset.url.toString();
+    if (await part.exists() &&
+        (!await partKey.exists() || (await partKey.readAsString()) != key)) {
+      await part.delete();
+    }
+    await partKey.writeAsString(key, flush: true);
+
+    for (var attempt = 1;; attempt++) {
+      final ownsClient = client == null;
+      final httpClient = client ?? http.Client();
+      try {
+        await _downloadResumable(
+          httpClient,
+          asset.url,
+          part,
+          onProgress: onProgress,
+          stallTimeout: stallTimeout,
         );
+        break;
+      } catch (e) {
+        if (attempt >= maxAttempts || !isTransientNetworkError(e)) rethrow;
+        await Future<void>.delayed(retryDelay * attempt);
+      } finally {
+        if (ownsClient) httpClient.close();
       }
+    }
 
-      final compressed = BytesBuilder(copy: false);
-      var received = 0;
-      final contentLength = response.contentLength;
-      final total =
-          contentLength != null && contentLength >= 0 ? contentLength : null;
-      await for (final chunk in response.stream) {
-        compressed.add(chunk);
+    final actualSha = (await sha256.bind(part.openRead()).first).toString();
+    final expectedSha = asset.sha256;
+    if (expectedSha != null &&
+        expectedSha.isNotEmpty &&
+        actualSha.toLowerCase() != expectedSha.toLowerCase()) {
+      // A corrupt partial must not be resumed again.
+      await part.delete();
+      throw StateError(
+        'GameData checksum mismatch: expected $expectedSha, got $actualSha',
+      );
+    }
+
+    final tmp = File('${dbFile.path}.tmp');
+    await part.openRead().transform(gzip.decoder).pipe(tmp.openWrite());
+    final expectedSize = asset.uncompressedBytes;
+    if (expectedSize != null && await tmp.length() != expectedSize) {
+      await tmp.delete();
+      throw StateError(
+        'GameData database size mismatch: expected $expectedSize, '
+        'got ${await tmp.length()}',
+      );
+    }
+    await _installTempFile(tmp, dbFile);
+    await File('${dbFile.path}$_assetMarkerSuffix')
+        .writeAsString(actualSha, flush: true);
+    await part.delete();
+    if (await partKey.exists()) await partKey.delete();
+    return true;
+  }
+
+  /// Streams [url] into [part], continuing an existing partial file with a
+  /// Range request. A server that ignores the range (HTTP 200) restarts the
+  /// file; 416 means the partial file is already complete.
+  Future<void> _downloadResumable(
+    http.Client client,
+    Uri url,
+    File part, {
+    required Duration stallTimeout,
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+  }) async {
+    var existing = await part.exists() ? await part.length() : 0;
+    final request = http.Request('GET', url);
+    if (existing > 0) request.headers['Range'] = 'bytes=$existing-';
+    final response = await client.send(request).timeout(stallTimeout);
+    if (existing > 0 && response.statusCode == 416) {
+      await response.stream.drain<void>();
+      return;
+    }
+    final resumed = response.statusCode == 206;
+    if (response.statusCode != 200 && !resumed) {
+      await response.stream.drain<void>();
+      throw StateError(
+        'Failed to download GameData database: HTTP ${response.statusCode}',
+      );
+    }
+    if (!resumed) existing = 0;
+    final length = response.contentLength;
+    final total = length != null && length >= 0 ? existing + length : null;
+    final sink = part.openWrite(
+      mode: resumed ? FileMode.writeOnlyAppend : FileMode.writeOnly,
+    );
+    var received = existing;
+    onProgress?.call(received, total);
+    try {
+      await for (final chunk in response.stream.timeout(stallTimeout)) {
+        sink.add(chunk);
         received += chunk.length;
         onProgress?.call(received, total);
       }
-
-      final compressedBytes = compressed.takeBytes();
-      final expectedSha = asset.sha256;
-      final actualSha = sha256.convert(compressedBytes).toString();
-      if (expectedSha != null && expectedSha.isNotEmpty) {
-        if (actualSha.toLowerCase() != expectedSha.toLowerCase()) {
-          throw StateError(
-            'GameData checksum mismatch: expected $expectedSha, got $actualSha',
-          );
-        }
-      }
-
-      final dbBytes = Uint8List.fromList(gzip.decode(compressedBytes));
-      final expectedSize = asset.uncompressedBytes;
-      if (expectedSize != null && dbBytes.length != expectedSize) {
-        throw StateError(
-          'GameData database size mismatch: expected $expectedSize, got ${dbBytes.length}',
-        );
-      }
-
-      await installFromBytes(dbBytes, overwrite: overwrite);
-      await File('${dbFile.path}$_assetMarkerSuffix')
-          .writeAsString(actualSha, flush: true);
-      return true;
     } finally {
-      if (ownsClient) httpClient.close();
+      await sink.flush();
+      await sink.close();
+    }
+    if (total != null && received < total) {
+      throw const SocketException('GameData download ended early');
     }
   }
 
@@ -181,6 +272,12 @@ class GameDataInstaller {
     final tmp = File('${dbFile.path}.tmp');
     await tmp.parent.create(recursive: true);
     await tmp.writeAsBytes(dbBytes, flush: true);
+    await _installTempFile(tmp, dbFile);
+  }
+
+  /// Validates [tmp] and swaps it over [dbFile]; a DB that fails validation
+  /// is deleted and the installed one stays.
+  Future<void> _installTempFile(File tmp, File dbFile) async {
     try {
       await _validateDatabase(tmp.path);
     } catch (_) {

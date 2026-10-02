@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:arklores/core/agent/fact_check_agent.dart';
@@ -747,6 +748,94 @@ void main() {
         releaseAssetSha: '',
       ).getStatus();
       expect(status.updateAvailable, isFalse);
+    });
+
+    test('a dropped download resumes with a Range request and installs',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final gz = gzip.encode(await File(validDbPath).readAsBytes());
+      final half = gz.length ~/ 2;
+      final ranges = <String?>[];
+      final client = MockClient.streaming((request, _) async {
+        final range = request.headers['Range'];
+        ranges.add(range);
+        if (range == null) {
+          // First attempt: half the file, then the connection drops.
+          final controller = StreamController<List<int>>();
+          controller
+            ..add(gz.sublist(0, half))
+            ..addError(const HandshakeException('Connection terminated during handshake'));
+          unawaited(controller.close());
+          return http.StreamedResponse(controller.stream, 200,
+              contentLength: gz.length,);
+        }
+        final from = int.parse(RegExp(r'bytes=(\d+)-').firstMatch(range)!.group(1)!);
+        return http.StreamedResponse(
+          Stream.value(gz.sublist(from)),
+          206,
+          contentLength: gz.length - from,
+        );
+      });
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: sha256.convert(gz).toString(),
+      );
+      final progress = <int>[];
+      expect(
+        await installer.installFromReleaseAsset(
+          client: client,
+          overwrite: true,
+          retryDelay: Duration.zero,
+          onProgress: (received, _) => progress.add(received),
+        ),
+        isTrue,
+      );
+      expect(ranges, [null, 'bytes=$half-']);
+      expect(progress.last, gz.length);
+      final status = await installer.getStatus();
+      expect(status.installed, isTrue);
+      expect(status.updateAvailable, isFalse);
+      // The partial file is cleaned up after a successful install.
+      expect(
+        File('${tempDir.path}/arklores_gamedata_zh.db.download.gz').existsSync(),
+        isFalse,
+      );
+    });
+
+    test('HTTP errors are not retried; a stale partial of another asset is '
+        'discarded', () async {
+      var calls = 0;
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: 'a' * 64,
+      );
+      // Leftover partial from a different asset.
+      File('${tempDir.path}/arklores_gamedata_zh.db.download.gz')
+          .writeAsBytesSync([1, 2, 3]);
+      File('${tempDir.path}/arklores_gamedata_zh.db.download.gz.key')
+          .writeAsStringSync('b' * 64);
+      final ranges = <String?>[];
+      final client = MockClient((request) async {
+        ranges.add(request.headers['Range']);
+        calls++;
+        return http.Response('missing', 404);
+      });
+      await expectLater(
+        installer.installFromReleaseAsset(
+          client: client,
+          overwrite: true,
+          retryDelay: Duration.zero,
+        ),
+        throwsA(isA<StateError>().having((e) => '$e', 'message', contains('HTTP 404'))),
+      );
+      expect(calls, 1);
+      expect(ranges, [null]); // the stale partial was not resumed
+      expect(isTransientNetworkError(const HandshakeException('x')), isTrue);
+      expect(isTransientNetworkError(StateError('HTTP 404')), isFalse);
     });
 
     test('rejects invalid story_line_count before replacing the installed DB',

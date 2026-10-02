@@ -19,10 +19,15 @@ class KnowledgeBasePage extends ConsumerStatefulWidget {
 }
 
 class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
-  bool _isDownloadingGameData = false;
-  int _gameDataDownloadedBytes = 0;
-  int? _gameDataTotalBytes;
-  String? _gameDataDownloadError;
+  // The download runs in [gameDataDownloadProvider] so it survives leaving
+  // this page and cannot be started twice.
+  GameDataDownloadState get _download => ref.watch(gameDataDownloadProvider);
+  bool get _isDownloadingGameData => _download.downloading;
+  int get _gameDataDownloadedBytes => _download.received;
+  int? get _gameDataTotalBytes => _download.total;
+  String? get _gameDataDownloadError => _download.error == null
+      ? null
+      : _friendlyGameDataError(_download.error!);
 
   final TextEditingController _tokenController = TextEditingController();
   bool _tokenLoaded = false;
@@ -37,6 +42,21 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final gameDataStatusAsync = ref.watch(gameDataInstallStatusProvider);
+
+    // A finished download reports once, even if it ended while the user was
+    // on another page and came back.
+    ref.listen(gameDataDownloadProvider, (previous, next) {
+      if (previous?.downloading != true || next.downloading) return;
+      final message = switch (next.result) {
+        GameDataDownloadResult.installed => context.t.kbInstalled,
+        GameDataDownloadResult.noAssetUrl => context.t.kbNoAssetUrl,
+        _ => null,
+      };
+      if (message != null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
+      }
+    });
 
     // Fill the token field once from secure storage (async, outside build).
     ref.listen(githubTokenProvider, (previous, next) {
@@ -429,47 +449,8 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     }
   }
 
-  Future<void> _downloadGameData() async {
-    setState(() {
-      _isDownloadingGameData = true;
-      _gameDataDownloadedBytes = 0;
-      _gameDataTotalBytes = null;
-      _gameDataDownloadError = null;
-    });
-
-    try {
-      final installer = ref.read(gameDataInstallerProvider);
-      final installed = await installer.installFromReleaseAsset(
-        overwrite: true,
-        onProgress: (received, total) {
-          if (!mounted) return;
-          setState(() {
-            _gameDataDownloadedBytes = received;
-            _gameDataTotalBytes = total;
-          });
-        },
-      );
-      ref.invalidate(gameDataInstallStatusProvider);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(installed
-              ? context.t.kbInstalled
-              : context.t.kbNoAssetUrl,),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _gameDataDownloadError = _friendlyGameDataError(e);
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isDownloadingGameData = false;
-        });
-      }
-    }
+  void _downloadGameData() {
+    ref.read(gameDataDownloadProvider.notifier).start();
   }
 
   String _friendlyGameDataError(Object error) {
@@ -479,6 +460,9 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     }
     if (text.contains('Connection timed out') || text.contains('timed out')) {
       return context.t.kbErrorTimeout;
+    }
+    if (isTransientNetworkError(error)) {
+      return context.t.kbErrorNetwork;
     }
     if (text.contains('HTTP 404')) {
       return context.t.kbErrorNotFound;

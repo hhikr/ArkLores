@@ -823,7 +823,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbErrorTimeout =>
-      'Connection timed out. Switch networks, or make sure the temporary HTTP server and the phone are on the same network.';
+      'Connection timed out. Check the network and try again; the downloaded part is kept.';
+
+  @override
+  String get kbErrorNetwork =>
+      'The connection was interrupted (unstable network or GitHub temporarily unreachable). It was retried several times; the downloaded part is kept, and tapping Update resumes from there.';
 
   @override
   String get kbErrorNotFound =>

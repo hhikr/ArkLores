@@ -1559,8 +1559,14 @@ abstract class AppLocalizations {
   /// No description provided for @kbErrorTimeout.
   ///
   /// In en, this message translates to:
-  /// **'Connection timed out. Switch networks, or make sure the temporary HTTP server and the phone are on the same network.'**
+  /// **'Connection timed out. Check the network and try again; the downloaded part is kept.'**
   String get kbErrorTimeout;
+
+  /// No description provided for @kbErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection was interrupted (unstable network or GitHub temporarily unreachable). It was retried several times; the downloaded part is kept, and tapping Update resumes from there.'**
+  String get kbErrorNetwork;
 
   /// No description provided for @kbErrorNotFound.
   ///

@@ -39,6 +39,11 @@ v0.10.0 (same signing key); download the new knowledge base in the app to get st
   text already read).
 - OUTLINE accepts path / `@scope` spellings; in-level dialogue files are named after their
   activity.
+- Knowledge-base download streams to disk and resumes with HTTP Range after a dropped
+  connection (TLS handshake / socket errors are retried automatically); it no longer holds
+  the ~600 MB database in memory. The download runs app-wide: leaving the page keeps its
+  progress and a second tap cannot start a parallel download (seen on a phone as
+  `HandshakeException: Connection terminated during handshake`).
 - Answers show sources as "巴别塔 BB-7 行动前《阴影显现》 第 N 行" (chips keep the raw id on
   long-press); stored answers keep raw ids for citation checks.
 - `tools/build_story_catalog.dart` adds the catalog to an existing DB in place.
