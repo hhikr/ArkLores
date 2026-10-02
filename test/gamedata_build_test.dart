@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_isolate.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/source/arknights_source_client.dart';
 import 'package:arklores/core/gamedata/gamedata_build_provider.dart';
+import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -302,6 +304,23 @@ void main() {
         ),
       );
 
+      // A release DB carries optional story vectors (R12): one chunk for the
+      // story that will change, one for a story that will not.
+      final seed = await databaseFactoryFfi.openDatabase(v1);
+      await seed.execute(storyChunkVectorsDdl);
+      for (final story in const ['level_fixture_c5.txt', 'level_fixture_c1.txt']) {
+        await seed.insert(storyChunkVectorsTable, {
+          'chunk_id': story,
+          'story_id': 'activities/act_fixture/$story',
+          'scope_id': 'activity:act_fixture',
+          'line_start': 0,
+          'line_end': 11,
+          'scale': 1.0,
+          'vec': Uint8List(4),
+        });
+      }
+      await seed.close();
+
       // Modify the source tree.
       final newStory = File(
         p.join(
@@ -382,6 +401,14 @@ void main() {
         'SELECT value FROM gamedata_manifest WHERE key = \'source_arknights_commit\'',
       );
       expect(commit.first['value'], 'c2');
+      // Vectors of the changed story are dropped; the rest are kept.
+      final vectors = await db.rawQuery(
+        'SELECT story_id FROM $storyChunkVectorsTable',
+      );
+      expect(
+        vectors.map((row) => row['story_id']),
+        ['activities/act_fixture/level_fixture_c1.txt'],
+      );
       await db.close();
 
       // The v1 database must be untouched.
