@@ -40,6 +40,7 @@ class FactCheckAgent {
     required String claim,
     List<Message> history = const [],
     List<ReadPage> priorPages = const [],
+    LLMClient? writerClient,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
   }) =>
@@ -48,6 +49,7 @@ class FactCheckAgent {
         style: AnswerStyle.factCheck,
         history: history,
         priorPages: priorPages,
+        writerClient: writerClient,
         onRawLlmResponse: onRawLlmResponse,
         onMemoryChanged: onMemoryChanged,
       );

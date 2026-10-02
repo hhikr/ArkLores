@@ -980,6 +980,30 @@ abstract class AppLocalizations {
   /// **'Answer mode'**
   String get aiModeMenuTooltip;
 
+  /// No description provided for @aiThinkingProcess.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get aiThinkingProcess;
+
+  /// No description provided for @aiDeepThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'Deep thinking'**
+  String get aiDeepThinking;
+
+  /// No description provided for @aiDeepThinkingTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Think before writing the answer (slower, more tokens)'**
+  String get aiDeepThinkingTooltip;
+
+  /// No description provided for @aiScrollToBottom.
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll to bottom'**
+  String get aiScrollToBottom;
+
   /// No description provided for @aiInvestigationCoverage.
   ///
   /// In en, this message translates to:

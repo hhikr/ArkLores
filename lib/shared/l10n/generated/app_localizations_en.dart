@@ -506,6 +506,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiModeMenuTooltip => 'Answer mode';
 
   @override
+  String get aiThinkingProcess => 'Thinking';
+
+  @override
+  String get aiDeepThinking => 'Deep thinking';
+
+  @override
+  String get aiDeepThinkingTooltip =>
+      'Think before writing the answer (slower, more tokens)';
+
+  @override
+  String get aiScrollToBottom => 'Scroll to bottom';
+
+  @override
   String get aiInvestigationCoverage => 'Coverage';
 
   @override

@@ -28,6 +28,8 @@ class ChatMessage {
     this.isError = false,
     this.factCheckVerdict,
     required this.timestamp,
+    this.reasoning = '',
+    this.liveStatus = '',
   });
 
   final String id;
@@ -39,6 +41,13 @@ class ChatMessage {
   final FactCheckVerdict? factCheckVerdict;
   final DateTime timestamp;
 
+  /// R16: hidden reasoning streamed while the answer is written; shown live,
+  /// never persisted.
+  final String reasoning;
+
+  /// R16: what the run is doing right now, for the status line ('' = none).
+  final String liveStatus;
+
   ChatMessage copyWith({
     String? id,
     MessageRole? role,
@@ -48,6 +57,8 @@ class ChatMessage {
     bool? isError,
     FactCheckVerdict? factCheckVerdict,
     DateTime? timestamp,
+    String? reasoning,
+    String? liveStatus,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -58,6 +69,8 @@ class ChatMessage {
       isError: isError ?? this.isError,
       factCheckVerdict: factCheckVerdict ?? this.factCheckVerdict,
       timestamp: timestamp ?? this.timestamp,
+      reasoning: reasoning ?? this.reasoning,
+      liveStatus: liveStatus ?? this.liveStatus,
     );
   }
 }

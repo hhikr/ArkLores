@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -119,6 +121,38 @@ List<ReadPage> lastTurnReadPages(List<ChatMessage> messages) {
   return const [];
 }
 
+/// R16: coalesces streamed-text updates so the message list (and its
+/// Markdown) is rebuilt at most once per [interval], not once per token.
+class StreamCoalescer {
+  StreamCoalescer(
+    this._flush, {
+    this.interval = const Duration(milliseconds: 60),
+  });
+
+  final void Function() _flush;
+  final Duration interval;
+  Timer? _timer;
+
+  /// Flushes once [interval] after the first pending change.
+  void schedule() {
+    _timer ??= Timer(interval, () {
+      _timer = null;
+      _flush();
+    });
+  }
+
+  /// Flushes now (end of stream, a replace, an error).
+  void flushNow() {
+    cancel();
+    _flush();
+  }
+
+  void cancel() {
+    _timer?.cancel();
+    _timer = null;
+  }
+}
+
 /// Shared state-machine logic for the Summary / Fact-check / Role-play chat
 /// notifiers: request generations for cancellation, message list updates,
 /// cancel/retry/clear behaviors, and LLM history reconstruction.
@@ -167,7 +201,10 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
     bool? isStreaming,
     bool? isError,
     FactCheckVerdict? factCheckVerdict,
+    String? reasoning,
+    String? liveStatus,
   }) {
+    if (!mounted) return;
     state = [
       for (final message in state)
         if (message.id == id)
@@ -177,6 +214,8 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
             isStreaming: isStreaming,
             isError: isError,
             factCheckVerdict: factCheckVerdict,
+            reasoning: reasoning,
+            liveStatus: liveStatus,
           )
         else
           message,

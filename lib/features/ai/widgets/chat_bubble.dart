@@ -54,6 +54,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       );
     }
     final storyAnswer = isStoryAnswer(msg.content);
+    // R16: while the story pipeline runs, one live line says what it is
+    // doing; the status envelope replaces it when the answer is checked.
+    final live = msg.isStreaming && msg.liveStatus.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -61,9 +64,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         children: [
           if (storyAnswer)
             _buildStoryAnswerHeader(theme)
+          else if (live)
+            _buildLiveHeader(theme)
           else if (msg.steps.isNotEmpty)
             _buildReActStepsSection(theme),
-          if (storyAnswer || msg.steps.isNotEmpty) const SizedBox(height: 6),
+          if (msg.isStreaming && msg.reasoning.isNotEmpty)
+            _buildReasoningPanel(theme),
+          if (storyAnswer || live || msg.steps.isNotEmpty)
+            const SizedBox(height: 6),
           if (msg.factCheckVerdict != null) ...[
             _buildVerdictBanner(theme, msg.factCheckVerdict!),
             const SizedBox(height: 6),
@@ -104,6 +112,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       content = humanizeCitations(
         stripStoryAnswerMarkers(content),
         _storyLabels(msg.content),
+        lineText: _lineText,
+      );
+    } else if (msg.isStreaming && msg.liveStatus.isNotEmpty) {
+      // R16: a story answer still being written (no envelope yet): the
+      // same readable citations, names derived from the path for now.
+      content = humanizeCitations(
+        stripWriterCoverage(content),
+        const {},
         lineText: _lineText,
       );
     }
@@ -349,6 +365,112 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               color: theme.textSecondary,
               fontSize: 11,
             ),
+          ),
+      ],
+    );
+  }
+
+  /// R16: the live line of a running story question — the current step
+  /// ("第 7 步 · 阅读 …" / "正在撰写答案"), tappable for the steps so far.
+  Widget _buildLiveHeader(AppThemeTokens theme) {
+    final msg = widget.message;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          key: const ValueKey('live-header'),
+          onTap: msg.steps.isEmpty
+              ? null
+              : () => setState(() => _showSteps = !_showSteps),
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    msg.liveStatus,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.bodyFont.copyWith(
+                      color: theme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (msg.steps.isNotEmpty)
+                  Icon(
+                    _showSteps
+                        ? Icons.expand_less_rounded
+                        : Icons.chevron_right_rounded,
+                    size: 16,
+                    color: theme.textSecondary,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (_showSteps) _buildStepsList(theme),
+      ],
+    );
+  }
+
+  bool _showReasoning = true;
+
+  /// R16: hidden reasoning streamed while the answer is written (only with
+  /// "深度思考" on); muted, collapsible, gone once the answer is complete.
+  Widget _buildReasoningPanel(AppThemeTokens theme) {
+    const tail = 800;
+    final text = widget.message.reasoning;
+    final shown =
+        text.length > tail ? '…${text.substring(text.length - tail)}' : text;
+    final muted = theme.bodyFont.copyWith(
+      color: theme.textSecondary,
+      fontSize: 12,
+      height: 1.5,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          key: const ValueKey('reasoning-header'),
+          onTap: () => setState(() => _showReasoning = !_showReasoning),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(context.t.aiThinkingProcess, style: muted),
+                Icon(
+                  _showReasoning
+                      ? Icons.expand_less_rounded
+                      : Icons.chevron_right_rounded,
+                  size: 16,
+                  color: theme.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_showReasoning)
+          Container(
+            key: const ValueKey('reasoning-text'),
+            width: double.infinity,
+            padding: const EdgeInsets.only(left: 10),
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: theme.divider, width: 2)),
+            ),
+            child: Text(shown, style: muted),
           ),
       ],
     );

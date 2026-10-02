@@ -34,6 +34,7 @@ class InvestigationAgent {
     required String query,
     List<Message> history = const [],
     List<ReadPage> priorPages = const [],
+    LLMClient? writerClient,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
   }) =>
@@ -42,6 +43,7 @@ class InvestigationAgent {
         style: AnswerStyle.answer,
         history: history,
         priorPages: priorPages,
+        writerClient: writerClient,
         onRawLlmResponse: onRawLlmResponse,
         onMemoryChanged: onMemoryChanged,
       );

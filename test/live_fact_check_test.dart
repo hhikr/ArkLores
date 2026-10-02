@@ -151,9 +151,10 @@ Future<_LiveResult> _runCase(FactCheckAgent agent, String claim) async {
     if (event.type == ReActEventType.toolObservation) {
       observations.writeln(event.content);
     }
-    if (event.type == ReActEventType.finalAnswerToken) {
-      answer.write(event.content);
-    }
+    final next = applyAnswerEvent(answer.toString(), event);
+    answer
+      ..clear()
+      ..write(next);
     if (event.type == ReActEventType.error) errors.add(event.content);
   }
   final content = answer.toString();

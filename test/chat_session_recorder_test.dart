@@ -285,19 +285,4 @@ class _RecorderLLM extends LLMClient {
     }
     return call == 1 ? 'SEARCH 阿米娅' : 'ANSWER';
   }
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }

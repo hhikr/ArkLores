@@ -490,6 +490,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiModeMenuTooltip => '回答方式';
 
   @override
+  String get aiThinkingProcess => '思考过程';
+
+  @override
+  String get aiDeepThinking => '深度思考';
+
+  @override
+  String get aiDeepThinkingTooltip => '写答案前先思考（较慢，耗更多 token）';
+
+  @override
+  String get aiScrollToBottom => '回到底部';
+
+  @override
   String get aiInvestigationCoverage => '已读范围';
 
   @override

@@ -354,10 +354,7 @@ void main() {
         'read_story_lines',
       ]);
 
-      final finalAnswer = events
-          .where((event) => event.type == ReActEventType.finalAnswerToken)
-          .map((event) => event.content)
-          .join();
+      final finalAnswer = finalAnswerOf(events);
       expect(finalAnswer, startsWith('[STORY_ANSWER: status=answered'));
       expect(llm.writerSystem, contains('梗概'));
       // The writer received the original line, not just ids.
@@ -551,14 +548,4 @@ class _ScriptedCoverageLLMClient extends LLMClient {
       _ => 'ANSWER 0.8',
     };
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
 }

@@ -53,6 +53,186 @@ String compactOutline(String observation, {int synopsisChars = 120}) {
   return out.toString().trimRight();
 }
 
+/// Why the planner handed over to the writer (R16). Only [answer] is the
+/// planner saying the evidence is enough; the others are limits. None of
+/// them decides the status on its own when the writer reports coverage.
+enum StopReason {
+  answer,
+  budget,
+  stalled,
+  onlyRereads,
+  repeatedSearches,
+  emptyReplies,
+  safetyCap;
+
+  /// Status when the writer gives no coverage line.
+  StoryAnswerStatus get fallbackStatus => this == answer || this == onlyRereads
+      ? StoryAnswerStatus.answered
+      : StoryAnswerStatus.partial;
+
+  /// What the writer is told about the stop: neutral — a limit says nothing
+  /// about whether the text read so far answers the question.
+  String get writerNote => switch (this) {
+        answer || onlyRereads => '',
+        budget => '\n说明：检索因步数上限结束，这本身不代表证据不足。已读原文足以回答'
+            '问题核心时正常作答；只把确实缺少原文的部分写成“资料未覆盖”。',
+        _ => '\n说明：检索在没有新发现时结束，这本身不代表证据不足。已读原文足以'
+            '回答问题核心时正常作答；只把确实缺少原文的部分写成“资料未覆盖”。',
+      };
+}
+
+/// The writer's own judgement of the read text (R16).
+enum StoryCoverage { full, gaps }
+
+/// Asks the writer for its coverage line (stripped from the answer).
+const String coverageInstruction =
+    '最后单独一行输出 [COVERAGE: full] 或 [COVERAGE: gaps]：已读原文回答了问题的'
+    '核心就写 full；问题的核心部分缺少原文证据才写 gaps（次要细节缺失不算）。';
+
+final RegExp _coverageLine = RegExp(
+    r'\n?[ \t>*_`]*\[COVERAGE:\s*(full|gaps)\s*\][ \t*_`]*',
+    caseSensitive: false,);
+
+/// Splits the `[COVERAGE: …]` line off a writer answer; exposed for tests.
+({String body, StoryCoverage? coverage}) splitCoverage(String answer) {
+  StoryCoverage? coverage;
+  final body = answer.replaceAllMapped(_coverageLine, (m) {
+    coverage = m.group(1)!.toLowerCase() == 'full'
+        ? StoryCoverage.full
+        : StoryCoverage.gaps;
+    return '';
+  });
+  return (body: body.trim(), coverage: coverage);
+}
+
+/// Final status of a run (R16): nothing read → not covered; otherwise the
+/// writer's coverage; [stop] only when the writer gave none.
+StoryAnswerStatus answerStatus({
+  required bool nothingRead,
+  required StoryCoverage? coverage,
+  required StopReason stop,
+}) {
+  if (nothingRead) return StoryAnswerStatus.notCovered;
+  return switch (coverage) {
+    StoryCoverage.full => StoryAnswerStatus.answered,
+    StoryCoverage.gaps => StoryAnswerStatus.partial,
+    null => stop.fallbackStatus,
+  };
+}
+
+/// Upper bound of raw read text handed to the writer (R16: 60000; R14 had
+/// 30000 filled in reading order, which cut the chapters read last).
+const int maxWriterSourceChars = 60000;
+
+/// Lines around a noted line that go to the writer first.
+const int _noteContext = 5;
+
+/// The read text for the writer (R16), within [maxChars]: first the noted
+/// lines of every chapter with [_noteContext] lines around them, then the
+/// rest of every chapter in turns of [_fillChunk] lines — so a chapter read
+/// late is never cut whole. Output keeps chapter order and line order;
+/// skipped stretches show as `…`. Exposed for tests.
+String buildWriterSource(
+  List<ReadPage> pages,
+  InvestigationState state, {
+  int maxChars = maxWriterSourceChars,
+}) {
+  final chapters = <String, Map<int, String>>{};
+  for (final page in pages) {
+    final rows = chapters.putIfAbsent(page.storyId, () => {});
+    for (final line in page.lines) {
+      rows.putIfAbsent(line.index, () => line.text);
+    }
+  }
+  if (chapters.isEmpty) return '';
+  String row(String id, int i) => '$id:$i ${chapters[id]![i]}\n';
+  String header(String id) {
+    final label = state.storyEntries[id]?.label;
+    return label == null ? '' : '〔$id = $label〕\n';
+  }
+
+  final chosen = {for (final id in chapters.keys) id: <int>{}};
+  var used = 0;
+  for (final id in chapters.keys) {
+    used += header(id).length;
+  }
+  bool take(String id, int i) {
+    if (chosen[id]!.contains(i) || !chapters[id]!.containsKey(i)) return true;
+    final cost = row(id, i).length;
+    if (used + cost > maxChars) return false;
+    used += cost;
+    chosen[id]!.add(i);
+    return true;
+  }
+
+  // Pass 1: noted lines with context, newest notes first.
+  var full = false;
+  for (final note in state.notes.reversed) {
+    if (!chapters.containsKey(note.storyId)) continue;
+    for (var i = note.line - _noteContext; i <= note.line + _noteContext; i++) {
+      if (!take(note.storyId, i)) {
+        full = true;
+        break;
+      }
+    }
+    if (full) break;
+  }
+  // Pass 2: the rest, chapter by chapter in turns.
+  final orders = {
+    for (final e in chapters.entries) e.key: (e.value.keys.toList()..sort()),
+  };
+  final cursor = {for (final id in chapters.keys) id: 0};
+  while (!full) {
+    var progressed = false;
+    for (final id in chapters.keys) {
+      final order = orders[id]!;
+      var taken = 0;
+      while (cursor[id]! < order.length && taken < _fillChunk) {
+        final i = order[cursor[id]!];
+        if (!chosen[id]!.contains(i)) {
+          if (!take(id, i)) {
+            full = true;
+            break;
+          }
+          taken++;
+        }
+        cursor[id] = cursor[id]! + 1;
+        progressed = true;
+      }
+      if (full) break;
+    }
+    if (!progressed) break;
+  }
+
+  final out = StringBuffer();
+  for (final id in chapters.keys) {
+    final lines = chosen[id]!.toList()..sort();
+    if (lines.isEmpty) continue;
+    out.write(header(id));
+    final all = orders[id]!;
+    var previous = -1;
+    for (final i in lines) {
+      final position = all.indexOf(i);
+      if (previous >= 0 && position > previous + 1) out.write('…\n');
+      if (previous < 0 && position > 0) out.write('…\n');
+      out.write(row(id, i));
+      previous = position;
+    }
+    if (previous < all.length - 1) out.write('…\n');
+  }
+  return out.toString();
+}
+
+const int _fillChunk = 20;
+
+/// Streamed answer text of one writer call.
+class _AnswerBuffer {
+  final StringBuffer _text = StringBuffer();
+  bool get isEmpty => _text.isEmpty;
+  void write(String text) => _text.write(text);
+  String get text => _text.toString().trim();
+}
+
 /// Planner loop (R8, M-A): the decision agent outputs a single short intent
 /// per call; a code executor runs the tool, parses the result and updates the
 /// [InvestigationState]; an extractor turns read pages into line-anchored
@@ -218,7 +398,10 @@ DONE
 - READ 精读章节行区间：只有 READ 读到的原文才会记为证据笔记。
 - SEARCH 只查实体档案/资料（干员档案、敌人图鉴等），不检索剧情原文。
 - MAP 查看章节地图；COLLECT 列出某实体的全部出场行（terms 填相关词，命中的排前面）。
-- 已读区间、已检索与证据笔记记录在状态中，同样的命令不会重复执行。
+- 已读章节（区间、摘要、证据笔记）与已检索记录在状态中，同样的命令不会重复执行。
+- 可以在意图后加“# 简短计划”，如 READ <story_id> 0 200 # 接着读下一章；
+  系统把它记为状态里的“当前计划”，下一步可以接着做。
+- 状态里的“步数”是检索预算；快用完时先 READ 最关键的未读章节，再 ANSWER。
 - 目标实体已在状态中消歧时直接用其 entity_id；消歧结果不对时用 RESELECT 切换候选。
 - 证据足以回答时输出 ANSWER（可附 0-1 置信度），系统会据此写答案。
 ''';
@@ -234,7 +417,7 @@ DONE
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String state)? onStateChanged,
   }) async* {
-    final state = InvestigationState();
+    final state = InvestigationState()..stepBudget = _maxToolSteps;
     // R12: the lines READ actually returned, for the writer.
     final readPages = <ReadPage>[];
     final previousQuestions = [
@@ -301,12 +484,13 @@ DONE
     var lastFingerprint = '';
     final executed = <String, int>{};
     final outlineCache = <String, String>{};
+    // R16: already-read ranges shown again once (signature of the request).
+    final reshown = <String>{};
     var duplicates = 0;
     var onlyRereads = true;
 
-    Stream<ReActEvent> finish(StoryAnswerStatus status, {String? confidence}) =>
-        _finish(
-          status: status,
+    Stream<ReActEvent> finish(StopReason stop, {String? confidence}) => _finish(
+          stop: stop,
           confidence: confidence,
           style: style,
           state: state,
@@ -335,7 +519,7 @@ DONE
     while (true) {
       iteration++;
       if (iteration > _safetyMaxIterations) {
-        yield* finish(StoryAnswerStatus.partial);
+        yield* finish(StopReason.safetyCap);
         return;
       }
 
@@ -344,6 +528,7 @@ DONE
         // R12: a reasoning model may spend the whole ceiling on hidden
         // reasoning and return empty content; retry with headroom before
         // treating the reply as empty.
+        state.stepsUsed = toolSteps;
         completion = await completeWithHeadroom(
           _llmClient,
           buildRequest(),
@@ -365,8 +550,13 @@ DONE
         return;
       }
       networkRetries = 0;
-      final response = completion.content.trim();
-      onRawLlmResponse?.call(iteration, response);
+      final raw = completion.content.trim();
+      onRawLlmResponse?.call(iteration, raw);
+      // R16: `<intent> # <plan>` — the plan note is kept in state for
+      // continuity and never takes part in any decision.
+      final split = splitPlanNote(raw);
+      final response = split.intent;
+      if (split.plan.isNotEmpty) state.plan = split.plan;
 
       final intent = parseIntent(response);
       if (intent == null) {
@@ -376,7 +566,7 @@ DONE
         if (response.isEmpty) {
           emptyResponses++;
           if (emptyResponses >= _maxEmptyResponses) {
-            yield* finish(StoryAnswerStatus.partial);
+            yield* finish(StopReason.emptyReplies);
             return;
           }
           recent.add(Message.user(
@@ -411,7 +601,7 @@ DONE
           continue;
         }
         yield* finish(
-          StoryAnswerStatus.answered,
+          StopReason.answer,
           confidence: intent.args['confidence'] as String?,
         );
         return;
@@ -473,7 +663,9 @@ DONE
       stalled = fingerprint == lastFingerprint ? stalled + 1 : 0;
       lastFingerprint = fingerprint;
       if (toolSteps > _maxToolSteps || stalled >= _stallFinish) {
-        yield* finish(StoryAnswerStatus.partial);
+        yield* finish(
+          toolSteps > _maxToolSteps ? StopReason.budget : StopReason.stalled,
+        );
         return;
       }
       if (stalled == _stallNudge) {
@@ -486,6 +678,7 @@ DONE
       // R14: a READ that starts inside already-read lines continues at the
       // first unread line (live runs re-read 30-line windows of the same
       // chapter many times over).
+      var advanced = false;
       if ((intent.action == 'READ' || intent.action == 'SUMMARIZE') &&
           args['page_token'] == null) {
         final storyId = '${args['story_id'] ?? ''}';
@@ -494,6 +687,7 @@ DONE
         final unread = state.firstUnreadLine(storyId, start);
         if (unread > start && (end == null || unread <= end)) {
           args['start_line'] = unread;
+          advanced = true;
         }
       }
 
@@ -544,6 +738,40 @@ DONE
           );
           continue;
         }
+        final isReread =
+            (intent.action == 'READ' || intent.action == 'SUMMARIZE') &&
+                (previous != null || rangeRead);
+        // R16: a planner asking for lines it already read wants to look at
+        // them again (it only keeps digests and notes); refusing made it
+        // ask up to 15 times. The text is shown again once, from the pages
+        // in hand, at the cost of a tool step.
+        // A planner that keeps asking for text it has (live: 9 of 21 steps
+        // after the first re-show) is done reading — the same as ANSWER;
+        // the writer sees all of it and says whether it covers the question.
+        if (isReread && reshown.length >= _maxReshows && readPages.isNotEmpty) {
+          yield* finish(StopReason.onlyRereads);
+          return;
+        }
+        if (isReread && reshown.add('$storyId ${start ?? 0}-${end ?? ''}')) {
+          final text = _rereadText(
+            [...inheritedPages, ...readPages],
+            storyId,
+            start ?? 0,
+            end,
+          );
+          if (text.isNotEmpty) {
+            final shown = '（这段原文之前已读过，再给你看一次；之后不再重复提供，'
+                '写答案时也会完整使用）\n$text';
+            recent.add(Message.user('Observation: $shown'));
+            if (recent.length > 2) recent.removeAt(0);
+            yield ReActEvent(
+              type: ReActEventType.toolObservation,
+              content: shown,
+              toolName: toolName,
+            );
+            continue;
+          }
+        }
         if (previous != null || rangeRead || missingOnly) {
           // R14: nothing ran, so the tool budget is not spent; but a planner
           // that only repeats itself has nothing left to look up — finish.
@@ -558,14 +786,14 @@ DONE
             // search means it is still looking but stuck — a stall.
             yield* finish(
               onlyRereads && readPages.isNotEmpty
-                  ? StoryAnswerStatus.answered
-                  : StoryAnswerStatus.partial,
+                  ? StopReason.onlyRereads
+                  : StopReason.repeatedSearches,
             );
             return;
           }
-          final note = rangeRead
-              ? 'READ $storyId $start-$end 的内容已经读过：已读原文会完整交给写答案'
-                  '的环节，不必重读。'
+          final note = isReread
+              ? 'READ $storyId 这一段已经给你看过（读取和重看各一次）：已读原文会完整'
+                  '交给写答案的环节，不必再看。'
               : missingOnly && previous == null
                   ? '库中没有“${searchTerms.join(' ')}”这个写法（之前的检索已确认），'
                       '换范围或数量也不会有结果；看状态里列出的相近名字。'
@@ -589,6 +817,10 @@ DONE
       onlyRereads = true;
 
       yield ReActEvent(
+        type: ReActEventType.status,
+        content: '第 $toolSteps 步 · ${_stepLabel(intent.action, args, state)}',
+      );
+      yield ReActEvent(
         type: ReActEventType.toolCall,
         content: 'Executing tool "$toolName" with arguments: $args',
         toolName: toolName,
@@ -602,6 +834,14 @@ DONE
             : '${result ?? 'No output'}';
       } catch (e) {
         observation = 'Error executing tool: $e';
+      }
+      // R16: continuing past the read lines found nothing — the chapter was
+      // read to its end. Said plainly: the raw "No lines" read like a failed
+      // READ and the planner asked again (live).
+      if (advanced && observation.startsWith('No lines in the requested range')) {
+        final storyId = '${args['story_id'] ?? ''}';
+        observation = '$storyId 已经读到结尾（已读 ${state.segmentsText(storyId)}），'
+            '没有更多行。这一章的摘要和笔记在状态“已读章节”里。';
       }
       completedToolCalls++;
       // R10/R11: an ambiguous SEARCH is resolved by the disambiguation helper
@@ -658,20 +898,74 @@ DONE
         readPages.add(page);
         final extractor = _extractorClient;
         if (extractor != null) {
-          final notes = await extractEvidenceNotes(
+          final digest = await digestReadPage(
             extractor,
             userQuery: extractorQuery,
             page: page,
             // R14: pages are up to ~150 lines now.
             maxNotes: 10,
           );
-          if (notes.isNotEmpty) {
-            state.addNotes(notes);
-            onStateChanged?.call(state.serialize());
-          }
+          state
+            ..noteDigest(page.storyId, digest.digest)
+            ..addNotes(digest.notes);
+          onStateChanged?.call(state.serialize());
         }
       }
     }
+  }
+
+  /// R16: the lines of [storyId] in [start]..[end] from pages already in
+  /// hand (`N | text` rows, at most [_maxRereadLines]); '' when none.
+  static String _rereadText(
+    List<ReadPage> pages,
+    String storyId,
+    int start,
+    int? end,
+  ) {
+    final rows = <int, String>{};
+    for (final page in pages) {
+      if (page.storyId != storyId) continue;
+      for (final line in page.lines) {
+        if (line.index < start || (end != null && line.index > end)) continue;
+        rows[line.index] = line.text;
+      }
+    }
+    if (rows.isEmpty) return '';
+    final indexes = rows.keys.toList()..sort();
+    return [
+      'Story: $storyId',
+      for (final i in indexes.take(_maxRereadLines)) '$i | ${rows[i]}',
+      if (indexes.length > _maxRereadLines)
+        '…（其余 ${indexes.length - _maxRereadLines} 行略）',
+    ].join('\n');
+  }
+
+  static const int _maxRereadLines = 200;
+
+  /// R16: already-read passages shown again per run; asking for more ends
+  /// the search (see the re-read branch in [run]).
+  static const int _maxReshows = 2;
+
+  /// Short description of a step for the live status line (R16).
+  String _stepLabel(
+    String action,
+    Map<String, dynamic> args,
+    InvestigationState state,
+  ) {
+    String story(String id) => state.storyEntries[id]?.label ?? id;
+    final query = '${args['query'] ?? args['entity_id'] ?? ''}';
+    final storyId = '${args['story_id'] ?? ''}';
+    final scope = '${args['scope_id'] ?? args['target'] ?? ''}';
+    return switch (action) {
+      'READ' || 'SUMMARIZE' => '阅读 ${story(storyId)}',
+      'FIND' => '搜索原文“$query”',
+      'COVER' => '查出场 $query',
+      'SEARCH' => '查档案 $query',
+      'OUTLINE' => '看梗概 ${scope.isEmpty ? query : scope}',
+      'MAP' => '查章节地图 $scope',
+      'COLLECT' => '汇总出场 $query',
+      _ => action,
+    };
   }
 
   /// R14: labels the story ids that entered the state since the last step.
@@ -797,12 +1091,17 @@ DONE
     return value;
   }
 
-  /// Writer role + provenance (R12/R13): composes the answer in [style] from
-  /// the notebook and read lines, checks every cited line was actually read
-  /// (one corrective rewrite, then a source warning), prefixes the
-  /// code-decided envelope, emits it and completes.
+  /// Writer role + provenance (R12/R13/R16): streams the answer in [style]
+  /// from the notebook and read lines, checks every cited line was actually
+  /// read (one corrective rewrite, streamed again, then a source warning),
+  /// and replaces the streamed text with the checked answer under the
+  /// status envelope.
+  ///
+  /// R16: the status follows the evidence, not why the search stopped: the
+  /// writer says whether the read text covers the core of the question
+  /// (`[COVERAGE: …]`); [stop] only decides when that line is missing.
   Stream<ReActEvent> _finish({
-    required StoryAnswerStatus status,
+    required StopReason stop,
     required String? confidence,
     required AnswerStyle style,
     required InvestigationState state,
@@ -812,21 +1111,33 @@ DONE
   }) async* {
     // Nothing read means nothing can be cited, whatever the planner thought.
     final nothingRead = readPages.isEmpty && state.notes.isEmpty;
-    final finalStatus = nothingRead ? StoryAnswerStatus.notCovered : status;
+    yield const ReActEvent(type: ReActEventType.status, content: '正在撰写答案');
     String body;
+    StoryCoverage? coverage;
     try {
-      body = await _composeAnswer(
-        status: finalStatus,
+      final draft = _AnswerBuffer();
+      yield* _streamAnswer(
+        draft,
+        stop: stop,
+        nothingRead: nothingRead,
         style: style,
         state: state,
         readPages: readPages,
         userQuery: userQuery,
         chatHistory: chatHistory,
       );
+      body = draft.text;
       var invalid = unreadCitations(body, state);
       if (invalid.isNotEmpty) {
-        body = await _composeAnswer(
-          status: finalStatus,
+        yield ReActEvent(
+          type: ReActEventType.finalAnswerReset,
+          content: '正在修正引用：${invalid.length} 处引用的行没有读过',
+        );
+        final rewrite = _AnswerBuffer();
+        yield* _streamAnswer(
+          rewrite,
+          stop: stop,
+          nothingRead: nothingRead,
           style: style,
           state: state,
           readPages: readPages,
@@ -834,8 +1145,12 @@ DONE
           chatHistory: chatHistory,
           invalidCitations: invalid,
         );
+        body = rewrite.text;
         invalid = unreadCitations(body, state);
       }
+      final parsed = splitCoverage(body);
+      body = parsed.body;
+      coverage = parsed.coverage;
       if (style == AnswerStyle.factCheck) {
         body = normalizeFactCheckBody(
           body,
@@ -850,8 +1165,15 @@ DONE
     } catch (e) {
       body = '（无法生成答案正文：$e）';
     }
-    yield* _emitFinal(
-      '${formatStoryAnswerEnvelope(finalStatus, confidence: nothingRead ? '0' : confidence)}\n$body',
+    final status = answerStatus(
+      nothingRead: nothingRead,
+      coverage: coverage,
+      stop: stop,
+    );
+    yield ReActEvent(
+      type: ReActEventType.finalAnswerReplace,
+      content:
+          '${formatStoryAnswerEnvelope(status, confidence: nothingRead ? '0' : confidence)}\n$body',
     );
     yield const ReActEvent(type: ReActEventType.complete);
   }
@@ -890,87 +1212,100 @@ DONE
     }
   }
 
-  Stream<ReActEvent> _emitFinal(String answer) async* {
-    const chunkSize = 120;
-    for (var i = 0; i < answer.length; i += chunkSize) {
-      final end = i + chunkSize < answer.length ? i + chunkSize : answer.length;
-      yield ReActEvent(
-        type: ReActEventType.finalAnswerToken,
-        content: answer.substring(i, end),
-      );
-    }
-  }
-
-  /// Upper bound of raw read text handed to the writer (R14: raised from
-  /// 8000 so set-up chapters and the previous turn's pages are not cut when
-  /// the event chapter is read later).
-  static const int _maxWriterSourceChars = 30000;
+  /// Ceiling of one writer call (R16: generous so a streamed answer is not
+  /// cut; billing follows the tokens produced).
+  static const int _writerMaxTokens = 8192;
 
   /// Writer role: the evidence notebook AND the raw lines READ returned go
   /// to the writer, so the answer rests on original text instead of model
-  /// memory; [invalidCitations] drives a corrective rewrite.
-  Future<String> _composeAnswer({
-    required StoryAnswerStatus status,
+  /// memory; [invalidCitations] drives a corrective rewrite. R16: streamed
+  /// into [out] token by token (hidden reasoning, when the writer thinks,
+  /// streams as [ReActEventType.reasoningToken]).
+  Stream<ReActEvent> _streamAnswer(
+    _AnswerBuffer out, {
+    required StopReason stop,
+    required bool nothingRead,
     required AnswerStyle style,
     required InvestigationState state,
     required List<ReadPage> readPages,
     required String userQuery,
     required List<Message> chatHistory,
     List<String> invalidCitations = const [],
-  }) async {
-    final source = StringBuffer();
-    // Overlapping reads (and pages inherited from the previous turn) repeat
-    // lines; each line goes to the writer once.
-    final emitted = <String>{};
-    for (final page in readPages) {
-      final label = state.storyEntries[page.storyId]?.label;
-      if (label != null && source.length < _maxWriterSourceChars) {
-        source.write('〔${page.storyId} = $label〕\n');
-      }
-      for (final line in page.lines) {
-        if (!emitted.add('${page.storyId}:${line.index}')) continue;
-        final row = '${page.storyId}:${line.index} ${line.text}\n';
-        if (source.length + row.length > _maxWriterSourceChars) break;
-        source.write(row);
-      }
-    }
-    final statusNote = switch (status) {
-      StoryAnswerStatus.answered => '',
-      StoryAnswerStatus.partial =>
-        '\n注意：检索在证据充分之前停止了（预算或无新进展），请明确说明哪些部分'
-            '资料不足，不要把不完整的证据说成定论。',
-      StoryAnswerStatus.notCovered =>
-        '\n注意：本次没有读到任何相关原文。请如实说明知识库未找到相关内容'
-            '（可列出检索过的方向），不要回答具体事实。',
-    };
+  }) async* {
+    final source = buildWriterSource(readPages, state);
+    final stopNote = nothingRead
+        ? '\n注意：本次没有读到任何相关原文。请如实说明知识库未找到相关内容'
+            '（可列出检索过的方向），不要回答具体事实。'
+        : stop.writerNote;
     final correction = invalidCitations.isEmpty
         ? ''
         : '\n\n上一版答案引用了未读取的行：${invalidCitations.join('、')}。'
             '请重写，只引用下方“已读原文”中出现的 story_id:行号。';
-    final result = await completeWithHeadroom(
-      _writerClient,
-      [
-        Message.system(
-          '你是明日方舟剧情资料员。只根据下方“证据笔记”和“已读原文”回答，'
-          '引用格式为 story_id:行号（或 story_id:起-止），只能引用已读原文中出现的行。'
-          '正文提到章节时用读者看得懂的名称（如〔〕中给出的“故事集 关卡号 标签《章名》”），'
-          '不要把 story_id 当作章节名写进句子；story_id 只出现在引用里。'
-          '“已看梗概”是官方简介，只能帮助理解前后文和事件顺序，不能代替原文作为证据。'
-          '回答要考虑整个故事的前因后果，而不只是事件发生的那一幕。'
-          '原文没有覆盖的部分明确写“资料未覆盖”，不得用记忆补充。用 Markdown。\n'
-          '${_styleInstructions(style)}$statusNote',
-        ),
-        ...chatHistory,
-        Message.user(
-          '问题: $userQuery\n\n检索状态:\n${state.serialize()}'
-          '\n\n已读原文:\n${source.isEmpty ? '（无）' : source}$correction',
-        ),
-      ],
-      temperature: 0.2,
-      maxTokens: 4096,
-      retryPartial: true, // a cut-off answer is not an answer
-    );
-    return result.content.trim();
+    final messages = [
+      Message.system(
+        '你是明日方舟剧情资料员。只根据下方“证据笔记”和“已读原文”回答，'
+        '引用格式为 story_id:行号（或 story_id:起-止），只能引用已读原文中出现的行。'
+        '正文提到章节时用读者看得懂的名称（如〔〕中给出的“故事集 关卡号 标签《章名》”），'
+        '不要把 story_id 当作章节名写进句子；story_id 只出现在引用里。'
+        '“已看梗概”是官方简介，只能帮助理解前后文和事件顺序，不能代替原文作为证据。'
+        '回答要考虑整个故事的前因后果，而不只是事件发生的那一幕。'
+        '原文没有覆盖的部分明确写“资料未覆盖”，不得用记忆补充。用 Markdown。'
+        '问题里的名字若列在检索状态“库中没有的写法”中，而已读原文与问题的其余部分'
+        '对得上状态列出的某个相近名字，就按那个名字作答，并在第一句说明按哪个名字理解；'
+        '不要只因写法不同就判定资料未覆盖。\n'
+        '${_styleInstructions(style)}\n$coverageInstruction$stopNote',
+      ),
+      ...chatHistory,
+      Message.user(
+        '问题: $userQuery\n\n检索状态:\n${state.serializeForWriter()}'
+        '\n\n已读原文:\n${source.isEmpty ? '（无）' : source}$correction',
+      ),
+    ];
+    var maxTokens = _writerMaxTokens;
+    while (true) {
+      String? finishReason;
+      await for (final delta in _writerClient.streamCompletion(
+        messages,
+        temperature: 0.2,
+        maxTokens: maxTokens,
+      )) {
+        if (delta.reasoningContent.isNotEmpty) {
+          yield ReActEvent(
+            type: ReActEventType.reasoningToken,
+            content: delta.reasoningContent,
+          );
+        }
+        if (delta.content.isNotEmpty) {
+          // Leading whitespace of the reply is dropped, as before.
+          final text = out.isEmpty ? delta.content.trimLeft() : delta.content;
+          if (text.isNotEmpty) {
+            out.write(text);
+            yield ReActEvent(
+              type: ReActEventType.finalAnswerToken,
+              content: text,
+            );
+          }
+        }
+        if (delta.done) finishReason = delta.finishReason;
+      }
+      // Hidden reasoning used the whole ceiling before any answer text:
+      // once more with the hard ceiling (completion_budget.dart).
+      if (finishReason == 'length' &&
+          out.isEmpty &&
+          maxTokens < maxCompletionTokens) {
+        maxTokens = maxCompletionTokens;
+        continue;
+      }
+      if (finishReason == 'length' && !out.isEmpty) {
+        const note = '\n\n> 注意：答案达到长度上限，可能不完整。';
+        out.write(note);
+        yield const ReActEvent(
+          type: ReActEventType.finalAnswerToken,
+          content: note,
+        );
+      }
+      return;
+    }
   }
 
   static String _styleInstructions(AnswerStyle style) => switch (style) {
@@ -979,7 +1314,8 @@ DONE
             '动因放到第 4 条的替代解读里，不要用它们代替对问题本身的回答。\n'
             '2. 然后 2-5 条证据，每条附引用。\n'
             '3. 列出与结论矛盾或削弱结论的原文（如有）。\n'
-            '4. 最后一段写置信度（0-1）与可能的替代解读。',
+            '4. 最后一段写置信度（0-1）；有原文依据的替代解读才写，'
+            '不要推测原文没有写到的动机或安排。',
         AnswerStyle.summary => '输出格式（梗概）：\n'
             '1. 概述（1-2 句）。\n'
             '2. 按时间顺序的关键事件，每条附引用。\n'

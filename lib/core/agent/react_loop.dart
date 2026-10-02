@@ -11,7 +11,13 @@ import 'tools/agent_tool.dart';
 import 'tools/tool_registry.dart';
 
 /// Types of events emitted by the ReAct Loop. (Re)exported for compatibility.
-export 'react_event.dart' show FinalAnswerTransform, ReActEvent, ReActEventType;
+export 'react_event.dart'
+    show
+        FinalAnswerTransform,
+        ReActEvent,
+        ReActEventType,
+        applyAnswerEvent,
+        finalAnswerOf;
 
 /// Executor for the ReAct (Reasoning and Acting) loop.
 ///
@@ -144,7 +150,13 @@ Let's begin!
     final evidenceSummary = EvidenceSummary();
     final observations = <String>[];
 
+    var previewOpen = false;
     while (!completed) {
+      if (previewOpen) {
+        // The previous step's live "Final Answer" text was not accepted.
+        yield const ReActEvent(type: ReActEventType.finalAnswerReset);
+        previewOpen = false;
+      }
       iteration++;
       logger?.logIteration(iteration);
       if (iteration > _safetyMaxIterations) {
@@ -158,8 +170,11 @@ Let's begin!
       // Ask for one Thought and Action step. Keep this bounded, but leave
       // enough room for providers that include verbose reasoning text.
       ChatCompletionResult completion;
+      // R16: every step streams; text after "Final Answer:" is shown live
+      // and replaced by the checked answer (or cleared) when the step ends.
+      final preview = _FinalAnswerPreview();
       try {
-        completion = await _llmClient.chatCompletion(
+        final deltas = _llmClient.streamCompletion(
           buildRequest(),
           temperature: 0.1, // Low temperature for high format compliance
           maxTokens: _stepMaxTokens,
@@ -170,7 +185,28 @@ Let's begin!
             '\nobservation:',
           ],
         );
+        final text = StringBuffer();
+        CompletionDelta? last;
+        await for (final delta in deltas) {
+          if (delta.done) last = delta;
+          if (delta.content.isEmpty) continue;
+          text.write(delta.content);
+          final live = preview.advance(text.toString());
+          if (live.isNotEmpty) {
+            yield ReActEvent(
+              type: ReActEventType.finalAnswerToken,
+              content: live,
+            );
+          }
+        }
+        completion = ChatCompletionResult(
+          content: text.toString(),
+          finishReason: last?.finishReason,
+        );
       } catch (e) {
+        if (preview.started) {
+          yield const ReActEvent(type: ReActEventType.finalAnswerReset);
+        }
         logger?.logError('LLM_ERROR: $e');
         await logger?.flush();
         yield ReActEvent(type: ReActEventType.error, content: 'LLM Error: $e');
@@ -178,6 +214,8 @@ Let's begin!
       }
       final response = completion.content;
       onRawLlmResponse?.call(iteration, response);
+      // Cleared at the next step unless this step's answer is accepted.
+      previewOpen = preview.started;
       if (completion.wasTruncated) {
         // R7-3: truncation is recoverable, not fatal. Retry up to
         // [_maxTruncatedRetries] times with a "be concise" hint; only give up
@@ -498,14 +536,34 @@ Let's begin!
     }
   }
 
+  /// R16: the checked answer replaces whatever was streamed live (the source
+  /// guard / transform may have changed it).
   Stream<ReActEvent> _emitFinalAnswer(String answer) async* {
-    const chunkSize = 120;
-    for (var i = 0; i < answer.length; i += chunkSize) {
-      final end = i + chunkSize < answer.length ? i + chunkSize : answer.length;
-      yield ReActEvent(
-        type: ReActEventType.finalAnswerToken,
-        content: answer.substring(i, end),
-      );
+    yield ReActEvent(
+      type: ReActEventType.finalAnswerReplace,
+      content: answer,
+    );
+  }
+}
+
+/// R16: live text of a streaming ReAct step after its `Final Answer:` key.
+class _FinalAnswerPreview {
+  static final RegExp _key = RegExp(r'(^|\n)\s*Final Answer:\s*');
+  int _sent = -1;
+
+  bool get started => _sent >= 0;
+
+  /// The not-yet-shown answer text in [text] (the step so far); '' before
+  /// the key appears.
+  String advance(String text) {
+    if (_sent < 0) {
+      final match = _key.firstMatch(text);
+      if (match == null) return '';
+      _sent = match.end;
     }
+    if (text.length <= _sent) return '';
+    final live = text.substring(_sent);
+    _sent = text.length;
+    return live;
   }
 }

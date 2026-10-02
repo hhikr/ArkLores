@@ -36,8 +36,8 @@ final sharedGameDataStoreProvider = Provider<GameDataKnowledgeStore>((ref) {
 /// off), the answer writer keeps the main model.
 final summaryAgentProvider = Provider<SummaryAgent>((ref) {
   return SummaryAgent(
-    llmClient: ref.watch(llmClientProvider),
-    auxClient: ref.watch(auxLlmClientProvider),
+    llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
+    auxClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );
@@ -45,8 +45,8 @@ final summaryAgentProvider = Provider<SummaryAgent>((ref) {
 
 final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
   return FactCheckAgent(
-    llmClient: ref.watch(llmClientProvider),
-    auxClient: ref.watch(auxLlmClientProvider),
+    llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
+    auxClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );
@@ -78,13 +78,19 @@ class AskChatNotifier extends ChatNotifierBase {
     required QuestionRouter router,
     ChatSessionStore sessionStore = const ChatSessionStore(),
     required LLMConfig Function() configReader,
+    LLMClient? Function()? writerClientReader,
   })  : _summaryAgent = summaryAgent,
         _factCheckAgent = factCheckAgent,
         _investigationAgent = investigationAgent,
         _router = router,
         _sessionStore = sessionStore,
         _configReader = configReader,
+        _writerClientReader = writerClientReader,
         super([]);
+
+  /// R16: the answer writer for the next question (the thinking client when
+  /// "深度思考" is on); null keeps each agent's own writer.
+  final LLMClient? Function()? _writerClientReader;
   final SummaryAgent _summaryAgent;
   final FactCheckAgent _factCheckAgent;
   final InvestigationAgent _investigationAgent;
@@ -205,11 +211,13 @@ class AskChatNotifier extends ChatNotifierBase {
     }
     void onMemory(String memoryBlock) => turnMemory = memoryBlock;
 
+    final writerClient = _writerClientReader?.call();
     final stream = switch (effectiveMode) {
       AiMode.verify => _factCheckAgent.checkClaim(
           claim: query,
           history: history,
           priorPages: priorPages,
+          writerClient: writerClient,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
         ),
@@ -217,6 +225,7 @@ class AskChatNotifier extends ChatNotifierBase {
           query: query,
           history: history,
           priorPages: priorPages,
+          writerClient: writerClient,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
         ),
@@ -224,13 +233,28 @@ class AskChatNotifier extends ChatNotifierBase {
           query: query,
           history: history,
           priorPages: priorPages,
+          writerClient: writerClient,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
         ),
     };
 
     final steps = <ReActStep>[];
-    final finalAnswerBuffer = StringBuffer();
+    // R16: streamed answer text and live reasoning, pushed to the UI at most
+    // once per coalescer interval.
+    var answer = '';
+    final reasoning = StringBuffer();
+    final coalescer = StreamCoalescer(() {
+      if (!isCurrentGeneration(generation)) return;
+      updateMessage(
+        assistantId,
+        content: answer,
+        reasoning: reasoning.toString(),
+        factCheckVerdict: effectiveMode == AiMode.verify
+            ? parseFactCheckVerdict(answer)
+            : null,
+      );
+    });
 
     // Auto routing failures are surfaced to the user instead of silently
     // degrading (M3): the step area shows why the pinned fallback mode was
@@ -309,20 +333,31 @@ class AskChatNotifier extends ChatNotifierBase {
             }
             break;
           case ReActEventType.finalAnswerToken:
-            finalAnswerBuffer.write(event.content);
-            updateMessage(
-              assistantId,
-              content: finalAnswerBuffer.toString(),
-              // Only the fact-check workflow produces a verdict banner; other
-              // modes may still contain a marker in text, which chat_bubble
-              // strips from the markdown body.
-              factCheckVerdict: effectiveMode == AiMode.verify
-                  ? parseFactCheckVerdict(finalAnswerBuffer.toString())
-                  : null,
-              steps: List.of(steps),
-            );
+            // Only the fact-check workflow produces a verdict banner; other
+            // modes may still contain a marker in text, which chat_bubble
+            // strips from the markdown body.
+            answer = applyAnswerEvent(answer, event);
+            coalescer.schedule();
+            break;
+          case ReActEventType.finalAnswerReset:
+            answer = '';
+            steps.add(ReActStep(type: event.type, content: event.content));
+            updateMessage(assistantId, steps: List.of(steps));
+            coalescer.flushNow();
+            break;
+          case ReActEventType.finalAnswerReplace:
+            answer = event.content;
+            coalescer.flushNow();
+            break;
+          case ReActEventType.reasoningToken:
+            reasoning.write(event.content);
+            coalescer.schedule();
+            break;
+          case ReActEventType.status:
+            updateMessage(assistantId, liveStatus: event.content);
             break;
           case ReActEventType.error:
+            coalescer.cancel();
             steps.add(ReActStep(type: event.type, content: event.content));
             turnError = event.content;
             turnStatus = ChatTurnStatus.error;
@@ -334,15 +369,19 @@ class AskChatNotifier extends ChatNotifierBase {
             );
             break;
           case ReActEventType.complete:
+            coalescer.flushNow();
             updateMessage(
               assistantId,
               isStreaming: false,
               steps: List.of(steps),
+              reasoning: '',
+              liveStatus: '',
             );
             break;
         }
       }
     } catch (e) {
+      coalescer.cancel();
       if (isCurrentGeneration(generation)) {
         updateMessage(
           assistantId,
@@ -354,6 +393,7 @@ class AskChatNotifier extends ChatNotifierBase {
         turnError = '$e';
       }
     } finally {
+      coalescer.cancel();
       if (recording && session != null) {
         await _finalizeTurn(
           session: session,
@@ -364,7 +404,7 @@ class AskChatNotifier extends ChatNotifierBase {
           config: config,
           turnStart: turnStart,
           iterations: iterations,
-          answer: finalAnswerBuffer.toString(),
+          answer: answer,
           status: canceled ? ChatTurnStatus.canceled : turnStatus,
           error: canceled ? '[ASK_CANCELED]' : turnError,
           memory: turnMemory,
@@ -458,20 +498,27 @@ final askChatProvider =
     summaryAgent: ref.watch(summaryAgentProvider),
     factCheckAgent: ref.watch(factCheckAgentProvider),
     investigationAgent: ref.watch(investigationAgentProvider),
-    router: QuestionRouter(llmClient: ref.watch(llmClientProvider)),
+    router: QuestionRouter(
+      llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
+    ),
     sessionStore: ref.watch(chatSessionStoreProvider),
     configReader: () => ref.read(apiConfigProvider),
+    // R16: read per question, so the switch never rebuilds the notifier
+    // (which would drop the conversation).
+    writerClientReader: () => ref.read(deepThinkingProvider)
+        ? ref.read(llmClientProvider(ReasoningLevel.low))
+        : null,
   );
 });
 
 /// Provider for the [InvestigationAgent] instance.
 final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
-  // R12 cost control: hidden reasoning was ~90% of investigation output
-  // tokens. Mechanical roles (extract notes, pick a candidate, emit one-line
-  // intents) run without it; the answer writer keeps the reasoning model.
-  final aux = ref.watch(auxLlmClientProvider);
+  // R12/R16 cost control: hidden reasoning was ~90% of investigation output
+  // tokens. Every role runs without it; only the "深度思考" switch gives
+  // the writer low-effort reasoning (see llm_provider.dart).
+  final aux = ref.watch(llmClientProvider(ReasoningLevel.off));
   return InvestigationAgent(
-    llmClient: ref.watch(llmClientProvider),
+    llmClient: aux,
     plannerClient: aux,
     extractorClient: aux,
     disambiguatorClient: aux,
@@ -529,7 +576,9 @@ final roleplaySessionStoreProvider =
     Provider<RoleplaySessionStore>((ref) => const RoleplaySessionStore());
 
 final roleplayAgentProvider = Provider<RoleplayAgent>((ref) {
-  return RoleplayAgent(llmClient: ref.watch(llmClientProvider));
+  return RoleplayAgent(
+    llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
+  );
 });
 
 class RoleplayNotifier extends StateNotifier<RoleplayState> {
@@ -602,6 +651,12 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
       ),
     ],);
     final steps = <ReActStep>[];
+    var answer = '';
+    final coalescer = StreamCoalescer(() {
+      if (generation == _requestGeneration && mounted) {
+        _updateMessage(assistantId, content: answer);
+      }
+    });
     try {
       await for (final event in _agent.reply(
         character: character,
@@ -610,7 +665,10 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
         history: history,
         isFirstTurn: firstTurn,
       )) {
-        if (generation != _requestGeneration) return;
+        if (generation != _requestGeneration) {
+          coalescer.cancel();
+          return;
+        }
         switch (event.type) {
           case ReActEventType.thought:
           case ReActEventType.toolObservation:
@@ -633,15 +691,28 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
             _updateMessage(assistantId, steps: List.of(steps));
             break;
           case ReActEventType.finalAnswerToken:
-            _updateMessage(assistantId, content: event.content);
+            // R16: tokens append (the old handler replaced the text with
+            // each 120-char chunk, so long replies showed only their tail).
+            answer = applyAnswerEvent(answer, event);
+            coalescer.schedule();
+            break;
+          case ReActEventType.finalAnswerReset:
+          case ReActEventType.finalAnswerReplace:
+            answer = applyAnswerEvent(answer, event);
+            coalescer.flushNow();
+            break;
+          case ReActEventType.reasoningToken:
+          case ReActEventType.status:
             break;
           case ReActEventType.complete:
+            coalescer.flushNow();
             _updateMessage(assistantId, isStreaming: false);
             await _persist();
             break;
         }
       }
     } catch (_) {
+      coalescer.cancel();
       if (generation == _requestGeneration) {
         _updateMessage(assistantId,
             content: '[ROLEPLAY_ERROR]', isError: true, isStreaming: false,);

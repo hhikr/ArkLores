@@ -5,32 +5,27 @@ import 'embedding_client.dart';
 import 'llm_client.dart';
 import 'openai_client.dart';
 
-/// Provider that creates and manages an [LLMClient] instance.
+/// Chat clients per [ReasoningLevel] (R16). All share the configured
+/// endpoint and model and rebuild whenever the API config changes.
 ///
-/// Rebuilds whenever the API config changes, so all downstream
-/// consumers automatically use the new configuration.
-final llmClientProvider = Provider<LLMClient>((ref) {
-  final config = ref.watch(apiConfigProvider);
-
-  final client = OpenAICompatibleClient(config: config);
-
-  // Dispose the client when the provider is disposed.
-  ref.onDispose(() => client.dispose());
-
-  return client;
-});
-
-/// Same endpoint/model as [llmClientProvider] but asking hybrid reasoning
-/// models to skip hidden reasoning (R12 cost control) — for mechanical roles
-/// (evidence extraction, candidate picking, per-step intents).
-final auxLlmClientProvider = Provider<LLMClient>((ref) {
+/// Every role runs at [ReasoningLevel.off] by default: routing, planning,
+/// note extraction and disambiguation are mechanical, and the answer writer
+/// works from text that was already retrieved (high effort over-interpreted
+/// the story). The "深度思考" switch moves only the writer to
+/// [ReasoningLevel.low]; nothing uses [ReasoningLevel.high].
+final llmClientProvider =
+    Provider.family<LLMClient, ReasoningLevel>((ref, level) {
   final client = OpenAICompatibleClient(
     config: ref.watch(apiConfigProvider),
-    reasoning: false,
+    reasoning: level,
   );
   ref.onDispose(client.dispose);
   return client;
 });
+
+/// Whether the answer writer may think ([ReasoningLevel.low]); off by
+/// default, toggled from the Ask input row.
+final deepThinkingProvider = StateProvider<bool>((ref) => false);
 
 /// Embedding client for vector recall (R12); null when no key is set, in
 /// which case `FIND` runs keyword-only.

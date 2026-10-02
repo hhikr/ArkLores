@@ -132,6 +132,58 @@ class ChatCompletionResult {
   bool get wasTruncated => finishReason == 'length';
 }
 
+/// R16: how much hidden reasoning a call may use. Mapped to each provider's
+/// own switch; for providers without a known switch nothing is sent.
+enum ReasoningLevel { off, low, high }
+
+/// One increment of a streamed completion (R16). The last delta of a stream
+/// has [done] set and carries [finishReason] and usage when the provider
+/// reports them.
+class CompletionDelta {
+  const CompletionDelta({
+    this.content = '',
+    this.reasoningContent = '',
+    this.done = false,
+    this.finishReason,
+    this.promptTokens,
+    this.completionTokens,
+    this.cachedPromptTokens,
+  });
+
+  /// Visible answer text of this increment.
+  final String content;
+
+  /// Hidden-reasoning text of this increment (shown live, never persisted).
+  final String reasoningContent;
+  final bool done;
+  final String? finishReason;
+  final int? promptTokens;
+  final int? completionTokens;
+  final int? cachedPromptTokens;
+}
+
+/// Collects a delta stream into the completed result, forwarding each delta
+/// to [onDelta] as it arrives.
+Future<ChatCompletionResult> collectCompletion(
+  Stream<CompletionDelta> deltas, {
+  void Function(CompletionDelta delta)? onDelta,
+}) async {
+  final content = StringBuffer();
+  CompletionDelta? last;
+  await for (final delta in deltas) {
+    content.write(delta.content);
+    onDelta?.call(delta);
+    if (delta.done) last = delta;
+  }
+  return ChatCompletionResult(
+    content: content.toString(),
+    finishReason: last?.finishReason,
+    promptTokens: last?.promptTokens,
+    completionTokens: last?.completionTokens,
+    cachedPromptTokens: last?.cachedPromptTokens,
+  );
+}
+
 /// Abstract LLM client interface.
 ///
 /// Implementations connect to OpenAI-compatible APIs.
@@ -167,13 +219,28 @@ abstract class LLMClient {
     return ChatCompletionResult(content: content);
   }
 
-  /// Sends a chat completion request and streams the response tokens
-  /// via the [onToken] callback. Returns the full assembled response.
-  Future<String> chatStream(
+  /// R16: streams a chat completion as [CompletionDelta]s; the last one has
+  /// `done` set. This default yields the whole [chatCompletion] result at
+  /// once, so clients without streaming (and test fakes) still work.
+  Stream<CompletionDelta> streamCompletion(
     List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
-  });
+  }) async* {
+    final result = await chatCompletion(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+    yield CompletionDelta(content: result.content);
+    yield CompletionDelta(
+      done: true,
+      finishReason: result.finishReason,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+      cachedPromptTokens: result.cachedPromptTokens,
+    );
+  }
 }

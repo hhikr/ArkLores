@@ -80,6 +80,7 @@ class StoryQaAgent {
     required AnswerStyle style,
     List<Message> history = const [],
     List<ReadPage> priorPages = const [],
+    LLMClient? writerClient,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
   }) {
@@ -90,7 +91,8 @@ class StoryQaAgent {
     };
     final loop = PlannerLoop(
       llmClient: _plannerClient,
-      writerClient: _llmClient,
+      // R16: the "深度思考" switch hands in a thinking writer per question.
+      writerClient: writerClient ?? _llmClient,
       toolRegistry: _toolRegistry,
       extractorClient: _extractorClient,
       disambiguator: _disambiguator,

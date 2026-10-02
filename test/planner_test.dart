@@ -10,10 +10,7 @@ import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  String answerOf(List<ReActEvent> events) => events
-      .where((e) => e.type == ReActEventType.finalAnswerToken)
-      .map((e) => e.content)
-      .join();
+  String answerOf(List<ReActEvent> events) => finalAnswerOf(events);
 
   group('parseIntent', () {
     test('parses READ with and without line range', () {
@@ -494,16 +491,6 @@ class _ReadThenDoneLLM extends LLMClient {
     callCount++;
     return callCount == 1 ? 'READ s 0 100' : 'DONE';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
 }
 
 /// Scripted planner: one SEARCH (nothing read), then ANSWER.
@@ -521,16 +508,6 @@ class _SearchThenAnswerLLM extends LLMClient {
     callCount++;
     return callCount == 1 ? 'SEARCH 无此人 5' : 'ANSWER 0.9';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
 }
 
 /// Writer that records its system prompt and returns a fixed reply.
@@ -550,16 +527,6 @@ class _RecordingWriter extends LLMClient {
     system = messages.first.content;
     return reply;
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
 }
 
 
@@ -588,22 +555,6 @@ class _PlannerScriptLLM extends _CountingLLM {
         return 'DONE';
     }
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 class _AlwaysInvalidIntentLLM extends LLMClient {
@@ -616,22 +567,6 @@ class _AlwaysInvalidIntentLLM extends LLMClient {
     List<String>? stop,
   }) async {
     return '今天天气不错';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -663,22 +598,6 @@ class _NetworkOnceLLM extends _CountingLLM {
         return 'DONE';
     }
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 /// First call throws a TLS HandshakeException (flaky provider), then works.
@@ -708,22 +627,6 @@ class _AmbiguousThenResolveLLM extends LLMClient {
         return 'DONE';
     }
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 /// Script: SEARCH 特蕾西娅 repeatedly (for dead-loop tests); always the same
@@ -741,22 +644,6 @@ class _RepeatNameLLM extends LLMClient {
   }) async {
     callCount++;
     return 'SEARCH 特蕾西娅 5';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -786,22 +673,6 @@ class _ReselectLLM extends LLMClient {
       default:
         return 'DONE';
     }
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -895,22 +766,6 @@ class _PickSecondDisambiguator extends LLMClient {
     calls++;
     return '2';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 /// Disambiguator helper that fails (garbage output) -> executor falls back
@@ -925,22 +780,6 @@ class _FailDisambiguator extends LLMClient {
     List<String>? stop,
   }) async {
     return '今天天气不错';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -972,22 +811,6 @@ class _HandshakeOnceLLM extends _CountingLLM {
       default:
         return 'DONE';
     }
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -1034,22 +857,6 @@ class _ReadThenSearchLLM extends LLMClient {
     callCount++;
     if (callCount <= 2) return 'READ activities/x/level_x.txt 0 100';
     return 'SEARCH 无此人 5';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -1109,22 +916,6 @@ class _AlwaysSearchNoResultLLM extends LLMClient {
     callCount++;
     return 'SEARCH 无此人 5';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 
@@ -1141,22 +932,6 @@ class _EmptyResponseLLM extends LLMClient {
     List<String>? stop,
   }) async {
     return '';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -1175,16 +950,6 @@ class _RephrasedFindLLM extends LLMClient {
     callCount++;
     return 'FIND 无此事 变体$callCount';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
 }
 
 /// search_story_lines-shaped tool: every call returns DIFFERENT stories,

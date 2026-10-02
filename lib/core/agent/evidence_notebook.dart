@@ -93,6 +93,31 @@ Future<List<EvidenceNote>> extractEvidenceNotes(
   required String userQuery,
   required ReadPage page,
   int maxNotes = 6,
+}) async =>
+    (await digestReadPage(
+      client,
+      userQuery: userQuery,
+      page: page,
+      maxNotes: maxNotes,
+    ))
+        .notes;
+
+/// What one READ page left in the planner's hands (R16): a short,
+/// question-independent digest of what happens in it, plus the
+/// question-relevant notes. The digest lets the planner tell what it has
+/// read without asking for the text again.
+class PageDigest {
+  const PageDigest({this.digest = '', this.notes = const []});
+  final String digest;
+  final List<EvidenceNote> notes;
+}
+
+/// One extractor call: digest + notes of [page] (empty on any failure).
+Future<PageDigest> digestReadPage(
+  LLMClient client, {
+  required String userQuery,
+  required ReadPage page,
+  int maxNotes = 6,
 }) async {
   final numbered = page.lines.map((l) => '${l.index} | ${l.text}').join('\n');
   final ChatCompletionResult result;
@@ -101,10 +126,12 @@ Future<List<EvidenceNote>> extractEvidenceNotes(
       client,
       [
         Message.system(
-          '你是剧情证据摘录员。给定用户问题和一段带行号的剧情原文，找出与回答该问题'
-          '有关的行（人物动作、对话中的事实、因果、时间、身份等）。\n'
+          '你是剧情证据摘录员。给定用户问题和一段带行号的剧情原文：\n'
+          '第一行严格输出：摘要: <这段原文发生了什么，客观叙述，不超过60字，'
+          '与问题无关也要写>\n'
+          '然后找出与回答该问题有关的行（人物动作、对话中的事实、因果、时间、身份等），'
           '每条一行，严格格式：L<行号>: <该行表明的事实，不超过40字>\n'
-          '最多 $maxNotes 条，只能使用给出的行号；没有相关内容时只输出 NONE。',
+          '最多 $maxNotes 条，只能使用给出的行号；没有相关的行时第二行只输出 NONE。',
         ),
         Message.user('问题：$userQuery\n\n剧情 ${page.storyId}：\n$numbered'),
       ],
@@ -112,12 +139,26 @@ Future<List<EvidenceNote>> extractEvidenceNotes(
       maxTokens: 2048,
     );
   } catch (_) {
-    return const [];
+    return const PageDigest();
   }
-  return parseEvidenceNotes(result.content, page, maxNotes: maxNotes);
+  return PageDigest(
+    digest: parseDigest(result.content),
+    notes: parseEvidenceNotes(result.content, page, maxNotes: maxNotes),
+  );
 }
 
-final RegExp _noteRow = RegExp(r'^\s*L?(\d+)\s*[:：]\s*(.+?)\s*$', multiLine: true);
+final RegExp _digestRow = RegExp(r'^\s*摘要\s*[:：]\s*(.+?)\s*$', multiLine: true);
+
+/// The `摘要:` line of extractor output ('' when absent); exposed for tests.
+String parseDigest(String raw) {
+  final match = _digestRow.firstMatch(raw);
+  return match == null ? '' : _clip(match.group(1)!, _maxDigestChars);
+}
+
+const int _maxDigestChars = 80;
+
+final RegExp _noteRow =
+    RegExp(r'^\s*L?(\d+)\s*[:：]\s*(.+?)\s*$', multiLine: true);
 
 /// Parses extractor output into notes anchored to [page]; exposed for tests.
 List<EvidenceNote> parseEvidenceNotes(

@@ -255,14 +255,4 @@ class _BudgetLLM extends LLMClient {
     List<String>? stop,
   }) async =>
       (await chatCompletion(messages, maxTokens: maxTokens)).content;
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages);
 }

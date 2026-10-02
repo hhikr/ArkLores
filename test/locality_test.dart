@@ -574,16 +574,6 @@ class _ScriptLLM extends LLMClient {
     List<String>? stop,
   }) async =>
       (await chatCompletion(messages)).content;
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages);
 }
 
 /// `search_story_coverage` stand-in with a two-collection overview.

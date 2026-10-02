@@ -3,7 +3,7 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`，OUTLINE）；
 向量、目录、梗概都只作定位线索，不作证据。
-当前版本：v0.11.0（R13–R15，预发布版，真机测试中）；最新正式 release：v0.10.0。
+当前版本：v0.12.0 开发中（R16：流式、思考强度、规划器记忆）；v0.11.0（R13–R15）为预发布版；最新正式 release：v0.10.0。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
@@ -209,6 +209,17 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
 （`name_similarity.dart`，只陈述"字符串相近"）、scope 内 0 命中时报告范围外命中、COVER 先给
 全部故事集总览；身份由 Agent 在问答时读原文确认。不要新增别名/身份表来"修"某个具体角色。
 没有该表的库照常可用（OUTLINE 提示改用 MAP，引用显示由路径推出的名字）。
+
+### 思考强度与流式（R16）
+
+- 思考档位用 `llmClientProvider(ReasoningLevel.off|low|high)`（`llm_provider.dart`）。deepseek 不传参数
+  时默认开启 high 档，所以每个角色都必须显式指定档位。现在全部默认 `off`；只有“深度思考”开关
+  （`deepThinkingProvider`）把 writer 设为 `low`。不要给任何剧情角色开 `high`：开发者实测剧情过度思考
+  会延伸推测原文没写的内容。
+- 答案流式：`LLMClient.streamCompletion`（默认实现一次吐完，测试假 client 不用改）。PlannerLoop 依次发
+  `status` → `finalAnswerToken`… →（引用重写时 `finalAnswerReset`）→ `finalAnswerReplace`（信封 +
+  校验后正文）。测试取答案用 `finalAnswerOf(events)`，不要自己拼 token。
+- 状态由 writer 末尾的 `[COVERAGE: full|gaps]` 决定，停止原因只决定 writer 漏写时的回退。
 
 ### 剧情向量（可选表，R12）
 

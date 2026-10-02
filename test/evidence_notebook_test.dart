@@ -187,6 +187,7 @@ void main() {
           'FIND 染血 匕首', // identical -> answered from state
           'READ activities/x/level_x_05.txt 10 12',
           'READ activities/x/level_x_05.txt 11 12', // inside read segment
+          'READ activities/x/level_x_05.txt 11 12', // asked again
           'DONE',
         ],
         extractor: 'NONE',
@@ -199,11 +200,17 @@ void main() {
 
       expect(lines.calls, hasLength(1));
       expect(read.calls, 1);
-      final lastRequest =
-          llm.plannerRequests.last.map((m) => m.content).join('\n');
-      expect(lastRequest, contains('已检索:'));
-      expect(lastRequest, contains('FIND 染血 匕首'));
-      expect(lastRequest, contains('已经读过'));
+      String request(int fromEnd) =>
+          llm.plannerRequests[llm.plannerRequests.length - 1 - fromEnd]
+              .map((m) => m.content)
+              .join('\n');
+      expect(request(0), contains('已检索:'));
+      expect(request(0), contains('FIND 染血 匕首'));
+      // R16: the first re-read shows the lines again from the pages in
+      // hand (no tool call); the second is refused.
+      expect(request(1), contains('再给你看一次'));
+      expect(request(1), contains('11 | 角色B：当年我藏起匕首。'));
+      expect(request(0), contains('已经给你看过'));
     });
 
     test('a stalled run is answered from what was read, via the writer',
@@ -294,10 +301,7 @@ void main() {
   });
 }
 
-String _answer(List<ReActEvent> events) => events
-    .where((e) => e.type == ReActEventType.finalAnswerToken)
-    .map((e) => e.content)
-    .join();
+String _answer(List<ReActEvent> events) => finalAnswerOf(events);
 
 final String _readObservation = appendDataBlock(
   'Story: activities/x/level_x_05.txt\n'
@@ -354,16 +358,6 @@ class _RoleLLM extends LLMClient {
     plannerRequests.add(List.of(messages));
     return _planner.isEmpty ? 'DONE' : _planner.removeAt(0);
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages);
 }
 
 /// Returns a page shorter than requested (lines 10-12) with a DATA block.
@@ -466,14 +460,4 @@ class _CapturingPicker extends LLMClient {
     prompts.add(messages.last.content);
     return '2';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages);
 }

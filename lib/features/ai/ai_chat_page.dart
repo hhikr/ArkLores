@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
 import '../../core/agent/question_router.dart';
+import '../../core/llm/llm_provider.dart' show deepThinkingProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -36,6 +37,16 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     });
   bool _handledInitialWikiContext = false;
 
+  /// R16: whether the list follows a streaming answer. True while the view
+  /// sits at the bottom; scrolling up stops it (and shows a ↓ button).
+  bool _followBottom = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -44,16 +55,39 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+  bool get _atBottom =>
+      !_scrollController.hasClients ||
+      _scrollController.position.maxScrollExtent -
+              _scrollController.position.pixels <
+          48;
+
+  void _onScroll() {
+    // Only the user's own drags change following; content growing below
+    // the view (a streaming answer) must not switch it off.
+    final dragging = _scrollController.hasClients &&
+        _scrollController.position.isScrollingNotifier.value;
+    if (!dragging && !_atBottom) return;
+    final follow = _atBottom;
+    if (follow != _followBottom) setState(() => _followBottom = follow);
+  }
+
+  /// Scrolls to the end after the next frame; [animate] for discrete jumps
+  /// (a new message), a plain jump while tokens stream in.
+  void _scrollToBottom({bool animate = true}) {
+    if (!_scrollController.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final end = _scrollController.position.maxScrollExtent;
+      if (animate) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          end,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
-      });
-    }
+      } else {
+        _scrollController.jumpTo(end);
+      }
+    });
   }
 
   @override
@@ -216,9 +250,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
 
     ref.listen(askChatProvider, (prev, next) {
-      if (prev?.length != next.length ||
-          (next.isNotEmpty && next.last.isStreaming)) {
+      if (prev?.length != next.length) {
+        // A new question: follow its answer from the start.
+        _followBottom = true;
         _scrollToBottom();
+      } else if (next.isNotEmpty && next.last.isStreaming && _followBottom) {
+        _scrollToBottom(animate: false);
       }
     });
 
@@ -229,14 +266,34 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
         Expanded(
           child: chatHistory.isEmpty
               ? _buildEmptyState(theme)
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: chatHistory.length,
-                  itemBuilder: (context, index) {
-                    return ChatBubble(message: chatHistory[index]);
-                  },
+              : Stack(
+                  children: [
+                    ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      itemCount: chatHistory.length,
+                      itemBuilder: (context, index) {
+                        return ChatBubble(message: chatHistory[index]);
+                      },
+                    ),
+                    if (!_followBottom)
+                      Positioned(
+                        right: 16,
+                        bottom: 12,
+                        child: IconButton.filledTonal(
+                          key: const ValueKey('scroll-to-bottom'),
+                          tooltip: context.t.aiScrollToBottom,
+                          onPressed: () {
+                            setState(() => _followBottom = true);
+                            _scrollToBottom();
+                          },
+                          icon: const Icon(Icons.arrow_downward_rounded),
+                        ),
+                      ),
+                  ],
                 ),
         ),
         _buildInputArea(
@@ -245,9 +302,55 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
           onSend: isSending ? chatNotifier.cancel : _handleAskSend,
           hintText: context.t.aiAskInputPlaceholder,
           isCancel: isSending,
-          leading: _buildModeMenu(theme),
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildModeMenu(theme),
+              const SizedBox(width: 4),
+              _buildDeepThinkingToggle(theme),
+            ],
+          ),
         ),
       ],
+    );
+  }
+
+  /// R16: "深度思考" — lets the answer writer think (low effort) for the
+  /// next questions; off by default. Retrieval is the same either way.
+  Widget _buildDeepThinkingToggle(AppThemeTokens theme) {
+    final on = ref.watch(deepThinkingProvider);
+    return Tooltip(
+      message: context.t.aiDeepThinkingTooltip,
+      child: Semantics(
+        button: true,
+        toggled: on,
+        label: context.t.aiDeepThinking,
+        child: InkWell(
+          key: const ValueKey('deep-thinking-toggle'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => ref.read(deepThinkingProvider.notifier).state = !on,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: on
+                  ? theme.accentPrimary.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: on
+                    ? theme.accentPrimary.withValues(alpha: 0.35)
+                    : theme.divider,
+                width: 0.5,
+              ),
+            ),
+            child: Icon(
+              Icons.psychology_alt_rounded,
+              size: 18,
+              color: on ? theme.accentPrimary : theme.textSecondary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

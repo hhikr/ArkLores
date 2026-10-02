@@ -196,10 +196,7 @@ void main() {
           )
           .toList();
 
-      final answers = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
+      final answers = finalAnswerOf(events);
       // The final answer is the scripted one, NOT the bare prose.
       expect(answers, contains('结论。'));
       expect(answers, isNot(contains('这是裸思考')));
@@ -250,10 +247,7 @@ void main() {
         events.where((e) => e.type == ReActEventType.error),
         isEmpty,
       );
-      final answers = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
+      final answers = finalAnswerOf(events);
       expect(answers, contains('结论。'));
       // The retry hint was injected after the truncation.
       final joined = mock.receivedMessages
@@ -325,22 +319,6 @@ Action Input: ${action == 'read_story_lines' ? '{"story_id": "activities/x/level
 Thought: I have enough information.
 Final Answer: 结论。
 ''';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -427,22 +405,6 @@ Final Answer: 结论。
 ''';
     }
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 /// Always outputs bare prose.
@@ -456,22 +418,6 @@ class _AlwaysBareProseLLM extends LLMClient {
     List<String>? stop,
   }) async {
     return '又是裸思考文本，还是没有格式键。';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -530,22 +476,6 @@ Final Answer: 结论。
     );
     return result.content;
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 /// Always returns a truncated result.
@@ -565,17 +495,6 @@ class _AlwaysTruncateLLM extends LLMClient {
   Future<String> chat(
     List<Message> messages, {
     List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return '';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,

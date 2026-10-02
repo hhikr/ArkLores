@@ -9,42 +9,62 @@ import 'llm_client.dart';
 /// OpenAI-compatible implementation of [LLMClient].
 ///
 /// Supports custom Base URL for chat-completion providers.
-class OpenAICompatibleClient implements LLMClient {
-
+class OpenAICompatibleClient extends LLMClient {
   OpenAICompatibleClient({
     required this.config,
     http.Client? httpClient,
     Duration? timeout,
     this.onCompletion,
-    this.reasoning = true,
+    this.reasoning = ReasoningLevel.off,
+    Duration? streamIdleTimeout,
   })  : _httpClient = httpClient ?? http.Client(),
-        _timeout = timeout ?? defaultRequestTimeout;
+        _timeout = timeout ?? defaultRequestTimeout,
+        _streamIdleTimeout = streamIdleTimeout ?? defaultStreamIdleTimeout;
 
   /// Optional observer of every successful completion (e.g. a token meter in
   /// the live test harness). Never alters the result.
   final void Function(ChatCompletionResult result)? onCompletion;
 
-  /// R12 cost control: false asks hybrid reasoning models to answer without
-  /// hidden reasoning (measured on deepseek flash: 298 -> 9 output tokens for
-  /// a one-line intent). Mapped to each provider's own switch; for unknown
-  /// providers nothing is sent, so the request can never be rejected.
-  final bool reasoning;
+  /// R12/R16: hidden-reasoning level. Hybrid reasoning models default to
+  /// thinking on at a high effort (deepseek); [ReasoningLevel.off] measured
+  /// 298 -> 9 output tokens for a one-line intent on deepseek flash.
+  final ReasoningLevel reasoning;
 
-  /// Provider-specific body fields that disable hidden reasoning.
-  Map<String, dynamic> get _noReasoningFields {
+  /// Provider-specific body fields for [reasoning]; empty for providers
+  /// without a known switch, so the request can never be rejected for them.
+  Map<String, dynamic> get reasoningFields =>
+      reasoningFieldsFor(config, reasoning);
+
+  /// Body fields that set [level] on the provider of [config] (R16).
+  static Map<String, dynamic> reasoningFieldsFor(
+    LLMConfig config,
+    ReasoningLevel level,
+  ) {
     final endpoint = config.chatEndpoint.toLowerCase();
     final model = config.chatModel.toLowerCase();
-    if (endpoint.contains('deepseek.com')) {
-      return {
-        'thinking': {'type': 'disabled'},
+    if (endpoint.contains('dashscope') || endpoint.contains('aliyuncs.com')) {
+      return switch (level) {
+        ReasoningLevel.off => {'enable_thinking': false},
+        ReasoningLevel.low => {
+            'enable_thinking': true,
+            'thinking_budget': 2048,
+          },
+        ReasoningLevel.high => {'enable_thinking': true},
       };
     }
-    if (endpoint.contains('dashscope') || endpoint.contains('aliyuncs.com')) {
-      return {'enable_thinking': false};
-    }
-    if (model.contains('deepseek')) {
-      return {
-        'thinking': {'type': 'disabled'},
+    if (endpoint.contains('deepseek.com') || model.contains('deepseek')) {
+      return switch (level) {
+        ReasoningLevel.off => {
+            'thinking': {'type': 'disabled'},
+          },
+        ReasoningLevel.low => {
+            'thinking': {'type': 'enabled'},
+            'reasoning_effort': 'low',
+          },
+        ReasoningLevel.high => {
+            'thinking': {'type': 'enabled'},
+            'reasoning_effort': 'high',
+          },
       };
     }
     return const {};
@@ -56,9 +76,14 @@ class OpenAICompatibleClient implements LLMClient {
   /// "Request timed out" mid-investigation. 180s pairs with the 8192-token
   /// step budget (R7-4): a full step can take minutes on slower providers.
   static const Duration defaultRequestTimeout = Duration(seconds: 180);
+
+  /// R16: a stream fails when no data arrives for this long (the whole
+  /// answer may take longer than [defaultRequestTimeout]).
+  static const Duration defaultStreamIdleTimeout = Duration(seconds: 60);
   final LLMConfig config;
   final http.Client _httpClient;
   final Duration _timeout;
+  final Duration _streamIdleTimeout;
 
   @override
   Future<String> chat(
@@ -94,7 +119,7 @@ class OpenAICompatibleClient implements LLMClient {
       'temperature': temperature,
       'max_tokens': maxTokens,
       if (stop != null) 'stop': stop,
-      if (!reasoning) ..._noReasoningFields,
+      ...reasoningFields,
     };
 
     if (tools != null && tools.isNotEmpty) {
@@ -134,16 +159,20 @@ class OpenAICompatibleClient implements LLMClient {
         throw LLMException('Network error: $lastError');
       }
 
+      // R16: always UTF-8 (as the embedding client does): without a
+      // `charset` in the content type, `response.body` decodes as latin1.
+      final responseBody =
+          utf8.decode(response.bodyBytes, allowMalformed: true);
       if (response.statusCode != 200) {
         throw LLMException(
-          chatFailureMessage(response.body,
+          chatFailureMessage(responseBody,
               fallback: 'Chat completion failed',),
           statusCode: response.statusCode,
-          body: response.body,
+          body: responseBody,
         );
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonDecode(responseBody) as Map<String, dynamic>;
       final choices = data['choices'] as List<dynamic>;
       if (choices.isEmpty) {
         throw const LLMException('Empty response from chat completion');
@@ -151,20 +180,13 @@ class OpenAICompatibleClient implements LLMClient {
 
       final firstChoice = choices[0] as Map<String, dynamic>;
       final message = firstChoice['message'] as Map<String, dynamic>;
-      final usage = data['usage'];
-      int? usageInt(String key) =>
-          usage is Map ? (usage[key] as num?)?.toInt() : null;
-      final cached = usageInt('prompt_cache_hit_tokens') ??
-          (usage is Map && usage['prompt_tokens_details'] is Map
-              ? ((usage['prompt_tokens_details'] as Map)['cached_tokens'] as num?)
-                  ?.toInt()
-              : null);
+      final usage = _usageOf(data['usage']);
       final result = ChatCompletionResult(
         content: (message['content'] as String?) ?? '',
         finishReason: firstChoice['finish_reason'] as String?,
-        promptTokens: usageInt('prompt_tokens'),
-        completionTokens: usageInt('completion_tokens'),
-        cachedPromptTokens: cached,
+        promptTokens: usage.prompt,
+        completionTokens: usage.completion,
+        cachedPromptTokens: usage.cached,
       );
       onCompletion?.call(result);
       return result;
@@ -175,75 +197,149 @@ class OpenAICompatibleClient implements LLMClient {
     }
   }
 
+  static ({int? prompt, int? completion, int? cached}) _usageOf(
+    Object? usage,
+  ) {
+    int? usageInt(String key) =>
+        usage is Map ? (usage[key] as num?)?.toInt() : null;
+    final cached = usageInt('prompt_cache_hit_tokens') ??
+        (usage is Map && usage['prompt_tokens_details'] is Map
+            ? ((usage['prompt_tokens_details'] as Map)['cached_tokens'] as num?)
+                ?.toInt()
+            : null);
+    return (
+      prompt: usageInt('prompt_tokens'),
+      completion: usageInt('completion_tokens'),
+      cached: cached,
+    );
+  }
+
+  /// Status codes after which the request is retried without streaming: a
+  /// provider that rejects `stream` / `stream_options` still answers.
+  static const Set<int> _streamRejectedCodes = {400, 404, 415, 422};
+
+  /// R16: server-sent events. Lines are joined across network chunks; the
+  /// idle timeout applies between chunks, not to the whole answer; network
+  /// errors are retried only before the first byte.
   @override
-  Future<String> chatStream(
+  Stream<CompletionDelta> streamCompletion(
     List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
-  }) async {
+  }) async* {
     _requireChatConfig();
-
     final body = <String, dynamic>{
       'model': config.chatModel,
       'messages': messages.map((m) => m.toJson()).toList(),
       'temperature': temperature,
       'max_tokens': maxTokens,
       'stream': true,
+      'stream_options': {'include_usage': true},
       if (stop != null) 'stop': stop,
+      ...reasoningFields,
     };
 
-    try {
-      final request = http.Request('POST', Uri.parse(config.chatEndpoint))
-        ..headers.addAll(_headers(config.chatApiKey, label: 'Chat API Key'))
-        ..body = jsonEncode(body);
+    http.StreamedResponse? response;
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final request = http.Request('POST', Uri.parse(config.chatEndpoint))
+          ..headers.addAll(_headers(config.chatApiKey, label: 'Chat API Key'))
+          ..body = jsonEncode(body);
+        response = await _httpClient.send(request).timeout(_timeout);
+        break;
+      } on SocketException catch (e) {
+        lastError = e;
+      } on http.ClientException catch (e) {
+        lastError = e;
+      } on TimeoutException catch (e) {
+        lastError = e;
+      } on HandshakeException catch (e) {
+        lastError = e;
+      }
+    }
+    if (response == null) {
+      if (lastError is TimeoutException) {
+        throw const LLMException('Request timed out');
+      }
+      throw LLMException('Network error: $lastError');
+    }
 
-      final streamedResponse =
-          await _httpClient.send(request).timeout(_timeout);
-
-      if (streamedResponse.statusCode != 200) {
-        final body = await streamedResponse.stream.bytesToString();
-        throw LLMException(
-          'Chat stream failed',
-          statusCode: streamedResponse.statusCode,
-          body: body,
+    if (response.statusCode != 200) {
+      final errorBody = await response.stream.bytesToString();
+      if (_streamRejectedCodes.contains(response.statusCode)) {
+        yield* super.streamCompletion(
+          messages,
+          temperature: temperature,
+          maxTokens: maxTokens,
+          stop: stop,
         );
+        return;
       }
+      throw LLMException(
+        chatFailureMessage(errorBody, fallback: 'Chat completion failed'),
+        statusCode: response.statusCode,
+        body: errorBody,
+      );
+    }
 
-      final buffer = StringBuffer();
-      await for (final chunk
-          in streamedResponse.stream.transform(utf8.decoder)) {
-        final lines = chunk.split('\n');
-        for (final line in lines) {
-          if (!line.startsWith('data: ')) continue;
-          final data = line.substring(6);
-          if (data == '[DONE]') continue;
-
-          try {
-            final json = jsonDecode(data) as Map<String, dynamic>;
-            final choices = json['choices'] as List<dynamic>?;
-            if (choices == null || choices.isEmpty) continue;
-
-            final firstChoice = choices[0] as Map<String, dynamic>;
-            final delta = firstChoice['delta'] as Map<String, dynamic>?;
-            final content = delta?['content'] as String?;
-            if (content != null && content.isNotEmpty) {
-              buffer.write(content);
-              onToken?.call(content);
-            }
-          } catch (_) {
-            // Skip malformed JSON lines in the stream.
-          }
+    final content = StringBuffer();
+    String? finishReason;
+    ({int? prompt, int? completion, int? cached}) usage =
+        (prompt: null, completion: null, cached: null);
+    try {
+      final lines = response.stream
+          .timeout(_streamIdleTimeout)
+          .transform(utf8.decoder)
+          .transform(const LineSplitter());
+      await for (final line in lines) {
+        if (!line.startsWith('data:')) continue;
+        final data = line.substring(5).trim();
+        if (data.isEmpty || data == '[DONE]') continue;
+        Map<String, dynamic> json;
+        try {
+          json = jsonDecode(data) as Map<String, dynamic>;
+        } catch (_) {
+          continue; // a malformed event never ends the answer
         }
+        if (json['usage'] is Map) usage = _usageOf(json['usage']);
+        final choices = json['choices'];
+        if (choices is! List || choices.isEmpty) continue;
+        final choice = choices.first as Map<String, dynamic>;
+        finishReason = (choice['finish_reason'] as String?) ?? finishReason;
+        final delta = choice['delta'];
+        if (delta is! Map) continue;
+        final text = delta['content'] as String? ?? '';
+        final reasoningText = delta['reasoning_content'] as String? ?? '';
+        if (text.isEmpty && reasoningText.isEmpty) continue;
+        content.write(text);
+        yield CompletionDelta(content: text, reasoningContent: reasoningText);
       }
-
-      return buffer.toString();
-    } on SocketException catch (e) {
-      throw LLMException('Network error: ${e.message}');
     } on TimeoutException {
       throw const LLMException('Request timed out');
+    } on SocketException catch (e) {
+      throw LLMException('Network error: ${e.message}');
+    } on http.ClientException catch (e) {
+      throw LLMException('Network error: ${e.message}');
     }
+
+    onCompletion?.call(
+      ChatCompletionResult(
+        content: content.toString(),
+        finishReason: finishReason,
+        promptTokens: usage.prompt,
+        completionTokens: usage.completion,
+        cachedPromptTokens: usage.cached,
+      ),
+    );
+    yield CompletionDelta(
+      done: true,
+      finishReason: finishReason,
+      promptTokens: usage.prompt,
+      completionTokens: usage.completion,
+      cachedPromptTokens: usage.cached,
+    );
   }
 
   Map<String, String> _headers(String apiKey, {String label = 'API Key'}) {

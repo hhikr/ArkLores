@@ -145,22 +145,6 @@ class _LabelLLMClient extends LLMClient {
   }) async {
     return label;
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 class _ThrowingLLMClient extends LLMClient {
@@ -168,17 +152,6 @@ class _ThrowingLLMClient extends LLMClient {
   Future<String> chat(
     List<Message> messages, {
     List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    throw const LLMException('boom');
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
@@ -194,17 +167,6 @@ class _EmptyLLMClient extends LLMClient {
   Future<String> chat(
     List<Message> messages, {
     List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return '';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
@@ -227,22 +189,6 @@ class _RecordingParamsLLMClient extends LLMClient {
   }) async {
     lastMaxTokens = maxTokens;
     return 'summarize';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
 
@@ -274,20 +220,5 @@ class _AutoRouteLLMClient extends LLMClient {
     }
     return '[FACT_CHECK_VERDICT:supported]\n'
         '支持：阿米娅是罗德岛的公开领袖。她是罗德岛的公开领袖。';
-  }
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }

@@ -892,9 +892,7 @@ void main() {
       expect(eventTypes, contains(ReActEventType.finalAnswerToken));
       expect(eventTypes, contains(ReActEventType.complete));
 
-      final finalAnswerEvent =
-          events.firstWhere((e) => e.type == ReActEventType.finalAnswerToken);
-      expect(finalAnswerEvent.content, contains('W is a mercenary'));
+      expect(finalAnswerOf(events), contains('W is a mercenary'));
     });
 
     test('parses loose Action Input key-value maps', () async {
@@ -918,10 +916,7 @@ void main() {
       expect(tool.lastArgs?['query'], '缪因');
       expect(tool.lastArgs?['top_k'], 5);
       expect(
-        events
-            .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .map((e) => e.content)
-            .join(),
+        finalAnswerOf(events),
         contains('done'),
       );
     });
@@ -947,10 +942,7 @@ void main() {
       expect(tool.lastArgs?['query'], '阿米娅 档案 干员 罗德岛');
       expect(tool.lastArgs?['top_k'], 5);
       expect(
-        events
-            .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .map((e) => e.content)
-            .join(),
+        finalAnswerOf(events),
         contains('done'),
       );
     });
@@ -1006,10 +998,7 @@ void main() {
 
       expect(tool.lastArgs?['query'], 'required evidence');
       expect(
-        events
-            .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .map((event) => event.content)
-            .join(),
+        finalAnswerOf(events),
         'verified',
       );
     });
@@ -1022,10 +1011,7 @@ void main() {
       final events = await loop
           .run(systemPrompt: 'test', chatHistory: const [], userQuery: 'test')
           .toList();
-      final answer = events
-          .where((event) => event.type == ReActEventType.finalAnswerToken)
-          .map((event) => event.content)
-          .join();
+      final answer = finalAnswerOf(events);
       expect(answer, contains('operator_handbook_profile'));
       expect(answer, isNot(contains('mentions Book evidence')));
     });
@@ -1091,10 +1077,7 @@ void main() {
           .toList();
 
       expect(llm.fallbackPrompt, contains('Wiki evidence available: no'));
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
+      final answer = finalAnswerOf(events);
       expect(answer, contains('Source warning'));
       expect(answer, contains('did not retrieve any observation'));
     });
@@ -1126,10 +1109,7 @@ void main() {
   });
 
   group('FactCheck Agent Tests', () {
-    String answerOf(List<ReActEvent> events) => events
-        .where((event) => event.type == ReActEventType.finalAnswerToken)
-        .map((event) => event.content)
-        .join();
+    String answerOf(List<ReActEvent> events) => finalAnswerOf(events);
 
     test('runs the shared planner pipeline; a definite verdict without '
         'cited read text is downgraded (R13)', () async {
@@ -1334,22 +1314,6 @@ Thought: I have enough information to write the final answer.
 Final Answer: W is a mercenary.
 ''';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 class _RoleplayLLMClient extends _MockLLMClient {
@@ -1402,17 +1366,6 @@ class _FactCheckLLMClient extends LLMClient {
     if (callCount == 2) return 'SEARCH 阿米娅 领袖 反证';
     return 'ANSWER 0.9';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages,
-          temperature: temperature, maxTokens: maxTokens, stop: stop,);
 }
 
 class _FactCheckSearchTool extends AgentTool {

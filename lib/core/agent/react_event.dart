@@ -17,6 +17,22 @@ enum ReActEventType {
   toolCall,
   toolObservation,
   finalAnswerToken,
+
+  /// R16: drop the answer text streamed so far (e.g. a citation rewrite
+  /// follows); [ReActEvent.content] is a short reason for the step list.
+  finalAnswerReset,
+
+  /// R16: the complete final answer, replacing what was streamed (adds the
+  /// status envelope and source warnings once the text is checked).
+  finalAnswerReplace,
+
+  /// R16: hidden-reasoning text streamed live; shown while the answer is
+  /// written, never stored with the answer.
+  reasoningToken,
+
+  /// R16: what the run is doing right now ("第 7 步 · 阅读 …"), for the
+  /// status line while streaming.
+  status,
   error,
   complete,
 }
@@ -39,3 +55,18 @@ class ReActEvent {
   String toString() =>
       'ReActEvent(type: $type, content: $content, toolName: $toolName, toolArgs: $toolArgs)';
 }
+
+/// Final answer text after [event] given the text [before] it (R16): tokens
+/// append, a reset clears, a replace sets the whole text; other events leave
+/// it unchanged.
+String applyAnswerEvent(String before, ReActEvent event) =>
+    switch (event.type) {
+      ReActEventType.finalAnswerToken => before + event.content,
+      ReActEventType.finalAnswerReset => '',
+      ReActEventType.finalAnswerReplace => event.content,
+      _ => before,
+    };
+
+/// The final answer a whole event sequence produces.
+String finalAnswerOf(Iterable<ReActEvent> events) =>
+    events.fold('', applyAnswerEvent);

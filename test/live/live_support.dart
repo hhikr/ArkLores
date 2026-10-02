@@ -97,6 +97,8 @@ List<LiveCase> loadLiveCases(Map<String, String> env) {
 final RegExp _citation =
     RegExp(r'([\w\-/\.\[\]]+\.txt)\s*[:：]\s*(\d+)(?:\s*[-–~]\s*(\d+))?');
 
+final RegExp _repeatObservation = RegExp('已执行过|已经读过|已经给你看过|再给你看一次|已获取|相同的梗概');
+
 /// Metrics for one recorded turn.
 Map<String, Object?> summarizeTurn(
   LiveCase liveCase,
@@ -107,6 +109,9 @@ Map<String, Object?> summarizeTurn(
   final toolCounts = <String, int>{};
   final readStories = <String>{};
   var emptyResponses = 0;
+  // Steps answered from what the run already had (re-shown text, cached
+  // outlines, refused repeats) — R16 measures these against R14/R15.
+  var repeats = 0;
   for (final it in turn.iterations) {
     final tool = it.tool;
     if (tool != null && tool.isNotEmpty) {
@@ -117,6 +122,7 @@ Map<String, Object?> summarizeTurn(
       if (story is String && story.isNotEmpty) readStories.add(story);
     }
     if (it.rawResponse.trim().isEmpty) emptyResponses++;
+    if (_repeatObservation.hasMatch(it.observation)) repeats++;
   }
   final goldHit = [
     for (final g in liveCase.goldStories)
@@ -145,6 +151,7 @@ Map<String, Object?> summarizeTurn(
     'duration_ms': turn.durationMs,
     'iterations': turn.iterations.length,
     'empty_responses': emptyResponses,
+    'repeat_steps': repeats,
     'tool_counts': toolCounts,
     'read_stories': readStories.toList()..sort(),
     'gold_stories': liveCase.goldStories,

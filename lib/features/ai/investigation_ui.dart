@@ -210,5 +210,15 @@ bool isStoryAnswer(String content) => parseStoryAnswerEnvelope(content) != null;
 String stripStoryAnswerMarkers(String content) {
   var cleaned = content.replaceFirst(storyAnswerEnvelopePattern, '');
   cleaned = cleaned.replaceFirst(coverageReportLinePattern, '').trim();
-  return cleaned;
+  return stripWriterCoverage(cleaned);
 }
+
+/// R16: the writer's `[COVERAGE: …]` line, also while it is still being
+/// streamed (`[COVER…` at the end of the text).
+final RegExp _writerCoverage = RegExp(
+    r'\[COVERAGE:[^\]\n]*\]?|\[C?O?V?E?R?A?G?E?:?$',
+    caseSensitive: false,);
+
+/// Removes the writer's coverage line from displayed text.
+String stripWriterCoverage(String content) =>
+    content.replaceAll(_writerCoverage, '').trimRight();

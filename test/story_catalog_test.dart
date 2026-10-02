@@ -296,10 +296,7 @@ void main() {
       final events = await loop
           .run(systemPrompt: 's', chatHistory: const [], userQuery: 'q')
           .toList();
-      return events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
+      return finalAnswerOf(events);
     }
 
     test('re-requesting already-read text finishes as answered', () async {
@@ -368,16 +365,6 @@ class _ScriptLLM extends LLMClient {
     List<String>? stop,
   }) async =>
       (await chatCompletion(messages)).content;
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages);
 }
 
 /// `read_story_lines` stand-in: three lines of a.txt, or "not found".

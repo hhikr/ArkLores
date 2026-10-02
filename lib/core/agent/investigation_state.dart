@@ -23,9 +23,24 @@ class InvestigationState {
 
   /// R14: compact outlines (collection id → chapter list with synopses) the
   /// planner fetched with OUTLINE, kept in state so the whole-story picture
-  /// survives the 2-observation window. Oldest dropped beyond [maxOutlines].
+  /// survives the 2-observation window. R16: every outline stays as a
+  /// chapter index with read marks; only the [maxOutlines] most recent keep
+  /// the synopses of their unread chapters (a planner that lost the index
+  /// re-opened the same outlines up to 13 times in one turn).
   final Map<String, String> outlines = {};
   static const int maxOutlines = 3;
+
+  /// R16: story id → digest of what the read lines of that chapter tell
+  /// (question-independent), so the planner knows what it has read.
+  final Map<String, String> digests = {};
+
+  /// R16: the planner's latest `# …` plan note; continuity only, never used
+  /// for any decision.
+  String plan = '';
+
+  /// R16: tool steps used / allowed in this run (0 budget: not shown).
+  int stepsUsed = 0;
+  int stepBudget = 0;
 
   /// R15: every collection outlined in this run, including outlines
   /// dropped from [outlines] — the missing-outline hint must not send the
@@ -73,7 +88,8 @@ class InvestigationState {
   /// by the model), so the writer cites real text.
   final List<EvidenceNote> notes = [];
 
-  /// Upper bound of [notes] kept in state (oldest dropped first).
+  /// Notes shown to the planner (R16: older chapters fold beyond this; no
+  /// note is dropped, the writer always sees all of them).
   static const int maxNotes = 40;
 
   /// Appearance rows collected per entity (COLLECT).
@@ -107,8 +123,15 @@ class InvestigationState {
   /// can switch to another candidate without a new search.
   final Map<String, String> _candidateNames = {};
 
-  String _serialize() {
+  String _serialize({bool allNotes = false}) {
     final buffer = StringBuffer();
+    if (stepBudget > 0) {
+      final left = stepBudget - stepsUsed;
+      buffer.writeln('步数: 已用 $stepsUsed / $stepBudget'
+          '${left <= lowBudgetSteps ? '（只剩 ${left < 0 ? 0 : left} 步：先 READ 目录里'
+              '最关键的未读章节，然后 ANSWER）' : ''}');
+    }
+    if (plan.isNotEmpty) buffer.writeln('当前计划: $plan');
     if (namedTargets.isNotEmpty) {
       buffer.writeln('问题提到的故事: ${namedTargets.map((t) {
         final pending = !outlinedCollections.contains(t.collectionId);
@@ -142,31 +165,20 @@ class InvestigationState {
       );
     }
     if (outlines.isNotEmpty) {
-      buffer.writeln('已看梗概（官方章节简介，按游戏内顺序；只是定位线索）:');
-      for (final outline in outlines.values) {
-        buffer.writeln(outline);
-      }
-    }
-    if (reads.isNotEmpty) {
-      buffer.writeln(
-        priorReadStories.isEmpty
-            ? '已读:'
-            : '已读（含上一轮对话已读的原文，可直接引用，不必重读）:',
-      );
-      for (final r in reads) {
-        final label = storyEntries[r.storyId]?.label;
+      buffer.writeln('已看梗概（故事集章节目录，按游戏内顺序；✓ 为已读区间；'
+          '未读章节附官方简介，只是定位线索）:');
+      final withSynopses =
+          outlines.keys.toList().reversed.take(maxOutlines).toSet();
+      for (final entry in outlines.entries) {
         buffer.writeln(
-          '  ${r.storyId}${label == null ? '' : '［$label］'}:'
-          '${r.segments.map((s) => '${s.start}-${s.end}').join(',')}',
+          _renderOutline(
+            entry.value,
+            withSynopses: withSynopses.contains(entry.key),
+          ),
         );
       }
     }
-    if (notes.isNotEmpty) {
-      buffer.writeln('证据笔记:');
-      for (final n in notes) {
-        buffer.writeln('  ${n.storyId}:${n.line} ${n.fact} 「${n.quote}」');
-      }
-    }
+    _writeChapters(buffer, allNotes: allNotes);
     if (evidence.isNotEmpty) {
       buffer.writeln('证据:');
       for (final e in evidence) {
@@ -195,6 +207,102 @@ class InvestigationState {
       );
     }
     return buffer.toString().trimRight();
+  }
+
+  /// R16: steps left at which the state starts saying how few remain.
+  static const int lowBudgetSteps = 3;
+
+  static final RegExp _outlineRow = RegExp(r'^(\s+\d+\. .+ \| )(\S+)( ←)?$');
+
+  /// An outline as a chapter index: read chapters get `✓ <segments>` and
+  /// lose their synopsis; with [withSynopses] false every synopsis is left
+  /// out.
+  String _renderOutline(String compact, {required bool withSynopses}) {
+    final out = <String>[];
+    var skipSynopsis = false;
+    for (final line in compact.split('\n')) {
+      final row = _outlineRow.firstMatch(line);
+      if (row != null) {
+        final segments = segmentsText(row.group(2)!);
+        skipSynopsis = !withSynopses || segments.isNotEmpty;
+        out.add('${row.group(1)}${row.group(2)}${row.group(3) ?? ''}'
+            '${segments.isEmpty ? '' : ' ✓ $segments'}');
+        continue;
+      }
+      if (line.startsWith('      ') && skipSynopsis) continue;
+      out.add(line);
+    }
+    return out.join('\n');
+  }
+
+  /// `0-120,200-260` for the read segments of [storyId] ('' when unread).
+  String segmentsText(String storyId) {
+    final index = reads.indexWhere((r) => r.storyId == storyId);
+    if (index < 0) return '';
+    return reads[index].segments.map((s) => '${s.start}-${s.end}').join(',');
+  }
+
+  /// R16: read chapters with their digest and notes. Notes of the most
+  /// recently read chapters are shown up to [maxNotes]; older chapters fold
+  /// theirs into a count instead of losing them ([allNotes] shows all).
+  void _writeChapters(StringBuffer buffer, {required bool allNotes}) {
+    final storyIds = <String>{
+      for (final r in reads) r.storyId,
+      for (final n in notes) n.storyId,
+    }.toList();
+    if (storyIds.isEmpty) return;
+    final byStory = <String, List<EvidenceNote>>{};
+    for (final n in notes) {
+      byStory.putIfAbsent(n.storyId, () => []).add(n);
+    }
+    // Newest chapters first get the shown-note budget.
+    final shown = <String, int>{};
+    var budget = allNotes ? 1 << 30 : maxNotes;
+    for (final id in storyIds.reversed) {
+      final count = byStory[id]?.length ?? 0;
+      final take = count < budget ? count : budget;
+      shown[id] = take;
+      budget -= take;
+    }
+    buffer.writeln(
+      priorReadStories.isEmpty
+          ? '已读章节（原文会完整交给写答案的环节，不必重读）:'
+          : '已读章节（含上一轮对话已读的原文，可直接引用，不必重读）:',
+    );
+    for (final id in storyIds) {
+      final label = storyEntries[id]?.label;
+      final prior = priorReadStories.contains(id) ? '（上一轮已读）' : '';
+      buffer.writeln(
+        '  $id${label == null ? '' : '［$label］'}:${segmentsText(id)}$prior',
+      );
+      final digest = digests[id];
+      if (digest != null && digest.isNotEmpty) {
+        buffer.writeln('    摘要: $digest');
+      }
+      final chapterNotes = byStory[id] ?? const <EvidenceNote>[];
+      final take = shown[id] ?? 0;
+      for (final n in chapterNotes.skip(chapterNotes.length - take)) {
+        buffer.writeln('    $id:${n.line} ${n.fact} 「${n.quote}」');
+      }
+      final folded = chapterNotes.length - take;
+      if (folded > 0) {
+        buffer.writeln('    （另有 $folded 条笔记已折叠，写答案时完整使用）');
+      } else if (chapterNotes.isEmpty && digests.containsKey(id)) {
+        buffer.writeln('    （没有与问题直接相关的行）');
+      }
+    }
+  }
+
+  /// R16: records the digest of a READ page of [storyId]; several reads of
+  /// one chapter join their digests.
+  void noteDigest(String storyId, String digest) {
+    final text = digest.trim();
+    final previous = digests[storyId];
+    if (previous == null || previous.isEmpty) {
+      digests[storyId] = text;
+    } else if (text.isNotEmpty && !previous.contains(text)) {
+      digests[storyId] = '$previous；$text';
+    }
   }
 
   /// R14: collections of READ chapters whose outline was not fetched yet.
@@ -237,15 +345,30 @@ class InvestigationState {
     outlinedCollections.add(collectionId);
     outlines.remove(collectionId);
     outlines[collectionId] = compact;
-    while (outlines.length > maxOutlines) {
-      outlines.remove(outlines.keys.first);
-    }
   }
 
   /// Full serialization injected into the planner request.
   String serialize() {
     final body = _serialize();
     return body.isEmpty ? '(尚无调查进展)' : body;
+  }
+
+  /// R16: the state for the answer writer: every note, no step counter or
+  /// plan (they are about searching, not about the answer).
+  String serializeForWriter() {
+    final used = stepsUsed;
+    final budget = stepBudget;
+    final savedPlan = plan;
+    stepBudget = 0;
+    plan = '';
+    try {
+      final body = _serialize(allNotes: true);
+      return body.isEmpty ? '(尚无调查进展)' : body;
+    } finally {
+      stepsUsed = used;
+      stepBudget = budget;
+      plan = savedPlan;
+    }
   }
 
   // ── code-maintained mutations ──────────────────────────────────────
@@ -382,16 +505,13 @@ class InvestigationState {
     return reads[index].segments.any((s) => line >= s.start && line <= s.end);
   }
 
-  /// Adds evidence notes, skipping exact duplicates and keeping the newest
-  /// [maxNotes].
+  /// Adds evidence notes, skipping exact duplicates. R16: nothing is
+  /// dropped (silently losing old notes made the planner re-read them).
   void addNotes(Iterable<EvidenceNote> newNotes) {
     for (final note in newNotes) {
       final duplicate = notes.any((n) =>
           n.storyId == note.storyId && n.line == note.line && n.fact == note.fact,);
       if (!duplicate) notes.add(note);
-    }
-    if (notes.length > maxNotes) {
-      notes.removeRange(0, notes.length - maxNotes);
     }
   }
 

@@ -16,6 +16,19 @@ class IntentRecord {
   final Map<String, dynamic> args;
 }
 
+/// R16: splits `<intent> # <plan>` into the intent and the planner's plan
+/// note ('' when absent).
+({String intent, String plan}) splitPlanNote(String raw) {
+  final text = raw.trim();
+  final mark = RegExp(r'\s*[#＃]\s*').firstMatch(text);
+  if (mark == null) return (intent: text, plan: '');
+  final note = text.substring(mark.end).replaceAll(RegExp(r'\s+'), ' ').trim();
+  return (
+    intent: text.substring(0, mark.start).trim(),
+    plan: note.length > 80 ? '${note.substring(0, 80)}…' : note,
+  );
+}
+
 /// Parses one intent line (or a JSON-ish object) into an [IntentRecord].
 ///
 /// Returns null when the line is not a valid intent — including a line that

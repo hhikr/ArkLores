@@ -15,6 +15,7 @@
 //   ARKLORES_LIVE_QUERIES="问题1||问题2"      (or ARKLORES_LIVE_EVAL=<json>)
 //   ARKLORES_LIVE_MODE=auto|investigate|summarize|verify   (default auto)
 //   ARKLORES_LIVE_CONVERSATION=true  (all queries as turns of ONE session)
+//   ARKLORES_LIVE_DEEP_THINKING=true (the "深度思考" switch on)
 //   ARKLORES_GAMEDATA_DB=<db path>  (default build/gamedata_mobile/...)
 //   ARKLORES_LIVE_OUT=<dir>         (default build/live_sessions)
 // API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL).
@@ -71,6 +72,10 @@ void main() {
                   ? 'GameData DB not found: $dbPath'
                   : false;
 
+  final deepThinking =
+      env['ARKLORES_LIVE_DEEP_THINKING']?.toLowerCase() == 'true';
+  var thinkingCalls = 0;
+
   late ProviderContainer container;
   final usage = UsageMeter();
   // Cost guard: after a provider failure (402 balance, auth, network) the
@@ -100,23 +105,20 @@ void main() {
             .overrideWithValue(ChatSessionStore(filePath: outDir.path)),
         // Same construction as llm_provider.dart plus a passive token meter
         // (cost control); the observer never alters results.
-        llmClientProvider.overrideWith((ref) {
+        llmClientProvider.overrideWith((ref, level) {
           final client = OpenAICompatibleClient(
             config: ref.watch(apiConfigProvider),
-            onCompletion: usage.add,
+            reasoning: level,
+            onCompletion: (result) {
+              usage.add(result);
+              if (level != ReasoningLevel.off) thinkingCalls++;
+            },
           );
           ref.onDispose(client.dispose);
           return client;
         }),
-        auxLlmClientProvider.overrideWith((ref) {
-          final client = OpenAICompatibleClient(
-            config: ref.watch(apiConfigProvider),
-            reasoning: false,
-            onCompletion: usage.add,
-          );
-          ref.onDispose(client.dispose);
-          return client;
-        }),
+        // ARKLORES_LIVE_DEEP_THINKING=true: the "深度思考" switch on.
+        deepThinkingProvider.overrideWith((ref) => deepThinking),
       ],
     );
   });
@@ -144,11 +146,41 @@ void main() {
           notifier.newSession();
         }
         usage.reset();
+        thinkingCalls = 0;
+        // R16 streaming metrics: when the writer started and when the first
+        // answer text reached the message list.
+        final start = DateTime.now();
+        int? writerStartMs;
+        int? firstTextMs;
+        final subscription = container.listen(askChatProvider, (_, messages) {
+          if (messages.isEmpty || !messages.last.isStreaming) return;
+          final last = messages.last;
+          final elapsed = DateTime.now().difference(start).inMilliseconds;
+          if (writerStartMs == null && last.liveStatus == '正在撰写答案') {
+            writerStartMs = elapsed;
+          }
+          if (firstTextMs == null && last.content.isNotEmpty) {
+            firstTextMs = elapsed;
+          }
+        });
         await notifier.sendMessage(liveCase.query, mode: mode);
+        subscription.close();
         final session = notifier.currentSession;
         expect(session, isNotNull, reason: 'session recording produced no file');
         final turn = session!.turns.last;
-        final report = summarizeTurn(liveCase, session, turn, usage: usage);
+        final report = {
+          ...summarizeTurn(liveCase, session, turn, usage: usage),
+          'streaming': {
+            'writer_start_ms': writerStartMs,
+            'first_text_ms': firstTextMs,
+            'first_text_after_writer_ms':
+                writerStartMs == null || firstTextMs == null
+                    ? null
+                    : firstTextMs! - writerStartMs!,
+          },
+          'deep_thinking': deepThinking,
+          'thinking_calls': thinkingCalls,
+        };
         File('${outDir.path}/${liveCase.id}.summary.json').writeAsStringSync(
           const JsonEncoder.withIndent('  ').convert(report),
         );

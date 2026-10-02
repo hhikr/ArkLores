@@ -93,7 +93,7 @@ void main() {
           initialApiConfigProvider.overrideWithValue(
             const LLMConfig(chatApiKey: 'test-key'),
           ),
-          llmClientProvider.overrideWithValue(client),
+          llmClientProvider.overrideWith((ref, level) => client),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
@@ -201,7 +201,8 @@ void main() {
           initialApiConfigProvider.overrideWithValue(
             const LLMConfig(chatApiKey: 'test-key'),
           ),
-          llmClientProvider.overrideWithValue(_FinalAnswerLLMClient()),
+          llmClientProvider
+              .overrideWith((ref, level) => _FinalAnswerLLMClient()),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
@@ -242,17 +243,6 @@ class _SilentLLMClient extends LLMClient {
   }) {
     throw UnimplementedError();
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) {
-    throw UnimplementedError();
-  }
 }
 
 class _FinalAnswerLLMClient extends LLMClient {
@@ -266,17 +256,6 @@ class _FinalAnswerLLMClient extends LLMClient {
   }) async {
     return 'Final Answer: 已收到 Wiki 上下文，将使用 GameData 单独核验。';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) {
-    throw UnimplementedError();
-  }
 }
 
 class _PendingLLMClient extends LLMClient {
@@ -284,16 +263,6 @@ class _PendingLLMClient extends LLMClient {
   Future<String> chat(
     List<Message> messages, {
     List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      Completer<String>().future;
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,

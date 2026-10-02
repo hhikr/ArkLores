@@ -4,6 +4,48 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - pre-release
+
+R16: streamed answers, per-role reasoning, a planner that keeps what it read, and a status
+decided by the evidence. Same knowledge base as v0.11.0 (no re-download needed).
+
+### Added
+
+- Streaming: answers appear token by token (SSE, lines joined across network chunks,
+  60 s idle timeout, fallback to non-streaming when a provider rejects it). A failed
+  citation check clears the draft and streams the rewrite; the checked answer then
+  replaces the text with its status line. The status line shows the current step
+  ("第 7 步 · 阅读 …"). The list follows the answer only while it is at the bottom
+  (↓ button otherwise). Roleplay replies stream too.
+- "深度思考" switch next to the mode chip: the answer writer thinks at low effort for the
+  next questions; retrieval is unchanged. The thinking streams in a folding panel and is
+  not saved.
+- Planner state: a one-line digest per read chapter, notes folded instead of dropped,
+  outlines kept as a chapter index with read marks, the planner's own `# plan` note, and
+  the step budget ("步数 n/24").
+
+### Changed
+
+- Every role runs without hidden reasoning by default (`ReasoningLevel`): the router, the
+  answer writer and roleplay used the provider default, which for deepseek is thinking
+  at high effort. Writer output tokens fell to about a fifth; answers no longer guess
+  motives the text does not state.
+- Status follows the evidence: the writer ends with `[COVERAGE: full|gaps]` (stripped
+  from the answer); a step limit only gets a neutral note to the writer instead of
+  forcing `partial`.
+- The writer gets up to 60,000 characters of read text: noted lines with context first,
+  then every chapter in turn (before: the first 30,000 characters in reading order, which
+  cut the chapters read last).
+- Re-reads: an already-read passage is shown again (up to two per question); asking for
+  more read text ends the search. A READ past the end of a read chapter says so.
+- The writer answers a misspelt name under the near name the state lists when the read
+  text matches the rest of the question, and says so in its first line.
+
+### Fixed
+
+- Roleplay replies longer than 120 characters showed only their last part.
+- Non-streamed responses without a `charset` were decoded as latin1.
+
 ## [0.11.0] - 2026-10-02
 
 Covers R13 (one QA pipeline, no question-type special cases) and R14 (whole-story grasp).

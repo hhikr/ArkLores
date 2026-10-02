@@ -133,7 +133,7 @@ void main() {
             initialApiConfigProvider.overrideWithValue(
               const LLMConfig(chatApiKey: 'test-key'),
             ),
-            llmClientProvider.overrideWithValue(_SilentLLMClient()),
+            llmClientProvider.overrideWith((ref, level) => _SilentLLMClient()),
           ],
           child: MaterialApp(
             locale: const Locale('zh'),
@@ -173,21 +173,5 @@ class _SilentLLMClient extends LLMClient {
     List<String>? stop,
   }) async {
     return 'Final Answer: silent';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
   }
 }
