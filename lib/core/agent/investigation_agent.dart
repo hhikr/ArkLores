@@ -18,10 +18,12 @@ class InvestigationAgent {
     LLMClient? extractorClient,
     LLMClient? disambiguatorClient,
     LLMClient? plannerClient,
+    LLMClient? planClient,
     EmbeddingClient? embeddingClient,
   }) : _agent = StoryQaAgent(
           llmClient: llmClient,
           plannerClient: plannerClient,
+          planClient: planClient,
           extractorClient: extractorClient,
           disambiguatorClient: disambiguatorClient,
           gameDataStore: gameDataStore,

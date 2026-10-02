@@ -120,27 +120,33 @@ Future<PageDigest> digestReadPage(
   int maxNotes = 6,
 }) async {
   final numbered = page.lines.map((l) => '${l.index} | ${l.text}').join('\n');
-  final ChatCompletionResult result;
-  try {
-    result = await completeWithHeadroom(
-      client,
-      [
-        Message.system(
-          '你是剧情证据摘录员。给定用户问题和一段带行号的剧情原文：\n'
-          '第一行严格输出：摘要: <这段原文发生了什么，客观叙述，不超过60字，'
-          '与问题无关也要写>\n'
-          '然后找出与回答该问题有关的行（人物动作、对话中的事实、因果、时间、身份等），'
-          '每条一行，严格格式：L<行号>: <该行表明的事实，不超过40字>\n'
-          '最多 $maxNotes 条，只能使用给出的行号；没有相关的行时第二行只输出 NONE。',
-        ),
-        Message.user('问题：$userQuery\n\n剧情 ${page.storyId}：\n$numbered'),
-      ],
-      temperature: 0,
-      maxTokens: 2048,
-    );
-  } catch (_) {
-    return const PageDigest();
+  final messages = [
+    Message.system(
+      '你是剧情证据摘录员。给定用户问题和一段带行号的剧情原文：\n'
+      '第一行严格输出：摘要: <这段原文发生了什么，客观叙述，不超过60字，'
+      '与问题无关也要写>\n'
+      '然后找出与回答该问题有关的行（人物动作、对话中的事实、因果、时间、身份等），'
+      '每条一行，严格格式：L<行号>: <该行表明的事实，不超过40字>\n'
+      '最多 $maxNotes 条，只能使用给出的行号；没有相关的行时第二行只输出 NONE。',
+    ),
+    Message.user('问题：$userQuery\n\n剧情 ${page.storyId}：\n$numbered'),
+  ];
+  ChatCompletionResult? result;
+  // R16: one retry — a failed call left a 381-line chapter with neither
+  // digest nor notes (live), and the writer then saw little of it.
+  for (var attempt = 0; attempt < 2 && result == null; attempt++) {
+    try {
+      result = await completeWithHeadroom(
+        client,
+        messages,
+        temperature: 0,
+        maxTokens: 2048,
+      );
+    } catch (_) {
+      result = null;
+    }
   }
+  if (result == null) return const PageDigest();
   return PageDigest(
     digest: parseDigest(result.content),
     notes: parseEvidenceNotes(result.content, page, maxNotes: maxNotes),

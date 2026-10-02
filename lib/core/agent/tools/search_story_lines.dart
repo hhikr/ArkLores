@@ -1,6 +1,7 @@
 import '../../gamedata/game_retrieval.dart';
 import '../../llm/embedding_client.dart';
 import 'agent_tool.dart';
+import 'collection_scope.dart';
 import 'observation_data.dart';
 
 /// R12 raw story-line search (the planner's `FIND` intent): finds which
@@ -78,7 +79,6 @@ class SearchStoryLinesTool extends AgentTool {
             '里检索，scope 用 activity:<活动id>，或去掉 scope 检索全库。',
       );
     }
-    final scopeId = normalizeScopeId(arguments['scope_id'] as String?);
     final topK = ((arguments['top_k'] as num?)?.toInt() ?? 6).clamp(1, 10);
 
     final store = _gameDataStore;
@@ -88,21 +88,41 @@ class SearchStoryLinesTool extends AgentTool {
             'Local GameData knowledge DB is not installed. Install the Chinese GameData knowledge base before searching lore.',
       );
     }
+    // R16: a collection id that is not a scope (`main_9`) searches the
+    // whole DB and keeps that collection's chapters.
+    final collectionStories =
+        await collectionScopeStories(store, arguments['scope_id'] as String?);
+    final scopeId = collectionStories == null
+        ? normalizeScopeId(arguments['scope_id'] as String?)
+        : null;
+    bool inCollection(String storyId) =>
+        collectionStories == null || collectionStories.contains(storyId);
 
     // Keyword leg.
     final terms = [
       for (final t in query.split(RegExp(r'\s+')))
         if (t.isNotEmpty) t,
     ];
-    final keywordHits = await store.searchStoryLinesLike(
-      terms,
-      scopeId: scopeId,
-      storyLimit: topK * 2,
-    );
+    final keywordHits = [
+      for (final hit in await store.searchStoryLinesLike(
+        terms,
+        scopeId: scopeId,
+        storyLimit: collectionStories == null ? topK * 2 : 200,
+      ))
+        if (inCollection(hit.storyId)) hit,
+    ];
 
     // Semantic leg.
-    final semantic = await _semanticHits(store, query, scopeId, topK * 4);
-    final vectorHits = semantic.hits;
+    final semantic = await _semanticHits(
+      store,
+      query,
+      scopeId,
+      collectionStories == null ? topK * 4 : 200,
+    );
+    final vectorHits = [
+      for (final hit in semantic.hits)
+        if (inCollection(hit.storyId)) hit,
+    ];
 
     // R15: terms with no literal line — near names for a term the DB lacks,
     // hits outside the scope for a term the scope lacks.
@@ -113,7 +133,7 @@ class SearchStoryLinesTool extends AgentTool {
       return ToolExecutionResult(
         observation: [
           'No story line matches "$query"'
-              '${scopeId == null ? '' : ' in $scopeId'} '
+              '${scopeId == null ? (collectionStories == null ? '' : ' in ${arguments['scope_id']}') : ' in $scopeId'} '
               '(${semantic.mode}). Try other wording, fewer terms, or COVER an '
               'entity name.',
           ...termNotes.lines,
@@ -151,7 +171,8 @@ class SearchStoryLinesTool extends AgentTool {
     // chapters where an event is set up, not only where it is spoken of.
     final synopsisHits = await store.searchStorySynopses(
       terms,
-      collectionId: _collectionOf(scopeId),
+      collectionId:
+          collectionStories == null ? _collectionOf(scopeId) : rawScope,
       limit: 4,
     );
 

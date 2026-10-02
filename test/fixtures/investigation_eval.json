@@ -21,6 +21,12 @@
      "gold_stories": [
        {"story_id": "obt/main/level_main_02-02_end.txt", "anchor": "L18 罗德岛不仅亲历了切尔诺伯格事件……经历了天灾"},
        {"story_id": "obt/main/level_main_07-01_end.txt", "anchor": "L60 切尔诺伯格没有提前拆分地块，面对天灾的袭击"}]},
+    {"id": "talulah_after_chernobog", "type": "经过", "query": "塔露拉在切尔诺伯格事件之后做了哪些事情？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_st_09-04.txt", "anchor": "L264 塔露拉：我会活下去。（9-21 被整合运动带走）"},
+       {"story_id": "activities/act18mini/level_act18mini_st02.txt", "anchor": "L355 会回乌萨斯面对真正属于她的审判"},
+       {"story_id": "obt/main/level_spst_16-01.txt", "anchor": "L77 我们只需等待一个时机（EG-7 农庄）"},
+       {"story_id": "obt/main/level_main_17-16_end.txt", "anchor": "L21 把乌萨斯的军队都交给我（17-17 攻入石墙）"}]},
     {"id": "talulah_kaschey", "type": "关系", "query": "塔露拉和科西切是什么关系？",
      "gold_stories": [
        {"story_id": "obt/main/level_main_08-05_end.txt", "anchor": "L101 塔露拉，你会去统治那些注定由你来统治的人"},

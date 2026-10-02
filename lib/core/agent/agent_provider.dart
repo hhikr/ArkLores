@@ -38,6 +38,7 @@ final summaryAgentProvider = Provider<SummaryAgent>((ref) {
   return SummaryAgent(
     llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     auxClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
+    planClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );
@@ -47,6 +48,7 @@ final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
   return FactCheckAgent(
     llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     auxClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
+    planClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );
@@ -520,6 +522,7 @@ final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
   return InvestigationAgent(
     llmClient: aux,
     plannerClient: aux,
+    planClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     extractorClient: aux,
     disambiguatorClient: aux,
     gameDataStore: ref.watch(sharedGameDataStoreProvider),

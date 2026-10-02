@@ -36,8 +36,22 @@ decided by the evidence. Same knowledge base as v0.11.0 (no re-download needed).
 - The writer gets up to 60,000 characters of read text: noted lines with context first,
   then every chapter in turn (before: the first 30,000 characters in reading order, which
   cut the chapters read last).
-- Re-reads: an already-read passage is shown again (up to two per question); asking for
-  more read text ends the search. A READ past the end of a read chapter says so.
+- Broad questions ("what did X do after Y", "all of X's story"): a reading plan is drafted
+  once at the start from the question and the person's overview, and kept as a checklist
+  (ticked when a chapter of it was read). When the planner answers with plan items or
+  much-mentioned collections still unread, a quick check of what was read decides whether
+  it is enough; if not, the open items are listed once and the budget grows by 8 steps.
+- Whole chapters: a READ without line numbers returns the whole chapter (up to ~450 lines);
+  an older page in the planner's window is a pointer to the state, not a cut-off fragment
+  (the cut-off fragment made it re-read the first half after every second page).
+- Re-reads: two passages are shown again; a short passage asked for again is pinned into
+  the state; later re-reads are refused without costing a step. A READ past the end of a
+  read chapter says so.
+- Reachability: a collection id (`main_9`) works as a search scope; OUTLINE accepts
+  `主线·名` and `名（id）`; READ adds a missing `.txt` and, for an unknown id, lists the real
+  ones with that level code. Older outlines fold to their read chapters.
+- The answer writer's source puts the lines of the people the question names right after
+  the noted lines; a failed note extraction is retried once.
 - The writer answers a misspelt name under the near name the state lists when the read
   text matches the rest of the question, and says so in its first line.
 

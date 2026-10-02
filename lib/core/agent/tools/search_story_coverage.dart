@@ -1,5 +1,6 @@
 import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
+import 'collection_scope.dart';
 
 /// Enumerates every appearance of an entity across stories (schema v3
 /// `entity_story_mentions`). Deterministic coverage: independent of query
@@ -57,7 +58,7 @@ class SearchStoryCoverageTool extends AgentTool {
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
     final query = (arguments['query'] as String?)?.trim();
     final entityIdArg = (arguments['entity_id'] as String?)?.trim();
-    final scopeFilter = (arguments['scope_filter'] as String?)?.trim();
+    var scopeFilter = (arguments['scope_filter'] as String?)?.trim();
     if ((entityIdArg == null || entityIdArg.isEmpty) &&
         (query == null || query.isEmpty)) {
       return 'Error: provide either query or entity_id';
@@ -70,10 +71,14 @@ class SearchStoryCoverageTool extends AgentTool {
             'Local GameData knowledge DB is not installed. Install the Chinese GameData knowledge base before searching lore.',
       );
     }
+    // R16: a collection id that is not a scope (`main_9`) keeps that
+    // collection's chapters of the whole coverage.
+    final collectionStories = await collectionScopeStories(store, scopeFilter);
+    if (collectionStories != null) scopeFilter = null;
 
     var entityId = entityIdArg;
     String? matchedEntityLabel;
-    final List<StoryCoverageEntry> entries;
+    List<StoryCoverageEntry> entries;
     if (entityId == null || entityId.isEmpty) {
       final candidates = await store.findEntityCandidates(query!);
       final exact = candidates
@@ -122,6 +127,12 @@ class SearchStoryCoverageTool extends AgentTool {
         entityId: entityId,
         scopeFilter: scopeFilter,
       );
+    }
+    if (collectionStories != null) {
+      entries = [
+        for (final e in entries)
+          if (collectionStories.contains(e.storyId)) e,
+      ];
     }
     if (entries.isEmpty) {
       return ToolExecutionResult(

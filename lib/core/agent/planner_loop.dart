@@ -87,7 +87,9 @@ enum StoryCoverage { full, gaps }
 /// Asks the writer for its coverage line (stripped from the answer).
 const String coverageInstruction =
     '最后单独一行输出 [COVERAGE: full] 或 [COVERAGE: gaps]：已读原文回答了问题的'
-    '核心就写 full；问题的核心部分缺少原文证据才写 gaps（次要细节缺失不算）。';
+    '核心就写 full；问题的核心部分缺少原文证据才写 gaps。次要细节缺失不算；问经历、'
+    '“全部”“之后”这类宽泛问题时，主要阶段都有原文支撑就写 full，没读到的次要章节'
+    '在覆盖说明里列出即可（总会有没读的章节，这本身不是 gaps）。';
 
 final RegExp _coverageLine = RegExp(
     r'\n?[ \t>*_`]*\[COVERAGE:\s*(full|gaps)\s*\][ \t*_`]*',
@@ -177,6 +179,45 @@ String buildWriterSource(
     }
     if (full) break;
   }
+  // Pass 1b: lines of the people the question names (±1), chapter by
+  // chapter in turns — a chapter whose notes failed (live) still brings its
+  // key lines, not only its opening.
+  final names = [
+    for (final n in state.questionNames)
+      if (n.trim().isNotEmpty) n.trim(),
+  ];
+  if (!full && names.isNotEmpty) {
+    final named = {
+      for (final e in chapters.entries)
+        e.key: [
+          for (final i in (e.value.keys.toList()..sort()))
+            if (names.any(e.value[i]!.contains)) i,
+        ],
+    };
+    final at = {for (final id in chapters.keys) id: 0};
+    var progressed = true;
+    while (!full && progressed) {
+      progressed = false;
+      for (final id in chapters.keys) {
+        final lines = named[id]!;
+        var taken = 0;
+        while (at[id]! < lines.length && taken < _fillChunk) {
+          final line = lines[at[id]!];
+          at[id] = at[id]! + 1;
+          progressed = true;
+          for (var i = line - 1; i <= line + 1; i++) {
+            if (!take(id, i)) {
+              full = true;
+              break;
+            }
+          }
+          if (full) break;
+          taken++;
+        }
+        if (full) break;
+      }
+    }
+  }
   // Pass 2: the rest, chapter by chapter in turns.
   final orders = {
     for (final e in chapters.entries) e.key: (e.value.keys.toList()..sort()),
@@ -256,7 +297,9 @@ class PlannerLoop {
     int maxToolSteps = 40,
     StoryCatalogLookup? storyCatalogLookup,
     QuestionContextLookup? questionContextLookup,
+    LLMClient? planClient,
   })  : _maxToolSteps = maxToolSteps,
+        _planClient = planClient,
         _storyCatalogLookup = storyCatalogLookup,
         _questionContextLookup = questionContextLookup,
         _llmClient = llmClient,
@@ -290,6 +333,82 @@ class PlannerLoop {
 
   /// R15: names / collections in the question (null: none detected).
   final QuestionContextLookup? _questionContextLookup;
+
+  /// R16: drafts the reading plan once at the start (low-effort thinking in
+  /// the app); null: no plan, the planner decides step by step.
+  final LLMClient? _planClient;
+
+  static const String _planSystem =
+      '你是剧情问答的阅读规划员。根据问题和检索状态（人物的出场总览、问题点名的故事等），'
+      '安排回答这个问题需要阅读的故事集或章节。\n'
+      '第一行写：范围：<问题涉及的时间段或故事范围>。\n'
+      '然后逐个核对出场总览里提及较多的故事集（活动、主线、密录都要看，活动按上线时间'
+      '不能代表剧情时间，要按剧情内容判断），凡是落在范围内的都列出；问题问某事'
+      '“之后”“全部”“最近”时不要只列一两个。按阅读顺序，最多 10 项，每项一行：\n'
+      '- <故事集名>（<故事集id>）：<要在里面找什么>\n'
+      '故事集 id 照抄状态里括号中的写法。这只是定位安排，不要回答问题，也不要写其他内容。';
+
+  /// R16: one call that turns the question and the opening state into a
+  /// reading checklist. A non-thinking planner choosing one line at a time
+  /// read the event chapter itself for a "what happened after" question and
+  /// answered after three chapters (live); one considered plan at the start
+  /// fixes the order and the breadth, the steps then execute it.
+  Future<void> _draftPlan(
+    InvestigationState state,
+    String userQuery,
+    List<Message> chatHistory,
+  ) async {
+    final client = _planClient;
+    if (client == null) return;
+    try {
+      final result = await completeWithHeadroom(
+        client,
+        [
+          Message.system(_planSystem),
+          ...chatHistory,
+          Message.user('问题: $userQuery\n\n检索状态:\n${state.serialize()}'),
+        ],
+        temperature: 0.2,
+        maxTokens: 4096,
+      );
+      state.readingPlan.addAll(PlanItem.parse(result.content));
+    } catch (_) {
+      // A plan is a convenience; the run works without it.
+    }
+  }
+
+  static const String _sufficiencySystem =
+      '你是剧情问答的审核员。给定问题和检索状态（阅读计划、人物出场总览、已读章节的摘要与'
+      '证据笔记），判断已读原文是否已经覆盖了回答这个问题所需的主要内容。'
+      '只看问题本身的范围：窄问题读到关键原文就够；问经历、“全部”“之后”这类宽泛问题，'
+      '范围内的主要阶段都读到才够。只输出一行：“足够”，或“不足：<还缺什么，'
+      '不超过40字>”。';
+
+  /// R16: what the read text still lacks for the question, or null when it
+  /// is enough (and on any failure: the check only decides whether to keep
+  /// reading). Runs once, on ANSWER, only when unread items exist.
+  Future<String?> _sufficiencyGap(
+    InvestigationState state,
+    String userQuery,
+  ) async {
+    final client = _extractorClient ?? _llmClient;
+    try {
+      final result = await completeWithHeadroom(
+        client,
+        [
+          Message.system(_sufficiencySystem),
+          Message.user('问题: $userQuery\n\n检索状态:\n${state.serialize()}'),
+        ],
+        temperature: 0,
+        maxTokens: 512,
+      );
+      final reply = result.content.trim();
+      final gap = RegExp(r'不足\s*[:：]\s*(.+)').firstMatch(reply)?.group(1);
+      return gap?.split('\n').first.trim();
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<({List<String> names, List<NamedStoryTarget> targets})>
       _questionContext(String question) async {
@@ -399,9 +518,15 @@ DONE
 - SEARCH 只查实体档案/资料（干员档案、敌人图鉴等），不检索剧情原文。
 - MAP 查看章节地图；COLLECT 列出某实体的全部出场行（terms 填相关词，命中的排前面）。
 - 已读章节（区间、摘要、证据笔记）与已检索记录在状态中，同样的命令不会重复执行。
-- 可以在意图后加“# 简短计划”，如 READ <story_id> 0 200 # 接着读下一章；
+- READ 不写行号就从头读整章（一次最多约 450 行，大多数章节一次读完）；只有要看
+  某几行时才写区间，不要把一章拆成几段读。
+- 可以在意图后加“# 简短计划”，如 READ <story_id> # 读下一章；
   系统把它记为状态里的“当前计划”，下一步可以接着做。
 - 状态里的“步数”是检索预算；快用完时先 READ 最关键的未读章节，再 ANSWER。
+- 状态里有“阅读计划”时按顺序逐项执行（· 为未完成）：先 OUTLINE 该故事集或直接
+  READ 相关章节；计划项都完成、或读到的内容已经足以回答时输出 ANSWER。
+- 计划有多项时先求覆盖：每项先读梗概里最关键的一两章就转下一项，所有项都有
+  原文后，若还有步数再回头细读；不要在一个故事集里逐章读完而让后面的项没有步数。
 - 目标实体已在状态中消歧时直接用其 entity_id；消歧结果不对时用 RESELECT 切换候选。
 - 证据足以回答时输出 ANSWER（可附 0-1 置信度），系统会据此写答案。
 ''';
@@ -434,6 +559,7 @@ DONE
     // where the last answer was.
     final context = await _questionContext(userQuery);
     state.namedTargets.addAll(context.targets);
+    state.questionNames.addAll(context.names);
     final previousTurn = previousQuestions.isEmpty
         ? ''
         : '${previousQuestions.last}\n'
@@ -466,6 +592,22 @@ DONE
     }
     state.priorReadStories.addAll(inheritedPages.map((p) => p.storyId));
     await _refreshLabels(state);
+    if (_planClient != null) {
+      yield const ReActEvent(
+        type: ReActEventType.status,
+        content: '正在制定阅读计划',
+      );
+      await _draftPlan(state, userQuery, chatHistory);
+      if (state.readingPlan.isNotEmpty) {
+        onStateChanged?.call(state.serialize());
+        yield ReActEvent(
+          type: ReActEventType.toolObservation,
+          content: '阅读计划:\n'
+              '${state.readingPlan.map((i) => '- ${i.text}').join('\n')}',
+          toolName: 'reading_plan',
+        );
+      }
+    }
     // R14: the extractor sees no chat history; a follow-up ("那根本原因
     // 呢？") is only meaningful with the previous question attached.
     final extractorQuery = followUp
@@ -488,6 +630,64 @@ DONE
     final reshown = <String>{};
     var duplicates = 0;
     var onlyRereads = true;
+    // R16: a one-time review of what is still unread (on ANSWER, or when
+    // the planner keeps asking for text it already read) — separate chances
+    // for the two moments: a review spent on an early re-read must not leave
+    // the final ANSWER without one (live).
+    var answerReviewed = false;
+    var rereadReviewed = false;
+    var budgetExtended = false;
+    Future<String?> reviewNote({required bool forAnswer}) async {
+      if ((forAnswer ? answerReviewed : rereadReviewed) ||
+          state.stepBudget - toolSteps <= InvestigationState.lowBudgetSteps) {
+        return null;
+      }
+      if (forAnswer) {
+        answerReviewed = true;
+      } else {
+        rereadReviewed = true;
+      }
+      // The reading plan's open items, and the question people's
+      // most-mentioned overview collections that neither the plan nor the
+      // reading reached (a plan can miss one: live, a non-thinking plan left
+      // out a collection with 102 mentions).
+      final pendingItems = state.pendingPlanItems;
+      final pending = [for (final item in pendingItems) item.text];
+      // Listed once: an open plan item is not repeated as an overview row.
+      final planned = {
+        for (final item in pendingItems)
+          if (item.collectionId != null) item.collectionId!,
+      };
+      final unplanned = [
+        for (final row in state.untouchedOverviewRows(limit: 4))
+          if (!planned.any((id) => row.contains('（$id'))) row,
+      ];
+      if (pending.isEmpty && unplanned.isEmpty) return null;
+      // On ANSWER, unread items alone are no reason to go on: a narrow
+      // question answered from two chapters was sent through every plan
+      // item (live, 43 steps). A focused check of what was read decides.
+      String? gap;
+      if (forAnswer) {
+        gap = await _sufficiencyGap(state, userQuery);
+        if (gap == null) return null;
+      }
+      // The review asks for more reading; the budget grows once to allow it.
+      if (!budgetExtended) {
+        budgetExtended = true;
+        state.stepBudget += _reviewExtraSteps;
+      }
+      return [
+        if (gap != null) '按已读内容，回答还缺：$gap',
+        if (pending.isNotEmpty)
+          '阅读计划里还有这些没有读：\n${pending.map((r) => '  - $r').join('\n')}',
+        if (unplanned.isNotEmpty)
+          '问题人物的出场总览里，这些提及较多的故事集还没读过或读了不到一半'
+              '（按故事顺序）：\n'
+              '${unplanned.map((r) => '  - $r').join('\n')}',
+        '问题的范围（时间段、“全部”“之后”“最近”等）包含其中的事就 OUTLINE 或 '
+            'READ 它们；读过的内容已经说明它们与问题无关时，输出 ANSWER。',
+      ].join('\n');
+    }
 
     Stream<ReActEvent> finish(StopReason stop, {String? confidence}) => _finish(
           stop: stop,
@@ -511,9 +711,7 @@ DONE
           for (var i = 0; i < recent.length; i++)
             i == recent.length - 1 || recent[i].content.length <= _clipOlder
                 ? recent[i]
-                : Message.user(
-                    '${recent[i].content.substring(0, _clipOlder)}…（已截断）',
-                  ),
+                : _olderObservation(recent[i].content),
         ];
 
     while (true) {
@@ -600,6 +798,22 @@ DONE
           ),);
           continue;
         }
+        // R16: a non-thinking planner answered a whole-life question after
+        // three chapters while the overview of the person it asked about
+        // listed more collections it never opened (live). Once per run, and
+        // only with budget left, those collections are shown; ANSWER again
+        // finishes.
+        final note = await reviewNote(forAnswer: true);
+        if (note != null) {
+          recent.add(Message.user('Observation: $note'));
+          if (recent.length > 2) recent.removeAt(0);
+          yield ReActEvent(
+            type: ReActEventType.toolObservation,
+            content: note,
+            toolName: 'answer_review',
+          );
+          continue;
+        }
         yield* finish(
           StopReason.answer,
           confidence: intent.args['confidence'] as String?,
@@ -662,9 +876,9 @@ DONE
       final fingerprint = state.progressFingerprint;
       stalled = fingerprint == lastFingerprint ? stalled + 1 : 0;
       lastFingerprint = fingerprint;
-      if (toolSteps > _maxToolSteps || stalled >= _stallFinish) {
+      if (toolSteps > state.stepBudget || stalled >= _stallFinish) {
         yield* finish(
-          toolSteps > _maxToolSteps ? StopReason.budget : StopReason.stalled,
+          toolSteps > state.stepBudget ? StopReason.budget : StopReason.stalled,
         );
         return;
       }
@@ -679,6 +893,12 @@ DONE
       // first unread line (live runs re-read 30-line windows of the same
       // chapter many times over).
       var advanced = false;
+      if ((intent.action == 'READ' || intent.action == 'SUMMARIZE') &&
+          args['story_id'] is String &&
+          !(args['story_id'] as String).endsWith('.txt')) {
+        // R16: same key as the read lines (`x` and `x.txt` are one story).
+        args['story_id'] = '${args['story_id']}.txt';
+      }
       if ((intent.action == 'READ' || intent.action == 'SUMMARIZE') &&
           args['page_token'] == null) {
         final storyId = '${args['story_id'] ?? ''}';
@@ -722,8 +942,17 @@ DONE
           final cachedData = parseDataBlocks(cachedOutline)
               .where((d) => d['type'] == 'get_story_outline')
               .firstOrNull;
-          final inState = state.outlines
-              .containsKey('${cachedData?['collection_id'] ?? ''}');
+          final collectionId = '${cachedData?['collection_id'] ?? ''}';
+          final folded = state.isOutlineFolded(collectionId);
+          final inState = state.outlines.containsKey(collectionId) && !folded;
+          // R16: served from cache without a tool step — a pointer when the
+          // full index is in state (live runs re-asked right after it
+          // arrived), the whole outline again when it was folded (it then
+          // becomes one of the full indexes again).
+          toolSteps--;
+          if (folded) {
+            state.noteOutline(collectionId, compactOutline(cachedOutline));
+          }
           recent.add(Message.user(
             inState
                 ? 'Observation: 这个故事集的梗概第 $previous 步已获取，完整列在状态'
@@ -741,18 +970,66 @@ DONE
         final isReread =
             (intent.action == 'READ' || intent.action == 'SUMMARIZE') &&
                 (previous != null || rangeRead);
-        // R16: a planner asking for lines it already read wants to look at
-        // them again (it only keeps digests and notes); refusing made it
-        // ask up to 15 times. The text is shown again once, from the pages
-        // in hand, at the cost of a tool step.
-        // A planner that keeps asking for text it has (live: 9 of 21 steps
-        // after the first re-show) is done reading — the same as ANSWER;
-        // the writer sees all of it and says whether it covers the question.
-        if (isReread && reshown.length >= _maxReshows && readPages.isNotEmpty) {
-          yield* finish(StopReason.onlyRereads);
-          return;
+        // R16 re-reads. A planner asking for lines it already read wants to
+        // look at them again (it only keeps digests and notes); refusing
+        // outright made it ask up to 15 times. So: the first [_maxReshows]
+        // are shown again from the pages in hand (a tool step each). After
+        // that it is stuck on what it has, possibly not done (live: three
+        // re-reads of the event chapter for a "what happened after"
+        // question): once, the open plan items and under-read collections;
+        // later re-reads are refused without a step, and three refusals in
+        // a row end the search (the writer sees all the text).
+        // A short passage it keeps asking for is clearly what it needs in
+        // view: pinned into the state for the rest of the run, free.
+        if (isReread && reshown.length >= _maxReshows) {
+          final rows = _rereadRows(
+            [...inheritedPages, ...readPages],
+            storyId,
+            start ?? 0,
+            end,
+          );
+          final first = rows.isEmpty ? 0 : int.parse(rows.first.split(' ').first);
+          final last = rows.isEmpty ? 0 : int.parse(rows.last.split(' ').first);
+          if (rows.isNotEmpty &&
+              rows.length <= _maxPinLines &&
+              state.pinnedLineCount + rows.length <= _maxPinnedLines &&
+              !state.isPinned(storyId, first, last)) {
+            state.pinned.add(
+              (storyId: storyId, first: first, last: last, rows: rows),
+            );
+            toolSteps--;
+            final pinNote = '已把 $storyId $first-$last 固定在状态“重点原文”里，'
+                '之后每一步都能看到，不必再 READ。';
+            recent.add(Message.user('Observation: $pinNote'));
+            if (recent.length > 2) recent.removeAt(0);
+            onStateChanged?.call(state.serialize());
+            yield ReActEvent(
+              type: ReActEventType.toolObservation,
+              content: pinNote,
+              toolName: toolName,
+            );
+            continue;
+          }
         }
-        if (isReread && reshown.add('$storyId ${start ?? 0}-${end ?? ''}')) {
+        final note = isReread && reshown.length >= _maxReshows
+            ? await reviewNote(forAnswer: false)
+            : null;
+        if (note != null) {
+          toolSteps--;
+          recent.add(Message.user(
+            'Observation: 这一章你已经读过并看过两次，不再提供。$note',
+          ),);
+          if (recent.length > 2) recent.removeAt(0);
+          yield ReActEvent(
+            type: ReActEventType.toolObservation,
+            content: note,
+            toolName: 'answer_review',
+          );
+          continue;
+        }
+        if (isReread &&
+            reshown.length < _maxReshows &&
+            reshown.add('$storyId ${start ?? 0}-${end ?? ''}')) {
           final text = _rereadText(
             [...inheritedPages, ...readPages],
             storyId,
@@ -791,9 +1068,11 @@ DONE
             );
             return;
           }
+          final open = state.pendingPlanItems;
           final note = isReread
-              ? 'READ $storyId 这一段已经给你看过（读取和重看各一次）：已读原文会完整'
-                  '交给写答案的环节，不必再看。'
+              ? 'READ $storyId 这一段已经读过，不再重复提供：它的摘要和笔记在状态'
+                  '“已读章节”里，原文会完整交给写答案的环节。'
+                  '${open.isEmpty ? '' : '阅读计划里还没读的：${open.map((i) => i.text).join('；')}。'}'
               : missingOnly && previous == null
                   ? '库中没有“${searchTerms.join(' ')}”这个写法（之前的检索已确认），'
                       '换范围或数量也不会有结果；看状态里列出的相近名字。'
@@ -902,8 +1181,8 @@ DONE
             extractor,
             userQuery: extractorQuery,
             page: page,
-            // R14: pages are up to ~150 lines now.
-            maxNotes: 10,
+            // R16: about one note per 15 lines (pages are up to ~450).
+            maxNotes: (page.lines.length ~/ 15).clamp(10, 25),
           );
           state
             ..noteDigest(page.storyId, digest.digest)
@@ -914,9 +1193,42 @@ DONE
     }
   }
 
+  /// R16: an older window message in the planner request. A READ page is
+  /// replaced by a pointer to the state: clipping it to its first lines
+  /// with "（已截断）" told the planner it had not seen the rest, and it asked
+  /// for the first page again after every second page (live).
+  static Message _olderObservation(String content) {
+    final page = parseReadObservation(content);
+    if (page != null) {
+      return Message.user(
+        'Observation: 已读 ${page.storyId} ${page.firstLine}-${page.lastLine}'
+        '（${page.lines.length} 行）。这段的摘要和证据笔记在状态“已读章节”里，'
+        '原文写答案时完整使用，不必重读。',
+      );
+    }
+    return Message.user('${content.substring(0, _clipOlder)}…（已截断）');
+  }
+
   /// R16: the lines of [storyId] in [start]..[end] from pages already in
   /// hand (`N | text` rows, at most [_maxRereadLines]); '' when none.
   static String _rereadText(
+    List<ReadPage> pages,
+    String storyId,
+    int start,
+    int? end,
+  ) {
+    final rows = _rereadRows(pages, storyId, start, end);
+    if (rows.isEmpty) return '';
+    return [
+      'Story: $storyId',
+      ...rows.take(_maxRereadLines),
+      if (rows.length > _maxRereadLines)
+        '…（其余 ${rows.length - _maxRereadLines} 行略）',
+    ].join('\n');
+  }
+
+  /// `N | text` rows of [storyId] in [start]..[end] from [pages], in order.
+  static List<String> _rereadRows(
     List<ReadPage> pages,
     String storyId,
     int start,
@@ -930,21 +1242,24 @@ DONE
         rows[line.index] = line.text;
       }
     }
-    if (rows.isEmpty) return '';
     final indexes = rows.keys.toList()..sort();
-    return [
-      'Story: $storyId',
-      for (final i in indexes.take(_maxRereadLines)) '$i | ${rows[i]}',
-      if (indexes.length > _maxRereadLines)
-        '…（其余 ${indexes.length - _maxRereadLines} 行略）',
-    ].join('\n');
+    return [for (final i in indexes) '$i | ${rows[i]}'];
   }
 
   static const int _maxRereadLines = 200;
 
-  /// R16: already-read passages shown again per run; asking for more ends
-  /// the search (see the re-read branch in [run]).
+  /// R16: already-read passages shown again per run (see the re-read
+  /// branch in [run]).
   static const int _maxReshows = 2;
+
+  /// R16: a passage asked for beyond [_maxReshows] is pinned into the state
+  /// when it is at most this long, while the pinned total stays within
+  /// [_maxPinnedLines].
+  static const int _maxPinLines = 60;
+  static const int _maxPinnedLines = 80;
+
+  /// R16: tool steps added once when the review lists unopened collections.
+  static const int _reviewExtraSteps = 8;
 
   /// Short description of a step for the live status line (R16).
   String _stepLabel(

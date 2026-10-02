@@ -114,6 +114,9 @@ abstract interface class GameDataRetrieval {
   /// [query] (collection name, collection id, scope key or story id).
   Future<StoryCollection?> storyCollection(String query);
 
+  /// R16: catalog entries with level code [code] (e.g. `10-10`).
+  Future<List<StoryCatalogEntry>> storiesByCode(String code);
+
   /// R14: collections whose name contains [like] and/or of [type].
   Future<List<({String id, String label, int chapters})>> storyCollectionIndex({
     String? like,

@@ -444,7 +444,9 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
             ? scopeType
             : '$scopeType:$scopeValue';
 
-    final limit = (maxLines ?? 30).clamp(1, 200);
+    // R16: 500 so a whole chapter fits one READ (the tool's observation
+    // budget still bounds what is returned).
+    final limit = (maxLines ?? 30).clamp(1, 500);
     final windowEnd = endLine;
     var sql = 'SELECT line_index, speaker, content FROM story_lines '
         'WHERE story_id = ? AND line_index >= ?';
@@ -687,6 +689,13 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final db = await _open();
     if (db == null) return null;
     return queryStoryCollection(db, query);
+  }
+
+  @override
+  Future<List<StoryCatalogEntry>> storiesByCode(String code) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryStoriesByCode(db, code);
   }
 
   @override

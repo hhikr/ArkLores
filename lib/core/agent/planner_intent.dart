@@ -112,7 +112,11 @@ IntentRecord? parseIntent(String line) {
                     .replaceAll(RegExp(r'[》」]$'), ''),
               );
               if (target.isEmpty) return null;
-              args['target'] = target;
+              // R16: a plan item copied whole (`主线·风暴瞭望（main_9）`)
+              // names the collection by the id in brackets.
+              final bracketed =
+                  RegExp(r'[（(]([^（）()\s]+)[）)]$').firstMatch(target);
+              args['target'] = bracketed?.group(1) ?? target;
             case 'COLLECT':
               final tokens = rest.split(RegExp(r'\s+'));
               if (tokens.isEmpty || tokens.first.isEmpty) return null;

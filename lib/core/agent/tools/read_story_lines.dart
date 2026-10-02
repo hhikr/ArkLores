@@ -9,12 +9,18 @@ class ReadStoryLinesTool extends AgentTool {
   ReadStoryLinesTool({GameDataRetrieval? gameDataStore})
       : _gameDataStore = gameDataStore;
   /// R14: raised from 4800 so one READ covers most of a chapter scene
-  /// (~150 lines) instead of 30-line slices.
-  static const int _maxObservationChars = 9000;
+  /// (~150 lines) instead of 30-line slices. R16: 20000 (~450 lines), so most
+  /// chapters arrive whole — a chapter split into ~200-line pages was read
+  /// page by page and then re-requested "to confirm the first half" (live).
+  /// Only the newest observation is sent in full; older pages become a
+  /// pointer to the state.
+  static const int _maxObservationChars = 20000;
 
   /// Page size of an open-ended READ (the observation budget still bounds
-  /// it); R14 raised from the store's 30-line default.
-  static const int _defaultPageLines = 150;
+  /// it); R14 raised from the store's 30-line default, R16 to a whole
+  /// chapter (an open READ returned 150 lines and the planner went on to
+  /// read the chapter in slices, then re-read the first slice).
+  static const int _defaultPageLines = 450;
 
   final GameDataRetrieval? _gameDataStore;
 
@@ -48,7 +54,7 @@ class ReadStoryLinesTool extends AgentTool {
           },
           'max_lines': {
             'type': 'integer',
-            'description': 'Optional page size. Default 150, max 200.',
+            'description': 'Optional page size. Default 450, max 500.',
           },
           'page_token': {
             'type': 'string',
@@ -61,10 +67,13 @@ class ReadStoryLinesTool extends AgentTool {
 
   @override
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
-    final storyId = (arguments['story_id'] as String?)?.trim();
+    var storyId = (arguments['story_id'] as String?)?.trim();
     if (storyId == null || storyId.isEmpty) {
       return 'Error: story_id parameter is empty';
     }
+    // R16: ids are file names; `level_st_09-04` without `.txt` was "not
+    // found" (live).
+    if (!storyId.endsWith('.txt')) storyId = '$storyId.txt';
     final store = _gameDataStore;
     if (store == null || !await store.isAvailable) {
       return const ToolExecutionResult(
@@ -92,9 +101,23 @@ class ReadStoryLinesTool extends AgentTool {
       pageToken: pageToken,
     );
     if (!page.storyFound) {
+      // R16: an id put together from a level code (`level_st_10-10_beg`
+      // for 10-10) — name the real ones with that code.
+      // File numbers are zero-padded (`16-07`), level codes are not (`16-7`).
+      final raw = RegExp(r'(\d+-\d+|[A-Z]+-\d+)').firstMatch(storyId)?.group(1);
+      final code = raw?.replaceAllMapped(
+        RegExp(r'(^|-)0+(\d)'),
+        (m) => '${m.group(1)}${m.group(2)}',
+      );
+      final similar = code == null
+          ? const <StoryCatalogEntry>[]
+          : await store.storiesByCode(code);
       return ToolExecutionResult(
-        observation: 'Story not found: $storyId. Use search_story_coverage or '
-            'get_story_map to obtain valid story ids.',
+        observation: 'Story not found: $storyId. '
+            '${similar.isEmpty ? 'Use search_story_coverage or get_story_map to '
+                'obtain valid story ids.' : '关卡号 $code 的章节是：'
+                '${similar.map((e) => '${e.storyId}《${e.label}》').join('；')}。'
+                '用这些 story_id READ，不要自己拼写。'}',
       );
     }
     if (page.lines.isEmpty) {

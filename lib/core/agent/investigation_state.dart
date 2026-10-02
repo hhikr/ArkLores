@@ -38,9 +38,53 @@ class InvestigationState {
   /// for any decision.
   String plan = '';
 
+  /// R16: short passages the planner asked to see again and again, kept in
+  /// state so it has them in front of it (live: the same 24 lines asked
+  /// for ten times).
+  final List<({String storyId, int first, int last, List<String> rows})>
+      pinned = [];
+
+  int get pinnedLineCount => pinned.fold(0, (n, p) => n + p.rows.length);
+
+  bool isPinned(String storyId, int first, int last) => pinned.any(
+        (p) => p.storyId == storyId && p.first <= first && p.last >= last,
+      );
+
   /// R16: tool steps used / allowed in this run (0 budget: not shown).
   int stepsUsed = 0;
   int stepBudget = 0;
+
+  /// R16: the reading plan drafted at the start of the run (collections /
+  /// chapters to read, in order). A checklist for the non-thinking planner;
+  /// an item is ticked once its collection was outlined or read from.
+  final List<PlanItem> readingPlan = [];
+
+  /// Collections this run read from. An outline alone does not count: it
+  /// is a map of the collection, not its text (live: a plan item was
+  /// ticked by OUTLINE and its one relevant chapter never read).
+  Set<String> get touchedCollections => {
+        for (final r in reads)
+          if (storyEntries[r.storyId] case final entry?) entry.collectionId,
+      };
+
+  bool _planItemDone(PlanItem item, Set<String> touched) {
+    final id = item.collectionId;
+    if (id != null &&
+        (touched.contains(id) || reads.any((r) => r.storyId.contains('/$id/')))) {
+      return true;
+    }
+    // Items naming a chapter file count once it was read.
+    return reads.any((r) => item.text.contains(r.storyId));
+  }
+
+  /// Plan items not done yet.
+  List<PlanItem> get pendingPlanItems {
+    final touched = touchedCollections;
+    return [
+      for (final item in readingPlan)
+        if (!_planItemDone(item, touched)) item,
+    ];
+  }
 
   /// R15: every collection outlined in this run, including outlines
   /// dropped from [outlines] — the missing-outline hint must not send the
@@ -58,6 +102,10 @@ class InvestigationState {
   /// R15: names in the question that the previous turn never mentioned
   /// (the question changed topic; nothing was inherited).
   final Set<String> newTopicNames = {};
+
+  /// R16: people named in the question (question context); the writer's
+  /// source gives their lines priority.
+  final List<String> questionNames = [];
 
   /// R15: name → COVER overview (every collection the person appears in,
   /// release order) of the people named in the question.
@@ -123,15 +171,34 @@ class InvestigationState {
   /// can switch to another candidate without a new search.
   final Map<String, String> _candidateNames = {};
 
-  String _serialize({bool allNotes = false}) {
+  String _serialize({bool allNotes = false, bool writer = false}) {
     final buffer = StringBuffer();
-    if (stepBudget > 0) {
+    if (!writer && stepBudget > 0) {
       final left = stepBudget - stepsUsed;
       buffer.writeln('步数: 已用 $stepsUsed / $stepBudget'
           '${left <= lowBudgetSteps ? '（只剩 ${left < 0 ? 0 : left} 步：先 READ 目录里'
               '最关键的未读章节，然后 ANSWER）' : ''}');
     }
-    if (plan.isNotEmpty) buffer.writeln('当前计划: $plan');
+    if (!writer && readingPlan.isNotEmpty) {
+      final touched = touchedCollections;
+      buffer.writeln('阅读计划（开局制定，按顺序；✓ 为已读其中章节，只看过梗概不算；'
+          '可按读到的内容调整）:');
+      for (final item in readingPlan) {
+        buffer.writeln(
+          '  ${_planItemDone(item, touched) ? '✓' : '·'} ${item.text}',
+        );
+      }
+    }
+    if (!writer && plan.isNotEmpty) buffer.writeln('当前计划: $plan');
+    if (!writer && pinned.isNotEmpty) {
+      buffer.writeln('重点原文（你反复要看的段落，常驻在这里，不必再 READ）:');
+      for (final p in pinned) {
+        buffer.writeln('  ${p.storyId} ${p.first}-${p.last}:');
+        for (final row in p.rows) {
+          buffer.writeln('    $row');
+        }
+      }
+    }
     if (namedTargets.isNotEmpty) {
       buffer.writeln('问题提到的故事: ${namedTargets.map((t) {
         final pending = !outlinedCollections.contains(t.collectionId);
@@ -142,7 +209,7 @@ class InvestigationState {
       }).join('、')}');
     }
     for (final overview in entityOverviews.entries) {
-      buffer.writeln('${overview.key} 的${overview.value}');
+      buffer.writeln('${overview.key} 的${_overviewWithReads(overview.value)}');
     }
     if (missingTerms.isNotEmpty) {
       buffer.writeln('库中没有的写法（再搜也不会有结果）: ${missingTerms.entries.map(
@@ -167,14 +234,11 @@ class InvestigationState {
     if (outlines.isNotEmpty) {
       buffer.writeln('已看梗概（故事集章节目录，按游戏内顺序；✓ 为已读区间；'
           '未读章节附官方简介，只是定位线索）:');
-      final withSynopses =
-          outlines.keys.toList().reversed.take(maxOutlines).toSet();
       for (final entry in outlines.entries) {
         buffer.writeln(
-          _renderOutline(
-            entry.value,
-            withSynopses: withSynopses.contains(entry.key),
-          ),
+          isOutlineFolded(entry.key)
+              ? _renderOutline(entry.value, withSynopses: false, folded: entry.key)
+              : _renderOutline(entry.value, withSynopses: true),
         );
       }
     }
@@ -214,23 +278,46 @@ class InvestigationState {
 
   static final RegExp _outlineRow = RegExp(r'^(\s+\d+\. .+ \| )(\S+)( ←)?$');
 
+  /// Outlines shown as a full chapter index (R16: the most recent ones);
+  /// older ones fold to their read chapters.
+  static const int fullOutlines = 2;
+
+  /// Whether the outline of [collectionId] is in state but folded.
+  bool isOutlineFolded(String collectionId) =>
+      outlines.containsKey(collectionId) &&
+      !outlines.keys.toList().reversed.take(fullOutlines).contains(collectionId);
+
   /// An outline as a chapter index: read chapters get `✓ <segments>` and
   /// lose their synopsis; with [withSynopses] false every synopsis is left
-  /// out.
-  String _renderOutline(String compact, {required bool withSynopses}) {
+  /// out. A [folded] outline (its collection id) keeps only the header and
+  /// the read chapters — a run over eight collections re-sent eight full
+  /// indexes (~12k characters) with every planner step (live).
+  String _renderOutline(
+    String compact, {
+    required bool withSynopses,
+    String? folded,
+  }) {
     final out = <String>[];
     var skipSynopsis = false;
+    var hidden = 0;
     for (final line in compact.split('\n')) {
       final row = _outlineRow.firstMatch(line);
       if (row != null) {
         final segments = segmentsText(row.group(2)!);
         skipSynopsis = !withSynopses || segments.isNotEmpty;
+        if (folded != null && segments.isEmpty) {
+          hidden++;
+          continue;
+        }
         out.add('${row.group(1)}${row.group(2)}${row.group(3) ?? ''}'
             '${segments.isEmpty ? '' : ' ✓ $segments'}');
         continue;
       }
       if (line.startsWith('      ') && skipSynopsis) continue;
       out.add(line);
+    }
+    if (folded != null && hidden > 0) {
+      out.add('   （其余 $hidden 章已折叠；需要时再 OUTLINE $folded，不占步数）');
     }
     return out.join('\n');
   }
@@ -305,6 +392,62 @@ class InvestigationState {
     }
   }
 
+  static final RegExp _overviewRow =
+      RegExp(r'^\s*\d+\. (.+?)（([^，）]+)[，）].*?: (\d+) 章，提及 (\d+) 次');
+
+  /// Chapters of collection [id] this run read from.
+  int readChaptersIn(String id) => reads
+      .where((r) =>
+          storyEntries[r.storyId]?.collectionId == id ||
+          r.storyId.contains('/$id/'),)
+      .length;
+
+  /// An overview with the read share of each collection appended
+  /// (`（已读 1/8 章）`), so the planner sees how much of a collection it has
+  /// covered, not only whether it opened it.
+  String _overviewWithReads(String overview) => [
+        for (final line in overview.split('\n'))
+          if (_overviewRow.firstMatch(line) case final m?)
+            readChaptersIn(m.group(2)!.trim()) > 0
+                ? '$line（已读 ${readChaptersIn(m.group(2)!.trim())}/${m.group(3)} 章）'
+                : line
+          else
+            line,
+      ].join('\n');
+
+  /// R16: rows of the question people's overviews whose collection this run
+  /// read less than half of (by chapters the person appears in; an outline
+  /// alone is not reading) — at least [minMentions] mentions, the [limit]
+  /// with the most mentions in unread chapters, kept in overview (story)
+  /// order. Live: a collection with eight chapters of the person was left
+  /// after one, because one read ticked it.
+  List<String> untouchedOverviewRows({int minMentions = 5, int limit = 6}) {
+    final rows = <({String text, double unread, int order})>[];
+    for (final overview in entityOverviews.values) {
+      for (final line in overview.split('\n')) {
+        final m = _overviewRow.firstMatch(line);
+        if (m == null) continue;
+        final id = m.group(2)!.trim();
+        final chapters = int.parse(m.group(3)!);
+        final mentions = int.parse(m.group(4)!);
+        final read = readChaptersIn(id);
+        if (read * 2 >= chapters || mentions < minMentions) continue;
+        if (rows.any((r) => r.text.contains('（$id'))) continue;
+        final text = line.trim().replaceFirst(RegExp(r'^\d+\. '), '');
+        rows.add((
+          text: read == 0 ? text : '$text（已读 $read/$chapters 章）',
+          unread: mentions * (chapters - read) / chapters,
+          order: rows.length,
+        ),);
+      }
+    }
+    final top = ([...rows]..sort((a, b) => b.unread.compareTo(a.unread)))
+        .take(limit)
+        .toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+    return [for (final r in top) r.text];
+  }
+
   /// R14: collections of READ chapters whose outline was not fetched yet.
   List<({String id, String label})> get collectionsWithoutOutline {
     final result = <({String id, String label})>[];
@@ -356,19 +499,8 @@ class InvestigationState {
   /// R16: the state for the answer writer: every note, no step counter or
   /// plan (they are about searching, not about the answer).
   String serializeForWriter() {
-    final used = stepsUsed;
-    final budget = stepBudget;
-    final savedPlan = plan;
-    stepBudget = 0;
-    plan = '';
-    try {
-      final body = _serialize(allNotes: true);
-      return body.isEmpty ? '(尚无调查进展)' : body;
-    } finally {
-      stepsUsed = used;
-      stepBudget = budget;
-      plan = savedPlan;
-    }
+    final body = _serialize(allNotes: true, writer: true);
+    return body.isEmpty ? '(尚无调查进展)' : body;
   }
 
   // ── code-maintained mutations ──────────────────────────────────────
@@ -540,6 +672,32 @@ class InvestigationState {
       evidenceRows: e.evidenceRows + evidenceRows,
       scopes: merged,
     );
+  }
+}
+
+/// R16: one item of the reading plan (`我们明日见（act18mini）：…`).
+class PlanItem {
+  const PlanItem(this.text, {this.collectionId});
+  final String text;
+
+  /// The collection id written in the item, when there is one.
+  final String? collectionId;
+
+  static final RegExp _line = RegExp(r'^\s*(?:[-*·•]|\d+[.、)])\s*(.+?)\s*$');
+  static final RegExp _id = RegExp(r'[（(]\s*([A-Za-z][\w\-]*)\s*[）)]');
+
+  /// Items of a plan reply (list lines only), at most [limit].
+  static List<PlanItem> parse(String raw, {int limit = 10}) {
+    final items = <PlanItem>[];
+    for (final line in raw.split('\n')) {
+      final m = _line.firstMatch(line);
+      if (m == null) continue;
+      final text = m.group(1)!;
+      final clipped = text.length > 80 ? '${text.substring(0, 80)}…' : text;
+      items.add(PlanItem(clipped, collectionId: _id.firstMatch(text)?.group(1)));
+      if (items.length >= limit) break;
+    }
+    return items;
   }
 }
 

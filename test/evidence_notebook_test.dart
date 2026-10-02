@@ -210,7 +210,7 @@ void main() {
       // hand (no tool call); the second is refused.
       expect(request(1), contains('再给你看一次'));
       expect(request(1), contains('11 | 角色B：当年我藏起匕首。'));
-      expect(request(0), contains('已经给你看过'));
+      expect(request(0), contains('已经读过，不再重复提供'));
     });
 
     test('a stalled run is answered from what was read, via the writer',

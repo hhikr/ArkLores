@@ -35,7 +35,9 @@ class StoryQaAgent {
     GameDataRetrieval? gameDataStore,
     EmbeddingClient? embeddingClient,
     AgentTool? searchTool,
+    LLMClient? planClient,
   })  : _llmClient = llmClient,
+        _planClient = planClient,
         _plannerClient = plannerClient ?? auxClient ?? llmClient,
         _extractorClient = extractorClient ?? auxClient ?? llmClient,
         _disambiguator = EntityDisambiguator(
@@ -70,6 +72,9 @@ class StoryQaAgent {
   final QuestionContextLookup? _questionContextLookup;
   final LLMClient _llmClient;
   final LLMClient _plannerClient;
+
+  /// R16: drafts the reading plan at the start (null: no plan).
+  final LLMClient? _planClient;
   final LLMClient _extractorClient;
   final EntityDisambiguator _disambiguator;
   final ToolRegistry _toolRegistry;
@@ -105,6 +110,7 @@ class StoryQaAgent {
       maxToolSteps: 24,
       storyCatalogLookup: _storyCatalogLookup,
       questionContextLookup: _questionContextLookup,
+      planClient: _planClient,
     );
     return loop.run(
       // The planner gets the trust rules + protocol only; the answer format

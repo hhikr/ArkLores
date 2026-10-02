@@ -15,11 +15,13 @@ class SummaryAgent {
   SummaryAgent({
     required LLMClient llmClient,
     LLMClient? auxClient,
+    LLMClient? planClient,
     GameDataRetrieval? gameDataStore,
     EmbeddingClient? embeddingClient,
   }) : _agent = StoryQaAgent(
           llmClient: llmClient,
           auxClient: auxClient,
+          planClient: planClient,
           gameDataStore: gameDataStore,
           embeddingClient: embeddingClient,
         );

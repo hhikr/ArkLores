@@ -363,6 +363,22 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
   return result;
 }
 
+/// R16: catalog entries whose level code is [code] (`10-10`, `EG-7`) — the
+/// real story ids for a READ of a guessed id that does not exist.
+Future<List<StoryCatalogEntry>> queryStoriesByCode(
+  DatabaseExecutor db,
+  String code, {
+  int limit = 4,
+}) async {
+  if (code.trim().isEmpty || !await hasStoryCatalog(db)) return const [];
+  final rows = await db.rawQuery(
+    'SELECT * FROM $storyCatalogTable WHERE story_code = ? '
+    'ORDER BY collection_id, story_sort LIMIT ?',
+    [code.trim(), limit],
+  );
+  return rows.map(StoryCatalogEntry.fromRow).toList();
+}
+
 /// Ordered chapters of one collection, resolved from [query]: a story id
 /// (its collection), a collection id, a scope key (`activity:act33side`),
 /// or a collection name (exact first, then substring). Null when nothing
@@ -396,15 +412,18 @@ Future<StoryCollection?> queryStoryCollection(
       [candidate],
     );
   }
+  // R16: the label prefixes [StoryCatalogEntry.collectionLabel] adds
+  // (`主线·风暴瞭望`, `干员密录·…`) are not part of the stored name.
+  final name = q.replaceFirst(RegExp(r'^(主线|干员密录)[·・•]'), '');
   collectionId ??= await first(
     'SELECT collection_id FROM $storyCatalogTable WHERE collection_name = ? '
     'ORDER BY collection_id LIMIT 1',
-    [q],
+    [name],
   );
   collectionId ??= await first(
     "SELECT collection_id FROM $storyCatalogTable WHERE collection_name LIKE ? ESCAPE '\\' "
     'GROUP BY collection_id ORDER BY LENGTH(collection_name), collection_id LIMIT 1',
-    ['%${escapeLike(q)}%'],
+    ['%${escapeLike(name)}%'],
   );
   if (collectionId == null) return null;
   final rows = await db.rawQuery(

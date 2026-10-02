@@ -23,12 +23,14 @@ class FactCheckAgent {
   FactCheckAgent({
     required LLMClient llmClient,
     LLMClient? auxClient,
+    LLMClient? planClient,
     GameDataRetrieval? gameDataStore,
     EmbeddingClient? embeddingClient,
     AgentTool? searchTool,
   }) : _agent = StoryQaAgent(
           llmClient: llmClient,
           auxClient: auxClient,
+          planClient: planClient,
           gameDataStore: gameDataStore,
           embeddingClient: embeddingClient,
           searchTool: searchTool,
