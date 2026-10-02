@@ -12,6 +12,7 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
 import 'package:arklores/features/ai/wiki_ai_context.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -699,6 +700,53 @@ void main() {
           contains('incompatible'),
         ),),
       );
+    });
+
+    test('remembers the installed official asset and flags a newer one',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final gz = gzip.encode(await File(validDbPath).readAsBytes());
+      final gzSha = sha256.convert(gz).toString();
+      final client = MockClient((_) async => http.Response.bytes(gz, 200));
+
+      // A DB installed without a marker (pre-v0.11.0 or built in the app)
+      // differs from the asset this build points at.
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: gzSha,
+      );
+      await installer.installFromBytes(
+        await File(validDbPath).readAsBytes(),
+        overwrite: true,
+      );
+      expect((await installer.getStatus()).updateAvailable, isTrue);
+
+      expect(
+        await installer.installFromReleaseAsset(client: client, overwrite: true),
+        isTrue,
+      );
+      var status = await installer.getStatus();
+      expect(status.installedAssetSha, gzSha);
+      expect(status.updateAvailable, isFalse);
+
+      // The next app build points at a new data release.
+      status = await GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: 'f' * 64,
+      ).getStatus();
+      expect(status.updateAvailable, isTrue);
+
+      // No configured asset: nothing to offer.
+      status = await GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: '',
+        releaseAssetSha: '',
+      ).getStatus();
+      expect(status.updateAvailable, isFalse);
     });
 
     test('rejects invalid story_line_count before replacing the installed DB',

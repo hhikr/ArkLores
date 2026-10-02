@@ -810,6 +810,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbDevAssetHint => '下载官方发布的知识库（压缩包下载后会解压，请预留约 1 GB 空闲空间）。';
 
   @override
+  String get kbUpdateAvailable => '有新版官方知识库，点“更新”下载（请预留约 1 GB 空闲空间）。';
+
+  @override
   String get kbDownloading => '下载中';
 
   @override

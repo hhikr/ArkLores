@@ -1592,6 +1592,12 @@ abstract class AppLocalizations {
   /// **'Download the published knowledge base (it is unpacked after download; keep about 1 GB of free space).'**
   String get kbDevAssetHint;
 
+  /// No description provided for @kbUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer official knowledge base is available. Tap Update to download it (keep about 1 GB of free space).'**
+  String get kbUpdateAvailable;
+
   /// No description provided for @kbDownloading.
   ///
   /// In en, this message translates to:

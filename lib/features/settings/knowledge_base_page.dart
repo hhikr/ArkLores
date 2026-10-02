@@ -591,6 +591,25 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               ),
             ),
           ],
+          if (status.updateAvailable && !_isDownloadingGameData) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.new_releases_rounded,
+                    size: 16, color: theme.accentPrimary,),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    context.t.kbUpdateAvailable,
+                    style: theme.bodyFont.copyWith(
+                      color: theme.accentPrimary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (_gameDataDownloadError != null) ...[
             const SizedBox(height: 10),
             Text(

@@ -16,11 +16,28 @@ class GameDataInstallStatus {
     required this.dbPath,
     required this.bytes,
     required this.manifest,
+    this.installedAssetSha,
+    this.releaseAssetSha,
   });
   final bool installed;
   final String dbPath;
   final int bytes;
   final Map<String, String> manifest;
+
+  /// SHA-256 of the official asset the installed DB came from (null for
+  /// DBs installed before v0.11.0 or built in the app).
+  final String? installedAssetSha;
+
+  /// SHA-256 of the official asset this app build points at.
+  final String? releaseAssetSha;
+
+  /// The app was built for a different official knowledge base than the one
+  /// installed (e.g. a new data release), so "update" is worth a tap.
+  bool get updateAvailable =>
+      installed &&
+      releaseAssetSha != null &&
+      releaseAssetSha!.isNotEmpty &&
+      releaseAssetSha!.toLowerCase() != installedAssetSha?.toLowerCase();
 
   String? get sourceCommit => manifest['source_arknights_commit'];
   String? get builtAt => manifest['built_at'];
@@ -46,9 +63,20 @@ class GameDataReleaseAsset {
 
 class GameDataInstaller {
 
-  const GameDataInstaller({this.installDirectory});
+  const GameDataInstaller({
+    this.installDirectory,
+    this.releaseAssetUrl = _definedUrl,
+    this.releaseAssetSha = _definedSha,
+  });
   static const _dbFileName = 'arklores_gamedata_zh.db';
+
+  /// Sidecar recording which official asset (gz SHA-256) was installed.
+  static const _assetMarkerSuffix = '.asset_sha256';
   final Directory? installDirectory;
+
+  /// Official asset this build downloads (dart-define; injectable in tests).
+  final String releaseAssetUrl;
+  final String releaseAssetSha;
 
   // Development/test path before a public release exists. Example:
   // flutter run --dart-define=ARKLORES_GAMEDATA_DB_URL=http://192.168.1.2:8000/arklores_gamedata_zh.db.gz
@@ -59,19 +87,26 @@ class GameDataInstaller {
   Future<GameDataInstallStatus> getStatus() async {
     final file = await _dbFile();
     final exists = await file.exists();
+    final marker = File('${file.path}$_assetMarkerSuffix');
     return GameDataInstallStatus(
       installed: exists,
       dbPath: file.path,
       bytes: exists ? await file.length() : 0,
       manifest: exists ? await _readManifest(file.path) : const {},
+      installedAssetSha: exists && await marker.exists()
+          ? (await marker.readAsString()).trim()
+          : null,
+      releaseAssetSha: releaseAssetUrl.trim().isEmpty
+          ? null
+          : releaseAssetSha.trim(),
     );
   }
 
   Future<GameDataReleaseAsset?> getReleaseAsset() async {
-    if (_definedUrl.trim().isEmpty) return null;
+    if (releaseAssetUrl.trim().isEmpty) return null;
     return GameDataReleaseAsset(
-      url: Uri.parse(_definedUrl.trim()),
-      sha256: _definedSha.trim().isEmpty ? null : _definedSha.trim(),
+      url: Uri.parse(releaseAssetUrl.trim()),
+      sha256: releaseAssetSha.trim().isEmpty ? null : releaseAssetSha.trim(),
     );
   }
 
@@ -110,8 +145,8 @@ class GameDataInstaller {
 
       final compressedBytes = compressed.takeBytes();
       final expectedSha = asset.sha256;
+      final actualSha = sha256.convert(compressedBytes).toString();
       if (expectedSha != null && expectedSha.isNotEmpty) {
-        final actualSha = sha256.convert(compressedBytes).toString();
         if (actualSha.toLowerCase() != expectedSha.toLowerCase()) {
           throw StateError(
             'GameData checksum mismatch: expected $expectedSha, got $actualSha',
@@ -128,6 +163,8 @@ class GameDataInstaller {
       }
 
       await installFromBytes(dbBytes, overwrite: overwrite);
+      await File('${dbFile.path}$_assetMarkerSuffix')
+          .writeAsString(actualSha, flush: true);
       return true;
     } finally {
       if (ownsClient) httpClient.close();
@@ -153,6 +190,10 @@ class GameDataInstaller {
     if (await dbFile.exists()) {
       await dbFile.delete();
     }
+    // The marker describes the replaced file; installFromReleaseAsset writes
+    // a new one for official assets.
+    final marker = File('${dbFile.path}$_assetMarkerSuffix');
+    if (await marker.exists()) await marker.delete();
     await tmp.rename(dbFile.path);
   }
 

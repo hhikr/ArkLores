@@ -42,6 +42,14 @@ Future<void> main(List<String> args) async {
       : _manifestFromDb(dbMeta.values);
   final embedding = dbMeta.embedding;
   if (embedding != null) manifest['embedding'] = embedding;
+  final catalogEntries = dbMeta.values['__story_catalog_entries'];
+  if (catalogEntries != null) {
+    manifest['storyCatalog'] = {
+      'entries': int.tryParse(catalogEntries),
+      'sourceCommit': dbMeta.values['story_catalog_source_commit'],
+      'optional': true,
+    };
+  }
   final database = (manifest['database'] as Map?)?.cast<String, dynamic>() ??
       <String, dynamic>{};
   database
@@ -120,6 +128,17 @@ Future<_DbMeta> _readDbManifest(String path) async {
         'optional': true,
       };
     }
+    // R14: optional story catalog (names, order, official synopses).
+    final hasCatalog = (await db.rawQuery(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+      "AND name = 'story_catalog'",
+    ))
+        .isNotEmpty;
+    if (hasCatalog) {
+      final count =
+          (await db.rawQuery('SELECT COUNT(*) AS c FROM story_catalog')).first['c'];
+      values['__story_catalog_entries'] = '$count';
+    }
     return _DbMeta(values, embedding);
   } finally {
     await db.close();
@@ -142,7 +161,8 @@ Map<String, dynamic> _manifestFromDb(Map<String, String> values) {
     },
     'counts': {
       for (final e in values.entries)
-        if (e.key.endsWith('_count')) e.key: int.tryParse(e.value) ?? e.value,
+        if (e.key.endsWith('_count') && !e.key.startsWith('__'))
+          e.key: int.tryParse(e.value) ?? e.value,
     },
   };
 }

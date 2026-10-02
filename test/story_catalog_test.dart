@@ -11,6 +11,7 @@ import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/get_story_outline.dart';
 import 'package:arklores/core/agent/tools/observation_data.dart';
 import 'package:arklores/core/agent/tools/search_story_lines.dart';
+import 'package:arklores/core/agent/tools/tool_registry.dart';
 import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart';
@@ -122,6 +123,21 @@ void main() {
           await store.storyCollection('activities/act_fx/level_act_fx_02_beg.txt');
       expect(focused!.focusStoryId, 'activities/act_fx/level_act_fx_02_beg.txt');
       expect(await store.storyCollection('不存在的故事'), isNull);
+      // Path-style and @-prefixed spellings seen in live planner output.
+      for (final query in ['activities/act_fx', 'activities/act_fx/', '@activity:act_fx']) {
+        expect((await store.storyCollection(query))?.collectionId, 'act_fx',
+            reason: query,);
+      }
+      await store.close();
+    });
+
+    test('in-level files without a catalog row take their activity name',
+        () async {
+      final store = GameDataKnowledgeStore(dbPath: dbPath);
+      const inLevel = 'activities/act_fx/level/fx_09_a1.txt';
+      final entries = await store.storyCatalogEntries([inLevel, 'obt/x/y.txt']);
+      expect(entries[inLevel]!.label, '虚构活动 fx_09_a1 关卡内对话');
+      expect(entries.containsKey('obt/x/y.txt'), isFalse);
       await store.close();
     });
 
@@ -269,6 +285,41 @@ void main() {
     });
   });
 
+  group('duplicate guard', () {
+    Future<String> runWith(List<String> script, {required bool readable}) async {
+      final llm = _ScriptLLM(script);
+      final loop = PlannerLoop(
+        llmClient: llm,
+        toolRegistry: ToolRegistry()..register(_FakeReadTool(readable: readable)),
+        minimumToolCalls: 1,
+      );
+      final events = await loop
+          .run(systemPrompt: 's', chatHistory: const [], userQuery: 'q')
+          .toList();
+      return events
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+    }
+
+    test('re-requesting already-read text finishes as answered', () async {
+      final answer = await runWith(
+        List.filled(6, 'READ a.txt 0 2'),
+        readable: true,
+      );
+      expect(answer, startsWith('[STORY_ANSWER: status=answered'));
+    });
+
+    test('repeating a fruitless lookup without reading stays not answered',
+        () async {
+      final answer = await runWith(
+        List.filled(6, 'READ missing.txt 0 2'),
+        readable: false,
+      );
+      expect(answer, isNot(startsWith('[STORY_ANSWER: status=answered')));
+    });
+  });
+
   group('readable citations', () {
     test('replaces story ids with labels and 1-based lines', () {
       const id = 'activities/act_fx/level_act_fx_02_beg.txt';
@@ -282,6 +333,81 @@ void main() {
       expect(extractCitedStoryIds('$id:1 b/c.txt:2'), {id, 'b/c.txt'});
     });
   });
+}
+
+/// Planner lines from [script] (then ANSWER); every non-planner call is the
+/// writer, which cites line 1 of a.txt.
+class _ScriptLLM extends LLMClient {
+  _ScriptLLM(this.script);
+  final List<String> script;
+  int _step = 0;
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    final planner = messages.first.content.contains('意图命令');
+    final content = !planner
+        ? '答案。a.txt:1'
+        : _step < script.length
+            ? script[_step++]
+            : 'ANSWER';
+    return ChatCompletionResult(content: content, finishReason: 'stop');
+  }
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      (await chatCompletion(messages)).content;
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) =>
+      chat(messages);
+}
+
+/// `read_story_lines` stand-in: three lines of a.txt, or "not found".
+class _FakeReadTool extends AgentTool {
+  _FakeReadTool({required this.readable});
+  final bool readable;
+
+  @override
+  String get name => 'read_story_lines';
+  @override
+  String get description => 'fake';
+  @override
+  Map<String, dynamic> get parameters => const {};
+
+  @override
+  Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    if (!readable) return 'Story not found: ${arguments['story_id']}';
+    return ToolExecutionResult(
+      observation: appendDataBlock(
+        'Story: a.txt\n0 | 甲 | 一\n1 | 乙 | 二\n2 | 丙 | 三',
+        {
+          'type': 'read_story_lines',
+          'story_id': 'a.txt',
+          'first_line': 0,
+          'last_line': 2,
+          'read_lines': 3,
+        },
+      ),
+    );
+  }
 }
 
 StoryCatalogEntry _entry(String id) => StoryCatalogEntry(

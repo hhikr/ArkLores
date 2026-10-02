@@ -3,8 +3,9 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`，OUTLINE）；
 向量、目录、梗概都只作定位线索，不作证据。
-当前版本与最新 release：v0.10.0；GameData schema：4（含确定性覆盖层，可选剧情向量表、
-可选故事目录表）。
+当前版本：v0.11.0（R13 + R14，release 草稿）；最新已发布 release：v0.10.0。
+GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
+知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
 ## 文档索引
 

@@ -846,6 +846,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Download the published knowledge base (it is unpacked after download; keep about 1 GB of free space).';
 
   @override
+  String get kbUpdateAvailable =>
+      'A newer official knowledge base is available. Tap Update to download it (keep about 1 GB of free space).';
+
+  @override
   String get kbDownloading => 'Downloading';
 
   @override

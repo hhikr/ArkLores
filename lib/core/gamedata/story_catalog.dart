@@ -277,6 +277,39 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
       result[entry.storyId] = entry;
     }
   }
+  // Files outside the review table (in-level dialogue under
+  // `activities/<id>/level/…`) still belong to their activity: name them by
+  // that collection plus the file name (no invented chapter names).
+  final missing = {
+    for (final id in ids)
+      if (!result.containsKey(id) && id.startsWith('activities/')) id,
+  };
+  if (missing.isNotEmpty) {
+    final byFolder = <String, List<String>>{};
+    for (final id in missing) {
+      final parts = id.split('/');
+      if (parts.length >= 3) byFolder.putIfAbsent(parts[1], () => []).add(id);
+    }
+    for (final folder in byFolder.entries) {
+      final rows = await db.rawQuery(
+        'SELECT collection_name, collection_type FROM $storyCatalogTable '
+        'WHERE collection_id = ? LIMIT 1',
+        [folder.key],
+      );
+      if (rows.isEmpty) continue;
+      for (final id in folder.value) {
+        result[id] = StoryCatalogEntry(
+          storyId: id,
+          collectionId: folder.key,
+          collectionName: '${rows.first['collection_name']}',
+          collectionType: '${rows.first['collection_type']}',
+          storySort: 1 << 30,
+          storyCode: id.split('/').last.replaceAll(RegExp(r'\.txt$'), ''),
+          avgTag: '关卡内对话',
+        );
+      }
+    }
+  }
   return result;
 }
 
@@ -288,7 +321,8 @@ Future<StoryCollection?> queryStoryCollection(
   DatabaseExecutor db,
   String query,
 ) async {
-  final q = query.trim();
+  var q = query.trim();
+  if (q.startsWith('@')) q = q.substring(1).trim();
   if (q.isEmpty || !await hasStoryCatalog(db)) return null;
   String? collectionId;
   Future<String?> first(String sql, List<Object?> args) async {
@@ -301,11 +335,17 @@ Future<StoryCollection?> queryStoryCollection(
     'SELECT collection_id FROM $storyCatalogTable WHERE story_id = ?',
     [storyId],
   );
-  final bare = q.contains(':') ? q.substring(q.lastIndexOf(':') + 1) : q;
-  collectionId ??= await first(
-    'SELECT collection_id FROM $storyCatalogTable WHERE collection_id = ? LIMIT 1',
-    [bare],
-  );
+  // `activity:act33side`, `@activity:act33side`, `activities/act33side`
+  // and `activities/act33side/` all name the collection `act33side`.
+  var bare = q.contains(':') ? q.substring(q.lastIndexOf(':') + 1) : q;
+  bare = bare.replaceAll(RegExp(r'/+$'), '');
+  final segments = bare.split('/');
+  for (final candidate in {bare, segments.last}) {
+    collectionId ??= await first(
+      'SELECT collection_id FROM $storyCatalogTable WHERE collection_id = ? LIMIT 1',
+      [candidate],
+    );
+  }
   collectionId ??= await first(
     'SELECT collection_id FROM $storyCatalogTable WHERE collection_name = ? '
     'ORDER BY collection_id LIMIT 1',

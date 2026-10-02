@@ -52,6 +52,16 @@ Future<void> main(List<String> args) async {
       stderr.writeln('story_review_table.json not found under $source');
       exit(66);
     }
+    // The catalog may come from a newer source commit than the story text;
+    // record it so the release manifest says which.
+    final head = await Process.run('git', ['-C', source, 'rev-parse', 'HEAD']);
+    if (head.exitCode == 0) {
+      await db.insert(
+        'gamedata_manifest',
+        {'key': 'story_catalog_source_commit', 'value': '${head.stdout}'.trim()},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
     stdout.writeln('Story catalog: ${result.entries} entries, '
         '${result.withSynopsis} with synopsis, '
         '${result.matchedStories} matched story files.');

@@ -4,6 +4,14 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-02
+
+Covers R13 (one QA pipeline, no question-type special cases) and R14 (whole-story grasp).
+Knowledge base: same story text and vectors as v0.10.0 plus the optional `story_catalog`
+table (`arklores_gamedata_zh.db.gz` 184,838,820 B, SHA-256
+`922e1a8159b7e097f2b0978cc895b7012c17009f0c91f15b98d384dd3b2e4bfa`). The APK installs over
+v0.10.0 (same signing key); download the new knowledge base in the app to get story names.
+
 ### Changed
 
 - R13: investigate, summarize and verify run one pipeline (`StoryQaAgent` → PlannerLoop);
@@ -27,7 +35,10 @@ All notable changes to ArkLores will be documented in this file.
   are inherited (already read, citable); the extractor gets the previous question too.
 - Reading: a READ window is read whole (up to ~150 lines per page), `READ id a-b` ranges
   parse, overlapping READs continue at the first unread line, blocked duplicates no longer
-  spend the step budget but three in a row end the run.
+  spend the step budget but three in a row end the run (as answered when they only re-read
+  text already read).
+- OUTLINE accepts path / `@scope` spellings; in-level dialogue files are named after their
+  activity.
 - Answers show sources as "巴别塔 BB-7 行动前《阴影显现》 第 N 行" (chips keep the raw id on
   long-press); stored answers keep raw ids for citation checks.
 - `tools/build_story_catalog.dart` adds the catalog to an existing DB in place.

@@ -201,6 +201,7 @@ DONE
     var lastFingerprint = '';
     final executed = <String, int>{};
     var duplicates = 0;
+    var onlyRereads = true;
 
     Stream<ReActEvent> finish(StoryAnswerStatus status, {String? confidence}) =>
         _finish(
@@ -412,16 +413,28 @@ DONE
           // that only repeats itself has nothing left to look up — finish.
           toolSteps--;
           duplicates++;
+          final isRead =
+              intent.action == 'READ' || intent.action == 'SUMMARIZE';
+          if (!isRead) onlyRereads = false;
           if (duplicates >= _maxConsecutiveDuplicates) {
-            yield* finish(StoryAnswerStatus.partial);
+            // Asking only to re-read text it already has means the planner
+            // has nothing new to read — the same as ANSWER. Repeating a
+            // search means it is still looking but stuck — a stall.
+            yield* finish(
+              onlyRereads && readPages.isNotEmpty
+                  ? StoryAnswerStatus.answered
+                  : StoryAnswerStatus.partial,
+            );
             return;
           }
           final note = rangeRead
-              ? 'READ $storyId $start-$end 的内容已经读过，要点在“证据笔记”中。'
+              ? 'READ $storyId $start-$end 的内容已经读过：已读原文会完整交给写答案'
+                  '的环节，不必重读。'
               : '该命令在第 $previous 步已执行过，结果已记录在状态'
                   '（已检索/已读/证据笔记）中。';
           recent.add(Message.user(
-            'Observation: $note请换关键词、READ 未读的章节，或输出 ANSWER。',
+            'Observation: $note如果还有没读过、与问题相关的章节（看“已看梗概”），'
+            '就 READ 它；如果没有新的方向，现在就输出 ANSWER。',
           ),);
           if (recent.length > 2) recent.removeAt(0);
           yield ReActEvent(
@@ -434,6 +447,7 @@ DONE
         executed[signature] = iteration;
       }
       duplicates = 0;
+      onlyRereads = true;
 
       yield ReActEvent(
         type: ReActEventType.toolCall,
