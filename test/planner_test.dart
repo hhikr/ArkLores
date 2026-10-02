@@ -3,12 +3,18 @@ import 'package:arklores/core/agent/investigation_state.dart';
 import 'package:arklores/core/agent/planner_intent.dart';
 import 'package:arklores/core/agent/planner_loop.dart';
 import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  String answerOf(List<ReActEvent> events) => events
+      .where((e) => e.type == ReActEventType.finalAnswerToken)
+      .map((e) => e.content)
+      .join();
+
   group('parseIntent', () {
     test('parses READ with and without line range', () {
       final withRange = parseIntent('READ activities/x/level_x.txt 100 200');
@@ -22,19 +28,27 @@ void main() {
       expect(bare.args.containsKey('start_line'), isFalse);
     });
 
-    test('parses COLLECT with claim terms', () {
-      final intent =
-          parseIntent('COLLECT speaker:博士 claim_terms=[杀,特蕾西娅,血]');
+    test('parses COLLECT terms (and the pre-R13 claim_terms spelling)', () {
+      final intent = parseIntent('COLLECT speaker:博士 terms=[王冠,誓言]');
       expect(intent!.action, 'COLLECT');
       expect(intent.args['entity_id'], 'speaker:博士');
-      expect(intent.args['claim_terms'], ['杀', '特蕾西娅', '血']);
+      expect(intent.args['terms'], ['王冠', '誓言']);
+
+      final legacy = parseIntent('COLLECT speaker:博士 claim_terms=[王冠]');
+      expect(legacy!.args['terms'], ['王冠']);
+      expect(legacy.args.containsKey('claim_terms'), isFalse);
     });
 
-    test('parses VERDICT / DONE / MAP', () {
-      final verdict = parseIntent('VERDICT char_b 0.8 multi_hypothesis_contrast');
-      expect(verdict!.action, 'VERDICT');
-      expect(verdict.args['culprit'], 'char_b');
-      expect(verdict.args['confidence'], '0.8');
+    test('ANSWER takes an optional confidence; VERDICT is an alias', () {
+      final bare = parseIntent('ANSWER');
+      expect(bare!.action, 'ANSWER');
+      expect(bare.args.containsKey('confidence'), isFalse);
+      expect(parseIntent('ANSWER 0.8')!.args['confidence'], '0.8');
+
+      final legacy = parseIntent('VERDICT char_b 0.8 multi_hypothesis_contrast');
+      expect(legacy!.action, 'ANSWER');
+      expect(legacy.args['confidence'], '0.8');
+      expect(legacy.args.keys, ['confidence']);
 
       expect(parseIntent('DONE')!.action, 'DONE');
       expect(parseIntent('MAP activity:act33side')!.args['scope_id'],
@@ -51,22 +65,26 @@ void main() {
       expect(single!.args['query'], '博士');
     });
 
-    test('SEARCH keeps quoted multi-word phrases intact', () {
-      final phrase = parseIntent('SEARCH "特蕾西娅 死亡" 10');
-      expect(phrase!.action, 'SEARCH');
-      expect(phrase.args['query'], '特蕾西娅 死亡');
-      expect(phrase.args['top_k'], 10);
-    });
-
-    test('SEARCH supports id= entity syntax', () {
+    test('SEARCH supports id= entity syntax and multi-word queries', () {
       final byId = parseIntent('SEARCH id=enemy:enemy_1554_lrtsia 10');
-      expect(byId!.action, 'SEARCH');
-      expect(byId.args['entity_id'], 'enemy:enemy_1554_lrtsia');
+      expect(byId!.args['entity_id'], 'enemy:enemy_1554_lrtsia');
       expect(byId.args['top_k'], 10);
 
-      final named = parseIntent('SEARCH 特蕾西娅 id=enemy:enemy_3006_tersia 5');
-      expect(named!.args['query'], '特蕾西娅');
-      expect(named.args['entity_id'], 'enemy:enemy_3006_tersia');
+      final compound =
+          parseIntent('SEARCH 特蕾西娅 王冠 id=enemy:enemy_1554_lrtsia top_k=20');
+      expect(compound!.args['query'], '特蕾西娅 王冠');
+      expect(compound.args['entity_id'], 'enemy:enemy_1554_lrtsia');
+      expect(compound.args['top_k'], 20);
+
+      final phrase = parseIntent('SEARCH "特蕾西娅 王冠" 10');
+      expect(phrase!.args['query'], '特蕾西娅 王冠');
+    });
+
+    test('FIND keeps large numbers (years) in the query', () {
+      final year = parseIntent('FIND 罗德岛 庆典 2030');
+      expect(year!.args['query'], '罗德岛 庆典 2030');
+      expect(year.args.containsKey('top_k'), isFalse);
+      expect(parseIntent('FIND 罗德岛 庆典 8')!.args['top_k'], 8);
     });
 
     test('RESELECT parses entity_id', () {
@@ -75,32 +93,10 @@ void main() {
       expect(reselect.args['entity_id'], 'enemy:enemy_3006_tersia');
     });
 
-    test('multi-intent lines are rejected, not silently truncated', () {
-      expect(
-        parseIntent('SEARCH 特蕾西娅 10\nSEARCH 特蕾西娅 死亡 10'),
-        isNull,
-      );
+    test('multi-intent and non-intent lines are rejected', () {
+      expect(parseIntent('SEARCH 特蕾西娅 10\nSEARCH 特蕾西娅 王冠 10'), isNull);
       expect(parseIntent('READ a.txt 1 10\nMAP b'), isNull);
-    });
-
-    test('SEARCH merges unquoted multi-word queries (R11.2)', () {
-      final compound =
-          parseIntent('SEARCH 特蕾西娅 死亡 id=enemy:enemy_1554_lrtsia top_k=20');
-      expect(compound!.action, 'SEARCH');
-      expect(compound.args['query'], '特蕾西娅 死亡');
-      expect(compound.args['entity_id'], 'enemy:enemy_1554_lrtsia');
-      expect(compound.args['top_k'], 20);
-
-      final naked = parseIntent('SEARCH 特蕾西娅 5');
-      expect(naked!.args['query'], '特蕾西娅');
-      expect(naked.args['top_k'], 5);
-
-      final phrase = parseIntent('SEARCH "特蕾西娅 死亡" 10');
-      expect(phrase!.args['query'], '特蕾西娅 死亡');
-      expect(phrase.args['top_k'], 10);
-    });
-
-    test('rejects non-intent lines', () {
+      expect(parseIntent('READ a.txt 1 10\nANSWER'), isNull);
       expect(parseIntent('随便说点什么'), isNull);
       expect(parseIntent(''), isNull);
       expect(parseIntent('Thought: 思考'), isNull);
@@ -108,26 +104,23 @@ void main() {
   });
 
   group('InvestigationState', () {
-    test('serializes stages, reads, evidence, mapped', () {
+    test('serializes reads, notes, evidence, mapped', () {
       final state = InvestigationState();
-      state.noteStage('S1');
-      state.noteStage('S3');
       state.noteRead('activities/x/level_x_09_beg.txt', 0, 103);
       state.addNotes(const [
         EvidenceNote(
           storyId: 'activities/x/level_x_09_beg.txt',
           line: 42,
-          fact: '刺客受摄政王派遣',
-          quote: '刺客：是摄政王派我来的。',
+          fact: '信使送来了王冠',
+          quote: '信使：这是给您的王冠。',
         ),
       ]);
       state.noteEvidence('speaker:博士', evidenceRows: 14, scopes: ['obt:main']);
       state.noteMapped('activity:act33side');
 
       final text = state.serialize();
-      expect(text, contains('阶段: S1,S3'));
       expect(text, contains('09_beg.txt:0-103'));
-      expect(text, contains('09_beg.txt:42 刺客受摄政王派遣 「刺客：是摄政王派我来的。」'));
+      expect(text, contains('09_beg.txt:42 信使送来了王冠 「信使：这是给您的王冠。」'));
       expect(text, contains('speaker:博士: 14行'));
       expect(text, contains('act33side'));
     });
@@ -142,19 +135,10 @@ void main() {
       expect(state.wasLineRead('s1', 250), isFalse);
       expect(state.wasLineRead('s2', 0), isFalse);
     });
-
-    test('no-result counts are per key, not global (R12)', () {
-      final state = InvestigationState();
-      state.noteSearchProgress(key: 'a', hadResult: false, contentChanged: true);
-      state.noteSearchProgress(key: 'a', hadResult: false, contentChanged: true);
-      state.noteSearchProgress(key: 'b', hadResult: false, contentChanged: true);
-      expect(state.consecutiveNoResult('a'), 2);
-      expect(state.consecutiveNoResult('b'), 1);
-    });
   });
 
   group('PlannerLoop execution', () {
-    test('runs READ -> VERDICT -> DONE with bounded requests', () async {
+    test('READ -> ANSWER finishes answered with bounded requests', () async {
       final mock = _PlannerScriptLLM();
       final loop = PlannerLoop(
         llmClient: mock,
@@ -165,16 +149,17 @@ void main() {
           .run(
             systemPrompt: 'You are a helper.',
             chatHistory: [],
-            userQuery: '调查某角色之死',
+            userQuery: '某角色最后怎么样了',
           )
           .toList();
 
-      // Finished with a verdict envelope.
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
-      expect(answer, contains('[INVESTIGATION_VERDICT: culprit=char_b'));
+      // The scripted VERDICT line is read as the ANSWER alias; status is
+      // decided by code, never by the model.
+      expect(
+        answerOf(events),
+        startsWith('[STORY_ANSWER: status=answered | confidence=0.8]'),
+      );
+      expect(answerOf(events), isNot(contains('char_b |')));
       // Request context stays tiny: state + recent observation only.
       expect(mock.receivedRequests.length, greaterThan(1));
       for (final request in mock.receivedRequests) {
@@ -182,78 +167,52 @@ void main() {
       }
     });
 
-    test('invalid intents are retried, then terminate', () async {
-      final mock = _AlwaysInvalidIntentLLM();
+    test('DONE without ANSWER still produces an answer', () async {
       final loop = PlannerLoop(
-        llmClient: mock,
+        llmClient: _ReadThenDoneLLM(),
+        toolRegistry: ToolRegistry()..register(_ReadTool()),
+        minimumToolCalls: 1,
+      );
+      final events = await loop
+          .run(systemPrompt: 's', chatHistory: [], userQuery: 'q')
+          .toList();
+      expect(answerOf(events), contains('status=answered'));
+    });
+
+    test('invalid intents are retried, then terminate', () async {
+      final loop = PlannerLoop(
+        llmClient: _AlwaysInvalidIntentLLM(),
         toolRegistry: ToolRegistry()..register(_ReadTool()),
       );
       final events = await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: 'q',
-          )
+          .run(systemPrompt: 's', chatHistory: [], userQuery: 'q')
           .toList();
       expect(
         events.any((e) =>
-            e.type == ReActEventType.error &&
-            e.content.contains('无效意图'),),
+            e.type == ReActEventType.error && e.content.contains('无效意图'),),
         isTrue,
       );
     });
 
-    test('network error retries then completes', () async {
-      final mock = _NetworkOnceLLM();
-      final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()..register(_ReadTool()),
-        minimumToolCalls: 1,
-      );
-      final events = await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: 'q',
-          )
-          .toList();
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
-      expect(answer, contains('INVESTIGATION_VERDICT'));
-      // The network error was retried (a second request happened).
-      expect(mock.receivedRequests.length, greaterThan(1));
-    });
-
-    test('HandshakeException is treated as a retryable network error',
-        () async {
-      final mock = _HandshakeOnceLLM();
-      final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()..register(_ReadTool()),
-        minimumToolCalls: 1,
-      );
-      final events = await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: 'q',
-          )
-          .toList();
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
-      expect(answer, contains('INVESTIGATION_VERDICT'));
-      expect(mock.receivedRequests.length, greaterThan(1));
+    test('network errors (incl. HandshakeException) are retried', () async {
+      for (final mock in <_CountingLLM>[_NetworkOnceLLM(), _HandshakeOnceLLM()]) {
+        final loop = PlannerLoop(
+          llmClient: mock,
+          toolRegistry: ToolRegistry()..register(_ReadTool()),
+          minimumToolCalls: 1,
+        );
+        final events = await loop
+            .run(systemPrompt: 's', chatHistory: [], userQuery: 'q')
+            .toList();
+        expect(answerOf(events), contains('STORY_ANSWER'));
+        expect(mock.receivedRequests.length, greaterThan(1));
+      }
     });
 
     test('ambiguous SEARCH auto-resolves the top candidate into state',
         () async {
-      final mock = _AmbiguousThenResolveLLM();
       final loop = PlannerLoop(
-        llmClient: mock,
+        llmClient: _AmbiguousThenResolveLLM(),
         toolRegistry: ToolRegistry()
           ..register(_AmbiguousSearchTool())
           ..register(_CollectTool()),
@@ -262,14 +221,12 @@ void main() {
       final states = <String>[];
       await loop
           .run(
-            systemPrompt: 'You are a helper.',
+            systemPrompt: 's',
             chatHistory: [],
-            userQuery: '特蕾西娅之死',
+            userQuery: '特蕾西娅做过什么',
             onStateChanged: states.add,
           )
           .toList();
-
-      // State now carries the auto-resolved target entity.
       expect(
         states.any((s) => s.contains('目标实体: enemy:enemy_1554_lrtsia')),
         isTrue,
@@ -278,9 +235,8 @@ void main() {
 
     test('disambiguation helper picks candidate #2 (not blindly #1)',
         () async {
-      final mock = _AmbiguousThenResolveLLM();
       final loop = PlannerLoop(
-        llmClient: mock,
+        llmClient: _AmbiguousThenResolveLLM(),
         toolRegistry: ToolRegistry()
           ..register(_AmbiguousSearchTool())
           ..register(_CollectTool()),
@@ -290,13 +246,12 @@ void main() {
       final states = <String>[];
       await loop
           .run(
-            systemPrompt: 'You are a helper.',
+            systemPrompt: 's',
             chatHistory: [],
-            userQuery: '导致特蕾西娅死亡的罪魁祸首是谁',
+            userQuery: '特蕾西娅做过什么',
             onStateChanged: states.add,
           )
           .toList();
-
       expect(
         states.any((s) => s.contains('目标实体: enemy:enemy_3006_tersia')),
         isTrue,
@@ -305,9 +260,8 @@ void main() {
 
     test('disambiguation helper failure falls back to top candidate',
         () async {
-      final mock = _AmbiguousThenResolveLLM();
       final loop = PlannerLoop(
-        llmClient: mock,
+        llmClient: _AmbiguousThenResolveLLM(),
         toolRegistry: ToolRegistry()
           ..register(_AmbiguousSearchTool())
           ..register(_CollectTool()),
@@ -317,147 +271,62 @@ void main() {
       final states = <String>[];
       await loop
           .run(
-            systemPrompt: 'You are a helper.',
+            systemPrompt: 's',
             chatHistory: [],
-            userQuery: '特蕾西娅之死',
+            userQuery: '特蕾西娅做过什么',
             onStateChanged: states.add,
           )
           .toList();
-
       expect(
         states.any((s) => s.contains('目标实体: enemy:enemy_1554_lrtsia')),
         isTrue,
       );
     });
 
-    test('SEARCH of an already-disambiguated name injects entity_id',
-        () async {
-      // Script: SEARCH 特蕾西娅 (ambiguous -> resolved to #2), then SEARCH
-      // 特蕾西娅 again — the executor must inject entity_id into the second
-      // call so the tool returns a direct hit instead of the ambiguity branch.
+    test('SEARCH of an already-disambiguated name injects entity_id, and a '
+        'repeat of that exact search is not re-run', () async {
       final search = _AmbiguousSearchTool();
-      final mock = _RepeatNameLLM();
       final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()
-          ..register(search)
-          ..register(_CollectTool()),
+        llmClient: _RepeatNameLLM(),
+        toolRegistry: ToolRegistry()..register(search),
         disambiguator: EntityDisambiguator(llmClient: _PickSecondDisambiguator()),
         minimumToolCalls: 1,
       );
       final observations = <String>[];
-      await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '特蕾西娅之死',
-          )
-          .forEach((e) {
-        if (e.type == ReActEventType.toolObservation) {
-          observations.add(e.content);
-        }
-      });
-
-      // Second SEARCH went straight to an entity-id hit (not "Ambiguous").
-      final second = observations.length >= 2 ? observations[1] : '';
-      expect(second, contains('特蕾西娅档案内容'));
-      expect(second, isNot(contains('Ambiguous')));
+      final events = await loop
+          .run(systemPrompt: 's', chatHistory: [], userQuery: '特蕾西娅做过什么')
+          .toList();
+      for (final e in events) {
+        if (e.type == ReActEventType.toolObservation) observations.add(e.content);
+      }
+      expect(observations[1], contains('特蕾西娅档案内容'));
+      expect(observations[1], isNot(contains('Ambiguous')));
+      expect(observations[2], contains('已执行过'));
+      expect(search.calls, 2);
     });
 
     test('RESELECT switches to an untried candidate and refuses retried ones',
         () async {
-      final search = _AmbiguousSearchTool();
-      final mock = _ReselectLLM();
       final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()..register(search),
+        llmClient: _ReselectLLM(),
+        toolRegistry: ToolRegistry()..register(_AmbiguousSearchTool()),
         disambiguator: EntityDisambiguator(llmClient: _PickSecondDisambiguator()),
         minimumToolCalls: 1,
       );
       final states = <String>[];
       await loop
           .run(
-            systemPrompt: 'You are a helper.',
+            systemPrompt: 's',
             chatHistory: [],
-            userQuery: '特蕾西娅之死',
+            userQuery: '特蕾西娅做过什么',
             onStateChanged: states.add,
           )
           .toList();
-
-      // After disambiguation picked #2, RESELECT re-picks #1 -> should be
-      // refused (attempted), then RESELECT #3 -> accepted.
-      final last = states.last;
-      expect(last, contains('目标实体: trap_762_skztxy'));
+      expect(states.last, contains('目标实体: trap_762_skztxy'));
     });
 
-    test('repeated SEARCH with identical results is counted as no-progress '
-        '(R11.2)', () async {
-      // Script: SEARCH id=... five times; tool returns the SAME hit every
-      // time. R11.2 treats "has result but identical content" as a repeat:
-      // the executor must eventually fall back to coverage instead of
-      // looping forever on the same data.
-      final search = _HitSearchTool();
-      final coverage = _CoverageTool();
-      final mock = _ResultRepeatedLLM();
-      final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()
-          ..register(search)
-          ..register(coverage),
-        minimumToolCalls: 1,
-        safetyMaxIterations: 20,
-      );
-      await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '调查某角色',
-          )
-          .toList();
-
-      // Identical-content repeats accumulate -> coverage fallback fires.
-      expect(coverage.calls, greaterThanOrEqualTo(1));
-    });
-
-    test('no-progress SEARCH with read progress guides instead of terminating '
-        '(R11.1)', () async {
-      // READ (progress) then repeated no-result SEARCH. The executor must
-      // inject a guidance observation (COLLECT/VERDICT) instead of an
-      // unresolved verdict.
-      final search = _HitSearchTool();
-      final read = _ReadTool();
-      final mock = _ReadThenSearchLLM();
-      final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()
-          ..register(search)
-          ..register(read),
-        minimumToolCalls: 1,
-        safetyMaxIterations: 30,
-      );
-      final observations = <String>[];
-      await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '调查某角色',
-          )
-          .forEach((e) {
-        if (e.type == ReActEventType.toolObservation) {
-          observations.add(e.content);
-        }
-      });
-
-      final guided = observations.any((o) => o.contains('请停止重复搜索'));
-      final unresolved = observations.any((o) =>
-          o.contains('INVESTIGATION_VERDICT') && o.contains('unresolved'),);
-      expect(guided, isTrue);
-      expect(unresolved, isFalse);
-    });
-
-    test('no-progress SEARCH with NO progress terminates with unresolved '
-        '(R11.1)', () async {
-      // No READ / evidence; repeated no-result SEARCH -> unresolved.
+    test('identical searches run once; a run that learns nothing ends '
+        'not_covered through the generic stall budget', () async {
       final search = _HitSearchTool();
       final mock = _AlwaysSearchNoResultLLM();
       final loop = PlannerLoop(
@@ -467,171 +336,237 @@ void main() {
         safetyMaxIterations: 30,
       );
       final events = await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '调查某角色',
-          )
+          .run(systemPrompt: 's', chatHistory: [], userQuery: '虚构的人做了什么')
           .toList();
-
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
-      expect(answer, contains('culprit=unresolved'));
+      expect(search.calls, 1);
+      expect(answerOf(events), startsWith('[STORY_ANSWER: status=not_covered'));
       expect(events.any((e) => e.type == ReActEventType.complete), isTrue);
-    });
-
-    test('no-progress SEARCH without target guides (not terminates) (R11.1)',
-        () async {
-      // No READ/evidence; repeated no-result SEARCH; no entity resolved yet.
-      // The executor must NOT emit unresolved — it guides (coverage fallback
-      // or "target not disambiguated") and the loop continues.
-      final search = _HitSearchTool();
-      final coverage = _CoverageTool();
-      final mock = _AlwaysSearchNoResultLLM();
-      final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()
-          ..register(search)
-          ..register(coverage),
-        minimumToolCalls: 1,
-        safetyMaxIterations: 30,
-      );
-      final observations = <String>[];
-      final events = await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '调查某角色',
-          )
-          .toList();
-      for (final e in events) {
-        if (e.type == ReActEventType.toolObservation) {
-          observations.add(e.content);
-        }
-      }
-
-      // A guidance/coverage observation was injected instead of a terminal
-      // unresolved verdict.
-      expect(
-        observations.any((o) =>
-            o.contains('已自动转 search_story_coverage') ||
-            o.contains('无法自动转枚举出场'),),
-        isTrue,
-      );
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
-      // R12: the repeated SEARCH branch itself never terminates; a model that
-      // keeps producing nothing new is ended by the generic stall budget
-      // (8 steps without state growth) — only AFTER guidance was given.
-      expect(answer, isNot(contains('连续多次 SEARCH')));
-      expect(answer, contains('没有获得新信息'));
       expect(mock.callCount, greaterThanOrEqualTo(8));
-      expect(mock.callCount, lessThan(30)); // bounded well before the cap
+      expect(mock.callCount, lessThan(30));
     });
 
-    test('RESELECT resets search counts for the new candidate (R11.1)',
-        () async {
-      // Script: SEARCH id=A no-result several times (accumulates), then
-      // RESELECT B. The new candidate must NOT inherit A's counts — a fresh
-      // SEARCH of B (no-result first) must not immediately terminate.
-      final search = _HitSearchTool();
-      final mock = _ReselectResetLLM();
+    test('semantic-only FIND hits are not progress, so re-phrased searches '
+        'stall out', () async {
+      final mock = _RephrasedFindLLM();
       final loop = PlannerLoop(
         llmClient: mock,
-        toolRegistry: ToolRegistry()
-          ..register(search)
-          ..register(_CollectTool()),
+        toolRegistry: ToolRegistry()..register(_SemanticOnlyFindTool()),
         minimumToolCalls: 1,
-        safetyMaxIterations: 30,
+        safetyMaxIterations: 40,
       );
-      final states = <String>[];
-      await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '调查某角色',
-            onStateChanged: states.add,
-          )
+      final events = await loop
+          .run(systemPrompt: 's', chatHistory: [], userQuery: 'q')
           .toList();
-
-      // After RESELECT B, the observation for the first B search must be the
-      // no-result hint, NOT an immediate "已切换候选" + unresolved or coverage
-      // termination — i.e. B starts its own baseline.
-      final last = states.last;
-      expect(last, contains('目标实体: enemy:enemy_3006_tersia'));
+      expect(answerOf(events), startsWith('[STORY_ANSWER: status=not_covered'));
+      // 1 step + 8 stalled steps (+ the writer call), well under the
+      // 24-step budget that the live negative case used to exhaust.
+      expect(mock.callCount, lessThanOrEqualTo(11));
     });
 
-    test('empty responses wind down to unresolved, not invalid-intent error '
-        '(R11.2)', () async {
-      // Script: model always returns empty content. The loop must terminate
-      // with a gentle unresolved verdict (not "模型连续输出无效意图" error) after
-      // the empty-response cap.
-      final search = _HitSearchTool();
-      final mock = _EmptyResponseLLM();
+    test('a stalled run that read something ends partial via the writer',
+        () async {
       final loop = PlannerLoop(
-        llmClient: mock,
-        toolRegistry: ToolRegistry()..register(search),
+        llmClient: _ReadThenSearchLLM(),
+        toolRegistry: ToolRegistry()
+          ..register(_HitSearchTool())
+          ..register(_ReadTool()),
         minimumToolCalls: 1,
         safetyMaxIterations: 30,
       );
       final events = await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '调查某角色',
-          )
+          .run(systemPrompt: 's', chatHistory: [], userQuery: 'q')
           .toList();
+      expect(answerOf(events), startsWith('[STORY_ANSWER: status=partial'));
+    });
 
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
-      expect(answer, contains('culprit=unresolved'));
+    test('empty responses finish from state, not an invalid-intent error',
+        () async {
+      final loop = PlannerLoop(
+        llmClient: _EmptyResponseLLM(),
+        toolRegistry: ToolRegistry()..register(_HitSearchTool()),
+        minimumToolCalls: 1,
+        safetyMaxIterations: 30,
+      );
+      final events = await loop
+          .run(systemPrompt: 's', chatHistory: [], userQuery: 'q')
+          .toList();
+      expect(answerOf(events), contains('status=not_covered'));
       expect(
         events.any((e) =>
-            e.type == ReActEventType.error &&
-            e.content.contains('无效意图'),),
+            e.type == ReActEventType.error && e.content.contains('无效意图'),),
         isFalse,
       );
     });
+  });
 
-    test('changing search content resets counters, never terminates (R11.2)',
-        () async {
-      // READ (progress) then SEARCH returning CHANGING hits each time —
-      // productive repeats must not trigger coverage/unresolved.
-      final search = _FreshHitSearchTool();
-      final read = _ReadTool();
-      final coverage = _CoverageTool();
-      final mock = _FreshContentSearchLLM();
+  group('answer styles (R13)', () {
+    Future<(String, _RecordingWriter)> runStyle(
+      AnswerStyle style,
+      String writerReply, {
+      bool read = true,
+    }) async {
+      final writer = _RecordingWriter(writerReply);
       final loop = PlannerLoop(
-        llmClient: mock,
+        llmClient: read ? _ReadThenDoneLLM() : _SearchThenAnswerLLM(),
+        writerClient: writer,
         toolRegistry: ToolRegistry()
-          ..register(search)
-          ..register(read)
-          ..register(coverage),
+          ..register(_ReadTool())
+          ..register(_HitSearchTool()),
         minimumToolCalls: 1,
-        safetyMaxIterations: 30,
       );
-      await loop
-          .run(
-            systemPrompt: 'You are a helper.',
-            chatHistory: [],
-            userQuery: '调查某角色',
-          )
+      final events = await loop
+          .run(systemPrompt: 's', chatHistory: [], userQuery: 'q', style: style)
           .toList();
+      return (answerOf(events), writer);
+    }
 
-      expect(coverage.calls, 0);
+    test('style only changes the writer format, not the envelope', () async {
+      final (answer, writer) = await runStyle(AnswerStyle.answer, '回答 s.txt:0');
+      expect(writer.system, contains('开头一行直接回答问题'));
+      expect(answer, startsWith('[STORY_ANSWER: status=answered'));
+
+      final (summary, summaryWriter) =
+          await runStyle(AnswerStyle.summary, '梗概 s.txt:0');
+      expect(summaryWriter.system, contains('梗概'));
+      expect(summary, startsWith('[STORY_ANSWER: status=answered'));
+    });
+
+    test('fact check keeps a cited definite verdict', () async {
+      final (answer, writer) = await runStyle(
+        AnswerStyle.factCheck,
+        '[FACT_CHECK_VERDICT:supported]\n原文 s.txt:0 支持。',
+      );
+      expect(writer.system, contains('FACT_CHECK_VERDICT'));
+      expect(answer, contains('[FACT_CHECK_VERDICT:supported]'));
+    });
+
+    test('fact check downgrades an uncited or unread-backed verdict',
+        () async {
+      final (uncited, _) = await runStyle(
+        AnswerStyle.factCheck,
+        '[FACT_CHECK_VERDICT:refuted]\n没有引用。',
+      );
+      expect(uncited, contains('[FACT_CHECK_VERDICT:uncertain]'));
+
+      final (nothingRead, _) = await runStyle(
+        AnswerStyle.factCheck,
+        '[FACT_CHECK_VERDICT:supported]\n凭记忆。',
+        read: false,
+      );
+      expect(nothingRead, contains('status=not_covered'));
+      expect(nothingRead, contains('[FACT_CHECK_VERDICT:unavailable]'));
+    });
+
+    test('normalizeFactCheckBody rules', () {
+      expect(
+        normalizeFactCheckBody('无标记', nothingRead: false, hasValidCitation: true),
+        startsWith('[FACT_CHECK_VERDICT:uncertain]'),
+      );
+      expect(
+        normalizeFactCheckBody(
+          '[FACT_CHECK_VERDICT:uncertain]\nx',
+          nothingRead: true,
+          hasValidCitation: false,
+        ),
+        startsWith('[FACT_CHECK_VERDICT:unavailable]'),
+      );
     });
   });
 }
 
-/// Scripted planner LLM: READ once, then VERDICT, then DONE.
-class _PlannerScriptLLM extends LLMClient {
+/// Common shape of the scripted LLMs that record their requests.
+abstract class _CountingLLM extends LLMClient {
+  List<List<Message>> get receivedRequests;
+}
+
+/// Scripted planner: READ once, then DONE (no ANSWER line).
+class _ReadThenDoneLLM extends LLMClient {
   int callCount = 0;
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    return callCount == 1 ? 'READ s 0 100' : 'DONE';
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
+}
+
+/// Scripted planner: one SEARCH (nothing read), then ANSWER.
+class _SearchThenAnswerLLM extends LLMClient {
+  int callCount = 0;
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    callCount++;
+    return callCount == 1 ? 'SEARCH 无此人 5' : 'ANSWER 0.9';
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
+}
+
+/// Writer that records its system prompt and returns a fixed reply.
+class _RecordingWriter extends LLMClient {
+  _RecordingWriter(this.reply);
+  final String reply;
+  String system = '';
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    system = messages.first.content;
+    return reply;
+  }
+
+  @override
+  Future<String> chatStream(
+    List<Message> messages, {
+    void Function(String token)? onToken,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
+}
+
+
+/// Scripted planner LLM: READ once, then VERDICT, then DONE.
+class _PlannerScriptLLM extends _CountingLLM {
+  int callCount = 0;
+  @override
   final List<List<Message>> receivedRequests = [];
 
   @override
@@ -701,8 +636,9 @@ class _AlwaysInvalidIntentLLM extends LLMClient {
 }
 
 /// First call throws a network error, later ones succeed.
-class _NetworkOnceLLM extends LLMClient {
+class _NetworkOnceLLM extends _CountingLLM {
   int callCount = 0;
+  @override
   final List<List<Message>> receivedRequests = [];
 
   @override
@@ -869,10 +805,10 @@ class _ReselectLLM extends LLMClient {
   }
 }
 
-/// collect_suspect_evidence-shaped tool returning an evidence DATA block.
+/// collect_entity_evidence-shaped tool returning an evidence DATA block.
 class _CollectTool extends AgentTool {
   @override
-  String get name => 'collect_suspect_evidence';
+  String get name => 'collect_entity_evidence';
 
   @override
   String get description => 'Collects evidence.';
@@ -882,7 +818,7 @@ class _CollectTool extends AgentTool {
         'type': 'object',
         'properties': {
           'entity_id': {'type': 'string'},
-          'claim_terms': {'type': 'array', 'items': {'type': 'string'}},
+          'terms': {'type': 'array', 'items': {'type': 'string'}},
         },
         'required': ['entity_id'],
       };
@@ -891,8 +827,8 @@ class _CollectTool extends AgentTool {
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
     return const ToolExecutionResult(
       observation:
-          'Suspect: x | Total appearance runs: 5\nEnd of Evidence: yes\n'
-          'DATA: {"type":"collect_suspect_evidence","entity_id":"x",'
+          'Entity: x | Total appearance runs: 5\nEnd of Evidence: yes\n'
+          'DATA: {"type":"collect_entity_evidence","entity_id":"x",'
           '"evidence_rows":4,"scopes":["obt:main"],"total_runs":5,'
           '"next_page_token":null}',
     );
@@ -901,6 +837,8 @@ class _CollectTool extends AgentTool {
 
 /// search_local_lore-shaped tool that returns an ambiguous observation.
 class _AmbiguousSearchTool extends AgentTool {
+  int calls = 0;
+
   @override
   String get name => 'search_local_lore';
 
@@ -920,6 +858,7 @@ class _AmbiguousSearchTool extends AgentTool {
 
   @override
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    calls++;
     final entityId = arguments['entity_id'] as String?;
     if (entityId != null && entityId.trim().isNotEmpty) {
       return ToolExecutionResult(
@@ -940,37 +879,6 @@ class _AmbiguousSearchTool extends AgentTool {
   }
 }
 
-/// search_story_coverage-shaped tool: counts calls so tests can assert the
-/// executor's automatic coverage fallback ran.
-class _CoverageTool extends AgentTool {
-  int calls = 0;
-
-  @override
-  String get name => 'search_story_coverage';
-
-  @override
-  String get description => 'Enumerates story appearances.';
-
-  @override
-  Map<String, dynamic> get parameters => {
-        'type': 'object',
-        'properties': {
-          'entity_id': {'type': 'string'},
-        },
-        'required': ['entity_id'],
-      };
-
-  @override
-  Future<dynamic> execute(Map<String, dynamic> arguments) async {
-    calls++;
-    return const ToolExecutionResult(
-      observation:
-          'Entity: x (x)\nScope: obt:main\n'
-          'Story: activities/x/level_x.txt | Lines: 0-100 | Mentions: 5\n'
-          'Coverage Scopes: 1\nCoverage Stories: 1',
-    );
-  }
-}
 
 /// Scripted disambiguator helper that always picks candidate #2.
 class _PickSecondDisambiguator extends LLMClient {
@@ -1036,8 +944,9 @@ class _FailDisambiguator extends LLMClient {
   }
 }
 
-class _HandshakeOnceLLM extends LLMClient {
+class _HandshakeOnceLLM extends _CountingLLM {
   int callCount = 0;
+  @override
   final List<List<Message>> receivedRequests = [];
 
   @override
@@ -1103,46 +1012,11 @@ class _ReadTool extends AgentTool {
   @override
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
     return const ToolExecutionResult(
-      observation: 'Story: s\n0 | 角色A | 台词\nRead Lines: 100',
+      observation: 'Story: s.txt\n0 | 角色A | 台词\nRead Lines: 100',
     );
   }
 }
 
-/// Scripts: repeated SEARCH with a RESULT (but identical content each time)
-/// — must NOT be treated as a productive loop that resets, let alone
-/// terminated, until no-progress repeats accumulate.
-class _ResultRepeatedLLM extends LLMClient {
-  int callCount = 0;
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    callCount++;
-    // Always SEARCH with explicit resolver id -> tool returns a hit.
-    return 'SEARCH id=enemy:enemy_1554_lrtsia 5';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
-}
 
 /// Scripts: READ once (giving non-search progress), then repeatedly SEARCH a
 /// name that returns no result — the executor must GUIDE (not terminate).
@@ -1181,6 +1055,8 @@ class _ReadThenSearchLLM extends LLMClient {
 
 /// search_local_lore-shaped tool that returns a direct entity hit.
 class _HitSearchTool extends AgentTool {
+  int calls = 0;
+
   @override
   String get name => 'search_local_lore';
 
@@ -1200,6 +1076,7 @@ class _HitSearchTool extends AgentTool {
 
   @override
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
+    calls++;
     final entityId = arguments['entity_id'] as String?;
     if (entityId != null && entityId.trim().isNotEmpty) {
       return const ToolExecutionResult(
@@ -1250,52 +1127,6 @@ class _AlwaysSearchNoResultLLM extends LLMClient {
   }
 }
 
-/// Scripts: SEARCH A (no result) x2 -> RESELECT B -> SEARCH B (no result).
-/// Asserts the executor keeps B on its own baseline instead of terminating
-/// with A's accumulated counts.
-class _ReselectResetLLM extends LLMClient {
-  int callCount = 0;
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    callCount++;
-    switch (callCount) {
-      case 1:
-      case 2:
-        return 'SEARCH id=enemy:enemy_1554_lrtsia 5';
-      case 3:
-        return 'RESELECT enemy:enemy_3006_tersia';
-      case 4:
-        return 'SEARCH id=enemy:enemy_3006_tersia 5';
-      case 5:
-        return 'VERDICT enemy:enemy_3006_tersia 0.5 multi_hypothesis_contrast';
-      default:
-        return 'DONE';
-    }
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
-}
 
 /// Scripts: emits empty responses repeatedly (like a model that has nothing
 /// to say after identical observations). The loop must wind down gently to
@@ -1329,10 +1160,8 @@ class _EmptyResponseLLM extends LLMClient {
   }
 }
 
-/// Scripts: READ once, then SEARCH where the tool returns CHANGING content
-/// each call (fresh hit) — productive repeats must reset counters and never
-/// trigger coverage/unresolved.
-class _FreshContentSearchLLM extends LLMClient {
+/// Re-phrases a fruitless FIND every step (fresh signature each time).
+class _RephrasedFindLLM extends LLMClient {
   int callCount = 0;
 
   @override
@@ -1344,8 +1173,7 @@ class _FreshContentSearchLLM extends LLMClient {
     List<String>? stop,
   }) async {
     callCount++;
-    if (callCount <= 2) return 'READ activities/x/level_x.txt 0 100';
-    return 'SEARCH id=enemy:enemy_1554_lrtsia 5';
+    return 'FIND 无此事 变体$callCount';
   }
 
   @override
@@ -1355,33 +1183,26 @@ class _FreshContentSearchLLM extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
+  }) async =>
+      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
 }
 
-/// search_local_lore-shaped tool that returns a hit whose content CHANGES on
-/// every call (simulates genuinely new information per search).
-class _FreshHitSearchTool extends AgentTool {
+/// search_story_lines-shaped tool: every call returns DIFFERENT stories,
+/// all marked as semantic-only neighbours (no literal hit).
+class _SemanticOnlyFindTool extends AgentTool {
   int calls = 0;
 
   @override
-  String get name => 'search_local_lore';
+  String get name => 'search_story_lines';
 
   @override
-  String get description => 'Searches lore.';
+  String get description => 'Finds story lines.';
 
   @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
         'properties': {
           'query': {'type': 'string'},
-          'entity_id': {'type': 'string'},
         },
         'required': ['query'],
       };
@@ -1390,8 +1211,9 @@ class _FreshHitSearchTool extends AgentTool {
   Future<dynamic> execute(Map<String, dynamic> arguments) async {
     calls++;
     return ToolExecutionResult(
-      observation: '=== Result #1 ===\nEntity ID: hit\nTitle: x\n'
-          'Content Excerpt:\n新信息 #$calls\n',
+      observation: 'Story line hits:\n'
+          'Story: s$calls.txt | Scope: x | 无字面命中（仅语义相近）\n'
+          '  Lines 0-11 (semantic 0.5)',
     );
   }
 }

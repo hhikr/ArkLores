@@ -291,7 +291,7 @@ R12：消歧器拿到候选的真实 type/source（此前是硬编码）；同�
 直接合并、不再要求消歧（实测 97% 的同名实体属于这种情况）。R11 为 SEARCH 单独写的
 重复计数与 coverage 兜底已被 R12 的通用进展控制取代，R13 删除。
 
-### 5.4 概括/事实核查仍走旧 ReActLoop（Open，R13 关闭）
+### 5.4 概括/事实核查仍走旧 ReActLoop（Closed，R13）
 
 **现象与影响**：只有调查模式用 PlannerLoop（证据笔记、引用校验、进展控制、机械角色
 关推理）。概括与事实核查仍是 ReAct：观察全文进上下文、截断容忍度低、没有行级引用
@@ -300,10 +300,11 @@ auto 路由把多数叙事问题分到概括，所以 R12 的改进对 auto 用�
 
 **根因**：R8 迁移时为控制回归风险只迁了调查；三种模式的差异其实只在输出格式。
 
-**修复方向**：R13 把三者统一到 PlannerLoop，`AnswerStyle {answer, summary, factCheck}`
-只决定 writer 的输出格式；`SummaryAgent` / `FactCheckAgent` 对外 API 不变。
+**修复（R13）**：三者统一到 `StoryQaAgent` → PlannerLoop，`AnswerStyle {answer, summary,
+factCheck}` 只决定 writer 的输出格式；`SummaryAgent` / `FactCheckAgent` 对外 API 不变。
+真机验收结果见 `AI_ARCHITECTURE.md` §4。
 
-### 5.5 调查结论信封与门槛是"凶手类"特判（Open，R13 关闭）
+### 5.5 调查结论信封与门槛是"凶手类"特判（Closed，R13）
 
 **现象与影响**：`[INVESTIGATION_VERDICT: culprit=…]` 信封、“≥2 个嫌疑人有证据才允许
 给出 culprit”的门槛、prompt 的 S5–S7 嫌疑人步骤、`collect_suspect_evidence` 命名，
@@ -312,10 +313,30 @@ auto 路由把多数叙事问题分到概括，所以 R12 的改进对 auto 用�
 **根因**：R3 以剧情谜题为设计样例，把样例的问题形态写进了协议。这与 CLAUDE.md
 检索原则 1 和 anti-fixture 规则相冲突。
 
-**修复方向**：R13 换成与问题类型无关的 `[STORY_ANSWER: status=answered|partial|not_covered
+**修复（R13）**：换成与问题类型无关的 `[STORY_ANSWER: status=answered|partial|not_covered
 | confidence=x]`，status 由代码按实际状态判定；删除门槛、S5–S7、basis 枚举；工具改名为
 `collect_entity_evidence`。新规则：禁止任何只对某类问题或桥段生效的代码分支、阈值、
-提示词步骤或输出字段，并用测试守卫。
+提示词步骤或输出字段，`test/no_special_case_test.dart` 守卫。
+
+### 5.6 宽问题在 24 步预算内读不全（Open）
+
+**现象**：R13 真机验收中，“谁导致……”与人物梗概两题都用满 24 步、以 `partial` 收尾；
+梗概把预算花在早期经历，结局写成“资料未覆盖”。答案诚实，但覆盖不完整，单题约 80–100k
+输入 token。
+
+**根因**：决策器按发现顺序逐章精读，没有“先看全貌再分配阅读”的规划；预算是固定步数，
+与问题需要读多少章无关。
+
+**修复方向（待量化后立项）**：在 COVER/MAP 结果上先选章（例如按提及数与时间线均匀取样）
+再 READ；或按已发现的相关章节数动态调整预算。必须是对任何问题都成立的通用规则。
+
+### 5.7 档案类事实无法被引用（Open）
+
+**现象**：引用校验只认 `story_id:行号`。SEARCH 返回的干员档案、敌人图鉴等结构化记录不进入
+writer 的“已读原文”，所以只靠档案就能核查的说法会被判为 `uncertain`/`unavailable`。
+
+**修复方向**：把 SEARCH 命中的记录（`source_path` + `raw_id`）作为第二类可引用证据交给
+writer，并扩展引用校验。
 
 ## 6. 代码结构与维护性
 
@@ -615,8 +636,10 @@ v0.7 之后演进为右下角可展开托盘，旧组件未随演进删除。
 | 5.1 | 组织/概念汇总实体缺失 | Open | 数据构建 | 数据产品化立项 |
 | 5.2 | 同义词归一化为规则表 | Open | 数据维护 | 俗称召回缺口量化 |
 | 5.3 | 歧义展示依赖 Agent 行为 | Closed（R11 + R12） | LLM 编排不确定性 | – |
-| 5.4 | 概括/核查仍走旧 ReActLoop | Open | Agent 架构 | R13 |
-| 5.5 | 结论信封与门槛是凶手类特判 | Open | 协议设计 | R13 |
+| 5.4 | 概括/核查仍走旧 ReActLoop | Closed（R13） | Agent 架构 | – |
+| 5.5 | 结论信封与门槛是凶手类特判 | Closed（R13） | 协议设计 | – |
+| 5.6 | 宽问题在 24 步预算内读不全 | Open | Agent 规划 | 量化后立项 |
+| 5.7 | 档案类事实无法被引用 | Open | 引用协议 | 核查质量缺口量化 |
 | R12 | 调查链路信息流断裂 | Closed（R12，见 `R12_BOTTLENECK_ANALYSIS.md`） | Agent 架构 | – |
 | 6.1 | 大文件职责集中 | Closed | 重构未立项 | 五个大文件全部拆出独立模块 |
 | 6.2 | 重复路由实现 | Closed | 清理未立项 | 已删除重复实现 |

@@ -228,8 +228,8 @@ void main() {
 }
 
 /// Distinguishes router calls (system prompt contains 模式分类器) from agent
-/// calls; agent responses follow a per-mode script so loops with
-/// minimumToolCalls (1 for fact-check, 4 for investigation) can complete.
+/// calls; planner responses follow a per-mode script, writer calls return a
+/// fixed answer.
 class _RecorderLLM extends LLMClient {
   _RecorderLLM({required this.routeLabel});
   final String routeLabel;
@@ -261,49 +261,28 @@ class _RecorderLLM extends LLMClient {
       routeCalls++;
       return routeLabel;
     }
+    // Shared story QA pipeline (R13): the writer answers after the planner.
+    if (!messages.first.content.contains('检索决策器')) {
+      return mode == AiMode.verify
+          ? '[FACT_CHECK_VERDICT:supported]\n支持：阿米娅是罗德岛的公开领袖。'
+          : '她是罗德岛的公开领袖。';
+    }
     agentCalls++;
     if (gate != null) await gate!.future;
     if (failNext) {
       failNext = false;
       throw const LLMException('boom');
     }
-    return _agentResponse(agentCalls);
+    return _plannerResponse(agentCalls);
   }
 
-  String _agentResponse(int call) {
-    switch (mode) {
-      case AiMode.verify:
-        if (call == 1) {
-          return '''
-Thought: 需要检索证据。
-Action: search_local_lore
-Action Input: {"query": "阿米娅"}
-''';
-        }
-        return '''
-Thought: 证据充分。
-Final Answer: [FACT_CHECK_VERDICT:supported]
-支持：阿米娅是罗德岛的公开领袖。
-''';
-      case AiMode.investigate:
-        // Investigation runs the planner loop (intent protocol, R8):
-        // READ/SEARCH intents, then VERDICT then DONE.
-        if (call <= 4) {
-          return 'READ activities/x/level_x.txt 0 100';
-        }
-        if (call == 5) {
-          return 'VERDICT speaker:博士 0.8 multi_hypothesis_contrast';
-        }
-        return 'DONE';
-      case AiMode.summarize:
-      case AiMode.auto:
-        return '''
-Thought: 整理已知信息。
-Final Answer: 她是罗德岛的公开领袖。
-''';
+  String _plannerResponse(int call) {
+    if (mode == AiMode.investigate) {
+      if (call <= 4) return 'READ activities/x/level_x.txt 0 100';
+      return 'VERDICT speaker:博士 0.8 multi_hypothesis_contrast';
     }
+    return call == 1 ? 'SEARCH 阿米娅' : 'ANSWER';
   }
-
   @override
   Future<String> chatStream(
     List<Message> messages, {

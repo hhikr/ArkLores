@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/agent/chat_session_models.dart';
+import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 
 /// Sums provider-reported token usage of chat completions (cost control).
@@ -121,16 +122,12 @@ Map<String, Object?> summarizeTurn(
     for (final g in liveCase.goldStories)
       if (readStories.contains(g)) g,
   ];
-  // Same scheme as tools/summarize_eval.dart: a state dump (`调查无法推进`)
-  // is not an answer and its read ranges are not citations.
+  // Same scheme as tools/summarize_eval.dart.
   final answer = turn.answer;
-  final terminal = turn.status != ChatTurnStatus.completed
-      ? 'error'
-      : answer.trim().isEmpty || answer.contains('调查无法推进')
-          ? 'no_answer'
-          : answer.contains('culprit=unresolved')
-              ? 'partial'
-              : 'answered';
+  final terminal = classifyAnswer(
+    completed: turn.status == ChatTurnStatus.completed,
+    answer: answer,
+  );
   final citations = terminal == 'no_answer' || terminal == 'error'
       ? const <String>{}
       : {for (final m in _citation.allMatches(answer)) m.group(0)!};

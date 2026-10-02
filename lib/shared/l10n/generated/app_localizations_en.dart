@@ -420,7 +420,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiModeInvestigateDesc =>
-      'Cross-chapter reasoning: culprit, cause, foreshadowing, truth';
+      'Answer a specific question (who, why, how, relationships) with cited story text';
 
   @override
   String get aiAskSource =>
@@ -441,7 +441,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Is Amiya the public leader of Rhodes Island?';
 
   @override
-  String get aiAskSuggestionInvestigate => 'What happened to Miogre\'s death?';
+  String get aiAskSuggestionInvestigate => 'How was Reunion founded?';
 
   @override
   String get aiAskError => 'Failed to answer. Please retry.';
@@ -462,33 +462,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiTabRoleplay => 'Roleplay';
 
   @override
-  String get aiInvestigationSource =>
-      'Investigation scope: installed GameData story text only (appearance enumeration + line-level reading + cross-chapter echoes)';
+  String get aiAnswerStatus => 'Answer status';
 
   @override
-  String get aiInvestigationEmpty =>
-      'Ask a cross-chapter causality or culprit question. The investigation enumerates appearances, reads key chapters, locates cross-chapter details, and compares evidence per suspect before concluding with an evidence chain.';
+  String get aiAnswerStatusAnswered => 'Answered';
 
   @override
-  String get aiInvestigationInputPlaceholder =>
-      'e.g. Who is responsible for a character\'s death...';
+  String get aiAnswerStatusPartial => 'Partial (limited evidence)';
 
   @override
-  String get aiInvestigationSuggestionDeath =>
-      'What is the truth behind Theresis\'s death';
-
-  @override
-  String get aiInvestigationSuggestionWeapon =>
-      'Key weapon clues in a death scene';
-
-  @override
-  String get aiInvestigationVerdict => 'Investigation verdict';
+  String get aiAnswerStatusNotCovered => 'Not covered by the knowledge base';
 
   @override
   String get aiInvestigationConfidence => 'Confidence';
-
-  @override
-  String get aiInvestigationBasis => 'Basis';
 
   @override
   String get aiInvestigationEvidenceChain => 'Evidence chain references';

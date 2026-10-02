@@ -4,9 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/fact_check_agent.dart';
-import '../../../core/agent/investigation_verdict.dart';
 import '../../../core/agent/react_loop.dart';
-import '../../../core/agent/story_coverage_transform.dart';
+import '../../../core/agent/story_answer.dart';
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
@@ -60,8 +59,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   _buildVerdictBanner(theme, msg.factCheckVerdict!),
                   const SizedBox(height: 6),
                 ],
-                if (!isUser && isInvestigationAnswer(msg.content)) ...[
-                  _buildInvestigationSection(theme),
+                if (!isUser && isStoryAnswer(msg.content)) ...[
+                  _buildStoryAnswerSection(theme),
                   const SizedBox(height: 6),
                 ],
 
@@ -136,8 +135,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       RegExp(r'\[FACT_CHECK_VERDICT:[a-z]+\]\s*', caseSensitive: false),
       '',
     );
-    if (isInvestigationAnswer(content)) {
-      content = stripInvestigationMarkers(content);
+    if (isStoryAnswer(content)) {
+      content = stripStoryAnswerMarkers(content);
     }
     if (content == '[FACT_CHECK_ERROR]') {
       content = context.t.importErrorOccurred;
@@ -293,15 +292,23 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// Investigation answer section (R3b): verdict envelope bar, evidence-chain
-  /// line references and the read-coverage bar.
-  Widget _buildInvestigationSection(AppThemeTokens theme) {
+  /// Story answer section (R3b; R13 neutral envelope): status bar, cited
+  /// line references and, for pre-R13 answers, the read-coverage bar.
+  Widget _buildStoryAnswerSection(AppThemeTokens theme) {
     final content = widget.message.content;
-    final envelope = parseInvestigationVerdictLine(content);
+    final envelope = parseStoryAnswerEnvelope(content);
     final coverage = parseCoverageReportLine(content);
     final refs = extractLineReferences(content);
-    final unresolved = envelope == null || envelope.culprit == 'unresolved';
-    final accent = unresolved ? theme.warning : theme.accentPrimary;
+    final status = envelope?.status;
+    final accent = status == StoryAnswerStatus.answered
+        ? theme.accentPrimary
+        : theme.warning;
+    final statusLabel = switch (status) {
+      StoryAnswerStatus.answered => context.t.aiAnswerStatusAnswered,
+      StoryAnswerStatus.partial => context.t.aiAnswerStatusPartial,
+      StoryAnswerStatus.notCovered => context.t.aiAnswerStatusNotCovered,
+      null => '-',
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,8 +329,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      '${context.t.aiInvestigationVerdict}: '
-                      '${envelope?.culprit ?? '-'}',
+                      '${context.t.aiAnswerStatus}: $statusLabel',
                       style: theme.titleFont.copyWith(
                         color: accent,
                         fontSize: 14,
@@ -333,11 +339,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   ),
                 ],
               ),
-              if (envelope != null) ...[
+              if (envelope?.confidence != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  '${context.t.aiInvestigationConfidence}: ${envelope.confidence} · '
-                  '${context.t.aiInvestigationBasis}: ${envelope.basis}',
+                  '${context.t.aiInvestigationConfidence}: '
+                  '${envelope!.confidence}',
                   style: theme.bodyFont.copyWith(
                     color: theme.textSecondary,
                     fontSize: 11,

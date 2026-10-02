@@ -407,7 +407,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiModeInvestigate => '深挖';
 
   @override
-  String get aiModeInvestigateDesc => '跨章节推理：凶手、因果、伏笔、真相';
+  String get aiModeInvestigateDesc => '回答一个具体问题：谁、为什么、怎样、什么关系，附原文证据';
 
   @override
   String get aiAskSource => '仅基于已安装的 GameData 剧情原文回答';
@@ -425,7 +425,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiAskSuggestionVerify => '阿米娅是罗德岛的公开领袖吗';
 
   @override
-  String get aiAskSuggestionInvestigate => '米格鲁的死是怎么回事';
+  String get aiAskSuggestionInvestigate => '整合运动是怎样成立的';
 
   @override
   String get aiAskError => '回答失败，请重试。';
@@ -446,30 +446,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabRoleplay => '角色扮演';
 
   @override
-  String get aiInvestigationSource =>
-      '调查范围：仅限已安装 GameData 剧情原文（出场枚举 + 行级精读 + 跨章节呼应）';
+  String get aiAnswerStatus => '回答状态';
 
   @override
-  String get aiInvestigationEmpty =>
-      '提出跨章节因果或凶手类问题。调查会枚举出场、精读关键章节、跨章节定位细节，并逐嫌疑人对比证据后给出带证据链的结论。';
+  String get aiAnswerStatusAnswered => '已作答';
 
   @override
-  String get aiInvestigationInputPlaceholder => '例如：某角色死亡的罪魁祸首是谁…';
+  String get aiAnswerStatusPartial => '部分作答（资料不足）';
 
   @override
-  String get aiInvestigationSuggestionDeath => '特蕾西娅死亡的真相是什么';
-
-  @override
-  String get aiInvestigationSuggestionWeapon => '某场死亡的关键凶器线索';
-
-  @override
-  String get aiInvestigationVerdict => '调查结论';
+  String get aiAnswerStatusNotCovered => '知识库未覆盖';
 
   @override
   String get aiInvestigationConfidence => '置信度';
-
-  @override
-  String get aiInvestigationBasis => '依据';
 
   @override
   String get aiInvestigationEvidenceChain => '证据链引用';

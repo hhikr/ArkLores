@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:arklores/core/agent/agent_prompts.dart';
 import 'package:arklores/core/agent/evidence_notebook.dart';
 import 'package:arklores/core/agent/react_loop.dart';
-import 'package:arklores/core/agent/story_coverage_transform.dart';
 import 'package:arklores/core/agent/summary_agent.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/get_story_map.dart';
@@ -331,48 +330,8 @@ void main() {
     });
   });
 
-  group('coverage report transform', () {
-    test('appends a truthful line when the answer lacks one', () {
-      final observations = [
-        'Scope: activity:act_fixture\nCoverage Scopes: 1\n'
-            'Story: s1 | Lines: 1-5',
-        'Story: s1\nScope: activity:act_fixture\nRead Lines: 5\n'
-            'End of Story: yes',
-      ];
-      final out = validateCoverageReport(
-        '角色B在第五章承认了真相。',
-        observations,
-      );
-      expect(out, contains('Coverage: read=1 | mapped=0 | skipped=0'));
-    });
-
-    test('rewrites a fabricated read count to the honest value', () {
-      final observations = [
-        'Scope: activity:act_fixture\nCoverage Scopes: 2\n'
-            'Scope: main:main\nCoverage Scopes: 2',
-        'Story: s1\nScope: activity:act_fixture\nRead Lines: 5\n'
-            'End of Story: yes',
-        'Scope: main:main\nMapped Stories: 1',
-      ];
-      final out = validateCoverageReport(
-        '角色B是凶手。\n\nCoverage: read=5 | mapped=3 | skipped=0',
-        observations,
-      );
-      expect(out, isNot(contains('read=5')));
-      expect(out, contains('Coverage: read=1 | mapped=1 | skipped=0'));
-    });
-
-    test('leaves non-narrative answers untouched', () {
-      final out = validateCoverageReport(
-        '阿米娅是罗德岛的公开领袖。',
-        ['Source Kind: GameData\n=== Result #1 ==='],
-      );
-      expect(out, '阿米娅是罗德岛的公开领袖。');
-    });
-  });
-
-  group('Summary agent narrative workflow', () {
-    test('runs coverage -> map -> read and normalizes the coverage line',
+  group('Summary agent on the shared pipeline (R13)', () {
+    test('runs COVER -> MAP -> READ and the writer sees the read lines',
         () async {
       final llm = _ScriptedCoverageLLMClient();
       final agent = SummaryAgent(
@@ -397,19 +356,17 @@ void main() {
           .where((event) => event.type == ReActEventType.finalAnswerToken)
           .map((event) => event.content)
           .join();
-      // The model fabricated read=5; the transform rewrites it to the actual
-      // single scope that was read.
-      expect(finalAnswer, contains('Coverage: read=1 | mapped=1 | skipped=0'));
-      expect(finalAnswer, isNot(contains('read=5')));
+      expect(finalAnswer, startsWith('[STORY_ANSWER: status=answered'));
+      expect(llm.writerSystem, contains('梗概'));
+      // The writer received the original line, not just ids.
+      expect(llm.writerUser, contains('藏起匕首'));
     });
 
-    test('registers all four tools', () {
-      // Surface check: the Summary agent prompt advertises the coverage tools.
-      final prompt = buildAgentPrompt(summaryInstructions);
-      expect(prompt, contains('search_story_coverage'));
-      expect(prompt, contains('get_story_map'));
-      expect(prompt, contains('read_story_lines'));
-      expect(prompt, contains('Coverage: read='));
+    test('planner prompt advertises the story intents', () {
+      expect(storyPlannerInstructions, contains('COVER'));
+      expect(storyPlannerInstructions, contains('FIND'));
+      expect(storyPlannerInstructions, contains('READ'));
+      expect(storyPlannerInstructions, contains('MAP'));
     });
   });
 }
@@ -562,8 +519,12 @@ Future<Directory> _writeFixtureSource(Directory tempDir) async {
 
 /// Scripted LLM that follows the narrative workflow
 /// coverage -> map -> read -> final (with a fabricated coverage line).
+/// Plays the planner (COVER -> MAP -> READ -> ANSWER) and records what the
+/// writer receives; the extractor gets no notes (no `L<n>:` rows).
 class _ScriptedCoverageLLMClient extends LLMClient {
   int callCount = 0;
+  String writerSystem = '';
+  String writerUser = '';
 
   @override
   Future<String> chat(
@@ -573,34 +534,20 @@ class _ScriptedCoverageLLMClient extends LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
-    callCount++;
-    switch (callCount) {
-      case 1:
-        return '''
-Thought: 我需要先枚举角色B的全部出场。
-Action: search_story_coverage
-Action Input: {"query": "角色B"}
-''';
-      case 2:
-        return '''
-Thought: 查看出场章节的画像以选择精读范围。
-Action: get_story_map
-Action Input: {"story_ids": ["activities/act_fixture/level_fixture_c5.txt"]}
-''';
-      case 3:
-        return '''
-Thought: 通读关键章节原文。
-Action: read_story_lines
-Action Input: {"story_id": "activities/act_fixture/level_fixture_c5.txt"}
-''';
-      default:
-        return '''
-Thought: 我已有足够信息。
-Final Answer: 角色B在第五章承认当年藏起匕首是为了掩盖真相。
-
-Coverage: read=5 | mapped=3 | skipped=0
-''';
+    if (!messages.first.content.contains('检索决策器')) {
+      if (messages.first.content.contains('剧情资料员')) {
+        writerSystem = messages.first.content;
+        writerUser = messages.last.content;
+      }
+      return '角色B在第五章承认当年藏起匕首是为了掩盖真相。';
     }
+    callCount++;
+    return switch (callCount) {
+      1 => 'COVER 角色B',
+      2 => 'MAP activity:act_fixture',
+      3 => 'READ activities/act_fixture/level_fixture_c5.txt',
+      _ => 'ANSWER 0.8',
+    };
   }
 
   @override
@@ -610,12 +557,6 @@ Coverage: read=5 | mapped=3 | skipped=0
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
+  }) =>
+      chat(messages, temperature: temperature, maxTokens: maxTokens, stop: stop);
 }

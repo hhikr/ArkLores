@@ -117,7 +117,7 @@ void main() {
         configReader: () => const LLMConfig(),
       );
 
-      await notifier.sendMessage('导致某角色死亡的罪魁祸首是谁', mode: AiMode.auto);
+      await notifier.sendMessage('某角色最后怎么样了', mode: AiMode.auto);
 
       final last = notifier.state.last;
       expect(last.content, contains('她是罗德岛的公开领袖'));
@@ -246,8 +246,8 @@ class _RecordingParamsLLMClient extends LLMClient {
   }
 }
 
-/// First route call answers `verify`; agent calls drive a tool step then a
-/// final answer. Route vs agent calls are distinguished by the system prompt.
+/// First route call answers `verify`; agent calls drive one planner search,
+/// ANSWER, then the writer. Route vs agent calls are distinguished by the system prompt.
 class _AutoRouteLLMClient extends LLMClient {
   int routeCallCount = 0;
   int _agentCallCount = 0;
@@ -267,23 +267,14 @@ class _AutoRouteLLMClient extends LLMClient {
       routeCallCount++;
       return 'verify';
     }
-    _agentCallCount++;
-    if (_agentCallCount == 1) {
-      // First agent step: perform one tool call so loops with
-      // minimumToolCalls >= 1 can proceed.
-      return '''
-Thought: 我需要检索证据。
-Action: search_local_lore
-Action Input: {"query": "阿米娅", "search_mode": "evidence", "scope_id": "activity:x", "entity_id": "char_002_amiya"}
-''';
+    // Shared story QA pipeline (R13): planner intents, then the writer.
+    if (messages.first.content.contains('检索决策器')) {
+      _agentCallCount++;
+      return _agentCallCount == 1 ? 'SEARCH 阿米娅' : 'ANSWER';
     }
-    return '''
-Thought: 证据充分。
-Final Answer: [FACT_CHECK_VERDICT:supported]
-支持：阿米娅是罗德岛的公开领袖。她是罗德岛的公开领袖。
-''';
+    return '[FACT_CHECK_VERDICT:supported]\n'
+        '支持：阿米娅是罗德岛的公开领袖。她是罗德岛的公开领袖。';
   }
-
   @override
   Future<String> chatStream(
     List<Message> messages, {

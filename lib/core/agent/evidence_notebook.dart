@@ -151,6 +151,10 @@ String _clip(String text, int max) {
 final RegExp _citation =
     RegExp(r'([\w\-/\.\[\]]+\.txt)\s*[:：]\s*(\d+)(?:\s*[-–~]\s*(\d+))?');
 
+/// Number of distinct line citations in [answer].
+int citationCount(String answer) =>
+    _citation.allMatches(answer).map((m) => m.group(0)).toSet().length;
+
 /// Returns the citations in [answer] that point at lines never actually read
 /// in [state]. A range is invalid when any of its lines was not read.
 List<String> unreadCitations(String answer, InvestigationState state) {

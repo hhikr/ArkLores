@@ -59,7 +59,7 @@ class LoopMemory {
     if (key.trim().isNotEmpty) _mappedScopes.add(key.trim());
   }
 
-  /// Records a successful `collect_suspect_evidence` call.
+  /// Records a successful `collect_entity_evidence` call.
   void noteEvidence(String entityId) {
     if (entityId.trim().isNotEmpty) _evidenceCollected.add(entityId.trim());
   }

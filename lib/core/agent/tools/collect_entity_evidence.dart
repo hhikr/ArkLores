@@ -2,12 +2,12 @@ import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
 import 'observation_data.dart';
 
-/// Collects the full appearance evidence of one suspect (entity) via
-/// `entity_story_mentions`, grouped by scope with pagination. Supports the
-/// multi-candidate comparison protocol: run it per suspect and compare the
-/// evidence sets (S6 gate counts candidates with non-empty evidence).
-class CollectSuspectEvidenceTool extends AgentTool {
-  CollectSuspectEvidenceTool({GameDataRetrieval? gameDataStore})
+/// Collects every appearance line of one entity via `entity_story_mentions`,
+/// grouped by scope with pagination. Optional terms put the stories whose
+/// lines contain them first. Appearance rows are locating hints: only text
+/// read through READ becomes evidence.
+class CollectEntityEvidenceTool extends AgentTool {
+  CollectEntityEvidenceTool({GameDataRetrieval? gameDataStore})
       : _gameDataStore = gameDataStore;
   static const int _maxObservationChars = 4800;
   static const int _pageSize = 4; // runs per page
@@ -15,14 +15,13 @@ class CollectSuspectEvidenceTool extends AgentTool {
   final GameDataRetrieval? _gameDataStore;
 
   @override
-  String get name => 'collect_suspect_evidence';
+  String get name => 'collect_entity_evidence';
 
   @override
   String get description =>
-      'Collect every appearance line of one suspect entity (via the story '
-      'coverage index), grouped by scope, with pagination. Call it once per '
-      'suspect to compare evidence sets. Returns the actual lines plus a '
-      'machine-readable DATA block with evidence counts.';
+      'Collect every appearance line of one entity (via the story coverage '
+      'index), grouped by scope, with pagination. Returns the actual lines '
+      'plus a machine-readable DATA block with row counts.';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -31,7 +30,7 @@ class CollectSuspectEvidenceTool extends AgentTool {
           'entity_id': {
             'type': 'string',
             'description':
-                'Suspect entity id (resolved, e.g. char_002_amiya or speaker:<name>).',
+                'Entity id (resolved, e.g. char_002_amiya or speaker:<name>).',
           },
           'scope_ids': {
             'type': 'array',
@@ -39,16 +38,16 @@ class CollectSuspectEvidenceTool extends AgentTool {
             'description':
                 'Optional scope keys to restrict to (e.g. activity:act21mini, obt:main).',
           },
-          'claim_terms': {
+          'terms': {
             'type': 'array',
             'items': {'type': 'string'},
             'description':
-                'Optional claim/relation terms; matching lines are listed first with a marker.',
+                'Optional terms; stories whose lines contain them are listed first and matching lines are marked.',
           },
           'page_token': {
             'type': 'string',
             'description':
-                'Opaque continuation token from a previous collect_suspect_evidence result. Echo it verbatim.',
+                'Opaque continuation token from a previous collect_entity_evidence result. Echo it verbatim.',
           },
         },
         'required': ['entity_id'],
@@ -64,9 +63,9 @@ class CollectSuspectEvidenceTool extends AgentTool {
     final scopeIds = rawScopes is List
         ? rawScopes.map((item) => '$item').toList(growable: false)
         : null;
-    final rawClaimTerms = arguments['claim_terms'];
-    final claimTerms = rawClaimTerms is List
-        ? rawClaimTerms.map((item) => '$item').toList(growable: false)
+    final rawTerms = arguments['terms'] ?? arguments['claim_terms'];
+    final terms = rawTerms is List
+        ? rawTerms.map((item) => '$item').toList(growable: false)
         : null;
     final pageToken = arguments['page_token'] as String?;
     var offset = int.tryParse(pageToken?.trim() ?? '') ?? 0;
@@ -88,15 +87,15 @@ class CollectSuspectEvidenceTool extends AgentTool {
           .where((entry) => allowed.contains(entry.scopeId))
           .toList(growable: false);
     }
-    // M4b: claim terms are prioritized GLOBALLY before paging, so the first
-    // page shows the runs whose lines actually match the claim terms (a
-    // suspect with hundreds of appearance runs otherwise buries the relevant
-    // ones behind unrelated daily dialogue). Non-claim runs follow in natural
+    // M4b: terms are prioritized GLOBALLY before paging, so the first page
+    // shows the runs whose lines actually match them (an entity with
+    // hundreds of appearance runs otherwise buries the relevant ones behind
+    // unrelated daily dialogue). Non-matching runs follow in natural
     // story order so same-chapter runs stay grouped.
-    if (claimTerms != null && claimTerms.isNotEmpty && runs.isNotEmpty) {
+    if (terms != null && terms.isNotEmpty && runs.isNotEmpty) {
       final hitCounts = <String, int>{};
       final storyIds = runs.map((run) => run.storyId).toSet().toList();
-      for (final term in claimTerms) {
+      for (final term in terms) {
         final rows = await store.searchStoryLinesLikeInStories(term, storyIds);
         for (final row in rows) {
           final storyId = '${row['story_id']}';
@@ -113,7 +112,7 @@ class CollectSuspectEvidenceTool extends AgentTool {
     }
     if (runs.isEmpty) {
       final data = <String, Object?>{
-        'type': 'collect_suspect_evidence',
+        'type': 'collect_entity_evidence',
         'entity_id': entityId,
         'evidence_rows': 0,
         'scopes': <String>[],
@@ -137,7 +136,7 @@ class CollectSuspectEvidenceTool extends AgentTool {
     }
     if (offset >= runs.length) {
       final data = <String, Object?>{
-        'type': 'collect_suspect_evidence',
+        'type': 'collect_entity_evidence',
         'entity_id': entityId,
         'evidence_rows': 0,
         'scopes': <String>[],
@@ -184,9 +183,9 @@ class CollectSuspectEvidenceTool extends AgentTool {
         final lineText = line.speaker == null || line.speaker!.trim().isEmpty
             ? '${line.lineIndex} | ${line.content}'
             : '${line.lineIndex} | ${line.speaker} | ${line.content}';
-        final hasClaim = claimTerms != null &&
-            claimTerms.any((term) => line.content.contains(term));
-        buffer.writeln(hasClaim ? '[claim] $lineText' : lineText);
+        final hasTerm = terms != null &&
+            terms.any((term) => line.content.contains(term));
+        buffer.writeln(hasTerm ? '[term] $lineText' : lineText);
         evidenceRows++;
       }
       buffer.writeln();
@@ -196,7 +195,7 @@ class CollectSuspectEvidenceTool extends AgentTool {
     final nextOffset = offset + processed;
     final hasMore = nextOffset < runs.length;
     final data = <String, Object?>{
-      'type': 'collect_suspect_evidence',
+      'type': 'collect_entity_evidence',
       'entity_id': entityId,
       'evidence_rows': evidenceRows,
       'scopes': scopes.toList(),
@@ -205,7 +204,7 @@ class CollectSuspectEvidenceTool extends AgentTool {
     };
 
     final body = StringBuffer()
-      ..writeln('Suspect: $entityId | Total appearance runs: ${runs.length}')
+      ..writeln('Entity: $entityId | Total appearance runs: ${runs.length}')
       ..writeln();
     body.write(buffer);
     if (omitted > 0) {

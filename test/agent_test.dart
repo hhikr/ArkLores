@@ -989,8 +989,13 @@ void main() {
   });
 
   group('FactCheck Agent Tests', () {
-    test('keeps supported verdict only after directed GameData searches',
-        () async {
+    String answerOf(List<ReActEvent> events) => events
+        .where((event) => event.type == ReActEventType.finalAnswerToken)
+        .map((event) => event.content)
+        .join();
+
+    test('runs the shared planner pipeline; a definite verdict without '
+        'cited read text is downgraded (R13)', () async {
       final llm = _FactCheckLLMClient();
       final tool = _FactCheckSearchTool();
       final agent = FactCheckAgent(llmClient: llm, searchTool: tool);
@@ -998,50 +1003,15 @@ void main() {
       final events = await agent.checkClaim(claim: '阿米娅是罗德岛的领袖吗？').toList();
 
       expect(tool.queries, ['阿米娅 罗德岛 身份', '阿米娅 领袖 反证']);
-      expect(
-        events
-            .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .map((event) => event.content)
-            .join(),
-        startsWith('[FACT_CHECK_VERDICT:supported]'),
-      );
-      expect(llm.systemPrompt, contains('仅使用 search_local_lore'));
+      final answer = answerOf(events);
+      // Profiles were searched but no story line was READ, so nothing can be
+      // cited: status and verdict are decided by code.
+      expect(answer, startsWith('[STORY_ANSWER: status=not_covered'));
+      expect(answer, contains('[FACT_CHECK_VERDICT:unavailable]'));
+      expect(parseFactCheckVerdict(answer), FactCheckVerdict.unavailable);
+      expect(llm.systemPrompt, contains('核查'));
       expect(llm.systemPrompt, isNot(contains('search_wiki')));
-    });
-
-    test('downgrades unsupported supported verdict to unavailable', () {
-      final verdict = validateFactCheckVerdict(
-        '[FACT_CHECK_VERDICT:supported]\n模型记忆说这是正确的。',
-        const ['No matching GameData result found for "未知命题".'],
-      );
-      expect(verdict, FactCheckVerdict.unavailable);
-    });
-
-    test('keeps refuted verdict with an actual GameData record', () {
-      final verdict = validateFactCheckVerdict(
-        '[FACT_CHECK_VERDICT:refuted]',
-        const [
-          '=== Result #1 ===\nSource Kind: GameData\nEvidence Scope Match: yes\nEvidence Level: direct candidate\nSource Path: a.json\nRaw ID: a',
-        ],
-      );
-      expect(verdict, FactCheckVerdict.refuted);
-    });
-
-    test('maps entity ambiguity without records to uncertain', () {
-      final verdict = validateFactCheckVerdict(
-        '[FACT_CHECK_VERDICT:uncertain]',
-        const [
-          'Ambiguous GameData entity query\n=== Candidate #1 ===\nSource Kind: GameData',
-        ],
-      );
-      expect(verdict, FactCheckVerdict.uncertain);
-    });
-
-    test('maps empty coverage to unavailable', () {
-      expect(
-        validateFactCheckVerdict('[FACT_CHECK_VERDICT:uncertain]', const []),
-        FactCheckVerdict.unavailable,
-      );
+      expect(llm.writerSystemPrompt, contains('FACT_CHECK_VERDICT'));
     });
 
     test('passes prior claim and evidence marker to a follow-up', () async {
@@ -1073,24 +1043,8 @@ void main() {
       );
     });
 
-    test('emits the validated verdict through the final answer stream',
+    test('exposes every raw planner response through onRawLlmResponse',
         () async {
-      final agent = FactCheckAgent(
-        llmClient: _UnsupportedFactCheckLLMClient(),
-        searchTool: _CurrentNoMatchTool(),
-      );
-
-      final events = await agent.checkClaim(claim: '未知命题').toList();
-      expect(
-        events
-            .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .map((event) => event.content)
-            .join(),
-        startsWith('[FACT_CHECK_VERDICT:unavailable]'),
-      );
-    });
-
-    test('exposes every raw LLM response through onRawLlmResponse', () async {
       final agent = FactCheckAgent(
         llmClient: _UnsupportedFactCheckLLMClient(),
         searchTool: _CurrentNoMatchTool(),
@@ -1102,10 +1056,7 @@ void main() {
             onRawLlmResponse: (iteration, raw) => raws.add((iteration, raw)),
           )
           .toList();
-      expect(events, isNotEmpty);
-      expect(raws, isNotEmpty);
-      // Iteration numbers are contiguous starting at 1 and every raw response
-      // is passed through untruncated.
+      expect(answerOf(events), contains('[FACT_CHECK_VERDICT:unavailable]'));
       expect(raws.first.$1, 1);
       expect(raws.map((r) => r.$2), everyElement(isNotEmpty));
     });
@@ -1285,9 +1236,12 @@ class _RoleplayLLMClient extends _MockLLMClient {
   }
 }
 
+/// Plays both planner roles of the shared pipeline: the decision model
+/// (searches twice, then ANSWER) and the writer (claims "supported").
 class _FactCheckLLMClient extends LLMClient {
   int callCount = 0;
   String systemPrompt = '';
+  String writerSystemPrompt = '';
   List<Message> firstRequestMessages = const [];
 
   @override
@@ -1298,16 +1252,18 @@ class _FactCheckLLMClient extends LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
+    if (!messages.first.content.contains('检索决策器')) {
+      writerSystemPrompt = messages.first.content;
+      return '[FACT_CHECK_VERDICT:supported]\n## 核查结论\n支持。';
+    }
     callCount++;
     if (callCount == 1) {
       firstRequestMessages = List.of(messages);
       systemPrompt = messages.first.content;
-      return 'Thought: 查身份支持证据。\nAction: search_local_lore\nAction Input: {"query":"阿米娅 罗德岛 身份"}';
+      return 'SEARCH 阿米娅 罗德岛 身份';
     }
-    if (callCount == 2) {
-      return 'Thought: 查可能的反证。\nAction: search_local_lore\nAction Input: {"query":"阿米娅 领袖 反证"}';
-    }
-    return 'Thought: 证据足够。\nFinal Answer: [FACT_CHECK_VERDICT:supported]\n## 核查结论\n支持。';
+    if (callCount == 2) return 'SEARCH 阿米娅 领袖 反证';
+    return 'ANSWER 0.9';
   }
 
   @override
@@ -1352,6 +1308,7 @@ class _FactCheckSearchTool extends AgentTool {
   }
 }
 
+/// Planner searches once and answers; the writer wrongly claims support.
 class _UnsupportedFactCheckLLMClient extends _MockLLMClient {
   @override
   Future<String> chat(
@@ -1361,13 +1318,11 @@ class _UnsupportedFactCheckLLMClient extends _MockLLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
-    callCount++;
-    if (callCount == 1) {
-      return 'Thought: 检索本地证据。\nAction: search_local_lore\n'
-          'Action Input: {"query":"未知命题"}';
+    if (!messages.first.content.contains('检索决策器')) {
+      return '[FACT_CHECK_VERDICT:supported]\n错误地声称支持。';
     }
-    return 'Thought: 完成。\nFinal Answer: '
-        '[FACT_CHECK_VERDICT:supported]\n错误地声称支持。';
+    callCount++;
+    return callCount == 1 ? 'SEARCH 未知命题' : 'ANSWER';
   }
 }
 

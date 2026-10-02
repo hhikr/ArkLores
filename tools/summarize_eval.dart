@@ -8,6 +8,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arklores/core/agent/story_answer.dart';
+
 void main(List<String> args) {
   final positional = args.where((a) => !a.startsWith('--')).toList();
   if (positional.isEmpty) {
@@ -72,24 +74,18 @@ final RegExp _citation =
     RegExp(r'([\w\-/\.\[\]]+\.txt)\s*[:：]\s*(\d+)(?:\s*[-–~]\s*(\d+))?');
 
 /// Re-derives the outcome from the recorded answer so every run (including
-/// summaries written by older harness versions) is scored the same way:
-/// - `error`: the turn failed;
-/// - `no_answer`: a state dump without an answer body (`调查无法推进`) or
-///   an empty answer — its `x.txt:a-b` read ranges are NOT citations;
-/// - `partial`: stopped (budget/stall/unresolved) but the writer answered
-///   from what was read;
-/// - `answered`: a verdict with an answer body.
+/// summaries written by older harness versions) is scored the same way
+/// (`classifyAnswer`: error / no_answer / not_covered / partial / answered).
+/// A `no_answer` state dump's `x.txt:a-b` read ranges are NOT citations.
 Map<String, dynamic> _classify(Map<String, dynamic> row) {
   final answer = '${row['answer'] ?? ''}';
-  final String terminal;
-  if (row['status'] != 'completed') {
-    terminal = 'error';
-  } else if (answer.trim().isEmpty || answer.contains('调查无法推进')) {
-    terminal = 'no_answer';
-  } else if (answer.contains('culprit=unresolved')) {
+  var terminal = classifyAnswer(
+    completed: row['status'] == 'completed',
+    answer: answer,
+  );
+  // Pre-R13 runs marked a stopped run with the old envelope field.
+  if (terminal == 'answered' && answer.contains('=unresolved')) {
     terminal = 'partial';
-  } else {
-    terminal = 'answered';
   }
   final citations = terminal == 'no_answer' || terminal == 'error'
       ? 0

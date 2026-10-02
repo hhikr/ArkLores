@@ -10,9 +10,6 @@
 /// the model, so it never drifts or loses the "what have I done" facts that
 /// caused the 103-iteration repeat loop.
 class InvestigationState {
-  /// Stages (S0..S8) completed so far, in order, deduplicated.
-  final List<String> stages = [];
-
   /// One read chapter: the line segments the tool ACTUALLY returned (R12).
   final List<ReadEntry> reads = [];
 
@@ -24,10 +21,10 @@ class InvestigationState {
   /// Upper bound of [notes] kept in state (oldest dropped first).
   static const int maxNotes = 30;
 
-  /// Evidence sets collected per suspect entity.
+  /// Appearance rows collected per entity (COLLECT).
   final List<EvidenceEntry> evidence = [];
 
-  /// Mapped scopes / story-id lists (for S2 bookkeeping).
+  /// Mapped scopes / story-id lists.
   final Set<String> mapped = {};
 
   /// R12: executed FIND/COVER searches -> top story ids they returned, so the
@@ -55,18 +52,6 @@ class InvestigationState {
   /// can switch to another candidate without a new search.
   final Map<String, String> _candidateNames = {};
 
-  /// R11: how many times each search key (name or id) was repeated, plus the
-  /// count of consecutive no-result searches PER KEY (R12: a global counter
-  /// penalized a fresh query for earlier queries' misses) — used by the
-  /// executor to break repeated dead loops deterministically.
-  final Map<String, int> _searchRepeatCount = {};
-  final Map<String, int> _consecutiveNoResult = {};
-
-  /// R11: search keys for which the executor already ran a coverage fallback.
-  /// A repeated SEARCH of such a key means the model ignored the enumerated
-  /// appearances — the executor terminates instead of looping.
-  final Set<String> _coverageFallbackKeys = {};
-
   String _serialize() {
     final buffer = StringBuffer();
     if (_targetEntityId != null) {
@@ -80,7 +65,6 @@ class InvestigationState {
         '已消歧名字: ${_searchedNames.entries.map((e) => '${e.key}->${e.value}').join(', ')}',
       );
     }
-    if (stages.isNotEmpty) buffer.writeln('阶段: ${stages.join(",")}');
     if (reads.isNotEmpty) {
       buffer.writeln('已读:');
       for (final r in reads) {
@@ -126,10 +110,6 @@ class InvestigationState {
 
   // ── code-maintained mutations ──────────────────────────────────────
 
-  void noteStage(String stage) {
-    if (!stages.contains(stage)) stages.add(stage);
-  }
-
   /// Records the executor-resolved target entity (R10).
   void setTargetEntity(String entityId, String name) {
     _targetEntityId = entityId;
@@ -174,96 +154,6 @@ class InvestigationState {
   /// investigation (used by RESELECT to refuse re-picking tried candidates).
   bool wasAttempted(String entityId) => _attemptedEntityIds.contains(entityId);
 
-  // ── R11.1 search progress tracking ──────────────────────────────────
-  // Death-loop detection now ONLY triggers on "no progress": a search that
-  // returns fresh results resets the counts, so repeated-but-productive
-  // searches are never mis-terminated. Counts are keyed by the canonical
-  // entity id when the executor resolves one, and RESELECT resets the id it
-  // switches to so each candidate investigates from its own baseline.
-
-  /// Last observation produced per search key (for "content changed" checks).
-  final Map<String, String> _lastSearchObservation = {};
-
-  /// Records the outcome of one search. [hadResult] true AND [contentChanged]
-  /// true (fresh content) resets both counters — a genuinely productive
-  /// search. [hadResult] true but [contentChanged] false (same hit set as the
-  /// previous call) counts as a repeat: the model keeps polling the same data
-  /// with no new information, which is a dead loop (R11.2). [hadResult] false
-  /// bumps the per-key repeat count and the consecutive no-result counter.
-  void noteSearchProgress({
-    required String key,
-    required bool hadResult,
-    required bool contentChanged,
-  }) {
-    final normalized = key.trim();
-    if (normalized.isEmpty) return;
-    if (hadResult && contentChanged) {
-      _consecutiveNoResult[normalized] = 0;
-      _searchRepeatCount[normalized] = 0;
-    } else {
-      if (!hadResult) {
-        _consecutiveNoResult[normalized] =
-            (_consecutiveNoResult[normalized] ?? 0) + 1;
-      }
-      _searchRepeatCount[normalized] =
-          (_searchRepeatCount[normalized] ?? 0) + 1;
-    }
-  }
-
-  /// Stores the raw observation for [key] (for content-change detection).
-  void noteSearchObservation(String key, String observation) {
-    if (key.trim().isNotEmpty) _lastSearchObservation[key.trim()] = observation;
-  }
-
-  /// Whether [observation] differs from the last one seen for [key]; always
-  /// true when [key] was never observed before.
-  bool hasSearchContentChanged(String key, String observation) {
-    final normalized = key.trim();
-    if (normalized.isEmpty) return true;
-    final prev = _lastSearchObservation[normalized];
-    return prev == null || prev != observation;
-  }
-
-  /// Number of times [key] was searched without fresh progress.
-  int searchRepeatCount(String key) => _searchRepeatCount[key.trim()] ?? 0;
-
-  /// Consecutive searches of [key] that produced no result.
-  int consecutiveNoResult(String key) => _consecutiveNoResult[key.trim()] ?? 0;
-
-  /// Marks [key] as already coverage-fallen-back; a later SEARCH of the same
-  /// key with no progress hits the terminal branch instead of looping.
-  void noteCoverageFallback(String key) {
-    if (key.trim().isNotEmpty) _coverageFallbackKeys.add(key.trim());
-  }
-
-  bool hasCoverageFallback(String key) =>
-      _coverageFallbackKeys.contains(key.trim());
-
-  /// Resets the search-tracking entries for a single [entityId] — called when
-  /// RESELECT switches the target so a newly selected candidate investigates
-  /// from its own baseline instead of inheriting a previous candidate's counts.
-  void resetSearchTrackingFor(String entityId) {
-    final normalized = entityId.trim();
-    if (normalized.isEmpty) return;
-    _searchRepeatCount.remove(normalized);
-    _lastSearchObservation.remove(normalized);
-    _coverageFallbackKeys.remove(normalized);
-    _consecutiveNoResult.remove(normalized);
-  }
-
-  /// True when the investigation has made non-search progress (read chapters
-  /// or collected evidence) — used to decide "decline to terminate, guide to
-  /// COLLECT/VERDICT" vs "no progress at all -> unresolved".
-  bool get hasReadOrEvidence => reads.isNotEmpty ||
-      evidence.any((e) => e.evidenceRows > 0);
-
-  void resetSearchTracking() {
-    _searchRepeatCount.clear();
-    _consecutiveNoResult.clear();
-    _coverageFallbackKeys.clear();
-    _lastSearchObservation.clear();
-  }
-
   /// Records that lines [startLine]..[endLine] (inclusive) of [storyId] were
   /// actually returned by a read. Overlapping or adjacent segments merge;
   /// gaps stay gaps (R12: a min..max merge marked unread lines as read).
@@ -295,11 +185,18 @@ class InvestigationState {
   /// Stories any FIND/COVER has surfaced so far.
   final Set<String> discoveredStories = {};
 
-  /// Records an executed FIND/COVER and the story ids it surfaced.
-  void noteSearchLog(String key, List<String> storyIds) {
+  /// Records an executed FIND/COVER and the story ids it surfaced. Only
+  /// [leads] — stories with a literal match — count as discovered: a
+  /// semantic-only neighbour always exists, so counting those let a
+  /// fruitless run look productive forever (R13 negative live case).
+  void noteSearchLog(
+    String key,
+    List<String> storyIds, {
+    Iterable<String>? leads,
+  }) {
     if (key.trim().isEmpty) return;
     searchLog[key.trim()] = storyIds;
-    discoveredStories.addAll(storyIds);
+    discoveredStories.addAll(leads ?? storyIds);
   }
 
   /// R12 progress fingerprint: changes whenever the investigation learned
@@ -405,7 +302,7 @@ class EvidenceNote {
   final String quote;
 }
 
-/// Evidence collected for one suspect.
+/// Appearance rows collected for one entity.
 class EvidenceEntry {
   const EvidenceEntry({
     required this.entityId,
