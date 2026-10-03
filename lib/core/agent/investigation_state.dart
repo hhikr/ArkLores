@@ -23,12 +23,11 @@ class InvestigationState {
 
   /// R14: compact outlines (collection id → chapter list with synopses) the
   /// planner fetched with OUTLINE, kept in state so the whole-story picture
-  /// survives the 2-observation window. R16: every outline stays as a
-  /// chapter index with read marks; only the [maxOutlines] most recent keep
-  /// the synopses of their unread chapters (a planner that lost the index
+  /// survives the 2-observation window. R16: every outline stays; the
+  /// [fullOutlines] most recent are shown as a full chapter index, older
+  /// ones fold to their read chapters (a planner that lost the index
   /// re-opened the same outlines up to 13 times in one turn).
   final Map<String, String> outlines = {};
-  static const int maxOutlines = 3;
 
   /// R16: story id → digest of what the read lines of that chapter tell
   /// (question-independent), so the planner knows what it has read.

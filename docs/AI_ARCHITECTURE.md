@@ -1,6 +1,8 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前状态：R16（`feature/r16-stream-reasoning`，在 R15 之上：流式输出、按角色设定思考强度、规划器保留已读内容、状态由证据决定）。本文档是 Agent 层与检索层的**唯一总括文档**，
+> 当前状态：R16（`feature/r16-stream-reasoning`，在 R15 之上：流式输出、按角色设定思考强度、规划器保留已读内容、
+> 开局阅读计划与作答前复核、状态由证据决定）。一个问题逐步怎么走、每步的参数，见 **`ASK_PIPELINE_FLOW.md`**。
+> 本文档是 Agent 层与检索层的**总括文档**（结构、取舍、历史），
 > 取代旧的 `AI_REFACTOR_SUMMARY.md`、`R0`–`R3` 阶段总结、`AI_RETRIEVAL_OPTIMIZATION.md`、
 > `FEASIBILITY_ANALYSIS.md`、`RETRIEVAL_INSTALL_CHAIN_ANALYSIS.md`（均已删除，原文在 git 历史中）。
 > R12 的决策过程见 `R12_BOTTLENECK_ANALYSIS.md`；已知缺口见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
@@ -11,13 +13,16 @@
 
 ```
 用户问题 ──► AskChatNotifier.sendMessage（auto / summarize / verify / investigate）
-              │
-              ├─ auto：QuestionRouter（一次短 LLM 调用）选出模式
+              │   历史（最近 3 轮）、上一轮已读原文页、“深度思考”→ 本问 writer 档位
+              ├─ auto：QuestionRouter（一次短 LLM 调用，不思考）选出模式
               │
               ├─ investigate ─► InvestigationAgent ┐
               ├─ summarize   ─► SummaryAgent       ├─► StoryQaAgent ─► PlannerLoop（§2）
               ├─ verify      ─► FactCheckAgent     ┘   （AnswerStyle 只决定输出格式）
               └─ Roleplay tab ► RoleplayAgent     ─► ReActLoop（不在统一范围）
+
+PlannerLoop：问题上下文与出场总览 → 阅读计划 → 检索循环（决策器 / 执行器 / 提取器；
+             ANSWER 时充分性检查与复核）→ writer 流式作答 → 引用校验 → 状态合成
                                          │
                        工具 ──► GameDataKnowledgeStore（共享只读 SQLite 连接）
                                          │
@@ -41,6 +46,8 @@ ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文�
 | 执行器 | 代码（无 LLM） | – | `parseIntent` → 调工具 → 解析 DATA 块 → 更新 `InvestigationState` |
 | 提取器 extractor | `evidence_notebook.dart` | 不思考 | READ 之后输出本页摘要（R16，与问题无关）和相关行 `L<行号>: 事实` |
 | 消歧器 | `entity_disambiguator.dart` | 不思考 | 同名多实体时按问题语义选一个候选，失败回退第 1 个 |
+| 计划 | `planner_loop.dart`（`_draftPlan`） | 不思考 | R16：开局一次，按问题和出场总览列出要读的故事集清单 |
+| 审核 | `planner_loop.dart`（`_sufficiencyGap`） | 不思考 | R16：ANSWER 时若还有未读项，判断已读内容“足够”还是“不足：缺什么” |
 | 写作者 writer | `planner_loop.dart` | 不思考；“深度思考”打开时 low | 基于证据笔记 + 已读原文**流式**写最终答案，并经过引用校验 |
 
 R16 思考强度：`llmClientProvider(ReasoningLevel)`（`llm_provider.dart`）。同一 API 配置按档位映射到
@@ -59,7 +66,7 @@ router 只输出一个分类词；writer 的输入已是筛好的原文，high �
 | `COVER <名字\|id> [scope=]` | `search_story_coverage` | 确定性枚举实体在哪些章节、哪些行出场 |
 | `MAP <scope_id>` | `get_story_map` | 章节画像（行范围、speaker、高密度实体；有目录时为故事名与官方梗概） |
 | `OUTLINE <故事集名\|scope\|story_id>` | `get_story_outline` | R14：整个故事集按游戏内顺序的章节（关卡号、行动前/后、章名、官方梗概、story_id），用来把握前因后果 |
-| `READ <story_id> [start end \| start-end]` | `read_story_lines` | 读剧情原文（行号；给出区间时整段读，一页最多约 150 行） |
+| `READ <story_id> [start end \| start-end]` | `read_story_lines` | 读剧情原文（R16：不写行号读整章，一页最多约 450 行 / 2 万字；给出区间时整段读） |
 | `FIND <词…> [scope=\|@scope] [top_k]` | `search_story_lines` | 在原文里找线索：关键词（各词 OR，按 IDF 加权的单行命中排序）+ 可选向量召回，RRF 融合；顶部列出官方梗概命中 |
 | `COLLECT <entity_id> [terms=[..]]` | `collect_entity_evidence` | 列出某实体的全部出场行（命中 terms 的章节排前） |
 | `RESELECT <entity_id>` | – | 切换消歧候选；已尝试的候选不会再选 |
@@ -131,13 +138,13 @@ router 只输出一个分类词；writer 的输入已是筛好的原文，high �
   跑到 43 步）。
 - R16 **可达性**：scope 可以写故事集 id（`main_9`，主线、密录本身不是 scope）；OUTLINE 认“主线·名”
   “名（id）”；READ 自动补 `.txt`，找不到时按关卡号（去前导零）列出真实 story_id。
-- R15：已看梗概最多 3 个，且记住本轮看过的所有故事集（被挤出状态也不再提示“尚未看梗概”，
-  避免在几个故事集之间来回 OUTLINE）；重复的 OUTLINE 从缓存回复（仍在状态里时只回一句指引），
-  计一步但不算重复命令。
+- R15：记住本轮看过的所有故事集（不再提示“尚未看梗概”，避免在几个故事集之间来回 OUTLINE）；
+  重复的 OUTLINE 从缓存回复（R16：不占步数；目录仍完整在状态里时只回一句指引，被折叠的再给全文）。
 - 连续 4 步无进展 → 提醒；连续 8 步无进展或用满 24 步 → 交给 writer 基于已读内容收尾。
   R16：停止原因（`StopReason`）只告诉 writer 一句中性的话（“步数上限本身不代表证据不足”），
   不再决定状态（见 §2.5）。
-- 近程窗口中，除最新一条观察外都截到 600 字。
+- 近程窗口保留 2 条观察：最新一条原样；较早的 READ 页换成“已读 X a-b，摘要和笔记在状态里”的指引
+  （R16），其他超过 600 字的截断。
 
 ### 2.4 Writer 与引用校验
 

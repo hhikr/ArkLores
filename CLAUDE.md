@@ -10,6 +10,7 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 ## 文档索引
 
 - `docs/AI_ARCHITECTURE.md`：Agent 与检索架构（当前状态 + 演进简史）——改 agent/检索层前先读。
+- `docs/ASK_PIPELINE_FLOW.md`：一个剧情问题从输入到落盘的逐步流程与参数（R16）。
 - `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：已知限制与根因。
 - `docs/RETRIEVAL_QA.md`：验收清单（离线 + 真机同链路）。
 - `docs/GAMEDATA_BUILD_PIPELINE.md`：数据构建、向量、发布。

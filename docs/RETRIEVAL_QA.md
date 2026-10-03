@@ -75,6 +75,12 @@ skipped）、既有固定检索 QA 全绿。
 - `test/story_coverage_test.dart`、`test/story_vectors_test.dart`：覆盖层工具、
   `search_story_lines` 关键词/向量/RRF、向量切块与量化、无向量时的回退。
 - `test/investigation_test.dart`、`test/investigation_ui_test.dart`：结论信封解析与渲染。
+- R16 `test/planner_memory_test.dart`：章节摘要与笔记折叠、目录折叠与已读标记、阅读计划解析与打勾、
+  出场总览“已读 n/m 章”、复核与充分性检查、重读（给看 / 固定 / 拒绝）、旧页指引、状态合成、
+  writer 原文分配。
+- R16 `test/streaming_test.dart`：SSE 跨块拼行、空闲超时、拒绝流式时回退、writer token/reset/replace
+  顺序、ReAct 实时预览、刷新合并、生成中的状态行与思考面板。
+- R16 `test/reasoning_level_test.dart`：各 provider 的思考参数、默认全部不思考、“深度思考”不重建会话。
 
 ### 真机同链路（opt-in，花钱）
 
@@ -93,6 +99,10 @@ token 用量）。
 | 负例 | 未覆盖的实体/事件明确说“未覆盖”，不用模型记忆补齐 |
 | 无向量 key | `ARKLORES_LIVE_NO_EMBEDDING=true` 时 FIND 退回关键词，观察写明原因 |
 | 成本 | 记录 `usage`；R12 参考值见 `AI_ARCHITECTURE.md` §4 |
+| 重复步（R16） | `summary.json` 的 `repeat_steps` 不超过总步数约 15% |
+| 流式（R16） | `streaming.first_text_after_writer_ms` 在几秒内（参考约 1.5 s） |
+| 宽问题（R16） | `talulah_after_chernobog`（`ARKLORES_LIVE_IDS`）answered，且读到 4 个 gold 章节所在的故事集 |
+| 窄问题不被拖长（R16） | 特雷西亚、缪因两题不被复核推去读无关故事集（参考 8 步 / 26 步） |
 
 ## Current Unit Coverage
 
