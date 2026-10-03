@@ -11,7 +11,8 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 
 ## 当前进度（每轮结束时更新）
 
-- 已发布 v0.10.4（2026-10-03，R18，分支 `feature/r18-answer-quality`）：§5.9 答案质量——审稿子 agent（读者视角，
+- v0.10.4（2026-10-03，R18，分支 `feature/r18-answer-quality`）：`release/v0.10.4`（b123e9d）已由 CI 构建签名成功，
+  Release 页面需开发者手动创建（云端 403）。内容：§5.9 答案质量——审稿子 agent（读者视角，
   只提本故事后段揭示/其他故事层面的待核实问题，主 agent 回原文核实后重写）+ 按阶段整理（详细版折叠在 `[DETAILS]` 下，
   每段出处由代码合并，段数只软性提示）+ 重写后只有过程话时的兜底。复测数据见 `docs/R17_TOOL_AGENT.md` §2「R18」。
   **待开发者真机确认**：答案开头是否交代故事性质、整理段落的可读性、“详细经过”折叠与流式手感
@@ -55,7 +56,7 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
   `tools/release_gamedata.env`，每次数据发版都要更新。
 - App 预发布一条命令：先改版本号/文档并提交推送，再运行 `tools/release_app.ps1 -Version <v> -NotesFile <md>`（Windows，
   PAT）或 `tools/release_app.sh <v> <md>`（Linux/云端，`gh`）：推 `release/v<v>` → 等 CI → 下载 APK → 建预发布。
-  发版前必须得到开发者明确同意。
+  发版前必须得到开发者明确同意。云端会话不能创建 Release（403），最后一步由开发者完成，见 `docs/CLOUD_DEV.md`。
 - 签名用项目 release keystore（仓库 secrets：`ANDROID_KEYSTORE_BASE64` 等）；workflow
   会校验证书 SHA-256 为 `b1b09ebf…e364`。本地备份 `tools/arklores-release.jks` +
   `tools/android_signing.properties`（gitignored），绝不提交、绝不打印。

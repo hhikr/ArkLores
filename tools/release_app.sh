@@ -55,7 +55,7 @@ tmp="$(mktemp -d)"
 gh run download "$run" -R "$repo" -n arklores-apk -D "$tmp"
 apk="$(find "$tmp" -name '*.apk' | head -n 1)"
 named="$tmp/ArkLores-$ver.apk"
-mv "$apk" "$named"
+[ "$apk" = "$named" ] || mv "$apk" "$named"
 echo "APK: $(stat -c %s "$named") bytes, SHA-256 $(sha256sum "$named" | awk '{print $1}')"
 
 gh release create "v$ver" "$named" -R "$repo" --target "$sha" \

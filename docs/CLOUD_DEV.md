@@ -72,6 +72,9 @@ bash tools/cloud/fetch_gamedata.sh
 - 全量测试正常约半分钟。明显变慢时先看磁盘（`df -h`）。
 - 提交不带 AI 署名：`.claude/settings.json` 关掉了 `Co-Authored-By`、PR 署名和 `Claude-Session` 尾注。
 - 发版：`tools/release_app.sh <版本> <说明.md>`（推 `release/v<版本>` → 等 CI → 下载 APK → 建预发布）。
+  **云端会话不能建 Release**（2026-10-03 实测：GitHub 代理对创建/编辑 Release 返回 403 “not permitted for this session type”）；
+  推分支、等 CI、下载 APK 都能做。云端跑到建 Release 这一步失败后，由开发者在 GitHub 网页或本机 `gh release create` 完成最后一步
+  （tag `v<版本>`，target 为 release 分支那个提交，勾选 pre-release，上传 CI 产物里的 APK）；不要重推 release 分支。
   如果云端下载 CI 产物被网络拦下，回本机用 `tools/release_app.ps1` 发同一个版本（`release/v<版本>` 已存在时脚本会拒绝，
   这时只需在本机执行脚本后半段，或删掉分支后重新推——注意重推会重新构建，APK 哈希会变）。
 
