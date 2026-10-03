@@ -483,6 +483,31 @@ void main() {
           StoryAnswerStatus.answered,);
     });
 
+    // R18: a rewrite reply that only talks about the process is asked for
+    // once more; if it still is not an answer, the earlier answer stays.
+    test('a process-only reply after a review is asked again, then the '
+        'earlier answer is kept', () async {
+      const story = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient(
+        [
+          _call('read_story', {'story_id': story}),
+          _answer('星灯点亮了钟楼 `$story:1`。'),
+          _answer('出处已核实，现在输出最终答案。'),
+          _answer('好的。'),
+        ],
+        reviews: ['{"issues": ["后来呢？"]}'],
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .toList();
+      expect(client.requests, hasLength(4));
+      expect(client.requests.last.last.content, contains('这不是最终答案'));
+      final answer = finalAnswerOf(events);
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+      expect(answer, contains('星灯点亮了钟楼 `$story:1`'));
+    });
+
     String detailJson(List<(String, List<List<Object>>)> entries) =>
         jsonEncode({
           'entries': [

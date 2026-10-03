@@ -145,6 +145,9 @@ class LoreAgentLoop {
     var citationRetried = false;
     var reviewed = false;
     var nudged = false;
+    // R18: the answer last sent back for a rewrite (citation recheck or
+    // reader review); kept if the rewrite never comes.
+    String? rewriteOf;
     var hitTurnLimit = false;
     // Session-record index (one per tool call, see onRawLlmResponse).
     var record = 0;
@@ -334,6 +337,30 @@ class LoreAgentLoop {
       // citations at its end; a markdown answer is taken as it is.
       // `story_id:L12-L40` is written without the L, the form the citation
       // display reads.
+      // R18: after a rewrite request, a reply with neither a JSON answer nor
+      // any citation only talks about the process ("核对完毕，现在输出……"):
+      // ask once more, then keep the answer that was sent back.
+      if (rewriteOf != null &&
+          !subtask &&
+          !loreAnswerJsonStart.hasMatch(content) &&
+          _citationCount(content) == 0) {
+        if (!nudged && !lastTurn) {
+          nudged = true;
+          if (answerOpen) {
+            yield const ReActEvent(
+              type: ReActEventType.finalAnswerReset,
+              content: '继续作答',
+            );
+          }
+          conversation
+            ..add(Message.assistant(content))
+            ..add(Message.user(
+              '这不是最终答案。请直接输出完整的最终答案（按要求的格式），不要描述核对过程。',
+            ),);
+          continue;
+        }
+        content = rewriteOf;
+      }
       final fromJson = subtask ? null : loreAnswerMarkdown(content);
       var body = (fromJson ?? content).trim().replaceAllMapped(
             RegExp(r'(\.txt\s*[:：]\s*)L(\d+)(\s*[-–~]\s*)?L?(\d+)?'),
@@ -364,6 +391,7 @@ class LoreAgentLoop {
           !citationRetried &&
           !lastTurn) {
         citationRetried = true;
+        rewriteOf = content;
         yield ReActEvent(
           type: ReActEventType.finalAnswerReset,
           content: unseen.isEmpty && bare.isEmpty ? '改写引语' : '核对出处',
@@ -412,6 +440,7 @@ class LoreAgentLoop {
               for (final (i, issue) in issues.indexed) '${i + 1}. $issue',
             ].join('\n'),
           );
+          rewriteOf = content;
           conversation
             ..add(Message.assistant(content))
             ..add(Message.user(
