@@ -3,7 +3,7 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`）；
 剧情问答由工具型 Agent（R17，`LoreAgentLoop`）直接查库作答。向量、目录、梗概都只作定位线索，不作证据。
-当前版本：v0.10.2（预发布，R13–R17c）；知识库资产仍是 v0.10.1 Release 上的那份。
+当前版本：v0.10.3（预发布，R13–R17d）；知识库资产仍是 v0.10.1 Release 上的那份。
 **版本号停在 0.10.x**：0.9 之后都是剧情问答工作流的迭代，v0.11.0 预发布已撤回；除非开发者明确说开启 0.11，
 发版只升 patch（0.10.2…），Android build 号继续递增。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。

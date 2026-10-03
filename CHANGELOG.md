@@ -4,6 +4,10 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-10-03 (pre-release)
+
+App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
+
 ### Changed
 
 - The Ask list no longer follows a streaming answer: thinking, steps and answer grow below
