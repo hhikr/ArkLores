@@ -7,10 +7,15 @@ All notable changes to ArkLores will be documented in this file.
 ### Changed
 
 - Answers are written for the reader, not about the knowledge base: no table names, file names,
-  ids or "库中 …" in the text, events told in the agent's own words with only short key phrases
-  quoted, and a misspelled name noted once as "X（你写的是 Y）". The prompt states rules only — no
+  ids or "库中 …" in the text, events retold in the agent's own words instead of quoted dialogue,
+  and a misspelled name noted once as "X（你写的是 Y）". The prompt states rules only — no
   concrete story, chapter or character (a test guards this). Gaps are one closing sentence in
   chapter names instead of a list of what was read.
+- The agent writes its final answer as JSON — entries of text plus citation tuples
+  (`["<story_id>", start, end]` / `["record", id]`) — which the app turns into the answer as it
+  streams, so every citation lands under the point it supports. Quoted text that copies the
+  cited lines is sent back once to be retold (shared with the citation check). On two test
+  questions the quoted share of the text fell from 15% / 10.6% to 0.5% / 1.4%.
 - Each paragraph or list item is followed by its evidence chain (`故事集 → 章 → 第 a–b 行`)
   instead of citations inside the sentence. Tapping a line range opens the whole chapter,
   scrolled to those lines, which flash twice and stay highlighted; a cited record opens in a

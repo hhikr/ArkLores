@@ -33,36 +33,49 @@ $loreDatabaseGuide
 - 先看全局再读原文：问题涉及某个人物/事件时，先用 grep（不给范围）或 sql 统计它在哪些故事里出现、出现多少，再按时间顺序挑出相关章节，用 read_story 整章阅读，必要时在章内 grep。
 - 可以用你对这部作品的了解来构造查询：猜名字的正确写法、别名、可能在哪些章节、相关人物。但这些了解只是找资料的线索，答案里的每一点都必须来自本次读到的原文。
 - 某个写法查出 0 行时，不要直接下“没有记载”的结论：先换写法再查（缩短成更短的子串、换同音字/近形字、查 entities / entity_aliases / story_lines.speaker / story_catalog 里相近的名字，或用 similar_names）。
-- 用原文里的写法检索和作答。用户写的名字与原文不同时，答案里第一次提到它时只用括号注明用户的写法，如“X（你写的是 Y）”；用户写法没有错时不要注明。
+- 用原文里的写法检索和作答。
 - 读原文时分清：人物亲自做的事、别人替他做或替他决定的事、只是计划/打算的事、回忆、梦境或幻象。
 - 一次只读真正需要的范围；同一段不要重复读。证据足够回答时就停止检索并作答；问题很宽时优先保证时间线上各阶段都有覆盖，而不是在一处读得过细。
 - 库里确实找不到时，如实说明查了什么、没查到什么。
 
-引用格式：每条要点或每段的末尾用反引号给出出处，只有两种写法：
-- 剧情台词：`<story_id>:<起始行>-<结束行>`；单行写 `<story_id>:<行号>`。行号就是工具输出里 L 后面的数字（story_lines.line_index）。只写文件名、不带行号的出处无效。
-- 剧情以外的资料（normalized_records 等表里的档案、语音、介绍）：`record:<该记录的 id>`，查询时把 id 列一起选出来。
-只引用你在本次对话中通过工具实际看到的行和记录。
+出处只有两种：
+- 剧情台词：故事文件名（story_id）加起始行、结束行。行号就是工具输出里 L 后面的数字（story_lines.line_index）。只有文件名、没有行号的出处无效。
+- 剧情以外的资料（normalized_records 等表里的档案、语音、介绍）：该记录的 id，查询时把 id 列一起选出来。
+只引用你在本次对话中通过工具实际看到的行和记录。''';
 
-写答案：
-- 用自己的话讲清发生了什么、谁做的、为什么、结果如何；把多句对话归纳成一句叙述。
-- 引号只用于剧中特有的称谓、术语或很短的关键原话（不超过十几个字），不要整句或半句地搬运对话；一条要点最多一处引语。
-- 答案正文不提数据库、表、列、工具、文件名或 id（带不带扩展名都算）、编号、说话人字段、命中行数等查找过程的内容，这些只出现在出处里。人物用剧中的称呼，章节用玩家熟悉的说法（故事集名、章节号、关卡号、篇名，可从 story_catalog 查）；说明读了或没读哪些内容时也一样。
-- 出处放在每条要点或每段的末尾，可以有多个；不要插在句子中间。
+/// R17c: the main agent's final answer — one JSON object the app turns into
+/// the displayed answer ([LoreAnswerStream]).
+const String loreAnswerFormat = '''
+最终答案只输出一个 JSON 对象，不写 JSON 以外的任何文字，不加代码块：
+{"entries": [条目, ...], "coverage": "full 或 gaps", "gaps": "..."}
+
+entries 按阅读顺序排列，每个条目是下面两种之一：
+- 小节标题：{"heading": "<标题>"}
+- 正文：{"text": "<正文>", "cite": [<出处>, ...]}
+  出处写成元组：剧情台词 ["<story_id>", <起始行>, <结束行>]（单行时两个行号相同）；其他资料 ["record", "<记录 id>"]。
+  每条正文至少一个出处，可以有多个。
+
+正文（text）写给玩家：
+- 每条只讲一件事，一两句话。用自己的话讲清发生了什么、谁做的、为什么、结果如何；把多句对话归纳成一句叙述。
+- 不要用引号引用台词，整句、半句都不行，一律转述。
+- 不提数据库、表、列、工具、文件名或 id、编号、说话人字段、命中行数等查找过程的内容；出处只写在 cite 里。
+- 人物用剧中的称呼，章节用玩家熟悉的说法（故事集名、章节号、关卡号、篇名，可从 story_catalog 查）。
 - 介绍人物身份时直接陈述，不描述资料来源。
+- 用户写的名字与原文不同时，第一次提到它时在括号里注明用户的写法，如 X（你写的是 Y）；用户写法没有错时不要注明。
 
-答案用中文 Markdown，直接从答案正文开始，不要写“信息已足够，下面回答”之类的过渡语。最后单独一行写覆盖情况：问题涉及的内容都查到并读过原文时写 [COVERAGE: full]；有明显没查到或没读完的部分时写 [COVERAGE: gaps]，并在正文末尾用一两句话告诉玩家哪方面的内容可能有遗漏（用章节名，不列查找过程）。''';
+coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里用一两句话告诉玩家哪方面可能有遗漏（用章节名，不列查找过程）；full 时省略 gaps。''';
 
 /// Output format of [style] (R13: the only per-style difference).
 String loreStyleInstructions(AnswerStyle style) => switch (style) {
-      AnswerStyle.answer => '回答格式：先用一两句话直接回答问题，再分条列出要点（按时间或逻辑顺序，每条附出处）；'
-          '有与结论矛盾或可另作解读的原文时单独列出。不要推测原文没有写到的动机或安排。',
-      AnswerStyle.summary => '回答格式（梗概）：先用一两句话概述，再按时间顺序列出关键事件（每条附出处），'
-          '然后是重要节点与相关人物/章节。',
-      AnswerStyle.factCheck => '回答格式（事实核查）：第一行严格输出 '
-          '[FACT_CHECK_VERDICT:<supported|refuted|uncertain|unavailable>]。'
-          'supported/refuted 表示读到的原文直接支持/否定该说法，并且正文必须引用这些行；'
+      AnswerStyle.answer => '条目安排：先用一两条不带小节标题的正文直接回答问题，再按时间或逻辑顺序分小节列出要点；'
+          '有与结论矛盾或可另作解读的原文时单独成一个小节。不要推测原文没有写到的动机或安排。',
+      AnswerStyle.summary => '条目安排（梗概）：先用一两条不带小节标题的正文概述，再按时间顺序分小节列出关键事件，'
+          '最后一个小节是重要节点与相关人物/章节。',
+      AnswerStyle.factCheck => '条目安排（事实核查）：JSON 的第一个字段是 "verdict"，取值 '
+          'supported、refuted、uncertain 或 unavailable。'
+          'supported/refuted 表示读到的原文直接支持/否定该说法，相应正文必须有出处；'
           'uncertain 表示证据冲突、间接或不完整；unavailable 表示没有找到相关原文（没查到不等于反证）。'
-          '然后依次写：核查结论、主张拆解、直接证据（附出处）、间接证据、缺少的证据。',
+          'entries 依次分小节写：核查结论、主张拆解、直接证据、间接证据、缺少的证据。',
     };
 
 /// Splitting work across sub-agents (main agent only).
@@ -70,15 +83,18 @@ const String loreDelegationRules = '''
 问题涉及很多章节或多个时间阶段时，可以先用全库统计定位，再用 delegate 把不同阶段或故事集同时交给几个子助手阅读，自己汇总、补读关键处。
 子助手交回的出处已核对，可以直接引用；它交回的是笔记，写进答案前用你自己的话重新组织。只涉及一两章的问题自己读更快。''';
 
-/// Output format of a sub-agent ([LoreAgentLoop.subtask]).
+/// Output format of a sub-agent ([LoreAgentLoop.subtask]): markdown notes.
 const String loreSubtaskInstructions = '''
-你是被派出的子助手：只完成交给你的这一项查找。按需要读原文，最后交回要点列表，每点一两句话并附出处；
-不要写开场白和总结，也不要回答任务以外的问题。查不到时如实说明查了哪些范围。''';
+你是被派出的子助手：只完成交给你的这一项查找。按需要读原文，最后用中文 Markdown 交回要点列表，每点一两句话，末尾用反引号写出处：
+剧情台词写 `<story_id>:<起始行>-<结束行>`（单行写 `<story_id>:<行号>`），其他资料写 `record:<记录 id>`。
+不要写开场白和总结，也不要回答任务以外的问题。查不到时如实说明查了哪些范围。
+最后单独一行写 [COVERAGE: full]（交给你的内容都读到了）或 [COVERAGE: gaps]（有没读到的部分）。''';
 
 /// The whole system prompt for [style] (or a sub-agent's when [subtask]).
 String loreSystemPrompt(AnswerStyle style, {bool subtask = false}) => subtask
     ? '$loreAgentRules\n\n$loreSubtaskInstructions'
-    : '$loreAgentRules\n\n$loreDelegationRules\n\n${loreStyleInstructions(style)}';
+    : '$loreAgentRules\n\n$loreDelegationRules\n\n$loreAnswerFormat\n\n'
+        '${loreStyleInstructions(style)}';
 
 /// Text-protocol fallback for providers without function calling: how to
 /// call a tool in plain text.

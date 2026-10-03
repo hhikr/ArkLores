@@ -90,7 +90,9 @@ void main() {
           jsonEncode(t.toJson()),
       ].join('\n');
       expect(text, isNot(contains('库中写作')));
-      expect(text, contains('写答案'));
+      expect(text, contains('不要用引号引用台词'));
+      // R17c: no carve-out for "allowed" quotes — naming one invites it.
+      expect(text, isNot(contains('引号只用于')));
       // Path shapes use placeholders (`level_main_<章>-<关>`), never a real
       // file, level code or character id.
       expect(RegExp(r'[\w/]+_\d+[\w-]*\.txt').hasMatch(text), isFalse);
@@ -118,8 +120,13 @@ void main() {
     test('the system prompt keeps the working rules', () {
       final prompt = loreSystemPrompt(AnswerStyle.answer);
       expect(prompt, contains('先看全局再读原文'));
-      expect(prompt, contains('record:<该记录的 id>'));
-      expect(prompt, contains('[COVERAGE: full]'));
+      expect(prompt, contains('["record", "<记录 id>"]'));
+      expect(prompt, contains('"entries"'));
+      expect(prompt, contains('"coverage"'));
+      // Sub-agents still hand back markdown notes.
+      final sub = loreSystemPrompt(AnswerStyle.answer, subtask: true);
+      expect(sub, contains('[COVERAGE: full]'));
+      expect(sub, isNot(contains('"entries"')));
     });
 
     tearDown(() async {
@@ -298,6 +305,49 @@ void main() {
       expect(third.where((m) => m.role == MessageRole.tool), hasLength(2));
     });
 
+    test('a JSON answer streams as markdown; copied dialogue is sent back',
+        () async {
+      String json(String text) => jsonEncode({
+            'entries': [
+              {
+                'text': text,
+                'cite': [
+                  ['obt/main/level_main_fx-01.txt', 1, 1],
+                ],
+              },
+            ],
+            'coverage': 'full',
+          });
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        _answer(json('星灯说“钟楼的灯由我来点亮”。')),
+        _answer(json('星灯主动承担了点亮钟楼的事。')),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .toList();
+      final recheck = client.requests[2].last.content;
+      expect(recheck, contains('照搬了原文台词'));
+      expect(recheck, contains('钟楼的灯由我来点亮'));
+      expect(recheck, contains('JSON'));
+      // The model's JSON stays in the conversation it is sent back with.
+      expect(client.requests[2][client.requests[2].length - 2].content,
+          startsWith('{'),);
+      final answer = finalAnswerOf(events);
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+      expect(answer, contains(
+          '星灯主动承担了点亮钟楼的事。 `obt/main/level_main_fx-01.txt:1`',),);
+      expect(answer, isNot(contains('"entries"')));
+      // Tokens streamed were markdown, not JSON.
+      final streamed = events
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+      expect(streamed, isNot(contains('{')));
+      expect(streamed, contains('星灯'));
+    });
+
     test('an answer citing unread lines is sent back once', () async {
       final client = _ScriptedClient([
         _call('grep', {'pattern': '星灯'}),
@@ -390,7 +440,7 @@ void main() {
           .toList();
       final answer = finalAnswerOf(events);
       expect(answer, contains('[FACT_CHECK_VERDICT:uncertain]'));
-      expect(client.requests.first.first.content, contains('FACT_CHECK_VERDICT'));
+      expect(client.requests.first.first.content, contains('"verdict"'));
     });
 
     test('a lead-in about the answering process is dropped, content kept',

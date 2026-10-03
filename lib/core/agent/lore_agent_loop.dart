@@ -24,6 +24,7 @@ import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import 'lore_agent_prompts.dart';
+import 'lore_answer_json.dart';
 import 'lore_tools.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
@@ -153,6 +154,9 @@ class LoreAgentLoop {
       final text = StringBuffer();
       final reasoning = StringBuffer();
       var answerOpen = false;
+      // R17c: the main agent answers in JSON, shown as markdown while it
+      // streams.
+      LoreAnswerStream? jsonAnswer;
       CompletionDelta? done;
       try {
         final messages = [Message.system(systemPrompt()), ...conversation];
@@ -173,9 +177,33 @@ class LoreAgentLoop {
           }
           if (delta.content.isNotEmpty) {
             text.write(delta.content);
-            // Narration before a tool call is short; longer text with no
-            // tool block is the answer, streamed as it comes.
-            if (answerOpen) {
+            var live = '';
+            if (jsonAnswer != null) {
+              live = jsonAnswer.add(delta.content);
+            } else if (!subtask) {
+              final start = loreAnswerJsonStart.firstMatch(text.toString());
+              if (start != null) {
+                if (answerOpen) {
+                  yield const ReActEvent(
+                    type: ReActEventType.finalAnswerReset,
+                    content: '整理答案',
+                  );
+                }
+                answerOpen = true;
+                jsonAnswer = LoreAnswerStream();
+                live = jsonAnswer.add(text.toString().substring(start.start));
+              }
+            }
+            if (jsonAnswer != null) {
+              if (live.isNotEmpty) {
+                yield ReActEvent(
+                  type: ReActEventType.finalAnswerToken,
+                  content: live,
+                );
+              }
+              // Narration before a tool call is short; longer text with no
+              // tool block is the answer, streamed as it comes.
+            } else if (answerOpen) {
               yield ReActEvent(
                 type: ReActEventType.finalAnswerToken,
                 content: delta.content,
@@ -286,9 +314,12 @@ class LoreAgentLoop {
         continue;
       }
 
-      // A final answer. `story_id:L12-L40` is written without the L, the
-      // form the citation display reads.
-      var body = content.trim().replaceAllMapped(
+      // A final answer: JSON (R17c) becomes markdown with each entry's
+      // citations at its end; a markdown answer is taken as it is.
+      // `story_id:L12-L40` is written without the L, the form the citation
+      // display reads.
+      final fromJson = subtask ? null : loreAnswerMarkdown(content);
+      var body = (fromJson ?? content).trim().replaceAllMapped(
             RegExp(r'(\.txt\s*[:：]\s*)L(\d+)(\s*[-–~]\s*)?L?(\d+)?'),
             (m) => '${m.group(1)}${m.group(2)}'
                 '${m.group(4) == null ? '' : '${m.group(3) ?? '-'}${m.group(4)}'}',
@@ -308,24 +339,33 @@ class LoreAgentLoop {
 
       final unseen = _unseenCitations(body, seen);
       final bare = _bareStoryCitations(body);
-      if ((unseen.isNotEmpty || bare.isNotEmpty) &&
+      // R17c: quoted passages copied from the cited lines (the answer should
+      // retell, not quote dialogue); checked once, with the citations.
+      final copied = citationRetried || lastTurn || subtask
+          ? const <String>[]
+          : quotedSourceLines(body, await _citedText(body));
+      if ((unseen.isNotEmpty || bare.isNotEmpty || copied.isNotEmpty) &&
           !citationRetried &&
           !lastTurn) {
         citationRetried = true;
-        yield const ReActEvent(
+        yield ReActEvent(
           type: ReActEventType.finalAnswerReset,
-          content: '核对出处',
+          content: unseen.isEmpty && bare.isEmpty ? '改写引语' : '核对出处',
         );
         conversation
-          ..add(Message.assistant(body))
+          ..add(Message.assistant(content))
           ..add(Message.user([
             if (unseen.isNotEmpty)
               '下面这些出处不在你本次通过工具实际看到的行或记录里：${unseen.join('、')}。'
                   '请先读取核实（或找到真正的出处），无法核实的内容请删掉。',
             if (bare.isNotEmpty)
               '下面这些出处只有文件名、没有行号：${bare.join('、')}。'
-                  '请用 read_story 或带范围的 grep 找到具体行，写成 story_id:起始行-结束行。',
-            '然后重新输出完整的最终答案；最终答案只写答案本身，不要提核对过程。',
+                  '请用 read_story 或带范围的 grep 找到具体行，写明起始行和结束行。',
+            if (copied.isNotEmpty)
+              '下面这些引号里的文字照搬了原文台词：${copied.map((q) => '“$q”').join('、')}。'
+                  '请改用自己的话转述，不要用引号引用台词。',
+            '然后重新输出完整的最终答案${fromJson == null ? '' : '（同样的 JSON 格式）'}；'
+                '最终答案只写答案本身，不要提核对过程。',
           ].join('\n'),),);
         continue;
       }
@@ -354,7 +394,9 @@ class LoreAgentLoop {
           : (coverage == 'gaps' || hitTurnLimit)
               ? StoryAnswerStatus.partial
               : StoryAnswerStatus.answered;
-      conversation.add(Message.assistant(body));
+      // The model's own text (JSON) stays in the conversation, so a
+      // follow-up sees the format it is asked for.
+      conversation.add(Message.assistant(fromJson == null ? body : content));
       onConversation?.call(
         LoreConversation(messages: List.of(conversation), seen: seen),
       );
@@ -533,6 +575,30 @@ class LoreAgentLoop {
     // A rule (`---`) under the lead-in goes with it.
     if (rest.startsWith('---')) rest = rest.substring(3).trimLeft();
     return rest.isEmpty ? body : rest;
+  }
+
+  /// Text of the story lines [body] cites (R17c quote check).
+  Future<String> _citedText(String body) async {
+    final out = StringBuffer();
+    for (final m in _citation.allMatches(body)) {
+      final a = int.parse(m.group(2)!);
+      final b = int.tryParse(m.group(3) ?? '') ?? a;
+      final (lo, hi) = a <= b ? (a, b) : (b, a);
+      try {
+        final page = await store.readStoryLines(
+          storyId: m.group(1)!,
+          startLine: lo,
+          endLine: hi,
+          maxLines: (hi - lo + 1).clamp(1, 500),
+        );
+        for (final line in page.lines) {
+          out.writeln(line.content);
+        }
+      } catch (_) {
+        // A citation that cannot be read is reported by the citation check.
+      }
+    }
+    return out.toString();
   }
 
   static int _citationCount(String body) => {

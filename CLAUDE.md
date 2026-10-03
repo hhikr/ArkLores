@@ -225,6 +225,8 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   等于特化优化。需要示意格式时只用占位符（`X`、`<story_id>`、`main_<章>`）；`lore_agent_test.dart` 守卫。
 - 答案写给玩家（R17b）：正文不提库/表/文件名/id，用自己的话叙述；出处在每条末尾，界面把它们放到该条下面的证据链，
   点行号打开原文阅读页（`story_reader_page.dart`）。
+- 主 agent 的最终答案是 JSON（R17c，`lore_answer_json.dart`）：条目 = 正文 + 出处元组，代码边流式边转成 markdown。
+  提示词只说“不要用引号引用台词”，不要写“哪些可以加引号”（开发者判断：写了模型就会刻意用）；照搬台词由代码检查、退回一次。
 - 只读 SQL（`readonly_sql.dart`）：单条 SELECT/WITH、拒绝写/ATTACH/PRAGMA、只读连接、每次查询一个 isolate、
   超时用 `sqlite3_interrupt` 在 SQLite 内部中止（工作 isolate 等主 isolate 说 close 才关连接，避免中止已释放的连接）。
 
