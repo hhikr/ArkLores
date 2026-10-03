@@ -10,12 +10,14 @@ library;
 
 import 'gamedata_models.dart';
 import 'name_similarity.dart';
+import 'readonly_sql.dart';
 import 'story_catalog.dart';
 import 'story_coverage_models.dart';
 import 'story_vectors.dart';
 
 export 'gamedata_models.dart';
 export 'name_similarity.dart' show SimilarName, describeSimilarNames;
+export 'readonly_sql.dart' show SqlQueryResult;
 export 'story_catalog.dart'
     show
         NamedStoryTarget,
@@ -148,4 +150,40 @@ abstract interface class GameDataRetrieval {
 
   /// R15: catalog collections / chapters named verbatim in [text].
   Future<List<NamedStoryTarget>> namedStoryTargets(String text);
+
+  /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at
+  /// most [maxRows] rows; rejections, errors and timeouts come back in
+  /// [SqlQueryResult.error].
+  Future<SqlQueryResult> readOnlySql(String sql, {int maxRows});
+
+  /// R17: story lines whose content or speaker contains any of [terms], in
+  /// [storyIds] (every story when null), by story then line; at most
+  /// [limit] rows.
+  Future<List<StoryLineHitRow>> grepStoryLines(
+    List<String> terms, {
+    Iterable<String>? storyIds,
+    int limit,
+  });
+
+  /// R17: per story, the number of lines whose content or speaker contains
+  /// any of [terms] (stories without a hit are left out).
+  Future<Map<String, int>> storyLineHitCounts(
+    List<String> terms, {
+    Iterable<String>? storyIds,
+  });
+}
+
+/// R17: one line found by [GameDataRetrieval.grepStoryLines].
+class StoryLineHitRow {
+  const StoryLineHitRow({
+    required this.storyId,
+    required this.lineIndex,
+    required this.content,
+    this.speaker,
+  });
+
+  final String storyId;
+  final int lineIndex;
+  final String? speaker;
+  final String content;
 }

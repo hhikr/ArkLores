@@ -97,6 +97,7 @@ class SettingsService {
 
   // ── Agent session log keys ──────────────────────────────
   static const _keySessionLogsEnabled = 'session_logs_enabled';
+  static const _keyToolAgentEnabled = 'tool_agent_enabled';
 
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
@@ -205,6 +206,15 @@ class SettingsService {
   /// Persists the per-session AI log toggle.
   Future<void> saveSessionLogsEnabled(bool enabled) async {
     await _storage.write(key: _keySessionLogsEnabled, value: '$enabled');
+  }
+
+  /// R17: whether story questions run the tool agent (default on).
+  Future<bool> loadToolAgentEnabled() async {
+    return await _storage.read(key: _keyToolAgentEnabled) != 'false';
+  }
+
+  Future<void> saveToolAgentEnabled(bool enabled) async {
+    await _storage.write(key: _keyToolAgentEnabled, value: '$enabled');
   }
 
   /// Returns `true` if onboarding has been completed.

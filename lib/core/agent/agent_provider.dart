@@ -19,6 +19,7 @@ import 'question_router.dart';
 import 'react_loop.dart';
 import 'roleplay_agent.dart';
 import 'roleplay_session_store.dart';
+import 'story_qa_agent.dart' show LoreConversation;
 import 'summary_agent.dart';
 
 export 'chat_message.dart';
@@ -81,6 +82,7 @@ class AskChatNotifier extends ChatNotifierBase {
     ChatSessionStore sessionStore = const ChatSessionStore(),
     required LLMConfig Function() configReader,
     LLMClient? Function()? writerClientReader,
+    bool Function()? toolAgentReader,
   })  : _summaryAgent = summaryAgent,
         _factCheckAgent = factCheckAgent,
         _investigationAgent = investigationAgent,
@@ -88,11 +90,20 @@ class AskChatNotifier extends ChatNotifierBase {
         _sessionStore = sessionStore,
         _configReader = configReader,
         _writerClientReader = writerClientReader,
+        _toolAgentReader = toolAgentReader,
         super([]);
 
   /// R16: the answer writer for the next question (the thinking client when
   /// "深度思考" is on); null keeps each agent's own writer.
   final LLMClient? Function()? _writerClientReader;
+
+  /// R17: whether the next question runs the tool agent ([LoreAgentLoop]).
+  final bool Function()? _toolAgentReader;
+
+  /// R17: the tool agent's conversation after each answer (by assistant
+  /// message id), so a follow-up continues with the text already read.
+  /// In memory only; a restored session starts from the answer texts.
+  final Map<String, LoreConversation> _conversations = {};
   final SummaryAgent _summaryAgent;
   final FactCheckAgent _factCheckAgent;
   final InvestigationAgent _investigationAgent;
@@ -113,6 +124,7 @@ class AskChatNotifier extends ChatNotifierBase {
   void newSession() {
     cancel();
     _currentSession = null;
+    _conversations.clear();
     state = const [];
   }
 
@@ -120,6 +132,7 @@ class AskChatNotifier extends ChatNotifierBase {
   /// the same session file.
   void loadSession(ChatSessionFile session) {
     _currentSession = session;
+    _conversations.clear();
     if (session.turns.isNotEmpty) {
       _lastMode = session.turns.last.effectiveMode;
     }
@@ -132,6 +145,7 @@ class AskChatNotifier extends ChatNotifierBase {
   void clearChat() {
     cancel();
     _currentSession = null;
+    _conversations.clear();
     state = const [];
   }
 
@@ -142,6 +156,13 @@ class AskChatNotifier extends ChatNotifierBase {
     final generation = nextGeneration();
     final history = buildHistory(state);
     final priorPages = lastTurnReadPages(state);
+    // R17: continue the last answer's conversation when it is the last
+    // message (an error or a cancel in between starts from the texts).
+    final lastMessage = state.isEmpty ? null : state.last;
+    final prior = lastMessage == null || lastMessage.role != MessageRole.assistant
+        ? null
+        : _conversations[lastMessage.id];
+    final useToolAgent = _toolAgentReader?.call() ?? false;
     final assistantId = newId();
     state = [
       ...state,
@@ -213,6 +234,8 @@ class AskChatNotifier extends ChatNotifierBase {
     }
     void onMemory(String memoryBlock) => turnMemory = memoryBlock;
 
+    void onConversation(LoreConversation conversation) =>
+        _conversations[assistantId] = conversation;
     final writerClient = _writerClientReader?.call();
     final stream = switch (effectiveMode) {
       AiMode.verify => _factCheckAgent.checkClaim(
@@ -222,6 +245,9 @@ class AskChatNotifier extends ChatNotifierBase {
           writerClient: writerClient,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
+          useToolAgent: useToolAgent,
+          prior: prior,
+          onConversation: onConversation,
         ),
       AiMode.investigate => _investigationAgent.investigate(
           query: query,
@@ -230,6 +256,9 @@ class AskChatNotifier extends ChatNotifierBase {
           writerClient: writerClient,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
+          useToolAgent: useToolAgent,
+          prior: prior,
+          onConversation: onConversation,
         ),
       AiMode.summarize || AiMode.auto => _summaryAgent.generateSummary(
           query: query,
@@ -238,6 +267,9 @@ class AskChatNotifier extends ChatNotifierBase {
           writerClient: writerClient,
           onRawLlmResponse: onRaw,
           onMemoryChanged: recording ? onMemory : null,
+          useToolAgent: useToolAgent,
+          prior: prior,
+          onConversation: onConversation,
         ),
     };
 
@@ -510,8 +542,16 @@ final askChatProvider =
     writerClientReader: () => ref.read(deepThinkingProvider)
         ? ref.read(llmClientProvider(ReasoningLevel.low))
         : null,
+    toolAgentReader: () => ref.read(toolAgentProvider),
   );
 });
+
+/// R17: whether story questions run the tool agent ([LoreAgentLoop]: one
+/// model with SQL / grep / whole-chapter reads) instead of the R16 planner
+/// pipeline. Read per question; toggled in Settings.
+final toolAgentProvider = StateProvider<bool>(
+  (ref) => ref.watch(initialToolAgentEnabledProvider),
+);
 
 /// Provider for the [InvestigationAgent] instance.
 final investigationAgentProvider = Provider<InvestigationAgent>((ref) {

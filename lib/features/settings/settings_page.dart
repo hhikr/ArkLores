@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
+import '../../core/agent/agent_provider.dart' show toolAgentProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -60,13 +61,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final enabled = ref.watch(sessionLogsEnabledProvider);
     return Switch(
       value: enabled,
-      activeColor: theme.accentPrimary,
+      activeThumbColor: theme.accentPrimary,
       onChanged: (value) async {
         ref.read(sessionLogsEnabledProvider.notifier).state = value;
         AgentLogger.setEnabled(value);
         await ref
             .read(settingsServiceProvider)
             .saveSessionLogsEnabled(value);
+      },
+    );
+  }
+
+  /// R17: tool agent (default) or the R16 planner pipeline.
+  Widget _buildToolAgentSwitch(AppThemeTokens theme) {
+    final enabled = ref.watch(toolAgentProvider);
+    return Switch(
+      value: enabled,
+      activeThumbColor: theme.accentPrimary,
+      onChanged: (value) async {
+        ref.read(toolAgentProvider.notifier).state = value;
+        await ref.read(settingsServiceProvider).saveToolAgentEnabled(value);
       },
     );
   }
@@ -237,6 +251,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             title: context.t.settingsSessionLogs,
                             subtitle: context.t.settingsSessionLogsDesc,
                             control: _buildSessionLogsSwitch(theme),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _CompactSettingWidth(
+                          child: _PreferenceRow(
+                            theme: theme,
+                            icon: Icons.manage_search_rounded,
+                            title: context.t.settingsToolAgent,
+                            subtitle: context.t.settingsToolAgentDesc,
+                            control: _buildToolAgentSwitch(theme),
                           ),
                         ),
                         const SizedBox(height: 18),

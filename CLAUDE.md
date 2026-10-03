@@ -3,14 +3,15 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`，OUTLINE）；
 向量、目录、梗概都只作定位线索，不作证据。
-当前版本：v0.12.0 开发中（R16：流式、思考强度、规划器记忆）；v0.11.0（R13–R15）为预发布版；最新正式 release：v0.10.0。
+当前版本：v0.12.0 开发中（R16：流式、思考强度、规划器记忆；R17：工具型剧情 Agent，默认启用）；v0.11.0（R13–R15）为预发布版；最新正式 release：v0.10.0。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
 ## 文档索引
 
 - `docs/AI_ARCHITECTURE.md`：Agent 与检索架构（当前状态 + 演进简史）——改 agent/检索层前先读。
-- `docs/ASK_PIPELINE_FLOW.md`：一个剧情问题从输入到落盘的逐步流程与参数（R16）。
+- `docs/R17_TOOL_AGENT.md`：R17 工具型剧情 Agent（默认链路）的结构、工具、出处核对与 A/B 数据。
+- `docs/ASK_PIPELINE_FLOW.md`：R16 流程（设置中可切回）从输入到落盘的逐步流程与参数。
 - `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：已知限制与根因。
 - `docs/RETRIEVAL_QA.md`：验收清单（离线 + 真机同链路）。
 - `docs/GAMEDATA_BUILD_PIPELINE.md`：数据构建、向量、发布。
@@ -84,8 +85,8 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 字段。反例（均已在 R13 删除）："至少比较 2 个嫌疑人才能下结论"的门槛、`culprit=`
 结论信封、"仅当问题问谁导致时"的提示词步骤、为凶手/死亡类问题定制的工具命名。
 
-1. 所有剧情问题走同一条流程（`StoryQaAgent` → `PlannerLoop`）：同一套检索、取证、
-   引用校验、进展控制与 `[STORY_ANSWER: status=…]` 状态。
+1. 所有剧情问题走同一条流程（`StoryQaAgent` → `LoreAgentLoop`（R17 默认）/ `PlannerLoop`（R16））：
+   同一套检索、取证、引用校验、进展控制与 `[STORY_ANSWER: status=…]` 状态。
 2. 唯一允许的差异：用户选择的模式（`AnswerStyle`：回答 / 梗概 / 核查）决定 writer 的
    **输出格式**，以及给 planner 的一行任务说明。不得因此改变检索或判定规则。
 3. 新增任何特判一律拒绝；以后也不许再写。修改后自查：
@@ -210,6 +211,17 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
 （`name_similarity.dart`，只陈述"字符串相近"）、scope 内 0 命中时报告范围外命中、COVER 先给
 全部故事集总览；身份由 Agent 在问答时读原文确认。不要新增别名/身份表来"修"某个具体角色。
 没有该表的库照常可用（OUTLINE 提示改用 MAP，引用显示由路径推出的名字）。
+
+### 工具型剧情 Agent（R17，默认）
+
+- `LoreAgentLoop`（`lore_agent_loop.dart`）：一个模型 + `lore_tools.dart` 的通用工具（只读 `sql`、`grep`、
+  `read_story`、`outline`、`similar_names`），messages 只追加（前缀缓存命中约 85–90%）。设置里的“新版剧情问答”
+  （`toolAgentProvider`）关闭后才走 R16 `PlannerLoop`。live harness 默认同 App，`ARKLORES_LIVE_ENGINE=planner` 跑旧流程。
+- 不要往这条链路里加手写的进度规则（预算提示、重读拒绝、复核、阅读计划）：R13–R16 证明这类规则只对样例有效。
+  改进方向是工具的表达力、工具输出的信息量和提示词里的通用工作方式。
+- 出处：`story_id:起始行-结束行` 或 `record:<normalized_records.id>`，代码核对必须是工具实际给模型看过的
+  （`SeenLines`）。写错的名字靠“模型用自身知识构造查询 + 零命中如实报告 + 自动附近名”解决，不加别名表。
+- 只读 SQL（`readonly_sql.dart`）：单条 SELECT/WITH、拒绝写/ATTACH/PRAGMA、只读连接、每次查询一个 isolate、超时 kill。
 
 ### 思考强度与流式（R16）
 

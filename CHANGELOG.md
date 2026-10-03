@@ -7,9 +7,20 @@ All notable changes to ArkLores will be documented in this file.
 ## [0.12.0] - pre-release
 
 R16: streamed answers, per-role reasoning, a planner that keeps what it read, and a status
-decided by the evidence. Same knowledge base as v0.11.0 (no re-download needed).
+decided by the evidence. R17: a new story agent (default). Same knowledge base as v0.11.0
+(no re-download needed).
 
 ### Added
+
+- R17 story agent (Settings → "新版剧情问答", on by default): one model works the knowledge
+  base with general tools — read-only SQL, corpus-wide or scoped grep with context,
+  whole-chapter reads, collection outlines, near names — in one append-only conversation.
+  Follow-up questions continue that conversation. On the Talulah test question it read all
+  four key chapters with 11 calls in 35 s (R16: ~37 calls, 97 s), and misspelled names
+  (切尔诺贝利, 缪因) are found under their spelling in the knowledge base. Citations are
+  checked against the lines the tools actually showed; tapping a cited line range under the
+  answer shows the original lines from the knowledge base, and non-story records are cited
+  and shown as "资料 n". Providers without function calling get a plain-text tool protocol.
 
 - Streaming: answers appear token by token (SSE, lines joined across network chunks,
   60 s idle timeout, fallback to non-streaming when a provider rejects it). A failed

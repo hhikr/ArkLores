@@ -1,6 +1,10 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前状态：R16（`feature/r16-stream-reasoning`，在 R15 之上：流式输出、按角色设定思考强度、规划器保留已读内容、
+> **R17（App 默认）**：剧情问答默认走工具型 Agent `LoreAgentLoop`。它只用一个模型，配通用工具：只读 SQL、全库或范围内 grep、整章阅读、目录、近名；对话只追加。
+> 结构、工具、出处核对和 A/B 数据见 **`R17_TOOL_AGENT.md`**。下文描述的 R16 `PlannerLoop` 仍保留，
+> 在设置中关闭“新版剧情问答”后使用。
+>
+> R16 状态：R16（`feature/r16-stream-reasoning`，在 R15 之上：流式输出、按角色设定思考强度、规划器保留已读内容、
 > 开局阅读计划与作答前复核、状态由证据决定）。一个问题逐步怎么走、每步的参数，见 **`ASK_PIPELINE_FLOW.md`**。
 > 本文档是 Agent 层与检索层的**总括文档**（结构、取舍、历史），
 > 取代旧的 `AI_REFACTOR_SUMMARY.md`、`R0`–`R3` 阶段总结、`AI_RETRIEVAL_OPTIMIZATION.md`、

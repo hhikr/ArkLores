@@ -117,9 +117,12 @@ Map<String, Object?> summarizeTurn(
     if (tool != null && tool.isNotEmpty) {
       toolCounts[tool] = (toolCounts[tool] ?? 0) + 1;
     }
-    if (tool == 'read_story_lines') {
+    // R16 planner READ / R17 tool agent read_story.
+    if (tool == 'read_story_lines' || tool == 'read_story') {
       final story = it.toolArgs?['story_id'];
-      if (story is String && story.isNotEmpty) readStories.add(story);
+      if (story is String && story.isNotEmpty) {
+        readStories.add(story.endsWith('.txt') ? story : '$story.txt');
+      }
     }
     if (it.rawResponse.trim().isEmpty) emptyResponses++;
     if (_repeatObservation.hasMatch(it.observation)) repeats++;

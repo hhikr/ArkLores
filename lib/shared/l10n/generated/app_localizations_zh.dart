@@ -73,6 +73,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '完整记录每次 AI 对话（含模式选择、自动路由决策、完整推理过程与检索原文）到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复；仅保存在本机，可在 app 内或文件管理器中删除。';
 
   @override
+  String get settingsToolAgent => '新版剧情问答';
+
+  @override
+  String get settingsToolAgentDesc =>
+      '由一个模型直接查询知识库（全库统计、整章阅读、章内搜索）并作答，引用的原文可在答案下展开查看。关闭后使用旧的分步检索流程。';
+
+  @override
   String get settingsKnowledgeBase => '知识库管理';
 
   @override
@@ -482,6 +489,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String aiChapterCount(int count) {
     return '$count 处';
   }
+
+  @override
+  String get aiCitedRecord => '资料';
+
+  @override
+  String aiCitedRecords(int count) {
+    return '其他资料 $count 条';
+  }
+
+  @override
+  String get aiCitedLinesUnavailable => '原文暂不可用（知识库未安装或已更新）';
 
   @override
   String get aiMoreActions => '更多';

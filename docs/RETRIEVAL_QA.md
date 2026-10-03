@@ -81,6 +81,12 @@ skipped）、既有固定检索 QA 全绿。
 - R16 `test/streaming_test.dart`：SSE 跨块拼行、空闲超时、拒绝流式时回退、writer token/reset/replace
   顺序、ReAct 实时预览、刷新合并、生成中的状态行与思考面板。
 - R16 `test/reasoning_level_test.dart`：各 provider 的思考参数、默认全部不思考、“深度思考”不重建会话。
+- R17 `test/lore_agent_test.dart`：
+  - 只读 SQL 语句检查（拒绝写入、多语句、ATTACH、PRAGMA）；
+  - 工具在 fixture 库上的输出：全库统计、范围 grep 加上下文、`read_story` 翻页和找不到时的建议、零命中附近名；
+  - 循环：请求只追加、出处核对退回一次（含 `record:` 和只写文件名的出处）、无出处判为 not_covered；
+  - 文本协议回退、最后一轮不带工具作答、上下文折叠、追问继续上一问的对话；
+  - `record:` 出处的显示编号。
 
 ### 真机同链路（opt-in，花钱）
 
@@ -103,6 +109,9 @@ token 用量）。
 | 流式（R16） | `streaming.first_text_after_writer_ms` 在几秒内（参考约 1.5 s） |
 | 宽问题（R16） | `talulah_after_chernobog`（`ARKLORES_LIVE_IDS`）answered，且读到 4 个 gold 章节所在的故事集 |
 | 窄问题不被拖长（R16） | 特雷西亚、缪因两题不被复核推去读无关故事集（参考 8 步 / 26 步） |
+| 工具型 Agent（R17，默认） | `talulah_after_chernobog`：`gold_recall` 为 1.0，约 10–15 次调用。缓存命中应占 `prompt_tokens` 的 80% 以上，否则说明对话不再是只追加 |
+| 写错的名字（R17） | “切尔诺贝利事件之后塔露拉做了什么？”“缪因是谁？”：答案按库中写法（切尔诺伯格、谬因）作答，并在开头说明 |
+| 追问（R17） | `ARKLORES_LIVE_CONVERSATION=true`：第二问的请求里带着第一问的工具结果，并且能引用第一问读过的行 |
 
 ## Current Unit Coverage
 

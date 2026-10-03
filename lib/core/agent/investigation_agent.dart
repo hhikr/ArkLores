@@ -39,6 +39,9 @@ class InvestigationAgent {
     LLMClient? writerClient,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
+    bool useToolAgent = false,
+    LoreConversation? prior,
+    void Function(LoreConversation conversation)? onConversation,
   }) =>
       _agent.run(
         query: query,
@@ -48,5 +51,8 @@ class InvestigationAgent {
         writerClient: writerClient,
         onRawLlmResponse: onRawLlmResponse,
         onMemoryChanged: onMemoryChanged,
+        useToolAgent: useToolAgent,
+        prior: prior,
+        onConversation: onConversation,
       );
 }

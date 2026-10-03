@@ -113,3 +113,25 @@ StoryAnswerEnvelope? parseStoryAnswerEnvelope(String content) {
     confidence: legacy.group(2)!.trim(),
   );
 }
+
+/// Normalizes the fact-check verdict line of a writer answer (R13): a
+/// definite verdict needs cited, actually-read text. Exposed for tests.
+String normalizeFactCheckBody(
+  String body, {
+  required bool nothingRead,
+  required bool hasValidCitation,
+}) {
+  final marker = RegExp(
+    r'\[FACT_CHECK_VERDICT:(supported|refuted|uncertain|unavailable)\]\s*',
+    caseSensitive: false,
+  );
+  final requested = marker.firstMatch(body)?.group(1)?.toLowerCase();
+  var verdict = requested ?? 'uncertain';
+  if (nothingRead) {
+    verdict = 'unavailable';
+  } else if ((verdict == 'supported' || verdict == 'refuted') &&
+      !hasValidCitation) {
+    verdict = 'uncertain';
+  }
+  return '[FACT_CHECK_VERDICT:$verdict]\n${body.replaceFirst(marker, '').trim()}';
+}

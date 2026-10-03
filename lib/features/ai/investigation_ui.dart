@@ -57,6 +57,16 @@ Set<String> extractCitedStoryIds(String content) => {
       for (final match in _citationPattern.allMatches(content)) match.group(1)!,
     };
 
+/// R17: a cited non-story record, `record:<id>` (optionally backticked).
+final RegExp _recordCitationPattern = RegExp(r'`?record:([\w\-]+)`?');
+
+/// R17: record ids cited in [content], in order of first citation.
+List<String> extractCitedRecordIds(String content) => [
+      ...{
+        for (final m in _recordCitationPattern.allMatches(content)) m.group(1)!,
+      },
+    ];
+
 /// Readable name of a cited story: the catalog label when known, otherwise a
 /// name derived from the path.
 String storyDisplayName(String storyId, Map<String, String> labels) =>
@@ -94,11 +104,21 @@ String humanizeCitations(
   String content,
   Map<String, String> labels, {
   LineRangeText lineText = _defaultLineText,
-}) =>
-    content.replaceAllMapped(_citationPattern, (m) {
-      return '〔${storyDisplayName(m.group(1)!, labels)} '
-          '${_lineText(m.group(2)!, m.group(3), lineText)}〕';
-    });
+  String recordLabel = '资料',
+}) {
+  // R17: records are numbered in citation order (the evidence list below
+  // the answer uses the same numbers).
+  final records = extractCitedRecordIds(content);
+  return content
+      .replaceAllMapped(_citationPattern, (m) {
+        return '〔${storyDisplayName(m.group(1)!, labels)} '
+            '${_lineText(m.group(2)!, m.group(3), lineText)}〕';
+      })
+      .replaceAllMapped(
+        _recordCitationPattern,
+        (m) => '〔$recordLabel ${records.indexOf(m.group(1)!) + 1}〕',
+      );
+}
 
 /// R15: one cited line range (0-based, inclusive) of a chapter.
 class CitedRange {

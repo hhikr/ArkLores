@@ -73,6 +73,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.';
 
   @override
+  String get settingsToolAgent => 'New story Q&A';
+
+  @override
+  String get settingsToolAgentDesc =>
+      'One model queries the knowledge base directly (corpus-wide counts, whole-chapter reads, in-chapter search) and answers; cited lines can be opened under the answer. Turn off to use the previous step-by-step pipeline.';
+
+  @override
   String get settingsKnowledgeBase => 'Knowledge Base Management';
 
   @override
@@ -498,6 +505,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String aiChapterCount(int count) {
     return '$count cited';
   }
+
+  @override
+  String get aiCitedRecord => 'Record';
+
+  @override
+  String aiCitedRecords(int count) {
+    return '$count other records';
+  }
+
+  @override
+  String get aiCitedLinesUnavailable =>
+      'Original text unavailable (knowledge base missing or updated)';
 
   @override
   String get aiMoreActions => 'More';

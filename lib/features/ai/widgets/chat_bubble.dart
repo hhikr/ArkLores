@@ -113,6 +113,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         stripStoryAnswerMarkers(content),
         _storyLabels(msg.content),
         lineText: _lineText,
+        recordLabel: context.t.aiCitedRecord,
       );
     } else if (msg.isStreaming && msg.liveStatus.isNotEmpty) {
       // R16: a story answer still being written (no envelope yet): the
@@ -121,6 +122,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         stripWriterCoverage(content),
         const {},
         lineText: _lineText,
+        recordLabel: context.t.aiCitedRecord,
       );
     }
     if (content == '[FACT_CHECK_ERROR]') {
@@ -489,18 +491,25 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
   /// R15: cited lines, folded by default: collection → chapter → line
   /// chips (raw id on long-press). Collections start open, chapters start
-  /// open only when the collection has a single chapter.
+  /// open only when the collection has a single chapter. R17: tapping a
+  /// chip shows the original lines from the knowledge base (the evidence
+  /// itself, not the model's account of it); cited non-story records are
+  /// listed after the stories, numbered as in the answer.
   Widget _buildCitationTree(AppThemeTokens theme) {
     final msg = widget.message;
     if (msg.isStreaming) return const SizedBox.shrink();
     final ids = extractCitedStoryIds(msg.content);
-    if (ids.isEmpty) return const SizedBox.shrink();
-    final entries = ref
-            .watch(storyCatalogEntriesProvider(storyLabelsKey(ids)))
-            .valueOrNull ??
-        const <String, StoryCatalogEntry>{};
+    final records = extractCitedRecordIds(msg.content);
+    if (ids.isEmpty && records.isEmpty) return const SizedBox.shrink();
+    final entries = ids.isEmpty
+        ? const <String, StoryCatalogEntry>{}
+        : ref
+                .watch(storyCatalogEntriesProvider(storyLabelsKey(ids)))
+                .valueOrNull ??
+            const <String, StoryCatalogEntry>{};
     final groups = groupCitations(msg.content, entries);
-    final total = groups.fold<int>(0, (n, g) => n + g.citationCount);
+    final total =
+        groups.fold<int>(0, (n, g) => n + g.citationCount) + records.length;
     final open = _isOpen('*');
     final muted = theme.bodyFont.copyWith(
       color: theme.textSecondary,
@@ -526,6 +535,96 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             ),
           ),
         );
+
+    Widget chip(String key, String text, {required bool selected}) => InkWell(
+          key: ValueKey('cite:$key'),
+          onTap: () => _toggle(key),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: selected
+                  ? theme.accentPrimary.withValues(alpha: 0.15)
+                  : theme.bgSecondary,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected ? theme.accentPrimary : theme.divider,
+                width: 0.5,
+              ),
+            ),
+            child: Text(
+              text,
+              style: theme.bodyFont.copyWith(
+                color: theme.textPrimary,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        );
+
+    Widget quote(Widget child) => Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+          decoration: BoxDecoration(
+            color: theme.bgPrimary,
+            border: Border(
+              left: BorderSide(color: theme.accentPrimary, width: 2),
+            ),
+          ),
+          child: child,
+        );
+
+    Widget citedLines(String storyId, CitedRange range) {
+      final lines = ref
+          .watch(citedLinesProvider(citedLinesKey(storyId, range.start, range.end)));
+      return quote(lines.when(
+        loading: () => const LinearProgressIndicator(minHeight: 2),
+        error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
+        data: (lines) => lines.isEmpty
+            ? Text(context.t.aiCitedLinesUnavailable, style: muted)
+            : SelectableText.rich(
+                TextSpan(
+                  children: [
+                    for (final line in lines)
+                      TextSpan(
+                        children: [
+                          if ((line.speaker ?? '').trim().isNotEmpty)
+                            TextSpan(
+                              text: '${line.speaker}：',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          TextSpan(text: '${line.content}\n'),
+                        ],
+                      ),
+                  ],
+                ),
+                style: theme.bodyFont.copyWith(
+                  color: theme.textPrimary,
+                  fontSize: 12,
+                  height: 1.5,
+                ),
+              ),
+      ),);
+    }
+
+    Widget citedRecord(String id) {
+      final record = ref.watch(citedRecordProvider(id));
+      return quote(record.when(
+        loading: () => const LinearProgressIndicator(minHeight: 2),
+        error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
+        data: (r) => r == null
+            ? Text(context.t.aiCitedLinesUnavailable, style: muted)
+            : SelectableText(
+                r.content,
+                style: theme.bodyFont.copyWith(
+                  color: theme.textPrimary,
+                  fontSize: 12,
+                  height: 1.5,
+                ),
+              ),
+      ),);
+    }
 
     return Padding(
       padding: const EdgeInsets.only(top: 6),
@@ -565,45 +664,73 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   ))
                     Padding(
                       padding: const EdgeInsets.fromLTRB(48, 2, 0, 6),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final range in chapter.ranges)
+                                Tooltip(
+                                  message: range.rawRef(chapter.storyId),
+                                  triggerMode: TooltipTriggerMode.longPress,
+                                  child: chip(
+                                    'l:${range.rawRef(chapter.storyId)}',
+                                    citedRangeText(range, _lineText),
+                                    selected: _isOpen(
+                                      'l:${range.rawRef(chapter.storyId)}',
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                           for (final range in chapter.ranges)
-                            Tooltip(
-                              message: range.rawRef(chapter.storyId),
-                              triggerMode: TooltipTriggerMode.longPress,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: theme.bgSecondary,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: theme.divider,
-                                    width: 0.5,
-                                  ),
-                                ),
-                                child: Text(
-                                  citedRangeText(range, _lineText),
-                                  style: theme.bodyFont.copyWith(
-                                    color: theme.textPrimary,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                            ),
+                            if (_isOpen('l:${range.rawRef(chapter.storyId)}'))
+                              citedLines(chapter.storyId, range),
                         ],
                       ),
                     ),
                 ],
             ],
+          if (open && records.isNotEmpty) ...[
+            row(
+              'records',
+              context.t.aiCitedRecords(records.length),
+              isOpen: _isOpen('records', byDefault: true),
+              indent: 14,
+              style: muted.copyWith(color: theme.textPrimary),
+            ),
+            if (_isOpen('records', byDefault: true))
+              for (final (i, id) in records.indexed) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 2, 0, 2),
+                  child: Tooltip(
+                    message: 'record:$id',
+                    triggerMode: TooltipTriggerMode.longPress,
+                    child: chip(
+                      'r:$id',
+                      '${context.t.aiCitedRecord} ${i + 1}'
+                          '${_recordTitle(id).isEmpty ? '' : ' · ${_recordTitle(id)}'}',
+                      selected: _isOpen('r:$id'),
+                    ),
+                  ),
+                ),
+                if (_isOpen('r:$id'))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 0, 0, 4),
+                    child: citedRecord(id),
+                  ),
+              ],
+          ],
         ],
       ),
     );
   }
+
+  /// Title of a cited record once loaded (empty while loading).
+  String _recordTitle(String id) =>
+      ref.watch(citedRecordProvider(id)).valueOrNull?.title ?? '';
   Widget _buildEvidenceSection(AppThemeTokens theme) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),

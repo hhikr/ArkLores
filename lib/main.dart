@@ -81,6 +81,12 @@ void main() async {
   } catch (e) {
     debugPrint('[Startup] Error loading session log toggle: $e');
   }
+  var toolAgentEnabled = true;
+  try {
+    toolAgentEnabled = await settingsService.loadToolAgentEnabled();
+  } catch (e) {
+    debugPrint('[Startup] Error loading agent engine toggle: $e');
+  }
 
   runApp(
     ProviderScope(
@@ -92,6 +98,7 @@ void main() async {
         initialThemeProvider.overrideWithValue(appTheme),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
+        initialToolAgentEnabledProvider.overrideWithValue(toolAgentEnabled),
       ],
       child: const ArkLoresApp(),
     ),

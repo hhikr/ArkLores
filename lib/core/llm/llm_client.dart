@@ -29,6 +29,7 @@ class Message {
     required this.content,
     this.toolCallId,
     this.toolCalls,
+    this.reasoningContent,
   });
 
   factory Message.system(String content) =>
@@ -39,16 +40,60 @@ class Message {
 
   factory Message.assistant(String content) =>
       Message(role: MessageRole.assistant, content: content);
+
+  /// R17: an assistant turn that called [calls].
+  factory Message.assistantToolCalls(
+    String content,
+    List<ToolCall> calls, {
+    String? reasoningContent,
+  }) =>
+      Message(
+        role: MessageRole.assistant,
+        content: content,
+        toolCalls: [for (final call in calls) call.toJson()],
+        reasoningContent: reasoningContent,
+      );
+
+  /// R17: the result of the tool call [callId].
+  factory Message.toolResult(String callId, String content) =>
+      Message(role: MessageRole.tool, content: content, toolCallId: callId);
+
   final MessageRole role;
   final String content;
   final String? toolCallId;
   final List<Map<String, dynamic>>? toolCalls;
+
+  /// R17: hidden reasoning of an assistant tool-call turn. Thinking-mode
+  /// providers (deepseek) require it back within the same question; the
+  /// client sends it only to providers that accept it.
+  final String? reasoningContent;
 
   Map<String, dynamic> toJson() => {
         'role': role.jsonValue,
         'content': content,
         if (toolCallId != null) 'tool_call_id': toolCallId,
         if (toolCalls != null) 'tool_calls': toolCalls,
+      };
+}
+
+/// R17: one function call requested by the model.
+class ToolCall {
+  const ToolCall({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+
+  final String id;
+  final String name;
+
+  /// Raw JSON arguments as the model wrote them (may be malformed).
+  final String arguments;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': 'function',
+        'function': {'name': name, 'arguments': arguments},
       };
 }
 
@@ -119,9 +164,17 @@ class ChatCompletionResult {
     this.promptTokens,
     this.completionTokens,
     this.cachedPromptTokens,
+    this.toolCalls = const [],
+    this.reasoningContent = '',
   });
   final String content;
   final String? finishReason;
+
+  /// R17: function calls of this turn (empty for a plain answer).
+  final List<ToolCall> toolCalls;
+
+  /// R17: hidden reasoning of this turn, when the provider returns it.
+  final String reasoningContent;
 
   /// Provider-reported usage (null when the provider omits it). Hidden
   /// reasoning tokens are included in [completionTokens].
@@ -148,7 +201,11 @@ class CompletionDelta {
     this.promptTokens,
     this.completionTokens,
     this.cachedPromptTokens,
+    this.toolCalls = const [],
   });
+
+  /// R17: the completed function calls of the turn, set on the `done` delta.
+  final List<ToolCall> toolCalls;
 
   /// Visible answer text of this increment.
   final String content;
@@ -169,9 +226,11 @@ Future<ChatCompletionResult> collectCompletion(
   void Function(CompletionDelta delta)? onDelta,
 }) async {
   final content = StringBuffer();
+  final reasoning = StringBuffer();
   CompletionDelta? last;
   await for (final delta in deltas) {
     content.write(delta.content);
+    reasoning.write(delta.reasoningContent);
     onDelta?.call(delta);
     if (delta.done) last = delta;
   }
@@ -181,6 +240,8 @@ Future<ChatCompletionResult> collectCompletion(
     promptTokens: last?.promptTokens,
     completionTokens: last?.completionTokens,
     cachedPromptTokens: last?.cachedPromptTokens,
+    toolCalls: last?.toolCalls ?? const [],
+    reasoningContent: reasoning.toString(),
   );
 }
 
@@ -241,6 +302,40 @@ abstract class LLMClient {
       promptTokens: result.promptTokens,
       completionTokens: result.completionTokens,
       cachedPromptTokens: result.cachedPromptTokens,
+    );
+  }
+
+  /// R17: one streamed agent turn with function calling. [tools] are
+  /// OpenAI-style function definitions; [toolChoice] `none` forbids calls
+  /// (the final answer after the turn limit). The `done` delta carries the
+  /// turn's [CompletionDelta.toolCalls]. This default runs [chatCompletion]
+  /// once, so clients and fakes without streaming still work.
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) async* {
+    final result = await chatCompletion(
+      messages,
+      tools: tools,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
+    if (result.content.isNotEmpty || result.reasoningContent.isNotEmpty) {
+      yield CompletionDelta(
+        content: result.content,
+        reasoningContent: result.reasoningContent,
+      );
+    }
+    yield CompletionDelta(
+      done: true,
+      finishReason: result.finishReason,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+      cachedPromptTokens: result.cachedPromptTokens,
+      toolCalls: result.toolCalls,
     );
   }
 }

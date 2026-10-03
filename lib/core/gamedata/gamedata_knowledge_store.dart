@@ -8,6 +8,7 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import 'game_retrieval.dart';
 import 'gamedata_query_plan.dart';
 import 'name_similarity.dart';
+import 'readonly_sql.dart';
 import 'story_catalog.dart';
 import 'story_line_search.dart';
 import 'story_vectors.dart';
@@ -759,6 +760,96 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final db = await _open();
     if (db == null) return const [];
     return queryNamedStoryTargets(db, text);
+  }
+
+  @override
+  Future<SqlQueryResult> readOnlySql(String sql, {int maxRows = 200}) async {
+    final path = await _resolveDbPath();
+    if (path == null || !File(path).existsSync()) {
+      return const SqlQueryResult(error: '本地知识库未安装');
+    }
+    return runReadOnlySql(path, sql, maxRows: maxRows);
+  }
+
+  /// `(content LIKE ? OR speaker LIKE ?) OR …` for [terms], with its args.
+  static (String, List<Object?>) _termsClause(List<String> terms) {
+    final parts = <String>[];
+    final args = <Object?>[];
+    for (final term in terms) {
+      final escaped = term
+          .replaceAll(r'\', r'\\')
+          .replaceAll('%', r'\%')
+          .replaceAll('_', r'\_');
+      parts.add(
+        "content LIKE ? ESCAPE '\\' OR speaker LIKE ? ESCAPE '\\'",
+      );
+      args
+        ..add('%$escaped%')
+        ..add('%$escaped%');
+    }
+    return ('(${parts.join(' OR ')})', args);
+  }
+
+  @override
+  Future<List<StoryLineHitRow>> grepStoryLines(
+    List<String> terms, {
+    Iterable<String>? storyIds,
+    int limit = 80,
+  }) async {
+    final db = await _open();
+    final cleaned = [
+      for (final t in terms)
+        if (t.trim().isNotEmpty) t.trim(),
+    ];
+    if (db == null || cleaned.isEmpty) return const [];
+    final (clause, args) = _termsClause(cleaned);
+    final ids = storyIds?.toList();
+    if (ids != null && ids.isEmpty) return const [];
+    final scope = ids == null
+        ? ''
+        : ' AND story_id IN (${List.filled(ids.length, '?').join(',')})';
+    final rows = await db.rawQuery(
+      'SELECT story_id, line_index, speaker, content FROM story_lines '
+      'WHERE $clause$scope ORDER BY story_id, line_index LIMIT ?',
+      [...args, ...?ids, limit],
+    );
+    return [
+      for (final row in rows)
+        StoryLineHitRow(
+          storyId: '${row['story_id']}',
+          lineIndex: (row['line_index'] as num).toInt(),
+          speaker: row['speaker'] as String?,
+          content: '${row['content'] ?? ''}',
+        ),
+    ];
+  }
+
+  @override
+  Future<Map<String, int>> storyLineHitCounts(
+    List<String> terms, {
+    Iterable<String>? storyIds,
+  }) async {
+    final db = await _open();
+    final cleaned = [
+      for (final t in terms)
+        if (t.trim().isNotEmpty) t.trim(),
+    ];
+    if (db == null || cleaned.isEmpty) return const {};
+    final (clause, args) = _termsClause(cleaned);
+    final ids = storyIds?.toList();
+    if (ids != null && ids.isEmpty) return const {};
+    final scope = ids == null
+        ? ''
+        : ' AND story_id IN (${List.filled(ids.length, '?').join(',')})';
+    final rows = await db.rawQuery(
+      'SELECT story_id, COUNT(*) AS n FROM story_lines '
+      'WHERE $clause$scope GROUP BY story_id',
+      [...args, ...?ids],
+    );
+    return {
+      for (final row in rows)
+        '${row['story_id']}': (row['n'] as num).toInt(),
+    };
   }
 
   Future<void> close() async {

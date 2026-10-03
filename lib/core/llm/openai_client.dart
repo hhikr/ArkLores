@@ -112,20 +112,74 @@ class OpenAICompatibleClient extends LLMClient {
     List<String>? stop,
   }) async {
     _requireChatConfig();
+    final body = _requestBody(
+      messages,
+      tools: tools,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+    return _complete(body);
+  }
 
-    final body = <String, dynamic>{
-      'model': config.chatModel,
-      'messages': messages.map((m) => m.toJson()).toList(),
-      'temperature': temperature,
-      'max_tokens': maxTokens,
-      if (stop != null) 'stop': stop,
-      ...reasoningFields,
-    };
+  /// R17: deepseek wants the reasoning of an earlier tool-call turn back in
+  /// thinking mode; other providers may reject the unknown field.
+  bool get _acceptsReasoningContent {
+    final endpoint = config.chatEndpoint.toLowerCase();
+    return endpoint.contains('deepseek.com') ||
+        config.chatModel.toLowerCase().contains('deepseek');
+  }
 
-    if (tools != null && tools.isNotEmpty) {
-      body['tools'] = tools;
+  Map<String, dynamic> _messageJson(Message message) {
+    final json = message.toJson();
+    final reasoning = message.reasoningContent;
+    if (reasoning != null &&
+        reasoning.isNotEmpty &&
+        _acceptsReasoningContent &&
+        this.reasoning != ReasoningLevel.off) {
+      json['reasoning_content'] = reasoning;
     }
+    return json;
+  }
 
+  Map<String, dynamic> _requestBody(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    required double temperature,
+    required int maxTokens,
+    List<String>? stop,
+    bool stream = false,
+  }) =>
+      {
+        'model': config.chatModel,
+        'messages': [for (final m in messages) _messageJson(m)],
+        'temperature': temperature,
+        'max_tokens': maxTokens,
+        if (stream) 'stream': true,
+        if (stream) 'stream_options': {'include_usage': true},
+        if (stop != null) 'stop': stop,
+        if (tools != null && tools.isNotEmpty) 'tools': tools,
+        if (tools != null && tools.isNotEmpty && toolChoice != null)
+          'tool_choice': toolChoice,
+        ...reasoningFields,
+      };
+
+  /// R17: function calls of a non-streamed `message`.
+  static List<ToolCall> _toolCallsOf(Object? raw) {
+    if (raw is! List) return const [];
+    return [
+      for (final (i, call) in raw.indexed)
+        if (call is Map && call['function'] is Map)
+          ToolCall(
+            id: '${call['id'] ?? 'call_$i'}',
+            name: '${(call['function'] as Map)['name'] ?? ''}',
+            arguments: '${(call['function'] as Map)['arguments'] ?? ''}',
+          ),
+    ];
+  }
+
+  Future<ChatCompletionResult> _complete(Map<String, dynamic> body) async {
     try {
       // R8 M-E: transient network errors (backgrounding closes the socket)
       // are retried once before surfacing.
@@ -187,6 +241,8 @@ class OpenAICompatibleClient extends LLMClient {
         promptTokens: usage.prompt,
         completionTokens: usage.completion,
         cachedPromptTokens: usage.cached,
+        toolCalls: _toolCallsOf(message['tool_calls']),
+        reasoningContent: (message['reasoning_content'] as String?) ?? '',
       );
       onCompletion?.call(result);
       return result;
@@ -227,19 +283,43 @@ class OpenAICompatibleClient extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
-  }) async* {
+  }) {
     _requireChatConfig();
-    final body = <String, dynamic>{
-      'model': config.chatModel,
-      'messages': messages.map((m) => m.toJson()).toList(),
-      'temperature': temperature,
-      'max_tokens': maxTokens,
-      'stream': true,
-      'stream_options': {'include_usage': true},
-      if (stop != null) 'stop': stop,
-      ...reasoningFields,
-    };
+    return _stream(
+      _requestBody(
+        messages,
+        temperature: temperature,
+        maxTokens: maxTokens,
+        stop: stop,
+        stream: true,
+      ),
+    );
+  }
 
+  /// R17: a streamed agent turn; tool-call fragments are joined by their
+  /// `index` and handed out complete on the `done` delta.
+  @override
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) {
+    _requireChatConfig();
+    return _stream(
+      _requestBody(
+        messages,
+        tools: tools,
+        toolChoice: toolChoice,
+        temperature: temperature,
+        maxTokens: maxTokens,
+        stream: true,
+      ),
+    );
+  }
+
+  Stream<CompletionDelta> _stream(Map<String, dynamic> body) async* {
     http.StreamedResponse? response;
     Object? lastError;
     for (var attempt = 0; attempt < 2; attempt++) {
@@ -269,11 +349,26 @@ class OpenAICompatibleClient extends LLMClient {
     if (response.statusCode != 200) {
       final errorBody = await response.stream.bytesToString();
       if (_streamRejectedCodes.contains(response.statusCode)) {
-        yield* super.streamCompletion(
-          messages,
-          temperature: temperature,
-          maxTokens: maxTokens,
-          stop: stop,
+        // Retried without streaming; a provider that also rejects the rest
+        // of the request (e.g. `tools`) fails there with its own status.
+        final result = await _complete(
+          Map.of(body)
+            ..remove('stream')
+            ..remove('stream_options'),
+        );
+        if (result.content.isNotEmpty || result.reasoningContent.isNotEmpty) {
+          yield CompletionDelta(
+            content: result.content,
+            reasoningContent: result.reasoningContent,
+          );
+        }
+        yield CompletionDelta(
+          done: true,
+          finishReason: result.finishReason,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+          cachedPromptTokens: result.cachedPromptTokens,
+          toolCalls: result.toolCalls,
         );
         return;
       }
@@ -285,6 +380,8 @@ class OpenAICompatibleClient extends LLMClient {
     }
 
     final content = StringBuffer();
+    final reasoningBuffer = StringBuffer();
+    final calls = <int, ({StringBuffer id, StringBuffer name, StringBuffer args})>{};
     String? finishReason;
     ({int? prompt, int? completion, int? cached}) usage =
         (prompt: null, completion: null, cached: null);
@@ -310,10 +407,33 @@ class OpenAICompatibleClient extends LLMClient {
         finishReason = (choice['finish_reason'] as String?) ?? finishReason;
         final delta = choice['delta'];
         if (delta is! Map) continue;
+        final toolDeltas = delta['tool_calls'];
+        if (toolDeltas is List) {
+          for (final (i, raw) in toolDeltas.indexed) {
+            if (raw is! Map) continue;
+            final index = (raw['index'] as num?)?.toInt() ?? i;
+            final call = calls.putIfAbsent(
+              index,
+              () => (id: StringBuffer(), name: StringBuffer(), args: StringBuffer()),
+            );
+            final id = raw['id'];
+            if (id is String && id.isNotEmpty && call.id.isEmpty) {
+              call.id.write(id);
+            }
+            final function = raw['function'];
+            if (function is Map) {
+              final name = function['name'];
+              if (name is String) call.name.write(name);
+              final args = function['arguments'];
+              if (args is String) call.args.write(args);
+            }
+          }
+        }
         final text = delta['content'] as String? ?? '';
         final reasoningText = delta['reasoning_content'] as String? ?? '';
         if (text.isEmpty && reasoningText.isEmpty) continue;
         content.write(text);
+        reasoningBuffer.write(reasoningText);
         yield CompletionDelta(content: text, reasoningContent: reasoningText);
       }
     } on TimeoutException {
@@ -324,6 +444,18 @@ class OpenAICompatibleClient extends LLMClient {
       throw LLMException('Network error: ${e.message}');
     }
 
+    final indexes = calls.keys.toList()..sort();
+    final toolCalls = [
+      for (final index in indexes)
+        if (calls[index]!.name.isNotEmpty)
+          ToolCall(
+            id: calls[index]!.id.isEmpty
+                ? 'call_$index'
+                : calls[index]!.id.toString(),
+            name: calls[index]!.name.toString(),
+            arguments: calls[index]!.args.toString(),
+          ),
+    ];
     onCompletion?.call(
       ChatCompletionResult(
         content: content.toString(),
@@ -331,6 +463,8 @@ class OpenAICompatibleClient extends LLMClient {
         promptTokens: usage.prompt,
         completionTokens: usage.completion,
         cachedPromptTokens: usage.cached,
+        toolCalls: toolCalls,
+        reasoningContent: reasoningBuffer.toString(),
       ),
     );
     yield CompletionDelta(
@@ -339,6 +473,7 @@ class OpenAICompatibleClient extends LLMClient {
       promptTokens: usage.prompt,
       completionTokens: usage.completion,
       cachedPromptTokens: usage.cached,
+      toolCalls: toolCalls,
     );
   }
 

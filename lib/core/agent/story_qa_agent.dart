@@ -6,6 +6,7 @@ import '../llm/llm_client.dart';
 import 'agent_prompts.dart';
 import 'entity_disambiguator.dart';
 import 'evidence_notebook.dart' show ReadPage;
+import 'lore_agent_loop.dart';
 import 'planner_loop.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
@@ -18,6 +19,8 @@ import 'tools/search_local_lore.dart';
 import 'tools/search_story_coverage.dart';
 import 'tools/search_story_lines.dart';
 import 'tools/tool_registry.dart';
+
+export 'lore_agent_loop.dart' show LoreConversation;
 
 /// The one story QA pipeline (R13): investigation, summary and fact check
 /// all run the same [PlannerLoop] with the same tools, evidence notebook and
@@ -37,6 +40,7 @@ class StoryQaAgent {
     AgentTool? searchTool,
     LLMClient? planClient,
   })  : _llmClient = llmClient,
+        _store = gameDataStore,
         _planClient = planClient,
         _plannerClient = plannerClient ?? auxClient ?? llmClient,
         _extractorClient = extractorClient ?? auxClient ?? llmClient,
@@ -71,6 +75,7 @@ class StoryQaAgent {
   final StoryCatalogLookup? _storyCatalogLookup;
   final QuestionContextLookup? _questionContextLookup;
   final LLMClient _llmClient;
+  final GameDataRetrieval? _store;
   final LLMClient _plannerClient;
 
   /// R16: drafts the reading plan at the start (null: no plan).
@@ -88,7 +93,26 @@ class StoryQaAgent {
     LLMClient? writerClient,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
     void Function(String memoryBlock)? onMemoryChanged,
+    bool useToolAgent = false,
+    LoreConversation? prior,
+    void Function(LoreConversation conversation)? onConversation,
   }) {
+    final store = _store;
+    if (useToolAgent && store != null) {
+      // R17: one model with general tools; the "深度思考" client (when on)
+      // runs the whole question.
+      return LoreAgentLoop(
+        client: writerClient ?? _llmClient,
+        store: store,
+      ).run(
+        query: query,
+        style: style,
+        history: history,
+        prior: prior,
+        onConversation: onConversation,
+        onRawLlmResponse: onRawLlmResponse,
+      );
+    }
     final task = switch (style) {
       AnswerStyle.answer => plannerTaskAnswer,
       AnswerStyle.summary => plannerTaskSummary,
