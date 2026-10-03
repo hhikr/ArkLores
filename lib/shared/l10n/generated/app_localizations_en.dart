@@ -490,6 +490,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String aiAnswerDetails(int count) {
+    return 'Details · $count points';
+  }
+
+  @override
   String aiEvidenceSummary(int count, int stories) {
     return '$count citations · $stories stories';
   }

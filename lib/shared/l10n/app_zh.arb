@@ -157,6 +157,8 @@
   "@aiCitationLine": {"placeholders": {"line": {"type": "int"}}},
   "aiCitationLines": "第 {start}–{end} 行",
   "@aiCitationLines": {"placeholders": {"start": {"type": "int"}, "end": {"type": "int"}}},
+  "aiAnswerDetails": "详细经过 · {count} 条",
+  "@aiAnswerDetails": {"placeholders": {"count": {"type": "int"}}},
   "aiEvidenceSummary": "证据 {count} 处 · 来自 {stories} 个故事",
   "@aiEvidenceSummary": {"placeholders": {"count": {"type": "int"}, "stories": {"type": "int"}}},
   "aiChapterCount": "{count} 处",

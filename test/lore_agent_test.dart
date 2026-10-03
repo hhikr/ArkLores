@@ -83,6 +83,9 @@ void main() {
         for (final style in AnswerStyle.values) loreSystemPrompt(style),
         loreSystemPrompt(AnswerStyle.answer, subtask: true),
         loreTextToolProtocol(''),
+        loreReviewPrompt,
+        loreReviewFollowUp(['<问题>'], json: true),
+        loreStagePrompt('1. <条目>'),
         for (final t in [
           ...loreTools(store, SeenLines()),
           DelegateTool((_) async => ''),
@@ -112,6 +115,10 @@ void main() {
         ...goldIds,
         '塔露拉', '切尔诺伯格', '科西切', '罗德岛', '阿米娅', '凯尔希',
         '谬因', '米格鲁', '特蕾西娅', '辞岁行', '双飞燕', '岁兽',
+        '安多恩', '众生行迹', '拉特兰', '吾导先路',
+        // R18: no named plot device either — only ways of working that hold
+        // for any story.
+        '梦', '幻觉', '幻象', '叙诡', '诡计', '叙述性诡计',
       ]) {
         expect(text, isNot(contains(name)), reason: name);
       }
@@ -410,6 +417,9 @@ void main() {
       final events = await LoreAgentLoop(client: client, store: store)
           .run(query: '星灯做了什么？', style: AnswerStyle.answer)
           .toList();
+      // R18: only the main agent's answer is reviewed.
+      expect(client.reviewRequests, hasLength(1));
+      expect(client.reviewRequests.single.first.content, loreReviewPrompt);
       final child = client.requests[1];
       expect(child.first.content, contains('子助手'));
       expect(child[1].content, contains('建议阅读：obt/main/level_main_fx-01.txt'));
@@ -427,6 +437,153 @@ void main() {
         events.where((e) => e.type == ReActEventType.finalAnswerReset),
         isEmpty,
       );
+    });
+
+    // R18: the reviewer reads the answer (no tools, no text); its questions
+    // go back to the main agent, which checks them and answers again. One
+    // review per question; the rewrite gets its own citation check.
+    test('a reader review sends its questions back once', () async {
+      const story = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient(
+        [
+          _call('read_story', {'story_id': story}),
+          _answer('星灯点亮了钟楼 `$story:1`。'),
+          _call('grep', {'pattern': '星灯'}),
+          _answer('星灯点亮了钟楼 `$story:1`，后来离开 `$story:3`。'),
+        ],
+        reviews: ['{"issues": ["后来离开城市的经过是否被漏掉？"]}', '{"issues": ["再问"]}'],
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .toList();
+      expect(client.reviewRequests, hasLength(1));
+      final review = client.reviewRequests.single;
+      expect(review.first.content, loreReviewPrompt);
+      expect(review[1].content, contains('星灯做了什么？'));
+      expect(review[1].content, contains('星灯点亮了钟楼'));
+      expect(review[1].content, contains('虚构主线'));
+      expect(review[1].content, isNot(contains('.txt')));
+      final followUp = client.requests[2].last.content;
+      expect(followUp, contains('后来离开城市的经过是否被漏掉？'));
+      expect(followUp, contains('只是线索'));
+      expect(
+        events
+            .where((e) => e.type == ReActEventType.finalAnswerReset)
+            .map((e) => e.content),
+        ['审稿提出 1 个问题，正在核实'],
+      );
+      expect(
+        events.any((e) =>
+            e.type == ReActEventType.thought && e.content.contains('读者审稿'),),
+        isTrue,
+      );
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('后来离开 `$story:3`'));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    String detailJson(List<(String, List<List<Object>>)> entries) =>
+        jsonEncode({
+          'entries': [
+            for (final (text, cite) in entries) {'text': text, 'cite': cite},
+          ],
+          'coverage': 'full',
+        });
+
+    const main = 'obt/main/level_main_fx-01.txt';
+    const act = 'activities/act_fx/level_act_fx_01_beg.txt';
+    final fiveEntries = detailJson([
+      ('夜里星灯到来。', [[main, 0, 0]]),
+      ('星灯答应点亮钟楼。', [[main, 1, 1]]),
+      ('旁人看见了星灯。', [[main, 2, 2]]),
+      ('甲在城门等星灯。', [[act, 1, 2]]),
+      ('星灯离开了城市。', [[main, 3, 3]]),
+    ]);
+
+    test('a long answer is reorganised; citations merge from its entries',
+        () async {
+      final client = _ScriptedClient(
+        [
+          _call('read_story', {'story_id': main}),
+          _call('read_story', {'story_id': act}),
+          _answer(fiveEntries),
+          _answer(jsonEncode({
+            'stages': [
+              {'heading': '到来', 'text': '星灯到城里并答应点亮钟楼。', 'from': [1, 2, 3]},
+              {'text': '星灯最后离开。', 'from': [5]},
+            ],
+          }),),
+        ],
+        reviews: ['{"ok": true}'],
+      );
+      final conversations = <LoreConversation>[];
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(
+            query: '星灯做了什么？',
+            style: AnswerStyle.summary,
+            onConversation: conversations.add,
+          )
+          .toList();
+      expect(client.requests, hasLength(4));
+      final stage = client.requests.last;
+      expect(client.toolChoices.last, 'none');
+      expect(stage.last.content, contains('1. 夜里星灯到来。'));
+      expect(stage.last.content, contains('"stages"'));
+      // The model's detailed JSON stays before the reorganising request.
+      expect(stage[stage.length - 2].content, startsWith('{"entries"'));
+      final answer = finalAnswerOf(events);
+      final body = answer.substring(answer.indexOf('\n') + 1);
+      expect(
+        body,
+        startsWith('## 到来\n\n'
+            // Entry 4 is in no paragraph: it joins the one of entry 3.
+            '星灯到城里并答应点亮钟楼。 `$main:0-2` `$act:1-2`\n\n'
+            '星灯最后离开。 `$main:3`\n\n[DETAILS]\n\n'),
+      );
+      expect(body, contains('星灯离开了城市。 `$main:3`'));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+      // The detailed answer streamed under the marker; the paragraphs were
+      // written above it.
+      final streamed = events
+          .where((e) => e.type == ReActEventType.finalAnswerToken)
+          .map((e) => e.content)
+          .join();
+      expect(streamed, startsWith('[DETAILS]\n\n'));
+      // A follow-up continues after the detailed JSON answer.
+      final kept = conversations.single.messages;
+      expect(kept.last.content, startsWith('{"entries"'));
+    });
+
+    test('a failed reorganisation keeps the detailed answer only', () async {
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _call('read_story', {'story_id': act}),
+        _answer(fiveEntries),
+        _answer('不是 JSON'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？', style: AnswerStyle.summary)
+          .toList();
+      final answer = finalAnswerOf(events);
+      expect(answer, isNot(contains('[DETAILS]')));
+      expect(answer, contains('夜里星灯到来。 `$main:0`'));
+    });
+
+    test('a short answer is not reorganised', () async {
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _answer(detailJson([
+          ('星灯答应点亮钟楼。', [[main, 1, 1]]),
+          ('星灯离开了城市。', [[main, 3, 3]]),
+        ]),),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .toList();
+      expect(client.requests, hasLength(2));
+      expect(finalAnswerOf(events), isNot(contains('[DETAILS]')));
     });
 
     test('fact check: a definite verdict without checked citations is '
@@ -599,10 +756,15 @@ _Turn _answer(String text) => _Turn(content: text);
 
 /// Replays [turns] and records every request.
 class _ScriptedClient extends LLMClient {
-  _ScriptedClient(this.turns, {this.rejectTools = false});
+  _ScriptedClient(this.turns, {this.rejectTools = false, this.reviews = const []});
 
   final List<_Turn> turns;
   final bool rejectTools;
+
+  /// R18: replies of the reviewer (`chatCompletion`); with none left the
+  /// call fails, which lets the answer through.
+  final List<String> reviews;
+  final List<List<Message>> reviewRequests = [];
   final List<List<Message>> requests = [];
   final List<String?> toolChoices = [];
   final List<List<String>> toolNames = [];
@@ -617,6 +779,19 @@ class _ScriptedClient extends LLMClient {
     List<String>? stop,
   }) async =>
       throw UnimplementedError();
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    reviewRequests.add(List.of(messages));
+    if (reviewRequests.length > reviews.length) throw UnimplementedError();
+    return ChatCompletionResult(content: reviews[reviewRequests.length - 1]);
+  }
 
   @override
   Stream<CompletionDelta> streamTurn(

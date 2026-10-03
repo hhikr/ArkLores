@@ -25,6 +25,7 @@ import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import 'lore_agent_prompts.dart';
 import 'lore_answer_json.dart';
+import 'lore_answer_stages.dart';
 import 'lore_tools.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
@@ -64,6 +65,8 @@ class LoreAgentLoop {
     this.temperature = 0.3,
     this.subtask = false,
     this.subtaskMaxTurns = 20,
+    this.review = true,
+    this.stageMinEntries = 5,
   });
 
   final LLMClient client;
@@ -78,6 +81,15 @@ class LoreAgentLoop {
 
   /// Turn limit of each sub-agent.
   final int subtaskMaxTurns;
+
+  /// R18: a second model reads the main agent's answer as a reader and
+  /// raises questions the main agent checks in the text (once per
+  /// question).
+  final bool review;
+
+  /// R18: a JSON answer with at least this many text entries is
+  /// reorganised into a few paragraphs, the detailed answer kept below.
+  final int stageMinEntries;
 
   /// Model turns per question; the last one must answer.
   final int maxTurns;
@@ -131,6 +143,7 @@ class LoreAgentLoop {
     };
 
     var citationRetried = false;
+    var reviewed = false;
     var nudged = false;
     var hitTurnLimit = false;
     // Session-record index (one per tool call, see onRawLlmResponse).
@@ -191,7 +204,10 @@ class LoreAgentLoop {
                 }
                 answerOpen = true;
                 jsonAnswer = LoreAnswerStream();
-                live = jsonAnswer.add(text.toString().substring(start.start));
+                // R18: the detailed answer streams under the marker (folded
+                // in the app); the reorganised one is written above it.
+                live = '$loreDetailsMarker\n\n'
+                    '${jsonAnswer.add(text.toString().substring(start.start))}';
               }
             }
             if (jsonAnswer != null) {
@@ -370,6 +386,42 @@ class LoreAgentLoop {
         continue;
       }
 
+      // R18: a reader's review. Its questions go back to the main agent,
+      // which checks them in the text and writes the answer again (with
+      // its own citation check).
+      if (review && !subtask && !reviewed && !lastTurn) {
+        reviewed = true;
+        yield const ReActEvent(
+          type: ReActEventType.status,
+          content: '审稿中',
+        );
+        final issues = await _review(
+          query,
+          body.replaceAll(_coverageLine, '').trim(),
+          (raw) => onRawLlmResponse?.call(++record, '（审稿）$raw'),
+        );
+        if (issues.isNotEmpty) {
+          yield ReActEvent(
+            type: ReActEventType.finalAnswerReset,
+            content: '审稿提出 ${issues.length} 个问题，正在核实',
+          );
+          yield ReActEvent(
+            type: ReActEventType.thought,
+            content: [
+              '读者审稿：',
+              for (final (i, issue) in issues.indexed) '${i + 1}. $issue',
+            ].join('\n'),
+          );
+          conversation
+            ..add(Message.assistant(content))
+            ..add(Message.user(
+              loreReviewFollowUp(issues, json: fromJson != null),
+            ),);
+          citationRetried = false;
+          continue;
+        }
+      }
+
       body = _dropProcessLeadIn(body);
       final coverage =
           _coverageLine.firstMatch(body)?.group(1)?.toLowerCase();
@@ -382,6 +434,42 @@ class LoreAgentLoop {
         body = '$body\n\n> 注意：答案达到长度上限，可能不完整。';
       }
       final verified = _citationCount(body) - unseen.length;
+      // The model's own text (JSON) stays in the conversation, so a
+      // follow-up sees the format it is asked for.
+      conversation.add(Message.assistant(fromJson == null ? body : content));
+
+      // R18: reorganise a long JSON answer into a few paragraphs; the
+      // detailed answer stays below the marker.
+      final entries =
+          fromJson == null || subtask || lastTurn ? null : loreAnswerEntries(content);
+      if (entries != null &&
+          entries.where((e) => e.isText).length >= stageMinEntries) {
+        final checked = [
+          for (final e in entries)
+            LoreAnswerEntry(
+              heading: e.heading,
+              text: e.text,
+              cites: [
+                for (final c in e.cites)
+                  if (!unseen.contains(c)) c,
+              ],
+            ),
+        ];
+        String? staged;
+        await for (final event in _stage(
+          checked,
+          detail: body,
+          conversation: conversation,
+          systemPrompt: systemPrompt(),
+          tools: textProtocol ? null : toolSpecs,
+          onRaw: (raw) => onRawLlmResponse?.call(++record, '（整理）$raw'),
+          onStaged: (markdown) => staged = markdown,
+        )) {
+          yield event;
+        }
+        if (staged != null) body = '$staged\n\n$loreDetailsMarker\n\n$body';
+      }
+
       if (style == AnswerStyle.factCheck) {
         body = normalizeFactCheckBody(
           body,
@@ -394,9 +482,6 @@ class LoreAgentLoop {
           : (coverage == 'gaps' || hitTurnLimit)
               ? StoryAnswerStatus.partial
               : StoryAnswerStatus.answered;
-      // The model's own text (JSON) stays in the conversation, so a
-      // follow-up sees the format it is asked for.
-      conversation.add(Message.assistant(fromJson == null ? body : content));
       onConversation?.call(
         LoreConversation(messages: List.of(conversation), seen: seen),
       );
@@ -408,6 +493,112 @@ class LoreAgentLoop {
       return;
     }
   }
+
+  /// R18: the reviewer's questions about [answer] (empty when it has none
+  /// or the call fails — a failed review never blocks the answer).
+  Future<List<String>> _review(
+    String query,
+    String answer,
+    void Function(String raw) onRaw,
+  ) async {
+    try {
+      final ids = <String>{
+        for (final m in _citation.allMatches(answer)) m.group(1)!,
+      };
+      final catalog =
+          ids.isEmpty
+          ? const <String, StoryCatalogEntry>{}
+          : await store.storyCatalogEntries(ids);
+      final stories = <String>{
+        for (final id in ids) catalog[id]?.label ?? fallbackStoryLabel(id),
+      }.take(40).toList();
+      final result = await client.chatCompletion(
+        [
+          Message.system(loreReviewPrompt),
+          Message.user(
+            loreReviewRequest(query, stories, withoutCitations(answer)),
+          ),
+        ],
+        temperature: temperature,
+        maxTokens: 1024,
+      );
+      onRaw(result.content);
+      return parseReviewIssues(result.content);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// R18: one more turn of the main conversation (no tools) that groups
+  /// [entries] into a few paragraphs. Streams the paragraphs above the
+  /// detailed answer ([detail]) as they are written; [onStaged] gets the
+  /// final markdown with merged citations, or nothing on any failure (only
+  /// the detailed answer is shown then). The request and reply are not
+  /// kept in [conversation]: a follow-up continues after the detailed JSON
+  /// answer, the format it is asked to write.
+  Stream<ReActEvent> _stage(
+    List<LoreAnswerEntry> entries, {
+    required String detail,
+    required List<Message> conversation,
+    required String systemPrompt,
+    required List<Map<String, dynamic>>? tools,
+    required void Function(String raw) onRaw,
+    required void Function(String markdown) onStaged,
+  }) async* {
+    final count = entries.where((e) => e.isText).length;
+    yield const ReActEvent(type: ReActEventType.status, content: '整理答案');
+    final prompt = Message.user(loreStagePrompt(numberedEntries(entries)));
+    final text = StringBuffer();
+    var shown = 0;
+    try {
+      final stream = client.streamTurn(
+        [Message.system(systemPrompt), ...conversation, prompt],
+        tools: tools,
+        toolChoice: tools == null ? null : 'none',
+        temperature: temperature,
+        maxTokens: maxTokens,
+      );
+      await for (final delta in stream) {
+        if (delta.content.isEmpty) continue;
+        text.write(delta.content);
+        final preview = _stagePreview(text.toString());
+        if (preview.length - shown >= 24) {
+          shown = preview.length;
+          yield ReActEvent(
+            type: ReActEventType.finalAnswerReplace,
+            content: '$preview\n\n$loreDetailsMarker\n\n$detail',
+          );
+        }
+      }
+    } catch (_) {
+      // Fall through: the detailed answer is shown as it is.
+    }
+    onRaw(text.toString());
+    final stages = parseLoreStages(text.toString(), count);
+    if (stages == null) return;
+    onStaged(stagedAnswerMarkdown(stages, entries));
+  }
+
+  /// Headings and paragraphs of a reorganising reply still being written
+  /// (no citations yet).
+  static String _stagePreview(String partial) {
+    final out = <String>[];
+    for (final m in _stageField.allMatches(partial)) {
+      final raw = m.group(2)!;
+      String value;
+      try {
+        value = jsonDecode('"$raw"') as String;
+      } on FormatException {
+        value = raw;
+      }
+      if (value.trim().isEmpty) continue;
+      out.add(m.group(1) == 'heading' ? '## ${value.trim()}' : value.trim());
+    }
+    return out.join('\n\n');
+  }
+
+  static final RegExp _stageField =
+      RegExp(r'"(heading|text)"\s*:\s*"((?:[^"\\]|\\.)*)');
 
   /// Runs a `delegate` call: a sub-agent with its own conversation. What it
   /// saw counts as seen here, so its checked citations can be reused.

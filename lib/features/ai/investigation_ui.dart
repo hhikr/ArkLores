@@ -1,6 +1,7 @@
 /// UI parsing helpers for story answers (R3b; R13 neutral envelope).
 library;
 
+import '../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../core/agent/story_answer.dart';
 import '../../core/gamedata/story_catalog.dart'
     show StoryCatalogEntry, fallbackStoryLabel;
@@ -397,6 +398,14 @@ void _addRange(BlockStoryCitation story, CitedRange range) {
 /// 1-based display text of a cited range.
 String citedRangeText(CitedRange range, LineRangeText lineText) =>
     lineText(range.start + 1, range.end == range.start ? null : range.end + 1);
+
+/// R18: the part of an answer whose citations are counted — the detailed
+/// answer below [loreDetailsMarker] when there is one (the paragraphs above
+/// it merge the same citations), otherwise the whole answer.
+String citedPartOfAnswer(String content) {
+  final cut = content.indexOf(loreDetailsMarker);
+  return cut < 0 ? content : content.substring(cut + loreDetailsMarker.length);
+}
 
 /// True when [content] carries a story answer envelope (new or legacy).
 bool isStoryAnswer(String content) => parseStoryAnswerEnvelope(content) != null;

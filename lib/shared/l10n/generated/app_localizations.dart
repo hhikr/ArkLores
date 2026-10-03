@@ -956,6 +956,12 @@ abstract class AppLocalizations {
   /// **'lines {start}–{end}'**
   String aiCitationLines(int start, int end);
 
+  /// No description provided for @aiAnswerDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details · {count} points'**
+  String aiAnswerDetails(int count);
+
   /// No description provided for @aiEvidenceSummary.
   ///
   /// In en, this message translates to:

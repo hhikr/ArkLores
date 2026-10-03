@@ -30,11 +30,11 @@ const String loreAgentRules = '''
 $loreDatabaseGuide
 
 工作方式：
-- 先看全局再读原文：问题涉及某个人物/事件时，先用 grep（不给范围）或 sql 统计它在哪些故事里出现、出现多少，再按时间顺序挑出相关章节，用 read_story 整章阅读，必要时在章内 grep。
+- 先看全局再读原文：问题涉及某个人物/事件时，先用 grep（不给范围）或 sql 统计它在哪些故事里出现、出现多少，再按时间顺序挑出相关章节，用 read_story 整章阅读，必要时在章内 grep。问题限定在某个故事集时也先看全库分布：其他故事里对同一人物/事件的叙述可能印证或修正这个故事集里的内容。
 - 可以用你对这部作品的了解来构造查询：猜名字的正确写法、别名、可能在哪些章节、相关人物。但这些了解只是找资料的线索，答案里的每一点都必须来自本次读到的原文。
 - 某个写法查出 0 行时，不要直接下“没有记载”的结论：先换写法再查（缩短成更短的子串、换同音字/近形字、查 entities / entity_aliases / story_lines.speaker / story_catalog 里相近的名字，或用 similar_names）。
 - 用原文里的写法检索和作答。
-- 读原文时分清：人物亲自做的事、别人替他做或替他决定的事、只是计划/打算的事、回忆、梦境或幻象。
+- 读原文时分清：人物亲自做的事、别人替他做或替他决定的事、只是计划/打算的事、回忆，以及故事后来揭示为另一种性质的经历。
 - 一次只读真正需要的范围；同一段不要重复读。证据足够回答时就停止检索并作答；问题很宽时优先保证时间线上各阶段都有覆盖，而不是在一处读得过细。
 - 库里确实找不到时，如实说明查了什么、没查到什么。
 
@@ -95,6 +95,51 @@ String loreSystemPrompt(AnswerStyle style, {bool subtask = false}) => subtask
     ? '$loreAgentRules\n\n$loreSubtaskInstructions'
     : '$loreAgentRules\n\n$loreDelegationRules\n\n$loreAnswerFormat\n\n'
         '${loreStyleInstructions(style)}';
+
+/// R18: system prompt of the reviewer — a second model reading the main
+/// agent's answer as a reader, without the text. It only raises questions;
+/// the main agent settles them from the text.
+const String loreReviewPrompt = '''
+你是熟悉《明日方舟》剧情的读者，替玩家审读一份剧情问答的答案。答案由另一个助手根据游戏原文写成；你看不到原文，只看到问题和答案。
+找出读者会质疑、需要回原文核实的地方：
+- 答案当作实际发生的事来讲的经历，在故事里是否真的发生了：故事后来是否揭示了它的另一种性质，或者它只是某个人物的说法、设想、转述；
+- 同一人物或事件在答案没有提到的其他故事里，是否有重要经历，或有能印证、修正答案的叙述；
+- 因果、人物归属、时间先后是否可疑；
+- 是否答非所问。
+你对作品的了解只能用来提出问题，不能当作结论。只提具体、能回原文核实的问题，最多五个，每个一句话，写明涉及答案的哪一部分、可能要查哪里；没有值得核实的地方就不要硬提。
+只输出一个 JSON 对象，不写别的文字：{"ok": true} 或 {"issues": ["<问题>", ...]}''';
+
+/// R18: the reviewer's input — the question, the stories the answer
+/// cites, and the answer without citations.
+String loreReviewRequest(String question, List<String> stories, String answer) =>
+    '问题：$question\n\n'
+    '${stories.isEmpty ? '' : '答案依据的故事：${stories.join('；')}\n\n'}'
+    '答案：\n$answer';
+
+/// R18: the reviewer's questions handed back to the main agent.
+String loreReviewFollowUp(List<String> issues, {required bool json}) => [
+      '一位读者审读了你的答案，提出下面的问题：',
+      for (final (i, issue) in issues.indexed) '${i + 1}. $issue',
+      '请逐个回原文核实，需要时继续用工具查，包括其他故事。读者的问题只是线索，不是证据：'
+          '原文支持原答案的部分保持不变；原文表明需要修改的就修改；'
+          '故事揭示了某段经历的另一种性质时，在答案开头说明，并按揭示后的性质叙述。',
+      '然后重新输出完整的最终答案${json ? '（同样的 JSON 格式）' : ''}；只写答案本身，不提审读和核对过程。',
+    ].join('\n');
+
+/// R18: reorganising the detailed answer into a few paragraphs. The model
+/// names the entries each paragraph covers; the citations are merged by
+/// code from those entries.
+String loreStagePrompt(String numberedEntries) => '''
+把你上面的最终答案重新整理给玩家：按阶段或方面合并成几段，每段用几句话概括一个阶段的经过和结果，不逐条复述细节。
+上面答案的正文条目编号如下：
+$numberedEntries
+
+只输出一个 JSON 对象，不写别的文字，不加代码块：
+{"stages": [{"heading": "<这一段的小标题>", "text": "<一段话>", "from": [<这一段概括的条目编号>, ...]}]}
+- 第一段直接回答玩家的问题；之后按时间或逻辑顺序排列。
+- 每个条目编号都要归入某一段；段数按内容决定，应比条目少得多。
+- 只用上面答案里的内容，不加新内容；不用引号引用台词；不提数据库、工具、查找过程。
+- 故事中有改变前面经历性质的揭示时，在第一段说明。''';
 
 /// Text-protocol fallback for providers without function calling: how to
 /// call a tool in plain text.

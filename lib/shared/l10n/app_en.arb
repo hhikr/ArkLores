@@ -157,6 +157,8 @@
   "@aiCitationLine": {"placeholders": {"line": {"type": "int"}}},
   "aiCitationLines": "lines {start}–{end}",
   "@aiCitationLines": {"placeholders": {"start": {"type": "int"}, "end": {"type": "int"}}},
+  "aiAnswerDetails": "Details · {count} points",
+  "@aiAnswerDetails": {"placeholders": {"count": {"type": "int"}}},
   "aiEvidenceSummary": "{count} citations · {stories} stories",
   "@aiEvidenceSummary": {"placeholders": {"count": {"type": "int"}, "stories": {"type": "int"}}},
   "aiChapterCount": "{count} cited",

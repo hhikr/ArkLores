@@ -491,8 +491,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   Widget _buildCitationTree(AppThemeTokens theme) {
     final msg = widget.message;
     if (msg.isStreaming) return const SizedBox.shrink();
-    final ids = extractCitedStoryIds(msg.content);
-    final records = extractCitedRecordIds(msg.content);
+    // R18: the reorganised paragraphs only merge the detailed answer's
+    // citations; count each once, from the details.
+    final cited = citedPartOfAnswer(msg.content);
+    final ids = extractCitedStoryIds(cited);
+    final records = extractCitedRecordIds(cited);
     if (ids.isEmpty && records.isEmpty) return const SizedBox.shrink();
     final entries = ids.isEmpty
         ? const <String, StoryCatalogEntry>{}
@@ -500,7 +503,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 .watch(storyCatalogEntriesProvider(storyLabelsKey(ids)))
                 .valueOrNull ??
             const <String, StoryCatalogEntry>{};
-    final groups = groupCitations(msg.content, entries);
+    final groups = groupCitations(cited, entries);
     final total =
         groups.fold<int>(0, (n, g) => n + g.citationCount) + records.length;
     final open = _isOpen('*');

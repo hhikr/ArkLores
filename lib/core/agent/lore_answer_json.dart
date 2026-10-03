@@ -289,7 +289,7 @@ class LoreAnswerStream {
 
   /// Appends one citation (a tuple, or a single string) to the entry.
   void _cite(List<Object?> parts) {
-    final ref = _citationRef(parts);
+    final ref = loreCitationRef(parts);
     if (ref == null) return;
     _openEntryBlock();
     _md.write(' `$ref`');
@@ -297,7 +297,7 @@ class LoreAnswerStream {
 }
 
 /// `story_id:a-b` / `record:id` of a citation tuple, or null.
-String? _citationRef(List<Object?> parts) {
+String? loreCitationRef(List<Object?> parts) {
   if (parts.isEmpty) return null;
   final first = '${parts.first}'.trim().replaceAll('`', '');
   if (first == 'record' && parts.length > 1) return 'record:${parts[1]}';

@@ -109,6 +109,35 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // R18: the reorganised paragraphs are shown; the detailed answer below
+    // the marker is one folded row until tapped. Evidence is counted once.
+    testWidgets('a staged answer folds its details', (tester) async {
+      tester.view.physicalSize = const Size(640, 1280);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const story = 'activities/act_fixture/level_fixture_c5.txt';
+      await pumpBubble(
+        tester,
+        '${formatStoryAnswerEnvelope(StoryAnswerStatus.answered)}\n'
+        '## 第一阶段\n\n阶段概括。 `$story:0-1` `$story:3`\n\n[DETAILS]\n\n'
+        '细节甲。 `$story:0-1`\n\n## 小节\n\n- 细节乙。 `$story:3`',
+      );
+      expect(find.text('阶段概括。'), findsOneWidget);
+      expect(find.text('第 1–2 行'), findsOneWidget);
+      expect(find.text('第 4 行'), findsOneWidget);
+      expect(find.text('详细经过 · 2 条'), findsOneWidget);
+      expect(find.text('细节甲。'), findsNothing);
+      expect(find.textContaining('DETAILS'), findsNothing);
+      expect(find.text('证据 2 处 · 来自 1 个故事'), findsOneWidget);
+      await tester.tap(find.text('详细经过 · 2 条'));
+      await tester.pumpAndSettle();
+      expect(find.text('细节甲。'), findsOneWidget);
+      expect(find.text('细节乙。'), findsOneWidget);
+      expect(find.text('第 1–2 行'), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a line chip opens the story at the cited lines',
         (tester) async {
       tester.view.physicalSize = const Size(640, 1280);

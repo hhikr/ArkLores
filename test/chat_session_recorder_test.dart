@@ -83,11 +83,13 @@ void main() {
       expect(turn.model, 'test-model');
       expect(turn.baseUrl, 'https://example.com/v1');
       expect(turn.status, ChatTurnStatus.completed);
-      // Every model response is recorded untruncated: two reads, the answer.
-      expect(turn.iterations, hasLength(3));
+      // Every model response is recorded untruncated: two reads, the
+      // answer, and (R18) the reader's review of it.
+      expect(turn.iterations, hasLength(4));
       expect(turn.iterations.first.rawResponse, contains('read_story'));
       expect(turn.iterations.first.tool, 'read_story');
-      expect(turn.iterations.last.rawResponse, contains('结论：博士'));
+      expect(turn.iterations[2].rawResponse, contains('结论：博士'));
+      expect(turn.iterations.last.rawResponse, startsWith('（审稿）'));
     });
 
     test('multi-turn follow-ups append to the same session file', () async {

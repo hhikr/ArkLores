@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
@@ -38,7 +39,12 @@ void showCitedRecord(BuildContext context, String id) {
 /// the answer streams, every block but the one being written already shows
 /// its chain, so the text grows only at the bottom and what the reader has
 /// scrolled to never moves.
-class StoryAnswerBody extends ConsumerWidget {
+///
+/// R18: an answer with [loreDetailsMarker] shows the reorganised paragraphs
+/// above it and folds the detailed answer below it into one row
+/// ("详细经过 · N 条"), also while the detailed answer is still streaming —
+/// so the row keeps one height until the reader opens it.
+class StoryAnswerBody extends ConsumerStatefulWidget {
   const StoryAnswerBody({
     super.key,
     required this.content,
@@ -52,50 +58,124 @@ class StoryAnswerBody extends ConsumerWidget {
   final bool streaming;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StoryAnswerBody> createState() => _StoryAnswerBodyState();
+}
+
+class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
+  bool _detailsOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final blocks = splitAnswerBlocks(content);
+    final content = widget.content;
+    final cut = content.indexOf(loreDetailsMarker);
     // Records are numbered in order of first citation in the whole answer,
     // as in the summary tree below it.
     final recordNumbers = extractCitedRecordIds(content);
-
+    if (cut < 0) {
+      return _blocks(splitAnswerBlocks(content), recordNumbers, theme,
+          streaming: widget.streaming,);
+    }
+    final top = splitAnswerBlocks(content.substring(0, cut));
+    final details = splitAnswerBlocks(
+      content.substring(cut + loreDetailsMarker.length),
+    );
+    final count = details.where((b) => !_isHeading(b.markdown)).length;
+    // The paragraphs are written after the details: while they stream, the
+    // details are complete.
+    final writingTop = widget.streaming && top.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final (i, block) in blocks.indexed) ...[
-          if (i > 0) const SizedBox(height: 8),
-          Padding(
-            padding: EdgeInsets.only(left: 18.0 * block.indent),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        if (top.isNotEmpty) ...[
+          _blocks(top, recordNumbers, theme, streaming: writingTop),
+          const SizedBox(height: 8),
+        ],
+        InkWell(
+          key: const ValueKey('answer-details-toggle'),
+          onTap: () => setState(() => _detailsOpen = !_detailsOpen),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (block.markdown.trim().isNotEmpty)
-                  MarkdownBody(data: block.markdown, styleSheet: styleSheet),
-                // The last block may still be receiving its citations.
-                if (block.hasCitations &&
-                    (!streaming || i < blocks.length - 1))
-                  Padding(
-                    // List items: align with the item text, past the bullet.
-                    padding: EdgeInsets.only(
-                      left: _isListItem(block.markdown) ? 18 : 0,
-                      top: 4,
-                    ),
-                    child: _EvidenceChain(
-                      block: block,
-                      recordNumbers: recordNumbers,
-                      theme: theme,
-                    ),
+                Icon(
+                  _detailsOpen
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 18,
+                  color: theme.accentText,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  context.t.aiAnswerDetails(count),
+                  style: theme.bodyFont.copyWith(
+                    color: theme.accentText,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
+                ),
               ],
             ),
           ),
+        ),
+        if (_detailsOpen) ...[
+          const SizedBox(height: 6),
+          _blocks(details, recordNumbers, theme,
+              streaming: widget.streaming && !writingTop,),
         ],
       ],
     );
   }
 
+  Widget _blocks(
+    List<AnswerBlock> blocks,
+    List<String> recordNumbers,
+    AppThemeTokens theme, {
+    required bool streaming,
+  }) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (i, block) in blocks.indexed) ...[
+            if (i > 0) const SizedBox(height: 8),
+            Padding(
+              padding: EdgeInsets.only(left: 18.0 * block.indent),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (block.markdown.trim().isNotEmpty)
+                    MarkdownBody(
+                      data: block.markdown,
+                      styleSheet: widget.styleSheet,
+                    ),
+                  // The last block may still be receiving its citations.
+                  if (block.hasCitations &&
+                      (!streaming || i < blocks.length - 1))
+                    Padding(
+                      // List items: align with the item text, past the bullet.
+                      padding: EdgeInsets.only(
+                        left: _isListItem(block.markdown) ? 18 : 0,
+                        top: 4,
+                      ),
+                      child: _EvidenceChain(
+                        block: block,
+                        recordNumbers: recordNumbers,
+                        theme: theme,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      );
+
   static final RegExp _listMarker = RegExp(r'^(?:[-*+]|\d+[.)])\s');
   static bool _isListItem(String markdown) => _listMarker.hasMatch(markdown);
+  static bool _isHeading(String markdown) =>
+      markdown.trimLeft().startsWith('#');
 }
 
 class _EvidenceChain extends ConsumerWidget {
