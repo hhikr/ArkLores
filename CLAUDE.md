@@ -240,6 +240,9 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   Agent 依次发 `status` / `toolCall` / `toolObservation` / `finalAnswerToken`… →（继续查资料或出处退回时
   `finalAnswerReset`）→ `finalAnswerReplace`（信封 + 核对后正文）。测试取答案用 `finalAnswerOf(events)`。
 - 状态：没有核对通过的出处 → `not_covered`；模型写 `[COVERAGE: gaps]` 或到轮数上限 → `partial`；否则 `answered`。
+- 界面（R17d，开发者要求）：问答列表**不随流式内容自动滚动**（只在发新问题时滚到底一次）；思考窗口固定高度、
+  内部也不跟随；阅读位置上方的内容在流式中不得变高变矮。不要再加“贴底跟随”。
+- 颜色：Endfield 的信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 
 ### 剧情向量（可选表，R12）
 

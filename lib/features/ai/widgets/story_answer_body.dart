@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/gamedata/story_catalog.dart'
-    show StoryCatalogEntry, fallbackStoryLabel;
+import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
@@ -35,8 +34,10 @@ void showCitedRecord(BuildContext context, String id) {
 
 /// R17b: a story answer rendered block by block — each paragraph or list
 /// item without its citations, followed by an indented evidence chain
-/// (`故事集 → 章 → 第 a–b 行`, the line chips open the story). While the
-/// answer streams the chains are left out so the text does not jump.
+/// (`故事集 → 章 → 第 a–b 行`, the line chips open the story). R17d: while
+/// the answer streams, every block but the one being written already shows
+/// its chain, so the text grows only at the bottom and what the reader has
+/// scrolled to never moves.
 class StoryAnswerBody extends ConsumerWidget {
   const StoryAnswerBody({
     super.key,
@@ -54,16 +55,6 @@ class StoryAnswerBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final blocks = splitAnswerBlocks(content);
-    final storyIds = {
-      for (final b in blocks)
-        for (final s in b.stories) s.storyId,
-    };
-    final entries = streaming || storyIds.isEmpty
-        ? const <String, StoryCatalogEntry>{}
-        : ref
-                .watch(storyCatalogEntriesProvider(storyLabelsKey(storyIds)))
-                .valueOrNull ??
-            const <String, StoryCatalogEntry>{};
     // Records are numbered in order of first citation in the whole answer,
     // as in the summary tree below it.
     final recordNumbers = extractCitedRecordIds(content);
@@ -80,7 +71,9 @@ class StoryAnswerBody extends ConsumerWidget {
               children: [
                 if (block.markdown.trim().isNotEmpty)
                   MarkdownBody(data: block.markdown, styleSheet: styleSheet),
-                if (!streaming && block.hasCitations)
+                // The last block may still be receiving its citations.
+                if (block.hasCitations &&
+                    (!streaming || i < blocks.length - 1))
                   Padding(
                     // List items: align with the item text, past the bullet.
                     padding: EdgeInsets.only(
@@ -89,7 +82,6 @@ class StoryAnswerBody extends ConsumerWidget {
                     ),
                     child: _EvidenceChain(
                       block: block,
-                      entries: entries,
                       recordNumbers: recordNumbers,
                       theme: theme,
                     ),
@@ -109,18 +101,16 @@ class StoryAnswerBody extends ConsumerWidget {
 class _EvidenceChain extends ConsumerWidget {
   const _EvidenceChain({
     required this.block,
-    required this.entries,
     required this.recordNumbers,
     required this.theme,
   });
 
   final AnswerBlock block;
-  final Map<String, StoryCatalogEntry> entries;
   final List<String> recordNumbers;
   final AppThemeTokens theme;
 
-  (String, String) _labels(String storyId) {
-    final entry = entries[storyId];
+  (String, String) _labels(WidgetRef ref, String storyId) {
+    final entry = ref.watch(storyCatalogEntryProvider(storyId)).valueOrNull;
     if (entry != null) return (entry.collectionLabel, entry.chapterLabel);
     final fallback = fallbackStoryLabel(storyId);
     final cut = fallback.indexOf(' · ');
@@ -143,7 +133,7 @@ class _EvidenceChain extends ConsumerWidget {
     final rows = <Widget>[
       for (final story in block.stories)
         Builder(builder: (context) {
-          final (collection, chapter) = _labels(story.storyId);
+          final (collection, chapter) = _labels(ref, story.storyId);
           return Wrap(
             spacing: 4,
             runSpacing: 4,
@@ -216,18 +206,19 @@ class _EvidenceChain extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
-              color: theme.accentPrimary.withValues(alpha: 0.10),
+              color: theme.accentPrimary.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: theme.accentPrimary.withValues(alpha: 0.5),
+                color: theme.accentText.withValues(alpha: 0.45),
                 width: 0.5,
               ),
             ),
             child: Text(
               text,
               style: theme.bodyFont.copyWith(
-                color: theme.accentPrimary,
+                color: theme.accentText,
                 fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),

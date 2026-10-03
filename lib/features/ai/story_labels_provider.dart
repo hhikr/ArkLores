@@ -23,6 +23,20 @@ final storyCatalogEntriesProvider =
   }
 });
 
+/// R17d: the catalog entry of one story, cached per id, so an evidence chain
+/// keeps its label while an answer streams in and more stories are cited.
+/// Null when the knowledge base has no catalog entry for it.
+final storyCatalogEntryProvider =
+    FutureProvider.family<StoryCatalogEntry?, String>((ref, storyId) async {
+  try {
+    final entries =
+        await ref.watch(sharedGameDataStoreProvider).storyCatalogEntries([storyId]);
+    return entries[storyId];
+  } catch (_) {
+    return null;
+  }
+});
+
 /// R14: readable labels (`巴别塔 BB-7 行动前《…》`) of the same ids.
 final storyLabelsProvider =
     FutureProvider.family<Map<String, String>, String>((ref, key) async {

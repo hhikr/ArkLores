@@ -4,6 +4,32 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- The Ask list no longer follows a streaming answer: thinking, steps and answer grow below
+  while the view stays where the reader put it (before, each update jumped to the end and
+  cut off the reader's drag). Only a new question scrolls to the end once; a ↓ button
+  appears whenever the end is out of view.
+- The thinking is a scrollable window of fixed height holding the whole text (not the last
+  800 characters); it does not follow new thinking and stays after the answer is complete,
+  so nothing above the answer changes height while it is read.
+- While an answer streams, every finished point already shows its evidence chain; only the
+  point being written waits. Chain labels are looked up per story, so they no longer change
+  when the answer completes.
+- Readability on the light (Endfield) theme: the signal yellow is kept for fills and thick
+  lines; accent text, icons and thin borders use a deep amber of the same hue (new theme
+  tokens `accentText` / `onAccent`, contrast ≥ 4.5 checked by a test) — status line,
+  evidence chips, mode button, send icon, tab label. Other pages can follow the same rule.
+- The mode picker is a rounded panel that slides up from the mode button instead of a popup
+  menu; it takes no focus, so the keyboard stays up.
+
+### Notes
+
+- Answer quality issues from the same device test (no short top-level answer for broad
+  questions; a story's framing, such as events later revealed to be a dream, is not stated
+  up front or checked against other stories) are recorded with candidate fixes in
+  `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5.9 and left for a later round.
+
 ## [0.10.2] - 2026-10-03 (pre-release)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).

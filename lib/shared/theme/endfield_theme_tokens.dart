@@ -37,6 +37,11 @@ class EndfieldThemeTokens implements AppThemeTokens {
   final Color accentPrimary = const Color(0xFFF8D439);
   @override
   final Color accentSecondary = const Color(0xFFF3F4EF);
+  /// Deep amber: the signal yellow's hue, readable on the light surfaces.
+  @override
+  final Color accentText = const Color(0xFF7D5E00);
+  @override
+  final Color onAccent = const Color(0xFF141615);
 
   // ─── Semantic colors ───────────────────────────────────────────
   @override

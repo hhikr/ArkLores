@@ -127,8 +127,16 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
                           animation: _strength,
                           builder: (context, child) => Container(
                             key: ValueKey('story-line-target-${line.lineIndex}'),
-                            color: theme.accentPrimary.withValues(
-                              alpha: 0.22 * _strength.value,
+                            decoration: BoxDecoration(
+                              color: theme.accentPrimary.withValues(
+                                alpha: 0.3 * _strength.value,
+                              ),
+                              border: Border(
+                                left: BorderSide(
+                                  color: theme.accentText,
+                                  width: 3,
+                                ),
+                              ),
                             ),
                             child: child,
                           ),

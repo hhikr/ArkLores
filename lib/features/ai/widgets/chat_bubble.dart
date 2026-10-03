@@ -69,8 +69,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             _buildLiveHeader(theme)
           else if (msg.steps.isNotEmpty)
             _buildReActStepsSection(theme),
-          if (msg.isStreaming && msg.reasoning.isNotEmpty)
-            _buildReasoningPanel(theme),
+          if (msg.reasoning.isNotEmpty) _buildReasoningPanel(theme),
           if (storyAnswer || live || msg.steps.isNotEmpty)
             const SizedBox(height: 6),
           if (msg.factCheckVerdict != null) ...[
@@ -92,7 +91,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         color: theme.accentPrimary.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.accentPrimary.withValues(alpha: 0.3),
+          color: theme.accentText.withValues(alpha: 0.35),
           width: 1,
         ),
       ),
@@ -161,7 +160,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       h1: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 18),
       h2: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 16),
       h3: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 14),
-      a: theme.bodyFont.copyWith(color: theme.accentPrimary),
+      a: theme.bodyFont.copyWith(color: theme.accentText),
       listBullet: theme.bodyFont.copyWith(color: theme.textPrimary),
       code: theme.bodyFont.copyWith(
         color: theme.accentSecondary,
@@ -274,7 +273,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final coverage = parseCoverageReportLine(msg.content);
     final status = envelope?.status;
     final accent = status == StoryAnswerStatus.answered
-        ? theme.accentPrimary
+        ? theme.accentText
         : theme.warning;
     final statusLabel = switch (status) {
       StoryAnswerStatus.answered => context.t.aiAnswerStatusAnswered,
@@ -401,14 +400,24 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   }
 
   bool _showReasoning = true;
+  final ScrollController _reasoningScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _reasoningScroll.dispose();
+    super.dispose();
+  }
+
+  /// Height of the thinking window, whatever the length of the text.
+  static const double reasoningWindowHeight = 168;
 
   /// R16: hidden reasoning streamed while the answer is written (only with
-  /// "深度思考" on); muted, collapsible, gone once the answer is complete.
+  /// "深度思考" on); muted and collapsible. R17d: a window of fixed height
+  /// holding the whole text, scrolled only by the reader (new thinking grows
+  /// below, nothing follows it), and kept after the answer is complete, so
+  /// the answer below it never shifts.
   Widget _buildReasoningPanel(AppThemeTokens theme) {
-    const tail = 800;
     final text = widget.message.reasoning;
-    final shown =
-        text.length > tail ? '…${text.substring(text.length - tail)}' : text;
     final muted = theme.bodyFont.copyWith(
       color: theme.textSecondary,
       fontSize: 12,
@@ -441,11 +450,22 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           Container(
             key: const ValueKey('reasoning-text'),
             width: double.infinity,
-            padding: const EdgeInsets.only(left: 10),
+            height: reasoningWindowHeight,
             decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: theme.divider, width: 2)),
+              color: theme.bgSecondary.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: theme.divider, width: 0.5),
             ),
-            child: Text(shown, style: muted),
+            child: Scrollbar(
+              controller: _reasoningScroll,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                key: const ValueKey('reasoning-scroll'),
+                controller: _reasoningScroll,
+                padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+                child: Text(text, style: muted),
+              ),
+            ),
           ),
       ],
     );
@@ -523,7 +543,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   : theme.bgSecondary,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: selected ? theme.accentPrimary : theme.divider,
+                color: selected ? theme.accentText : theme.divider,
                 width: 0.5,
               ),
             ),
@@ -673,7 +693,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         onExpansionChanged: (value) => setState(() => _showEvidence = value),
         tilePadding: const EdgeInsets.symmetric(horizontal: 10),
         childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        leading: Icon(Icons.source_rounded, color: theme.accentPrimary),
+        leading: Icon(Icons.source_rounded, color: theme.accentText),
         title: Text(
           context.t.aiEvidenceTitle(_evidenceRecords.length),
           style: theme.titleFont.copyWith(fontSize: 13),
@@ -751,7 +771,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                         ? Icons.visibility_rounded
                         : Icons.visibility_off_rounded,
                     size: 14,
-                    color: theme.accentPrimary,
+                    color: theme.accentText,
                   ),
                   const SizedBox(width: 6),
                   Flexible(
@@ -868,12 +888,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
           color: theme.accentPrimary.withValues(alpha: 0.12),
-          border: Border.all(color: theme.accentPrimary.withValues(alpha: 0.4)),
+          border: Border.all(color: theme.accentText.withValues(alpha: 0.4)),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(label,
             style: theme.bodyFont.copyWith(
-                color: theme.accentPrimary,
+                color: theme.accentText,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,),),
       );
@@ -886,7 +906,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     switch (step.type) {
       case ReActEventType.thought:
         icon = Icons.lightbulb_outline_rounded;
-        color = theme.accentPrimary;
+        color = theme.accentText;
         prefix = 'Thought';
         break;
       case ReActEventType.toolCall:

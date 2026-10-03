@@ -389,7 +389,8 @@ class AskChatNotifier extends ChatNotifierBase {
               assistantId,
               isStreaming: false,
               steps: List.of(steps),
-              reasoning: '',
+              // The thinking stays (in memory only) so the panel above
+              // the answer does not vanish and shift the text being read.
               liveStatus: '',
             );
             break;

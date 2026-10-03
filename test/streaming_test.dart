@@ -265,6 +265,72 @@ void main() {
       expect(find.text('先比较两段原文'), findsNothing);
       expect(tester.takeException(), isNull);
     });
+
+    ChatMessage thinking(String reasoning, {bool streaming = true}) =>
+        ChatMessage(
+          id: 'a',
+          role: MessageRole.assistant,
+          content: '结论',
+          isStreaming: streaming,
+          liveStatus: streaming ? '正在撰写答案' : '',
+          reasoning: reasoning,
+          timestamp: DateTime(2026),
+        );
+
+    testWidgets(
+        'R17d: the thinking window has one fixed height, holds the whole text '
+        'and does not follow new thinking', (tester) async {
+      await pump(tester, thinking('短'));
+      final window = find.byKey(const ValueKey('reasoning-text'));
+      final shortSize = tester.getSize(window);
+
+      final long = [for (var i = 0; i < 80; i++) '第$i段思考'].join('\n');
+      await pump(tester, thinking(long));
+      expect(tester.getSize(window), shortSize);
+      // The whole text, not a tail.
+      expect(find.textContaining('第0段思考'), findsOneWidget);
+      expect(find.textContaining('第79段思考'), findsOneWidget);
+      final scroll = tester.state<ScrollableState>(find.descendant(
+        of: find.byKey(const ValueKey('reasoning-scroll')),
+        matching: find.byType(Scrollable),
+      ),);
+      expect(scroll.position.maxScrollExtent, greaterThan(0));
+      expect(scroll.position.pixels, 0);
+
+      // More thinking arrives: the window stays where the reader left it.
+      await pump(tester, thinking('$long\n更多思考'));
+      expect(scroll.position.pixels, 0);
+      expect(tester.getSize(window), shortSize);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('R17d: the thinking stays after the answer is complete',
+        (tester) async {
+      await pump(tester, thinking('先比较两段原文', streaming: false));
+      expect(find.text('思考过程'), findsOneWidget);
+      expect(find.text('先比较两段原文'), findsOneWidget);
+    });
+
+    testWidgets(
+        'R17d: while streaming, finished blocks already show their chain; '
+        'the block being written does not', (tester) async {
+      await pump(
+        tester,
+        ChatMessage(
+          id: 'a',
+          role: MessageRole.assistant,
+          content: '- 第一条 `activities/act_fixture/level_fixture_c5.txt:3-4`\n'
+              '- 第二条 `activities/act_fixture/level_fixture_c5.txt:7`',
+          isStreaming: true,
+          liveStatus: '正在撰写答案',
+          timestamp: DateTime(2026),
+        ),
+      );
+      expect(find.text('第 4–5 行'), findsOneWidget);
+      expect(find.text('第 8 行'), findsNothing);
+      expect(find.textContaining('.txt'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 

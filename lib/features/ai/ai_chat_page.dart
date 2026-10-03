@@ -10,6 +10,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'chat_history_page.dart';
+import 'widgets/ask_mode_picker.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/roleplay_tab.dart';
 import 'wiki_ai_context.dart';
@@ -37,15 +38,11 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     });
   bool _handledInitialWikiContext = false;
 
-  /// R16: whether the list follows a streaming answer. True while the view
-  /// sits at the bottom; scrolling up stops it (and shows a ↓ button).
-  bool _followBottom = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
+  /// R17d: the list never follows a streaming answer — the thinking, the
+  /// steps and the answer grow below and the reader scrolls at their own
+  /// pace. Only a new question scrolls (once) to the end. The ↓ button
+  /// shows whenever the end is out of view.
+  bool _showJumpToEnd = false;
 
   @override
   void dispose() {
@@ -55,39 +52,30 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     super.dispose();
   }
 
-  bool get _atBottom =>
-      !_scrollController.hasClients ||
-      _scrollController.position.maxScrollExtent -
-              _scrollController.position.pixels <
-          48;
-
-  void _onScroll() {
-    // Only the user's own drags change following; content growing below
-    // the view (a streaming answer) must not switch it off.
-    final dragging = _scrollController.hasClients &&
-        _scrollController.position.isScrollingNotifier.value;
-    if (!dragging && !_atBottom) return;
-    final follow = _atBottom;
-    if (follow != _followBottom) setState(() => _followBottom = follow);
+  /// Called on scrolling and on content size changes.
+  bool _onScrollMetrics(ScrollMetrics metrics) {
+    final away = metrics.maxScrollExtent - metrics.pixels > 48;
+    if (away != _showJumpToEnd) setState(() => _showJumpToEnd = away);
+    return false;
   }
 
-  /// Scrolls to the end after the next frame; [animate] for discrete jumps
-  /// (a new message), a plain jump while tokens stream in.
-  void _scrollToBottom({bool animate = true}) {
-    if (!_scrollController.hasClients) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  /// Animates to the end; [afterFrame] when the content just changed and
+  /// is not laid out yet.
+  void _scrollToBottom({bool afterFrame = false}) {
+    void go() {
       if (!_scrollController.hasClients) return;
-      final end = _scrollController.position.maxScrollExtent;
-      if (animate) {
-        _scrollController.animateTo(
-          end,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      } else {
-        _scrollController.jumpTo(end);
-      }
-    });
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    if (afterFrame) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => go());
+    } else {
+      go();
+    }
   }
 
   @override
@@ -111,7 +99,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
           tabAlignment: TabAlignment.start,
           dividerColor: Colors.transparent,
           indicatorColor: theme.accentPrimary,
-          labelColor: theme.accentPrimary,
+          labelColor: theme.accentText,
           unselectedLabelColor: theme.textSecondary,
           labelStyle: theme.titleFont.copyWith(
             fontSize: 17,
@@ -226,12 +214,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
             icon: Icon(
               Icons.settings_rounded,
               size: 21,
-              color: theme.isDark ? Colors.black : Colors.white,
+              color: theme.onAccent,
             ),
             label: Text(context.t.aiSettingsGoTo),
             style: FilledButton.styleFrom(
               backgroundColor: theme.accentPrimary,
-              foregroundColor: theme.isDark ? Colors.black : Colors.white,
+              foregroundColor: theme.onAccent,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               textStyle: theme.titleFont.copyWith(fontWeight: FontWeight.bold),
             ),
@@ -250,13 +238,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
 
     ref.listen(askChatProvider, (prev, next) {
-      if (prev?.length != next.length) {
-        // A new question: follow its answer from the start.
-        _followBottom = true;
-        _scrollToBottom();
-      } else if (next.isNotEmpty && next.last.isStreaming && _followBottom) {
-        _scrollToBottom(animate: false);
-      }
+      // A new question (not a streaming update): bring it into view once.
+      if ((prev?.length ?? 0) < next.length) _scrollToBottom(afterFrame: true);
     });
 
     // R15: the conversation fills the tab; actions live in the app bar and
@@ -268,29 +251,44 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
               ? _buildEmptyState(theme)
               : Stack(
                   children: [
-                    ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                    NotificationListener<ScrollMetricsNotification>(
+                      onNotification: (n) => n.depth == 0 &&
+                          _onScrollMetrics(n.metrics),
+                      child: NotificationListener<ScrollUpdateNotification>(
+                        onNotification: (n) => n.depth == 0 &&
+                            _onScrollMetrics(n.metrics),
+                        child: ListView.builder(
+                          key: const ValueKey('ask-chat-list'),
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          itemCount: chatHistory.length,
+                          itemBuilder: (context, index) {
+                            return ChatBubble(message: chatHistory[index]);
+                          },
+                        ),
                       ),
-                      itemCount: chatHistory.length,
-                      itemBuilder: (context, index) {
-                        return ChatBubble(message: chatHistory[index]);
-                      },
                     ),
-                    if (!_followBottom)
+                    if (_showJumpToEnd)
                       Positioned(
                         right: 16,
                         bottom: 12,
-                        child: IconButton.filledTonal(
-                          key: const ValueKey('scroll-to-bottom'),
-                          tooltip: context.t.aiScrollToBottom,
-                          onPressed: () {
-                            setState(() => _followBottom = true);
-                            _scrollToBottom();
-                          },
-                          icon: const Icon(Icons.arrow_downward_rounded),
+                        child: Material(
+                          color: theme.accentPrimary,
+                          shape: const CircleBorder(),
+                          elevation: 3,
+                          shadowColor: Colors.black.withValues(alpha: 0.3),
+                          child: IconButton(
+                            key: const ValueKey('scroll-to-bottom'),
+                            tooltip: context.t.aiScrollToBottom,
+                            onPressed: _scrollToBottom,
+                            icon: Icon(
+                              Icons.arrow_downward_rounded,
+                              color: theme.onAccent,
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -305,7 +303,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
           leading: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildModeMenu(theme),
+              const AskModePicker(),
               const SizedBox(width: 4),
               _buildDeepThinkingToggle(theme),
             ],
@@ -333,12 +331,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
               color: on
-                  ? theme.accentPrimary.withValues(alpha: 0.12)
+                  ? theme.accentPrimary.withValues(alpha: 0.18)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: on
-                    ? theme.accentPrimary.withValues(alpha: 0.35)
+                    ? theme.accentText.withValues(alpha: 0.4)
                     : theme.divider,
                 width: 0.5,
               ),
@@ -346,89 +344,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
             child: Icon(
               Icons.psychology_alt_rounded,
               size: 18,
-              color: on ? theme.accentPrimary : theme.textSecondary,
+              color: on ? theme.accentText : theme.textSecondary,
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  String _modeLabel(AiMode mode) => switch (mode) {
-        AiMode.auto => context.t.aiModeAuto,
-        AiMode.summarize => context.t.aiModeSummarize,
-        AiMode.verify => context.t.aiModeVerify,
-        AiMode.investigate => context.t.aiModeInvestigate,
-      };
-
-  /// R15: compact mode picker in the input row ("自动 ▾"); the mode
-  /// descriptions moved into the menu.
-  Widget _buildModeMenu(AppThemeTokens theme) {
-    final mode = ref.watch(aiModeProvider);
-    return PopupMenuButton<AiMode>(
-      key: const ValueKey('ask-mode-menu'),
-      tooltip: context.t.aiModeMenuTooltip,
-      color: theme.cardSurface,
-      initialValue: mode,
-      onSelected: (value) => ref.read(aiModeProvider.notifier).state = value,
-      itemBuilder: (context) => [
-        for (final candidate in AiMode.values)
-          PopupMenuItem(
-            value: candidate,
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                _modeLabel(candidate),
-                style: theme.bodyFont.copyWith(
-                  color: candidate == mode
-                      ? theme.accentPrimary
-                      : theme.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              subtitle: Text(
-                switch (candidate) {
-                  AiMode.auto => context.t.aiModeAutoDesc,
-                  AiMode.summarize => context.t.aiModeSummarizeDesc,
-                  AiMode.verify => context.t.aiModeVerifyDesc,
-                  AiMode.investigate => context.t.aiModeInvestigateDesc,
-                },
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-          ),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: theme.accentPrimary.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: theme.accentPrimary.withValues(alpha: 0.35),
-            width: 0.5,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _modeLabel(mode),
-              style: theme.bodyFont.copyWith(
-                color: theme.accentPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Icon(
-              Icons.arrow_drop_down_rounded,
-              size: 18,
-              color: theme.accentPrimary,
-            ),
-          ],
         ),
       ),
     );
@@ -543,7 +461,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
               onPressed: onSend,
               icon: Icon(
                 isCancel ? Icons.stop_rounded : Icons.send_rounded,
-                color: isCancel ? theme.danger : theme.accentPrimary,
+                color: isCancel ? theme.danger : theme.accentText,
               ),
               tooltip: isCancel ? context.t.aiCancel : context.t.aiSend,
             ),
