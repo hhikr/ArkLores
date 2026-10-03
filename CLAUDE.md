@@ -9,8 +9,17 @@
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
+## 当前进度（每轮结束时更新）
+
+- 已发布 v0.10.3（2026-10-03，R17d：问答页不随流式自动滚动、固定高度思考窗口、证据链随写随出、
+  `accentText` 可读性、模式面板）。**待开发者真机确认**这几项的手感。
+- 本轮（R18，分支 `feature/r18-answer-quality`）：`docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5.9 的答案质量问题——
+  概括题没有一层短答案；故事后段才揭示的叙述框架不在一开始指出、不跨故事求证。先做候选方案 1–3，先出计划。
+- 开发可在本机（Windows）或云端（环境 ArkLores-Cloud，见 `docs/CLOUD_DEV.md`）进行。
+
 ## 文档索引
 
+- `docs/CLOUD_DEV.md`：云端会话的环境、每次开始要跑的脚本、能做/不能做的事、发版。
 - `docs/AI_ARCHITECTURE.md`：Agent 与检索架构（当前状态 + 演进简史）——改 agent/检索层前先读。
 - `docs/R17_TOOL_AGENT.md`：剧情问答 Agent 的结构、工具、子 agent、出处核对与验收数据。
 - `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：已知限制与根因。
@@ -22,7 +31,9 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 ## Do
 
 - Linux 使用 `/home/hhikr/flutter/bin/flutter`；Windows 使用 `C:\src\flutter\bin\flutter`
-  （已在 PATH）。
+  （已在 PATH）；云端会话里是 `/opt/flutter`（已链接到 `/usr/local/bin/flutter`）。
+- **云端会话**（环境变量 `CLAUDE_CODE_REMOTE=true`）开始时先运行 `bash tools/cloud/session_start.sh`
+  （git 作者、key 文件、pub get）；需要知识库时 `bash tools/cloud/fetch_gamedata.sh`。详见 `docs/CLOUD_DEV.md`。
 - 保护 `logs/`。
 - 保持 GameData 为 Agent 主知识源。
 - 保留 source path、raw id、content type、entity id。
@@ -41,6 +52,9 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 - APK 由 GitHub Actions 构建：把要发布的提交推到 `release/<版本>` 分支即触发
   `android-release.yml`，产物在该次运行的 artifact 中。GameData 资产的 URL/SHA 在
   `tools/release_gamedata.env`，每次数据发版都要更新。
+- App 预发布一条命令：先改版本号/文档并提交推送，再运行 `tools/release_app.ps1 -Version <v> -NotesFile <md>`（Windows，
+  PAT）或 `tools/release_app.sh <v> <md>`（Linux/云端，`gh`）：推 `release/v<v>` → 等 CI → 下载 APK → 建预发布。
+  发版前必须得到开发者明确同意。
 - 签名用项目 release keystore（仓库 secrets：`ANDROID_KEYSTORE_BASE64` 等）；workflow
   会校验证书 SHA-256 为 `b1b09ebf…e364`。本地备份 `tools/arklores-release.jks` +
   `tools/android_signing.properties`（gitignored），绝不提交、绝不打印。
@@ -57,6 +71,7 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 - 提交信息中**禁止**出现 `Co-Authored-By` 或任何把 AI 写为作者/协作者的
   尾注或署名（如 "Generated with ..."）；未经开发者明确许可不得添加。
 - 2026-10 已改写全部历史移除旧的 Claude 协作者尾注；不要再引入。
+- `.claude/settings.json` 的 `attribution` 已关闭 Claude Code 自动加的协作者尾注、PR 署名和 `Claude-Session` 尾注；不要改回。
 - 凭据（`tools/api_info`、`tools/*apiKey*`、`tools/github_pat`）不得提交、
   打印、写入 git 配置或 remote URL。
 
@@ -138,7 +153,8 @@ HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
   `C:\Users\hhikr\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe`
   （同目录 `..\usr\bin` 下有 sh、sed；没有 gzip，压缩用 .NET `GZipStream`）。两者已加入用户 PATH；若当前 shell 没刷新，先执行
   `$env:Path = "C:\src\flutter\bin;<git cmd 目录>;$env:Path"`。
-- 没有 `gh` 和 Android SDK：GitHub 操作用 REST API；APK 在 Linux 上构建。
+- 没有 `gh` 和 Android SDK：GitHub 操作用 REST API；APK 由 GitHub Actions 构建。
+- 磁盘：C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时。全量测试正常约 25 秒，明显变慢先查剩余空间。
 - PowerShell 设置环境变量用 `$env:NAME='value'`，不支持 `NAME=value cmd` 前缀。
 - sqflite FFI 会把相对 DB 路径解析到 `.dart_tool` 下，`ARKLORES_GAMEDATA_DB` 等路径要写绝对路径。
 - 依赖 POSIX 文件替换语义的测试在 Windows 上跳过；临时目录用 `test/support/temp_dir.dart`
