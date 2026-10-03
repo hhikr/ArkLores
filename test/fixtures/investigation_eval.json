@@ -122,6 +122,8 @@
      "gold_stories": [
        {"story_id": "obt/main/level_main_13-01_end.txt", "anchor": "L26 整合运动的建立者，感染者的领袖"}]},
     {"id": "neg_fictional", "type": "负例", "query": "虚构角色泽克洛斯在剧情中做了什么？", "gold_stories": []},
+    {"id": "r18_overview_framing", "type": "概括/叙述框架（R18 §5.9）", "query": "众生行迹中安多恩做了哪些事情？", "gold_stories": []},
+    {"id": "r18_name_branches", "type": "人物/写错的名字（R18）", "query": "缪因是谁？", "gold_stories": []},
     {"id": "neg_future", "type": "负例", "query": "罗德岛在2030年公开举办过庆典吗？", "gold_stories": []}
   ]
 }

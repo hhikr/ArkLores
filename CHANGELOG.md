@@ -4,6 +4,19 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Story answers get a reader's review: a second model call reads the question and the answer
+  (without the source text) and asks up to three questions about the whole story — whether a
+  later reveal changes what the answer tells as fact, whether other stories add or correct it,
+  whether the question was answered. The agent checks them in the text and rewrites; once per
+  question, and a failed review lets the answer through.
+- Long answers are reorganised into a few paragraphs, one per stage, each followed by all the
+  citations of the points it covers (merged by code, none lost). The detailed answer is folded
+  below as "详细经过 · N 条", also while it streams.
+- The prompt no longer names plot devices; a question about one story collection still looks at
+  the corpus-wide distribution first.
+
 ## [0.10.3] - 2026-10-03 (pre-release)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).

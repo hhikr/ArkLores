@@ -122,7 +122,8 @@ String loreReviewFollowUp(List<String> issues, {required bool json}) => [
       '请逐个回原文核实，需要时继续用工具查，包括其他故事。读者的问题只是线索，不是证据：'
           '原文支持原答案的部分保持不变；原文表明需要修改的就修改；'
           '故事揭示了某段经历的另一种性质时，在答案开头说明，并按揭示后的性质叙述。',
-      '然后重新输出完整的最终答案${json ? '（同样的 JSON 格式）' : ''}；只写答案本身，不提审读和核对过程。',
+      '然后重新输出完整的最终答案${json ? '（同样的 JSON 格式）' : ''}；只写答案本身，不提审读和核对过程，'
+          '也不写读者问题里的文件名或编号，故事仍用玩家熟悉的名字。',
     ].join('\n');
 
 /// R18: reorganising the detailed answer into a few paragraphs. The model
