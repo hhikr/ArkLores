@@ -13,7 +13,10 @@ library;
 import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
+import '../llm/embedding_client.dart';
 import 'tools/agent_tool.dart';
+import 'tools/observation_data.dart' show dataBlockPrefix;
+import 'tools/search_story_lines.dart';
 
 /// Story lines shown to the model in this run (per story, line indexes),
 /// and ids of other records (`normalized_records` …) a query returned.
@@ -46,6 +49,14 @@ class SeenLines {
   }
 
   bool get isEmpty => _lines.isEmpty && _records.isEmpty;
+
+  /// Adds everything [other] saw (a sub-agent's reading counts as read).
+  void addAll(SeenLines other) {
+    for (final MapEntry(key: story, value: lines) in other._lines.entries) {
+      _lines.putIfAbsent(story, () => <int>{}).addAll(lines);
+    }
+    _records.addAll(other._records);
+  }
 
   /// Stories with at least one shown line.
   Iterable<String> get stories => _lines.keys;
@@ -516,6 +527,62 @@ class OutlineTool extends AgentTool {
   }
 }
 
+/// `find`: ranked search for a phrase or a described scene — FTS keywords
+/// fused with the optional story vectors (R12). For text that grep's exact
+/// substrings would miss.
+class FindTool extends AgentTool {
+  FindTool(this._store, EmbeddingClient? embeddingClient)
+      : _search = SearchStoryLinesTool(
+          gameDataStore: _store,
+          embeddingClient: embeddingClient,
+        );
+
+  final GameDataRetrieval _store;
+  final SearchStoryLinesTool _search;
+
+  @override
+  String get name => 'find';
+
+  @override
+  String get description =>
+      '按意思找剧情：给一句描述、台词或几个词，返回最相关的故事和其中最相关的几行（关键词检索，'
+      '配置了向量模型时再加语义检索）。适合不知道确切用词的场景、事件；知道确切名字时用 grep 更准。'
+      '结果只是定位线索，要用 read_story 读原文。';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string', 'description': '描述、台词或空格分隔的词'},
+          'collection': {'type': 'string', 'description': '只在这个故事集里找（可选）'},
+        },
+        'required': ['query'],
+      };
+
+  @override
+  Future<String> execute(Map<String, dynamic> arguments) async {
+    // The search takes collection ids; resolve a collection name first.
+    final collection = '${arguments['collection'] ?? ''}'.trim();
+    final scope = collection.isEmpty
+        ? null
+        : (await _store.storyCollection(collection))?.collectionId ?? collection;
+    final result = await _search.execute({
+      'query': arguments['query'],
+      if (scope != null) 'scope_id': scope,
+    });
+    final text = result is ToolExecutionResult ? result.observation : '$result';
+    return [
+      for (final line in text.split('\n'))
+        if (!line.startsWith(dataBlockPrefix))
+          // The search speaks the R16 planner's commands.
+          line
+              .replaceAll('READ', 'read_story')
+              .replaceAll('COVER', 'grep')
+              .replaceAll('FIND', 'find'),
+    ].join('\n').trim();
+  }
+}
+
 /// `similar_names`: names in the DB spelled or pronounced like a term.
 class SimilarNamesTool extends AgentTool {
   SimilarNamesTool(this.store);
@@ -551,11 +618,70 @@ class SimilarNamesTool extends AgentTool {
   }
 }
 
+/// `delegate`: hands one search to a sub-agent with its own conversation
+/// (R17 phase 2); several can run in the same turn.
+class DelegateTool extends AgentTool {
+  DelegateTool(this.runSubtask);
+
+  /// Runs the sub-agent and returns its checked findings.
+  final Future<String> Function(Map<String, dynamic> arguments) runSubtask;
+
+  @override
+  String get name => 'delegate';
+
+  @override
+  String get description =>
+      '把一部分查找和阅读交给一个子助手（独立对话，只有查库工具，不占用你的上下文）。'
+      '同一轮可以派出多个并行执行，例如按时间阶段或故事集拆分。task 要写清查什么、交回什么；'
+      '可用 story_ids 或 collection 限定范围。返回子助手的要点，每点带出处，这些出处已经核对过，可以直接引用。'
+      '适合涉及很多章节的问题；只需读一两章时自己读更快。';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'task': {'type': 'string', 'description': '交给子助手的任务'},
+          'story_ids': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description': '建议它阅读的故事文件（可选）',
+          },
+          'collection': {
+            'type': 'string',
+            'description': '限定的故事集（可选）',
+          },
+        },
+        'required': ['task'],
+      };
+
+  @override
+  Future<String> execute(Map<String, dynamic> arguments) =>
+      runSubtask(arguments);
+}
+
+/// The scope hints of a `delegate` call, as text for the sub-agent.
+String delegateTaskText(Map<String, dynamic> arguments) {
+  final task = '${arguments['task'] ?? ''}'.trim();
+  final ids = _stringList(arguments['story_ids']);
+  final collection = '${arguments['collection'] ?? ''}'.trim();
+  return [
+    task,
+    if (ids.isNotEmpty) '建议阅读：${ids.join('、')}',
+    if (collection.isNotEmpty) '范围：故事集 $collection',
+  ].join('\n');
+}
+
 /// The story agent's tools, sharing one [SeenLines] log.
-List<AgentTool> loreTools(GameDataRetrieval store, SeenLines seen) => [
+List<AgentTool> loreTools(
+  GameDataRetrieval store,
+  SeenLines seen, {
+  EmbeddingClient? embeddingClient,
+}) =>
+    [
       SqlTool(store, seen),
       GrepTool(store, seen),
       ReadStoryTool(store, seen),
+      FindTool(store, embeddingClient),
       OutlineTool(store),
       SimilarNamesTool(store),
     ];

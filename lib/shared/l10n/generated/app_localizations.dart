@@ -224,18 +224,6 @@ abstract class AppLocalizations {
   /// **'Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.'**
   String get settingsSessionLogsDesc;
 
-  /// No description provided for @settingsToolAgent.
-  ///
-  /// In en, this message translates to:
-  /// **'New story Q&A'**
-  String get settingsToolAgent;
-
-  /// No description provided for @settingsToolAgentDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'One model queries the knowledge base directly (corpus-wide counts, whole-chapter reads, in-chapter search) and answers; cited lines can be opened under the answer. Turn off to use the previous step-by-step pipeline.'**
-  String get settingsToolAgentDesc;
-
   /// No description provided for @settingsKnowledgeBase.
   ///
   /// In en, this message translates to:

@@ -3,11 +3,9 @@ import 'dart:async';
 import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
-import 'evidence_notebook.dart' show ReadPage;
 import 'react_event.dart';
 import 'story_answer.dart';
 import 'story_qa_agent.dart';
-import 'tools/agent_tool.dart';
 
 enum FactCheckVerdict { supported, refuted, uncertain, unavailable }
 
@@ -22,44 +20,31 @@ extension FactCheckVerdictWireValue on FactCheckVerdict {
 class FactCheckAgent {
   FactCheckAgent({
     required LLMClient llmClient,
-    LLMClient? auxClient,
-    LLMClient? planClient,
     GameDataRetrieval? gameDataStore,
     EmbeddingClient? embeddingClient,
-    AgentTool? searchTool,
   }) : _agent = StoryQaAgent(
           llmClient: llmClient,
-          auxClient: auxClient,
-          planClient: planClient,
           gameDataStore: gameDataStore,
           embeddingClient: embeddingClient,
-          searchTool: searchTool,
         );
 
   final StoryQaAgent _agent;
-
   Stream<ReActEvent> checkClaim({
     required String claim,
     List<Message> history = const [],
-    List<ReadPage> priorPages = const [],
-    LLMClient? writerClient,
-    void Function(int iteration, String rawResponse)? onRawLlmResponse,
-    void Function(String memoryBlock)? onMemoryChanged,
-    bool useToolAgent = false,
+    LLMClient? client,
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
+    void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) =>
       _agent.run(
         query: claim,
         style: AnswerStyle.factCheck,
         history: history,
-        priorPages: priorPages,
-        writerClient: writerClient,
-        onRawLlmResponse: onRawLlmResponse,
-        onMemoryChanged: onMemoryChanged,
-        useToolAgent: useToolAgent,
+        client: client,
         prior: prior,
         onConversation: onConversation,
+        onRawLlmResponse: onRawLlmResponse,
       );
 }
 

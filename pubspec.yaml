@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.12.0+14
+version: 0.10.1+15
 
 environment:
   sdk: ^3.6.0
@@ -56,6 +56,9 @@ dependencies:
   # channel it works in any isolate (background build) and, together with
   # sqlite3_flutter_libs, bundles a recent SQLite with guaranteed FTS5.
   sqflite_common_ffi: ^2.3.4
+  # R17: the agent's read-only SQL runs on the raw sqlite3 API so a runaway
+  # query can be stopped with sqlite3_interrupt (same version as above uses).
+  sqlite3: ^2.9.4
 
   # Bundled native SQLite for Android/iOS (used by sqflite_common_ffi).
   sqlite3_flutter_libs: ^0.5.24

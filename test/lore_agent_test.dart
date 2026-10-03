@@ -118,6 +118,22 @@ void main() {
       expect(zero, contains('星灯'));
     });
 
+    test('a runaway query is interrupted at the timeout', () async {
+      final path = p.join(dir.path, 'lore.db');
+      final watch = Stopwatch()..start();
+      final result = await runReadOnlySql(
+        path,
+        'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) '
+        'SELECT count(*) FROM c',
+        timeout: const Duration(seconds: 1),
+      );
+      expect(result.error, contains('被中止'));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 4)));
+      // The DB stays usable for the next query.
+      final next = await runReadOnlySql(path, 'SELECT count(*) AS n FROM story_lines');
+      expect(next.rows.single.single, 10);
+    });
+
     test('runReadOnlySql truncates to maxRows', () async {
       final result = await store.readOnlySql(
         'SELECT story_id, line_index FROM story_lines',
@@ -280,6 +296,81 @@ void main() {
       expect(answer, isNot(contains('未能在本次读到的原文中核实')));
     });
 
+    test('a delegated sub-agent reads; its checked citations count as seen',
+        () async {
+      final client = _ScriptedClient([
+        _call('delegate', {
+          'task': '查星灯在主线里做了什么',
+          'story_ids': ['obt/main/level_main_fx-01.txt'],
+        }),
+        // The sub-agent's own conversation:
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        _answer('- 星灯点亮钟楼 `obt/main/level_main_fx-01.txt:1`'),
+        // Back in the main conversation:
+        _answer('星灯点亮了钟楼 `obt/main/level_main_fx-01.txt:1`。'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .toList();
+      final child = client.requests[1];
+      expect(child.first.content, contains('子助手'));
+      expect(child[1].content, contains('建议阅读：obt/main/level_main_fx-01.txt'));
+      expect(client.toolNames[1], isNot(contains('delegate')));
+      expect(client.toolNames[0], contains('delegate'));
+      final observation = events
+          .firstWhere((e) => e.type == ReActEventType.toolObservation)
+          .content;
+      expect(observation, contains('子任务结果'));
+      expect(observation, isNot(contains('STORY_ANSWER')));
+      final answer = finalAnswerOf(events);
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+      expect(
+        events.where((e) => e.type == ReActEventType.finalAnswerReset),
+        isEmpty,
+      );
+    });
+
+    test('fact check: a definite verdict without checked citations is '
+        'downgraded', () async {
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯点亮过钟楼吗？', style: AnswerStyle.factCheck)
+          .toList();
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('[FACT_CHECK_VERDICT:uncertain]'));
+      expect(client.requests.first.first.content, contains('FACT_CHECK_VERDICT'));
+    });
+
+    test('a lead-in about the answering process is dropped, content kept',
+        () async {
+      Future<String> answerFor(String text) async => finalAnswerOf(
+            await LoreAgentLoop(
+              client: _ScriptedClient([
+                _call('read_story', {
+                  'story_id': 'obt/main/level_main_fx-01.txt',
+                }),
+                _answer(text),
+              ]),
+              store: store,
+            ).run(query: '星灯？', style: AnswerStyle.answer).toList(),
+          );
+      final dropped = await answerFor(
+        '已核实，现在输出完整最终答案。\n\n---\n\n'
+        '星灯点亮钟楼 `obt/main/level_main_fx-01.txt:1`。',
+      );
+      expect(dropped, isNot(contains('已核实')));
+      expect(dropped, contains('\n星灯点亮钟楼'));
+      final kept = await answerFor(
+        '星灯是这座城的守灯人。\n\n'
+        '它点亮钟楼 `obt/main/level_main_fx-01.txt:1`。',
+      );
+      expect(kept, contains('星灯是这座城的守灯人。'));
+    });
+
     test('an answer without any checked citation is not_covered', () async {
       final client = _ScriptedClient([
         _call('grep', {'pattern': '不存在的名字'}),
@@ -408,6 +499,7 @@ class _ScriptedClient extends LLMClient {
   final bool rejectTools;
   final List<List<Message>> requests = [];
   final List<String?> toolChoices = [];
+  final List<List<String>> toolNames = [];
   var _next = 0;
 
   @override
@@ -436,6 +528,10 @@ class _ScriptedClient extends LLMClient {
     }
     requests.add(List.of(messages));
     toolChoices.add(toolChoice);
+    toolNames.add([
+      for (final t in tools ?? const <Map<String, dynamic>>[])
+        '${(t['function'] as Map)['name']}',
+    ]);
     final turn = turns[_next++];
     if (turn.content.isNotEmpty) yield CompletionDelta(content: turn.content);
     yield CompletionDelta(done: true, toolCalls: turn.calls);

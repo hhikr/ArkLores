@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
-import 'evidence_notebook.dart';
 import 'fact_check_agent.dart';
 import 'react_loop.dart';
 import 'story_answer.dart';
@@ -99,26 +98,6 @@ List<Message> buildStoryQaHistory(
     }
   }
   return history;
-}
-
-/// R14: the original-text pages the most recent finished assistant turn
-/// actually READ (parsed back from its tool observations), so a follow-up
-/// question starts from the evidence already gathered.
-List<ReadPage> lastTurnReadPages(List<ChatMessage> messages) {
-  for (final m in messages.reversed) {
-    if (m.role != MessageRole.assistant || m.isStreaming || m.isError) continue;
-    final pages = <ReadPage>[];
-    for (final step in m.steps) {
-      if (step.type != ReActEventType.toolObservation ||
-          step.toolName != 'read_story_lines') {
-        continue;
-      }
-      final page = parseReadObservation(step.content);
-      if (page != null) pages.add(page);
-    }
-    return pages;
-  }
-  return const [];
 }
 
 /// R16: coalesces streamed-text updates so the message list (and its

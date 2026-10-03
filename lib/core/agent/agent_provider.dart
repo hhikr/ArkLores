@@ -32,14 +32,11 @@ final sharedGameDataStoreProvider = Provider<GameDataKnowledgeStore>((ref) {
   return GameDataKnowledgeStore();
 });
 
-/// Provider for the [SummaryAgent] instance. R12 cost control applies to all
-/// story QA modes (R13): mechanical roles run on the aux client (reasoning
-/// off), the answer writer keeps the main model.
+/// Provider for the [SummaryAgent] instance. Story questions run without
+/// hidden reasoning unless "深度思考" is on (R16/R17).
 final summaryAgentProvider = Provider<SummaryAgent>((ref) {
   return SummaryAgent(
     llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
-    auxClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
-    planClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );
@@ -48,8 +45,6 @@ final summaryAgentProvider = Provider<SummaryAgent>((ref) {
 final factCheckAgentProvider = Provider<FactCheckAgent>((ref) {
   return FactCheckAgent(
     llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
-    auxClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
-    planClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );
@@ -81,24 +76,19 @@ class AskChatNotifier extends ChatNotifierBase {
     required QuestionRouter router,
     ChatSessionStore sessionStore = const ChatSessionStore(),
     required LLMConfig Function() configReader,
-    LLMClient? Function()? writerClientReader,
-    bool Function()? toolAgentReader,
+    LLMClient? Function()? clientReader,
   })  : _summaryAgent = summaryAgent,
         _factCheckAgent = factCheckAgent,
         _investigationAgent = investigationAgent,
         _router = router,
         _sessionStore = sessionStore,
         _configReader = configReader,
-        _writerClientReader = writerClientReader,
-        _toolAgentReader = toolAgentReader,
+        _clientReader = clientReader,
         super([]);
 
-  /// R16: the answer writer for the next question (the thinking client when
-  /// "深度思考" is on); null keeps each agent's own writer.
-  final LLMClient? Function()? _writerClientReader;
-
-  /// R17: whether the next question runs the tool agent ([LoreAgentLoop]).
-  final bool Function()? _toolAgentReader;
+  /// R16: the client for the next question (the thinking client when
+  /// "深度思考" is on); null keeps each agent's own client.
+  final LLMClient? Function()? _clientReader;
 
   /// R17: the tool agent's conversation after each answer (by assistant
   /// message id), so a follow-up continues with the text already read.
@@ -155,14 +145,14 @@ class AskChatNotifier extends ChatNotifierBase {
     _lastMode = mode;
     final generation = nextGeneration();
     final history = buildHistory(state);
-    final priorPages = lastTurnReadPages(state);
+
     // R17: continue the last answer's conversation when it is the last
     // message (an error or a cancel in between starts from the texts).
     final lastMessage = state.isEmpty ? null : state.last;
     final prior = lastMessage == null || lastMessage.role != MessageRole.assistant
         ? null
         : _conversations[lastMessage.id];
-    final useToolAgent = _toolAgentReader?.call() ?? false;
+
     final assistantId = newId();
     state = [
       ...state,
@@ -222,7 +212,7 @@ class AskChatNotifier extends ChatNotifierBase {
     // before the corresponding thought/tool events arrive, so event handling
     // below fills the same record.
     void Function(int iteration, String rawResponse)? onRaw;
-    String? turnMemory;
+
     if (recording) {
       onRaw = (iteration, raw) {
         currentIteration = iteration;
@@ -232,42 +222,33 @@ class AskChatNotifier extends ChatNotifierBase {
         );
       };
     }
-    void onMemory(String memoryBlock) => turnMemory = memoryBlock;
+
 
     void onConversation(LoreConversation conversation) =>
         _conversations[assistantId] = conversation;
-    final writerClient = _writerClientReader?.call();
+    final client = _clientReader?.call();
     final stream = switch (effectiveMode) {
       AiMode.verify => _factCheckAgent.checkClaim(
           claim: query,
           history: history,
-          priorPages: priorPages,
-          writerClient: writerClient,
+          client: client,
           onRawLlmResponse: onRaw,
-          onMemoryChanged: recording ? onMemory : null,
-          useToolAgent: useToolAgent,
           prior: prior,
           onConversation: onConversation,
         ),
       AiMode.investigate => _investigationAgent.investigate(
           query: query,
           history: history,
-          priorPages: priorPages,
-          writerClient: writerClient,
+          client: client,
           onRawLlmResponse: onRaw,
-          onMemoryChanged: recording ? onMemory : null,
-          useToolAgent: useToolAgent,
           prior: prior,
           onConversation: onConversation,
         ),
       AiMode.summarize || AiMode.auto => _summaryAgent.generateSummary(
           query: query,
           history: history,
-          priorPages: priorPages,
-          writerClient: writerClient,
+          client: client,
           onRawLlmResponse: onRaw,
-          onMemoryChanged: recording ? onMemory : null,
-          useToolAgent: useToolAgent,
           prior: prior,
           onConversation: onConversation,
         ),
@@ -441,7 +422,6 @@ class AskChatNotifier extends ChatNotifierBase {
           answer: answer,
           status: canceled ? ChatTurnStatus.canceled : turnStatus,
           error: canceled ? '[ASK_CANCELED]' : turnError,
-          memory: turnMemory,
         );
       }
     }
@@ -539,32 +519,18 @@ final askChatProvider =
     configReader: () => ref.read(apiConfigProvider),
     // R16: read per question, so the switch never rebuilds the notifier
     // (which would drop the conversation).
-    writerClientReader: () => ref.read(deepThinkingProvider)
+    clientReader: () => ref.read(deepThinkingProvider)
         ? ref.read(llmClientProvider(ReasoningLevel.low))
         : null,
-    toolAgentReader: () => ref.read(toolAgentProvider),
   );
 });
 
-/// R17: whether story questions run the tool agent ([LoreAgentLoop]: one
-/// model with SQL / grep / whole-chapter reads) instead of the R16 planner
-/// pipeline. Read per question; toggled in Settings.
-final toolAgentProvider = StateProvider<bool>(
-  (ref) => ref.watch(initialToolAgentEnabledProvider),
-);
-
 /// Provider for the [InvestigationAgent] instance.
 final investigationAgentProvider = Provider<InvestigationAgent>((ref) {
-  // R12/R16 cost control: hidden reasoning was ~90% of investigation output
-  // tokens. Every role runs without it; only the "深度思考" switch gives
-  // the writer low-effort reasoning (see llm_provider.dart).
-  final aux = ref.watch(llmClientProvider(ReasoningLevel.off));
+  // R12/R16 cost control: hidden reasoning was ~90% of output tokens; it is
+  // off unless the "深度思考" switch asks for low effort (llm_provider.dart).
   return InvestigationAgent(
-    llmClient: aux,
-    plannerClient: aux,
-    planClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
-    extractorClient: aux,
-    disambiguatorClient: aux,
+    llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(sharedGameDataStoreProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
   );

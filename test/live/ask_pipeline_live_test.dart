@@ -16,7 +16,6 @@
 //   ARKLORES_LIVE_MODE=auto|investigate|summarize|verify   (default auto)
 //   ARKLORES_LIVE_CONVERSATION=true  (all queries as turns of ONE session)
 //   ARKLORES_LIVE_DEEP_THINKING=true (the "深度思考" switch on)
-//   ARKLORES_LIVE_ENGINE=tools|planner (R17 tool agent, the app default, or R16 planner)
 //   ARKLORES_GAMEDATA_DB=<db path>  (default build/gamedata_mobile/...)
 //   ARKLORES_LIVE_OUT=<dir>         (default build/live_sessions)
 // API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL).
@@ -76,7 +75,6 @@ void main() {
   final deepThinking =
       env['ARKLORES_LIVE_DEEP_THINKING']?.toLowerCase() == 'true';
   var thinkingCalls = 0;
-  final toolAgent = env['ARKLORES_LIVE_ENGINE']?.toLowerCase() != 'planner';
 
   late ProviderContainer container;
   final usage = UsageMeter();
@@ -121,8 +119,6 @@ void main() {
         }),
         // ARKLORES_LIVE_DEEP_THINKING=true: the "深度思考" switch on.
         deepThinkingProvider.overrideWith((ref) => deepThinking),
-        // ARKLORES_LIVE_ENGINE=planner: the R16 pipeline instead of the tool agent.
-        toolAgentProvider.overrideWith((ref) => toolAgent),
       ],
     );
   });

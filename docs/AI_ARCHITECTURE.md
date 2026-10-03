@@ -1,15 +1,9 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> **R17（App 默认）**：剧情问答默认走工具型 Agent `LoreAgentLoop`。它只用一个模型，配通用工具：只读 SQL、全库或范围内 grep、整章阅读、目录、近名；对话只追加。
-> 结构、工具、出处核对和 A/B 数据见 **`R17_TOOL_AGENT.md`**。下文描述的 R16 `PlannerLoop` 仍保留，
-> 在设置中关闭“新版剧情问答”后使用。
->
-> R16 状态：R16（`feature/r16-stream-reasoning`，在 R15 之上：流式输出、按角色设定思考强度、规划器保留已读内容、
-> 开局阅读计划与作答前复核、状态由证据决定）。一个问题逐步怎么走、每步的参数，见 **`ASK_PIPELINE_FLOW.md`**。
-> 本文档是 Agent 层与检索层的**总括文档**（结构、取舍、历史），
-> 取代旧的 `AI_REFACTOR_SUMMARY.md`、`R0`–`R3` 阶段总结、`AI_RETRIEVAL_OPTIMIZATION.md`、
-> `FEASIBILITY_ANALYSIS.md`、`RETRIEVAL_INSTALL_CHAIN_ANALYSIS.md`（均已删除，原文在 git 历史中）。
-> R12 的决策过程见 `R12_BOTTLENECK_ANALYSIS.md`；已知缺口见 `KNOWN_LIMITATIONS_AND_DEBT.md`。
+> 当前状态：v0.10.1（R17）。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加。
+> 结构、工具、出处核对与验收数据见 **`R17_TOOL_AGENT.md`**。R8–R16 的分步流程（`PlannerLoop`）已删除，
+> 下文 §4、§5 保留它的验收数据与演进过程，作为“为什么不再这样做”的记录。
+> 已知缺口见 `KNOWN_LIMITATIONS_AND_DEBT.md`；R12 决策过程见 `R12_BOTTLENECK_ANALYSIS.md`。
 
 ---
 
@@ -17,187 +11,43 @@
 
 ```
 用户问题 ──► AskChatNotifier.sendMessage（auto / summarize / verify / investigate）
-              │   历史（最近 3 轮）、上一轮已读原文页、“深度思考”→ 本问 writer 档位
+              │   历史：紧接上一条回答时带上一问的完整对话（LoreConversation），否则带最近 3 轮问答文本
+              │   “深度思考”开关 → 本问使用 low 档思考的 client
               ├─ auto：QuestionRouter（一次短 LLM 调用，不思考）选出模式
               │
               ├─ investigate ─► InvestigationAgent ┐
-              ├─ summarize   ─► SummaryAgent       ├─► StoryQaAgent ─► PlannerLoop（§2）
+              ├─ summarize   ─► SummaryAgent       ├─► StoryQaAgent ─► LoreAgentLoop（R17_TOOL_AGENT.md）
               ├─ verify      ─► FactCheckAgent     ┘   （AnswerStyle 只决定输出格式）
               └─ Roleplay tab ► RoleplayAgent     ─► ReActLoop（不在统一范围）
 
-PlannerLoop：问题上下文与出场总览 → 阅读计划 → 检索循环（决策器 / 执行器 / 提取器；
-             ANSWER 时充分性检查与复核）→ writer 流式作答 → 引用校验 → 状态合成
+LoreAgentLoop：system（库结构 + 工作方式 + 引用格式 + 输出格式）+ 只追加的 messages
+               每轮 streamTurn(tools) → tool_calls 并发执行（delegate = 并行子 agent）→ 结果原样追加
+               最终答案 → 出处核对（SeenLines，最多退回一次）→ [STORY_ANSWER: status=…]
                                          │
-                       工具 ──► GameDataKnowledgeStore（共享只读 SQLite 连接）
+       工具 sql / grep / read_story / find / outline / similar_names / delegate
                                          │
-              ChatSessionStore（每对话一个 JSON，完整记录每步原始输出、工具、观察）
+              GameDataKnowledgeStore（共享只读 SQLite 连接；sql 另开只读 FFI 连接，超时 sqlite3_interrupt）
+                                         │
+              ChatSessionStore（每对话一个 JSON，记录每次模型输出、工具、观察、答案）
 ```
 
 - **知识源**：只有 GameData（解包文本构建的 SQLite）。Wiki 与用户文本只作浏览/上下文，
   不能作为证据。
 - **会话记录**：`chat_sessions/` 下每对话一个 JSON（原子写、损坏容错、50 会话轮转），
-  记录用户模式 / 生效模式 / router 原始输出 / 模型 / 每步原始响应 / 工具与观察 / 最终答案 /
-  状态与耗时。开发日志开关打开时额外写入 `logs/`。所有真机问题都应能用这些 JSON 回放。
+  记录用户模式 / 生效模式 / router 原始输出 / 模型 / 每次模型输出（每个工具调用一条）/ 工具与观察 /
+  最终答案 / 状态与耗时。开发日志开关打开时额外写入 `logs/`。
 
-## 2. PlannerLoop（所有剧情问答的统一流程）
+## 2. Agent 设计原则（R17）
 
-ReAct 把“记忆 + 推理 + 执行”放在同一个上下文里，上下文必然膨胀，只能靠截断，
-截断又导致重复与遗忘（R6–R7 的教训）。PlannerLoop 把职责拆开：
-
-| 角色 | 实现 | 模型 | 职责 |
-| --- | --- | --- | --- |
-| 决策器 planner | `planner_loop.dart` | 不思考 | 每步只输出**一行意图**（R16：可附 `# 计划`）；上下文 = 固定 system + 状态序列化 + 最近观察，不随调查增长 |
-| 执行器 | 代码（无 LLM） | – | `parseIntent` → 调工具 → 解析 DATA 块 → 更新 `InvestigationState` |
-| 提取器 extractor | `evidence_notebook.dart` | 不思考 | READ 之后输出本页摘要（R16，与问题无关）和相关行 `L<行号>: 事实` |
-| 消歧器 | `entity_disambiguator.dart` | 不思考 | 同名多实体时按问题语义选一个候选，失败回退第 1 个 |
-| 计划 | `planner_loop.dart`（`_draftPlan`） | 不思考 | R16：开局一次，按问题和出场总览列出要读的故事集清单 |
-| 审核 | `planner_loop.dart`（`_sufficiencyGap`） | 不思考 | R16：ANSWER 时若还有未读项，判断已读内容“足够”还是“不足：缺什么” |
-| 写作者 writer | `planner_loop.dart` | 不思考；“深度思考”打开时 low | 基于证据笔记 + 已读原文**流式**写最终答案，并经过引用校验 |
-
-R16 思考强度：`llmClientProvider(ReasoningLevel)`（`llm_provider.dart`）。同一 API 配置按档位映射到
-provider 自己的开关：deepseek `thinking:{type:disabled}` / `enabled` + `reasoning_effort: low|high`，
-百炼 `enable_thinking`（low 档加 `thinking_budget`），未知 provider 不发任何参数。deepseek 不传参数时
-默认**开启、high 档**，所以 R16 之前 router、writer、角色扮演都跑在 high 档。现在**所有角色默认不思考**：
-router 只输出一个分类词；writer 的输入已是筛好的原文，high 档会延伸推测原文没写的动机。输入框旁的
-“深度思考”开关只把 writer 设为 low，按问读取（不重建 notifier），不改变检索与判定；没有任何地方用 high。
-机械角色关推理后输出 token 下降约 88%，答案质量不变（R12 A/B）。
-
-### 2.1 意图与工具
-
-| 意图 | 工具 | 用途 |
-| --- | --- | --- |
-| `SEARCH <名字> [id=<id>] [top_k]` | `search_local_lore` | 查实体档案（FTS + LIKE） |
-| `COVER <名字\|id> [scope=]` | `search_story_coverage` | 确定性枚举实体在哪些章节、哪些行出场 |
-| `MAP <scope_id>` | `get_story_map` | 章节画像（行范围、speaker、高密度实体；有目录时为故事名与官方梗概） |
-| `OUTLINE <故事集名\|scope\|story_id>` | `get_story_outline` | R14：整个故事集按游戏内顺序的章节（关卡号、行动前/后、章名、官方梗概、story_id），用来把握前因后果 |
-| `READ <story_id> [start end \| start-end]` | `read_story_lines` | 读剧情原文（R16：不写行号读整章，一页最多约 450 行 / 2 万字；给出区间时整段读） |
-| `FIND <词…> [scope=\|@scope] [top_k]` | `search_story_lines` | 在原文里找线索：关键词（各词 OR，按 IDF 加权的单行命中排序）+ 可选向量召回，RRF 融合；顶部列出官方梗概命中 |
-| `COLLECT <entity_id> [terms=[..]]` | `collect_entity_evidence` | 列出某实体的全部出场行（命中 terms 的章节排前） |
-| `RESELECT <entity_id>` | – | 切换消歧候选；已尝试的候选不会再选 |
-| `ANSWER [confidence]` / `DONE` | – | 证据够了，交给 writer（`VERDICT` 是旧写法别名，只取置信度） |
-
-- R15：COVER 先输出**出场总览**——实体出场的全部故事集（按 `start_time` 上线顺序，主线按章号，
-  其余在后；每行故事集名、上线月、章数、提及数、首尾章节），再按故事集轮流分配明细预算；
-  旧输出按 scope 字母序截断，常常只露出第一个故事集。
-- R15：名字解析不到实体、或 FIND 某词全库 0 字面命中时，给出读音感知的近似名
-  （`name_similarity.dart`：同音字替换代价 0.3，其余 1，阈值 max(1, 长度×0.5)，取前 3，按出现次数排序）；
-  只陈述“库中有相近字符串”，不断言同一人。FIND 的 scope 内 0 命中、全库有命中时报告“范围外命中”；
-  `activities/<id>` 视为该活动的 scope，单个章节文件不是 scope（提示改用 READ）。
-- 一行只能有一个意图，多意图行整体拒绝；空输出单独计数，3 次后温和收尾。
-- 工具观察 = 人类可读正文 + 末尾 `DATA: <json>`（由工具生成，代码解析，失败回退文本标记）。
-  新工具必须同时提供两者。
-
-### 2.2 状态与证据
-
-`InvestigationState`（代码维护，序列化有界）：
-
-- **已读**：按实际返回的行段记录（保留空洞），所以“读过 1–40 和 80–120”不会被当成读过 1–120。
-- R16 **阅读计划**：每轮开始一次调用（不思考）按问题和出场总览列出最多 10 个要读的故事集
-  （先写一行“范围”，再逐个核对总览里提及多的故事集），作为清单进状态；读过其中章节才打 ✓
-  （只看过梗概不算）。不思考的决策器一行一行地选，会把“之后”读成事件本身、读三章就作答；
-  一次有全局的计划把顺序和广度定下来。
-- **证据笔记** `EvidenceNote`（每页最多约行数/15 条，10–25）：行号必须落在本页内，引用原文由代码从原行复制，
-  模型无法伪造引文。R16：笔记不再丢弃（以前超过 40 条就删最老的）；状态按章节列出“区间 · 摘要 · 笔记”，
-  给决策器看的笔记超过 40 条时，较早章节折叠成“另有 k 条”，writer 看到全部。
-- R16 **章节摘要**：提取器同一次调用多写一行与问题无关的“这段发生了什么”；读了但没有相关笔记的章节
-  明确写“没有与问题直接相关的行”，决策器不必为确认读过什么而重读。
-- R16 **当前计划**：意图行尾的 `# …` 记为状态里的“当前计划”，只为保持连续，不参与任何判定。
-- R16 **步数**：状态顶部“步数: 已用 n / 24”，剩 3 步时提示先读最关键的未读章节再 ANSWER。
-- **检索记录** `searchLog`、**已发现章节** `discoveredStories`、目标实体与候选清单。
-- R14 **章节名**：状态里的 story_id 由执行器查 `story_catalog` 附上“故事集 关卡号 标签《章名》”；
-  **已看梗概**常驻状态：R16 起最近 2 个故事集给完整目录（已读章节标 `✓ 区间`，未读章节带梗概），
-  更早的折叠成“已读章节 + 其余 N 章”，再 OUTLINE 从缓存免步数取回（八个主线目录每步重发约 1.2 万字）；
-  出场总览每行标“已读 n/m 章”。已读章节所属故事集尚未看梗概时给一行提示。
-- R16 **重点原文**：已读的短段落（≤60 行，合计 ≤80 行）在给看两次后还被要，就固定进状态，每步可见。
-- R14 **追问承接**：上一轮实际 READ 到的原文页（从会话步骤的观察里解析）作为本轮“已读”注入，
-  可直接引用、不必重读，并送到 writer；对话历史只保留问题、答案和已读章节列表，不再回放
-  工具观察；router 与提取器都会看到上一个问题。
-- R15 **问题上下文**（每轮开始，确定性、无 LLM）：问题里的人物名（干员/敌人名，台词 ≥5 行的说话人；
-  更长的已知字符串占位，避免“伊比利亚”里的“比利”）与目录里点名的故事集/章节（故事集名 ≥2 字、
-  章名或密录名 ≥3 字，《》内不限）。人物的出场总览（最多 2 人、每人最多 15 个故事集）一开始就进状态。
-  本问出现上一轮问答里没有的名字时视为换话题：不继承上一轮已读页、不拼“承接上一问”，状态写明
-  “按本问重新定位”。
-- R15 **库中没有的写法**：FIND/COVER 确认全库没有的写法记入状态（附近似名）；只由这些写法组成的
-  检索直接拦下（不论 scope / top_k 怎么换）。
-- **身份不入库**：代号与真名、“？？？”、冒名与夺舍都是剧情解读，由 Agent 读原文确认；数据层只负责
-  让每一跳检索可达（见 CLAUDE.md“名字与身份”）。
-
-### 2.3 进展控制
-
-- 完全相同的 SEARCH / FIND / COVER / MAP / COLLECT / READ 不重复执行（直接返回“已执行过”）；
-  已消歧的名字再次 SEARCH 时自动带上 entity_id。
-- “进展” = 状态指纹有变化（新读到的行、新证据、有字面命中的新章节）；单纯换说法检索、
-  只带来“仅语义相近”章节的 FIND 都不算进展（R13：否则负例会一直跑满预算）。
-- FIND 末尾 ≤50 的裸数字才当 top_k，更大的数字（如年份）留在查询里。
-- R14：READ 的起点落在已读区间内时自动推到第一行未读行（R16：推过章末时明说“已经读到结尾”，
-  不再返回像失败的 “No lines”）；被拦下的重复命令不消耗步数预算，连续 3 条重复命令即收尾。
-- R16 **重读**：要已读原文 = 决策器想再看一眼（它手里只有摘要和笔记）。R14/R15 日志里重复命令占
-  20–60% 的步数（同一段最多被要 15 次）。根因有二：近程窗口把较早的一页截成 600 字并标“已截断”
-  （现在换成指引“已读 X a-b，摘要和笔记在状态里”）；一章被拆成 200 行一页（现在不写行号即整章，
-  单页 ≤450 行 / 2 万字）。剩下的重读：前 2 段从手头页面再给看一次（计一步）→ 短段落固定为重点
-  原文 → 一次复核（见下）→ 此后不占步数地拒绝，连续 3 次即交给 writer。
-- R16 **复核**（ANSWER 时一次、卡在重读时一次）：先用不思考的辅助模型做充分性检查（问题 + 状态 →
-  “足够”或“不足：缺什么”），足够就直接写答案；不足才列出计划里没读的项和总览里提及多、读了不到
-  一半的故事集，附上缺什么，预算加 8 步（一次）。窄问题不会被推去读无关的计划项（缪因一题曾因此
-  跑到 43 步）。
-- R16 **可达性**：scope 可以写故事集 id（`main_9`，主线、密录本身不是 scope）；OUTLINE 认“主线·名”
-  “名（id）”；READ 自动补 `.txt`，找不到时按关卡号（去前导零）列出真实 story_id。
-- R15：记住本轮看过的所有故事集（不再提示“尚未看梗概”，避免在几个故事集之间来回 OUTLINE）；
-  重复的 OUTLINE 从缓存回复（R16：不占步数；目录仍完整在状态里时只回一句指引，被折叠的再给全文）。
-- 连续 4 步无进展 → 提醒；连续 8 步无进展或用满 24 步 → 交给 writer 基于已读内容收尾。
-  R16：停止原因（`StopReason`）只告诉 writer 一句中性的话（“步数上限本身不代表证据不足”），
-  不再决定状态（见 §2.5）。
-- 近程窗口保留 2 条观察：最新一条原样；较早的 READ 页换成“已读 X a-b，摘要和笔记在状态里”的指引
-  （R16），其他超过 600 字的截断。
-
-### 2.4 Writer 与引用校验
-
-- 输入：用户问题 + 全部证据笔记 + 已读原文（R16：≤60000 字，`buildWriterSource` 先放每章笔记行
-  前后 5 行，再放问题人物名字所在行（前后 1 行，摘录失败的章节也能带出关键段），再在各章之间
-  轮流补全文，跳过的段落标 `…`；摘录调用失败重试一次；R14/R15 按读取顺序拼到 30000 字就截断，
-  最后读到的关键章常常整章进不来，于是写成“资料未覆盖”）。要求直接回答（背景性、更抽象的动因
-  放到替代解读，不能用来代替回答；只写有原文依据的替代解读）、行级引用 `story_id.txt:行号`、
-  反方证据、置信度；正文用章节名指代章节，story_id 只出现在引用里。问题里的名字在“库中没有的写法”
-  中、而原文对得上某个相近名字时，按那个名字作答并在第一句说明。
-- R16 **流式**：writer 用 `streamCompletion` 边写边发 token（开了思考时，思考内容另走
-  `reasoningToken`，只实时显示、不保存）；引用校验失败 → `finalAnswerReset`（步骤里显示“正在
-  修正引用”）后流式重写；最后 `finalAnswerReplace` 用“信封 + 正文 + 来源警告”替换整段。检索阶段
-  每步发 `status`（“第 7 步 · 阅读 BB-9 行动前《尘埃落定》”），UI 状态行实时显示。界面更新合并到
-  每 60ms 最多一次；只有停在底部时才跟随滚动，上滑后出现“↓”。角色扮演的 ReAct 每步也流式请求，
-  出现 `Final Answer:` 之后的文字实时显示，这一步不被采纳时清掉（R16 前角色扮演的 notifier 用每个
-  120 字分块覆盖正文，长回复只剩最后一块，已修）。
-- SSE：`LineSplitter` 跨网络块拼行，空闲超时 60s（不是整段计时），只在收到首字节前重试；
-  provider 以 400/404/415/422 拒绝流式时自动退回非流式。非流式响应一律按 UTF-8 解码（没有
-  `charset` 时 `http` 默认 latin1，中文会乱码）。
-- 显示：App 把引用渲染成“巴别塔 BB-7 行动前《阴影显现》 第 N 行”（行号从 1 起；无目录时由路径
-  推出名字），证据链 chip 长按显示原始 id；存储的答案保留原始 id，供校验与日志。
-- `unreadCitations`：每条引用必须落在已读区间内。不合法 → 重写一次；仍不合法 →
-  附加来源警告。
-- `completeWithHeadroom`：reasoning 模型的隐藏推理也占 `max_tokens`；遇到截断时把上限
-  放大 4 倍重试一次，而不是返回空串。
-
-### 2.5 结论信封与输出格式（R13）
-
-每个答案第一行是 `[STORY_ANSWER: status=answered|partial|not_covered | confidence=x]`
-（`story_answer.dart`），status 由代码合成，与问题类型无关（R16 `answerStatus`）：
-
-- `not_covered`：整个过程没有读到任何原文（因此无从引用）；
-- 否则看 writer 末尾的 `[COVERAGE: full|gaps]`（已读原文是否回答了问题的核心；该行从正文剥掉）：
-  `full` → `answered`，`gaps` → `partial`；
-- writer 没写这一行时才按停止原因：ANSWER/DONE 或只剩重读 → `answered`，预算、停滞、重复检索、
-  空输出 → `partial`。
-
-R16 之前状态完全由停止原因决定：停在预算上就是 `partial`，writer 还被要求“说明哪些部分资料不足”，
-于是内容正确的答案（R15 缪因一题）也被标成部分作答并列出一串“资料未覆盖”。
-
-`AnswerStyle` 只改变 writer 的输出格式：`answer`（直接回答 + 证据 + 反方证据 + 置信度）、
-`summary`（概述 + 时间线 + 覆盖说明）、`factCheck`（第一行 `[FACT_CHECK_VERDICT:…]` +
-主张拆解 + 证据）。核查结论由代码规范化：没读到原文 → `unavailable`；`supported/refuted`
-但没有合法引用 → `uncertain`。
-
-旧会话里的 `[INVESTIGATION_VERDICT: …]` 和 `Coverage:` 行仍能解析显示（仅格式兼容）。
-R13 起禁止任何问题类型特判，由 `test/no_special_case_test.dart` 守卫（见 CLAUDE.md）。
-
+- **读原文的模型就是写答案的模型**：没有摘要器、没有 writer 选材。信息每多一次交接就会丢一部分，这是 R8–R16 的根本问题。
+- **工具要有表达力**：只读 SQL 能在一次调用里看到全语料（按故事统计、关联目录排序），模型不必猜 story_id；
+  grep / read_story 让它整章读、章内搜；工具结果如实报告 0 命中并附近名。
+- **对话只追加**：前缀缓存命中 85–90%，长对话反而便宜；超过上下文预算才把最早的工具结果折叠成指引。
+- **不写进度规则**：没有预算提示、重读阶梯、复核、阅读计划。R13–R16 证明这类规则只对样例有效，换个问题或追问就变差。
+  改进方向是工具的表达力、工具输出的信息量和提示词里的通用工作方式。
+- **代码只做确定性的事**：出处是否被工具展示过、状态信封、事实核查结论的降级、只读 SQL 的边界。
+- **R13 原则不变**：所有问题同一流程、同一份提示词，`AnswerStyle` 只换输出格式；`test/no_special_case_test.dart` 守卫。
+- 旧会话里的 `[INVESTIGATION_VERDICT: …]`、`confidence=`、`Coverage:` 行仍能解析显示（仅格式兼容）。
 ## 3. 检索层（GameData SQLite，schema 4）
 
 ### 3.1 表与构建
@@ -233,9 +83,9 @@ App 内构建共用同一份实现：
   暴力 cosine。schema 版本不变，没有这张表的库照常可用。
 - manifest：`embedding_model` / `embedding_dims` / `embedding_chunking`。App 只在设置中的
   向量配置（默认百炼 `qwen3.7-text-embedding`，512 维）与 manifest 一致时启用语义召回；
-  否则 FIND 退回纯关键词，并在观察里写明原因。
-- 关键词一条都没命中时，观察会标注“只是语义相近，可能无关”。向量命中必须 READ 原文后
-  才能当证据。
+  否则 `find` 退回纯关键词，并在结果里写明原因。
+- 关键词一条都没命中时，`find` 会标注“只是语义相近，可能无关”。向量命中必须用 `read_story`
+  读到原文后才能当证据。
 - 构建：`dart run tools/build_story_embeddings.dart --db=...`（可续跑，按内容哈希缓存，全量约 11 分钟）。
 
 ### 3.4 故事目录（可选，R14）
@@ -246,7 +96,7 @@ App 内构建共用同一份实现：
   按所在活动命名（“巴别塔 act33side_09_a1 关卡内对话”）；引导、集成战略等仍用路径推出的名字。
 - 构建时写入目录后，`story_chapter_profiles` 的 title/summary 改为章节名与官方梗概
   （覆盖层每次重建 profile 后重新套用）。manifest 记 `story_catalog_count`。
-- 旧库没有这张表时一切照旧：OUTLINE 提示用 MAP，标签退回原始 id。
+- 旧库没有这张表时一切照旧：`outline` 找不到故事集，引用标签退回由路径推出的名字。
 - 梗概与章节名同样只是**定位线索**，不能当证据（检索原则 5）。
 - 给现有库补表：`dart run tools/build_story_catalog.dart --db=... --source=...`（稀疏检出即可）。
 
@@ -259,6 +109,8 @@ App 内构建共用同一份实现：
 - 成本规则：先离线；每个方面最多 2 个代表性用例，逐题串行；不整批跑评测。
 - 评测集 `test/fixtures/investigation_eval.json`（30 题草稿，标准答案章节待人工审核），
   汇总工具 `tools/summarize_eval.dart`。
+
+R17 的验收数据见 `R17_TOOL_AGENT.md` §3。以下是 R12–R16 分步流程的历史数据。
 
 ### R12 真机结果（向量 + 机械角色不推理，deepseek flash）
 
@@ -379,3 +231,4 @@ v0.10.0 真机（R12）两问都没有指出博士：只读了死亡发生的 09
 | R14 | `story_catalog`（故事名/关卡号/顺序/官方梗概）+ OUTLINE；FIND 关键词 OR 排序 + 梗概命中；状态带章节名；追问承接上一轮原文与问题；READ 整段与续读；重复命令收尾；引用显示为故事名 | 只看得到文件名、找不到铺垫章节，全局剧情把握差（真机两问都没指出博士）；FIND 多词 AND 常年 0 命中；追问从零开始 |
 | R15 | 读音感知近似名、库中没有的写法常驻状态、范围外命中；COVER 全部故事集总览（`start_time` 上线顺序）且问题人物总览常驻状态；问题点名的故事集；换话题不继承；梗概不来回；问答界面去头像、状态与证据折叠 | 错别字/代号让检索原地打转；COVER 截断只露出一个故事集，“最近/全部”问题被锁在上一轮的故事里；界面一半空间被固定元素占用 |
 | R16 | 真流式（SSE、writer 逐 token、引用重写 reset/replace、ReAct 实时预览、状态行显示当前步）；`ReasoningLevel` 按角色设定思考（全部默认关，“深度思考”只给 writer low）；章节摘要、笔记折叠不丢、目录带已读标记与折叠、计划、步数可见；开局阅读计划、ANSWER 前充分性检查与复核；整章读取、旧页换指引、重读给看/固定/拒绝；故事集 id 作 scope；状态由 writer 的 `[COVERAGE]` 决定；writer 原文按笔记、问题人物行优先 + 轮流分配 | 答案整段“蹦出来”；router/writer/角色扮演一直在 high 档思考；重复请求占 20–60% 步数（规划器看不到自己读过什么）；停在预算上就标 partial，最后读的章节进不了 writer |
+| R17 | 工具型 Agent `LoreAgentLoop`：一个模型 + 只读 SQL / grep / 整章阅读 / find / outline / 近名 / 并行子 agent，对话只追加，代码核对出处；删除 PlannerLoop、状态、提取器、writer、消歧器与 COVER/MAP/READ/OUTLINE/COLLECT 工具 | 让通用 agent 直接读同一个库，结果全面优于 R16；R16 的决策器看不到原文、每步重建提示词无法命中缓存，规则越加越只适合样例 |

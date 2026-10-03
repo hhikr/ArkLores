@@ -1,14 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:arklores/core/agent/agent_prompts.dart';
 import 'package:arklores/core/agent/loop_memory.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/collect_entity_evidence.dart';
-import 'package:arklores/core/agent/tools/find_detail_echoes.dart';
-import 'package:arklores/core/agent/tools/observation_data.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
 import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
@@ -112,107 +108,6 @@ void main() {
       );
       expect(rows.first['c'], 1); // only char_a, no speaker:角色A
       await db.close();
-    });
-  });
-
-  group('find_detail_echoes tool', () {
-    test('finds cross-chapter echoes of rare detail terms', () async {
-      final tool = FindDetailEchoesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result = await tool.execute({
-        'source_text': '当年我藏起匕首，是为了掩盖那场死亡的真相。',
-        'max_terms': 5,
-      }) as ToolExecutionResult;
-
-      expect(result.observation, contains('Detail Terms:'));
-      expect(result.observation, contains('匕首'));
-      expect(result.observation, contains('Echo:'));
-      expect(
-        result.observation,
-        contains('activities/act_fixture/level_fixture_c1.txt'),
-      );
-      expect(
-        result.observation,
-        contains('activities/act_fixture/level_fixture_c4.txt'),
-      );
-
-      final blocks = parseDataBlocks(result.observation);
-      expect(blocks, isNotEmpty);
-      final data = blocks.first;
-      expect(data['type'], 'find_detail_echoes');
-      expect((data['matches'] as List).length, greaterThanOrEqualTo(2));
-    });
-
-    test('excludes entity names from detail terms', () async {
-      final tool = FindDetailEchoesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      // Passage dominated by entity names; 角色 is a bigram inside 角色A/B.
-      final result = await tool.execute({
-        'source_text': '角色A说角色B是凶手，角色A在说谎。',
-      }) as ToolExecutionResult;
-      final blocks = parseDataBlocks(result.observation);
-      final terms = (blocks.isEmpty ? const <String>[] : blocks.first['terms'])
-          as List;
-      expect(terms, isNot(contains('角色')));
-    });
-  });
-
-  group('collect_entity_evidence tool', () {
-    test('returns evidence rows and DATA counts', () async {
-      final tool = CollectEntityEvidenceTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result = await tool.execute({
-        'entity_id': 'char_b',
-      }) as ToolExecutionResult;
-      expect(result.observation, contains('Entity: char_b'));
-      expect(result.observation, contains('End of Evidence: yes'));
-
-      final blocks = parseDataBlocks(result.observation);
-      final data = blocks.first;
-      expect(data['type'], 'collect_entity_evidence');
-      expect(data['entity_id'], 'char_b');
-      expect((data['evidence_rows'] as num).toInt(), greaterThan(0));
-      expect((data['scopes'] as List), contains('activity:act_fixture'));
-    });
-
-    test('terms reorder runs so matching chapters come first (M4b)',
-        () async {
-      final tool = CollectEntityEvidenceTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      // char_b appears in c4 then c5. Without terms the first run is c4;
-      // with the term 藏起 the c5 run (which matches) must come first.
-      final plain = await tool.execute({
-        'entity_id': 'char_b',
-      }) as ToolExecutionResult;
-      expect(
-        plain.observation.indexOf('level_fixture_c4.txt'),
-        lessThan(plain.observation.indexOf('level_fixture_c5.txt')),
-      );
-
-      for (final key in const ['terms', 'claim_terms']) {
-        final ordered = await tool.execute({
-          'entity_id': 'char_b',
-          key: ['藏起'],
-        }) as ToolExecutionResult;
-        expect(
-          ordered.observation.indexOf('level_fixture_c5.txt'),
-          lessThan(ordered.observation.indexOf('level_fixture_c4.txt')),
-          reason: key,
-        );
-        expect(ordered.observation, contains('[term]'));
-      }
-    });
-  });
-
-  group('story planner prompt (R13)', () {
-    test('is question-type neutral and advertises the current tools', () {
-      expect(storyPlannerInstructions, isNot(contains('find_detail_echoes')));
-      expect(storyPlannerInstructions, contains('ANSWER'));
-      expect(storyPlannerInstructions, isNot(contains('VERDICT')));
     });
   });
 

@@ -9,16 +9,33 @@ import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/investigation_agent.dart';
 import 'package:arklores/core/agent/question_router.dart';
 import 'package:arklores/core/agent/summary_agent.dart';
+import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'support/temp_dir.dart';
 
 void main() {
   late Directory tempDir;
   late ChatSessionStore store;
+  late GameDataKnowledgeStore knowledge;
 
-  setUp(() {
+  setUpAll(() {
+    sqfliteFfiInit();
+    sqflite.databaseFactory = databaseFactoryFfi;
+  });
+
+  setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('chat_session_recorder_test');
     store = ChatSessionStore(filePath: tempDir.path);
+    final kbDir = Directory.systemTemp.createTempSync('chat_session_recorder_kb');
+    addTearDown(() async {
+      await knowledge.close();
+      await deleteTempDir(kbDir);
+    });
+    knowledge = GameDataKnowledgeStore(dbPath: await _createFixtureDb(kbDir));
   });
 
   tearDown(() {
@@ -27,9 +44,11 @@ void main() {
   });
 
   AskChatNotifier makeNotifier(_RecorderLLM mock) => AskChatNotifier(
-        summaryAgent: SummaryAgent(llmClient: mock),
-        factCheckAgent: FactCheckAgent(llmClient: mock),
-        investigationAgent: InvestigationAgent(llmClient: mock),
+        summaryAgent: SummaryAgent(llmClient: mock, gameDataStore: knowledge),
+        factCheckAgent:
+            FactCheckAgent(llmClient: mock, gameDataStore: knowledge),
+        investigationAgent:
+            InvestigationAgent(llmClient: mock, gameDataStore: knowledge),
         router: QuestionRouter(llmClient: mock),
         sessionStore: store,
         configReader: () => const LLMConfig(
@@ -64,13 +83,11 @@ void main() {
       expect(turn.model, 'test-model');
       expect(turn.baseUrl, 'https://example.com/v1');
       expect(turn.status, ChatTurnStatus.completed);
-      // Every iteration's raw LLM response is recorded untruncated.
+      // Every model response is recorded untruncated: two reads, the answer.
       expect(turn.iterations, hasLength(3));
-      expect(
-        turn.iterations.first.rawResponse,
-        contains('READ activities/x/level_x.txt'),
-      );
-      expect(turn.iterations.last.rawResponse, contains('VERDICT speaker:博士'));
+      expect(turn.iterations.first.rawResponse, contains('read_story'));
+      expect(turn.iterations.first.tool, 'read_story');
+      expect(turn.iterations.last.rawResponse, contains('结论：博士'));
     });
 
     test('multi-turn follow-ups append to the same session file', () async {
@@ -227,9 +244,39 @@ void main() {
   });
 }
 
+const String _story = 'activities/x/level_x.txt';
+
+/// A one-chapter knowledge base for the agents.
+Future<String> _createFixtureDb(Directory dir) async {
+  final path = '${dir.path}${Platform.pathSeparator}kb.db';
+  final db = await databaseFactoryFfi.openDatabase(path);
+  await db.execute(
+    'CREATE TABLE story_lines (story_id TEXT, line_index INTEGER, '
+    'speaker TEXT, content TEXT)',
+  );
+  await db.execute(
+    'CREATE TABLE story_scopes (story_id TEXT PRIMARY KEY, scope_type TEXT, '
+    'scope_id TEXT, source_path TEXT)',
+  );
+  await db.insert('story_scopes', {
+    'story_id': _story,
+    'scope_type': 'activity',
+    'scope_id': 'x',
+    'source_path': 'zh_CN/gamedata/story/$_story',
+  });
+  await db.insert('story_lines', {
+    'story_id': _story,
+    'line_index': 0,
+    'speaker': '旁白',
+    'content': '她是罗德岛的公开领袖。',
+  });
+  await db.close();
+  return path;
+}
+
 /// Distinguishes router calls (system prompt contains 模式分类器) from agent
-/// calls; planner responses follow a per-mode script, writer calls return a
-/// fixed answer.
+/// calls. Agent calls read the fixture chapter (twice in investigate mode),
+/// then answer citing it.
 class _RecorderLLM extends LLMClient {
   _RecorderLLM({required this.routeLabel});
   final String routeLabel;
@@ -256,16 +303,20 @@ class _RecorderLLM extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+  }) async =>
+      (await chatCompletion(messages, tools: tools)).content;
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
   }) async {
     if (_isRouteCall(messages)) {
       routeCalls++;
-      return routeLabel;
-    }
-    // Shared story QA pipeline (R13): the writer answers after the planner.
-    if (!messages.first.content.contains('检索决策器')) {
-      return mode == AiMode.verify
-          ? '[FACT_CHECK_VERDICT:supported]\n支持：阿米娅是罗德岛的公开领袖。'
-          : '她是罗德岛的公开领袖。';
+      return ChatCompletionResult(content: routeLabel);
     }
     agentCalls++;
     if (gate != null) await gate!.future;
@@ -273,16 +324,23 @@ class _RecorderLLM extends LLMClient {
       failNext = false;
       throw const LLMException('boom');
     }
-    return _plannerResponse(agentCalls);
-  }
-
-  String _plannerResponse(int call) {
-    if (mode == AiMode.investigate) {
-      // One read plus one repeat (blocked as a duplicate), then the answer;
-      // R14 ends a run after 3 consecutive duplicates.
-      if (call <= 2) return 'READ activities/x/level_x.txt 0 100';
-      return 'VERDICT speaker:博士 0.8 multi_hypothesis_contrast';
+    final reads = mode == AiMode.investigate ? 2 : 1;
+    if (agentCalls <= reads) {
+      return ChatCompletionResult(
+        content: '',
+        toolCalls: [
+          ToolCall(
+            id: 'call_$agentCalls',
+            name: 'read_story',
+            arguments: '{"story_id": "$_story"}',
+          ),
+        ],
+      );
     }
-    return call == 1 ? 'SEARCH 阿米娅' : 'ANSWER';
+    return ChatCompletionResult(
+      content: mode == AiMode.verify
+          ? '[FACT_CHECK_VERDICT:supported]\n支持：她是罗德岛的公开领袖 `$_story:0`。'
+          : '她是罗德岛的公开领袖 `$_story:0`。结论：博士。',
+    );
   }
 }

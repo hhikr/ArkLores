@@ -58,9 +58,20 @@ String loreStyleInstructions(AnswerStyle style) => switch (style) {
           '然后依次写：核查结论、主张拆解、直接证据（附出处）、间接证据、缺少的证据。',
     };
 
-/// The whole system prompt for [style].
-String loreSystemPrompt(AnswerStyle style) =>
-    '$loreAgentRules\n\n${loreStyleInstructions(style)}';
+/// Splitting work across sub-agents (main agent only).
+const String loreDelegationRules = '''
+问题涉及很多章节或多个时间阶段时，可以先用全库统计定位，再用 delegate 把不同阶段或故事集同时交给几个子助手阅读，自己汇总、补读关键处。
+子助手交回的出处已核对，可以直接引用。只涉及一两章的问题自己读更快。''';
+
+/// Output format of a sub-agent ([LoreAgentLoop.subtask]).
+const String loreSubtaskInstructions = '''
+你是被派出的子助手：只完成交给你的这一项查找。按需要读原文，最后交回要点列表，每点一两句话并附出处；
+不要写开场白和总结，也不要回答任务以外的问题。查不到时如实说明查了哪些范围。''';
+
+/// The whole system prompt for [style] (or a sub-agent's when [subtask]).
+String loreSystemPrompt(AnswerStyle style, {bool subtask = false}) => subtask
+    ? '$loreAgentRules\n\n$loreSubtaskInstructions'
+    : '$loreAgentRules\n\n$loreDelegationRules\n\n${loreStyleInstructions(style)}';
 
 /// Text-protocol fallback for providers without function calling: how to
 /// call a tool in plain text.

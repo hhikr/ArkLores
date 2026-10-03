@@ -68,25 +68,19 @@ skipped）、既有固定检索 QA 全绿。
 
 ### 离线（每次改动 Agent/检索层都要跑）
 
-- `test/planner_test.dart`：意图解析、去重、进展控制（4 步提醒 / 8 步收尾 / 步数预算）、
-  消歧与 RESELECT、空输出温和收尾。
-- `test/evidence_notebook_test.dart`：READ 实际区间、证据笔记行号校验、引文由代码复制、
-  `unreadCitations`。
-- `test/story_coverage_test.dart`、`test/story_vectors_test.dart`：覆盖层工具、
-  `search_story_lines` 关键词/向量/RRF、向量切块与量化、无向量时的回退。
-- `test/investigation_test.dart`、`test/investigation_ui_test.dart`：结论信封解析与渲染。
-- R16 `test/planner_memory_test.dart`：章节摘要与笔记折叠、目录折叠与已读标记、阅读计划解析与打勾、
-  出场总览“已读 n/m 章”、复核与充分性检查、重读（给看 / 固定 / 拒绝）、旧页指引、状态合成、
-  writer 原文分配。
-- R16 `test/streaming_test.dart`：SSE 跨块拼行、空闲超时、拒绝流式时回退、writer token/reset/replace
-  顺序、ReAct 实时预览、刷新合并、生成中的状态行与思考面板。
-- R16 `test/reasoning_level_test.dart`：各 provider 的思考参数、默认全部不思考、“深度思考”不重建会话。
-- R17 `test/lore_agent_test.dart`：
-  - 只读 SQL 语句检查（拒绝写入、多语句、ATTACH、PRAGMA）；
-  - 工具在 fixture 库上的输出：全库统计、范围 grep 加上下文、`read_story` 翻页和找不到时的建议、零命中附近名；
-  - 循环：请求只追加、出处核对退回一次（含 `record:` 和只写文件名的出处）、无出处判为 not_covered；
-  - 文本协议回退、最后一轮不带工具作答、上下文折叠、追问继续上一问的对话；
-  - `record:` 出处的显示编号。
+- `test/lore_agent_test.dart`（R17 Agent）：
+  - 只读 SQL 语句检查（拒绝写入、多语句、ATTACH、PRAGMA），失控查询在超时处被 `sqlite3_interrupt` 中止且库仍可用；
+  - 工具在 fixture 库上的输出：全库统计、范围 grep 加上下文、`read_story` 翻页和找不到时的建议、零命中附近名、目录；
+  - 循环：请求只追加、出处核对退回一次（含 `record:` 和只写文件名的出处）、无出处判为 not_covered、
+    核查结论无出处时降级、去掉只讲过程的开头；
+  - 子 agent：独立对话、没有 `delegate`、看过的行并入主 agent；
+  - 文本协议回退、最后一轮不带工具作答、上下文折叠、追问继续上一问的对话；`record:` 出处的显示编号。
+- `test/story_coverage_test.dart`、`test/story_vectors_test.dart`、`test/locality_test.dart`、`test/story_catalog_test.dart`：
+  覆盖层与目录构建、`search_story_lines`（`find` 的实现）关键词/向量/RRF、向量切块与量化、近似名、上线顺序、引用分组。
+- `test/investigation_test.dart`、`test/investigation_ui_test.dart`：状态信封解析与渲染。
+- `test/streaming_test.dart`：SSE 跨块拼行、空闲超时、拒绝流式时回退、ReAct 实时预览、刷新合并、生成中的状态行与思考面板。
+- `test/reasoning_level_test.dart`：各 provider 的思考参数、默认全部不思考、“深度思考”不重建会话。
+- `test/ask_router_test.dart`、`test/chat_session_recorder_test.dart`：自动路由、会话记录（每个工具调用一条记录）、出错与取消。
 
 ### 真机同链路（opt-in，花钱）
 
@@ -100,18 +94,14 @@ token 用量）。
 
 | 验收项 | 预期 |
 | --- | --- |
-| 答案有引用 | 至少一条 `story_id.txt:行号` 引用，且全部落在已读区间内（否则重写一次，仍不合法附警告） |
-| 不状态转储 | 预算用尽或停滞时由 writer 基于已读内容作答，不输出内部状态 |
-| 负例 | 未覆盖的实体/事件明确说“未覆盖”，不用模型记忆补齐 |
-| 无向量 key | `ARKLORES_LIVE_NO_EMBEDDING=true` 时 FIND 退回关键词，观察写明原因 |
-| 成本 | 记录 `usage`；R12 参考值见 `AI_ARCHITECTURE.md` §4 |
-| 重复步（R16） | `summary.json` 的 `repeat_steps` 不超过总步数约 15% |
-| 流式（R16） | `streaming.first_text_after_writer_ms` 在几秒内（参考约 1.5 s） |
-| 宽问题（R16） | `talulah_after_chernobog`（`ARKLORES_LIVE_IDS`）answered，且读到 4 个 gold 章节所在的故事集 |
-| 窄问题不被拖长（R16） | 特雷西亚、缪因两题不被复核推去读无关故事集（参考 8 步 / 26 步） |
-| 工具型 Agent（R17，默认） | `talulah_after_chernobog`：`gold_recall` 为 1.0，约 10–15 次调用。缓存命中应占 `prompt_tokens` 的 80% 以上，否则说明对话不再是只追加 |
-| 写错的名字（R17） | “切尔诺贝利事件之后塔露拉做了什么？”“缪因是谁？”：答案按库中写法（切尔诺伯格、谬因）作答，并在开头说明 |
-| 追问（R17） | `ARKLORES_LIVE_CONVERSATION=true`：第二问的请求里带着第一问的工具结果，并且能引用第一问读过的行 |
+| 答案有引用 | 出处是 `story_id:行号` 或 `record:<id>`，全部是工具给模型看过的（否则退回一次，仍不合法附注） |
+| 负例 | 未覆盖的实体/事件明确说“没查到”，不用模型记忆补齐；状态 not_covered |
+| 无向量 key | `ARKLORES_LIVE_NO_EMBEDDING=true` 时 `find` 退回关键词，结果写明原因 |
+| 成本 | 记录 `usage`；缓存命中应占 `prompt_tokens` 的 80% 以上，否则说明对话不再是只追加 |
+| 宽问题 | `talulah_after_chernobog`：`gold_recall` 为 1.0，约 10–15 次调用（参考 35–46 s） |
+| 写错的名字 | “切尔诺贝利事件之后塔露拉做了什么？”“缪因是谁？”：按库中写法（切尔诺伯格、谬因）作答，并在开头说明 |
+| 追问 | `ARKLORES_LIVE_CONVERSATION=true`：第二问的请求里带着第一问的工具结果，并且能引用第一问读过的行 |
+| 跨很多章的整理 | 如“整理某人在第 9–15 章的主要行动”：可能派出子 agent；每章都有出处 |
 
 ## Current Unit Coverage
 

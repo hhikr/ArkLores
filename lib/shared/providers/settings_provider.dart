@@ -19,10 +19,6 @@ final initialMainTabIndexProvider =
 final initialSessionLogsEnabledProvider =
     Provider<bool>((ref) => throw UnimplementedError());
 
-/// R17: the saved engine choice for story questions (true: tool agent);
-/// overridden in main().
-final initialToolAgentEnabledProvider = Provider<bool>((ref) => true);
-
 final wikiSourcesRevisionProvider = StateProvider<int>((ref) => 0);
 
 /// Whether the user enabled per-session AI logs (default off; applied to

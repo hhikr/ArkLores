@@ -1,20 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:arklores/core/agent/agent_prompts.dart';
-import 'package:arklores/core/agent/evidence_notebook.dart';
-import 'package:arklores/core/agent/react_loop.dart';
-import 'package:arklores/core/agent/summary_agent.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/get_story_map.dart';
-import 'package:arklores/core/agent/tools/read_story_lines.dart';
-import 'package:arklores/core/agent/tools/search_story_coverage.dart';
 import 'package:arklores/core/agent/tools/search_story_lines.dart';
 import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_coverage_builder.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
-import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -162,71 +154,6 @@ void main() {
   });
 
   group('coverage tools', () {
-    test('search_story_coverage resolves query and returns markers', () async {
-      final tool = SearchStoryCoverageTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result = await tool.execute({'query': '角色B'}) as ToolExecutionResult;
-      expect(result.observation, contains('Coverage Scopes: 1'));
-      expect(result.observation, contains('Coverage Stories: 4'));
-      // R15: an overview of every collection comes first.
-      expect(result.observation, contains('出场总览（共 1 个故事集 / 4 章'));
-      expect(result.observation, contains('activity:act_fixture'));
-      expect(result.observation, contains('level_fixture_c5.txt'));
-    });
-
-    test('search_story_coverage disambiguates exact aliases', () async {
-      final tool = SearchStoryCoverageTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      // Resolving a single exact candidate by query picks the entity.
-      final result =
-          await tool.execute({'query': '角色A'}) as ToolExecutionResult;
-      expect(result.observation, contains('角色A (char_a)'));
-    });
-
-    test('search_story_coverage merges same-name entities (R12)', () async {
-      // Give a second entity the same alias plus one appearance of its own.
-      final db = await databaseFactory.openDatabase(dbPath);
-      await db.insert('entities', {
-        'id': 'char_b_alt',
-        'name': '角色B（异格）',
-        'aliases': '[]',
-        'entity_type': 'operator',
-        'source_type': 'operator_profile',
-        'game': 'arknights',
-        'source_path': 'fixture',
-      });
-      await db.insert('entity_aliases', {
-        'alias': '角色B',
-        'entity_id': 'char_b_alt',
-        'alias_type': 'alias',
-        'confidence': 0.9,
-        'source_path': 'fixture',
-      });
-      await db.insert('entity_story_mentions', {
-        'entity_id': 'char_b_alt',
-        'story_id': 'activities/act_fixture/level_fixture_c2.txt',
-        'scope_id': 'activity:act_fixture',
-        'line_start': 3,
-        'line_end': 3,
-        'mention_count': 1,
-        'matched_alias': '角色B',
-      });
-      await db.close();
-
-      final tool = SearchStoryCoverageTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result =
-          await tool.execute({'query': '角色B'}) as ToolExecutionResult;
-      expect(result.observation, isNot(contains('Ambiguous')));
-      expect(result.observation, contains('合并 2 个同名实体'));
-      // Union: char_b's 4 stories plus char_b_alt's c2.
-      expect(result.observation, contains('Coverage Stories: 5'));
-      expect(result.observation, contains('level_fixture_c2.txt'));
-    });
-
     test('search_story_lines finds stories by raw text (R12)', () async {
       final tool = SearchStoryLinesTool(
         gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
@@ -257,117 +184,8 @@ void main() {
       expect(scoped.observation, contains('No story line matches'));
     });
 
-    test('read_story_lines DATA block reports the returned range (R12)',
-        () async {
-      final tool = ReadStoryLinesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result = await tool.execute({
-        'story_id': 'activities/act_fixture/level_fixture_c2.txt',
-        'start_line': 5,
-        'max_lines': 10,
-      }) as ToolExecutionResult;
-      final page = parseReadObservation(result.observation)!;
-      expect(page.storyId, 'activities/act_fixture/level_fixture_c2.txt');
-      expect(page.firstLine, 5);
-      expect(page.lastLine, 14);
-      expect(page.lines, hasLength(10));
-    });
-
-    test('read_story_lines paginates with page_token', () async {
-      final tool = ReadStoryLinesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final first = await tool.execute({
-        'story_id': 'activities/act_fixture/level_fixture_c2.txt',
-        'max_lines': 10,
-      }) as ToolExecutionResult;
-      expect(first.observation, contains('Read Lines: 10'));
-      expect(first.observation, contains('Next Page Token: 10'));
-
-      final second = await tool.execute({
-        'story_id': 'activities/act_fixture/level_fixture_c2.txt',
-        'max_lines': 10,
-        'page_token': '11',
-      }) as ToolExecutionResult;
-      expect(second.observation, contains('Read Lines: 10'));
-      expect(second.observation, contains('11 | 角色A'));
-
-      final last = await tool.execute({
-        'story_id': 'activities/act_fixture/level_fixture_c2.txt',
-        'max_lines': 10,
-        'page_token': '31',
-      }) as ToolExecutionResult;
-      expect(last.observation, contains('End of Story: yes'));
-    });
-
-    test('read_story_lines reports missing story distinctly', () async {
-      final tool = ReadStoryLinesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result = await tool.execute(
-        {'story_id': 'activities/act_fixture/level_missing.txt'},
-      ) as ToolExecutionResult;
-      expect(result.observation, contains('Story not found'));
-    });
-
-    test('get_story_map lists chapters of a scope', () async {
-      final tool = GetStoryMapTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result = await tool.execute(
-        {'scope_id': 'activity:act_fixture'},
-      ) as ToolExecutionResult;
-      // Compact one-line-per-chapter list: every chapter visible, ordered by
-      // chapter number (c9 before c10), full profiles deferred to story_ids.
-      expect(result.observation, contains('Chapter List: 7'));
-      expect(result.observation, contains('End of Chapters: yes'));
-      expect(
-        result.observation.indexOf('level_fixture_c9.txt'),
-        lessThan(result.observation.indexOf('level_fixture_c10.txt')),
-      );
-      expect(result.observation, isNot(contains('=== Chapter #')));
-      expect(result.observation, isNot(contains('Top Entities:')));
-      expect(result.observation, contains('| Summary:'));
-    });
   });
 
-  group('Summary agent on the shared pipeline (R13)', () {
-    test('runs COVER -> MAP -> READ and the writer sees the read lines',
-        () async {
-      final llm = _ScriptedCoverageLLMClient();
-      final agent = SummaryAgent(
-        llmClient: llm,
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-
-      final events = await agent
-          .generateSummary(query: '角色B的剧情')
-          .toList();
-      final toolNames = events
-          .where((event) => event.type == ReActEventType.toolCall)
-          .map((event) => event.toolName)
-          .toList();
-      expect(toolNames, [
-        'search_story_coverage',
-        'get_story_map',
-        'read_story_lines',
-      ]);
-
-      final finalAnswer = finalAnswerOf(events);
-      expect(finalAnswer, startsWith('[STORY_ANSWER: status=answered'));
-      expect(llm.writerSystem, contains('梗概'));
-      // The writer received the original line, not just ids.
-      expect(llm.writerUser, contains('藏起匕首'));
-    });
-
-    test('planner prompt advertises the story intents', () {
-      expect(storyPlannerInstructions, contains('COVER'));
-      expect(storyPlannerInstructions, contains('FIND'));
-      expect(storyPlannerInstructions, contains('READ'));
-      expect(storyPlannerInstructions, contains('MAP'));
-    });
-  });
 }
 
 /// Builds a schema v3 DB from [sourceDir] using the production build pipeline
@@ -516,36 +334,3 @@ Future<Directory> _writeFixtureSource(Directory tempDir) async {
   return sourceDir;
 }
 
-/// Scripted LLM that follows the narrative workflow
-/// coverage -> map -> read -> final (with a fabricated coverage line).
-/// Plays the planner (COVER -> MAP -> READ -> ANSWER) and records what the
-/// writer receives; the extractor gets no notes (no `L<n>:` rows).
-class _ScriptedCoverageLLMClient extends LLMClient {
-  int callCount = 0;
-  String writerSystem = '';
-  String writerUser = '';
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    if (!messages.first.content.contains('检索决策器')) {
-      if (messages.first.content.contains('剧情资料员')) {
-        writerSystem = messages.first.content;
-        writerUser = messages.last.content;
-      }
-      return '角色B在第五章承认当年藏起匕首是为了掩盖真相。';
-    }
-    callCount++;
-    return switch (callCount) {
-      1 => 'COVER 角色B',
-      2 => 'MAP activity:act_fixture',
-      3 => 'READ activities/act_fixture/level_fixture_c5.txt',
-      _ => 'ANSWER 0.8',
-    };
-  }
-}

@@ -6,9 +6,7 @@ import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/search_story_lines.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
-import 'package:arklores/core/llm/completion_budget.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
-import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -19,31 +17,6 @@ import 'support/temp_dir.dart';
 /// deterministic character histogram, so "semantic" similarity here means
 /// shared characters — enough to verify plumbing, ranking and fallbacks.
 void main() {
-  group('completeWithHeadroom', () {
-    test('retries an empty truncated reply with a larger ceiling', () async {
-      final llm = _BudgetLLM(emptyBelow: 2000);
-      final result = await completeWithHeadroom(
-        llm,
-        [Message.user('q')],
-        temperature: 0,
-        maxTokens: 1024,
-      );
-      expect(result.content, 'DONE');
-      expect(llm.budgets, [1024, 4096]);
-    });
-
-    test('does not retry a complete reply', () async {
-      final llm = _BudgetLLM(emptyBelow: 0);
-      await completeWithHeadroom(
-        llm,
-        [Message.user('q')],
-        temperature: 0,
-        maxTokens: 1024,
-      );
-      expect(llm.budgets, [1024]);
-    });
-  });
-
   group('chunking and quantization', () {
     test('chunkStory uses fixed windows anchored to line indexes', () {
       final lines = [
@@ -226,33 +199,3 @@ class _FakeEmbedder implements EmbeddingClient {
       ];
 }
 
-/// Returns empty+length below [emptyBelow] tokens, 'DONE' otherwise.
-class _BudgetLLM extends LLMClient {
-  _BudgetLLM({required this.emptyBelow});
-  final int emptyBelow;
-  final List<int> budgets = [];
-
-  @override
-  Future<ChatCompletionResult> chatCompletion(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    budgets.add(maxTokens);
-    return maxTokens < emptyBelow
-        ? const ChatCompletionResult(content: '', finishReason: 'length')
-        : const ChatCompletionResult(content: 'DONE', finishReason: 'stop');
-  }
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      (await chatCompletion(messages, maxTokens: maxTokens)).content;
-}

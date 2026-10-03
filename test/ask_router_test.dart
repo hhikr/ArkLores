@@ -76,10 +76,9 @@ void main() {
       );
 
       // The router classified it as verify, so the answer goes through the
-      // fact-check transform. Without an installed DB the tool returns "not
-      // installed", so the verdict transform legitimately downgrades to
-      // unavailable — the assertion targets routing + verdict parsing, not
-      // the evidence outcome.
+      // fact-check format. Without an installed DB nothing can be read, so
+      // the verdict is unavailable — the assertion targets routing + verdict
+      // parsing, not the evidence outcome.
       expect(mock.routeCallCount, 1);
       final last = notifier.state.last;
       expect(last.content, contains('[FACT_CHECK_VERDICT:unavailable]'));
@@ -101,7 +100,7 @@ void main() {
 
       expect(mock.routeCallCount, 0);
       final last = notifier.state.last;
-      expect(last.content, contains('她是罗德岛的公开领袖'));
+      expect(last.content, startsWith('[STORY_ANSWER: status=not_covered]'));
       expect(last.factCheckVerdict, isNull);
     });
 
@@ -120,7 +119,7 @@ void main() {
       await notifier.sendMessage('某角色最后怎么样了', mode: AiMode.auto);
 
       final last = notifier.state.last;
-      expect(last.content, contains('她是罗德岛的公开领袖'));
+      expect(last.content, contains('本地知识库不可用'));
       final failureStep = last.steps.where(
         (step) =>
             step.type == ReActEventType.error &&
@@ -196,7 +195,6 @@ class _RecordingParamsLLMClient extends LLMClient {
 /// ANSWER, then the writer. Route vs agent calls are distinguished by the system prompt.
 class _AutoRouteLLMClient extends LLMClient {
   int routeCallCount = 0;
-  int _agentCallCount = 0;
 
   bool _isRouteCall(List<Message> messages) =>
       messages.first.content.contains('模式分类器');
@@ -213,11 +211,7 @@ class _AutoRouteLLMClient extends LLMClient {
       routeCallCount++;
       return 'verify';
     }
-    // Shared story QA pipeline (R13): planner intents, then the writer.
-    if (messages.first.content.contains('检索决策器')) {
-      _agentCallCount++;
-      return _agentCallCount == 1 ? 'SEARCH 阿米娅' : 'ANSWER';
-    }
+
     return '[FACT_CHECK_VERDICT:supported]\n'
         '支持：阿米娅是罗德岛的公开领袖。她是罗德岛的公开领袖。';
   }

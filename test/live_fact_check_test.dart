@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
-import 'package:arklores/core/agent/tools/search_local_lore.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
@@ -50,9 +49,7 @@ void main() {
     );
     agent = FactCheckAgent(
       llmClient: client,
-      searchTool: SearchLocalLoreTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: db.path),
-      ),
+      gameDataStore: GameDataKnowledgeStore(dbPath: db.path),
     );
   });
 
@@ -93,11 +90,7 @@ void main() {
         FactCheckVerdict.supported,
         reason: diagnostics,
       );
-      expect(
-        result.observations,
-        contains('scoped_story_evidence'),
-        reason: diagnostics,
-      );
+
       expect(
         result.observations,
         contains('activities/act21mini/level_act21mini_st'),

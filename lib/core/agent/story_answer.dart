@@ -1,18 +1,18 @@
 /// Answer envelope and output styles of the story QA pipeline (R13).
 ///
-/// Every answer the [PlannerLoop] writes starts with one machine-readable
-/// line:
+/// Every answer the story agent (`LoreAgentLoop`) writes starts with one
+/// machine-readable line:
 ///
 /// ```text
-/// [STORY_ANSWER: status=answered|partial|not_covered | confidence=0.8]
+/// [STORY_ANSWER: status=answered|partial|not_covered]
 /// ```
 ///
-/// The status is decided by CODE from what the run actually did, never by
-/// the model: `answered` when the planner said the evidence was enough,
-/// `partial` when the run stopped on a budget/stall and the writer answered
-/// from what was read, `not_covered` when nothing was read at all. It says
-/// nothing about the kind of question — the same envelope serves "who",
-/// "how", summaries and fact checks.
+/// The status is decided by CODE from what the run actually did:
+/// `not_covered` when no citation could be checked against text the tools
+/// showed, `partial` when the model reported gaps (`[COVERAGE: gaps]`) or
+/// the turn limit was reached, `answered` otherwise. It says nothing about
+/// the kind of question — the same envelope serves "who", "how", summaries
+/// and fact checks. (R13–R16 sessions may also carry `confidence=`.)
 ///
 /// Pre-R13 sessions stored `[INVESTIGATION_VERDICT: field=… | confidence=… |
 /// basis=…]`; [parseStoryAnswerEnvelope] still reads it so old

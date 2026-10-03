@@ -4,139 +4,61 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
-## [0.12.0] - pre-release
+## [0.10.1] - 2026-10-03 (pre-release)
 
-R16: streamed answers, per-role reasoning, a planner that keeps what it read, and a status
-decided by the evidence. R17: a new story agent (default). Same knowledge base as v0.11.0
-(no re-download needed).
-
-### Added
-
-- R17 story agent (Settings → "新版剧情问答", on by default): one model works the knowledge
-  base with general tools — read-only SQL, corpus-wide or scoped grep with context,
-  whole-chapter reads, collection outlines, near names — in one append-only conversation.
-  Follow-up questions continue that conversation. On the Talulah test question it read all
-  four key chapters with 11 calls in 35 s (R16: ~37 calls, 97 s), and misspelled names
-  (切尔诺贝利, 缪因) are found under their spelling in the knowledge base. Citations are
-  checked against the lines the tools actually showed; tapping a cited line range under the
-  answer shows the original lines from the knowledge base, and non-story records are cited
-  and shown as "资料 n". Providers without function calling get a plain-text tool protocol.
-
-- Streaming: answers appear token by token (SSE, lines joined across network chunks,
-  60 s idle timeout, fallback to non-streaming when a provider rejects it). A failed
-  citation check clears the draft and streams the rewrite; the checked answer then
-  replaces the text with its status line. The status line shows the current step
-  ("第 7 步 · 阅读 …"). The list follows the answer only while it is at the bottom
-  (↓ button otherwise). Roleplay replies stream too.
-- "深度思考" switch next to the mode chip: the answer writer thinks at low effort for the
-  next questions; retrieval is unchanged. The thinking streams in a folding panel and is
-  not saved.
-- Planner state: a one-line digest per read chapter, notes folded instead of dropped,
-  outlines kept as a chapter index with read marks, the planner's own `# plan` note, and
-  the step budget ("步数 n/24").
-
-### Changed
-
-- Every role runs without hidden reasoning by default (`ReasoningLevel`): the router, the
-  answer writer and roleplay used the provider default, which for deepseek is thinking
-  at high effort. Writer output tokens fell to about a fifth; answers no longer guess
-  motives the text does not state.
-- Status follows the evidence: the writer ends with `[COVERAGE: full|gaps]` (stripped
-  from the answer); a step limit only gets a neutral note to the writer instead of
-  forcing `partial`.
-- The writer gets up to 60,000 characters of read text: noted lines with context first,
-  then every chapter in turn (before: the first 30,000 characters in reading order, which
-  cut the chapters read last).
-- Broad questions ("what did X do after Y", "all of X's story"): a reading plan is drafted
-  once at the start from the question and the person's overview, and kept as a checklist
-  (ticked when a chapter of it was read). When the planner answers with plan items or
-  much-mentioned collections still unread, a quick check of what was read decides whether
-  it is enough; if not, the open items are listed once and the budget grows by 8 steps.
-- Whole chapters: a READ without line numbers returns the whole chapter (up to ~450 lines);
-  an older page in the planner's window is a pointer to the state, not a cut-off fragment
-  (the cut-off fragment made it re-read the first half after every second page).
-- Re-reads: two passages are shown again; a short passage asked for again is pinned into
-  the state; later re-reads are refused without costing a step. A READ past the end of a
-  read chapter says so.
-- Reachability: a collection id (`main_9`) works as a search scope; OUTLINE accepts
-  `主线·名` and `名（id）`; READ adds a missing `.txt` and, for an unknown id, lists the real
-  ones with that level code. Older outlines fold to their read chapters.
-- The answer writer's source puts the lines of the people the question names right after
-  the noted lines; a failed note extraction is retried once.
-- The writer answers a misspelt name under the near name the state lists when the read
-  text matches the rest of the question, and says so in its first line.
-
-### Fixed
-
-- Roleplay replies longer than 120 characters showed only their last part.
-- Non-streamed responses without a `charset` were decoded as latin1.
-
-## [0.11.0] - 2026-10-02
-
-Covers R13 (one QA pipeline, no question-type special cases) and R14 (whole-story grasp).
-Knowledge base: same story text and vectors as v0.10.0 plus the optional `story_catalog`
-table (`arklores_gamedata_zh.db.gz` 184,850,215 B, SHA-256
+Everything since v0.10.0 is one iteration of the story Q&A agent and ships as 0.10.1 (a v0.11.0
+pre-release published on 2026-10-02 was withdrawn; its work is included here). Knowledge base:
+same story text and vectors as v0.10.0 plus the optional `story_catalog` table
+(`arklores_gamedata_zh.db.gz` 184,850,215 B, SHA-256
 `f5f14283a42f9b678a598354e74033c2393da64e4e1b4bc470303f279c9aed53`). The APK installs over
 v0.10.0 (same signing key); download the new knowledge base in the app to get story names.
 
 ### Changed
 
-- R13: investigate, summarize and verify run one pipeline (`StoryQaAgent` → PlannerLoop);
-  the mode only changes the answer format. Answers start with a code-decided
-  `[STORY_ANSWER: status=answered|partial|not_covered | confidence=x]` line; fact-check
-  verdicts need cited, actually-read lines.
-- Removed every question-type special case (culprit envelope, two-suspect gate, suspect
-  prompt steps, SEARCH-only repeat patches); a test guards against new ones.
-- `collect_suspect_evidence` is now `collect_entity_evidence` (`terms=`).
-- R14 whole-story grasp: new optional `story_catalog` table built from
-  `story_review_table.json` + the official `[uc]info` synopses (story collection name,
-  level code, chapter name, 行动前/后, order). Chapter profiles are relabelled with these
-  names and synopses. New planner command `OUTLINE` lists a collection's chapters in game
-  order with synopses; the planner prompt asks for the outline and for set-up chapters, not
-  only the scene where an event happens.
-- FIND keyword search ORs terms and ranks by IDF-weighted matched terms (it used to need
-  every term in one line, so mixed queries silently returned nothing); it also lists
-  official-synopsis hits.
-- Follow-up questions: the router sees the previous question; history carries answers and
-  the chapters read instead of replaying tool observations; the previous turn's read pages
-  are inherited (already read, citable); the extractor gets the previous question too.
-- Reading: a READ window is read whole (up to ~150 lines per page), `READ id a-b` ranges
-  parse, overlapping READs continue at the first unread line, blocked duplicates no longer
-  spend the step budget but three in a row end the run (as answered when they only re-read
-  text already read).
-- OUTLINE accepts path / `@scope` spellings; in-level dialogue files are named after their
-  activity.
-- Knowledge-base download streams to disk and resumes with HTTP Range after a dropped
-  connection (TLS handshake / socket errors are retried automatically); it no longer holds
-  the ~600 MB database in memory. The download runs app-wide: leaving the page keeps its
-  progress and a second tap cannot start a parallel download (seen on a phone as
-  `HandshakeException: Connection terminated during handshake`).
-- Answers show sources as "巴别塔 BB-7 行动前《阴影显现》 第 N 行" (chips keep the raw id on
-  long-press); stored answers keep raw ids for citation checks.
-- `tools/build_story_catalog.dart` adds the catalog to an existing DB in place.
-- R15 Ask page: one top bar (Ask / Roleplay switch, history, new conversation, a menu with
-  retry / clear); the mode picker is a chip in the input row; no avatars — the question is
-  a right-aligned bubble, the answer uses the full width. Status, confidence and reasoning
-  steps share one tappable line; cited lines fold into "证据 N 处 · 来自 M 个故事" and open as
-  collection → chapter → line chips. Inline citations show the chapter only.
-- R15 names: a name the knowledge base does not contain (a typo, a homophone) gets the
-  closest names it does contain, ranked by a pinyin-aware edit distance (`lpinyin`), in
-  COVER and FIND; spellings found nowhere are remembered and not searched again. Only
-  string similarity is stated — who a name refers to is settled from the lines read.
-- R15 reach: COVER starts with an overview of every collection an entity appears in, in
-  release order (new `story_catalog.start_time`), with details shared between collections;
-  the overview of the people a question names is in the planner state from the first step.
-  Collections named in the question are recognised; a question about someone the previous
-  turn did not mention no longer inherits that turn's pages. FIND says when a term occurs
-  only outside its scope, accepts `activities/<id>` as a scope and redirects a chapter-file
-  scope to READ. OUTLINE shows the release month; an outline asked for again is answered
-  from cache.
+- New story agent for every Ask question (investigate, summarize, verify — the mode only changes
+  the answer format): one model works the knowledge base with general tools in one append-only
+  conversation — read-only SQL over the whole database, corpus-wide or scoped grep with context,
+  whole-chapter reads, ranked keyword/vector search, collection outlines and near names. For
+  questions that span many chapters it can hand parts of the reading to sub-agents that run in
+  parallel. It replaces the step-by-step planner pipeline of v0.10.0 (planner, note extractor,
+  separate answer writer). On the test question "塔露拉在切尔诺伯格事件之后做了哪些事情？" it read
+  all four key chapters with 11 model calls in 35 s; the planner needed ~37 calls and 97 s and
+  most of its input could not be served from the provider's prompt cache.
+- Follow-up questions continue the previous answer's conversation, so text already read is
+  still there.
+- Misspelled names (e.g. 切尔诺贝利, 缪因) are searched under the knowledge base's spelling;
+  the answer says "库中写作 …". Zero-hit searches list near names (pinyin-aware string
+  similarity only — who a name refers to is settled from the lines read).
+- Citations are checked by code against the lines and records the tools actually showed; an
+  answer citing anything else is sent back once. Answers start with a code-decided
+  `[STORY_ANSWER: status=answered|partial|not_covered]` line; fact-check verdicts need cited,
+  checked lines. No question-type special cases (a test guards against new ones).
+- Answers stream token by token; the status line shows what the agent is doing
+  ("第 3 轮 · 阅读 …"); the list follows the answer only while it is at the bottom (↓ button
+  otherwise). Roleplay replies stream too.
+- "深度思考" switch next to the mode chip: the agent thinks at low effort for the next
+  questions. By default nothing runs with hidden reasoning (deepseek otherwise thinks at high
+  effort; it cost ~5× the output tokens and invited guesses beyond the text).
+- Evidence: sources show as "巴别塔 BB-7 行动前《…》 第 N 行"; cited lines fold into
+  "证据 N 处 · 来自 M 个故事" and open as collection → chapter → line chips; tapping a chip shows
+  the original lines from the knowledge base. Non-story records (profiles, voice lines, item
+  texts) are cited as "资料 n" and open the same way.
+- Ask page: one top bar (Ask / Roleplay switch, history, new conversation, a menu with retry /
+  clear); the mode picker is a chip in the input row; no avatars.
+- Knowledge base: optional `story_catalog` (collection name, level code, chapter name,
+  行动前/后, order, official synopsis, release time) built from `story_review_table.json` and the
+  `[uc]info` synopses; `tools/build_story_catalog.dart` adds it to an existing DB in place. The
+  download streams to disk, resumes after a dropped connection, and runs app-wide (one download
+  at a time). The knowledge-base page offers an update when the installed asset differs from the
+  one this APK points to.
+- Providers without function calling fall back to a plain-text tool protocol.
 
 ### Fixed
 
-- Years in `FIND` queries are no longer read as a result count; semantic-only hits no longer
-  count as progress, so fruitless runs stop early.
-- Tool parameter examples no longer use a real story id (they reached the roleplay prompt).
+- Roleplay replies longer than 120 characters showed only their last part.
+- Non-streamed responses without a `charset` were decoded as latin1.
+- `HandshakeException: Connection terminated during handshake` during the knowledge-base
+  download (now retried and resumed).
 
 ## [0.10.0] - 2026-10-02
 

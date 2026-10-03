@@ -3,149 +3,72 @@ import 'dart:async';
 import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
-import 'agent_prompts.dart';
-import 'entity_disambiguator.dart';
-import 'evidence_notebook.dart' show ReadPage;
 import 'lore_agent_loop.dart';
-import 'planner_loop.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
-import 'tools/agent_tool.dart';
-import 'tools/collect_entity_evidence.dart';
-import 'tools/get_story_map.dart';
-import 'tools/get_story_outline.dart';
-import 'tools/read_story_lines.dart';
-import 'tools/search_local_lore.dart';
-import 'tools/search_story_coverage.dart';
-import 'tools/search_story_lines.dart';
-import 'tools/tool_registry.dart';
 
 export 'lore_agent_loop.dart' show LoreConversation;
 
-/// The one story QA pipeline (R13): investigation, summary and fact check
-/// all run the same [PlannerLoop] with the same tools, evidence notebook and
-/// citation checks; [AnswerStyle] only changes the writer's output format.
-///
-/// Roles: the planner, extractor and disambiguator are mechanical and run on
-/// [auxClient] (reasoning off in the app); the writer runs on [llmClient].
+/// The one story QA pipeline (R13; R17 tool agent): answers, summaries and
+/// fact checks all run the same [LoreAgentLoop] with the same tools and
+/// citation checks; [AnswerStyle] only changes the output format.
 class StoryQaAgent {
   StoryQaAgent({
     required LLMClient llmClient,
-    LLMClient? auxClient,
-    LLMClient? plannerClient,
-    LLMClient? extractorClient,
-    LLMClient? disambiguatorClient,
     GameDataRetrieval? gameDataStore,
     EmbeddingClient? embeddingClient,
-    AgentTool? searchTool,
-    LLMClient? planClient,
   })  : _llmClient = llmClient,
         _store = gameDataStore,
-        _planClient = planClient,
-        _plannerClient = plannerClient ?? auxClient ?? llmClient,
-        _extractorClient = extractorClient ?? auxClient ?? llmClient,
-        _disambiguator = EntityDisambiguator(
-          llmClient: disambiguatorClient ?? auxClient ?? llmClient,
-        ),
-        _storyCatalogLookup = gameDataStore?.storyCatalogEntries,
-        _questionContextLookup = gameDataStore == null
-            ? null
-            : ((question) async => (
-                  names: await gameDataStore.namesInText(question),
-                  targets: await gameDataStore.namedStoryTargets(question),
-                )),
-        _toolRegistry = ToolRegistry() {
-    // R9: ALL tools share ONE store instance (separate stores closed each
-    // other's shared sqflite connection).
-    final store = gameDataStore;
-    _toolRegistry.registerAll([
-      searchTool ?? SearchLocalLoreTool(gameDataStore: store),
-      SearchStoryCoverageTool(gameDataStore: store),
-      SearchStoryLinesTool(
-        gameDataStore: store,
-        embeddingClient: embeddingClient,
-      ),
-      GetStoryMapTool(gameDataStore: store),
-      GetStoryOutlineTool(gameDataStore: store),
-      ReadStoryLinesTool(gameDataStore: store),
-      CollectEntityEvidenceTool(gameDataStore: store),
-    ]);
-  }
+        _embeddingClient = embeddingClient;
 
-  final StoryCatalogLookup? _storyCatalogLookup;
-  final QuestionContextLookup? _questionContextLookup;
   final LLMClient _llmClient;
   final GameDataRetrieval? _store;
-  final LLMClient _plannerClient;
+  final EmbeddingClient? _embeddingClient;
 
-  /// R16: drafts the reading plan at the start (null: no plan).
-  final LLMClient? _planClient;
-  final LLMClient _extractorClient;
-  final EntityDisambiguator _disambiguator;
-  final ToolRegistry _toolRegistry;
-
-  /// Answers [query] in [style].
+  /// Answers [query] in [style]. [prior] continues an earlier answer's
+  /// conversation (follow-ups); [onConversation] receives this one's.
+  /// [client] replaces the default client for this question (the "深度思考"
+  /// switch).
   Stream<ReActEvent> run({
     required String query,
     required AnswerStyle style,
     List<Message> history = const [],
-    List<ReadPage> priorPages = const [],
-    LLMClient? writerClient,
-    void Function(int iteration, String rawResponse)? onRawLlmResponse,
-    void Function(String memoryBlock)? onMemoryChanged,
-    bool useToolAgent = false,
+    LLMClient? client,
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
+    void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) {
     final store = _store;
-    if (useToolAgent && store != null) {
-      // R17: one model with general tools; the "深度思考" client (when on)
-      // runs the whole question.
-      return LoreAgentLoop(
-        client: writerClient ?? _llmClient,
-        store: store,
-      ).run(
-        query: query,
-        style: style,
-        history: history,
-        prior: prior,
-        onConversation: onConversation,
-        onRawLlmResponse: onRawLlmResponse,
-      );
+    if (store == null) {
+      // Nothing to search: say so without spending a model call.
+      const note = '本地知识库不可用，请先在“知识库”页安装中文 GameData 知识库。';
+      final body = style == AnswerStyle.factCheck
+          ? normalizeFactCheckBody(
+              note,
+              nothingRead: true,
+              hasValidCitation: false,
+            )
+          : note;
+      return Stream.fromIterable([
+        ReActEvent(
+          type: ReActEventType.finalAnswerReplace,
+          content: '${formatStoryAnswerEnvelope(StoryAnswerStatus.notCovered)}'
+              '\n$body',
+        ),
+        const ReActEvent(type: ReActEventType.complete),
+      ]);
     }
-    final task = switch (style) {
-      AnswerStyle.answer => plannerTaskAnswer,
-      AnswerStyle.summary => plannerTaskSummary,
-      AnswerStyle.factCheck => plannerTaskFactCheck,
-    };
-    final loop = PlannerLoop(
-      llmClient: _plannerClient,
-      // R16: the "深度思考" switch hands in a thinking writer per question.
-      writerClient: writerClient ?? _llmClient,
-      toolRegistry: _toolRegistry,
-      extractorClient: _extractorClient,
-      disambiguator: _disambiguator,
-      minimumToolCalls: 1,
-      // R12: ceiling, not cost — reasoning models need room before the
-      // one-line intent (completeWithHeadroom escalates when truncated).
-      stepMaxTokens: 4096,
-      // R12 cost control: useful reads happen early; a spent budget still
-      // ends through the writer with what was read.
-      maxToolSteps: 24,
-      storyCatalogLookup: _storyCatalogLookup,
-      questionContextLookup: _questionContextLookup,
-      planClient: _planClient,
-    );
-    return loop.run(
-      // The planner gets the trust rules + protocol only; the answer format
-      // belongs to the writer.
-      systemPrompt: '$knowledgeBaseRules\n\n$storyPlannerInstructions\n\n$task',
-      chatHistory: history,
-      priorPages: priorPages,
-      userQuery: query,
+    return LoreAgentLoop(
+      client: client ?? _llmClient,
+      store: store,
+      embeddingClient: _embeddingClient,
+    ).run(
+      query: query,
       style: style,
+      history: history,
+      prior: prior,
+      onConversation: onConversation,
       onRawLlmResponse: onRawLlmResponse,
-      onStateChanged: onMemoryChanged,
     );
   }
 }

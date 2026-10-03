@@ -1,7 +1,7 @@
 # R17：工具型剧情 Agent（一个模型 + 通用工具 + 只追加的对话）
 
-> 状态：`feature/r16-stream-reasoning` 上实现，App 默认启用（设置 →“新版剧情问答”，关闭后走 R16 流程）。
-> R16 流程（`PlannerLoop`）的逐步说明仍见 `ASK_PIPELINE_FLOW.md`。
+> 状态：v0.10.1 起是剧情问答**唯一**的流程。R13–R16 的分步流程（`PlannerLoop`、状态、提取器、writer）已删除，
+> 原文和逐步说明（`ASK_PIPELINE_FLOW.md`）都在 git 历史中。
 
 ## 1. 为什么改
 
@@ -34,11 +34,11 @@ R16 正好相反：
 
 ```
 用户问题 ─► AskChatNotifier ─► (auto: QuestionRouter 选 AnswerStyle)
-            ─► StoryQaAgent.run(useToolAgent: true) ─► LoreAgentLoop
+            ─► StoryQaAgent.run ─► LoreAgentLoop
                  system: loreSystemPrompt(style)（库结构说明 + 工作方式 + 引用格式 + 输出格式）
                  messages: [上一问的完整对话（追问时）] + 用户问题 + 每轮 assistant/tool 消息（只追加）
                  每轮：client.streamTurn(messages, tools) ─► 文本增量 / tool_calls
-                       有 tool_calls → 执行工具，结果原样作为 tool 消息追加
+                       有 tool_calls → 同一轮的调用并发执行（delegate 即并行的子 agent），结果按顺序原样追加
                        没有 → 最终答案 → 出处核对（最多退回一次）→ 状态信封
 ```
 
@@ -47,7 +47,7 @@ R16 正好相反：
 | `lib/core/agent/lore_agent_loop.dart` | 循环、文本协议回退、上下文折叠、出处核对、状态 |
 | `lib/core/agent/lore_tools.dart` | 工具；`SeenLines` 记录本次给模型看过的行和记录 |
 | `lib/core/agent/lore_agent_prompts.dart` | 系统提示（所有问题同一份，R13） |
-| `lib/core/gamedata/readonly_sql.dart` | 只读 SQL：语句检查，后台 isolate 执行，超时就 kill |
+| `lib/core/gamedata/readonly_sql.dart` | 只读 SQL：语句检查，每次查询一个后台 isolate，超时用 `sqlite3_interrupt` 中止 |
 | `lib/core/llm/openai_client.dart` | `streamTurn`：SSE 中按 index 拼接 `tool_calls` |
 
 ### 工具
@@ -57,8 +57,21 @@ R16 正好相反：
 | `sql(query)` | 一条只读 `SELECT`/`WITH` | 200 行 / 16k 字，8 s 超时 |
 | `grep(pattern, story_ids?/collection?, context, max_hits)` | 子串匹配，`\|` 表示任一。不给范围：全库按故事统计行数（主线在前，其余按上线时间）；给范围：命中行加上下文，命中行标 `*` | 150 行，列出 160 个故事 |
 | `read_story(story_id, start, count)` | 连续读原文，`L行号 [说话人] 内容` | 500 行 / 16k 字 |
+| `find(query, collection?)` | 按意思找：FTS 关键词，配置了向量 API 时再融合语义召回（复用 R12 `SearchStoryLinesTool`）；只是定位线索 | 6 个故事 |
 | `outline(collection)` | 故事集章节、关卡号、官方梗概（只用于定位） | 16k 字 |
 | `similar_names(name)` | 读音或字形相近的名字（R15 `name_similarity`） | 8 个 |
+| `delegate(task, story_ids?, collection?)` | 把一部分阅读交给子 agent（只主 agent 有） | 子 agent 20 轮 |
+
+### 子 agent
+
+`delegate` 启动一个新的 `LoreAgentLoop`（`subtask: true`）：
+
+- 有自己的对话，工具与主 agent 相同，但没有 `delegate`（只有一层）；
+- 系统提示要求只完成交给它的查找，最后交回带出处的要点；它也走自己的出处核对；
+- 结束后它看过的行和记录并入主 agent 的 `SeenLines`，所以主 agent 可以直接引用它交回的出处；
+- 同一轮的多个调用并发执行，事件和 tool 消息仍按调用顺序给出。
+
+是否拆分由模型决定。实测：读二十章左右的问题它自己读完；“凯尔希在第 9–15 章的主要行动”派出了 5 个子 agent。
 
 ### 写错的名字
 
@@ -95,9 +108,10 @@ R16 正好相反：
 
 ### 安全阀
 
-只有三个，不设预算提示，不拒绝重读，也不做复核：
+只有下面几个，不设预算提示，不拒绝重读，也不做复核：
 
 - 每问最多 60 轮，最后一轮 `tool_choice: none`，要求直接作答；
+- 只读 SQL 超过 8 秒，用 `sqlite3_interrupt` 在 SQLite 内部中止语句（工作 isolate 在主 isolate 允许前不关闭连接，所以中止不会碰到已释放的连接），并告诉模型缩小范围；
 - 上下文超过 36 万字时，把最早的工具结果折叠成一行指引，最近 8 条消息不动；
 - 用户可以随时停止。
 
@@ -119,10 +133,11 @@ R16 正好相反：
 
 - 工具调用显示在步骤列表和状态行，例如“第 3 轮 · 阅读 level_st_09-04.txt”。
 - 正文没有工具块、长度超过 160 字时，开始当作答案流式显示。之后如果又出现工具调用，就清掉重来。
+- 答案开头若是一段只讲过程的短话（“已核实，现在输出完整最终答案。”），由代码去掉；带出处的段落不会被去掉。
 - 答案下的出处树里，点行号就从库中读出原文显示，不是模型的转述。
 - `record:` 出处显示为“资料 n”，可以展开看原文。
 
-## 3. 验收（2026-10-03，deepseek-v4-flash，不思考，库为 v0.11.0b）
+## 3. 验收（2026-10-03，deepseek-v4-flash，不思考，库为 v0.10.1 发布的同一资产，本地目录名 gamedata_release_v0.11.0b）
 
 | 问题 | 链路 | 调用 | 输入 token（缓存命中） | 耗时 | 出处 | 说明 |
 |---|---|---|---|---|---|---|
@@ -133,12 +148,13 @@ R16 正好相反：
 | 缪因是谁？ | R16 | 46 | 19.7 万（8.1 万） | 55 s | 13 | |
 | 同上 | R17 | 8 | 5.9 万（4.4 万） | 19 s | 4 + 记录 | 指出“库中写作谬因” |
 | （追问）她和米格鲁是什么关系？ | R17 | 6 | 16.2 万（12.6 万） | 20 s | 18 | 接着上一问的对话继续 |
+| 塔露拉（最终代码：删除 R16、加入 find/delegate 后） | R17 | 14 | 62.8 万（54.8 万） | 46 s | 41 | 金标 4 章全读；自己读了 21 章，未拆分 |
+| 整理凯尔希在主线第9章到第15章里的主要行动 | R17 | 57 | 173 万（149 万） | 132 s | 154 | 派出 5 个子 agent 并行阅读，按章整理 |
 
 未命中缓存的 token 大致降到原来的 1/5 到 1/10，耗时减半。
 
 ## 4. 已知限制与后续
 
-- **SQL 超时**：手机上全表 `LIKE` 的耗时还没在真机上测过；电脑上约 0.1–0.3 s。超时后 isolate 会被 kill，但如果 SQLite 正卡在一次 native 调用里，要等它返回才真正结束。
-- **单次运行的波动**：同一问题偶尔会漏掉某个阶段，例如第一次塔露拉运行漏了 EG-7。目前靠全库统计列出最多 160 个故事来缓解，没有加任何针对具体问题的规则。
-- **子 agent（第 2 阶段）**：并行读多章、交回带出处的要点，暂未实现。
-- **删除 R16 流程**：新链路在更多真机问题上稳定后，再删除 `PlannerLoop` 及相关代码：`investigation_state`、`evidence_notebook`、`planner_intent`、`loop_memory`、阅读计划和复核的提示词。
+- **手机上的 SQL 耗时**：电脑上全表 `LIKE` 约 0.1–0.3 s，手机上还没实测（预计慢几倍，仍远低于 8 s 超时）。超时会在 SQLite 内部中止，不会在后台继续扫描。
+- **单次运行的波动**：同一问题偶尔会漏掉某个阶段（R17 第一次塔露拉运行漏了 EG-7）。靠全库统计列出最多 160 个故事、模型可以拆给子 agent 来缓解；不加针对具体问题的规则。
+- **成本随问题宽度增长**：跨七章的整理问题约 25 万未命中缓存的 token；窄问题 1.5–5 万。

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
 import 'package:arklores/core/agent/roleplay_session_store.dart';
@@ -712,7 +711,7 @@ void main() {
       final gzSha = sha256.convert(gz).toString();
       final client = MockClient((_) async => http.Response.bytes(gz, 200));
 
-      // A DB installed without a marker (pre-v0.11.0 or built in the app)
+      // A DB installed without a marker (pre-v0.10.1 or built in the app)
       // differs from the asset this build points at.
       final installer = GameDataInstaller(
         installDirectory: tempDir,
@@ -1108,77 +1107,6 @@ void main() {
     });
   });
 
-  group('FactCheck Agent Tests', () {
-    String answerOf(List<ReActEvent> events) => finalAnswerOf(events);
-
-    test('runs the shared planner pipeline; a definite verdict without '
-        'cited read text is downgraded (R13)', () async {
-      final llm = _FactCheckLLMClient();
-      final tool = _FactCheckSearchTool();
-      final agent = FactCheckAgent(llmClient: llm, searchTool: tool);
-
-      final events = await agent.checkClaim(claim: '阿米娅是罗德岛的领袖吗？').toList();
-
-      expect(tool.queries, ['阿米娅 罗德岛 身份', '阿米娅 领袖 反证']);
-      final answer = answerOf(events);
-      // Profiles were searched but no story line was READ, so nothing can be
-      // cited: status and verdict are decided by code.
-      expect(answer, startsWith('[STORY_ANSWER: status=not_covered'));
-      expect(answer, contains('[FACT_CHECK_VERDICT:unavailable]'));
-      expect(parseFactCheckVerdict(answer), FactCheckVerdict.unavailable);
-      expect(llm.systemPrompt, contains('核查'));
-      expect(llm.systemPrompt, isNot(contains('search_wiki')));
-      expect(llm.writerSystemPrompt, contains('FACT_CHECK_VERDICT'));
-    });
-
-    test('passes prior claim and evidence marker to a follow-up', () async {
-      final llm = _FactCheckLLMClient();
-      final agent = FactCheckAgent(
-        llmClient: llm,
-        searchTool: _FactCheckSearchTool(),
-      );
-      await agent.checkClaim(
-        claim: '那她什么时候加入的？',
-        history: const [
-          Message(role: MessageRole.user, content: '阿米娅属于罗德岛吗？'),
-          Message(
-            role: MessageRole.assistant,
-            content: '[FACT_CHECK_VERDICT:supported] Source Path: a.json',
-          ),
-        ],
-      ).toList();
-
-      expect(
-        llm.firstRequestMessages
-            .any((message) => message.content.contains('阿米娅属于罗德岛')),
-        isTrue,
-      );
-      expect(
-        llm.firstRequestMessages
-            .any((message) => message.content.contains('Source Path: a.json')),
-        isTrue,
-      );
-    });
-
-    test('exposes every raw planner response through onRawLlmResponse',
-        () async {
-      final agent = FactCheckAgent(
-        llmClient: _UnsupportedFactCheckLLMClient(),
-        searchTool: _CurrentNoMatchTool(),
-      );
-      final raws = <(int, String)>[];
-      final events = await agent
-          .checkClaim(
-            claim: '未知命题',
-            onRawLlmResponse: (iteration, raw) => raws.add((iteration, raw)),
-          )
-          .toList();
-      expect(answerOf(events), contains('[FACT_CHECK_VERDICT:unavailable]'));
-      expect(raws.first.$1, 1);
-      expect(raws.map((r) => r.$2), everyElement(isNotEmpty));
-    });
-  });
-
   group('LLM Client Tests', () {
     test('OpenAICompatibleClient rejects invalid API key text clearly',
         () async {
@@ -1334,85 +1262,6 @@ class _RoleplayLLMClient extends _MockLLMClient {
           'Action Input: {"query":"切尔诺伯格 任务","entity_id":"char_002_amiya"}';
     }
     return 'Thought: 已依据资料回应。\nFinal Answer: ……我记得那次行动。';
-  }
-}
-
-/// Plays both planner roles of the shared pipeline: the decision model
-/// (searches twice, then ANSWER) and the writer (claims "supported").
-class _FactCheckLLMClient extends LLMClient {
-  int callCount = 0;
-  String systemPrompt = '';
-  String writerSystemPrompt = '';
-  List<Message> firstRequestMessages = const [];
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    if (!messages.first.content.contains('检索决策器')) {
-      writerSystemPrompt = messages.first.content;
-      return '[FACT_CHECK_VERDICT:supported]\n## 核查结论\n支持。';
-    }
-    callCount++;
-    if (callCount == 1) {
-      firstRequestMessages = List.of(messages);
-      systemPrompt = messages.first.content;
-      return 'SEARCH 阿米娅 罗德岛 身份';
-    }
-    if (callCount == 2) return 'SEARCH 阿米娅 领袖 反证';
-    return 'ANSWER 0.9';
-  }
-}
-
-class _FactCheckSearchTool extends AgentTool {
-  final queries = <String>[];
-
-  @override
-  String get name => 'search_local_lore';
-
-  @override
-  String get description => 'GameData-only fact-check search.';
-
-  @override
-  Map<String, dynamic> get parameters => {
-        'type': 'object',
-        'properties': {
-          'query': {'type': 'string'},
-        },
-        'required': ['query'],
-      };
-
-  @override
-  Future<dynamic> execute(Map<String, dynamic> arguments) async {
-    queries.add(arguments['query'] as String);
-    return const ToolExecutionResult(
-      observation: '=== Result #1 ===\nSource Kind: GameData\n'
-          'Evidence Scope Match: yes\nEvidence Level: direct candidate\n'
-          'Content Type: operator_profile\nSource Path: character_table.json\n'
-          'Raw ID: char_002_amiya\nContent Excerpt: 阿米娅是罗德岛的公开领袖。',
-    );
-  }
-}
-
-/// Planner searches once and answers; the writer wrongly claims support.
-class _UnsupportedFactCheckLLMClient extends _MockLLMClient {
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    if (!messages.first.content.contains('检索决策器')) {
-      return '[FACT_CHECK_VERDICT:supported]\n错误地声称支持。';
-    }
-    callCount++;
-    return callCount == 1 ? 'SEARCH 未知命题' : 'ANSWER';
   }
 }
 

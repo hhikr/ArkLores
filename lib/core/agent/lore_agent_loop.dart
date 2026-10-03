@@ -21,6 +21,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
+import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import 'lore_agent_prompts.dart';
 import 'lore_tools.dart';
@@ -55,14 +56,27 @@ class LoreAgentLoop {
   LoreAgentLoop({
     required this.client,
     required this.store,
+    this.embeddingClient,
     this.maxTurns = 60,
     this.contextCharBudget = 360000,
     this.maxTokens = 8192,
     this.temperature = 0.3,
+    this.subtask = false,
+    this.subtaskMaxTurns = 20,
   });
 
   final LLMClient client;
   final GameDataRetrieval store;
+
+  /// Optional story vectors for `find` (R12); keyword-only without.
+  final EmbeddingClient? embeddingClient;
+
+  /// A sub-agent run by `delegate`: its own conversation, no `delegate`
+  /// tool, findings instead of a full answer.
+  final bool subtask;
+
+  /// Turn limit of each sub-agent.
+  final int subtaskMaxTurns;
 
   /// Model turns per question; the last one must answer.
   final int maxTurns;
@@ -85,13 +99,22 @@ class LoreAgentLoop {
     void Function(int turn, String rawResponse)? onRawLlmResponse,
   }) async* {
     final seen = prior?.seen ?? SeenLines();
-    final tools = {for (final t in loreTools(store, seen)) t.name: t};
+    final tools = {
+      for (final t in [
+        ...loreTools(store, seen, embeddingClient: embeddingClient),
+        if (!subtask) DelegateTool((args) => _runSubtask(args, seen)),
+      ])
+        t.name: t,
+    };
     final toolSpecs = [for (final t in tools.values) t.toJson()];
     var textProtocol = false;
 
-    String systemPrompt() => textProtocol
-        ? '${loreSystemPrompt(style)}\n\n${loreTextToolProtocol(_toolList(tools.values))}'
-        : loreSystemPrompt(style);
+    String systemPrompt() {
+      final base = loreSystemPrompt(style, subtask: subtask);
+      return textProtocol
+          ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
+          : base;
+    }
 
     final conversation = <Message>[
       if (prior != null)
@@ -218,6 +241,14 @@ class LoreAgentLoop {
             reasoningContent: reasoning.isEmpty ? null : reasoning.toString(),
           ),);
         }
+        // All calls of a turn run at once (sub-agents in parallel); events
+        // and tool messages still follow the calls' order.
+        final args = [for (final c in calls) decodeToolArguments(c.arguments)];
+        final results = [
+          for (final (k, call) in calls.indexed)
+            _runTool(tools[call.name], call, args[k]),
+        ];
+        final delegates = calls.where((c) => c.name == 'delegate').length;
         for (final (k, call) in calls.indexed) {
           onRawLlmResponse?.call(
             ++record,
@@ -226,19 +257,20 @@ class LoreAgentLoop {
                     .trim()
                 : '（第 $turn 轮的第 ${k + 1} 个调用）',
           );
-          final args = decodeToolArguments(call.arguments);
-          final label = _describeCall(call.name, args);
+          final label = _describeCall(call.name, args[k]);
           yield ReActEvent(
             type: ReActEventType.toolCall,
             content: label,
             toolName: call.name,
-            toolArgs: args,
+            toolArgs: args[k],
           );
           yield ReActEvent(
             type: ReActEventType.status,
-            content: '第 $turn 轮 · $label',
+            content: delegates > 1
+                ? '第 $turn 轮 · $delegates 个子任务并行查阅中'
+                : '第 $turn 轮 · $label',
           );
-          final result = await _runTool(tools[call.name], call, args);
+          final result = await results[k];
           yield ReActEvent(
             type: ReActEventType.toolObservation,
             content: result,
@@ -298,6 +330,7 @@ class LoreAgentLoop {
         continue;
       }
 
+      body = _dropProcessLeadIn(body);
       final coverage =
           _coverageLine.firstMatch(body)?.group(1)?.toLowerCase();
       body = body.replaceAll(_coverageLine, '').trim();
@@ -334,13 +367,48 @@ class LoreAgentLoop {
     }
   }
 
+  /// Runs a `delegate` call: a sub-agent with its own conversation. What it
+  /// saw counts as seen here, so its checked citations can be reused.
+  Future<String> _runSubtask(
+    Map<String, dynamic> args,
+    SeenLines parentSeen,
+  ) async {
+    final task = delegateTaskText(args);
+    if (task.trim().isEmpty) return '错误：task 为空';
+    final childSeen = SeenLines();
+    final events = await LoreAgentLoop(
+      client: client,
+      store: store,
+      embeddingClient: embeddingClient,
+      maxTurns: subtaskMaxTurns,
+      contextCharBudget: contextCharBudget,
+      maxTokens: maxTokens,
+      temperature: temperature,
+      subtask: true,
+    )
+        .run(
+          query: task,
+          style: AnswerStyle.answer,
+          prior: LoreConversation(seen: childSeen),
+        )
+        .toList();
+    final error = events.where((e) => e.type == ReActEventType.error);
+    if (error.isNotEmpty) return '子任务出错：${error.first.content}';
+    parentSeen.addAll(childSeen);
+    final findings = finalAnswerOf(events)
+        .replaceFirst(storyAnswerEnvelopePattern, '')
+        .trim();
+    return '子任务结果（出处已核对，可直接引用）：\n$findings';
+  }
+
   Future<String> _runTool(
     AgentTool? tool,
     ToolCall call,
     Map<String, dynamic> args,
   ) async {
     if (tool == null) {
-      return '没有名为 ${call.name} 的工具。可用：sql、grep、read_story、outline、similar_names。';
+      return '没有名为 ${call.name} 的工具。可用：sql、grep、read_story、find、outline、similar_names'
+          '${subtask ? '' : '、delegate'}。';
     }
     if (args.isEmpty && call.arguments.trim().isNotEmpty) {
       return '参数不是合法的 JSON：${call.arguments}';
@@ -363,6 +431,7 @@ class LoreAgentLoop {
           '${arg('start').isEmpty ? '' : ' L${arg('start')} 起'}',
       'outline' => '查看故事集 ${arg('collection')}',
       'similar_names' => '查找与“${arg('name')}”相近的名字',
+      'delegate' => '子任务：${arg('task').length > 40 ? '${arg('task').substring(0, 40)}…' : arg('task')}',
       _ => name,
     };
   }
@@ -446,6 +515,26 @@ class LoreAgentLoop {
     }
   }
 
+  /// Drops a short first paragraph that only narrates the process ("已核实，
+  /// 现在输出完整最终答案。"): models write it after a citation re-check even
+  /// when told not to. A paragraph with a citation is never dropped.
+  static String _dropProcessLeadIn(String body) {
+    final cut = body.indexOf('\n\n');
+    if (cut < 0) return body;
+    final first = body.substring(0, cut).trim();
+    if (first.length > 80 ||
+        first.startsWith('#') ||
+        _citation.hasMatch(first) ||
+        _recordCitation.hasMatch(first) ||
+        !_processLeadIn.hasMatch(first)) {
+      return body;
+    }
+    var rest = body.substring(cut).trimLeft();
+    // A rule (`---`) under the lead-in goes with it.
+    if (rest.startsWith('---')) rest = rest.substring(3).trimLeft();
+    return rest.isEmpty ? body : rest;
+  }
+
   static int _citationCount(String body) => {
         ..._citation.allMatches(body).map((m) => m.group(0)),
         ..._recordCitation.allMatches(body).map((m) => m.group(0)),
@@ -474,6 +563,12 @@ class LoreAgentLoop {
       }.toList()
         ..sort();
 }
+
+/// Words of a lead-in that talks about the answering process.
+final RegExp _processLeadIn = RegExp(
+  r'核实|核对|重新输出|最终答案|完整答案|信息(已经)?足够|已经掌握|'
+  r'(下面|以下|现在)(给出|回答|输出|作答|是答案)',
+);
 
 /// `record:<id>` — a non-story record (R17).
 final RegExp _recordCitation = RegExp(r'record:([\w\-]+)');

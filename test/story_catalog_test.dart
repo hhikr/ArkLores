@@ -1,22 +1,11 @@
 import 'dart:io';
 
-import 'package:arklores/core/agent/chat_message.dart';
-import 'package:arklores/core/agent/chat_notifier_base.dart';
-import 'package:arklores/core/agent/investigation_state.dart';
-import 'package:arklores/core/agent/planner_intent.dart';
-import 'package:arklores/core/agent/planner_loop.dart';
-import 'package:arklores/core/agent/react_loop.dart';
-import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/get_story_outline.dart';
-import 'package:arklores/core/agent/tools/observation_data.dart';
 import 'package:arklores/core/agent/tools/search_story_lines.dart';
-import 'package:arklores/core/agent/tools/tool_registry.dart';
 import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart';
 import 'package:arklores/core/gamedata/story_line_search.dart';
-import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/ai/investigation_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -141,27 +130,6 @@ void main() {
       await store.close();
     });
 
-    test('OUTLINE lists chapters in order with synopses', () async {
-      final tool = GetStoryOutlineTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result =
-          await tool.execute({'target': '虚构活动'}) as ToolExecutionResult;
-      final text = result.observation;
-      expect(text, contains('Outline: 《虚构活动》'));
-      expect(text.indexOf('FX-1'), lessThan(text.indexOf('FX-2')));
-      expect(text, contains('梗概: 乙与丙秘密会面，达成交易。'));
-      expect(text, contains('READ 原文'));
-      final data = parseDataBlocks(text).single;
-      expect(data['collection_id'], 'act_fx');
-
-      // Compact form kept in state: one row per chapter + clipped synopsis.
-      final compact = compactOutline(text);
-      expect(compact, contains('FX-2 行动前《转折》 | activities/act_fx/level_act_fx_02_beg.txt'));
-      expect(compact, contains('乙与丙秘密会面'));
-      expect(compact, isNot(contains('DATA:')));
-    });
-
     test('FIND lists synopsis hits and labels the stories', () async {
       final tool = SearchStoryLinesTool(
         gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
@@ -190,133 +158,6 @@ void main() {
     });
   });
 
-  group('planner state and history', () {
-    test('OUTLINE intent keeps the whole target', () {
-      final intent = parseIntent('OUTLINE 《虚构 活动》')!;
-      expect(intent.action, 'OUTLINE');
-      expect(intent.args['target'], '虚构 活动');
-      expect(parseIntent('OUTLINE'), isNull);
-    });
-
-    test('FIND scope spellings normalize to the canonical key', () {
-      final intent = parseIntent('FIND 会面 交易 @activity:act_fx')!;
-      expect(intent.args['query'], '会面 交易');
-      expect(intent.args['scope_id'], 'activity:act_fx');
-      expect(normalizeScopeId('act_fx'), 'activity:act_fx');
-      expect(normalizeScopeId('activities:act_fx'), 'activity:act_fx');
-      expect(normalizeScopeId('@obt:main'), 'obt:main');
-      expect(normalizeScopeId(' '), isNull);
-    });
-
-    test('READ accepts a start-end range token', () {
-      final intent = parseIntent('READ a/b.txt 30-90')!;
-      expect(intent.args['start_line'], 30);
-      expect(intent.args['end_line'], 90);
-      final spaced = parseIntent('READ a/b.txt 30 90')!;
-      expect(spaced.args['end_line'], 90);
-    });
-
-    test('firstUnreadLine skips already-read segments', () {
-      final state = InvestigationState()
-        ..noteRead('a.txt', 0, 29)
-        ..noteRead('a.txt', 40, 59);
-      expect(state.firstUnreadLine('a.txt', 0), 30);
-      expect(state.firstUnreadLine('a.txt', 35), 35);
-      expect(state.firstUnreadLine('a.txt', 45), 60);
-      expect(state.firstUnreadLine('b.txt', 5), 5);
-    });
-
-    test('state shows labels, outlines and the missing-outline hint', () {
-      const id = 'activities/act_fx/level_act_fx_02_beg.txt';
-      final state = InvestigationState()..noteRead(id, 0, 10);
-      expect(state.storyIdsWithoutLabel, {id});
-      state.addStoryEntries([id], {id: _entry(id)});
-      expect(state.storyIdsWithoutLabel, isEmpty);
-      var text = state.serialize();
-      expect(text, contains('$id［虚构活动 FX-2 行动前《转折》］:0-10'));
-      expect(text, contains('OUTLINE act_fx'));
-
-      final before = state.progressFingerprint;
-      state.noteOutline('act_fx', '  《虚构活动》\n   1. FX-1 | a.txt');
-      expect(state.progressFingerprint, isNot(before));
-      text = state.serialize();
-      expect(text, contains('已看梗概'));
-      expect(text, isNot(contains('OUTLINE act_fx')));
-    });
-
-    test('follow-up history keeps answers and read chapters, not observations',
-        () {
-      final messages = [
-        ChatMessage(
-          id: '1',
-          role: MessageRole.user,
-          content: '问题一',
-          timestamp: DateTime(2026),
-        ),
-        ChatMessage(
-          id: '2',
-          role: MessageRole.assistant,
-          content: '${formatStoryAnswerEnvelope(StoryAnswerStatus.answered)}\n答案一',
-          timestamp: DateTime(2026),
-          steps: [
-            ReActStep(
-              type: ReActEventType.toolObservation,
-              toolName: 'read_story_lines',
-              content: appendDataBlock('Story: a.txt\n0 | 很长的原文', {
-                'type': 'read_story_lines',
-                'story_id': 'a.txt',
-                'first_line': 0,
-                'last_line': 29,
-              }),
-            ),
-          ],
-        ),
-      ];
-      final prior = lastTurnReadPages(messages);
-      expect(prior.single.storyId, 'a.txt');
-      expect(prior.single.lines.single.content, '很长的原文');
-      final history = buildStoryQaHistory(messages);
-      expect(history, hasLength(2));
-      expect(history[1].content, startsWith('答案一'));
-      expect(history[1].content, contains('a.txt:0-29'));
-      expect(history[1].content, isNot(contains('STORY_ANSWER')));
-      expect(history[1].content, isNot(contains('很长的原文')));
-      expect(history[1].content, isNot(contains('Observation')));
-    });
-  });
-
-  group('duplicate guard', () {
-    Future<String> runWith(List<String> script, {required bool readable}) async {
-      final llm = _ScriptLLM(script);
-      final loop = PlannerLoop(
-        llmClient: llm,
-        toolRegistry: ToolRegistry()..register(_FakeReadTool(readable: readable)),
-        minimumToolCalls: 1,
-      );
-      final events = await loop
-          .run(systemPrompt: 's', chatHistory: const [], userQuery: 'q')
-          .toList();
-      return finalAnswerOf(events);
-    }
-
-    test('re-requesting already-read text finishes as answered', () async {
-      final answer = await runWith(
-        List.filled(6, 'READ a.txt 0 2'),
-        readable: true,
-      );
-      expect(answer, startsWith('[STORY_ANSWER: status=answered'));
-    });
-
-    test('repeating a fruitless lookup without reading stays not answered',
-        () async {
-      final answer = await runWith(
-        List.filled(6, 'READ missing.txt 0 2'),
-        readable: false,
-      );
-      expect(answer, isNot(startsWith('[STORY_ANSWER: status=answered')));
-    });
-  });
-
   group('readable citations', () {
     test('replaces story ids with labels and 1-based lines', () {
       const id = 'activities/act_fx/level_act_fx_02_beg.txt';
@@ -331,82 +172,6 @@ void main() {
     });
   });
 }
-
-/// Planner lines from [script] (then ANSWER); every non-planner call is the
-/// writer, which cites line 1 of a.txt.
-class _ScriptLLM extends LLMClient {
-  _ScriptLLM(this.script);
-  final List<String> script;
-  int _step = 0;
-
-  @override
-  Future<ChatCompletionResult> chatCompletion(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    final planner = messages.first.content.contains('意图命令');
-    final content = !planner
-        ? '答案。a.txt:1'
-        : _step < script.length
-            ? script[_step++]
-            : 'ANSWER';
-    return ChatCompletionResult(content: content, finishReason: 'stop');
-  }
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      (await chatCompletion(messages)).content;
-}
-
-/// `read_story_lines` stand-in: three lines of a.txt, or "not found".
-class _FakeReadTool extends AgentTool {
-  _FakeReadTool({required this.readable});
-  final bool readable;
-
-  @override
-  String get name => 'read_story_lines';
-  @override
-  String get description => 'fake';
-  @override
-  Map<String, dynamic> get parameters => const {};
-
-  @override
-  Future<dynamic> execute(Map<String, dynamic> arguments) async {
-    if (!readable) return 'Story not found: ${arguments['story_id']}';
-    return ToolExecutionResult(
-      observation: appendDataBlock(
-        'Story: a.txt\n0 | 甲 | 一\n1 | 乙 | 二\n2 | 丙 | 三',
-        {
-          'type': 'read_story_lines',
-          'story_id': 'a.txt',
-          'first_line': 0,
-          'last_line': 2,
-          'read_lines': 3,
-        },
-      ),
-    );
-  }
-}
-
-StoryCatalogEntry _entry(String id) => StoryCatalogEntry(
-      storyId: id,
-      collectionId: 'act_fx',
-      collectionName: '虚构活动',
-      collectionType: 'ACTIVITY',
-      storySort: 2,
-      storyCode: 'FX-2',
-      storyName: '转折',
-      avgTag: '行动前',
-    );
 
 Future<void> _createStoryTables(Database db) async {
   await db.execute(

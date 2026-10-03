@@ -25,7 +25,7 @@ class GameDataInstallStatus {
   final Map<String, String> manifest;
 
   /// SHA-256 of the official asset the installed DB came from (null for
-  /// DBs installed before v0.11.0 or built in the app).
+  /// DBs installed before v0.10.1 or built in the app).
   final String? installedAssetSha;
 
   /// SHA-256 of the official asset this app build points at.

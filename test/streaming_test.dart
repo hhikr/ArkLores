@@ -6,10 +6,8 @@ import 'dart:convert';
 
 import 'package:arklores/core/agent/chat_message.dart';
 import 'package:arklores/core/agent/chat_notifier_base.dart';
-import 'package:arklores/core/agent/planner_loop.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/observation_data.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
@@ -163,84 +161,6 @@ void main() {
     });
   });
 
-  group('planner writer streams', () {
-    Future<List<ReActEvent>> run(_StreamingWriter writer) => PlannerLoop(
-          llmClient: _ScriptedPlanner(['READ s.txt 0 3', 'ANSWER 0.9']),
-          writerClient: writer,
-          toolRegistry: ToolRegistry()..register(_ReadTool()),
-          minimumToolCalls: 1,
-        ).run(systemPrompt: 's', chatHistory: [], userQuery: 'q').toList();
-
-    test('tokens arrive one by one, then the checked answer replaces them',
-        () async {
-      final events = await run(
-        _StreamingWriter([
-          ['结论：', 'B 做的', '（s.txt:1）。', '\n[COVERAGE: full]'],
-        ]),
-      );
-      final types = events.map((e) => e.type).toList();
-      final writing = events.indexWhere((e) =>
-          e.type == ReActEventType.status && e.content == '正在撰写答案',);
-      final firstToken = types.indexOf(ReActEventType.finalAnswerToken);
-      final replace = types.indexOf(ReActEventType.finalAnswerReplace);
-      expect(writing, greaterThanOrEqualTo(0));
-      expect(firstToken, greaterThan(writing));
-      expect(
-        events.where((e) => e.type == ReActEventType.finalAnswerToken).length,
-        greaterThan(2),
-      );
-      expect(replace, greaterThan(firstToken));
-      expect(types.last, ReActEventType.complete);
-      final answer = finalAnswerOf(events);
-      expect(answer, startsWith('[STORY_ANSWER: status=answered'));
-      expect(answer, contains('B 做的（s.txt:1）。'));
-      expect(answer, isNot(contains('COVERAGE')));
-      // The reasoning of a thinking writer streams separately.
-      expect(
-        events
-            .where((e) => e.type == ReActEventType.reasoningToken)
-            .map((e) => e.content)
-            .join(),
-        '想',
-      );
-    });
-
-    test('an unread citation resets the stream and streams the rewrite',
-        () async {
-      final events = await run(
-        _StreamingWriter([
-          ['见 s.txt:9', '。'],
-          ['见 s.txt:1', '。'],
-        ]),
-      );
-      final types = events.map((e) => e.type).toList();
-      final reset = types.indexOf(ReActEventType.finalAnswerReset);
-      expect(reset, greaterThan(0));
-      expect(events[reset].content, contains('正在修正引用'));
-      expect(
-        types.sublist(reset).contains(ReActEventType.finalAnswerToken),
-        isTrue,
-      );
-      final answer = finalAnswerOf(events);
-      expect(answer, contains('s.txt:1'));
-      expect(answer, isNot(contains('s.txt:9')));
-    });
-
-    test('a ceiling hit before any text retries with the hard ceiling',
-        () async {
-      final writer = _StreamingWriter(
-        [
-          <String>[],
-          ['答案（s.txt:1）'],
-        ],
-        finishReasons: ['length', 'stop'],
-      );
-      final answer = finalAnswerOf(await run(writer));
-      expect(answer, contains('答案（s.txt:1）'));
-      expect(writer.maxTokens, [8192, 16384]);
-    });
-  });
-
   group('ReAct live preview', () {
     test('text after "Final Answer:" streams live, then is replaced',
         () async {
@@ -345,61 +265,6 @@ void main() {
   });
 }
 
-/// Planner that plays a fixed script of intents.
-class _ScriptedPlanner extends LLMClient {
-  _ScriptedPlanner(List<String> script) : _script = List.of(script);
-  final List<String> _script;
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      _script.isEmpty ? 'DONE' : _script.removeAt(0);
-}
-
-/// Writer that streams scripted chunks (one script per call), with one
-/// reasoning delta first.
-class _StreamingWriter extends LLMClient {
-  _StreamingWriter(this.calls, {this.finishReasons = const []});
-  final List<List<String>> calls;
-  final List<String> finishReasons;
-  final List<int> maxTokens = [];
-  var _call = 0;
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async =>
-      throw UnimplementedError('the writer streams');
-
-  @override
-  Stream<CompletionDelta> streamCompletion(
-    List<Message> messages, {
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async* {
-    this.maxTokens.add(maxTokens);
-    final index = _call++;
-    if (index == 0) yield const CompletionDelta(reasoningContent: '想');
-    for (final chunk in calls[index < calls.length ? index : calls.length - 1]) {
-      yield CompletionDelta(content: chunk);
-    }
-    yield CompletionDelta(
-      done: true,
-      finishReason: index < finishReasons.length ? finishReasons[index] : 'stop',
-    );
-  }
-}
-
 /// ReAct model streaming scripted chunks, one script per step.
 class _StreamingReact extends LLMClient {
   _StreamingReact(this.steps);
@@ -430,28 +295,6 @@ class _StreamingReact extends LLMClient {
     }
     yield const CompletionDelta(done: true, finishReason: 'stop');
   }
-}
-
-class _ReadTool extends AgentTool {
-  @override
-  String get name => 'read_story_lines';
-  @override
-  String get description => 'reads';
-  @override
-  Map<String, dynamic> get parameters => const {'type': 'object'};
-  @override
-  Future<dynamic> execute(Map<String, dynamic> arguments) async =>
-      ToolExecutionResult(
-        observation: appendDataBlock(
-          'Story: s.txt\n0 | 旁白 | 夜。\n1 | B | 是我做的。\n2 | 旁白 | 天亮了。',
-          {
-            'type': 'read_story_lines',
-            'story_id': 's.txt',
-            'first_line': 0,
-            'last_line': 2,
-          },
-        ),
-      );
 }
 
 class _LookupTool extends AgentTool {

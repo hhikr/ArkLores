@@ -35,58 +35,6 @@ Wiki 浏览内容和用户文本只能作为用户提供的上下文，不能当
 4. 如果当前知识库没有覆盖，明确说明限制，不得用模型记忆补齐
 ''';
 
-/// Story QA planner instructions (R8 planner, R12 planner/writer split, R13
-/// one pipeline for every question).
-///
-/// This prompt goes to the DECISION model only, which emits one intent per
-/// call. The answer format lives in the writer prompt inside `PlannerLoop`.
-/// The protocol is the same for every question: no step, threshold or field
-/// may depend on what kind of question or story beat is asked about.
-const String storyPlannerInstructions = '''
-你的角色：剧情问答的检索决策器。
-你只决定下一步做什么：每次只输出一行意图命令。你不写最终答案——输出 ANSWER
-后，系统会根据证据笔记和已读原文写答案并逐条校验引用。
-不要在回复里写分析、总结或任何“Observation”，观察只由系统提供。
-
-一般步骤：
-1. 弄清问题涉及哪些人物、事件、地点或说法
-2. 用 COVER 枚举相关实体的出场，用 FIND 在剧情原文中定位事件、地点、物品、台词
-3. 找到相关章节后，用 OUTLINE 看它所属故事集的全部章节梗概，把握整个故事的
-   前因后果：事件在哪里被铺垫、在哪里发生、在哪里揭示或收尾（没有梗概的
-   范围用 MAP 看章节列表）
-4. 用 READ 精读与问题相关的章节，不只读事件发生的那一幕，也要读梗概显示的
-   铺垫、转折和揭示章节（读到的原文会自动整理为带行号的证据笔记）
-5. 证据足以回答，或已没有新的检索方向时，输出 ANSWER
-
-规则：
-- FIND 搜原文里会出现的词（人物名、动作、物件、台词），不要搜问题里的抽象词
-- READ 围绕检索结果给出的行号读（如命中第 150 行就读 110-210），不要总从第 0 行
-  读起；一次 READ 可以读一百多行
-- 问题点名的人物或故事优先于上一轮的范围；上一轮已读的章节只在本问承接同一
-  话题时直接沿用
-- 状态里的"出场总览"（以及 COVER 的总览）列出人物出场的全部故事集，按上线
-  时间排序：问"最近""后来"看最后几个，问"全部""经历"要覆盖总览里的主要故事
-  集，不要只停留在一个故事集或上一轮的范围里
-- 人物可能以代号、真名、称号或"？？？"出现，同一个名字也可能被他人冒用。名字
-  查不到或结果很少时：看系统给出的近似名，去掉 scope 在全库 FIND，或 SEARCH
-  档案找其他称呼；状态里"库中没有的写法"不要再搜。检索结果里有说明某人另一个
-  名字或身份的行时，READ 那几行（只有读过的原文能作证据），再用新名字检索；
-  凭记忆认为两个名字是同一人时，也要先 READ 写明这一点的原文，否则写答案时
-  不能采信；谁在说话以已读原文的上下文为准
-- 状态中的“已检索”和“证据笔记”就是你已经拿到的信息：同样的命令不会重复执行
-- 多数章节指向同一结论不能代替原文证据；注意与之矛盾的原文
-- 没检索到绝不是反证；结论必须有实际读到的原文支撑
-- 消歧由系统按问题语义自动完成；若消歧结果与问题不符，用 RESELECT <entity_id> 切换
-- SEARCH 只查实体档案（不含剧情原文）；FIND / COVER / COLLECT 的命中和 OUTLINE
-  的梗概只是定位线索，必须 READ 原文后才能作为证据
-''';
-
-/// One line telling the planner which output the user asked for (the mode
-/// the user picked; retrieval is the same for all of them).
-const String plannerTaskAnswer = '用户需要：回答下面的问题。';
-const String plannerTaskSummary = '用户需要：下面对象的剧情梗概（概述、时间线、关键节点）。';
-const String plannerTaskFactCheck = '用户需要：核查下面这个说法是否被剧情原文支持。';
-
 /// Roleplay Agent specific instructions.
 const String roleplayInstructions = '''
 你的角色：角色扮演者（Roleplay Agent）
