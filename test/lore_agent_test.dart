@@ -466,6 +466,8 @@ void main() {
       final followUp = client.requests[2].last.content;
       expect(followUp, contains('后来离开城市的经过是否被漏掉？'));
       expect(followUp, contains('只是线索'));
+      expect(followUp, contains('不写读者问题里的文件名'));
+      expect(loreReviewPrompt, contains('不写文件名'));
       expect(
         events
             .where((e) => e.type == ReActEventType.finalAnswerReset)
