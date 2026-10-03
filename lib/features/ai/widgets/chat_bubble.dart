@@ -14,6 +14,7 @@ import '../../../shared/theme/app_theme.dart';
 import '../evidence_observation.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
+import 'story_answer_body.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
 /// and lazy loading of citations.
@@ -108,22 +109,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       RegExp(r'\[FACT_CHECK_VERDICT:[a-z]+\]\s*', caseSensitive: false),
       '',
     );
+    // R17b: story answers are rendered block by block, each followed by its
+    // evidence chain (also while streaming, then without the chains).
+    String? storyBody;
     if (isStoryAnswer(content)) {
-      content = humanizeCitations(
-        stripStoryAnswerMarkers(content),
-        _storyLabels(msg.content),
-        lineText: _lineText,
-        recordLabel: context.t.aiCitedRecord,
-      );
+      storyBody = stripStoryAnswerMarkers(content);
     } else if (msg.isStreaming && msg.liveStatus.isNotEmpty) {
-      // R16: a story answer still being written (no envelope yet): the
-      // same readable citations, names derived from the path for now.
-      content = humanizeCitations(
-        stripWriterCoverage(content),
-        const {},
-        lineText: _lineText,
-        recordLabel: context.t.aiCitedRecord,
-      );
+      storyBody = stripWriterCoverage(content);
     }
     if (content == '[FACT_CHECK_ERROR]') {
       content = context.t.importErrorOccurred;
@@ -163,6 +155,27 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           formattedContent.replaceAll('[$uuid]', '[^${uuidToIdx[uuid]}]');
     }
 
+    final styleSheet =
+        MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+      p: theme.bodyFont.copyWith(color: theme.textPrimary, height: 1.5),
+      h1: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 18),
+      h2: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 16),
+      h3: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 14),
+      a: theme.bodyFont.copyWith(color: theme.accentPrimary),
+      listBullet: theme.bodyFont.copyWith(color: theme.textPrimary),
+      code: theme.bodyFont.copyWith(
+        color: theme.accentSecondary,
+        backgroundColor: theme.bgPrimary,
+      ),
+      blockquote: theme.bodyFont.copyWith(color: theme.textSecondary),
+      blockquoteDecoration: BoxDecoration(
+        color: theme.bgPrimary,
+        border: Border(
+          left: BorderSide(color: theme.accentPrimary, width: 3),
+        ),
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -171,35 +184,16 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           width: double.infinity,
           child: formattedContent.trim().isEmpty && msg.isStreaming
               ? _buildTypingIndicator(theme)
-              : MarkdownBody(
-                  data: formattedContent,
-                  styleSheet:
-                      MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                    p: theme.bodyFont
-                        .copyWith(color: theme.textPrimary, height: 1.5),
-                    h1: theme.titleFont
-                        .copyWith(color: theme.textPrimary, fontSize: 18),
-                    h2: theme.titleFont
-                        .copyWith(color: theme.textPrimary, fontSize: 16),
-                    h3: theme.titleFont
-                        .copyWith(color: theme.textPrimary, fontSize: 14),
-                    a: theme.bodyFont.copyWith(color: theme.accentPrimary),
-                    listBullet:
-                        theme.bodyFont.copyWith(color: theme.textPrimary),
-                    code: theme.bodyFont.copyWith(
-                      color: theme.accentSecondary,
-                      backgroundColor: theme.bgPrimary,
+              : storyBody != null
+                  ? StoryAnswerBody(
+                      content: storyBody,
+                      styleSheet: styleSheet,
+                      streaming: msg.isStreaming,
+                    )
+                  : MarkdownBody(
+                      data: formattedContent,
+                      styleSheet: styleSheet,
                     ),
-                    blockquote:
-                        theme.bodyFont.copyWith(color: theme.textSecondary),
-                    blockquoteDecoration: BoxDecoration(
-                      color: theme.bgPrimary,
-                      border: Border(
-                        left: BorderSide(color: theme.accentPrimary, width: 3),
-                      ),
-                    ),
-                  ),
-                ),
         ),
         if (citationIds.isNotEmpty) const SizedBox(height: 8),
         if (_evidenceRecords.isNotEmpty) _buildEvidenceSection(theme),
@@ -210,27 +204,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   String _lineText(int start, int? end) => end == null
       ? context.t.aiCitationLine(start)
       : context.t.aiCitationLines(start, end);
-
-  /// R14: catalog labels of the stories cited in [content]; empty while
-  /// loading or without a catalog (names then come from the path). Looked
-  /// up once the answer has finished streaming. R15: inline citations use
-  /// the chapter part only (`BB-9 行动前《…》`) — the evidence tree below the
-  /// answer names the collection.
-  Map<String, String> _storyLabels(String content) {
-    if (widget.message.isStreaming) return const {};
-    final ids = extractCitedStoryIds(content);
-    if (ids.isEmpty) return const {};
-    final entries = ref
-            .watch(storyCatalogEntriesProvider(storyLabelsKey(ids)))
-            .valueOrNull ??
-        const <String, StoryCatalogEntry>{};
-    return {
-      for (final e in entries.entries)
-        e.key: e.value.chapterLabel.isEmpty
-            ? e.value.label
-            : e.value.chapterLabel,
-    };
-  }
 
   List<String> get _evidenceObservations => widget.message.steps
       .where((step) =>
@@ -536,9 +509,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           ),
         );
 
-    Widget chip(String key, String text, {required bool selected}) => InkWell(
+    Widget chip(String key, String text,
+            {required bool selected, VoidCallback? onTap,}) =>
+        InkWell(
           key: ValueKey('cite:$key'),
-          onTap: () => _toggle(key),
+          onTap: onTap ?? () => _toggle(key),
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -574,39 +549,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           ),
           child: child,
         );
-
-    Widget citedLines(String storyId, CitedRange range) {
-      final lines = ref
-          .watch(citedLinesProvider(citedLinesKey(storyId, range.start, range.end)));
-      return quote(lines.when(
-        loading: () => const LinearProgressIndicator(minHeight: 2),
-        error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
-        data: (lines) => lines.isEmpty
-            ? Text(context.t.aiCitedLinesUnavailable, style: muted)
-            : SelectableText.rich(
-                TextSpan(
-                  children: [
-                    for (final line in lines)
-                      TextSpan(
-                        children: [
-                          if ((line.speaker ?? '').trim().isNotEmpty)
-                            TextSpan(
-                              text: '${line.speaker}：',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          TextSpan(text: '${line.content}\n'),
-                        ],
-                      ),
-                  ],
-                ),
-                style: theme.bodyFont.copyWith(
-                  color: theme.textPrimary,
-                  fontSize: 12,
-                  height: 1.5,
-                ),
-              ),
-      ),);
-    }
 
     Widget citedRecord(String id) {
       final record = ref.watch(citedRecordProvider(id));
@@ -664,30 +606,22 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   ))
                     Padding(
                       padding: const EdgeInsets.fromLTRB(48, 2, 0, 6),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: [
-                              for (final range in chapter.ranges)
-                                Tooltip(
-                                  message: range.rawRef(chapter.storyId),
-                                  triggerMode: TooltipTriggerMode.longPress,
-                                  child: chip(
-                                    'l:${range.rawRef(chapter.storyId)}',
-                                    citedRangeText(range, _lineText),
-                                    selected: _isOpen(
-                                      'l:${range.rawRef(chapter.storyId)}',
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
                           for (final range in chapter.ranges)
-                            if (_isOpen('l:${range.rawRef(chapter.storyId)}'))
-                              citedLines(chapter.storyId, range),
+                            Tooltip(
+                              message: range.rawRef(chapter.storyId),
+                              triggerMode: TooltipTriggerMode.longPress,
+                              child: chip(
+                                'l:${range.rawRef(chapter.storyId)}',
+                                citedRangeText(range, _lineText),
+                                selected: false,
+                                onTap: () => openStoryReader(
+                                    context, chapter.storyId, range,),
+                              ),
+                            ),
                         ],
                       ),
                     ),

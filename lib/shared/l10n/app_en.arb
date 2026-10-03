@@ -165,6 +165,7 @@
   "aiCitedRecords": "{count} other records",
   "@aiCitedRecords": {"placeholders": {"count": {"type": "int"}}},
   "aiCitedLinesUnavailable": "Original text unavailable (knowledge base missing or updated)",
+  "aiStoryReaderTitle": "Original text",
   "aiMoreActions": "More",
   "aiModeMenuTooltip": "Answer mode",
   "aiThinkingProcess": "Thinking",

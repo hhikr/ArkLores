@@ -986,6 +986,12 @@ abstract class AppLocalizations {
   /// **'Original text unavailable (knowledge base missing or updated)'**
   String get aiCitedLinesUnavailable;
 
+  /// No description provided for @aiStoryReaderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Original text'**
+  String get aiStoryReaderTitle;
+
   /// No description provided for @aiMoreActions.
   ///
   /// In en, this message translates to:

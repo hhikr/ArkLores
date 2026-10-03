@@ -235,7 +235,7 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('shows the current step, the thinking and readable citations',
+    testWidgets('shows the current step, the thinking and the text without citations',
         (tester) async {
       await pump(
         tester,
@@ -255,7 +255,10 @@ void main() {
       expect(find.text('先比较两段原文'), findsOneWidget);
       expect(find.textContaining('COVERAGE'), findsNothing);
       expect(find.textContaining('.txt'), findsNothing);
-      expect(find.textContaining('第 1 行'), findsOneWidget);
+      // R17b: while streaming the citation leaves the text and the chain
+      // waits for the finished answer, so nothing jumps.
+      expect(find.text('结论'), findsOneWidget);
+      expect(find.textContaining('第 1 行'), findsNothing);
       // The thinking folds away on tap.
       await tester.tap(find.text('思考过程'));
       await tester.pump();

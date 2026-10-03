@@ -495,6 +495,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiCitedLinesUnavailable => '原文暂不可用（知识库未安装或已更新）';
 
   @override
+  String get aiStoryReaderTitle => '原文';
+
+  @override
   String get aiMoreActions => '更多';
 
   @override

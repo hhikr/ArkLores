@@ -214,7 +214,7 @@ class ReadStoryTool extends AgentTool {
         'properties': {
           'story_id': {
             'type': 'string',
-            'description': '例如 obt/main/level_main_01-01_beg.txt',
+            'description': '故事文件名（story_lines.story_id）',
           },
           'start': {'type': 'integer', 'description': '起始行号，默认 0'},
           'count': {'type': 'integer', 'description': '行数，默认 $defaultCount'},
@@ -313,7 +313,7 @@ class GrepTool extends AgentTool {
           },
           'collection': {
             'type': 'string',
-            'description': '只在这个故事集里找（故事集名字或 collection_id，如主线第 9 章为 main_9）',
+            'description': '只在这个故事集里找（故事集名字或 collection_id，主线某章形如 main_<章>）',
           },
           'context': {
             'type': 'integer',

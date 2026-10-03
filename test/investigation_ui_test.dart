@@ -1,9 +1,12 @@
 import 'package:arklores/core/agent/chat_message.dart';
 import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
 import 'package:arklores/features/ai/investigation_ui.dart';
+import 'package:arklores/features/ai/story_labels_provider.dart';
+import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
@@ -83,16 +86,19 @@ void main() {
       expect(find.text('已作答 · 置信度 0.8'), findsOneWidget);
       expect(find.byIcon(Icons.psychology_rounded), findsNothing);
       expect(find.byIcon(Icons.person_rounded), findsNothing);
-      // R15: evidence is folded to one line until tapped.
+      // R17b: the evidence chain sits below the paragraph that cites it:
+      // collection → chapter → line chip (no catalog here, so the names
+      // come from the path).
+      expect(find.text('活动 act_fixture'), findsOneWidget);
+      expect(find.text('level_fixture_c5'), findsOneWidget);
+      expect(find.text('第 1 行'), findsOneWidget);
+      // R15: the summary tree is folded to one line until tapped.
       expect(find.text('证据 1 处 · 来自 1 个故事'), findsOneWidget);
-      expect(find.text('第 1 行'), findsNothing);
       await tester.tap(find.text('证据 1 处 · 来自 1 个故事'));
       await tester.pumpAndSettle();
-      // Collection → chapter → line chip (no catalog in this test, so the
-      // names come from the path); a single chapter starts open.
       expect(find.text('活动 act_fixture · 1 处'), findsOneWidget);
       expect(find.text('level_fixture_c5 · 1 处'), findsOneWidget);
-      expect(find.text('第 1 行'), findsOneWidget);
+      expect(find.text('第 1 行'), findsNWidgets(2));
       // R14: the body shows a readable source and a 1-based line number.
       expect(
         find.textContaining('activities/act_fixture/level_fixture_c5.txt'),
@@ -100,6 +106,62 @@ void main() {
       );
       // The envelope is stripped from the markdown body.
       expect(find.textContaining('STORY_ANSWER'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a line chip opens the story at the cited lines',
+        (tester) async {
+      tester.view.physicalSize = const Size(640, 1280);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const story = 'activities/act_fixture/level_fixture_c5.txt';
+      final message = ChatMessage(
+        id: 'story-answer',
+        role: MessageRole.assistant,
+        content:
+            '${formatStoryAnswerEnvelope(StoryAnswerStatus.answered)}\n'
+            '- 第一件事 `$story:60-61`\n- 第二件事',
+        timestamp: DateTime(2026),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            storyFullLinesProvider.overrideWith((ref, id) async => [
+                  for (var i = 0; i < 120; i++)
+                    StoryLineEntry(
+                      lineIndex: i,
+                      speaker: i.isEven ? '甲' : null,
+                      content: '第$i句',
+                    ),
+                ],),
+          ],
+          child: MaterialApp(
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(body: ChatBubble(message: message)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The chain follows the first item only; the citation left the text.
+      expect(find.text('第 61–62 行'), findsOneWidget);
+      expect(find.textContaining(story), findsNothing);
+
+      await tester.tap(find.text('第 61–62 行'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StoryReaderPage), findsOneWidget);
+      expect(find.text('原文 · 第 61–62 行'), findsOneWidget);
+      // Only the cited lines are highlighted, and they were scrolled to.
+      expect(find.byKey(const ValueKey('story-line-target-60')), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-line-target-61')), findsOneWidget);
+      expect(find.byKey(const ValueKey('story-line-target-62')), findsNothing);
+      final top = tester
+          .getTopLeft(find.byKey(const ValueKey('story-line-target-60')))
+          .dy;
+      expect(top, lessThan(640));
+      expect(top, greaterThan(0));
       expect(tester.takeException(), isNull);
     });
 

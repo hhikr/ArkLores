@@ -4,6 +4,20 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Answers are written for the reader, not about the knowledge base: no table names, file names,
+  ids or "库中 …" in the text, events told in the agent's own words with only short key phrases
+  quoted, and a misspelled name noted once as "X（你写的是 Y）". The prompt states rules only — no
+  concrete story, chapter or character (a test guards this). Gaps are one closing sentence in
+  chapter names instead of a list of what was read.
+- Each paragraph or list item is followed by its evidence chain (`故事集 → 章 → 第 a–b 行`)
+  instead of citations inside the sentence. Tapping a line range opens the whole chapter,
+  scrolled to those lines, which flash twice and stay highlighted; a cited record opens in a
+  sheet. The collapsed evidence summary under the answer opens the chapter the same way.
+- A short opening paragraph about the search itself ("让我确认……grep 显示……") is dropped like
+  the other process lead-ins.
+
 ## [0.10.1] - 2026-10-03 (pre-release)
 
 Everything since v0.10.0 is one iteration of the story Q&A agent and ships as 0.10.1 (a v0.11.0

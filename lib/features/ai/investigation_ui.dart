@@ -218,6 +218,182 @@ List<CitedCollection> groupCitations(
   return collections.values.toList(growable: false);
 }
 
+/// R17b: the cited line ranges of one story inside an [AnswerBlock]
+/// (0-based, merged when overlapping or adjacent).
+class BlockStoryCitation {
+  BlockStoryCitation(this.storyId);
+  final String storyId;
+  final List<CitedRange> ranges = [];
+}
+
+/// R17b: one block of an answer — a heading, paragraph, list item, table or
+/// code block — with its citations taken out of the text. The UI shows the
+/// text and then the evidence chain of these citations below it.
+class AnswerBlock {
+  AnswerBlock({
+    required this.markdown,
+    required this.indent,
+    required this.stories,
+    required this.records,
+  });
+
+  /// The block without citations; list items are dedented (the UI indents
+  /// them by [indent]).
+  final String markdown;
+
+  /// Nesting level of a list item (0 for top-level blocks).
+  final int indent;
+
+  /// Cited stories in order of first citation.
+  final List<BlockStoryCitation> stories;
+
+  /// Cited `record:` ids in order of first citation.
+  final List<String> records;
+
+  bool get hasCitations => stories.isNotEmpty || records.isNotEmpty;
+}
+
+final RegExp _listItemStart = RegExp(r'^(\s*)(?:[-*+]|\d+[.)])\s+');
+final RegExp _headingLine = RegExp(r'^\s{0,3}#{1,6}\s');
+final RegExp _ruleLine = RegExp(r'^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$');
+final RegExp _tableLine = RegExp(r'^\s*\|');
+final RegExp _fenceLine = RegExp(r'^\s*(```|~~~)');
+
+/// Splits answer markdown into [AnswerBlock]s (R17b). Citations are removed
+/// from each block's text, together with what only framed them (empty
+/// brackets, "出处：", separators between citations).
+List<AnswerBlock> splitAnswerBlocks(String content) {
+  final raw = <({List<String> lines, int indent, bool table})>[];
+  List<String>? current;
+  var currentTable = false;
+  var inFence = false;
+
+  void flush() {
+    if (current != null && current!.any((l) => l.trim().isNotEmpty)) {
+      final first = current!.first;
+      final item = _listItemStart.firstMatch(first);
+      final width = item == null ? 0 : item.group(1)!.replaceAll('\t', '    ').length;
+      raw.add((
+        lines: [
+          for (final l in current!) _dedent(l, width),
+        ],
+        indent: width ~/ 2,
+        table: currentTable,
+      ),);
+    }
+    current = null;
+    currentTable = false;
+  }
+
+  for (final line in content.split('\n')) {
+    if (inFence) {
+      current!.add(line);
+      if (_fenceLine.hasMatch(line)) {
+        inFence = false;
+        flush();
+      }
+      continue;
+    }
+    if (_fenceLine.hasMatch(line)) {
+      flush();
+      current = [line];
+      inFence = true;
+      continue;
+    }
+    if (line.trim().isEmpty) {
+      flush();
+    } else if (_headingLine.hasMatch(line) || _ruleLine.hasMatch(line)) {
+      flush();
+      current = [line];
+      flush();
+    } else if (_tableLine.hasMatch(line)) {
+      if (!currentTable) flush();
+      (current ??= []).add(line);
+      currentTable = true;
+    } else if (_listItemStart.hasMatch(line)) {
+      flush();
+      current = [line];
+    } else {
+      if (currentTable) flush();
+      (current ??= []).add(line);
+    }
+  }
+  flush();
+
+  return [
+    for (final block in raw) _toAnswerBlock(block.lines.join('\n'), block.indent),
+  ];
+}
+
+String _dedent(String line, int width) {
+  var i = 0;
+  while (i < width && i < line.length && (line[i] == ' ' || line[i] == '\t')) {
+    i++;
+  }
+  return line.substring(i);
+}
+
+const String _citeMark = '\u0000';
+final RegExp _framedCitations = RegExp(
+  r'[（(〔【\[]\s*(?:(?:出处|来源|见)\s*[:：]?\s*)?'
+  '(?:$_citeMark[\\s、，,；;和及]*)+[）)〕】\\]]',
+);
+final RegExp _bareCitations = RegExp(
+  r'(?:(?:出处|来源)\s*[:：]\s*)?'
+  '$_citeMark(?:[\\s、，,；;和及]*$_citeMark)*',
+);
+final RegExp _spaceBeforePunctuation = RegExp(r'[ \t]+(?=[。，；、！？：）)」』”])');
+final RegExp _trailingSpaces = RegExp(r'[ \t]+$', multiLine: true);
+
+AnswerBlock _toAnswerBlock(String text, int indent) {
+  final stories = <String, BlockStoryCitation>{};
+  final records = <String>[];
+  final marked = text
+      .replaceAllMapped(_citationPattern, (m) {
+        final a = int.parse(m.group(2)!);
+        final b = m.group(3) == null ? a : int.parse(m.group(3)!);
+        _addRange(
+          stories.putIfAbsent(m.group(1)!, () => BlockStoryCitation(m.group(1)!)),
+          CitedRange(a <= b ? a : b, a <= b ? b : a),
+        );
+        return _citeMark;
+      })
+      .replaceAllMapped(_recordCitationPattern, (m) {
+        if (!records.contains(m.group(1)!)) records.add(m.group(1)!);
+        return _citeMark;
+      });
+  final cleaned = marked
+      .replaceAll(_framedCitations, '')
+      .replaceAll(_bareCitations, '')
+      .replaceAll(_spaceBeforePunctuation, '')
+      .replaceAll(_trailingSpaces, '');
+  return AnswerBlock(
+    markdown: cleaned,
+    indent: indent,
+    stories: stories.values.toList(growable: false),
+    records: records,
+  );
+}
+
+/// Adds [range] to [story], merging overlapping or adjacent ranges.
+void _addRange(BlockStoryCitation story, CitedRange range) {
+  final ranges = story.ranges..add(range);
+  ranges.sort((x, y) => x.start.compareTo(y.start));
+  final merged = <CitedRange>[];
+  for (final r in ranges) {
+    final last = merged.isEmpty ? null : merged.last;
+    if (last != null && r.start <= last.end + 1) {
+      merged[merged.length - 1] =
+          CitedRange(last.start, r.end > last.end ? r.end : last.end);
+    } else {
+      merged.add(r);
+    }
+  }
+  ranges
+    ..clear()
+    ..addAll(merged);
+}
+
 /// 1-based display text of a cited range.
 String citedRangeText(CitedRange range, LineRangeText lineText) =>
     lineText(range.start + 1, range.end == range.start ? null : range.end + 1);

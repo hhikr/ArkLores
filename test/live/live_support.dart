@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/llm/llm_client.dart';
+import 'package:arklores/features/ai/investigation_ui.dart';
 
 /// Sums provider-reported token usage of chat completions (cost control).
 class UsageMeter {
@@ -99,6 +100,30 @@ final RegExp _citation =
 
 final RegExp _repeatObservation = RegExp('已执行过|已经读过|已经给你看过|再给你看一次|已获取|相同的梗概');
 
+final RegExp _quoted = RegExp(r'[“"「『]([^”"」』\n]*)[”"」』]');
+final RegExp _internalTerms = RegExp(
+  r'库中|story_id|\.txt|说话人|line_index|\b[a-z][a-z0-9]*_[a-z0-9_]+\b',
+);
+
+/// R17b: how the answer reads (statistics only): the share of its prose
+/// inside quotation marks, and mentions of knowledge-base internals in the
+/// prose. Citations are removed first, as the app does.
+Map<String, Object?> proseMetrics(String answer) {
+  final prose = [
+    for (final b in splitAnswerBlocks(answer)) b.markdown,
+  ].join('\n').replaceAll(RegExp(r'\[[A-Z_]+:[^\]]*\]'), '');
+  final chars = prose.replaceAll(RegExp(r'\s'), '').length;
+  final quoted = _quoted
+      .allMatches(prose)
+      .fold<int>(0, (n, m) => n + m.group(1)!.length);
+  return {
+    'quoted_char_ratio':
+        chars == 0 ? 0 : double.parse((quoted / chars).toStringAsFixed(3)),
+    'quote_count': _quoted.allMatches(prose).length,
+    'internal_terms_in_prose': _internalTerms.allMatches(prose).length,
+  };
+}
+
 /// Metrics for one recorded turn.
 Map<String, Object?> summarizeTurn(
   LiveCase liveCase,
@@ -164,6 +189,7 @@ Map<String, Object?> summarizeTurn(
     'citations': citations.length,
     'source_warning': turn.answer.contains('来源警告'),
     'answer_chars': turn.answer.length,
+    ...proseMetrics(answer),
     if (usage != null) 'usage': usage.toJson(),
     'answer': turn.answer,
   };

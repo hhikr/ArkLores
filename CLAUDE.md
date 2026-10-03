@@ -221,6 +221,10 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   改进方向是工具的表达力、工具输出的信息量和提示词里的通用工作方式。
 - 出处：`story_id:起始行-结束行` 或 `record:<normalized_records.id>`，代码核对必须是工具实际给模型看过的
   （`SeenLines`）。写错的名字靠“模型用自身知识构造查询 + 零命中如实报告 + 自动附近名”解决，不加别名表。
+- 提示词与工具说明里**不放任何具体人物、章节、活动或剧情示例**（开发者要求，2026-10）：示例会把模型带向那类问题，
+  等于特化优化。需要示意格式时只用占位符（`X`、`<story_id>`、`main_<章>`）；`lore_agent_test.dart` 守卫。
+- 答案写给玩家（R17b）：正文不提库/表/文件名/id，用自己的话叙述；出处在每条末尾，界面把它们放到该条下面的证据链，
+  点行号打开原文阅读页（`story_reader_page.dart`）。
 - 只读 SQL（`readonly_sql.dart`）：单条 SELECT/WITH、拒绝写/ATTACH/PRAGMA、只读连接、每次查询一个 isolate、
   超时用 `sqlite3_interrupt` 在 SQLite 内部中止（工作 isolate 等主 isolate 说 close 才关连接，避免中止已释放的连接）。
 

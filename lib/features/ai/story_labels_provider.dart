@@ -36,30 +36,28 @@ final storyLabelsProvider =
 String storyLabelsKey(Iterable<String> storyIds) =>
     (storyIds.toSet().toList()..sort()).join('\n');
 
-/// R17: the original lines of one cited range, read from the knowledge base
-/// when the reader opens the citation (key: [citedLinesKey]). Empty when
-/// the store is unavailable.
-final citedLinesProvider =
-    FutureProvider.family<List<StoryLineEntry>, String>((ref, key) async {
-  final parts = key.split('\n');
-  if (parts.length != 3) return const [];
-  final start = int.tryParse(parts[1]) ?? 0;
-  final end = int.tryParse(parts[2]) ?? start;
+/// R17b: every line of one story, for the reader opened from a citation.
+/// Empty when the story or the store is unavailable.
+final storyFullLinesProvider =
+    FutureProvider.family<List<StoryLineEntry>, String>((ref, storyId) async {
+  final store = ref.watch(sharedGameDataStoreProvider);
+  final lines = <StoryLineEntry>[];
+  String? next;
   try {
-    final page = await ref.watch(sharedGameDataStoreProvider).readStoryLines(
-          storyId: parts[0],
-          startLine: start,
-          endLine: end,
-          maxLines: (end - start + 1).clamp(1, 500),
-        );
-    return page.lines;
+    do {
+      final page = await store.readStoryLines(
+        storyId: storyId,
+        maxLines: 500,
+        pageToken: next,
+      );
+      lines.addAll(page.lines);
+      next = page.nextPageToken;
+    } while (next != null);
   } catch (_) {
     return const [];
   }
+  return lines;
 });
-
-String citedLinesKey(String storyId, int start, int end) =>
-    '$storyId\n$start\n$end';
 
 /// R17: a cited non-story record (`record:<id>`): title and text.
 final citedRecordProvider =

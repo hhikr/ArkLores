@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/agent/lore_agent_loop.dart';
+import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
@@ -72,6 +73,53 @@ void main() {
       final dbPath = p.join(dir.path, 'lore.db');
       await _createFixture(dbPath);
       store = GameDataKnowledgeStore(dbPath: dbPath);
+    });
+
+    // R17b: the prompt the model sees (system prompts of every style and
+    // of sub-agents, plus tool descriptions) states rules only — no concrete
+    // story, chapter or character that could tilt it towards some questions.
+    test('prompts and tool descriptions carry no concrete examples', () {
+      final text = [
+        for (final style in AnswerStyle.values) loreSystemPrompt(style),
+        loreSystemPrompt(AnswerStyle.answer, subtask: true),
+        loreTextToolProtocol(''),
+        for (final t in [
+          ...loreTools(store, SeenLines()),
+          DelegateTool((_) async => ''),
+        ])
+          jsonEncode(t.toJson()),
+      ].join('\n');
+      expect(text, isNot(contains('库中写作')));
+      expect(text, contains('写答案'));
+      // Path shapes use placeholders (`level_main_<章>-<关>`), never a real
+      // file, level code or character id.
+      expect(RegExp(r'[\w/]+_\d+[\w-]*\.txt').hasMatch(text), isFalse);
+      expect(RegExp(r'\d+-\d+').hasMatch(text), isFalse);
+      expect(RegExp(r'char_\d').hasMatch(text), isFalse);
+      expect(RegExp(r'main_\d').hasMatch(text), isFalse);
+      // Names from the evaluation fixture and live acceptance questions.
+      final eval = jsonDecode(
+        File('test/fixtures/investigation_eval.json').readAsStringSync(),
+      ) as Map<String, dynamic>;
+      final goldIds = [
+        for (final c in eval['cases'] as List)
+          for (final g in (c as Map)['gold_stories'] as List? ?? const [])
+            '${(g as Map)['story_id']}',
+      ];
+      for (final name in [
+        ...goldIds,
+        '塔露拉', '切尔诺伯格', '科西切', '罗德岛', '阿米娅', '凯尔希',
+        '谬因', '米格鲁', '特蕾西娅', '辞岁行', '双飞燕', '岁兽',
+      ]) {
+        expect(text, isNot(contains(name)), reason: name);
+      }
+    });
+
+    test('the system prompt keeps the working rules', () {
+      final prompt = loreSystemPrompt(AnswerStyle.answer);
+      expect(prompt, contains('先看全局再读原文'));
+      expect(prompt, contains('record:<该记录的 id>'));
+      expect(prompt, contains('[COVERAGE: full]'));
     });
 
     tearDown(() async {
@@ -364,6 +412,14 @@ void main() {
       );
       expect(dropped, isNot(contains('已核实')));
       expect(dropped, contains('\n星灯点亮钟楼'));
+      // R17b: talk about the search itself goes too.
+      final toolTalk = await answerFor(
+        '我已经有足够信息回答。让我确认一下这个写法的使用情况——之前 grep 显示'
+        '它只出现 2 次，而另一个名字出现很多。整理答案。\n\n'
+        '星灯点亮钟楼 `obt/main/level_main_fx-01.txt:1`。',
+      );
+      expect(toolTalk, isNot(contains('grep')));
+      expect(toolTalk, contains('星灯点亮钟楼'));
       final kept = await answerFor(
         '星灯是这座城的守灯人。\n\n'
         '它点亮钟楼 `obt/main/level_main_fx-01.txt:1`。',

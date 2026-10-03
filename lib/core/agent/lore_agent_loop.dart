@@ -522,7 +522,7 @@ class LoreAgentLoop {
     final cut = body.indexOf('\n\n');
     if (cut < 0) return body;
     final first = body.substring(0, cut).trim();
-    if (first.length > 80 ||
+    if (first.length > 160 ||
         first.startsWith('#') ||
         _citation.hasMatch(first) ||
         _recordCitation.hasMatch(first) ||
@@ -566,8 +566,10 @@ class LoreAgentLoop {
 
 /// Words of a lead-in that talks about the answering process.
 final RegExp _processLeadIn = RegExp(
-  r'核实|核对|重新输出|最终答案|完整答案|信息(已经)?足够|已经掌握|'
-  r'(下面|以下|现在)(给出|回答|输出|作答|是答案)',
+  r'核实|核对|重新输出|最终答案|完整答案|信息(已经)?足够|足够(的)?信息|已经掌握|'
+  r'(下面|以下|现在)(给出|回答|输出|作答|是答案)|整理(一下)?答案|让我(先|再)?(确认|查|看)|'
+  // Talk about the tools themselves (R17b).
+  r'\b(grep|sql|read_story|find|outline|similar_names|delegate)\b',
 );
 
 /// `record:<id>` — a non-story record (R17).

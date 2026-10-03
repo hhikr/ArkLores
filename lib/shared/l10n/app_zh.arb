@@ -165,6 +165,7 @@
   "aiCitedRecords": "其他资料 {count} 条",
   "@aiCitedRecords": {"placeholders": {"count": {"type": "int"}}},
   "aiCitedLinesUnavailable": "原文暂不可用（知识库未安装或已更新）",
+  "aiStoryReaderTitle": "原文",
   "aiMoreActions": "更多",
   "aiModeMenuTooltip": "回答方式",
   "aiThinkingProcess": "思考过程",

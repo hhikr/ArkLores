@@ -512,6 +512,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Original text unavailable (knowledge base missing or updated)';
 
   @override
+  String get aiStoryReaderTitle => 'Original text';
+
+  @override
   String get aiMoreActions => 'More';
 
   @override
