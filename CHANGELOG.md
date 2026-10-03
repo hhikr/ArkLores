@@ -4,6 +4,10 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-10-03 (pre-release)
+
+App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
+
 ### Changed
 
 - Story answers get a reader's review: a second model call reads the question and the answer
@@ -16,6 +20,12 @@ All notable changes to ArkLores will be documented in this file.
   below as "详细经过 · N 条", also while it streams.
 - The prompt no longer names plot devices; a question about one story collection still looks at
   the corpus-wide distribution first.
+
+### Fixed
+
+- After an answer was sent back (citation check or review), a reply that only described the
+  process could be taken as the answer and end as "not covered"; it is now asked for once more,
+  and otherwise the earlier answer is kept.
 
 ## [0.10.3] - 2026-10-03 (pre-release)
 
