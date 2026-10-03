@@ -100,13 +100,12 @@ String loreSystemPrompt(AnswerStyle style, {bool subtask = false}) => subtask
 /// agent's answer as a reader, without the text. It only raises questions;
 /// the main agent settles them from the text.
 const String loreReviewPrompt = '''
-你是熟悉《明日方舟》剧情的读者，替玩家审读一份剧情问答的答案。答案由另一个助手根据游戏原文写成；你看不到原文，只看到问题和答案。
-找出读者会质疑、需要回原文核实的地方：
-- 答案当作实际发生的事来讲的经历，在故事里是否真的发生了：故事后来是否揭示了它的另一种性质，或者它只是某个人物的说法、设想、转述；
+你是熟悉《明日方舟》剧情的读者，替玩家审读一份剧情问答的答案。答案由另一个助手根据游戏原文写成，每一点都有原文出处，逐句的细节已经核对过；你看不到原文，只看到问题和答案。
+不要逐条怀疑细节是否属实。你要从整个故事、整部作品的层面看，读者读完答案后的理解会不会错：
+- 故事的结尾或后续故事是否揭示了答案所讲经历的另一种性质（是否真实发生、发生在何时何地、是谁的视角），而答案没有交代；
 - 同一人物或事件在答案没有提到的其他故事里，是否有重要经历，或有能印证、修正答案的叙述；
-- 因果、人物归属、时间先后是否可疑；
-- 是否答非所问。
-你对作品的了解只能用来提出问题，不能当作结论。只提具体、能回原文核实的问题，最多五个，每个一句话，写明涉及答案的哪一部分、可能要查哪里；没有值得核实的地方就不要硬提。
+- 答案是否回答了玩家真正问的事。
+用你对这部作品的了解去发现这类问题：你记得的内容只能用来提出问题，不能当作结论，结论由答案作者回原文确认。只提这类具体、能回原文核实的问题，最多三个，每个一句话，写明可能要查哪个故事或哪一段；没有这类问题就回 ok，不要为了提问而提问。
 只输出一个 JSON 对象，不写别的文字：{"ok": true} 或 {"issues": ["<问题>", ...]}''';
 
 /// R18: the reviewer's input — the question, the stories the answer
@@ -131,15 +130,24 @@ String loreReviewFollowUp(List<String> issues, {required bool json}) => [
 /// code from those entries.
 String loreStagePrompt(String numberedEntries) => '''
 把你上面的最终答案重新整理给玩家：按阶段或方面合并成几段，每段用几句话概括一个阶段的经过和结果，不逐条复述细节。
+整理后的全部段落加起来不超过 ${_stageCharBudget(numberedEntries)} 字（原答案的四分之一左右）。
 上面答案的正文条目编号如下：
 $numberedEntries
 
 只输出一个 JSON 对象，不写别的文字，不加代码块：
 {"stages": [{"heading": "<这一段的小标题>", "text": "<一段话>", "from": [<这一段概括的条目编号>, ...]}]}
 - 第一段直接回答玩家的问题；之后按时间或逻辑顺序排列。
-- 每个条目编号都要归入某一段；段数按内容决定，应比条目少得多。
+- 每段两三句话，只写这一阶段最重要的经过和结果，细节留在原答案里（玩家可以展开看）；不要把条目原样拼接或改写成同样长的段落。
+- 每个条目编号都要归入某一段；只是回顾或罗列前文的条目归入相关的段，不单独成段。段数按内容决定，应比条目少得多。
 - 只用上面答案里的内容，不加新内容；不用引号引用台词；不提数据库、工具、查找过程。
 - 故事中有改变前面经历性质的揭示时，在第一段说明。''';
+
+/// Length budget of the reorganised answer: a quarter of the detailed
+/// entries' text, rounded to 50 characters (at least 200).
+int _stageCharBudget(String numberedEntries) {
+  final quarter = numberedEntries.length ~/ 4;
+  return quarter < 200 ? 200 : (quarter + 49) ~/ 50 * 50;
+}
 
 /// Text-protocol fallback for providers without function calling: how to
 /// call a tool in plain text.

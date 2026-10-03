@@ -187,7 +187,7 @@ final RegExp _storyRef = RegExp(r'^(.+\.txt):(\d+)(?:-(\d+))?$');
 
 /// The questions of a review reply (`{"issues": [...]}`); empty for
 /// `{"ok": true}` or a reply that cannot be read.
-List<String> parseReviewIssues(String content, {int max = 5}) {
+List<String> parseReviewIssues(String content, {int max = 3}) {
   final issues = _decodeObject(content, RegExp(r'\{'))?['issues'];
   if (issues is! List) return const [];
   return [

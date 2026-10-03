@@ -104,7 +104,7 @@ void main() {
       parseReviewIssues(jsonEncode({
         'issues': [for (var i = 0; i < 8; i++) 'q$i'],
       }),),
-      hasLength(5),
+      hasLength(3),
     );
     expect(
       withoutCitations('甲到了城门。 `$a:1-2`\n\n- 乙 `record:r1` `$b:3`'),
