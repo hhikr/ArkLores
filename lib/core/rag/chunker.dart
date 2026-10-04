@@ -5,12 +5,6 @@ import 'package:uuid/uuid.dart';
 /// Each chunk carries metadata about its origin (page, section, sequence)
 /// so the retrieval layer can present context alongside the content.
 class Chunk {
-  final String id;
-  final String content;
-  final String pageTitle;
-  final String section;
-  final int seqIndex;
-  final int tokenCount;
 
   Chunk({
     String? id,
@@ -21,15 +15,6 @@ class Chunk {
     required this.tokenCount,
   }) : id = id ?? const Uuid().v4();
 
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'content': content,
-        'page_title': pageTitle,
-        'section': section,
-        'seq_index': seqIndex,
-        'token_count': tokenCount,
-      };
-
   factory Chunk.fromMap(Map<String, dynamic> map) => Chunk(
         id: map['id'] as String,
         content: map['content'] as String,
@@ -39,6 +24,21 @@ class Chunk {
         tokenCount: (map['token_count'] as int?) ??
             _estimateTokens(map['content'] as String),
       );
+  final String id;
+  final String content;
+  final String pageTitle;
+  final String section;
+  final int seqIndex;
+  final int tokenCount;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'content': content,
+        'page_title': pageTitle,
+        'section': section,
+        'seq_index': seqIndex,
+        'token_count': tokenCount,
+      };
 
   @override
   String toString() =>
@@ -91,10 +91,10 @@ int _estimateTokens(String text) {
 
 /// Result of heading detection.
 class _HeadingMatch {
-  final String text;
-  final int level;
 
   const _HeadingMatch(this.text, this.level);
+  final String text;
+  final int level;
 }
 
 /// Detects whether [line] is a Markdown heading.
@@ -112,6 +112,12 @@ _HeadingMatch? _detectHeading(String line) {
 
 /// Configuration for [Chunker].
 class ChunkerConfig {
+
+  const ChunkerConfig({
+    this.targetTokens = 500,
+    this.overlapTokens = 50,
+    this.maxChars = 4000,
+  });
   /// Target token count per chunk.
   final int targetTokens;
 
@@ -120,12 +126,6 @@ class ChunkerConfig {
 
   /// Maximum characters to consider per chunk (safety limit).
   final int maxChars;
-
-  const ChunkerConfig({
-    this.targetTokens = 500,
-    this.overlapTokens = 50,
-    this.maxChars = 4000,
-  });
 }
 
 /// Text chunker that splits long documents into retrieval-friendly passages.
@@ -136,9 +136,9 @@ class ChunkerConfig {
 /// 2. **Sliding-window** — splits long plain text into fixed-size windows
 ///    with configurable overlap.
 class Chunker {
-  final ChunkerConfig config;
 
   const Chunker({this.config = const ChunkerConfig()});
+  final ChunkerConfig config;
 
   /// Returns the estimated token count for [text].
   int estimateTokens(String text) => _estimateTokens(text);
@@ -200,7 +200,7 @@ class Chunker {
           section: sectionTitle,
           seqIndex: seqIndex++,
           tokenCount: estimatedTokens,
-        ));
+        ),);
       } else {
         // Oversize section — split further with sliding window.
         final subChunks = _splitText(
@@ -263,7 +263,7 @@ class Chunker {
         section: section,
         seqIndex: seqIndex++,
         tokenCount: _estimateTokens(content),
-      ));
+      ),);
 
       pos += step;
       if (pos >= text.length) break;
@@ -275,13 +275,13 @@ class Chunker {
 
 /// Internal section parsed from markdown headings.
 class _Section {
-  final String heading;
-  final int level;
-  String content;
 
   _Section({
     required this.heading,
     required this.level,
     required this.content,
   });
+  final String heading;
+  final int level;
+  String content;
 }

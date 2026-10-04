@@ -14,9 +14,9 @@ import '../../shared/theme/app_theme.dart';
 /// 2. Chat API Key configuration
 /// 3. Ready to explore
 class OnboardingPage extends ConsumerStatefulWidget {
-  final VoidCallback onComplete;
 
   const OnboardingPage({super.key, required this.onComplete});
+  final VoidCallback onComplete;
 
   @override
   ConsumerState<OnboardingPage> createState() => _OnboardingPageState();
@@ -30,17 +30,16 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   late TextEditingController _baseUrlController;
   late TextEditingController _apiKeyController;
   late TextEditingController _chatModelController;
-  bool _obscureApiKey = true;
 
   @override
   void initState() {
     super.initState();
     _baseUrlController = TextEditingController(
-      text: 'https://api.deepseek.com/v1',
+      text: 'https://api.z.ai/api/paas/v4',
     );
     _apiKeyController = TextEditingController();
     _chatModelController = TextEditingController(
-      text: 'deepseek-v4-flash',
+      text: 'glm-5.3-flash',
     );
   }
 
@@ -86,7 +85,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       await ref.read(apiConfigProvider.notifier).save(config);
     }
 
-    _pageController.nextPage(
+    await _pageController.nextPage(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOut,
     );
@@ -115,6 +114,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                           ? SupportedLocale.zh
                           : SupportedLocale.en;
                       ref.read(localeProvider.notifier).switchTo(next);
+                      ref.read(settingsServiceProvider).saveLocale(next);
                     },
                     icon: Icon(
                       Icons.translate_rounded,
@@ -122,20 +122,23 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       size: 18,
                     ),
                     label: Text(
-                      currentLocale == SupportedLocale.en ? '中文' : 'English',
+                      currentLocale == SupportedLocale.en
+                          ? SupportedLocale.zh.displayName
+                          : SupportedLocale.en.displayName,
                       style: theme.titleFont.copyWith(
                         color: theme.textPrimary,
                         fontSize: 14,
                       ),
                     ),
                   ),
-                  // Skip button (top right)
-                  if (_currentStep > 0)
+                  // "Not now" (top right), only on the API step: the last
+                  // step's main button already finishes onboarding.
+                  if (_currentStep == 1)
                     ExcludeFocus(
                       child: TextButton(
                         onPressed: _skip,
                         child: Text(
-                          context.t.onboardingSkip,
+                          context.t.onboardingNotNow,
                           style: theme.bodyFont.copyWith(
                             color: theme.textSecondary,
                             fontSize: 14,
@@ -154,9 +157,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               child: PageView(
                 controller: _pageController,
                 onPageChanged: (i) => setState(() => _currentStep = i),
-                physics: _currentStep == 1
-                    ? const NeverScrollableScrollPhysics()
-                    : null,
+                // Steps advance only through their buttons, never by swiping.
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   _buildWelcomeStep(theme),
                   _buildApiConfigStep(theme),
@@ -276,7 +278,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           _buildInputField(
             label: context.t.apiSettingsLabelBaseUrl,
             controller: _baseUrlController,
-            hint: 'https://api.deepseek.com/v1',
+            hint: 'https://api.z.ai/api/paas/v4',
             theme: theme,
           ),
           const SizedBox(height: 14),
@@ -285,23 +287,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             controller: _apiKeyController,
             hint: 'sk-...',
             theme: theme,
-            obscureText: _obscureApiKey,
-            suffix: IconButton(
-              icon: Icon(
-                _obscureApiKey
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: theme.textSecondary,
-                size: 20,
-              ),
-              onPressed: () => setState(() => _obscureApiKey = !_obscureApiKey),
-            ),
+            secret: true,
           ),
           const SizedBox(height: 14),
           _buildInputField(
             label: context.t.apiSettingsLabelModel,
             controller: _chatModelController,
-            hint: 'deepseek-v4-flash',
+            hint: 'glm-5.3-flash',
             theme: theme,
           ),
           const SizedBox(height: 28),
@@ -389,8 +381,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required TextEditingController controller,
     required String hint,
     required AppThemeTokens theme,
-    bool obscureText = false,
-    Widget? suffix,
+    bool secret = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +404,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           ),
           child: TextField(
             controller: controller,
-            obscureText: obscureText,
+            // Keys stay visible, but the keyboard must not learn, suggest or
+            // autocorrect them.
+            keyboardType: secret ? TextInputType.visiblePassword : null,
+            autocorrect: !secret,
+            enableSuggestions: !secret,
             style: theme.bodyFont.copyWith(
               color: theme.textPrimary,
               fontSize: 14,
@@ -428,7 +423,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 horizontal: 14,
                 vertical: 12,
               ),
-              suffixIcon: suffix,
             ),
           ),
         ),

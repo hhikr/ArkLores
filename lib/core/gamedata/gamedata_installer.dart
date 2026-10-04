@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -7,31 +7,64 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
+import 'build/gamedata_db_validator.dart';
+
 class GameDataInstallStatus {
-  final bool installed;
-  final String dbPath;
-  final int bytes;
-  final Map<String, String> manifest;
 
   const GameDataInstallStatus({
     required this.installed,
     required this.dbPath,
     required this.bytes,
     required this.manifest,
+    this.installedAssetSha,
+    this.releaseAssetSha,
   });
+  final bool installed;
+  final String dbPath;
+  final int bytes;
+  final Map<String, String> manifest;
+
+  /// SHA-256 of the official asset the installed DB came from (null for
+  /// DBs installed before v0.10.1 or built in the app).
+  final String? installedAssetSha;
+
+  /// SHA-256 of the official asset this app build points at.
+  final String? releaseAssetSha;
+
+  /// The app was built for a different official knowledge base than the one
+  /// installed (e.g. a new data release), so "update" is worth a tap.
+  bool get updateAvailable =>
+      installed &&
+      releaseAssetSha != null &&
+      releaseAssetSha!.isNotEmpty &&
+      releaseAssetSha!.toLowerCase() != installedAssetSha?.toLowerCase();
 
   String? get sourceCommit => manifest['source_arknights_commit'];
   String? get builtAt => manifest['built_at'];
   String? get entityCount => manifest['entity_count'];
   String? get recordCount => manifest['normalized_record_count'];
   String? get chunkCount => manifest['lore_chunk_count'];
+  String? get storyLineCount => manifest['story_line_count'];
+}
+
+/// Network failures worth retrying (and resuming): TLS handshakes cut by the
+/// network, dropped sockets, stalled streams.
+bool isTransientNetworkError(Object error) {
+  if (error is SocketException ||
+      error is HandshakeException ||
+      error is TlsException ||
+      error is HttpException ||
+      error is TimeoutException ||
+      error is http.ClientException) {
+    return true;
+  }
+  final text = '$error';
+  return text.contains('Connection terminated') ||
+      text.contains('Connection reset') ||
+      text.contains('Connection closed');
 }
 
 class GameDataReleaseAsset {
-  final Uri url;
-  final String? sha256;
-  final int? compressedBytes;
-  final int? uncompressedBytes;
 
   const GameDataReleaseAsset({
     required this.url,
@@ -39,11 +72,31 @@ class GameDataReleaseAsset {
     this.compressedBytes,
     this.uncompressedBytes,
   });
+  final Uri url;
+  final String? sha256;
+  final int? compressedBytes;
+  final int? uncompressedBytes;
 }
 
 class GameDataInstaller {
+
+  const GameDataInstaller({
+    this.installDirectory,
+    this.releaseAssetUrl = _definedUrl,
+    this.releaseAssetSha = _definedSha,
+  });
   static const _dbFileName = 'arklores_gamedata_zh.db';
+
+  /// Sidecar recording which official asset (gz SHA-256) was installed.
+  static const _assetMarkerSuffix = '.asset_sha256';
+
+  /// Partial download of the compressed asset (resumed across attempts).
+  static const _partialSuffix = '.download.gz';
   final Directory? installDirectory;
+
+  /// Official asset this build downloads (dart-define; injectable in tests).
+  final String releaseAssetUrl;
+  final String releaseAssetSha;
 
   // Development/test path before a public release exists. Example:
   // flutter run --dart-define=ARKLORES_GAMEDATA_DB_URL=http://192.168.1.2:8000/arklores_gamedata_zh.db.gz
@@ -51,83 +104,161 @@ class GameDataInstaller {
   static const _definedSha =
       String.fromEnvironment('ARKLORES_GAMEDATA_DB_SHA256');
 
-  const GameDataInstaller({this.installDirectory});
-
   Future<GameDataInstallStatus> getStatus() async {
     final file = await _dbFile();
     final exists = await file.exists();
+    final marker = File('${file.path}$_assetMarkerSuffix');
     return GameDataInstallStatus(
       installed: exists,
       dbPath: file.path,
       bytes: exists ? await file.length() : 0,
       manifest: exists ? await _readManifest(file.path) : const {},
+      installedAssetSha: exists && await marker.exists()
+          ? (await marker.readAsString()).trim()
+          : null,
+      releaseAssetSha: releaseAssetUrl.trim().isEmpty
+          ? null
+          : releaseAssetSha.trim(),
     );
   }
 
   Future<GameDataReleaseAsset?> getReleaseAsset() async {
-    if (_definedUrl.trim().isEmpty) return null;
+    if (releaseAssetUrl.trim().isEmpty) return null;
     return GameDataReleaseAsset(
-      url: Uri.parse(_definedUrl.trim()),
-      sha256: _definedSha.trim().isEmpty ? null : _definedSha.trim(),
+      url: Uri.parse(releaseAssetUrl.trim()),
+      sha256: releaseAssetSha.trim().isEmpty ? null : releaseAssetSha.trim(),
     );
   }
 
+  /// Downloads, verifies and installs the official asset.
+  ///
+  /// The compressed file is streamed to `<db>.download.gz` (never held in
+  /// memory: the DB is ~600 MB), so an interrupted download resumes with an
+  /// HTTP Range request on the next attempt or the next tap. Transient
+  /// network errors (TLS handshake, socket, stalled stream) are retried up
+  /// to [maxAttempts] times. The gz is checked against the expected SHA-256,
+  /// then decompressed by streaming into a temp file, validated and swapped
+  /// in; the installed DB is untouched until then.
   Future<bool> installFromReleaseAsset({
     http.Client? client,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
     bool overwrite = false,
+    int maxAttempts = 4,
+    Duration retryDelay = const Duration(seconds: 3),
+    Duration stallTimeout = const Duration(seconds: 60),
   }) async {
     final asset = await getReleaseAsset();
     if (asset == null) return false;
 
     final dbFile = await _dbFile();
     if (!overwrite && await dbFile.exists()) return false;
+    await dbFile.parent.create(recursive: true);
 
-    final ownsClient = client == null;
-    final httpClient = client ?? http.Client();
-    try {
-      final request = http.Request('GET', asset.url);
-      final response = await httpClient.send(request);
-      if (response.statusCode != 200) {
-        throw StateError(
-          'Failed to download GameData database: HTTP ${response.statusCode}',
+    // A partial download only resumes for the same asset.
+    final part = File('${dbFile.path}$_partialSuffix');
+    final partKey = File('${part.path}.key');
+    final key = asset.sha256 ?? asset.url.toString();
+    if (await part.exists() &&
+        (!await partKey.exists() || (await partKey.readAsString()) != key)) {
+      await part.delete();
+    }
+    await partKey.writeAsString(key, flush: true);
+
+    for (var attempt = 1;; attempt++) {
+      final ownsClient = client == null;
+      final httpClient = client ?? http.Client();
+      try {
+        await _downloadResumable(
+          httpClient,
+          asset.url,
+          part,
+          onProgress: onProgress,
+          stallTimeout: stallTimeout,
         );
+        break;
+      } catch (e) {
+        if (attempt >= maxAttempts || !isTransientNetworkError(e)) rethrow;
+        await Future<void>.delayed(retryDelay * attempt);
+      } finally {
+        if (ownsClient) httpClient.close();
       }
+    }
 
-      final compressed = BytesBuilder(copy: false);
-      var received = 0;
-      final contentLength = response.contentLength;
-      final total =
-          contentLength != null && contentLength >= 0 ? contentLength : null;
-      await for (final chunk in response.stream) {
-        compressed.add(chunk);
+    final actualSha = (await sha256.bind(part.openRead()).first).toString();
+    final expectedSha = asset.sha256;
+    if (expectedSha != null &&
+        expectedSha.isNotEmpty &&
+        actualSha.toLowerCase() != expectedSha.toLowerCase()) {
+      // A corrupt partial must not be resumed again.
+      await part.delete();
+      throw StateError(
+        'GameData checksum mismatch: expected $expectedSha, got $actualSha',
+      );
+    }
+
+    final tmp = File('${dbFile.path}.tmp');
+    await part.openRead().transform(gzip.decoder).pipe(tmp.openWrite());
+    final expectedSize = asset.uncompressedBytes;
+    if (expectedSize != null && await tmp.length() != expectedSize) {
+      await tmp.delete();
+      throw StateError(
+        'GameData database size mismatch: expected $expectedSize, '
+        'got ${await tmp.length()}',
+      );
+    }
+    await _installTempFile(tmp, dbFile);
+    await File('${dbFile.path}$_assetMarkerSuffix')
+        .writeAsString(actualSha, flush: true);
+    await part.delete();
+    if (await partKey.exists()) await partKey.delete();
+    return true;
+  }
+
+  /// Streams [url] into [part], continuing an existing partial file with a
+  /// Range request. A server that ignores the range (HTTP 200) restarts the
+  /// file; 416 means the partial file is already complete.
+  Future<void> _downloadResumable(
+    http.Client client,
+    Uri url,
+    File part, {
+    required Duration stallTimeout,
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+  }) async {
+    var existing = await part.exists() ? await part.length() : 0;
+    final request = http.Request('GET', url);
+    if (existing > 0) request.headers['Range'] = 'bytes=$existing-';
+    final response = await client.send(request).timeout(stallTimeout);
+    if (existing > 0 && response.statusCode == 416) {
+      await response.stream.drain<void>();
+      return;
+    }
+    final resumed = response.statusCode == 206;
+    if (response.statusCode != 200 && !resumed) {
+      await response.stream.drain<void>();
+      throw StateError(
+        'Failed to download GameData database: HTTP ${response.statusCode}',
+      );
+    }
+    if (!resumed) existing = 0;
+    final length = response.contentLength;
+    final total = length != null && length >= 0 ? existing + length : null;
+    final sink = part.openWrite(
+      mode: resumed ? FileMode.writeOnlyAppend : FileMode.writeOnly,
+    );
+    var received = existing;
+    onProgress?.call(received, total);
+    try {
+      await for (final chunk in response.stream.timeout(stallTimeout)) {
+        sink.add(chunk);
         received += chunk.length;
         onProgress?.call(received, total);
       }
-
-      final compressedBytes = compressed.takeBytes();
-      final expectedSha = asset.sha256;
-      if (expectedSha != null && expectedSha.isNotEmpty) {
-        final actualSha = sha256.convert(compressedBytes).toString();
-        if (actualSha.toLowerCase() != expectedSha.toLowerCase()) {
-          throw StateError(
-            'GameData checksum mismatch: expected $expectedSha, got $actualSha',
-          );
-        }
-      }
-
-      final dbBytes = Uint8List.fromList(gzip.decode(compressedBytes));
-      final expectedSize = asset.uncompressedBytes;
-      if (expectedSize != null && dbBytes.length != expectedSize) {
-        throw StateError(
-          'GameData database size mismatch: expected $expectedSize, got ${dbBytes.length}',
-        );
-      }
-
-      await installFromBytes(dbBytes, overwrite: overwrite);
-      return true;
     } finally {
-      if (ownsClient) httpClient.close();
+      await sink.flush();
+      await sink.close();
+    }
+    if (total != null && received < total) {
+      throw const SocketException('GameData download ended early');
     }
   }
 
@@ -141,6 +272,12 @@ class GameDataInstaller {
     final tmp = File('${dbFile.path}.tmp');
     await tmp.parent.create(recursive: true);
     await tmp.writeAsBytes(dbBytes, flush: true);
+    await _installTempFile(tmp, dbFile);
+  }
+
+  /// Validates [tmp] and swaps it over [dbFile]; a DB that fails validation
+  /// is deleted and the installed one stays.
+  Future<void> _installTempFile(File tmp, File dbFile) async {
     try {
       await _validateDatabase(tmp.path);
     } catch (_) {
@@ -150,6 +287,10 @@ class GameDataInstaller {
     if (await dbFile.exists()) {
       await dbFile.delete();
     }
+    // The marker describes the replaced file; installFromReleaseAsset writes
+    // a new one for official assets.
+    final marker = File('${dbFile.path}$_assetMarkerSuffix');
+    if (await marker.exists()) await marker.delete();
     await tmp.rename(dbFile.path);
   }
 
@@ -191,64 +332,7 @@ class GameDataInstaller {
     sqflite.Database? db;
     try {
       db = await sqflite.openDatabase(dbPath, readOnly: true);
-      const requiredTables = {
-        'gamedata_manifest',
-        'entities',
-        'entity_aliases',
-        'entity_documents',
-        'normalized_records',
-        'story_lines',
-        'story_scopes',
-        'lore_chunks',
-        'entity_documents_fts',
-        'lore_chunks_fts',
-      };
-      final tableRows = await db.rawQuery(
-        '''
-        SELECT name
-        FROM sqlite_master
-        WHERE type IN ('table', 'virtual') AND name IN (${List.filled(requiredTables.length, '?').join(',')})
-        ''',
-        requiredTables.toList(growable: false),
-      );
-      final presentTables = {
-        for (final row in tableRows) '${row['name']}',
-      };
-      final missingTables = requiredTables.difference(presentTables);
-      if (missingTables.isNotEmpty) {
-        throw StateError(
-          'Downloaded GameData database is missing required table(s): ${missingTables.join(', ')}',
-        );
-      }
-
-      final manifest = {
-        for (final row in await db.query('gamedata_manifest'))
-          '${row['key']}': '${row['value']}',
-      };
-      final schemaVersion = manifest['schema_version'];
-      if (schemaVersion == null || schemaVersion.trim().isEmpty) {
-        throw StateError(
-          'Downloaded GameData database manifest is missing schema_version.',
-        );
-      }
-      if (schemaVersion != '2') {
-        throw StateError(
-          'Downloaded GameData database schema_version $schemaVersion is incompatible; expected 2.',
-        );
-      }
-
-      for (final entry in const {
-        'entity_count': 'entities',
-        'normalized_record_count': 'records',
-        'lore_chunk_count': 'chunks',
-      }.entries) {
-        final value = int.tryParse(manifest[entry.key] ?? '');
-        if (value == null || value <= 0) {
-          throw StateError(
-            'Downloaded GameData database manifest has invalid ${entry.key} ${entry.value} count.',
-          );
-        }
-      }
+      await validateGameDataDatabase(db);
     } finally {
       await db?.close();
     }

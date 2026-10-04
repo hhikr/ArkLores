@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -20,8 +21,10 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   late TextEditingController _chatBaseUrlCtrl;
   late TextEditingController _chatApiKeyCtrl;
   late TextEditingController _chatModelCtrl;
+  late TextEditingController _embedBaseUrlCtrl;
+  late TextEditingController _embedApiKeyCtrl;
+  late TextEditingController _embedModelCtrl;
 
-  bool _obscureChatKey = true;
   bool _saved = false;
   bool _synced = false;
 
@@ -31,6 +34,9 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     _chatBaseUrlCtrl = TextEditingController();
     _chatApiKeyCtrl = TextEditingController();
     _chatModelCtrl = TextEditingController();
+    _embedBaseUrlCtrl = TextEditingController();
+    _embedApiKeyCtrl = TextEditingController();
+    _embedModelCtrl = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncControllers());
   }
 
@@ -46,6 +52,10 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     _chatBaseUrlCtrl.text = config.chatBaseUrl;
     _chatApiKeyCtrl.text = config.chatApiKey;
     _chatModelCtrl.text = config.chatModel;
+    final embedding = ref.read(embeddingConfigProvider);
+    _embedBaseUrlCtrl.text = embedding.baseUrl;
+    _embedApiKeyCtrl.text = embedding.apiKey;
+    _embedModelCtrl.text = embedding.model;
     _synced = true;
   }
 
@@ -54,6 +64,9 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     _chatBaseUrlCtrl.dispose();
     _chatApiKeyCtrl.dispose();
     _chatModelCtrl.dispose();
+    _embedBaseUrlCtrl.dispose();
+    _embedApiKeyCtrl.dispose();
+    _embedModelCtrl.dispose();
     super.dispose();
   }
 
@@ -72,8 +85,24 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
       chatModel: _chatModelCtrl.text.trim(),
     );
 
-    await ref.read(apiConfigProvider.notifier).save(config);
+    final embedApiKey = _embedApiKeyCtrl.text.trim();
+    final embedKeyError =
+        LLMConfig.apiKeyFormatError(embedApiKey, label: 'Embedding API Key');
+    if (embedKeyError != null) {
+      _showConfigError(embedKeyError);
+      return;
+    }
 
+    await ref.read(apiConfigProvider.notifier).save(config);
+    await ref.read(embeddingConfigProvider.notifier).save(
+          ref.read(embeddingConfigProvider).copyWith(
+                baseUrl: _embedBaseUrlCtrl.text.trim(),
+                apiKey: embedApiKey,
+                model: _embedModelCtrl.text.trim(),
+              ),
+        );
+
+    if (!mounted) return;
     setState(() => _saved = true);
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) setState(() => _saved = false);
@@ -92,7 +121,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     ref.watch(apiConfigProvider);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: theme.bgPrimary,
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(
@@ -135,7 +164,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 _inputField(
                   theme: theme,
                   controller: _chatBaseUrlCtrl,
-                  hint: 'https://api.deepseek.com/v1',
+                  hint: 'https://api.z.ai/api/paas/v4',
                 ),
                 const SizedBox(height: 14),
                 _inputLabel(theme, context.t.apiSettingsLabelApiKey),
@@ -143,25 +172,57 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                   theme: theme,
                   controller: _chatApiKeyCtrl,
                   hint: 'sk-...',
-                  obscure: _obscureChatKey,
-                  suffix: IconButton(
-                    icon: Icon(
-                      _obscureChatKey
-                          ? Icons.visibility_off_rounded
-                          : Icons.visibility_rounded,
-                      color: theme.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureChatKey = !_obscureChatKey),
-                  ),
+                  secret: true,
                 ),
                 const SizedBox(height: 14),
                 _inputLabel(theme, context.t.apiSettingsLabelModel),
                 _inputField(
                   theme: theme,
                   controller: _chatModelCtrl,
-                  hint: 'deepseek-v4-flash',
+                  hint: 'glm-5.3-flash',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _sectionHeader(
+            theme,
+            Icons.hub_rounded,
+            context.t.apiSettingsEmbeddingSection,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            context.t.apiSettingsEmbeddingDesc,
+            style: theme.bodyFont.copyWith(
+              color: theme.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ThemeAwareCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _inputLabel(theme, context.t.apiSettingsLabelBaseUrl),
+                _inputField(
+                  theme: theme,
+                  controller: _embedBaseUrlCtrl,
+                  hint: defaultEmbeddingConfig.baseUrl,
+                ),
+                const SizedBox(height: 14),
+                _inputLabel(theme, context.t.apiSettingsLabelApiKey),
+                _inputField(
+                  theme: theme,
+                  controller: _embedApiKeyCtrl,
+                  hint: 'sk-...',
+                  secret: true,
+                ),
+                const SizedBox(height: 14),
+                _inputLabel(theme, context.t.apiSettingsLabelModel),
+                _inputField(
+                  theme: theme,
+                  controller: _embedModelCtrl,
+                  hint: defaultEmbeddingConfig.model,
                 ),
               ],
             ),
@@ -222,8 +283,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     required AppThemeTokens theme,
     required TextEditingController controller,
     required String hint,
-    bool obscure = false,
-    Widget? suffix,
+    bool secret = false,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -233,7 +293,11 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
       ),
       child: TextField(
         controller: controller,
-        obscureText: obscure,
+        // Keys stay visible, but the keyboard must not learn, suggest or
+        // autocorrect them.
+        keyboardType: secret ? TextInputType.visiblePassword : null,
+        autocorrect: !secret,
+        enableSuggestions: !secret,
         style: theme.bodyFont.copyWith(
           color: theme.textPrimary,
           fontSize: 14,
@@ -245,7 +309,6 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          suffixIcon: suffix,
         ),
       ),
     );

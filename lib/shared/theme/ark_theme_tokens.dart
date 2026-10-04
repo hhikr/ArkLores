@@ -38,6 +38,11 @@ class ArkThemeTokens implements AppThemeTokens {
   final Color accentPrimary = const Color(0xFF0BA0D0);
   @override
   final Color accentSecondary = const Color(0xFFCFD6DA);
+  /// The blue is already readable on the dark surfaces.
+  @override
+  final Color accentText = const Color(0xFF0BA0D0);
+  @override
+  final Color onAccent = const Color(0xFF000000);
 
   // ─── Semantic colors ───────────────────────────────────────────
   @override

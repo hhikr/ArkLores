@@ -1,16 +1,16 @@
-import '../../gamedata/gamedata_knowledge_store.dart';
+import '../../gamedata/game_retrieval.dart';
 import 'agent_tool.dart';
 
 /// Source-neutral local lore search tool.
 class SearchLocalLoreTool extends AgentTool {
+
+  SearchLocalLoreTool({
+    GameDataRetrieval? gameDataStore,
+  }) : _gameDataStore = gameDataStore;
   static const int _maxObservationChars = 4800;
   static const int _maxContentExcerptChars = 700;
 
-  final GameDataKnowledgeStore? _gameDataStore;
-
-  SearchLocalLoreTool({
-    GameDataKnowledgeStore? gameDataStore,
-  }) : _gameDataStore = gameDataStore ?? GameDataKnowledgeStore();
+  final GameDataRetrieval? _gameDataStore;
 
   @override
   String get name => 'search_local_lore';
@@ -50,7 +50,7 @@ class SearchLocalLoreTool extends AgentTool {
           'scope_id': {
             'type': 'string',
             'description':
-                'Optional resolved story scope id, e.g. activity:act21mini. Use with entity_id and evidence mode.',
+                'Optional resolved story scope id, e.g. activity:<activity_id>. Use with entity_id and evidence mode.',
           },
           'search_mode': {
             'type': 'string',
@@ -89,14 +89,58 @@ class SearchLocalLoreTool extends AgentTool {
 
     final store = _gameDataStore;
     if (store != null && await store.isAvailable) {
-      if ((entityId == null || entityId.trim().isEmpty) &&
-          contentType == null) {
+      // R11: never let an explicit/resolved entity id walk into the
+      // disambiguation branch — an id is already unambiguous. This mirrors the
+      // roleplay session semantics (locked entity_id) for the general tool.
+      // Evidence mode keeps its own retrieval plan and empty-result guidance.
+      var resolvedEntityId = searchMode == 'evidence'
+          ? null
+          : entityId?.trim().isNotEmpty == true
+              ? entityId!.trim()
+              : null;
+      if (resolvedEntityId == null && searchMode != 'evidence') {
+        // R11: when the whole query is an entity-id LITERAL (canonical with a
+        // namespace prefix, e.g. `SEARCH enemy:enemy_1554_lrtsia`), search by
+        // id instead of as free text so the "solo id always no result"
+        // deadlock cannot happen. Plain display names must NOT be resolved
+        // here — they still go through the normal (possibly ambiguous)
+        // name search path.
+        if (_looksLikeEntityId(query)) {
+          final viaId = await store.resolveEntityId(query);
+          if (viaId != null) resolvedEntityId = viaId;
+        }
+      }
+
+      if (resolvedEntityId != null) {
+        final results = await store.search(
+          query: query,
+          topK: cleanTopK,
+          contentType: contentType,
+          entityId: resolvedEntityId,
+          searchMode: searchMode,
+          scopeId: scopeId,
+        );
+        if (results.isNotEmpty) {
+          return _formatGameDataResults(results, searchMode: searchMode);
+        }
+        return ToolExecutionResult(
+          observation:
+              'No matching GameData result found for entity "$resolvedEntityId". '
+              '该 id 是实体标识而非可检索文本：请用 search_story_coverage '
+              '(entity_id=<id>) 枚举其剧情出场，或用 COLLECT 收集其证据；'
+              '不要把它当作普通文本反复搜索。',
+        );
+      }
+
+      if (contentType == null &&
+          (entityId == null || entityId.trim().isEmpty) &&
+          searchMode != 'evidence') {
         final candidates = await store.findEntityCandidates(query);
         final exactCandidates = candidates
             .where((candidate) =>
                 candidate.matchType == 'name_exact' ||
                 candidate.matchType == 'canonical_alias_exact' ||
-                candidate.matchType == 'alias_exact')
+                candidate.matchType == 'alias_exact',)
             .toList(growable: false);
         if (exactCandidates.length > 1) {
           return _formatDisambiguationCandidates(query, exactCandidates);
@@ -126,7 +170,7 @@ class SearchLocalLoreTool extends AgentTool {
       }
       return ToolExecutionResult(
         observation:
-            'No matching GameData result found for "$query". The local GameData knowledge DB is installed, but structured/FTS search returned no result.',
+            'No matching GameData result found for "$query". The local GameData knowledge DB is installed, but structured/FTS search returned no result. Do not guess alternate spellings: use search_story_coverage with the exact name or a canonical alias from the DB.',
       );
     }
 
@@ -134,6 +178,19 @@ class SearchLocalLoreTool extends AgentTool {
       observation:
           'Local GameData knowledge DB is not installed. Install the Chinese GameData knowledge base before searching lore.',
     );
+  }
+
+  /// True when [query] is an entity-id literal rather than a display name:
+  /// either canonical (`enemy:enemy_1554_lrtsia`, `char_002_amiya` is the
+  /// suffix-only form of `char:char_002_amiya`) or starts with a known
+  /// namespace prefix (`enemy_`, `char_`, `trap_`, `token_`, `uni_`…).
+  /// Plain Chinese/display names never match.
+  bool _looksLikeEntityId(String query) {
+    final q = query.trim();
+    if (q.isEmpty) return false;
+    if (q.contains(':')) return true;
+    return RegExp(r'^(enemy|char|trap|token|uni|speaker|player|item|skill)_')
+        .hasMatch(q);
   }
 
   ToolExecutionResult _formatGameDataResults(
@@ -209,7 +266,7 @@ class SearchLocalLoreTool extends AgentTool {
       }
       if (result.lineStart != null || result.lineEnd != null) {
         buffer.writeln(
-            'Lines: ${result.lineStart ?? '?'}-${result.lineEnd ?? '?'}');
+            'Lines: ${result.lineStart ?? '?'}-${result.lineEnd ?? '?'}',);
       }
       buffer.writeln('Trust: GameData / game original text (highest).');
       buffer.writeln('Content Excerpt:\n${_excerpt(result.content)}');
@@ -232,32 +289,22 @@ class SearchLocalLoreTool extends AgentTool {
     String query,
     List<GameDataEntityCandidate> candidates,
   ) {
+    // R10: compact one-line-per-candidate form. The executor auto-picks the
+    // top candidate; a bloated observation would fill the planner's recent
+    // window and keep the model looping on the same ambiguous query.
+    // R11: each line also carries entity_type so the disambiguation helper
+    // (and the model) can choose by semantic fit with the user question.
     final buffer = StringBuffer()
       ..writeln('Ambiguous GameData entity query: "$query".')
-      ..writeln(
-        'Multiple exact entity candidates were found. Ask the user to choose one, or call search_local_lore again with entity_id.',
-      )
-      ..writeln();
-
+      ..writeln('候选实体（请用 Entity ID 消歧）:');
     for (var i = 0; i < candidates.length; i++) {
       final candidate = candidates[i];
-      buffer.writeln('=== Candidate #${i + 1} ===');
-      buffer.writeln('Entity ID: ${candidate.entityId}');
-      buffer.writeln('Name: ${candidate.name}');
-      buffer.writeln('Entity Type: ${candidate.entityType}');
-      buffer.writeln('Matched Alias: ${candidate.matchedAlias}');
-      buffer.writeln('Match Type: ${candidate.matchType}');
       buffer.writeln(
-        'Confidence: ${candidate.confidence.toStringAsFixed(2)}',
+        '  ${i + 1}. ${candidate.entityId} | ${candidate.name} | '
+        '${candidate.entityType} | ${candidate.sourceType} | '
+        '${candidate.matchType} | ${candidate.confidence.toStringAsFixed(2)}',
       );
-      buffer.writeln('Source Type: ${candidate.sourceType}');
-      if (candidate.sourcePath != null) {
-        buffer.writeln('Source Path: ${candidate.sourcePath}');
-      }
-      buffer.writeln('Trust: GameData / game original text (highest).');
-      buffer.writeln();
     }
-
     return ToolExecutionResult(observation: buffer.toString().trim());
   }
 

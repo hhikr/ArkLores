@@ -10,10 +10,16 @@ enum AppTheme {
   endfield,
 }
 
+/// Initial theme read from persisted storage in `main()` and injected here.
+///
+/// Defaults to [AppTheme.ark] so tests and non-overridden environments keep
+/// the historical default; `main()` always overrides it with the saved value.
+final initialThemeProvider = Provider<AppTheme>((ref) => AppTheme.ark);
+
 /// Notifier that holds the current [AppThemeTokens] instance and allows
 /// switching between [ArkThemeTokens] and [EndfieldThemeTokens].
 class ThemeNotifier extends StateNotifier<AppThemeTokens> {
-  ThemeNotifier() : super(ArkThemeTokens());
+  ThemeNotifier(super.initial);
 
   void switchTo(AppTheme theme) {
     switch (theme) {
@@ -40,5 +46,8 @@ class ThemeNotifier extends StateNotifier<AppThemeTokens> {
 /// Global theme provider — all UI components read tokens via [ref.watch].
 final themeProvider =
     StateNotifierProvider<ThemeNotifier, AppThemeTokens>((ref) {
-  return ThemeNotifier();
+  final initial = ref.watch(initialThemeProvider);
+  return ThemeNotifier(
+    initial == AppTheme.endfield ? EndfieldThemeTokens() : ArkThemeTokens(),
+  );
 });

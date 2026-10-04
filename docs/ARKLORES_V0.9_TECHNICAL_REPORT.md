@@ -1,9 +1,19 @@
 # ArkLores v0.9 技术与运行原理报告
 
+> **快照说明（2026-10）**：本文是 v0.9.0 的审计快照，不随后续版本逐段更新。
+> Agent 层（PlannerLoop、证据笔记、可选向量召回等）与 schema 3/4 的现状以
+> `AI_ARCHITECTURE.md` 为准，已知缺口以 `KNOWN_LIMITATIONS_AND_DEBT.md` 为准。
+
 > 审计基准：v0.9.0 release line，工程版本 `0.9.0+9`<br>
 > 审计日期：2026-07-15<br>
 > 报告范围：Git 跟踪的源码、平台工程、工具、测试与全部维护文档<br>
 > 状态口径：v0.9 功能开发、分支合并、tag、推送与 GitHub Release 均已完成
+
+> 状态更新（2026-08）：v0.9.0 封盘后，开发者已在代表性 Android 真机上完成个人验收
+> （知识库下载/安装/替换、检索、三个 Agent 对话、Wiki 双站浏览与阅读器、双主题/双语、
+> TalkBack 与横屏），结果符合预期；dev 分支仍在持续迭代（Wiki 阅读器与站点适配、
+> 设置扩展等），v0.9 不是最后的测试版本。本文档作为 v0.9 封盘审计基准保留；
+> 后续状态以 `RETRIEVAL_QA.md` 与 `KNOWN_LIMITATIONS_AND_DEBT.md` 为准。
 
 ## 1. 执行摘要
 

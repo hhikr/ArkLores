@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
-import 'package:arklores/core/agent/tools/search_local_lore.dart';
+import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/agent/story_qa_agent.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
@@ -29,7 +29,7 @@ void main() {
           : false;
 
   late OpenAICompatibleClient client;
-  late FactCheckAgent agent;
+  late StoryQaAgent agent;
   late HttpOverrides? previousHttpOverrides;
 
   setUpAll(() {
@@ -48,11 +48,9 @@ void main() {
       ),
       timeout: const Duration(seconds: 90),
     );
-    agent = FactCheckAgent(
+    agent = StoryQaAgent(
       llmClient: client,
-      searchTool: SearchLocalLoreTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: db.path),
-      ),
+      gameDataStore: GameDataKnowledgeStore(dbPath: db.path),
     );
   });
 
@@ -93,11 +91,7 @@ void main() {
         FactCheckVerdict.supported,
         reason: diagnostics,
       );
-      expect(
-        result.observations,
-        contains('scoped_story_evidence'),
-        reason: diagnostics,
-      );
+
       expect(
         result.observations,
         contains('activities/act21mini/level_act21mini_st'),
@@ -141,19 +135,20 @@ Map<String, String> _readApiInfo(File file) {
   return values;
 }
 
-Future<_LiveResult> _runCase(FactCheckAgent agent, String claim) async {
+Future<_LiveResult> _runCase(StoryQaAgent agent, String claim) async {
   final observations = StringBuffer();
   final answer = StringBuffer();
   final errors = <String>[];
   var toolCalls = 0;
-  await for (final event in agent.checkClaim(claim: claim)) {
+  await for (final event in agent.run(query: claim)) {
     if (event.type == ReActEventType.toolCall) toolCalls++;
     if (event.type == ReActEventType.toolObservation) {
       observations.writeln(event.content);
     }
-    if (event.type == ReActEventType.finalAnswerToken) {
-      answer.write(event.content);
-    }
+    final next = applyAnswerEvent(answer.toString(), event);
+    answer
+      ..clear()
+      ..write(next);
     if (event.type == ReActEventType.error) errors.add(event.content);
   }
   final content = answer.toString();
@@ -167,11 +162,6 @@ Future<_LiveResult> _runCase(FactCheckAgent agent, String claim) async {
 }
 
 class _LiveResult {
-  final FactCheckVerdict? verdict;
-  final String answer;
-  final String observations;
-  final int toolCalls;
-  final List<String> errors;
 
   const _LiveResult({
     required this.verdict,
@@ -180,6 +170,11 @@ class _LiveResult {
     required this.toolCalls,
     required this.errors,
   });
+  final FactCheckVerdict? verdict;
+  final String answer;
+  final String observations;
+  final int toolCalls;
+  final List<String> errors;
 
   String get diagnostics => [
         ...errors,

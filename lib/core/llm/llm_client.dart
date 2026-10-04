@@ -23,24 +23,14 @@ enum MessageRole {
 
 /// A single message in a conversation.
 class Message {
-  final MessageRole role;
-  final String content;
-  final String? toolCallId;
-  final List<Map<String, dynamic>>? toolCalls;
 
   const Message({
     required this.role,
     required this.content,
     this.toolCallId,
     this.toolCalls,
+    this.reasoningContent,
   });
-
-  Map<String, dynamic> toJson() => {
-        'role': role.jsonValue,
-        'content': content,
-        if (toolCallId != null) 'tool_call_id': toolCallId,
-        if (toolCalls != null) 'tool_calls': toolCalls,
-      };
 
   factory Message.system(String content) =>
       Message(role: MessageRole.system, content: content);
@@ -50,20 +40,75 @@ class Message {
 
   factory Message.assistant(String content) =>
       Message(role: MessageRole.assistant, content: content);
+
+  /// R17: an assistant turn that called [calls].
+  factory Message.assistantToolCalls(
+    String content,
+    List<ToolCall> calls, {
+    String? reasoningContent,
+  }) =>
+      Message(
+        role: MessageRole.assistant,
+        content: content,
+        toolCalls: [for (final call in calls) call.toJson()],
+        reasoningContent: reasoningContent,
+      );
+
+  /// R17: the result of the tool call [callId].
+  factory Message.toolResult(String callId, String content) =>
+      Message(role: MessageRole.tool, content: content, toolCallId: callId);
+
+  final MessageRole role;
+  final String content;
+  final String? toolCallId;
+  final List<Map<String, dynamic>>? toolCalls;
+
+  /// R17: hidden reasoning of an assistant tool-call turn. Thinking-mode
+  /// providers (deepseek) require it back within the same question; the
+  /// client sends it only to providers that accept it.
+  final String? reasoningContent;
+
+  Map<String, dynamic> toJson() => {
+        'role': role.jsonValue,
+        'content': content,
+        if (toolCallId != null) 'tool_call_id': toolCallId,
+        if (toolCalls != null) 'tool_calls': toolCalls,
+      };
+}
+
+/// R17: one function call requested by the model.
+class ToolCall {
+  const ToolCall({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+
+  final String id;
+  final String name;
+
+  /// Raw JSON arguments as the model wrote them (may be malformed).
+  final String arguments;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': 'function',
+        'function': {'name': name, 'arguments': arguments},
+      };
 }
 
 /// Configuration for LLM API connections.
 class LLMConfig {
+
+  const LLMConfig({
+    this.chatBaseUrl = 'https://api.z.ai/api/paas/v4',
+    this.chatApiKey = '',
+    this.chatModel = 'glm-5.3-flash',
+  });
   // ── Chat API ─────────────────────────────────────────────
   final String chatBaseUrl;
   final String chatApiKey;
   final String chatModel;
-
-  const LLMConfig({
-    this.chatBaseUrl = 'https://api.deepseek.com/v1',
-    this.chatApiKey = '',
-    this.chatModel = 'deepseek-v4-flash',
-  });
 
   LLMConfig copyWith({
     String? chatBaseUrl,
@@ -99,28 +144,158 @@ class LLMConfig {
 
 /// Exception thrown by LLM operations.
 class LLMException implements Exception {
+
+  const LLMException(this.message, {this.statusCode, this.body});
   final String message;
   final int? statusCode;
   final String? body;
-
-  const LLMException(this.message, {this.statusCode, this.body});
 
   @override
   String toString() =>
       'LLMException: $message${statusCode != null ? ' ($statusCode)' : ''}';
 }
 
+/// Wall-clock timing of one completion request (measurement only).
+class CallTiming {
+  const CallTiming({
+    required this.startedAt,
+    required this.endedAt,
+    this.headersAt,
+    this.firstDataAt,
+    this.firstTokenAt,
+    this.rateLimitRetries = 0,
+    this.rateLimitSleep = Duration.zero,
+    this.streamed = false,
+  });
+
+  /// The request was sent (before any 429 wait).
+  final DateTime startedAt;
+
+  /// The answer is complete.
+  final DateTime endedAt;
+
+  /// Response headers arrived (after the last 429).
+  final DateTime? headersAt;
+
+  /// First streamed event of any kind (tool-call fragments included).
+  final DateTime? firstDataAt;
+
+  /// First visible-answer or reasoning text.
+  final DateTime? firstTokenAt;
+
+  /// 429 answers waited out before this one succeeded, and the time slept.
+  final int rateLimitRetries;
+  final Duration rateLimitSleep;
+  final bool streamed;
+
+  Duration get total => endedAt.difference(startedAt);
+
+  Map<String, Object?> toJson() => {
+        'total_ms': total.inMilliseconds,
+        if (headersAt != null)
+          'headers_ms': headersAt!.difference(startedAt).inMilliseconds,
+        if (firstDataAt != null)
+          'first_data_ms': firstDataAt!.difference(startedAt).inMilliseconds,
+        if (firstTokenAt != null)
+          'first_token_ms': firstTokenAt!.difference(startedAt).inMilliseconds,
+        'rate_limit_retries': rateLimitRetries,
+        'rate_limit_sleep_ms': rateLimitSleep.inMilliseconds,
+        'streamed': streamed,
+      };
+}
+
 /// Metadata returned by a chat completion.
 class ChatCompletionResult {
-  final String content;
-  final String? finishReason;
 
   const ChatCompletionResult({
     required this.content,
     this.finishReason,
+    this.promptTokens,
+    this.completionTokens,
+    this.cachedPromptTokens,
+    this.toolCalls = const [],
+    this.reasoningContent = '',
+    this.timing,
   });
+  final String content;
+
+  /// How long the request took (set by [OpenAICompatibleClient]).
+  final CallTiming? timing;
+  final String? finishReason;
+
+  /// R17: function calls of this turn (empty for a plain answer).
+  final List<ToolCall> toolCalls;
+
+  /// R17: hidden reasoning of this turn, when the provider returns it.
+  final String reasoningContent;
+
+  /// Provider-reported usage (null when the provider omits it). Hidden
+  /// reasoning tokens are included in [completionTokens].
+  final int? promptTokens;
+  final int? completionTokens;
+  final int? cachedPromptTokens;
 
   bool get wasTruncated => finishReason == 'length';
+}
+
+/// R16: how much hidden reasoning a call may use. Mapped to each provider's
+/// own switch; for providers without a known switch nothing is sent.
+enum ReasoningLevel { off, low, high }
+
+/// One increment of a streamed completion (R16). The last delta of a stream
+/// has [done] set and carries [finishReason] and usage when the provider
+/// reports them.
+class CompletionDelta {
+  const CompletionDelta({
+    this.content = '',
+    this.reasoningContent = '',
+    this.done = false,
+    this.finishReason,
+    this.promptTokens,
+    this.completionTokens,
+    this.cachedPromptTokens,
+    this.toolCalls = const [],
+  });
+
+  /// R17: the completed function calls of the turn, set on the `done` delta.
+  final List<ToolCall> toolCalls;
+
+  /// Visible answer text of this increment.
+  final String content;
+
+  /// Hidden-reasoning text of this increment (shown live, never persisted).
+  final String reasoningContent;
+  final bool done;
+  final String? finishReason;
+  final int? promptTokens;
+  final int? completionTokens;
+  final int? cachedPromptTokens;
+}
+
+/// Collects a delta stream into the completed result, forwarding each delta
+/// to [onDelta] as it arrives.
+Future<ChatCompletionResult> collectCompletion(
+  Stream<CompletionDelta> deltas, {
+  void Function(CompletionDelta delta)? onDelta,
+}) async {
+  final content = StringBuffer();
+  final reasoning = StringBuffer();
+  CompletionDelta? last;
+  await for (final delta in deltas) {
+    content.write(delta.content);
+    reasoning.write(delta.reasoningContent);
+    onDelta?.call(delta);
+    if (delta.done) last = delta;
+  }
+  return ChatCompletionResult(
+    content: content.toString(),
+    finishReason: last?.finishReason,
+    promptTokens: last?.promptTokens,
+    completionTokens: last?.completionTokens,
+    cachedPromptTokens: last?.cachedPromptTokens,
+    toolCalls: last?.toolCalls ?? const [],
+    reasoningContent: reasoning.toString(),
+  );
 }
 
 /// Abstract LLM client interface.
@@ -158,13 +333,62 @@ abstract class LLMClient {
     return ChatCompletionResult(content: content);
   }
 
-  /// Sends a chat completion request and streams the response tokens
-  /// via the [onToken] callback. Returns the full assembled response.
-  Future<String> chatStream(
+  /// R16: streams a chat completion as [CompletionDelta]s; the last one has
+  /// `done` set. This default yields the whole [chatCompletion] result at
+  /// once, so clients without streaming (and test fakes) still work.
+  Stream<CompletionDelta> streamCompletion(
     List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
-  });
+  }) async* {
+    final result = await chatCompletion(
+      messages,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      stop: stop,
+    );
+    yield CompletionDelta(content: result.content);
+    yield CompletionDelta(
+      done: true,
+      finishReason: result.finishReason,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+      cachedPromptTokens: result.cachedPromptTokens,
+    );
+  }
+
+  /// R17: one streamed agent turn with function calling. [tools] are
+  /// OpenAI-style function definitions; [toolChoice] `none` forbids calls
+  /// (the final answer after the turn limit). The `done` delta carries the
+  /// turn's [CompletionDelta.toolCalls]. This default runs [chatCompletion]
+  /// once, so clients and fakes without streaming still work.
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) async* {
+    final result = await chatCompletion(
+      messages,
+      tools: tools,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
+    if (result.content.isNotEmpty || result.reasoningContent.isNotEmpty) {
+      yield CompletionDelta(
+        content: result.content,
+        reasoningContent: result.reasoningContent,
+      );
+    }
+    yield CompletionDelta(
+      done: true,
+      finishReason: result.finishReason,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+      cachedPromptTokens: result.cachedPromptTokens,
+      toolCalls: result.toolCalls,
+    );
+  }
 }

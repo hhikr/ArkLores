@@ -1,11 +1,6 @@
 enum WikiAiTarget { summary, factCheck }
 
 class WikiAiContext {
-  final String selectedText;
-  final String pageTitle;
-  final String pageUrl;
-  final String siteLabel;
-  final WikiAiTarget target;
 
   const WikiAiContext({
     required this.selectedText,
@@ -14,6 +9,11 @@ class WikiAiContext {
     required this.siteLabel,
     required this.target,
   });
+  final String selectedText;
+  final String pageTitle;
+  final String pageUrl;
+  final String siteLabel;
+  final WikiAiTarget target;
 
   bool get hasSelection => selectedText.trim().isNotEmpty;
 }

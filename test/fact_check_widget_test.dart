@@ -1,17 +1,17 @@
 import 'dart:async';
 
 import 'package:arklores/core/agent/agent_provider.dart';
-import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
 import 'package:arklores/core/agent/roleplay_session_store.dart';
+import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
-import 'package:arklores/features/ai/wiki_ai_context.dart';
 import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/features/ai/widgets/roleplay_tab.dart';
+import 'package:arklores/features/ai/wiki_ai_context.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
@@ -93,7 +93,7 @@ void main() {
           initialApiConfigProvider.overrideWithValue(
             const LLMConfig(chatApiKey: 'test-key'),
           ),
-          llmClientProvider.overrideWithValue(client),
+          llmClientProvider.overrideWith((ref, level) => client),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
@@ -104,16 +104,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('剧情梗概').last);
-    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '阿米娅');
     await tester.tap(find.byTooltip('发送'));
     await tester.pump();
     expect(find.byTooltip('取消'), findsOneWidget);
     await tester.tap(find.byTooltip('取消'));
     await tester.pump();
-    expect(find.text('已取消本次梗概生成。'), findsOneWidget);
-    expect(find.byTooltip('重试'), findsOneWidget);
+    expect(find.text('已取消本次回答。'), findsOneWidget);
+    // R15: retry sits in the app bar's overflow menu.
+    await tester.tap(find.byTooltip('更多'));
+    await tester.pumpAndSettle();
+    expect(find.text('重试'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -181,7 +182,7 @@ void main() {
     expect(find.text('阿米娅'), findsWidgets);
     expect(find.textContaining('char_002_amiya'), findsWidgets);
     expect(find.text('角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。'),
-        findsOneWidget);
+        findsOneWidget,);
     expect(find.text('你好'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -194,7 +195,8 @@ void main() {
           initialApiConfigProvider.overrideWithValue(
             const LLMConfig(chatApiKey: 'test-key'),
           ),
-          llmClientProvider.overrideWithValue(_FinalAnswerLLMClient()),
+          llmClientProvider
+              .overrideWith((ref, level) => _FinalAnswerLLMClient()),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
@@ -216,7 +218,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('剧情梗概'), findsWidgets);
+    expect(find.text('AI 问答'), findsOneWidget); // Ask tab in the app bar
     expect(find.textContaining('Wiki reading context'), findsOneWidget);
     expect(find.textContaining('not GameData evidence'), findsOneWidget);
     expect(find.textContaining('阿米娅是罗德岛的公开领袖。'), findsOneWidget);
@@ -229,17 +231,6 @@ class _SilentLLMClient extends LLMClient {
   Future<String> chat(
     List<Message> messages, {
     List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
@@ -259,17 +250,6 @@ class _FinalAnswerLLMClient extends LLMClient {
   }) async {
     return 'Final Answer: 已收到 Wiki 上下文，将使用 GameData 单独核验。';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) {
-    throw UnimplementedError();
-  }
 }
 
 class _PendingLLMClient extends LLMClient {
@@ -277,16 +257,6 @@ class _PendingLLMClient extends LLMClient {
   Future<String> chat(
     List<Message> messages, {
     List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      Completer<String>().future;
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,

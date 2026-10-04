@@ -1,0 +1,129 @@
+{
+  "format": "arklores_eval",
+  "version": 1,
+  "status": "DRAFT — gold stories proposed by keyword anchors (tools: build-time LIKE probe); needs human review",
+  "notes": [
+    "Evaluation fixture only (CLAUDE.md anti-fixture rule): never referenced from lib/.",
+    "gold_stories: stories whose lines directly support an answer; recall = share of gold stories the run actually READ.",
+    "anchor: the line that made the story gold (story_id line text) — review these first.",
+    "Negative cases have no gold; a good run says the knowledge base does not cover them."
+  ],
+  "cases": [
+    {"id": "amiya_crown", "type": "经过", "query": "阿米娅是怎样继承“黑色王冠”、成为罗德岛领袖的？",
+     "gold_stories": [
+       {"story_id": "activities/act33side/level_act33side_10_beg.txt", "anchor": "L2 那顶黑色的王冠终于安稳地传递到了阿米娅的手中"},
+       {"story_id": "activities/act33side/level_act33side_10_end.txt", "anchor": "L60 我寄留于王冠中的意识，借由这个孩子的身体与你告别"}]},
+    {"id": "chernobog_crash", "type": "经过", "query": "切尔诺伯格核心城为什么会和龙门相撞？罗德岛是怎么应对的？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_st_06-03.txt", "anchor": "L279 再过三十六个小时，切尔诺伯格核心城就会与龙门相撞"},
+       {"story_id": "obt/main/level_main_07-03_beg.txt", "anchor": "L40 去阻止切尔诺伯格核心城与与龙门城的冲撞"}]},
+    {"id": "chernobog_incident", "type": "经过", "query": "切尔诺伯格事件中罗德岛经历了什么？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_02-02_end.txt", "anchor": "L18 罗德岛不仅亲历了切尔诺伯格事件……经历了天灾"},
+       {"story_id": "obt/main/level_main_07-01_end.txt", "anchor": "L60 切尔诺伯格没有提前拆分地块，面对天灾的袭击"}]},
+    {"id": "talulah_after_chernobog", "type": "经过", "query": "塔露拉在切尔诺伯格事件之后做了哪些事情？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_st_09-04.txt", "anchor": "L264 塔露拉：我会活下去。（9-21 被整合运动带走）"},
+       {"story_id": "activities/act18mini/level_act18mini_st02.txt", "anchor": "L355 会回乌萨斯面对真正属于她的审判"},
+       {"story_id": "obt/main/level_spst_16-01.txt", "anchor": "L77 我们只需等待一个时机（EG-7 农庄）"},
+       {"story_id": "obt/main/level_main_17-16_end.txt", "anchor": "L21 把乌萨斯的军队都交给我（17-17 攻入石墙）"}]},
+    {"id": "talulah_kaschey", "type": "关系", "query": "塔露拉和科西切是什么关系？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_08-05_end.txt", "anchor": "L101 塔露拉，你会去统治那些注定由你来统治的人"},
+       {"story_id": "obt/main/level_main_08-17_end.txt", "anchor": "L44 你可以说我们是黑蛇，也可以说，我就是塔露拉"}]},
+    {"id": "kaschey_control", "type": "原因", "query": "塔露拉为什么会继承科西切的一切？科西切是怎样影响她的？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_08-16_beg.txt", "anchor": "L6 塔露拉她确实继承了科西切的一切"},
+       {"story_id": "obt/main/level_main_08-17_end.txt", "anchor": "L37 科西切！你对塔露拉小姐做的一切"}]},
+    {"id": "kaschey_duke", "type": "身份", "query": "科西切公爵是谁？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_07-02_end.txt", "anchor": "L121 遇见过科西切公爵与她的养女"},
+       {"story_id": "obt/main/level_main_08-16_beg.txt", "anchor": "L48 你一直自夸能够从精神的源石技艺里完整地保护自己，科西切公爵"}]},
+    {"id": "frostnova_end", "type": "经过", "query": "霜星最后怎么样了？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_06-15_end.txt", "anchor": "L10 我的兄弟姐妹们……我让他们白白死去了"},
+       {"story_id": "obt/main/level_main_06-14_beg.txt", "anchor": "L16 你们想要杀死整合运动的指挥官吧"}]},
+    {"id": "frostnova_origin", "type": "身份", "query": "霜星的身世是什么？她的父亲怎样了？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_st_06-02.txt", "anchor": "L38 但我真正的父亲很早就死了"}]},
+    {"id": "patriot_motive", "type": "动机", "query": "爱国者博卓卡斯替为什么站在整合运动一边？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_07-16_beg.txt", "anchor": "L39 我要看到，感染者和，乌萨斯的，另一种未来"},
+       {"story_id": "obt/main/level_main_07-16_end.txt", "anchor": "L14 许多萨卡兹，并不希望你这样的温迪戈无谓地牺牲掉"}]},
+    {"id": "w_motive", "type": "动机", "query": "W为什么认为博士要为特蕾西娅的死负责？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_14-16_end.txt", "anchor": "L49 害死特蕾西娅的凶手，怎么着都数不出第二个人"},
+       {"story_id": "obt/main/level_st_07-03.txt", "anchor": "L356 当时走进议长室、又知道……（W 的推论）"}]},
+    {"id": "theresa_death", "type": "凶手", "query": "导致特蕾西娅死亡的罪魁祸首是谁",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_13-15_beg.txt", "anchor": "L70 是他派刺客杀了特蕾西娅，自诩为王"},
+       {"story_id": "activities/act33side/level_act33side_10_beg.txt", "anchor": "L2 特蕾西娅将议长室中的最后一名刺客抹除"},
+       {"story_id": "obt/main/level_main_14-16_end.txt", "anchor": "L49 害死特蕾西娅的凶手……"}]},
+    {"id": "chen_talulah", "type": "关系", "query": "陈和塔露拉是什么关系？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_07-02_beg.txt", "anchor": "L151 塔露拉是我的姐姐"}]},
+    {"id": "wei_chen", "type": "关系", "query": "魏彦吾和陈之间是什么关系？两人为什么起冲突？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_st_06-03.txt", "anchor": "L207 魏彦吾，你都做了什么？！"},
+       {"story_id": "obt/main/level_main_07-01_end.txt", "anchor": "L108 陈警司，不要自诩有志之士"}]},
+    {"id": "wei_infected", "type": "原因", "query": "魏彦吾对感染者是什么态度？为什么？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_07-02_end.txt", "anchor": "L144 我不依靠感染者，也不相信感染者"}]},
+    {"id": "theresis_londinium", "type": "原因", "query": "特雷西斯为什么要去伦蒂尼姆？",
+     "gold_stories": [
+       {"story_id": "activities/act33side/level_act33side_08_beg.txt", "anchor": "L95 特雷西斯因卡文迪许公爵的最后通牒提前奔赴伦蒂尼姆"},
+       {"story_id": "obt/main/level_st_10-01.txt", "anchor": "L4 飞空艇……去往伦蒂尼姆的上空"}]},
+    {"id": "ascalon_who", "type": "身份", "query": "阿斯卡纶是谁？她和特雷西斯是什么关系？",
+     "gold_stories": [
+       {"story_id": "obt/memory/story_ascln_1_1.txt", "anchor": "干员密录（阿斯卡纶）"},
+       {"story_id": "obt/main/level_main_15-01_end.txt", "anchor": "L5 你在消散，“阿斯卡纶”"}]},
+    {"id": "kaltsit_babel", "type": "关系", "query": "巴别塔时期凯尔希和博士是什么关系？",
+     "gold_stories": [
+       {"story_id": "activities/act33side/level_act33side_04_end.txt", "anchor": "L19 为了博士的安全……抹除他的登舰记录"},
+       {"story_id": "activities/act33side/level_act33side_06_end.txt", "anchor": "L99 巴别塔的博士依旧是孑然一身"}]},
+    {"id": "sarkaz_court", "type": "时间线", "query": "萨卡兹王庭是怎样失去对卡兹戴尔的管理权的？",
+     "gold_stories": [
+       {"story_id": "activities/act33side/level_act33side_01_end.txt", "anchor": "L16 卡兹戴尔的正式管理者从此只有军事委员会"}]},
+    {"id": "skadi_hunter", "type": "身份", "query": "斯卡蒂是什么人？深海猎人是怎样的群体？",
+     "gold_stories": [
+       {"story_id": "activities/act17side/level_act17side_st08.txt", "anchor": "L63 斯卡蒂一度认为，深海猎人只剩她最后一人"},
+       {"story_id": "activities/act17side/level_act17side_10_end.txt", "anchor": "L113 我是深海猎人，斯卡蒂"}]},
+    {"id": "mon3tr_cocoon", "type": "事件", "query": "第十五章最后Mon3tr发生了什么？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_15-18_end.txt", "anchor": "L66 用丝线缠起Mon3tr化成的“茧”"}]},
+    {"id": "mephisto_faust", "type": "关系", "query": "梅菲斯特和浮士德是什么关系？浮士德后来怎样了？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_05-10_end.txt", "anchor": "L38 为什么不射击她？浮士德！"},
+       {"story_id": "obt/main/level_main_06-05_end.txt", "anchor": "L93 浮士德！"}]},
+    {"id": "crownslayer_ch3", "type": "经过", "query": "碎骨在龙门的行动中做了什么？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_03-02_end.txt", "anchor": "L4 听碎骨他说了好久"},
+       {"story_id": "obt/main/level_main_03-03_end.txt", "anchor": "L0 碎骨：你看。"}]},
+    {"id": "maria_nearl", "type": "身份", "query": "玛莉娅·临光是谁？她在骑士竞赛中取得了什么成绩？",
+     "gold_stories": [
+       {"story_id": "activities/act13d5/level_act13d5_02_end.txt", "anchor": "L2 这个继承了临光之名的小女孩"},
+       {"story_id": "activities/act13d5/level_act13d5_05_end.txt", "anchor": "L27 玛莉娅·临光紧随其后——斩获压线"}]},
+    {"id": "saria_injury", "type": "经过", "query": "塞雷娅受伤后赫默是怎么救治她的？",
+     "gold_stories": [
+       {"story_id": "activities/act25side/level_act25side_04_beg.txt", "anchor": "L129 塞雷娅的体温稳定了下来，危险期已经过去了"},
+       {"story_id": "activities/act25side/level_act25side_04_end.txt", "anchor": "L183 我还好。塞雷娅……"}]},
+    {"id": "mostima_lateran", "type": "原因", "query": "莫斯提马为什么离开拉特兰成为信使？",
+     "gold_stories": [
+       {"story_id": "activities/act42side/level_act42side_09_end.txt", "anchor": "L68 意外堕了天……这样就可以不用一直待在拉特兰"}]},
+    {"id": "priestess_who", "type": "身份", "query": "普瑞赛斯是谁？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_15-11_beg.txt", "anchor": "L36 我的名字是普瑞赛斯"},
+       {"story_id": "obt/main/level_main_14-17_beg.txt", "anchor": "L14 普瑞赛斯与博士的对话"}]},
+    {"id": "doctor_amnesia", "type": "原因", "query": "博士为什么失去了记忆？罗德岛的人怎么看待失忆前后的博士？",
+     "gold_stories": [
+       {"story_id": "activities/act25side/level_act25side_08_end.txt", "anchor": "L7 所以，“失忆”。为什么你不把所有事情重新告诉这个……“博士”"},
+       {"story_id": "activities/act25side/level_act25side_09_end.txt", "anchor": "L190 她们眼里的那位巴别塔的指挥官，与罗德岛的博士您真的是同一个人吗"}]},
+    {"id": "reunion_founder", "type": "身份", "query": "整合运动的建立者是谁？",
+     "gold_stories": [
+       {"story_id": "obt/main/level_main_13-01_end.txt", "anchor": "L26 整合运动的建立者，感染者的领袖"}]},
+    {"id": "neg_fictional", "type": "负例", "query": "虚构角色泽克洛斯在剧情中做了什么？", "gold_stories": []},
+    {"id": "r18_overview_framing", "type": "概括/叙述框架（R18 §5.9）", "query": "众生行迹中安多恩做了哪些事情？", "gold_stories": []},
+    {"id": "r18_name_branches", "type": "人物/写错的名字（R18）", "query": "缪因是谁？", "gold_stories": []},
+    {"id": "neg_future", "type": "负例", "query": "罗德岛在2030年公开举办过庆典吗？", "gold_stories": []}
+  ]
+}

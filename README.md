@@ -3,20 +3,21 @@
 > Arknights AI-enhanced reading companion - 明日方舟剧情智能助手
 
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Flutter 应用。
-当前版本 v0.9.0 已完成双主题设计系统与设置界面重构，并继续使用中文 GameData release asset
-作为主知识源，并提供带原文引用的梗概、
-事实核查、证据约束的角色扮演，以及 Wiki 阅读上下文转交到 AI workflow。
+当前版本 v0.10.0（正式版）使用中文 GameData release asset 作为主知识源，剧情问答由一个模型直接查询知识库（只读 SQL、全库检索、
+整章阅读）作答，提供带行级原文引用的剧情问答与调查、梗概、事实核查、证据约束的角色扮演，以及 Wiki 阅读上下文转交到 AI workflow；
+可选的剧情向量召回需要在设置中配置向量 API。
 
-Latest release: [v0.9.0](https://github.com/hhikr/ArkLores/releases/tag/v0.9.0)
+Latest release: [v0.10.0](https://github.com/hhikr/ArkLores/releases/tag/v0.10.0)
 
 ## 当前方向
 
 - 中文 GameData 结构化知识库是主知识源。
 - App 通过 GitHub Release asset 或开发期临时 URL 下载 `arklores_gamedata_zh.db.gz`。
-- 检索使用 SQLite 结构化表、别名表、精确匹配、LIKE 和 FTS。
+- 检索使用 SQLite 结构化表、别名表、精确匹配、LIKE、FTS 和确定性剧情覆盖层；
+  配置向量 API 后，剧情原文检索额外使用语义召回（只作定位线索，答案引用必须来自已读原文）。
 - Wiki 只作为浏览与人工补充材料，不再作为 Agent 主检索路径。
 - 用户导入资料功能暂缓，后续需重新设计为低可信来源。
-- AI 设置只保留 Chat API 配置。
+- AI 设置包含 Chat API 与可选的向量 API 配置。
 - Fact-check 对剧情命题使用 scope、实体和关系词交集检索；确定结论必须有直接 GameData
   evidence，证据不足时明确返回存疑或无法确认。
 - Role-play 先解析 canonical character 和稳定 `entity_id`，只使用 GameData 检索作为角色事实依据；
@@ -26,13 +27,15 @@ Latest release: [v0.9.0](https://github.com/hhikr/ArkLores/releases/tag/v0.9.0)
 
 ## 发布资产
 
-v0.9.0 GitHub Release 包含：
+v0.10.0 GitHub Release 包含：
 
-- `ArkLores-0.9.0.apk`：Android release-mode debug-certificate 验收包，SHA-256
-  `a261919380865efa1ed22f11f4eba09558adfeee1095ce4068d5a2cb8c5b686c`。
-- `arklores_gamedata_zh.db.gz`：schema 2 中文 GameData DB，SHA-256
-  `8870945a23e399b00736fff77883db8b1e4bd8eec866d9395aa0841ff01aabd5`。
-- `gamedata_manifest.json` / `gamedata_build_report.json`：来源、计数、大小和 hash 元数据。
+- `ArkLores-0.10.0.apk`：Android release 包，使用项目签名密钥（与之前的 0.10 预发布同一把密钥，可直接覆盖安装；从 v0.9 及更早版本升级需先卸载一次）。
+
+知识库资产同在本 Release 上：
+
+- `arklores_gamedata_zh.db.gz`：schema 4 中文 GameData DB（含可选剧情向量表与故事目录表），SHA-256
+  `f5f14283a42f9b678a598354e74033c2393da64e4e1b4bc470303f279c9aed53`。
+- `gamedata_manifest.json`：来源、计数、大小、hash、向量与故事目录元数据。
 
 ## 开始使用
 
@@ -65,9 +68,9 @@ v0.9.0 GitHub Release 包含：
 | 框架 | Flutter / Dart |
 | 状态管理 | Riverpod |
 | 数据库 | SQLite / sqflite |
-| 主知识库 | 中文 GameData 结构化 DB + FTS |
-| AI 接入 | OpenAI-compatible Chat API |
-| Agent | Summary / Fact-check / Role-play + Dart ReAct Loop + `search_local_lore` |
+| 主知识库 | 中文 GameData 结构化 DB + FTS + 剧情覆盖层 + 可选向量 |
+| AI 接入 | OpenAI-compatible Chat / Embedding API |
+| Agent | Ask（一个工具型 Agent 直接查库作答，不分模式）+ Role-play |
 
 ## 项目结构
 
@@ -89,5 +92,7 @@ tools/
 docs/
 ```
 
-完整运行原理见 [`docs/ARKLORES_V0.9_TECHNICAL_REPORT.md`](docs/ARKLORES_V0.9_TECHNICAL_REPORT.md)，
-当前路线与跨版本约束见 [`docs/implementation_plan.md`](docs/implementation_plan.md)。
+AI 与检索架构见 [`docs/AI_ARCHITECTURE.md`](docs/AI_ARCHITECTURE.md)，
+v0.9 运行原理快照见 [`docs/ARKLORES_V0.9_TECHNICAL_REPORT.md`](docs/ARKLORES_V0.9_TECHNICAL_REPORT.md)，
+当前路线与跨版本约束见 [`docs/implementation_plan.md`](docs/implementation_plan.md)，
+已知限制与技术债根因分析见 [`docs/KNOWN_LIMITATIONS_AND_DEBT.md`](docs/KNOWN_LIMITATIONS_AND_DEBT.md)。

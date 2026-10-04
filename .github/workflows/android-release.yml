@@ -1,0 +1,95 @@
+name: Android release APK
+
+# Builds a release APK signed with the project key (repository secrets) and
+# uploads it as a workflow artifact. Runs on pushes to release/** branches or
+# manually. The GameData download URL/SHA-256 come from the inputs, else from
+# tools/release_gamedata.env, and are baked in via --dart-define.
+on:
+  push:
+    branches: ['release/**']
+  workflow_dispatch:
+    inputs:
+      gamedata_db_url:
+        description: GameData .db.gz URL (default from tools/release_gamedata.env)
+        required: false
+      gamedata_db_sha256:
+        description: SHA-256 of the .db.gz (default from tools/release_gamedata.env)
+        required: false
+
+env:
+  # Fingerprint of the project signing certificate (public, not a secret).
+  # The build fails if the APK is signed with any other key.
+  EXPECTED_CERT_SHA256: b1b09ebfd22659b4b246ea87d67ff340a277e8031c14577caa5715519923e364
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+      - run: flutter pub get
+
+      - name: Write signing config
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/arklores-release.jks
+          {
+            echo "storeFile=arklores-release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+
+      - name: Build APK
+        env:
+          INPUT_URL: ${{ inputs.gamedata_db_url }}
+          INPUT_SHA: ${{ inputs.gamedata_db_sha256 }}
+        run: |
+          source tools/release_gamedata.env
+          url="${INPUT_URL:-$GAMEDATA_DB_URL}"
+          sha="${INPUT_SHA:-$GAMEDATA_DB_SHA256}"
+          echo "GameData: $url ($sha)"
+          # Phones only: 32/64-bit ARM (x86_64 is for emulators).
+          flutter build apk --release \
+            --target-platform android-arm,android-arm64 \
+            --dart-define=ARKLORES_GAMEDATA_DB_URL="$url" \
+            --dart-define=ARKLORES_GAMEDATA_DB_SHA256="$sha"
+
+      - name: Verify signature and name the APK
+        run: |
+          version=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          apk="ArkLores-${version}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$apk"
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs "$apk" | tee certs.txt
+          actual=$(grep -m1 'certificate SHA-256 digest' certs.txt | awk '{print $NF}')
+          if [ "$actual" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "Unexpected signing certificate: $actual" >&2
+            exit 1
+          fi
+          sha256sum "$apk" | tee "$apk.sha256"
+          echo "APK=$apk" >> "$GITHUB_ENV"
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f android/app/arklores-release.jks android/key.properties
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arklores-apk
+          path: |
+            ${{ env.APK }}
+            ${{ env.APK }}.sha256
+          retention-days: 14

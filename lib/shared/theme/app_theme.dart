@@ -25,6 +25,14 @@ abstract class AppThemeTokens {
   Color get accentPrimary;
   Color get accentSecondary;
 
+  /// The accent as text, icons and thin borders on [bgPrimary] / [cardSurface]
+  /// (contrast ≥ 4.5). [accentPrimary] itself is for fills and thick lines:
+  /// the Endfield signal yellow is unreadable as text on its light surfaces.
+  Color get accentText;
+
+  /// Text and icons drawn on an [accentPrimary] fill.
+  Color get onAccent;
+
   // ─── Semantic colors ───────────────────────────────────────────
   Color get warning;
   Color get danger;

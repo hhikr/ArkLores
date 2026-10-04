@@ -1,84 +1,39 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
-class GameDataSearchResult {
-  final String id;
-  final double score;
-  final String retrievalType;
-  final String sourceKind;
-  final String sourceType;
-  final String? contentCategory;
-  final String? contentSubtype;
-  final String? contentType;
-  final String? entityId;
-  final String? storyId;
-  final String title;
-  final String? section;
-  final String content;
-  final String? sourcePath;
-  final String? rawId;
-  final int? lineStart;
-  final int? lineEnd;
-  final String rankingReason;
+import 'build/gamedata_schema.dart' show storyLinesIndexName, storyLinesIndexSql;
+import 'game_retrieval.dart';
+import 'gamedata_query_plan.dart';
+import 'name_similarity.dart';
+import 'readonly_sql.dart';
+import 'story_catalog.dart';
+import 'story_line_search.dart';
+import 'story_vectors.dart';
 
-  const GameDataSearchResult({
-    required this.id,
-    required this.score,
-    required this.retrievalType,
-    required this.sourceKind,
-    required this.sourceType,
-    required this.title,
-    required this.content,
-    this.contentCategory,
-    this.contentSubtype,
-    this.contentType,
-    this.entityId,
-    this.storyId,
-    this.section,
-    this.sourcePath,
-    this.rawId,
-    this.lineStart,
-    this.lineEnd,
-    this.rankingReason = 'structured GameData match',
-  });
-}
+export 'gamedata_models.dart';
 
-class GameDataEntityCandidate {
-  final String entityId;
-  final String name;
-  final String entityType;
-  final String sourceType;
-  final String? sourcePath;
-  final String matchedAlias;
-  final String matchType;
-  final double confidence;
+class GameDataKnowledgeStore implements GameDataRetrieval {
 
-  const GameDataEntityCandidate({
-    required this.entityId,
-    required this.name,
-    required this.entityType,
-    required this.sourceType,
-    required this.matchedAlias,
-    required this.matchType,
-    required this.confidence,
-    this.sourcePath,
-  });
-}
-
-class GameDataKnowledgeStore {
+  GameDataKnowledgeStore({this.dbPath});
   final String? dbPath;
   sqflite.Database? _db;
 
-  GameDataKnowledgeStore({this.dbPath});
+  /// File identity captured when [_db] was opened. When the underlying DB file
+  /// is replaced (installer swap or an in-app rebuild), the cached handle would
+  /// keep serving the stale file; [_open] reopens when this stamp changes.
+  FileStat? _openedFileStat;
 
+  @override
   Future<bool> get isAvailable async {
     final path = await _resolveDbPath();
     return path != null && File(path).existsSync();
   }
 
+  @override
   Future<List<GameDataSearchResult>> search({
     required String query,
     int topK = 5,
@@ -88,7 +43,7 @@ class GameDataKnowledgeStore {
     String? scopeId,
   }) async {
     final plan =
-        _GameDataQueryPlan.from(query, explicitContentType: contentType);
+        GameDataQueryPlan.from(query, explicitContentType: contentType);
     final cleanQuery = plan.originalQuery;
     if (cleanQuery.isEmpty) return const [];
     final db = await _open();
@@ -266,6 +221,60 @@ class GameDataKnowledgeStore {
     return results.take(limit).toList();
   }
 
+  /// Resolves [raw] (an entity id, possibly suffix-only, or an exact entity
+  /// name/alias) to a canonical entity id.
+  ///
+  /// Order of attempt:
+  ///   1. exact `entities.id` match;
+  ///   2. if [raw] contains no namespace prefix (`:`), try prefixing each known
+  ///      namespace (`enemy:`, `char:` …) at most once;
+  ///   3. exact `entities.name` / `entity_aliases.alias` match.
+  /// Returns null when nothing resolves.
+  @override
+  Future<String?> resolveEntityId(String raw) async {
+    final value = raw.trim();
+    if (value.isEmpty) return null;
+    final db = await _open();
+    if (db == null) return null;
+
+    final direct = await db.rawQuery(
+      'SELECT id FROM entities WHERE id = ? LIMIT 1',
+      [value],
+    );
+    if (direct.isNotEmpty) return '${direct.first['id']}';
+
+    if (!value.contains(':')) {
+      // Suffix-only id: match any namespace prefix once (e.g. `enemy_1554_lrtsia`
+      // -> `enemy:enemy_1554_lrtsia`). Substring LIKE would over-match
+      // (`char_002` matching `char_002_amiya`); anchor to the suffix end.
+      final suffix = value.replaceAll('%', r'\%').replaceAll('_', r'\_');
+      final prefixed = await db.rawQuery(
+        "SELECT id FROM entities WHERE id = ? OR id LIKE ? ESCAPE '\\' LIMIT 1",
+        [value, '%:$suffix'],
+      );
+      if (prefixed.isNotEmpty) return '${prefixed.first['id']}';
+    }
+
+    final hasAliasTable = await _hasTable(db, 'entity_aliases');
+    if (hasAliasTable) {
+      final byName = await db.rawQuery(
+        '''
+        SELECT e.id
+        FROM entities e
+        LEFT JOIN entity_aliases ea ON ea.entity_id = e.id
+        WHERE e.name = ? OR ea.alias = ?
+        GROUP BY e.id
+        ORDER BY CASE WHEN e.name = ? THEN 0 ELSE 1 END
+        LIMIT 1
+        ''',
+        [value, value, value],
+      );
+      if (byName.isNotEmpty) return '${byName.first['id']}';
+    }
+    return null;
+  }
+
+  @override
   Future<List<GameDataEntityCandidate>> findEntityCandidates(
     String query, {
     int limit = 8,
@@ -298,7 +307,7 @@ class GameDataKnowledgeStore {
                 matchType:
                     row['name'] == cleanQuery ? 'name_exact' : 'legacy_like',
                 confidence: row['name'] == cleanQuery ? 1.0 : 0.6,
-              ))
+              ),)
           .toList();
     }
 
@@ -347,24 +356,573 @@ class GameDataKnowledgeStore {
               sourceType: row['source_type'] as String,
               sourcePath: row['source_path'] as String?,
               matchedAlias: row['matched_alias'] as String,
-              matchType: _candidateMatchType(row['rank'] as int?),
+              matchType: candidateMatchType(row['rank'] as int?),
               confidence: (row['confidence'] as num?)?.toDouble() ?? 1.0,
-            ))
+            ),)
         .toList();
+  }
+
+  /// Returns every appearance run of [entityId] across stories
+  /// (schema v3 `entity_story_mentions`), optionally limited to [scopeFilter]
+  /// (canonical scope key, e.g. `activity:act21mini`).
+  ///
+  /// Empty when the coverage tables are absent (old schema) or the entity has
+  /// no recorded mentions.
+  @override
+  Future<List<StoryCoverageEntry>> searchStoryCoverage({
+    required String entityId,
+    String? scopeFilter,
+  }) async {
+    final db = await _open();
+    if (db == null || !await _hasTable(db, 'entity_story_mentions')) {
+      return const [];
+    }
+    var sql = '''
+      SELECT m.entity_id, m.story_id, m.scope_id, m.line_start, m.line_end,
+             m.mention_count, m.matched_alias, p.title
+      FROM entity_story_mentions m
+      LEFT JOIN story_chapter_profiles p ON p.story_id = m.story_id
+      WHERE m.entity_id = ?
+    ''';
+    final args = <Object?>[entityId.trim()];
+    final scope = scopeFilter?.trim();
+    if (scope != null && scope.isNotEmpty) {
+      sql += ' AND m.scope_id = ?';
+      args.add(scope);
+    }
+    sql += ' ORDER BY m.scope_id, m.story_id, m.line_start';
+    final rows = await db.rawQuery(sql, args);
+    return [
+      for (final row in rows)
+        StoryCoverageEntry(
+          entityId: '${row['entity_id']}',
+          storyId: '${row['story_id']}',
+          scopeId: '${row['scope_id']}',
+          title: row['title'] as String?,
+          lineStart: (row['line_start'] as num).toInt(),
+          lineEnd: (row['line_end'] as num).toInt(),
+          mentionCount: (row['mention_count'] as num).toInt(),
+          matchedAlias: row['matched_alias'] as String?,
+        ),
+    ];
+  }
+
+  /// Reads raw story lines (schema 2 `story_lines`) for [storyId].
+  ///
+  /// Window semantics: [startLine]/[endLine] bound the range; [maxLines]
+  /// limits the page size; [pageToken] (opaque, from a previous page)
+  /// continues from that line. Returns [StoryLinesPage] with the next
+  /// continuation token when more lines remain.
+  @override
+  Future<StoryLinesPage> readStoryLines({
+    required String storyId,
+    int? startLine,
+    int? endLine,
+    int? maxLines,
+    String? pageToken,
+  }) async {
+    final db = await _open();
+    if (db == null) {
+      return const StoryLinesPage(lines: [], storyFound: false);
+    }
+    var fromLine = startLine;
+    if (pageToken != null && pageToken.trim().isNotEmpty) {
+      fromLine = int.tryParse(pageToken.trim());
+    }
+    if (fromLine == null || fromLine < 0) fromLine = 0;
+
+    final storyExists = await db.rawQuery(
+      'SELECT scope_type, scope_id FROM story_scopes WHERE story_id = ? LIMIT 1',
+      [storyId],
+    );
+    if (storyExists.isEmpty) {
+      return const StoryLinesPage(lines: [], storyFound: false);
+    }
+    final scopeType = '${storyExists.first['scope_type'] ?? ''}'.trim();
+    final scopeValue = '${storyExists.first['scope_id'] ?? ''}'.trim();
+    final scopeId = scopeType.isEmpty
+        ? null
+        : scopeValue.isEmpty
+            ? scopeType
+            : '$scopeType:$scopeValue';
+
+    // R16: 500 so a whole chapter fits one READ (the tool's observation
+    // budget still bounds what is returned).
+    final limit = (maxLines ?? 30).clamp(1, 500);
+    final windowEnd = endLine;
+    var sql = 'SELECT line_index, speaker, content FROM story_lines '
+        'WHERE story_id = ? AND line_index >= ?';
+    final args = <Object?>[storyId, fromLine];
+    if (windowEnd != null) {
+      sql += ' AND line_index <= ?';
+      args.add(windowEnd);
+    }
+    sql += ' ORDER BY line_index LIMIT ?';
+    args.add(limit + 1); // +1 to detect whether more lines follow.
+    final rows = await db.rawQuery(sql, args);
+
+    final hasMore = rows.length > limit;
+    final pageRows = hasMore ? rows.sublist(0, limit) : rows;
+    final lines = [
+      for (final row in pageRows)
+        StoryLineEntry(
+          lineIndex: (row['line_index'] as num).toInt(),
+          speaker: row['speaker'] as String?,
+          content: '${row['content'] ?? ''}',
+        ),
+    ];
+    final nextPageToken = hasMore && lines.isNotEmpty
+        ? '${lines.last.lineIndex + 1}'
+        : null;
+    return StoryLinesPage(
+      lines: lines,
+      storyFound: true,
+      scopeId: scopeId,
+      nextPageToken: nextPageToken,
+    );
+  }
+
+  /// Returns chapter profiles (schema v3 `story_chapter_profiles`) for the
+  /// given [storyIds] or all stories of [scopeId].
+  @override
+  Future<List<StoryChapterProfile>> getStoryMap({
+    List<String>? storyIds,
+    String? scopeId,
+  }) async {
+    final db = await _open();
+    if (db == null || !await _hasTable(db, 'story_chapter_profiles')) {
+      return const [];
+    }
+    var sql = 'SELECT * FROM story_chapter_profiles';
+    final args = <Object?>[];
+    final ids = storyIds
+        ?.map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    final scope = scopeId?.trim();
+    if (ids != null && ids.isNotEmpty) {
+      sql +=
+          ' WHERE story_id IN (${List.filled(ids.length, '?').join(',')})';
+      args.addAll(ids);
+    } else if (scope != null && scope.isNotEmpty) {
+      sql += ' WHERE scope_id = ?';
+      args.add(scope);
+    } else {
+      return const [];
+    }
+    sql += ' ORDER BY story_id';
+    final rows = await db.rawQuery(sql, args);
+    return [
+      for (final row in rows) _profileFromRow(row),
+    ];
+  }
+
+  StoryChapterProfile _profileFromRow(Map<String, Object?> row) {
+    List<String> stringList(Object? raw) {
+      if (raw is! String) return const [];
+      final decoded = _tryDecode(raw);
+      if (decoded is! List) return const [];
+      return [
+        for (final item in decoded) '$item',
+      ];
+    }
+
+    Map<String, int> intMap(Object? raw) {
+      if (raw is! String) return const {};
+      final decoded = _tryDecode(raw);
+      if (decoded is! Map) return const {};
+      return {
+        for (final entry in decoded.entries)
+          if (entry.value is num) '${entry.key}': (entry.value as num).toInt(),
+      };
+    }
+
+    return StoryChapterProfile(
+      storyId: '${row['story_id']}',
+      scopeId: '${row['scope_id']}',
+      title: row['title'] as String?,
+      lineStart: (row['line_start'] as num).toInt(),
+      lineEnd: (row['line_end'] as num).toInt(),
+      speakerSet: stringList(row['speaker_set']),
+      entityDensity: intMap(row['entity_density']),
+      summary: row['summary'] as String?,
+    );
+  }
+
+  Object? _tryDecode(String value) {
+    try {
+      return jsonDecode(value);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// Returns the subset of [bigrams] that exist in the `rare_terms` table
+  /// (schema v3). Used by `find_detail_echoes` as the IDF whitelist.
+  Future<Set<String>> filterRareTerms(Iterable<String> bigrams) async {
+    final db = await _open();
+    if (db == null || !await _hasTable(db, 'rare_terms')) return const {};
+    final unique = bigrams.toSet().toList(growable: false);
+    if (unique.isEmpty) return const {};
+    final rows = await db.rawQuery(
+      'SELECT term FROM rare_terms '
+      'WHERE term IN (${List.filled(unique.length, '?').join(',')})',
+      unique,
+    );
+    return {
+      for (final row in rows) '${row['term']}',
+    };
+  }
+
+  /// Returns all entity canonical names and aliases, used to exclude entity
+  /// names from detail-term extraction so they cannot dominate echo search.
+  Future<Set<String>> loadEntityNamesAndAliases() async {
+    final db = await _open();
+    if (db == null) return const {};
+    final names = await db.rawQuery('SELECT name FROM entities');
+    final namesSet = {
+      for (final row in names) '${row['name']}'.trim(),
+    }..remove('');
+    if (await _hasTable(db, 'entity_aliases')) {
+      final aliases = await db.rawQuery('SELECT alias FROM entity_aliases');
+      for (final row in aliases) {
+        final alias = '${row['alias']}'.trim();
+        if (alias.isNotEmpty) namesSet.add(alias);
+      }
+    }
+    return namesSet;
+  }
+
+  /// Searches `story_lines.content` with a LIKE pattern across all stories.
+  /// Returns raw rows; callers exclude the source story for echo searches.
+  Future<List<Map<String, Object?>>> searchStoryLinesContentLike(
+    String term, {
+    int limit = 50,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return db.rawQuery(
+      'SELECT story_id, line_index, speaker, content FROM story_lines '
+      'WHERE content LIKE ? ORDER BY story_id, line_index LIMIT ?',
+      ['%$term%', limit],
+    );
+  }
+
+  @override
+  Future<List<StoryLineHit>> searchStoryLinesLike(
+    List<String> terms, {
+    String? scopeId,
+    int storyLimit = 8,
+    int linesPerStory = 3,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryStoryLinesLike(
+      db,
+      terms,
+      scopeId: scopeId,
+      storyLimit: storyLimit,
+      linesPerStory: linesPerStory,
+    );
+  }
+
+  /// Vector index of the currently open DB (R12); loaded on first use and
+  /// dropped whenever the connection is reopened for a replaced file.
+  Future<StoryVectorIndex?>? _vectorIndex;
+
+  Future<StoryVectorIndex?> _loadVectorIndex() async {
+    final db = await _open();
+    if (db == null) return null;
+    return _vectorIndex ??= StoryVectorIndex.load(db);
+  }
+
+  @override
+  Future<({String model, int dims})?> get storyVectorInfo async {
+    final index = await _loadVectorIndex();
+    return index == null ? null : (model: index.model, dims: index.dims);
+  }
+
+  @override
+  Future<List<StoryChunkHit>> searchStoryChunksByVector(
+    List<double> queryVector, {
+    String? scopeId,
+    int topK = 20,
+  }) async {
+    final index = await _loadVectorIndex();
+    if (index == null) return const [];
+    return index.search(queryVector, topK: topK, scopeId: scopeId);
+  }
+
+  /// LIKE search restricted to a set of story ids (M4b: global term
+  /// prioritization for `collect_entity_evidence`). Escapes LIKE wildcards
+  /// in [term] so user-provided terms cannot broaden the match.
+  @override
+  Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
+    String term,
+    List<String> storyIds, {
+    int limit = 500,
+  }) async {
+    final db = await _open();
+    if (db == null || storyIds.isEmpty) return const [];
+    final escaped = term
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final placeholders = List.filled(storyIds.length, '?').join(',');
+    return db.rawQuery(
+      'SELECT story_id, line_index, speaker, content FROM story_lines '
+      'WHERE content LIKE ? ESCAPE \'\\\' AND story_id IN ($placeholders) '
+      'ORDER BY story_id, line_index LIMIT ?',
+      ['%$escaped%', ...storyIds, limit],
+    );
+  }
+
+  @override
+  Future<Map<String, StoryCatalogEntry>> storyCatalogEntries(
+    Iterable<String> storyIds,
+  ) async {
+    final db = await _open();
+    if (db == null) return const {};
+    return queryCatalogEntries(db, storyIds);
+  }
+
+  @override
+  Future<StoryCollection?> storyCollection(String query) async {
+    final db = await _open();
+    if (db == null) return null;
+    return queryStoryCollection(db, query);
+  }
+
+  @override
+  Future<List<StoryCatalogEntry>> storiesByCode(String code) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryStoriesByCode(db, code);
+  }
+
+  @override
+  Future<List<({String id, String label, int chapters})>> storyCollectionIndex({
+    String? like,
+    String? type,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryCollectionIndex(db, like: like, type: type);
+  }
+
+  @override
+  Future<List<StoryCatalogEntry>> searchStorySynopses(
+    List<String> terms, {
+    String? collectionId,
+    int limit = 5,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return querySynopsisHits(
+      db,
+      terms,
+      collectionId: collectionId,
+      limit: limit,
+    );
+  }
+
+  /// R15: name inventory of the currently open DB, loaded on first use and
+  /// dropped with the connection (like [_vectorIndex]).
+  Future<List<NameOccurrence>>? _nameInventory;
+
+  @override
+  Future<List<SimilarName>> similarNames(String term, {int limit = 3}) async {
+    final db = await _open();
+    if (db == null || term.trim().isEmpty) return const [];
+    final inventory = await (_nameInventory ??= loadNameInventory(db));
+    return rankSimilarNames(term, inventory, limit: limit);
+  }
+
+  @override
+  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
+    List<String> terms, {
+    String? scopeId,
+  }) async {
+    final db = await _open();
+    if (db == null) return const {};
+    return queryTermLineCounts(db, terms, scopeId: scopeId);
+  }
+
+  @override
+  Future<List<String>> namesInText(String text) async {
+    final db = await _open();
+    if (db == null || text.trim().isEmpty) return const [];
+    final inventory = await (_nameInventory ??= loadNameInventory(db));
+    return namesMentionedIn(text, inventory);
+  }
+
+  @override
+  Future<List<NamedStoryTarget>> namedStoryTargets(String text) async {
+    final db = await _open();
+    if (db == null) return const [];
+    return queryNamedStoryTargets(db, text);
+  }
+
+  @override
+  Future<SqlQueryResult> readOnlySql(String sql, {int maxRows = 200}) async {
+    final path = await _resolveDbPath();
+    if (path == null || !File(path).existsSync()) {
+      return const SqlQueryResult(error: '本地知识库未安装');
+    }
+    return runReadOnlySql(path, sql, maxRows: maxRows);
+  }
+
+  /// `(content LIKE ? OR speaker LIKE ?) OR …` for [terms], with its args.
+  static (String, List<Object?>) _termsClause(List<String> terms) {
+    final parts = <String>[];
+    final args = <Object?>[];
+    for (final term in terms) {
+      final escaped = term
+          .replaceAll(r'\', r'\\')
+          .replaceAll('%', r'\%')
+          .replaceAll('_', r'\_');
+      parts.add(
+        "content LIKE ? ESCAPE '\\' OR speaker LIKE ? ESCAPE '\\'",
+      );
+      args
+        ..add('%$escaped%')
+        ..add('%$escaped%');
+    }
+    return ('(${parts.join(' OR ')})', args);
+  }
+
+  @override
+  Future<List<StoryLineHitRow>> grepStoryLines(
+    List<String> terms, {
+    Iterable<String>? storyIds,
+    int limit = 80,
+  }) async {
+    final db = await _open();
+    final cleaned = [
+      for (final t in terms)
+        if (t.trim().isNotEmpty) t.trim(),
+    ];
+    if (db == null || cleaned.isEmpty) return const [];
+    final (clause, args) = _termsClause(cleaned);
+    final ids = storyIds?.toList();
+    if (ids != null && ids.isEmpty) return const [];
+    final scope = ids == null
+        ? ''
+        : ' AND story_id IN (${List.filled(ids.length, '?').join(',')})';
+    final rows = await db.rawQuery(
+      'SELECT story_id, line_index, speaker, content FROM story_lines '
+      'WHERE $clause$scope ORDER BY story_id, line_index LIMIT ?',
+      [...args, ...?ids, limit],
+    );
+    return [
+      for (final row in rows)
+        StoryLineHitRow(
+          storyId: '${row['story_id']}',
+          lineIndex: (row['line_index'] as num).toInt(),
+          speaker: row['speaker'] as String?,
+          content: '${row['content'] ?? ''}',
+        ),
+    ];
+  }
+
+  @override
+  Future<Map<String, int>> storyLineHitCounts(
+    List<String> terms, {
+    Iterable<String>? storyIds,
+  }) async {
+    final db = await _open();
+    final cleaned = [
+      for (final t in terms)
+        if (t.trim().isNotEmpty) t.trim(),
+    ];
+    if (db == null || cleaned.isEmpty) return const {};
+    final (clause, args) = _termsClause(cleaned);
+    final ids = storyIds?.toList();
+    if (ids != null && ids.isEmpty) return const {};
+    final scope = ids == null
+        ? ''
+        : ' AND story_id IN (${List.filled(ids.length, '?').join(',')})';
+    final rows = await db.rawQuery(
+      'SELECT story_id, COUNT(*) AS n FROM story_lines '
+      'WHERE $clause$scope GROUP BY story_id',
+      [...args, ...?ids],
+    );
+    return {
+      for (final row in rows)
+        '${row['story_id']}': (row['n'] as num).toInt(),
+    };
   }
 
   Future<void> close() async {
     await _db?.close();
     _db = null;
+    _openedFileStat = null;
+    _vectorIndex = null;
+    _nameInventory = null;
   }
 
   Future<sqflite.Database?> _open() async {
-    if (_db != null) return _db;
     final path = await _resolveDbPath();
-    if (path == null || !await File(path).exists()) return null;
+    if (path == null) return null;
+
+    // statSync reports a missing file as notFound instead of throwing.
+    final stat = File(path).statSync();
+    if (stat.type == FileSystemEntityType.notFound) return null;
+
+    if (_db != null &&
+        _openedFileStat != null &&
+        _sameFileStamp(_openedFileStat!, stat)) {
+      return _db;
+    }
+
+    // The DB file was replaced (in-app rebuild): close this store's handle
+    // and reopen. Safe because R9 guarantees ONE store instance is shared by
+    // all tools; previously multiple stores each held a sqflite handle and a
+    // single stat-change close() killed the shared connection for the others
+    // (database_closed mid-investigation).
+    await close();
+    await _ensureStoryLinesIndex(path);
+    // Creating the index changed the file: remember the stamp it has now.
+    final openedStat = File(path).statSync();
     _db = await sqflite.openDatabase(path, readOnly: true);
+    _openedFileStat = openedStat;
     return _db;
   }
+
+  /// Paths whose `story_lines` index was checked in this process.
+  static final Set<String> _indexChecked = {};
+
+  /// A knowledge base built before v0.10.7 has no index on
+  /// `story_lines(story_id, line_index)`, so every read of a chapter scans
+  /// ~410k lines (~0.45 s; an answer does dozens of reads). Creates it once
+  /// (about a second, +20 MB) through a short writable connection; where the
+  /// file cannot be written, reads just stay slower.
+  Future<void> _ensureStoryLinesIndex(String path) async {
+    if (!_indexChecked.add(path)) return;
+    try {
+      final db = await sqflite.openDatabase(path);
+      try {
+        final has = await db.rawQuery(
+          "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+          [storyLinesIndexName],
+        );
+        if (has.isEmpty && await _hasTable(db, 'story_lines')) {
+          await db.execute(storyLinesIndexSql);
+        }
+      } finally {
+        await db.close();
+      }
+    } catch (_) {
+      // Read-only media or a locked file: carry on without the index.
+    }
+  }
+
+  /// Returns true when [a] and [b] describe the same underlying file content.
+  ///
+  /// A replace-and-rename swap yields a new file identity: size and
+  /// modification/change timestamps differ from the replaced file.
+  bool _sameFileStamp(FileStat a, FileStat b) =>
+      a.size == b.size && a.modified == b.modified && a.changed == b.changed;
 
   Future<String?> _resolveDbPath() async {
     if (dbPath != null && dbPath!.trim().isNotEmpty) return dbPath;
@@ -465,7 +1023,7 @@ class GameDataKnowledgeStore {
               score: row['name'] == query ? 7600 : 6200,
               retrievalType:
                   row['name'] == query ? 'entity_exact' : 'entity_like',
-            )));
+            ),),);
         continue;
       }
       if (contentType != null && contentType.trim().isNotEmpty) {
@@ -484,7 +1042,7 @@ class GameDataKnowledgeStore {
         content: row['name'] as String,
         sourcePath: row['source_path'] as String?,
         rawId: entityId,
-      ));
+      ),);
     }
     return results;
   }
@@ -607,7 +1165,7 @@ class GameDataKnowledgeStore {
     required Set<String> entityNames,
     required int limit,
   }) async {
-    final terms = _storySearchTerms(query, entityNames: entityNames);
+    final terms = storySearchTerms(query, entityNames: entityNames);
     if (terms.isEmpty) return const [];
 
     final where = StringBuffer(
@@ -709,7 +1267,7 @@ class GameDataKnowledgeStore {
     if (!await _hasTable(db, 'entity_documents_fts')) return const [];
 
     final where = StringBuffer('entity_documents_fts MATCH ?');
-    final args = <Object?>[_ftsQuery(query)];
+    final args = <Object?>[ftsQuery(query)];
     if (entityId != null && entityId.trim().isNotEmpty) {
       where.write(' AND ed.entity_id = ?');
       args.add(entityId.trim());
@@ -793,7 +1351,7 @@ class GameDataKnowledgeStore {
     String? contentType,
     String? entityId,
   }) async {
-    final terms = _searchTerms(query);
+    final terms = searchTerms(query);
     if (terms.isEmpty) return const [];
     final where = StringBuffer();
     final args = <Object?>[];
@@ -843,7 +1401,7 @@ class GameDataKnowledgeStore {
     String? entityId,
   }) async {
     final where = StringBuffer('lore_chunks_fts MATCH ?');
-    final args = <Object?>[_ftsQuery(query)];
+    final args = <Object?>[ftsQuery(query)];
     if (contentType != null && contentType.trim().isNotEmpty) {
       where.write(' AND lc.content_type = ?');
       args.add(contentType.trim());
@@ -877,7 +1435,7 @@ class GameDataKnowledgeStore {
     String? contentType,
     String? entityId,
   }) async {
-    final terms = _searchTerms(query);
+    final terms = searchTerms(query);
     if (terms.isEmpty) return const [];
     final where = StringBuffer();
     final args = <Object?>[];
@@ -930,7 +1488,7 @@ class GameDataKnowledgeStore {
     final scopeType = scopeParts.first.trim();
     final scope = scopeParts.last.trim();
     final names = await _entityNamesById(db, entityId.trim());
-    final terms = _searchTerms(query);
+    final terms = searchTerms(query);
     if (scopeType.isEmpty || scope.isEmpty || names.isEmpty || terms.isEmpty) {
       return const [];
     }
@@ -959,12 +1517,12 @@ class GameDataKnowledgeStore {
     );
     final ranked = rows.toList(growable: false)
       ..sort((left, right) {
-        final proximity = _evidenceProximity(
+        final proximity = evidenceProximity(
           left['content'] as String,
           names: names,
           terms: terms,
         ).compareTo(
-          _evidenceProximity(
+          evidenceProximity(
             right['content'] as String,
             names: names,
             terms: terms,
@@ -1003,7 +1561,7 @@ class GameDataKnowledgeStore {
       rawId: row['raw_id'] as String?,
       lineStart: row['line_start'] as int?,
       lineEnd: row['line_end'] as int?,
-      rankingReason: _rankingReason(retrievalType),
+      rankingReason: rankingReason(retrievalType),
     );
   }
 
@@ -1027,7 +1585,7 @@ class GameDataKnowledgeStore {
       content: row['content'] as String,
       sourcePath: row['source_paths'] as String?,
       rawId: row['entity_id'] as String?,
-      rankingReason: _rankingReason(retrievalType),
+      rankingReason: rankingReason(retrievalType),
     );
   }
 
@@ -1067,7 +1625,7 @@ class GameDataKnowledgeStore {
       rawId: row['raw_id'] as String?,
       lineStart: row['line_start'] as int?,
       lineEnd: row['line_end'] as int?,
-      rankingReason: _rankingReason(retrievalType),
+      rankingReason: rankingReason(retrievalType),
     );
   }
 
@@ -1094,254 +1652,7 @@ class GameDataKnowledgeStore {
       rawId: result.rawId,
       lineStart: result.lineStart,
       lineEnd: result.lineEnd,
-      rankingReason: _rankingReason(retrievalType),
+      rankingReason: rankingReason(retrievalType),
     );
-  }
-}
-
-String _candidateMatchType(int? rank) {
-  switch (rank) {
-    case 0:
-      return 'name_exact';
-    case 1:
-      return 'canonical_alias_exact';
-    case 2:
-      return 'alias_exact';
-    case 3:
-      return 'name_like';
-    case 4:
-      return 'alias_like';
-    default:
-      return 'unknown';
-  }
-}
-
-bool _hasStoryIntent(String query) {
-  return query.contains(RegExp(r'(主线|剧情|故事|时间线|事件|章节|关卡|行动)'));
-}
-
-class _GameDataQueryPlan {
-  final String originalQuery;
-  final String entityQuery;
-  final List<String> searchQueries;
-  final String? effectiveContentType;
-  final bool hasStoryIntent;
-
-  const _GameDataQueryPlan({
-    required this.originalQuery,
-    required this.entityQuery,
-    required this.searchQueries,
-    required this.effectiveContentType,
-    required this.hasStoryIntent,
-  });
-
-  factory _GameDataQueryPlan.from(
-    String query, {
-    String? explicitContentType,
-  }) {
-    final original = query.trim();
-    final normalized = original.replaceAll(RegExp(r'\s+'), ' ');
-    final inferredContentType = explicitContentType?.trim().isNotEmpty == true
-        ? explicitContentType!.trim()
-        : _inferContentType(normalized);
-    final entityQuery = _entityFocusedQuery(normalized);
-    final queries = <String>{
-      normalized,
-      if (entityQuery.isNotEmpty) entityQuery,
-      ..._expandedQueryAliases(normalized),
-      ..._expandedQueryAliases(entityQuery),
-    }.where((value) => value.trim().isNotEmpty).toList(growable: false);
-
-    return _GameDataQueryPlan(
-      originalQuery: original,
-      entityQuery: entityQuery.isEmpty ? normalized : entityQuery,
-      searchQueries: queries,
-      effectiveContentType: inferredContentType,
-      hasStoryIntent: _hasStoryIntent(normalized),
-    );
-  }
-}
-
-String? _inferContentType(String query) {
-  if (query.contains('语音')) return 'operator_voice';
-  if (query.contains('秘录')) return 'operator_record_story';
-  if (query.contains('模组')) return 'operator_module';
-  if (query.contains('档案')) return 'operator_handbook_profile';
-  if (query.contains('敌人')) return 'enemy_profile';
-  return null;
-}
-
-String _entityFocusedQuery(String query) {
-  var focused = query;
-  for (final term in _queryIntentTerms) {
-    focused = focused.replaceAll(term, ' ');
-  }
-  return focused.replaceAll(RegExp(r'\s+'), ' ').trim();
-}
-
-List<String> _expandedQueryAliases(String query) {
-  if (query.trim().isEmpty) return const [];
-  final expanded = <String>{};
-  if (query.contains('肉鸽')) {
-    expanded.add(query.replaceAll('肉鸽', '集成战略'));
-    expanded.add('$query 集成战略 傀影与猩红孤钻 水月与深蓝之树 探索者的银凇止境 萨卡兹的无终奇语');
-  }
-  if (query.contains('集成战略')) {
-    expanded.add('$query 肉鸽');
-  }
-  if (query.contains('收藏品')) {
-    expanded.add('$query relic collection');
-  }
-  if (query.contains('语音')) {
-    expanded.add(query.replaceAll('语音', 'operator_voice charword'));
-  }
-  if (query.contains('档案')) {
-    expanded.add(query.replaceAll('档案', 'operator_handbook_profile handbook'));
-  }
-  if (query.contains('秘录')) {
-    expanded.add(query.replaceAll('秘录', 'operator_record_story story_review'));
-  }
-  if (query.contains('模组')) {
-    expanded.add(query.replaceAll('模组', 'operator_module uniequip'));
-  }
-  return expanded.toList(growable: false);
-}
-
-const _queryIntentTerms = {
-  '语音',
-  '档案',
-  '秘录',
-  '模组',
-  '主线',
-  '剧情',
-  '故事',
-  '时间线',
-  '事件',
-  '章节',
-  '关卡',
-  '行动',
-  '相关',
-  '梗概',
-  '介绍',
-};
-
-List<String> _storySearchTerms(
-  String query, {
-  required Set<String> entityNames,
-}) {
-  final terms = <String>[];
-  final normalized = query.trim();
-
-  for (final entityName in entityNames) {
-    final clean = entityName.trim();
-    if (clean.isNotEmpty && normalized.contains(clean)) {
-      terms.add(clean);
-    }
-  }
-
-  if (terms.isEmpty) {
-    terms.addAll(
-      normalized
-          .split(RegExp(r'\s+'))
-          .map((term) => term.trim())
-          .where((term) => term.isNotEmpty)
-          .where((term) => !_isStoryIntentTerm(term)),
-    );
-  }
-
-  return terms.toSet().take(3).toList(growable: false);
-}
-
-bool _isStoryIntentTerm(String term) {
-  return const {
-    '主线',
-    '剧情',
-    '故事',
-    '时间线',
-    '事件',
-    '章节',
-    '关卡',
-    '行动',
-    '相关',
-    '梗概',
-  }.contains(term);
-}
-
-String _rankingReason(String retrievalType) {
-  if (retrievalType == 'entity_document') {
-    return 'entity document exact match; highest priority for summaries';
-  }
-  if (retrievalType == 'entity_exact') {
-    return 'exact entity match; authoritative structured GameData record';
-  }
-  if (retrievalType == 'summary_story_context') {
-    return 'summary mode story context for the resolved entity';
-  }
-  if (retrievalType == 'entity_chunks') {
-    return 'structured entity chunk match';
-  }
-  if (retrievalType == 'entity_records') {
-    return 'structured entity raw record match';
-  }
-  if (retrievalType == 'entity_document_fts') {
-    return 'entity document full-text match';
-  }
-  if (retrievalType == 'entity_document_like') {
-    return 'entity document keyword fallback';
-  }
-  if (retrievalType == 'fts') {
-    return 'lore chunk full-text match';
-  }
-  if (retrievalType.endsWith('_like') || retrievalType == 'record_like') {
-    return 'keyword fallback match';
-  }
-  return 'structured GameData match';
-}
-
-String _ftsQuery(String query) {
-  final terms = _searchTerms(query)
-      .map((term) => term.replaceAll('"', '""'))
-      .toList(growable: false);
-  if (terms.isEmpty) return '""';
-  return terms.map((term) => '"$term"').join(' ');
-}
-
-List<String> _searchTerms(String query) {
-  return query
-      .trim()
-      .split(RegExp(r'\s+'))
-      .map((term) => term.trim())
-      .where((term) => term.isNotEmpty)
-      .toSet()
-      .toList(growable: false);
-}
-
-int _evidenceProximity(
-  String content, {
-  required List<String> names,
-  required List<String> terms,
-}) {
-  var closest = content.length;
-  for (final name in names) {
-    final nameOffsets = _allOffsets(content, name);
-    for (final term in terms) {
-      for (final termOffset in _allOffsets(content, term)) {
-        for (final nameOffset in nameOffsets) {
-          final distance = (nameOffset - termOffset).abs();
-          if (distance < closest) closest = distance;
-        }
-      }
-    }
-  }
-  return closest;
-}
-
-Iterable<int> _allOffsets(String content, String term) sync* {
-  var offset = 0;
-  while (offset < content.length) {
-    final match = content.indexOf(term, offset);
-    if (match < 0) return;
-    yield match;
-    offset = match + term.length;
   }
 }

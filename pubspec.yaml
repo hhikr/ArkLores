@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.9.0+9
+version: 0.10.0+22
 
 environment:
   sdk: ^3.6.0
@@ -47,6 +47,24 @@ dependencies:
 
   # Database
   sqflite: ^2.4.0
+  # Pure-Dart SQLite interfaces shared by the app, the desktop build CLI and
+  # the in-app builder (lib/core/gamedata/build). sqflite is a Flutter plugin;
+  # importing it from pure Dart tools is not possible, so shared code uses
+  # sqflite_common's platform-neutral Database/Transaction types.
+  sqflite_common: ^2.5.4
+  # FFI SQLite backend used by the in-app builder. Unlike the sqflite platform
+  # channel it works in any isolate (background build) and, together with
+  # sqlite3_flutter_libs, bundles a recent SQLite with guaranteed FTS5.
+  sqflite_common_ffi: ^2.3.4
+  # R17: the agent's read-only SQL runs on the raw sqlite3 API so a runaway
+  # query can be stopped with sqlite3_interrupt (same version as above uses).
+  sqlite3: ^2.9.4
+
+  # Bundled native SQLite for Android/iOS (used by sqflite_common_ffi).
+  sqlite3_flutter_libs: ^0.5.24
+
+  # Zip extraction for the first-time source pull (filtered by whitelist).
+  archive: ^3.6.1
 
   # File system paths
   path_provider: ^2.1.0
@@ -66,6 +84,7 @@ dependencies:
 
   # Markdown rendering in AI chat
   flutter_markdown: ^0.7.4
+  lpinyin: ^2.0.3
 
 dev_dependencies:
   flutter_test:
@@ -78,7 +97,6 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   path_provider_platform_interface: ^2.1.2
-  sqflite_common_ffi: ^2.3.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -96,6 +114,8 @@ flutter:
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
+  assets:
+    - assets/fonts/lxgw-wenkai/
 
   # Localization code generation (flutter gen-l10n)
   generate: true

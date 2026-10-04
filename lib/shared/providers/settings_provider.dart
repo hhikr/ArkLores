@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../features/settings/settings_service.dart';
 
@@ -13,6 +14,18 @@ final onboardingDoneProvider =
     Provider<bool>((ref) => throw UnimplementedError());
 final initialApiConfigProvider =
     Provider<LLMConfig>((ref) => throw UnimplementedError());
+final initialMainTabIndexProvider =
+    Provider<int>((ref) => throw UnimplementedError());
+final initialSessionLogsEnabledProvider =
+    Provider<bool>((ref) => throw UnimplementedError());
+
+final wikiSourcesRevisionProvider = StateProvider<int>((ref) => 0);
+
+/// Whether the user enabled per-session AI logs (default off; applied to
+/// [AgentLogger] at startup and on toggle in Settings).
+final sessionLogsEnabledProvider = StateProvider<bool>((ref) {
+  return ref.watch(initialSessionLogsEnabledProvider);
+});
 
 /// Active state for onboarding status.
 final onboardingStatusProvider = StateProvider<bool>((ref) {
@@ -22,9 +35,9 @@ final onboardingStatusProvider = StateProvider<bool>((ref) {
 /// Notifier that holds the current [LLMConfig] and persists changes
 /// to secure storage.
 class ApiConfigNotifier extends StateNotifier<LLMConfig> {
-  final SettingsService _service;
 
   ApiConfigNotifier(this._service, LLMConfig initial) : super(initial);
+  final SettingsService _service;
 
   /// Saves a new config and updates state.
   Future<void> save(LLMConfig config) async {
@@ -48,4 +61,35 @@ final apiConfigProvider =
   final service = ref.watch(settingsServiceProvider);
   final initial = ref.watch(initialApiConfigProvider);
   return ApiConfigNotifier(service, initial);
+});
+
+/// Embedding endpoint loaded at startup (R12); overridden in main().
+final initialEmbeddingConfigProvider =
+    Provider<EmbeddingConfig>((ref) => defaultEmbeddingConfig);
+
+/// Holds the embedding config and persists changes to secure storage.
+class EmbeddingConfigNotifier extends StateNotifier<EmbeddingConfig> {
+  EmbeddingConfigNotifier(this._service, EmbeddingConfig initial)
+      : super(initial);
+  final SettingsService _service;
+
+  Future<void> save(EmbeddingConfig config) async {
+    await _service.saveEmbeddingConfig(config);
+    state = config;
+  }
+}
+
+final embeddingConfigProvider =
+    StateNotifierProvider<EmbeddingConfigNotifier, EmbeddingConfig>((ref) {
+  return EmbeddingConfigNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialEmbeddingConfigProvider),
+  );
+});
+
+/// Loads the optional GitHub Personal Access Token from secure storage.
+///
+/// Used by the in-app GameData builder; invalidated after save/clear.
+final githubTokenProvider = FutureProvider<String>((ref) async {
+  return ref.watch(settingsServiceProvider).loadGithubToken();
 });

@@ -41,7 +41,7 @@ Content Excerpt:
     expect(parseGameDataEvidence('Source Kind: Wiki\nTitle: page'), isEmpty);
     expect(
       parseGameDataEvidence(
-          '=== Result #1 ===\nSource Kind: GameData\nTitle: incomplete'),
+          '=== Result #1 ===\nSource Kind: GameData\nTitle: incomplete',),
       isEmpty,
     );
   });

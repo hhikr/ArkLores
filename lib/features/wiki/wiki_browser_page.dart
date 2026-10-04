@@ -1,39 +1,29 @@
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../ai/ai_chat_page.dart';
 import '../ai/wiki_ai_context.dart';
+import '../settings/settings_service.dart';
 import 'bookmark_page.dart';
 import 'bookmark_service.dart' show Bookmark;
-import 'wiki_dark_mode.dart';
-import 'wiki_toolbar.dart';
-
-/// Wiki site configuration.
-class _WikiSite {
-  final String label;
-  final String icon;
-  final String initialUrl;
-
-  const _WikiSite(this.label, this.icon, this.initialUrl);
-}
-
-const _wikiSites = [
-  _WikiSite('PRTS Wiki', 'https://prts.wiki/favicon.ico', 'https://prts.wiki'),
-  _WikiSite(
-    'Endfield Wiki',
-    'https://warfarin.wiki/cn/favicon.ico',
-    'https://warfarin.wiki/cn',
-  ),
-];
+import 'wiki_appearance.dart';
+import 'wiki_browser_controls.dart';
+import 'wiki_reader_mode.dart';
+import 'wiki_site_adapter.dart';
 
 /// Wiki Browser tab — hosts dual-site WebView with custom toolbar.
 ///
-/// Two wiki sites (PRTS and Endfield) are available via a top TabBar.
+/// Wiki sites are available via a top TabBar.
 /// Each site keeps its own [InAppWebViewController] and browsing history.
 class WikiBrowserPage extends ConsumerStatefulWidget {
   const WikiBrowserPage({super.key});
@@ -43,36 +33,67 @@ class WikiBrowserPage extends ConsumerStatefulWidget {
 }
 
 class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
-    with TickerProviderStateMixin {
-  late final TabController _tabController;
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  late TabController _tabController;
+  List<WikiSiteConfig> _wikiSites = SettingsService.defaultWikiSites;
 
   /// Controllers for each site tab.
-  final List<InAppWebViewController?> _controllers =
-      List.filled(_wikiSites.length, null);
+  var _controllers = <InAppWebViewController?>[];
 
   /// Current page title per tab.
-  final List<String> _titles = List.filled(_wikiSites.length, '');
+  var _titles = <String>[];
 
   /// Current page URL per tab.
-  final List<String> _currentUrls = List.filled(_wikiSites.length, '');
+  var _currentUrls = <String>[];
+
+  /// Source URL that each WebView last applied.
+  var _appliedSourceUrls = <String>[];
 
   /// Navigation state per tab.
-  final List<bool> _canGoBack = List.filled(_wikiSites.length, false);
-  final List<bool> _canGoForward = List.filled(_wikiSites.length, false);
+  var _canGoBack = <bool>[];
+  var _canGoForward = <bool>[];
 
   /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = false;
+  bool _isReaderMode = false;
+  double _readerFontScale = 1.0;
+  double _pageScale = 1.0;
   bool _trayExpanded = false;
+  bool _readerControlsVisible = true;
+  bool _restoredState = false;
+  bool _hasStoredDarkMode = false;
+  Timer? _readerControlsTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _isDarkMode =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+    _resetTabState(SettingsService.defaultWikiSites);
     _tabController = TabController(length: _wikiSites.length, vsync: this);
     _tabController.addListener(_onTabChanged);
+    // Defer the provider write to after the first frame: Riverpod 2.x rejects
+    // modifying a provider during initState/build ("Tried to modify a provider
+    // while the widget tree was building"), which crashed the whole shell.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(wikiBackHandlerProvider.notifier).state = _handleSystemBack;
+      }
+    });
+    _restoreBrowsingState();
   }
 
   @override
   void dispose() {
+    _readerControlsTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _persistBrowsingState();
+    // Intentionally NOT writing providers here: the Wiki page lives in the
+    // MainShell IndexedStack for the whole app lifetime, so provider cleanup
+    // on dispose is unnecessary, and modifying providers during dispose is
+    // rejected by Riverpod 2.x.
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
@@ -81,28 +102,541 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   void _onTabChanged() {
     if (!_tabController.indexIsChanging) {
       setState(() {});
+      _saveWikiTabIndex(_tabController.index);
     }
+  }
+
+  void _resetTabState(List<WikiSiteConfig> sites) {
+    _wikiSites = sites.isEmpty ? SettingsService.defaultWikiSites : sites;
+    _controllers = List.filled(_wikiSites.length, null);
+    _titles = List.filled(_wikiSites.length, '');
+    _currentUrls = [for (final site in _wikiSites) site.url];
+    _appliedSourceUrls = [for (final site in _wikiSites) site.url];
+    _canGoBack = List.filled(_wikiSites.length, false);
+    _canGoForward = List.filled(_wikiSites.length, false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _persistBrowsingState();
+    }
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    if (_hasStoredDarkMode) return;
+    final prefersDark =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+    if (prefersDark == _isDarkMode) return;
+    setState(() => _isDarkMode = prefersDark);
+  }
+
+  Future<void> _restoreBrowsingState() async {
+    var tabIndex = 0;
+    var readerMode = false;
+    var readerFontScale = 1.0;
+    bool? storedDarkMode;
+    var sites = SettingsService.defaultWikiSites;
+    var urls = <String>[];
+    var appliedUrls = <String>[];
+    try {
+      final service = ref.read(settingsServiceProvider);
+      sites = await service.loadWikiSites();
+      urls = [
+        for (var i = 0; i < sites.length; i++)
+          await service.loadWikiUrl(i) ?? sites[i].url,
+      ];
+      appliedUrls = [
+        for (var i = 0; i < sites.length; i++)
+          await service.loadWikiAppliedUrl(i) ?? sites[i].url,
+      ];
+      tabIndex = await service.loadWikiTabIndex();
+      readerMode = await service.loadWikiReaderMode();
+      readerFontScale = await service.loadWikiReaderFontScale();
+      storedDarkMode = await service.loadWikiDarkMode();
+    } catch (e) {
+      debugPrint('[WikiBrowser] Error restoring browsing state: $e');
+    }
+    if (!mounted) return;
+    setState(() {
+      _tabController.removeListener(_onTabChanged);
+      _tabController.dispose();
+      _resetTabState(sites);
+      for (var i = 0; i < urls.length && i < _currentUrls.length; i++) {
+        _currentUrls[i] = urls[i];
+      }
+      for (var i = 0;
+          i < appliedUrls.length && i < _appliedSourceUrls.length;
+          i++) {
+        _appliedSourceUrls[i] = appliedUrls[i];
+      }
+      _tabController = TabController(length: _wikiSites.length, vsync: this);
+      _tabController.addListener(_onTabChanged);
+      _tabController.index = tabIndex.clamp(0, _wikiSites.length - 1).toInt();
+      _isReaderMode = readerMode;
+      _readerFontScale = readerFontScale;
+      if (storedDarkMode != null) {
+        _isDarkMode = storedDarkMode;
+        _hasStoredDarkMode = true;
+      }
+      _restoredState = true;
+    });
+    ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
+  }
+
+  Future<void> _persistBrowsingState() async {
+    try {
+      final service = ref.read(settingsServiceProvider);
+      await service.saveWikiTabIndex(_tabController.index);
+      await service.saveWikiReaderMode(_isReaderMode);
+      await service.saveWikiReaderFontScale(_readerFontScale);
+      if (_hasStoredDarkMode) {
+        await service.saveWikiDarkMode(_isDarkMode);
+      }
+      await Future.wait([
+        for (var i = 0; i < _currentUrls.length; i++)
+          if (_currentUrls[i].trim().isNotEmpty)
+            service.saveWikiUrl(i, _currentUrls[i]),
+        for (var i = 0; i < _appliedSourceUrls.length; i++)
+          if (_appliedSourceUrls[i].trim().isNotEmpty)
+            service.saveWikiAppliedUrl(i, _appliedSourceUrls[i]),
+      ]);
+    } catch (e) {
+      debugPrint('[WikiBrowser] Error saving browsing state: $e');
+    }
+  }
+
+  void _saveWikiTabIndex(int index) {
+    ref.read(settingsServiceProvider).saveWikiTabIndex(index).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving wiki tab: $error',
+          ),
+        );
+  }
+
+  void _saveWikiUrl(int index, String url) {
+    ref.read(settingsServiceProvider).saveWikiUrl(index, url).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving wiki URL: $error',
+          ),
+        );
   }
 
   // ─── Toolbar action callbacks ────────────────────────────────────
 
-  void _goBack() {
-    _controllers[_tabController.index]?.goBack();
+  Future<bool> _handleSystemBack() async {
+    if (_isReaderMode) {
+      _setReaderMode(false);
+      return true;
+    }
+    final controller = _controllers[_tabController.index];
+    if (controller == null) return true;
+    if (await controller.canGoBack()) {
+      await controller.goBack();
+    }
+    return true;
   }
 
-  void _goForward() {
-    _controllers[_tabController.index]?.goForward();
+  void _zoomOut() {
+    _setPageScale(_pageScale - 0.08);
+  }
+
+  void _zoomIn() {
+    _setPageScale(_pageScale + 0.08);
+  }
+
+  void _setPageScale(double value) {
+    final next = value.clamp(0.72, 1.36).toDouble();
+    if (next == _pageScale) return;
+    setState(() => _pageScale = next);
+    _applyPageScaleToControllers();
+  }
+
+  void _applyPageScaleToControllers() {
+    for (final c in _controllers) {
+      if (c != null) _applyPageScale(c);
+    }
+  }
+
+  Future<void> _applyPageScale(InAppWebViewController controller) async {
+    final scale = _isReaderMode ? 1.0 : _pageScale;
+    final js = '''
+(function() {
+  var html = document.documentElement;
+  if (!html) return;
+  html.style.setProperty('zoom', '$scale');
+  html.style.setProperty('transform-origin', '0 0');
+})();
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // Page scale is best-effort across WebView engines.
+    }
   }
 
   void _reload() {
-    _controllers[_tabController.index]?.reload();
+    _refreshCurrentWiki();
+  }
+
+  Future<void> _refreshCurrentWiki() async {
+    if (!_restoredState || _wikiSites.isEmpty) return;
+
+    final index = _tabController.index;
+    final controller = _controllers[index];
+    if (controller == null) return;
+
+    final configuredSites =
+        await ref.read(settingsServiceProvider).loadWikiSites();
+    if (!mounted) return;
+
+    final activeSite = _wikiSites[index];
+    final configuredIndex =
+        configuredSites.indexWhere((site) => site.id == activeSite.id);
+    final configuredSite =
+        configuredIndex >= 0 ? configuredSites[configuredIndex] : null;
+
+    if (configuredSite != null &&
+        configuredSite.url != _appliedSourceUrls[index]) {
+      final nextSites = [..._wikiSites];
+      nextSites[index] = configuredSite;
+      setState(() {
+        _wikiSites = nextSites;
+        _currentUrls[index] = configuredSite.url;
+        _appliedSourceUrls[index] = configuredSite.url;
+        _titles[index] = '';
+        _canGoBack[index] = false;
+        _canGoForward[index] = false;
+      });
+      await ref
+          .read(settingsServiceProvider)
+          .saveWikiAppliedUrl(index, configuredSite.url);
+      await controller.loadUrl(
+        urlRequest: URLRequest(url: WebUri(configuredSite.url)),
+      );
+      return;
+    }
+
+    await controller.reload();
   }
 
   void _toggleDarkMode() {
     final newValue = !_isDarkMode;
     setState(() => _isDarkMode = newValue);
-    for (final c in _controllers) {
-      if (c != null) WikiDarkMode.setEnabled(c, newValue);
+    _hasStoredDarkMode = true;
+    ref.read(settingsServiceProvider).saveWikiDarkMode(newValue).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving wiki appearance: $error',
+          ),
+        );
+  }
+
+  void _toggleReaderMode() {
+    final enabled = !_isReaderMode;
+    _setReaderMode(enabled);
+  }
+
+  void _setReaderMode(bool enabled) {
+    _readerControlsTimer?.cancel();
+    setState(() {
+      _isReaderMode = enabled;
+      if (enabled) {
+        _trayExpanded = false;
+        _readerControlsVisible = true;
+      }
+    });
+    ref.read(wikiReaderFullscreenProvider.notifier).state = enabled;
+    ref.read(settingsServiceProvider).saveWikiReaderMode(enabled).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving reader mode: $error',
+          ),
+        );
+    if (enabled) _scheduleReaderControlsHide();
+  }
+
+  void _toggleReaderControls() {
+    if (!_isReaderMode) return;
+    if (_readerControlsVisible) {
+      _readerControlsTimer?.cancel();
+      setState(() => _readerControlsVisible = false);
+      return;
+    }
+    setState(() => _readerControlsVisible = true);
+    _scheduleReaderControlsHide();
+  }
+
+  void _scheduleReaderControlsHide() {
+    _readerControlsTimer?.cancel();
+    if (!_isReaderMode || !_readerControlsVisible) return;
+    _readerControlsTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted || !_isReaderMode) return;
+      setState(() => _readerControlsVisible = false);
+    });
+  }
+
+  void _runReaderToolbarAction(VoidCallback action) {
+    _scheduleReaderControlsHide();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isReaderMode) return;
+      action();
+    });
+  }
+
+  void _decreaseReaderFont() {
+    _setReaderFontScale(_readerFontScale - 0.1);
+  }
+
+  void _increaseReaderFont() {
+    _setReaderFontScale(_readerFontScale + 0.1);
+  }
+
+  void _setReaderFontScale(double value) {
+    final next = value.clamp(0.62, 1.38).toDouble();
+    if (next == _readerFontScale) return;
+    setState(() => _readerFontScale = next);
+    ref.read(settingsServiceProvider).saveWikiReaderFontScale(next).catchError(
+          (Object error) => debugPrint(
+            '[WikiBrowser] Error saving reader font scale: $error',
+          ),
+        );
+  }
+
+  Future<void> _applyNormalWebViewEnhancements(
+    InAppWebViewController controller,
+  ) async {
+    await _applyPageScale(controller);
+    await _applyPrtsOperatorResponsiveLayout(controller);
+    await _applyPrtsScenarioFit(controller);
+  }
+
+  Future<void> _applyPrtsOperatorResponsiveLayout(
+    InAppWebViewController controller,
+  ) async {
+    const js = '''
+(function() {
+  var styleId = 'arklores-prts-paradox-mobile-fit';
+  if (!document.getElementById(styleId)) {
+    var style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .arklores-prts-paradox-table {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+      }
+      .arklores-prts-paradox-table :where(tbody, tr, td, th) {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+      }
+      .arklores-prts-paradox-table img {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+      @media (max-width: 600px) {
+        .arklores-prts-paradox-table .nomobile { display: none !important; }
+        .arklores-prts-paradox-table .nodesktop {
+          display: table !important;
+          width: min(100%, 15rem) !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          margin: 0.55em auto !important;
+          table-layout: auto !important;
+        }
+        .arklores-prts-paradox-table .nodesktop > tbody > tr > td > a > div {
+          width: 100% !important;
+          max-width: 100% !important;
+          margin-left: 0 !important;
+        }
+        .arklores-prts-paradox-table .nodesktop > tbody > tr > td > span {
+          width: auto !important;
+          max-width: 100% !important;
+          margin: 0.7em auto 0 !important;
+          padding: 0.4em 0.5em !important;
+          height: auto !important;
+          flex-wrap: wrap !important;
+          justify-content: center !important;
+          gap: 0.35em !important;
+        }
+      }
+      @media (min-width: 601px) {
+        .arklores-prts-paradox-table .nodesktop { display: none !important; }
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function findHeading() {
+    var headings = document.querySelectorAll('#mw-content-text h2, .mw-parser-output h2');
+    for (var i = 0; i < headings.length; i++) {
+      var heading = headings[i];
+      var id = heading.querySelector('[id="悖论模拟"]');
+      if (id || (heading.textContent || '').trim() === '悖论模拟') return heading;
+    }
+    return null;
+  }
+
+  function markParadoxTables() {
+    var heading = findHeading();
+    if (!heading) return;
+    var node = heading.nextElementSibling;
+    while (node && node.tagName !== 'H2') {
+      if (node.tagName === 'TABLE') {
+        var nested = node.querySelectorAll('table');
+        for (var i = 0; i < nested.length; i++) {
+          nested[i].classList.remove('arklores-prts-paradox-table');
+        }
+        node.classList.add('arklores-prts-paradox-table');
+      }
+      node = node.nextElementSibling;
+    }
+  }
+
+  markParadoxTables();
+  window.setTimeout(markParadoxTables, 500);
+})();
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // PRTS operator tables are enhanced only when the page exposes them.
+    }
+  }
+
+  Future<void> _applyPrtsScenarioFit(
+    InAppWebViewController controller,
+  ) async {
+    const js = '''
+(function() {
+  var shell = document.getElementById('sys_fullscreen');
+  var offset = document.getElementById('sys_offset');
+  var main = document.getElementById('sys_main');
+  var fullscreenButton = document.getElementById('button_fullscreen');
+  if (!shell || !offset || !main || !fullscreenButton) return;
+
+  var alreadyWrapped = document.documentElement.dataset.arkloresPrtsFitWrapped === '1';
+  var alreadyListening = document.documentElement.dataset.arkloresPrtsFitListening === '1';
+  var baseWidth = 960;
+  var baseHeight = 540;
+
+  function viewportSize() {
+    var viewport = window.visualViewport;
+    var width = viewport && viewport.width ? viewport.width : window.innerWidth;
+    var height = viewport && viewport.height ? viewport.height : window.innerHeight;
+    return {
+      width: Math.max(1, Math.floor(width || baseWidth)),
+      height: Math.max(1, Math.floor(height || baseHeight))
+    };
+  }
+
+  function isFullscreenActive() {
+    return !!(document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement ||
+      document.webkitIsFullScreen ||
+      document.webkitFullScreen);
+  }
+
+  function fitScenario() {
+    var viewport = viewportSize();
+    var scale = Math.min(viewport.width / baseWidth, viewport.height / baseHeight);
+    if (!isFinite(scale) || scale <= 0) scale = 1;
+    scale = Math.min(scale, 1.0);
+    var width = Math.round(baseWidth * scale);
+    var height = Math.round(baseHeight * scale);
+    var left = isFullscreenActive() ? Math.max(Math.round((viewport.width - width) / 2), 0) : 0;
+    var top = isFullscreenActive() ? Math.max(Math.round((viewport.height - height) / 2), 0) : 0;
+
+    main.style.transformOrigin = '0 0';
+    main.style.transform = 'scale(' + scale + ')';
+    offset.style.width = width + 'px';
+    offset.style.height = height + 'px';
+    offset.style.left = left + 'px';
+    offset.style.top = top + 'px';
+
+    if (isFullscreenActive()) {
+      fullscreenButton.classList.remove('normal');
+      fullscreenButton.classList.add('return');
+    } else {
+      fullscreenButton.classList.add('normal');
+      fullscreenButton.classList.remove('return');
+    }
+  }
+
+  function wrapFullscreen() {
+    if (document.documentElement.dataset.arkloresPrtsFitWrapped === '1') return;
+    if (typeof window.fun_fullscreen !== 'function') return;
+    if (window.fun_fullscreen.__arkloresWrapped === '1') {
+      document.documentElement.dataset.arkloresPrtsFitWrapped = '1';
+      return;
+    }
+    var originalFullscreen = window.fun_fullscreen;
+    var wrapped = function() {
+      try {
+        originalFullscreen.apply(this, arguments);
+      } catch (e) {}
+      try {
+        fitScenario();
+      } catch (e) {}
+    };
+    wrapped.__arkloresWrapped = '1';
+    window.fun_fullscreen = wrapped;
+    document.documentElement.dataset.arkloresPrtsFitWrapped = '1';
+  }
+
+  function installPolling() {
+    if (document.documentElement.dataset.arkloresPrtsFitPolling === '1') return;
+    document.documentElement.dataset.arkloresPrtsFitPolling = '1';
+    var timer = window.setInterval(function() {
+      wrapFullscreen();
+      fitScenario();
+    }, 350);
+    window.addEventListener('pagehide', function() {
+      window.clearInterval(timer);
+      document.documentElement.dataset.arkloresPrtsFitPolling = '0';
+    }, { once: true });
+  }
+
+  if (!alreadyWrapped) {
+    wrapFullscreen();
+  }
+
+  if (!alreadyListening) {
+    var schedule = function() {
+      if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(fitScenario);
+      } else {
+        window.setTimeout(fitScenario, 0);
+      }
+    };
+    window.addEventListener('resize', schedule, { passive: true });
+    window.addEventListener('orientationchange', schedule, { passive: true });
+    document.addEventListener('fullscreenchange', schedule, true);
+    document.addEventListener('webkitfullscreenchange', schedule, true);
+    document.addEventListener('mozfullscreenchange', schedule, true);
+    document.addEventListener('MSFullscreenChange', schedule, true);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', schedule, { passive: true });
+      window.visualViewport.addEventListener('scroll', schedule, { passive: true });
+    }
+    document.documentElement.dataset.arkloresPrtsFitListening = '1';
+  }
+
+  installPolling();
+  fitScenario();
+})();
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // Best-effort PRTS simulator fit for mobile/fullscreen layouts.
     }
   }
 
@@ -112,11 +646,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     if (url.isEmpty) return;
     final title =
         _titles[idx].isNotEmpty ? _titles[idx] : _wikiSites[idx].label;
-    final site = idx == 0 ? 'prts' : 'endfield';
     ref.read(bookmarkProvider.notifier).toggle(
           title: title,
           url: url,
-          site: site,
+          site: _wikiSites[idx].id,
         );
   }
 
@@ -128,18 +661,21 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     );
     if (bookmark == null || !mounted) return;
 
-    // Determine which tab to switch to.
-    final targetIndex = bookmark.site == 'prts' ? 0 : 1;
+    final targetIndex = _wikiSites.indexWhere(
+      (site) => site.id == bookmark.site,
+    );
+    if (targetIndex < 0) return;
 
     // Switch tab if needed.
     if (_tabController.index != targetIndex) {
       _tabController.animateTo(targetIndex);
+      _saveWikiTabIndex(targetIndex);
     }
 
     // Load the bookmarked URL in the corresponding WebView.
     final controller = _controllers[targetIndex];
     if (controller != null) {
-      controller.loadUrl(
+      await controller.loadUrl(
         urlRequest: URLRequest(url: WebUri(bookmark.url)),
       );
     }
@@ -155,7 +691,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     final target = await showModalBottomSheet<WikiAiTarget>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => _WikiAiTargetSheet(theme: ref.read(themeProvider)),
+      builder: (context) => WikiAiTargetSheet(theme: ref.read(themeProvider)),
     );
     if (target == null || !mounted) return;
 
@@ -165,13 +701,13 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
           _titles[idx].trim().isNotEmpty ? _titles[idx] : _wikiSites[idx].label,
       pageUrl: _currentUrls[idx].trim().isNotEmpty
           ? _currentUrls[idx]
-          : _wikiSites[idx].initialUrl,
+          : _wikiSites[idx].url,
       siteLabel: _wikiSites[idx].label,
       target: target,
     );
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
         builder: (_) => AiChatPage(initialWikiContext: contextPayload),
       ),
     );
@@ -191,18 +727,22 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   // ─── WebView tab state callbacks ─────────────────────────────────
 
   void _onControllerCreated(int index, InAppWebViewController controller) {
+    if (index >= _controllers.length) return;
     _controllers[index] = controller;
   }
 
   void _onTitleChanged(int index, String? title) {
+    if (index >= _titles.length) return;
     if (title != null && title != _titles[index]) {
       setState(() => _titles[index] = title);
     }
   }
 
   void _onUrlChanged(int index, String url) {
+    if (index >= _currentUrls.length) return;
     if (url != _currentUrls[index]) {
       setState(() => _currentUrls[index] = url);
+      _saveWikiUrl(index, url);
     }
   }
 
@@ -211,6 +751,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     bool back,
     bool forward,
   ) async {
+    if (index >= _canGoBack.length || index >= _canGoForward.length) return;
     if (back != _canGoBack[index] || forward != _canGoForward[index]) {
       setState(() {
         _canGoBack[index] = back;
@@ -225,6 +766,16 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
+    if (!_restoredState) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          child: Center(
+            child: CircularProgressIndicator(color: theme.accentPrimary),
+          ),
+        ),
+      );
+    }
 
     // Determine if the current page is bookmarked.
     final currentUrl = _currentUrls[_tabController.index];
@@ -237,39 +788,62 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
+        top: !_isReaderMode,
+        bottom: false,
         child: Stack(
           children: [
             // ── Main content column ────────────────────────────
             Column(
               children: [
                 // ── Site tab bar ─────────────────────────────────
-                Container(
-                  color: theme.bgSecondary,
-                  child: TabBar(
-                    controller: _tabController,
-                    indicatorColor: theme.accentPrimary,
-                    labelColor: theme.accentPrimary,
-                    unselectedLabelColor: theme.textSecondary,
-                    labelStyle: theme.titleFont.copyWith(fontSize: 14),
-                    unselectedLabelStyle: theme.bodyFont.copyWith(fontSize: 14),
-                    indicatorWeight: 2,
-                    tabs: _wikiSites.map((site) {
-                      return Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.public_rounded,
-                              size: 16,
-                              color: theme.accentPrimary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(site.label),
-                          ],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeInOutCubic,
+                  child: _isReaderMode
+                      ? const SizedBox.shrink()
+                      : Container(
+                          color: theme.bgSecondary,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TabBar(
+                                  controller: _tabController,
+                                  indicatorColor: theme.accentPrimary,
+                                  labelColor: theme.accentPrimary,
+                                  unselectedLabelColor: theme.textSecondary,
+                                  labelStyle:
+                                      theme.titleFont.copyWith(fontSize: 14),
+                                  unselectedLabelStyle:
+                                      theme.bodyFont.copyWith(fontSize: 14),
+                                  indicatorWeight: 2,
+                                  tabs: _wikiSites.map((site) {
+                                    return Tab(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.public_rounded,
+                                            size: 16,
+                                            color: theme.accentPrimary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(site.label),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.bookmarks_rounded),
+                                color: theme.textSecondary,
+                                tooltip: 'Bookmarks',
+                                onPressed: _openBookmarks,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                          ),
                         ),
-                      );
-                    }).toList(),
-                  ),
                 ),
 
                 // ── WebView area (IndexedStack = no horizontal swipes) ──
@@ -278,10 +852,19 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     index: _tabController.index,
                     children: List.generate(_wikiSites.length, (i) {
                       return _WikiTabView(
+                        key: ValueKey(_wikiSites[i].id),
                         index: i,
-                        initialUrl: _wikiSites[i].initialUrl,
+                        initialUrl: _currentUrls[i].trim().isNotEmpty
+                            ? _currentUrls[i]
+                            : _wikiSites[i].url,
                         theme: theme,
                         isDarkMode: _isDarkMode,
+                        isReaderMode: _isReaderMode,
+                        readerDark: _isDarkMode,
+                        readerFontScale: _readerFontScale,
+                        siteKind: WikiSiteAdapter.kindForUrl(_currentUrls[i]),
+                        onReaderTapped: _toggleReaderControls,
+                        onNormalAppearance: _applyNormalWebViewEnhancements,
                         onControllerCreated: _onControllerCreated,
                         onTitleChanged: _onTitleChanged,
                         onUrlChanged: _onUrlChanged,
@@ -293,22 +876,39 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               ],
             ),
 
-            // ── Expandable floating tray (FAB ⇄ vertical toolbar) ──
-            _ExpandableTray(
-              expanded: _trayExpanded,
-              onToggle: () => setState(() => _trayExpanded = !_trayExpanded),
-              canGoBack: _canGoBack[_tabController.index],
-              canGoForward: _canGoForward[_tabController.index],
-              isDarkMode: _isDarkMode,
-              isBookmarked: isBookmarked,
-              onBack: _goBack,
-              onForward: _goForward,
-              onRefresh: _reload,
-              onToggleDarkMode: _toggleDarkMode,
-              onToggleBookmark: _toggleBookmark,
-              onOpenBookmarks: _openBookmarks,
-              onSendToAi: _sendSelectionToAi,
-            ),
+            if (_isReaderMode)
+              ReaderToolbar(
+                visible: _readerControlsVisible,
+                isDarkMode: _isDarkMode,
+                onToggleDarkMode: () =>
+                    _runReaderToolbarAction(_toggleDarkMode),
+                onDecreaseReaderFont: () =>
+                    _runReaderToolbarAction(_decreaseReaderFont),
+                onIncreaseReaderFont: () =>
+                    _runReaderToolbarAction(_increaseReaderFont),
+                onHide: () {
+                  _readerControlsTimer?.cancel();
+                  setState(() => _readerControlsVisible = false);
+                },
+                onExitReader: () => _setReaderMode(false),
+              )
+            else
+              ExpandableTray(
+                expanded: _trayExpanded,
+                onToggle: () => setState(() => _trayExpanded = !_trayExpanded),
+                isDarkMode: _isDarkMode,
+                isReaderMode: _isReaderMode,
+                isBookmarked: isBookmarked,
+                onZoomOut: _zoomOut,
+                onZoomIn: _zoomIn,
+                onRefresh: _reload,
+                onToggleDarkMode: _toggleDarkMode,
+                onToggleReaderMode: _toggleReaderMode,
+                onDecreaseReaderFont: _decreaseReaderFont,
+                onIncreaseReaderFont: _increaseReaderFont,
+                onToggleBookmark: _toggleBookmark,
+                onSendToAi: _sendSelectionToAi,
+              ),
           ],
         ),
       ),
@@ -319,25 +919,38 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 /// A single wiki tab whose WebView is kept alive by [IndexedStack] in the
 /// parent, so browsing state is preserved across tab switches.
 class _WikiTabView extends StatefulWidget {
-  final int index;
-  final String initialUrl;
-  final AppThemeTokens theme;
-  final bool isDarkMode;
-  final void Function(int, InAppWebViewController) onControllerCreated;
-  final void Function(int, String?) onTitleChanged;
-  final void Function(int, String) onUrlChanged;
-  final Future<void> Function(int, bool, bool) onHistoryChanged;
 
   const _WikiTabView({
+    super.key,
     required this.index,
     required this.initialUrl,
     required this.theme,
     required this.isDarkMode,
+    required this.isReaderMode,
+    required this.readerDark,
+    required this.readerFontScale,
+    required this.siteKind,
+    required this.onReaderTapped,
+    required this.onNormalAppearance,
     required this.onControllerCreated,
     required this.onTitleChanged,
     required this.onUrlChanged,
     required this.onHistoryChanged,
   });
+  final int index;
+  final String initialUrl;
+  final AppThemeTokens theme;
+  final bool isDarkMode;
+  final bool isReaderMode;
+  final bool readerDark;
+  final double readerFontScale;
+  final WikiSiteKind siteKind;
+  final VoidCallback onReaderTapped;
+  final Future<void> Function(InAppWebViewController) onNormalAppearance;
+  final void Function(int, InAppWebViewController) onControllerCreated;
+  final void Function(int, String?) onTitleChanged;
+  final void Function(int, String) onUrlChanged;
+  final Future<void> Function(int, bool, bool) onHistoryChanged;
 
   @override
   State<_WikiTabView> createState() => _WikiTabViewState();
@@ -346,6 +959,95 @@ class _WikiTabView extends StatefulWidget {
 class _WikiTabViewState extends State<_WikiTabView> {
   InAppWebViewController? _controller;
   String? _loadError;
+  double? _edgeDragStartX;
+  bool _isPreparingWebView = true;
+  bool _hasLoadedPage = false;
+  int _appearanceRequest = 0;
+
+  @override
+  void didUpdateWidget(covariant _WikiTabView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_controller == null) return;
+    if (oldWidget.isReaderMode != widget.isReaderMode ||
+        oldWidget.readerDark != widget.readerDark ||
+        oldWidget.readerFontScale != widget.readerFontScale ||
+        oldWidget.isDarkMode != widget.isDarkMode) {
+      if (_hasLoadedPage) {
+        _prepareWebViewAppearance();
+      }
+    }
+  }
+
+  void _showLoadingOverlay() {
+    _appearanceRequest++;
+    if (mounted && !_isPreparingWebView) {
+      setState(() => _isPreparingWebView = true);
+    }
+  }
+
+  Future<void> _prepareWebViewAppearance() async {
+    final request = ++_appearanceRequest;
+    var needsFrame = false;
+    if (mounted && !_isPreparingWebView) {
+      setState(() => _isPreparingWebView = true);
+      needsFrame = true;
+    }
+
+    if (needsFrame) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || request != _appearanceRequest) return;
+    }
+
+    try {
+      await _applyAppearance();
+    } catch (error) {
+      debugPrint('[WikiBrowser] Error applying WebView appearance: $error');
+    }
+
+    if (!mounted || request != _appearanceRequest) return;
+    setState(() => _isPreparingWebView = false);
+  }
+
+  Future<void> _applyAppearance() async {
+    final controller = _controller;
+    if (controller == null) return;
+
+    if (widget.isReaderMode) {
+      await WikiAppearance.remove(controller);
+      await _resetPageScale(controller);
+      await WikiReaderMode.inject(
+        controller,
+        dark: widget.readerDark,
+        fontScale: widget.readerFontScale,
+        siteKind: widget.siteKind,
+      );
+      return;
+    }
+
+    await WikiReaderMode.remove(controller);
+    await WikiAppearance.inject(
+      controller,
+      dark: widget.isDarkMode,
+    );
+    await widget.onNormalAppearance(controller);
+  }
+
+  Future<void> _resetPageScale(InAppWebViewController controller) async {
+    try {
+      await controller.evaluateJavascript(
+        source: '''
+(function() {
+  var html = document.documentElement;
+  if (!html) return;
+  html.style.removeProperty('zoom');
+  html.style.removeProperty('transform-origin');
+})();
+''',
+      );
+    } catch (_) {
+      // Reader mode always uses the document's natural scale.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -364,22 +1066,37 @@ class _WikiTabViewState extends State<_WikiTabView> {
             domStorageEnabled: true,
             useWideViewPort: true,
             supportZoom: true,
-            // Transparent background to avoid white flash on dark themes.
-            transparentBackground: true,
+            transparentBackground: false,
           ),
+          initialUserScripts: UnmodifiableListView<UserScript>([
+            UserScript(
+              groupName: 'arklores-theme-bootstrap',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: true,
+              source: WikiSiteAdapter.documentStartThemeScript(
+                dark: widget.isDarkMode,
+              ),
+            ),
+          ]),
           onWebViewCreated: (controller) {
             _controller = controller;
+            controller.addJavaScriptHandler(
+              handlerName: 'arkloresReaderTap',
+              callback: (_) {
+                if (widget.isReaderMode) widget.onReaderTapped();
+                return null;
+              },
+            );
             widget.onControllerCreated(widget.index, controller);
           },
           onLoadStart: (controller, url) {
-            if (_loadError != null) {
-              setState(() => _loadError = null);
-            }
+            _hasLoadedPage = false;
+            _showLoadingOverlay();
+            if (_loadError != null) setState(() => _loadError = null);
           },
           onLoadStop: (controller, url) async {
-            if (widget.isDarkMode) {
-              await WikiDarkMode.inject(controller);
-            }
+            _hasLoadedPage = true;
+            await _prepareWebViewAppearance();
           },
           onTitleChanged: (controller, title) {
             widget.onTitleChanged(widget.index, title);
@@ -397,11 +1114,92 @@ class _WikiTabViewState extends State<_WikiTabView> {
             if (!isMainFrame) return;
             setState(() {
               _loadError = _friendlyWebViewError(error.description);
+              _isPreparingWebView = false;
             });
+            _appearanceRequest++;
           },
         ),
+        if (!widget.isReaderMode) _buildEdgeGestureLayer(),
+        if (_isPreparingWebView) _buildLoadingOverlay(),
         if (_loadError != null) _buildErrorOverlay(context),
       ],
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return AbsorbPointer(
+      child: ColoredBox(
+        color: widget.isReaderMode
+            ? (widget.readerDark
+                ? const Color(0xFF0B0F14)
+                : const Color(0xFFF6F3EA))
+            : widget.theme.bgPrimary,
+        child: Center(
+          child: SizedBox(
+            height: 28,
+            width: 28,
+            child: CircularProgressIndicator(
+              color: widget.theme.accentPrimary,
+              strokeWidth: 2.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEdgeGestureLayer() {
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const edgeWidth = 28.0;
+          return IgnorePointer(
+            ignoring: false,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: edgeWidth,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragStart: (details) {
+                      _edgeDragStartX = details.globalPosition.dx;
+                    },
+                    onHorizontalDragEnd: (details) async {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity > 320 || (_edgeDragStartX ?? 0) < 12) {
+                        if (await _controller?.canGoForward() ?? false) {
+                          await _controller?.goForward();
+                        }
+                      }
+                      _edgeDragStartX = null;
+                    },
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: edgeWidth,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragEnd: (details) async {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity < -320) {
+                        if (await _controller?.canGoBack() ?? false) {
+                          await _controller?.goBack();
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -429,7 +1227,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
                     Icon(Icons.wifi_off_rounded, color: theme.danger, size: 28),
                     const SizedBox(height: 12),
                     Text(
-                      'Wiki 页面加载失败',
+                      context.t.wikiLoadFailed,
                       style: theme.titleFont.copyWith(fontSize: 18),
                     ),
                     const SizedBox(height: 8),
@@ -450,7 +1248,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
                         },
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: Text(
-                          '重试',
+                          context.t.wikiRetry,
                           style: theme.titleFont.copyWith(fontSize: 13),
                         ),
                         style: ElevatedButton.styleFrom(
@@ -476,209 +1274,14 @@ class _WikiTabViewState extends State<_WikiTabView> {
   String _friendlyWebViewError(String description) {
     final lower = description.toLowerCase();
     if (lower.contains('host') || lower.contains('dns')) {
-      return '无法解析 Wiki 域名。请确认网络、DNS 或代理已对 ArkLores 生效后重试。';
+      return context.t.wikiErrorDns;
     }
     if (lower.contains('timeout')) {
-      return '连接超时。请切换网络或确认代理/VPN 已连接后重试。';
+      return context.t.wikiErrorTimeout;
     }
     if (lower.contains('net::err_internet_disconnected')) {
-      return '设备当前没有可用网络连接。';
+      return context.t.wikiErrorOffline;
     }
     return description;
-  }
-}
-
-class _WikiAiTargetSheet extends StatelessWidget {
-  final AppThemeTokens theme;
-
-  const _WikiAiTargetSheet({required this.theme});
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.cardSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          border: Border(top: BorderSide(color: theme.cardBorder)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.t.wikiSendToAi,
-                style: theme.titleFont.copyWith(fontSize: 18),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                context.t.wikiSendToAiDesc,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _TargetTile(
-                theme: theme,
-                icon: Icons.summarize_rounded,
-                title: context.t.aiTabSummary,
-                subtitle: context.t.wikiSendToSummaryDesc,
-                onTap: () => Navigator.pop(context, WikiAiTarget.summary),
-              ),
-              _TargetTile(
-                theme: theme,
-                icon: Icons.verified_outlined,
-                title: context.t.aiTabFactCheck,
-                subtitle: context.t.wikiSendToFactCheckDesc,
-                onTap: () => Navigator.pop(context, WikiAiTarget.factCheck),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TargetTile extends StatelessWidget {
-  final AppThemeTokens theme;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _TargetTile({
-    required this.theme,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: theme.accentPrimary),
-      title: Text(title, style: theme.titleFont.copyWith(fontSize: 15)),
-      subtitle: Text(
-        subtitle,
-        style: theme.bodyFont.copyWith(color: theme.textSecondary),
-      ),
-      onTap: onTap,
-    );
-  }
-}
-
-// ─── Sizing constants for the expandable tray ───────────────────
-const double _traySize = 52;
-const double _trayMargin = 16;
-const double _trayHeightFactor = 0.45;
-
-/// Floating tray anchored at bottom-right that morphs between a FAB and a
-/// tall vertical toolbar.
-///
-/// Collapsed: a small round button.
-/// Expanded: the same-width container "stretches" upward into a floating
-/// vertical toolbar with [WikiToolbar] inside and a close toggle at bottom.
-class _ExpandableTray extends ConsumerWidget {
-  const _ExpandableTray({
-    required this.expanded,
-    required this.onToggle,
-    required this.canGoBack,
-    required this.canGoForward,
-    required this.isDarkMode,
-    required this.isBookmarked,
-    required this.onBack,
-    required this.onForward,
-    required this.onRefresh,
-    required this.onToggleDarkMode,
-    required this.onToggleBookmark,
-    required this.onOpenBookmarks,
-    required this.onSendToAi,
-  });
-
-  final bool expanded;
-  final VoidCallback onToggle;
-
-  final bool canGoBack;
-  final bool canGoForward;
-  final bool isDarkMode;
-  final bool isBookmarked;
-
-  final VoidCallback onBack;
-  final VoidCallback onForward;
-  final VoidCallback onRefresh;
-  final VoidCallback onToggleDarkMode;
-  final VoidCallback onToggleBookmark;
-  final VoidCallback onOpenBookmarks;
-  final VoidCallback onSendToAi;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
-
-    return Positioned(
-      right: _trayMargin,
-      bottom: _trayMargin,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOutCubic,
-        width: _traySize,
-        height: expanded
-            ? (MediaQuery.of(context).size.height * _trayHeightFactor)
-            : _traySize,
-        decoration: BoxDecoration(
-          color: theme.cardSurface,
-          borderRadius: BorderRadius.circular(expanded ? 16 : _traySize / 2),
-          boxShadow: theme.cardShadow,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Toolbar buttons (only when expanded) ──────────────
-            if (expanded)
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: WikiToolbar(
-                    canGoBack: canGoBack,
-                    canGoForward: canGoForward,
-                    isDarkMode: isDarkMode,
-                    isBookmarked: isBookmarked,
-                    onBack: onBack,
-                    onForward: onForward,
-                    onRefresh: onRefresh,
-                    onToggleDarkMode: onToggleDarkMode,
-                    onToggleBookmark: onToggleBookmark,
-                    onOpenBookmarks: onOpenBookmarks,
-                    onSendToAi: onSendToAi,
-                    sendToAiTooltip: context.t.wikiSendToAi,
-                  ),
-                ),
-              ),
-
-            // ── Toggle button (always visible at the bottom) ──────
-            SizedBox(
-              height: _traySize,
-              child: IconButton(
-                icon: Icon(
-                  expanded ? Icons.close_rounded : Icons.tune_rounded,
-                  size: 22,
-                ),
-                color: theme.textPrimary,
-                onPressed: onToggle,
-                padding: EdgeInsets.zero,
-                splashRadius: 22,
-                tooltip: expanded ? 'Close' : 'Tools',
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

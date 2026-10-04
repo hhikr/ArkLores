@@ -2,53 +2,78 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
+import '../../core/llm/llm_provider.dart' show deepThinkingProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import 'wiki_ai_context.dart';
+import '../../shared/widgets/smooth_page_route.dart';
+import 'chat_history_page.dart';
+import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/roleplay_tab.dart';
+import 'wiki_ai_context.dart';
 
 /// The main AI Chat Page hosting the three AI modes (FactCheck, Summary, Roleplay).
 ///
 /// Features a TabBar for fact-check, summary, and roleplay modes.
 class AiChatPage extends ConsumerStatefulWidget {
-  final WikiAiContext? initialWikiContext;
 
   const AiChatPage({super.key, this.initialWikiContext});
+  final WikiAiContext? initialWikiContext;
 
   @override
   ConsumerState<AiChatPage> createState() => _AiChatPageState();
 }
 
-class _AiChatPageState extends ConsumerState<AiChatPage> {
+class _AiChatPageState extends ConsumerState<AiChatPage>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  // Ask tab first; the wiki handoff sets the mode, not the tab.
+  late final TabController _tabController = TabController(length: 2, vsync: this)
+    ..addListener(() {
+      if (!_tabController.indexIsChanging && mounted) setState(() {});
+    });
   bool _handledInitialWikiContext = false;
 
-  int get _initialTabIndex {
-    final target = widget.initialWikiContext?.target;
-    if (target == WikiAiTarget.factCheck) return 0;
-    return 1;
-  }
+  /// R17d: the list never follows a streaming answer — the thinking, the
+  /// steps and the answer grow below and the reader scrolls at their own
+  /// pace. Only a new question scrolls (once) to the end. The ↓ button
+  /// shows whenever the end is out of view.
+  bool _showJumpToEnd = false;
 
   @override
   void dispose() {
+    _tabController.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      });
+  /// Called on scrolling and on content size changes.
+  bool _onScrollMetrics(ScrollMetrics metrics) {
+    final away = metrics.maxScrollExtent - metrics.pixels > 48;
+    if (away != _showJumpToEnd) setState(() => _showJumpToEnd = away);
+    return false;
+  }
+
+  /// Animates to the end; [afterFrame] when the content just changed and
+  /// is not laid out yet.
+  void _scrollToBottom({bool afterFrame = false}) {
+    void go() {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+
+    if (afterFrame) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => go());
+    } else {
+      go();
     }
   }
 
@@ -58,47 +83,103 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     final isConfigured = ref.watch(apiConfigProvider).isValid;
     _dispatchInitialWikiContext(isConfigured);
 
-    return DefaultTabController(
-      length: 3,
-      initialIndex: _initialTabIndex,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: theme.bgSecondary,
-          elevation: 0,
-          title: Text(
-            context.t.aiChatTitle,
-            style: theme.titleFont.copyWith(fontSize: 20),
+    // R15: one bar — the Ask / Roleplay switch where the title was, the
+    // conversation actions on the right (Ask tab only).
+    final onAsk = _tabController.index == 0;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: theme.bgSecondary,
+        elevation: 0,
+        titleSpacing: 4,
+        title: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          dividerColor: Colors.transparent,
+          indicatorColor: theme.accentPrimary,
+          labelColor: theme.accentText,
+          unselectedLabelColor: theme.textSecondary,
+          labelStyle: theme.titleFont.copyWith(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
           ),
-          bottom: TabBar(
-            indicatorColor: theme.accentPrimary,
-            labelColor: theme.accentPrimary,
-            unselectedLabelColor: theme.textSecondary,
-            labelStyle: theme.titleFont.copyWith(fontWeight: FontWeight.bold),
-            unselectedLabelStyle: theme.titleFont,
-            tabs: [
-              Tab(text: context.t.aiTabFactCheck),
-              Tab(text: context.t.aiTabSummary),
-              Tab(text: context.t.aiTabRoleplay),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            isConfigured
-                ? _buildFactCheckTab(theme)
-                : _buildConfigRequiredTab(theme),
-
-            // ── Summary Tab (Functional) ─────────────────────
-            isConfigured
-                ? _buildSummaryChatTab(theme)
-                : _buildConfigRequiredTab(theme),
-
-            isConfigured ? const RoleplayTab() : _buildConfigRequiredTab(theme),
+          unselectedLabelStyle: theme.titleFont.copyWith(fontSize: 17),
+          tabs: [
+            Tab(text: context.t.aiTabAsk),
+            Tab(text: context.t.aiTabRoleplay),
           ],
         ),
+        actions: [
+          if (onAsk && isConfigured) ..._buildAskActions(theme),
+        ],
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // ── Ask Tab (unified: summarize / verify / investigate) ──
+          isConfigured ? _buildAskTab(theme) : _buildConfigRequiredTab(theme),
+
+          isConfigured ? const RoleplayTab() : _buildConfigRequiredTab(theme),
+        ],
       ),
     );
+  }
+
+  /// History and new-conversation buttons plus a menu with retry / clear.
+  List<Widget> _buildAskActions(AppThemeTokens theme) {
+    final chatHistory = ref.watch(askChatProvider);
+    final chatNotifier = ref.read(askChatProvider.notifier);
+    final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
+    return [
+      IconButton(
+        onPressed: isSending
+            ? null
+            : () => Navigator.of(context).push(
+                  smoothPageRoute<void>(
+                    builder: (_) => const ChatHistoryPage(),
+                  ),
+                ),
+        tooltip: context.t.aiHistoryTitle,
+        icon: const Icon(Icons.history_rounded),
+      ),
+      IconButton(
+        onPressed: isSending ? null : chatNotifier.newSession,
+        tooltip: context.t.aiNewConversation,
+        icon: const Icon(Icons.add_comment_outlined),
+      ),
+      if (chatHistory.isNotEmpty)
+        PopupMenuButton<String>(
+          tooltip: context.t.aiMoreActions,
+          icon: const Icon(Icons.more_vert_rounded),
+          color: theme.cardSurface,
+          onSelected: (value) {
+            if (value == 'retry') chatNotifier.retryLast();
+            if (value == 'clear') _confirmClearHistory(context, chatNotifier);
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'retry',
+              enabled: !isSending,
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.refresh_rounded),
+                title: Text(context.t.aiRetry),
+              ),
+            ),
+            PopupMenuItem(
+              value: 'clear',
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.delete_sweep_rounded, color: theme.danger),
+                title: Text(context.t.aiClearHistory),
+              ),
+            ),
+          ],
+        ),
+    ];
   }
 
   Widget _buildConfigRequiredTab(AppThemeTokens theme) {
@@ -125,15 +206,19 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-          ElevatedButton.icon(
+          FilledButton.icon(
             onPressed: () {
               Navigator.pushNamed(context, '/api-settings');
             },
-            icon: const Icon(Icons.settings_rounded),
+            icon: Icon(
+              Icons.settings_rounded,
+              size: 21,
+              color: theme.onAccent,
+            ),
             label: Text(context.t.aiSettingsGoTo),
-            style: ElevatedButton.styleFrom(
+            style: FilledButton.styleFrom(
               backgroundColor: theme.accentPrimary,
-              foregroundColor: theme.isDark ? Colors.black : Colors.white,
+              foregroundColor: theme.onAccent,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               textStyle: theme.titleFont.copyWith(fontWeight: FontWeight.bold),
             ),
@@ -143,80 +228,122 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  Widget _buildSummaryChatTab(AppThemeTokens theme) {
-    final chatHistory = ref.watch(summaryChatProvider);
-    final chatNotifier = ref.read(summaryChatProvider.notifier);
+  /// Unified Ask tab: mode selector + chat list + input. The same message
+  /// list renders summary answers, fact-check verdicts and investigation
+  /// cards (chat_bubble dispatches by content).
+  Widget _buildAskTab(AppThemeTokens theme) {
+    final chatHistory = ref.watch(askChatProvider);
+    final chatNotifier = ref.read(askChatProvider.notifier);
     final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
 
-    // Listen to changes in chat history to scroll to bottom
-    ref.listen(summaryChatProvider, (prev, next) {
-      if (prev?.length != next.length ||
-          (next.isNotEmpty && next.last.isStreaming)) {
-        _scrollToBottom();
-      }
+    ref.listen(askChatProvider, (prev, next) {
+      // A new question (not a streaming update): bring it into view once.
+      if ((prev?.length ?? 0) < next.length) _scrollToBottom(afterFrame: true);
     });
 
-    return Column(
+    // R15: the conversation fills the tab; actions live in the app bar. The
+    // question box may grow to half or all of the tab (its height budget).
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
       children: [
-        // ── Active profile display & Clear history ───────
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: theme.bgSecondary.withValues(alpha: 0.5),
-          child: Row(
-            children: [
-              Icon(Icons.storage_rounded, size: 14, color: theme.textSecondary),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  context.t.aiSummarySource,
-                  style: theme.bodyFont
-                      .copyWith(color: theme.textSecondary, fontSize: 12),
-                ),
-              ),
-              if (chatHistory.isNotEmpty)
-                IconButton(
-                  onPressed: isSending ? null : chatNotifier.retryLast,
-                  tooltip: context.t.aiRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  visualDensity: VisualDensity.compact,
-                ),
-              if (chatHistory.isNotEmpty)
-                IconButton(
-                  icon: Icon(Icons.delete_sweep_rounded,
-                      color: theme.danger, size: 18),
-                  tooltip: context.t.aiClearHistory,
-                  onPressed: () => _confirmClearHistory(context, chatNotifier),
-                  constraints: const BoxConstraints(),
-                  padding: EdgeInsets.zero,
-                ),
-            ],
-          ),
-        ),
-
-        // ── Chat List ────────────────────────────────────
         Expanded(
           child: chatHistory.isEmpty
               ? _buildEmptyState(theme)
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: chatHistory.length,
-                  itemBuilder: (context, index) {
-                    return ChatBubble(message: chatHistory[index]);
-                  },
+              : Stack(
+                  children: [
+                    NotificationListener<ScrollMetricsNotification>(
+                      onNotification: (n) => n.depth == 0 &&
+                          _onScrollMetrics(n.metrics),
+                      child: NotificationListener<ScrollUpdateNotification>(
+                        onNotification: (n) => n.depth == 0 &&
+                            _onScrollMetrics(n.metrics),
+                        child: ListView.builder(
+                          key: const ValueKey('ask-chat-list'),
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          itemCount: chatHistory.length,
+                          itemBuilder: (context, index) {
+                            return ChatBubble(message: chatHistory[index]);
+                          },
+                        ),
+                      ),
+                    ),
+                    if (_showJumpToEnd)
+                      Positioned(
+                        right: 16,
+                        bottom: 12,
+                        child: Material(
+                          color: theme.accentPrimary,
+                          shape: const CircleBorder(),
+                          elevation: 3,
+                          shadowColor: Colors.black.withValues(alpha: 0.3),
+                          child: IconButton(
+                            key: const ValueKey('scroll-to-bottom'),
+                            tooltip: context.t.aiScrollToBottom,
+                            onPressed: _scrollToBottom,
+                            icon: Icon(
+                              Icons.arrow_downward_rounded,
+                              color: theme.onAccent,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
         ),
-
-        // ── Input box ────────────────────────────────────
-        _buildInputArea(
-          theme,
-          isSending,
-          onSend: isSending ? chatNotifier.cancel : _handleSummarySend,
-          hintText: context.t.aiSummaryInputPlaceholder,
-          isCancel: isSending,
+        AskComposer(
+          controller: _inputController,
+          theme: theme,
+          isSending: isSending,
+          onSend: isSending ? chatNotifier.cancel : _handleAskSend,
+          hintText: context.t.aiAskInputPlaceholder,
+          maxHeight: constraints.maxHeight,
+          leading: _buildDeepThinkingToggle(theme),
         ),
       ],
+      ),
+    );
+  }
+
+  /// R16: "深度思考" — lets the answer writer think (low effort) for the
+  /// next questions; off by default. Retrieval is the same either way.
+  Widget _buildDeepThinkingToggle(AppThemeTokens theme) {
+    final on = ref.watch(deepThinkingProvider);
+    return Tooltip(
+      message: context.t.aiDeepThinkingTooltip,
+      child: Semantics(
+        button: true,
+        toggled: on,
+        label: context.t.aiDeepThinking,
+        child: InkWell(
+          key: const ValueKey('deep-thinking-toggle'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => ref.read(deepThinkingProvider.notifier).state = !on,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: on
+                  ? theme.accentPrimary.withValues(alpha: 0.18)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: on
+                    ? theme.accentText.withValues(alpha: 0.4)
+                    : theme.divider,
+                width: 0.5,
+              ),
+            ),
+            child: Icon(
+              Icons.psychology_alt_rounded,
+              size: 18,
+              color: on ? theme.accentText : theme.textSecondary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -227,21 +354,28 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         child: Column(
           children: [
             Icon(
-              Icons.summarize_rounded,
+              Icons.auto_awesome_rounded,
               size: 48,
               color: theme.accentPrimary.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 12),
             Text(
-              context.t.aiTabSummary,
+              context.t.aiTabAsk,
               style: theme.titleFont
                   .copyWith(fontSize: 20, color: theme.textPrimary),
             ),
             const SizedBox(height: 8),
             Text(
-              context.t.aiSummaryEmpty,
+              context.t.aiAskEmpty,
               style: theme.bodyFont
                   .copyWith(color: theme.textSecondary, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.t.aiAskSource,
+              style: theme.bodyFont
+                  .copyWith(color: theme.textSecondary, fontSize: 11),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -250,12 +384,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: [
-                _buildSuggestionChip(theme, context.t.aiSummarySuggestionAmiya),
-                _buildSuggestionChip(
-                    theme, context.t.aiSummarySuggestionKaltsit),
-                _buildSuggestionChip(theme, context.t.aiSummarySuggestionRhine),
-                _buildSuggestionChip(
-                    theme, context.t.aiSummarySuggestionChernobog),
+                _buildSuggestionChip(theme, context.t.aiAskSuggestionAmiya),
+                _buildSuggestionChip(theme, context.t.aiAskSuggestionVerify),
+                _buildSuggestionChip(theme, context.t.aiAskSuggestionInvestigate),
               ],
             ),
           ],
@@ -277,150 +408,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  Widget _buildFactCheckTab(AppThemeTokens theme) {
-    final history = ref.watch(factCheckChatProvider);
-    final notifier = ref.read(factCheckChatProvider.notifier);
-    final isSending = history.isNotEmpty && history.last.isStreaming;
-    ref.listen(factCheckChatProvider, (previous, next) => _scrollToBottom());
-
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: theme.bgSecondary.withValues(alpha: 0.5),
-          child: Row(
-            children: [
-              Icon(Icons.verified_outlined,
-                  size: 16, color: theme.accentPrimary),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  context.t.aiFactCheckSource,
-                  style: theme.bodyFont
-                      .copyWith(color: theme.textSecondary, fontSize: 12),
-                ),
-              ),
-              if (history.isNotEmpty)
-                IconButton(
-                  onPressed: notifier.retryLast,
-                  tooltip: context.t.aiRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  visualDensity: VisualDensity.compact,
-                ),
-              if (history.isNotEmpty)
-                IconButton(
-                  onPressed: notifier.clearChat,
-                  tooltip: context.t.aiClearHistory,
-                  icon: Icon(Icons.delete_sweep_rounded, color: theme.danger),
-                  visualDensity: VisualDensity.compact,
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: history.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      context.t.aiFactCheckEmpty,
-                      textAlign: TextAlign.center,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                )
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: history.length,
-                  itemBuilder: (context, index) =>
-                      ChatBubble(message: history[index]),
-                ),
-        ),
-        _buildInputArea(
-          theme,
-          isSending,
-          onSend: isSending ? notifier.cancel : _handleFactCheckSend,
-          hintText: context.t.aiFactCheckInputPlaceholder,
-          isCancel: isSending,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInputArea(
-    AppThemeTokens theme,
-    bool isSending, {
-    required VoidCallback onSend,
-    required String hintText,
-    bool isCancel = false,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        border: Border(top: BorderSide(color: theme.divider, width: 0.5)),
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: theme.bgPrimary,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: theme.divider, width: 0.5),
-                ),
-                child: TextField(
-                  controller: _inputController,
-                  style: theme.bodyFont.copyWith(color: theme.textPrimary),
-                  cursorColor: theme.accentPrimary,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: isSending ? null : (_) => onSend(),
-                  decoration: InputDecoration(
-                    hintText: hintText,
-                    hintStyle: theme.bodyFont
-                        .copyWith(color: theme.textSecondary, fontSize: 13),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: onSend,
-              icon: Icon(
-                isCancel ? Icons.stop_rounded : Icons.send_rounded,
-                color: isCancel ? theme.danger : theme.accentPrimary,
-              ),
-              tooltip: isCancel ? context.t.aiCancel : context.t.aiSend,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _handleSummarySend() {
+  void _handleAskSend() {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
     _inputController.clear();
-    ref.read(summaryChatProvider.notifier).sendMessage(text);
-  }
-
-  void _handleFactCheckSend() {
-    final text = _inputController.text.trim();
-    if (text.isEmpty) return;
-    _inputController.clear();
-    ref.read(factCheckChatProvider.notifier).sendMessage(text);
+    ref.read(askChatProvider.notifier).sendMessage(text);
   }
 
   void _dispatchInitialWikiContext(bool isConfigured) {
@@ -431,23 +424,17 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     _handledInitialWikiContext = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final prompt = buildWikiAiPrompt(wikiContext);
-      switch (wikiContext.target) {
-        case WikiAiTarget.summary:
-          ref.read(summaryChatProvider.notifier).sendMessage(prompt);
-          break;
-        case WikiAiTarget.factCheck:
-          ref.read(factCheckChatProvider.notifier).sendMessage(prompt);
-          break;
-      }
+      // The prompt itself says whether to summarize or to check a claim.
+      ref.read(askChatProvider.notifier).sendMessage(
+            buildWikiAiPrompt(wikiContext),
+          );
     });
   }
 
-  void _confirmClearHistory(
-      BuildContext context, SummaryChatNotifier notifier) {
+  void _confirmClearHistory(BuildContext context, AskChatNotifier notifier) {
     final theme = ref.read(themeProvider);
 
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(

@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/ai/ai_chat_page.dart';
 import 'features/materials/materials_page.dart';
-import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
+import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
+import 'shared/providers/wiki_navigation_provider.dart';
 import 'shared/theme/app_theme.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
@@ -23,6 +24,9 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
+  bool _pageTransitioning = false;
+  bool _pageRevealActive = false;
+  int _pageRevealToken = 0;
 
   final List<Widget> _pages = const [
     WikiBrowserPage(),
@@ -32,39 +36,108 @@ class _MainShellState extends ConsumerState<MainShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _currentIndex = ref.read(initialMainTabIndexProvider);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final wikiReaderFullscreen = ref.watch(wikiReaderFullscreenProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: Curves.easeInOut,
-        switchOutCurve: Curves.easeInOut,
-        transitionBuilder: (Widget child, Animation<double> animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey('page_${theme.themeName}'),
-          child: IndexedStack(
-            index: _currentIndex,
-            children: _pages,
-          ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (_currentIndex == 0) {
+          final handled = await (ref.read(wikiBackHandlerProvider)?.call() ??
+              Future.value(false));
+          if (handled) return;
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            IndexedStack(
+              index: _currentIndex,
+              children: _pages,
+            ),
+            _buildPageTransitionOverlay(theme),
+          ],
+        ),
+        bottomNavigationBar: AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeInOutCubic,
+          child: wikiReaderFullscreen && _currentIndex == 0
+              ? const SizedBox.shrink()
+              : _IndustrialNavigation(
+                  theme: theme,
+                  currentIndex: _currentIndex,
+                  onSelected: _selectTab,
+                  items: [
+                    (Icons.language_rounded, context.t.navWiki),
+                    (Icons.psychology_alt_rounded, context.t.navAI),
+                    (Icons.menu_book_rounded, context.t.navMaterials),
+                    (Icons.settings_rounded, context.t.navSettings),
+                  ],
+                ),
         ),
       ),
-      bottomNavigationBar: _IndustrialNavigation(
-        theme: theme,
-        currentIndex: _currentIndex,
-        onSelected: (index) => setState(() => _currentIndex = index),
-        items: [
-          (Icons.language_rounded, context.t.navWiki),
-          (Icons.psychology_alt_rounded, context.t.navAI),
-          (Icons.menu_book_rounded, context.t.navMaterials),
-          (Icons.settings_rounded, context.t.navSettings),
-        ],
+    );
+  }
+
+  void _selectTab(int index) {
+    if (index == _currentIndex) return;
+    setState(() {
+      _currentIndex = index;
+      _pageTransitioning = true;
+      _pageRevealActive = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _pageTransitioning = false;
+        _pageRevealActive = true;
+        _pageRevealToken++;
+      });
+    });
+    ref.read(settingsServiceProvider).saveMainTabIndex(index).catchError(
+          (Object error) => debugPrint(
+            '[MainShell] Error saving selected tab: $error',
+          ),
+        );
+  }
+
+  Widget _buildPageTransitionOverlay(AppThemeTokens theme) {
+    if (_pageTransitioning) {
+      return Positioned.fill(
+        child: IgnorePointer(
+          child: ColoredBox(color: theme.bgPrimary),
+        ),
+      );
+    }
+    if (!_pageRevealActive) return const SizedBox.shrink();
+
+    final token = _pageRevealToken;
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey(token),
+          tween: Tween(begin: 1, end: 0),
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          onEnd: () {
+            if (!mounted || token != _pageRevealToken) return;
+            setState(() => _pageRevealActive = false);
+          },
+          builder: (context, opacity, child) {
+            return Opacity(opacity: opacity, child: child);
+          },
+          child: ColoredBox(color: theme.bgPrimary),
+        ),
       ),
     );
   }
@@ -114,7 +187,7 @@ class _IndustrialNavigation extends StatelessWidget {
   }
 }
 
-class _NavigationItem extends StatelessWidget {
+class _NavigationItem extends StatefulWidget {
   const _NavigationItem({
     required this.theme,
     required this.icon,
@@ -130,72 +203,99 @@ class _NavigationItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_NavigationItem> createState() => _NavigationItemState();
+}
+
+class _NavigationItemState extends State<_NavigationItem> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (mounted && _pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = selected
-        ? (theme.isEndfield ? theme.textPrimary : theme.navSelectedItem)
-        : theme.navUnselectedItem;
+    final color = widget.selected
+        ? (widget.theme.isEndfield
+            ? widget.theme.textPrimary
+            : widget.theme.navSelectedItem)
+        : widget.theme.navUnselectedItem;
     return Semantics(
       button: true,
-      selected: selected,
-      label: label,
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (selected)
-              Positioned(
-                top: 0,
-                left: 18,
-                right: 18,
-                child: Container(height: 3, color: theme.accentPrimary),
-              ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      selected: widget.selected,
+      label: widget.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _setPressed(true),
+        onTapCancel: () => _setPressed(false),
+        onTapUp: (_) => _setPressed(false),
+        onTap: () {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) widget.onTap();
+          });
+        },
+        child: AnimatedScale(
+          scale: _pressed ? 0.94 : 1,
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            decoration: BoxDecoration(
+              color: widget.selected
+                  ? widget.theme.accentPrimary.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Icon(icon, color: color, size: 24),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.bodyFont.copyWith(
-                    color: color,
-                    fontSize: 11,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    height: 1.2,
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  bottom: 3,
+                  left: widget.selected ? 26 : 32,
+                  right: widget.selected ? 26 : 32,
+                  height: 3,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: widget.selected
+                          ? widget.theme.accentPrimary
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedScale(
+                      scale: widget.selected ? 1.04 : 1,
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutBack,
+                      child: Icon(widget.icon, color: color, size: 24),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: widget.theme.bodyFont.copyWith(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight:
+                            widget.selected ? FontWeight.w700 : FontWeight.w500,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
-  }
-}
-
-/// Knowledge base page route wrapper.
-///
-/// Called from [MainShell] via Navigator.pushNamed.
-class KnowledgeBaseRoute extends ConsumerWidget {
-  const KnowledgeBaseRoute({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return const KnowledgeBasePage();
-  }
-}
-
-/// Route generator for sub-pages pushed over the main shell.
-Route<dynamic>? generateAppRoute(RouteSettings settings) {
-  switch (settings.name) {
-    case '/knowledge-base':
-      return MaterialPageRoute(
-        builder: (_) => const KnowledgeBaseRoute(),
-        settings: settings,
-      );
-    default:
-      return null;
   }
 }

@@ -1,15 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:sqflite/sqflite.dart' as sqflite;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
 import 'package:arklores/core/agent/react_loop.dart';
-import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
 import 'package:arklores/core/agent/roleplay_session_store.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
@@ -20,6 +12,16 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
 import 'package:arklores/features/ai/wiki_ai_context.dart';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'support/temp_dir.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -56,7 +58,7 @@ void main() {
     if (previousDatabaseFactory != null) {
       sqflite.databaseFactory = previousDatabaseFactory!;
     }
-    await tempDir.delete(recursive: true);
+    await deleteTempDir(tempDir);
   });
 
   group('Wiki AI context handoff', () {
@@ -160,6 +162,62 @@ void main() {
       expect(observation, contains('Retrieval Type: entity_document'));
     });
 
+    test('reopens cached connection after the DB file is replaced', () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final store = GameDataKnowledgeStore(dbPath: dbPath);
+      final tool = SearchLocalLoreTool(gameDataStore: store);
+
+      final first = await tool.execute({'query': '阿米娅', 'top_k': 3});
+      expect(
+        (first as ToolExecutionResult).observation,
+        contains('Entity ID: char_002_amiya'),
+      );
+
+      // The original file has no entity named this way; a stale cached handle
+      // would keep reporting "no result" after the swap below.
+      final before = await tool.execute({'query': '测试新角色', 'top_k': 3});
+      expect(
+        (before as ToolExecutionResult).observation,
+        contains('No matching GameData result'),
+      );
+
+      // Simulate an installer-style swap: build a DB with an extra entity at a
+      // temp path, then replace the original file while the store still caches
+      // a handle to the old file.
+      final replacedPath = '${tempDir.path}/replaced_gamedata.db';
+      await _createGameDataTestDb(replacedPath);
+      final replacedDb = await sqflite.openDatabase(replacedPath);
+      await replacedDb.insert('entities', {
+        'id': 'char_999_test',
+        'name': '测试新角色',
+        'aliases': '[]',
+        'entity_type': 'operator',
+        'source_type': 'operator_profile',
+        'game': 'arknights',
+        'source_path': 'zh_CN/gamedata/excel/character_table.json',
+      });
+      await replacedDb.insert('entity_aliases', {
+        'alias': '测试新角色',
+        'entity_id': 'char_999_test',
+        'alias_type': 'canonical',
+        'confidence': 1.0,
+        'source_path': 'zh_CN/gamedata/excel/character_table.json',
+      });
+      await replacedDb.close();
+      await File(dbPath).delete();
+      await File(replacedPath).rename(dbPath);
+
+      final after = await tool.execute({'query': '测试新角色', 'top_k': 3});
+      expect(
+        (after as ToolExecutionResult).observation,
+        contains('Entity ID: char_999_test'),
+      );
+    },
+        // Replacing a file that another handle keeps open needs POSIX
+        // semantics (the app runs on Android); Windows locks open files.
+        skip: Platform.isWindows ? 'requires POSIX open-file replacement' : false,);
+
     test('uses entity document FTS for compound queries', () async {
       final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
       await _createGameDataTestDb(dbPath);
@@ -226,10 +284,49 @@ void main() {
       expect(result, isA<ToolExecutionResult>());
       final observation = (result as ToolExecutionResult).observation;
       expect(observation, contains('Ambiguous GameData entity query'));
+      // R10 compact one-line-per-candidate form.
+      expect(observation, contains('1. char_002_amiya'));
+      expect(observation, contains('2. token_amiya_memory'));
+      expect(observation, contains('候选实体（请用 Entity ID 消歧）'));
+    });
+
+    test('explicit entity_id skips the disambiguation branch (R11)',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      await _insertAmbiguousAmiyaCandidate(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      // Same ambiguous name, but with an explicit entity_id: must NOT return
+      // the ambiguity list — it goes straight to entity-scoped retrieval.
+      final result = await tool.execute({
+        'query': 'Amiya',
+        'top_k': 3,
+        'entity_id': 'char_002_amiya',
+      });
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
+      expect(observation, isNot(contains('Ambiguous')));
+    });
+
+    test('entity-id literal query resolves and searches by id (R11)',
+        () async {
+      final dbPath = '${tempDir.path}/arklores_gamedata_zh.db';
+      await _createGameDataTestDb(dbPath);
+      final tool = SearchLocalLoreTool(
+        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+      );
+
+      // `SEARCH char_002_amiya` — suffix-only id literal. Must resolve to the
+      // canonical id and search by it, not treat the id as free text.
+      final result = await tool.execute({'query': 'char_002_amiya', 'top_k': 3});
+
+      expect(result, isA<ToolExecutionResult>());
+      final observation = (result as ToolExecutionResult).observation;
       expect(observation, contains('Entity ID: char_002_amiya'));
-      expect(observation, contains('Entity ID: token_amiya_memory'));
-      expect(
-          observation, contains('call search_local_lore again with entity_id'));
     });
 
     test('summary mode announces retrieval plan and includes story context',
@@ -550,7 +647,7 @@ void main() {
 
       final status = await installer.getStatus();
       expect(status.installed, isTrue);
-      expect(status.manifest['schema_version'], '2');
+      expect(status.manifest['schema_version'], '4');
       expect(status.entityCount, '1');
     });
 
@@ -601,7 +698,170 @@ void main() {
           (error) => '$error',
           'message',
           contains('incompatible'),
-        )),
+        ),),
+      );
+    });
+
+    test('remembers the installed official asset and flags a newer one',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final gz = gzip.encode(await File(validDbPath).readAsBytes());
+      final gzSha = sha256.convert(gz).toString();
+      final client = MockClient((_) async => http.Response.bytes(gz, 200));
+
+      // A DB installed without a marker (pre-v0.10.1 or built in the app)
+      // differs from the asset this build points at.
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: gzSha,
+      );
+      await installer.installFromBytes(
+        await File(validDbPath).readAsBytes(),
+        overwrite: true,
+      );
+      expect((await installer.getStatus()).updateAvailable, isTrue);
+
+      expect(
+        await installer.installFromReleaseAsset(client: client, overwrite: true),
+        isTrue,
+      );
+      var status = await installer.getStatus();
+      expect(status.installedAssetSha, gzSha);
+      expect(status.updateAvailable, isFalse);
+
+      // The next app build points at a new data release.
+      status = await GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: 'f' * 64,
+      ).getStatus();
+      expect(status.updateAvailable, isTrue);
+
+      // No configured asset: nothing to offer.
+      status = await GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: '',
+        releaseAssetSha: '',
+      ).getStatus();
+      expect(status.updateAvailable, isFalse);
+    });
+
+    test('a dropped download resumes with a Range request and installs',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final gz = gzip.encode(await File(validDbPath).readAsBytes());
+      final half = gz.length ~/ 2;
+      final ranges = <String?>[];
+      final client = MockClient.streaming((request, _) async {
+        final range = request.headers['Range'];
+        ranges.add(range);
+        if (range == null) {
+          // First attempt: half the file, then the connection drops.
+          final controller = StreamController<List<int>>();
+          controller
+            ..add(gz.sublist(0, half))
+            ..addError(const HandshakeException('Connection terminated during handshake'));
+          unawaited(controller.close());
+          return http.StreamedResponse(controller.stream, 200,
+              contentLength: gz.length,);
+        }
+        final from = int.parse(RegExp(r'bytes=(\d+)-').firstMatch(range)!.group(1)!);
+        return http.StreamedResponse(
+          Stream.value(gz.sublist(from)),
+          206,
+          contentLength: gz.length - from,
+        );
+      });
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: sha256.convert(gz).toString(),
+      );
+      final progress = <int>[];
+      expect(
+        await installer.installFromReleaseAsset(
+          client: client,
+          overwrite: true,
+          retryDelay: Duration.zero,
+          onProgress: (received, _) => progress.add(received),
+        ),
+        isTrue,
+      );
+      expect(ranges, [null, 'bytes=$half-']);
+      expect(progress.last, gz.length);
+      final status = await installer.getStatus();
+      expect(status.installed, isTrue);
+      expect(status.updateAvailable, isFalse);
+      // The partial file is cleaned up after a successful install.
+      expect(
+        File('${tempDir.path}/arklores_gamedata_zh.db.download.gz').existsSync(),
+        isFalse,
+      );
+    });
+
+    test('HTTP errors are not retried; a stale partial of another asset is '
+        'discarded', () async {
+      var calls = 0;
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: 'a' * 64,
+      );
+      // Leftover partial from a different asset.
+      File('${tempDir.path}/arklores_gamedata_zh.db.download.gz')
+          .writeAsBytesSync([1, 2, 3]);
+      File('${tempDir.path}/arklores_gamedata_zh.db.download.gz.key')
+          .writeAsStringSync('b' * 64);
+      final ranges = <String?>[];
+      final client = MockClient((request) async {
+        ranges.add(request.headers['Range']);
+        calls++;
+        return http.Response('missing', 404);
+      });
+      await expectLater(
+        installer.installFromReleaseAsset(
+          client: client,
+          overwrite: true,
+          retryDelay: Duration.zero,
+        ),
+        throwsA(isA<StateError>().having((e) => '$e', 'message', contains('HTTP 404'))),
+      );
+      expect(calls, 1);
+      expect(ranges, [null]); // the stale partial was not resumed
+      expect(isTransientNetworkError(const HandshakeException('x')), isTrue);
+      expect(isTransientNetworkError(StateError('HTTP 404')), isFalse);
+    });
+
+    test('rejects invalid story_line_count before replacing the installed DB',
+        () async {
+      final invalidPath = '${tempDir.path}/invalid_counts_gamedata.db';
+      await _createGameDataTestDb(invalidPath);
+      final db = await sqflite.openDatabase(invalidPath);
+      await db.update(
+        'gamedata_manifest',
+        {'value': '0'},
+        where: 'key = ?',
+        whereArgs: ['story_line_count'],
+      );
+      await db.close();
+      final installer = GameDataInstaller(installDirectory: tempDir);
+      final invalidBytes = await File(invalidPath).readAsBytes();
+
+      expect(
+        () => installer.installFromBytes(
+          invalidBytes,
+          overwrite: true,
+        ),
+        throwsA(isA<StateError>().having(
+          (error) => '$error',
+          'message',
+          contains('story_line_count'),
+        ),),
       );
     });
   });
@@ -614,7 +874,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _MockLLMClient(),
         toolRegistry: registry,
-        maxIterations: 3,
       );
 
       final events = await reactLoop
@@ -632,9 +891,7 @@ void main() {
       expect(eventTypes, contains(ReActEventType.finalAnswerToken));
       expect(eventTypes, contains(ReActEventType.complete));
 
-      final finalAnswerEvent =
-          events.firstWhere((e) => e.type == ReActEventType.finalAnswerToken);
-      expect(finalAnswerEvent.content, contains('W is a mercenary'));
+      expect(finalAnswerOf(events), contains('W is a mercenary'));
     });
 
     test('parses loose Action Input key-value maps', () async {
@@ -645,7 +902,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _LooseActionInputLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       final events = await reactLoop
@@ -659,10 +915,7 @@ void main() {
       expect(tool.lastArgs?['query'], '缪因');
       expect(tool.lastArgs?['top_k'], 5);
       expect(
-        events
-            .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+        finalAnswerOf(events),
         contains('done'),
       );
     });
@@ -675,7 +928,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _TrailingActionInputLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       final events = await reactLoop
@@ -689,10 +941,7 @@ void main() {
       expect(tool.lastArgs?['query'], '阿米娅 档案 干员 罗德岛');
       expect(tool.lastArgs?['top_k'], 5);
       expect(
-        events
-            .where((e) => e.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+        finalAnswerOf(events),
         contains('done'),
       );
     });
@@ -705,7 +954,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _ActionMetadataLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       await loop
@@ -723,7 +971,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _PunctuatedActionLLMClient(),
         toolRegistry: registry,
-        maxIterations: 2,
       );
 
       await loop
@@ -741,7 +988,6 @@ void main() {
       final loop = ReActLoop(
         llmClient: _EarlyFinalThenActionLLMClient(),
         toolRegistry: registry,
-        maxIterations: 3,
         minimumToolCalls: 1,
       );
 
@@ -751,10 +997,7 @@ void main() {
 
       expect(tool.lastArgs?['query'], 'required evidence');
       expect(
-        events
-            .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
+        finalAnswerOf(events),
         'verified',
       );
     });
@@ -767,10 +1010,7 @@ void main() {
       final events = await loop
           .run(systemPrompt: 'test', chatHistory: const [], userQuery: 'test')
           .toList();
-      final answer = events
-          .where((event) => event.type == ReActEventType.finalAnswerToken)
-          .single
-          .content;
+      final answer = finalAnswerOf(events);
       expect(answer, contains('operator_handbook_profile'));
       expect(answer, isNot(contains('mentions Book evidence')));
     });
@@ -779,7 +1019,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _EmptyFinalAnswerLLMClient(),
         toolRegistry: ToolRegistry(),
-        maxIterations: 1,
       );
 
       final events = await reactLoop
@@ -801,7 +1040,6 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: _TruncatedLLMClient(),
         toolRegistry: ToolRegistry(),
-        maxIterations: 1,
       );
 
       final events = await reactLoop
@@ -826,7 +1064,7 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: llm,
         toolRegistry: registry,
-        maxIterations: 1,
+        safetyMaxIterations: 1,
       );
 
       final events = await reactLoop
@@ -838,10 +1076,7 @@ void main() {
           .toList();
 
       expect(llm.fallbackPrompt, contains('Wiki evidence available: no'));
-      final answer = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .single
-          .content;
+      final answer = finalAnswerOf(events);
       expect(answer, contains('Source warning'));
       expect(answer, contains('did not retrieve any observation'));
     });
@@ -853,7 +1088,7 @@ void main() {
       final reactLoop = ReActLoop(
         llmClient: llm,
         toolRegistry: registry,
-        maxIterations: 1,
+        safetyMaxIterations: 1,
       );
 
       await reactLoop
@@ -868,130 +1103,6 @@ void main() {
       expect(
         llm.fallbackPrompt,
         contains('Do not add well-known lore'),
-      );
-    });
-  });
-
-  group('FactCheck Agent Tests', () {
-    test('keeps supported verdict only after directed GameData searches',
-        () async {
-      final llm = _FactCheckLLMClient();
-      final tool = _FactCheckSearchTool();
-      final agent = FactCheckAgent(llmClient: llm, searchTool: tool);
-
-      final events = await agent.checkClaim(claim: '阿米娅是罗德岛的领袖吗？').toList();
-
-      expect(tool.queries, ['阿米娅 罗德岛 身份', '阿米娅 领袖 反证']);
-      expect(
-        events
-            .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
-        startsWith('[FACT_CHECK_VERDICT:supported]'),
-      );
-      expect(llm.systemPrompt, contains('仅使用 search_local_lore'));
-      expect(llm.systemPrompt, isNot(contains('search_wiki')));
-    });
-
-    test('downgrades unsupported supported verdict to unavailable', () {
-      final verdict = validateFactCheckVerdict(
-        '[FACT_CHECK_VERDICT:supported]\n模型记忆说这是正确的。',
-        const ['No matching GameData result found for "未知命题".'],
-      );
-      expect(verdict, FactCheckVerdict.unavailable);
-    });
-
-    test('keeps refuted verdict with an actual GameData record', () {
-      final verdict = validateFactCheckVerdict(
-        '[FACT_CHECK_VERDICT:refuted]',
-        const [
-          '=== Result #1 ===\nSource Kind: GameData\nEvidence Scope Match: yes\nEvidence Level: direct candidate\nSource Path: a.json\nRaw ID: a',
-        ],
-      );
-      expect(verdict, FactCheckVerdict.refuted);
-    });
-
-    test('maps entity ambiguity without records to uncertain', () {
-      final verdict = validateFactCheckVerdict(
-        '[FACT_CHECK_VERDICT:uncertain]',
-        const [
-          'Ambiguous GameData entity query\n=== Candidate #1 ===\nSource Kind: GameData',
-        ],
-      );
-      expect(verdict, FactCheckVerdict.uncertain);
-    });
-
-    test('maps empty coverage to unavailable', () {
-      expect(
-        validateFactCheckVerdict('[FACT_CHECK_VERDICT:uncertain]', const []),
-        FactCheckVerdict.unavailable,
-      );
-    });
-
-    test('passes prior claim and evidence marker to a follow-up', () async {
-      final llm = _FactCheckLLMClient();
-      final agent = FactCheckAgent(
-        llmClient: llm,
-        searchTool: _FactCheckSearchTool(),
-      );
-      await agent.checkClaim(
-        claim: '那她什么时候加入的？',
-        history: const [
-          Message(role: MessageRole.user, content: '阿米娅属于罗德岛吗？'),
-          Message(
-            role: MessageRole.assistant,
-            content: '[FACT_CHECK_VERDICT:supported] Source Path: a.json',
-          ),
-        ],
-      ).toList();
-
-      expect(
-        llm.firstRequestMessages
-            .any((message) => message.content.contains('阿米娅属于罗德岛')),
-        isTrue,
-      );
-      expect(
-        llm.firstRequestMessages
-            .any((message) => message.content.contains('Source Path: a.json')),
-        isTrue,
-      );
-    });
-
-    test('logs the validated verdict through the shared ReAct logger',
-        () async {
-      final agent = FactCheckAgent(
-        llmClient: _UnsupportedFactCheckLLMClient(),
-        searchTool: _CurrentNoMatchTool(),
-      );
-
-      final events = await agent.checkClaim(claim: '未知命题').toList();
-      expect(
-        events
-            .where((event) => event.type == ReActEventType.finalAnswerToken)
-            .single
-            .content,
-        startsWith('[FACT_CHECK_VERDICT:unavailable]'),
-      );
-
-      final logDir = Directory('${tempDir.path}/ArkLores/agent_logs');
-      final logFiles = await logDir
-          .list()
-          .where((entry) => entry is File && entry.path.endsWith('.log'))
-          .cast<File>()
-          .toList();
-      expect(logFiles, hasLength(1));
-      final log = await logFiles.single.readAsString();
-      expect(log, contains('Agent  : FactCheck'));
-      expect(log, contains('▶ TOOL CALL: search_local_lore'));
-      expect(log, contains('No matching GameData result'));
-      final loggedFinalAnswer = log.split('▶ FINAL ANSWER:').last;
-      expect(
-        loggedFinalAnswer,
-        contains('[FACT_CHECK_VERDICT:unavailable]'),
-      );
-      expect(
-        loggedFinalAnswer,
-        isNot(contains('[FACT_CHECK_VERDICT:supported]')),
       );
     });
   });
@@ -1087,7 +1198,7 @@ void main() {
       expect(llm.systemPrompt, contains('NOT GameData evidence'));
       expect(llm.systemPrompt, contains('不得用模型记忆补齐'));
       expect(
-          events.where((e) => e.type == ReActEventType.toolCall), isNotEmpty);
+          events.where((e) => e.type == ReActEventType.toolCall), isNotEmpty,);
     });
 
     test('session store handles empty, save, load, clear and corrupt data',
@@ -1131,22 +1242,6 @@ Thought: I have enough information to write the final answer.
 Final Answer: W is a mercenary.
 ''';
   }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    return chat(
-      messages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-      stop: stop,
-    );
-  }
 }
 
 class _RoleplayLLMClient extends _MockLLMClient {
@@ -1167,92 +1262,6 @@ class _RoleplayLLMClient extends _MockLLMClient {
           'Action Input: {"query":"切尔诺伯格 任务","entity_id":"char_002_amiya"}';
     }
     return 'Thought: 已依据资料回应。\nFinal Answer: ……我记得那次行动。';
-  }
-}
-
-class _FactCheckLLMClient extends LLMClient {
-  int callCount = 0;
-  String systemPrompt = '';
-  List<Message> firstRequestMessages = const [];
-
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    callCount++;
-    if (callCount == 1) {
-      firstRequestMessages = List.of(messages);
-      systemPrompt = messages.first.content;
-      return 'Thought: 查身份支持证据。\nAction: search_local_lore\nAction Input: {"query":"阿米娅 罗德岛 身份"}';
-    }
-    if (callCount == 2) {
-      return 'Thought: 查可能的反证。\nAction: search_local_lore\nAction Input: {"query":"阿米娅 领袖 反证"}';
-    }
-    return 'Thought: 证据足够。\nFinal Answer: [FACT_CHECK_VERDICT:supported]\n## 核查结论\n支持。';
-  }
-
-  @override
-  Future<String> chatStream(
-    List<Message> messages, {
-    void Function(String token)? onToken,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) =>
-      chat(messages,
-          temperature: temperature, maxTokens: maxTokens, stop: stop);
-}
-
-class _FactCheckSearchTool extends AgentTool {
-  final queries = <String>[];
-
-  @override
-  String get name => 'search_local_lore';
-
-  @override
-  String get description => 'GameData-only fact-check search.';
-
-  @override
-  Map<String, dynamic> get parameters => {
-        'type': 'object',
-        'properties': {
-          'query': {'type': 'string'},
-        },
-        'required': ['query'],
-      };
-
-  @override
-  Future<dynamic> execute(Map<String, dynamic> arguments) async {
-    queries.add(arguments['query'] as String);
-    return const ToolExecutionResult(
-      observation: '=== Result #1 ===\nSource Kind: GameData\n'
-          'Evidence Scope Match: yes\nEvidence Level: direct candidate\n'
-          'Content Type: operator_profile\nSource Path: character_table.json\n'
-          'Raw ID: char_002_amiya\nContent Excerpt: 阿米娅是罗德岛的公开领袖。',
-    );
-  }
-}
-
-class _UnsupportedFactCheckLLMClient extends _MockLLMClient {
-  @override
-  Future<String> chat(
-    List<Message> messages, {
-    List<Map<String, dynamic>>? tools,
-    double temperature = 0.7,
-    int maxTokens = 2048,
-    List<String>? stop,
-  }) async {
-    callCount++;
-    if (callCount == 1) {
-      return 'Thought: 检索本地证据。\nAction: search_local_lore\n'
-          'Action Input: {"query":"未知命题"}';
-    }
-    return 'Thought: 完成。\nFinal Answer: '
-        '[FACT_CHECK_VERDICT:supported]\n错误地声称支持。';
   }
 }
 
@@ -1674,12 +1683,51 @@ Future<void> _createGameDataTestDb(String path) async {
           tokenize='trigram'
         )
       ''');
+      // Schema v3 coverage layer tables (R1 / AI retrieval P0).
+      await db.execute('''
+        CREATE TABLE entity_story_mentions (
+          entity_id     TEXT NOT NULL,
+          story_id      TEXT NOT NULL,
+          scope_id      TEXT NOT NULL,
+          line_start    INTEGER NOT NULL,
+          line_end      INTEGER NOT NULL,
+          mention_count INTEGER NOT NULL,
+          matched_alias TEXT,
+          PRIMARY KEY (entity_id, story_id, line_start)
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE story_chapter_profiles (
+          story_id       TEXT PRIMARY KEY,
+          scope_id       TEXT NOT NULL,
+          title          TEXT,
+          line_start     INTEGER NOT NULL,
+          line_end       INTEGER NOT NULL,
+          speaker_set    TEXT,
+          entity_density TEXT,
+          summary        TEXT,
+          keyword_hits   TEXT
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE rare_terms (
+          term     TEXT PRIMARY KEY,
+          doc_freq INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE VIRTUAL TABLE story_lines_fts USING fts5(
+          content,
+          content='story_lines',
+          content_rowid='rowid'
+        )
+      ''');
     },
   );
 
   await db.insert('gamedata_manifest', {
     'key': 'schema_version',
-    'value': '2',
+    'value': '4',
   });
   await db.insert('gamedata_manifest', {
     'key': 'entity_count',
@@ -1692,6 +1740,20 @@ Future<void> _createGameDataTestDb(String path) async {
   await db.insert('gamedata_manifest', {
     'key': 'lore_chunk_count',
     'value': '1',
+  });
+  await db.insert('gamedata_manifest', {
+    'key': 'story_line_count',
+    'value': '1',
+  });
+  await db.insert('story_lines', {
+    'id': 'story_line_test_0',
+    'game': 'arknights',
+    'story_id': 'activities/act_test/level_test_01.txt',
+    'line_index': 0,
+    'speaker': '阿米娅',
+    'content': '测试剧情行内容',
+    'source_path': 'zh_CN/gamedata/story/activities/act_test/level_test_01.txt',
+    'language': 'zh',
   });
   await db.insert('entities', {
     'id': 'char_002_amiya',
