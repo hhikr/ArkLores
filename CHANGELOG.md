@@ -4,20 +4,35 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-10-04 (pre-release)
+
+App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
+
 ### Changed
 
 - New installs default to Zhipu GLM-5.3-Flash (`glm-5.3-flash`,
-  `https://api.z.ai/api/paas/v4`) instead of DeepSeek; saved settings are kept. GLM-5.3-Flash
-  cannot switch thinking off, so it always thinks and "深度思考" makes no difference for it.
-- When a provider rejects the thinking switch (400/422 naming thinking/reasoning), the request
-  is sent again without it and later requests leave it out; when it rejects `stream_options`,
-  the stream is retried without it before falling back to a non-streamed answer.
+  `https://api.z.ai/api/paas/v4`) instead of DeepSeek; saved settings are kept.
 - Zhipu GLM (api.z.ai / open.bigmodel.cn, or a `glm*` model behind another endpoint) is a
-  known provider: thinking is switched off by default and on only with "深度思考" (GLM has no
-  effort level), and `tool_choice` is not sent (Zhipu accepts only `auto`).
-- A rate-limited chat request (HTTP 429) is retried up to three times, honouring
-  `Retry-After` (otherwise 2 / 5 / 10 s); parallel sub-agents can exceed a provider's
-  concurrency limit.
+  known provider. GLM-5.3-Flash cannot switch thinking off, so the effort is set with
+  `reasoning_effort`: `low` by default (an 80-word answer: ~20 s → ~4 s), `high` with
+  "深度思考". `tool_choice` is not sent (Zhipu accepts only `auto`); tool calls are streamed
+  with `tool_stream`.
+- The story reader: the text starts at the page gutter with small line numbers on the right,
+  a speaker's name is shown once per run of lines, the cited lines are one rounded highlight,
+  and a header shows the collection, chapter and cited range, with a button back to them.
+- The sources under each point of an answer are a folded pill ("出处 N" and the story
+  collections) that opens a card with the chapters and line chips, instead of an always-open
+  list behind a grey bar.
+
+### Fixed
+
+- A request the provider rejects only for its reasoning fields (including a bare "invalid
+  parameter") is sent once more without them, and later requests leave them out; a rejected
+  `stream_options` is dropped before falling back to a non-streamed answer. Before, a GLM run
+  could spend over 20 minutes in retries.
+- A rate-limited request (HTTP 429) is retried up to three times, honouring `Retry-After`
+  (otherwise 2 / 5 / 10 s); parallel sub-agents can exceed a provider's concurrency limit.
+- A tool name repeated in every streamed chunk is no longer joined into one long name.
 
 ## [0.10.4] - 2026-10-03 (pre-release)
 
