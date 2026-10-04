@@ -145,6 +145,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbUpdate => 'Update';
 
   @override
+  String get kbUpToDate => 'Up to date';
+
+  @override
+  String get kbRedownload => 'Download again';
+
+  @override
+  String get kbRedownloadTitle => 'Download the knowledge base again?';
+
+  @override
+  String get kbRedownloadBody =>
+      'You already have the latest version. Downloading again fetches about 185 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.';
+
+  @override
+  String get kbRedownloadConfirm => 'Download again';
+
+  @override
+  String get kbCancel => 'Cancel';
+
+  @override
   String get kbIndexing => 'Indexing...';
 
   @override

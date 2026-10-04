@@ -362,6 +362,42 @@ abstract class AppLocalizations {
   /// **'Update'**
   String get kbUpdate;
 
+  /// No description provided for @kbUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get kbUpToDate;
+
+  /// No description provided for @kbRedownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download again'**
+  String get kbRedownload;
+
+  /// No description provided for @kbRedownloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download the knowledge base again?'**
+  String get kbRedownloadTitle;
+
+  /// No description provided for @kbRedownloadBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have the latest version. Downloading again fetches about 185 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.'**
+  String get kbRedownloadBody;
+
+  /// No description provided for @kbRedownloadConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Download again'**
+  String get kbRedownloadConfirm;
+
+  /// No description provided for @kbCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get kbCancel;
+
   /// No description provided for @kbIndexing.
   ///
   /// In en, this message translates to:

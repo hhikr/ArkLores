@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -453,6 +455,31 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     ref.read(gameDataDownloadProvider.notifier).start();
   }
 
+  /// "Download again" of an already current knowledge base: asks first.
+  Future<void> _redownloadGameData() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(context.t.kbRedownloadTitle),
+        content: Text(context.t.kbRedownloadBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: Text(context.t.kbCancel),
+          ),
+          TextButton(
+            key: const Key('kb-redownload-confirm'),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: Text(context.t.kbRedownloadConfirm),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      unawaited(ref.read(gameDataDownloadProvider.notifier).start(force: true));
+    }
+  }
+
   String _friendlyGameDataError(Object error) {
     final text = '$error';
     if (text.contains('Failed host lookup') || text.contains('errno = 7')) {
@@ -478,6 +505,8 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     GameDataInstallStatus status,
     AppThemeTokens theme,
   ) {
+    // Installed and not older than the asset this app points at.
+    final upToDate = status.installed && !status.updateAvailable;
     final total = _gameDataTotalBytes;
     final progress = total != null && total > 0
         ? (_gameDataDownloadedBytes / total).clamp(0.0, 1.0)
@@ -534,19 +563,26 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               ),
               const SizedBox(width: 12),
               ElevatedButton.icon(
-                onPressed: _isDownloadingGameData ? null : _downloadGameData,
+                key: const Key('kb-download-button'),
+                onPressed: _isDownloadingGameData || upToDate
+                    ? null
+                    : _downloadGameData,
                 icon: Icon(
                   _isDownloadingGameData
                       ? Icons.downloading_rounded
-                      : Icons.download_rounded,
+                      : upToDate
+                          ? Icons.check_rounded
+                          : Icons.download_rounded,
                   size: 18,
                 ),
                 label: Text(
                   _isDownloadingGameData
                       ? context.t.kbDownloading
-                      : status.installed
-                          ? context.t.kbUpdate
-                          : context.t.kbDownload,
+                      : upToDate
+                          ? context.t.kbUpToDate
+                          : status.installed
+                              ? context.t.kbUpdate
+                              : context.t.kbDownload,
                   style: theme.titleFont.copyWith(fontSize: 13),
                 ),
                 style: ElevatedButton.styleFrom(
@@ -575,6 +611,21 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               ),
             ),
           ],
+          if (upToDate && !_isDownloadingGameData)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: const Key('kb-redownload'),
+                onPressed: _redownloadGameData,
+                child: Text(
+                  context.t.kbRedownload,
+                  style: theme.bodyFont.copyWith(
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
           if (status.updateAvailable && !_isDownloadingGameData) ...[
             const SizedBox(height: 10),
             Row(

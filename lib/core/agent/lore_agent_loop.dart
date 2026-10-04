@@ -49,10 +49,19 @@ final RegExp _citation =
     RegExp(r'([\w\-/\.\[\]]+\.txt)\s*[:：]\s*L?(\d+)(?:\s*[-–~]\s*L?(\d+))?');
 
 final RegExp _coverageLine =
-    RegExp(r'\[COVERAGE:\s*(full|gaps)\s*\]', caseSensitive: false);
+    RegExp(r'\[COVERAGE\s*[:：=]\s*([A-Za-z_]+)\s*\]', caseSensitive: false);
+
+/// "gaps" for the words a model uses to say something was left unread
+/// (gaps / partial / incomplete ...), "full" otherwise.
+String _coverageOf(String word) {
+  final w = word.toLowerCase();
+  return w.contains('gap') || w.contains('partial') || w.contains('incomplete')
+      ? 'gaps'
+      : 'full';
+}
 
 /// A plain-text tool call (providers without function calling).
-final RegExp _textToolCall = RegExp(r'```tool\s*([\s\S]*?)```');
+final RegExp _textToolCall = RegExp(r'```(?:tool|json)\s*([\s\S]*?)```');
 
 class LoreAgentLoop {
   LoreAgentLoop({
@@ -67,7 +76,14 @@ class LoreAgentLoop {
     this.subtaskMaxTurns = 20,
     this.review = true,
     this.stageMinEntries = 5,
+    this.streamRetryDelay = const Duration(seconds: 2),
   });
+
+  /// A turn cut by a dropped connection (the app was backgrounded, the
+  /// network changed) is asked again up to [_maxStreamRetries] times; the
+  /// conversation only grows when a turn completes, so asking again is safe.
+  final Duration streamRetryDelay;
+  static const int _maxStreamRetries = 2;
 
   final LLMClient client;
   final GameDataRetrieval store;
@@ -151,6 +167,7 @@ class LoreAgentLoop {
     var hitTurnLimit = false;
     // Session-record index (one per tool call, see onRawLlmResponse).
     var record = 0;
+    var streamRetries = 0;
 
     for (var turn = 1; turn <= maxTurns; turn++) {
       final lastTurn = turn == maxTurns;
@@ -247,6 +264,24 @@ class LoreAgentLoop {
           turn--;
           continue;
         }
+        if (!lastTurn &&
+            streamRetries < _maxStreamRetries &&
+            _isConnectionDrop(e)) {
+          streamRetries++;
+          if (answerOpen) {
+            yield const ReActEvent(
+              type: ReActEventType.finalAnswerReset,
+              content: '连接中断，重试',
+            );
+          }
+          yield ReActEvent(
+            type: ReActEventType.status,
+            content: '连接中断，正在重试（$streamRetries/$_maxStreamRetries）',
+          );
+          await Future<void>.delayed(streamRetryDelay * streamRetries);
+          turn--;
+          continue;
+        }
         yield ReActEvent(type: ReActEventType.error, content: e.message);
         return;
       } catch (e) {
@@ -254,6 +289,7 @@ class LoreAgentLoop {
         return;
       }
 
+      streamRetries = 0;
       var content = text.toString();
       var calls = done?.toolCalls ?? const <ToolCall>[];
       if (calls.isEmpty) {
@@ -361,7 +397,11 @@ class LoreAgentLoop {
         }
         content = rewriteOf;
       }
-      final fromJson = subtask ? null : loreAnswerMarkdown(content);
+      final parsedJson = subtask ? null : loreAnswerParsed(content);
+      final fromJson = parsedJson?.markdown;
+      // A flat or odd citation shape is written back in the nested form, so
+      // later turns (rewrite, follow-ups) do not copy it.
+      final keep = fromJson == null ? content : normalizeAnswerCites(content);
       var body = (fromJson ?? content).trim().replaceAllMapped(
             RegExp(r'(\.txt\s*[:：]\s*)L(\d+)(\s*[-–~]\s*)?L?(\d+)?'),
             (m) => '${m.group(1)}${m.group(2)}'
@@ -387,18 +427,33 @@ class LoreAgentLoop {
       final copied = citationRetried || lastTurn || subtask
           ? const <String>[]
           : quotedSourceLines(body, await _citedText(body));
-      if ((unseen.isNotEmpty || bare.isNotEmpty || copied.isNotEmpty) &&
+      // Citations written in a shape that cannot be read are lost from the
+      // answer: either some items gave no ref, or the model read lines but
+      // not one citation came out.
+      final unreadable = parsedJson != null &&
+          (parsedJson.dropped > 0 ||
+              (!seen.isEmpty && _citationCount(body) == 0));
+      if ((unseen.isNotEmpty ||
+              bare.isNotEmpty ||
+              copied.isNotEmpty ||
+              unreadable) &&
           !citationRetried &&
           !lastTurn) {
         citationRetried = true;
-        rewriteOf = content;
+        rewriteOf = keep;
         yield ReActEvent(
           type: ReActEventType.finalAnswerReset,
-          content: unseen.isEmpty && bare.isEmpty ? '改写引语' : '核对出处',
+          content: unseen.isEmpty && bare.isEmpty && !unreadable
+              ? '改写引语'
+              : '核对出处',
         );
         conversation
-          ..add(Message.assistant(content))
+          ..add(Message.assistant(keep))
           ..add(Message.user([
+            if (unreadable)
+              '答案里有出处的写法无法识别。cite 必须是数组的数组，每个出处自己一对方括号，'
+                  '例如 [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]；'
+                  'story_id 与工具输出完全一致（含 .txt），行号是整数。',
             if (unseen.isNotEmpty)
               '下面这些出处不在你本次通过工具实际看到的行或记录里：${unseen.join('、')}。'
                   '请先读取核实（或找到真正的出处），无法核实的内容请删掉。',
@@ -440,9 +495,9 @@ class LoreAgentLoop {
               for (final (i, issue) in issues.indexed) '${i + 1}. $issue',
             ].join('\n'),
           );
-          rewriteOf = content;
+          rewriteOf = keep;
           conversation
-            ..add(Message.assistant(content))
+            ..add(Message.assistant(keep))
             ..add(Message.user(
               loreReviewFollowUp(issues, json: fromJson != null),
             ),);
@@ -452,8 +507,8 @@ class LoreAgentLoop {
       }
 
       body = _dropProcessLeadIn(body);
-      final coverage =
-          _coverageLine.firstMatch(body)?.group(1)?.toLowerCase();
+      final coverageWord = _coverageLine.firstMatch(body)?.group(1);
+      final coverage = coverageWord == null ? null : _coverageOf(coverageWord);
       body = body.replaceAll(_coverageLine, '').trim();
       if (unseen.isNotEmpty) {
         body = '$body\n\n> 以下出处未能在本次读到的原文中核实：'
@@ -465,7 +520,7 @@ class LoreAgentLoop {
       final verified = _citationCount(body) - unseen.length;
       // The model's own text (JSON) stays in the conversation, so a
       // follow-up sees the format it is asked for.
-      conversation.add(Message.assistant(fromJson == null ? body : content));
+      conversation.add(Message.assistant(fromJson == null ? body : keep));
 
       // R18: reorganise a long JSON answer into a few paragraphs; the
       // detailed answer stays below the marker.
@@ -553,7 +608,8 @@ class LoreAgentLoop {
       );
       onRaw(result.content);
       return parseReviewIssues(result.content);
-    } catch (_) {
+    } catch (e) {
+      onRaw('审稿失败：$e');
       return const [];
     }
   }
@@ -657,10 +713,16 @@ class LoreAgentLoop {
     final error = events.where((e) => e.type == ReActEventType.error);
     if (error.isNotEmpty) return '子任务出错：${error.first.content}';
     parentSeen.addAll(childSeen);
-    final findings = finalAnswerOf(events)
-        .replaceFirst(storyAnswerEnvelopePattern, '')
-        .trim();
-    return '子任务结果（出处已核对，可直接引用）：\n$findings';
+    final answer = finalAnswerOf(events);
+    final findings = answer.replaceFirst(storyAnswerEnvelopePattern, '').trim();
+    final status = RegExp(r'status=(\w+)').firstMatch(answer)?.group(1);
+    // The sub-agent's own coverage and citation check travel with its notes.
+    final header = switch (status) {
+      'partial' => '子任务结果（子助手报告有没读到的部分；列出的出处已核对，可直接引用）',
+      'not_covered' => '子任务结果（没有核对通过的出处，只能当线索，不能引用）',
+      _ => '子任务结果（出处已核对，可直接引用）',
+    };
+    return '$header：\n$findings';
   }
 
   Future<String> _runTool(
@@ -673,12 +735,32 @@ class LoreAgentLoop {
           '${subtask ? '' : '、delegate'}。';
     }
     if (args.isEmpty && call.arguments.trim().isNotEmpty) {
-      return '参数不是合法的 JSON：${call.arguments}';
+      final empty = _isEmptyJsonObject(call.arguments);
+      return empty
+          ? '缺少参数：${call.name} 需要的参数见工具说明。'
+          : '参数不是合法的 JSON：${call.arguments}';
     }
     try {
       return '${await tool.execute(args)}';
     } catch (e) {
       return '工具出错：$e';
+    }
+  }
+
+  /// A failure of the connection itself (no HTTP status): a timeout, a
+  /// reset socket, a client closed by the system.
+  static bool _isConnectionDrop(LLMException e) =>
+      e.statusCode == null &&
+      (e.message.contains('timed out') ||
+          e.message.contains('Network error') ||
+          e.message.contains('Connection'));
+
+  static bool _isEmptyJsonObject(String raw) {
+    try {
+      final v = jsonDecode(raw);
+      return v is Map && v.isEmpty;
+    } on FormatException {
+      return false;
     }
   }
 
@@ -700,7 +782,8 @@ class LoreAgentLoop {
 
   static String _toolList(Iterable<AgentTool> tools) => [
         for (final t in tools)
-          '- ${t.name}：${t.description} 参数：${jsonEncode(t.parameters['properties'])}',
+          '- ${t.name}：${t.description} 参数：${jsonEncode(t.parameters['properties'])}'
+              '${(t.parameters['required'] as List?)?.isNotEmpty == true ? '；必填：${(t.parameters['required'] as List).join('、')}' : ''}',
       ].join('\n');
 
   /// Providers without function calling answer a request with `tools` with
@@ -745,7 +828,7 @@ class LoreAgentLoop {
       final decoded = decodeToolArguments(match.group(1)!);
       final name = '${decoded['name'] ?? ''}'.trim();
       if (name.isEmpty) continue;
-      final args = decoded['arguments'];
+      final args = decoded['arguments'] ?? decoded['parameters'] ?? decoded['args'];
       calls.add(ToolCall(
         id: 'text_$i',
         name: name,

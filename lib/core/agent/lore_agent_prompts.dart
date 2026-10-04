@@ -48,11 +48,14 @@ $loreDatabaseGuide
 const String loreAnswerFormat = '''
 最终答案只输出一个 JSON 对象，不写 JSON 以外的任何文字，不加代码块：
 {"entries": [条目, ...], "coverage": "full 或 gaps", "gaps": "..."}
+（事实核查时 JSON 的第一个字段是 "verdict"，见条目安排。）
 
 entries 按阅读顺序排列，每个条目是下面两种之一：
 - 小节标题：{"heading": "<标题>"}
-- 正文：{"text": "<正文>", "cite": [<出处>, ...]}
-  出处写成元组：剧情台词 ["<story_id>", <起始行>, <结束行>]（单行时两个行号相同）；其他资料 ["record", "<记录 id>"]。
+- 正文：{"text": "<正文>", "cite": [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]}
+  cite 是“数组的数组”：每个出处自己一对方括号，不要把 story_id 和行号直接平铺在 cite 里。
+  剧情台词的出处是 ["<story_id>", <起始行>, <结束行>]：story_id 与工具输出里的完全一致（含 .txt），行号是整数、不带 L，单行时两个行号相同；
+  其他资料的出处是 ["record", "<记录 id>"]。
   每条正文至少一个出处，可以有多个。
 
 正文（text）写给玩家：
@@ -87,6 +90,7 @@ const String loreDelegationRules = '''
 const String loreSubtaskInstructions = '''
 你是被派出的子助手：只完成交给你的这一项查找。按需要读原文，最后用中文 Markdown 交回要点列表，每点一两句话，末尾用反引号写出处：
 剧情台词写 `<story_id>:<起始行>-<结束行>`（单行写 `<story_id>:<行号>`），其他资料写 `record:<记录 id>`。
+每个反引号里只写一个范围；同一个故事有多个范围时分别写多个反引号，每个都带完整的 story_id；不要单独写只有文件名的反引号。
 不要写开场白和总结，也不要回答任务以外的问题。查不到时如实说明查了哪些范围。
 最后单独一行写 [COVERAGE: full]（交给你的内容都读到了）或 [COVERAGE: gaps]（有没读到的部分）。''';
 

@@ -673,6 +673,82 @@ void main() {
           StoryAnswerStatus.notCovered,);
     });
 
+    test('a flat cite list is read, and kept in the nested form', () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      LoreConversation? saved;
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': id}),
+        // Flat: ["<story_id>", a, b] directly inside cite.
+        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
+            '"cite": ["$id", 1, 2]}], "coverage": "full"}'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(
+            query: '钟楼？',
+            style: AnswerStyle.answer,
+            onConversation: (c) => saved = c,
+          )
+          .toList();
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('星灯点亮钟楼。 `$id:1-2`'));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+      expect(client.requests, hasLength(2));
+      expect(saved!.messages.last.content, contains('"cite":[["$id",1,2]]'));
+    });
+
+    test('citations in an unreadable shape ask for the nested form once',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': id}),
+        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
+            '"cite": [{"file": "$id"}]}]}'),
+        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
+            '"cite": [["$id", 1, 1]]}]}'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '钟楼？', style: AnswerStyle.answer)
+          .toList();
+      expect(client.requests, hasLength(3));
+      expect(client.requests.last.last.content, contains('数组的数组'));
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('`$id:1`'));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('a turn cut by a dropped connection is asked again', () async {
+      final client = _DroppingClient(
+        [
+          _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+          _answer('钟楼 `obt/main/level_main_fx-01.txt:1`'),
+        ],
+        drops: 2,
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        review: false,
+        streamRetryDelay: Duration.zero,
+      ).run(query: '钟楼？', style: AnswerStyle.answer).toList();
+      expect(client.attempts, 4); // two dropped, then the two real turns
+      expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
+      expect(events.map((e) => e.content), contains('连接中断，正在重试（2/2）'));
+    });
+
+    test('a connection that keeps dropping ends with the error', () async {
+      final client = _DroppingClient([_answer('x')], drops: 5);
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        review: false,
+        streamRetryDelay: Duration.zero,
+      ).run(query: '钟楼？', style: AnswerStyle.answer).toList();
+      expect(client.attempts, 3);
+      expect(events.last.type, ReActEventType.error);
+    });
+
     test('falls back to text tool calls when the provider rejects tools',
         () async {
       final client = _ScriptedClient(
@@ -780,6 +856,33 @@ _Turn _call(String name, Map<String, dynamic> args) => _Turn(
     );
 
 _Turn _answer(String text) => _Turn(content: text);
+
+/// Fails the first [drops] model calls with a dropped connection.
+class _DroppingClient extends _ScriptedClient {
+  _DroppingClient(super.turns, {required this.drops});
+  final int drops;
+  var attempts = 0;
+
+  @override
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) {
+    if (attempts++ < drops) {
+      throw const LLMException('Network error: Connection reset');
+    }
+    return super.streamTurn(
+      messages,
+      tools: tools,
+      toolChoice: toolChoice,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
+  }
+}
 
 /// Replays [turns] and records every request.
 class _ScriptedClient extends LLMClient {

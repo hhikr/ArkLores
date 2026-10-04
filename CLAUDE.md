@@ -3,7 +3,7 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`）；
 剧情问答由工具型 Agent（R17，`LoreAgentLoop`）直接查库作答。向量、目录、梗概都只作定位线索，不作证据。
-当前版本：v0.10.5（预发布，R13–R18 + 智谱 GLM 默认、阅读页与出处折叠）；知识库资产仍是 v0.10.1 Release 上的那份。
+当前版本：v0.10.6（待发布；已发布的最新是 v0.10.5 预发布，R13–R18 + 智谱 GLM 默认、阅读页与出处折叠）；知识库资产仍是 v0.10.1 Release 上的那份。
 **版本号停在 0.10.x**：0.9 之后都是剧情问答工作流的迭代，v0.11.0 预发布已撤回；除非开发者明确说开启 0.11，
 发版只升 patch（0.10.2…），Android build 号继续递增。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
@@ -11,6 +11,11 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 
 ## 当前进度（每轮结束时更新）
 
+- v0.10.6（2026-10-04，分支 `feature/r18-answer-quality`，**尚未发布，发版需开发者同意**）：修手机真机发现的四件事——
+  ① 证据链消失（GLM 平铺 `cite`，提示词补骨架 + 解析容错 + 零出处退回，见 R17 一节）；② 知识库页“更新”按钮在已是最新时仍可点
+  （现在显示“已是最新”+ 带确认的“重新下载”）；③ 长时操作退后台被截断（`BackgroundWork` 前台 service，见 R16 一节“后台”）；
+  ④ 审稿并非不同流程，是随机（日志证实审稿在手机上也运行了）。已在本机装好 Android SDK/JDK，Kotlin/清单已用 debug 包编译验证，
+  **待开发者真机确认**：长问题退后台超过 1 分钟后能否完成（会出现一条常驻通知，Android 13+ 首次会询问通知权限）、证据链是否出现。
 - v0.10.5（2026-10-04，同一分支）：默认改用智谱 `glm-5.3-flash`（`reasoning_effort` 控制思考）；原文阅读页重排；
   每条答案下的出处改成可折叠胶囊。**待开发者真机确认**阅读页与出处的观感，以及 GLM 每题约 4 分钟的耗时是否可接受
   （带工具的轮次智谱不逐字流式，见下文 R16 一节；live 数据见 `docs/R17_TOOL_AGENT.md` R18 表后）。
@@ -157,7 +162,10 @@ HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
   `C:\Users\hhikr\.cache\codex-runtimes\codex-primary-runtime\dependencies\native\git\cmd\git.exe`
   （同目录 `..\usr\bin` 下有 sh、sed；没有 gzip，压缩用 .NET `GZipStream`）。两者已加入用户 PATH；若当前 shell 没刷新，先执行
   `$env:Path = "C:\src\flutter\bin;<git cmd 目录>;$env:Path"`。
-- 没有 `gh` 和 Android SDK：GitHub 操作用 REST API；APK 由 GitHub Actions 构建。
+- 没有 `gh`：GitHub 操作用 REST API；发布用的 APK 由 GitHub Actions 构建（签名）。
+- Android SDK/JDK 装在 `C:\Users\hhikr\dev`（`android-sdk`、`jdk-17`，已用 `flutter config --android-sdk/--jdk-dir` 指定，
+  没有写环境变量）：改了 `android/` 下的 Kotlin/清单后用 `flutter build apk --debug` 本机编译检查（debug 包不能发布）。
+  Flutter 迁移器会自动往 `android/gradle.properties` 加 `android.builtInKotlin/newDsl=false`，提交前确认是否需要。
 - 磁盘：C 盘曾满到 0 字节，`flutter test` 编译失败后卡住半小时。全量测试正常约 25 秒，明显变慢先查剩余空间。
 - PowerShell 设置环境变量用 `$env:NAME='value'`，不支持 `NAME=value cmd` 前缀。
 - sqflite FFI 会把相对 DB 路径解析到 `.dart_tool` 下，`ARKLORES_GAMEDATA_DB` 等路径要写绝对路径。
@@ -256,6 +264,10 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   守卫覆盖审稿和整理的提示词。
 - 答案写给玩家（R17b）：正文不提库/表/文件名/id，用自己的话叙述；出处在每条末尾，界面把它们放到该条下面的证据链，
   点行号打开原文阅读页（`story_reader_page.dart`）。
+- **提示词里凡是代码要严格解析的格式，都必须给出完整骨架（用占位符），不能只用文字描述**（v0.10.6 教训：只写“出处写成元组”，
+  GLM 把 `cite` 写成平铺的 `["<id>.txt", 97, 127]`，解析器静默丢掉，答案没有出处和证据链）。解析器对常见变体要容错
+  （平铺、`L12`、`"12-30"`、缺 `.txt`、反向范围；`loreCitationRefs`），丢弃的出处要计数并触发一次退回，不能静默吞掉。
+  换模型后先看会话日志里 `cite`/`coverage`/`from` 等的真实写法。
 - 主 agent 的最终答案是 JSON（R17c，`lore_answer_json.dart`）：条目 = 正文 + 出处元组，代码边流式边转成 markdown。
   提示词只说“不要用引号引用台词”，不要写“哪些可以加引号”（开发者判断：写了模型就会刻意用）；照搬台词由代码检查、退回一次。
 - 只读 SQL（`readonly_sql.dart`）：单条 SELECT/WITH、拒绝写/ATTACH/PRAGMA、只读连接、每次查询一个 isolate、
@@ -284,6 +296,10 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   Agent 依次发 `status` / `toolCall` / `toolObservation` / `finalAnswerToken`… →（继续查资料或出处退回时
   `finalAnswerReset`）→ `finalAnswerReplace`（信封 + 核对后正文）。测试取答案用 `finalAnswerOf(events)`。
 - 状态：没有核对通过的出处 → `not_covered`；模型写 `[COVERAGE: gaps]` 或到轮数上限 → `partial`；否则 `answered`。
+- 后台（v0.10.6）：长时操作（Ask 问答、角色扮演、知识库下载/构建）包在 `BackgroundWork.instance.run(...)`
+  （`lib/core/background/background_work.dart`）里，Android 上由前台 service（`BackgroundWorkService.kt`，dataSync、
+  唤醒锁、常驻通知）保活，否则退后台后 socket 被冻结、问答被截断。新增长时操作也要包进去。
+  一轮被连接中断（无 HTTP 状态的超时/重置）打断时 `LoreAgentLoop` 重发该轮最多 2 次。
 - 界面（R17d，开发者要求）：问答列表**不随流式内容自动滚动**（只在发新问题时滚到底一次）；思考窗口固定高度、
   内部也不跟随；阅读位置上方的内容在流式中不得变高变矮。不要再加“贴底跟随”。
 - 颜色：Endfield 的信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。

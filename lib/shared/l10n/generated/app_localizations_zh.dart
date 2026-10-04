@@ -143,6 +143,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbUpdate => '更新';
 
   @override
+  String get kbUpToDate => '已是最新';
+
+  @override
+  String get kbRedownload => '重新下载';
+
+  @override
+  String get kbRedownloadTitle => '重新下载知识库？';
+
+  @override
+  String get kbRedownloadBody =>
+      '当前已是最新版本。重新下载会再下载约 185 MB 并重建数据库（需约 1 GB 空闲空间），一般没有必要。';
+
+  @override
+  String get kbRedownloadConfirm => '重新下载';
+
+  @override
+  String get kbCancel => '取消';
+
+  @override
   String get kbIndexing => '索引中...';
 
   @override

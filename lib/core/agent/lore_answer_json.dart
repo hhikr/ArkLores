@@ -21,11 +21,16 @@ final RegExp loreAnswerJsonStart =
 
 /// The markdown of a complete JSON answer in [content], or null when
 /// [content] holds no JSON answer (the model wrote markdown instead).
-String? loreAnswerMarkdown(String content) {
+String? loreAnswerMarkdown(String content) => loreAnswerParsed(content)?.markdown;
+
+/// [loreAnswerMarkdown] plus how many citation items of the answer gave no
+/// usable ref (written in a shape that cannot be read).
+({String markdown, int dropped})? loreAnswerParsed(String content) {
   final start = loreAnswerJsonStart.firstMatch(content);
   if (start == null) return null;
   final stream = LoreAnswerStream()..add(content.substring(start.start));
-  return stream.finish();
+  final markdown = stream.finish();
+  return (markdown: markdown, dropped: stream.droppedCites);
 }
 
 enum _Role { root, entries, entry, cites, tuple, ignore }
@@ -66,8 +71,15 @@ class LoreAnswerStream {
   bool _sectionOpen = false;
   bool _entryOpen = false; // the current entry has started its block
   final List<Object?> _tuple = [];
+  // Scalars written directly inside `cite` (the flat form), grouped when the
+  // array closes or a nested tuple starts.
+  final List<Object?> _flat = [];
   String? _verdict;
   String? _coverage;
+  bool _hasGaps = false; // a non-empty "gaps" text says something is missing
+
+  /// Citation items that gave no usable ref (the answer lost them).
+  int droppedCites = 0;
 
   /// Markdown produced so far.
   String get markdown => _md.toString();
@@ -88,7 +100,10 @@ class LoreAnswerStream {
     return [
       if (_verdict != null) '[FACT_CHECK_VERDICT:${_verdict!.trim()}]',
       if (body.isNotEmpty) body,
-      if (_coverage != null) '[COVERAGE: ${_coverage!.trim()}]',
+      if (_hasGaps)
+        '[COVERAGE: gaps]'
+      else if (_coverage != null)
+        '[COVERAGE: ${_coverage!.trim()}]',
     ].join('\n\n');
   }
 
@@ -190,6 +205,7 @@ class LoreAnswerStream {
       _collect!.write(c);
     } else if (_streamKey != null) {
       _md.write(c);
+      if (_streamKey == 'gaps' && c.trim().isNotEmpty) _hasGaps = true;
     }
   }
 
@@ -206,6 +222,7 @@ class LoreAnswerStream {
   void _openValue(_Frame parent, _Role role) {
     if (role == _Role.entry) _entryOpen = false;
     if (role == _Role.cites) _openEntryBlock();
+    if (role == _Role.tuple || role == _Role.ignore) _flushFlat();
   }
 
   void _startString(_Frame parent) {
@@ -246,7 +263,7 @@ class LoreAnswerStream {
       case (_Role.root, 'coverage'):
         _coverage = value;
       case (_Role.cites, _):
-        _cite([value]);
+        _flat.add(value);
       case (_Role.tuple, _):
         _tuple.add(value);
       default:
@@ -257,8 +274,12 @@ class LoreAnswerStream {
   void _endScalar() {
     final raw = _scalar.toString();
     _scalar.clear();
-    if (_stack.isNotEmpty && _stack.last.role == _Role.tuple) {
-      _tuple.add(int.tryParse(raw) ?? raw);
+    if (_stack.isEmpty) return;
+    final value = int.tryParse(raw) ?? raw;
+    if (_stack.last.role == _Role.tuple) {
+      _tuple.add(value);
+    } else if (_stack.last.role == _Role.cites) {
+      _flat.add(value);
     }
   }
 
@@ -266,6 +287,18 @@ class LoreAnswerStream {
     if (frame.role == _Role.tuple) {
       _cite(List.of(_tuple));
       _tuple.clear();
+    } else if (frame.role == _Role.cites) {
+      _flushFlat();
+    }
+  }
+
+  void _flushFlat() {
+    if (_flat.isEmpty) return;
+    final items = List.of(_flat);
+    _flat.clear();
+    for (final ref in loreCitationRefs(items, onDropped: () => droppedCites++)) {
+      _openEntryBlock();
+      _md.write(' `$ref`');
     }
   }
 
@@ -290,26 +323,94 @@ class LoreAnswerStream {
   /// Appends one citation (a tuple, or a single string) to the entry.
   void _cite(List<Object?> parts) {
     final ref = loreCitationRef(parts);
-    if (ref == null) return;
+    if (ref == null) {
+      droppedCites++;
+      return;
+    }
     _openEntryBlock();
     _md.write(' `$ref`');
   }
 }
 
-/// `story_id:a-b` / `record:id` of a citation tuple, or null.
+final RegExp _lineRange =
+    RegExp(r'^\s*L?(\d+)(?:\s*[-–~—]\s*L?(\d+))?\s*$', caseSensitive: false);
+
+/// A line number, or a "97-127" / "L97" string, read as (start, end).
+(int, int)? _lineSpan(Object? v) {
+  if (v is num) return (v.toInt(), v.toInt());
+  final m = _lineRange.firstMatch('$v');
+  if (m == null) return null;
+  final a = int.parse(m.group(1)!);
+  return (a, m.group(2) == null ? a : int.parse(m.group(2)!));
+}
+
+/// `story_id:a-b` / `record:id` of a citation tuple, or null. Also reads the
+/// slightly different shapes models write: lines as "L97" or "97-127", a
+/// story id without `.txt`, a reversed range.
 String? loreCitationRef(List<Object?> parts) {
   if (parts.isEmpty) return null;
-  final first = '${parts.first}'.trim().replaceAll('`', '');
+  var first = '${parts.first}'.trim().replaceAll('`', '');
   if (first == 'record' && parts.length > 1) return 'record:${parts[1]}';
   if (parts.length == 1) {
     // Written as one string ("story_id:3-5" / "record:id").
     return first.contains(':') ? first : null;
   }
-  int? line(Object? v) => v is int ? v : int.tryParse('$v'.trim());
-  final a = line(parts[1]);
-  if (a == null) return null;
-  final b = parts.length > 2 ? line(parts[2]) ?? a : a;
+  final span = _lineSpan(parts[1]);
+  if (span == null) return null;
+  var a = span.$1;
+  var b = span.$2;
+  if (parts.length > 2) {
+    final end = _lineSpan(parts[2]);
+    if (end != null) b = end.$2;
+  }
+  if (b < a) (a, b) = (b, a);
+  if (!first.contains('.')) first = '$first.txt';
   return b == a ? '$first:$a' : '$first:$a-$b';
+}
+
+/// The citation refs of a whole `cite` array. Besides the nested form
+/// (`[["id", 1, 2], ...]`) it accepts the flat form some models write
+/// (`["id", 1, 2]`, also several in a row) and plain strings (`"id:1-2"`).
+/// [onDropped] is called once per item that gave no ref.
+List<String> loreCitationRefs(List<Object?> items, {void Function()? onDropped}) {
+  final out = <String>[];
+  var group = <Object?>[];
+  void add(String? ref) {
+    if (ref == null) {
+      onDropped?.call();
+    } else if (!out.contains(ref)) {
+      out.add(ref);
+    }
+  }
+
+  void flush() {
+    if (group.isEmpty) return;
+    add(loreCitationRef(group));
+    group = [];
+  }
+
+  for (final item in items) {
+    if (item is List) {
+      flush();
+      add(loreCitationRef(item));
+    } else if (item is! String && item is! num) {
+      flush();
+      onDropped?.call(); // an object or other shape that is not a citation
+    } else if (item is num || (item is String && _lineRange.hasMatch(item))) {
+      if (group.isEmpty) {
+        onDropped?.call();
+      } else {
+        group.add(item);
+      }
+    } else if (group.length == 1 && '${group.first}'.trim() == 'record') {
+      group.add(item);
+    } else {
+      flush();
+      group = ['$item'];
+    }
+  }
+  flush();
+  return out;
 }
 
 final RegExp _quotedSpan =

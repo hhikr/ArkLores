@@ -47,15 +47,36 @@ List<LoreAnswerEntry>? loreAnswerEntries(String content) {
     if (text is! String || text.trim().isEmpty) continue;
     final cites = <String>[];
     final raw = e['cite'];
-    if (raw is List) {
-      for (final c in raw) {
-        final ref = loreCitationRef(c is List ? c : [c]);
-        if (ref != null && !cites.contains(ref)) cites.add(ref);
-      }
-    }
+    if (raw is List) cites.addAll(loreCitationRefs(raw));
     out.add(LoreAnswerEntry(text: text.trim(), cites: cites));
   }
   return out;
+}
+
+/// [content] with every `cite` of its JSON answer rewritten in the nested
+/// form the prompt asks for (`[["<story_id>", a, b], ["record", "<id>"]]`),
+/// so a flat or odd citation shape is not replayed to the model in later
+/// turns. [content] itself when it holds no parsable JSON answer.
+String normalizeAnswerCites(String content) {
+  final start = loreAnswerJsonStart.firstMatch(content);
+  final decoded = _decodeObject(content, loreAnswerJsonStart);
+  final entries = decoded?['entries'];
+  if (start == null || decoded == null || entries is! List) return content;
+  for (final e in entries) {
+    if (e is! Map || e['cite'] is! List) continue;
+    e['cite'] = [
+      for (final ref in loreCitationRefs(e['cite'] as List))
+        if (ref.startsWith('record:'))
+          ['record', ref.substring(7)]
+        else if (_storyRef.firstMatch(ref) case final m?)
+          [
+            m.group(1)!,
+            int.parse(m.group(2)!),
+            int.parse(m.group(3) ?? m.group(2)!),
+          ],
+    ];
+  }
+  return jsonEncode(decoded);
 }
 
 /// The text entries of [entries], numbered from 1 for the reorganising
@@ -97,8 +118,9 @@ List<LoreAnswerStage>? parseLoreStages(String content, int entryCount) {
     final text = s['text'];
     if (text is! String || text.trim().isEmpty) continue;
     final from = <int>[
-      for (final f in s['from'] is List ? s['from'] as List : const [])
-        if (_int(f) case final int n when n >= 1 && n <= entryCount) n,
+      for (final f in s['from'] is List ? s['from'] as List : [s['from']])
+        for (final n in _numbers(f))
+          if (n >= 1 && n <= entryCount) n,
     ];
     if (from.isEmpty) continue;
     final heading = s['heading'];
@@ -183,7 +205,7 @@ List<String> mergeCitationRefs(List<String> refs) {
   return [...out, ...records];
 }
 
-final RegExp _storyRef = RegExp(r'^(.+\.txt):(\d+)(?:-(\d+))?$');
+final RegExp _storyRef = RegExp(r'^(.+\.txt):L?(\d+)(?:-L?(\d+))?$');
 
 /// The questions of a review reply (`{"issues": [...]}`); empty for
 /// `{"ok": true}` or a reply that cannot be read.
@@ -202,7 +224,16 @@ String withoutCitations(String markdown) => markdown
     .replaceAll(RegExp(r'\s*`[^`\n]*(?:\.txt[:：][^`\n]*|record:[^`\n]*)`'), '')
     .trim();
 
-int? _int(Object? v) => v is int ? v : int.tryParse('$v'.trim());
+/// An entry number, or a "3-5" range of them, as a list of numbers.
+List<int> _numbers(Object? v) {
+  if (v is num) return [v.toInt()];
+  final m = RegExp(r'^\s*(\d+)\s*(?:[-–~—]\s*(\d+))?\s*$').firstMatch('$v');
+  if (m == null) return const [];
+  final a = int.parse(m.group(1)!);
+  final b = m.group(2) == null ? a : int.parse(m.group(2)!);
+  if (b < a || b - a > 200) return [a];
+  return [for (var n = a; n <= b; n++) n];
+}
 
 /// The JSON object starting at [start] in [content] (text after its last
 /// closing brace is ignored), or null.

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../shared/providers/settings_provider.dart';
+import '../background/background_work.dart';
 import '../gamedata/gamedata_knowledge_store.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
@@ -139,7 +140,15 @@ class AskChatNotifier extends ChatNotifierBase {
     state = const [];
   }
 
-  Future<void> sendMessage(String text, {required AiMode mode}) async {
+  /// An answer takes minutes: it runs under the background service, so
+  /// leaving the app does not cut it.
+  Future<void> sendMessage(String text, {required AiMode mode}) =>
+      BackgroundWork.instance.run(
+        BackgroundWork.text('正在回答问题', 'Answering a question'),
+        () => _sendMessage(text, mode: mode),
+      );
+
+  Future<void> _sendMessage(String text, {required AiMode mode}) async {
     final query = text.trim();
     if (query.isEmpty || state.any((message) => message.isStreaming)) return;
     _lastMode = mode;
@@ -617,14 +626,19 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
       candidates: const [],
       clearResolutionStatus: true,
     );
-    final result = await _agent.resolveCharacter(cleanQuery);
-    state = state.copyWith(
-      character: result.character,
-      candidates: result.candidates,
-      scene: scene.trim(),
-      isResolving: false,
-      resolutionStatus: result.status,
-    );
+    try {
+      final result = await _agent.resolveCharacter(cleanQuery);
+      state = state.copyWith(
+        character: result.character,
+        candidates: result.candidates,
+        scene: scene.trim(),
+        isResolving: false,
+        resolutionStatus: result.status,
+      );
+    } catch (_) {
+      // Do not stay "resolving" forever when the lookup fails.
+      state = state.copyWith(isResolving: false);
+    }
   }
 
   void selectCandidate(GameDataEntityCandidate candidate, {String? scene}) {
@@ -636,7 +650,12 @@ class RoleplayNotifier extends StateNotifier<RoleplayState> {
     );
   }
 
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(String text) => BackgroundWork.instance.run(
+        BackgroundWork.text('正在生成回复', 'Generating a reply'),
+        () => _sendMessage(text),
+      );
+
+  Future<void> _sendMessage(String text) async {
     final message = text.trim();
     final character = state.character;
     if (message.isEmpty || character == null || state.isSending) return;

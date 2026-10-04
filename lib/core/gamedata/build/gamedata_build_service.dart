@@ -120,6 +120,9 @@ class GameDataBuildService {
       await target.delete();
     }
     await built.rename(installPath);
+    // The database is no longer the official asset the marker describes.
+    final marker = File('$installPath.asset_sha256');
+    if (await marker.exists()) await marker.delete();
   }
 
   Future<GameDataBuildResult> _fullBuild(

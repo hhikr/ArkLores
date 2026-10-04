@@ -12,6 +12,7 @@
 /// background isolate. Network access to GitHub is required.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -132,10 +133,12 @@ class ArknightsSourceClient {
   /// the API quota is exhausted. An invalid token surfaces as HTTP 401 with
   /// an explicit diagnostic instead of a silent fallback.
   Future<String> fetchLatestCommit() async {
-    final response = await _client.get(
-      _api('/commits/${ArknightsSourcePaths.branch}'),
-      headers: _headers,
-    );
+    final response = await _client
+        .get(
+          _api('/commits/${ArknightsSourcePaths.branch}'),
+          headers: _headers,
+        )
+        .timeout(stallTimeout);
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
       final sha = decoded is Map ? decoded['sha'] : null;
@@ -193,13 +196,15 @@ class ArknightsSourceClient {
     const perPage = 100;
     var page = 1;
     while (true) {
-      final response = await _client.get(
-        _api(
-          '/compare/$baseSha...$headSha',
-          {'per_page': '$perPage', 'page': '$page'},
-        ),
-        headers: _headers,
-      );
+      final response = await _client
+          .get(
+            _api(
+              '/compare/$baseSha...$headSha',
+              {'per_page': '$perPage', 'page': '$page'},
+            ),
+            headers: _headers,
+          )
+          .timeout(stallTimeout);
       if (response.statusCode != 200) {
         if (response.statusCode == 401) {
           throw StateError(
@@ -306,14 +311,41 @@ class ArknightsSourceClient {
     }
   }
 
+  /// A stalled connection (the app was in the background, the network
+  /// changed) fails after this long instead of hanging.
+  static const Duration stallTimeout = Duration(seconds: 60);
+
+  /// Whole-file attempts; the file is fetched again from the start.
+  static const int downloadAttempts = 3;
+
   Future<void> _downloadToFile(
+    Uri uri,
+    String outputPath,
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+  ) async {
+    for (var attempt = 1;; attempt++) {
+      try {
+        await _downloadOnce(uri, outputPath, onProgress);
+        return;
+      } on TimeoutException {
+        if (attempt >= downloadAttempts) rethrow;
+      } on http.ClientException {
+        if (attempt >= downloadAttempts) rethrow;
+      } on SocketException {
+        if (attempt >= downloadAttempts) rethrow;
+      }
+      await Future<void>.delayed(Duration(seconds: 2 * attempt));
+    }
+  }
+
+  Future<void> _downloadOnce(
     Uri uri,
     String outputPath,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
   ) async {
     final request = http.Request('GET', uri);
     request.headers.addAll(_headers);
-    final response = await _client.send(request);
+    final response = await _client.send(request).timeout(stallTimeout);
     if (response.statusCode != 200) {
       throw StateError('Download failed: HTTP ${response.statusCode} for $uri');
     }
@@ -322,12 +354,15 @@ class ArknightsSourceClient {
     final sink = file.openWrite();
     var received = 0;
     final total = response.contentLength;
-    await for (final chunk in response.stream) {
-      sink.add(chunk);
-      received += chunk.length;
-      onProgress?.call(received, total);
+    try {
+      await for (final chunk in response.stream.timeout(stallTimeout)) {
+        sink.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received, total);
+      }
+    } finally {
+      await sink.close();
     }
-    await sink.close();
   }
 
   static String? _stripTopLevel(String entryName) {

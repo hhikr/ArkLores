@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../background/background_work.dart';
 import 'gamedata_installer.dart';
 
 final gameDataInstallerProvider = Provider<GameDataInstaller>((ref) {
@@ -43,10 +44,28 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
   /// Progress updates are throttled to this many bytes.
   static const int _progressStep = 512 * 1024;
 
-  /// Starts a download unless one is already running.
-  Future<void> start() async {
+  /// Starts a download unless one is already running. An installed asset
+  /// that is already the one this app points at is not downloaded again
+  /// unless [force] (the page asks the user first).
+  Future<void> start({bool force = false}) async {
+    if (state.downloading) return;
+    if (!force) {
+      try {
+        final status = await _ref.read(gameDataInstallerProvider).getStatus();
+        if (status.installed && !status.updateAvailable) return;
+      } catch (_) {
+        // Cannot tell: download as before.
+      }
+    }
     if (state.downloading) return;
     state = const GameDataDownloadState(downloading: true);
+    await BackgroundWork.instance.run(
+      BackgroundWork.text('正在下载知识库', 'Downloading the knowledge base'),
+      _download,
+    );
+  }
+
+  Future<void> _download() async {
     var lastReported = 0;
     try {
       final installed =

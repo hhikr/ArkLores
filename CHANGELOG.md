@@ -4,6 +4,34 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.6] - 2026-10-04 (pre-release)
+
+App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
+
+### Fixed
+
+- **Evidence chains were missing** with GLM: the model wrote each citation flat
+  (`"cite": ["<story>.txt", 97, 127]`) instead of as a list of lists, the app dropped them, and
+  the answer ended up with no sources and the status "knowledge base not covered". The prompt now
+  shows the exact nested shape, and the app reads the flat shape, `L97` / `"97-127"` line values,
+  a story id without `.txt`, and a reversed range. An answer whose citations still cannot be read
+  is sent back once with the correct shape, and the model's own answer is kept in the nested form
+  (a rewrite or follow-up no longer copies the odd shape).
+- Long operations are no longer cut when the app goes to the background: an Ask answer, a
+  role-play reply, the knowledge-base download and the in-app build run under an Android
+  foreground service (a small ongoing notification, a wake lock; Android 13+ asks for the
+  notification permission once). A turn cut by a dropped connection is asked again (twice).
+- The knowledge-base page offered "更新" and a full re-download even when the installed
+  knowledge base was current. It now shows "已是最新" (greyed), with a confirmed "重新下载" for the
+  rare case; the download is skipped when nothing is new. Rebuilding in the app drops the
+  official-asset marker.
+- Format tolerance elsewhere: `coverage` words (partial/incomplete = gaps), unknown fact-check
+  verdict words, the stage `from` as "1-3", the plain-text tool protocol (`json` fence,
+  `parameters`/`args`), an empty `{}` tool call, and a sub-agent's gaps and unchecked citations
+  are reported to the main agent. A failed reviewer call is now written to the session log.
+- Prompt and tool descriptions state the formats the code needs: the nested `cite`, one range
+  per backtick for sub-agents, `read_story` has no `end`, a fact-check's `verdict` position.
+
 ## [0.10.5] - 2026-10-04 (pre-release)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).

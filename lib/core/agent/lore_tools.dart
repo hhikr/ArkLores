@@ -206,7 +206,8 @@ class ReadStoryTool extends AgentTool {
   String get description =>
       '读取一个故事文件（章节）的原文：从 start 行开始的 count 行'
       '（默认 $defaultCount 行，最多 $maxCount 行，约一整章）。'
-      '每行形如 “L行号 [说话人] 内容”，行号即 story_lines.line_index，引用时使用。';
+      '每行形如 “L行号 [说话人] 内容”，行号即 story_lines.line_index，引用时使用。'
+      '没有 end 参数：想读到某一行，用 count 表示行数。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -214,9 +215,9 @@ class ReadStoryTool extends AgentTool {
         'properties': {
           'story_id': {
             'type': 'string',
-            'description': '故事文件名（story_lines.story_id）',
+            'description': '故事文件名（story_lines.story_id，完整路径，如查询结果里所示）',
           },
-          'start': {'type': 'integer', 'description': '起始行号，默认 0'},
+          'start': {'type': 'integer', 'description': '起始行号（整数，不带 L），默认 0'},
           'count': {'type': 'integer', 'description': '行数，默认 $defaultCount'},
         },
         'required': ['story_id'],
@@ -309,7 +310,7 @@ class GrepTool extends AgentTool {
           'story_ids': {
             'type': 'array',
             'items': {'type': 'string'},
-            'description': '只在这些故事文件里找',
+            'description': '只在这些故事文件里找（完整的 story_id；不存在的文件会报 0 行）',
           },
           'collection': {
             'type': 'string',

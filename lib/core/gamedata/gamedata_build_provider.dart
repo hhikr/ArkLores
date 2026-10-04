@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../background/background_work.dart';
 import 'build/gamedata_build_isolate.dart';
 import 'build/gamedata_build_service.dart';
 import 'build/source/arknights_source_client.dart';
@@ -139,7 +140,13 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   /// Pulls source (incremental or first-time zip) and builds/updates the
   /// knowledge base in a background isolate, then swaps the validated output
   /// over the installed database.
-  Future<void> buildFromSource({String? githubToken}) async {
+  Future<void> buildFromSource({String? githubToken}) =>
+      BackgroundWork.instance.run(
+        BackgroundWork.text('正在构建知识库', 'Building the knowledge base'),
+        () => _buildFromSource(githubToken: githubToken),
+      );
+
+  Future<void> _buildFromSource({String? githubToken}) async {
     if (state.busy) return;
     final dirs = await _dirs();
     await dirs.sourceDir.create(recursive: true);

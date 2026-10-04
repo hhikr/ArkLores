@@ -121,12 +121,16 @@ String normalizeFactCheckBody(
   required bool nothingRead,
   required bool hasValidCitation,
 }) {
+  // Any word is read (and stripped): one that is not a verdict is uncertain.
   final marker = RegExp(
-    r'\[FACT_CHECK_VERDICT:(supported|refuted|uncertain|unavailable)\]\s*',
+    r'\[FACT_CHECK_VERDICT\s*:\s*([^\]\n]*)\]\s*',
     caseSensitive: false,
   );
-  final requested = marker.firstMatch(body)?.group(1)?.toLowerCase();
-  var verdict = requested ?? 'uncertain';
+  final requested = marker.firstMatch(body)?.group(1)?.trim().toLowerCase();
+  var verdict = const {'supported', 'refuted', 'uncertain', 'unavailable'}
+          .contains(requested)
+      ? requested!
+      : 'uncertain';
   if (nothingRead) {
     verdict = 'unavailable';
   } else if ((verdict == 'supported' || verdict == 'refuted') &&
