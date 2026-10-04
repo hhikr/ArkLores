@@ -35,11 +35,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   void initState() {
     super.initState();
     _baseUrlController = TextEditingController(
-      text: 'https://api.deepseek.com/v1',
+      text: 'https://api.z.ai/api/paas/v4',
     );
     _apiKeyController = TextEditingController();
     _chatModelController = TextEditingController(
-      text: 'deepseek-v4-flash',
+      text: 'glm-5.3-flash',
     );
   }
 
@@ -278,7 +278,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           _buildInputField(
             label: context.t.apiSettingsLabelBaseUrl,
             controller: _baseUrlController,
-            hint: 'https://api.deepseek.com/v1',
+            hint: 'https://api.z.ai/api/paas/v4',
             theme: theme,
           ),
           const SizedBox(height: 14),
@@ -293,7 +293,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           _buildInputField(
             label: context.t.apiSettingsLabelModel,
             controller: _chatModelController,
-            hint: 'deepseek-v4-flash',
+            hint: 'glm-5.3-flash',
             theme: theme,
           ),
           const SizedBox(height: 28),

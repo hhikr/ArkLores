@@ -101,9 +101,9 @@ class ToolCall {
 class LLMConfig {
 
   const LLMConfig({
-    this.chatBaseUrl = 'https://api.deepseek.com/v1',
+    this.chatBaseUrl = 'https://api.z.ai/api/paas/v4',
     this.chatApiKey = '',
-    this.chatModel = 'deepseek-v4-flash',
+    this.chatModel = 'glm-5.3-flash',
   });
   // ── Chat API ─────────────────────────────────────────────
   final String chatBaseUrl;

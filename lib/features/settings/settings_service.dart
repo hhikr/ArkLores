@@ -140,9 +140,9 @@ class SettingsService {
     final chatModel = await _storage.read(key: _keyChatModel);
 
     return LLMConfig(
-      chatBaseUrl: chatBaseUrl ?? 'https://api.deepseek.com/v1',
+      chatBaseUrl: chatBaseUrl ?? 'https://api.z.ai/api/paas/v4',
       chatApiKey: chatApiKey ?? '',
-      chatModel: chatModel ?? 'deepseek-v4-flash',
+      chatModel: chatModel ?? 'glm-5.3-flash',
     );
   }
 

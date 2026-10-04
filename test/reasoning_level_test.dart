@@ -159,7 +159,11 @@ void main() {
     test('tool_choice none is sent, except to Zhipu (only "auto" there)',
         () async {
       final deepseek = await lastTurnBody(
-        const LLMConfig(chatApiKey: 'test-key'),
+        const LLMConfig(
+          chatApiKey: 'test-key',
+          chatBaseUrl: 'https://api.deepseek.com/v1',
+          chatModel: 'deepseek-v4-flash',
+        ),
       );
       expect(deepseek['tool_choice'], 'none');
       final glm = await lastTurnBody(
@@ -172,6 +176,81 @@ void main() {
       expect(glm.containsKey('tool_choice'), isFalse);
       expect(glm['tools'], isNotEmpty);
       expect(glm['thinking'], {'type': 'disabled'});
+    });
+
+    test(
+        'a model that cannot switch thinking off: the field is dropped once '
+        'and not sent again', () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(
+          chatApiKey: 'test-key',
+          chatBaseUrl: 'https://api.z.ai/api/paas/v4',
+          chatModel: 'glm-5.3-flash',
+        ),
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          bodies.add(body);
+          if (body.containsKey('thinking')) {
+            return http.Response(
+              '{"error":{"code":"1214","message":"thinking.type only supports enabled"}}',
+              400,
+            );
+          }
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {'content': 'ok', 'reasoning_content': 'r'},
+                  'finish_reason': 'stop',
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      expect((await client.chatCompletion([Message.user('q')])).content, 'ok');
+      expect(bodies, hasLength(2));
+      await client.chatCompletion([Message.user('q')]);
+      expect(bodies, hasLength(3));
+      expect(bodies.last.containsKey('thinking'), isFalse);
+    });
+
+    test('a provider rejecting stream_options still streams without it',
+        () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key'),
+        httpClient: MockClient.streaming((request, bodyStream) async {
+          final body = jsonDecode(await bodyStream.bytesToString())
+              as Map<String, dynamic>;
+          bodies.add(body);
+          if (body.containsKey('stream_options')) {
+            return http.StreamedResponse(
+              Stream.value(utf8.encode('{"error":{"message":"unknown field"}}')),
+              400,
+            );
+          }
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(
+              'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'
+              'data: [DONE]\n\n',
+            ),),
+            200,
+          );
+        }),
+      );
+      final text = await client
+          .streamCompletion([Message.user('q')])
+          .map((d) => d.content)
+          .join();
+      expect(text, 'ok');
+      expect(bodies, hasLength(2));
+      expect(bodies.last['stream'], isTrue);
+      await client.streamCompletion([Message.user('q')]).drain<void>();
+      expect(bodies, hasLength(3));
+      expect(bodies.last.containsKey('stream_options'), isFalse);
     });
 
     MockClient rateLimited(int failures, List<int> calls) =>

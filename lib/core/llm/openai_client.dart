@@ -46,6 +46,28 @@ class OpenAICompatibleClient extends LLMClient {
   /// the last agent turn.
   static bool acceptsToolChoice(LLMConfig config) => !isZhipu(config);
 
+  /// Set when the provider rejected the [reasoningFields] (some models
+  /// cannot switch thinking off, e.g. GLM-5.3-Flash): later requests of
+  /// this client leave them out and the model thinks at its default.
+  bool _reasoningFieldsRejected = false;
+
+  /// Set when the provider rejected `stream_options`: later streams are
+  /// sent without it (usage may then be missing).
+  bool _streamOptionsRejected = false;
+
+  /// Whether a 4xx [errorText] for [body] is about the reasoning fields.
+  bool _rejectsReasoningFields(Map<String, dynamic> body, String errorText) {
+    final fields = reasoningFields.keys;
+    if (fields.isEmpty || !fields.any(body.containsKey)) return false;
+    final text = errorText.toLowerCase();
+    return text.contains('thinking') || text.contains('reasoning');
+  }
+
+  Map<String, dynamic> _withoutReasoningFields(Map<String, dynamic> body) {
+    _reasoningFieldsRejected = true;
+    return Map.of(body)..removeWhere((k, _) => reasoningFields.containsKey(k));
+  }
+
   /// Optional observer of every successful completion (e.g. a token meter in
   /// the live test harness). Never alters the result.
   final void Function(ChatCompletionResult result)? onCompletion;
@@ -193,7 +215,8 @@ class OpenAICompatibleClient extends LLMClient {
         'temperature': temperature,
         'max_tokens': maxTokens,
         if (stream) 'stream': true,
-        if (stream) 'stream_options': {'include_usage': true},
+        if (stream && !_streamOptionsRejected)
+          'stream_options': {'include_usage': true},
         if (stop != null) 'stop': stop,
         if (tools != null && tools.isNotEmpty) 'tools': tools,
         if (tools != null &&
@@ -201,7 +224,7 @@ class OpenAICompatibleClient extends LLMClient {
             toolChoice != null &&
             acceptsToolChoice(config))
           'tool_choice': toolChoice,
-        ...reasoningFields,
+        if (!_reasoningFieldsRejected) ...reasoningFields,
       };
 
   /// R17: function calls of a non-streamed `message`.
@@ -267,6 +290,10 @@ class OpenAICompatibleClient extends LLMClient {
       // `charset` in the content type, `response.body` decodes as latin1.
       final responseBody =
           utf8.decode(response.bodyBytes, allowMalformed: true);
+      if ((response.statusCode == 400 || response.statusCode == 422) &&
+          _rejectsReasoningFields(body, responseBody)) {
+        return await _complete(_withoutReasoningFields(body));
+      }
       if (response.statusCode != 200) {
         throw LLMException(
           chatFailureMessage(responseBody,
@@ -419,6 +446,18 @@ class OpenAICompatibleClient extends LLMClient {
 
     if (response.statusCode != 200) {
       final errorBody = await response.stream.bytesToString();
+      final badRequest =
+          response.statusCode == 400 || response.statusCode == 422;
+      if (badRequest && _rejectsReasoningFields(body, errorBody)) {
+        yield* _stream(_withoutReasoningFields(body));
+        return;
+      }
+      if (badRequest && body.containsKey('stream_options')) {
+        // Some providers stream fine but reject `stream_options`.
+        _streamOptionsRejected = true;
+        yield* _stream(Map.of(body)..remove('stream_options'));
+        return;
+      }
       if (_streamRejectedCodes.contains(response.statusCode)) {
         // Retried without streaming; a provider that also rejects the rest
         // of the request (e.g. `tools`) fails there with its own status.

@@ -164,7 +164,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 _inputField(
                   theme: theme,
                   controller: _chatBaseUrlCtrl,
-                  hint: 'https://api.deepseek.com/v1',
+                  hint: 'https://api.z.ai/api/paas/v4',
                 ),
                 const SizedBox(height: 14),
                 _inputLabel(theme, context.t.apiSettingsLabelApiKey),
@@ -179,7 +179,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 _inputField(
                   theme: theme,
                   controller: _chatModelCtrl,
-                  hint: 'deepseek-v4-flash',
+                  hint: 'glm-5.3-flash',
                 ),
               ],
             ),

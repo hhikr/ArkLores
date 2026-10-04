@@ -143,7 +143,11 @@ void main() {
           .map((d) => d.content)
           .join();
       expect(text, '整段答案');
-      expect(bodies, hasLength(2));
+      // First without `stream_options` (some providers reject only that),
+      // then without streaming.
+      expect(bodies, hasLength(3));
+      expect(bodies[1]['stream'], isTrue);
+      expect(bodies[1].containsKey('stream_options'), isFalse);
       expect(bodies.last.containsKey('stream'), isFalse);
     });
 

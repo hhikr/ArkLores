@@ -269,8 +269,13 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   百炼（`enable_thinking`）、智谱 GLM（`thinking`，无强度档，low = high，按 host `z.ai`/`bigmodel.cn` 或模型名 `glm*` 识别）；
   其他 provider 不发字段。智谱只接受 `tool_choice: auto`，所以对它不发 `none`（最后一轮和 R18 整理段落时
   模型仍可能调用工具：前者按答案处理，后者回退为只显示详细答案）。429 按 `Retry-After` 或 2/5/10 秒重试三次。
-- 开发者 2026-10 起改用智谱 GLM（国际站 `https://api.z.ai/api/paas/v4`）。R17/R18 文档里的验收数据是 deepseek 测的，
-  换模型后调用次数、token、缓存命中率都要重新测。
+- 服务商因思考字段报 400/422（错误里提到 thinking/reasoning）时，该 client 去掉思考字段重发、之后不再发；
+  拒绝 `stream_options` 时先去掉它再流式重发，仍被拒才改为非流式。
+- **默认模型是智谱 `glm-5.3-flash`**（`https://api.z.ai/api/paas/v4`，2026-10 开发者决定：写作更好）。
+  官方文档：它**不能关闭思考**（`thinking.type` 只支持 `enabled`）——所以每一轮都会思考，“深度思考”开关对它无效，
+  上面“全部默认 off、不开 high”的约束在这个模型上做不到，答案是否因此推测过度要在真机/live 测试里看。
+  已保存过设置的用户不受影响（URL、key、模型三项总是一起保存）。
+- R17/R18 文档里的验收数据是 deepseek 测的，换模型后调用次数、token、缓存命中率都要重新测。
 - 流式：`LLMClient.streamTurn`（带 tools；默认实现调用一次 `chatCompletion`，测试假 client 可直接覆盖它）。
   Agent 依次发 `status` / `toolCall` / `toolObservation` / `finalAnswerToken`… →（继续查资料或出处退回时
   `finalAnswerReset`）→ `finalAnswerReplace`（信封 + 核对后正文）。测试取答案用 `finalAnswerOf(events)`。

@@ -6,6 +6,12 @@ All notable changes to ArkLores will be documented in this file.
 
 ### Changed
 
+- New installs default to Zhipu GLM-5.3-Flash (`glm-5.3-flash`,
+  `https://api.z.ai/api/paas/v4`) instead of DeepSeek; saved settings are kept. GLM-5.3-Flash
+  cannot switch thinking off, so it always thinks and "深度思考" makes no difference for it.
+- When a provider rejects the thinking switch (400/422 naming thinking/reasoning), the request
+  is sent again without it and later requests leave it out; when it rejects `stream_options`,
+  the stream is retried without it before falling back to a non-streamed answer.
 - Zhipu GLM (api.z.ai / open.bigmodel.cn, or a `glm*` model behind another endpoint) is a
   known provider: thinking is switched off by default and on only with "深度思考" (GLM has no
   effort level), and `tool_choice` is not sent (Zhipu accepts only `auto`).
