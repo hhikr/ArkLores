@@ -86,11 +86,15 @@ void main() {
       expect(find.text('已作答 · 置信度 0.8'), findsOneWidget);
       expect(find.byIcon(Icons.psychology_rounded), findsNothing);
       expect(find.byIcon(Icons.person_rounded), findsNothing);
-      // R17b: the evidence chain sits below the paragraph that cites it:
-      // collection → chapter → line chip (no catalog here, so the names
-      // come from the path).
+      // R17b: the evidence chain sits below the paragraph that cites it.
+      // R18b: folded into a pill with the count and the collection (no
+      // catalog here, so the names come from the path) until tapped.
+      expect(find.text('出处 1'), findsOneWidget);
       expect(find.text('活动 act_fixture'), findsOneWidget);
-      expect(find.text('level_fixture_c5'), findsOneWidget);
+      expect(find.text('第 1 行'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('evidence-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('level_fixture_c5'), findsOneWidget);
       expect(find.text('第 1 行'), findsOneWidget);
       // R15: the summary tree is folded to one line until tapped.
       expect(find.text('证据 1 处 · 来自 1 个故事'), findsOneWidget);
@@ -124,6 +128,9 @@ void main() {
         '细节甲。 `$story:0-1`\n\n## 小节\n\n- 细节乙。 `$story:3`',
       );
       expect(find.text('阶段概括。'), findsOneWidget);
+      expect(find.text('出处 2'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('evidence-toggle')));
+      await tester.pumpAndSettle();
       expect(find.text('第 1–2 行'), findsOneWidget);
       expect(find.text('第 4 行'), findsOneWidget);
       expect(find.text('详细经过 · 2 条'), findsOneWidget);
@@ -134,7 +141,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('细节甲。'), findsOneWidget);
       expect(find.text('细节乙。'), findsOneWidget);
-      expect(find.text('第 1–2 行'), findsNWidgets(2));
+      // Each detailed point has its own folded sources.
+      expect(find.byKey(const ValueKey('evidence-toggle')), findsNWidgets(3));
+      expect(find.text('第 1–2 行'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -175,6 +184,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       // The chain follows the first item only; the citation left the text.
+      expect(find.byKey(const ValueKey('evidence-toggle')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('evidence-toggle')));
+      await tester.pumpAndSettle();
       expect(find.text('第 61–62 行'), findsOneWidget);
       expect(find.textContaining(story), findsNothing);
 
@@ -186,6 +198,9 @@ void main() {
       expect(find.byKey(const ValueKey('story-line-target-60')), findsOneWidget);
       expect(find.byKey(const ValueKey('story-line-target-61')), findsOneWidget);
       expect(find.byKey(const ValueKey('story-line-target-62')), findsNothing);
+      // R18b: a speaker's name is shown once per run of lines.
+      expect(find.text('甲'), findsWidgets);
+      expect(find.byKey(const ValueKey('story-reader-jump')), findsOneWidget);
       final top = tester
           .getTopLeft(find.byKey(const ValueKey('story-line-target-60')))
           .dy;

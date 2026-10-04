@@ -520,6 +520,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiStoryReaderTitle => 'Original text';
 
   @override
+  String aiCitationSources(int count) {
+    return 'Sources $count';
+  }
+
+  @override
+  String get aiStoryReaderJumpBack => 'Back to the cited lines';
+
+  @override
+  String aiStoryReaderCited(String range) {
+    return 'Cited: $range';
+  }
+
+  @override
+  String get aiStoryReaderEnd => 'End of chapter';
+
+  @override
   String get aiMoreActions => 'More';
 
   @override

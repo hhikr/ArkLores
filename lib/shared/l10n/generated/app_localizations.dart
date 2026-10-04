@@ -998,6 +998,30 @@ abstract class AppLocalizations {
   /// **'Original text'**
   String get aiStoryReaderTitle;
 
+  /// No description provided for @aiCitationSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources {count}'**
+  String aiCitationSources(int count);
+
+  /// No description provided for @aiStoryReaderJumpBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the cited lines'**
+  String get aiStoryReaderJumpBack;
+
+  /// No description provided for @aiStoryReaderCited.
+  ///
+  /// In en, this message translates to:
+  /// **'Cited: {range}'**
+  String aiStoryReaderCited(String range);
+
+  /// No description provided for @aiStoryReaderEnd.
+  ///
+  /// In en, this message translates to:
+  /// **'End of chapter'**
+  String get aiStoryReaderEnd;
+
   /// No description provided for @aiMoreActions.
   ///
   /// In en, this message translates to:

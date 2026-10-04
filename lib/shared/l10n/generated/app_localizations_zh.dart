@@ -503,6 +503,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiStoryReaderTitle => '原文';
 
   @override
+  String aiCitationSources(int count) {
+    return '出处 $count';
+  }
+
+  @override
+  String get aiStoryReaderJumpBack => '回到引用处';
+
+  @override
+  String aiStoryReaderCited(String range) {
+    return '引用 · $range';
+  }
+
+  @override
+  String get aiStoryReaderEnd => '本章完';
+
+  @override
   String get aiMoreActions => '更多';
 
   @override

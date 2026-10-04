@@ -178,7 +178,10 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
       markdown.trimLeft().startsWith('#');
 }
 
-class _EvidenceChain extends ConsumerWidget {
+/// R18b: the sources of one block, folded into one pill — "出处 N" and the
+/// story collections — that opens a card with `故事集 · 章` and the line
+/// chips. Folded by default; only the reader's tap changes its height.
+class _EvidenceChain extends ConsumerStatefulWidget {
   const _EvidenceChain({
     required this.block,
     required this.recordNumbers,
@@ -189,7 +192,16 @@ class _EvidenceChain extends ConsumerWidget {
   final List<String> recordNumbers;
   final AppThemeTokens theme;
 
-  (String, String) _labels(WidgetRef ref, String storyId) {
+  @override
+  ConsumerState<_EvidenceChain> createState() => _EvidenceChainState();
+}
+
+class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
+  bool _open = false;
+
+  AppThemeTokens get theme => widget.theme;
+
+  (String, String) _labels(String storyId) {
     final entry = ref.watch(storyCatalogEntryProvider(storyId)).valueOrNull;
     if (entry != null) return (entry.collectionLabel, entry.chapterLabel);
     final fallback = fallbackStoryLabel(storyId);
@@ -200,66 +212,171 @@ class _EvidenceChain extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final muted = theme.bodyFont.copyWith(
-      color: theme.textSecondary,
-      fontSize: 12,
-      height: 1.4,
+  Widget build(BuildContext context) {
+    final block = widget.block;
+    final count = block.stories.fold<int>(0, (n, s) => n + s.ranges.length) +
+        block.records.length;
+    final collections = <String>{
+      for (final story in block.stories) _labels(story.storyId).$1,
+      if (block.records.isNotEmpty) context.t.aiCitedRecord,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _toggle(count, collections.join(' · ')),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topLeft,
+          child: _open
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _card(context),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
     );
+  }
+
+  Widget _toggle(int count, String collections) => InkWell(
+        key: const ValueKey('evidence-toggle'),
+        onTap: () => setState(() => _open = !_open),
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
+          decoration: BoxDecoration(
+            color: _open
+                ? theme.accentPrimary.withValues(alpha: 0.16)
+                : theme.bgSecondary,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: _open
+                  ? theme.accentText.withValues(alpha: 0.45)
+                  : theme.divider,
+              width: 0.6,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.menu_book_rounded, size: 13, color: theme.accentText),
+              const SizedBox(width: 5),
+              Text(
+                context.t.aiCitationSources(count),
+                style: theme.bodyFont.copyWith(
+                  color: theme.accentText,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (collections.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    collections,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.bodyFont.copyWith(
+                      color: theme.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ),
+              ],
+              AnimatedRotation(
+                turns: _open ? 0.5 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: Icon(
+                  Icons.expand_more_rounded,
+                  size: 16,
+                  color: theme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _card(BuildContext context) {
+    final block = widget.block;
     String lineText(int start, int? end) => end == null
         ? context.t.aiCitationLine(start)
         : context.t.aiCitationLines(start, end);
-
     final rows = <Widget>[
       for (final story in block.stories)
         Builder(builder: (context) {
-          final (collection, chapter) = _labels(ref, story.storyId);
-          return Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          final (collection, chapter) = _labels(story.storyId);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(collection, style: muted),
-              if (chapter.isNotEmpty) ...[
-                Text('→', style: muted),
-                Text(chapter, style: muted),
-              ],
-              Text('→', style: muted),
-              for (final range in story.ranges)
-                _chip(
-                  key: 'chain:${range.rawRef(story.storyId)}',
-                  text: citedRangeText(range, lineText),
-                  tooltip: range.rawRef(story.storyId),
-                  onTap: () => openStoryReader(context, story.storyId, range),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: collection,
+                      style: TextStyle(color: theme.textSecondary),
+                    ),
+                    if (chapter.isNotEmpty) ...[
+                      TextSpan(
+                        text: '  ·  ',
+                        style: TextStyle(color: theme.divider),
+                      ),
+                      TextSpan(
+                        text: chapter,
+                        style: TextStyle(
+                          color: theme.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
+                style: theme.bodyFont.copyWith(fontSize: 12.5, height: 1.4),
+              ),
+              const SizedBox(height: 5),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final range in story.ranges)
+                    _chip(
+                      key: 'chain:${range.rawRef(story.storyId)}',
+                      text: citedRangeText(range, lineText),
+                      tooltip: range.rawRef(story.storyId),
+                      onTap: () => openStoryReader(context, story.storyId, range),
+                    ),
+                ],
+              ),
             ],
           );
         },),
       for (final id in block.records)
-        Wrap(
-          spacing: 4,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _chip(
-              key: 'chain:record:$id',
-              text: '${context.t.aiCitedRecord} ${recordNumbers.indexOf(id) + 1}'
-                  '${_title(ref, id).isEmpty ? '' : ' · ${_title(ref, id)}'}',
-              tooltip: 'record:$id',
-              onTap: () => showCitedRecord(context, id),
-            ),
-          ],
+        _chip(
+          key: 'chain:record:$id',
+          text: '${context.t.aiCitedRecord} ${widget.recordNumbers.indexOf(id) + 1}'
+              '${_title(id).isEmpty ? '' : ' · ${_title(id)}'}',
+          tooltip: 'record:$id',
+          onTap: () => showCitedRecord(context, id),
         ),
     ];
     return Container(
-      padding: const EdgeInsets.only(left: 8),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: theme.divider, width: 2)),
+        color: theme.bgSecondary,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.divider, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final (i, row) in rows.indexed) ...[
-            if (i > 0) const SizedBox(height: 4),
+            if (i > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Divider(height: 1, color: theme.divider),
+              ),
             row,
           ],
         ],
@@ -267,7 +384,7 @@ class _EvidenceChain extends ConsumerWidget {
     );
   }
 
-  String _title(WidgetRef ref, String id) =>
+  String _title(String id) =>
       ref.watch(citedRecordProvider(id)).valueOrNull?.title ?? '';
 
   Widget _chip({
@@ -284,7 +401,7 @@ class _EvidenceChain extends ConsumerWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             decoration: BoxDecoration(
               color: theme.accentPrimary.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(8),
@@ -293,13 +410,24 @@ class _EvidenceChain extends ConsumerWidget {
                 width: 0.5,
               ),
             ),
-            child: Text(
-              text,
-              style: theme.bodyFont.copyWith(
-                color: theme.accentText,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  text,
+                  style: theme.bodyFont.copyWith(
+                    color: theme.accentText,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 14,
+                  color: theme.accentText,
+                ),
+              ],
             ),
           ),
         ),

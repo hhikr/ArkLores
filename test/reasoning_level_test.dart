@@ -174,6 +174,8 @@ void main() {
         ),
       );
       expect(glm.containsKey('tool_choice'), isFalse);
+      expect(glm['tool_stream'], isTrue);
+      expect(deepseek.containsKey('tool_stream'), isFalse);
       expect(glm['tools'], isNotEmpty);
       expect(glm['thinking'], {'type': 'disabled'});
     });
@@ -215,6 +217,47 @@ void main() {
       await client.chatCompletion([Message.user('q')]);
       expect(bodies, hasLength(3));
       expect(bodies.last.containsKey('thinking'), isFalse);
+    });
+
+    test('streamed tool calls: arguments joined, a repeated name kept once',
+        () async {
+      String chunk(Map<String, dynamic> call) =>
+          'data: ${jsonEncode({
+            'choices': [
+              {
+                'delta': {
+                  'tool_calls': [call],
+                },
+              },
+            ],
+          })}\n\n';
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key'),
+        httpClient: MockClient.streaming(
+          (request, _) async => http.StreamedResponse(
+            Stream.value(utf8.encode([
+              chunk({
+                'index': 0,
+                'id': 'c1',
+                'function': {'name': 'sql', 'arguments': '{"q":'},
+              }),
+              chunk({
+                'index': 0,
+                'function': {'name': 'sql', 'arguments': '"x"}'},
+              }),
+              'data: [DONE]\n\n',
+            ].join(),),),
+            200,
+          ),
+        ),
+      );
+      final done = (await client
+              .streamTurn([Message.user('q')], tools: tools)
+              .toList())
+          .last;
+      expect(done.toolCalls, hasLength(1));
+      expect(done.toolCalls.single.name, 'sql');
+      expect(done.toolCalls.single.arguments, '{"q":"x"}');
     });
 
     test('a provider rejecting stream_options still streams without it',

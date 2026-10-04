@@ -217,6 +217,9 @@ class OpenAICompatibleClient extends LLMClient {
         if (stream) 'stream': true,
         if (stream && !_streamOptionsRejected)
           'stream_options': {'include_usage': true},
+        // Zhipu streams tool calls only when asked (default: whole at the end).
+        if (stream && tools != null && tools.isNotEmpty && isZhipu(config))
+          'tool_stream': true,
         if (stop != null) 'stop': stop,
         if (tools != null && tools.isNotEmpty) 'tools': tools,
         if (tools != null &&
@@ -532,8 +535,9 @@ class OpenAICompatibleClient extends LLMClient {
             }
             final function = raw['function'];
             if (function is Map) {
+              // Names are not split; a provider may repeat it per chunk.
               final name = function['name'];
-              if (name is String) call.name.write(name);
+              if (name is String && call.name.isEmpty) call.name.write(name);
               final args = function['arguments'];
               if (args is String) call.args.write(args);
             }

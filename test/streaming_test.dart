@@ -330,6 +330,10 @@ void main() {
           timestamp: DateTime(2026),
         ),
       );
+      // One folded chain: the first point's; the second is still written.
+      expect(find.byKey(const ValueKey('evidence-toggle')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('evidence-toggle')));
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('第 4–5 行'), findsOneWidget);
       expect(find.text('第 8 行'), findsNothing);
       expect(find.textContaining('.txt'), findsNothing);
