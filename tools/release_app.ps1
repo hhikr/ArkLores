@@ -24,13 +24,27 @@ $headers = @{ Authorization = "Bearer $pat"; Accept = 'application/vnd.github+js
 $repo = 'https://api.github.com/repos/hhikr/ArkLores'
 $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$pat"))
 
-git -c "http.extraHeader=Authorization: Basic $basic" ls-remote --exit-code origin "refs/heads/release/v$Version" *> $null
-if ($LASTEXITCODE -eq 0) { throw "release/v$Version already exists" }
-
 $sha = (git rev-parse HEAD).Trim()
-git -c "http.extraHeader=Authorization: Basic $basic" push -q origin "HEAD:refs/heads/release/v$Version"
-if ($LASTEXITCODE -ne 0) { throw 'push failed' }
-"pushed $sha to release/v$Version; waiting for the Android release run"
+# Native git writes progress and "remote:" notes to stderr, which Windows
+# PowerShell 5.1 turns into terminating errors under 'Stop': run git under
+# 'Continue' and judge it by its exit code.
+$ErrorActionPreference = 'Continue'
+$remote = git -c "http.extraHeader=Authorization: Basic $basic" ls-remote origin "refs/heads/release/v$Version" 2> $null
+$ErrorActionPreference = 'Stop'
+$remoteSha = if ($remote) { ("$remote" -split '\s+')[0] } else { '' }
+if ($remoteSha -and $remoteSha -ne $sha) {
+  throw "release/v$Version already exists at $remoteSha (HEAD is $sha); re-pushing would rebuild the APK"
+}
+if ($remoteSha -eq $sha) {
+  "release/v$Version already points at $sha; resuming without pushing"
+} else {
+  $ErrorActionPreference = 'Continue'
+  git -c "http.extraHeader=Authorization: Basic $basic" push -q origin "HEAD:refs/heads/release/v$Version" 2> $null
+  $pushed = $LASTEXITCODE
+  $ErrorActionPreference = 'Stop'
+  if ($pushed -ne 0) { throw 'push failed' }
+  "pushed $sha to release/v$Version; waiting for the Android release run"
+}
 
 $run = $null
 for ($i = 0; $i -lt 90 -and -not $run; $i++) {
