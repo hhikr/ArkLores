@@ -2,213 +2,23 @@
 /// in-app builder (R0: extracted from `tools/build_gamedata_database.dart`).
 ///
 /// Reads `zh_CN/gamedata` from Kengxxiao/ArknightsGameData and writes the
-/// schema 2 tables through a `sqflite`-compatible [Database]. The four import
-/// stages have no data dependencies between them, so callers may reorder or
-/// run them in isolation for incremental updates.
+/// schema 5 tables through a `sqflite`-compatible [Database]. The import
+/// stages (operators, voices, entries, stories) have no data dependencies
+/// between them, so callers may reorder or run them in isolation for
+/// incremental updates. Operators, voices and stories are imported here;
+/// every other table becomes entries through `EntryImporter`.
 library;
 
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arklores/core/gamedata/build/entry_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
+import 'package:arklores/core/gamedata/build/story_script.dart';
 import 'package:arklores/core/rag/chunker.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common/sqlite_api.dart';
-
-/// Whitelisted JSON text keys collected by the structured importer.
-const _textKeys = {  'name',
-  'description',
-  'desc',
-  'usage',
-  'storyText',
-  'voiceText',
-  'voiceTitle',
-  'title',
-  'subtitle',
-  'content',
-  'text',
-  'itemDesc',
-  'itemUsage',
-  'teamDes',
-  'teamFlavorDesc',
-  'endingDescription',
-  'changeEndingDesc',
-  'eliteDesc',
-  'taskDes',
-  'unlockCondDesc',
-  'obtainApproach',
-  'lineText',
-  'getMethod',
-  'dangerLevel',
-  'displayDesc',
-  'displayName',
-  'zoneNameFirst',
-  'zoneNameSecond',
-  'textDesc',
-  'storyName',
-  'storyTitle',
-  'storyIntro',
-  'storySetName',
-  'groupName',
-  'groupDesc',
-  'skinName',
-  'skinGroupName',
-  'brandName',
-  'dialog',
-  'medalName',
-  'uniEquipName',
-  'uniEquipDesc',
-  'specialEquipDesc',
-  'subProfessionName',
-  'topicName',
-  'itemName',
-  'buffName',
-  'buffEffectDesc',
-};
-
-/// Import spec of one whitelisted structured excel table.
-class _StructuredTableSpec {
-  const _StructuredTableSpec({
-    required this.sourcePath,
-    required this.roots,
-    required this.category,
-    required this.subtype,
-    required this.contentType,
-    required this.entityType,
-  });
-  final String sourcePath;
-  final List<String> roots;
-  final String category;
-  final String subtype;
-  final String contentType;
-  final String entityType;
-}
-
-/// The 15 structured excel tables imported by the importer (order matters for
-/// progress reporting only; stages are independent).
-const List<_StructuredTableSpec> _structuredTableSpecs = [
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/item_table.json',
-    roots: ['items', 'expItems', 'potentialItems', 'apSupplies'],
-    category: 'world_item',
-    subtype: 'item',
-    contentType: 'item_description',
-    entityType: 'item',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/skin_table.json',
-    roots: ['charSkins', 'brandList'],
-    category: 'world_item',
-    subtype: 'skin',
-    contentType: 'skin_description',
-    entityType: 'skin',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/medal_table.json',
-    roots: ['medalList', 'medalTypeData'],
-    category: 'world_item',
-    subtype: 'medal',
-    contentType: 'medal_description',
-    entityType: 'medal',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/uniequip_table.json',
-    roots: ['equipDict'],
-    category: 'operator',
-    subtype: 'module',
-    contentType: 'operator_module',
-    entityType: 'operator_module',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/enemy_handbook_table.json',
-    roots: ['enemyData', 'raceData'],
-    category: 'enemy',
-    subtype: 'profile',
-    contentType: 'enemy_profile',
-    entityType: 'enemy',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/stage_table.json',
-    roots: ['stages'],
-    category: 'stage',
-    subtype: 'stage',
-    contentType: 'stage_description',
-    entityType: 'stage',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/zone_table.json',
-    roots: ['zones', 'zoneMetaData'],
-    category: 'stage',
-    subtype: 'zone',
-    contentType: 'zone_description',
-    entityType: 'zone',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/campaign_table.json',
-    roots: ['campaigns', 'campaignGroups', 'campaignZones'],
-    category: 'stage',
-    subtype: 'campaign',
-    contentType: 'campaign_description',
-    entityType: 'campaign',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/activity_table.json',
-    roots: ['basicInfo', 'activity', 'missionData', 'missionGroup'],
-    category: 'activity',
-    subtype: 'basic_info',
-    contentType: 'activity_basic_info',
-    entityType: 'activity',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/retro_table.json',
-    roots: ['retroActList', 'retroTrailList', 'ruleData'],
-    category: 'activity',
-    subtype: 'archive',
-    contentType: 'activity_archive',
-    entityType: 'activity_archive',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/mission_table.json',
-    roots: ['missions', 'missionGroups'],
-    category: 'activity',
-    subtype: 'mission',
-    contentType: 'activity_mission',
-    entityType: 'mission',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/roguelike_table.json',
-    roots: ['itemTable', 'stages', 'zones', 'choices', 'endings'],
-    category: 'roguelike',
-    subtype: 'mechanic',
-    contentType: 'roguelike_mechanic',
-    entityType: 'roguelike',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/roguelike_topic_table.json',
-    roots: ['topics', 'details', 'modules'],
-    category: 'roguelike',
-    subtype: 'topic',
-    contentType: 'roguelike_topic',
-    entityType: 'roguelike_topic',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/sandbox_table.json',
-    roots: ['sandboxActTables', 'itemDatas'],
-    category: 'sandbox',
-    subtype: 'mechanic',
-    contentType: 'sandbox_mechanic',
-    entityType: 'sandbox',
-  ),
-  _StructuredTableSpec(
-    sourcePath: 'zh_CN/gamedata/excel/sandbox_perm_table.json',
-    roots: ['basicInfo', 'detail', 'itemData'],
-    category: 'sandbox',
-    subtype: 'item',
-    contentType: 'sandbox_item',
-    entityType: 'sandbox_item',
-  ),
-];
 
 /// Imports Arknights GameData into an open [Database].
 class ArknightsImporter {
@@ -241,8 +51,21 @@ class ArknightsImporter {
     }
     await importCharacterTables();
     await importVoiceTable();
-    await _importStructuredTextTables();
+    await importEntries();
     await _importStories();
+  }
+
+  /// The importer of the entry layer (every table except operators, voices
+  /// and stories).
+  late final EntryImporter entryImporter = EntryImporter(this);
+
+  /// Imports the whole entry layer: tables, levels and the owners
+  /// (`collections`). Derived entries (stories) are added by
+  /// [EntryImporter.rebuildDerived] once the stories and the catalog exist.
+  Future<void> importEntries() async {
+    onProgress?.call('structured', 0, 1);
+    await entryImporter.importAllTables();
+    onProgress?.call('structured', 1, 1);
   }
 
   /// Re-imports the character profile stage (character_table.json +
@@ -262,30 +85,6 @@ class ArknightsImporter {
     onProgress?.call('voices', 1, 1);
   }
 
-  /// Re-imports a single structured excel table by its repo-relative
-  /// `sourcePath` (e.g. `zh_CN/gamedata/excel/activity_table.json`).
-  ///
-  /// Throws [StateError] for paths outside the whitelisted tables.
-  Future<void> importStructuredTable(String sourcePath) async {
-    final matches = _structuredTableSpecs
-        .where((item) => item.sourcePath == sourcePath)
-        .toList(growable: false);
-    if (matches.isEmpty) {
-      throw StateError('Not a whitelisted structured table: $sourcePath');
-    }
-    final spec = matches.first;
-    final zh = Directory(p.join(sourceDir.path, 'zh_CN'));
-    await _importJsonCollection(
-      zh,
-      sourcePath: spec.sourcePath,
-      roots: spec.roots,
-      category: spec.category,
-      subtype: spec.subtype,
-      contentType: spec.contentType,
-      entityType: spec.entityType,
-    );
-  }
-
   /// Re-imports one story file by its repo-relative path
   /// (e.g. `zh_CN/gamedata/story/activities/act21mini/level_x.txt`).
   Future<void> importStoryFile(String relativePath) async {
@@ -298,10 +97,10 @@ class ArknightsImporter {
 
   Future<void> _importCharacterProfiles() async {
     final zh = Directory(p.join(sourceDir.path, 'zh_CN'));
-    final characterTable = await _readJsonMap(
+    final characterTable = await readJsonMap(
       p.join(zh.path, 'gamedata', 'excel', 'character_table.json'),
     );
-    final handbookInfo = await _readJsonMap(
+    final handbookInfo = await readJsonMap(
       p.join(zh.path, 'gamedata', 'excel', 'handbook_info_table.json'),
     );
     final handbookDict =
@@ -373,6 +172,7 @@ class ArknightsImporter {
           sourcePath: sourcePath,
           rawId: charId,
           retrievalHint: 'operator_profile',
+          entryId: 'operator:$charId',
         );
 
         final handbook = handbookDict[charId];
@@ -401,6 +201,7 @@ class ArknightsImporter {
                   sourcePath: 'zh_CN/gamedata/excel/handbook_info_table.json',
                   rawId: charId,
                   retrievalHint: 'operator_handbook',
+                  entryId: 'operator:$charId',
                 );
               }
             }
@@ -421,13 +222,27 @@ class ArknightsImporter {
           ],
           sourceRecordIds: [charId],
         );
+        if (documentSections.isNotEmpty) {
+          await insertEntry(
+            txn,
+            id: 'operator:$charId',
+            type: 'operator',
+            name: name,
+            code: '${data['displayNumber'] ?? ''}'.trim().isEmpty
+                ? null
+                : '${data['displayNumber']}'.trim(),
+            entityId: charId,
+            rawId: charId,
+            sourcePath: sourcePath,
+          );
+        }
       }
     });
   }
 
   Future<void> _importCharacterVoices() async {
     final sourcePath = 'zh_CN/gamedata/excel/charword_table.json';
-    final table = await _readJsonMap(p.join(sourceDir.path, sourcePath));
+    final table = await readJsonMap(p.join(sourceDir.path, sourcePath));
     final charWords =
         (table['charWords'] as Map?)?.cast<String, dynamic>() ?? const {};
 
@@ -450,8 +265,9 @@ class ArknightsImporter {
           content: text,
           sourcePath: sourcePath,
           rawId: '${data['charWordId'] ?? entry.key}',
+          entryId: charId.isEmpty ? null : 'operator:$charId',
         );
-        await _insertRecord(txn, record);
+        await insertRecord(txn, record);
         if (charId.isNotEmpty) {
           await _insertRelation(
             txn,
@@ -464,129 +280,6 @@ class ArknightsImporter {
         }
       }
     });
-  }
-
-  Future<void> _importStructuredTextTables() async {
-    final zh = Directory(p.join(sourceDir.path, 'zh_CN'));
-    for (var i = 0; i < _structuredTableSpecs.length; i++) {
-      final spec = _structuredTableSpecs[i];
-      await _importJsonCollection(
-        zh,
-        sourcePath: spec.sourcePath,
-        roots: spec.roots,
-        category: spec.category,
-        subtype: spec.subtype,
-        contentType: spec.contentType,
-        entityType: spec.entityType,
-      );
-      onProgress?.call('structured', i + 1, _structuredTableSpecs.length);
-    }
-  }
-
-  Future<void> _importJsonCollection(
-    Directory zh, {
-    required String sourcePath,
-    required List<String> roots,
-    required String category,
-    required String subtype,
-    required String contentType,
-    required String entityType,
-  }) async {
-    final table = await _readJsonMap(p.join(sourceDir.path, sourcePath));
-    await db.transaction((txn) async {
-      for (final root in roots) {
-        final node = table[root];
-        await _walkStructuredEntries(
-          txn,
-          node,
-          sourcePath: sourcePath,
-          root: root,
-          category: category,
-          subtype: subtype,
-          contentType: contentType,
-          entityType: entityType,
-        );
-      }
-    });
-  }
-
-  Future<void> _walkStructuredEntries(
-    Transaction txn,
-    Object? node, {
-    required String sourcePath,
-    required String root,
-    required String category,
-    required String subtype,
-    required String contentType,
-    required String entityType,
-    String? inheritedId,
-  }) async {
-    if (node is Map) {
-      final data = node.cast<String, dynamic>();
-      final rawId = rawIdFromMap(data) ?? inheritedId;
-      final texts = collectTextSections(data);
-      if (rawId != null && texts.isNotEmpty) {
-        final title = titleFromMap(data) ?? rawId;
-        await _upsertEntity(
-          txn,
-          id: '$entityType:$rawId',
-          name: title,
-          entityType: entityType,
-          sourceType: contentType,
-          sourcePath: sourcePath,
-        );
-        for (final text in texts) {
-          await _insertRecord(
-            txn,
-            NormalizedRecord(
-              category: category,
-              subtype: subtype,
-              contentType: contentType,
-              entityId: '$entityType:$rawId',
-              entityName: title,
-              parentId: parentIdFromMap(data),
-              parentType: category,
-              title: title,
-              section: text.section,
-              content: text.content,
-              sourcePath: sourcePath,
-              rawId: rawId,
-            ),
-          );
-        }
-        return;
-      }
-      for (final entry in data.entries) {
-        await _walkStructuredEntries(
-          txn,
-          entry.value,
-          sourcePath: sourcePath,
-          root: root,
-          category: category,
-          subtype: subtype,
-          contentType: contentType,
-          entityType: entityType,
-          inheritedId: entry.key,
-        );
-      }
-      return;
-    }
-
-    if (node is List) {
-      for (var i = 0; i < node.length; i++) {
-        await _walkStructuredEntries(
-          txn,
-          node[i],
-          sourcePath: sourcePath,
-          root: root,
-          category: category,
-          subtype: subtype,
-          contentType: contentType,
-          entityType: entityType,
-          inheritedId: '$root:$i',
-        );
-      }
-    }
   }
 
   Future<void> _importStories() async {
@@ -622,7 +315,7 @@ class ArknightsImporter {
     final storyId =
         p.relative(file.path, from: zhStory).replaceAll(p.separator, '/');
     final raw = await file.readAsString();
-    final lines = _parseStoryLines(raw);
+    final lines = parseStoryScript(raw);
     if (lines.isEmpty) return;
     final scope = storyScope(storyId);
 
@@ -651,13 +344,17 @@ class ArknightsImporter {
             'line_index': i,
             'language': gamedataLanguage,
             'source_path': relativePath,
+            'kind': line.kind.value,
           },
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
         stats.storyLines++;
       }
 
+      // Tutorial and guide popups are story lines (readable, queryable) but
+      // not retrieval text of the story.
       final text = lines
+          .where((line) => line.kind != StoryLineKind.system)
           .map((line) => line.speaker == null
               ? line.content
               : '${line.speaker}: ${line.content}',)
@@ -665,7 +362,7 @@ class ArknightsImporter {
       final chunks = _chunker.chunkBySliding(text, pageTitle: storyId);
       for (var chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
         final chunk = chunks[chunkIndex];
-        await _insertRecord(
+        await insertRecord(
           txn,
           NormalizedRecord(
             category: storyCategory(storyId),
@@ -681,39 +378,15 @@ class ArknightsImporter {
             rawId: '$storyId:$chunkIndex',
             lineStart: null,
             lineEnd: null,
+            entryId: 'story:$storyId',
           ),
         );
       }
     });
   }
 
-  List<StoryLine> _parseStoryLines(String raw) {
-    final lines = <StoryLine>[];
-    final speakerPattern = RegExp(r'^\[name="([^"]+)"\](.*)$');
-
-    for (final original in raw.split('\n')) {
-      final line = original.trim();
-      if (line.isEmpty) continue;
-
-      final speakerMatch = speakerPattern.firstMatch(line);
-      if (speakerMatch != null) {
-        final content = cleanStoryText(speakerMatch.group(2) ?? '');
-        if (content.isNotEmpty) {
-          lines.add(StoryLine(speakerMatch.group(1), content));
-        }
-        continue;
-      }
-
-      if (line.startsWith('[')) continue;
-      final content = cleanStoryText(line);
-      if (content.isNotEmpty) {
-        lines.add(StoryLine(null, content));
-      }
-    }
-    return lines;
-  }
-
-  Future<Map<String, dynamic>> _readJsonMap(String path) async {
+  /// Reads a JSON object file of the source tree.
+  Future<Map<String, dynamic>> readJsonMap(String path) async {
     final file = File(path);
     if (!await file.exists()) {
       throw StateError('Missing required GameData file: $path');
@@ -740,6 +413,8 @@ class ArknightsImporter {
     int? lineEnd,
     String? rawId,
     String? retrievalHint,
+    String? entryId,
+    String? collectionId,
   }) async {
     final clean = content.trim();
     if (clean.isEmpty) return;
@@ -780,6 +455,8 @@ class ArknightsImporter {
         'updated_at': nowSeconds(),
         'raw_id': rawId,
         'retrieval_hint': retrievalHint,
+        'entry_id': entryId,
+        'collection_id': collectionId,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -793,7 +470,8 @@ class ArknightsImporter {
     }
   }
 
-  Future<void> _insertRecord(Transaction txn, NormalizedRecord record) async {
+  /// Inserts one citable record (and its retrieval chunk).
+  Future<void> insertRecord(Transaction txn, NormalizedRecord record) async {
     final clean = record.content.trim();
     if (clean.isEmpty) return;
     await txn.insert(
@@ -820,6 +498,8 @@ class ArknightsImporter {
         'source_repo': arknightsSourceRepoUrl,
         'source_commit': null,
         'updated_at': nowSeconds(),
+        'entry_id': record.entryId,
+        'collection_id': record.collectionId,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -840,10 +520,69 @@ class ArknightsImporter {
       rawId: record.rawId,
       storyId: record.parentType == 'story_file' ? record.parentId : null,
       retrievalHint: record.contentType,
+      entryId: record.entryId,
+      collectionId: record.collectionId,
     );
   }
 
-  Future<void> _upsertEntity(
+  /// Adds (or replaces) one entry row.
+  Future<void> insertEntry(
+    Transaction txn, {
+    required String id,
+    required String type,
+    required String sourcePath,
+    String? name,
+    String? code,
+    String? collectionId,
+    String? groupName,
+    int? sortKey,
+    String? entityId,
+    String? rawId,
+    String? recordId,
+  }) async {
+    await txn.insert(
+      'entries',
+      {
+        'id': id,
+        'type': type,
+        'name': name,
+        'code': code,
+        'collection_id': collectionId,
+        'group_name': groupName,
+        'sort_key': sortKey,
+        'entity_id': entityId,
+        'raw_id': rawId,
+        'record_id': recordId,
+        'source_path': sourcePath,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    stats.entries++;
+  }
+
+  /// Adds one directed link between two entries.
+  Future<void> insertLink(
+    Transaction txn, {
+    required String src,
+    required String relation,
+    required String dst,
+    required String sourcePath,
+  }) async {
+    await txn.insert(
+      'entry_links',
+      {
+        'src': src,
+        'relation': relation,
+        'dst': dst,
+        'source_path': sourcePath,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+    stats.entryLinks++;
+  }
+
+  /// Adds or replaces an entity (the name index of aliases and coverage).
+  Future<void> upsertEntity(
     Transaction txn, {
     required String id,
     required String name,
@@ -1060,12 +799,6 @@ String storyContentType(String storyId) {
   return subtype;
 }
 
-class StoryLine {
-  const StoryLine(this.speaker, this.content);
-  final String? speaker;
-  final String content;
-}
-
 class TextSection {
   const TextSection(this.section, this.content);
   final String section;
@@ -1089,7 +822,15 @@ class NormalizedRecord {
     this.rawId,
     this.lineStart,
     this.lineEnd,
+    this.entryId,
+    this.collectionId,
   });
+
+  /// The entry this record's text belongs to (`entries.id`).
+  final String? entryId;
+
+  /// The collection that owns the entry (`collections.id`).
+  final String? collectionId;
   final String category;
   final String subtype;
   final String contentType;
@@ -1131,6 +872,11 @@ class BuildStats {
   int storyChunks = 0;
   int structuredChunks = 0;
 
+  // Schema v5 entry layer.
+  int entries = 0;
+  int collections = 0;
+  int entryLinks = 0;
+
   // Schema v3 coverage layer (StoryCoverageBuilder).
   int storyCoverageMentions = 0;
   int storyProfiles = 0;
@@ -1146,6 +892,9 @@ class BuildStats {
         'profileChunks': profileChunks,
         'storyChunks': storyChunks,
         'structuredChunks': structuredChunks,
+        'entries': entries,
+        'collections': collections,
+        'entryLinks': entryLinks,
         'storyCoverageMentions': storyCoverageMentions,
         'storyProfiles': storyProfiles,
         'rareTerms': rareTerms,
@@ -1177,6 +926,11 @@ class BuildStats {
       ),
     );
     structuredChunks = loreChunks - storyChunks - profileChunks;
+    entries = firstInt(await db.rawQuery('SELECT COUNT(*) FROM entries'));
+    collections =
+        firstInt(await db.rawQuery('SELECT COUNT(*) FROM collections'));
+    entryLinks =
+        firstInt(await db.rawQuery('SELECT COUNT(*) FROM entry_links'));
     storyCoverageMentions = firstInt(
       await db.rawQuery('SELECT COUNT(*) FROM entity_story_mentions'),
     );
@@ -1195,122 +949,3 @@ int firstInt(List<Map<String, Object?>> rows) {
   return int.tryParse('$value') ?? 0;
 }
 
-List<TextSection> collectTextSections(Map<String, dynamic> data) {
-  final sections = <TextSection>[];
-
-  void visit(Object? value, String path) {
-    if (value is String) {
-      final key = path.split('.').last;
-      final text = value.trim();
-      if (_textKeys.contains(key) && containsChinese(text)) {
-        sections.add(TextSection(key, cleanStructuredText(text)));
-      }
-      return;
-    }
-    if (value is List) {
-      for (var i = 0; i < value.length; i++) {
-        visit(value[i], '$path.$i');
-      }
-      return;
-    }
-    if (value is Map) {
-      for (final entry in value.entries) {
-        visit(
-            entry.value, path.isEmpty ? '${entry.key}' : '$path.${entry.key}',);
-      }
-    }
-  }
-
-  visit(data, '');
-  final seen = <String>{};
-  return [
-    for (final section in sections)
-      if (section.content.isNotEmpty &&
-          seen.add('${section.section}\n${section.content}'))
-        section,
-  ];
-}
-
-String? rawIdFromMap(Map<String, dynamic> data) {
-  const keys = [
-    'id',
-    'charId',
-    'charWordId',
-    'itemId',
-    'enemyId',
-    'raceId',
-    'stageId',
-    'zoneId',
-    'campaignId',
-    'activityId',
-    'missionId',
-    'topicId',
-    'medalId',
-    'skinId',
-    'uniEquipId',
-  ];
-  for (final key in keys) {
-    final value = '${data[key] ?? ''}'.trim();
-    if (value.isNotEmpty) return value;
-  }
-  return null;
-}
-
-String? titleFromMap(Map<String, dynamic> data) {
-  const keys = [
-    'name',
-    'appellation',
-    'title',
-    'voiceTitle',
-    'itemName',
-    'medalName',
-    'skinName',
-    'uniEquipName',
-    'topicName',
-    'zoneNameFirst',
-    'zoneNameSecond',
-    'displayName',
-    'storyName',
-    'groupName',
-  ];
-  for (final key in keys) {
-    final value = '${data[key] ?? ''}'.trim();
-    if (containsChinese(value)) return cleanStructuredText(value);
-  }
-  return null;
-}
-
-String? parentIdFromMap(Map<String, dynamic> data) {
-  const keys = [
-    'activityId',
-    'actId',
-    'topicId',
-    'zoneId',
-    'stageId',
-    'charId',
-  ];
-  final rawId = rawIdFromMap(data);
-  for (final key in keys) {
-    final value = '${data[key] ?? ''}'.trim();
-    if (value.isNotEmpty && value != rawId) return value;
-  }
-  return null;
-}
-
-bool containsChinese(String text) =>
-    text.runes.any((rune) => rune >= 0x4e00 && rune <= 0x9fff);
-
-String cleanStructuredText(String value) {
-  return value
-      .replaceAll(RegExp(r'<[^>]+>'), '')
-      .replaceAll(r'\n', '\n')
-      .replaceAll(RegExp(r'[ \t]+'), ' ')
-      .trim();
-}
-
-String cleanStoryText(String value) {
-  return value
-      .replaceAll(RegExp(r'<[^>]+>'), '')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-}

@@ -9,17 +9,29 @@ library;
 /// needs to read results and cite lines.
 const String loreDatabaseGuide = '''
 知识库是一个 SQLite 数据库（明日方舟中文游戏数据），主要的表：
-- story_lines(story_id, line_index, speaker, content, ...)：全部剧情台词，约 41 万行。
+- story_lines(story_id, line_index, speaker, content, kind, ...)：全部剧情文本，约 44 万行。
   story_id 是故事文件名，形如 obt/main/level_main_<章>-<关>_beg.txt（主线）、activities/<活动id>/level_<活动id>_<关>_beg.txt（活动）；
   line_index 从 0 开始，是引用用的行号；speaker 为空表示旁白/叙述。
+  kind 是这一行的性质：dialogue 对白、narration 旁白、subtitle 场景字幕、document 剧情里出现的书信/文档/笔记、
+  choice 玩家选项（多个选项用“／”连接）、title 标题、system 教程与引导提示（不属于故事）。
 - story_catalog(story_id, collection_id, collection_name, collection_type, story_code, story_name, avg_tag, story_sort, synopsis, start_time)：
   每个故事文件属于哪个故事集、关卡号（形如 <章>-<关>）、章名、行动前/行动后/幕间、在故事集内的顺序、官方梗概、上线时间（unix 秒，主线为空）。
   collection_type：MAINLINE 主线（collection_id 形如 main_<章>）、ACTIVITY / MINI_ACTIVITY 活动、NONE 干员密录。
 - story_chapter_profiles(story_id, title, summary, speaker_set, ...)：每章的标题、梗概和说话人列表。
 - entities(id, name, entity_type, ...) 与 entity_aliases(alias, entity_id, ...)：人物、干员、敌人、地点、活动等名字及别名。
 - entity_story_mentions(entity_id, story_id, line_start, line_end, mention_count, matched_alias)：实体在各故事中出现的行段。
-- normalized_records(category, subtype, title, entity_name, content, ...)：剧情以外的资料（干员档案、语音、敌人介绍、道具/勋章描述等）。
-梗概、章节简介、实体表只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
+- normalized_records(id, category, subtype, content_type, title, entity_name, content, entry_id, collection_id, ...)：剧情以外的资料
+  （干员档案、语音、敌人介绍、道具/勋章/皮肤描述、肉鸽藏品与事件、活动档案/新闻/来信等）的原文；每条属于一个条目（entry_id）。
+- collections(id, kind, name, parent_id, sort_key, start_time)：故事集的“归属单位”：kind 为 main 主线章节、activity 活动、memory 干员密录、
+  roguelike 肉鸽主题、sandbox 沙盘、retro 复刻、system 教程/指引；parent_id 指向所属干员条目（密录）。
+- entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, record_id)：每个官方条目一行，id 形如 <type>:<原始id>。
+  type 有 story、operator、enemy、stage、zone、item、skin、medal、module、power、worldview、mail、activity_text、archive_*、
+  roguelike_item / roguelike_scene / roguelike_choice / roguelike_ending / roguelike_stage 等；code 是关卡号/敌人编号；
+  collection_id 是所属的故事集/活动/主题；record_id 指向 normalized_records 里这个条目的文字。
+- entry_links(src, relation, dst)：条目之间的绑定。appears_in：敌人出现在哪些关卡；belongs_to：关卡属于地区、皮肤/模组/干员关卡属于干员；
+  belongs_to_stage：剧情文件对应的关卡；leads_to：肉鸽选项通向的场景；features：肉鸽分队的干员；reads_story：档案条目对应的剧情文件。
+  视图 collection_enemies(collection_id, enemy_id) 列出某个故事集/活动/主题里出现过的敌人。
+梗概、章节简介、实体表、条目与绑定只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
 
 /// How the agent works and cites.
 const String loreAgentRules = '''

@@ -26,7 +26,20 @@ import 'package:sqflite_common/sqlite_api.dart';
 /// scopes (previously all lumped under `obt:obt`). v3 databases built before
 /// this fix contain stub rows that incremental updates cannot purge, so the
 /// version bump forces a clean rebuild.
-const int gamedataSchemaVersion = 4;
+///
+/// v5 (0.11) reshapes the knowledge base around entries:
+/// - `story_lines.kind` tells dialogue from narration, scene captions,
+///   in-scene documents, player choices, headings and tutorial text; the
+///   story parser now reads every text-bearing command, not only
+///   `[name="X"]` lines (`story_script.dart`);
+/// - `collections` (activity, main chapter, operator record, roguelike
+///   topic, sandbox …) own `entries` (one row per official item: story,
+///   operator, enemy, stage, relic, event, ending, archive document …);
+///   `entry_links` binds them (enemy ↔ stage, operator ↔ record set,
+///   story ↔ stage …). `normalized_records.entry_id` points each citable
+///   record at its entry. Gameplay text (skills, mechanics, rules,
+///   obtain methods, ability descriptions) is not imported.
+const int gamedataSchemaVersion = 5;
 
 /// Language of the Arknights knowledge base build.
 const String gamedataLanguage = 'zh';
@@ -90,7 +103,8 @@ Future<void> createGamedataSchema(Database db) async {
       content     TEXT NOT NULL,
       line_index  INTEGER,
       language    TEXT NOT NULL DEFAULT 'zh',
-      source_path TEXT
+      source_path TEXT,
+      kind        TEXT NOT NULL DEFAULT 'dialogue'
     )
   ''');
   // Reading a chapter (`WHERE story_id = ? AND line_index ...`) scanned all
@@ -119,7 +133,9 @@ Future<void> createGamedataSchema(Database db) async {
       source_repo    TEXT,
       source_commit  TEXT,
       game_version   TEXT,
-      updated_at     INTEGER
+      updated_at     INTEGER,
+      entry_id       TEXT,
+      collection_id  TEXT
     )
   ''');
   await db.execute('''
@@ -181,7 +197,9 @@ Future<void> createGamedataSchema(Database db) async {
       game_version   TEXT,
       updated_at     INTEGER,
       raw_id         TEXT,
-      retrieval_hint TEXT
+      retrieval_hint TEXT,
+      entry_id       TEXT,
+      collection_id  TEXT
     )
   ''');
   await db.execute('''
@@ -285,7 +303,84 @@ Future<void> createGamedataSchema(Database db) async {
   await db.execute(
     'CREATE INDEX idx_entity_documents_type ON entity_documents(document_type)',
   );
+  // --- Schema v5 entry layer (0.11) ---
+  await db.execute(collectionsDdl);
+  await db.execute(entriesDdl);
+  await db.execute(entryLinksDdl);
+  for (final sql in entryLayerIndexes) {
+    await db.execute(sql);
+  }
+  await db.execute(collectionEnemiesView);
 }
+
+/// Owners of entries: a main chapter, an activity, an operator's record set,
+/// a roguelike topic, a sandbox … (`kind`). The unit "same story set / same
+/// topic / same activity" of the library page and of attribution queries.
+const String collectionsDdl = '''
+  CREATE TABLE collections (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL,
+    name        TEXT,
+    parent_id   TEXT,
+    sort_key    INTEGER,
+    start_time  INTEGER,
+    source_path TEXT
+  )
+''';
+
+/// One row per official item (story file, operator, enemy, stage, relic,
+/// event, ending, archive document …). `record_id` is the citable
+/// `normalized_records` row that carries the item's text.
+const String entriesDdl = '''
+  CREATE TABLE entries (
+    id            TEXT PRIMARY KEY,
+    type          TEXT NOT NULL,
+    name          TEXT,
+    code          TEXT,
+    collection_id TEXT,
+    group_name    TEXT,
+    sort_key      INTEGER,
+    entity_id     TEXT,
+    raw_id        TEXT,
+    record_id     TEXT,
+    source_path   TEXT
+  )
+''';
+
+/// Directed bindings between entries (`relation` is a stable verb such as
+/// `appears_in`, `belongs_to`, `memory_of`). Binding is deterministic: it is
+/// derived from ids in the source tables and never from names or guesses.
+const String entryLinksDdl = '''
+  CREATE TABLE entry_links (
+    src         TEXT NOT NULL,
+    relation    TEXT NOT NULL,
+    dst         TEXT NOT NULL,
+    source_path TEXT,
+    PRIMARY KEY (src, relation, dst)
+  )
+''';
+
+/// Enemies per collection (activity, main chapter, roguelike topic …): the
+/// enemies that appear in any stage the collection owns.
+const String collectionEnemiesView = '''
+  CREATE VIEW collection_enemies AS
+  SELECT DISTINCT s.collection_id AS collection_id, l.src AS enemy_id
+  FROM entry_links l JOIN entries s ON s.id = l.dst
+  WHERE l.relation = 'appears_in' AND s.collection_id IS NOT NULL
+''';
+
+const List<String> entryLayerIndexes = [
+  'CREATE INDEX idx_entries_type ON entries(type)',
+  'CREATE INDEX idx_entries_collection ON entries(collection_id, type, sort_key)',
+  'CREATE INDEX idx_entries_name ON entries(name)',
+  'CREATE INDEX idx_entries_source ON entries(source_path)',
+  'CREATE INDEX idx_entries_entity ON entries(entity_id)',
+  'CREATE INDEX idx_entry_links_dst ON entry_links(dst, relation)',
+  'CREATE INDEX idx_entry_links_source ON entry_links(source_path)',
+  'CREATE INDEX idx_collections_kind ON collections(kind, sort_key)',
+  'CREATE INDEX idx_records_entry ON normalized_records(entry_id)',
+  'CREATE INDEX idx_records_collection ON normalized_records(collection_id)',
+];
 
 /// Upserts key/value rows into `gamedata_manifest`.
 Future<void> writeGamedataManifest(

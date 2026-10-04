@@ -2,6 +2,8 @@
 /// (`search_story_coverage`, `read_story_lines`, `get_story_map` tools).
 library;
 
+import 'package:sqflite_common/sqlite_api.dart';
+
 /// One appearance run of an entity inside a story (from
 /// `entity_story_mentions`).
 class StoryCoverageEntry {
@@ -31,11 +33,34 @@ class StoryLineEntry {
     required this.lineIndex,
     required this.content,
     this.speaker,
+    this.kind,
   });
   final int lineIndex;
   final String? speaker;
   final String content;
+
+  /// `story_lines.kind` (schema 5): `dialogue`, `narration`, `subtitle`,
+  /// `document`, `choice`, `title` or `system`; null for older databases.
+  final String? kind;
 }
+
+/// Whether `story_lines` has the schema 5 `kind` column. Databases built
+/// before 0.11 do not, and still open.
+Future<bool> storyLinesHaveKind(DatabaseExecutor db) async {
+  final columns = await db.rawQuery('PRAGMA table_info(story_lines)');
+  return columns.any((c) => c['name'] == 'kind');
+}
+
+/// Label shown in front of a line that is neither dialogue nor narration
+/// (`[字幕]`, `[文档]` …); null for dialogue, narration and unknown kinds.
+String? storyKindLabel(String? kind) => switch (kind) {
+      'subtitle' => '字幕',
+      'document' => '文档',
+      'choice' => '选项',
+      'title' => '标题',
+      'system' => '教程',
+      _ => null,
+    };
 
 /// One story whose raw lines matched a keyword search (R12 `FIND`): total
 /// matching line count plus the best matching lines as locating hints.

@@ -450,7 +450,8 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     // budget still bounds what is returned).
     final limit = (maxLines ?? 30).clamp(1, 500);
     final windowEnd = endLine;
-    var sql = 'SELECT line_index, speaker, content FROM story_lines '
+    final kindColumn = await storyLinesHaveKind(db) ? ', kind' : '';
+    var sql = 'SELECT line_index, speaker, content$kindColumn FROM story_lines '
         'WHERE story_id = ? AND line_index >= ?';
     final args = <Object?>[storyId, fromLine];
     if (windowEnd != null) {
@@ -469,6 +470,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
           lineIndex: (row['line_index'] as num).toInt(),
           speaker: row['speaker'] as String?,
           content: '${row['content'] ?? ''}',
+          kind: row['kind'] as String?,
         ),
     ];
     final nextPageToken = hasMore && lines.isNotEmpty

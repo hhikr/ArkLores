@@ -7,6 +7,7 @@ import 'package:arklores/core/agent/roleplay_session_store.dart';
 import 'package:arklores/core/agent/tools/agent_tool.dart';
 import 'package:arklores/core/agent/tools/search_local_lore.dart';
 import 'package:arklores/core/agent/tools/tool_registry.dart';
+import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
@@ -647,7 +648,7 @@ void main() {
 
       final status = await installer.getStatus();
       expect(status.installed, isTrue);
-      expect(status.manifest['schema_version'], '4');
+      expect(status.manifest['schema_version'], '5');
       expect(status.entityCount, '1');
     });
 
@@ -1722,12 +1723,16 @@ Future<void> _createGameDataTestDb(String path) async {
           content_rowid='rowid'
         )
       ''');
+      // Schema v5 entry layer.
+      await db.execute(collectionsDdl);
+      await db.execute(entriesDdl);
+      await db.execute(entryLinksDdl);
     },
   );
 
   await db.insert('gamedata_manifest', {
     'key': 'schema_version',
-    'value': '4',
+    'value': '5',
   });
   await db.insert('gamedata_manifest', {
     'key': 'entity_count',

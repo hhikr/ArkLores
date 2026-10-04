@@ -24,6 +24,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../story_catalog.dart';
 import '../story_vectors.dart';
 import 'arknights_importer.dart';
+import 'entry_importer.dart';
 import 'gamedata_db_validator.dart';
 import 'gamedata_schema.dart';
 import 'source/arknights_source_client.dart';
@@ -158,6 +159,7 @@ class GameDataBuildService {
         onProgress: onProgress,
       ).build();
       await _refreshStoryCatalog(db, sourceDir);
+      await importer.entryImporter.rebuildDerived();
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);
@@ -208,6 +210,7 @@ class GameDataBuildService {
         onProgress: onProgress,
       ).build();
       await _refreshStoryCatalog(db, sourceDir);
+      await importer.entryImporter.rebuildDerived();
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);
@@ -253,13 +256,17 @@ class GameDataBuildService {
     if (isStoryCatalogSource(path)) return;
     if (ArknightsSourcePaths.isStoryFile(path)) {
       await importer.importStoryFile(path);
-    } else if (path == 'zh_CN/gamedata/excel/character_table.json' ||
-        path == 'zh_CN/gamedata/excel/handbook_info_table.json') {
+    } else if (path == 'zh_CN/gamedata/excel/character_table.json') {
       await importer.importCharacterTables();
+    } else if (path == 'zh_CN/gamedata/excel/handbook_info_table.json') {
+      await importer.importCharacterTables();
+      await importer.entryImporter.importTable(path);
     } else if (path == 'zh_CN/gamedata/excel/charword_table.json') {
       await importer.importVoiceTable();
+    } else if (EntryTables.isLevelFile(path)) {
+      await importer.entryImporter.importLevelFile(path);
     } else {
-      await importer.importStructuredTable(path);
+      await importer.entryImporter.importTable(path);
     }
   }
 
@@ -320,6 +327,17 @@ class GameDataBuildService {
       );
       await db.delete(
         'lore_chunks',
+        where: 'source_path = ?',
+        whereArgs: [path],
+      );
+      // Entry layer: the entries and bindings this file produced.
+      await db.delete(
+        'entries',
+        where: 'source_path = ?',
+        whereArgs: [path],
+      );
+      await db.delete(
+        'entry_links',
         where: 'source_path = ?',
         whereArgs: [path],
       );

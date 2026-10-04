@@ -70,9 +70,18 @@ const int maxToolResultChars = 16000;
 String _clip(String text, int max) =>
     text.length <= max ? text : '${text.substring(0, max)}…';
 
-/// One story line as the tools print it: `L12 [阿米娅] 内容`.
-String formatStoryLine(int index, String? speaker, String content) {
-  final who = speaker == null || speaker.trim().isEmpty ? '' : '[$speaker] ';
+/// One story line as the tools print it: `L12 [阿米娅] 内容`. Lines that are
+/// not dialogue or narration carry their kind instead: `L40 [字幕] 内容`.
+String formatStoryLine(
+  int index,
+  String? speaker,
+  String content, {
+  String? kind,
+}) {
+  final label = speaker == null || speaker.trim().isEmpty
+      ? storyKindLabel(kind)
+      : speaker;
+  final who = label == null || label.trim().isEmpty ? '' : '[$label] ';
   return 'L$index $who$content';
 }
 
@@ -260,7 +269,7 @@ class ReadStoryTool extends AgentTool {
       ..writeln('《${_storyLabel(storyId, entries)}》 $storyId');
     var last = start;
     for (final line in page.lines) {
-      final text = formatStoryLine(line.lineIndex, line.speaker, line.content);
+      final text = formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind);
       if (buffer.length + text.length > maxToolResultChars &&
           line.lineIndex > page.lines.first.lineIndex) {
         break;
@@ -399,7 +408,7 @@ class GrepTool extends AgentTool {
         for (final line in page.lines) {
           final mark = hitSet.contains(line.lineIndex) ? '* ' : '  ';
           block.writeln(
-            '$mark${formatStoryLine(line.lineIndex, line.speaker, line.content)}',
+            '$mark${formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind)}',
           );
           seen.add(storyId, line.lineIndex);
         }

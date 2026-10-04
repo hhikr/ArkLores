@@ -28,9 +28,12 @@ class ArknightsSourcePaths {
   static const String branch = 'master';
   static const String languagePath = 'zh_CN';
 
-  /// Repo-relative paths of the excel tables the importer reads. The three
-  /// character tables are handled by dedicated stages; the rest map to the
-  /// 15-table structured spec list.
+  /// Repo-relative paths of the excel tables the importer reads: the
+  /// operator, handbook and voice tables (dedicated stages) and the tables of
+  /// the entry layer (EntryTables.all, 0.11). Gameplay tables (skills,
+  /// buildings, shops …) are not imported and not downloaded. The levels/
+  /// directory (500 MB, enemy ↔ stage bindings) is only read by desktop
+  /// builds; the in-app builder skips it.
   static const List<String> excelTables = [
     'zh_CN/gamedata/excel/character_table.json',
     'zh_CN/gamedata/excel/handbook_info_table.json',
@@ -42,16 +45,22 @@ class ArknightsSourcePaths {
     'zh_CN/gamedata/excel/enemy_handbook_table.json',
     'zh_CN/gamedata/excel/stage_table.json',
     'zh_CN/gamedata/excel/zone_table.json',
-    'zh_CN/gamedata/excel/campaign_table.json',
     'zh_CN/gamedata/excel/activity_table.json',
     'zh_CN/gamedata/excel/retro_table.json',
-    'zh_CN/gamedata/excel/mission_table.json',
     'zh_CN/gamedata/excel/roguelike_table.json',
     'zh_CN/gamedata/excel/roguelike_topic_table.json',
     'zh_CN/gamedata/excel/sandbox_table.json',
     'zh_CN/gamedata/excel/sandbox_perm_table.json',
-    // R14: story names / order / synopsis paths for the story catalog.
+    'zh_CN/gamedata/excel/handbook_team_table.json',
+    'zh_CN/gamedata/excel/tip_table.json',
+    'zh_CN/gamedata/excel/charm_table.json',
+    'zh_CN/gamedata/excel/display_meta_table.json',
+    'zh_CN/gamedata/excel/arkvent_table.json',
+    'zh_CN/gamedata/excel/ark_odc_table.json',
+    // R14: story names / order / synopsis paths for the story catalog;
+    // 0.11: the archive documents of the activities.
     'zh_CN/gamedata/excel/story_review_table.json',
+    'zh_CN/gamedata/excel/story_review_meta_table.json',
   ];
 
   static bool isStoryFile(String path) =>

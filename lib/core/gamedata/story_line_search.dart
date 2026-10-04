@@ -113,10 +113,11 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   );
 
   final hits = <StoryLineHit>[];
+  final kindColumn = await storyLinesHaveKind(db) ? 'l.kind, ' : '';
   for (final row in stories) {
     final storyId = '${row['story_id']}';
     final lines = await db.rawQuery(
-      'SELECT l.line_index, l.speaker, l.content, ($score) AS score '
+      'SELECT l.line_index, l.speaker, l.content, $kindColumn($score) AS score '
       'FROM story_lines l WHERE l.story_id = ? AND ($any) '
       'ORDER BY score DESC, l.line_index LIMIT ?',
       [...scoreArgs, storyId, ...anyArgs, linesPerStory],
@@ -127,6 +128,7 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
           lineIndex: (l['line_index'] as num).toInt(),
           speaker: l['speaker'] as String?,
           content: '${l['content'] ?? ''}',
+          kind: l['kind'] as String?,
         ),
     ]..sort((a, b) => a.lineIndex.compareTo(b.lineIndex));
     hits.add(StoryLineHit(
