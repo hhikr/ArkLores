@@ -43,8 +43,8 @@ class AskComposer extends StatefulWidget {
 }
 
 class _AskComposerState extends State<AskComposer> {
-  static const _toolbarHeight = 44.0;
-  static const _textPadding = EdgeInsets.fromLTRB(14, 10, 44, 4);
+  static const _toolbarHeight = 36.0;
+  static const _textPadding = EdgeInsets.fromLTRB(14, 8, 44, 0);
   static const _maxCollapsedLines = 4;
   static const _duration = Duration(milliseconds: 220);
 
@@ -272,8 +272,8 @@ class _AskComposerState extends State<AskComposer> {
                                   : theme.accentPrimary,
                               foregroundColor:
                                   widget.isSending ? Colors.white : theme.onAccent,
-                              minimumSize: const Size(36, 36),
-                              maximumSize: const Size(36, 36),
+                              minimumSize: const Size(32, 32),
+                              maximumSize: const Size(32, 32),
                               padding: EdgeInsets.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),

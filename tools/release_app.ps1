@@ -1,4 +1,4 @@
-# Publishes an app-only pre-release from the current commit (Windows; GitHub
+# Publishes an app-only release (a pre-release unless -Stable) from the current commit (Windows; GitHub
 # REST with the PAT in the gitignored tools/github_pat, never printed).
 # Linux / cloud: tools/release_app.sh. Same steps:
 #   1. push HEAD to release/v<version> (android-release.yml builds and signs),
@@ -8,7 +8,8 @@
 #   .\tools\release_app.ps1 -Version 0.10.4 -NotesFile notes.md
 param(
   [Parameter(Mandatory = $true)][string]$Version,
-  [Parameter(Mandatory = $true)][string]$NotesFile
+  [Parameter(Mandatory = $true)][string]$NotesFile,
+  [switch]$Stable
 )
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
@@ -73,7 +74,7 @@ Copy-Item (Get-ChildItem "$tmp\apk" -Recurse -Filter *.apk | Select-Object -Firs
 
 $body = @{
   tag_name = "v$Version"; target_commitish = $sha; name = "v$Version"
-  body = [IO.File]::ReadAllText((Resolve-Path $NotesFile)); prerelease = $true; draft = $false
+  body = [IO.File]::ReadAllText((Resolve-Path $NotesFile)); prerelease = (-not $Stable); draft = $false
 } | ConvertTo-Json
 $release = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' `
   -Uri "$repo/releases" -Body ([Text.Encoding]::UTF8.GetBytes($body))

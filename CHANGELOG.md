@@ -4,7 +4,20 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
-## [0.10.7] - 2026-10-04 (pre-release)
+## [0.10.0] - 2026-10-04
+
+First stable release of the 0.10 line. It replaces the eight pre-releases v0.10.0–v0.10.7, which were
+withdrawn; their entries below are kept as the development history of this release. The knowledge
+base asset (schema 4, built from the same data as the old v0.10.1) is attached to this release.
+
+- Story QA is one tool agent (`LoreAgentLoop`) over the local GameData database, with line-level citations,
+  an evidence chain under every answer, a reader-view review step and staged summaries.
+- Default model is Zhipu `glm-5.3-flash`; long operations (answers, role-play, knowledge-base download/build)
+  survive leaving the app through an Android foreground service.
+- No answer modes; an expandable question box (collapsed it is two rows: text and toolbar); compact grouped
+  sources; a usage line (`in … · out … · cache …% · … calls · …`) under each answer.
+- The `story_lines` index fixes slow chapter reads.
+## 0.10.0 iteration 7 (2026-10-04; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
 
@@ -42,7 +55,7 @@ App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new down
   throttled. A tool-using call has a floor of 4.5–6 s even for a 25-token reply; writing the
   answer (draft, rewrite after the review, reorganised version) is ~55% of a run.
 
-## [0.10.6] - 2026-10-04 (pre-release)
+## 0.10.0 iteration 6 (2026-10-04; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
 
@@ -70,7 +83,7 @@ App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new down
 - Prompt and tool descriptions state the formats the code needs: the nested `cite`, one range
   per backtick for sub-agents, `read_story` has no `end`, a fact-check's `verdict` position.
 
-## [0.10.5] - 2026-10-04 (pre-release)
+## 0.10.0 iteration 5 (2026-10-04; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
 
@@ -100,7 +113,7 @@ App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new down
   (otherwise 2 / 5 / 10 s); parallel sub-agents can exceed a provider's concurrency limit.
 - A tool name repeated in every streamed chunk is no longer joined into one long name.
 
-## [0.10.4] - 2026-10-03 (pre-release)
+## 0.10.0 iteration 4 (2026-10-03; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
 
@@ -123,7 +136,7 @@ App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new down
   process could be taken as the answer and end as "not covered"; it is now asked for once more,
   and otherwise the earlier answer is kept.
 
-## [0.10.3] - 2026-10-03 (pre-release)
+## 0.10.0 iteration 3 (2026-10-03; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
 
@@ -153,7 +166,7 @@ App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new down
   up front or checked against other stories) are recorded with candidate fixes in
   `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5.9 and left for a later round.
 
-## [0.10.2] - 2026-10-03 (pre-release)
+## 0.10.0 iteration 2 (2026-10-03; pre-release, withdrawn)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
 
@@ -176,7 +189,7 @@ App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new down
 - A short opening paragraph about the search itself ("让我确认……grep 显示……") is dropped like
   the other process lead-ins.
 
-## [0.10.1] - 2026-10-03 (pre-release)
+## 0.10.0 iteration 1 (2026-10-03; pre-release, withdrawn)
 
 Everything since v0.10.0 is one iteration of the story Q&A agent and ships as 0.10.1 (a v0.11.0
 pre-release published on 2026-10-02 was withdrawn; its work is included here). Knowledge base:
@@ -232,7 +245,7 @@ v0.10.0 (same signing key); download the new knowledge base in the app to get st
 - `HandshakeException: Connection terminated during handshake` during the knowledge-base
   download (now retried and resumed).
 
-## [0.10.0] - 2026-10-02
+## 0.10.0 iteration 0 (2026-10-02; pre-release, withdrawn)
 
 Covers development rounds R0–R12 since v0.9.0. Architecture: `docs/AI_ARCHITECTURE.md`.
 

@@ -3,13 +3,16 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`）；
 剧情问答由工具型 Agent（R17，`LoreAgentLoop`）直接查库作答。向量、目录、梗概都只作定位线索，不作证据。
-当前版本：v0.10.7（预发布）；知识库资产仍是 v0.10.1 Release 上的那份。
-**版本号停在 0.10.x**：0.9 之后都是剧情问答工作流的迭代，v0.11.0 预发布已撤回；除非开发者明确说开启 0.11，
-发版只升 patch（0.10.2…），Android build 号继续递增。
+当前版本：v0.10.0（正式版，2026-10-04；取代并删除了之前的 v0.10.0–v0.10.7 八个预发布）；知识库资产在 v0.10.0 Release 上。
+**0.10 线视作开发结束**：0.9 之后的迭代都并入这一个正式版；以后是否发 0.10.1 / 0.11 由开发者决定，未经明确同意不要发版；
+发版时 Android build 号继续递增（当前 22），知识库资产的 URL 随 `tools/release_gamedata.env` 更新。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
 ## 当前进度（每轮结束时更新）
+
+- **v0.10.0 正式版（2026-10-04）**：下面 v0.10.1–v0.10.7 的各条都是并入它的开发迭代（对应的预发布、`release/*` 与 `feature/*` 分支、旧 PR 已删除，只留 `main`）。
+  输入框收起时是两行（文字一行 + 工具栏一行）。
 
 - v0.10.7（2026-10-04，同一分支，已发布预发布）：① 删除 自动/概括/核查/回答 模式、`QuestionRouter`、
   三个转发 agent 和 `AnswerStyle`（一份提示词，核查 verdict 保留，旧会话仍能打开）；② 输入框 `ask_composer.dart`：更宽、
@@ -70,7 +73,7 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 - APK 由 GitHub Actions 构建：把要发布的提交推到 `release/<版本>` 分支即触发
   `android-release.yml`，产物在该次运行的 artifact 中。GameData 资产的 URL/SHA 在
   `tools/release_gamedata.env`，每次数据发版都要更新。
-- App 预发布一条命令：先改版本号/文档并提交推送，再运行 `tools/release_app.ps1 -Version <v> -NotesFile <md>`（Windows，
+- App 发布一条命令（默认建预发布；加 `-Stable`（ps1）/ 环境变量 `STABLE=1`（sh）建正式版）：先改版本号/文档并提交推送，再运行 `tools/release_app.ps1 -Version <v> -NotesFile <md>`（Windows，
   PAT）或 `tools/release_app.sh <v> <md>`（Linux/云端，`gh`）：推 `release/v<v>` → 等 CI → 下载 APK → 建预发布。
   发版前必须得到开发者明确同意。云端会话不能创建 Release（403），最后一步由开发者完成，见 `docs/CLOUD_DEV.md`。
 - 签名用项目 release keystore（仓库 secrets：`ANDROID_KEYSTORE_BASE64` 等）；workflow

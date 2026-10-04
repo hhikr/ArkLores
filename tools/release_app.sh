@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Publishes an app-only pre-release from the current commit (Linux / cloud,
+# Publishes an app-only release (pre-release unless STABLE=1) from the current commit (Linux / cloud,
 # uses the gh CLI; in a cloud session gh authenticates through the GitHub
 # proxy, no token needed). Windows: tools/release_app.ps1.
 #
-#   tools/release_app.sh <version> <notes.md>
+#   [STABLE=1] tools/release_app.sh <version> <notes.md>
 #
 # Before: bump pubspec.yaml (patch + build number), README, CLAUDE.md and
 # CHANGELOG, commit and push the feature branch. This script then
 #   1. pushes the commit to release/v<version> (triggers android-release.yml,
 #      which builds and signs the APK and checks the certificate),
 #   2. waits for that run, downloads the APK artifact,
-#   3. creates the pre-release v<version> with ArkLores-<version>.apk.
+#   3. creates the release v<version> with ArkLores-<version>.apk.
 # release/v<version> must not exist yet: a second push rebuilds the APK and
 # changes its hash.
 set -euo pipefail
@@ -59,5 +59,5 @@ named="$tmp/ArkLores-$ver.apk"
 echo "APK: $(stat -c %s "$named") bytes, SHA-256 $(sha256sum "$named" | awk '{print $1}')"
 
 gh release create "v$ver" "$named" -R "$repo" --target "$sha" \
-  --title "v$ver" --prerelease --notes-file "$notes"
+  --title "v$ver" ${STABLE:+--latest} ${STABLE:---prerelease} --notes-file "$notes"
 echo "https://github.com/$repo/releases/tag/v$ver"
