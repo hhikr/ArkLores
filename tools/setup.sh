@@ -24,13 +24,13 @@ readonly DEFAULT_GAMEDATA_OUTPUT="build/gamedata_mobile"
 readonly ANDROID_API_LEVEL="36"
 readonly ANDROID_BUILD_TOOLS="34.0.0"
 
-# GameData schema version required by the current App (schema 4, R3 follow-up
-# data fix: importer skips the `[uc]info` story-stub tree and groups obt
+# GameData schema version required by the current App (schema 5, 0.11 entry layer;
+# schema 4 was the R3 follow-up data fix: importer skips the `[uc]info` story-stub tree and groups obt
 # stories under obt:<group>). The App installer rejects any DB whose
 # gamedata_manifest schema_version differs from this value, so old schema-3
 # builds (which may contain duplicated `[uc]info` stub rows) cannot be
 # installed.
-readonly REQUIRED_GAMEDATA_SCHEMA="4"
+readonly REQUIRED_GAMEDATA_SCHEMA="5"
 
 # ─── 颜色输出 ────────────────────────────────────────────────────
 
@@ -199,7 +199,7 @@ PY
 
 # Verifies a local (reused or freshly built) gzip DB matches the schema
 # required by the current App (REQUIRED_GAMEDATA_SCHEMA). Exits when it does
-# not, guiding the user to rebuild a schema-4 database.
+# not, guiding the user to rebuild a schema-5 database.
 check_gamedata_schema() {
   local gz_path="$1"
   if [ ! -f "$gz_path" ]; then

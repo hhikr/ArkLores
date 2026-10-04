@@ -1,6 +1,6 @@
 # ArkLores GameData Build Pipeline
 
-> 本文档定义中文 GameData DB（当前 schema 4，可选剧情向量表）的构建、索引、验收和
+> 本文档定义中文 GameData DB（当前 schema 5，可选剧情向量表）的构建、索引、验收和
 > GitHub Release 分发规范。v0.4.5 是 GameData-first 架构起点，不是本规范的版本上限。
 > Agent 如何使用这些表见 `AI_ARCHITECTURE.md`。
 
@@ -148,6 +148,42 @@ schema 4 跳过上游 `[uc]info/` 摘要桩树。仍待立项：
 - 更新质量标记，如 low coverage、ambiguous alias、generated aggregate、manual review needed。
 - 多游戏、多语言和跨版本兼容字段，避免后续 Endfield 或其他语言接入时破坏现有 App。
 
+### 条目层（schema 5，0.11）
+
+schema 5 把知识库从“按字段拍平的行”改成“按条目建模”。上游仓库国服数据约 1 GB，其中文字只有
+`story/`（63 MB）与 `excel/`（144 MB）；`levels/`（约 500 MB）只提供“关卡里出现哪些敌人”的关联。
+
+**范围（只收与剧情相关的文字）**：名称、设定/背景描述、关卡简介、新闻、来信、事件叙述、档案文件、
+物品/皮肤/勋章/藏品的描述、世界观文本、干员档案与语音。**不收玩法文字**：技能/天赋/特性、基建、商店、
+规则与任务说明、效果与数值、获得方式，以及**敌人的技能描述**（实测 75% 是机制用语；“召唤/复活/重生/隐匿”这类词，
+技能描述的命中数是剧情台词的 3–7 倍，会把检索淹没，而且没有设定内容）。
+
+**表**（DDL 见 `gamedata_schema.dart`）：
+
+- `collections(id, kind, name, parent_id, sort_key, start_time)`：归属单位。`kind`：`main` 主线章节、`activity` 活动、
+  `memory` 干员密录（`parent_id` 指向干员条目）、`roguelike` 肉鸽主题、`sandbox` 沙盘、`retro` 复刻、`system` 教程/指引。
+- `entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, raw_id, record_id, source_path)`：
+  每个官方条目一行，`id = <type>:<原始 id>`。类型包括 `story`、`operator`、`enemy`、`stage`、`zone`、`item`、`skin`、`medal`、
+  `module`、`charm`、`power`、`npc`、`worldview`、`mail`、`activity_text`、`archive_*`、`roguelike_*`、`sandbox_*` 等；
+  `record_id` 指向 `normalized_records` 里承载它文字的记录（可引用为出处）。
+- `entry_links(src, relation, dst, source_path)`：绑定。`appears_in`（敌人→关卡）、`belongs_to`（关卡→地区、皮肤/模组/
+  干员关卡→干员）、`belongs_to_stage`（剧情文件→关卡）、`leads_to`（肉鸽选项→场景）、`features`（肉鸽分队→干员）、
+  `reads_story`（档案条目→剧情文件）。视图 `collection_enemies(collection_id, enemy_id)` 给出某个故事集/活动/主题里的敌人。
+- `normalized_records.entry_id / collection_id`、`story_lines.kind`（`dialogue` / `narration` / `subtitle` / `document` /
+  `choice` / `title` / `system`）。
+
+**归属与绑定都是确定性的**，只用表里的 id：关卡 → `zoneId` → `zoneToActivity` / `zoneToRetro` / 主线章；其余条目按
+“id 前缀等于某个已知集合 id”；敌人 ↔ 关卡来自关卡文件的 `enemyDbRefs` 与波次里的 `SPAWN`（不记录数量、数值）；
+剧情 → 关卡要求同集合同关卡号且唯一。不写任何剧情、活动、人物的名字表。
+
+**通用叙事提取**（`text_harvest.dart`）：活动表等长尾结构里的文字按“路径关键词（news、event、dialog、letter、bark …）或成段的
+句子”收集，路径里有玩法关键词（rule、task、reward、buff、shop …）或文字含数字/百分号/效果用语的一律丢弃。
+`levels/` 只在桌面构建读取（App 内增量不下载，已有的敌人绑定保持不变）。
+
+**剧情脚本解析**（`story_script.dart`）：读取所有带文字的命令，不再只认 `[name="X"]文本`——旧解析器丢掉了约 4% 的行
+（场景字幕 14 万字、书信/日记 9 万字、玩家选项 7 万字、其他对白写法）和 885 个文件（教程、引导、`act21side` 的任务对话等）。
+教程/引导文字保留在 `story_lines`（`kind=system`），但不进入剧情检索块和向量。
+
 ### 剧情向量（可选表，R12）
 
 向量是 GameData 的派生产物，与原文同库，不是第二知识库：
@@ -164,6 +200,18 @@ dart run tools/build_story_embeddings.dart --db=build/gamedata_mobile/arklores_g
 ```
 
 向量命中只是定位线索；最终证据仍必须回到 `story_id` 与行号对应的原文。
+
+**换库时移植向量**（schema 4 → 5，2026-10-05）：缓存按文字哈希命中，但两次构建之间上游把全文的“......”统一改成了“……”，
+哈希全部失效（命中率 6.8%）。向量只是定位线索，所以改为**按行对齐迁移**：
+
+```bash
+dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<带向量的旧库> --dry-run   # 只打印计划，不调 API
+dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<带向量的旧库>
+```
+
+旧库的每行与新库同一故事里的行按顺序一一对应（忽略省略号点数和空白），首尾两行都能对应的旧向量原样搬到新行号上；
+对不上的行（新解析多出来的字幕/文档/选项/新增文件）才分块并调用 API。实测 2816 个旧故事全部对齐，51,264 条向量全部迁移，
+只需嵌入 4,309 块（约 71 万字）。教程/引导文字（`kind=system`）不嵌入。
 
 ### 故事目录（可选表，R14）
 
@@ -196,7 +244,8 @@ dart run tools/build_story_catalog.dart --db=build/gamedata_mobile/arklores_game
 
 ## SQLite Schema
 
-当前 schema version 为 `4`，App 安装器拒绝其他版本。下面列出 v2 起的基础表；
+当前 schema version 为 `5`，App 安装器拒绝其他版本（已装的 schema 4 库仍能打开读取，但要更新到新资产才有条目层）。
+下面列出 v2 起的基础表；v5 的条目层见上文“条目层”一节；
 v3 新增的覆盖层表（`entity_story_mentions`、`story_chapter_profiles`、`rare_terms`、
 `story_lines_fts`）与可选向量表的 DDL 以 `lib/core/gamedata/build/gamedata_schema.dart`
 和 `lib/core/gamedata/story_vectors.dart` 为准。
@@ -383,8 +432,10 @@ HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
   --db=build/gamedata_mobile/arklores_gamedata_zh.db
 ```
 
-builder 当前只接受 `--arknights-source`、`--output`、`--force` 和 smoke 专用的
-`--story-limit=N`；语言固定为中文，不存在 `--language` 参数。`--story-limit` 产物不能用于
+builder 当前只接受 `--arknights-source`、`--output`、`--force`、`--source-commit=<sha>`（源目录不是 git 检出时写入 manifest 的提交）
+和 smoke 专用的 `--story-limit=N`；语言固定为中文，不存在 `--language` 参数。源目录要有
+`zh_CN/gamedata/{excel,story}`，有 `levels/` 时才生成敌人 ↔ 关卡绑定（约 500 MB，只下载该目录即可）。
+全量构建约 7 分钟（Windows 本机）；`--story-limit=30` 约 30 秒，适合调试条目层规则。`--story-limit` 产物不能用于
 finalized 完整 DB retrieval QA。
 
 `tools/finalize_gamedata_assets.dart` 在 gzip 后更新

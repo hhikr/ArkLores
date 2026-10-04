@@ -10,10 +10,33 @@
 0.11 不重构角色扮演（保持现状，只修崩溃）。
 未经开发者明确同意不要发版；发版时 Android build 号继续递增（当前 22），知识库资产的 URL 随 `tools/release_gamedata.env` 更新。
 **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、竞品分析等放本地 `notes/`（已 gitignore），不要提交、不要写进 PR。
-GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
+GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry_links`、`story_lines.kind`、确定性覆盖层，
+可选剧情向量表、可选故事目录表）；已发布的 v0.10.0 资产仍是 schema 4。
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
 ## 当前进度（每轮结束时更新）
+
+- **0.11 第 2 步：知识库扩充与重构（2026-10-05，分支 `feature/v0.11-library`，未发布）**：
+  - **按条目建模（schema 5）**：每个官方条目（故事、干员、敌人、关卡、物品、藏品、肉鸽事件…）一行 `entries`，归属某个 `collections`
+    （主线章、活动、干员密录、肉鸽主题、沙盘、复刻），文字在 `normalized_records`（`entry_id`），条目间绑定在 `entry_links`
+    （敌人 `appears_in` 关卡来自 `levels/` 的出场表；关卡 `belongs_to` 地区；剧情 `belongs_to_stage` 关卡…）；视图
+    `collection_enemies` 直接给出“同一故事集/活动/肉鸽主题里的敌人”。实现：`entry_importer.dart`、`text_harvest.dart`；
+    详见 `docs/GAMEDATA_BUILD_PIPELINE.md` “条目层”一节。
+  - **剧情脚本全量解析**（`story_script.dart`）：旧解析器只认 `[name="X"]文本`，丢了约 4% 的行和 885 个文件（场景字幕、书信/日记、
+    玩家选项、其他对白写法、教程）；现在每行带 `kind`，读章/搜索时非对白行显示 `[字幕]` `[文档]` `[选项]` 等标记。
+  - **不收玩法文字**（开发者决定）：技能/天赋/规则/效果/获得方式一律不进库；**敌人技能描述不进库**（实测 75% 是机制用语，
+    对“召唤/复活/重生/隐匿”这类词的命中数是剧情台词的 3–7 倍，会淹没检索且没有设定内容），只保留敌人的设定描述和出场绑定。
+    教程/引导文字保留在 `story_lines`（`kind=system`）但不进检索块和向量。
+  - **向量迁移**：两次构建之间上游把全文的“......”统一成“……”，哈希缓存全部失效；改为按行对齐迁移
+    （`build_story_embeddings.dart --migrate-from=<旧库>`，旧库 51,264 条向量全部迁移，只嵌入新增的 4,309 块）。
+  - 实测（上游 a550f5e，2026-09-29）：29,987 个条目、788 个集合（活动 327、密录 387、复刻 44、主线 18、肉鸽 6…）、35,283 条绑定
+    （敌人↔关卡 26,048，剧情→关卡 1,440）、436,823 行剧情、55,573 条向量，库 643 MB；`flutter test` 316 通过；重建后用
+    `test/live/gamedata_v5_acceptance_test.dart`（`ARKLORES_RUN_DB_CHECK=true`）和 `tools/check_gamedata_retrieval.dart` 验收。
+    记录的 `section` 是条目类型的中文名（“集成战略收藏品”“关卡”“敌人”…），`title` 是“集合名 · 条目名”，方便按玩家的叫法检索。
+  - **发版前必须先发 schema 5 的知识库资产**：App 现在只接受 schema 5，`tools/release_gamedata.env` 仍指向 v0.10.0 的 schema 4 资产，
+    直接发 App 会装不上知识库（已装的旧库仍可读，但没有条目层）。
+  - **待办（第 3 步起）**：App 内增量更新目前不下载 `levels/`（敌人绑定保持不变）；故事目录 `story_catalog` 仍只覆盖 71%，
+    其余按路径归属（`collections` 已有）；阅读目录/资料页在最后一步用 `collections` + `entries` 做。
 
 - **v0.10.0 正式版（2026-10-04）**：下面 v0.10.1–v0.10.7 的各条都是并入它的开发迭代（对应的预发布、`release/*` 与 `feature/*` 分支、旧 PR 已删除，只留 `main`）。
   输入框收起时是两行（文字一行 + 工具栏一行）。
@@ -66,6 +89,11 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 - 运行相关 tests / analyze 后再汇报。
 
 ## Do Not
+
+- 不往知识库里导入玩法文字（技能、天赋、基建、商店、规则/任务说明、效果与数值、获得方式、敌人技能描述）；新增数据源先判断
+  “对剧情有没有参考价值”。叙事文字的收集规则是通用的（`text_harvest.dart`：路径关键词 + 文字特征），不写活动名/剧情名/人物名表，
+  也不为某个活动补特例。
+- 条目的归属与绑定只来自表里的 id（zone→activity、id 前缀=集合 id、`levelId`、`charId`、关卡文件的出场表），不用名字猜。
 
 - 不恢复旧 Wiki seed 运行链路。
 - 不恢复旧用户资料索引链路。

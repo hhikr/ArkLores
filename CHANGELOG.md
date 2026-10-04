@@ -4,6 +4,20 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Knowledge base (schema 5, in development for 0.11)
+
+- **More of the story is in the database.** The story parser now reads every text line of the game scripts: scene captions,
+  letters and notes shown in scenes, the options of player choices, other dialogue spellings and the tutorial scripts.
+  The old parser skipped about 4% of the lines (most of them in the main story and operator records) and 885 files.
+  Each line has a `kind`, and readers show non-dialogue lines with a label (`[字幕]`, `[文档]`, `[选项]` …).
+- **Entries, owners and bindings.** Every official item (story, operator, enemy, stage, item, skin, medal, roguelike relic /
+  event / ending, activity news and letters, archive documents …) is an entry owned by a story set, activity, main chapter,
+  operator record set, roguelike topic or sandbox. Enemies are bound to the stages they appear in, so "the enemies of one
+  story set / one roguelike topic" is a single query.
+- **New text**: activity archives, news, letters and event narration, roguelike relic flavor text, scenes and endings,
+  handbook stages, world-view texts, mails. Gameplay text (skills, rules, effects, how to obtain) is not imported.
+- Story vectors of the previous knowledge base are carried over to the new one; only the new lines are embedded.
+
 ## [0.10.0] - 2026-10-04
 
 First stable release of the 0.10 line. It replaces the eight pre-releases v0.10.0–v0.10.7, which were

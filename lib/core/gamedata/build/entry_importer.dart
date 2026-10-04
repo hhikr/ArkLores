@@ -1,4 +1,4 @@
-﻿/// Entry layer importer (schema 5, 0.11): every official item that is not an
+/// Entry layer importer (schema 5, 0.11): every official item that is not an
 /// operator, a voice line or a story file becomes an `entries` row owned by
 /// a `collections` row, with its text as one or more citable
 /// `normalized_records` and its bindings in `entry_links`.
@@ -158,6 +158,48 @@ const Map<String, _TypeSpec> _typeSpecs = {
 
 _TypeSpec _specOf(String type) =>
     _typeSpecs[type] ?? _TypeSpec('misc', type, type);
+
+/// Chinese name of each entry type: the `section` of its records, so that a
+/// search for the words players use ("收藏品", "关卡", "敌人") finds them.
+/// The labels are the game's own terms (the roguelike mode is 集成战略).
+const Map<String, String> _typeLabels = {
+  'item': '物品',
+  'skin': '皮肤',
+  'skin_brand': '皮肤系列',
+  'medal': '勋章',
+  'charm': '护符',
+  'module': '干员模组',
+  'operator_stage': '干员档案关卡',
+  'enemy': '敌人',
+  'stage': '关卡',
+  'zone': '章节',
+  'activity': '活动',
+  'activity_text': '活动文本',
+  'archive_file': '活动档案',
+  'archive_news': '活动档案',
+  'archive_landmark': '活动档案',
+  'archive_log': '活动档案',
+  'archive_book': '活动档案',
+  'archive_avg': '活动档案',
+  'power': '势力',
+  'npc': '角色',
+  'worldview': '世界观',
+  'mail': '邮件',
+  'home_theme': '界面主题',
+  'roguelike_topic': '集成战略',
+  'roguelike_item': '集成战略收藏品',
+  'roguelike_scene': '集成战略事件',
+  'roguelike_choice': '集成战略选项',
+  'roguelike_ending': '集成战略结局',
+  'roguelike_stage': '集成战略关卡',
+  'roguelike_zone': '集成战略区域',
+  'roguelike_squad': '集成战略分队',
+  'roguelike_prize': '集成战略奖励',
+  'roguelike_tip': '集成战略提示',
+  'roguelike_buff': '集成战略加成',
+  'sandbox_item': '生息演算物品',
+  'sandbox_text': '生息演算文本',
+};
 
 /// One entry before it is written.
 class _Draft {
@@ -391,6 +433,21 @@ class EntryImporter {
 
   // ─── Writing ────────────────────────────────────────────────────
 
+  /// Owner lookup of the run in progress (names of the collections).
+  _Context? _ctx;
+
+  /// Display title of a record: `<owner name> · <entry name>`, so a hit
+  /// shows which activity, topic or chapter the entry belongs to.
+  String? _titleOf(_Draft d) {
+    final owner = d.collectionId == null
+        ? null
+        : _ctx?.collections[d.collectionId]?.name;
+    final name = d.name;
+    if (name == null || name.isEmpty) return owner;
+    if (owner == null || owner.isEmpty || name.startsWith(owner)) return name;
+    return '$owner · $name';
+  }
+
   /// Writes [d] (entry, entity and records) unless the id was written
   /// already in this run. Returns whether it was written.
   Future<bool> _emit(Transaction txn, _Draft d) async {
@@ -419,8 +476,8 @@ class EntryImporter {
           entityName: d.name,
           parentId: d.collectionId,
           parentType: d.collectionId == null ? null : 'collection',
-          title: d.name,
-          section: d.sectionLabel ?? d.type,
+          title: _titleOf(d),
+          section: d.sectionLabel ?? _typeLabels[d.type] ?? d.type,
           content: pieces[i],
           sourcePath: d.sourcePath,
           rawId: i == 0 ? d.key : '${d.key}#$i',
@@ -481,6 +538,7 @@ class EntryImporter {
     _seen.clear();
     _texts.clear();
     final ctx = await _loadContext();
+    _ctx = ctx;
     for (final path in _importers.keys) {
       await _importTableWith(path, ctx);
     }
@@ -503,6 +561,7 @@ class EntryImporter {
   Future<void> _importTableWith(String path, _Context ctx) async {
     final run = _importers[path];
     if (run == null) return;
+    _ctx = ctx;
     await db.transaction((txn) => run(this, txn, ctx));
   }
 
@@ -798,6 +857,8 @@ class EntryImporter {
     String fallbackId,
     Map<String, dynamic> stage,
   ) async {
+    // A patch stage is a variant of another stage (same name and text).
+    if (stage['isStagePatch'] == true) return;
     final id = _s(stage['stageId']).isEmpty ? fallbackId : _s(stage['stageId']);
     final name = _clean(stage['name']);
     if (name.isEmpty) return;
@@ -1805,7 +1866,15 @@ class EntryImporter {
         "WHERE entry_id LIKE 'story:%'",
       );
 
-      // story → stage: same collection and the same code, when unique.
+      // story → stage. The game names a stage's story files after the stage
+      // id (`level_<stage id>_beg.txt`); otherwise the same collection and
+      // the same code bind them, when that is unique.
+      final stageIds = {
+        for (final r in await txn.rawQuery(
+          "SELECT id FROM entries WHERE type = 'stage'",
+        ))
+          '${r['id']}',
+      };
       final byCode = <String, List<String>>{};
       for (final r in await txn.rawQuery(
         "SELECT id, collection_id, code FROM entries WHERE type = 'stage' "
@@ -1815,13 +1884,21 @@ class EntryImporter {
             .putIfAbsent('${r['collection_id']}|${r['code']}', () => [])
             .add('${r['id']}');
       }
+      final nameStage = RegExp(r'^level_(.+?)(?:_(?:beg|end))?$');
       for (final r in await txn.rawQuery(
-        "SELECT id, collection_id, code FROM entries WHERE type = 'story' "
-        "AND collection_id IS NOT NULL AND code IS NOT NULL AND code <> ''",
+        "SELECT id, collection_id, code, raw_id FROM entries WHERE type = 'story'",
       )) {
-        final match = byCode['${r['collection_id']}|${r['code']}'];
-        if (match != null && match.length == 1) {
-          await _link(txn, '${r['id']}', 'belongs_to_stage', match.single, 'derived');
+        final base = p.posix.basenameWithoutExtension('${r['raw_id']}');
+        final byName = nameStage.firstMatch(base)?.group(1);
+        String? target;
+        if (byName != null && stageIds.contains('stage:$byName')) {
+          target = 'stage:$byName';
+        } else if ('${r['code'] ?? ''}'.isNotEmpty) {
+          final match = byCode['${r['collection_id']}|${r['code']}'];
+          if (match != null && match.length == 1) target = match.single;
+        }
+        if (target != null) {
+          await _link(txn, '${r['id']}', 'belongs_to_stage', target, 'derived');
         }
       }
       // Bindings whose ends are not entries (an operator without a profile,
