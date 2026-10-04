@@ -4,6 +4,13 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Planned (0.11, library page — docs only so far)
+
+- `docs/V0.11_PLAN.md`: offline reading catalog (stories + archives), reading history/bookmarks, user materials
+  (CRUD, low-trust), read-only official knowledge base separated from a user database, update check and incremental
+  update path. Milestones M1–M5.
+- `docs/ROLEPLAY_ZOOT_ANALYSIS.md`: role-play is frozen (heavy overlap with ZOOT!); no rebuild planned.
+
 ## [0.10.0] - 2026-10-04
 
 First stable release of the 0.10 line. It replaces the eight pre-releases v0.10.0–v0.10.7, which were

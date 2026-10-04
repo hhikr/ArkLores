@@ -9,6 +9,13 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
 
 Latest release: [v0.10.0](https://github.com/hhikr/ArkLores/releases/tag/v0.10.0)
 
+## 下一步：v0.11（已立项）
+
+0.10 线已收尾。0.11 的主题是**资料页**：把知识库里的剧情和档案整理成可离线阅读的目录（带阅读历史、定位、书签），
+让用户导入自己的资料（可增删改，只作低可信补充），并把知识库做成“官方库只读、用户库独立、能跟上游解包更新”。
+角色扮演经调查与成熟的 ZOOT! 高度重合，暂不重构（冻结）。详见 [`docs/V0.11_PLAN.md`](docs/V0.11_PLAN.md) 与
+[`docs/ROLEPLAY_ZOOT_ANALYSIS.md`](docs/ROLEPLAY_ZOOT_ANALYSIS.md)。
+
 ## 当前方向
 
 - 中文 GameData 结构化知识库是主知识源。
