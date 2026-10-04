@@ -65,24 +65,30 @@ class TurnStats {
       };
 }
 
-/// A token count for people: `53.4 万` / `1.4 万` (Chinese), `534.0k` /
-/// `1.4M` (English), the plain number below 10 000 / 1 000.
-String formatTokenCount(int tokens, {required bool zh}) {
-  if (zh) {
-    return tokens >= 10000
-        ? '${(tokens / 10000).toStringAsFixed(1)} 万'
-        : '$tokens';
-  }
+/// A token count: `950`, `14.0k`, `1.5M`.
+String formatTokenCount(int tokens) {
   if (tokens >= 1000000) return '${(tokens / 1000000).toStringAsFixed(1)}M';
-  if (tokens >= 1000) return '${(tokens / 1000).toStringAsFixed(1)}k';
+  if (tokens >= 1000) return '${(tokens / 1000).toStringAsFixed(tokens >= 100000 ? 0 : 1)}k';
   return '$tokens';
 }
 
-/// A duration for people: `6 分 0 秒` / `6m 0s`, seconds only below a minute.
-String formatElapsed(Duration d, {required bool zh}) {
+/// A duration: `42s`, `4m22s`.
+String formatElapsed(Duration d) {
   final total = d.inSeconds;
   final minutes = total ~/ 60;
   final seconds = total % 60;
-  if (zh) return minutes == 0 ? '$seconds 秒' : '$minutes 分 $seconds 秒';
-  return minutes == 0 ? '${seconds}s' : '${minutes}m ${seconds}s';
+  return minutes == 0 ? '${seconds}s' : '${minutes}m${seconds.toString().padLeft(2, '0')}s';
 }
+
+/// The line under an answer, short and the same in every language:
+/// `in 382k · out 12k · cache 87% · 14 calls · 4m22s`. Parts the provider
+/// did not report are left out.
+String formatUsageLine(TurnStats s) => [
+      if (s.hasTokens) ...[
+        'in ${formatTokenCount(s.promptTokens)}',
+        'out ${formatTokenCount(s.completionTokens)}',
+        if (s.cacheRate != null) 'cache ${(s.cacheRate! * 100).round()}%',
+      ],
+      if (s.calls > 0) '${s.calls} calls',
+      formatElapsed(s.elapsed),
+    ].join(' · ');

@@ -10,21 +10,18 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('formatting', () {
     test('token counts', () {
-      expect(formatTokenCount(950, zh: true), '950');
-      expect(formatTokenCount(14000, zh: true), '1.4 万');
-      expect(formatTokenCount(534000, zh: true), '53.4 万');
-      expect(formatTokenCount(950, zh: false), '950');
-      expect(formatTokenCount(14000, zh: false), '14.0k');
-      expect(formatTokenCount(1500000, zh: false), '1.5M');
+      expect(formatTokenCount(950), '950');
+      expect(formatTokenCount(14000), '14.0k');
+      expect(formatTokenCount(38200), '38.2k');
+      expect(formatTokenCount(381562), '382k');
+      expect(formatTokenCount(1500000), '1.5M');
     });
 
     test('elapsed time', () {
-      expect(formatElapsed(const Duration(seconds: 42), zh: true), '42 秒');
-      expect(formatElapsed(const Duration(seconds: 360), zh: true), '6 分 0 秒');
-      expect(formatElapsed(const Duration(seconds: 262), zh: false), '4m 22s');
-      expect(formatElapsed(const Duration(seconds: 5), zh: false), '5s');
+      expect(formatElapsed(const Duration(seconds: 42)), '42s');
+      expect(formatElapsed(const Duration(seconds: 360)), '6m00s');
+      expect(formatElapsed(const Duration(seconds: 262)), '4m22s');
     });
-
     test('cache rate needs input and a reported cache', () {
       expect(const TurnStats().cacheRate, isNull);
       expect(const TurnStats(promptTokens: 100).cacheRate, isNull);
@@ -89,7 +86,7 @@ void main() {
         ),
       );
       expect(
-        find.text('输入 38.2 万（缓存 87%） · 输出 1.2 万 · 14 次调用 · 用时 4 分 22 秒'),
+        find.text('in 382k · out 11.7k · cache 87% · 14 calls · 4m22s'),
         findsOneWidget,
       );
     });
@@ -99,10 +96,10 @@ void main() {
         tester,
         const TurnStats(calls: 3, elapsed: Duration(seconds: 9)),
       );
-      expect(find.text('3 次调用 · 用时 9 秒'), findsOneWidget);
+      expect(find.text('3 calls · 9s'), findsOneWidget);
     });
 
-    testWidgets('English', (tester) async {
+    testWidgets('the same in English', (tester) async {
       await pump(
         tester,
         const TurnStats(
@@ -113,9 +110,8 @@ void main() {
         ),
         locale: const Locale('en'),
       );
-      expect(find.text('In 1.2k · Out 300 · 2 calls · 1m 5s'), findsOneWidget);
+      expect(find.text('in 1.2k · out 300 · 2 calls · 1m05s'), findsOneWidget);
     });
-
     testWidgets('no stats, no line', (tester) async {
       await pump(tester, null);
       expect(find.byKey(const ValueKey('usage-line')), findsNothing);

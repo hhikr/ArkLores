@@ -423,31 +423,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiInputExitFullscreen => '退出全屏';
 
   @override
-  String aiUsageInput(String tokens) {
-    return '输入 $tokens';
-  }
-
-  @override
-  String aiUsageInputCached(String tokens, String rate) {
-    return '输入 $tokens（缓存 $rate%）';
-  }
-
-  @override
-  String aiUsageOutput(String tokens) {
-    return '输出 $tokens';
-  }
-
-  @override
-  String aiUsageCalls(int count) {
-    return '$count 次调用';
-  }
-
-  @override
-  String aiUsageElapsed(String time) {
-    return '用时 $time';
-  }
-
-  @override
   String get aiAskInputPlaceholder => '问任何剧情问题…';
 
   @override

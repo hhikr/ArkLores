@@ -434,31 +434,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiInputExitFullscreen => 'Exit full screen';
 
   @override
-  String aiUsageInput(String tokens) {
-    return 'In $tokens';
-  }
-
-  @override
-  String aiUsageInputCached(String tokens, String rate) {
-    return 'In $tokens ($rate% cached)';
-  }
-
-  @override
-  String aiUsageOutput(String tokens) {
-    return 'Out $tokens';
-  }
-
-  @override
-  String aiUsageCalls(int count) {
-    return '$count calls';
-  }
-
-  @override
-  String aiUsageElapsed(String time) {
-    return '$time';
-  }
-
-  @override
   String get aiAskInputPlaceholder => 'Ask any lore question...';
 
   @override

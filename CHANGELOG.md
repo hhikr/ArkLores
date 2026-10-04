@@ -25,8 +25,7 @@ App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new down
   chapters are indented under it, and the line chips of a chapter sit on the chapter's row
   (about half the height of before).
 - **Cost under every answer**: a small grey line with input tokens (and the share served from the
-  provider's cache), output tokens, number of model calls and the time, e.g. `输入 38.2 万（缓存
-  87%）· 输出 1.2 万 · 14 次调用 · 用时 4 分 22 秒`. Also saved in the session file together with a
+  provider's cache), output tokens, number of model calls and the time, e.g. `in 382k · out 12k · cache 87% · 14 calls · 4m22s`. Also saved in the session file together with a
   per-call timeline (when each call and each tool run started and how long it took).
 
 ### Fixed

@@ -84,29 +84,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// What the question cost, in small grey text under the answer: input
-  /// tokens (with the cache share), output tokens, calls and time.
+  /// What the question cost, in small grey text under the answer.
   Widget _buildStatsLine(AppThemeTokens theme, TurnStats stats) {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
-    final t = context.t;
-    final parts = <String>[
-      if (stats.hasTokens) ...[
-        if (stats.cacheRate != null)
-          t.aiUsageInputCached(
-            formatTokenCount(stats.promptTokens, zh: zh),
-            (stats.cacheRate! * 100).round().toString(),
-          )
-        else
-          t.aiUsageInput(formatTokenCount(stats.promptTokens, zh: zh)),
-        t.aiUsageOutput(formatTokenCount(stats.completionTokens, zh: zh)),
-      ],
-      if (stats.calls > 0) t.aiUsageCalls(stats.calls),
-      t.aiUsageElapsed(formatElapsed(stats.elapsed, zh: zh)),
-    ];
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: SelectableText(
-        parts.join(' · '),
+        formatUsageLine(stats),
         key: const ValueKey('usage-line'),
         style: theme.bodyFont.copyWith(
           fontSize: 11,
@@ -116,7 +99,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       ),
     );
   }
-
   Widget _buildUserContentBox(AppThemeTokens theme) {
     return Container(
       key: const ValueKey('user-bubble'),

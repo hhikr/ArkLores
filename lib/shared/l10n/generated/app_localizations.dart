@@ -860,36 +860,6 @@ abstract class AppLocalizations {
   /// **'Exit full screen'**
   String get aiInputExitFullscreen;
 
-  /// No description provided for @aiUsageInput.
-  ///
-  /// In en, this message translates to:
-  /// **'In {tokens}'**
-  String aiUsageInput(String tokens);
-
-  /// No description provided for @aiUsageInputCached.
-  ///
-  /// In en, this message translates to:
-  /// **'In {tokens} ({rate}% cached)'**
-  String aiUsageInputCached(String tokens, String rate);
-
-  /// No description provided for @aiUsageOutput.
-  ///
-  /// In en, this message translates to:
-  /// **'Out {tokens}'**
-  String aiUsageOutput(String tokens);
-
-  /// No description provided for @aiUsageCalls.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} calls'**
-  String aiUsageCalls(int count);
-
-  /// No description provided for @aiUsageElapsed.
-  ///
-  /// In en, this message translates to:
-  /// **'{time}'**
-  String aiUsageElapsed(String time);
-
   /// No description provided for @aiAskInputPlaceholder.
   ///
   /// In en, this message translates to:
