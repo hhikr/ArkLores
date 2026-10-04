@@ -1,4 +1,4 @@
-/// Answer envelope and output styles of the story QA pipeline (R13).
+/// Answer envelope and claim-check verdict of the story QA pipeline (R13).
 ///
 /// Every answer the story agent (`LoreAgentLoop`) writes starts with one
 /// machine-readable line:
@@ -20,17 +20,18 @@
 /// value `unresolved` maps to [StoryAnswerStatus.partial]).
 library;
 
-/// How the writer formats the answer. The style changes ONLY the output
-/// format; retrieval, evidence and citation checks are identical.
-enum AnswerStyle {
-  /// Direct answer, cited evidence, counter-evidence, confidence.
-  answer,
+/// Verdict of a claim check (`[FACT_CHECK_VERDICT:…]` line of the answer).
+enum FactCheckVerdict { supported, refuted, uncertain, unavailable }
 
-  /// Overview, timeline and key moments, each cited.
-  summary,
-
-  /// `[FACT_CHECK_VERDICT:…]` line, claim breakdown, cited evidence.
-  factCheck,
+/// The verdict marker of [content], or null when it has none.
+FactCheckVerdict? parseFactCheckVerdict(String content) {
+  final match = RegExp(
+    r'\[FACT_CHECK_VERDICT:(supported|refuted|uncertain|unavailable)\]',
+    caseSensitive: false,
+  ).firstMatch(content);
+  final value = match?.group(1)?.toLowerCase();
+  if (value == null) return null;
+  return FactCheckVerdict.values.firstWhere((item) => item.name == value);
 }
 
 /// Outcome of a run, decided by code.

@@ -3,6 +3,7 @@ import 'dart:async';
 import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
+import '../llm/usage_meter.dart';
 import 'lore_agent_loop.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
@@ -10,28 +11,30 @@ import 'story_answer.dart';
 export 'lore_agent_loop.dart' show LoreConversation;
 
 /// The one story QA pipeline (R13; R17 tool agent): answers, summaries and
-/// fact checks all run the same [LoreAgentLoop] with the same tools and
-/// citation checks; [AnswerStyle] only changes the output format.
+/// fact checks all run the same [LoreAgentLoop] with the same prompt, tools
+/// and citation checks.
 class StoryQaAgent {
   StoryQaAgent({
     required LLMClient llmClient,
     GameDataRetrieval? gameDataStore,
     EmbeddingClient? embeddingClient,
+    UsageMeter? usage,
   })  : _llmClient = llmClient,
         _store = gameDataStore,
-        _embeddingClient = embeddingClient;
+        _embeddingClient = embeddingClient,
+        _usage = usage;
 
+  /// Where tool runs and local checks report their wall-clock spans.
+  final UsageMeter? _usage;
   final LLMClient _llmClient;
   final GameDataRetrieval? _store;
   final EmbeddingClient? _embeddingClient;
 
-  /// Answers [query] in [style]. [prior] continues an earlier answer's
-  /// conversation (follow-ups); [onConversation] receives this one's.
-  /// [client] replaces the default client for this question (the "深度思考"
-  /// switch).
+  /// Answers [query]. [prior] continues an earlier answer's conversation
+  /// (follow-ups); [onConversation] receives this one's. [client] replaces
+  /// the default client for this question (the "深度思考" switch).
   Stream<ReActEvent> run({
     required String query,
-    required AnswerStyle style,
     List<Message> history = const [],
     LLMClient? client,
     LoreConversation? prior,
@@ -42,18 +45,11 @@ class StoryQaAgent {
     if (store == null) {
       // Nothing to search: say so without spending a model call.
       const note = '本地知识库不可用，请先在“知识库”页安装中文 GameData 知识库。';
-      final body = style == AnswerStyle.factCheck
-          ? normalizeFactCheckBody(
-              note,
-              nothingRead: true,
-              hasValidCitation: false,
-            )
-          : note;
       return Stream.fromIterable([
         ReActEvent(
           type: ReActEventType.finalAnswerReplace,
           content: '${formatStoryAnswerEnvelope(StoryAnswerStatus.notCovered)}'
-              '\n$body',
+              '\n$note',
         ),
         const ReActEvent(type: ReActEventType.complete),
       ]);
@@ -62,9 +58,9 @@ class StoryQaAgent {
       client: client ?? _llmClient,
       store: store,
       embeddingClient: _embeddingClient,
+      onSpan: _usage?.addSpan,
     ).run(
       query: query,
-      style: style,
       history: history,
       prior: prior,
       onConversation: onConversation,

@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
-import 'package:arklores/core/agent/fact_check_agent.dart';
-import 'package:arklores/core/agent/question_router.dart';
+import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/agent/turn_stats.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -33,9 +33,6 @@ void main() {
             turn: i + 1,
             timestamp: base.add(Duration(minutes: i)),
             query: '问题$i',
-            userMode: AiMode.auto,
-            effectiveMode: i.isEven ? AiMode.verify : AiMode.summarize,
-            router: RouterRecord(rawResponse: 'verify'),
             model: 'test-model',
             baseUrl: 'https://example.com/v1',
             iterations: [
@@ -54,6 +51,13 @@ void main() {
             verdict: FactCheckVerdict.supported,
             status: ChatTurnStatus.completed,
             durationMs: 1234,
+            usage: const TurnStats(
+              calls: 3,
+              promptTokens: 300,
+              cachedPromptTokens: 150,
+              completionTokens: 30,
+              elapsed: Duration(seconds: 12),
+            ),
           ),
       ],
     );
@@ -68,9 +72,7 @@ void main() {
     expect(loaded.title, '首问标题');
     expect(loaded.turns, hasLength(2));
     final turn = loaded.turns.first;
-    expect(turn.userMode, AiMode.auto);
-    expect(turn.effectiveMode, AiMode.verify);
-    expect(turn.router!.rawResponse, 'verify');
+    expect(turn.usage!.calls, 3);
     expect(turn.model, 'test-model');
     expect(turn.iterations.single.rawResponse,
         contains('Thought: 查证。'),);
@@ -88,7 +90,7 @@ void main() {
     expect(summaries, hasLength(2));
     expect(summaries.first.sessionId, 'newer');
     expect(summaries.first.turnCount, 3);
-    expect(summaries.first.lastMode, 'verify');
+    expect(summaries.first.lastQuery, '问题2');
     expect(summaries.first.corrupt, isFalse);
   });
 
@@ -115,8 +117,7 @@ void main() {
     expect(text, isNotNull);
     expect(text, contains('ArkLores Chat Session'));
     expect(text, contains('问题0'));
-    expect(text, contains('Effective Mode : verify'));
-    expect(text, contains('Router Raw     : verify'));
+    expect(text, contains('Usage          : 3 calls, 300 in (150 cached), 30 out, 12s'));
     expect(text, contains('[Iteration 1]'));
     expect(text, contains('RAW LLM RESPONSE:'));
     expect(text, contains('FINAL ANSWER:'));

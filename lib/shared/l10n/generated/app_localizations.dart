@@ -824,54 +824,6 @@ abstract class AppLocalizations {
   /// **'Ask AI'**
   String get aiTabAsk;
 
-  /// No description provided for @aiModeAuto.
-  ///
-  /// In en, this message translates to:
-  /// **'Auto'**
-  String get aiModeAuto;
-
-  /// No description provided for @aiModeAutoDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'AI picks the best mode (summarize / verify / investigate)'**
-  String get aiModeAutoDesc;
-
-  /// No description provided for @aiModeSummarize.
-  ///
-  /// In en, this message translates to:
-  /// **'Summarize'**
-  String get aiModeSummarize;
-
-  /// No description provided for @aiModeSummarizeDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Summarize known lore: characters, events, factions, timeline'**
-  String get aiModeSummarizeDesc;
-
-  /// No description provided for @aiModeVerify.
-  ///
-  /// In en, this message translates to:
-  /// **'Verify'**
-  String get aiModeVerify;
-
-  /// No description provided for @aiModeVerifyDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Judge whether a claim is true (supported / refuted)'**
-  String get aiModeVerifyDesc;
-
-  /// No description provided for @aiModeInvestigate.
-  ///
-  /// In en, this message translates to:
-  /// **'Investigate'**
-  String get aiModeInvestigate;
-
-  /// No description provided for @aiModeInvestigateDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Answer a specific question (who, why, how, relationships) with cited story text'**
-  String get aiModeInvestigateDesc;
-
   /// No description provided for @aiAskSource.
   ///
   /// In en, this message translates to:
@@ -881,8 +833,62 @@ abstract class AppLocalizations {
   /// No description provided for @aiAskEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Ask any lore question — summarize, verify, or dig deeper; auto mode picks the approach for you.'**
+  /// **'Ask any lore question: what a character went through, how an event came about, whether a claim is true.'**
   String get aiAskEmpty;
+
+  /// No description provided for @aiInputExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand the input'**
+  String get aiInputExpand;
+
+  /// No description provided for @aiInputCollapse.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse the input'**
+  String get aiInputCollapse;
+
+  /// No description provided for @aiInputFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Full-screen input'**
+  String get aiInputFullscreen;
+
+  /// No description provided for @aiInputExitFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit full screen'**
+  String get aiInputExitFullscreen;
+
+  /// No description provided for @aiUsageInput.
+  ///
+  /// In en, this message translates to:
+  /// **'In {tokens}'**
+  String aiUsageInput(String tokens);
+
+  /// No description provided for @aiUsageInputCached.
+  ///
+  /// In en, this message translates to:
+  /// **'In {tokens} ({rate}% cached)'**
+  String aiUsageInputCached(String tokens, String rate);
+
+  /// No description provided for @aiUsageOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'Out {tokens}'**
+  String aiUsageOutput(String tokens);
+
+  /// No description provided for @aiUsageCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} calls'**
+  String aiUsageCalls(int count);
+
+  /// No description provided for @aiUsageElapsed.
+  ///
+  /// In en, this message translates to:
+  /// **'{time}'**
+  String aiUsageElapsed(String time);
 
   /// No description provided for @aiAskInputPlaceholder.
   ///
@@ -932,12 +938,6 @@ abstract class AppLocalizations {
   /// **'Summary'**
   String get aiTabSummary;
 
-  /// No description provided for @aiTabInvestigation.
-  ///
-  /// In en, this message translates to:
-  /// **'Investigation'**
-  String get aiTabInvestigation;
-
   /// No description provided for @aiTabRoleplay.
   ///
   /// In en, this message translates to:
@@ -973,12 +973,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confidence'**
   String get aiInvestigationConfidence;
-
-  /// No description provided for @aiInvestigationEvidenceChain.
-  ///
-  /// In en, this message translates to:
-  /// **'Evidence chain references'**
-  String get aiInvestigationEvidenceChain;
 
   /// No description provided for @aiCitationLine.
   ///
@@ -1064,12 +1058,6 @@ abstract class AppLocalizations {
   /// **'More'**
   String get aiMoreActions;
 
-  /// No description provided for @aiModeMenuTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Answer mode'**
-  String get aiModeMenuTooltip;
-
   /// No description provided for @aiThinkingProcess.
   ///
   /// In en, this message translates to:
@@ -1117,30 +1105,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'skipped'**
   String get aiInvestigationSkipped;
-
-  /// No description provided for @aiInvestigationError.
-  ///
-  /// In en, this message translates to:
-  /// **'Investigation failed. Please retry.'**
-  String get aiInvestigationError;
-
-  /// No description provided for @aiFactCheckSource.
-  ///
-  /// In en, this message translates to:
-  /// **'Evidence: installed Chinese GameData only'**
-  String get aiFactCheckSource;
-
-  /// No description provided for @aiFactCheckEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter a lore claim to check it against local GameData evidence.'**
-  String get aiFactCheckEmpty;
-
-  /// No description provided for @aiFactCheckInputPlaceholder.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter a claim to verify...'**
-  String get aiFactCheckInputPlaceholder;
 
   /// No description provided for @aiVerdictSupported.
   ///
@@ -1297,60 +1261,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter lore query or claim...'**
   String get aiInputPlaceholder;
-
-  /// No description provided for @aiSummaryInputPlaceholder.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter character, event, location or faction to summarize...'**
-  String get aiSummaryInputPlaceholder;
-
-  /// No description provided for @aiSummarySource.
-  ///
-  /// In en, this message translates to:
-  /// **'Evidence: installed Chinese GameData only'**
-  String get aiSummarySource;
-
-  /// No description provided for @aiSummaryEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter an Arknights character, event, location, or faction to summarize from local GameData evidence.'**
-  String get aiSummaryEmpty;
-
-  /// No description provided for @aiSummarySuggestionAmiya.
-  ///
-  /// In en, this message translates to:
-  /// **'Amiya'**
-  String get aiSummarySuggestionAmiya;
-
-  /// No description provided for @aiSummarySuggestionKaltsit.
-  ///
-  /// In en, this message translates to:
-  /// **'Kal\'tsit'**
-  String get aiSummarySuggestionKaltsit;
-
-  /// No description provided for @aiSummarySuggestionRhine.
-  ///
-  /// In en, this message translates to:
-  /// **'Rhine Lab'**
-  String get aiSummarySuggestionRhine;
-
-  /// No description provided for @aiSummarySuggestionChernobog.
-  ///
-  /// In en, this message translates to:
-  /// **'Chernobog Incident'**
-  String get aiSummarySuggestionChernobog;
-
-  /// No description provided for @aiSummaryError.
-  ///
-  /// In en, this message translates to:
-  /// **'Summary generation failed. Please retry.'**
-  String get aiSummaryError;
-
-  /// No description provided for @aiSummaryCanceled.
-  ///
-  /// In en, this message translates to:
-  /// **'Summary generation canceled.'**
-  String get aiSummaryCanceled;
 
   /// No description provided for @aiSettingsRequired.
   ///

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
-import '../../core/agent/question_router.dart';
 import '../../core/llm/llm_provider.dart' show deepThinkingProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -10,7 +9,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'chat_history_page.dart';
-import 'widgets/ask_mode_picker.dart';
+import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/roleplay_tab.dart';
 import 'wiki_ai_context.dart';
@@ -242,9 +241,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
       if ((prev?.length ?? 0) < next.length) _scrollToBottom(afterFrame: true);
     });
 
-    // R15: the conversation fills the tab; actions live in the app bar and
-    // the mode picker sits in the input row.
-    return Column(
+    // R15: the conversation fills the tab; actions live in the app bar. The
+    // question box may grow to half or all of the tab (its height budget).
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
       children: [
         Expanded(
           child: chatHistory.isEmpty
@@ -294,22 +294,17 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
                   ],
                 ),
         ),
-        _buildInputArea(
-          theme,
-          isSending,
+        AskComposer(
+          controller: _inputController,
+          theme: theme,
+          isSending: isSending,
           onSend: isSending ? chatNotifier.cancel : _handleAskSend,
           hintText: context.t.aiAskInputPlaceholder,
-          isCancel: isSending,
-          leading: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const AskModePicker(),
-              const SizedBox(width: 4),
-              _buildDeepThinkingToggle(theme),
-            ],
-          ),
+          maxHeight: constraints.maxHeight,
+          leading: _buildDeepThinkingToggle(theme),
         ),
       ],
+      ),
     );
   }
 
@@ -413,73 +408,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     );
   }
 
-  Widget _buildInputArea(
-    AppThemeTokens theme,
-    bool isSending, {
-    required VoidCallback onSend,
-    required String hintText,
-    bool isCancel = false,
-    Widget? leading,
-  }) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-      decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        border: Border(top: BorderSide(color: theme.divider, width: 0.5)),
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            if (leading != null) ...[leading, const SizedBox(width: 8)],
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: theme.bgPrimary,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: theme.divider, width: 0.5),
-                ),
-                child: TextField(
-                  controller: _inputController,
-                  style: theme.bodyFont.copyWith(color: theme.textPrimary),
-                  cursorColor: theme.accentPrimary,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: isSending ? null : (_) => onSend(),
-                  decoration: InputDecoration(
-                    hintText: hintText,
-                    hintStyle: theme.bodyFont
-                        .copyWith(color: theme.textSecondary, fontSize: 13),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10,),
-                    border: InputBorder.none,
-                    isDense: true,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: onSend,
-              icon: Icon(
-                isCancel ? Icons.stop_rounded : Icons.send_rounded,
-                color: isCancel ? theme.danger : theme.accentText,
-              ),
-              tooltip: isCancel ? context.t.aiCancel : context.t.aiSend,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _handleAskSend() {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
     _inputController.clear();
-    ref.read(askChatProvider.notifier).sendMessage(
-          text,
-          mode: ref.read(aiModeProvider),
-        );
+    ref.read(askChatProvider.notifier).sendMessage(text);
   }
 
   void _dispatchInitialWikiContext(bool isConfigured) {
@@ -490,13 +424,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     _handledInitialWikiContext = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final prompt = buildWikiAiPrompt(wikiContext);
-      final mode = switch (wikiContext.target) {
-        WikiAiTarget.summary => AiMode.summarize,
-        WikiAiTarget.factCheck => AiMode.verify,
-      };
-      ref.read(aiModeProvider.notifier).state = mode;
-      ref.read(askChatProvider.notifier).sendMessage(prompt, mode: mode);
+      // The prompt itself says whether to summarize or to check a claim.
+      ref.read(askChatProvider.notifier).sendMessage(
+            buildWikiAiPrompt(wikiContext),
+          );
     });
   }
 

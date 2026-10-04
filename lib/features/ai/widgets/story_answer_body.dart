@@ -298,71 +298,148 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
         ),
       );
 
+  /// The block's stories grouped by collection (first-cited order), the
+  /// chapters of one collection in story order.
+  List<_SourceGroup> _groups() {
+    final groups = <String, _SourceGroup>{};
+    for (final story in widget.block.stories) {
+      final (collection, chapter) = _labels(story.storyId);
+      final sort = ref
+              .watch(storyCatalogEntryProvider(story.storyId))
+              .valueOrNull
+              ?.storySort ??
+          1 << 30;
+      groups
+          .putIfAbsent(collection, () => _SourceGroup(collection))
+          .chapters
+          .add(_SourceChapter(story, chapter, sort));
+    }
+    for (final group in groups.values) {
+      group.chapters.sort((a, b) {
+        final byOrder = a.sort.compareTo(b.sort);
+        return byOrder != 0 ? byOrder : a.story.storyId.compareTo(b.story.storyId);
+      });
+    }
+    return groups.values.toList();
+  }
+
   Widget _card(BuildContext context) {
     final block = widget.block;
     String lineText(int start, int? end) => end == null
         ? context.t.aiCitationLine(start)
         : context.t.aiCitationLines(start, end);
-    final rows = <Widget>[
-      for (final story in block.stories)
-        Builder(builder: (context) {
-          final (collection, chapter) = _labels(story.storyId);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: collection,
-                      style: TextStyle(color: theme.textSecondary),
-                    ),
-                    if (chapter.isNotEmpty) ...[
-                      TextSpan(
-                        text: '  ·  ',
-                        style: TextStyle(color: theme.divider),
-                      ),
-                      TextSpan(
-                        text: chapter,
-                        style: TextStyle(
-                          color: theme.textPrimary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                style: theme.bodyFont.copyWith(fontSize: 12.5, height: 1.4),
-              ),
-              const SizedBox(height: 5),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
+
+    // The line chips of a chapter: siblings of its name in one Wrap, so they
+    // share its row and wrap one by one only when the row is full.
+    List<Widget> chips(_SourceChapter chapter) => [
+          for (final range in chapter.story.ranges)
+            _chip(
+              key: 'chain:${range.rawRef(chapter.story.storyId)}',
+              text: citedRangeText(range, lineText),
+              tooltip: range.rawRef(chapter.story.storyId),
+              onTap: () =>
+                  openStoryReader(context, chapter.story.storyId, range),
+            ),
+        ];
+
+    final collectionStyle = theme.bodyFont.copyWith(
+      fontSize: 12,
+      height: 1.3,
+      fontWeight: FontWeight.w600,
+      color: theme.textSecondary,
+    );
+    final chapterStyle = theme.bodyFont.copyWith(
+      fontSize: 12,
+      height: 1.3,
+      fontWeight: FontWeight.w500,
+      color: theme.textPrimary,
+    );
+
+    Widget groupWidget(_SourceGroup group) {
+      // One chapter: "collection · chapter" and its chips on one line.
+      if (group.chapters.length == 1) {
+        final chapter = group.chapters.single;
+        return Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text.rich(
+              TextSpan(
                 children: [
-                  for (final range in story.ranges)
-                    _chip(
-                      key: 'chain:${range.rawRef(story.storyId)}',
-                      text: citedRangeText(range, lineText),
-                      tooltip: range.rawRef(story.storyId),
-                      onTap: () => openStoryReader(context, story.storyId, range),
+                  TextSpan(text: group.collection, style: collectionStyle),
+                  if (chapter.label.isNotEmpty) ...[
+                    TextSpan(
+                      text: ' · ',
+                      style: collectionStyle.copyWith(color: theme.divider),
                     ),
+                    TextSpan(text: chapter.label, style: chapterStyle),
+                  ],
                 ],
               ),
-            ],
-          );
-        },),
-      for (final id in block.records)
-        _chip(
-          key: 'chain:record:$id',
-          text: '${context.t.aiCitedRecord} ${widget.recordNumbers.indexOf(id) + 1}'
-              '${_title(id).isEmpty ? '' : ' · ${_title(id)}'}',
-          tooltip: 'record:$id',
-          onTap: () => showCitedRecord(context, id),
+            ),
+            ...chips(chapter),
+          ],
+        );
+      }
+      // Several chapters: the collection once, the chapters indented under
+      // it on a thin guide line, each with its chips on the same row.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(group.collection, style: collectionStyle),
+          Container(
+            margin: const EdgeInsets.only(left: 3, top: 3),
+            padding: const EdgeInsets.only(left: 9),
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: theme.divider, width: 1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (i, chapter) in group.chapters.indexed) ...[
+                  if (i > 0) const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (chapter.label.isNotEmpty)
+                        Text(chapter.label, style: chapterStyle),
+                      ...chips(chapter),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    final rows = <Widget>[
+      for (final group in _groups()) groupWidget(group),
+      if (block.records.isNotEmpty)
+        Wrap(
+          spacing: 5,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final id in block.records)
+              _chip(
+                key: 'chain:record:$id',
+                text: '${context.t.aiCitedRecord} '
+                    '${widget.recordNumbers.indexOf(id) + 1}'
+                    '${_title(id).isEmpty ? '' : ' · ${_title(id)}'}',
+                tooltip: 'record:$id',
+                onTap: () => showCitedRecord(context, id),
+              ),
+          ],
         ),
     ];
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
         color: theme.bgSecondary,
         borderRadius: BorderRadius.circular(12),
@@ -374,8 +451,8 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
           for (final (i, row) in rows.indexed) ...[
             if (i > 0)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Divider(height: 1, color: theme.divider),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Divider(height: 1, thickness: 0.5, color: theme.divider),
               ),
             row,
           ],
@@ -383,7 +460,6 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
       ),
     );
   }
-
   String _title(String id) =>
       ref.watch(citedRecordProvider(id)).valueOrNull?.title ?? '';
 
@@ -399,12 +475,12 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
         child: InkWell(
           key: ValueKey(key),
           onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(7),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
               color: theme.accentPrimary.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(7),
               border: Border.all(
                 color: theme.accentText.withValues(alpha: 0.45),
                 width: 0.5,
@@ -417,14 +493,14 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                   text,
                   style: theme.bodyFont.copyWith(
                     color: theme.accentText,
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 2),
+                const SizedBox(width: 1),
                 Icon(
                   Icons.chevron_right_rounded,
-                  size: 14,
+                  size: 12,
                   color: theme.accentText,
                 ),
               ],
@@ -473,4 +549,18 @@ class _RecordSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The chapters of one story collection cited by a block.
+class _SourceGroup {
+  _SourceGroup(this.collection);
+  final String collection;
+  final List<_SourceChapter> chapters = [];
+}
+
+class _SourceChapter {
+  _SourceChapter(this.story, this.label, this.sort);
+  final BlockStoryCitation story;
+  final String label;
+  final int sort;
 }

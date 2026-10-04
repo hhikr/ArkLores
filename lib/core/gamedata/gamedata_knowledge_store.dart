@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
+import 'build/gamedata_schema.dart' show storyLinesIndexName, storyLinesIndexSql;
 import 'game_retrieval.dart';
 import 'gamedata_query_plan.dart';
 import 'name_similarity.dart';
@@ -880,9 +881,40 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     // single stat-change close() killed the shared connection for the others
     // (database_closed mid-investigation).
     await close();
+    await _ensureStoryLinesIndex(path);
+    // Creating the index changed the file: remember the stamp it has now.
+    final openedStat = File(path).statSync();
     _db = await sqflite.openDatabase(path, readOnly: true);
-    _openedFileStat = stat;
+    _openedFileStat = openedStat;
     return _db;
+  }
+
+  /// Paths whose `story_lines` index was checked in this process.
+  static final Set<String> _indexChecked = {};
+
+  /// A knowledge base built before v0.10.7 has no index on
+  /// `story_lines(story_id, line_index)`, so every read of a chapter scans
+  /// ~410k lines (~0.45 s; an answer does dozens of reads). Creates it once
+  /// (about a second, +20 MB) through a short writable connection; where the
+  /// file cannot be written, reads just stay slower.
+  Future<void> _ensureStoryLinesIndex(String path) async {
+    if (!_indexChecked.add(path)) return;
+    try {
+      final db = await sqflite.openDatabase(path);
+      try {
+        final has = await db.rawQuery(
+          "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+          [storyLinesIndexName],
+        );
+        if (has.isEmpty && await _hasTable(db, 'story_lines')) {
+          await db.execute(storyLinesIndexSql);
+        }
+      } finally {
+        await db.close();
+      }
+    } catch (_) {
+      // Read-only media or a locked file: carry on without the index.
+    }
   }
 
   /// Returns true when [a] and [b] describe the same underlying file content.

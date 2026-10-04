@@ -2,18 +2,18 @@ import 'dart:convert';
 
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
-import 'fact_check_agent.dart';
-import 'question_router.dart';
 import 'react_loop.dart' show ReActEventType;
+import 'story_answer.dart' show FactCheckVerdict;
+import 'turn_stats.dart';
 
 /// Serializable models for AI chat session persistence (Ask page).
 ///
 /// A session file captures a full user-facing conversation: every turn
 /// (question + answer) including the complete ReAct chain (raw LLM responses
-/// per iteration, parsed keys, tool calls and full observations), the mode the
-/// user picked, the mode actually executed (auto routing result and the
-/// router's raw classification output), model/base_url per turn, verdict,
-/// errors and cancellations.
+/// per iteration, parsed keys, tool calls and full observations), model/base_url
+/// per turn, verdict, what the turn cost, errors and cancellations. Sessions
+/// saved before v0.10.7 also carry user_mode / effective_mode / router (the
+/// removed answer modes); they are ignored when reading.
 ///
 /// The file is JSON in a user-visible directory (`chat_sessions/`); it is both
 /// the debug record and the restore source for the in-app conversation history
@@ -94,47 +94,15 @@ class ReActIterationRecord {
       };
 }
 
-/// The auto-routing decision for one turn (present when user_mode == auto).
-class RouterRecord {
-
-  factory RouterRecord.fromJson(Map<String, dynamic> json) => RouterRecord(
-        rawResponse: '${json['raw_response'] ?? ''}',
-        error: json['error'] as String?,
-      );
-  const RouterRecord({this.rawResponse = '', this.error});
-
-  /// The router LLM's raw classification output (untruncated).
-  final String rawResponse;
-
-  /// Set when the classification call failed (fallback to summarize).
-  final String? error;
-
-  Map<String, dynamic> toJson() => {
-        'raw_response': rawResponse,
-        if (error != null) 'error': error,
-      };
-}
-
 /// One question-answer turn of a chat session.
 class ChatSessionTurn {
 
   factory ChatSessionTurn.fromJson(Map<String, dynamic> json) {
-    final userMode =
-        AiMode.values.firstWhere((m) => m.name == json['user_mode'],
-            orElse: () => AiMode.auto,);
     return ChatSessionTurn(
       turn: (json['turn'] as num?)?.toInt() ?? 0,
       timestamp: DateTime.tryParse('${json['timestamp'] ?? ''}') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       query: '${json['query'] ?? ''}',
-      userMode: userMode,
-      effectiveMode: AiMode.values
-          .firstWhere((m) => m.name == json['effective_mode'],
-              orElse: () => userMode,),
-      router: json['router'] is Map<String, dynamic>
-          ? RouterRecord.fromJson(
-              Map<String, dynamic>.from(json['router'] as Map),)
-          : null,
       model: '${json['model'] ?? ''}',
       baseUrl: '${json['base_url'] ?? ''}',
       iterations: [
@@ -152,15 +120,21 @@ class ChatSessionTurn {
       error: json['error'] as String?,
       durationMs: (json['duration_ms'] as num?)?.toInt(),
       memory: json['memory'] as String?,
+      usage: json['usage'] is Map
+          ? TurnStats.fromJson(Map<String, dynamic>.from(json['usage'] as Map))
+          : null,
+      timeline: json['timeline'] is List
+          ? [
+              for (final item in json['timeline'] as List)
+                if (item is Map) Map<String, Object?>.from(item),
+            ]
+          : null,
     );
   }
   const ChatSessionTurn({
     required this.turn,
     required this.timestamp,
     required this.query,
-    required this.userMode,
-    required this.effectiveMode,
-    this.router,
     required this.model,
     required this.baseUrl,
     this.iterations = const [],
@@ -170,20 +144,20 @@ class ChatSessionTurn {
     this.error,
     this.durationMs,
     this.memory,
+    this.usage,
+    this.timeline,
   });
 
   final int turn;
   final DateTime timestamp;
   final String query;
 
-  /// Mode the user selected for this turn (`auto` or a concrete mode).
-  final AiMode userMode;
+  /// What the turn cost (calls, tokens, time); null in older sessions.
+  final TurnStats? usage;
 
-  /// Mode actually executed; equals [userMode] unless auto routing resolved it.
-  final AiMode effectiveMode;
-
-  /// Auto-routing decision (non-null when [userMode] == auto).
-  final RouterRecord? router;
+  /// Per-call wall-clock timeline of the turn (start order), for analysing
+  /// where the time went.
+  final List<Map<String, Object?>>? timeline;
 
   final String model;
   final String baseUrl;
@@ -202,9 +176,6 @@ class ChatSessionTurn {
         'turn': turn,
         'timestamp': timestamp.toIso8601String(),
         'query': query,
-        'user_mode': userMode.name,
-        'effective_mode': effectiveMode.name,
-        if (router != null) 'router': router!.toJson(),
         'model': model,
         'base_url': baseUrl,
         'iterations': iterations.map((i) => i.toJson()).toList(growable: false),
@@ -214,6 +185,8 @@ class ChatSessionTurn {
         if (error != null) 'error': error,
         if (durationMs != null) 'duration_ms': durationMs,
         if (memory != null) 'memory': memory,
+        if (usage != null) 'usage': usage!.toJson(),
+        if (timeline != null && timeline!.isNotEmpty) 'timeline': timeline,
       };
 }
 
@@ -257,8 +230,6 @@ class ChatSessionFile {
 
   /// Derived display summary for the history list.
   int get turnCount => turns.length;
-  AiMode? get lastMode =>
-      turns.isEmpty ? null : turns.last.effectiveMode;
   String get lastQuery =>
       turns.isEmpty ? '' : turns.last.query;
 
@@ -326,6 +297,7 @@ List<ChatMessage> chatTurnToMessages(ChatSessionTurn turn, String assistantId) {
       isStreaming: false,
       isError: turn.status == ChatTurnStatus.error,
       factCheckVerdict: turn.verdict,
+      stats: turn.usage,
       timestamp: turn.timestamp,
     ),
   ];

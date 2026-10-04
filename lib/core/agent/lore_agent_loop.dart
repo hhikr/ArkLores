@@ -13,8 +13,7 @@
 /// - no hand-written progress rules — only a turn limit, a context budget
 ///   (oldest tool results folded) and one citation check at the end.
 ///
-/// Every story question takes this same path (R13); [AnswerStyle] changes
-/// only the output format.
+/// Every story question takes this same path (R13), with one prompt.
 library;
 
 import 'dart:async';
@@ -77,7 +76,22 @@ class LoreAgentLoop {
     this.review = true,
     this.stageMinEntries = 5,
     this.streamRetryDelay = const Duration(seconds: 2),
+    this.onSpan,
   });
+
+  /// Measurement only: called when a tool run or a local check (citation
+  /// text lookup, catalog lookup) finishes, with its name and wall-clock
+  /// start and end. Never changes behaviour.
+  final void Function(String name, DateTime start, DateTime end)? onSpan;
+
+  Future<T> _span<T>(String name, Future<T> Function() action) async {
+    final start = DateTime.now();
+    try {
+      return await action();
+    } finally {
+      onSpan?.call(name, start, DateTime.now());
+    }
+  }
 
   /// A turn cut by a dropped connection (the app was backgrounded, the
   /// network changed) is asked again up to [_maxStreamRetries] times; the
@@ -121,7 +135,6 @@ class LoreAgentLoop {
 
   Stream<ReActEvent> run({
     required String query,
-    required AnswerStyle style,
     List<Message> history = const [],
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
@@ -139,7 +152,7 @@ class LoreAgentLoop {
     var textProtocol = false;
 
     String systemPrompt() {
-      final base = loreSystemPrompt(style, subtask: subtask);
+      final base = loreSystemPrompt(subtask: subtask);
       return textProtocol
           ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
           : base;
@@ -426,7 +439,10 @@ class LoreAgentLoop {
       // retell, not quote dialogue); checked once, with the citations.
       final copied = citationRetried || lastTurn || subtask
           ? const <String>[]
-          : quotedSourceLines(body, await _citedText(body));
+          : quotedSourceLines(
+              body,
+              await _span('cited_text', () => _citedText(body)),
+            );
       // Citations written in a shape that cannot be read are lost from the
       // answer: either some items gave no ref, or the model read lines but
       // not one citation came out.
@@ -554,7 +570,9 @@ class LoreAgentLoop {
         if (staged != null) body = '$staged\n\n$loreDetailsMarker\n\n$body';
       }
 
-      if (style == AnswerStyle.factCheck) {
+      // A claim check carries a verdict: a definite one needs cited,
+      // actually-read text (checked here, not left to the model).
+      if (!subtask && body.contains('[FACT_CHECK_VERDICT')) {
         body = normalizeFactCheckBody(
           body,
           nothingRead: seen.isEmpty,
@@ -592,7 +610,7 @@ class LoreAgentLoop {
       final catalog =
           ids.isEmpty
           ? const <String, StoryCatalogEntry>{}
-          : await store.storyCatalogEntries(ids);
+          : await _span('catalog', () => store.storyCatalogEntries(ids));
       final stories = <String>{
         for (final id in ids) catalog[id]?.label ?? fallbackStoryLabel(id),
       }.take(40).toList();
@@ -703,10 +721,10 @@ class LoreAgentLoop {
       maxTokens: maxTokens,
       temperature: temperature,
       subtask: true,
+      onSpan: onSpan,
     )
         .run(
           query: task,
-          style: AnswerStyle.answer,
           prior: LoreConversation(seen: childSeen),
         )
         .toList();
@@ -741,7 +759,7 @@ class LoreAgentLoop {
           : '参数不是合法的 JSON：${call.arguments}';
     }
     try {
-      return '${await tool.execute(args)}';
+      return '${await _span('tool:${call.name}', () => tool.execute(args))}';
     } catch (e) {
       return '工具出错：$e';
     }

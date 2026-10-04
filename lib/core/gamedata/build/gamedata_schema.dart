@@ -31,6 +31,14 @@ const int gamedataSchemaVersion = 4;
 /// Language of the Arknights knowledge base build.
 const String gamedataLanguage = 'zh';
 
+/// Index of `story_lines` by chapter and line. Builds from v0.10.7 on carry
+/// it; a knowledge base built earlier gets it from `GameDataKnowledgeStore`
+/// the first time it is opened.
+const String storyLinesIndexName = 'idx_story_lines_story_line';
+const String storyLinesIndexSql =
+    'CREATE INDEX IF NOT EXISTS $storyLinesIndexName '
+    'ON story_lines(story_id, line_index)';
+
 /// Game id recorded for Arknights rows.
 const String gamedataGame = 'arknights';
 
@@ -85,6 +93,9 @@ Future<void> createGamedataSchema(Database db) async {
       source_path TEXT
     )
   ''');
+  // Reading a chapter (`WHERE story_id = ? AND line_index ...`) scanned all
+  // ~410k lines without this (~0.45 s a read); with it the read is instant.
+  await db.execute(storyLinesIndexSql);
   await db.execute('''
     CREATE TABLE normalized_records (
       id             TEXT PRIMARY KEY,

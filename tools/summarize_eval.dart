@@ -37,11 +37,11 @@ void main(List<String> args) {
 
   buffer
     ..writeln()
-    ..writeln('| id | type | mode | terminal | iters | gold recall | cites | warn | s |')
-    ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+    ..writeln('| id | type | terminal | iters | gold recall | cites | warn | s |')
+    ..writeln('| --- | --- | --- | --- | --- | --- | --- | --- |');
   for (final r in run) {
     final recall = r['gold_recall'];
-    buffer.writeln('| ${r['id']} | ${r['type'] ?? ''} | ${r['effective_mode']} | '
+    buffer.writeln('| ${r['id']} | ${r['type'] ?? ''} | '
         '${r['terminal']} | ${r['iterations']} | '
         '${recall == null ? '-' : (recall as num).toStringAsFixed(2)} | '
         '${r['citations']} | ${r['source_warning'] == true ? 'yes' : ''} | '

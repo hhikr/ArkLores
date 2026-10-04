@@ -3,7 +3,7 @@
 当前主线：中文 GameData release asset + SQLite structured retrieval + FTS/LIKE
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`）；
 剧情问答由工具型 Agent（R17，`LoreAgentLoop`）直接查库作答。向量、目录、梗概都只作定位线索，不作证据。
-当前版本：v0.10.6（待发布；已发布的最新是 v0.10.5 预发布，R13–R18 + 智谱 GLM 默认、阅读页与出处折叠）；知识库资产仍是 v0.10.1 Release 上的那份。
+当前版本：v0.10.7（待发布；已发布的最新是 v0.10.6 预发布）；知识库资产仍是 v0.10.1 Release 上的那份。
 **版本号停在 0.10.x**：0.9 之后都是剧情问答工作流的迭代，v0.11.0 预发布已撤回；除非开发者明确说开启 0.11，
 发版只升 patch（0.10.2…），Android build 号继续递增。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
@@ -11,7 +11,16 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 
 ## 当前进度（每轮结束时更新）
 
-- v0.10.6（2026-10-04，分支 `feature/r18-answer-quality`，**尚未发布，发版需开发者同意**）：修手机真机发现的四件事——
+- v0.10.7（2026-10-04，同一分支，**尚未发布，发版需开发者同意**）：① 删除 自动/概括/核查/回答 模式、`QuestionRouter`、
+  三个转发 agent 和 `AnswerStyle`（一份提示词，核查 verdict 保留，旧会话仍能打开）；② 输入框 `ask_composer.dart`：更宽、
+  随文字长到 4 行、可展开到半屏/全屏；③ 来源卡片紧凑 + 同故事集分组缩进；④ 回答下面一行灰色小字显示用量（输入/缓存率/
+  输出/调用数/用时，也存进会话文件 `usage` 与逐次 `timeline`）；⑤ **速度**：`story_lines(story_id, line_index)` 一直没有索引，
+  每次读章/grep 上下文/出处核对都全表扫描（约 0.45 s 一次，一次回答几十次，出处核对一次 19 s）——现在首次打开旧库时自动建索引
+  （`GameDataKnowledgeStore._ensureStoryLinesIndex`，约 1 s、+20 MB），新构建自带；实测数据库耗时从 ~45 s 降到 <6 s。
+  测量结论见 `docs/R17_TOOL_AGENT.md` 速度一节（并发 ≥5 不被限流；带工具的调用有 4.5–6 s 的服务商底噪，与是否流式无关；
+  答案文本写 3 遍占 ~55%）。**待开发者真机确认**：输入框展开手感与动画、来源卡片紧凑度、首次问答建索引的耗时、
+  用量行显示。
+- v0.10.6（2026-10-04，分支 `feature/r18-answer-quality`，已发布预发布）：修手机真机发现的四件事——
   ① 证据链消失（GLM 平铺 `cite`，提示词补骨架 + 解析容错 + 零出处退回，见 R17 一节）；② 知识库页“更新”按钮在已是最新时仍可点
   （现在显示“已是最新”+ 带确认的“重新下载”）；③ 长时操作退后台被截断（`BackgroundWork` 前台 service，见 R16 一节“后台”）；
   ④ 审稿并非不同流程，是随机（日志证实审稿在手机上也运行了）。已在本机装好 Android SDK/JDK，Kotlin/清单已用 debug 包编译验证，
@@ -112,8 +121,10 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 
 1. 所有剧情问题走同一条流程（`StoryQaAgent` → `LoreAgentLoop`）：同一份系统提示、同一套工具、
    引用校验与 `[STORY_ANSWER: status=…]` 状态。
-2. 唯一允许的差异：用户选择的模式（`AnswerStyle`：回答 / 梗概 / 核查）决定答案的
-   **输出格式**（系统提示末尾的一段）。不得因此改变检索或判定规则。
+2. 没有任何模式或分支（v0.10.7 起删除了 自动/概括/核查/回答 四种模式、`QuestionRouter` 和 `AnswerStyle`）：
+   一份系统提示，其中的“条目安排”（`loreEntryLayout`）只讲输出格式——先直接回答/概述，再分小节；用户要求核查某个说法时
+   JSON 以 `verdict` 开头（结论由代码按“有读过并引用的原文”降级）。这是模型按问题自己选的**输出格式**，
+   不得因此改变检索或判定规则。
 3. 新增任何特判一律拒绝；以后也不许再写。修改后自查：
 
    ```bash
@@ -197,16 +208,17 @@ ARKLORES_LIVE_QUERIES="导致特蕾西娅死亡的罪魁祸首是谁||另一个�
 flutter test test/live/ask_pipeline_live_test.dart
 ```
 
-- 驱动的是 App 的 `askChatProvider`（`AskChatNotifier.sendMessage`，默认
-  auto 模式 → `QuestionRouter` → 各 Agent → `GameDataKnowledgeStore` →
-  `ChatSessionStore`）；只覆盖 `main.dart` 启动时注入的 provider（API 配置、
+- 驱动的是 App 的 `askChatProvider`（`AskChatNotifier.sendMessage` →
+  `StoryQaAgent` → `GameDataKnowledgeStore` → `ChatSessionStore`）；只覆盖 `main.dart` 启动时注入的 provider（API 配置、
   向量配置、会话日志开关）和两个平台路径（DB、会话目录）。SQL 引擎换成
   sqflite FFI，其余每个 Dart 类都是 App 代码。
 - 输出：`build/live_sessions/<...>/conversation_*.json`（与 App
   `chat_sessions/`、`logs/` 同格式）+ 每题 `*.summary.json` 指标。
 - 追问类用例用 `ARKLORES_LIVE_CONVERSATION=true`：`||` 分隔的问题作为同一会话的连续轮次。
-- 可选：`ARKLORES_LIVE_MODE=investigate|summarize|verify`、
-  `ARKLORES_LIVE_EVAL=test/fixtures/investigation_eval.json`（批量评测）、
+- 输出的 `*.summary.json` 含 `timeline`：每次 LLM 调用的起止、首字节/首 token 延迟、429 等待、token，
+  以及每次工具运行和本地检查（`span`）的起止——用来看时间花在哪。
+  `ARKLORES_RUN_LIVE_PROBE=true flutter test test/live/concurrency_probe_live_test.dart` 测并发限制（几美分）。
+- 可选：`ARKLORES_LIVE_EVAL=test/fixtures/investigation_eval.json`（批量评测）、
   `ARKLORES_LIVE_IDS=a,b`、`ARKLORES_LIVE_NO_EMBEDDING=true`（模拟无向量 key）、
   `ARKLORES_GAMEDATA_DB`、`ARKLORES_LIVE_OUT`。
 - 配置从 gitignored 的 `tools/api_info`（API_KEY=/MODEL=/URL=）和

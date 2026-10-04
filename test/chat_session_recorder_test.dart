@@ -5,12 +5,10 @@ import 'package:arklores/core/agent/agent_logger.dart';
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
-import 'package:arklores/core/agent/fact_check_agent.dart';
-import 'package:arklores/core/agent/investigation_agent.dart';
-import 'package:arklores/core/agent/question_router.dart';
-import 'package:arklores/core/agent/summary_agent.dart';
+import 'package:arklores/core/agent/story_qa_agent.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
+import 'package:arklores/core/llm/usage_meter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -21,6 +19,7 @@ void main() {
   late Directory tempDir;
   late ChatSessionStore store;
   late GameDataKnowledgeStore knowledge;
+  late UsageMeter meter;
 
   setUpAll(() {
     sqfliteFfiInit();
@@ -30,6 +29,7 @@ void main() {
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('chat_session_recorder_test');
     store = ChatSessionStore(filePath: tempDir.path);
+    meter = UsageMeter();
     final kbDir = Directory.systemTemp.createTempSync('chat_session_recorder_kb');
     addTearDown(() async {
       await knowledge.close();
@@ -43,19 +43,18 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  AskChatNotifier makeNotifier(_RecorderLLM mock) => AskChatNotifier(
-        summaryAgent: SummaryAgent(llmClient: mock, gameDataStore: knowledge),
-        factCheckAgent:
-            FactCheckAgent(llmClient: mock, gameDataStore: knowledge),
-        investigationAgent:
-            InvestigationAgent(llmClient: mock, gameDataStore: knowledge),
-        router: QuestionRouter(llmClient: mock),
-        sessionStore: store,
-        configReader: () => const LLMConfig(
-          chatModel: 'test-model',
-          chatBaseUrl: 'https://example.com/v1',
-        ),
-      );
+  AskChatNotifier makeNotifier(_RecorderLLM mock) {
+    mock.meter = meter;
+    return AskChatNotifier(
+      agent: StoryQaAgent(llmClient: mock, gameDataStore: knowledge),
+      usage: meter,
+      sessionStore: store,
+      configReader: () => const LLMConfig(
+        chatModel: 'test-model',
+        chatBaseUrl: 'https://example.com/v1',
+      ),
+    );
+  }
 
   Future<ChatSessionFile> singleSession() async {
     final summaries = await store.list();
@@ -64,21 +63,17 @@ void main() {
   }
 
   group('session recording', () {
-    test('auto-routed turn records router decision and raw response',
+    test('a turn records its question, raw responses and what it cost',
         () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'investigate')..mode = AiMode.investigate;
+      final mock = _RecorderLLM()..reads = 2;
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('特雷西娅的死是谁造成的', mode: AiMode.auto);
+      await notifier.sendMessage('特雷西娅的死是谁造成的');
 
       final session = await singleSession();
       expect(session.turns, hasLength(1));
       final turn = session.turns.single;
-      expect(turn.userMode, AiMode.auto);
-      expect(turn.effectiveMode, AiMode.investigate);
-      expect(turn.router!.rawResponse, 'investigate');
-      expect(turn.router!.error, isNull);
       expect(turn.query, '特雷西娅的死是谁造成的');
       expect(turn.model, 'test-model');
       expect(turn.baseUrl, 'https://example.com/v1');
@@ -90,18 +85,40 @@ void main() {
       expect(turn.iterations.first.tool, 'read_story');
       expect(turn.iterations[2].rawResponse, contains('结论：博士'));
       expect(turn.iterations.last.rawResponse, startsWith('（审稿）'));
+      // What the turn cost: the four calls, their tokens, one timeline row
+      // per call; the same totals sit under the answer on screen.
+      expect(turn.usage!.calls, 4);
+      expect(turn.usage!.promptTokens, 400);
+      expect(turn.usage!.cachedPromptTokens, 200);
+      expect(turn.usage!.completionTokens, 40);
+      expect(turn.timeline, hasLength(4));
+      expect(notifier.state.last.stats!.calls, 4);
+      expect(notifier.state.last.stats!.cacheRate, 0.5);
+    });
+
+    test('the cost is counted per question, not accumulated', () async {
+      AgentLogger.setEnabled(true);
+      final mock = _RecorderLLM();
+      final notifier = makeNotifier(mock);
+
+      await notifier.sendMessage('第一问');
+      final first = notifier.state.last.stats!.calls;
+      mock.resetAgentCalls();
+      await notifier.sendMessage('第二问');
+      expect(notifier.state.last.stats!.calls, first);
+      expect(notifier.state.first.stats, isNull); // user messages: none
     });
 
     test('multi-turn follow-ups append to the same session file', () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'summarize')..mode = AiMode.summarize;
+      final mock = _RecorderLLM();
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('第一问', mode: AiMode.summarize);
+      await notifier.sendMessage('第一问');
       mock.resetAgentCalls();
-      await notifier.sendMessage('追问第二问', mode: AiMode.summarize);
+      await notifier.sendMessage('追问第二问');
       mock.resetAgentCalls();
-      await notifier.sendMessage('追问第三问', mode: AiMode.auto);
+      await notifier.sendMessage('追问第三问');
 
       final session = await singleSession();
       expect(session.turns, hasLength(3));
@@ -109,41 +126,26 @@ void main() {
       expect(session.turns[1].query, '追问第二问');
       expect(session.turns[1].turn, 2);
       expect(session.turns[2].query, '追问第三问');
-      expect(session.turns[2].userMode, AiMode.auto);
-      expect(session.turns[2].effectiveMode, AiMode.summarize);
     });
 
-    test('mode switches across turns are recorded per turn', () async {
+    test('a claim check records its verdict', () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'verify');
+      final mock = _RecorderLLM()..verdict = true;
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('概括问题', mode: AiMode.summarize);
-      mock
-        ..mode = AiMode.verify
-        ..resetAgentCalls();
-      await notifier.sendMessage('查证问题', mode: AiMode.verify);
-      mock
-        ..mode = AiMode.verify
-        ..resetAgentCalls();
-      await notifier.sendMessage('自动问题', mode: AiMode.auto);
+      await notifier.sendMessage('她是罗德岛的公开领袖吗');
 
       final session = await singleSession();
-      expect(session.turns[0].userMode, AiMode.summarize);
-      expect(session.turns[0].effectiveMode, AiMode.summarize);
-      expect(session.turns[1].userMode, AiMode.verify);
-      expect(session.turns[1].effectiveMode, AiMode.verify);
-      expect(session.turns[1].verdict, isNotNull);
-      expect(session.turns[2].userMode, AiMode.auto);
-      expect(session.turns[2].effectiveMode, AiMode.verify);
+      expect(session.turns.single.verdict, isNotNull);
+      expect(notifier.state.last.factCheckVerdict, isNotNull);
     });
 
     test('error turns are recorded with status error', () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'summarize')..failNext = true;
+      final mock = _RecorderLLM()..failNext = true;
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('会出错的问题', mode: AiMode.summarize);
+      await notifier.sendMessage('会出错的问题');
 
       final session = await singleSession();
       expect(session.turns.single.status, ChatTurnStatus.error);
@@ -153,10 +155,10 @@ void main() {
 
     test('canceled turns are recorded with status canceled', () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'summarize')..gate = Completer<void>();
+      final mock = _RecorderLLM()..gate = Completer<void>();
       final notifier = makeNotifier(mock);
 
-      final future = notifier.sendMessage('将被取消的问题', mode: AiMode.summarize);
+      final future = notifier.sendMessage('将被取消的问题');
       // Let the agent stream start, then cancel.
       await Future<void>.delayed(const Duration(milliseconds: 20));
       notifier.cancel();
@@ -170,13 +172,13 @@ void main() {
 
     test('newSession starts a fresh session file', () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'summarize');
+      final mock = _RecorderLLM();
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('第一轮会话', mode: AiMode.summarize);
+      await notifier.sendMessage('第一轮会话');
       notifier.newSession();
       mock.resetAgentCalls();
-      await notifier.sendMessage('新会话第一问', mode: AiMode.summarize);
+      await notifier.sendMessage('新会话第一问');
 
       expect(await store.list(), hasLength(2));
       final sessions = [
@@ -189,13 +191,15 @@ void main() {
 
     test('no files are written while recording is disabled', () async {
       AgentLogger.setEnabled(false);
-      final mock = _RecorderLLM(routeLabel: 'summarize');
+      final mock = _RecorderLLM();
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('不记录的问题', mode: AiMode.summarize);
+      await notifier.sendMessage('不记录的问题');
 
       expect(await store.list(), isEmpty);
       expect(notifier.state, hasLength(2));
+      // The on-screen cost does not depend on recording.
+      expect(notifier.state.last.stats, isNotNull);
     });
   });
 
@@ -203,10 +207,10 @@ void main() {
     test('loadSession rebuilds messages and continues the same file',
         () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'summarize');
+      final mock = _RecorderLLM();
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('第一问', mode: AiMode.summarize);
+      await notifier.sendMessage('第一问');
       final saved = await singleSession();
 
       // A fresh notifier (simulating app restart) restores the session.
@@ -217,21 +221,23 @@ void main() {
       expect(restored.state[0].role, MessageRole.user);
       expect(restored.state[1].role, MessageRole.assistant);
       expect(restored.state[1].steps, isNotEmpty);
+      // The cost shows again under the restored answer.
+      expect(restored.state[1].stats!.calls, saved.turns.single.usage!.calls);
 
       mock.resetAgentCalls();
-      await restored.sendMessage('恢复后的追问', mode: AiMode.summarize);
+      await restored.sendMessage('恢复后的追问');
 
       final reloaded = await store.load(saved.sessionId);
       expect(reloaded!.turns, hasLength(2));
       expect(reloaded.turns.last.query, '恢复后的追问');
     });
 
-    test('restored verify session continues with its effective mode', () async {
+    test('resendLast asks the last question again', () async {
       AgentLogger.setEnabled(true);
-      final mock = _RecorderLLM(routeLabel: 'verify')..mode = AiMode.verify;
+      final mock = _RecorderLLM()..verdict = true;
       final notifier = makeNotifier(mock);
 
-      await notifier.sendMessage('查证问题', mode: AiMode.auto);
+      await notifier.sendMessage('查证问题');
       final saved = await singleSession();
 
       final restored = makeNotifier(mock);
@@ -241,14 +247,14 @@ void main() {
 
       final reloaded = await store.load(saved.sessionId);
       expect(reloaded!.turns, hasLength(2));
-      expect(reloaded.turns.last.userMode, AiMode.verify);
+      expect(reloaded.turns.last.query, '查证问题');
     });
   });
 }
 
 const String _story = 'activities/x/level_x.txt';
 
-/// A one-chapter knowledge base for the agents.
+/// A one-chapter knowledge base for the agent.
 Future<String> _createFixtureDb(Directory dir) async {
   final path = '${dir.path}${Platform.pathSeparator}kb.db';
   final db = await databaseFactoryFfi.openDatabase(path);
@@ -276,27 +282,21 @@ Future<String> _createFixtureDb(Directory dir) async {
   return path;
 }
 
-/// Distinguishes router calls (system prompt contains 模式分类器) from agent
-/// calls. Agent calls read the fixture chapter (twice in investigate mode),
-/// then answer citing it.
+/// Reads the fixture chapter [reads] times, then answers citing it. Every
+/// reply is reported to [meter] with token counts, as the app's client does.
 class _RecorderLLM extends LLMClient {
-  _RecorderLLM({required this.routeLabel});
-  final String routeLabel;
-  int routeCalls = 0;
   int agentCalls = 0;
+  int reads = 1;
+  bool verdict = false;
   bool failNext = false;
   Completer<void>? gate;
-
-  AiMode mode = AiMode.summarize;
+  UsageMeter? meter;
 
   void resetAgentCalls() {
     agentCalls = 0;
     failNext = false;
     gate = null;
   }
-
-  bool _isRouteCall(List<Message> messages) =>
-      messages.first.content.contains('模式分类器');
 
   @override
   Future<String> chat(
@@ -316,33 +316,36 @@ class _RecorderLLM extends LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
-    if (_isRouteCall(messages)) {
-      routeCalls++;
-      return ChatCompletionResult(content: routeLabel);
-    }
     agentCalls++;
     if (gate != null) await gate!.future;
     if (failNext) {
       failNext = false;
       throw const LLMException('boom');
     }
-    final reads = mode == AiMode.investigate ? 2 : 1;
-    if (agentCalls <= reads) {
-      return ChatCompletionResult(
-        content: '',
-        toolCalls: [
-          ToolCall(
-            id: 'call_$agentCalls',
-            name: 'read_story',
-            arguments: '{"story_id": "$_story"}',
-          ),
-        ],
-      );
-    }
-    return ChatCompletionResult(
-      content: mode == AiMode.verify
-          ? '[FACT_CHECK_VERDICT:supported]\n支持：她是罗德岛的公开领袖 `$_story:0`。'
-          : '她是罗德岛的公开领袖 `$_story:0`。结论：博士。',
-    );
+    final now = DateTime.now();
+    ChatCompletionResult reply(String content, [List<ToolCall> calls = const []]) =>
+        ChatCompletionResult(
+          content: content,
+          toolCalls: calls,
+          promptTokens: 100,
+          cachedPromptTokens: 50,
+          completionTokens: 10,
+          timing: CallTiming(startedAt: now, endedAt: now),
+        );
+    final result = agentCalls <= reads
+        ? reply('', [
+            ToolCall(
+              id: 'call_$agentCalls',
+              name: 'read_story',
+              arguments: '{"story_id": "$_story"}',
+            ),
+          ])
+        : reply(
+            verdict
+                ? '[FACT_CHECK_VERDICT:supported]\n支持：她是罗德岛的公开领袖 `$_story:0`。'
+                : '她是罗德岛的公开领袖 `$_story:0`。结论：博士。',
+          );
+    meter?.add(result);
+    return result;
   }
 }

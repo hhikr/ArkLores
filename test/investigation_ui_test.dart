@@ -231,7 +231,7 @@ void main() {
   });
 
   group('AI page entry consolidation', () {
-    testWidgets('shows two tabs with the Ask mode selector and empty state',
+    testWidgets('shows two tabs and the Ask empty state with the question box',
         (tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -251,19 +251,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // R15: the tabs are the app bar; the mode picker is one chip in the
-      // input row whose menu lists the modes with their descriptions.
+      // R15: the tabs are the app bar; the question box (with the deep-thinking
+      // switch and the send button) sits at the bottom. No answer modes.
       expect(find.text('AI 问答'), findsWidgets); // tab + empty-state title
       expect(find.text('角色扮演'), findsOneWidget); // Roleplay tab
-      expect(find.text('自动'), findsOneWidget); // mode chip
-      expect(find.text('概括'), findsNothing);
+      expect(find.byTooltip('回答方式'), findsNothing);
       expect(find.textContaining('直接问任何剧情问题'), findsOneWidget);
-      await tester.tap(find.byTooltip('回答方式'));
-      await tester.pumpAndSettle();
-      expect(find.text('概括'), findsOneWidget);
-      expect(find.text('查证'), findsOneWidget);
-      expect(find.text('深挖'), findsOneWidget);
-      expect(find.textContaining('判定一个说法的真假'), findsOneWidget);
+      expect(find.byKey(const ValueKey('ask-input-field')), findsOneWidget);
+      expect(find.byKey(const ValueKey('deep-thinking-toggle')), findsOneWidget);
+      expect(find.byTooltip('发送'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

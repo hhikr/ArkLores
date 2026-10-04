@@ -1,7 +1,6 @@
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
-import 'package:arklores/core/agent/question_router.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/ai/chat_history_page.dart';
 import 'package:arklores/main.dart';
@@ -31,9 +30,6 @@ void main() {
           turn: 1,
           timestamp: base,
           query: '特蕾西娅之死是谁造成的？',
-          userMode: AiMode.auto,
-          effectiveMode: AiMode.investigate,
-          router: RouterRecord(rawResponse: 'investigate'),
           model: 'm',
           baseUrl: 'b',
           iterations: [
@@ -63,8 +59,6 @@ void main() {
           turn: 1,
           timestamp: base.add(const Duration(minutes: 10)),
           query: '阿米娅是谁',
-          userMode: AiMode.summarize,
-          effectiveMode: AiMode.summarize,
           model: 'm',
           baseUrl: 'b',
           answer: '她是罗德岛的公开领袖。',
@@ -130,7 +124,8 @@ void main() {
     expect(find.text('特蕾西娅之死'), findsOneWidget);
     expect(find.text('阿米娅是谁'), findsOneWidget);
     expect(find.textContaining('1 轮对话'), findsNWidgets(2));
-    expect(find.textContaining('investigate'), findsOneWidget);
+    // The answer modes are gone: the subtitle is the time and the turn count.
+    expect(find.textContaining('investigate'), findsNothing);
   });
 
   testWidgets('view opens a read-only transcript', (tester) async {
@@ -213,7 +208,6 @@ class _FakeChatSessionStore extends ChatSessionStore {
           updatedAt: session.updatedAt,
           createdAt: session.createdAt,
           turnCount: session.turnCount,
-          lastMode: session.lastMode?.name,
           lastQuery: session.lastQuery,
         ),
     ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));

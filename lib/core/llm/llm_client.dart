@@ -155,6 +155,55 @@ class LLMException implements Exception {
       'LLMException: $message${statusCode != null ? ' ($statusCode)' : ''}';
 }
 
+/// Wall-clock timing of one completion request (measurement only).
+class CallTiming {
+  const CallTiming({
+    required this.startedAt,
+    required this.endedAt,
+    this.headersAt,
+    this.firstDataAt,
+    this.firstTokenAt,
+    this.rateLimitRetries = 0,
+    this.rateLimitSleep = Duration.zero,
+    this.streamed = false,
+  });
+
+  /// The request was sent (before any 429 wait).
+  final DateTime startedAt;
+
+  /// The answer is complete.
+  final DateTime endedAt;
+
+  /// Response headers arrived (after the last 429).
+  final DateTime? headersAt;
+
+  /// First streamed event of any kind (tool-call fragments included).
+  final DateTime? firstDataAt;
+
+  /// First visible-answer or reasoning text.
+  final DateTime? firstTokenAt;
+
+  /// 429 answers waited out before this one succeeded, and the time slept.
+  final int rateLimitRetries;
+  final Duration rateLimitSleep;
+  final bool streamed;
+
+  Duration get total => endedAt.difference(startedAt);
+
+  Map<String, Object?> toJson() => {
+        'total_ms': total.inMilliseconds,
+        if (headersAt != null)
+          'headers_ms': headersAt!.difference(startedAt).inMilliseconds,
+        if (firstDataAt != null)
+          'first_data_ms': firstDataAt!.difference(startedAt).inMilliseconds,
+        if (firstTokenAt != null)
+          'first_token_ms': firstTokenAt!.difference(startedAt).inMilliseconds,
+        'rate_limit_retries': rateLimitRetries,
+        'rate_limit_sleep_ms': rateLimitSleep.inMilliseconds,
+        'streamed': streamed,
+      };
+}
+
 /// Metadata returned by a chat completion.
 class ChatCompletionResult {
 
@@ -166,8 +215,12 @@ class ChatCompletionResult {
     this.cachedPromptTokens,
     this.toolCalls = const [],
     this.reasoningContent = '',
+    this.timing,
   });
   final String content;
+
+  /// How long the request took (set by [OpenAICompatibleClient]).
+  final CallTiming? timing;
   final String? finishReason;
 
   /// R17: function calls of this turn (empty for a plain answer).

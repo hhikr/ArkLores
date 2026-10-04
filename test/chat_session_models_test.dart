@@ -1,13 +1,13 @@
 import 'package:arklores/core/agent/chat_session_models.dart';
-import 'package:arklores/core/agent/fact_check_agent.dart';
-import 'package:arklores/core/agent/question_router.dart';
 import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/agent/turn_stats.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ChatSessionFile JSON round-trip', () {
-    test('preserves turns, router records, iterations and verdict', () {
+    test('preserves turns, iterations, verdict and what the turn cost', () {
       final session = ChatSessionFile(
         sessionId: 'sid-1',
         createdAt: DateTime(2026, 8, 24, 10, 0),
@@ -18,12 +18,6 @@ void main() {
             turn: 1,
             timestamp: DateTime(2026, 8, 24, 10, 1),
             query: '问题',
-            userMode: AiMode.auto,
-            effectiveMode: AiMode.investigate,
-            router: RouterRecord(
-              rawResponse: 'investigate',
-              error: null,
-            ),
             model: 'deepseek-v4-flash',
             baseUrl: 'https://api.deepseek.com/v1',
             iterations: [
@@ -42,13 +36,24 @@ void main() {
             status: ChatTurnStatus.completed,
             durationMs: 99,
             memory: '## 调查记忆\n已读章节: s1:0-103; s2:0-86',
+            usage: const TurnStats(
+              calls: 7,
+              promptTokens: 1000,
+              cachedPromptTokens: 800,
+              completionTokens: 100,
+              elapsed: Duration(seconds: 90),
+              rateLimitRetries: 1,
+              rateLimitSleep: Duration(seconds: 2),
+            ),
+            timeline: const [
+              {'start_ms': 0, 'total_ms': 1200, 'prompt': 10},
+              {'span': 'tool:grep', 'start_ms': 1200, 'total_ms': 300},
+            ],
           ),
           ChatSessionTurn(
             turn: 2,
             timestamp: DateTime(2026, 8, 24, 10, 2),
             query: '第二个问题',
-            userMode: AiMode.verify,
-            effectiveMode: AiMode.verify,
             model: 'deepseek-v4-flash',
             baseUrl: 'https://api.deepseek.com/v1',
             answer: '[FACT_CHECK_VERDICT:refuted]\n不成立',
@@ -65,10 +70,12 @@ void main() {
       expect(decoded.turns, hasLength(2));
 
       final turn1 = decoded.turns[0];
-      expect(turn1.userMode, AiMode.auto);
-      expect(turn1.effectiveMode, AiMode.investigate);
-      expect(turn1.router!.rawResponse, 'investigate');
-      expect(turn1.router!.error, isNull);
+      expect(turn1.usage!.calls, 7);
+      expect(turn1.usage!.cacheRate, 0.8);
+      expect(turn1.usage!.elapsed, const Duration(seconds: 90));
+      expect(turn1.usage!.rateLimitSleep, const Duration(seconds: 2));
+      expect(turn1.timeline, hasLength(2));
+      expect(turn1.timeline!.last['span'], 'tool:grep');
       expect(turn1.iterations.single.rawResponse,
           contains('Thought: 调查。'),);
       expect(turn1.iterations.single.toolArgs, {'story_id': 's1'});
@@ -76,11 +83,49 @@ void main() {
       expect(turn1.memory, contains('已读章节: s1:0-103'));
 
       final turn2 = decoded.turns[1];
-      expect(turn2.router, isNull);
+      expect(turn2.usage, isNull);
+      expect(turn2.timeline, isNull);
       expect(turn2.verdict, FactCheckVerdict.refuted);
       expect(turn2.status, ChatTurnStatus.error);
       expect(turn2.error, 'LLM Error: boom');
       expect(turn2.durationMs, 5);
+    });
+
+    test('a session saved with the removed answer modes still loads', () {
+      // v0.10.6 and older wrote user_mode / effective_mode / router.
+      final session = ChatSessionFile.decode('''
+      {
+        "format": "arklores_chat_session",
+        "version": 1,
+        "session_id": "old",
+        "created_at": "2026-08-24T10:00:00.000",
+        "updated_at": "2026-08-24T10:00:00.000",
+        "title": "t",
+        "turns": [
+          {
+            "turn": 1,
+            "timestamp": "2026-08-24T10:00:00.000",
+            "query": "q",
+            "user_mode": "auto",
+            "effective_mode": "verify",
+            "router": {"raw_response": "verify"},
+            "model": "m",
+            "base_url": "b",
+            "answer": "[FACT_CHECK_VERDICT:supported]\\n对",
+            "verdict": "supported",
+            "status": "completed"
+          }
+        ]
+      }
+      ''');
+      final turn = session.turns.single;
+      expect(turn.verdict, FactCheckVerdict.supported);
+      expect(turn.usage, isNull);
+      final messages = chatSessionToMessages(session);
+      expect(messages.last.factCheckVerdict, FactCheckVerdict.supported);
+      expect(messages.last.stats, isNull);
+      // Written again, the modes are gone.
+      expect(session.encode(), isNot(contains('user_mode')));
     });
 
     test('tolerates missing optional fields', () {
@@ -124,8 +169,6 @@ void main() {
             turn: 1,
             timestamp: DateTime(2026, 8, 24, 10),
             query: '问题一',
-            userMode: AiMode.summarize,
-            effectiveMode: AiMode.summarize,
             model: 'm',
             baseUrl: 'b',
             iterations: [
@@ -169,8 +212,6 @@ void main() {
           turn: 1,
           timestamp: DateTime(2026),
           query: 'q',
-          userMode: AiMode.verify,
-          effectiveMode: AiMode.verify,
           model: 'm',
           baseUrl: 'b',
           answer: '',
@@ -191,8 +232,6 @@ void main() {
           turn: 1,
           timestamp: DateTime(2026),
           query: 'q',
-          userMode: AiMode.auto,
-          effectiveMode: AiMode.summarize,
           model: 'm',
           baseUrl: 'b',
           status: ChatTurnStatus.canceled,

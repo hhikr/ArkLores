@@ -250,6 +250,9 @@ class OpenAICompatibleClient extends LLMClient {
   }
 
   Future<ChatCompletionResult> _complete(Map<String, dynamic> body) async {
+    final startedAt = DateTime.now();
+    var rateSleep = Duration.zero;
+    var rateRetries = 0;
     try {
       // R8 M-E: transient network errors (backgrounding closes the socket)
       // are retried once before surfacing.
@@ -286,13 +289,15 @@ class OpenAICompatibleClient extends LLMClient {
         }
         if (response.statusCode == 429 &&
             rateRetry < rateLimitBackoff.length) {
-          await Future<void>.delayed(
-            _rateLimitDelay(response.headers, rateRetry),
-          );
+          final wait = _rateLimitDelay(response.headers, rateRetry);
+          rateRetries++;
+          rateSleep += wait;
+          await Future<void>.delayed(wait);
           continue;
         }
         break;
       }
+      final headersAt = DateTime.now();
 
       // R16: always UTF-8 (as the embedding client does): without a
       // `charset` in the content type, `response.body` decodes as latin1.
@@ -328,6 +333,13 @@ class OpenAICompatibleClient extends LLMClient {
         cachedPromptTokens: usage.cached,
         toolCalls: _toolCallsOf(message['tool_calls']),
         reasoningContent: (message['reasoning_content'] as String?) ?? '',
+        timing: CallTiming(
+          startedAt: startedAt,
+          endedAt: DateTime.now(),
+          headersAt: headersAt,
+          rateLimitRetries: rateRetries,
+          rateLimitSleep: rateSleep,
+        ),
       );
       onCompletion?.call(result);
       return result;
@@ -415,6 +427,9 @@ class OpenAICompatibleClient extends LLMClient {
   }
 
   Stream<CompletionDelta> _stream(Map<String, dynamic> body) async* {
+    final startedAt = DateTime.now();
+    var rateSleep = Duration.zero;
+    var rateRetries = 0;
     http.StreamedResponse? response;
     for (var rateRetry = 0;; rateRetry++) {
       Object? lastError;
@@ -444,13 +459,17 @@ class OpenAICompatibleClient extends LLMClient {
       }
       if (response.statusCode == 429 && rateRetry < rateLimitBackoff.length) {
         await response.stream.drain<void>();
-        await Future<void>.delayed(
-          _rateLimitDelay(response.headers, rateRetry),
-        );
+        final wait = _rateLimitDelay(response.headers, rateRetry);
+        rateRetries++;
+        rateSleep += wait;
+        await Future<void>.delayed(wait);
         continue;
       }
       break;
     }
+    final headersAt = DateTime.now();
+    DateTime? firstDataAt;
+    DateTime? firstTokenAt;
 
     if (response.statusCode != 200) {
       final errorBody = await response.stream.bytesToString();
@@ -518,6 +537,7 @@ class OpenAICompatibleClient extends LLMClient {
         } catch (_) {
           continue; // a malformed event never ends the answer
         }
+        firstDataAt ??= DateTime.now();
         if (json['usage'] is Map) usage = _usageOf(json['usage']);
         final choices = json['choices'];
         if (choices is! List || choices.isEmpty) continue;
@@ -551,6 +571,7 @@ class OpenAICompatibleClient extends LLMClient {
         final text = delta['content'] as String? ?? '';
         final reasoningText = delta['reasoning_content'] as String? ?? '';
         if (text.isEmpty && reasoningText.isEmpty) continue;
+        firstTokenAt ??= DateTime.now();
         content.write(text);
         reasoningBuffer.write(reasoningText);
         yield CompletionDelta(content: text, reasoningContent: reasoningText);
@@ -584,6 +605,16 @@ class OpenAICompatibleClient extends LLMClient {
         cachedPromptTokens: usage.cached,
         toolCalls: toolCalls,
         reasoningContent: reasoningBuffer.toString(),
+        timing: CallTiming(
+          startedAt: startedAt,
+          endedAt: DateTime.now(),
+          headersAt: headersAt,
+          firstDataAt: firstDataAt,
+          firstTokenAt: firstTokenAt,
+          rateLimitRetries: rateRetries,
+          rateLimitSleep: rateSleep,
+          streamed: true,
+        ),
       ),
     );
     yield CompletionDelta(

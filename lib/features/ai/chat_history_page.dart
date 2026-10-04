@@ -107,8 +107,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
         summary.corrupt
             ? _formatTime(summary.updatedAt)
             : '${_formatTime(summary.updatedAt)} · '
-                '${t.aiHistoryTurns(summary.turnCount)}'
-                '${summary.lastMode != null ? ' · ${summary.lastMode}' : ''}',
+                '${t.aiHistoryTurns(summary.turnCount)}',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: theme.bodyFont.copyWith(

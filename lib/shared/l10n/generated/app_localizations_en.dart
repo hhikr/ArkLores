@@ -414,40 +414,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiTabAsk => 'Ask AI';
 
   @override
-  String get aiModeAuto => 'Auto';
-
-  @override
-  String get aiModeAutoDesc =>
-      'AI picks the best mode (summarize / verify / investigate)';
-
-  @override
-  String get aiModeSummarize => 'Summarize';
-
-  @override
-  String get aiModeSummarizeDesc =>
-      'Summarize known lore: characters, events, factions, timeline';
-
-  @override
-  String get aiModeVerify => 'Verify';
-
-  @override
-  String get aiModeVerifyDesc =>
-      'Judge whether a claim is true (supported / refuted)';
-
-  @override
-  String get aiModeInvestigate => 'Investigate';
-
-  @override
-  String get aiModeInvestigateDesc =>
-      'Answer a specific question (who, why, how, relationships) with cited story text';
-
-  @override
   String get aiAskSource =>
       'Answers are grounded in installed GameData story text only';
 
   @override
   String get aiAskEmpty =>
-      'Ask any lore question — summarize, verify, or dig deeper; auto mode picks the approach for you.';
+      'Ask any lore question: what a character went through, how an event came about, whether a claim is true.';
+
+  @override
+  String get aiInputExpand => 'Expand the input';
+
+  @override
+  String get aiInputCollapse => 'Collapse the input';
+
+  @override
+  String get aiInputFullscreen => 'Full-screen input';
+
+  @override
+  String get aiInputExitFullscreen => 'Exit full screen';
+
+  @override
+  String aiUsageInput(String tokens) {
+    return 'In $tokens';
+  }
+
+  @override
+  String aiUsageInputCached(String tokens, String rate) {
+    return 'In $tokens ($rate% cached)';
+  }
+
+  @override
+  String aiUsageOutput(String tokens) {
+    return 'Out $tokens';
+  }
+
+  @override
+  String aiUsageCalls(int count) {
+    return '$count calls';
+  }
+
+  @override
+  String aiUsageElapsed(String time) {
+    return '$time';
+  }
 
   @override
   String get aiAskInputPlaceholder => 'Ask any lore question...';
@@ -475,9 +484,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiTabSummary => 'Summary';
 
   @override
-  String get aiTabInvestigation => 'Investigation';
-
-  @override
   String get aiTabRoleplay => 'Roleplay';
 
   @override
@@ -494,9 +500,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiInvestigationConfidence => 'Confidence';
-
-  @override
-  String get aiInvestigationEvidenceChain => 'Evidence chain references';
 
   @override
   String aiCitationLine(int line) {
@@ -558,9 +561,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiMoreActions => 'More';
 
   @override
-  String get aiModeMenuTooltip => 'Answer mode';
-
-  @override
   String get aiThinkingProcess => 'Thinking';
 
   @override
@@ -584,19 +584,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiInvestigationSkipped => 'skipped';
-
-  @override
-  String get aiInvestigationError => 'Investigation failed. Please retry.';
-
-  @override
-  String get aiFactCheckSource => 'Evidence: installed Chinese GameData only';
-
-  @override
-  String get aiFactCheckEmpty =>
-      'Enter a lore claim to check it against local GameData evidence.';
-
-  @override
-  String get aiFactCheckInputPlaceholder => 'Enter a claim to verify...';
 
   @override
   String get aiVerdictSupported => 'Supported';
@@ -685,35 +672,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiInputPlaceholder => 'Enter lore query or claim...';
-
-  @override
-  String get aiSummaryInputPlaceholder =>
-      'Enter character, event, location or faction to summarize...';
-
-  @override
-  String get aiSummarySource => 'Evidence: installed Chinese GameData only';
-
-  @override
-  String get aiSummaryEmpty =>
-      'Enter an Arknights character, event, location, or faction to summarize from local GameData evidence.';
-
-  @override
-  String get aiSummarySuggestionAmiya => 'Amiya';
-
-  @override
-  String get aiSummarySuggestionKaltsit => 'Kal\'tsit';
-
-  @override
-  String get aiSummarySuggestionRhine => 'Rhine Lab';
-
-  @override
-  String get aiSummarySuggestionChernobog => 'Chernobog Incident';
-
-  @override
-  String get aiSummaryError => 'Summary generation failed. Please retry.';
-
-  @override
-  String get aiSummaryCanceled => 'Summary generation canceled.';
 
   @override
   String get aiSettingsRequired =>

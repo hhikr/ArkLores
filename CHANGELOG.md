@@ -4,6 +4,45 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.7] - 2026-10-04 (pre-release)
+
+App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
+
+### Changed
+
+- **No more answer modes.** The 自动 / 概括 / 查证 / 回答 picker, the question router (one extra
+  model call before every auto-mode question) and the three wrapper agents are gone: every
+  question runs the one story agent with one prompt, and the model lays the answer out to fit
+  the question. A claim check still shows its verdict chip (the model starts the answer with a
+  verdict when asked to check a claim; the code still downgrades a verdict that has no cited,
+  actually-read text). Saved sessions with the old mode fields still open.
+- **The question box** is wider and grows with the text up to four lines; a button opens it to
+  half of the screen and from there to the full screen (animated, rounded). The draft and the
+  keyboard stay put while it changes size; sending collapses it. Enter sends when the box is
+  closed up and writes a new line when it is open. The send button is a small round button with
+  less margin.
+- **Sources under an answer are compact and grouped.** One story collection gets one header; its
+  chapters are indented under it, and the line chips of a chapter sit on the chapter's row
+  (about half the height of before).
+- **Cost under every answer**: a small grey line with input tokens (and the share served from the
+  provider's cache), output tokens, number of model calls and the time, e.g. `输入 38.2 万（缓存
+  87%）· 输出 1.2 万 · 14 次调用 · 用时 4 分 22 秒`. Also saved in the session file together with a
+  per-call timeline (when each call and each tool run started and how long it took).
+
+### Fixed
+
+- **Reading a chapter was slow.** The knowledge base has no index on `story_lines(story_id,
+  line_index)`, so every `read_story`, every context line of a `grep` and every citation check
+  scanned all ~410,000 lines (~0.45 s each; one answer did dozens, 19 s in one citation check).
+  The app now creates the index the first time it opens an older knowledge base (about a second,
+  +20 MB) and new builds include it. No re-download.
+
+### Measured (live, glm-5.3-flash)
+
+- The key accepts at least 5 requests at once (no 429), so the parallel sub-agents are not
+  throttled. A tool-using call has a floor of 4.5–6 s even for a 25-token reply; writing the
+  answer (draft, rewrite after the review, reorganised version) is ~55% of a run.
+
 ## [0.10.6] - 2026-10-04 (pre-release)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).

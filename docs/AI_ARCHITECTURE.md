@@ -10,15 +10,11 @@
 ## 1. 总体链路
 
 ```
-用户问题 ──► AskChatNotifier.sendMessage（auto / summarize / verify / investigate）
+用户问题 ──► AskChatNotifier.sendMessage（没有模式：v0.10.7 起删除了 自动/概括/核查/回答）
               │   历史：紧接上一条回答时带上一问的完整对话（LoreConversation），否则带最近 3 轮问答文本
               │   “深度思考”开关 → 本问使用 low 档思考的 client
-              ├─ auto：QuestionRouter（一次短 LLM 调用，不思考）选出模式
-              │
-              ├─ investigate ─► InvestigationAgent ┐
-              ├─ summarize   ─► SummaryAgent       ├─► StoryQaAgent ─► LoreAgentLoop（R17_TOOL_AGENT.md）
-              ├─ verify      ─► FactCheckAgent     ┘   （AnswerStyle 只决定输出格式）
-              └─ Roleplay tab ► RoleplayAgent     ─► ReActLoop（不在统一范围）
+              ├─ StoryQaAgent ─► LoreAgentLoop（R17_TOOL_AGENT.md；一份提示词，条目安排由模型按问题选）
+              └─ Roleplay tab ► RoleplayAgent ─► ReActLoop（不在统一范围）
 
 LoreAgentLoop：system（库结构 + 工作方式 + 引用格式 + 输出格式）+ 只追加的 messages
                每轮 streamTurn(tools) → tool_calls 并发执行（delegate = 并行子 agent）→ 结果原样追加
@@ -34,8 +30,9 @@ LoreAgentLoop：system（库结构 + 工作方式 + 引用格式 + 输出格式�
 - **知识源**：只有 GameData（解包文本构建的 SQLite）。Wiki 与用户文本只作浏览/上下文，
   不能作为证据。
 - **会话记录**：`chat_sessions/` 下每对话一个 JSON（原子写、损坏容错、50 会话轮转），
-  记录用户模式 / 生效模式 / router 原始输出 / 模型 / 每次模型输出（每个工具调用一条）/ 工具与观察 /
-  最终答案 / 状态与耗时。开发日志开关打开时额外写入 `logs/`。
+  记录模型 / 每次模型输出（每个工具调用一条）/ 工具与观察 / 最终答案 / 状态与耗时 /
+  本轮用量（`usage`：调用数、token、缓存、用时）/ 逐次调用与工具的时间线（`timeline`）。
+  旧会话里的 user_mode / effective_mode / router 读取时忽略。开发日志开关打开时额外写入 `logs/`。
 
 ## 2. Agent 设计原则（R17）
 
@@ -46,7 +43,7 @@ LoreAgentLoop：system（库结构 + 工作方式 + 引用格式 + 输出格式�
 - **不写进度规则**：没有预算提示、重读阶梯、复核、阅读计划。R13–R16 证明这类规则只对样例有效，换个问题或追问就变差。
   改进方向是工具的表达力、工具输出的信息量和提示词里的通用工作方式。
 - **代码只做确定性的事**：出处是否被工具展示过、状态信封、事实核查结论的降级、只读 SQL 的边界。
-- **R13 原则不变**：所有问题同一流程、同一份提示词，`AnswerStyle` 只换输出格式；`test/no_special_case_test.dart` 守卫。
+- **R13 原则不变**：所有问题同一流程、同一份提示词（没有按问题类型的分支）；`test/no_special_case_test.dart` 守卫。
 - 旧会话里的 `[INVESTIGATION_VERDICT: …]`、`confidence=`、`Coverage:` 行仍能解析显示（仅格式兼容）。
 ## 3. 检索层（GameData SQLite，schema 4）
 

@@ -4,6 +4,11 @@ import '../../shared/providers/settings_provider.dart';
 import 'embedding_client.dart';
 import 'llm_client.dart';
 import 'openai_client.dart';
+import 'usage_meter.dart';
+
+/// Adds up the LLM usage of the question that is running (the Ask page
+/// resets it per question and reads it for the line under the answer).
+final usageMeterProvider = Provider<UsageMeter>((ref) => UsageMeter());
 
 /// Chat clients per [ReasoningLevel] (R16). All share the configured
 /// endpoint and model and rebuild whenever the API config changes.
@@ -15,9 +20,13 @@ import 'openai_client.dart';
 /// [ReasoningLevel.low]; nothing uses [ReasoningLevel.high].
 final llmClientProvider =
     Provider.family<LLMClient, ReasoningLevel>((ref, level) {
+  final meter = ref.read(usageMeterProvider);
   final client = OpenAICompatibleClient(
     config: ref.watch(apiConfigProvider),
     reasoning: level,
+    // Every call of every client adds to the one meter of the running
+    // question (tokens, calls, time shown under the answer).
+    onCompletion: meter.add,
   );
   ref.onDispose(client.dispose);
   return client;

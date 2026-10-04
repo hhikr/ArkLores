@@ -70,7 +70,7 @@ v0.10.6 GitHub Release 包含：
 | 数据库 | SQLite / sqflite |
 | 主知识库 | 中文 GameData 结构化 DB + FTS + 剧情覆盖层 + 可选向量 |
 | AI 接入 | OpenAI-compatible Chat / Embedding API |
-| Agent | Ask（auto / 调查 / 梗概 / 核查）+ Role-play；调查走 PlannerLoop，其余走 ReAct Loop |
+| Agent | Ask（一个工具型 Agent 直接查库作答，不分模式）+ Role-play |
 
 ## 项目结构
 

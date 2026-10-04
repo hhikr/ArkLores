@@ -3,9 +3,9 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/agent_provider.dart';
-import '../../../core/agent/fact_check_agent.dart';
 import '../../../core/agent/react_loop.dart';
 import '../../../core/agent/story_answer.dart';
+import '../../../core/agent/turn_stats.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
@@ -78,7 +78,41 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           ],
           _buildAssistantContentBox(theme),
           if (storyAnswer) _buildCitationTree(theme),
+          if (msg.stats != null) _buildStatsLine(theme, msg.stats!),
         ],
+      ),
+    );
+  }
+
+  /// What the question cost, in small grey text under the answer: input
+  /// tokens (with the cache share), output tokens, calls and time.
+  Widget _buildStatsLine(AppThemeTokens theme, TurnStats stats) {
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final t = context.t;
+    final parts = <String>[
+      if (stats.hasTokens) ...[
+        if (stats.cacheRate != null)
+          t.aiUsageInputCached(
+            formatTokenCount(stats.promptTokens, zh: zh),
+            (stats.cacheRate! * 100).round().toString(),
+          )
+        else
+          t.aiUsageInput(formatTokenCount(stats.promptTokens, zh: zh)),
+        t.aiUsageOutput(formatTokenCount(stats.completionTokens, zh: zh)),
+      ],
+      if (stats.calls > 0) t.aiUsageCalls(stats.calls),
+      t.aiUsageElapsed(formatElapsed(stats.elapsed, zh: zh)),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: SelectableText(
+        parts.join(' · '),
+        key: const ValueKey('usage-line'),
+        style: theme.bodyFont.copyWith(
+          fontSize: 11,
+          height: 1.3,
+          color: theme.textSecondary.withValues(alpha: 0.7),
+        ),
       ),
     );
   }
@@ -116,22 +150,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     } else if (msg.isStreaming && msg.liveStatus.isNotEmpty) {
       storyBody = stripWriterCoverage(content);
     }
-    if (content == '[FACT_CHECK_ERROR]') {
-      content = context.t.importErrorOccurred;
-    } else if (content == '[FACT_CHECK_CANCELED]') {
-      content = context.t.aiCancel;
-    } else if (content == '[ROLEPLAY_ERROR]') {
+    if (content == '[ROLEPLAY_ERROR]') {
       content = context.t.aiRoleplayError;
     } else if (content == '[ROLEPLAY_CANCELED]') {
       content = context.t.aiRoleplayCanceled;
-    } else if (content == '[SUMMARY_ERROR]') {
-      content = context.t.aiSummaryError;
-    } else if (content == '[SUMMARY_CANCELED]') {
-      content = context.t.aiSummaryCanceled;
-    } else if (content == '[INVESTIGATION_ERROR]') {
-      content = context.t.aiInvestigationError;
-    } else if (content == '[INVESTIGATION_CANCELED]') {
-      content = context.t.aiCancel;
     } else if (content == '[ASK_ERROR]') {
       content = context.t.aiAskError;
     } else if (content == '[ASK_CANCELED]') {

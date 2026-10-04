@@ -1,7 +1,8 @@
 import 'dart:io';
 
-import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/agent/story_qa_agent.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
@@ -28,7 +29,7 @@ void main() {
           : false;
 
   late OpenAICompatibleClient client;
-  late FactCheckAgent agent;
+  late StoryQaAgent agent;
   late HttpOverrides? previousHttpOverrides;
 
   setUpAll(() {
@@ -47,7 +48,7 @@ void main() {
       ),
       timeout: const Duration(seconds: 90),
     );
-    agent = FactCheckAgent(
+    agent = StoryQaAgent(
       llmClient: client,
       gameDataStore: GameDataKnowledgeStore(dbPath: db.path),
     );
@@ -134,12 +135,12 @@ Map<String, String> _readApiInfo(File file) {
   return values;
 }
 
-Future<_LiveResult> _runCase(FactCheckAgent agent, String claim) async {
+Future<_LiveResult> _runCase(StoryQaAgent agent, String claim) async {
   final observations = StringBuffer();
   final answer = StringBuffer();
   final errors = <String>[];
   var toolCalls = 0;
-  await for (final event in agent.checkClaim(claim: claim)) {
+  await for (final event in agent.run(query: claim)) {
     if (event.type == ReActEventType.toolCall) toolCalls++;
     if (event.type == ReActEventType.toolObservation) {
       observations.writeln(event.content);

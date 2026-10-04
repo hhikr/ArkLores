@@ -1,13 +1,12 @@
 // R17d: reading at one's own pace — the Ask list never follows a streaming
-// answer, the mode panel keeps the keyboard, the accent text is readable.
+// answer, the question box grows and keeps the keyboard, the accent text is readable.
 import 'dart:math' as math;
 
 import 'package:arklores/core/agent/agent_provider.dart';
-import 'package:arklores/core/agent/question_router.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
-import 'package:arklores/features/ai/widgets/ask_mode_picker.dart';
+import 'package:arklores/features/ai/widgets/ask_composer.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/theme/app_theme.dart';
@@ -124,78 +123,136 @@ void main() {
     });
   });
 
-  group('Ask mode panel', () {
-    Future<(FocusNode, ProviderContainer)> pumpPicker(
-      WidgetTester tester,
-    ) async {
-      final focus = FocusNode();
-      addTearDown(focus.dispose);
+  group('Ask composer', () {
+    const tabHeight = 600.0;
+    var sends = 0;
+    late TextEditingController controller;
+
+    Future<void> pumpComposer(
+      WidgetTester tester, {
+      bool isSending = false,
+    }) async {
       await tester.pumpWidget(_app(
         Scaffold(
           body: Column(
             children: [
-              const Spacer(),
-              Row(
-                children: [
-                  const AskModePicker(),
-                  Expanded(child: TextField(focusNode: focus)),
-                ],
+              const Expanded(child: SizedBox.shrink()),
+              AskComposer(
+                controller: controller,
+                theme: EndfieldThemeTokens(),
+                isSending: isSending,
+                onSend: () => sends++,
+                hintText: '问点什么',
+                maxHeight: tabHeight,
               ),
             ],
           ),
         ),
       ),);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(AskModePicker)),
-      );
-      return (focus, container);
+      await tester.pump();
     }
 
-    testWidgets(
-        'slides up above the button, keeps the text field focused and '
-        'sets the mode', (tester) async {
-      final (focus, container) = await pumpPicker(tester);
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
-      expect(focus.hasFocus, isTrue);
+    double barHeight(WidgetTester tester) =>
+        tester.getSize(find.byKey(const ValueKey('ask-input-bar'))).height;
 
-      await tester.tap(find.byKey(const ValueKey('ask-mode-menu')));
-      await tester.pumpAndSettle();
-      final panel = find.byKey(const ValueKey('ask-mode-panel'));
-      expect(panel, findsOneWidget);
-      for (final mode in AiMode.values) {
-        expect(find.byKey(ValueKey('ask-mode-${mode.name}')), findsOneWidget);
-      }
-      // Above the button.
-      expect(
-        tester.getBottomLeft(panel).dy,
-        lessThanOrEqualTo(
-          tester.getTopLeft(find.byKey(const ValueKey('ask-mode-menu'))).dy,
-        ),
-      );
-      expect(focus.hasFocus, isTrue);
+    setUp(() {
+      sends = 0;
+      controller = TextEditingController();
+    });
+    tearDown(() => controller.dispose());
 
-      await tester.tap(find.byKey(const ValueKey('ask-mode-summarize')));
+    testWidgets('grows with the text up to four lines, then stops',
+        (tester) async {
+      await pumpComposer(tester);
+      final one = barHeight(tester);
+      expect(find.byKey(const ValueKey('ask-input-expand-toggle')), findsOneWidget);
+      // The expand button is hidden (transparent, not hit-testable) for a
+      // short text.
+      controller.text = '一\n二';
       await tester.pumpAndSettle();
-      expect(container.read(aiModeProvider), AiMode.summarize);
-      expect(panel, findsNothing);
-      expect(focus.hasFocus, isTrue);
+      final two = barHeight(tester);
+      expect(two, greaterThan(one));
+      controller.text = '一\n二\n三\n四';
+      await tester.pumpAndSettle();
+      final four = barHeight(tester);
+      controller.text = '一\n二\n三\n四\n五\n六\n七';
+      await tester.pumpAndSettle();
+      expect(barHeight(tester), four, reason: 'capped at four lines');
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('closes on a tap outside without changing the mode',
+    testWidgets(
+        'opens to half and to the full tab; the draft and the focus stay',
         (tester) async {
-      final (_, container) = await pumpPicker(tester);
-      await tester.tap(find.byKey(const ValueKey('ask-mode-menu')));
+      await pumpComposer(tester);
+      await tester.tap(find.byKey(const ValueKey('ask-input-field')));
+      await tester.enterText(
+        find.byKey(const ValueKey('ask-input-field')),
+        '一\n二\n三\n四',
+      );
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('ask-mode-panel')), findsOneWidget);
-      await tester.tapAt(const Offset(400, 40));
+      final focusNode = tester
+          .widget<TextField>(find.byKey(const ValueKey('ask-input-field')))
+          .focusNode!;
+      expect(focusNode.hasFocus, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('ask-input-expand-toggle')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('ask-mode-panel')), findsNothing);
-      expect(container.read(aiModeProvider), AiMode.auto);
+      expect(barHeight(tester), closeTo((tabHeight - 15) * 0.5, 1));
+      expect(controller.text, '一\n二\n三\n四');
+      expect(focusNode.hasFocus, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('ask-input-fullscreen-toggle')));
+      await tester.pumpAndSettle();
+      expect(barHeight(tester), closeTo(tabHeight - 15, 1));
+      expect(focusNode.hasFocus, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('ask-input-fullscreen-toggle')));
+      await tester.pumpAndSettle();
+      expect(barHeight(tester), closeTo((tabHeight - 15) * 0.5, 1));
+
+      await tester.tap(find.byKey(const ValueKey('ask-input-expand-toggle')));
+      await tester.pumpAndSettle();
+      expect(barHeight(tester), lessThan((tabHeight - 15) * 0.5));
+      expect(controller.text, '一\n二\n三\n四');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the keyboard key sends when collapsed, writes a line when open',
+        (tester) async {
+      await pumpComposer(tester);
+      await tester.tap(find.byKey(const ValueKey('ask-input-field')));
+      await tester.enterText(
+        find.byKey(const ValueKey('ask-input-field')),
+        '问题',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      expect(sends, 1);
+
+      // Open up (the toggle shows from three lines on, or when open).
+      controller.text = '一\n二\n三';
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('ask-input-expand-toggle')));
+      await tester.pumpAndSettle();
+      final field =
+          tester.widget<TextField>(find.byKey(const ValueKey('ask-input-field')));
+      expect(field.textInputAction, TextInputAction.newline);
+    });
+
+    testWidgets('sending gives the room back', (tester) async {
+      controller.text = '一\n二\n三';
+      await pumpComposer(tester);
+      await tester.tap(find.byKey(const ValueKey('ask-input-expand-toggle')));
+      await tester.pumpAndSettle();
+      final open = barHeight(tester);
+      await pumpComposer(tester, isSending: true);
+      await tester.pumpAndSettle();
+      expect(barHeight(tester), lessThan(open));
+      // The send button became a cancel button.
+      expect(find.byTooltip('取消'), findsOneWidget);
     });
   });
-
   group('accent text contrast', () {
     double luminance(Color c) => c.computeLuminance();
     double contrast(Color a, Color b) {

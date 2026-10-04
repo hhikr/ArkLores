@@ -15,7 +15,6 @@ class ChatSessionSummary {
     required this.updatedAt,
     required this.createdAt,
     required this.turnCount,
-    this.lastMode,
     this.lastQuery = '',
     this.corrupt = false,
   });
@@ -25,7 +24,6 @@ class ChatSessionSummary {
   final DateTime updatedAt;
   final DateTime createdAt;
   final int turnCount;
-  final String? lastMode;
   final String lastQuery;
   final bool corrupt;
 }
@@ -116,7 +114,6 @@ class ChatSessionStore {
           updatedAt: session.updatedAt,
           createdAt: session.createdAt,
           turnCount: session.turnCount,
-          lastMode: session.lastMode?.name,
           lastQuery: session.lastQuery,
         ),);
       } catch (_) {
@@ -146,8 +143,8 @@ class ChatSessionStore {
   /// Renders a human-readable transcript of [sessionId] (plain text).
   ///
   /// Returns null when the session is missing or corrupt. The text keeps the
-  /// complete raw content: router decision, every iteration's raw LLM
-  /// response, tool calls and observations, and the final answer.
+  /// complete raw content: every iteration's raw LLM response, tool calls
+  /// and observations, the final answer and what the turn cost.
   Future<String?> exportText(String sessionId) async {
     final session = await load(sessionId);
     if (session == null) return null;
@@ -163,15 +160,14 @@ class ChatSessionStore {
       buffer
         ..writeln()
         ..writeln('─' * 60)
-        ..writeln('[Turn ${turn.turn}] ${turn.timestamp.toIso8601String()}')
-        ..writeln('User Mode      : ${turn.userMode.name}')
-        ..writeln('Effective Mode : ${turn.effectiveMode.name}');
-      if (turn.router != null) {
-        buffer
-          ..writeln('Router Raw     : ${turn.router!.rawResponse}')
-          ..writeln(
-            'Router Error   : ${turn.router!.error ?? '-'}',
-          );
+        ..writeln('[Turn ${turn.turn}] ${turn.timestamp.toIso8601String()}');
+      final usage = turn.usage;
+      if (usage != null) {
+        buffer.writeln(
+          'Usage          : ${usage.calls} calls, ${usage.promptTokens} in '
+          '(${usage.cachedPromptTokens} cached), ${usage.completionTokens} out, '
+          '${usage.elapsed.inSeconds}s',
+        );
       }
       buffer
         ..writeln('Model          : ${turn.model} @ ${turn.baseUrl}')

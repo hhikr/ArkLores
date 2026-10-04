@@ -1,6 +1,6 @@
 // Live Ask-pipeline harness (R12): runs questions through the SAME provider
 // graph and code path as the app's Ask page — AskChatNotifier.sendMessage
-// -> QuestionRouter (auto) -> Summary / Fact-check / Investigation agent ->
+// -> StoryQaAgent (LoreAgentLoop) ->
 // GameDataKnowledgeStore -> ChatSessionStore — and writes session JSON in
 // the exact format of the app's `chat_sessions/` (and `logs/`) files.
 //
@@ -13,7 +13,6 @@
 // Opt-in (never runs in the normal suite):
 //   ARKLORES_RUN_LIVE_ASK=true
 //   ARKLORES_LIVE_QUERIES="问题1||问题2"      (or ARKLORES_LIVE_EVAL=<json>)
-//   ARKLORES_LIVE_MODE=auto|investigate|summarize|verify   (default auto)
 //   ARKLORES_LIVE_CONVERSATION=true  (all queries as turns of ONE session)
 //   ARKLORES_LIVE_DEEP_THINKING=true (the "深度思考" switch on)
 //   ARKLORES_GAMEDATA_DB=<db path>  (default build/gamedata_mobile/...)
@@ -28,7 +27,6 @@ import 'package:arklores/core/agent/agent_logger.dart';
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
-import 'package:arklores/core/agent/question_router.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
@@ -52,7 +50,6 @@ void main() {
       ? defaultEmbeddingConfig
       : readEmbeddingCsv(File('tools/embedding-apiKey.csv'));
   final cases = loadLiveCases(env);
-  final mode = parseAiMode(env['ARKLORES_LIVE_MODE']);
   final conversation =
       env['ARKLORES_LIVE_CONVERSATION']?.toLowerCase() == 'true';
   final dbPath = File(
@@ -103,6 +100,9 @@ void main() {
             .overrideWithValue(GameDataKnowledgeStore(dbPath: dbPath)),
         chatSessionStoreProvider
             .overrideWithValue(ChatSessionStore(filePath: outDir.path)),
+        // The app's own usage meter, shared with this harness: the Ask
+        // notifier resets it per question and tools report their spans to it.
+        usageMeterProvider.overrideWithValue(usage),
         // Same construction as llm_provider.dart plus a passive token meter
         // (cost control); the observer never alters results.
         llmClientProvider.overrideWith((ref, level) {
@@ -132,7 +132,7 @@ void main() {
 
   for (final liveCase in cases.isEmpty ? [const LiveCase(id: '-', query: '-')] : cases) {
     test(
-      'ask[${mode.name}] ${liveCase.id}: ${liveCase.query}',
+      'ask ${liveCase.id}: ${liveCase.query}',
       () async {
         if (providerFailure != null) {
           markTestSkipped('skipped after provider failure: $providerFailure');
@@ -163,7 +163,7 @@ void main() {
             firstTextMs = elapsed;
           }
         });
-        await notifier.sendMessage(liveCase.query, mode: mode);
+        await notifier.sendMessage(liveCase.query);
         subscription.close();
         final session = notifier.currentSession;
         expect(session, isNotNull, reason: 'session recording produced no file');
@@ -180,6 +180,11 @@ void main() {
           },
           'deep_thinking': deepThinking,
           'thinking_calls': thinkingCalls,
+          // Per-call wall-clock timeline (start order): when each LLM call
+          // began, time to headers / first data / first token, 429 waits,
+          // tokens. Gaps between calls are tool time and local work.
+          'timeline': usage.timeline(start),
+          'wall_ms': DateTime.now().difference(start).inMilliseconds,
         };
         File('${outDir.path}/${liveCase.id}.summary.json').writeAsStringSync(
           const JsonEncoder.withIndent('  ').convert(report),
@@ -226,7 +231,3 @@ EmbeddingConfig readEmbeddingCsv(File file) {
   );
 }
 
-AiMode parseAiMode(String? raw) => AiMode.values.firstWhere(
-      (m) => m.name == raw?.trim(),
-      orElse: () => AiMode.auto,
-    );

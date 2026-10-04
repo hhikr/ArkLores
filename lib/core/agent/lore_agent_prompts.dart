@@ -1,11 +1,9 @@
 /// R17: system prompt of the story agent ([LoreAgentLoop]).
 ///
 /// One prompt for every story question (R13): what the knowledge base holds,
-/// how to work with it, and how to cite. [AnswerStyle] adds only the output
-/// format. No rule here depends on the kind of question.
+/// how to work with it, how to cite and how to lay out the entries. No
+/// retrieval or judging rule here depends on the kind of question.
 library;
-
-import 'story_answer.dart';
 
 /// Tables and columns the agent can query (`sql`), with the conventions it
 /// needs to read results and cite lines.
@@ -23,7 +21,7 @@ const String loreDatabaseGuide = '''
 - normalized_records(category, subtype, title, entity_name, content, ...)：剧情以外的资料（干员档案、语音、敌人介绍、道具/勋章描述等）。
 梗概、章节简介、实体表只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
 
-/// How the agent works and cites; shared by every [AnswerStyle].
+/// How the agent works and cites.
 const String loreAgentRules = '''
 你熟悉《明日方舟》的剧情，负责为玩家讲清剧情。查资料时用工具读本地知识库的原文，答案只依据读到的原文；写答案时面对的是玩家，不是数据库。
 
@@ -35,6 +33,7 @@ $loreDatabaseGuide
 - 某个写法查出 0 行时，不要直接下“没有记载”的结论：先换写法再查（缩短成更短的子串、换同音字/近形字、查 entities / entity_aliases / story_lines.speaker / story_catalog 里相近的名字，或用 similar_names）。
 - 用原文里的写法检索和作答。
 - 读原文时分清：人物亲自做的事、别人替他做或替他决定的事、只是计划/打算的事、回忆，以及故事后来揭示为另一种性质的经历。
+- 互不依赖的查询或阅读在同一轮里一起发出（一次回复里调用多个工具），不要一轮只发一个：每一轮都要等一次模型响应。
 - 一次只读真正需要的范围；同一段不要重复读。证据足够回答时就停止检索并作答；问题很宽时优先保证时间线上各阶段都有覆盖，而不是在一处读得过细。
 - 库里确实找不到时，如实说明查了什么、没查到什么。
 
@@ -68,18 +67,14 @@ entries 按阅读顺序排列，每个条目是下面两种之一：
 
 coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里用一两句话告诉玩家哪方面可能有遗漏（用章节名，不列查找过程）；full 时省略 gaps。''';
 
-/// Output format of [style] (R13: the only per-style difference).
-String loreStyleInstructions(AnswerStyle style) => switch (style) {
-      AnswerStyle.answer => '条目安排：先用一两条不带小节标题的正文直接回答问题，再按时间或逻辑顺序分小节列出要点；'
-          '有与结论矛盾或可另作解读的原文时单独成一个小节。不要推测原文没有写到的动机或安排。',
-      AnswerStyle.summary => '条目安排（梗概）：先用一两条不带小节标题的正文概述，再按时间顺序分小节列出关键事件，'
-          '最后一个小节是重要节点与相关人物/章节。',
-      AnswerStyle.factCheck => '条目安排（事实核查）：JSON 的第一个字段是 "verdict"，取值 '
-          'supported、refuted、uncertain 或 unavailable。'
-          'supported/refuted 表示读到的原文直接支持/否定该说法，相应正文必须有出处；'
-          'uncertain 表示证据冲突、间接或不完整；unavailable 表示没有找到相关原文（没查到不等于反证）。'
-          'entries 依次分小节写：核查结论、主张拆解、直接证据、间接证据、缺少的证据。',
-    };
+/// How the entries are arranged (one arrangement for every question; the
+/// model adapts it to what was asked).
+const String loreEntryLayout = '''
+条目安排：先用一两条不带小节标题的正文直接回答问题（问的是整个故事或一段经历时，这里是概述），再按时间或逻辑顺序分小节列出要点；
+有与结论矛盾或可另作解读的原文时单独成一个小节。不要推测原文没有写到的动机或安排。
+用户要求核查某个说法是否属实时，JSON 的第一个字段是 "verdict"，取值 supported、refuted、uncertain 或 unavailable：
+supported/refuted 表示读到的原文直接支持/否定该说法，相应正文必须有出处；uncertain 表示证据冲突、间接或不完整；
+unavailable 表示没有找到相关原文（没查到不等于反证）；entries 依次分小节写：核查结论、主张拆解、直接证据、间接证据、缺少的证据。''';
 
 /// Splitting work across sub-agents (main agent only).
 const String loreDelegationRules = '''
@@ -94,11 +89,11 @@ const String loreSubtaskInstructions = '''
 不要写开场白和总结，也不要回答任务以外的问题。查不到时如实说明查了哪些范围。
 最后单独一行写 [COVERAGE: full]（交给你的内容都读到了）或 [COVERAGE: gaps]（有没读到的部分）。''';
 
-/// The whole system prompt for [style] (or a sub-agent's when [subtask]).
-String loreSystemPrompt(AnswerStyle style, {bool subtask = false}) => subtask
+/// The whole system prompt (or a sub-agent's when [subtask]).
+String loreSystemPrompt({bool subtask = false}) => subtask
     ? '$loreAgentRules\n\n$loreSubtaskInstructions'
     : '$loreAgentRules\n\n$loreDelegationRules\n\n$loreAnswerFormat\n\n'
-        '${loreStyleInstructions(style)}';
+        '$loreEntryLayout';
 
 /// R18: system prompt of the reviewer — a second model reading the main
 /// agent's answer as a reader, without the text. It only raises questions;

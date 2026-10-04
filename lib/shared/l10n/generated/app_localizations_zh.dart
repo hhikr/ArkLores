@@ -405,34 +405,47 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabAsk => 'AI 问答';
 
   @override
-  String get aiModeAuto => '自动';
-
-  @override
-  String get aiModeAutoDesc => 'AI 自动判断用哪种模式（概括 / 查证 / 深挖）';
-
-  @override
-  String get aiModeSummarize => '概括';
-
-  @override
-  String get aiModeSummarizeDesc => '整理已知剧情：人物、事件、组织、时间线';
-
-  @override
-  String get aiModeVerify => '查证';
-
-  @override
-  String get aiModeVerifyDesc => '判定一个说法的真假（对吗？是不是？）';
-
-  @override
-  String get aiModeInvestigate => '深挖';
-
-  @override
-  String get aiModeInvestigateDesc => '回答一个具体问题：谁、为什么、怎样、什么关系，附原文证据';
-
-  @override
   String get aiAskSource => '仅基于已安装的 GameData 剧情原文回答';
 
   @override
-  String get aiAskEmpty => '直接问任何剧情问题——概括、查证、深挖都可以，自动模式会为你选择合适的方式。';
+  String get aiAskEmpty => '直接问任何剧情问题——人物经历、事件前因后果、某个说法是否属实，都可以。';
+
+  @override
+  String get aiInputExpand => '展开输入框';
+
+  @override
+  String get aiInputCollapse => '收起输入框';
+
+  @override
+  String get aiInputFullscreen => '全屏输入';
+
+  @override
+  String get aiInputExitFullscreen => '退出全屏';
+
+  @override
+  String aiUsageInput(String tokens) {
+    return '输入 $tokens';
+  }
+
+  @override
+  String aiUsageInputCached(String tokens, String rate) {
+    return '输入 $tokens（缓存 $rate%）';
+  }
+
+  @override
+  String aiUsageOutput(String tokens) {
+    return '输出 $tokens';
+  }
+
+  @override
+  String aiUsageCalls(int count) {
+    return '$count 次调用';
+  }
+
+  @override
+  String aiUsageElapsed(String time) {
+    return '用时 $time';
+  }
 
   @override
   String get aiAskInputPlaceholder => '问任何剧情问题…';
@@ -459,9 +472,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabSummary => '剧情梗概';
 
   @override
-  String get aiTabInvestigation => '剧情调查';
-
-  @override
   String get aiTabRoleplay => '角色扮演';
 
   @override
@@ -478,9 +488,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiInvestigationConfidence => '置信度';
-
-  @override
-  String get aiInvestigationEvidenceChain => '证据链引用';
 
   @override
   String aiCitationLine(int line) {
@@ -541,9 +548,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiMoreActions => '更多';
 
   @override
-  String get aiModeMenuTooltip => '回答方式';
-
-  @override
   String get aiThinkingProcess => '思考过程';
 
   @override
@@ -566,18 +570,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiInvestigationSkipped => '未读';
-
-  @override
-  String get aiInvestigationError => '调查失败，请重试。';
-
-  @override
-  String get aiFactCheckSource => '证据范围：仅限已安装的中文 GameData';
-
-  @override
-  String get aiFactCheckEmpty => '输入一条设定或剧情说法，使用本地 GameData 证据进行核查。';
-
-  @override
-  String get aiFactCheckInputPlaceholder => '输入要核查的说法…';
 
   @override
   String get aiVerdictSupported => '支持';
@@ -666,33 +658,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiInputPlaceholder => '输入剧情内容或设定...';
-
-  @override
-  String get aiSummaryInputPlaceholder => '输入人物、事件、地点或组织名称以生成梗概...';
-
-  @override
-  String get aiSummarySource => '证据范围：仅限已安装的中文 GameData';
-
-  @override
-  String get aiSummaryEmpty => '输入明日方舟人物、事件、地点或组织，依据本地 GameData 证据生成梗概。';
-
-  @override
-  String get aiSummarySuggestionAmiya => '阿米娅';
-
-  @override
-  String get aiSummarySuggestionKaltsit => '凯尔希';
-
-  @override
-  String get aiSummarySuggestionRhine => '莱茵生命';
-
-  @override
-  String get aiSummarySuggestionChernobog => '切尔诺伯格事件';
-
-  @override
-  String get aiSummaryError => '梗概生成失败，请重试。';
-
-  @override
-  String get aiSummaryCanceled => '已取消本次梗概生成。';
 
   @override
   String get aiSettingsRequired => '请先在设置中配置对话 API 密钥以使用 AI 功能。';

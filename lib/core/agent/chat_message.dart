@@ -1,6 +1,7 @@
 import '../llm/llm_client.dart';
-import 'fact_check_agent.dart';
 import 'react_loop.dart';
+import 'story_answer.dart';
+import 'turn_stats.dart';
 
 /// One step in the ReAct loop process.
 class ReActStep {
@@ -30,9 +31,14 @@ class ChatMessage {
     required this.timestamp,
     this.reasoning = '',
     this.liveStatus = '',
+    this.stats,
   });
 
   final String id;
+
+  /// What the question cost (tokens, calls, time); null for sessions saved
+  /// before v0.10.7 and for messages that are not answers.
+  final TurnStats? stats;
   final MessageRole role;
   final String content;
   final List<ReActStep> steps;
@@ -59,8 +65,10 @@ class ChatMessage {
     DateTime? timestamp,
     String? reasoning,
     String? liveStatus,
+    TurnStats? stats,
   }) {
     return ChatMessage(
+      stats: stats ?? this.stats,
       id: id ?? this.id,
       role: role ?? this.role,
       content: content ?? this.content,

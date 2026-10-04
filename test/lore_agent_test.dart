@@ -80,8 +80,8 @@ void main() {
     // story, chapter or character that could tilt it towards some questions.
     test('prompts and tool descriptions carry no concrete examples', () {
       final text = [
-        for (final style in AnswerStyle.values) loreSystemPrompt(style),
-        loreSystemPrompt(AnswerStyle.answer, subtask: true),
+        loreSystemPrompt(),
+        loreSystemPrompt(subtask: true),
         loreTextToolProtocol(''),
         loreReviewPrompt,
         loreReviewFollowUp(['<问题>'], json: true),
@@ -125,13 +125,13 @@ void main() {
     });
 
     test('the system prompt keeps the working rules', () {
-      final prompt = loreSystemPrompt(AnswerStyle.answer);
+      final prompt = loreSystemPrompt();
       expect(prompt, contains('先看全局再读原文'));
       expect(prompt, contains('["record", "<记录 id>"]'));
       expect(prompt, contains('"entries"'));
       expect(prompt, contains('"coverage"'));
       // Sub-agents still hand back markdown notes.
-      final sub = loreSystemPrompt(AnswerStyle.answer, subtask: true);
+      final sub = loreSystemPrompt(subtask: true);
       expect(sub, contains('[COVERAGE: full]'));
       expect(sub, isNot(contains('"entries"')));
     });
@@ -290,7 +290,7 @@ void main() {
             '[COVERAGE: full]'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .run(query: '星灯做了什么？')
           .toList();
       final answer = finalAnswerOf(events);
       expect(parseStoryAnswerEnvelope(answer)!.status,
@@ -331,7 +331,7 @@ void main() {
         _answer(json('星灯主动承担了点亮钟楼的事。')),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .run(query: '星灯做了什么？')
           .toList();
       final recheck = client.requests[2].last.content;
       expect(recheck, contains('照搬了原文台词'));
@@ -363,7 +363,7 @@ void main() {
         _answer('星灯离开了 `obt/main/level_main_fx-01.txt:3`。'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯后来呢？', style: AnswerStyle.answer)
+          .run(query: '星灯后来呢？')
           .toList();
       expect(
         events.where((e) => e.type == ReActEventType.finalAnswerReset),
@@ -390,7 +390,7 @@ void main() {
             '`obt/main/level_main_fx-01.txt:1`。'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯是什么？', style: AnswerStyle.answer)
+          .run(query: '星灯是什么？')
           .toList();
       final recheck = client.requests[2].last.content;
       expect(recheck, contains('只有文件名、没有行号'));
@@ -415,7 +415,7 @@ void main() {
         _answer('星灯点亮了钟楼 `obt/main/level_main_fx-01.txt:1`。'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .run(query: '星灯做了什么？')
           .toList();
       // R18: only the main agent's answer is reviewed.
       expect(client.reviewRequests, hasLength(1));
@@ -454,7 +454,7 @@ void main() {
         reviews: ['{"issues": ["后来离开城市的经过是否被漏掉？"]}', '{"issues": ["再问"]}'],
       );
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .run(query: '星灯做了什么？')
           .toList();
       expect(client.reviewRequests, hasLength(1));
       final review = client.reviewRequests.single;
@@ -500,7 +500,7 @@ void main() {
         reviews: ['{"issues": ["后来呢？"]}'],
       );
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .run(query: '星灯做了什么？')
           .toList();
       expect(client.requests, hasLength(4));
       expect(client.requests.last.last.content, contains('这不是最终答案'));
@@ -548,7 +548,6 @@ void main() {
       final events = await LoreAgentLoop(client: client, store: store)
           .run(
             query: '星灯做了什么？',
-            style: AnswerStyle.summary,
             onConversation: conversations.add,
           )
           .toList();
@@ -591,7 +590,7 @@ void main() {
         _answer('不是 JSON'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？', style: AnswerStyle.summary)
+          .run(query: '星灯做了什么？')
           .toList();
       final answer = finalAnswerOf(events);
       expect(answer, isNot(contains('[DETAILS]')));
@@ -607,7 +606,7 @@ void main() {
         ]),),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？', style: AnswerStyle.answer)
+          .run(query: '星灯做了什么？')
           .toList();
       expect(client.requests, hasLength(2));
       expect(finalAnswerOf(events), isNot(contains('[DETAILS]')));
@@ -620,11 +619,42 @@ void main() {
         _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯点亮过钟楼吗？', style: AnswerStyle.factCheck)
+          .run(query: '星灯点亮过钟楼吗？')
           .toList();
       final answer = finalAnswerOf(events);
       expect(answer, contains('[FACT_CHECK_VERDICT:uncertain]'));
       expect(client.requests.first.first.content, contains('"verdict"'));
+    });
+
+    test('a JSON answer that starts with a verdict keeps it when cited',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': id}),
+        _answer('{"verdict": "supported", "entries": [{"text": "确有其事。", '
+            '"cite": [["$id", 1, 1]]}], "coverage": "full"}'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯点亮过钟楼吗？')
+          .toList();
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('[FACT_CHECK_VERDICT:supported]'));
+      expect(parseFactCheckVerdict(answer), FactCheckVerdict.supported);
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('an answer without a verdict gets none added', () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': id}),
+        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
+            '"cite": [["$id", 1, 1]]}]}'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(finalAnswerOf(events), isNot(contains('FACT_CHECK_VERDICT')));
     });
 
     test('a lead-in about the answering process is dropped, content kept',
@@ -638,7 +668,7 @@ void main() {
                 _answer(text),
               ]),
               store: store,
-            ).run(query: '星灯？', style: AnswerStyle.answer).toList(),
+            ).run(query: '星灯？').toList(),
           );
       final dropped = await answerFor(
         '已核实，现在输出完整最终答案。\n\n---\n\n'
@@ -667,7 +697,7 @@ void main() {
         _answer('知识库里没有找到相关记载。'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '某人做了什么？', style: AnswerStyle.answer)
+          .run(query: '某人做了什么？')
           .toList();
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.notCovered,);
@@ -685,7 +715,6 @@ void main() {
       final events = await LoreAgentLoop(client: client, store: store)
           .run(
             query: '钟楼？',
-            style: AnswerStyle.answer,
             onConversation: (c) => saved = c,
           )
           .toList();
@@ -708,7 +737,7 @@ void main() {
             '"cite": [["$id", 1, 1]]}]}'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '钟楼？', style: AnswerStyle.answer)
+          .run(query: '钟楼？')
           .toList();
       expect(client.requests, hasLength(3));
       expect(client.requests.last.last.content, contains('数组的数组'));
@@ -731,7 +760,7 @@ void main() {
         store: store,
         review: false,
         streamRetryDelay: Duration.zero,
-      ).run(query: '钟楼？', style: AnswerStyle.answer).toList();
+      ).run(query: '钟楼？').toList();
       expect(client.attempts, 4); // two dropped, then the two real turns
       expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
       expect(events.map((e) => e.content), contains('连接中断，正在重试（2/2）'));
@@ -744,7 +773,7 @@ void main() {
         store: store,
         review: false,
         streamRetryDelay: Duration.zero,
-      ).run(query: '钟楼？', style: AnswerStyle.answer).toList();
+      ).run(query: '钟楼？').toList();
       expect(client.attempts, 3);
       expect(events.last.type, ReActEventType.error);
     });
@@ -760,7 +789,7 @@ void main() {
         rejectTools: true,
       );
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '钟楼在哪？', style: AnswerStyle.answer)
+          .run(query: '钟楼在哪？')
           .toList();
       expect(finalAnswerOf(events), contains('level_main_fx-01.txt:1'));
       expect(client.requests.last.first.content, contains('```tool'));
@@ -781,7 +810,6 @@ void main() {
           await LoreAgentLoop(client: client, store: store, maxTurns: 3)
               .run(
                 query: '星灯？',
-                style: AnswerStyle.answer,
               )
               .toList();
       expect(client.toolChoices.last, 'none');
@@ -801,7 +829,7 @@ void main() {
         client: client,
         store: store,
         contextCharBudget: 1200,
-      ).run(query: '读读看', style: AnswerStyle.answer).toList();
+      ).run(query: '读读看').toList();
       final last = client.requests.last;
       final tools = last.where((m) => m.role == MessageRole.tool).toList();
       expect(tools.first.content, startsWith('[已折叠]'));
@@ -819,7 +847,6 @@ void main() {
       )
           .run(
             query: '钟楼？',
-            style: AnswerStyle.answer,
             onConversation: (c) => saved = c,
           )
           .toList();
@@ -829,7 +856,7 @@ void main() {
         _answer('还是钟楼 `obt/main/level_main_fx-01.txt:1`'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '那后来呢？', style: AnswerStyle.answer, prior: saved)
+          .run(query: '那后来呢？', prior: saved)
           .toList();
       final request = client.requests.single;
       expect(request.where((m) => m.role == MessageRole.tool), hasLength(1));

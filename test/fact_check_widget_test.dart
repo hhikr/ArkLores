@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:arklores/core/agent/agent_provider.dart';
-import 'package:arklores/core/agent/fact_check_agent.dart';
 import 'package:arklores/core/agent/react_loop.dart';
 import 'package:arklores/core/agent/roleplay_agent.dart';
 import 'package:arklores/core/agent/roleplay_session_store.dart';
+import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
@@ -103,12 +103,6 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-    // Pin the Summarize mode so the auto router is not invoked (R15: the
-    // modes live in the input row's menu).
-    await tester.tap(find.byTooltip('回答方式'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('概括'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '阿米娅');
     await tester.tap(find.byTooltip('发送'));
