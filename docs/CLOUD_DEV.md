@@ -17,7 +17,7 @@
 
 默认的 **Trusted** 已包含 `github.com`、`storage.googleapis.com`、`pub.dev`，足够安装 Flutter、拉依赖、跑离线测试。
 只有要跑**真实 API 测试**时才需要改：选 **Custom**，勾选 “Also include default list of common package managers”，
-再添加你的模型 API 和向量 API 的域名（例如 `api.deepseek.com`、`dashscope.aliyuncs.com`，以 `tools/api_info`、
+再添加你的模型 API 和向量 API 的域名（例如智谱国际站 `api.z.ai`、向量用的 `dashscope.aliyuncs.com`，以 `tools/api_info`、
 `tools/embedding-apiKey.csv` 里的 URL 为准）。
 
 ### 环境变量（Environment variables，`.env` 格式，一行一个）

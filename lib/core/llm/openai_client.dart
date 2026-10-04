@@ -17,9 +17,34 @@ class OpenAICompatibleClient extends LLMClient {
     this.onCompletion,
     this.reasoning = ReasoningLevel.off,
     Duration? streamIdleTimeout,
+    this.rateLimitBackoff = defaultRateLimitBackoff,
   })  : _httpClient = httpClient ?? http.Client(),
         _timeout = timeout ?? defaultRequestTimeout,
         _streamIdleTimeout = streamIdleTimeout ?? defaultStreamIdleTimeout;
+
+  /// Waits before each retry of a rate-limited (429) request; its length is
+  /// the number of retries. Parallel sub-agents can exceed a provider's
+  /// concurrency limit (e.g. free / flash tiers).
+  final List<Duration> rateLimitBackoff;
+
+  static const List<Duration> defaultRateLimitBackoff = [
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+  ];
+
+  /// Zhipu GLM (open.bigmodel.cn / api.z.ai), or a GLM model elsewhere.
+  static bool isZhipu(LLMConfig config) {
+    final host = Uri.tryParse(config.chatBaseUrl)?.host.toLowerCase() ?? '';
+    return host.endsWith('bigmodel.cn') ||
+        host == 'z.ai' ||
+        host.endsWith('.z.ai') ||
+        config.chatModel.toLowerCase().startsWith('glm');
+  }
+
+  /// Zhipu only accepts `tool_choice: auto`; elsewhere `none` is sent on
+  /// the last agent turn.
+  static bool acceptsToolChoice(LLMConfig config) => !isZhipu(config);
 
   /// Optional observer of every successful completion (e.g. a token meter in
   /// the live test harness). Never alters the result.
@@ -64,6 +89,17 @@ class OpenAICompatibleClient extends LLMClient {
         ReasoningLevel.high => {
             'thinking': {'type': 'enabled'},
             'reasoning_effort': 'high',
+          },
+      };
+    }
+    if (isZhipu(config)) {
+      // GLM thinks by default and has no effort setting: low = high.
+      return switch (level) {
+        ReasoningLevel.off => {
+            'thinking': {'type': 'disabled'},
+          },
+        ReasoningLevel.low || ReasoningLevel.high => {
+            'thinking': {'type': 'enabled'},
           },
       };
     }
@@ -160,7 +196,10 @@ class OpenAICompatibleClient extends LLMClient {
         if (stream) 'stream_options': {'include_usage': true},
         if (stop != null) 'stop': stop,
         if (tools != null && tools.isNotEmpty) 'tools': tools,
-        if (tools != null && tools.isNotEmpty && toolChoice != null)
+        if (tools != null &&
+            tools.isNotEmpty &&
+            toolChoice != null &&
+            acceptsToolChoice(config))
           'tool_choice': toolChoice,
         ...reasoningFields,
       };
@@ -184,33 +223,44 @@ class OpenAICompatibleClient extends LLMClient {
       // R8 M-E: transient network errors (backgrounding closes the socket)
       // are retried once before surfacing.
       http.Response? response;
-      Object? lastError;
-      for (var attempt = 0; attempt < 2; attempt++) {
-        try {
-          response = await _httpClient
-              .post(
-                Uri.parse(config.chatEndpoint),
-                headers: _headers(config.chatApiKey, label: 'Chat API Key'),
-                body: jsonEncode(body),
-              )
-              .timeout(_timeout);
-          break;
-        } on SocketException catch (e) {
-          lastError = e;
-        } on http.ClientException catch (e) {
-          lastError = e;
-        } on TimeoutException catch (e) {
-          lastError = e;
-        } on HandshakeException catch (e) {
-          // TLS handshake interrupted (flakey provider/network) — retry once.
-          lastError = e;
+      for (var rateRetry = 0;; rateRetry++) {
+        Object? lastError;
+        response = null;
+        for (var attempt = 0; attempt < 2; attempt++) {
+          try {
+            response = await _httpClient
+                .post(
+                  Uri.parse(config.chatEndpoint),
+                  headers: _headers(config.chatApiKey, label: 'Chat API Key'),
+                  body: jsonEncode(body),
+                )
+                .timeout(_timeout);
+            break;
+          } on SocketException catch (e) {
+            lastError = e;
+          } on http.ClientException catch (e) {
+            lastError = e;
+          } on TimeoutException catch (e) {
+            lastError = e;
+          } on HandshakeException catch (e) {
+            // TLS handshake interrupted (flakey provider/network) — retry once.
+            lastError = e;
+          }
         }
-      }
-      if (response == null) {
-        if (lastError is TimeoutException) {
-          throw const LLMException('Request timed out');
+        if (response == null) {
+          if (lastError is TimeoutException) {
+            throw const LLMException('Request timed out');
+          }
+          throw LLMException('Network error: $lastError');
         }
-        throw LLMException('Network error: $lastError');
+        if (response.statusCode == 429 &&
+            rateRetry < rateLimitBackoff.length) {
+          await Future<void>.delayed(
+            _rateLimitDelay(response.headers, rateRetry),
+          );
+          continue;
+        }
+        break;
       }
 
       // R16: always UTF-8 (as the embedding client does): without a
@@ -319,31 +369,52 @@ class OpenAICompatibleClient extends LLMClient {
     );
   }
 
+  /// The wait before rate-limit retry [retry]: the provider's numeric
+  /// `Retry-After` (capped at 30 s) or [rateLimitBackoff].
+  Duration _rateLimitDelay(Map<String, String> headers, int retry) {
+    final seconds = int.tryParse(headers['retry-after'] ?? '');
+    if (seconds != null && seconds >= 0) {
+      return Duration(seconds: seconds > 30 ? 30 : seconds);
+    }
+    return rateLimitBackoff[retry];
+  }
+
   Stream<CompletionDelta> _stream(Map<String, dynamic> body) async* {
     http.StreamedResponse? response;
-    Object? lastError;
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        final request = http.Request('POST', Uri.parse(config.chatEndpoint))
-          ..headers.addAll(_headers(config.chatApiKey, label: 'Chat API Key'))
-          ..body = jsonEncode(body);
-        response = await _httpClient.send(request).timeout(_timeout);
-        break;
-      } on SocketException catch (e) {
-        lastError = e;
-      } on http.ClientException catch (e) {
-        lastError = e;
-      } on TimeoutException catch (e) {
-        lastError = e;
-      } on HandshakeException catch (e) {
-        lastError = e;
+    for (var rateRetry = 0;; rateRetry++) {
+      Object? lastError;
+      response = null;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          final request = http.Request('POST', Uri.parse(config.chatEndpoint))
+            ..headers.addAll(_headers(config.chatApiKey, label: 'Chat API Key'))
+            ..body = jsonEncode(body);
+          response = await _httpClient.send(request).timeout(_timeout);
+          break;
+        } on SocketException catch (e) {
+          lastError = e;
+        } on http.ClientException catch (e) {
+          lastError = e;
+        } on TimeoutException catch (e) {
+          lastError = e;
+        } on HandshakeException catch (e) {
+          lastError = e;
+        }
       }
-    }
-    if (response == null) {
-      if (lastError is TimeoutException) {
-        throw const LLMException('Request timed out');
+      if (response == null) {
+        if (lastError is TimeoutException) {
+          throw const LLMException('Request timed out');
+        }
+        throw LLMException('Network error: $lastError');
       }
-      throw LLMException('Network error: $lastError');
+      if (response.statusCode == 429 && rateRetry < rateLimitBackoff.length) {
+        await response.stream.drain<void>();
+        await Future<void>.delayed(
+          _rateLimitDelay(response.headers, rateRetry),
+        );
+        continue;
+      }
+      break;
     }
 
     if (response.statusCode != 200) {

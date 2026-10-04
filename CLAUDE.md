@@ -265,6 +265,12 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   时默认开启 high 档，所以每个角色都必须显式指定档位。现在全部默认 `off`；只有“深度思考”开关
   （`deepThinkingProvider`）让本问的 Agent 用 `low`。不要给剧情问答开 `high`：开发者实测剧情过度思考
   会延伸推测原文没写的内容。
+- 各家的思考开关在 `OpenAICompatibleClient.reasoningFieldsFor`：deepseek（`thinking` + `reasoning_effort`）、
+  百炼（`enable_thinking`）、智谱 GLM（`thinking`，无强度档，low = high，按 host `z.ai`/`bigmodel.cn` 或模型名 `glm*` 识别）；
+  其他 provider 不发字段。智谱只接受 `tool_choice: auto`，所以对它不发 `none`（最后一轮和 R18 整理段落时
+  模型仍可能调用工具：前者按答案处理，后者回退为只显示详细答案）。429 按 `Retry-After` 或 2/5/10 秒重试三次。
+- 开发者 2026-10 起改用智谱 GLM（国际站 `https://api.z.ai/api/paas/v4`）。R17/R18 文档里的验收数据是 deepseek 测的，
+  换模型后调用次数、token、缓存命中率都要重新测。
 - 流式：`LLMClient.streamTurn`（带 tools；默认实现调用一次 `chatCompletion`，测试假 client 可直接覆盖它）。
   Agent 依次发 `status` / `toolCall` / `toolObservation` / `finalAnswerToken`… →（继续查资料或出处退回时
   `finalAnswerReset`）→ `finalAnswerReplace`（信封 + 核对后正文）。测试取答案用 `finalAnswerOf(events)`。

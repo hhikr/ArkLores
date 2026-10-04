@@ -56,6 +56,40 @@ void main() {
       });
     });
 
+    test('zhipu GLM: thinking off / on, no effort setting', () {
+      const zai = LLMConfig(
+        chatBaseUrl: 'https://api.z.ai/api/paas/v4',
+        chatModel: 'glm-flash',
+      );
+      const bigmodel = LLMConfig(
+        chatBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        chatModel: 'some-model',
+      );
+      const glmElsewhere = LLMConfig(
+        chatBaseUrl: 'https://proxy.example.com/v1',
+        chatModel: 'GLM-flash',
+      );
+      for (final c in [zai, bigmodel, glmElsewhere]) {
+        expect(fields(c, ReasoningLevel.off), {
+          'thinking': {'type': 'disabled'},
+        });
+        expect(fields(c, ReasoningLevel.low), {
+          'thinking': {'type': 'enabled'},
+        });
+        expect(fields(c, ReasoningLevel.high), {
+          'thinking': {'type': 'enabled'},
+        });
+      }
+      // A host that merely ends in "z.ai" is not Zhipu.
+      expect(
+        fields(
+          const LLMConfig(chatBaseUrl: 'https://xyz.ai/v1', chatModel: 'm'),
+          ReasoningLevel.off,
+        ),
+        isEmpty,
+      );
+    });
+
     test('unknown providers get no field at any level', () {
       for (final level in ReasoningLevel.values) {
         expect(fields(unknown, level), isEmpty);
@@ -85,6 +119,135 @@ void main() {
     await client.chatCompletion([Message.user('q')]);
     expect(body!['thinking'], {'type': 'disabled'});
     expect(body!.containsKey('reasoning_effort'), isFalse);
+  });
+
+  group('provider quirks in the request', () {
+    const tools = [
+      {
+        'type': 'function',
+        'function': {'name': 'sql', 'parameters': <String, dynamic>{}},
+      },
+    ];
+
+    Future<Map<String, dynamic>> lastTurnBody(LLMConfig config) async {
+      Map<String, dynamic>? body;
+      final client = OpenAICompatibleClient(
+        config: config,
+        httpClient: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {'content': 'ok'},
+                  'finish_reason': 'stop',
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      // A plain response to a stream request falls back to the
+      // non-streaming body; the request is what is checked.
+      await client
+          .streamTurn([Message.user('q')], tools: tools, toolChoice: 'none')
+          .drain<void>();
+      return body!;
+    }
+
+    test('tool_choice none is sent, except to Zhipu (only "auto" there)',
+        () async {
+      final deepseek = await lastTurnBody(
+        const LLMConfig(chatApiKey: 'test-key'),
+      );
+      expect(deepseek['tool_choice'], 'none');
+      final glm = await lastTurnBody(
+        const LLMConfig(
+          chatApiKey: 'test-key',
+          chatBaseUrl: 'https://api.z.ai/api/paas/v4',
+          chatModel: 'glm-flash',
+        ),
+      );
+      expect(glm.containsKey('tool_choice'), isFalse);
+      expect(glm['tools'], isNotEmpty);
+      expect(glm['thinking'], {'type': 'disabled'});
+    });
+
+    MockClient rateLimited(int failures, List<int> calls) =>
+        MockClient((request) async {
+          calls.add(1);
+          if (calls.length <= failures) {
+            return http.Response('{"error":{"message":"too many"}}', 429);
+          }
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {'content': 'ok'},
+                  'finish_reason': 'stop',
+                },
+              ],
+            }),
+            200,
+          );
+        });
+
+    test('429 is retried after a wait, then reported', () async {
+      final calls = <int>[];
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key'),
+        httpClient: rateLimited(2, calls),
+        rateLimitBackoff: const [Duration.zero, Duration.zero],
+      );
+      final result = await client.chatCompletion([Message.user('q')]);
+      expect(result.content, 'ok');
+      expect(calls, hasLength(3));
+
+      final stubborn = <int>[];
+      final failing = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key'),
+        httpClient: rateLimited(99, stubborn),
+        rateLimitBackoff: const [Duration.zero],
+      );
+      await expectLater(
+        failing.chatCompletion([Message.user('q')]),
+        throwsA(
+          isA<LLMException>().having((e) => e.statusCode, 'status', 429),
+        ),
+      );
+      expect(stubborn, hasLength(2));
+    });
+
+    test('a rate-limited stream is retried too', () async {
+      final calls = <int>[];
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key'),
+        httpClient: MockClient.streaming((request, _) async {
+          calls.add(1);
+          if (calls.length == 1) {
+            return http.StreamedResponse(
+              Stream.value(utf8.encode('{}')),
+              429,
+            );
+          }
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(
+              'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'
+              'data: [DONE]\n\n',
+            ),),
+            200,
+          );
+        }),
+        rateLimitBackoff: const [Duration.zero],
+      );
+      final text = await client
+          .streamCompletion([Message.user('q')])
+          .map((d) => d.content)
+          .join();
+      expect(text, 'ok');
+      expect(calls, hasLength(2));
+    });
   });
 
   group('providers', () {

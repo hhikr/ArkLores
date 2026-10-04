@@ -4,6 +4,15 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Zhipu GLM (api.z.ai / open.bigmodel.cn, or a `glm*` model behind another endpoint) is a
+  known provider: thinking is switched off by default and on only with "深度思考" (GLM has no
+  effort level), and `tool_choice` is not sent (Zhipu accepts only `auto`).
+- A rate-limited chat request (HTTP 429) is retried up to three times, honouring
+  `Retry-After` (otherwise 2 / 5 / 10 s); parallel sub-agents can exceed a provider's
+  concurrency limit.
+
 ## [0.10.4] - 2026-10-03 (pre-release)
 
 App-only update; the knowledge base is the v0.10.1 asset (unchanged, no new download).
