@@ -4,12 +4,20 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
-### Planned (0.11, library page — docs only so far)
+0.11 (library page) in development; plan and milestones in `docs/V0.11_PLAN.md`.
 
-- `docs/V0.11_PLAN.md`: offline reading catalog (stories + archives), reading history/bookmarks, user materials
-  (CRUD, low-trust), read-only official knowledge base separated from a user database, update check and incremental
-  update path. Milestones M1–M5.
-- `docs/ROLEPLAY_ZOOT_ANALYSIS.md`: role-play is frozen (heavy overlap with ZOOT!); no rebuild planned.
+### Added
+
+- User database (`lib/core/userdata/`): a separate `userdata/arklores_user.db` with ordered migrations, stable
+  `LibraryRef` references into the read-only knowledge base, reading history (an evidence-chain open does not
+  overwrite the reading position) and bookmarks. Data layer only; not wired into the UI yet.
+- `tools/library_inventory.dart`: prints what a knowledge base holds for a reader. It lists stories by scope and
+  story-catalog coverage, and documents and records by type.
+
+### Decided
+
+- Role-play is frozen: the ZOOT! app already covers chat-style role-play, so the planned rebuild is dropped and
+  0.12 does not schedule one (`docs/ROLEPLAY_ZOOT_ANALYSIS.md`).
 
 ## [0.10.0] - 2026-10-04
 

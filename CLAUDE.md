@@ -4,21 +4,32 @@
 + 可选剧情向量召回（R12）+ 可选故事目录与官方梗概（R14，`story_catalog`）；
 剧情问答由工具型 Agent（R17，`LoreAgentLoop`）直接查库作答。向量、目录、梗概都只作定位线索，不作证据。
 当前发布版本：v0.10.0（正式版，2026-10-04；取代并删除了之前的 v0.10.0–v0.10.7 八个预发布）；知识库资产在 v0.10.0 Release 上。
-**0.10 线已收尾**；**0.11 已立项（2026-10-04）**，主题是“资料页：阅读器 + 用户资料”，范围、设计和里程碑见 `docs/V0.11_PLAN.md`。
-未经开发者明确同意不要发版（0.11 先发预发布验证，正式版与删旧版本由开发者决定）；发版时 Android build 号继续递增
-（当前 22），知识库资产的 URL 随 `tools/release_gamedata.env` 更新。pubspec 版本号在第一次 0.11 预发布时才改成 0.11.0。
-**角色扮演冻结**（2026-10-04 调查 ZOOT! 后的结论，见 `docs/ROLEPLAY_ZOOT_ANALYSIS.md`）：不重构、不加功能，只修崩溃；
-不要因为“酒馆/ZOOT!”去重做聊天形态。
+**0.10 线已收尾；0.11 已立项（2026-10-04）**，主题是“资料页：离线阅读器 + 阅读历史 + 用户资料 + 知识库跟随解包更新”，
+范围、实测数据、设计和里程碑见 `docs/V0.11_PLAN.md`。
+未经开发者明确同意不要发版（0.11 先发预发布验证，正式版与删旧版本由开发者决定）；pubspec 在第一次 0.11 预发布时才改成 0.11.0；
+发版时 Android build 号继续递增（当前 22），知识库资产的 URL 随 `tools/release_gamedata.env` 更新。
+**角色扮演冻结**（调查 ZOOT! 后的结论，见 `docs/ROLEPLAY_ZOOT_ANALYSIS.md`）：不重构、不加功能，只修崩溃；
+不要因为“酒馆 / ZOOT!”去重做聊天形态。
 GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故事目录表）。
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
 ## 当前进度（每轮结束时更新）
 
-- **0.11 启动（M0，2026-10-04，分支 `feature/v0.11-library`）**：① 调查 ZOOT!（Kiiinou，非官方，全干员一对一聊天 + 群聊 +
-  动态/朋友圈 + 人设编辑，Android/Windows，免费，自备 API）→ 与本项目的角色扮演高度重合，结论是冻结角色扮演、不排进 0.12；
-  ② 0.11 做资料页：官方内容离线阅读目录（剧情 + 档案）、阅读历史/定位/书签、用户资料增删改、知识库只读 + 用户库分离、
-  更新检查与 App 内增量更新稳定化。里程碑 M1 用户库与历史 → M2 剧情目录 → M3 档案阅读 → M4 用户资料 → M5 更新通道，
-  详见 `docs/V0.11_PLAN.md`。目前只有文档，代码尚未动；M1 是下一步。
+- **0.11 启动（2026-10-04，分支 `feature/v0.11-library`）**：
+  - **M0**：
+    - 调查 ZOOT!：Kiiinou 的非官方同人 app，有全干员一对一聊天、群聊、动态/评论、人设与活跃度参数、世界经济模拟、
+      局域网结点；Android/Windows，自备 API；PV 33 万播放，有社区。结论：与“仿酒馆重构角色扮演”完全重合，角色扮演冻结，
+      0.12 也不预排。
+    - 0.11 做资料页（计划见 `docs/V0.11_PLAN.md`）。
+    - 新增 `tools/library_inventory.dart`，实测了可读内容：剧情 2816 个，目录覆盖 71%，另有 824 个要退化分组；
+      档案拼好的只有 839 份干员档案，其余 9.7 万条记录要按实体拼页。
+    - 上游自资产构建后又更新了 4 次，每次只有 2–4 个剧情文件，所以增量更新是常规通道。
+  - **M1 前半（数据层）**：已完成，见 `lib/core/userdata/`：
+    - 独立的用户库 `<documents>/userdata/arklores_user.db`，带迁移框架；
+    - `LibraryRef` 稳定引用；
+    - 阅读历史（证据链打开不覆盖阅读位置）与书签；
+    - 8 项测试（`test/user_data_store_test.dart`）。
+  - **下一步（M1 后半）**：资料页壳（历史与书签），以及 `StoryReaderPage` 记录历史、记住位置、加书签。
 - **v0.10.0 正式版（2026-10-04）**：下面 v0.10.1–v0.10.7 的各条都是并入它的开发迭代（对应的预发布、`release/*` 与 `feature/*` 分支、旧 PR 已删除，只留 `main`）。
   输入框收起时是两行（文字一行 + 工具栏一行）。
 
@@ -48,8 +59,8 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 
 ## 文档索引
 
-- `docs/V0.11_PLAN.md`：0.11（资料页）的范围、设计、里程碑——做资料页/用户库/阅读目录前先读。
-- `docs/ROLEPLAY_ZOOT_ANALYSIS.md`：角色扮演为什么冻结（与 ZOOT! 的重合度分析）。
+- `docs/V0.11_PLAN.md`：0.11（资料页）的范围、实测数据、设计、里程碑——做资料页/用户库/阅读目录/更新通道前先读。
+- `docs/ROLEPLAY_ZOOT_ANALYSIS.md`：角色扮演为什么冻结（与 ZOOT! 的重合度分析；资料页的同类工具）。
 - `docs/CLOUD_DEV.md`：云端会话的环境、每次开始要跑的脚本、能做/不能做的事、发版。
 - `docs/AI_ARCHITECTURE.md`：Agent 与检索架构（当前状态 + 演进简史）——改 agent/检索层前先读。
 - `docs/R17_TOOL_AGENT.md`：剧情问答 Agent 的结构、工具、子 agent、出处核对与验收数据。
@@ -73,11 +84,15 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 
 ## Do Not
 
-- 不往官方知识库（`gamedata`）里写用户数据；用户资料、阅读历史、书签只进独立的用户库（0.11 起，见 `docs/V0.11_PLAN.md`）。
-  官方库只读、只能整体替换；用户数据用稳定标识（`story_id` / `entity_id` / `source_path`）引用官方内容，不用外键或 `ATTACH`。
+- 不往官方知识库（`gamedata`）里写用户数据；阅读历史、书签、用户资料只进独立的用户库（`lib/core/userdata/`）。
+  官方库只读、只能整体替换；用户数据用 `LibraryRef`（`story:` / `record:` / `document:` / `user:`）引用官方内容，
+  不用外键或 `ATTACH`。官方库唯一允许的维护写入是 `_ensureStoryLinesIndex`（只建索引），不再新增就地写入。
+- 用户库的 schema 只通过往 `userDataMigrations` 末尾追加步骤来改，不改已发布的步骤。
+- 阅读目录（`story_catalog`、计划中的 `library_index`）只做导航：分组和排序规则对任意故事集成立，不写活动名字表/顺序表，
+  也不当证据。
 - 不给角色扮演加功能、不重构成聊天 app（见 `docs/ROLEPLAY_ZOOT_ANALYSIS.md`）。
 - 不恢复旧 Wiki seed 运行链路。
-- 不恢复旧用户资料索引链路。
+- 不恢复旧用户资料索引链路（0.11 的用户资料是新设计：独立用户库、低可信、只在用户明确附上时进入问答，见 `docs/V0.11_PLAN.md` §3.4）。
 - 不提交 API key、token、`.env`。
 - 不直接 push `main` 或 `dev`。
 
@@ -179,6 +194,8 @@ GameData schema：4（含确定性覆盖层，可选剧情向量表、可选故�
 /home/hhikr/flutter/bin/flutter test
 /home/hhikr/flutter/bin/flutter analyze
 /home/hhikr/flutter/bin/dart run tools/build_gamedata_database.dart --help
+# 0.11：列出知识库里可阅读的内容（剧情按范围/目录覆盖、档案与记录按类型），只读
+/home/hhikr/flutter/bin/dart run tools/library_inventory.dart --db=<绝对路径>.db
 HOME=/tmp /home/hhikr/flutter/bin/dart run tools/check_gamedata_retrieval.dart \
   --db=build/gamedata_mobile/arklores_gamedata_zh.db
 ```
