@@ -60,7 +60,12 @@ class OpenAICompatibleClient extends LLMClient {
     final fields = reasoningFields.keys;
     if (fields.isEmpty || !fields.any(body.containsKey)) return false;
     final text = errorText.toLowerCase();
-    return text.contains('thinking') || text.contains('reasoning');
+    // Zhipu answers some rejections only with "Invalid API parameter"
+    // ("参数有误"); a retry without the fields costs one request at most.
+    return text.contains('thinking') ||
+        text.contains('reasoning') ||
+        text.contains('parameter') ||
+        text.contains('参数');
   }
 
   Map<String, dynamic> _withoutReasoningFields(Map<String, dynamic> body) {
@@ -115,14 +120,14 @@ class OpenAICompatibleClient extends LLMClient {
       };
     }
     if (isZhipu(config)) {
-      // GLM thinks by default and has no effort setting: low = high.
+      // Measured 2026-10 (glm-5.3-flash, api.z.ai): thinking cannot be
+      // disabled ("please use low, high, or max"); `reasoning_effort: low`
+      // cut an 80-word answer from ~1100 reasoning chunks / 20 s to none /
+      // 4 s. No field = the model's own (heavy) default.
       return switch (level) {
-        ReasoningLevel.off => {
-            'thinking': {'type': 'disabled'},
-          },
-        ReasoningLevel.low || ReasoningLevel.high => {
-            'thinking': {'type': 'enabled'},
-          },
+        ReasoningLevel.off => {'reasoning_effort': 'low'},
+        ReasoningLevel.low => {'reasoning_effort': 'high'},
+        ReasoningLevel.high => {'reasoning_effort': 'max'},
       };
     }
     return const {};

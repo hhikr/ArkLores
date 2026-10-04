@@ -56,7 +56,8 @@ void main() {
       });
     });
 
-    test('zhipu GLM: thinking off / on, no effort setting', () {
+    test('zhipu GLM: thinking cannot be off; the effort is low / high / max',
+        () {
       const zai = LLMConfig(
         chatBaseUrl: 'https://api.z.ai/api/paas/v4',
         chatModel: 'glm-flash',
@@ -70,15 +71,9 @@ void main() {
         chatModel: 'GLM-flash',
       );
       for (final c in [zai, bigmodel, glmElsewhere]) {
-        expect(fields(c, ReasoningLevel.off), {
-          'thinking': {'type': 'disabled'},
-        });
-        expect(fields(c, ReasoningLevel.low), {
-          'thinking': {'type': 'enabled'},
-        });
-        expect(fields(c, ReasoningLevel.high), {
-          'thinking': {'type': 'enabled'},
-        });
+        expect(fields(c, ReasoningLevel.off), {'reasoning_effort': 'low'});
+        expect(fields(c, ReasoningLevel.low), {'reasoning_effort': 'high'});
+        expect(fields(c, ReasoningLevel.high), {'reasoning_effort': 'max'});
       }
       // A host that merely ends in "z.ai" is not Zhipu.
       expect(
@@ -117,8 +112,9 @@ void main() {
       }),
     );
     await client.chatCompletion([Message.user('q')]);
-    expect(body!['thinking'], {'type': 'disabled'});
-    expect(body!.containsKey('reasoning_effort'), isFalse);
+    // The default provider is Zhipu GLM: the lowest effort, no switch.
+    expect(body!['reasoning_effort'], 'low');
+    expect(body!.containsKey('thinking'), isFalse);
   });
 
   group('provider quirks in the request', () {
@@ -177,12 +173,13 @@ void main() {
       expect(glm['tool_stream'], isTrue);
       expect(deepseek.containsKey('tool_stream'), isFalse);
       expect(glm['tools'], isNotEmpty);
-      expect(glm['thinking'], {'type': 'disabled'});
+      expect(glm['reasoning_effort'], 'low');
+      expect(glm.containsKey('thinking'), isFalse);
     });
 
     test(
-        'a model that cannot switch thinking off: the field is dropped once '
-        'and not sent again', () async {
+        'reasoning fields the model rejects (Zhipu says only "Invalid API '
+        'parameter") are dropped once and not sent again', () async {
       final bodies = <Map<String, dynamic>>[];
       final client = OpenAICompatibleClient(
         config: const LLMConfig(
@@ -193,9 +190,9 @@ void main() {
         httpClient: MockClient((request) async {
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           bodies.add(body);
-          if (body.containsKey('thinking')) {
+          if (body.containsKey('reasoning_effort')) {
             return http.Response(
-              '{"error":{"code":"1214","message":"thinking.type only supports enabled"}}',
+              '{"error":{"code":"1210","message":"Invalid API parameter, please check the documentation."}}',
               400,
             );
           }
@@ -216,7 +213,7 @@ void main() {
       expect(bodies, hasLength(2));
       await client.chatCompletion([Message.user('q')]);
       expect(bodies, hasLength(3));
-      expect(bodies.last.containsKey('thinking'), isFalse);
+      expect(bodies.last.containsKey('reasoning_effort'), isFalse);
     });
 
     test('streamed tool calls: arguments joined, a repeated name kept once',
