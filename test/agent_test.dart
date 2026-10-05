@@ -961,6 +961,34 @@ void main() {
       expect((await installer.getStatus()).installed, isTrue);
     });
 
+    test('a whole file with the right checksum installs without the server',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final gz = gzip.encode(await File(validDbPath).readAsBytes());
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/not-published.gz',
+        releaseAssetSha: sha256.convert(gz).toString(),
+      );
+      File('${tempDir.path}/arklores_gamedata_zh.db.download.gz')
+          .writeAsBytesSync(gz);
+      var asked = false;
+      expect(
+        await installer.installFromReleaseAsset(
+          client: MockClient((r) async {
+            asked = true;
+            return http.Response('missing', 404);
+          }),
+          overwrite: true,
+        ),
+        isTrue,
+      );
+      expect(asked, isFalse);
+      expect((await installer.getStatus()).installed, isTrue);
+    });
+
     test('rejects invalid story_line_count before replacing the installed DB',
         () async {
       final invalidPath = '${tempDir.path}/invalid_counts_gamedata.db';

@@ -255,7 +255,17 @@ class GameDataInstaller {
     required Duration connectTimeout,
     required Duration stallTimeout,
   }) async {
-    for (var attempt = 1;; attempt++) {
+    // A complete file already at <db>.download.gz (put there by hand or by
+    // an earlier download that was interrupted after the last byte) with the
+    // expected checksum is installed as it is, without asking the server.
+    var haveLocal = false;
+    final wanted = asset.sha256;
+    if (wanted != null && wanted.isNotEmpty && await part.exists()) {
+      onPhase?.call(GameDataInstallPhase.verifying, 0);
+      final local = (await sha256.bind(part.openRead()).first).toString();
+      haveLocal = local.toLowerCase() == wanted.toLowerCase();
+    }
+    for (var attempt = 1; !haveLocal; attempt++) {
       final ownsClient = client == null;
       final httpClient = client ?? http.Client();
       cancelToken?._client = httpClient;
