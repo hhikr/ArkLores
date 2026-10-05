@@ -558,7 +558,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shelfActivity => 'Events';
 
   @override
-  String get shelfMemory => 'Operator records';
+  String get shelfMemory => 'Operators';
 
   @override
   String get shelfRoguelike => 'Integrated Strategies';
@@ -571,6 +571,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shelfCodex => 'Codex';
+
+  @override
+  String get libraryOperatorRecords => 'Operator records';
+
+  @override
+  String get libraryOperatorProfile => 'Operator file';
 
   @override
   String libraryCountCollections(int n) {

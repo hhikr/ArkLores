@@ -40,7 +40,7 @@ All notable changes to ArkLores will be documented in this file.
 ### Library (in development for 0.11)
 
 - **The Materials tab is now a library.** *Read*: continue the story you were reading, browse the shelves — main story,
-  events, operator records, Integrated Strategies, Sandbox, re-runs and the codex (operators, enemies, items, medals …) —
+  events, operators, Integrated Strategies, Sandbox and the codex (enemies, items, medals …) —
   open a story set to see its chapters with the official synopsis and your progress, and the other texts that belong to it
   (stages, enemies, relics, events …). An entry shows its text and what it is bound to (an enemy shows the stages it appears
   in; tap to go there). Search finds story sets, entries and stage codes.
@@ -48,6 +48,13 @@ All notable changes to ArkLores will be documented in this file.
   are at and how far you read; *Continue reading* and *Recently read* return to that line (found again by its text if the story
   changed), with a progress bar and a check mark when finished. Chapters end with *previous / next chapter*. Captions, documents
   and choices are labelled.
+- **Real names instead of file ids.** Training, guide, tutorial, Integrated Strategies and Sandbox stories used to be listed
+  under their raw file names (`training_…_01_a`, `endbook_rogue_…`). They now carry their real names: training and level
+  stories are named after the stage they belong to (and are bound to it), ending-book pages and month chats take the names
+  the game gives them, and what only has a kind is numbered (`指引 3`). Re-runs are no longer a shelf of their own — their
+  stages belong to the event they re-run. *(Needs the new knowledge base.)*
+- **One page per operator.** The *Operators* shelf lists operators; an operator's page holds the record sets (密录),
+  modules, skins, paradox simulation stages (悖论模拟) and the profile. They no longer appear as separate lists in the codex.
 - **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and
   never enter the knowledge base. *Ask about it* puts a text in the question box so you can finish the question and send it.
 

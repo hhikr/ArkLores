@@ -25,6 +25,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite_common/sqlite_api.dart';
 
 import 'arknights_importer.dart';
+import 'story_naming.dart';
 import 'text_harvest.dart';
 
 const String _excel = 'zh_CN/gamedata/excel';
@@ -169,7 +170,7 @@ const Map<String, String> _typeLabels = {
   'medal': '勋章',
   'charm': '护符',
   'module': '干员模组',
-  'operator_stage': '干员档案关卡',
+  'operator_stage': '悖论模拟关卡',
   'enemy': '敌人',
   'stage': '关卡',
   'zone': '章节',
@@ -386,19 +387,32 @@ class EntryImporter {
       ctx.zoneToActivity[entry.key] = '${entry.value}';
     }
     final retro = await _table(EntryTables.retro);
+    // A re-run is the same content as the activity it re-runs: its zones and
+    // stages belong to that activity, not to a shelf of re-runs of their
+    // own. Only a re-run that links no known activity stays a collection.
+    final retroHome = <String, String>{};
     for (final entry in _map(retro['retroActList']).entries) {
       final info = _map(entry.value);
+      final home = [
+        for (final id in _list(info['linkedActId']))
+          if (ctx.collections.containsKey(_s(id))) _s(id),
+      ];
+      if (home.isNotEmpty) {
+        retroHome[entry.key] = home.first;
+        continue;
+      }
       final start = _int(info['startTime']);
       ctx.add(
         entry.key,
-        'retro',
+        'activity',
         _clean(info['name']),
         start == null || start < 0 ? null : start,
         sort++,
       );
     }
     for (final entry in _map(retro['zoneToRetro']).entries) {
-      ctx.zoneToRetro[entry.key] = '${entry.value}';
+      final id = '${entry.value}';
+      ctx.zoneToRetro[entry.key] = retroHome[id] ?? id;
     }
     final topics = _map((await _table(EntryTables.roguelikeTopic))['topics']);
     for (final entry in topics.entries) {
@@ -1762,6 +1776,7 @@ class EntryImporter {
   Future<void> rebuildDerived() async {
     final ctx = await _loadContext();
     final memberOf = await _memorySetOwners();
+    final namer = await _storyNamer();
     await db.transaction((txn) async {
       await txn.delete('collections');
       await txn.delete('entries', where: "type = 'story'");
@@ -1824,10 +1839,36 @@ class EntryImporter {
         'record': '记录',
       };
       var fallbackSort = 100000;
+      // Files the catalog does not name get a name from the tables, from
+      // the stage they belong to, or from their kind (see story_naming).
+      final owners = <String, String?>{};
+      final named = <String, StoryNaming>{};
+      final unnamed = <String, List<String>>{};
       for (final row in rows) {
         final storyId = '${row['story_id']}';
-        var owner = row['collection_id'] as String?;
-        owner ??= _ownerOfStoryPath(ctx, storyId);
+        final owner = (row['collection_id'] as String?) ??
+            _ownerOfStoryPath(ctx, storyId);
+        owners[storyId] = owner;
+        final catalogName = (row['story_name'] as String?)?.trim() ?? '';
+        if (catalogName.isNotEmpty) continue;
+        final found = namer.resolve(storyId, collectionId: owner);
+        if (found != null) {
+          named[storyId] = found;
+        } else {
+          unnamed.putIfAbsent(owner ?? '', () => []).add(storyId);
+        }
+      }
+      for (final ids in unnamed.values) {
+        named.addAll(numberedKinds(ids));
+      }
+      final rank = <String, int>{};
+      final order = named.keys.toList()..sort(naturalCompare);
+      for (var i = 0; i < order.length; i++) {
+        rank[order[i]] = i;
+      }
+      for (final row in rows) {
+        final storyId = '${row['story_id']}';
+        final owner = owners[storyId];
         if (owner != null && !written.contains(owner)) {
           final parts = storyId.split('/');
           final system = parts.length >= 2 && parts.first == 'obt'
@@ -1847,16 +1888,27 @@ class EntryImporter {
             fallbackSort++,
           );
         }
-        final name = (row['story_name'] as String?)?.trim();
+        final catalogName = (row['story_name'] as String?)?.trim();
+        final naming = named[storyId];
+        final fromCatalog = catalogName != null && catalogName.isNotEmpty;
+        var sort = (row['story_sort'] as num?)?.toInt();
+        if (!fromCatalog && naming != null) {
+          // Unnamed files follow the catalogued chapters of their collection.
+          sort = 1000000 + (naming.sort ?? 0) * 10000 + rank[storyId]!;
+        }
         await importer.insertEntry(
           txn,
           id: 'story:$storyId',
           type: 'story',
-          name: name == null || name.isEmpty ? p.posix.basenameWithoutExtension(storyId) : name,
+          name: fromCatalog
+              ? catalogName
+              : naming?.name ?? p.posix.basenameWithoutExtension(storyId),
           code: row['story_code'] as String?,
           collectionId: owner,
-          groupName: row['avg_tag'] as String?,
-          sortKey: (row['story_sort'] as num?)?.toInt(),
+          groupName: fromCatalog
+              ? row['avg_tag'] as String?
+              : naming?.group ?? row['avg_tag'] as String?,
+          sortKey: sort,
           rawId: storyId,
           sourcePath: '${row['source_path']}',
         );
@@ -1911,7 +1963,8 @@ class EntryImporter {
           final match = byCode['${r['collection_id']}|${r['code']}'];
           if (match != null && match.length == 1) target = match.single;
         }
-        if (target != null) {
+        target ??= named['${r['raw_id']}']?.stageEntryId;
+        if (target != null && target.isNotEmpty) {
           await _link(txn, '${r['id']}', 'belongs_to_stage', target, 'derived');
         }
       }
@@ -1922,6 +1975,62 @@ class EntryImporter {
         'OR dst NOT IN (SELECT id FROM entries)',
       );
     });
+  }
+
+  /// The lookups that name story files the catalog does not name: names the
+  /// tables give them, the stages of the library, stage names by id and by
+  /// level file.
+  Future<StoryNamer> _storyNamer() async {
+    final hints = <String, StoryHint>{};
+    final stageNames = <String, String>{};
+    final levelNames = <String, String>{};
+    hints.addAll(
+      roguelikeStoryHints(await _table(EntryTables.roguelikeTopic), _clean),
+    );
+    final sandbox = sandboxStoryNames(await _table(EntryTables.sandboxPerm), _clean);
+    hints.addAll(sandbox.hints);
+    levelNames.addAll(sandbox.levelNames);
+    collectStageNames(
+      _map((await _table(EntryTables.stage))['stages']),
+      stageNames,
+      levelNames,
+      _clean,
+    );
+    collectStageNames(
+      _map((await _table(EntryTables.retro))['stageList']),
+      stageNames,
+      levelNames,
+      _clean,
+    );
+    final readBy = <String, String>{};
+    for (final r in await db.rawQuery(
+      'SELECT l.dst AS dst, e.name AS name FROM entry_links l '
+      "JOIN entries e ON e.id = l.src WHERE l.relation = 'reads_story'",
+    )) {
+      final dst = '${r['dst']}';
+      final name = '${r['name'] ?? ''}'.trim();
+      if (name.isNotEmpty && dst.startsWith('story:')) {
+        readBy[storyKey(dst.substring(6))] = name;
+      }
+    }
+    final stages = <StageRef>[];
+    final collectionOfStage = <String, String>{};
+    for (final r in await db.rawQuery(
+      'SELECT id, raw_id, name, code, collection_id FROM entries '
+      "WHERE type = 'stage' AND collection_id IS NOT NULL",
+    )) {
+      final id = '${r['id']}';
+      stages.add(StageRef(id, '${r['raw_id']}', '${r['name'] ?? ''}', r['code'] as String?));
+      collectionOfStage[id] = '${r['collection_id']}';
+    }
+    return StoryNamer(
+      hints: hints,
+      readBy: readBy,
+      stages: stages,
+      collectionOfStage: collectionOfStage,
+      levelNames: levelNames,
+      stageNames: stageNames,
+    );
   }
 
   /// Memory story set id → `operator:<charId>` from the handbook's record

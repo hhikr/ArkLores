@@ -24,13 +24,14 @@ Future<Database> buildFixture() async {
   );
 
   Future<void> collection(String id, String kind, String name,
-      {int? sort, int? start,}) =>
+      {int? sort, int? start, String? parent,}) =>
       db.insert('collections', {
         'id': id,
         'kind': kind,
         'name': name,
         'sort_key': sort,
         'start_time': start,
+        'parent_id': parent,
       });
   Future<void> entry(
     String id,
@@ -72,7 +73,7 @@ Future<Database> buildFixture() async {
   await collection('act_old', 'activity', '旧活动', start: 1000);
   await collection('act_new', 'activity', '新活动', start: 2000);
   await collection('act_empty', 'activity', '空活动', start: 3000);
-  await collection('mem_a', 'memory', '密录甲', sort: 5);
+  await collection('mem_a', 'memory', '密录甲', sort: 5, parent: 'operator:char_x');
   await collection('rogue_1', 'roguelike', '肉鸽一', start: 1500);
 
   for (var i = 1; i <= 3; i++) {
@@ -110,6 +111,15 @@ Future<Database> buildFixture() async {
   await entry('roguelike_item:ri1', 'roguelike_item', '怪异的票', collection: 'rogue_1', record: 'r_ri1');
   await record('r_ri1', 'roguelike_item:ri1', '怪异的票', '一张票。');
   await entry('skin:nodoc', 'skin', '无文字皮肤'); // no record: not readable
+  await entry('module:m1', 'module', '模组甲', code: 'X-A', record: 'r_m1', sort: 2);
+  await record('r_m1', 'module:m1', '模组甲', '一块模组。');
+  await entry('skin:s1', 'skin', '皮肤甲', record: 'r_s1', sort: 1);
+  await record('r_s1', 'skin:s1', '皮肤甲', '一件皮肤。');
+  await entry('operator_stage:p1', 'operator_stage', '模拟场景', code: 'EX', record: 'r_p1');
+  await record('r_p1', 'operator_stage:p1', '模拟场景', '一段说明。');
+  for (final owned in ['module:m1', 'skin:s1', 'operator_stage:p1']) {
+    await db.insert('entry_links', {'src': owned, 'relation': 'belongs_to', 'dst': 'operator:char_x'});
+  }
 
   await db.insert('entry_links', {'src': 'enemy:e1', 'relation': 'appears_in', 'dst': 'stage:st1'});
   await db.insert('entry_links', {'src': 'stage:st1', 'relation': 'belongs_to', 'dst': 'activity:act_empty'});
@@ -141,13 +151,33 @@ void main() {
     expect(await hasEntryLayer(db), isTrue);
   });
 
-  test('the codex lists readable free entries by type', () async {
+  test('the codex lists readable free entries by type, not the operators'
+      ' or what belongs to them', () async {
     final types = await codexTypes(db);
     expect({for (final t in types) t.type: t.count}, {
       'enemy': 2,
       'item': 1,
-      'operator': 1,
     });
+  });
+
+  test('an operator page: its record sets and what belongs to it', () async {
+    final sets = await collectionsOwnedBy(db, 'operator:char_x');
+    expect(sets.map((c) => c.id), ['mem_a']);
+    expect(sets.single.stories, 1);
+    final owned = await entriesOwnedBy(db, 'operator:char_x');
+    // By type, then in order.
+    expect(owned.map((e) => e.id), [
+      'module:m1',
+      'operator_stage:p1',
+      'skin:s1',
+    ]);
+    expect(await entriesOwnedBy(db, 'operator:nobody'), isEmpty);
+    expect(entryTypeName('operator_stage'), '悖论模拟');
+  });
+
+  test('the operator shelf counts operators, not their record sets', () async {
+    final memory = (await shelfSummaries(db)).firstWhere((s) => s.kind == operatorShelf);
+    expect((memory.collections, memory.stories), (1, 1));
   });
 
   test('collections: release order, empty ones left out, game order otherwise',

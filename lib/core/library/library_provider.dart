@@ -94,7 +94,15 @@ final entryBindingsProvider = FutureProvider.autoDispose
     .family<List<EntryBinding>, String>((ref, id) async =>
         await _query(ref, (db) => entryBindings(db, id)) ?? const [],);
 
-final storyPlaceProvider = FutureProvider.autoDispose
+final operatorMemoriesProvider = FutureProvider.autoDispose
+    .family<List<LibraryCollection>, String>((ref, id) async =>
+        await _query(ref, (db) => collectionsOwnedBy(db, id)) ?? const [],);
+
+final operatorOwnedProvider = FutureProvider.autoDispose
+    .family<List<LibraryEntry>, String>((ref, id) async =>
+        await _query(ref, (db) => entriesOwnedBy(db, id)) ?? const [],);
+
+final storyPlaceProvider =FutureProvider.autoDispose
     .family<StoryPlace?, String>((ref, storyId) async =>
         _query<StoryPlace?>(ref, (db) => storyPlace(db, storyId)),);
 

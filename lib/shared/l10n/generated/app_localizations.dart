@@ -1079,7 +1079,7 @@ abstract class AppLocalizations {
   /// No description provided for @shelfMemory.
   ///
   /// In en, this message translates to:
-  /// **'Operator records'**
+  /// **'Operators'**
   String get shelfMemory;
 
   /// No description provided for @shelfRoguelike.
@@ -1105,6 +1105,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Codex'**
   String get shelfCodex;
+
+  /// No description provided for @libraryOperatorRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator records'**
+  String get libraryOperatorRecords;
+
+  /// No description provided for @libraryOperatorProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator file'**
+  String get libraryOperatorProfile;
 
   /// No description provided for @libraryCountCollections.
   ///

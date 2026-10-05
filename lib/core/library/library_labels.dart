@@ -8,7 +8,7 @@ import 'library_queries.dart';
 String entryTypeName(String type) => switch (type) {
       'story' => '剧情',
       'operator' => '干员档案',
-      'operator_stage' => '干员密录关卡',
+      'operator_stage' => '悖论模拟',
       'enemy' => '敌人',
       'stage' => '关卡',
       'zone' => '章节',

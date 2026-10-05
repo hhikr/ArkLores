@@ -25,7 +25,6 @@ String shelfLabel(BuildContext context, String kind) => switch (kind) {
       'memory' => context.t.shelfMemory,
       'roguelike' => context.t.shelfRoguelike,
       'sandbox' => context.t.shelfSandbox,
-      'retro' => context.t.shelfRetro,
       _ => context.t.shelfCodex,
     };
 
@@ -35,15 +34,20 @@ IconData shelfIcon(String kind) => switch (kind) {
       'memory' => Icons.badge_rounded,
       'roguelike' => Icons.diamond_rounded,
       'sandbox' => Icons.landscape_rounded,
-      'retro' => Icons.history_edu_rounded,
       _ => Icons.collections_bookmark_rounded,
     };
 
 void _push(BuildContext context, WidgetBuilder builder) =>
     Navigator.of(context).push(smoothPageRoute<void>(builder: builder));
 
-void openShelf(BuildContext context, String kind) =>
-    _push(context, (_) => ShelfPage(kind: kind));
+/// The operator shelf lists the operators; every other shelf its
+/// collections (the codex its entry types).
+void openShelf(BuildContext context, String kind) => _push(
+      context,
+      (_) => kind == operatorShelf
+          ? EntryListPage(type: 'operator', title: shelfLabel(context, kind))
+          : ShelfPage(kind: kind),
+    );
 
 void openCollection(BuildContext context, String id) =>
     _push(context, (_) => CollectionPage(collectionId: id));
@@ -54,7 +58,12 @@ void openEntry(BuildContext context, LibraryEntry entry) {
     openStory(context, story);
     return;
   }
-  _push(context, (_) => EntryPage(entryId: entry.id));
+  _push(
+    context,
+    (_) => entry.type == 'operator'
+        ? OperatorPage(entryId: entry.id)
+        : EntryPage(entryId: entry.id),
+  );
 }
 
 void openSearch(BuildContext context) =>
@@ -341,7 +350,11 @@ class CollectionPage extends ConsumerWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    AccentPill(shelfLabel(context, c.kind)),
+                    AccentPill(
+                      c.kind == operatorShelf
+                          ? context.t.libraryOperatorRecords
+                          : shelfLabel(context, c.kind),
+                    ),
                     if (month != null)
                       AccentPill(context.t.libraryRelease(month), muted: true),
                     if (c.stories > 0)
@@ -374,11 +387,15 @@ class EntryListPage extends ConsumerStatefulWidget {
     required this.type,
     this.collectionId,
     this.collectionName,
+    this.title,
   });
 
   final String type;
   final String? collectionId;
   final String? collectionName;
+
+  /// Replaces the default title (the type's name).
+  final String? title;
 
   @override
   ConsumerState<EntryListPage> createState() => _EntryListPageState();
@@ -404,10 +421,11 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
     );
     final entries = ref.watch(entriesOfTypeProvider(key));
     return LibraryScaffold(
-      title: [
-        if (widget.collectionName != null) widget.collectionName!,
-        entryTypeName(widget.type),
-      ].join(' · '),
+      title: widget.title ??
+          [
+            if (widget.collectionName != null) widget.collectionName!,
+            entryTypeName(widget.type),
+          ].join(' · '),
       body: Column(
         children: [
           FilterField(
@@ -528,7 +546,11 @@ class EntryPage extends ConsumerWidget {
         ],
       );
 
-  Widget _textBlock(AppThemeTokens theme, LibraryEntry e, EntryTextBlock b) {
+  static Widget _textBlock(
+    AppThemeTokens theme,
+    LibraryEntry e,
+    EntryTextBlock b,
+  ) {
     final text = cleanRichText(b.content).trim();
     if (text.isEmpty) return const SizedBox.shrink();
     final showTitle = b.title.trim().isNotEmpty &&
@@ -624,6 +646,152 @@ class EntryPage extends ConsumerWidget {
         ),
       ],
     ];
+  }
+}
+
+// ─── One operator ─────────────────────────────────────────────────
+
+/// An operator's page: everything the knowledge base holds about it in one
+/// place — record sets (密录), modules, skins, paradox simulation stages and
+/// the profile text.
+class OperatorPage extends ConsumerWidget {
+  const OperatorPage({super.key, required this.entryId});
+
+  final String entryId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final entry = ref.watch(entryProvider(entryId));
+    final e = entry.valueOrNull;
+    if (e == null) {
+      return LibraryScaffold(
+        title: '',
+        body: entry.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : LibraryMessage(
+                icon: Icons.folder_off_rounded,
+                title: context.t.libraryEmpty,
+              ),
+      );
+    }
+    final records = ref.watch(operatorMemoriesProvider(e.id)).valueOrNull ??
+        const <LibraryCollection>[];
+    final owned = ref.watch(operatorOwnedProvider(e.id)).valueOrNull ??
+        const <LibraryEntry>[];
+    final blocks = ref.watch(entryTextsProvider(e)).valueOrNull ??
+        const <EntryTextBlock>[];
+
+    // Owned entries by type, in the order the query returns them.
+    final byType = <String, List<LibraryEntry>>{};
+    for (final o in owned) {
+      (byType[o.type] ??= []).add(o);
+    }
+
+    Widget header(String title, String code) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: IndustrialSectionHeader(theme: theme, title: title, code: code),
+        );
+
+    return LibraryScaffold(
+      title: e.name.isEmpty ? e.id : e.name,
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 32),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: _headerCard(context, theme, e, records, byType),
+          ),
+          if (records.isNotEmpty) ...[
+            header(context.t.libraryOperatorRecords, 'records'),
+            for (final c in records) ...[
+              LibraryRow(
+                key: ValueKey('operator-record-${c.id}'),
+                title: c.name,
+                subtitle: context.t.libraryCountStories(c.stories),
+                subtitleLines: 1,
+                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                onTap: () => openCollection(context, c.id),
+              ),
+              rowDivider(theme),
+            ],
+          ],
+          for (final group in byType.entries) ...[
+            header(entryTypeName(group.key), group.key),
+            for (final o in group.value) ...[
+              LibraryRow(
+                key: ValueKey('operator-owned-${o.id}'),
+                titlePrefix: o.code,
+                title: o.name.isEmpty ? o.id : o.name,
+                subtitle: o.group,
+                subtitleLines: 1,
+                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                onTap: () => openEntry(context, o),
+              ),
+              rowDivider(theme),
+            ],
+          ],
+          if (blocks.isNotEmpty) ...[
+            header(context.t.libraryOperatorProfile, 'profile'),
+            const SizedBox(height: 4),
+            for (final b in blocks)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: EntryPage._textBlock(theme, e, b),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _headerCard(
+    BuildContext context,
+    AppThemeTokens theme,
+    LibraryEntry e,
+    List<LibraryCollection> records,
+    Map<String, List<LibraryEntry>> byType,
+  ) {
+    final stories = records.fold<int>(0, (n, c) => n + c.stories);
+    return ThemeAwareCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(shelfIcon(operatorShelf), color: theme.accentText, size: 28),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  e.name.isEmpty ? e.id : e.name,
+                  style: theme.titleFont.copyWith(fontSize: 18, height: 1.25),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    AccentPill(context.t.shelfMemory),
+                    if (stories > 0)
+                      AccentPill(
+                        context.t.libraryCountStories(stories),
+                        muted: true,
+                      ),
+                    for (final g in byType.entries)
+                      AccentPill(
+                        '${entryTypeName(g.key)} ${g.value.length}',
+                        muted: true,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

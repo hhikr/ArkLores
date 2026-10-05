@@ -23,7 +23,7 @@ const String loreDatabaseGuide = '''
 - normalized_records(id, category, subtype, content_type, title, entity_name, content, entry_id, collection_id, ...)：剧情以外的资料
   （干员档案、语音、敌人介绍、道具/勋章/皮肤描述、肉鸽藏品与事件、活动档案/新闻/来信等）的原文；每条属于一个条目（entry_id）。
 - collections(id, kind, name, parent_id, sort_key, start_time)：故事集的“归属单位”：kind 为 main 主线章节、activity 活动、memory 干员密录、
-  roguelike 肉鸽主题、sandbox 沙盘、retro 复刻、system 教程/指引；parent_id 指向所属干员条目（密录）。
+  roguelike 肉鸽主题、sandbox 沙盘、system 教程/指引（复刻并入原活动）；parent_id 指向所属干员条目（密录）。
 - entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, record_id)：每个官方条目一行，id 形如 <type>:<原始id>。
   type 有 story、operator、enemy、stage、zone、item、skin、medal、module、power、worldview、mail、activity_text、archive_*、
   roguelike_item / roguelike_scene / roguelike_choice / roguelike_ending / roguelike_stage 等；code 是关卡号/敌人编号；

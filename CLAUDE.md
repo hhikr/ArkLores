@@ -16,6 +16,17 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 资料页修正（2026-10-05，未发布，需重建/重算知识库）**：真机反馈三点。① 训练/指引/教程/肉鸽/生息演算的剧情用的是解包文件名：
+  新增 `build/story_naming.dart`（`rebuildDerived` 里调用）——名字优先级：表里给文件本身的名字（肉鸽 `archiveComp.endbook/chat`、
+  生息演算 NPC 对话 `picName`、档案条目 `reads_story`）→ 所属关卡（`level_<关卡>_beg/end`、`training_<集合>_<nn>_x` → 关卡 `<集合>_tr<nn>`、
+  `levelId` 文件名、关卡 id；训练文件只认 `tr` 关卡，不会落到同号的章节关卡）并写 `belongs_to_stage` → 只能判断类型时
+  按类型编号（`训练 3`，自然序）。全部来自 id 结构与表，没有任何故事/活动/人名。实测（上游 a550f5e）：非中文名字的故事 1676 → 39（剩下的是
+  “6:44P.M.” 这类真实标题和 NPC 名）。② 复刻不再是书架：`retro_table.linkedActId` 指向原活动，复刻的区域/关卡并入原活动（无链接的才保留为活动）。
+  ③ 干员页：`operatorShelf`（=`memory`）书架列干员，`OperatorPage` 汇集密录集（`collections.parent_id`）、模组/皮肤/悖论模拟关卡
+  （`belongs_to` 干员的条目）与档案；图鉴不再单列这些类型和干员；`operator_stage` 显示名改为“悖论模拟”。
+  给已有的库补算：`dart run tools/rederive_gamedata.dart --db=<库> --source=notes/src --output=<新库>`（重导条目表 + `rebuildDerived` + FTS，
+  不动故事与向量）。上线前需把新库作为知识库资产重新发布。
+
 - **预发布 v0.11.0-pre.2（2026-10-05）**：pre.1 在真机上知识库下载一直停在“下载中”、进度条不动（部分文件夹里只有 `.download.gz.key`，没有
   `.download.gz`：等不到服务器应答）。桌面上用 `test/live/release_asset_install_live_test.dart`（`ARKLORES_RUN_ASSET_INSTALL=true` +
   `ARKLORES_ASSET_URL/SHA`）完整装了这个资产（下载 39 s、安装 44 s），所以资产与安装代码没问题，真机根因未能复现（疑为手机到

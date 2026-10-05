@@ -5,6 +5,7 @@ import 'package:arklores/core/userdata/library_ref.dart';
 import 'package:arklores/core/userdata/user_data_provider.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
+import 'package:arklores/features/library/library_pages.dart';
 import 'package:arklores/features/library/my_materials.dart';
 import 'package:arklores/features/materials/materials_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
@@ -47,6 +48,13 @@ const _stories = [
   ),
 ];
 
+const _operator = LibraryEntry(
+  id: 'operator:char_x',
+  type: 'operator',
+  name: '干员甲',
+  entityId: 'char_x',
+);
+
 const _enemy = LibraryEntry(
   id: 'enemy:e1',
   type: 'enemy',
@@ -64,13 +72,11 @@ List<Override> overrides(MemoryUserStore store) => [
           ShelfSummary(kind: 'memory', collections: 387, stories: 390),
           ShelfSummary(kind: 'roguelike', collections: 6, stories: 260),
           ShelfSummary(kind: 'sandbox', collections: 2, stories: 251),
-          ShelfSummary(kind: 'retro', collections: 44, stories: 0),
         ],
       ),
       codexTypesProvider.overrideWith(
         (ref) async => const [
           (type: 'enemy', count: 1747),
-          (type: 'operator', count: 843),
         ],
       ),
       collectionsOfKindProvider.overrideWith(
@@ -115,7 +121,29 @@ List<Override> overrides(MemoryUserStore store) => [
         ],
       ),
       entryProvider.overrideWith(
-        (ref, id) async => _enemy.id == id ? _enemy : null,
+        (ref, id) async => switch (id) {
+          'enemy:e1' => _enemy,
+          'operator:char_x' => _operator,
+          _ => null,
+        },
+      ),
+      operatorMemoriesProvider.overrideWith(
+        (ref, id) async => const [
+          LibraryCollection(
+            id: 'story_x_set_1',
+            kind: 'memory',
+            name: '苹果',
+            stories: 2,
+            others: 0,
+          ),
+        ],
+      ),
+      operatorOwnedProvider.overrideWith(
+        (ref, id) async => const [
+          LibraryEntry(id: 'module:m1', type: 'module', name: '模组甲', code: 'X-A'),
+          LibraryEntry(id: 'skin:s1', type: 'skin', name: '皮肤甲'),
+          LibraryEntry(id: 'operator_stage:p1', type: 'operator_stage', name: '模拟场景', code: 'EX'),
+        ],
       ),
       entryTextsProvider.overrideWith(
         (ref, entry) async => const [
@@ -225,11 +253,11 @@ void main() {
     expect(find.text('阅读'), findsOneWidget);
     expect(find.text('我的资料'), findsOneWidget);
     expect(find.byKey(const ValueKey('library-continue')), findsOneWidget);
-    for (final k in ['main', 'activity', 'memory', 'roguelike', 'sandbox', 'retro', 'codex']) {
+    for (final k in ['main', 'activity', 'memory', 'roguelike', 'sandbox', 'codex']) {
       expect(find.byKey(ValueKey('shelf-$k')), findsOneWidget, reason: k);
     }
     expect(find.text('18 项 · 463 个故事'), findsOneWidget);
-    expect(find.text('2590 条'), findsOneWidget);
+    expect(find.text('1747 条'), findsOneWidget);
     await tester.drag(find.byType(ListView).first, const Offset(0, -1500));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byKey(const ValueKey('library-all-recent')), findsOneWidget);
@@ -299,6 +327,29 @@ void main() {
     expect(find.textContaining('<@'), findsNothing);
     expect(find.byKey(const ValueKey('binding-stage:s0')), findsOneWidget);
     expect(find.textContaining('出现在'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the operator shelf lists operators; their page holds it all',
+      (tester) async {
+    await pumpApp(tester, const MaterialsPage());
+    expect(find.byKey(const ValueKey('shelf-retro')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('shelf-memory')));
+    await tester.pumpAndSettle();
+    expect(find.text('干员'), findsWidgets);
+    expect(find.byKey(const ValueKey('codex-type-operator')), findsNothing);
+
+    await pumpApp(tester, const OperatorPage(entryId: 'operator:char_x'));
+    await shoot(tester, 'library_operator');
+    expect(find.text('干员甲'), findsWidgets);
+    expect(find.text('干员密录'), findsWidgets);
+    expect(find.byKey(const ValueKey('operator-record-story_x_set_1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('operator-owned-module:m1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('operator-owned-skin:s1')), findsOneWidget);
+    // The simulation stages carry their own name, not "密录关卡".
+    expect(find.text('悖论模拟'), findsWidgets);
+    expect(find.byKey(const ValueKey('operator-owned-operator_stage:p1')), findsOneWidget);
+    expect(find.textContaining('嗅觉敏锐'), findsOneWidget); // the profile text
     expect(tester.takeException(), isNull);
   });
 

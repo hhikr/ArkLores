@@ -16,12 +16,24 @@ const List<String> shelfKinds = [
   'memory',
   'roguelike',
   'sandbox',
-  'retro',
 ];
 
-/// The shelf of items that belong to no collection (operators, enemies,
-/// items, medals, skins, mails, world-view texts …).
+/// The shelf of items that belong to no collection (enemies, items, medals,
+/// mails, world-view texts …). Operators have a shelf of their own (their
+/// record sets are the `memory` collections), and everything that belongs
+/// to an operator is on the operator's page.
 const String codexShelf = 'codex';
+
+/// The shelf kind whose list is the operators (the record collections hang
+/// below them).
+const String operatorShelf = 'memory';
+
+/// An entry bound to an operator (`belongs_to` an `operator:` entry): a
+/// module, a skin, a paradox simulation stage. It is shown on the operator's
+/// page, not in the codex.
+const String _ownedByOperator = 'EXISTS (SELECT 1 FROM entry_links ol '
+    "WHERE ol.src = e.id AND ol.relation = 'belongs_to' "
+    "AND ol.dst LIKE 'operator:%')";
 
 /// One shelf and how much is on it.
 class ShelfSummary {
@@ -187,7 +199,7 @@ Future<bool> hasEntryLayer(DatabaseExecutor db) async =>
 /// collection are left out. [codexTypes] is the shelf of free entries.
 Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
   final rows = await db.rawQuery(
-    'SELECT c.kind AS kind, COUNT(DISTINCT c.id) AS collections, '
+    'SELECT c.kind AS kind, COUNT(DISTINCT COALESCE(c.parent_id, c.id)) AS collections, '
     "SUM(CASE WHEN e.type = 'story' THEN 1 ELSE 0 END) AS stories "
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'GROUP BY c.kind',
@@ -208,9 +220,13 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
 
 /// Entry types of the codex shelf with their counts.
 Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
+  final owned = await _hasTable(db, 'entry_links')
+      ? 'AND NOT $_ownedByOperator '
+      : '';
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
-    'WHERE e.collection_id IS NULL AND $_readable '
+    "WHERE e.collection_id IS NULL AND e.type <> 'operator' AND $_readable "
+    '$owned'
     'GROUP BY e.type ORDER BY n DESC',
   );
   return [
@@ -244,6 +260,42 @@ Future<List<LibraryCollection>> collectionsOfKind(
     return a.id.compareTo(b.id);
   });
   return list;
+}
+
+/// The record sets (`memory` collections) of an operator, in game order.
+Future<List<LibraryCollection>> collectionsOwnedBy(
+  DatabaseExecutor db,
+  String ownerEntryId,
+) async {
+  final rows = await db.rawQuery(
+    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
+    "SUM(CASE WHEN e.type = 'story' THEN 1 ELSE 0 END) AS stories, "
+    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
+    'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
+    'WHERE c.parent_id = ? GROUP BY c.id ORDER BY c.sort_key, c.id',
+    [ownerEntryId],
+  );
+  return [
+    for (final r in rows) LibraryCollection.fromRow(r),
+  ].where((c) => c.stories + c.others > 0).toList();
+}
+
+/// What belongs to an operator besides its profile: modules, skins, paradox
+/// simulation stages (entries bound to it by `belongs_to`), by type.
+Future<List<LibraryEntry>> entriesOwnedBy(
+  DatabaseExecutor db,
+  String ownerEntryId,
+) async {
+  if (!await _hasTable(db, 'entry_links')) return const [];
+  final rows = await db.rawQuery(
+    'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
+    'e.collection_id, e.entity_id FROM entry_links l '
+    'JOIN entries e ON e.id = l.src '
+    "WHERE l.dst = ? AND l.relation = 'belongs_to' "
+    'ORDER BY e.type, e.sort_key, e.code, e.name, e.id',
+    [ownerEntryId],
+  );
+  return [for (final r in rows) LibraryEntry.fromRow(r)];
 }
 
 /// One collection with its release time, or null.
@@ -330,8 +382,7 @@ Future<List<LibraryEntry>> entriesOfType(
     from = 'entries e';
     where = collectionId == null
         ? 'e.collection_id IS NULL AND e.type = ?'
-        : 'e.collection_id = ? AND e.type = ?';
-    head = [if (collectionId != null) collectionId, type];
+        : 'e.collection_id = ? AND e.type = ?';    head = [if (collectionId != null) collectionId, type];
   }
   final rows = await db.rawQuery(
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '

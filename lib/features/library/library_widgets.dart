@@ -298,7 +298,11 @@ class StoryRow extends ConsumerWidget {
     return LibraryRow(
       key: ValueKey('story-row-${story.id}'),
       titlePrefix: story.code,
-      title: [story.name, if (story.group != null) '· ${story.group}']
+      title: [
+        story.name,
+        if (story.group != null && !story.name.contains(story.group!))
+          '· ${story.group}',
+      ]
           .where((s) => s.isNotEmpty)
           .join(' '),
       subtitle: story.synopsis,

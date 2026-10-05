@@ -546,7 +546,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shelfActivity => '活动';
 
   @override
-  String get shelfMemory => '干员密录';
+  String get shelfMemory => '干员';
 
   @override
   String get shelfRoguelike => '集成战略';
@@ -559,6 +559,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shelfCodex => '图鉴';
+
+  @override
+  String get libraryOperatorRecords => '干员密录';
+
+  @override
+  String get libraryOperatorProfile => '干员档案';
 
   @override
   String libraryCountCollections(int n) {
