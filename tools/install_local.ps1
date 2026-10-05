@@ -53,7 +53,7 @@ $ready = @($lines | Where-Object { $_ -match '\sdevice$' })
 if ($Device) {
   if (-not ($ready | Where-Object { $_ -like "$Device*" })) { throw "device $Device is not connected" }
 } elseif ($ready.Count -eq 0) {
-  $why = if ($lines) { "found: $($lines -join '; ') (unlock the phone and allow USB debugging)" } else { 'no device (USB debugging on? cable?)' }
+  $why = if ($lines) { "found: $($lines -join '; ') (unlock the phone and allow USB debugging)" } else { 'no device: unlock the phone, pull the notification shade and set USB to file transfer (not charging only), check Developer options > USB debugging is on and accept the "allow USB debugging" prompt; then run `adb kill-server` and try again (an emulator such as MuMu may hold adb)' }
   throw $why
 } elseif ($ready.Count -gt 1) {
   throw "several devices, choose one with -Device <serial>: $($ready -join '; ')"
