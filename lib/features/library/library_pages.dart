@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/build/story_naming.dart' show openingStoryKind;
 import '../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
 import '../../core/library/library_labels.dart';
@@ -252,7 +253,17 @@ class CollectionPage extends ConsumerWidget {
       });
     // Roguelike and sandbox stories come in tens, under a heading each
     // (ending, squad, character …): one folding section per heading.
-    final sections = _storySections(c, storyList);
+    // The story that plays on first entering a topic has a place of its own,
+    // before the endings; the stories left over (tutorials, challenge
+    // stories of older topics) follow the endings and squads, each kind
+    // under its own folding heading.
+    final opening = ownParts
+        ? [for (final s in storyList) if (s.group == openingStoryKind) s]
+        : const <LibraryEntry>[];
+    final restStories = ownParts
+        ? [for (final s in storyList) if (s.group != openingStoryKind) s]
+        : storyList;
+    final sections = _storySections(c, restStories);
     final read = storyList
         .where((s) =>
             progress[LibraryRef.story(s.rawId ?? '').toString()]?.finished ??
@@ -288,20 +299,38 @@ class CollectionPage extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    ..._ownParts(context, theme, inline),
-                    if (storyList.isNotEmpty) ...[
+                    if (opening.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: IndustrialSectionHeader(
                           theme: theme,
-                          title: ownParts
-                              ? context.t.libraryLeftoverStories
-                              : context.t.libraryStories,
-                          code: 'stories',
+                          title: openingStoryKind,
+                          code: 'opening',
                         ),
                       ),
+                      for (final s in opening) ...[
+                        StoryRow(
+                          story: s,
+                          showGroup: false,
+                          read: progress[
+                              LibraryRef.story(s.rawId ?? '').toString()],
+                        ),
+                        rowDivider(theme),
+                      ],
+                    ],
+                    ..._ownParts(context, theme, inline),
+                    if (restStories.isNotEmpty) ...[
+                      if (!ownParts)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: IndustrialSectionHeader(
+                            theme: theme,
+                            title: context.t.libraryStories,
+                            code: 'stories',
+                          ),
+                        ),
                       if (sections == null)
-                        for (final s in storyList) ...[
+                        for (final s in restStories) ...[
                           StoryRow(
                             story: s,
                             read: progress[

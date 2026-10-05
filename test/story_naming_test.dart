@@ -214,6 +214,8 @@ void main() {
       expect(storyKindLabel('activities/a/training/training_a_01_a'), '训练');
       expect(storyKindLabel('obt/rogue/r/endbook/e_1'), '结局文集');
       expect(storyKindLabel('obt/x/y/z'), '剧情');
+      expect(storyKindLabel('obt/roguelike/r1/level_rogue1_entry'), '开局剧情');
+      expect(storyKindLabel('activities/a/guide_a_entry'), '指引');
     });
   });
 }

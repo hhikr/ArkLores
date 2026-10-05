@@ -103,7 +103,20 @@ List<Override> overrides(MemoryUserStore store) => [
           others: 12,
         ),
       ),
-      collectionStoriesProvider.overrideWith((ref, id) async => _stories),
+      collectionStoriesProvider.overrideWith(
+        (ref, id) async => id == 'rogue_x'
+            ? const [
+                LibraryEntry(
+                  id: 'story:ro/entry.txt',
+                  type: 'story',
+                  name: '开局剧情',
+                  group: '开局剧情',
+                  rawId: 'ro/entry.txt',
+                  collectionId: 'rogue_x',
+                ),
+              ]
+            : _stories,
+      ),
       collectionTypesProvider.overrideWith(
         (ref, id) async => const [
           (type: 'stage', count: 12),
@@ -463,6 +476,8 @@ void main() {
     // The headings that split the page into stories and related texts are
     // gone; the kinds of texts are plain rows.
     expect(find.text('剧情'), findsNothing);
+    // The opening story has its own place, above the endings; nothing is
+    // left under \
     expect(find.text('相关资料'), findsNothing);
     await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
     await tester.pumpAndSettle();

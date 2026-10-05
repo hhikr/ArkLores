@@ -84,7 +84,12 @@ class StageRef {
   final String? code;
 }
 
+/// The kind (and group) of the story that plays on first entering a mode.
+const String openingStoryKind = '开局剧情';
+
 const List<(String, String)> _kinds = [
+  ('challenge', '挑战'),
+  ('ending', '结局剧情'),
   ('traininglevel', '训练关卡'),
   ('training', '训练'),
   ('tutorial', '教程'),
@@ -105,6 +110,9 @@ const List<(String, String)> _kinds = [
 /// What kind of file a story is, from words in its path (`训练`, `指引` …).
 String storyKindLabel(String id) {
   final key = storyKey(id);
+  // A level file named `entry` is what plays when a mode is entered the
+  // first time.
+  if (RegExp(r'(^|/)level_[^/]*_entry$').hasMatch(key)) return openingStoryKind;
   for (final (word, label) in _kinds) {
     if (key.contains(word)) return label;
   }
