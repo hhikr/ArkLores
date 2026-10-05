@@ -18,6 +18,17 @@ All notable changes to ArkLores will be documented in this file.
   handbook stages, world-view texts, mails. Gameplay text (skills, rules, effects, how to obtain) is not imported.
 - Story vectors of the previous knowledge base are carried over to the new one; only the new lines are embedded.
 
+### Incremental updates (in development for 0.11)
+
+- **The knowledge base page updates incrementally.** "Check for updates" shows what changed upstream (story files, data tables,
+  level files). "Build" downloads only the changed files and the few data tables it needs, instead of the whole 850 MB
+  repository, and then shows what the update changed: story files added/changed/removed, entries per type, new activities.
+- **Story vectors are updated separately and show their cost.** After an update the page lists how many stories lack vectors, the
+  estimated chunks and tokens, an estimated price at the default (Bailian) vector service, and how to configure the vector service
+  (Settings → API settings → Vectors). Vectors from a different model are never mixed in. Everything works without vectors; those
+  stories just get keyword search.
+- Developers get the same update from the command line: `tools/update_gamedata.dart`.
+
 ## [0.10.0] - 2026-10-04
 
 First stable release of the 0.10 line. It replaces the eight pre-releases v0.10.0–v0.10.7, which were

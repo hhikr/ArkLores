@@ -64,6 +64,10 @@ abstract class EmbeddingClient {
 
   /// One vector per text, in input order.
   Future<List<List<double>>> embed(List<String> texts);
+
+  /// Tokens the provider has billed this client so far (0 when the provider
+  /// reports no usage). Used to show the real cost after a vector update.
+  int get tokensUsed => 0;
 }
 
 /// `POST {baseUrl}/embeddings` with `{model, input, dimensions}`.
@@ -92,6 +96,11 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
 
   @override
   int get dimensions => config.dimensions;
+
+  int _tokensUsed = 0;
+
+  @override
+  int get tokensUsed => _tokensUsed;
 
   @override
   Future<List<List<double>>> embed(List<String> texts) async {
@@ -155,6 +164,13 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
           throw LLMException(
             'Embedding response has ${data.length} vectors for ${batch.length} inputs',
           );
+        }
+        final usage = json['usage'];
+        if (usage is Map) {
+          _tokensUsed += ((usage['total_tokens'] ?? usage['prompt_tokens'])
+                      as num?)
+                  ?.toInt() ??
+              0;
         }
         return [
           for (final item in data)

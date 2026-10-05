@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_isolate.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/source/arknights_source_client.dart';
+import 'package:arklores/core/gamedata/build/update_report.dart';
 import 'package:arklores/core/gamedata/gamedata_build_provider.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -138,7 +139,10 @@ void main() {
                 'status': 'added',
               },
               for (var i = 0; i < 99; i++)
-                {'filename': 'zh_CN/gamedata/levels/lvl_$i.json', 'status': 'added'},
+                {
+                  'filename': 'zh_CN/gamedata/bakemuzzledata/model_$i.json',
+                  'status': 'added',
+                },
             ];
             return http.Response(jsonEncode({'files': files}), 200);
           }
@@ -186,6 +190,18 @@ void main() {
       );
       expect(
         ArknightsSourcePaths.isStoryFile('zh_CN/gamedata/levels/x.json'),
+        isFalse,
+      );
+      // Changed level files are followed by an update, but the repository
+      // zip of a first pull never extracts `levels/`.
+      const level = 'zh_CN/gamedata/levels/obt/main/level_main_01-01.json';
+      expect(ArknightsSourcePaths.isLevelFile(level), isTrue);
+      expect(ArknightsSourcePaths.isImporterRelevant(level), isTrue);
+      expect(ArknightsSourcePaths.isZipRelevant(level), isFalse);
+      expect(
+        ArknightsSourcePaths.isLevelFile(
+          'zh_CN/gamedata/levels/enemydata/enemy_database.json',
+        ),
         isFalse,
       );
       expect(
@@ -373,6 +389,15 @@ void main() {
         ),
       );
       expect(result.incremental, isTrue);
+      // The report says what the update did.
+      final report = result.report!;
+      expect(report.storyAdded, 1);
+      expect(report.storyChanged, 1);
+      expect(report.storyRemoved, 0);
+      expect(report.changedTables, ['item_table.json']);
+      expect(report.storyLineDelta, greaterThan(0));
+      expect(report.vectorsDropped, 1);
+      expect(UpdateReport.fromJson(report.toJson()).describe(), report.describe());
       await validateGameDataDatabaseFile(v2);
 
       final db = await databaseFactoryFfi.openDatabase(v2);

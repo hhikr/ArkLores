@@ -30,6 +30,7 @@ import 'gamedata_schema.dart';
 import 'source/arknights_source_client.dart';
 import 'story_catalog_importer.dart';
 import 'story_coverage_builder.dart';
+import 'update_report.dart';
 
 /// Thrown when the user cancels a running build.
 class GameDataBuildCancelledException implements Exception {
@@ -67,10 +68,14 @@ class GameDataBuildResult {
     required this.outputDbPath,
     required this.incremental,
     required this.stats,
+    this.report,
   });
   final String outputDbPath;
   final bool incremental;
   final BuildStats stats;
+
+  /// What an incremental update changed (null for a full build).
+  final UpdateReport? report;
 }
 
 /// Orchestrates full and incremental GameData builds.
@@ -191,14 +196,19 @@ class GameDataBuildService {
 
     final db = await databaseFactoryFfi.openDatabase(options.outputDbPath);
     final stats = BuildStats();
+    UpdateReport? report;
     try {
+      final before = await DbSnapshot.take(db);
       final importer = ArknightsImporter(
         sourceDir: sourceDir,
         db: db,
         stats: stats,
         storyLimit: 0,
       );
-      final changes = options.changedFiles;
+      // Tables first (they define stages and owners), then level files
+      // (they bind enemies to those stages), then stories.
+      final changes = [...options.changedFiles]
+        ..sort((a, b) => _order(a.path).compareTo(_order(b.path)));
       for (var i = 0; i < changes.length; i++) {
         _checkCancel(shouldCancel);
         onProgress?.call('incremental', i + 1, changes.length);
@@ -221,6 +231,11 @@ class GameDataBuildService {
         'built_at': DateTime.now().toUtc().toIso8601String(),
         ...countManifest(stats),
       });
+      report = UpdateReport.compute(
+        before: before,
+        after: await DbSnapshot.take(db),
+        changes: changes,
+      );
     } finally {
       await db.close();
     }
@@ -229,7 +244,16 @@ class GameDataBuildService {
       outputDbPath: options.outputDbPath,
       incremental: true,
       stats: stats,
+      report: report,
     );
+  }
+
+  /// Order in which changed files are applied: data tables, level files,
+  /// then story files.
+  static int _order(String path) {
+    if (ArknightsSourcePaths.isStoryFile(path)) return 2;
+    if (ArknightsSourcePaths.isLevelFile(path)) return 1;
+    return 0;
   }
 
   Future<void> _applyChange(

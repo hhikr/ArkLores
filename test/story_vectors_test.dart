@@ -186,6 +186,9 @@ class _FakeEmbedder implements EmbeddingClient {
   int get dimensions => dims;
 
   @override
+  int get tokensUsed => 0;
+
+  @override
   Future<List<List<double>>> embed(List<String> texts) async => [
         for (final text in texts)
           () {

@@ -1915,6 +1915,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The device currently has no network connection.'**
   String get wikiErrorOffline;
+
+  /// No description provided for @kbBuildChangeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Upstream has updates: {stories} story files, {tables} data tables, {levels} level files.'**
+  String kbBuildChangeSummary(int stories, int tables, int levels);
+
+  /// No description provided for @kbBuildNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing upstream concerns the knowledge base; no update needed.'**
+  String get kbBuildNoChanges;
+
+  /// No description provided for @kbBuildTooManyChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Too much changed upstream to apply file by file; Build will rebuild completely instead (about 170 MB to download, takes a while).'**
+  String get kbBuildTooManyChanges;
+
+  /// No description provided for @kbBuildDownloadingContext.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the data tables the update needs…'**
+  String get kbBuildDownloadingContext;
+
+  /// No description provided for @kbBuildReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What this update changed'**
+  String get kbBuildReportTitle;
+
+  /// No description provided for @kbBuildReportStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Story files: {added} added, {changed} changed, {removed} removed'**
+  String kbBuildReportStories(int added, int changed, int removed);
+
+  /// No description provided for @kbBuildReportEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'Entries: {text}'**
+  String kbBuildReportEntries(String text);
+
+  /// No description provided for @kbBuildReportNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New collections: {names}'**
+  String kbBuildReportNew(String names);
+
+  /// No description provided for @kbBuildReportVectors.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} vectors became invalid because their story changed; you can add them below under Story vectors.'**
+  String kbBuildReportVectors(int count);
+
+  /// No description provided for @kbVectorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Story vectors (semantic search)'**
+  String get kbVectorTitle;
+
+  /// No description provided for @kbVectorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.'**
+  String get kbVectorDesc;
+
+  /// No description provided for @kbVectorStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{vectors} vectors covering {stories} stories'**
+  String kbVectorStatus(int vectors, int stories);
+
+  /// No description provided for @kbVectorNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No vectors yet'**
+  String get kbVectorNone;
+
+  /// No description provided for @kbVectorPending.
+  ///
+  /// In en, this message translates to:
+  /// **'To generate: {stories} stories, about {chunks} chunks, about {tokens}×10k tokens'**
+  String kbVectorPending(int stories, int chunks, String tokens);
+
+  /// No description provided for @kbVectorCost.
+  ///
+  /// In en, this message translates to:
+  /// **'About ¥{yuan} at Bailian\'s price (an estimate only; your provider\'s bill decides, and other providers charge differently: convert from the token count)'**
+  String kbVectorCost(String yuan);
+
+  /// No description provided for @kbVectorUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Every story has vectors; nothing to update.'**
+  String get kbVectorUpToDate;
+
+  /// No description provided for @kbVectorFirstBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'This generates vectors for all stories, which costs and takes far more than an incremental update.'**
+  String get kbVectorFirstBuild;
+
+  /// No description provided for @kbVectorConfigure.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure the vector service first: Settings → API settings → Vectors (default Bailian {model}, {dims} dimensions, needs that service\'s API key).'**
+  String kbVectorConfigure(String model, int dims);
+
+  /// No description provided for @kbVectorMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Existing vectors come from {have}, the configuration says {want}. They cannot be mixed: set the vector settings back to {have}.'**
+  String kbVectorMismatch(String have, String want);
+
+  /// No description provided for @kbVectorStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate vectors'**
+  String get kbVectorStart;
+
+  /// No description provided for @kbVectorRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Recalculate'**
+  String get kbVectorRefresh;
+
+  /// No description provided for @kbVectorRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating vectors: {done} / {total} stories ({chunks} chunks)'**
+  String kbVectorRunning(int done, int total, int chunks);
+
+  /// No description provided for @kbVectorDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated {chunks} chunks; the provider counted {tokens} tokens.'**
+  String kbVectorDone(int chunks, int tokens);
+
+  /// No description provided for @kbVectorCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get kbVectorCancel;
+
+  /// No description provided for @kbVectorConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate vectors for all stories?'**
+  String get kbVectorConfirmTitle;
+
+  /// No description provided for @kbVectorConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'About {stories} stories, {chunks} chunks, {tokens}×10k tokens. This costs money at your vector service. You can stop any time; finished stories are kept.'**
+  String kbVectorConfirmBody(int stories, int chunks, String tokens);
+
+  /// No description provided for @kbVectorConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get kbVectorConfirm;
 }
 
 class _AppLocalizationsDelegate

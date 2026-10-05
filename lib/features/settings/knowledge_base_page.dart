@@ -3,9 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/build/update_report.dart' show entryTypeLabel;
 import '../../core/gamedata/gamedata_build_provider.dart';
 import '../../core/gamedata/gamedata_installer.dart';
 import '../../core/gamedata/gamedata_provider.dart';
+import '../../core/gamedata/story_vector_provider.dart';
+import '../../core/gamedata/story_vector_updater.dart';
+import '../../core/llm/embedding_client.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -35,6 +39,14 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   bool _tokenLoaded = false;
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      if (mounted) ref.read(storyVectorProvider.notifier).refresh();
+    });
+  }
+
+  @override
   void dispose() {
     _tokenController.dispose();
     super.dispose();
@@ -57,6 +69,14 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       if (message != null) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(message)));
+      }
+    });
+
+    // A finished update changes which stories lack vectors.
+    ref.listen(gameDataBuildProvider, (previous, next) {
+      if (previous?.phase != GameDataBuildPhase.done &&
+          next.phase == GameDataBuildPhase.done) {
+        ref.read(storyVectorProvider.notifier).refresh();
       }
     });
 
@@ -133,6 +153,8 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
           ),
           const SizedBox(height: 16),
           _buildSourceBuildCard(context, theme),
+          const SizedBox(height: 16),
+          _buildVectorCard(context, theme),
         ],
       ),
     );
@@ -183,6 +205,28 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 fontSize: 12,
               ),
             ),
+          if (build.phase == GameDataBuildPhase.idle &&
+              build.changedFileCount == -1) ...[
+            const SizedBox(height: 8),
+            _note(context.t.kbBuildTooManyChanges, theme, theme.warning),
+          ] else if (build.phase == GameDataBuildPhase.idle &&
+              build.noRelevantChanges) ...[
+            const SizedBox(height: 8),
+            _note(context.t.kbBuildNoChanges, theme, theme.accentText),
+          ] else if (build.phase == GameDataBuildPhase.idle &&
+              build.changeSummary != null &&
+              !build.changeSummary!.isEmpty) ...[
+            const SizedBox(height: 8),
+            _note(
+              context.t.kbBuildChangeSummary(
+                build.changeSummary!.storyFiles,
+                build.changeSummary!.tables.length,
+                build.changeSummary!.levelFiles,
+              ),
+              theme,
+              theme.accentText,
+            ),
+          ],
           if (build.phase == GameDataBuildPhase.done) ...[
             const SizedBox(height: 8),
             Text(
@@ -194,6 +238,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 fontSize: 12,
               ),
             ),
+            if (build.report != null) ..._buildReport(context, build, theme),
           ],
           if (build.error != null) ...[
             const SizedBox(height: 8),
@@ -281,6 +326,272 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         ],
       ),
     );
+  }
+
+  Widget _note(String text, AppThemeTokens theme, Color color) => Text(
+        text,
+        style: theme.bodyFont.copyWith(color: color, fontSize: 12, height: 1.4),
+      );
+
+  /// What the last incremental update changed.
+  List<Widget> _buildReport(
+    BuildContext context,
+    GameDataBuildUiState build,
+    AppThemeTokens theme,
+  ) {
+    final report = build.report!;
+    final entries = (report.entryDelta.entries.toList()
+          ..sort((a, b) => b.value.abs().compareTo(a.value.abs())))
+        .take(6)
+        .map(
+          (e) => '${entryTypeLabel(e.key)} ${e.value >= 0 ? '+' : ''}${e.value}',
+        )
+        .join('，');
+    return [
+      const SizedBox(height: 10),
+      Text(
+        context.t.kbBuildReportTitle,
+        style: theme.titleFont.copyWith(fontSize: 13),
+      ),
+      const SizedBox(height: 4),
+      _note(
+        context.t.kbBuildReportStories(
+          report.storyAdded,
+          report.storyChanged,
+          report.storyRemoved,
+        ),
+        theme,
+        theme.textSecondary,
+      ),
+      if (entries.isNotEmpty)
+        _note(
+          context.t.kbBuildReportEntries(entries),
+          theme,
+          theme.textSecondary,
+        ),
+      if (report.newCollections.isNotEmpty)
+        _note(
+          context.t.kbBuildReportNew(report.newCollections.take(8).join('、')),
+          theme,
+          theme.textSecondary,
+        ),
+      if (report.vectorsDropped > 0)
+        _note(
+          context.t.kbBuildReportVectors(report.vectorsDropped),
+          theme,
+          theme.accentText,
+        ),
+    ];
+  }
+
+  /// Story vectors: what is missing, what it costs, how to configure it.
+  Widget _buildVectorCard(BuildContext context, AppThemeTokens theme) {
+    final installed =
+        ref.watch(gameDataInstallStatusProvider).valueOrNull?.installed ??
+            false;
+    if (!installed) return const SizedBox.shrink();
+    final vec = ref.watch(storyVectorProvider);
+    final config = ref.watch(embeddingConfigProvider);
+    final plan = vec.plan;
+    final tokensText = plan == null
+        ? ''
+        : (plan.estimatedTokens / 10000).toStringAsFixed(1);
+    final bailian = config.baseUrl.contains('dashscope');
+    final yuan = plan == null ? 0.0 : plan.estimatedYuan();
+    final canStart = !vec.running &&
+        !vec.loading &&
+        plan != null &&
+        !plan.nothingToDo &&
+        config.isValid &&
+        vec.mismatch == null;
+    return ThemeAwareCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hub_rounded, color: theme.accentPrimary, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.t.kbVectorTitle,
+                  style: theme.titleFont.copyWith(fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _note(context.t.kbVectorDesc, theme, theme.textSecondary),
+          const SizedBox(height: 10),
+          if (plan != null) ...[
+            Text(
+              plan.existingVectors > 0
+                  ? context.t.kbVectorStatus(
+                      plan.existingVectors,
+                      plan.storiesWithVectors,
+                    )
+                  : context.t.kbVectorNone,
+              style: theme.bodyFont.copyWith(
+                color: theme.textPrimary,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 4),
+            if (plan.nothingToDo)
+              _note(context.t.kbVectorUpToDate, theme, theme.accentText)
+            else ...[
+              _note(
+                context.t.kbVectorPending(
+                  plan.pendingStories,
+                  plan.pendingChunks,
+                  tokensText,
+                ),
+                theme,
+                theme.textPrimary,
+              ),
+              if (bailian)
+                _note(
+                  context.t.kbVectorCost(
+                    yuan < 0.01 ? '<0.01' : yuan.toStringAsFixed(2),
+                  ),
+                  theme,
+                  theme.textSecondary,
+                ),
+              if (plan.isFirstBuild)
+                _note(context.t.kbVectorFirstBuild, theme, theme.warning),
+            ],
+          ],
+          if (!config.isValid) ...[
+            const SizedBox(height: 6),
+            _note(
+              context.t.kbVectorConfigure(
+                defaultEmbeddingConfig.model,
+                defaultEmbeddingConfig.dimensions,
+              ),
+              theme,
+              theme.warning,
+            ),
+          ],
+          if (vec.mismatch != null) ...[
+            const SizedBox(height: 6),
+            _note(
+              context.t.kbVectorMismatch(
+                vec.mismatch!.have,
+                vec.mismatch!.want,
+              ),
+              theme,
+              theme.danger,
+            ),
+          ],
+          if (vec.running) ...[
+            const SizedBox(height: 10),
+            _note(
+              context.t.kbVectorRunning(
+                vec.doneStories,
+                vec.totalStories,
+                vec.doneChunks,
+              ),
+              theme,
+              theme.textPrimary,
+            ),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(
+              value: vec.totalStories > 0
+                  ? (vec.doneStories / vec.totalStories).clamp(0.0, 1.0)
+                  : null,
+              backgroundColor: theme.divider,
+              valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+              minHeight: 6,
+            ),
+          ] else if (vec.result != null && vec.result!.chunks > 0) ...[
+            const SizedBox(height: 6),
+            _note(
+              context.t.kbVectorDone(
+                vec.result!.chunks,
+                vec.result!.tokensUsed,
+              ),
+              theme,
+              theme.accentText,
+            ),
+          ],
+          if (vec.error != null) ...[
+            const SizedBox(height: 6),
+            _note(vec.error!, theme, theme.danger),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: vec.running || vec.loading
+                    ? null
+                    : () => ref.read(storyVectorProvider.notifier).refresh(),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(context.t.kbVectorRefresh),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: theme.accentText,
+                  side: BorderSide(color: theme.divider),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (vec.running)
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      ref.read(storyVectorProvider.notifier).cancel(),
+                  icon: const Icon(Icons.stop_rounded, size: 18),
+                  label: Text(context.t.kbVectorCancel),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.danger,
+                    side: BorderSide(color: theme.divider),
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  key: const Key('kb-vector-start'),
+                  onPressed: canStart ? () => _startVectors(plan) : null,
+                  icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                  label: Text(context.t.kbVectorStart),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.accentPrimary,
+                    foregroundColor: theme.onAccent,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Starts the vector update; a first complete build asks first (it costs
+  /// far more than an incremental update).
+  Future<void> _startVectors(VectorPlan plan) async {
+    if (plan.isFirstBuild) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+          title: Text(context.t.kbVectorConfirmTitle),
+          content: Text(
+            context.t.kbVectorConfirmBody(
+              plan.pendingStories,
+              plan.pendingChunks,
+              (plan.estimatedTokens / 10000).toStringAsFixed(1),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, false),
+              child: Text(context.t.kbCancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialog, true),
+              child: Text(context.t.kbVectorConfirm),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    unawaited(ref.read(storyVectorProvider.notifier).start());
   }
 
   /// Optional GitHub Personal Access Token section: raises the GitHub API
@@ -405,9 +716,11 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       case GameDataBuildPhase.checking:
         return context.t.kbBuildChecking;
       case GameDataBuildPhase.downloading:
-        return build.stage == 'zip'
-            ? context.t.kbBuildDownloadingZip
-            : context.t.kbBuildDownloadingChanges;
+        if (build.stage == 'zip') return context.t.kbBuildDownloadingZip;
+        if (build.stage == 'context') {
+          return context.t.kbBuildDownloadingContext;
+        }
+        return context.t.kbBuildDownloadingChanges;
       case GameDataBuildPhase.extracting:
         return context.t.kbBuildExtracting;
       case GameDataBuildPhase.swapping:

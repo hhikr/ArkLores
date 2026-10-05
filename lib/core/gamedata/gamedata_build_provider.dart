@@ -13,7 +13,10 @@ import 'package:path_provider/path_provider.dart';
 import '../background/background_work.dart';
 import 'build/gamedata_build_isolate.dart';
 import 'build/gamedata_build_service.dart';
+import 'build/gamedata_schema.dart';
 import 'build/source/arknights_source_client.dart';
+import 'build/source/source_sync.dart';
+import 'build/update_report.dart';
 import 'gamedata_installer.dart';
 import 'gamedata_provider.dart';
 
@@ -32,6 +35,9 @@ class GameDataBuildUiState {
     this.changedFileCount,
     this.incremental = false,
     this.error,
+    this.changeSummary,
+    this.report,
+    this.noRelevantChanges = false,
   });
   final GameDataBuildPhase phase;
   final String stage;
@@ -42,6 +48,15 @@ class GameDataBuildUiState {
   final int? changedFileCount;
   final bool incremental;
   final String? error;
+
+  /// What the last update check found, by kind of file.
+  final SourceChangeSummary? changeSummary;
+
+  /// What the last incremental update changed.
+  final UpdateReport? report;
+
+  /// The last check or update found nothing that concerns the knowledge base.
+  final bool noRelevantChanges;
 
   bool get busy =>
       phase == GameDataBuildPhase.checking ||
@@ -60,6 +75,10 @@ class GameDataBuildUiState {
     int? changedFileCount,
     bool? incremental,
     String? error,
+    SourceChangeSummary? changeSummary,
+    UpdateReport? report,
+    bool? noRelevantChanges,
+    bool clearReport = false,
   }) {
     return GameDataBuildUiState(
       phase: phase ?? this.phase,
@@ -71,6 +90,9 @@ class GameDataBuildUiState {
       changedFileCount: changedFileCount ?? this.changedFileCount,
       incremental: incremental ?? this.incremental,
       error: error ?? this.error,
+      changeSummary: changeSummary ?? this.changeSummary,
+      report: clearReport ? null : (report ?? this.report),
+      noRelevantChanges: noRelevantChanges ?? this.noRelevantChanges,
     );
   }
 }
@@ -123,11 +145,20 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
       final changes = installed == null || installed == latest
           ? const <SourceFileChange>[]
           : await client.compareCommits(baseSha: installed, headSha: latest);
+      final summary = SourceChangeSummary.of(changes);
       state = state.copyWith(
         phase: GameDataBuildPhase.idle,
         latestCommit: latest,
         installedCommit: installed,
         changedFileCount: changes.length,
+        changeSummary: summary,
+        noRelevantChanges: installed != null && summary.isEmpty,
+      );
+    } on GameDataSourceTooManyChangesException {
+      // Not an error: the update becomes a full rebuild.
+      state = state.copyWith(
+        phase: GameDataBuildPhase.idle,
+        changedFileCount: -1,
       );
     } catch (error) {
       state = state.copyWith(
@@ -162,66 +193,74 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     try {
       final latest = state.latestCommit ?? await client.fetchLatestCommit();
       final installed = await _installedCommit();
-      final hasSource =
-          await File(p.join(dirs.sourceDir.path, 'zh_CN')).exists();
+      final installedSchema = await _installedSchema();
+      final sync = SourceSync(client: client, sourceDir: dirs.sourceDir);
+      // An installed database of the current schema is updated from the
+      // changed files only. Anything else (nothing installed, an older
+      // schema) is built from the whole source.
+      var incrementalOk = installed != null &&
+          installedSchema == '$gamedataSchemaVersion';
 
-      if (hasSource) {
-        // Incremental source pull: compare + raw download of changed files.
+      if (incrementalOk) {
+        if (installed == latest) {
+          state = state.copyWith(
+            phase: GameDataBuildPhase.idle,
+            noRelevantChanges: true,
+          );
+          return;
+        }
         state = state.copyWith(
           phase: GameDataBuildPhase.downloading,
           stage: 'incremental',
           done: 0,
           total: 0,
           error: null,
+          clearReport: true,
+          noRelevantChanges: false,
         );
         try {
-          changes = installed == null || installed == latest
-              ? const <SourceFileChange>[]
-              : await client.compareCommits(
-                  baseSha: installed,
-                  headSha: latest,
-                );
-        } on GameDataSourceRateLimitedException {
-          // GitHub API quota exhausted on this egress IP (403/429). Fall
-          // back to a full zip pull: codeload is a non-API endpoint and is
-          // not quota-limited.
-          state = state.copyWith(
-            phase: GameDataBuildPhase.downloading,
-            stage: 'zip',
-            error: null,
+          final result = await sync.sync(
+            installedSha: installed,
+            latestSha: latest,
+            onProgress: (stage, done, total) {
+              state = state.copyWith(
+                phase: GameDataBuildPhase.downloading,
+                stage: stage == SourceSyncStage.contextTables
+                    ? 'context'
+                    : 'incremental',
+                done: done,
+                total: total,
+              );
+            },
           );
-          final zh = Directory(p.join(dirs.sourceDir.path, 'zh_CN'));
-          if (await zh.exists()) await zh.delete(recursive: true);
-          await _pullFullSource(client, latest, dirs);
-          changes = const <SourceFileChange>[];
+          changes = result.changes;
+        } on GameDataSourceTooManyChangesException {
+          // More than the compare API lists: a complete rebuild is the only
+          // correct update.
+          incrementalOk = false;
         }
-        for (var i = 0; i < changes.length; i++) {
-          final change = changes[i];
-          final target = File(p.join(dirs.sourceDir.path, change.path));
-          if (change.isRemoval) {
-            if (await target.exists()) await target.delete();
-          } else {
-            await client.downloadFile(
-              sha: latest,
-              path: change.path,
-              outputPath: target.path,
-            );
-          }
+        if (incrementalOk && changes.isEmpty) {
+          // Upstream moved, but nothing that concerns the knowledge base.
           state = state.copyWith(
-            phase: GameDataBuildPhase.downloading,
-            stage: 'incremental',
-            done: i + 1,
-            total: changes.length,
+            phase: GameDataBuildPhase.idle,
+            noRelevantChanges: true,
           );
+          return;
         }
-      } else {
-        // First-time pull: one zip download + whitelist-filtered extraction.
+      }
+      if (!incrementalOk) {
+        // First-time (or complete) pull: one zip download and a
+        // whitelist-filtered extraction.
         state = state.copyWith(
           phase: GameDataBuildPhase.downloading,
           stage: 'zip',
           error: null,
+          clearReport: true,
         );
+        final zh = Directory(p.join(dirs.sourceDir.path, 'zh_CN'));
+        if (await zh.exists()) await zh.delete(recursive: true);
         await _pullFullSource(client, latest, dirs);
+        changes = const <SourceFileChange>[];
       }
 
       // Background build.
@@ -249,6 +288,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
                 );
               case GameDataBuildEventType.done:
                 await _swapInBuiltDatabase(event, dirs.installPath);
+                // The source directory now matches the installed database.
+                await sync.markSynced(latest);
                 if (!completer.isCompleted) completer.complete();
               case GameDataBuildEventType.error:
                 state = state.copyWith(
@@ -347,6 +388,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
       phase: GameDataBuildPhase.done,
       error: null,
       incremental: event.incremental,
+      report: event.report,
+      noRelevantChanges: false,
     );
   }
 
@@ -379,6 +422,11 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   Future<String?> _installedCommit() async {
     final status = await GameDataInstaller().getStatus();
     return status.manifest['source_arknights_commit'];
+  }
+
+  Future<String?> _installedSchema() async {
+    final status = await GameDataInstaller().getStatus();
+    return status.manifest['schema_version'];
   }
 
   Future<({Directory sourceDir, Directory tmpDir, String installPath})>

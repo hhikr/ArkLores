@@ -1025,4 +1025,116 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wikiErrorOffline =>
       'The device currently has no network connection.';
+
+  @override
+  String kbBuildChangeSummary(int stories, int tables, int levels) {
+    return 'Upstream has updates: $stories story files, $tables data tables, $levels level files.';
+  }
+
+  @override
+  String get kbBuildNoChanges =>
+      'Nothing upstream concerns the knowledge base; no update needed.';
+
+  @override
+  String get kbBuildTooManyChanges =>
+      'Too much changed upstream to apply file by file; Build will rebuild completely instead (about 170 MB to download, takes a while).';
+
+  @override
+  String get kbBuildDownloadingContext =>
+      'Downloading the data tables the update needs…';
+
+  @override
+  String get kbBuildReportTitle => 'What this update changed';
+
+  @override
+  String kbBuildReportStories(int added, int changed, int removed) {
+    return 'Story files: $added added, $changed changed, $removed removed';
+  }
+
+  @override
+  String kbBuildReportEntries(String text) {
+    return 'Entries: $text';
+  }
+
+  @override
+  String kbBuildReportNew(String names) {
+    return 'New collections: $names';
+  }
+
+  @override
+  String kbBuildReportVectors(int count) {
+    return '$count vectors became invalid because their story changed; you can add them below under Story vectors.';
+  }
+
+  @override
+  String get kbVectorTitle => 'Story vectors (semantic search)';
+
+  @override
+  String get kbVectorDesc =>
+      'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.';
+
+  @override
+  String kbVectorStatus(int vectors, int stories) {
+    return '$vectors vectors covering $stories stories';
+  }
+
+  @override
+  String get kbVectorNone => 'No vectors yet';
+
+  @override
+  String kbVectorPending(int stories, int chunks, String tokens) {
+    return 'To generate: $stories stories, about $chunks chunks, about $tokens×10k tokens';
+  }
+
+  @override
+  String kbVectorCost(String yuan) {
+    return 'About ¥$yuan at Bailian\'s price (an estimate only; your provider\'s bill decides, and other providers charge differently: convert from the token count)';
+  }
+
+  @override
+  String get kbVectorUpToDate => 'Every story has vectors; nothing to update.';
+
+  @override
+  String get kbVectorFirstBuild =>
+      'This generates vectors for all stories, which costs and takes far more than an incremental update.';
+
+  @override
+  String kbVectorConfigure(String model, int dims) {
+    return 'Configure the vector service first: Settings → API settings → Vectors (default Bailian $model, $dims dimensions, needs that service\'s API key).';
+  }
+
+  @override
+  String kbVectorMismatch(String have, String want) {
+    return 'Existing vectors come from $have, the configuration says $want. They cannot be mixed: set the vector settings back to $have.';
+  }
+
+  @override
+  String get kbVectorStart => 'Generate vectors';
+
+  @override
+  String get kbVectorRefresh => 'Recalculate';
+
+  @override
+  String kbVectorRunning(int done, int total, int chunks) {
+    return 'Generating vectors: $done / $total stories ($chunks chunks)';
+  }
+
+  @override
+  String kbVectorDone(int chunks, int tokens) {
+    return 'Generated $chunks chunks; the provider counted $tokens tokens.';
+  }
+
+  @override
+  String get kbVectorCancel => 'Stop';
+
+  @override
+  String get kbVectorConfirmTitle => 'Generate vectors for all stories?';
+
+  @override
+  String kbVectorConfirmBody(int stories, int chunks, String tokens) {
+    return 'About $stories stories, $chunks chunks, $tokens×10k tokens. This costs money at your vector service. You can stop any time; finished stories are kept.';
+  }
+
+  @override
+  String get kbVectorConfirm => 'Start';
 }

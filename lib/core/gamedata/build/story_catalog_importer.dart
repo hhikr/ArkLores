@@ -39,9 +39,27 @@ Future<StoryCatalogImportResult?> importStoryCatalog(
   final tableFile = File(p.join(sourceDir.path, storyReviewTablePath));
   if (!await tableFile.exists()) return null;
   final table = decodeStoryReviewTable(await tableFile.readAsString());
+  // An update of an installed database has no `[uc]info` files locally (the
+  // database already holds their text): a synopsis whose file is missing
+  // keeps the one the catalog had.
+  final existing = <String, String>{};
+  final hasCatalog = (await db.rawQuery(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [storyCatalogTable],
+  ))
+      .isNotEmpty;
+  if (hasCatalog) {
+    for (final r in await db.rawQuery(
+      'SELECT synopsis_path, synopsis FROM $storyCatalogTable '
+      "WHERE synopsis IS NOT NULL AND synopsis <> ''",
+    )) {
+      existing['${r['synopsis_path']}'] = '${r['synopsis']}';
+    }
+  }
   final entries = parseStoryReviewTable(table, (storyInfo) {
-    final file = File(p.joinAll([sourceDir.path, ...synopsisPathFor(storyInfo).split('/')]));
-    return file.existsSync() ? file.readAsStringSync() : null;
+    final relative = synopsisPathFor(storyInfo);
+    final file = File(p.joinAll([sourceDir.path, ...relative.split('/')]));
+    return file.existsSync() ? file.readAsStringSync() : existing[relative];
   });
   await writeStoryCatalog(db, entries);
   final matched = await db.rawQuery(

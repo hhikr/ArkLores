@@ -67,8 +67,86 @@ class ArknightsSourcePaths {
       path.startsWith('$languagePath/gamedata/story/') &&
       path.endsWith('.txt');
 
+  /// A level file (`levels/**.json`): the source of the enemy ↔ stage
+  /// bindings. `levels/enemydata/` and `levels_meta.json` are not.
+  static bool isLevelFile(String path) =>
+      path.startsWith('$languagePath/gamedata/levels/') &&
+      path.endsWith('.json') &&
+      !path.contains('/levels/enemydata/') &&
+      !path.endsWith('/levels_meta.json');
+
+  /// Files an incremental update applies. Changed level files are small
+  /// (one stage each), so they are followed even though the whole `levels/`
+  /// tree (500 MB) is never pulled.
   static bool isImporterRelevant(String path) =>
+      isStoryFile(path) || excelTables.contains(path) || isLevelFile(path);
+
+  /// Files taken from the repository zip of a first-time pull: no levels.
+  static bool isZipRelevant(String path) =>
       isStoryFile(path) || excelTables.contains(path);
+}
+
+/// What an update changes, by kind of file (for the update check and the
+/// report after an update).
+class SourceChangeSummary {
+  const SourceChangeSummary({
+    this.storyAdded = 0,
+    this.storyChanged = 0,
+    this.storyRemoved = 0,
+    this.tables = const [],
+    this.levelFiles = 0,
+  });
+
+  factory SourceChangeSummary.of(Iterable<SourceFileChange> changes) {
+    var added = 0, changed = 0, removed = 0, levels = 0;
+    final tables = <String>[];
+    for (final change in changes) {
+      final path = change.path;
+      if (ArknightsSourcePaths.isStoryFile(path)) {
+        if (change.status == 'added') {
+          added++;
+        } else if (change.isRemoval) {
+          removed++;
+        } else {
+          changed++;
+        }
+      } else if (ArknightsSourcePaths.isLevelFile(path)) {
+        levels++;
+      } else if (ArknightsSourcePaths.excelTables.contains(path)) {
+        tables.add(p.posix.basename(path));
+      }
+    }
+    return SourceChangeSummary(
+      storyAdded: added,
+      storyChanged: changed,
+      storyRemoved: removed,
+      tables: tables,
+      levelFiles: levels,
+    );
+  }
+
+  final int storyAdded;
+  final int storyChanged;
+  final int storyRemoved;
+
+  /// File names of the changed data tables.
+  final List<String> tables;
+  final int levelFiles;
+
+  int get storyFiles => storyAdded + storyChanged + storyRemoved;
+  bool get isEmpty => storyFiles == 0 && tables.isEmpty && levelFiles == 0;
+}
+
+/// Thrown when an update changes more files than the compare API lists
+/// (3000): the incremental result would silently miss some. A full rebuild
+/// (or downloading the release asset) is the right way then.
+class GameDataSourceTooManyChangesException implements Exception {
+  const GameDataSourceTooManyChangesException();
+
+  @override
+  String toString() =>
+      'The upstream changed more than 3000 files since the installed '
+      'knowledge base; rebuild it completely instead of updating it.';
 }
 
 /// One changed file reported by the GitHub compare API.
@@ -259,9 +337,37 @@ class ArknightsSourceClient {
         );
       }
       if (files.length < perPage) break;
+      // The compare API lists at most 3000 files (30 pages of 100).
+      if (page >= 30) throw const GameDataSourceTooManyChangesException();
       page++;
     }
     return changes;
+  }
+
+  /// Downloads the data tables the importer reads as context (owners, names,
+  /// zones …) that are missing from [sourceDir] at [sha]. An update of an
+  /// installed knowledge base does not need the story files or the 850 MB
+  /// repository: the database already holds the stories; only these tables
+  /// (about 60 MB) and the changed files are needed. Returns how many were
+  /// downloaded.
+  Future<int> ensureContextTables({
+    required Directory sourceDir,
+    required String sha,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final missing = [
+      for (final path in ArknightsSourcePaths.excelTables)
+        if (!File(p.join(sourceDir.path, path)).existsSync()) path,
+    ];
+    for (var i = 0; i < missing.length; i++) {
+      await downloadFile(
+        sha: sha,
+        path: missing[i],
+        outputPath: p.join(sourceDir.path, missing[i]),
+      );
+      onProgress?.call(i + 1, missing.length);
+    }
+    return missing.length;
   }
 
   /// Downloads one repo file at [sha] into [outputPath].
@@ -310,7 +416,7 @@ class ArknightsSourceClient {
     for (final entry in archive) {
       if (entry.isFile) {
         final rel = _stripTopLevel(entry.name);
-        if (rel == null || !ArknightsSourcePaths.isImporterRelevant(rel)) {
+        if (rel == null || !ArknightsSourcePaths.isZipRelevant(rel)) {
           continue;
         }
         final outFile = File(p.join(outputDir.path, rel));

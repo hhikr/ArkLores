@@ -330,9 +330,9 @@ class EntryImporter {
   /// Entry ids written in this run (the first writer wins).
   final Set<String> _seen = {};
 
-  /// Text already written by a harvested group. An activity and its re-run
-  /// carry identical text; the first copy stays.
-  final Set<String> _texts = {};
+  /// Harvested groups: an activity and its re-run carry identical text, and
+  /// the first copy stays. Looked up in the database (not in memory), so a
+  /// single re-imported table makes the same choice a complete build does.
   static const Set<String> _dedupedTypes = {'activity_text', 'sandbox_text'};
 
   Future<Object?> _json(String repoPath) async {
@@ -458,11 +458,17 @@ class EntryImporter {
         .map((s) => s.section.isEmpty ? s.content : '${s.section}：${s.content}')
         .join('\n')
         .trim();
-    if (content.isNotEmpty &&
-        _dedupedTypes.contains(d.type) &&
-        !_texts.add(content)) {
-      _seen.remove(d.id);
-      return false;
+    if (content.isNotEmpty && _dedupedTypes.contains(d.type)) {
+      final first = splitText(content).first;
+      final same = await txn.rawQuery(
+        'SELECT 1 FROM normalized_records WHERE content_type = ? '
+        "AND content = ? AND raw_id NOT LIKE '%#%' LIMIT 1",
+        [spec.contentType, first],
+      );
+      if (same.isNotEmpty) {
+        _seen.remove(d.id);
+        return false;
+      }
     }
     String? firstRecord;
     if (content.isNotEmpty) {
@@ -536,7 +542,6 @@ class EntryImporter {
   /// the source tree has `levels/`.
   Future<void> importAllTables() async {
     _seen.clear();
-    _texts.clear();
     final ctx = await _loadContext();
     _ctx = ctx;
     for (final path in _importers.keys) {
@@ -550,7 +555,6 @@ class EntryImporter {
   Future<void> importTable(String path) async {
     if (!_importers.containsKey(path)) return;
     _seen.clear();
-    _texts.clear();
     await _importTableWith(path, await _loadContext());
   }
 
@@ -562,6 +566,9 @@ class EntryImporter {
     final run = _importers[path];
     if (run == null) return;
     _ctx = ctx;
+    _levelIndexCache = null;
+    _enemyIdCache = null;
+    _stageIdCache = null;
     await db.transaction((txn) => run(this, txn, ctx));
   }
 
@@ -1678,18 +1685,21 @@ class EntryImporter {
 
   /// Re-imports the bindings of one changed level file.
   Future<void> importLevelFile(String repoPath) async {
-    final ctx = await _loadContext();
-    final index = await _levelIndex(ctx);
+    // An update can change hundreds of level files: the stage index (it
+    // parses several large tables) and the entry id sets are built once and
+    // dropped when a table is re-imported.
+    final index =
+        _levelIndexCache ??= await _levelIndex(await _loadContext());
     final key = repoPath.substring('$_levels/'.length).replaceAll('.json', '');
     final stagesOfLevel = index[key.toLowerCase()];
     if (stagesOfLevel == null) return;
-    final enemies = {
+    final enemies = _enemyIdCache ??= {
       for (final r in await db.rawQuery(
         "SELECT id FROM entries WHERE type = 'enemy'",
       ))
         '${r['id']}',
     };
-    final stages = {
+    final stages = _stageIdCache ??= {
       for (final r in await db.rawQuery(
         "SELECT id FROM entries WHERE type IN ('stage', 'roguelike_stage')",
       ))
@@ -1697,6 +1707,10 @@ class EntryImporter {
     };
     await _levelBindings(repoPath, stagesOfLevel, enemies, stages);
   }
+
+  Map<String, List<String>>? _levelIndexCache;
+  Set<String>? _enemyIdCache;
+  Set<String>? _stageIdCache;
 
   Future<void> _levelBindings(
     String repoPath,

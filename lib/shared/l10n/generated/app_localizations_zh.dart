@@ -987,4 +987,113 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get wikiErrorOffline => '设备当前没有可用网络连接。';
+
+  @override
+  String kbBuildChangeSummary(int stories, int tables, int levels) {
+    return '上游有更新：剧情文件 $stories 个、数据表 $tables 个、关卡文件 $levels 个。';
+  }
+
+  @override
+  String get kbBuildNoChanges => '上游没有与知识库相关的新变化，不需要更新。';
+
+  @override
+  String get kbBuildTooManyChanges =>
+      '上游变化太多，无法逐个增量应用；点“构建”将改为完整重建（需要下载约 170 MB，耗时较长）。';
+
+  @override
+  String get kbBuildDownloadingContext => '正在下载更新所需的数据表…';
+
+  @override
+  String get kbBuildReportTitle => '本次更新的内容';
+
+  @override
+  String kbBuildReportStories(int added, int changed, int removed) {
+    return '剧情文件：新增 $added 个，修改 $changed 个，删除 $removed 个';
+  }
+
+  @override
+  String kbBuildReportEntries(String text) {
+    return '条目变化：$text';
+  }
+
+  @override
+  String kbBuildReportNew(String names) {
+    return '新增集合：$names';
+  }
+
+  @override
+  String kbBuildReportVectors(int count) {
+    return '有 $count 条向量因所在剧情变化而失效，可在下面的“故事向量”里补上。';
+  }
+
+  @override
+  String get kbVectorTitle => '故事向量（语义检索）';
+
+  @override
+  String get kbVectorDesc =>
+      '向量让“找剧情”能按意思匹配，而不只是字面相同。没有向量也能用，只是这部分剧情只做关键词检索。向量只用来定位，答案的证据仍然是原文。';
+
+  @override
+  String kbVectorStatus(int vectors, int stories) {
+    return '已有 $vectors 条向量，覆盖 $stories 个故事';
+  }
+
+  @override
+  String get kbVectorNone => '还没有向量';
+
+  @override
+  String kbVectorPending(int stories, int chunks, String tokens) {
+    return '待生成：$stories 个故事，约 $chunks 块，约 $tokens 万 token';
+  }
+
+  @override
+  String kbVectorCost(String yuan) {
+    return '按百炼价格估算约 ¥$yuan（只是估算，以服务商账单为准；其他服务商价格不同，请按 token 数换算）';
+  }
+
+  @override
+  String get kbVectorUpToDate => '所有故事都有向量，不需要更新。';
+
+  @override
+  String get kbVectorFirstBuild => '这会为全部故事生成向量，费用和时间都比增量更新多得多。';
+
+  @override
+  String kbVectorConfigure(String model, int dims) {
+    return '生成向量需要先配置向量服务：设置 → API 设置 → 向量（默认百炼 $model，维度 $dims，需要该服务的 API Key）。';
+  }
+
+  @override
+  String kbVectorMismatch(String have, String want) {
+    return '已有向量来自 $have，当前配置是 $want。两者不能混用，请把向量设置改回 $have。';
+  }
+
+  @override
+  String get kbVectorStart => '生成向量';
+
+  @override
+  String get kbVectorRefresh => '重新计算';
+
+  @override
+  String kbVectorRunning(int done, int total, int chunks) {
+    return '正在生成向量：$done / $total 个故事（$chunks 块）';
+  }
+
+  @override
+  String kbVectorDone(int chunks, int tokens) {
+    return '已生成 $chunks 块向量，服务商记录用了 $tokens token。';
+  }
+
+  @override
+  String get kbVectorCancel => '停止';
+
+  @override
+  String get kbVectorConfirmTitle => '为全部故事生成向量？';
+
+  @override
+  String kbVectorConfirmBody(int stories, int chunks, String tokens) {
+    return '预计 $stories 个故事、约 $chunks 块，约 $tokens 万 token。会产生向量服务的费用，可以随时停止，已完成的故事会保留。';
+  }
+
+  @override
+  String get kbVectorConfirm => '开始';
 }

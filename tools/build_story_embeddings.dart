@@ -195,6 +195,7 @@ Future<void> main(List<String> args) async {
   await db.transaction((txn) async {
     await txn.execute('DROP TABLE IF EXISTS $storyChunkVectorsTable');
     await txn.execute(storyChunkVectorsDdl);
+    await txn.execute(storyChunkVectorsIndexDdl);
     final batch = txn.batch();
     for (final row in migrated) {
       batch.insert(storyChunkVectorsTable, row,

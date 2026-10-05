@@ -40,6 +40,12 @@ const String storyChunkVectorsDdl = '''
   )
 ''';
 
+/// Index that makes "which stories have vectors" and "drop a story's
+/// vectors" cheap (an update touches a handful of stories out of 3,600).
+const String storyChunkVectorsIndexDdl =
+    'CREATE INDEX IF NOT EXISTS idx_story_chunk_vectors_story '
+    'ON $storyChunkVectorsTable(story_id)';
+
 /// One story line as input to chunking.
 class ChunkLine {
   const ChunkLine(this.index, this.speaker, this.content);
