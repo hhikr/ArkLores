@@ -112,6 +112,98 @@ void main() {
     });
   });
 
+  group('reading progress', () {
+    const a = LibraryRef.story('s/a.txt');
+
+    test('the anchor follows the reader, the furthest line only grows',
+        () async {
+      await store.recordOpen(
+        a,
+        title: 'A',
+        lineIndex: 0,
+        snippet: 'x',
+        totalLines: 100,
+      );
+      await store.updateProgress(
+        a,
+        lineIndex: 40,
+        snippet: 'line 40',
+        totalLines: 100,
+        reached: 55,
+      );
+      await store.updateProgress(
+        a,
+        lineIndex: 10,
+        snippet: 'line 10',
+        totalLines: 100,
+        reached: 20,
+      );
+      final e = (await store.recent()).single;
+      expect(e.lineIndex, 10);
+      expect(e.snippet, 'line 10');
+      expect(e.furthest, 55);
+      expect(e.progress, closeTo(0.56, 0.001));
+      expect(e.finished, isFalse);
+      expect((await store.progressByRef()).keys, [a.toString()]);
+
+      await store.updateProgress(
+        a,
+        lineIndex: 90,
+        snippet: 'end',
+        totalLines: 100,
+        reached: 99,
+      );
+      expect((await store.recent()).single.finished, isTrue);
+    });
+
+    test('reopening keeps how far it was read; progress of unknown is null',
+        () async {
+      await store.recordOpen(a, title: 'A', lineIndex: 0, snippet: '');
+      expect((await store.recent()).single.progress, isNull);
+      await store.updateProgress(
+        a,
+        lineIndex: 5,
+        snippet: '',
+        totalLines: 50,
+        reached: 30,
+      );
+      await store.recordOpen(a, title: 'A', lineIndex: 2, snippet: '');
+      final e = (await store.recent()).single;
+      expect(e.furthest, 30);
+      expect(e.totalLines, 50);
+    });
+  });
+
+  group('materials', () {
+    test('create, edit, list newest first, delete', () async {
+      final a = await store.saveMaterial(title: '  ', body: '第一行标题\n正文');
+      expect(a.title, '第一行标题');
+      now = now.add(const Duration(minutes: 1));
+      final b = await store.saveMaterial(title: 'B', body: 'text');
+      expect(a.id, isNot(b.id));
+      expect((await store.materials()).map((m) => m.title), ['B', '第一行标题']);
+
+      now = now.add(const Duration(minutes: 1));
+      final edited =
+          await store.saveMaterial(id: a.id, title: 'A2', body: 'changed');
+      expect(edited.id, a.id);
+      expect(edited.createdAt, a.createdAt);
+      expect(edited.updatedAt.isAfter(a.updatedAt), isTrue);
+      expect((await store.materials()).first.id, a.id);
+      expect((await store.material(a.id))!.body, 'changed');
+
+      await store.deleteMaterial(a.id);
+      expect(await store.material(a.id), isNull);
+      expect(await store.materials(), hasLength(1));
+    });
+
+    test('a long first line becomes a short title', () async {
+      final m = await store.saveMaterial(title: '', body: '字' * 80);
+      expect(m.title.length, 25);
+      expect(m.title.endsWith('…'), isTrue);
+    });
+  });
+
   group('reanchorLine', () {
     final lines = ['零', '一一一', '二二二', '三三三', '四四四'];
 
@@ -176,6 +268,34 @@ void main() {
       final db = await databaseFactoryFfi.openDatabase(path);
       expect(await db.getVersion(), userDataSchemaVersion);
       expect((await db.query('marker')).single['v'], 'kept');
+      await db.close();
+    });
+
+    test('a version 1 file (history only) gains progress and materials',
+        () async {
+      final path = p.join(dir.path, userDataFileName);
+      final v1 = await databaseFactoryFfi.openDatabase(path);
+      await userDataMigrations.first(v1);
+      await v1.insert('reading_history', {
+        'ref': 'story:s/a.txt',
+        'title': 'A',
+        'line_index': 7,
+        'snippet': 'old row',
+        'opened_at': 1,
+      });
+      await v1.setVersion(1);
+      await v1.close();
+
+      store = open();
+      final kept = (await store.recent()).single;
+      expect((kept.title, kept.lineIndex, kept.snippet), ('A', 7, 'old row'));
+      expect((kept.totalLines, kept.furthest, kept.progress), (0, 0, null));
+      final m = await store.saveMaterial(title: 'T', body: 'b');
+      expect((await store.materials()).single.id, m.id);
+      await store.close();
+      final db = await databaseFactoryFfi.openDatabase(path);
+      expect(await db.getVersion(), userDataSchemaVersion);
+      expect(userDataSchemaVersion, 3);
       await db.close();
     });
 

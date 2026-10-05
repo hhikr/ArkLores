@@ -29,6 +29,20 @@ All notable changes to ArkLores will be documented in this file.
   stories just get keyword search.
 - Developers get the same update from the command line: `tools/update_gamedata.dart`.
 
+### Library (in development for 0.11)
+
+- **The Materials tab is now a library.** *Read*: continue the story you were reading, browse the shelves — main story,
+  events, operator records, Integrated Strategies, Sandbox, re-runs and the codex (operators, enemies, items, medals …) —
+  open a story set to see its chapters with the official synopsis and your progress, and the other texts that belong to it
+  (stages, enemies, relics, events …). An entry shows its text and what it is bound to (an enemy shows the stages it appears
+  in; tap to go there). Search finds story sets, entries and stage codes.
+- **The reader remembers where you are.** Opening a story from the library, or from an answer's evidence, records the line you
+  are at and how far you read; *Continue reading* and *Recently read* return to that line (found again by its text if the story
+  changed), with a progress bar and a check mark when finished. Chapters end with *previous / next chapter*. Captions, documents
+  and choices are labelled.
+- **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and
+  never enter the knowledge base. *Ask about it* puts a text in the question box so you can finish the question and send it.
+
 ### Reading history (in development for 0.11)
 
 - **Recently read.** Stories opened from an answer's evidence are remembered (book icon in the Ask tab's top bar): the chapter, the

@@ -6,6 +6,7 @@ import 'features/materials/materials_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
+import 'shared/providers/handoff_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/providers/wiki_navigation_provider.dart';
@@ -45,6 +46,12 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final wikiReaderFullscreen = ref.watch(wikiReaderFullscreenProvider);
+    // Another page asked for a tab (the library's "ask about it").
+    ref.listen<int?>(mainTabRequestProvider, (_, tab) {
+      if (tab == null) return;
+      ref.read(mainTabRequestProvider.notifier).state = null;
+      _selectTab(tab);
+    });
 
     return PopScope(
       canPop: false,

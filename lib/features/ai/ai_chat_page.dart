@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/agent/agent_provider.dart';
 import '../../core/llm/llm_provider.dart' show deepThinkingProvider;
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -83,6 +84,17 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     final theme = ref.watch(themeProvider);
     final isConfigured = ref.watch(apiConfigProvider).isValid;
     _dispatchInitialWikiContext(isConfigured);
+    // The library's "ask about it": the text goes into the question box for
+    // the user to finish; nothing is sent.
+    ref.listen<String?>(askDraftProvider, (_, draft) {
+      if (draft == null) return;
+      ref.read(askDraftProvider.notifier).state = null;
+      _tabController.animateTo(0);
+      _inputController.value = TextEditingValue(
+        text: draft,
+        selection: TextSelection.collapsed(offset: draft.length),
+      );
+    });
 
     // R15: one bar — the Ask / Roleplay switch where the title was, the
     // conversation actions on the right (Ask tab only).

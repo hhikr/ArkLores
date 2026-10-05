@@ -204,7 +204,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get materialsEmptyDesc =>
-      'Import PDF or TXT files to build your personal lore reference library.';
+      'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.';
 
   @override
   String get materialsNoApiKeyHint =>
@@ -234,9 +234,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsDeleteTitle => 'Delete Book';
 
   @override
-  String materialsDeleteConfirm(Object name) {
-    return 'Remove \"$name\" and all its chunks from the knowledge base?';
-  }
+  String get materialsDeleteConfirm => 'Delete this text?';
 
   @override
   String get materialsDelete => 'Delete';
@@ -531,6 +529,166 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiStoryReaderEnd => 'End of chapter';
+
+  @override
+  String get libraryTabRead => 'Read';
+
+  @override
+  String get libraryTabMine => 'My texts';
+
+  @override
+  String get librarySearchTitle => 'Search';
+
+  @override
+  String get librarySearchHint => 'Search chapters, entries, stage codes';
+
+  @override
+  String get libraryContinue => 'Continue reading';
+
+  @override
+  String get libraryShelves => 'Shelves';
+
+  @override
+  String get libraryViewAll => 'All';
+
+  @override
+  String get shelfMain => 'Main story';
+
+  @override
+  String get shelfActivity => 'Events';
+
+  @override
+  String get shelfMemory => 'Operator records';
+
+  @override
+  String get shelfRoguelike => 'Integrated Strategies';
+
+  @override
+  String get shelfSandbox => 'Sandbox';
+
+  @override
+  String get shelfRetro => 'Re-runs';
+
+  @override
+  String get shelfCodex => 'Codex';
+
+  @override
+  String libraryCountCollections(int n) {
+    return '$n sets';
+  }
+
+  @override
+  String libraryCountStories(int n) {
+    return '$n stories';
+  }
+
+  @override
+  String libraryCountEntries(int n) {
+    return '$n entries';
+  }
+
+  @override
+  String get libraryNotInstalledTitle => 'No knowledge base yet';
+
+  @override
+  String get libraryNotInstalledDesc =>
+      'Download or build it under Settings → Knowledge base; the stories and texts to read appear here.';
+
+  @override
+  String get libraryOldSchemaTitle => 'The knowledge base needs an update';
+
+  @override
+  String get libraryOldSchemaDesc =>
+      'The installed knowledge base is an older version without the story-set index. Update it under Settings → Knowledge base to read here.';
+
+  @override
+  String get libraryEmpty => 'Nothing here yet';
+
+  @override
+  String get libraryStories => 'Stories';
+
+  @override
+  String get libraryOtherSections => 'Related texts';
+
+  @override
+  String get libraryFilterHint => 'Filter this list';
+
+  @override
+  String libraryProgress(int percent) {
+    return '$percent% read';
+  }
+
+  @override
+  String get libraryFinished => 'Finished';
+
+  @override
+  String libraryRelease(String month) {
+    return 'Released $month';
+  }
+
+  @override
+  String get libraryRelated => 'Related';
+
+  @override
+  String get libraryNoText => 'This entry has no text';
+
+  @override
+  String get libraryNoResults => 'Nothing found';
+
+  @override
+  String get librarySearchCollections => 'Story sets and topics';
+
+  @override
+  String get librarySearchEntries => 'Entries';
+
+  @override
+  String get storyReaderNext => 'Next chapter';
+
+  @override
+  String get storyReaderPrevious => 'Previous chapter';
+
+  @override
+  String storyReaderResumed(int line) {
+    return 'Continue · line $line';
+  }
+
+  @override
+  String get storyReaderSynopsis => 'Official synopsis';
+
+  @override
+  String get materialsEmptyTitle => 'No texts of your own yet';
+
+  @override
+  String get materialsNew => 'New';
+
+  @override
+  String get materialsPaste => 'Paste from clipboard';
+
+  @override
+  String get materialsTitleHint => 'Title (optional)';
+
+  @override
+  String get materialsBodyHint => 'Text';
+
+  @override
+  String get materialsEdit => 'Edit';
+
+  @override
+  String materialsChars(int n) {
+    return '$n characters';
+  }
+
+  @override
+  String get materialsClipboardEmpty => 'The clipboard has no text';
+
+  @override
+  String get materialsDiscard => 'Discard unsaved changes?';
+
+  @override
+  String get materialsDiscardAction => 'Discard';
+
+  @override
+  String get materialsAskAbout => 'Ask about it';
 
   @override
   String get readingHistoryTitle => 'Recently read';

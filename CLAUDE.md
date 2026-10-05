@@ -16,6 +16,27 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 第 5 步：可阅读资料页（2026-10-05，同一分支，未发布）**：
+  - **“资料”标签页**（`features/materials/materials_page.dart`，原“暂停”占位被替换）：顶栏与 Ask 页一致的 TabBar [阅读 | 我的资料]。
+    阅读：继续阅读卡（最近一篇，含进度）→ 书架（`collections.kind`：主线/活动/干员密录/集成战略/生息演算/复刻 + 图鉴=无归属条目类型）→ 最近阅读。
+    书架页 → 集合页（章节列表带官方梗概与已读进度、相关资料入口：关卡/敌人/藏品/事件…）→ 条目列表页（可筛选）→ 条目页
+    （文字去标记 + `entry_links` 绑定，可点进相关条目）；右上角搜索（集合名、条目名、关卡代号）。全部页面代码在 `features/library/`。
+  - **读取**：`core/library/library_queries.dart`（纯函数，只读，全部由 schema 派生：书架=collections.kind、列表=entries.type、顺序=sort_key，
+    不出现任何具体名字）+ `library_provider.dart`；`GameDataKnowledgeStore.withDatabase` 借用已打开的只读连接。旧库（schema 4）
+    给出“知识库需要更新”提示而不是崩。显示名（条目类型、绑定动词）在 `library_labels.dart`。
+  - **阅读页**（`story_reader_page.dart`）三种打开方式：引用（高亮）、续读（定位到上次的行，左侧竖线标记）、资料页（从头）；
+    每行一个 GlobalKey，滚动结束时二分查视口首行/末行，防抖写入用户库（锚点=首行，`furthest`=末行只增不减，`total_lines`）；章末“上一章/下一章”
+    （同集合 `sort_key` 邻居）；非对白行显示 `字幕/文档/选项` 小标记。第 4 步的三个局限（只有证据链进历史、记的是引用行、历史只认故事）
+    由此解决；非故事条目很短，不记历史。
+  - **用户库升到 v3**：v2 = `reading_history.total_lines/furthest`，v3 = `materials`（我的资料：新建、从剪贴板导入、编辑、删除、阅读；
+    只存在本机，不进知识库）。迁移只追加。资料页的“用它提问”把资料文字（≤1500 字）放进提问框草稿并切到 Ask 页，由用户补完问题再发送；
+    **不改 agent**，资料只是用户提供的上下文，不是证据（`handoff_provider.dart`）。
+  - **验证**：纯 Dart 查询在合成条目层上有单测，并在真实 schema 5 库（上游 a550f5e）上核过：3660 个故事全部有条目、有名字、有归属，
+    且 `story_lines` 里没有无条目的故事（都能从书架走到）；查询均 <30 ms。界面在 Ahem 字体下做了布局截图检查
+    （`ARKLORES_SHOT_DIR=<目录> flutter test test/library_ui_test.dart` 导出 PNG，仅看布局不看字形）。
+  - **已知局限**：数据层——主线章 `main_14` 的关卡被归到它的复刻活动（上一步已记的“活动与其复刻共用关卡，归属复刻”），所以该章页面没有关卡/敌人；
+    要修需在 `entry_importer` 里让主线关卡按 id 前缀归主线章并重建库。App 端——长篇故事（数千行）用单个 Column 渲染，
+    未做分段加载；条目类型与绑定的显示名只有中文。真机待确认：书架网格观感、阅读页滚动保存的进度、续读定位。
 - **0.11 第 4 步：用户库与阅读历史（2026-10-05，同一分支，未发布）**：
   - **用户库** `lib/core/userdata/`：独立文件 `<documents>/userdata/arklores_user.db`（与知识库不同目录，不 ATTACH、不建外键，
     知识库更新/替换/删除都碰不到它）。结构版本用 `PRAGMA user_version`，由 `UserDataStore` 自己管理（`userDataMigrations`，
@@ -24,7 +45,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
     目标消失时引用仍能解析，界面提示而不是崩。
   - **阅读历史**只存“条目 + 一行锚点 + 该行原文开头 60 字”（`reading_history`，每条目一行，最多 200 条）；知识库变动后用
     `reanchorLine` 按原文片段找回位置（原位置还在 → 最近的同文行 → 夹到范围内并提示“已定位到大致位置”）。
-    不记滚动位置、不记读到哪、不做书签——粒度留到第 5 步在真正的阅读器里定。
+    （第 5 步在阅读页里补了真正的阅读位置与进度：见上，用户库 v2。）
   - **界面**：阅读页 `story_reader_page.dart` 打开时写历史（`ReadingHistoryPage`：Ask 页顶栏书本图标，点条目回到锚点行，
     左滑删除、清空）。第 5 步的资料页复用这套用户库，不要另建文件。
 

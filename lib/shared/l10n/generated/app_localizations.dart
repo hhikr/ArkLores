@@ -461,7 +461,7 @@ abstract class AppLocalizations {
   /// No description provided for @materialsEmptyDesc.
   ///
   /// In en, this message translates to:
-  /// **'Import PDF or TXT files to build your personal lore reference library.'**
+  /// **'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.'**
   String get materialsEmptyDesc;
 
   /// No description provided for @materialsNoApiKeyHint.
@@ -515,8 +515,8 @@ abstract class AppLocalizations {
   /// No description provided for @materialsDeleteConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Remove \"{name}\" and all its chunks from the knowledge base?'**
-  String materialsDeleteConfirm(Object name);
+  /// **'Delete this text?'**
+  String get materialsDeleteConfirm;
 
   /// No description provided for @materialsDelete.
   ///
@@ -1021,6 +1021,294 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'End of chapter'**
   String get aiStoryReaderEnd;
+
+  /// No description provided for @libraryTabRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get libraryTabRead;
+
+  /// No description provided for @libraryTabMine.
+  ///
+  /// In en, this message translates to:
+  /// **'My texts'**
+  String get libraryTabMine;
+
+  /// No description provided for @librarySearchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get librarySearchTitle;
+
+  /// No description provided for @librarySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search chapters, entries, stage codes'**
+  String get librarySearchHint;
+
+  /// No description provided for @libraryContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue reading'**
+  String get libraryContinue;
+
+  /// No description provided for @libraryShelves.
+  ///
+  /// In en, this message translates to:
+  /// **'Shelves'**
+  String get libraryShelves;
+
+  /// No description provided for @libraryViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get libraryViewAll;
+
+  /// No description provided for @shelfMain.
+  ///
+  /// In en, this message translates to:
+  /// **'Main story'**
+  String get shelfMain;
+
+  /// No description provided for @shelfActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get shelfActivity;
+
+  /// No description provided for @shelfMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator records'**
+  String get shelfMemory;
+
+  /// No description provided for @shelfRoguelike.
+  ///
+  /// In en, this message translates to:
+  /// **'Integrated Strategies'**
+  String get shelfRoguelike;
+
+  /// No description provided for @shelfSandbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Sandbox'**
+  String get shelfSandbox;
+
+  /// No description provided for @shelfRetro.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-runs'**
+  String get shelfRetro;
+
+  /// No description provided for @shelfCodex.
+  ///
+  /// In en, this message translates to:
+  /// **'Codex'**
+  String get shelfCodex;
+
+  /// No description provided for @libraryCountCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} sets'**
+  String libraryCountCollections(int n);
+
+  /// No description provided for @libraryCountStories.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} stories'**
+  String libraryCountStories(int n);
+
+  /// No description provided for @libraryCountEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} entries'**
+  String libraryCountEntries(int n);
+
+  /// No description provided for @libraryNotInstalledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No knowledge base yet'**
+  String get libraryNotInstalledTitle;
+
+  /// No description provided for @libraryNotInstalledDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Download or build it under Settings → Knowledge base; the stories and texts to read appear here.'**
+  String get libraryNotInstalledDesc;
+
+  /// No description provided for @libraryOldSchemaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The knowledge base needs an update'**
+  String get libraryOldSchemaTitle;
+
+  /// No description provided for @libraryOldSchemaDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed knowledge base is an older version without the story-set index. Update it under Settings → Knowledge base to read here.'**
+  String get libraryOldSchemaDesc;
+
+  /// No description provided for @libraryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here yet'**
+  String get libraryEmpty;
+
+  /// No description provided for @libraryStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories'**
+  String get libraryStories;
+
+  /// No description provided for @libraryOtherSections.
+  ///
+  /// In en, this message translates to:
+  /// **'Related texts'**
+  String get libraryOtherSections;
+
+  /// No description provided for @libraryFilterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter this list'**
+  String get libraryFilterHint;
+
+  /// No description provided for @libraryProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% read'**
+  String libraryProgress(int percent);
+
+  /// No description provided for @libraryFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get libraryFinished;
+
+  /// No description provided for @libraryRelease.
+  ///
+  /// In en, this message translates to:
+  /// **'Released {month}'**
+  String libraryRelease(String month);
+
+  /// No description provided for @libraryRelated.
+  ///
+  /// In en, this message translates to:
+  /// **'Related'**
+  String get libraryRelated;
+
+  /// No description provided for @libraryNoText.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry has no text'**
+  String get libraryNoText;
+
+  /// No description provided for @libraryNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing found'**
+  String get libraryNoResults;
+
+  /// No description provided for @librarySearchCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'Story sets and topics'**
+  String get librarySearchCollections;
+
+  /// No description provided for @librarySearchEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'Entries'**
+  String get librarySearchEntries;
+
+  /// No description provided for @storyReaderNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next chapter'**
+  String get storyReaderNext;
+
+  /// No description provided for @storyReaderPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous chapter'**
+  String get storyReaderPrevious;
+
+  /// No description provided for @storyReaderResumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue · line {line}'**
+  String storyReaderResumed(int line);
+
+  /// No description provided for @storyReaderSynopsis.
+  ///
+  /// In en, this message translates to:
+  /// **'Official synopsis'**
+  String get storyReaderSynopsis;
+
+  /// No description provided for @materialsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No texts of your own yet'**
+  String get materialsEmptyTitle;
+
+  /// No description provided for @materialsNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get materialsNew;
+
+  /// No description provided for @materialsPaste.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste from clipboard'**
+  String get materialsPaste;
+
+  /// No description provided for @materialsTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Title (optional)'**
+  String get materialsTitleHint;
+
+  /// No description provided for @materialsBodyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get materialsBodyHint;
+
+  /// No description provided for @materialsEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get materialsEdit;
+
+  /// No description provided for @materialsChars.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} characters'**
+  String materialsChars(int n);
+
+  /// No description provided for @materialsClipboardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard has no text'**
+  String get materialsClipboardEmpty;
+
+  /// No description provided for @materialsDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard unsaved changes?'**
+  String get materialsDiscard;
+
+  /// No description provided for @materialsDiscardAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get materialsDiscardAction;
+
+  /// No description provided for @materialsAskAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about it'**
+  String get materialsAskAbout;
 
   /// No description provided for @readingHistoryTitle.
   ///

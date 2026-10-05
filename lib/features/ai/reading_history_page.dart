@@ -7,8 +7,7 @@ import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/smooth_page_route.dart';
-import 'story_reader_page.dart';
+import '../library/library_widgets.dart';
 
 /// "Recently read": the stories the user opened, newest first. Tapping one
 /// reopens it at the line it was left at (found again by its text if the
@@ -120,46 +119,28 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
         }
         ref.invalidate(recentReadingProvider);
       },
-      child: ListTile(
+      child: LibraryRow(
         key: ValueKey('reading-tile-${entry.ref}'),
         leading: Icon(Icons.menu_book_rounded, color: theme.accentText),
-        title: Text(
-          entry.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.titleFont.copyWith(fontSize: 15),
-        ),
-        subtitle: Text(
-          [
-            '${_time(entry.openedAt)} · '
-                '${context.t.readingHistoryLine(entry.lineIndex + 1)}',
-            if (entry.snippet.isNotEmpty) entry.snippet,
-          ].join('\n'),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.bodyFont.copyWith(
-            fontSize: 12,
-            color: theme.textSecondary,
-          ),
-        ),
-        isThreeLine: entry.snippet.isNotEmpty,
+        title: entry.title,
+        subtitle: [
+          '${_time(entry.openedAt)} · '
+              '${context.t.readingHistoryLine(entry.lineIndex + 1)}',
+          if (entry.snippet.isNotEmpty) entry.snippet,
+        ].join('\n'),
+        progress: entry.progress != null && !entry.finished
+            ? entry.progress
+            : null,
+        trailing: entry.progress == null
+            ? null
+            : readMark(context, theme, entry),
         // Only stories are readable so far; other kinds are skipped.
         onTap: item == null || item.kind != LibraryRefKind.story
             ? null
-            : () => Navigator.of(context).push(
-                  smoothPageRoute<void>(
-                    builder: (_) => StoryReaderPage(
-                      storyId: item.id,
-                      highlightStart: entry.lineIndex,
-                      highlightEnd: entry.lineIndex,
-                      snippet: entry.snippet,
-                    ),
-                  ),
-                ),
+            : () => openStory(context, item.id, resume: entry),
       ),
     );
   }
-
   Future<void> _confirmClear() async {
     final ok = await showDialog<bool>(
       context: context,

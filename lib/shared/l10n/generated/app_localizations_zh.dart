@@ -201,7 +201,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsNoBooks => '还没有书籍';
 
   @override
-  String get materialsEmptyDesc => '导入 PDF 或 TXT 文件来构建你的个人剧情资料库。';
+  String get materialsEmptyDesc =>
+      '把想留的文字放在这里：设定摘录、笔记、考据都可以。它们只保存在这台设备上，不会进入知识库。';
 
   @override
   String get materialsNoApiKeyHint => '请在设置中配置 API 密钥以启用导入功能。';
@@ -230,9 +231,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsDeleteTitle => '删除书籍';
 
   @override
-  String materialsDeleteConfirm(Object name) {
-    return '确定要删除 \"$name\" 及其所有知识库片段吗？';
-  }
+  String get materialsDeleteConfirm => '删除这份资料？';
 
   @override
   String get materialsDelete => '删除';
@@ -518,6 +517,165 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiStoryReaderEnd => '本章完';
+
+  @override
+  String get libraryTabRead => '阅读';
+
+  @override
+  String get libraryTabMine => '我的资料';
+
+  @override
+  String get librarySearchTitle => '搜索';
+
+  @override
+  String get librarySearchHint => '搜索章节、条目、关卡代号';
+
+  @override
+  String get libraryContinue => '继续阅读';
+
+  @override
+  String get libraryShelves => '书架';
+
+  @override
+  String get libraryViewAll => '全部';
+
+  @override
+  String get shelfMain => '主线';
+
+  @override
+  String get shelfActivity => '活动';
+
+  @override
+  String get shelfMemory => '干员密录';
+
+  @override
+  String get shelfRoguelike => '集成战略';
+
+  @override
+  String get shelfSandbox => '生息演算';
+
+  @override
+  String get shelfRetro => '复刻';
+
+  @override
+  String get shelfCodex => '图鉴';
+
+  @override
+  String libraryCountCollections(int n) {
+    return '$n 项';
+  }
+
+  @override
+  String libraryCountStories(int n) {
+    return '$n 个故事';
+  }
+
+  @override
+  String libraryCountEntries(int n) {
+    return '$n 条';
+  }
+
+  @override
+  String get libraryNotInstalledTitle => '还没有知识库';
+
+  @override
+  String get libraryNotInstalledDesc => '到 设置 → 知识库 下载或构建后，这里会出现可以阅读的剧情和资料。';
+
+  @override
+  String get libraryOldSchemaTitle => '知识库需要更新';
+
+  @override
+  String get libraryOldSchemaDesc =>
+      '当前的知识库是旧版本，没有按故事集分好的目录。到 设置 → 知识库 更新后即可阅读。';
+
+  @override
+  String get libraryEmpty => '这里还没有内容';
+
+  @override
+  String get libraryStories => '剧情';
+
+  @override
+  String get libraryOtherSections => '相关资料';
+
+  @override
+  String get libraryFilterHint => '在列表中筛选';
+
+  @override
+  String libraryProgress(int percent) {
+    return '已读 $percent%';
+  }
+
+  @override
+  String get libraryFinished => '已读完';
+
+  @override
+  String libraryRelease(String month) {
+    return '上线 $month';
+  }
+
+  @override
+  String get libraryRelated => '关联';
+
+  @override
+  String get libraryNoText => '这一条没有文字内容';
+
+  @override
+  String get libraryNoResults => '没有找到相关内容';
+
+  @override
+  String get librarySearchCollections => '故事集与主题';
+
+  @override
+  String get librarySearchEntries => '条目';
+
+  @override
+  String get storyReaderNext => '下一章';
+
+  @override
+  String get storyReaderPrevious => '上一章';
+
+  @override
+  String storyReaderResumed(int line) {
+    return '继续阅读 · 第 $line 行';
+  }
+
+  @override
+  String get storyReaderSynopsis => '官方梗概';
+
+  @override
+  String get materialsEmptyTitle => '还没有自己的资料';
+
+  @override
+  String get materialsNew => '新建';
+
+  @override
+  String get materialsPaste => '从剪贴板导入';
+
+  @override
+  String get materialsTitleHint => '标题（可留空）';
+
+  @override
+  String get materialsBodyHint => '正文';
+
+  @override
+  String get materialsEdit => '编辑';
+
+  @override
+  String materialsChars(int n) {
+    return '$n 字';
+  }
+
+  @override
+  String get materialsClipboardEmpty => '剪贴板里没有文字';
+
+  @override
+  String get materialsDiscard => '放弃未保存的修改？';
+
+  @override
+  String get materialsDiscardAction => '放弃';
+
+  @override
+  String get materialsAskAbout => '用它提问';
 
   @override
   String get readingHistoryTitle => '最近阅读';

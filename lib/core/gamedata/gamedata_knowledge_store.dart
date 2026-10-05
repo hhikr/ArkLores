@@ -863,6 +863,16 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     _nameInventory = null;
   }
 
+  /// Runs [action] on the open knowledge base (read-only); null when none is
+  /// installed. For callers that need their own queries (the library pages).
+  Future<R?> withDatabase<R>(
+    Future<R> Function(sqflite.DatabaseExecutor db) action,
+  ) async {
+    final db = await _open();
+    if (db == null) return null;
+    return action(db);
+  }
+
   Future<sqflite.Database?> _open() async {
     final path = await _resolveDbPath();
     if (path == null) return null;

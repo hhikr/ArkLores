@@ -1,7 +1,6 @@
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/userdata/library_ref.dart';
 import 'package:arklores/core/userdata/user_data_provider.dart';
-import 'package:arklores/core/userdata/user_data_store.dart';
 import 'package:arklores/features/ai/reading_history_page.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
@@ -9,7 +8,7 @@ import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'support/memory_user_store.dart';
 
 const _story = 'activities/act_fixture/level_fixture_c5.txt';
 
@@ -26,50 +25,10 @@ List<StoryLineEntry> _lines({int shift = 0, bool rewritten = false}) => [
         ),
     ];
 
-/// In memory: real sqlite needs real async, which lets the theme's font
-/// downloads run (and fail) inside widget tests. The real store has its own
-/// tests in user_data_store_test.dart.
-class _MemoryStore extends UserDataStore {
-  _MemoryStore() : super(factory: databaseFactoryFfi, path: 'unused');
-
-  final Map<String, ReadingEntry> rows = {};
-  var _tick = 0;
-
-  @override
-  Future<void> recordOpen(
-    LibraryRef ref, {
-    required String title,
-    required int lineIndex,
-    required String snippet,
-  }) async {
-    rows[ref.toString()] = ReadingEntry(
-      ref: ref.toString(),
-      title: title,
-      lineIndex: lineIndex,
-      snippet: historySnippetOf(snippet),
-      openedAt: DateTime(2026, 10, 5).add(Duration(minutes: _tick++)),
-      openCount: 1,
-    );
-  }
-
-  @override
-  Future<List<ReadingEntry>> recent({int limit = 50}) async =>
-      (rows.values.toList()..sort((a, b) => b.openedAt.compareTo(a.openedAt)))
-          .take(limit)
-          .toList();
-
-  @override
-  Future<void> clearHistory([LibraryRef? ref]) async =>
-      ref == null ? rows.clear() : rows.remove(ref.toString());
-
-  @override
-  Future<void> close() async {}
-}
-
 void main() {
-  late _MemoryStore store;
+  late MemoryUserStore store;
 
-  setUp(() => store = _MemoryStore());
+  setUp(() => store = MemoryUserStore());
 
   Future<void> settle(WidgetTester tester) async {
     await tester.pump();
@@ -132,8 +91,9 @@ void main() {
     await settle(tester);
     expect(find.byType(StoryReaderPage), findsOneWidget);
     // Found again by its text: line 20 is now line 23.
-    expect(find.byKey(const ValueKey('story-line-target-23')), findsOneWidget);
-    expect(find.byKey(const ValueKey('story-line-target-20')), findsNothing);
+    expect(find.byKey(const ValueKey('story-line-resume-23')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-line-resume-20')), findsNothing);
+    expect(find.byKey(const ValueKey('story-line-target-23')), findsNothing);
     expect(find.text('原文有变动，已定位到大致位置'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -151,7 +111,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('故事 · 章'));
     await settle(tester);
-    expect(find.byKey(const ValueKey('story-line-target-12')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-line-resume-12')), findsOneWidget);
     expect(find.text('原文有变动，已定位到大致位置'), findsOneWidget);
   });
 
