@@ -16,6 +16,13 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 肉鸽页第四轮（2026-10-05，未发布，需重算知识库）**：① 类型显示名去掉“集成战略”前缀（`entryTypeName`；目录标签 `ROGUELIKE` 不再加前缀；
+  `_typeLabels` 里写进记录 `section` 的仍带前缀，利于检索）。② 区域：游戏按“层位”重复列同一区域（rogue_3 有 337 条，文字相同、只差 id），
+  构建时按“名字+去掉规则行后的文字”去重（`_prose`：逐行去掉玩法行），仍同名的编号；关卡按 `levelId` 的 `_<区>-<序>` 归到 `zone_<区>`，
+  写 `belongs_to`（区域页的“包含 · 关卡”）。表里没有事件/加成与区域的关系（`rollNodeData` 只有传送门区域的节点类型，`relics` 里的 zone 是机制参数），所以不做。
+  ③ 事件：场景与选项在表里没有互相列出，只靠 id 词干相连（`scene_<主题>_<词干>_enter/_2`、`choice_<主题>_<词干>_1`，`choice.nextSceneId` 指向下一场景）；
+  构建按词干把同一事件的场景与选项合成一个 `roguelike_scene` 条目（场景依次，末尾“选项”列出标题与通向的场景，效果文字略去），
+  不再有 `roguelike_choice` 条目（rogue_6：338 场景 + 396 选项 → 59 个事件）。
 - **0.11 肉鸽页第三轮（2026-10-05，未发布，需重算知识库；本地 release APK 供开发者试装）**：肉鸽主题页改为一页读完。
   构建（`entry_importer.dart`/`story_naming.dart`，全部来自表里的 id 关系）：`StoryHint.parent` + 新链接关系 `part_of`——结局书的页面
   （`clientEndbookItemDatas`）与结局同名的故事（`avgId`，排在最后）属于结局（`endbook.endingId`），月度小队的三段故事（`monthSquad.chatId`

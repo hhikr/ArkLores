@@ -68,6 +68,11 @@ All notable changes to ArkLores will be documented in this file.
   separate story list and "related texts" headings are gone; what is left (areas, stages, collectibles, events …) are plain
   rows. Stages that exist in a normal and a raid form are marked *· 普通* / *· 突袭*. Tips that were only play advice and the
   rule stand-in items are no longer listed; tips that explain a term are kept under the term.
+- **Events carry their options; zones are listed once.** In Integrated Strategies an event (a scene and its follow-ups, found
+  by their shared id stem) is one entry that ends with the options it offers and where each leads — the separate options list
+  is gone. Zones the game lists once per layer slot (identical text) are one zone (a topic had 337 "zones", now 8); a zone's page
+  lists its stages (from the level numbers: `level_<topic>_<zone>-<n>`). The tables link neither events nor bonuses to zones, so
+  those are not shown. The "集成战略" in front of every list name is gone (收藏品, 事件, 区域, 关卡 …).
 - **Long lists are menus.** Integrated Strategies collections list their stories under folding headings (ending, squad …),
   put endings and squads before the long lists, and open collectibles, events and choices as a menu of kinds first.
 - **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and

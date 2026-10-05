@@ -1318,6 +1318,13 @@ class EntryImporter {
     await txn.rawDelete('DELETE FROM entries WHERE source_path = ?', [path]);
   }
 
+  /// The lines of [text] that are prose: Chinese and not rule text.
+  String _prose(String text) => cleanDescription(text)
+      .split(RegExp(r'\n|\\n'))
+      .map(_clean)
+      .where((l) => hasChinese(l) && !isMechanical(l))
+      .join('\n');
+
   Future<void> _roguelikeTopics(Transaction txn, _Context ctx) async {
     const path = EntryTables.roguelikeTopic;
     await _purgeSource(txn, path);
@@ -1393,56 +1400,87 @@ class EntryImporter {
         ),
       );
     }
-    for (final entry in _map(d['choiceScenes']).entries) {
-      final scene = _map(entry.value);
-      final title = _clean(scene['title']);
-      final desc = cleanDescription(_s(scene['description']));
-      if (title.isEmpty && !hasChinese(desc)) continue;
+    // Events. A scene and its follow-up scenes share an id stem
+    // (`scene_<topic>_<stem>_enter`, `scene_<topic>_<stem>_2`), and the choices
+    // offered carry the same stem (`choice_<topic>_<stem>_1`): one entry per
+    // stem, the scenes in order, then the choices with where each leads.
+    String stemOf(String raw, String lead) {
+      final s = raw.startsWith(lead) ? raw.substring(lead.length) : raw;
+      return s.replaceAll(RegExp(r'(_enter|_\d+)+$'), '');
+    }
+
+    final sceneTable = _map(d['choiceScenes']);
+    final sceneTitle = {
+      for (final e in sceneTable.entries) e.key: _clean(_map(e.value)['title']),
+    };
+    final scenesOf = <String, List<String>>{};
+    for (final key in sceneTable.keys) {
+      (scenesOf[stemOf(key, 'scene_')] ??= []).add(key);
+    }
+    final choicesOf = <String, List<MapEntry<String, Map<String, dynamic>>>>{};
+    for (final e in _map(d['choices']).entries) {
+      (choicesOf[stemOf(e.key, 'choice_')] ??= []).add(MapEntry(e.key, _map(e.value)));
+    }
+    var eventRank = 0;
+    for (final stem in scenesOf.keys) {
+      final keys = scenesOf[stem]!
+        ..sort((a, b) {
+          final ea = a.endsWith('_enter'), eb = b.endsWith('_enter');
+          if (ea != eb) return ea ? -1 : 1;
+          return naturalCompare(a, b);
+        });
+      final name = [
+        for (final k in keys)
+          if (sceneTitle[k]!.isNotEmpty) sceneTitle[k]!,
+      ].firstOrNull;
+      if (name == null) continue;
+      final blocks = <String>[];
+      for (var i = 0; i < keys.length; i++) {
+        final scene = _map(sceneTable[keys[i]]);
+        final desc = cleanDescription(_s(scene['description']));
+        final text = [
+          if (i > 0 &&
+              sceneTitle[keys[i]]!.isNotEmpty &&
+              sceneTitle[keys[i]] != name)
+            sceneTitle[keys[i]]!,
+          if (hasChinese(desc) && !isMechanical(desc)) desc,
+        ].join('\n');
+        if (text.isNotEmpty) blocks.add(text);
+      }
+      final picks = [...?choicesOf[stem]]..sort((a, b) {
+          final byOrder = (_int(a.value['sortId']) ?? 0)
+              .compareTo(_int(b.value['sortId']) ?? 0);
+          return byOrder != 0 ? byOrder : naturalCompare(a.key, b.key);
+        });
+      final lines = <String>{};
+      for (final pick in picks) {
+        final title = _clean(pick.value['title']);
+        if (title.isEmpty) continue;
+        final desc = cleanDescription(_s(pick.value['description']));
+        final next = sceneTitle[_s(pick.value['nextSceneId'])] ?? '';
+        lines.add(
+          [
+            '· $title',
+            if (hasChinese(desc) && !isMechanical(desc)) '：$desc',
+            if (next.isNotEmpty && next != name) ' → $next',
+          ].join(),
+        );
+      }
+      if (lines.isNotEmpty) blocks.add('选项\n${lines.join('\n')}');
+      if (blocks.isEmpty) continue;
       await _emit(
         txn,
         _Draft(
           type: 'roguelike_scene',
-          key: id(entry.key),
+          key: id(stem),
           sourcePath: path,
-          name: title,
+          name: name,
           collectionId: topic,
-          sections: [if (hasChinese(desc) && !isMechanical(desc)) TextSection('', desc)],
+          sortKey: eventRank++,
+          sections: [TextSection('', blocks.join('\n\n'))],
         ),
       );
-    }
-    for (final entry in _map(d['choices']).entries) {
-      final choice = _map(entry.value);
-      final title = _clean(choice['title']);
-      final desc = cleanDescription(_s(choice['description']));
-      if (title.isEmpty) continue;
-      final key = id(entry.key);
-      final written = await _emit(
-        txn,
-        _Draft(
-          type: 'roguelike_choice',
-          key: key,
-          sourcePath: path,
-          name: title,
-          collectionId: topic,
-          groupName: _s(choice['type']),
-          sortKey: _int(choice['sortId']),
-          sections: [
-            if (hasChinese(desc) && !isMechanical(desc)) TextSection('', desc),
-          ],
-        ),
-      );
-      final next = _s(choice['nextSceneId']);
-      if (written && next.isNotEmpty) {
-        await _link(
-          txn,
-          'roguelike_choice:$key',
-          'leads_to',
-          'roguelike_scene:${id(next)}',
-          path,
-        );
-      }
-    }
-    for (final entry in _map(d['endings']).entries) {
+    }    for (final entry in _map(d['endings']).entries) {
       final ending = _map(entry.value);
       final name = _clean(ending['name']);
       final sections = [
@@ -1458,6 +1496,43 @@ class EntryImporter {
           sourcePath: path,
           name: name,
           collectionId: topic,
+          sections: sections,
+        ),
+      );
+    }
+    // Zones. The game lists the same zone once per layer slot (identical
+    // text, other id); those are one zone. A stage belongs to the zone its
+    // level number says (`level_<topic>_<zone>-<n>` → `zone_<zone>`).
+    final zoneTable = _map(d['zones']);
+    final zoneBySignature = <String, String>{};
+    final zoneKeyOf = <String, String>{};
+    var zoneRank = 0;
+    final zoneNames = <String, int>{};
+    for (final entry in zoneTable.entries) {
+      final zone = _map(entry.value);
+      var name = _clean(zone['name']);
+      // The prose only: a zone's description may end with the rule line of
+      // the variant (this zone raises attack …), which is gameplay.
+      final sections = [
+        for (final key in const ['description', 'endingDescription'])
+          if (_prose(_s(zone[key])).isNotEmpty) TextSection('', _prose(_s(zone[key]))),
+      ];
+      if (name.isEmpty || sections.isEmpty) continue;
+      final signature = '$name|${sections.map((s) => s.content).join('|')}';
+      final first = zoneBySignature.putIfAbsent(signature, () => entry.key);
+      zoneKeyOf[entry.key] = first;
+      if (first != entry.key) continue;
+      final nth = zoneNames[name] = (zoneNames[name] ?? 0) + 1;
+      if (nth > 1) name = '$name · $nth';
+      await _emit(
+        txn,
+        _Draft(
+          type: 'roguelike_zone',
+          key: id(entry.key),
+          sourcePath: path,
+          name: name,
+          collectionId: topic,
+          sortKey: zoneRank++,
           sections: sections,
         ),
       );
@@ -1490,7 +1565,7 @@ class EntryImporter {
       }
       final nth = nameCount[name] = (nameCount[name] ?? 0) + 1;
       if (nth > 1) name = '$name · $nth';
-      await _emit(
+      final written = await _emit(
         txn,
         _Draft(
           type: 'roguelike_stage',
@@ -1502,28 +1577,19 @@ class EntryImporter {
           sections: [if (hasChinese(desc)) TextSection('', desc)],
         ),
       );
-    }
-    for (final entry in _map(d['zones']).entries) {
-      final zone = _map(entry.value);
-      final name = _clean(zone['name']);
-      final sections = [
-        for (final key in const ['description', 'endingDescription'])
-          if (hasChinese(_s(zone[key]))) TextSection('', _clean(zone[key])),
-      ];
-      if (name.isEmpty || sections.isEmpty) continue;
-      await _emit(
-        txn,
-        _Draft(
-          type: 'roguelike_zone',
-          key: id(entry.key),
-          sourcePath: path,
-          name: name,
-          collectionId: topic,
-          sections: sections,
-        ),
-      );
-    }
-    for (final entry in _map(d['monthSquad']).entries) {
+      final level = _s(stage['levelId']).split('/').last.toLowerCase();
+      final zoneNumber = RegExp(r'_(\d+)-\d+$').firstMatch(level)?.group(1);
+      final zone = zoneNumber == null ? null : zoneKeyOf['zone_$zoneNumber'];
+      if (written && zone != null) {
+        await _link(
+          txn,
+          'roguelike_stage:${id(entry.key)}',
+          'belongs_to',
+          'roguelike_zone:${id(zone)}',
+          path,
+        );
+      }
+    }    for (final entry in _map(d['monthSquad']).entries) {
       final squad = _map(entry.value);
       final name = _clean(squad['teamName']);
       // Only the Chinese one-liner: the subtitle (`teamFlavorDesc`,

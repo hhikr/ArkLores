@@ -328,6 +328,18 @@ void main() {
                 },
               },
             },
+            'zones': {
+              'zone_1': {
+                'id': 'zone_1',
+                'name': '区甲',
+                'description': '区甲的描述。',
+              },
+              'zone_portal_1': {
+                'id': 'zone_portal_1',
+                'name': '区甲',
+                'description': '区甲的描述。',
+              },
+            },
             'battleLoadingTips': [
               {'tip': '词语——这是对一个词语的设定解释，写得足够长。'},
               {'tip': '请规划好路线，否则将会触发追猎。'},
@@ -358,7 +370,7 @@ void main() {
               'st_solo': {
                 'name': '独关',
                 'code': 'ISW-NO',
-                'levelId': 'Obt/R/level_b',
+                'levelId': 'Obt/R/level_fx_1-2',
                 'description': '另一个关卡描述。',
                 'isElite': 0,
               },
@@ -496,7 +508,7 @@ void main() {
         'obt/main/level_main_00-01_beg.txt',
       ]);
       final rogue = labels['obt/rogue/rogue_fx/endbook/e1.txt']!;
-      expect(rogue.label, startsWith('集成战略·虚构肉鸽'));
+      expect(rogue.label, startsWith('虚构肉鸽 '));
       expect(rogue.label, isNot(contains('e1')));
       // A catalogued story keeps its catalogue label.
       expect(labels['obt/main/level_main_00-01_beg.txt']!.label,
@@ -678,16 +690,31 @@ void main() {
           .single;
       expect(item['content'], '一件藏品的设定描述。');
       expect(item['collection_id'], 'rogue_fx');
-      final choice = (await q(
-        "SELECT record_id FROM entries WHERE type = 'roguelike_choice'",
+      // Options are not entries of their own: they are part of the event
+      // that offers them (same id stem), the effect text left out.
+      expect(
+        await q("SELECT 1 FROM entries WHERE type = 'roguelike_choice'"),
+        isEmpty,
+      );
+      final event = (await q(
+        'SELECT e.name, r.content FROM entries e JOIN normalized_records r '
+        "ON r.id = e.record_id WHERE e.type = 'roguelike_scene'",
       ))
           .single;
-      // The option's effect text is mechanical: the entry stays, no record.
-      expect(choice['record_id'], isNull);
-      final leads = await q(
-        "SELECT dst FROM entry_links WHERE relation = 'leads_to'",
+      expect(event['name'], '路口');
+      expect(event['content'], '一个岔路口。\n\n选项\n· 向左走');
+    });
+
+    test('a zone listed once per slot is one zone, with its stages', () async {
+      final zones = await q(
+        "SELECT id FROM entries WHERE type = 'roguelike_zone'",
       );
-      expect(leads.single['dst'], 'roguelike_scene:rogue_fx/scene_1');
+      expect(zones.map((z) => z['id']), ['roguelike_zone:rogue_fx/zone_1']);
+      final stages = await q(
+        "SELECT src FROM entry_links WHERE relation = 'belongs_to' "
+        "AND dst = 'roguelike_zone:rogue_fx/zone_1'",
+      );
+      expect(stages.map((s) => s['src']), ['roguelike_stage:rogue_fx/st_solo']);
     });
 
     test('operators, records and handbook stages are bound', () async {

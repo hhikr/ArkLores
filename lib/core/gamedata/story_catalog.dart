@@ -122,7 +122,6 @@ class StoryCatalogEntry {
   String get collectionLabel => switch (collectionType) {
         'MAINLINE' => '主线·$collectionName',
         'NONE' => '干员密录·$collectionName',
-        'ROGUELIKE' => '集成战略·$collectionName',
         'SANDBOX' => '生息演算·$collectionName',
         _ => collectionName,
       };
@@ -714,7 +713,7 @@ String fallbackStoryLabel(String storyId) {
     final group = switch (parts[1]) {
       'main' => '主线',
       'memory' => '干员密录',
-      'rogue' || 'roguelike' => '集成战略',
+      'rogue' || 'roguelike' => '肉鸽',
       'guide' => '引导',
       _ => parts[1],
     };

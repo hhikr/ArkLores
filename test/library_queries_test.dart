@@ -274,7 +274,7 @@ void main() {
   });
 
   test('labels cover the types and read as a headline', () {
-    expect(entryTypeName('roguelike_item'), '集成战略收藏品');
+    expect(entryTypeName('roguelike_item'), '收藏品');
     expect(entryTypeName('brand_new_type'), 'brand_new_type');
     const stage = LibraryEntry(id: 'x', type: 'stage', name: '突入', code: 'N-1');
     expect(entryHeadline(stage), 'N-1  突入');
