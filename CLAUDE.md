@@ -16,6 +16,12 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 资料页学名核对（2026-10-05，未发布，需重算知识库）**：界面里凡由代码推出来的名词，一律以游戏表或 prts.wiki 为准，查不到的不起名
+  （无标题好过臆造）。表里有名字的构建时直接取：奖章分组取 `medal_table.medalTypeData`（履历/章节/剿灭/保全/成长/记录/基建/活动/远行/加密奖章，
+  类型名“勋章”→“奖章”）；`roguelike_buff` 的分组名构建时写进 `group_name`（`_buffKind`：表里 `innerName` 全带“X：”前缀就取 X，否则查
+  `_buffKinds`——幻觉/排异反应/乌托邦，来自各模式的 wiki 页面）。界面标签 `groupLabel`：剧目（capsule）、密文板（totem）、调查装备、思绪（fragment）、
+  通宝（copper）、零件（scrap）、黄色襁褓生灵（legacy）/蓝色襁褓生灵（`<主题>_start_<n>`）；没有可靠名字的（copper_buff、totem_effect、wrath、
+  rogue_2 的分队加成）不显示标题。活动档案的 logs 是“行动日志”（不是“探索记录”）。规则的计数器/票券（占卜工具、票券、投钱数量、存券数量）不再导入。
 - **0.11 肉鸽页第六轮（2026-10-05，未发布，需重算知识库）**：⓪ 收藏品去重（`rebuildDerived`）：同主题、同名且（同类 `group_name`，或导入后文字完全相同——钱币与它的加成、物品与它的票券、按槽位重复的变异加成）的 `roguelike_item`/`roguelike_buff` 只留一条；同名但文字不同且不同类的（钱币 vs 加成的修订措辞）保留两条
   （优先新表 `roguelike_topic_table`，再取最短 id），链接改指向保留的一条。原因：rogue_1 的新旧两张表各列一遍；rogue_5 的钱币每枚有 4 个朝向、
   新旧各一套、每套 a–k 共 11 个附加词条变体（差别只在不导入的玩法行），3502 条 → 539；rogue_6 传承物按阶段重复。

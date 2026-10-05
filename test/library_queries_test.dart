@@ -283,8 +283,12 @@ void main() {
   });
 
   test('game codes are named, a code without a name is not shown raw', () {
-    expect(groupLabel('roguelike_item', 'copper_buff'), '铜钱效果');
-    expect(groupLabel('roguelike_choice', 'TRADE_PROB_SHOW'), '交易');
+    expect(groupLabel('roguelike_item', 'copper'), '通宝');
+    expect(groupLabel('roguelike_item', 'legacy'), '黄色襁褓生灵');
+    expect(groupLabel('roguelike_item', 'start'), '蓝色襁褓生灵');
+    // Nobody named these kinds: no heading rather than an invented one.
+    expect(groupLabel('roguelike_item', 'copper_buff'), isNull);
+    expect(groupLabel('roguelike_buff', 'variationData'), isNull);
     expect(groupLabel('roguelike_item', 'brand_new_code'), isNull);
     expect(groupLabel('item', 'VOUCHER_PICK'), '凭证与券');
     expect(groupLabel('stage', '第九章 · 某章'), '第九章 · 某章');

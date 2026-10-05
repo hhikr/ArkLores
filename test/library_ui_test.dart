@@ -456,8 +456,7 @@ void main() {
     );
     // Game codes are named; one without a name is "其他", never raw.
     expect(find.byKey(const ValueKey('group-藏品')), findsOneWidget);
-    expect(find.byKey(const ValueKey('group-铜钱')), findsOneWidget);
-    expect(find.byKey(const ValueKey('group-铜钱效果')), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-通宝')), findsOneWidget);
     expect(find.byKey(const ValueKey('group-其他')), findsOneWidget);
     expect(find.byKey(const ValueKey('group-all')), findsOneWidget);
     expect(find.textContaining('copper'), findsNothing);

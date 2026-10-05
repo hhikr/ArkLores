@@ -413,6 +413,17 @@ void main() {
                 'description': '铜币的设定描述之二。',
                 'type': 'COPPER_BUFF',
               },
+              // What a run starts with, and a counter of the rules.
+              'rogue_fx_start_1': {
+                'name': '开局之物',
+                'description': '愿新生的它不再折翼。',
+                'type': 'RELIC',
+              },
+              'rogue_fx_counter': {
+                'name': '计数器',
+                'description': '规则用的一个计数中文描述。',
+                'type': 'STASH_RECRUIT_LIMIT',
+              },
               // The same collectible listed again (a variant copy).
               'rogue_fx_relic_1_b': {
                 'name': '虚构藏品',
@@ -759,6 +770,11 @@ void main() {
             .single['raw_id'],
         'rogue_fx/rogue_fx_relic_1',
       );
+      expect(
+        (await q("SELECT group_name FROM entries WHERE name = '开局之物'")).single['group_name'],
+        'start',
+      );
+      expect(await q("SELECT 1 FROM entries WHERE name = '计数器'"), isEmpty);
       // A coin and its buff with the same words are one; revised words stay two.
       expect(
         (await q("SELECT raw_id FROM entries WHERE name = '双生币'")).single['raw_id'],

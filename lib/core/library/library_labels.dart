@@ -19,8 +19,8 @@ String entryTypeName(String type) => switch (type) {
       'item' => '物品',
       'skin' => '皮肤',
       'skin_brand' => '皮肤系列',
-      'module' => '干员模组',
-      'medal' => '勋章',
+      'module' => '模组',
+      'medal' => '奖章',
       'charm' => '护符',
       'mail' => '邮件',
       'worldview' => '世界观',
@@ -37,10 +37,11 @@ String entryTypeName(String type) => switch (type) {
       'roguelike_zone' => '区域',
       'roguelike_topic' => '概述',
       'roguelike_tip' => '注释',
-      'roguelike_prize' => '奖励',
-      'roguelike_buff' => '加成',
+      'roguelike_prize' => '稀有奖励',
+      // Named by its groups where they have names (see the topic page).
+      'roguelike_buff' => '特殊设定',
       'roguelike_squad' => '月度小队',
-      'archive_log' => '探索记录',
+      'archive_log' => '行动日志',
       'archive_landmark' => '地标',
       'archive_book' => '书籍',
       'archive_file' => '档案文件',
@@ -106,64 +107,37 @@ String? groupLabel(String type, String? raw) {
   final key = g.toUpperCase();
   bool has(String s) => key.contains(s);
   switch (type) {
+    // The names the wiki pages of each mode use. A kind nobody named has no
+    // heading rather than an invented one.
     case 'roguelike_item':
       return switch (g.toLowerCase()) {
         'relic' => '藏品',
-        'capsule' => '胶囊',
-        'totem' => '图腾',
-        'totem_effect' => '图腾效果',
-        'explore_tool' => '探索工具',
-        'fragment' => '碎片',
-        'custom_ticket' => '票券',
-        'divination_kit' => '占卜工具',
-        'copper' => '铜钱',
-        'copper_buff' => '铜钱效果',
-        'legacy' => '遗产',
-        'scrap' => '废料',
+        'capsule' => '剧目',
+        'totem' => '密文板',
+        'explore_tool' => '调查装备',
+        'fragment' => '思绪',
+        'copper' => '通宝',
+        'legacy' => '黄色襁褓生灵',
+        'start' => '蓝色襁褓生灵',
+        'scrap' => '零件',
         'character' => '干员',
         _ => null,
       };
-    case 'roguelike_choice':
-      final base = key
-          .replaceAll(RegExp(r'_(ALL|PROB_SHOW|PROB|SHOW)$'), '');
-      return switch (base) {
-        'TRADE' => '交易',
-        'NEXT' => '前进',
-        'LEAVE' => '离开',
-        'WISH' => '祈愿',
-        'SACRIFICE' || 'SACRIFICE_TOTEM' => '献祭',
-        'TELEPORT' => '传送',
-        'EXPEDITION' || 'EXPEDITION_RETURN' => '远征',
-        'USE_STASHED_TICKET' => '使用票券',
-        'ITEM_REROLL' => '重掷',
-        'JUMP' => '跳转',
-        'PACIFY_WRATH' => '安抚',
-        'ITEM_TOP_UP' => '补充',
-        'GILD_COPPER' => '镀金铜钱',
-        'ZONE_END' => '区域结束',
-        'MOVE' => '移动',
-        'VISION' => '视野',
-        'SCRAP_PAY' => '支付废料',
-        _ => null,
-      };
     case 'roguelike_buff':
-      return switch (g) {
-        'charBuffData' => '干员加成',
-        'squadBuffData' => '分队加成',
-        'variationData' => '变奏',
-        _ => null,
-      };
+      // Named when built; the old table keys are not names.
+      return null;
     case 'medal':
       return switch (g) {
-        'activityMedal' => '活动勋章',
-        'storyMedal' => '剧情勋章',
-        'rogueMedal' => '集成战略勋章',
-        'growthMedal' => '成长勋章',
-        'stageMedal' => '关卡勋章',
-        'buildMedal' => '基建勋章',
-        'campMedal' => '阵营勋章',
-        'hiddenMedal' => '隐藏勋章',
-        'playerMedal' => '玩家勋章',
+        'playerMedal' => '履历奖章',
+        'stageMedal' => '章节奖章',
+        'campMedal' => '剿灭奖章',
+        'towerMedal' => '保全奖章',
+        'growthMedal' => '成长奖章',
+        'storyMedal' => '记录奖章',
+        'buildMedal' => '基建奖章',
+        'activityMedal' => '活动奖章',
+        'rogueMedal' => '远行奖章',
+        'hiddenMedal' => '加密奖章',
         _ => null,
       };
     case 'zone':

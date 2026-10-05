@@ -337,6 +337,36 @@ class EntryImporter {
   /// single re-imported table makes the same choice a complete build does.
   static const Set<String> _dedupedTypes = {'activity_text', 'sandbox_text'};
 
+  /// What a topic calls one of its buff tables (the wiki pages of the modes):
+  /// the tables only name them by key. A table whose entries all read
+  /// 回响：… is named by that prefix; kinds nobody named stay unnamed.
+  static const Map<String, String> _buffKinds = {
+    'rogue_1/variationData': '幻觉',
+    'rogue_2/charBuffData': '排异反应',
+    'rogue_6/variationData': '乌托邦',
+  };
+
+  String? _buffKind(String topic, String group, Map<String, dynamic> table) {
+    final prefixes = {
+      for (final v in table.values)
+        if (_clean(_map(v)['innerName']).contains('：'))
+          _clean(_map(v)['innerName']).split('：').first
+        else
+          '',
+    };
+    if (prefixes.length == 1 && prefixes.first.isNotEmpty) return prefixes.first;
+    return _buffKinds['$topic/$group'];
+  }
+
+  /// Roguelike item types that are the rules' own stand-ins and resources.
+  static const Set<String> _mechanicItemTypes = {
+    'feature',
+    'copper_draw_num',
+    'divination_kit',
+    'stash_recruit_limit',
+    'custom_ticket',
+  };
+
   Future<Object?> _json(String repoPath) async {
     final file = File(p.join(sourceDir.path, repoPath));
     if (!await file.exists()) return null;
@@ -707,6 +737,8 @@ class EntryImporter {
   Future<void> _medals(Transaction txn, _Context ctx) async {
     const path = EntryTables.medal;
     final table = await _table(path);
+    // The table names its groups (履历奖章, 章节奖章 …).
+    final groups = _map(table['medalTypeData']);
     for (final raw in _list(table['medalList'])) {
       final medal = _map(raw);
       final id = _s(medal['medalId']);
@@ -721,7 +753,7 @@ class EntryImporter {
           sourcePath: path,
           name: name,
           collectionId: ctx.collectionForId(id),
-          groupName: _s(medal['medalType']),
+          groupName: _clean(_map(groups[_s(medal['medalType'])])['medalName']),
           sortKey: _int(medal['slotId']),
           sections: [TextSection('', desc)],
         ),
@@ -1084,7 +1116,7 @@ class EntryImporter {
           type: 'archive_log',
           key: entry.key,
           sourcePath: path,
-          name: '${base(owner, entry.key)} · 探索记录',
+          name: '${base(owner, entry.key)} · 行动日志',
           collectionId: owner,
           sections: [TextSection('', text)],
         ),
@@ -1390,8 +1422,9 @@ class EntryImporter {
       final desc = cleanDescription(_s(item['description']));
       if (name.isEmpty || !hasChinese(desc) || isMechanical(desc)) continue;
       // `feature` items are stand-ins the game's rules use (potion drop
-      // control, resource refunds): mechanics, not story.
-      if (_s(item['type']).toLowerCase() == 'feature') continue;
+      // control, resource refunds), and the counters and tickets are the
+      // rules' own resources: mechanics, not story.
+      if (_mechanicItemTypes.contains(_s(item['type']).toLowerCase())) continue;
       await _emit(
         txn,
         _Draft(
@@ -1400,7 +1433,10 @@ class EntryImporter {
           sourcePath: path,
           name: name,
           collectionId: topic,
-          groupName: _s(item['type']).toLowerCase(),
+          // `<topic>_start_<n>`: what a run starts with.
+          groupName: RegExp(r'_start_\d+$').hasMatch(entry.key)
+              ? 'start'
+              : _s(item['type']).toLowerCase(),
           sortKey: _int(item['sortId']),
           sections: [TextSection('', desc)],
         ),
@@ -1701,6 +1737,7 @@ class EntryImporter {
       );
     }
     for (final group in const ['variationData', 'charBuffData', 'squadBuffData']) {
+      final kind = _buffKind(topic, group, _map(d[group]));
       for (final entry in _map(d[group]).entries) {
         final buff = _map(entry.value);
         final name = _clean(buff['outerName']).isEmpty
@@ -1716,7 +1753,7 @@ class EntryImporter {
             sourcePath: path,
             name: name,
             collectionId: topic,
-            groupName: group,
+            groupName: kind,
             sections: [TextSection('', text)],
           ),
         );
@@ -2170,13 +2207,14 @@ class EntryImporter {
         "WHERE type IN ('activity_text', 'sandbox_text')",
       );
       // Rule stand-ins imported by earlier builds.
+      final mechanic = _mechanicItemTypes.map((t) => "'$t'").join(',');
       await txn.execute(
         'DELETE FROM normalized_records WHERE entry_id IN (SELECT id FROM '
-        "entries WHERE type = 'roguelike_item' AND group_name = 'feature')",
+        "entries WHERE type = 'roguelike_item' AND group_name IN ($mechanic))",
       );
       await txn.execute(
         "DELETE FROM entries WHERE type = 'roguelike_item' "
-        "AND group_name = 'feature'",
+        'AND group_name IN ($mechanic)',
       );
       // One collectible is one entry. The game lists the same one several
       // times (a topic's old and new table, one copy per variant or upgrade

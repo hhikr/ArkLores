@@ -233,6 +233,16 @@ class CollectionPage extends ConsumerWidget {
     final collection = ref.watch(collectionProvider(collectionId));
     final stories = ref.watch(collectionStoriesProvider(collectionId));
     final types = ref.watch(collectionTypesProvider(collectionId));
+    // Special rules are named by what the game calls each kind.
+    final ruleKinds = [
+      for (final g in ref
+              .watch(entryGroupsProvider(
+                (type: 'roguelike_buff', collectionId: collectionId),
+              ),)
+              .valueOrNull ??
+          const <({String? group, int count})>[])
+        if (g.group != null) g.group!,
+    ];
     final progress = ref.watch(readingProgressProvider).valueOrNull ?? const {};
     final c = collection.valueOrNull;
 
@@ -393,7 +403,9 @@ class CollectionPage extends ConsumerWidget {
                       for (final t in typeList) ...[
                         LibraryRow(
                           key: ValueKey('collection-type-${t.type}'),
-                          title: entryTypeName(t.type),
+                          title: t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
+                              ? ruleKinds.join('、')
+                              : entryTypeName(t.type),
                           subtitle: context.t.libraryCountEntries(t.count),
                           subtitleLines: 1,
                           trailing: Icon(
