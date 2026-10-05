@@ -620,7 +620,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryOtherSections => 'Related texts';
 
   @override
-  String get libraryParts => 'Stories';
+  String get libraryParts => 'Unlocked stories';
 
   @override
   String get libraryLeftoverStories => 'Other stories';

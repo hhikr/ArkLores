@@ -607,7 +607,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryOtherSections => '相关资料';
 
   @override
-  String get libraryParts => '包含的故事';
+  String get libraryParts => '解锁的故事';
 
   @override
   String get libraryLeftoverStories => '其他剧情';

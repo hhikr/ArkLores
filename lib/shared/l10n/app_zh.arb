@@ -202,7 +202,7 @@
   "libraryEmpty": "这里还没有内容",
   "libraryStories": "剧情",
   "libraryOtherSections": "相关资料",
-  "libraryParts": "包含的故事",
+  "libraryParts": "解锁的故事",
   "libraryLeftoverStories": "其他剧情",
   "libraryFilterHint": "在列表中筛选",
   "libraryProgress": "已读 {percent}%",

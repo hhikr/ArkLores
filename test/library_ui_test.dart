@@ -167,14 +167,19 @@ List<Override> overrides(MemoryUserStore store) => [
             : const [],
       ),
       entryPartsProvider.overrideWith(
-        (ref, id) async => id == 'roguelike_ending:rogue_x/e1' ? _stories : const [],
+        (ref, id) async => id.startsWith('roguelike_') ? _stories : const [],
       ),
       entryProvider.overrideWith(
         (ref, id) async => switch (id) {
           'roguelike_ending:rogue_x/e1' => const LibraryEntry(
               id: 'roguelike_ending:rogue_x/e1',
               type: 'roguelike_ending',
-              name: '某结局',
+              name: '暗火四起',
+            ),
+          'roguelike_squad:rogue_x/s1' => const LibraryEntry(
+              id: 'roguelike_squad:rogue_x/s1',
+              type: 'roguelike_squad',
+              name: '小队甲',
             ),
           'enemy:e1' => _enemy,
           'operator:char_x' => _operator,
@@ -209,7 +214,19 @@ List<Override> overrides(MemoryUserStore store) => [
         ],
       ),
       entryBindingsProvider.overrideWith(
-        (ref, id) async => [
+        (ref, id) async => id.startsWith('roguelike_squad')
+            ? [
+                const EntryBinding(
+                  relation: 'features',
+                  outgoing: true,
+                  entry: LibraryEntry(
+                    id: 'operator:char_x',
+                    type: 'operator',
+                    name: '干员甲',
+                  ),
+                ),
+              ]
+            : [
           for (var i = 0; i < 6; i++)
             EntryBinding(
               relation: 'appears_in',
@@ -487,8 +504,29 @@ void main() {
     // An ending's page: its stories, in order.
     await tester.tap(find.byKey(const ValueKey('part-roguelike_ending:rogue_x/e1')));
     await tester.pumpAndSettle();
-    expect(find.text('包含的故事'), findsWidgets);
-    expect(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')), findsOneWidget);
+    expect(find.text('解锁的故事'), findsWidgets);
+    expect(find.text('包含的故事'), findsNothing);
+    // The story named like the ending comes first, right under its page's
+    // top; what it unlocks follows the heading.
+    double top(String id) =>
+        tester.getTopLeft(find.byKey(ValueKey('story-row-story:$id'))).dy;
+    final heading = tester.getTopLeft(find.text('解锁的故事').first).dy;
+    expect(top('a/2_beg.txt'), lessThan(heading));
+    expect(top('a/1_beg.txt'), greaterThan(heading));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a month squad shows its protagonist above its stories',
+      (tester) async {
+    await pumpApp(
+      tester,
+      const EntryPage(entryId: 'roguelike_squad:rogue_x/s1'),
+    );
+    expect(find.text('主角'), findsWidgets);
+    expect(find.text('关联'), findsNothing);
+    final chat = tester.getTopLeft(find.byKey(const ValueKey('binding-operator:char_x'))).dy;
+    final heading = tester.getTopLeft(find.text('解锁的故事').first).dy;
+    expect(chat, lessThan(heading));
     expect(tester.takeException(), isNull);
   });
 

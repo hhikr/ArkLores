@@ -531,11 +531,14 @@ void main() {
       ))
           .single;
       expect(squad['group_name'], '2026年7月');
-      // The official English subtitle is kept as written.
+      // The subtitle (English or invented) is not imported, only the
+      // Chinese one-liner.
       final text = await q(
         "SELECT content FROM normalized_records WHERE entry_id = 'roguelike_squad:rogue_fx/sq1'",
       );
-      expect(text.map((r) => '${r['content']}').join('\n'), contains('Hello There'));
+      final joined = text.map((r) => '${r['content']}').join('\n');
+      expect(joined, contains('小队的一句话'));
+      expect(joined, isNot(contains('Hello There')));
       // The topic's introduction is its text.
       final intro = await q(
         "SELECT content FROM normalized_records WHERE entry_id = 'roguelike_topic:rogue_fx'",

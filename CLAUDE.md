@@ -19,7 +19,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 - **0.11 肉鸽页第三轮（2026-10-05，未发布，需重算知识库；本地 release APK 供开发者试装）**：肉鸽主题页改为一页读完。
   构建（`entry_importer.dart`/`story_naming.dart`，全部来自表里的 id 关系）：`StoryHint.parent` + 新链接关系 `part_of`——结局书的页面
   （`clientEndbookItemDatas`）与结局同名的故事（`avgId`，排在最后）属于结局（`endbook.endingId`），月度小队的三段故事（`monthSquad.chatId`
-  → `archiveComp.chat`）属于小队，`rebuildDerived` 写链接；顺序用故事的 `sort_key`。小队条目：分组=年月、文字=官方英文副标题（原样保留）+一句话、
+  → `archiveComp.chat`）属于小队，`rebuildDerived` 写链接；顺序用故事的 `sort_key`。小队条目：分组=年月、文字=一句话（英文/自造语言的副标题不导入）、
   `features` 链接到主角干员；`roguelike_topic` 的文字作为集合简介。关卡：`isElite` 的名字加“· 突袭”，有突袭孪生的普通关加“· 普通”，同名同关卡去重，仍同名的编号；
   提示只留“词——解释”型（其余是玩法提示）；`feature` 类收藏品（机制物品）不导入。`_purgeSource` 让 `roguelike_topic`/旧肉鸽表的重导入先清掉旧条目
   （否则规则变了旧行还在）。类型显示名：`roguelike_squad`=月度小队（游戏表里的叫法），`roguelike_tip`=背景词条。

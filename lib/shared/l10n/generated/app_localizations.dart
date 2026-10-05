@@ -1187,7 +1187,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryParts.
   ///
   /// In en, this message translates to:
-  /// **'Stories'**
+  /// **'Unlocked stories'**
   String get libraryParts;
 
   /// No description provided for @libraryLeftoverStories.

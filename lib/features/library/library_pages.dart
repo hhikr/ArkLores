@@ -764,6 +764,30 @@ class EntryPage extends ConsumerWidget {
     final parts =
         ref.watch(entryPartsProvider(e.id)).valueOrNull ?? const <LibraryEntry>[];
     final progress = ref.watch(readingProgressProvider).valueOrNull ?? const {};
+    final all = bindings.valueOrNull ?? const <EntryBinding>[];
+    // A month squad's protagonist comes before its stories; the story that
+    // has the entry's own name (an ending's) comes right after its sentence,
+    // the others are what it unlocks.
+    final protagonists = [
+      for (final b in all)
+        if (e.type == 'roguelike_squad' &&
+            b.relation == 'features' &&
+            b.outgoing)
+          b,
+    ];
+    final own = [for (final s in parts) if (s.name == e.name) s];
+    final unlocked = [for (final s in parts) if (s.name != e.name) s];
+    Widget storyRow(LibraryEntry s) => Column(
+          key: ValueKey('part-story-${s.id}'),
+          children: [
+            StoryRow(
+              story: s,
+              showGroup: false,
+              read: progress[LibraryRef.story(s.rawId ?? '').toString()],
+            ),
+            rowDivider(theme),
+          ],
+        );
 
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
@@ -781,30 +805,51 @@ class EntryPage extends ConsumerWidget {
               ),
             ),
           for (final b in blocks) _textBlock(theme, e, b),
-          // The stories that make up this entry (an ending's pages and its
-          // own story, a month squad's three stories), in reading order.
-          if (parts.isNotEmpty) ...[
+          for (final s in own) storyRow(s),
+          if (protagonists.isNotEmpty) ...[
+            IndustrialSectionHeader(
+              theme: theme,
+              title: bindingName(
+                'features',
+                outgoing: true,
+                ownerType: e.type,
+              ),
+              code: 'protagonist',
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final b in protagonists)
+                  ActionChip(
+                    key: ValueKey('binding-${b.entry.id}'),
+                    label: Text(entryHeadline(b.entry)),
+                    labelStyle: theme.bodyFont.copyWith(fontSize: 12.5),
+                    backgroundColor: theme.cardSurface,
+                    side: BorderSide(color: theme.cardBorder),
+                    onPressed: () => openEntry(context, b.entry),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+          // What the entry unlocks (an ending's pages, a month squad's three
+          // stories), in reading order.
+          if (unlocked.isNotEmpty) ...[
             IndustrialSectionHeader(
               theme: theme,
               title: context.t.libraryParts,
               code: 'parts',
             ),
-            for (final s in parts) ...[
-              StoryRow(
-                story: s,
-                showGroup: false,
-                read: progress[LibraryRef.story(s.rawId ?? '').toString()],
-              ),
-              rowDivider(theme),
-            ],
+            for (final s in unlocked) storyRow(s),
             const SizedBox(height: 8),
           ],
           ..._bindingSections(
             context,
             theme,
             [
-              for (final b in bindings.valueOrNull ?? const <EntryBinding>[])
-                if (b.relation != 'part_of') b,
+              for (final b in all)
+                if (b.relation != 'part_of' && !protagonists.contains(b)) b,
             ],
             e.type,
           ),

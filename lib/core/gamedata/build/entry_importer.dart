@@ -1526,10 +1526,10 @@ class EntryImporter {
     for (final entry in _map(d['monthSquad']).entries) {
       final squad = _map(entry.value);
       final name = _clean(squad['teamName']);
-      // The official English subtitle stays as it is written.
+      // Only the Chinese one-liner: the subtitle (`teamFlavorDesc`,
+      // `teamSubName`) is written in English or in an invented language and
+      // is not the squad's name.
       final sections = [
-        if (_clean(squad['teamFlavorDesc']).isNotEmpty)
-          TextSection('', _clean(squad['teamFlavorDesc'])),
         if (hasChinese(_s(squad['teamDes'])))
           TextSection('', _clean(squad['teamDes'])),
       ];
