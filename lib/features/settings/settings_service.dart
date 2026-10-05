@@ -98,6 +98,9 @@ class SettingsService {
   // ── Agent session log keys ──────────────────────────────
   static const _keySessionLogsEnabled = 'session_logs_enabled';
 
+  // ── Profile keys ─────────────────────────────────────────
+  static const _keyNickname = 'profile_nickname';
+
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
   static const _keyMainTabIndex = 'main_tab_index';
@@ -198,6 +201,13 @@ class SettingsService {
   }
 
   /// Loads whether the user enabled per-session AI logs (default off).
+  /// How the stories address the reader (empty: the default).
+  Future<String> loadNickname() async =>
+      (await _storage.read(key: _keyNickname)) ?? '';
+
+  Future<void> saveNickname(String nickname) =>
+      _storage.write(key: _keyNickname, value: nickname.trim());
+
   Future<bool> loadSessionLogsEnabled() async {
     return await _storage.read(key: _keySessionLogsEnabled) == 'true';
   }

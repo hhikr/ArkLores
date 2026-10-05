@@ -142,7 +142,8 @@ void main() {
       expect(e.lineIndex, 10);
       expect(e.snippet, 'line 10');
       expect(e.furthest, 55);
-      expect(e.progress, closeTo(0.56, 0.001));
+      // The percentage follows the first line on screen, like continue-reading.
+      expect(e.progress, closeTo(0.11, 0.001));
       expect(e.finished, isFalse);
       expect((await store.progressByRef()).keys, [a.toString()]);
 

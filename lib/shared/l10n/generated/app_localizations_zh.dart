@@ -54,6 +54,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get localeChineseShort => '中文';
 
   @override
+  String get settingsProfile => '资料设置';
+
+  @override
+  String get settingsProfileDesc => '设置剧情里怎样称呼你。';
+
+  @override
+  String get settingsProfileSectionCode => 'PROFILE';
+
+  @override
+  String get profileNicknameLabel => '称呼';
+
+  @override
+  String get profileNicknameHelp =>
+      '剧情文本里博士的名字是占位符，阅读时显示为这里填写的称呼（留空显示“博士”）。不会改动知识库。';
+
+  @override
+  String get profileNicknameDefault => '博士';
+
+  @override
   String get settingsAiServices => 'AI 服务';
 
   @override
@@ -543,7 +562,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shelfMain => '主线';
 
   @override
-  String get shelfActivity => '活动';
+  String get shelfActivity => '其他活动';
+
+  @override
+  String get shelfSideStory => 'SideStory';
+
+  @override
+  String get shelfMiniStory => '故事集';
+
+  @override
+  String get shelfBranchline => '插曲';
 
   @override
   String get shelfMemory => '干员';
@@ -697,6 +725,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readingHistoryEmpty => '还没有阅读记录。在回答的证据链里点开原文后，会记在这里。';
+
+  @override
+  String readingHistoryPage(Object page, Object pages) {
+    return '第 $page / $pages 页';
+  }
 
   @override
   String get readingHistoryClear => '清空';

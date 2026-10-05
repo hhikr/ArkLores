@@ -170,6 +170,16 @@ void main() {
             'name': '虚构活动',
             'startTime': 1600000000,
             'type': 'TYPE_FX',
+            'displayType': 'SIDESTORY',
+          },
+          // A re-run of it: carries nothing the original does not.
+          'act_fxre': {
+            'id': 'act_fxre',
+            'name': '虚构活动·复刻',
+            'startTime': 1700000000,
+            'type': 'TYPE_FX',
+            'displayType': 'SIDESTORY',
+            'isReplicate': true,
           },
           'act1fxhub': {
             'id': 'act1fxhub',
@@ -190,6 +200,20 @@ void main() {
               'taskData': {
                 't1': {'desc': '通关关卡并获得奖励的任务说明，写得也很长，但属于玩法。'},
               },
+            },
+          },
+        },
+      });
+      await writeJson('excel/skin_table.json', {
+        'charSkins': {
+          'skin_fx': {
+            'skinId': 'skin_fx',
+            'charId': 'char_fx_1',
+            'displaySkin': {
+              'skinName': '虚构时装',
+              'description': '第一段设定文字。\n第二段设定文字。',
+              'content': '第二段设定文字。\n第三段设定文字。',
+              'skinGroupName': '虚构系列',
             },
           },
         },
@@ -288,6 +312,12 @@ void main() {
           'rogue_fx': {
             'endings': {
               'end_a': {'id': 'end_a', 'name': '某结局', 'desc': '结局的一句话。'},
+              // An ending without a book: its story is the file numbered like it.
+              'ro_ending_9': {
+                'id': 'ro_ending_9',
+                'name': '无书结局',
+                'desc': '没有结局书的结局的一句话。',
+              },
             },
             'monthSquad': {
               'sq1': {
@@ -501,6 +531,10 @@ void main() {
         '[name="乙"]结局的故事。\n',
       );
       await writeText(
+        'story/obt/rogue/rogue_fx/level_fx_ending_9.txt',
+        '[name="乙"]无书结局的故事。\n',
+      );
+      await writeText(
         'story/obt/rogue/rogue_fx/monthrecord/m1.txt',
         '[name="乙"]月度小故事。\n',
       );
@@ -600,6 +634,9 @@ void main() {
         await partsOf('roguelike_ending:rogue_fx/end_a'),
         ['篇一', '某结局'],
       );
+      // An ending without a book still has its own story, the file numbered
+      // like it, in the ending group.
+      expect(await partsOf('roguelike_ending:rogue_fx/ro_ending_9'), ['结局剧情']);
       // A squad: its short stories by floor, the protagonist an operator.
       expect(await partsOf('roguelike_squad:rogue_fx/sq1'), ['第一段']);
       final protagonist = await q(
@@ -696,6 +733,29 @@ void main() {
         "SELECT code FROM entries WHERE type = 'activity' AND collection_id = 'act_fx'",
       );
       expect(activity.single['code'], isNull);
+    });
+
+    test('a paragraph the skin fields share is said once', () async {
+      final text = (await q(
+        'SELECT group_concat(r.content, char(10)) AS t FROM entries e JOIN '
+        "normalized_records r ON r.entry_id = e.id WHERE e.type = 'skin'",
+      ))
+          .single['t'];
+      expect(text, '第一段设定文字。\n第二段设定文字。\n第三段设定文字。');
+    });
+
+    test('activities sit on the shelf their kind says; re-runs are gone', () async {
+      final kinds = {
+        for (final r in await q('SELECT id, kind FROM collections'))
+          r['id']: r['kind'],
+      };
+      expect(kinds['act_fx'], 'sidestory');
+      expect(kinds['act1fxhub'], 'activity');
+      expect(kinds.containsKey('act_fxre'), isFalse);
+      expect(
+        await q("SELECT 1 FROM entries WHERE collection_id = 'act_fxre'"),
+        isEmpty,
+      );
     });
 
     test('stages are attributed through zones; gameplay stages are skipped',

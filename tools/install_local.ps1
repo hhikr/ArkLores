@@ -56,7 +56,14 @@ if ($Device) {
   $why = if ($lines) { "found: $($lines -join '; ') (unlock the phone and allow USB debugging)" } else { 'no device: unlock the phone, pull the notification shade and set USB to file transfer (not charging only), check Developer options > USB debugging is on and accept the "allow USB debugging" prompt; then run `adb kill-server` and try again (an emulator such as MuMu may hold adb)' }
   throw $why
 } elseif ($ready.Count -gt 1) {
-  throw "several devices, choose one with -Device <serial>: $($ready -join '; ')"
+  # Emulators (MuMu and the like listen on 127.0.0.1 or are called emulator-*)
+  # are not the phone: when exactly one device is not one, that is it.
+  $phones = @($ready | Where-Object { $_ -notmatch '^(127\.0\.0\.1|localhost|emulator-)' })
+  if ($phones.Count -ne 1) {
+    throw "several devices, choose one with -Device <serial>: $($ready -join '; ')"
+  }
+  $Device = ($phones[0] -split '\s+')[0]
+  Write-Host "several devices; using the only non-emulator one: $Device"
 }
 
 # --- App ---

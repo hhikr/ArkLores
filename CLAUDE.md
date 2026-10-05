@@ -16,6 +16,16 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 活动分类、阅读器与设置（2026-10-05，未发布，需重算知识库）**：① 活动书架按游戏表分类（`_activityKind`）：活动表的 `displayType`
+  （SIDESTORY → `sidestory` “SideStory”、MINISTORY → `ministory` “故事集”、BRANCHLINE → `branchline` “插曲”），没有时看剧情回顾表的 `entryType`
+  （ACTIVITY/MINI_ACTIVITY），其余（签到、登录、玩法类）仍是 `activity` “其他活动”；`shelfKinds` 里依次排开。② 复刻不再出现：`isReplicate` 或名字含“复刻”的活动、
+  没有链到原活动的 `retroActList` 条目进 `ctx.dropped`，`rebuildDerived` 删掉它们名下的条目/记录/链接/实体（它们没有剧情，只是原活动的重复）。
+  ③ 皮肤文本：`description/dialog/content/usage` 互相重复段落，按行去重（`_distinctParagraphs`）；`_emit` 重写条目时先清掉该条目旧的记录（重算已有库不再叠加）。
+  ④ 进度百分比 = 页面首行（`ReadingEntry.progress` 用 `lineIndex`，与“继续阅读第 x 行”一致；“读完”标记仍看 `furthest`）。⑤ 阅读器：段间距（同说话人 14、换人 20）
+  大于行距，字体是打包的霞鹜文楷屏幕阅读版（LXGW WenKai Screen v1.522，OFL，`assets/fonts/LXGWWenKaiScreen.ttf` 25.7 MB，`readingFontFamily`），旁白只在“有对白的
+  故事”里斜体，纯叙述的故事（月度小队等）正体；`{@nickname}` 阅读时换成“设置 → 资料设置 → 称呼”（`withPlaceholders`，不改库；留空显示“博士”），`{@nbs}` 换成不换行空格。
+  ⑥ 阅读历史每页 15 条。⑦ 没有结局书的主题（rogue_1）：`ending_<n>` 的结局对应文件 `level_*ending_<n>` 作为它自己的剧情（组 `结局`，`part_of`），
+  `level_*_entry` 一律是开局剧情；条目页的“自己的故事”按组 `结局` 认，不再靠和结局同名。
 - **0.11 资料页学名核对（2026-10-05，未发布，需重算知识库）**：界面里凡由代码推出来的名词，一律以游戏表或 prts.wiki 为准，查不到的不起名
   （无标题好过臆造）。表里有名字的构建时直接取：奖章分组取 `medal_table.medalTypeData`（履历/章节/剿灭/保全/成长/记录/基建/活动/远行/加密奖章，
   类型名“勋章”→“奖章”）；`roguelike_buff` 的分组名构建时写进 `group_name`（`_buffKind`：表里 `innerName` 全带“X：”前缀就取 X，否则查

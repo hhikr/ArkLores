@@ -9,15 +9,20 @@ import '../../core/gamedata/story_coverage_models.dart'
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart' show LibraryEntry;
+import '../../core/library/placeholders.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart'
     show UserDataStore, reanchorLine;
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'story_labels_provider.dart';
+
+/// The story reader's font: LXGW WenKai Screen (bundled, see pubspec).
+const String readingFontFamily = 'LXGWWenKaiScreen';
 
 /// The whole text of one story. Three ways in:
 ///
@@ -433,7 +438,7 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      synopsis.trim(),
+                      withPlaceholders(synopsis.trim(), ref.watch(nicknameProvider)),
                       style: theme.bodyFont.copyWith(
                         color: theme.textPrimary,
                         fontSize: 13,
@@ -455,11 +460,17 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     final out = <Widget>[];
     final cited = <Widget>[];
     String? previousSpeaker;
+    // Narration is set in italics only between spoken lines; a text that is
+    // all narration (a month squad's story, a document) is plain.
+    final spoken = lines.any((l) => (l.speaker ?? '').trim().isNotEmpty);
+    // Read once for the whole text, not once per line.
+    final nickname = ref.watch(nicknameProvider);
     for (var i = 0; i < lines.length; i++) {
       final line = lines[i];
       final speaker = (line.speaker ?? '').trim();
       final showName = speaker.isNotEmpty && speaker != previousSpeaker;
-      final gap = speaker != previousSpeaker ? 10.0 : 2.0;
+      // Between paragraphs a little more than the leading inside one.
+      final gap = speaker != previousSpeaker ? 20.0 : 14.0;
       previousSpeaker = speaker;
       final isResume = !_cited && line.lineIndex == _resume;
       final row = Container(
@@ -470,6 +481,8 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
           speaker: speaker,
           showName: showName,
           marked: isResume,
+          italicNarration: spoken,
+          nickname: nickname,
         ),
       );
       if (_isTarget(line.lineIndex)) {
@@ -671,8 +684,11 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     required String speaker,
     required bool showName,
     bool marked = false,
+    bool italicNarration = true,
+    String nickname = '',
   }) {
     final narration = speaker.isEmpty;
+    final plain = narration && !italicNarration;
     final content = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -706,12 +722,17 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
                   ),
                 ),
               Text(
-                line.content,
+                withPlaceholders(line.content, nickname),
                 style: theme.bodyFont.copyWith(
-                  color: narration ? theme.textSecondary : theme.textPrimary,
-                  fontStyle: narration ? FontStyle.italic : FontStyle.normal,
-                  fontSize: narration ? 14 : 15,
-                  height: 1.6,
+                  fontFamily: readingFontFamily,
+                  color: narration && !plain
+                      ? theme.textSecondary
+                      : theme.textPrimary,
+                  fontStyle: narration && !plain
+                      ? FontStyle.italic
+                      : FontStyle.normal,
+                  fontSize: narration && !plain ? 14.5 : 15.5,
+                  height: 1.7,
                 ),
               ),
             ],

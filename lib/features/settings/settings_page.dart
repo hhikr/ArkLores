@@ -214,6 +214,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(height: 22),
                         IndustrialSectionHeader(
                           theme: theme,
+                          title: context.t.settingsProfile,
+                          code: context.t.settingsProfileSectionCode,
+                        ),
+                        _CompactSettingWidth(
+                          child: _SettingsActionTile(
+                            theme: theme,
+                            icon: Icons.person_outline_rounded,
+                            title: context.t.settingsProfile,
+                            subtitle: context.t.settingsProfileDesc,
+                            onTap: () => Navigator.of(context).push(
+                              smoothPageRoute<void>(
+                                builder: (_) => const ProfileSettingsPage(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        IndustrialSectionHeader(
+                          theme: theme,
                           title: context.t.settingsAiServices,
                           code: context.t.settingsAiSectionCode,
                         ),
@@ -307,6 +326,79 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Profile settings: one entry for now, how the stories address the reader.
+class ProfileSettingsPage extends ConsumerStatefulWidget {
+  const ProfileSettingsPage({super.key});
+
+  @override
+  ConsumerState<ProfileSettingsPage> createState() =>
+      _ProfileSettingsPageState();
+}
+
+class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
+  late final TextEditingController _nickname =
+      TextEditingController(text: ref.read(nicknameProvider));
+
+  @override
+  void dispose() {
+    _nickname.dispose();
+    super.dispose();
+  }
+
+  void _save(String value) {
+    ref.read(nicknameProvider.notifier).state = value.trim();
+    ref.read(settingsServiceProvider).saveNickname(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: theme.bgSecondary,
+        title: Text(
+          context.t.settingsProfile,
+          style: theme.titleFont.copyWith(fontSize: 18),
+        ),
+        iconTheme: IconThemeData(color: theme.textPrimary),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          ThemeAwareCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  key: const ValueKey('profile-nickname'),
+                  controller: _nickname,
+                  onChanged: _save,
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                    labelText: context.t.profileNicknameLabel,
+                    hintText: context.t.profileNicknameDefault,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  context.t.profileNicknameHelp,
+                  style: theme.bodyFont.copyWith(
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

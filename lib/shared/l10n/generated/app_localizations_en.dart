@@ -54,6 +54,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localeChineseShort => '中文';
 
   @override
+  String get settingsProfile => 'Profile';
+
+  @override
+  String get settingsProfileDesc => 'How the stories address you.';
+
+  @override
+  String get settingsProfileSectionCode => 'PROFILE';
+
+  @override
+  String get profileNicknameLabel => 'Form of address';
+
+  @override
+  String get profileNicknameHelp =>
+      'Stories write the Doctor\'s name as a placeholder; it is shown as what you enter here (left empty: \"Doctor\"). The knowledge base is not changed.';
+
+  @override
+  String get profileNicknameDefault => 'Doctor';
+
+  @override
   String get settingsAiServices => 'AI Services';
 
   @override
@@ -555,7 +574,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shelfMain => 'Main story';
 
   @override
-  String get shelfActivity => 'Events';
+  String get shelfActivity => 'Other events';
+
+  @override
+  String get shelfSideStory => 'Side Story';
+
+  @override
+  String get shelfMiniStory => 'Story collections';
+
+  @override
+  String get shelfBranchline => 'Interludes';
 
   @override
   String get shelfMemory => 'Operators';
@@ -711,6 +739,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get readingHistoryEmpty =>
       'Nothing read yet. Stories you open from an answer\'s evidence show up here.';
+
+  @override
+  String readingHistoryPage(Object page, Object pages) {
+    return 'Page $page / $pages';
+  }
 
   @override
   String get readingHistoryClear => 'Clear';

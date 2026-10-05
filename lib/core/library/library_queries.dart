@@ -12,6 +12,9 @@ import 'package:sqflite_common/sqlite_api.dart';
 /// Shelves are the collection kinds of the entry layer.
 const List<String> shelfKinds = [
   'main',
+  'sidestory',
+  'ministory',
+  'branchline',
   'activity',
   'memory',
   'roguelike',

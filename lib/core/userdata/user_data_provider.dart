@@ -26,5 +26,5 @@ final userDataStoreProvider = FutureProvider<UserDataStore>((ref) async {
 final recentReadingProvider =
     FutureProvider.autoDispose<List<ReadingEntry>>((ref) async {
   final store = await ref.watch(userDataStoreProvider.future);
-  return store.recent();
+  return store.recent(limit: historyLimit);
 });

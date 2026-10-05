@@ -87,6 +87,9 @@ class StageRef {
 /// The kind (and group) of the story that plays on first entering a mode.
 const String openingStoryKind = '开局剧情';
 
+/// The group of an ending's own story (the one that plays when it is reached).
+const String endingStoryKind = '结局';
+
 const List<(String, String)> _kinds = [
   ('challenge', '挑战'),
   ('ending', '结局剧情'),
@@ -346,7 +349,7 @@ Map<String, StoryHint> roguelikeStoryHints(
         // The ending's own story comes after the pages of its book.
         out[storyKey(avg)] = StoryHint(
           title,
-          group: '结局',
+          group: endingStoryKind,
           sort: endSort * 100 + 99,
           parent: parent,
         );

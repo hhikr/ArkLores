@@ -355,7 +355,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('shelf-activity')));
     await tester.pumpAndSettle();
     await shoot(tester, 'library_shelf');
-    expect(find.text('活动'), findsWidgets);
+    expect(find.text('其他活动'), findsWidgets);
     expect(find.byKey(const ValueKey('collection-activity_0')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('collection-activity_0')));

@@ -121,9 +121,10 @@ class ReadingEntry {
   final int totalLines;
   final int furthest;
 
-  /// 0..1 share of the item read, or null when its length is unknown.
+  /// 0..1 where the reader is, by the first line on screen — the same line
+  /// that continue reading opens at — or null when the length is unknown.
   double? get progress =>
-      totalLines <= 0 ? null : ((furthest + 1) / totalLines).clamp(0.0, 1.0);
+      totalLines <= 0 ? null : ((lineIndex + 1) / totalLines).clamp(0.0, 1.0);
 
   /// Read to (nearly) the end.
   bool get finished => totalLines > 0 && furthest >= totalLines - 3;

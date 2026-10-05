@@ -83,6 +83,13 @@ void main() async {
   }
 
 
+  var nickname = '';
+  try {
+    nickname = await settingsService.loadNickname();
+  } catch (e) {
+    debugPrint('[Startup] Error loading nickname: $e');
+  }
+
   runApp(
     ProviderScope(
       overrides: [
@@ -93,6 +100,7 @@ void main() async {
         initialThemeProvider.overrideWithValue(appTheme),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
+        initialNicknameProvider.overrideWithValue(nickname),
       ],
       child: const ArkLoresApp(),
     ),

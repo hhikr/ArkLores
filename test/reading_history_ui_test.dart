@@ -147,4 +147,53 @@ void main() {
     expect(find.textContaining('还没有阅读记录'), findsOneWidget);
     expect((await store.recent()), isEmpty);
   });
+
+  testWidgets('a long history is shown a page at a time', (tester) async {
+    tall(tester);
+    for (var i = 0; i < 20; i++) {
+      await store.recordOpen(
+        LibraryRef.story('s/$i.txt'),
+        title: '故事$i',
+        lineIndex: 0,
+        snippet: '',
+      );
+    }
+    await tester.pumpWidget(app(const ReadingHistoryPage(), const []));
+    await settle(tester);
+    // Newest first: 19 … 5 on the first page, 4 … 0 on the second.
+    expect(find.text('故事19'), findsOneWidget);
+    expect(find.text('故事4'), findsNothing);
+    await tester.scrollUntilVisible(find.text('第 1 / 2 页'), 300);
+    await tester.tap(find.byKey(const ValueKey('reading-history-next')));
+    await settle(tester);
+    expect(find.text('故事4'), findsOneWidget);
+    expect(find.text('故事19'), findsNothing);
+    expect(find.text('第 2 / 2 页'), findsOneWidget);
+  });
+
+  testWidgets('narration is italic only between spoken lines; the Doctor '
+      'placeholder shows the reader\'s form of address', (tester) async {
+    tall(tester);
+    TextStyle? styleOf(String text) => tester
+        .widget<Text>(find.text(text, findRichText: false).first)
+        .style;
+    final spoken = [
+      const StoryLineEntry(lineIndex: 0, speaker: null, content: '旁白一句。'),
+      const StoryLineEntry(lineIndex: 1, speaker: '乙', content: '你好，{@nickname}。'),
+    ];
+    await tester.pumpWidget(app(const StoryReaderPage(storyId: _story), spoken));
+    await settle(tester);
+    expect(styleOf('旁白一句。')?.fontStyle, FontStyle.italic);
+    expect(styleOf('你好，博士。')?.fontFamily, readingFontFamily);
+
+    // All narration (a month squad's story): plain.
+    await tester.pumpWidget(app(
+      const StoryReaderPage(storyId: _story),
+      const [
+        StoryLineEntry(lineIndex: 0, speaker: null, content: '全是叙述。'),
+      ],
+    ),);
+    await settle(tester);
+    expect(styleOf('全是叙述。')?.fontStyle, FontStyle.normal);
+  });
 }

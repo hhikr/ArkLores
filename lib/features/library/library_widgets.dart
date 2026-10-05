@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_queries.dart';
+import '../../core/library/placeholders.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
@@ -328,7 +330,9 @@ class StoryRow extends ConsumerWidget {
       ]
           .where((s) => s.isNotEmpty)
           .join(' '),
-      subtitle: story.synopsis,
+      subtitle: story.synopsis == null
+          ? null
+          : withPlaceholders(story.synopsis!, ref.watch(nicknameProvider)),
       progress: read?.progress != null && !(read?.finished ?? false)
           ? read!.progress
           : null,
@@ -349,7 +353,7 @@ class MarkdownText extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    final cleaned = cleanRichText(text)
+    final cleaned = cleanRichText(withPlaceholders(text, ref.watch(nicknameProvider)))
         .split('\n')
         .map((l) => l.trimRight())
         .join('  \n');

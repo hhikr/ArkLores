@@ -68,6 +68,14 @@ All notable changes to ArkLores will be documented in this file.
   separate story list and "related texts" headings are gone; what is left (areas, stages, collectibles, events …) are plain
   rows. Stages that exist in a normal and a raid form are marked *· 普通* / *· 突袭*. Tips that were only play advice and the
   rule stand-in items are no longer listed; tips that explain a term are kept under the term.
+- **Events are sorted by kind; re-runs are gone.** Events are shelved as SideStory, story collections (故事集), interludes
+  (插曲) and other events (check-ins and battle modes, which carry little story); re-runs are no longer listed (they add
+  nothing the original does not). Skin texts no longer repeat a paragraph.
+- **A better reader.** Stories are set in LXGW WenKai Screen with a little more room between paragraphs than between the lines of
+  one; narration is italic only between spoken lines (a month squad's story is plain); `{@nickname}` shows the form of address
+  set in Settings → Profile (the knowledge base is not changed); the reading percentage follows the first line on screen like
+  "continue reading"; the reading history is paged. Older Integrated Strategies topics without an ending book
+  get the same ending page as the others.
 - **Each collectible is listed once.** The game lists the same collectible several times (old and new table, variant and
   upgrade copies that differ only in effect text); they are now one entry per topic (one topic went from 3,502 to 539).
 - **Event options fold, layer by layer.** An event's options are a nested, collapsible list: each option opens to the text

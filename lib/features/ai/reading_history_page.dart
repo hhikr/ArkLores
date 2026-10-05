@@ -24,6 +24,10 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
   /// the tree in the same frame.
   final Set<String> _removed = {};
 
+  /// 0-based page of the list; the history is shown a page at a time.
+  int _page = 0;
+  static const int _pageSize = 15;
+
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
@@ -56,23 +60,52 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
             for (final e in all)
               if (!_removed.contains(e.ref)) e,
           ];
-          return list.isEmpty
-            ? _empty(context, theme)
-            : ListView.separated(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: list.length,
-                separatorBuilder: (_, __) => Divider(
-                  height: 1,
-                  indent: 16,
-                  endIndent: 16,
-                  color: theme.divider,
-                ),
-                itemBuilder: (context, i) => _tile(context, theme, list[i]),
-              );
+          if (list.isEmpty) return _empty(context, theme);
+          final pages = (list.length + _pageSize - 1) ~/ _pageSize;
+          final page = _page.clamp(0, pages - 1);
+          final shown = list.skip(page * _pageSize).take(_pageSize).toList();
+          return ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: shown.length + (pages > 1 ? 1 : 0),
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              indent: 16,
+              endIndent: 16,
+              color: theme.divider,
+            ),
+            itemBuilder: (context, i) => i < shown.length
+                ? _tile(context, theme, shown[i])
+                : _pager(context, theme, page, pages),
+          );
         },
       ),
     );
   }
+
+  Widget _pager(BuildContext context, AppThemeTokens theme, int page, int pages) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              key: const ValueKey('reading-history-previous'),
+              onPressed: page == 0 ? null : () => setState(() => _page = page - 1),
+              icon: const Icon(Icons.chevron_left_rounded),
+            ),
+            Text(
+              context.t.readingHistoryPage(page + 1, pages),
+              style: theme.bodyFont.copyWith(color: theme.textSecondary),
+            ),
+            IconButton(
+              key: const ValueKey('reading-history-next'),
+              onPressed:
+                  page >= pages - 1 ? null : () => setState(() => _page = page + 1),
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
+        ),
+      );
 
   Widget _empty(BuildContext context, AppThemeTokens theme) => Center(
         child: Padding(

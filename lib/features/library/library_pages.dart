@@ -3,14 +3,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/gamedata/build/story_naming.dart' show openingStoryKind;
+import '../../core/gamedata/build/story_naming.dart'
+    show endingStoryKind, openingStoryKind;
 import '../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
+import '../../core/library/placeholders.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/industrial_ui.dart';
@@ -22,6 +25,9 @@ import 'library_widgets.dart';
 
 String shelfLabel(BuildContext context, String kind) => switch (kind) {
       'main' => context.t.shelfMain,
+      'sidestory' => context.t.shelfSideStory,
+      'ministory' => context.t.shelfMiniStory,
+      'branchline' => context.t.shelfBranchline,
       'activity' => context.t.shelfActivity,
       'memory' => context.t.shelfMemory,
       'roguelike' => context.t.shelfRoguelike,
@@ -31,6 +37,9 @@ String shelfLabel(BuildContext context, String kind) => switch (kind) {
 
 IconData shelfIcon(String kind) => switch (kind) {
       'main' => Icons.auto_stories_rounded,
+      'sidestory' => Icons.menu_book_rounded,
+      'ministory' => Icons.bookmarks_rounded,
+      'branchline' => Icons.alt_route_rounded,
       'activity' => Icons.event_note_rounded,
       'memory' => Icons.badge_rounded,
       'roguelike' => Icons.diamond_rounded,
@@ -233,6 +242,7 @@ class CollectionPage extends ConsumerWidget {
     final collection = ref.watch(collectionProvider(collectionId));
     final stories = ref.watch(collectionStoriesProvider(collectionId));
     final types = ref.watch(collectionTypesProvider(collectionId));
+    final nickname = ref.watch(nicknameProvider);
     // Special rules are named by what the game calls each kind.
     final ruleKinds = [
       for (final g in ref
@@ -309,7 +319,7 @@ class CollectionPage extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    ..._ownParts(context, theme, inline, notes: true),
+                    ..._ownParts(context, theme, inline, notes: true, nickname: nickname),
                     if (opening.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -329,7 +339,7 @@ class CollectionPage extends ConsumerWidget {
                         rowDivider(theme),
                       ],
                     ],
-                    ..._ownParts(context, theme, inline, notes: false),
+                    ..._ownParts(context, theme, inline, notes: false, nickname: nickname),
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
                         Padding(
@@ -448,6 +458,7 @@ class CollectionPage extends ConsumerWidget {
     AppThemeTokens theme,
     List<LibraryEntry> inline, {
     required bool notes,
+    required String nickname,
   }) {
     final byType = <String, List<LibraryEntry>>{};
     for (final e in inline) {
@@ -487,7 +498,7 @@ class CollectionPage extends ConsumerWidget {
                 LibraryRow(
                   key: ValueKey('part-${e.id}'),
                   title: e.name,
-                  subtitle: e.synopsis ?? '',
+                  subtitle: withPlaceholders(e.synopsis ?? '', nickname),
                   subtitleLines: 2,
                   trailing: Icon(
                     Icons.chevron_right_rounded,
@@ -519,7 +530,7 @@ class CollectionPage extends ConsumerWidget {
             title: e.name,
             subtitle: [
               if (e.group != null) e.group!,
-              if (e.synopsis != null) e.synopsis!,
+              if (e.synopsis != null) withPlaceholders(e.synopsis!, nickname),
             ].join('\n'),
             subtitleLines: 3,
             trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
@@ -835,7 +846,10 @@ class EntryPage extends ConsumerWidget {
             b.outgoing)
           b,
     ];
-    final own = [for (final s in parts) if (s.name == e.name) s];
+    final own = [
+      for (final s in parts)
+        if (s.name == e.name || s.group == endingStoryKind) s,
+    ];
     final unlocked = [for (final s in parts) if (s.name != e.name) s];
     Widget storyRow(LibraryEntry s) => Column(
           key: ValueKey('part-story-${s.id}'),
@@ -864,7 +878,7 @@ class EntryPage extends ConsumerWidget {
                 style: theme.bodyFont.copyWith(color: theme.textSecondary),
               ),
             ),
-          for (final b in blocks) _textBlock(theme, e, b),
+          for (final b in blocks) _textBlock(theme, e, b, ref.watch(nicknameProvider)),
           for (final s in own) storyRow(s),
           if (protagonists.isNotEmpty) ...[
             IndustrialSectionHeader(
@@ -955,8 +969,9 @@ class EntryPage extends ConsumerWidget {
     AppThemeTokens theme,
     LibraryEntry e,
     EntryTextBlock b,
+    String nickname,
   ) {
-    final text = cleanRichText(b.content).trim();
+    final text = cleanRichText(withPlaceholders(b.content, nickname)).trim();
     if (text.isEmpty) return const SizedBox.shrink();
     final showTitle = b.title.trim().isNotEmpty &&
         b.title.trim() != e.name &&
@@ -1120,7 +1135,7 @@ class OperatorPage extends ConsumerWidget {
             for (final b in blocks)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: EntryPage._textBlock(theme, e, b),
+                child: EntryPage._textBlock(theme, e, b, ref.watch(nicknameProvider)),
               ),
           ],
           if (records.isNotEmpty) ...[

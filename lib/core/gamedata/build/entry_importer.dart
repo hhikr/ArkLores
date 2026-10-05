@@ -247,6 +247,10 @@ class _Context {
   final Map<String, String> zoneToRetro = {};
   final Map<String, String> zoneType = {};
 
+  /// Re-runs: they carry what the original carries, so they are not entries
+  /// of the library (their rows are removed in [EntryImporter.rebuildDerived]).
+  final Set<String> dropped = {};
+
   /// Every known collection: id → (kind, name, start, sort).
   final Map<String, ({String kind, String name, int? start, int sort})>
       collections = {};
@@ -369,6 +373,26 @@ class EntryImporter {
     'copper_buff',
   };
 
+  /// The shelf of an activity: the game's own displayType first (the
+  /// activity table), else what the story review lists it as. A big
+  /// SideStory, a mini story collection (故事集), an interlude, and the rest
+  /// (check-ins, battle modes, minor events) that carry little story.
+  static String _activityKind(String displayType, String reviewType) {
+    switch (displayType) {
+      case 'SIDESTORY':
+        return 'sidestory';
+      case 'MINISTORY':
+        return 'ministory';
+      case 'BRANCHLINE':
+        return 'branchline';
+    }
+    return switch (reviewType) {
+      'ACTIVITY' => 'sidestory',
+      'MINI_ACTIVITY' => 'ministory',
+      _ => 'activity',
+    };
+  }
+
   Future<Object?> _json(String repoPath) async {
     final file = File(p.join(sourceDir.path, repoPath));
     if (!await file.exists()) return null;
@@ -382,16 +406,22 @@ class EntryImporter {
 
   Future<_Context> _loadContext() async {
     final ctx = _Context();
+    final activity = await _table(EntryTables.activity);
+    final basic = _map(activity['basicInfo']);
     final review = await _table(EntryTables.storyReview);
     var sort = 0;
     for (final entry in review.entries) {
       final c = _map(entry.value);
       final type = _s(c['entryType']);
+      final id = _s(c['id']).isEmpty ? entry.key : _s(c['id']);
       final kind = type == 'MAINLINE'
           ? 'main'
           : type == 'NONE'
               ? 'memory'
-              : 'activity';
+              : _activityKind(
+                  _s(_map(basic[id])['displayType']),
+                  type,
+                );
       final start = _int(c['startTime']);
       ctx.add(
         _s(c['id']).isEmpty ? entry.key : _s(c['id']),
@@ -401,16 +431,19 @@ class EntryImporter {
         sort++,
       );
     }
-    final activity = await _table(EntryTables.activity);
-    for (final entry in _map(activity['basicInfo']).entries) {
+    for (final entry in basic.entries) {
       final info = _map(entry.value);
       final name = _clean(info['name']);
       final start = _int(info['startTime']);
       ctx.activityName[entry.key] = name;
       ctx.activityStart[entry.key] = start;
+      if (info['isReplicate'] == true || name.contains('复刻')) {
+        ctx.dropped.add(entry.key);
+        continue;
+      }
       ctx.add(
         entry.key,
-        'activity',
+        _activityKind(_s(info['displayType']), ''),
         name,
         start == null || start < 0 ? null : start,
         sort++,
@@ -434,14 +467,7 @@ class EntryImporter {
         retroHome[entry.key] = home.first;
         continue;
       }
-      final start = _int(info['startTime']);
-      ctx.add(
-        entry.key,
-        'activity',
-        _clean(info['name']),
-        start == null || start < 0 ? null : start,
-        sort++,
-      );
+      ctx.dropped.add(entry.key);
     }
     for (final entry in _map(retro['zoneToRetro']).entries) {
       final id = '${entry.value}';
@@ -517,6 +543,13 @@ class EntryImporter {
         return false;
       }
     }
+    // Texts of an earlier run of this entry (a table read again after a rule
+    // changed) are replaced, not added to.
+    await txn.delete(
+      'normalized_records',
+      where: 'entry_id = ?',
+      whereArgs: [d.id],
+    );
     String? firstRecord;
     if (content.isNotEmpty) {
       final pieces = splitText(content);
@@ -683,6 +716,25 @@ class EntryImporter {
     }
   }
 
+  /// One section per text, each line (paragraph) only where it first
+  /// appears: a line that is, or is part of, one already said is dropped.
+  static List<TextSection> _distinctParagraphs(List<String> texts) {
+    final said = <String>[];
+    final out = <TextSection>[];
+    for (final text in texts) {
+      final lines = <String>[];
+      for (final raw in text.split('\n')) {
+        final line = raw.trim();
+        if (line.isEmpty) continue;
+        if (said.any((s) => s.contains(line))) continue;
+        said.add(line);
+        lines.add(line);
+      }
+      if (lines.isNotEmpty) out.add(TextSection('', lines.join('\n')));
+    }
+    return out;
+  }
+
   Future<void> _skins(Transaction txn, _Context ctx) async {
     const path = EntryTables.skin;
     final table = await _table(path);
@@ -690,14 +742,16 @@ class EntryImporter {
       final skin = _map(entry.value);
       final display = _map(skin['displaySkin']);
       final name = _clean(display['skinName']);
-      final sections = [
+      // The fields overlap (the description's paragraphs come again in the
+      // content): a paragraph is said once.
+      final sections = _distinctParagraphs([
         for (final key in const ['description', 'dialog', 'content'])
           if (hasChinese(_s(display[key])))
-            TextSection('', cleanDescription(_s(display[key]))),
+            cleanDescription(_s(display[key])),
         if (hasChinese(_s(display['usage'])) &&
             !isMechanical(_s(display['usage'])))
-          TextSection('', _clean(display['usage'])),
-      ];
+          _clean(display['usage']),
+      ]);
       if (name.isEmpty || sections.isEmpty) continue;
       final id = _s(skin['skinId']).isEmpty ? entry.key : _s(skin['skinId']);
       final entryId = 'skin:$id';
@@ -1979,6 +2033,32 @@ class EntryImporter {
       await txn.delete('collections');
       await txn.delete('entries', where: "type = 'story'");
       await txn.delete('entry_links', where: "source_path = 'derived'");
+      // Re-runs add nothing the original does not have: what the tables
+      // attributed to them goes.
+      if (ctx.dropped.isNotEmpty) {
+        final marks = List.filled(ctx.dropped.length, '?').join(',');
+        final ids = 'SELECT id FROM entries WHERE collection_id IN ($marks)';
+        final args = ctx.dropped.toList();
+        await txn.execute(
+          'DELETE FROM normalized_records WHERE entry_id IN ($ids)',
+          args,
+        );
+        await txn.execute(
+          'DELETE FROM entry_links WHERE src IN ($ids) OR dst IN ($ids)',
+          [...args, ...args],
+        );
+        final gone = [
+          for (final r in await txn.rawQuery(ids, args)) '${r['id']}',
+        ];
+        await txn.execute(
+          'DELETE FROM entries WHERE collection_id IN ($marks)',
+          args,
+        );
+        for (final id in gone) {
+          await txn.delete('entity_aliases', where: 'entity_id = ?', whereArgs: [id]);
+          await txn.delete('entities', where: 'id = ?', whereArgs: [id]);
+        }
+      }
       importer.stats.collections = 0;
       final written = <String>{};
       Future<void> putCollection(
@@ -2177,6 +2257,42 @@ class EntryImporter {
           await _link(txn, '${r['id']}', 'part_of', parent, 'derived');
         }
       }
+      // A topic without an ending book (older ones) still has the ending's
+      // own story: the file named after the ending's number, level_*_ending_<n>,
+      // for the ending whose id ends in ending_<n>. The story that opens a
+      // topic is level_*_entry in every topic, named or not.
+      final bound = {
+        for (final r in await txn.rawQuery(
+          "SELECT dst FROM entry_links WHERE relation = 'part_of'",
+        ))
+          '${r['dst']}',
+      };
+      for (final end in await txn.rawQuery(
+        'SELECT id, collection_id, raw_id FROM entries '
+        "WHERE type = 'roguelike_ending'",
+      )) {
+        if (bound.contains('${end['id']}')) continue;
+        final n = RegExp(r'ending_(\d+)$').firstMatch('${end['raw_id']}')?.group(1);
+        if (n == null) continue;
+        for (final story in await txn.rawQuery(
+          "SELECT id FROM entries WHERE type = 'story' AND collection_id = ? "
+          'AND raw_id GLOB ?',
+          ['${end['collection_id']}', '*level_*ending_$n.txt'],
+        )) {
+          await _link(txn, '${story['id']}', 'part_of', '${end['id']}', 'derived');
+          await txn.rawUpdate(
+            'UPDATE entries SET group_name = ? WHERE id = ?',
+            [endingStoryKind, story['id']],
+          );
+        }
+      }
+      await txn.rawUpdate(
+        "UPDATE entries SET group_name = ? WHERE type = 'story' "
+        "AND raw_id GLOB '*level_*_entry.txt' "
+        "AND collection_id IN (SELECT id FROM collections WHERE kind = 'roguelike')",
+        [openingStoryKind],
+      );
+
       // Stages are grouped by the zone they are in: its name, or no group
       // when the zone has none (an id is not a heading).
       await txn.execute(

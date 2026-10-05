@@ -188,6 +188,42 @@ abstract class AppLocalizations {
   /// **'中文'**
   String get localeChineseShort;
 
+  /// No description provided for @settingsProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get settingsProfile;
+
+  /// No description provided for @settingsProfileDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'How the stories address you.'**
+  String get settingsProfileDesc;
+
+  /// No description provided for @settingsProfileSectionCode.
+  ///
+  /// In en, this message translates to:
+  /// **'PROFILE'**
+  String get settingsProfileSectionCode;
+
+  /// No description provided for @profileNicknameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Form of address'**
+  String get profileNicknameLabel;
+
+  /// No description provided for @profileNicknameHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories write the Doctor\'s name as a placeholder; it is shown as what you enter here (left empty: \"Doctor\"). The knowledge base is not changed.'**
+  String get profileNicknameHelp;
+
+  /// No description provided for @profileNicknameDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Doctor'**
+  String get profileNicknameDefault;
+
   /// No description provided for @settingsAiServices.
   ///
   /// In en, this message translates to:
@@ -1073,8 +1109,26 @@ abstract class AppLocalizations {
   /// No description provided for @shelfActivity.
   ///
   /// In en, this message translates to:
-  /// **'Events'**
+  /// **'Other events'**
   String get shelfActivity;
+
+  /// No description provided for @shelfSideStory.
+  ///
+  /// In en, this message translates to:
+  /// **'Side Story'**
+  String get shelfSideStory;
+
+  /// No description provided for @shelfMiniStory.
+  ///
+  /// In en, this message translates to:
+  /// **'Story collections'**
+  String get shelfMiniStory;
+
+  /// No description provided for @shelfBranchline.
+  ///
+  /// In en, this message translates to:
+  /// **'Interludes'**
+  String get shelfBranchline;
 
   /// No description provided for @shelfMemory.
   ///
@@ -1351,6 +1405,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing read yet. Stories you open from an answer\'s evidence show up here.'**
   String get readingHistoryEmpty;
+
+  /// No description provided for @readingHistoryPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} / {pages}'**
+  String readingHistoryPage(Object page, Object pages);
 
   /// No description provided for @readingHistoryClear.
   ///
