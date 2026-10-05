@@ -61,6 +61,18 @@ final collectionTypesProvider = FutureProvider.autoDispose
     .family<List<({String type, int count})>, String>((ref, id) async =>
         await _query(ref, (db) => collectionTypes(db, id)) ?? const [],);
 
+final collectionIntroProvider = FutureProvider.autoDispose
+    .family<String?, String>((ref, id) async =>
+        _query<String?>(ref, (db) => collectionIntro(db, id)),);
+
+final collectionInlineProvider = FutureProvider.autoDispose
+    .family<List<LibraryEntry>, String>((ref, id) async =>
+        await _query(ref, (db) => inlineEntries(db, id)) ?? const [],);
+
+final entryPartsProvider = FutureProvider.autoDispose
+    .family<List<LibraryEntry>, String>((ref, id) async =>
+        await _query(ref, (db) => entryParts(db, id)) ?? const [],);
+
 final collectionStoriesProvider = FutureProvider.autoDispose
     .family<List<LibraryEntry>, String>((ref, id) async =>
         await _query(ref, (db) => storiesOf(db, id)) ?? const [],);

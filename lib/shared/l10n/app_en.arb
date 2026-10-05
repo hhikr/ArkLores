@@ -204,6 +204,8 @@
   "libraryEmpty": "Nothing here yet",
   "libraryStories": "Stories",
   "libraryOtherSections": "Related texts",
+  "libraryParts": "Stories",
+  "libraryLeftoverStories": "Other stories",
   "libraryFilterHint": "Filter this list",
   "libraryProgress": "{percent}% read",
   "@libraryProgress": {"placeholders": {"percent": {"type": "int"}}},

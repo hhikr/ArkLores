@@ -16,6 +16,16 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 肉鸽页第三轮（2026-10-05，未发布，需重算知识库；本地 release APK 供开发者试装）**：肉鸽主题页改为一页读完。
+  构建（`entry_importer.dart`/`story_naming.dart`，全部来自表里的 id 关系）：`StoryHint.parent` + 新链接关系 `part_of`——结局书的页面
+  （`clientEndbookItemDatas`）与结局同名的故事（`avgId`，排在最后）属于结局（`endbook.endingId`），月度小队的三段故事（`monthSquad.chatId`
+  → `archiveComp.chat`）属于小队，`rebuildDerived` 写链接；顺序用故事的 `sort_key`。小队条目：分组=年月、文字=官方英文副标题（原样保留）+一句话、
+  `features` 链接到主角干员；`roguelike_topic` 的文字作为集合简介。关卡：`isElite` 的名字加“· 突袭”，有突袭孪生的普通关加“· 普通”，同名同关卡去重，仍同名的编号；
+  提示只留“词——解释”型（其余是玩法提示）；`feature` 类收藏品（机制物品）不导入。`_purgeSource` 让 `roguelike_topic`/旧肉鸽表的重导入先清掉旧条目
+  （否则规则变了旧行还在）。类型显示名：`roguelike_squad`=月度小队（游戏表里的叫法），`roguelike_tip`=背景词条。
+  界面：集合页 = 简介 + 结局/月度小队行（`inlineEntries`）+ 没有归属的剧情（“其他剧情”）+ 资料类型菜单，不再有“剧情”“相关资料”标题；条目页的“包含的故事”
+  （`entryParts`）；小队的“涉及”显示为“主角”。已上线的 pre.4 库没有这些结构，需要重新下载知识库。
+
 - **0.11 资料页第二轮修正（2026-10-05，未发布，需重算知识库）**：真机再反馈四点。① 编码残留不止一层：阅读页标题/续读卡/历史/证据链
   用的是 `story_catalog`（只含 71% 的故事）+ 路径兜底，所以训练、肉鸽等仍显示文件名——`queryCatalogEntries` 现在对目录没有的故事
   从条目层（`entries`+`collections`）取名字（`集成战略·主题 分组《名》`），历史/续读卡显示“当前名字”（`storyLabelProvider`，库不认识时才用存的旧标题）；

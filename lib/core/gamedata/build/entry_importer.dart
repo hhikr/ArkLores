@@ -194,9 +194,9 @@ const Map<String, String> _typeLabels = {
   'roguelike_ending': '集成战略结局',
   'roguelike_stage': '集成战略关卡',
   'roguelike_zone': '集成战略区域',
-  'roguelike_squad': '集成战略分队',
+  'roguelike_squad': '月度小队',
   'roguelike_prize': '集成战略奖励',
-  'roguelike_tip': '集成战略提示',
+  'roguelike_tip': '背景词条',
   'roguelike_buff': '集成战略加成',
   'sandbox_item': '生息演算物品',
   'sandbox_text': '生息演算文本',
@@ -1300,8 +1300,27 @@ class EntryImporter {
 
   // ─── Roguelike ──────────────────────────────────────────────────
 
+  /// Removes what an earlier import of [path] wrote (entries, their records,
+  /// chunks and bindings), so a re-import is exactly what the table says now:
+  /// an entry dropped from the rules (a tip, a duplicate stage) goes away.
+  Future<void> _purgeSource(Transaction txn, String path) async {
+    const ids = 'SELECT id FROM entries WHERE source_path = ?';
+    await txn.rawDelete('DELETE FROM lore_chunks WHERE entry_id IN ($ids)', [path]);
+    await txn.rawDelete(
+      'DELETE FROM normalized_records WHERE entry_id IN ($ids)',
+      [path],
+    );
+    await txn.rawDelete(
+      'DELETE FROM entry_links WHERE source_path = ? OR src IN ($ids) '
+      'OR dst IN ($ids)',
+      [path, path, path],
+    );
+    await txn.rawDelete('DELETE FROM entries WHERE source_path = ?', [path]);
+  }
+
   Future<void> _roguelikeTopics(Transaction txn, _Context ctx) async {
     const path = EntryTables.roguelikeTopic;
+    await _purgeSource(txn, path);
     final table = await _table(path);
     final topics = _map(table['topics']);
     for (final entry in topics.entries) {
@@ -1328,6 +1347,7 @@ class EntryImporter {
 
   Future<void> _roguelikeLegacy(Transaction txn, _Context ctx) async {
     const path = EntryTables.roguelike;
+    await _purgeSource(txn, path);
     final table = await _table(path);
     final items = _map(_map(table['itemTable'])['items']);
     await _roguelike(txn, ctx, path, 'rogue_1', {
@@ -1442,11 +1462,34 @@ class EntryImporter {
         ),
       );
     }
-    for (final entry in _map(d['stages']).entries) {
+    // A stage has a normal and a raid (`isElite`) form that share name, level
+    // and text; the raid one names its normal one in `linkedStageId`. Both
+    // carry the form in their name; a stage listed twice for one level is
+    // one, and what still shares a name (other levels) is numbered.
+    final stageTable = _map(d['stages']);
+    final raidOf = {
+      for (final s in stageTable.values)
+        if (_s(_map(s)['linkedStageId']).isNotEmpty)
+          _s(_map(s)['linkedStageId']),
+    };
+    final seenStages = <String>{};
+    final nameCount = <String, int>{};
+    for (final entry in stageTable.entries) {
       final stage = _map(entry.value);
-      final name = _clean(stage['name']);
+      var name = _clean(stage['name']);
       if (name.isEmpty) continue;
       final desc = cleanDescription(_s(stage['description']));
+      final raid = _int(stage['isElite']) == 1;
+      if (!seenStages.add('$name|${_s(stage['levelId']).toLowerCase()}|$raid')) {
+        continue;
+      }
+      if (raid) {
+        name = '$name · 突袭';
+      } else if (raidOf.contains(entry.key)) {
+        name = '$name · 普通';
+      }
+      final nth = nameCount[name] = (nameCount[name] ?? 0) + 1;
+      if (nth > 1) name = '$name · $nth';
       await _emit(
         txn,
         _Draft(
@@ -1483,12 +1526,17 @@ class EntryImporter {
     for (final entry in _map(d['monthSquad']).entries) {
       final squad = _map(entry.value);
       final name = _clean(squad['teamName']);
+      // The official English subtitle stays as it is written.
       final sections = [
-        for (final key in const ['teamDes', 'teamFlavorDesc'])
-          if (hasChinese(_s(squad[key]))) TextSection('', _clean(squad[key])),
+        if (_clean(squad['teamFlavorDesc']).isNotEmpty)
+          TextSection('', _clean(squad['teamFlavorDesc'])),
+        if (hasChinese(_s(squad['teamDes'])))
+          TextSection('', _clean(squad['teamDes'])),
       ];
       if (name.isEmpty || sections.isEmpty) continue;
       final key = id(entry.key);
+      final year = _int(squad['teamYear']);
+      final month = _int(squad['teamMonth']);
       final written = await _emit(
         txn,
         _Draft(
@@ -1497,6 +1545,8 @@ class EntryImporter {
           sourcePath: path,
           name: name,
           collectionId: topic,
+          groupName: year != null && month != null ? '$year年$month月' : null,
+          sortKey: _int(squad['teamIndex']),
           sections: sections,
         ),
       );
@@ -1535,14 +1585,18 @@ class EntryImporter {
     final tips = _list(d['battleLoadingTips']);
     for (var i = 0; i < tips.length; i++) {
       final text = _clean(_map(tips[i])['tip']);
-      if (!hasChinese(text)) continue;
+      // Loading tips are mostly play advice; the ones that explain a term of
+      // the setting are written `词——解释` and are the only ones kept, under
+      // the term.
+      final term = RegExp(r'^([^—\n]{1,24})——').firstMatch(text)?.group(1);
+      if (!hasChinese(text) || term == null || isMechanical(text)) continue;
       await _emit(
         txn,
         _Draft(
           type: 'roguelike_tip',
           key: '$topic/$i',
           sourcePath: path,
-          name: '${ctx.collections[topic]?.name ?? topic} · 提示',
+          name: term.trim(),
           collectionId: topic,
           sortKey: i,
           sections: [TextSection('', text)],
@@ -1979,6 +2033,12 @@ class EntryImporter {
         target ??= named['${r['raw_id']}']?.stageEntryId;
         if (target != null && target.isNotEmpty) {
           await _link(txn, '${r['id']}', 'belongs_to_stage', target, 'derived');
+        }
+        // A file the tables make part of an entry (an ending's pages, a month
+        // squad's short stories) is bound to it; the order is its sort key.
+        final parent = named['${r['raw_id']}']?.parent;
+        if (parent != null && parent.isNotEmpty) {
+          await _link(txn, '${r['id']}', 'part_of', parent, 'derived');
         }
       }
       // Stages are grouped by the zone they are in: its name, or no group

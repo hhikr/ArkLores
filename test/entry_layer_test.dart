@@ -268,10 +268,101 @@ void main() {
       });
       await writeJson('excel/roguelike_topic_table.json', {
         'topics': {
-          'rogue_fx': {'id': 'rogue_fx', 'name': '虚构肉鸽', 'startTime': 1},
+          'rogue_fx': {
+            'id': 'rogue_fx',
+            'name': '虚构肉鸽',
+            'startTime': 1,
+            'lineText': '这是虚构肉鸽的一小段介绍。',
+          },
         },
         'details': {
           'rogue_fx': {
+            'endings': {
+              'end_a': {'id': 'end_a', 'name': '某结局', 'desc': '结局的一句话。'},
+            },
+            'monthSquad': {
+              'sq1': {
+                'id': 'sq1',
+                'teamName': '小队甲',
+                'teamFlavorDesc': 'Hello There',
+                'teamDes': '小队的一句话。',
+                'teamYear': '2026',
+                'teamMonth': '07',
+                'teamIndex': '1',
+                'teamChars': [
+                  {'teamCharId': 'char_fx_1'},
+                ],
+                'chatId': 'chat_1',
+              },
+            },
+            'archiveComp': {
+              'endbook': {
+                'endbook': {
+                  'eb': {
+                    'endingId': 'end_a',
+                    'title': '某结局',
+                    'sortId': 1,
+                    'avgId': 'Obt/Rogue/rogue_fx/ending',
+                    'clientEndbookItemDatas': [
+                      {
+                        'textId': 'Obt/Rogue/rogue_fx/Endbook/e1',
+                        'endbookName': '篇一',
+                        'sortId': 1,
+                      },
+                    ],
+                  },
+                },
+              },
+              'chat': {
+                'chat': {
+                  'chat_1': {
+                    'sortId': 1,
+                    'chatItemList': [
+                      {
+                        'floor': 1,
+                        'chatDesc': '第一段',
+                        'chatStoryId': 'Obt/Rogue/rogue_fx/MonthRecord/m1',
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            'battleLoadingTips': [
+              {'tip': '词语——这是对一个词语的设定解释，写得足够长。'},
+              {'tip': '请规划好路线，否则将会触发追猎。'},
+            ],
+            'stages': {
+              'st_n': {
+                'name': '某关',
+                'code': 'ISW-NO',
+                'levelId': 'Obt/R/level_a',
+                'description': '关卡描述。',
+                'isElite': 0,
+              },
+              'st_e': {
+                'name': '某关',
+                'code': 'ISW-NO',
+                'levelId': 'Obt/R/level_a',
+                'description': '关卡描述。',
+                'isElite': 1,
+                'linkedStageId': 'st_n',
+              },
+              'st_copy': {
+                'name': '某关',
+                'code': 'ISW-NO',
+                'levelId': 'Obt/R/level_a',
+                'description': '关卡描述。',
+                'isElite': 0,
+              },
+              'st_solo': {
+                'name': '独关',
+                'code': 'ISW-NO',
+                'levelId': 'Obt/R/level_b',
+                'description': '另一个关卡描述。',
+                'isElite': 0,
+              },
+            },
             'items': {
               'rogue_fx_relic_1': {
                 'name': '虚构藏品',
@@ -323,6 +414,14 @@ void main() {
       await writeText(
         'story/obt/rogue/rogue_fx/endbook/e1.txt',
         '[name="乙"]肉鸽里的故事。\n',
+      );
+      await writeText(
+        'story/obt/rogue/rogue_fx/ending.txt',
+        '[name="乙"]结局的故事。\n',
+      );
+      await writeText(
+        'story/obt/rogue/rogue_fx/monthrecord/m1.txt',
+        '[name="乙"]月度小故事。\n',
       );
       await writeText(
         'story/activities/fxhub/guide_fx_entry.txt',
@@ -402,6 +501,61 @@ void main() {
       // A catalogued story keeps its catalogue label.
       expect(labels['obt/main/level_main_00-01_beg.txt']!.label,
           contains('开端'),);
+    });
+
+    test('endings and month squads hold their stories, in order', () async {
+      Future<List<String>> partsOf(String parent) async => [
+            for (final r in await q(
+              'SELECT e.name FROM entry_links l JOIN entries e ON e.id = l.src '
+              "WHERE l.dst = ? AND l.relation = 'part_of' "
+              'ORDER BY e.sort_key, e.id',
+              [parent],
+            ))
+              '${r['name']}',
+          ];
+      // The ending's sentence is its text; the pages of its book come
+      // first, the ending's own story (named like it) last.
+      expect(
+        await partsOf('roguelike_ending:rogue_fx/end_a'),
+        ['篇一', '某结局'],
+      );
+      // A squad: its short stories by floor, the protagonist an operator.
+      expect(await partsOf('roguelike_squad:rogue_fx/sq1'), ['第一段']);
+      final protagonist = await q(
+        "SELECT dst FROM entry_links WHERE src = 'roguelike_squad:rogue_fx/sq1' "
+        "AND relation = 'features'",
+      );
+      expect(protagonist.single['dst'], 'operator:char_fx_1');
+      final squad = (await q(
+        "SELECT group_name FROM entries WHERE id = 'roguelike_squad:rogue_fx/sq1'",
+      ))
+          .single;
+      expect(squad['group_name'], '2026年7月');
+      // The official English subtitle is kept as written.
+      final text = await q(
+        "SELECT content FROM normalized_records WHERE entry_id = 'roguelike_squad:rogue_fx/sq1'",
+      );
+      expect(text.map((r) => '${r['content']}').join('\n'), contains('Hello There'));
+      // The topic's introduction is its text.
+      final intro = await q(
+        "SELECT content FROM normalized_records WHERE entry_id = 'roguelike_topic:rogue_fx'",
+      );
+      expect(intro.single['content'], '这是虚构肉鸽的一小段介绍。');
+    });
+
+    test('tips keep only the terms, stages say normal or raid once', () async {
+      final tips = await q(
+        "SELECT name FROM entries WHERE type = 'roguelike_tip'",
+      );
+      expect(tips.map((t) => t['name']), ['词语']);
+      final stages = await q(
+        "SELECT name FROM entries WHERE type = 'roguelike_stage' ORDER BY name",
+      );
+      expect(
+        stages.map((s) => s['name']).toSet(),
+        {'独关', '某关 · 突袭', '某关 · 普通'},
+      );
+      expect(stages, hasLength(3));
     });
 
     test('summons and devices are told from operators by the table', () async {

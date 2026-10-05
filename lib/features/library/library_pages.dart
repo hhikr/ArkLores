@@ -236,8 +236,17 @@ class CollectionPage extends ConsumerWidget {
     final c = collection.valueOrNull;
 
     final storyList = stories.valueOrNull ?? const <LibraryEntry>[];
-    final typeList = [...types.valueOrNull ?? const <({String type, int count})>[]]
-      ..sort((a, b) {
+    final intro = ref.watch(collectionIntroProvider(collectionId)).valueOrNull;
+    final inline = ref.watch(collectionInlineProvider(collectionId)).valueOrNull ??
+        const <LibraryEntry>[];
+    // A topic whose endings and squads carry their own stories lists them
+    // first; the stories left over and the kinds of texts follow, without
+    // headings of their own.
+    final ownParts = inline.isNotEmpty;
+    final typeList = [
+      for (final t in types.valueOrNull ?? const <({String type, int count})>[])
+        if (!inlineEntryTypes.contains(t.type)) t,
+    ]..sort((a, b) {
         final byRank = typeRank(a.type).compareTo(typeRank(b.type));
         return byRank != 0 ? byRank : b.count.compareTo(a.count);
       });
@@ -266,12 +275,28 @@ class CollectionPage extends ConsumerWidget {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                       child: _headerCard(context, theme, c, read),
                     ),
+                    if (intro != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Text(
+                          intro,
+                          key: const ValueKey('collection-intro'),
+                          style: theme.bodyFont.copyWith(
+                            color: theme.textSecondary,
+                            fontSize: 14,
+                            height: 1.7,
+                          ),
+                        ),
+                      ),
+                    ..._ownParts(context, theme, inline),
                     if (storyList.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: IndustrialSectionHeader(
                           theme: theme,
-                          title: context.t.libraryStories,
+                          title: ownParts
+                              ? context.t.libraryLeftoverStories
+                              : context.t.libraryStories,
                           code: 'stories',
                         ),
                       ),
@@ -326,14 +351,17 @@ class CollectionPage extends ConsumerWidget {
                         ],
                     ],
                     if (typeList.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: IndustrialSectionHeader(
-                          theme: theme,
-                          title: context.t.libraryOtherSections,
-                          code: 'related',
-                        ),
-                      ),
+                      if (!ownParts)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: IndustrialSectionHeader(
+                            theme: theme,
+                            title: context.t.libraryOtherSections,
+                            code: 'related',
+                          ),
+                        )
+                      else
+                        const SizedBox(height: 8),
                       for (final t in typeList) ...[
                         LibraryRow(
                           key: ValueKey('collection-type-${t.type}'),
@@ -358,6 +386,7 @@ class CollectionPage extends ConsumerWidget {
                     ],
                     if (storyList.isEmpty &&
                         typeList.isEmpty &&
+                        !ownParts &&
                         !stories.isLoading)
                       SizedBox(
                         height: 240,
@@ -369,6 +398,48 @@ class CollectionPage extends ConsumerWidget {
                   ],
                 ),
     );
+  }
+
+  /// The collection's own parts (endings, month squads): a heading per kind
+  /// and a row per entry with its sentence; each opens its own page with the
+  /// stories it holds.
+  List<Widget> _ownParts(
+    BuildContext context,
+    AppThemeTokens theme,
+    List<LibraryEntry> inline,
+  ) {
+    final byType = <String, List<LibraryEntry>>{};
+    for (final e in inline) {
+      (byType[e.type] ??= []).add(e);
+    }
+    final order = byType.keys.toList()
+      ..sort((a, b) => typeRank(a).compareTo(typeRank(b)));
+    return [
+      for (final type in order) ...[
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: IndustrialSectionHeader(
+            theme: theme,
+            title: entryTypeName(type),
+            code: type,
+          ),
+        ),
+        for (final e in byType[type]!) ...[
+          LibraryRow(
+            key: ValueKey('part-${e.id}'),
+            title: e.name,
+            subtitle: [
+              if (e.group != null) e.group!,
+              if (e.synopsis != null) e.synopsis!,
+            ].join('\n'),
+            subtitleLines: 3,
+            trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+            onTap: () => openEntry(context, e),
+          ),
+          rowDivider(theme),
+        ],
+      ],
+    ];
   }
 
   /// The stories of a roguelike or sandbox collection by their group, in
@@ -661,6 +732,9 @@ class EntryPage extends ConsumerWidget {
     final texts = ref.watch(entryTextsProvider(e));
     final bindings = ref.watch(entryBindingsProvider(e.id));
     final blocks = texts.valueOrNull ?? const <EntryTextBlock>[];
+    final parts =
+        ref.watch(entryPartsProvider(e.id)).valueOrNull ?? const <LibraryEntry>[];
+    final progress = ref.watch(readingProgressProvider).valueOrNull ?? const {};
 
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
@@ -678,7 +752,33 @@ class EntryPage extends ConsumerWidget {
               ),
             ),
           for (final b in blocks) _textBlock(theme, e, b),
-          ..._bindingSections(context, theme, bindings.valueOrNull ?? const []),
+          // The stories that make up this entry (an ending's pages and its
+          // own story, a month squad's three stories), in reading order.
+          if (parts.isNotEmpty) ...[
+            IndustrialSectionHeader(
+              theme: theme,
+              title: context.t.libraryParts,
+              code: 'parts',
+            ),
+            for (final s in parts) ...[
+              StoryRow(
+                story: s,
+                showGroup: false,
+                read: progress[LibraryRef.story(s.rawId ?? '').toString()],
+              ),
+              rowDivider(theme),
+            ],
+            const SizedBox(height: 8),
+          ],
+          ..._bindingSections(
+            context,
+            theme,
+            [
+              for (final b in bindings.valueOrNull ?? const <EntryBinding>[])
+                if (b.relation != 'part_of') b,
+            ],
+            e.type,
+          ),
         ],
       ),
     );
@@ -768,11 +868,12 @@ class EntryPage extends ConsumerWidget {
     BuildContext context,
     AppThemeTokens theme,
     List<EntryBinding> bindings,
+    String ownerType,
   ) {
     if (bindings.isEmpty) return const [];
     final groups = <String, List<EntryBinding>>{};
     for (final b in bindings) {
-      final key = '${bindingName(b.relation, outgoing: b.outgoing)}'
+      final key = '${bindingName(b.relation, outgoing: b.outgoing, ownerType: ownerType)}'
           '\u0000${entryTypeName(b.entry.type)}';
       (groups[key] ??= []).add(b);
     }

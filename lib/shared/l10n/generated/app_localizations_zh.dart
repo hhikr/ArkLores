@@ -607,6 +607,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryOtherSections => '相关资料';
 
   @override
+  String get libraryParts => '包含的故事';
+
+  @override
+  String get libraryLeftoverStories => '其他剧情';
+
+  @override
   String get libraryFilterHint => '在列表中筛选';
 
   @override

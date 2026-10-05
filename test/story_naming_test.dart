@@ -112,6 +112,7 @@ void main() {
               'endbook': {
                 'endbook': {
                   'end_1': {
+                    'endingId': 'ee1',
                     'title': '结局一',
                     'sortId': 1,
                     'avgId': 'Obt/Roguelike/RO/ending_1',
@@ -154,6 +155,24 @@ void main() {
       expect(hints['obt/rogue/chat_1/c_3']!.name, '第3层');
       expect(hints['obt/rogue/chat_1/c_3']!.group, '联谊会');
       expect(hints['obt/rogue/chat_1/c_5']!.name, '这一层');
+      // Each file names the entry it is part of; the ending's own story
+      // sorts after the pages of its book.
+      expect(
+        hints['obt/rogue/a/endbook/eb_1_2']!.parent,
+        'roguelike_ending:topic_a/ee1',
+      );
+      expect(
+        hints['obt/roguelike/ro/ending_1']!.parent,
+        'roguelike_ending:topic_a/ee1',
+      );
+      expect(
+        hints['obt/roguelike/ro/ending_1']!.sort!,
+        greaterThan(hints['obt/rogue/a/endbook/eb_1_2']!.sort!),
+      );
+      expect(
+        hints['obt/rogue/chat_1/c_3']!.parent,
+        'roguelike_squad:topic_a/sq1',
+      );
     });
 
     test('sandbox dialogs take the name of the NPC, levels their stage name',

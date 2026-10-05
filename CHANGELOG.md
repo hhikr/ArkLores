@@ -62,6 +62,12 @@ All notable changes to ArkLores will be documented in this file.
   story's real name (also for entries saved earlier); stage lists are grouped by chapter name, game enums (`TRADE`,
   `copper_buff`, item kinds) are named, ids of paradox simulations, activity kinds and unnamed folders are gone, and
   rule stand-ins of Integrated Strategies are no longer listed.
+- **Integrated Strategies topics read as one page.** A topic opens with its introduction text; below it the *endings* (each
+  with its sentence, then the pages of its ending book, then the ending's own story) and the *month squads* (月度小队: month,
+  name, the official English subtitle, one-liner, protagonist — a link to the operator — and the three short stories). The
+  separate story list and "related texts" headings are gone; what is left (areas, stages, collectibles, events …) are plain
+  rows. Stages that exist in a normal and a raid form are marked *· 普通* / *· 突袭*. Tips that were only play advice and the
+  rule stand-in items are no longer listed; tips that explain a term are kept under the term.
 - **Long lists are menus.** Integrated Strategies collections list their stories under folding headings (ending, squad …),
   put endings and squads before the long lists, and open collectibles, events and choices as a menu of kinds first.
 - **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and

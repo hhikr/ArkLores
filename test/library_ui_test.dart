@@ -131,8 +131,38 @@ List<Override> overrides(MemoryUserStore store) => [
               ]
             : const [],
       ),
+      collectionIntroProvider.overrideWith(
+        (ref, id) async => id == 'rogue_x' ? '这是一个主题的小小介绍。' : null,
+      ),
+      collectionInlineProvider.overrideWith(
+        (ref, id) async => id == 'rogue_x'
+            ? const [
+                LibraryEntry(
+                  id: 'roguelike_ending:rogue_x/e1',
+                  type: 'roguelike_ending',
+                  name: '某结局',
+                  synopsis: '结局的一句话。',
+                ),
+                LibraryEntry(
+                  id: 'roguelike_squad:rogue_x/s1',
+                  type: 'roguelike_squad',
+                  name: '小队甲',
+                  group: '2026年7月',
+                  synopsis: '小队的一句话。',
+                ),
+              ]
+            : const [],
+      ),
+      entryPartsProvider.overrideWith(
+        (ref, id) async => id == 'roguelike_ending:rogue_x/e1' ? _stories : const [],
+      ),
       entryProvider.overrideWith(
         (ref, id) async => switch (id) {
+          'roguelike_ending:rogue_x/e1' => const LibraryEntry(
+              id: 'roguelike_ending:rogue_x/e1',
+              type: 'roguelike_ending',
+              name: '某结局',
+            ),
           'enemy:e1' => _enemy,
           'operator:char_x' => _operator,
           _ => null,
@@ -420,6 +450,31 @@ void main() {
     );
     expect(find.textContaining('编号 RCX7'), findsOneWidget);
     expect(find.text('RCX7'), findsNothing);
+  });
+
+  testWidgets('a topic opens with its introduction and its own parts',
+      (tester) async {
+    await pumpApp(tester, const CollectionPage(collectionId: 'rogue_x'));
+    expect(find.byKey(const ValueKey('collection-intro')), findsOneWidget);
+    expect(find.text('这是一个主题的小小介绍。'), findsOneWidget);
+    expect(find.byKey(const ValueKey('part-roguelike_ending:rogue_x/e1')), findsOneWidget);
+    expect(find.text('结局的一句话。'), findsOneWidget);
+    expect(find.textContaining('2026年7月'), findsOneWidget);
+    // The headings that split the page into stories and related texts are
+    // gone; the kinds of texts are plain rows.
+    expect(find.text('剧情'), findsNothing);
+    expect(find.text('相关资料'), findsNothing);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('collection-type-stage')), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
+    await tester.pumpAndSettle();
+    // An ending's page: its stories, in order.
+    await tester.tap(find.byKey(const ValueKey('part-roguelike_ending:rogue_x/e1')));
+    await tester.pumpAndSettle();
+    expect(find.text('包含的故事'), findsWidgets);
+    expect(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('search offers collections and entries', (tester) async {

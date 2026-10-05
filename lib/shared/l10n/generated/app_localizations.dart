@@ -1184,6 +1184,18 @@ abstract class AppLocalizations {
   /// **'Related texts'**
   String get libraryOtherSections;
 
+  /// No description provided for @libraryParts.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories'**
+  String get libraryParts;
+
+  /// No description provided for @libraryLeftoverStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Other stories'**
+  String get libraryLeftoverStories;
+
   /// No description provided for @libraryFilterHint.
   ///
   /// In en, this message translates to:

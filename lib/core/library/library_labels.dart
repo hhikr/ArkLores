@@ -36,10 +36,10 @@ String entryTypeName(String type) => switch (type) {
       'roguelike_stage' => '集成战略关卡',
       'roguelike_zone' => '集成战略区域',
       'roguelike_topic' => '集成战略概述',
-      'roguelike_tip' => '集成战略提示',
+      'roguelike_tip' => '背景词条',
       'roguelike_prize' => '集成战略奖励',
       'roguelike_buff' => '集成战略加成',
-      'roguelike_squad' => '集成战略分队',
+      'roguelike_squad' => '月度小队',
       'archive_log' => '探索记录',
       'archive_landmark' => '地标',
       'archive_book' => '书籍',
@@ -218,8 +218,16 @@ String? groupLabel(String type, String? raw) {
 
 /// Chinese phrase for a binding, seen from the opened entry: [outgoing] is
 /// true when the opened entry is the source of the binding.
-String bindingName(String relation, {required bool outgoing}) =>
+String bindingName(
+  String relation, {
+  required bool outgoing,
+  String? ownerType,
+}) =>
     switch ((relation, outgoing)) {
+      // A month squad features its protagonist.
+      ('features', true) when ownerType == 'roguelike_squad' => '主角',
+      ('part_of', true) => '属于',
+      ('part_of', false) => '包含',
       ('appears_in', true) => '出现在',
       ('appears_in', false) => '出场',
       ('belongs_to', true) => '属于',

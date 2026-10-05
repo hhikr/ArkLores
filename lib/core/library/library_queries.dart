@@ -35,6 +35,19 @@ const String _ownedByOperator = 'EXISTS (SELECT 1 FROM entry_links ol '
     "WHERE ol.src = e.id AND ol.relation = 'belongs_to' "
     "AND ol.dst LIKE 'operator:%')";
 
+/// A story that is part of another entry (an ending's pages, a month squad's
+/// short stories): it is read from that entry's page, not listed on its own.
+const String _isPart = 'EXISTS (SELECT 1 FROM entry_links pl '
+    "WHERE pl.src = e.id AND pl.relation = 'part_of')";
+
+/// Types of a collection's entries that are its own parts and are listed
+/// right on its page (the endings and the month squads of a roguelike
+/// topic) instead of behind a menu.
+const Set<String> inlineEntryTypes = {'roguelike_ending', 'roguelike_squad'};
+
+/// The type whose text introduces its collection.
+const String introEntryType = 'roguelike_topic';
+
 /// One shelf and how much is on it.
 class ShelfSummary {
   const ShelfSummary({
@@ -324,7 +337,8 @@ Future<List<({String type, int count})>> collectionTypes(
 ) async {
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
-    "WHERE e.collection_id = ? AND e.type <> 'story' AND $_readable "
+    "WHERE e.collection_id = ? AND e.type <> 'story' AND "
+    "e.type <> '$introEntryType' AND $_readable "
     'GROUP BY e.type ORDER BY n DESC',
     [collectionId],
   );
@@ -349,15 +363,74 @@ Future<List<LibraryEntry>> storiesOf(
   String collectionId,
 ) async {
   final catalog = await _hasTable(db, 'story_catalog');
+  final parts = await _hasTable(db, 'entry_links')
+      ? 'AND NOT $_isPart '
+      : '';
   final rows = await db.rawQuery(
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
     'e.collection_id, e.sort_key, '
     '${catalog ? 's.synopsis' : 'NULL'} AS synopsis '
     'FROM entries e '
     '${catalog ? 'LEFT JOIN story_catalog s ON s.story_id = e.raw_id ' : ''}'
-    "WHERE e.collection_id = ? AND e.type = 'story' "
+    "WHERE e.collection_id = ? AND e.type = 'story' $parts"
     'ORDER BY e.sort_key, e.id',
     [collectionId],
+  );
+  return [for (final r in rows) LibraryEntry.fromRow(r)];
+}
+
+/// The introduction of a collection: the text of its `roguelike_topic` entry.
+Future<String?> collectionIntro(DatabaseExecutor db, String collectionId) async {
+  final rows = await db.rawQuery(
+    'SELECT r.content AS content FROM entries e '
+    'JOIN normalized_records r ON r.entry_id = e.id '
+    "WHERE e.collection_id = ? AND e.type = '$introEntryType' "
+    'ORDER BY r.line_start, r.id',
+    [collectionId],
+  );
+  final text = rows.map((r) => '${r['content'] ?? ''}'.trim()).join('\n').trim();
+  return text.isEmpty ? null : text;
+}
+
+/// The own parts of a collection ([inlineEntryTypes]) in order, each with
+/// the last line of its text (an ending's sentence, a squad's one-liner) as
+/// `synopsis` and its group (a squad's month).
+Future<List<LibraryEntry>> inlineEntries(
+  DatabaseExecutor db,
+  String collectionId,
+) async {
+  final types = inlineEntryTypes.map((t) => "'$t'").join(',');
+  final rows = await db.rawQuery(
+    'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
+    'e.collection_id, e.entity_id, (SELECT r.content FROM normalized_records r '
+    'WHERE r.entry_id = e.id ORDER BY r.line_start DESC, r.id DESC LIMIT 1) '
+    'AS synopsis FROM entries e '
+    'WHERE e.collection_id = ? AND e.type IN ($types) '
+    'ORDER BY e.type, e.sort_key, e.name, e.id',
+    [collectionId],
+  );
+  // The sentence is the last line: a squad's text opens with its subtitle.
+  return [
+    for (final r in rows)
+      LibraryEntry.fromRow({
+        ...r,
+        'synopsis': '${r['synopsis'] ?? ''}'.trim().split('\n').last,
+      }),
+  ];
+}
+
+/// The stories that are parts of [entryId], in order (see [_isPart]).
+Future<List<LibraryEntry>> entryParts(
+  DatabaseExecutor db,
+  String entryId,
+) async {
+  if (!await _hasTable(db, 'entry_links')) return const [];
+  final rows = await db.rawQuery(
+    'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
+    'e.collection_id FROM entry_links l JOIN entries e ON e.id = l.src '
+    "WHERE l.dst = ? AND l.relation = 'part_of' "
+    'ORDER BY e.sort_key, e.id',
+    [entryId],
   );
   return [for (final r in rows) LibraryEntry.fromRow(r)];
 }

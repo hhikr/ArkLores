@@ -34,13 +34,17 @@ String _baseOf(String key) {
 
 /// A name the source tables give one story file.
 class StoryHint {
-  const StoryHint(this.name, {this.group, this.sort});
+  const StoryHint(this.name, {this.group, this.sort, this.parent});
 
   final String name;
   final String? group;
 
   /// Order inside the collection (lower first).
   final int? sort;
+
+  /// The entry this file is a part of (`roguelike_ending:<topic>/<id>`): an
+  /// ending's pages, a month squad's three short stories.
+  final String? parent;
 }
 
 /// The result for one story.
@@ -50,11 +54,15 @@ class StoryNaming {
     this.group,
     this.stageEntryId,
     this.sort,
+    this.parent,
     this.fromTables = false,
   });
 
   final String name;
   final String? group;
+
+  /// The entry the story is a part of, when a table says so.
+  final String? parent;
 
   /// `stage:<id>` entry when the story belongs to an imported stage.
   final String? stageEntryId;
@@ -250,6 +258,7 @@ class StoryNamer {
         name: hint.name,
         group: hint.group,
         sort: hint.sort,
+        parent: hint.parent,
         fromTables: true,
       );
     }
@@ -303,23 +312,36 @@ String _s(Object? v) => v == null ? '' : '$v'.trim();
 
 /// Names from the roguelike topic table: the pages of the ending books
 /// (named by the ending they belong to) and the month chats (named by their
-/// own caption, else by the floor, under the month squad's name).
+/// own caption, else by the floor, under the month squad's name). Each file
+/// also names the entry it is part of: an ending (`endingId` of its book)
+/// with the book's pages in order and the ending's own story last, a month
+/// squad (`chatId`) with its three short stories by floor.
 Map<String, StoryHint> roguelikeStoryHints(
   Map<String, dynamic> topicTable,
   String Function(Object?) clean,
 ) {
   final out = <String, StoryHint>{};
-  for (final topic in _map(topicTable['details']).values) {
-    final d = _map(topic);
+  for (final topicEntry in _map(topicTable['details']).entries) {
+    final topic = topicEntry.key;
+    final d = _map(topicEntry.value);
     final archive = _map(d['archiveComp']);
     final book = _map(_map(archive['endbook'])['endbook']);
     for (final end in book.values) {
       final e = _map(end);
       final title = clean(e['title']);
       final endSort = (e['sortId'] as num?)?.toInt() ?? 0;
+      final endingId = _s(e['endingId']);
+      final parent =
+          endingId.isEmpty ? null : 'roguelike_ending:$topic/$endingId';
       final avg = _s(e['avgId']);
       if (avg.isNotEmpty && title.isNotEmpty) {
-        out[storyKey(avg)] = StoryHint(title, group: '结局', sort: endSort * 100);
+        // The ending's own story comes after the pages of its book.
+        out[storyKey(avg)] = StoryHint(
+          title,
+          group: '结局',
+          sort: endSort * 100 + 99,
+          parent: parent,
+        );
       }
       for (final item in _list(e['clientEndbookItemDatas'])) {
         final i = _map(item);
@@ -330,20 +352,25 @@ Map<String, StoryHint> roguelikeStoryHints(
           name,
           group: title.isEmpty ? '结局文集' : title,
           sort: endSort * 100 + ((i['sortId'] as num?)?.toInt() ?? 0),
+          parent: parent,
         );
       }
     }
-    final squadOfChat = <String, String>{};
-    for (final squad in _map(d['monthSquad']).values) {
-      final s = _map(squad);
+    final squadOfChat = <String, ({String name, String entry})>{};
+    for (final squad in _map(d['monthSquad']).entries) {
+      final s = _map(squad.value);
       final chat = _s(s['chatId']);
       final name = clean(s['teamName']);
-      if (chat.isNotEmpty && name.isNotEmpty) squadOfChat[chat] = name;
+      if (chat.isNotEmpty && name.isNotEmpty) {
+        squadOfChat[chat] =
+            (name: name, entry: 'roguelike_squad:$topic/${squad.key}');
+      }
     }
     final chats = _map(_map(archive['chat'])['chat']);
     for (final entry in chats.entries) {
       final c = _map(entry.value);
-      final group = squadOfChat[entry.key] ?? '月度对话';
+      final squad = squadOfChat[entry.key];
+      final group = squad?.name ?? '月度对话';
       final sort = ((c['sortId'] as num?)?.toInt() ?? 0) * 100;
       for (final item in _list(c['chatItemList'])) {
         final i = _map(item);
@@ -355,13 +382,13 @@ Map<String, StoryHint> roguelikeStoryHints(
           desc.isNotEmpty ? desc : '第$floor层',
           group: group,
           sort: sort + floor,
+          parent: squad?.entry,
         );
       }
     }
   }
   return out;
 }
-
 /// Names from the sandbox table: dialogs named after the NPC that speaks
 /// them, stage names by level file.
 ({Map<String, StoryHint> hints, Map<String, String> levelNames})
