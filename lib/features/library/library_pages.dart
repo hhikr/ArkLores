@@ -299,6 +299,7 @@ class CollectionPage extends ConsumerWidget {
                           ),
                         ),
                       ),
+                    ..._ownParts(context, theme, inline, notes: true),
                     if (opening.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -318,7 +319,7 @@ class CollectionPage extends ConsumerWidget {
                         rowDivider(theme),
                       ],
                     ],
-                    ..._ownParts(context, theme, inline),
+                    ..._ownParts(context, theme, inline, notes: false),
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
                         Padding(
@@ -380,17 +381,15 @@ class CollectionPage extends ConsumerWidget {
                         ],
                     ],
                     if (typeList.isNotEmpty) ...[
-                      if (!ownParts)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: IndustrialSectionHeader(
-                            theme: theme,
-                            title: context.t.libraryOtherSections,
-                            code: 'related',
-                          ),
-                        )
-                      else
-                        const SizedBox(height: 8),
+                      // Zones to medals: one heading for all of them.
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: IndustrialSectionHeader(
+                          theme: theme,
+                          title: context.t.libraryOtherSections,
+                          code: 'related',
+                        ),
+                      ),
                       for (final t in typeList) ...[
                         LibraryRow(
                           key: ValueKey('collection-type-${t.type}'),
@@ -435,10 +434,13 @@ class CollectionPage extends ConsumerWidget {
   List<Widget> _ownParts(
     BuildContext context,
     AppThemeTokens theme,
-    List<LibraryEntry> inline,
-  ) {
+    List<LibraryEntry> inline, {
+    required bool notes,
+  }) {
     final byType = <String, List<LibraryEntry>>{};
     for (final e in inline) {
+      // The notes come before the opening story, the rest after it.
+      if ((e.type == 'roguelike_tip') != notes) continue;
       (byType[e.type] ??= []).add(e);
     }
     final order = byType.keys.toList()
@@ -919,7 +921,7 @@ class EntryPage extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
             ],
-            if (documentEntryTypes.contains(e.type))
+            if (markdownEntryTypes.contains(e.type))
               MarkdownText(text)
             else
               SelectableText(

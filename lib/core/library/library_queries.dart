@@ -41,9 +41,22 @@ const String _isPart = 'EXISTS (SELECT 1 FROM entry_links pl '
     "WHERE pl.src = e.id AND pl.relation = 'part_of')";
 
 /// Types of a collection's entries that are its own parts and are listed
-/// right on its page (the endings and the month squads of a roguelike
+/// right on its page (the notes, endings and month squads of a roguelike
 /// topic) instead of behind a menu.
-const Set<String> inlineEntryTypes = {'roguelike_ending', 'roguelike_squad'};
+const Set<String> inlineEntryTypes = {
+  'roguelike_tip',
+  'roguelike_ending',
+  'roguelike_squad',
+};
+
+/// Entry types whose text is written as markdown (headings, lists): the
+/// profile documents and the events (event text, options, what follows).
+const Set<String> markdownEntryTypes = {
+  'operator',
+  'token',
+  'trap',
+  'roguelike_scene',
+};
 
 /// The type whose text introduces its collection.
 const String introEntryType = 'roguelike_topic';

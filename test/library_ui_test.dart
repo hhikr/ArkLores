@@ -151,6 +151,12 @@ List<Override> overrides(MemoryUserStore store) => [
         (ref, id) async => id == 'rogue_x'
             ? const [
                 LibraryEntry(
+                  id: 'roguelike_tip:rogue_x/0',
+                  type: 'roguelike_tip',
+                  name: '词语',
+                  synopsis: '词语——一个词语的解释。',
+                ),
+                LibraryEntry(
                   id: 'roguelike_ending:rogue_x/e1',
                   type: 'roguelike_ending',
                   name: '某结局',
@@ -495,7 +501,15 @@ void main() {
     expect(find.text('剧情'), findsNothing);
     // The opening story has its own place, above the endings; nothing is
     // left under \
-    expect(find.text('相关资料'), findsNothing);
+    // Notes first, then the opening story, the endings and squads; the kinds
+    // of texts (zones to medals) are under one heading.
+    expect(find.text('注释'), findsOneWidget);
+    expect(find.text('相关资料'), findsOneWidget);
+    double rowTop(String key) => tester.getTopLeft(find.byKey(ValueKey(key))).dy;
+    expect(
+      rowTop('part-roguelike_tip:rogue_x/0'),
+      lessThan(rowTop('story-row-story:ro/entry.txt')),
+    );
     await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('collection-type-stage')), findsOneWidget);

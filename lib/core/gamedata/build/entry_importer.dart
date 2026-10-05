@@ -196,7 +196,7 @@ const Map<String, String> _typeLabels = {
   'roguelike_zone': '集成战略区域',
   'roguelike_squad': '月度小队',
   'roguelike_prize': '集成战略奖励',
-  'roguelike_tip': '背景词条',
+  'roguelike_tip': '注释',
   'roguelike_buff': '集成战略加成',
   'sandbox_item': '生息演算物品',
   'sandbox_text': '生息演算文本',
@@ -570,6 +570,13 @@ class EntryImporter {
     if (!_importers.containsKey(path)) return;
     _seen.clear();
     await _importTableWith(path, await _loadContext());
+  }
+
+  /// Binds the enemies to their stages from the level files again (after the
+  /// stage entries were imported anew); a no-op without a `levels/` tree.
+  Future<void> importLevels() async {
+    _levelIndexCache = null;
+    await _importLevels(await _loadContext());
   }
 
   /// Whether [path] is imported by this class.
@@ -1301,7 +1308,7 @@ class EntryImporter {
   // ─── Roguelike ──────────────────────────────────────────────────
 
   /// Removes what an earlier import of [path] wrote (entries, their records,
-  /// chunks and bindings), so a re-import is exactly what the table says now:
+  /// chunks and its own bindings), so a re-import is exactly what the table says now:
   /// an entry dropped from the rules (a tip, a duplicate stage) goes away.
   Future<void> _purgeSource(Transaction txn, String path) async {
     const ids = 'SELECT id FROM entries WHERE source_path = ?';
@@ -1310,11 +1317,9 @@ class EntryImporter {
       'DELETE FROM normalized_records WHERE entry_id IN ($ids)',
       [path],
     );
-    await txn.rawDelete(
-      'DELETE FROM entry_links WHERE source_path = ? OR src IN ($ids) '
-      'OR dst IN ($ids)',
-      [path, path, path],
-    );
+    // Only the bindings this table wrote: others (enemies in a stage, from
+    // the level files) stay and meet the re-imported entry by its id.
+    await txn.rawDelete('DELETE FROM entry_links WHERE source_path = ?', [path]);
     await txn.rawDelete('DELETE FROM entries WHERE source_path = ?', [path]);
   }
 
@@ -1403,24 +1408,29 @@ class EntryImporter {
     // Events. A scene and its follow-up scenes share an id stem
     // (`scene_<topic>_<stem>_enter`, `scene_<topic>_<stem>_2`), and the choices
     // offered carry the same stem (`choice_<topic>_<stem>_1`): one entry per
-    // stem, the scenes in order, then the choices with where each leads.
+    // stem. A choice names the scene it leads to (`nextSceneId`); a scene no
+    // choice leads to is what the event says when it starts. So the entry has
+    // three parts: the event's own text, the options offered, and what is said
+    // after choosing each option.
     String stemOf(String raw, String lead) {
       final s = raw.startsWith(lead) ? raw.substring(lead.length) : raw;
       return s.replaceAll(RegExp(r'(_enter|_\d+)+$'), '');
     }
 
     final sceneTable = _map(d['choiceScenes']);
-    final sceneTitle = {
-      for (final e in sceneTable.entries) e.key: _clean(_map(e.value)['title']),
-    };
     final scenesOf = <String, List<String>>{};
     for (final key in sceneTable.keys) {
       (scenesOf[stemOf(key, 'scene_')] ??= []).add(key);
     }
     final choicesOf = <String, List<MapEntry<String, Map<String, dynamic>>>>{};
     for (final e in _map(d['choices']).entries) {
-      (choicesOf[stemOf(e.key, 'choice_')] ??= []).add(MapEntry(e.key, _map(e.value)));
+      (choicesOf[stemOf(e.key, 'choice_')] ??= [])
+          .add(MapEntry(e.key, _map(e.value)));
     }
+    String sceneProse(String key) =>
+        _prose(_s(_map(sceneTable[key])['description']));
+    final seenEvents = <String>{};
+    final eventNames = <String, int>{};
     var eventRank = 0;
     for (final stem in scenesOf.keys) {
       final keys = scenesOf[stem]!
@@ -1429,45 +1439,76 @@ class EntryImporter {
           if (ea != eb) return ea ? -1 : 1;
           return naturalCompare(a, b);
         });
-      final name = [
+      var name = [
         for (final k in keys)
-          if (sceneTitle[k]!.isNotEmpty) sceneTitle[k]!,
+          if (_clean(_map(sceneTable[k])['title']).isNotEmpty)
+            _clean(_map(sceneTable[k])['title']),
       ].firstOrNull;
       if (name == null) continue;
-      final blocks = <String>[];
-      for (var i = 0; i < keys.length; i++) {
-        final scene = _map(sceneTable[keys[i]]);
-        final desc = cleanDescription(_s(scene['description']));
-        final text = [
-          if (i > 0 &&
-              sceneTitle[keys[i]]!.isNotEmpty &&
-              sceneTitle[keys[i]] != name)
-            sceneTitle[keys[i]]!,
-          if (hasChinese(desc) && !isMechanical(desc)) desc,
-        ].join('\n');
-        if (text.isNotEmpty) blocks.add(text);
-      }
       final picks = [...?choicesOf[stem]]..sort((a, b) {
           final byOrder = (_int(a.value['sortId']) ?? 0)
               .compareTo(_int(b.value['sortId']) ?? 0);
           return byOrder != 0 ? byOrder : naturalCompare(a.key, b.key);
         });
-      final lines = <String>{};
+      final led = {
+        for (final pick in picks) _s(pick.value['nextSceneId']),
+      }..remove('');
+      // What the event says when it starts: the scenes no choice leads to
+      // (the first scene when every one is led to).
+      var opening = [for (final k in keys) if (!led.contains(k)) k];
+      if (opening.isEmpty) opening = [keys.first];
+      final start = [
+        for (final k in opening)
+          if (sceneProse(k).isNotEmpty) sceneProse(k),
+      ].join('\n\n');
+      // The options, once each by title, with their own text when they have
+      // prose (most are effect text and are left out).
+      final options = <String, String>{};
       for (final pick in picks) {
         final title = _clean(pick.value['title']);
         if (title.isEmpty) continue;
-        final desc = cleanDescription(_s(pick.value['description']));
-        final next = sceneTitle[_s(pick.value['nextSceneId'])] ?? '';
-        lines.add(
-          [
-            '· $title',
-            if (hasChinese(desc) && !isMechanical(desc)) '：$desc',
-            if (next.isNotEmpty && next != name) ' → $next',
-          ].join(),
-        );
+        final said = _prose(_s(pick.value['description']));
+        if ((options[title] ?? '').isEmpty) options[title] = said;
       }
-      if (lines.isNotEmpty) blocks.add('选项\n${lines.join('\n')}');
+      // After choosing: for each scene a choice leads to, the options that
+      // lead there and the scene's text.
+      final after = <String, List<String>>{};
+      for (final pick in picks) {
+        final next = _s(pick.value['nextSceneId']);
+        final title = _clean(pick.value['title']);
+        if (next.isEmpty || title.isEmpty || opening.contains(next)) continue;
+        final into = after.putIfAbsent(next, () => <String>[]);
+        if (!into.contains(title)) into.add(title);
+      }
+      // Scenes with the same words (variants of one outcome) are one.
+      final byWords = <String, List<String>>{};
+      for (final e in after.entries) {
+        final words = sceneProse(e.key);
+        if (words.isEmpty) continue;
+        final into = byWords.putIfAbsent(words, () => <String>[]);
+        for (final title in e.value) {
+          if (!into.contains(title)) into.add(title);
+        }
+      }
+      final results = <String>[
+        for (final e in byWords.entries) '**${e.value.join(' / ')}**\n${e.key}',
+      ];
+      final blocks = <String>[
+        if (start.isNotEmpty) '## 事件\n$start',
+        if (options.isNotEmpty)
+          '## 选项\n${[
+            for (final o in options.entries)
+              '- **${o.key}**${o.value.isEmpty ? '' : '：${o.value}'}',
+          ].join('\n')}',
+        if (results.isNotEmpty) '## 选择后\n${results.join('\n\n')}',
+      ];
       if (blocks.isEmpty) continue;
+      final text = blocks.join('\n\n');
+      // The same event listed under several stems (one per layer slot) is
+      // one; what still shares a name is numbered.
+      if (!seenEvents.add('$name|$text')) continue;
+      final nth = eventNames[name] = (eventNames[name] ?? 0) + 1;
+      if (nth > 1) name = '$name · $nth';
       await _emit(
         txn,
         _Draft(
@@ -1477,7 +1518,7 @@ class EntryImporter {
           name: name,
           collectionId: topic,
           sortKey: eventRank++,
-          sections: [TextSection('', blocks.join('\n\n'))],
+          sections: [TextSection('', text)],
         ),
       );
     }    for (final entry in _map(d['endings']).entries) {

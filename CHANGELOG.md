@@ -68,6 +68,11 @@ All notable changes to ArkLores will be documented in this file.
   separate story list and "related texts" headings are gone; what is left (areas, stages, collectibles, events …) are plain
   rows. Stages that exist in a normal and a raid form are marked *· 普通* / *· 突袭*. Tips that were only play advice and the
   rule stand-in items are no longer listed; tips that explain a term are kept under the term.
+- **Events read as what happens.** An Integrated Strategies event now has three parts: the event's own text, the options
+  offered (each once), and what is said after choosing (grouped by outcome; variants with the same words are one). Roguelike
+  stages list their enemies like all other stages (they had lost them), the topic page puts zones … medals under one heading
+  "相关资料", and the notes (注释, formerly background terms) come first, before the opening story. The tables link neither
+  events nor bonuses to zones, so a zone page lists its stages only.
 - **Events carry their options; zones are listed once.** In Integrated Strategies an event (a scene and its follow-ups, found
   by their shared id stem) is one entry that ends with the options it offers and where each leads — the separate options list
   is gone. Zones the game lists once per layer slot (identical text) are one zone (a topic had 337 "zones", now 8); a zone's page

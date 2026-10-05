@@ -52,6 +52,8 @@ Future<void> main(List<String> args) async {
       stdout.writeln('re-import $path');
       await entries.importTable(path);
     }
+    stdout.writeln('bind enemies to stages (level files)');
+    await entries.importLevels();
     stdout.writeln('re-import character profiles');
     await importer.importCharacterTables();
     stdout.writeln('rebuild derived layer');

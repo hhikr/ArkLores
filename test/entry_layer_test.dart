@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/arknights_importer.dart';
+import 'package:arklores/core/gamedata/build/entry_importer.dart'
+    show EntryTables;
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
 import 'package:arklores/core/gamedata/build/text_harvest.dart';
@@ -73,6 +75,7 @@ void main() {
     late Directory dir;
     late Database db;
     late BuildStats stats;
+    late ArknightsImporter importer;
 
     Future<void> writeJson(String rel, Object? value) async {
       final f = File(p.join(dir.path, 'src', 'zh_CN', 'gamedata', rel));
@@ -266,6 +269,12 @@ void main() {
           },
         ],
       });
+      await writeJson('levels/obt/r/level_fx_1-2.json', {
+        'enemyDbRefs': [
+          {'id': 'enemy_fx_b'},
+        ],
+        'waves': <Object?>[],
+      });
       await writeJson('excel/roguelike_topic_table.json', {
         'topics': {
           'rogue_fx': {
@@ -389,14 +398,34 @@ void main() {
               },
             },
             'choiceScenes': {
-              'scene_1': {'id': 'scene_1', 'title': '路口', 'description': '一个岔路口。'},
+              'scene_1_enter': {
+                'id': 'scene_1_enter',
+                'title': '路口',
+                'description': '一个岔路口。',
+              },
+              'scene_1_2': {
+                'id': 'scene_1_2',
+                'title': '路口',
+                'description': '你向左走去。',
+              },
             },
             'choices': {
-              'choice_1': {
-                'id': 'choice_1',
+              'choice_1_1': {
+                'id': 'choice_1_1',
                 'title': '向左走',
                 'description': '获得3点生命',
-                'nextSceneId': 'scene_1',
+                'nextSceneId': 'scene_1_2',
+              },
+              'choice_1_2': {
+                'id': 'choice_1_2',
+                'title': '向左走',
+                'description': '获得3点生命',
+                'nextSceneId': 'scene_1_2',
+              },
+              'choice_1_3': {
+                'id': 'choice_1_3',
+                'title': '离开',
+                'nextSceneId': null,
               },
             },
           },
@@ -450,7 +479,7 @@ void main() {
       await createGamedataSchema(db);
       stats = BuildStats();
       final source = Directory(p.join(dir.path, 'src'));
-      final importer = ArknightsImporter(
+      importer = ArknightsImporter(
         sourceDir: source,
         db: db,
         stats: stats,
@@ -563,6 +592,10 @@ void main() {
         "SELECT name FROM entries WHERE type = 'roguelike_tip'",
       );
       expect(tips.map((t) => t['name']), ['词语']);
+      expect(
+        await q("SELECT 1 FROM entries WHERE type = 'roguelike_scene' AND name LIKE '% · 2'"),
+        isEmpty,
+      );
       final stages = await q(
         "SELECT name FROM entries WHERE type = 'roguelike_stage' ORDER BY name",
       );
@@ -649,6 +682,7 @@ void main() {
       expect(links.map((l) => (l['src'], l['dst'])), [
         ('enemy:enemy_fx_a', 'stage:fx_01'),
         ('enemy:enemy_fx_a', 'stage:main_00-01'),
+        ('enemy:enemy_fx_b', 'roguelike_stage:rogue_fx/st_solo'),
         ('enemy:enemy_fx_b', 'stage:fx_01'),
       ]);
       final inActivity = await q(
@@ -702,7 +736,29 @@ void main() {
       ))
           .single;
       expect(event['name'], '路口');
-      expect(event['content'], '一个岔路口。\n\n选项\n· 向左走');
+      // The event's own text, the options (each once), and what is said
+      // after choosing.
+      expect(
+        event['content'],
+        '## 事件\n一个岔路口。\n\n'
+        '## 选项\n- **向左走**\n- **离开**\n\n'
+        '## 选择后\n**向左走**\n你向左走去。',
+      );
+    });
+
+    test('a roguelike stage has its enemies, also after its table is read again',
+        () async {
+      Future<List<Object?>> enemies() async => [
+            for (final r in await q(
+              "SELECT src FROM entry_links WHERE relation = 'appears_in' "
+              "AND dst = 'roguelike_stage:rogue_fx/st_solo'",
+            ))
+              r['src'],
+          ];
+      expect(await enemies(), ['enemy:enemy_fx_b']);
+      await importer.entryImporter.importTable(EntryTables.roguelikeTopic);
+      await importer.entryImporter.rebuildDerived();
+      expect(await enemies(), ['enemy:enemy_fx_b']);
     });
 
     test('a zone listed once per slot is one zone, with its stages', () async {
@@ -749,7 +805,7 @@ void main() {
     });
 
     test('re-importing one table does not duplicate its entries', () async {
-      final importer = ArknightsImporter(
+      importer = ArknightsImporter(
         sourceDir: Directory(p.join(dir.path, 'src')),
         db: db,
         stats: stats,
