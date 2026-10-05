@@ -29,6 +29,14 @@ All notable changes to ArkLores will be documented in this file.
   stories just get keyword search.
 - Developers get the same update from the command line: `tools/update_gamedata.dart`.
 
+### Knowledge base download (0.11.0-pre.2)
+
+- **The download shows where it is and can be cancelled.** A download that waits for the server now says "connecting, attempt n"
+  (each attempt is a fresh connection, up to six), then the progress, "checking the file" and "unzipping and installing"; a
+  *Cancel* button ends a wait without losing the partial file. From the second attempt the page explains how to install by hand
+  when the network cannot reach the server: put the downloaded `.gz` into the app folder as `arklores_gamedata_zh.db.download.gz`
+  and tap Download; it is checked against the expected SHA-256 and installed. A failed start no longer leaves a stray `.key` file.
+
 ### Library (in development for 0.11)
 
 - **The Materials tab is now a library.** *Read*: continue the story you were reading, browse the shelves — main story,

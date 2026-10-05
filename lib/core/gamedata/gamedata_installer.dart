@@ -64,6 +64,47 @@ bool isTransientNetworkError(Object error) {
       text.contains('Connection closed');
 }
 
+/// Where an installation is, for the page to word.
+enum GameDataInstallPhase {
+  /// Waiting for the server's answer (attempt [GameDataInstallProgress]).
+  connecting,
+  downloading,
+
+  /// Checking the downloaded file's SHA-256.
+  verifying,
+
+  /// Unzipping, validating and swapping the database in.
+  installing,
+}
+
+/// Lets the page stop a download that is waiting for a server that does not
+/// answer. The partial file stays, so the next start resumes it.
+class GameDataDownloadToken {
+  bool _cancelled = false;
+  http.Client? _client;
+  final Completer<void> _signal = Completer<void>();
+
+  bool get cancelled => _cancelled;
+
+  /// Completes when [cancel] is called.
+  Future<void> get whenCancelled => _signal.future;
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _signal.complete();
+    _client?.close();
+  }
+}
+
+/// A download stopped by its [GameDataDownloadToken].
+class GameDataDownloadCancelled implements Exception {
+  const GameDataDownloadCancelled();
+
+  @override
+  String toString() => 'GameData download cancelled';
+}
+
 class GameDataReleaseAsset {
 
   const GameDataReleaseAsset({
@@ -139,12 +180,22 @@ class GameDataInstaller {
   /// to [maxAttempts] times. The gz is checked against the expected SHA-256,
   /// then decompressed by streaming into a temp file, validated and swapped
   /// in; the installed DB is untouched until then.
+  ///
+  /// [onPhase] reports where the installation is (the page shows it, so a
+  /// server that does not answer is visible as "connecting, attempt 2 of 5"
+  /// rather than a bar that never moves); [cancelToken] stops a download
+  /// that waits for a server. A compressed file placed by hand at
+  /// `<db>.download.gz` is used as the partial download (and checked against
+  /// the SHA-256 like any other), for networks that cannot reach the server.
   Future<bool> installFromReleaseAsset({
     http.Client? client,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
+    void Function(GameDataInstallPhase phase, int attempt)? onPhase,
+    GameDataDownloadToken? cancelToken,
     bool overwrite = false,
-    int maxAttempts = 4,
+    int maxAttempts = 6,
     Duration retryDelay = const Duration(seconds: 3),
+    Duration connectTimeout = const Duration(seconds: 45),
     Duration stallTimeout = const Duration(seconds: 60),
   }) async {
     final asset = await getReleaseAsset();
@@ -154,36 +205,90 @@ class GameDataInstaller {
     if (!overwrite && await dbFile.exists()) return false;
     await dbFile.parent.create(recursive: true);
 
-    // A partial download only resumes for the same asset.
+    // A partial download only resumes for the same asset. A file without a
+    // key (placed by hand) is tried: the checksum below refuses a wrong one.
     final part = File('${dbFile.path}$_partialSuffix');
     final partKey = File('${part.path}.key');
     final key = asset.sha256 ?? asset.url.toString();
     if (await part.exists() &&
-        (!await partKey.exists() || (await partKey.readAsString()) != key)) {
+        await partKey.exists() &&
+        (await partKey.readAsString()) != key) {
       await part.delete();
     }
     await partKey.writeAsString(key, flush: true);
 
+    try {
+      return await _install(
+        asset: asset,
+        dbFile: dbFile,
+        part: part,
+        partKey: partKey,
+        client: client,
+        onProgress: onProgress,
+        onPhase: onPhase,
+        cancelToken: cancelToken,
+        maxAttempts: maxAttempts,
+        retryDelay: retryDelay,
+        connectTimeout: connectTimeout,
+        stallTimeout: stallTimeout,
+      );
+    } catch (_) {
+      // The key only means something next to a partial file.
+      if (!await part.exists() && await partKey.exists()) {
+        await partKey.delete();
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> _install({
+    required GameDataReleaseAsset asset,
+    required File dbFile,
+    required File part,
+    required File partKey,
+    required http.Client? client,
+    required void Function(int receivedBytes, int? totalBytes)? onProgress,
+    required void Function(GameDataInstallPhase phase, int attempt)? onPhase,
+    required GameDataDownloadToken? cancelToken,
+    required int maxAttempts,
+    required Duration retryDelay,
+    required Duration connectTimeout,
+    required Duration stallTimeout,
+  }) async {
     for (var attempt = 1;; attempt++) {
       final ownsClient = client == null;
       final httpClient = client ?? http.Client();
+      cancelToken?._client = httpClient;
       try {
+        if (cancelToken?.cancelled ?? false) {
+          throw const GameDataDownloadCancelled();
+        }
+        onPhase?.call(GameDataInstallPhase.connecting, attempt);
         await _downloadResumable(
           httpClient,
           asset.url,
           part,
           onProgress: onProgress,
+          onResponse: () => onPhase?.call(GameDataInstallPhase.downloading, attempt),
+          connectTimeout: connectTimeout,
           stallTimeout: stallTimeout,
+          cancelToken: cancelToken,
         );
         break;
       } catch (e) {
+        // Closing the client to cancel makes the pending request fail.
+        if (cancelToken?.cancelled ?? false) {
+          throw const GameDataDownloadCancelled();
+        }
         if (attempt >= maxAttempts || !isTransientNetworkError(e)) rethrow;
         await Future<void>.delayed(retryDelay * attempt);
       } finally {
         if (ownsClient) httpClient.close();
+        cancelToken?._client = null;
       }
     }
 
+    onPhase?.call(GameDataInstallPhase.verifying, 0);
     final actualSha = (await sha256.bind(part.openRead()).first).toString();
     final expectedSha = asset.sha256;
     if (expectedSha != null &&
@@ -196,6 +301,7 @@ class GameDataInstaller {
       );
     }
 
+    onPhase?.call(GameDataInstallPhase.installing, 0);
     final tmp = File('${dbFile.path}.tmp');
     await part.openRead().transform(gzip.decoder).pipe(tmp.openWrite());
     final expectedSize = asset.uncompressedBytes;
@@ -221,13 +327,32 @@ class GameDataInstaller {
     http.Client client,
     Uri url,
     File part, {
+    required Duration connectTimeout,
     required Duration stallTimeout,
+    GameDataDownloadToken? cancelToken,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
+    void Function()? onResponse,
   }) async {
     var existing = await part.exists() ? await part.length() : 0;
     final request = http.Request('GET', url);
     if (existing > 0) request.headers['Range'] = 'bytes=$existing-';
-    final response = await client.send(request).timeout(stallTimeout);
+    // A client that is stuck connecting may not give up when closed, so the
+    // wait itself also ends when the user cancels.
+    final sending = client.send(request).timeout(connectTimeout);
+    final token = cancelToken;
+    final http.StreamedResponse response;
+    if (token == null) {
+      response = await sending;
+    } else {
+      unawaited(sending.then<void>((_) {}, onError: (Object _) {}));
+      response = await Future.any([
+        sending,
+        token.whenCancelled.then<http.StreamedResponse>(
+          (_) => throw const GameDataDownloadCancelled(),
+        ),
+      ]);
+    }
+    onResponse?.call();
     if (existing > 0 && response.statusCode == 416) {
       await response.stream.drain<void>();
       return;

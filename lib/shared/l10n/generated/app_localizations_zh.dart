@@ -993,6 +993,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbErrorInvalidUrl => '无法解析下载地址。真机测试请确认手机能访问该 GitHub / 局域网 URL。';
 
   @override
+  String kbConnecting(int attempt) {
+    return '正在连接服务器…（第 $attempt 次尝试）';
+  }
+
+  @override
+  String get kbVerifying => '正在校验文件…';
+
+  @override
+  String get kbInstalling => '正在解压并安装，约需一两分钟，请不要退出…';
+
+  @override
+  String get kbCancelDownload => '取消';
+
+  @override
+  String kbManualHint(String dir) {
+    return '网络连不上时：用别的网络下载 Release 里的 arklores_gamedata_zh.db.gz，改名为 arklores_gamedata_zh.db.download.gz，放进 $dir，再点“下载”。';
+  }
+
+  @override
   String get kbErrorTimeout => '连接超时。请检查网络后重试，已下载的部分会保留。';
 
   @override

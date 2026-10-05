@@ -1022,6 +1022,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.';
 
   @override
+  String kbConnecting(int attempt) {
+    return 'Connecting to the server… (attempt $attempt)';
+  }
+
+  @override
+  String get kbVerifying => 'Checking the file…';
+
+  @override
+  String get kbInstalling =>
+      'Unzipping and installing, about a minute or two. Please do not quit…';
+
+  @override
+  String get kbCancelDownload => 'Cancel';
+
+  @override
+  String kbManualHint(String dir) {
+    return 'If the network cannot reach the server: download arklores_gamedata_zh.db.gz from the Release on another network, rename it to arklores_gamedata_zh.db.download.gz, put it in $dir, then tap Download.';
+  }
+
+  @override
   String get kbErrorTimeout =>
       'Connection timed out. Check the network and try again; the downloaded part is kept.';
 

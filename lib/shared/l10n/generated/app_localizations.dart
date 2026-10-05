@@ -1904,6 +1904,36 @@ abstract class AppLocalizations {
   /// **'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.'**
   String get kbErrorInvalidUrl;
 
+  /// No description provided for @kbConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to the server… (attempt {attempt})'**
+  String kbConnecting(int attempt);
+
+  /// No description provided for @kbVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the file…'**
+  String get kbVerifying;
+
+  /// No description provided for @kbInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Unzipping and installing, about a minute or two. Please do not quit…'**
+  String get kbInstalling;
+
+  /// No description provided for @kbCancelDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get kbCancelDownload;
+
+  /// No description provided for @kbManualHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If the network cannot reach the server: download arklores_gamedata_zh.db.gz from the Release on another network, rename it to arklores_gamedata_zh.db.download.gz, put it in {dir}, then tap Download.'**
+  String kbManualHint(String dir);
+
   /// No description provided for @kbErrorTimeout.
   ///
   /// In en, this message translates to:

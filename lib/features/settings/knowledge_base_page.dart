@@ -813,6 +813,14 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     return context.t.kbDownloadFailed(text);
   }
 
+  /// The folder the knowledge base lives in (where a hand-downloaded file
+  /// goes).
+  String _installDir(GameDataInstallStatus status) {
+    final path = status.dbPath.replaceAll('\\', '/');
+    final cut = path.lastIndexOf('/');
+    return cut > 0 ? path.substring(0, cut) : path;
+  }
+
   Widget _buildGameDataCard(
     BuildContext context,
     GameDataInstallStatus status,
@@ -824,7 +832,16 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     final progress = total != null && total > 0
         ? (_gameDataDownloadedBytes / total).clamp(0.0, 1.0)
         : null;
-    final progressText = total != null && total > 0
+    final phase = _download.phase;
+    final progressText = _isDownloadingGameData &&
+            phase != GameDataInstallPhase.downloading
+        ? switch (phase) {
+            GameDataInstallPhase.connecting =>
+              context.t.kbConnecting(_download.attempt),
+            GameDataInstallPhase.verifying => context.t.kbVerifying,
+            _ => context.t.kbInstalling,
+          }
+        : total != null && total > 0
         ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} MB'
         : _gameDataDownloadedBytes > 0
             ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
@@ -923,6 +940,32 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 minHeight: 6,
               ),
             ),
+            if (phase == GameDataInstallPhase.connecting ||
+                phase == GameDataInstallPhase.downloading)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('kb-cancel-download'),
+                  onPressed: ref.read(gameDataDownloadProvider.notifier).cancel,
+                  child: Text(
+                    context.t.kbCancelDownload,
+                    style: theme.bodyFont.copyWith(
+                      color: theme.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            if (phase == GameDataInstallPhase.connecting &&
+                _download.attempt >= 2)
+              Text(
+                context.t.kbManualHint(_installDir(status)),
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
           ],
           if (upToDate && !_isDownloadingGameData)
             Align(
@@ -967,6 +1010,17 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 fontSize: 12,
               ),
             ),
+            if (isTransientNetworkError(_download.error!)) ...[
+              const SizedBox(height: 6),
+              Text(
+                context.t.kbManualHint(_installDir(status)),
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
+            ],
           ],
           if (status.installed && status.dbPath.isNotEmpty) ...[
             const SizedBox(height: 8),

@@ -34,13 +34,39 @@ class _FakeInstaller extends GameDataInstaller {
   Future<bool> installFromReleaseAsset({
     http.Client? client,
     void Function(int receivedBytes, int? totalBytes)? onProgress,
+    void Function(GameDataInstallPhase phase, int attempt)? onPhase,
+    GameDataDownloadToken? cancelToken,
     bool overwrite = false,
-    int maxAttempts = 4,
+    int maxAttempts = 5,
     Duration retryDelay = const Duration(seconds: 3),
+    Duration connectTimeout = const Duration(seconds: 90),
     Duration stallTimeout = const Duration(seconds: 60),
   }) async {
     downloads++;
     return true;
+  }
+}
+
+/// An installer whose server never answers: it reports the second connection
+/// attempt and waits until the user cancels.
+class _SilentInstaller extends _FakeInstaller {
+  _SilentInstaller(super.status);
+
+  @override
+  Future<bool> installFromReleaseAsset({
+    http.Client? client,
+    void Function(int receivedBytes, int? totalBytes)? onProgress,
+    void Function(GameDataInstallPhase phase, int attempt)? onPhase,
+    GameDataDownloadToken? cancelToken,
+    bool overwrite = false,
+    int maxAttempts = 5,
+    Duration retryDelay = const Duration(seconds: 3),
+    Duration connectTimeout = const Duration(seconds: 90),
+    Duration stallTimeout = const Duration(seconds: 60),
+  }) async {
+    onPhase?.call(GameDataInstallPhase.connecting, 2);
+    await cancelToken!.whenCancelled;
+    throw const GameDataDownloadCancelled();
   }
 }
 
@@ -111,6 +137,66 @@ void main() {
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
       expect(find.text('重新下载知识库？'), findsNothing);
+    });
+  });
+
+  group('a download that cannot connect', () {
+    testWidgets('shows the attempt, the way around it, and can be cancelled',
+        (tester) async {
+      final installer = _SilentInstaller(_status(installed: false, releaseSha: 'aa'));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            gameDataInstallStatusProvider
+                .overrideWith((ref) async => installer.status),
+            gameDataInstallerProvider.overrideWithValue(installer),
+          ],
+          child: MaterialApp(
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const KnowledgeBasePage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('kb-download-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('下载中'), findsOneWidget);
+      expect(find.textContaining('正在连接服务器…（第 2 次尝试）'), findsOneWidget);
+      expect(find.textContaining('.download.gz'), findsOneWidget);
+      expect(find.byKey(const Key('kb-cancel-download')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('kb-cancel-download')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('下载'), findsOneWidget);
+      expect(find.byKey(const Key('kb-cancel-download')), findsNothing);
+      // A cancel is not an error: no manual hint under a failure either.
+      expect(find.textContaining('.download.gz'), findsNothing);
+    });
+
+    test('phases reach the state; cancel ends without an error', () async {
+      final installer = _SilentInstaller(_status(installed: false, releaseSha: 'aa'));
+      final container = ProviderContainer(
+        overrides: [gameDataInstallerProvider.overrideWithValue(installer)],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(gameDataDownloadProvider.notifier);
+      final running = notifier.start(force: true);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      var state = container.read(gameDataDownloadProvider);
+      expect(state.downloading, isTrue);
+      expect(state.phase, GameDataInstallPhase.connecting);
+      expect(state.attempt, 2);
+      notifier.cancel();
+      await running;
+      state = container.read(gameDataDownloadProvider);
+      expect(state.downloading, isFalse);
+      expect(state.error, isNull);
+      expect(state.result, GameDataDownloadResult.none);
     });
   });
 

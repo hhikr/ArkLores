@@ -838,6 +838,129 @@ void main() {
       expect(isTransientNetworkError(StateError('HTTP 404')), isFalse);
     });
 
+    test('reports its phases and leaves no key file behind when it fails',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final gz = gzip.encode(await File(validDbPath).readAsBytes());
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: sha256.convert(gz).toString(),
+      );
+      final phases = <GameDataInstallPhase>[];
+      expect(
+        await installer.installFromReleaseAsset(
+          client: MockClient((_) async => http.Response.bytes(gz, 200)),
+          overwrite: true,
+          onPhase: (phase, attempt) {
+            if (phases.isEmpty || phases.last != phase) phases.add(phase);
+          },
+        ),
+        isTrue,
+      );
+      expect(phases, [
+        GameDataInstallPhase.connecting,
+        GameDataInstallPhase.downloading,
+        GameDataInstallPhase.verifying,
+        GameDataInstallPhase.installing,
+      ]);
+
+      // A failure before any byte arrived: no partial file, so no key file.
+      await expectLater(
+        installer.installFromReleaseAsset(
+          client: MockClient((_) async => http.Response('missing', 404)),
+          overwrite: true,
+        ),
+        throwsA(isA<StateError>()),
+      );
+      expect(
+        File('${tempDir.path}/arklores_gamedata_zh.db.download.gz.key')
+            .existsSync(),
+        isFalse,
+      );
+    });
+
+    test('a server that never answers is retried, shown and can be cancelled',
+        () async {
+      var calls = 0;
+      final silent = MockClient.streaming((request, _) {
+        calls++;
+        return Completer<http.StreamedResponse>().future;
+      });
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: 'a' * 64,
+      );
+      final attempts = <int>[];
+      await expectLater(
+        installer.installFromReleaseAsset(
+          client: silent,
+          overwrite: true,
+          maxAttempts: 3,
+          retryDelay: Duration.zero,
+          connectTimeout: const Duration(milliseconds: 40),
+          onPhase: (phase, attempt) => attempts.add(attempt),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(calls, 3);
+      expect(attempts, [1, 2, 3]);
+
+      final token = GameDataDownloadToken();
+      final waiting = installer.installFromReleaseAsset(
+        client: silent,
+        overwrite: true,
+        cancelToken: token,
+        connectTimeout: const Duration(seconds: 30),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      token.cancel();
+      await expectLater(waiting, throwsA(isA<GameDataDownloadCancelled>()));
+    });
+
+    test('a file placed by hand at the partial path is checked and installed',
+        () async {
+      final validDbPath = '${tempDir.path}/valid_gamedata.db';
+      await _createGameDataTestDb(validDbPath);
+      await _insertAmiyaStoryChunk(validDbPath);
+      final gz = gzip.encode(await File(validDbPath).readAsBytes());
+      final installer = GameDataInstaller(
+        installDirectory: tempDir,
+        releaseAssetUrl: 'https://example.com/db.gz',
+        releaseAssetSha: sha256.convert(gz).toString(),
+      );
+      final part = File('${tempDir.path}/arklores_gamedata_zh.db.download.gz');
+
+      // A wrong file is refused (and not kept).
+      part.writeAsBytesSync([1, 2, 3, 4]);
+      await expectLater(
+        installer.installFromReleaseAsset(
+          client: MockClient((r) async => http.Response('', 416)),
+          overwrite: true,
+        ),
+        throwsA(isA<StateError>().having(
+          (e) => '$e',
+          'message',
+          contains('checksum mismatch'),
+        ),),
+      );
+      expect(part.existsSync(), isFalse);
+
+      // The right one needs no download: the server's 416 says it is whole.
+      part.writeAsBytesSync(gz);
+      expect(
+        await installer.installFromReleaseAsset(
+          client: MockClient((r) async => http.Response('', 416)),
+          overwrite: true,
+        ),
+        isTrue,
+      );
+      expect((await installer.getStatus()).installed, isTrue);
+    });
+
     test('rejects invalid story_line_count before replacing the installed DB',
         () async {
       final invalidPath = '${tempDir.path}/invalid_counts_gamedata.db';

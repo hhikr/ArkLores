@@ -23,10 +23,16 @@ class GameDataDownloadState {
     this.total,
     this.error,
     this.result = GameDataDownloadResult.none,
+    this.phase = GameDataInstallPhase.connecting,
+    this.attempt = 1,
   });
   final bool downloading;
   final int received;
   final int? total;
+
+  /// Where a running download is, and the connection attempt it is on.
+  final GameDataInstallPhase phase;
+  final int attempt;
 
   /// Raw error of the last failed attempt (the page words it for users).
   final Object? error;
@@ -44,6 +50,12 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
   /// Progress updates are throttled to this many bytes.
   static const int _progressStep = 512 * 1024;
 
+  GameDataDownloadToken? _token;
+
+  /// Stops a running download (e.g. one that waits for a server that does
+  /// not answer). The partial file is kept for the next start.
+  void cancel() => _token?.cancel();
+
   /// Starts a download unless one is already running. An installed asset
   /// that is already the one this app points at is not downloaded again
   /// unless [force] (the page asks the user first).
@@ -59,6 +71,7 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
     }
     if (state.downloading) return;
     state = const GameDataDownloadState(downloading: true);
+    _token = GameDataDownloadToken();
     await BackgroundWork.instance.run(
       BackgroundWork.text('正在下载知识库', 'Downloading the knowledge base'),
       _download,
@@ -71,11 +84,25 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
       final installed =
           await _ref.read(gameDataInstallerProvider).installFromReleaseAsset(
         overwrite: true,
+        cancelToken: _token,
+        onPhase: (phase, attempt) {
+          if (!mounted) return;
+          state = GameDataDownloadState(
+            downloading: true,
+            received: state.received,
+            total: state.total,
+            phase: phase,
+            attempt: attempt,
+          );
+        },
         onProgress: (received, total) {
           if (!mounted) return;
           final done = total != null && received >= total;
+          // The first report carries the size: show it at once.
+          final first = state.total == null && total != null;
           if (received - lastReported < _progressStep &&
               !done &&
+              !first &&
               received >= lastReported) {
             return;
           }
@@ -84,6 +111,8 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
             downloading: true,
             received: received,
             total: total,
+            phase: GameDataInstallPhase.downloading,
+            attempt: state.attempt,
           );
         },
       );
@@ -94,12 +123,17 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
             ? GameDataDownloadResult.installed
             : GameDataDownloadResult.noAssetUrl,
       );
+    } on GameDataDownloadCancelled {
+      if (!mounted) return;
+      state = const GameDataDownloadState();
     } catch (e) {
       if (!mounted) return;
       state = GameDataDownloadState(
         error: e,
         result: GameDataDownloadResult.failed,
       );
+    } finally {
+      _token = null;
     }
   }
 }

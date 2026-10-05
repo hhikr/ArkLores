@@ -16,6 +16,13 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **预发布 v0.11.0-pre.2（2026-10-05）**：pre.1 在真机上知识库下载一直停在“下载中”、进度条不动（部分文件夹里只有 `.download.gz.key`，没有
+  `.download.gz`：等不到服务器应答）。桌面上用 `test/live/release_asset_install_live_test.dart`（`ARKLORES_RUN_ASSET_INSTALL=true` +
+  `ARKLORES_ASSET_URL/SHA`）完整装了这个资产（下载 39 s、安装 44 s），所以资产与安装代码没问题，真机根因未能复现（疑为手机到
+  `release-assets.githubusercontent.com` 的连接卡住）。修复的是“看不见、出不来”：`installFromReleaseAsset` 报告阶段
+  （连接第 n 次/下载/校验/解压安装），连接超时 45 s、最多 6 次、每次新连接；页面显示阶段与“取消”，连接第 2 次起提示手动下载
+  （把 Release 里的 `.gz` 改名为 `arklores_gamedata_zh.db.download.gz` 放进应用目录，点“下载”即按断点续传逻辑校验并安装，无需 key 文件）；
+  失败且没有部分文件时不再留下 `.key`。知识库附件随 pre.2 一起上传，`release_gamedata.env` 指向 pre.2。
 - **预发布 v0.11.0-pre.1（2026-10-05）**：0.11 第 1–5 步的首个预发布（`pubspec` 0.11.0-pre.1+23）；知识库资产（schema 5，含向量，
   195 MB gz）作为该 Release 的附件，`tools/release_gamedata.env` 已指向它。旧的 PR #8 已关闭并删除远端分支；
   之后的 0.11 工作从 `release/v0.11.0-pre.1` 之后继续（本地分支 `feature/v0.11-library`）。
