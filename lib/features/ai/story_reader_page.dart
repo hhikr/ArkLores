@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry;
+import '../../core/userdata/library_ref.dart';
+import '../../core/userdata/user_data_provider.dart';
+import '../../core/userdata/user_data_store.dart' show reanchorLine;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -22,11 +25,16 @@ class StoryReaderPage extends ConsumerStatefulWidget {
     required this.storyId,
     required this.highlightStart,
     required this.highlightEnd,
+    this.snippet,
   });
 
   final String storyId;
   final int highlightStart;
   final int highlightEnd;
+
+  /// Set when opened from the reading history: the text of the anchor line
+  /// ([highlightStart]), used to find it again if the story changed.
+  final String? snippet;
 
   @override
   ConsumerState<StoryReaderPage> createState() => _StoryReaderPageState();
@@ -36,6 +44,56 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     with SingleTickerProviderStateMixin {
   final GlobalKey _targetKey = GlobalKey();
   bool _scrolled = false;
+  bool _recorded = false;
+
+  /// The highlighted range; moved by [_anchor] when the story changed.
+  late int _start = widget.highlightStart;
+  late int _stop = widget.highlightEnd;
+  bool _anchored = false;
+  bool _moved = false;
+
+  /// Finds the history anchor again in the current text (once).
+  void _anchor(List<StoryLineEntry> lines) {
+    if (_anchored) return;
+    _anchored = true;
+    final snippet = widget.snippet;
+    if (snippet == null) return;
+    final found = reanchorLine(
+      [for (final l in lines) l.content],
+      widget.highlightStart,
+      snippet,
+    );
+    if (found == null) return;
+    _start = _stop = lines[found.index].lineIndex;
+    _moved = !found.exact;
+  }
+
+  /// Writes this visit to the reading history (once, after the text loaded;
+  /// the history is a convenience, so a failure is ignored).
+  void _recordLater(List<StoryLineEntry> lines) {
+    if (_recorded) return;
+    _recorded = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _record(lines));
+  }
+
+  Future<void> _record(List<StoryLineEntry> lines) async {
+    try {
+      final entry = await ref.read(storyCatalogEntryProvider(widget.storyId).future);
+      final title = entry?.label ?? fallbackStoryLabel(widget.storyId);
+      final store = await ref.read(userDataStoreProvider.future);
+      final anchor = lines.firstWhere(
+        (l) => l.lineIndex == _start,
+        orElse: () => lines.first,
+      );
+      await store.recordOpen(
+        LibraryRef.story(widget.storyId),
+        title: title,
+        lineIndex: anchor.lineIndex,
+        snippet: anchor.content,
+      );
+      ref.invalidate(recentReadingProvider);
+    } catch (_) {}
+  }
 
   /// Highlight strength: on-off-on-off over 1.2 s, then steady.
   late final AnimationController _flash = AnimationController(
@@ -56,7 +114,7 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
   }
 
   bool _isTarget(int index) =>
-      index >= widget.highlightStart && index <= widget.highlightEnd;
+      index >= _start && index <= _stop;
 
   Future<void> _jumpToTarget() async {
     final target = _targetKey.currentContext;
@@ -86,10 +144,6 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
         (cut < 0 ? fallback : fallback.substring(0, cut));
     final chapter =
         entry?.chapterLabel ?? (cut < 0 ? '' : fallback.substring(cut + 3));
-    final range = widget.highlightStart == widget.highlightEnd
-        ? context.t.aiCitationLine(widget.highlightStart + 1)
-        : context.t.aiCitationLines(
-            widget.highlightStart + 1, widget.highlightEnd + 1,);
     final lines = ref.watch(storyFullLinesProvider(widget.storyId));
 
     return Scaffold(
@@ -120,7 +174,12 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
         error: (_, __) => _unavailable(theme),
         data: (lines) {
           if (lines.isEmpty) return _unavailable(theme);
+          _anchor(lines);
+          _recordLater(lines);
           _scrollToTarget();
+          final range = _start == _stop
+              ? context.t.aiCitationLine(_start + 1)
+              : context.t.aiCitationLines(_start + 1, _stop + 1);
           return Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
@@ -131,6 +190,17 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (_moved)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+                        child: Text(
+                          context.t.aiStoryReaderMoved,
+                          style: theme.bodyFont.copyWith(
+                            color: theme.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
                     _header(theme, collection, chapter, range),
                     ..._body(theme, lines),
                     _end(theme),

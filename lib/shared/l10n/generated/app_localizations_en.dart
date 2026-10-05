@@ -533,6 +533,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiStoryReaderEnd => 'End of chapter';
 
   @override
+  String get readingHistoryTitle => 'Recently read';
+
+  @override
+  String get readingHistoryEmpty =>
+      'Nothing read yet. Stories you open from an answer\'s evidence show up here.';
+
+  @override
+  String get readingHistoryClear => 'Clear';
+
+  @override
+  String get readingHistoryClearConfirm => 'Clear the whole reading history?';
+
+  @override
+  String get readingHistoryRemove => 'Remove from history';
+
+  @override
+  String readingHistoryLine(int line) {
+    return 'line $line';
+  }
+
+  @override
+  String get aiStoryReaderMoved =>
+      'The text changed; showing the approximate place';
+
+  @override
   String get aiMoreActions => 'More';
 
   @override

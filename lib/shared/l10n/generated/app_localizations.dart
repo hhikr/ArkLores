@@ -1022,6 +1022,48 @@ abstract class AppLocalizations {
   /// **'End of chapter'**
   String get aiStoryReaderEnd;
 
+  /// No description provided for @readingHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently read'**
+  String get readingHistoryTitle;
+
+  /// No description provided for @readingHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing read yet. Stories you open from an answer\'s evidence show up here.'**
+  String get readingHistoryEmpty;
+
+  /// No description provided for @readingHistoryClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get readingHistoryClear;
+
+  /// No description provided for @readingHistoryClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole reading history?'**
+  String get readingHistoryClearConfirm;
+
+  /// No description provided for @readingHistoryRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from history'**
+  String get readingHistoryRemove;
+
+  /// No description provided for @readingHistoryLine.
+  ///
+  /// In en, this message translates to:
+  /// **'line {line}'**
+  String readingHistoryLine(int line);
+
+  /// No description provided for @aiStoryReaderMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'The text changed; showing the approximate place'**
+  String get aiStoryReaderMoved;
+
   /// No description provided for @aiMoreActions.
   ///
   /// In en, this message translates to:

@@ -520,6 +520,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiStoryReaderEnd => '本章完';
 
   @override
+  String get readingHistoryTitle => '最近阅读';
+
+  @override
+  String get readingHistoryEmpty => '还没有阅读记录。在回答的证据链里点开原文后，会记在这里。';
+
+  @override
+  String get readingHistoryClear => '清空';
+
+  @override
+  String get readingHistoryClearConfirm => '清空全部阅读记录？';
+
+  @override
+  String get readingHistoryRemove => '删除这条记录';
+
+  @override
+  String readingHistoryLine(int line) {
+    return '第 $line 行';
+  }
+
+  @override
+  String get aiStoryReaderMoved => '原文有变动，已定位到大致位置';
+
+  @override
   String get aiMoreActions => '更多';
 
   @override

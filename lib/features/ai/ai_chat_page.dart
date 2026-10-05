@@ -9,6 +9,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'chat_history_page.dart';
+import 'reading_history_page.dart';
 import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/roleplay_tab.dart';
@@ -142,6 +143,16 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
                 ),
         tooltip: context.t.aiHistoryTitle,
         icon: const Icon(Icons.history_rounded),
+      ),
+      IconButton(
+        key: const ValueKey('ask-reading-history'),
+        onPressed: () => Navigator.of(context).push(
+          smoothPageRoute<void>(
+            builder: (_) => const ReadingHistoryPage(),
+          ),
+        ),
+        tooltip: context.t.readingHistoryTitle,
+        icon: const Icon(Icons.menu_book_outlined),
       ),
       IconButton(
         onPressed: isSending ? null : chatNotifier.newSession,

@@ -29,6 +29,15 @@ All notable changes to ArkLores will be documented in this file.
   stories just get keyword search.
 - Developers get the same update from the command line: `tools/update_gamedata.dart`.
 
+### Reading history (in development for 0.11)
+
+- **Recently read.** Stories opened from an answer's evidence are remembered (book icon in the Ask tab's top bar): the chapter, the
+  line you were at and the start of that line. Tapping an entry reopens the story at that line; if the story's text changed after
+  a knowledge base update, the line is found again by its text, or the page says it shows the approximate place. Swipe to remove an
+  entry, or clear the list.
+- **Your own data lives in its own file** (`userdata/arklores_user.db`), separate from the knowledge base: updating, replacing or
+  deleting the knowledge base never touches it. It upgrades itself when the app adds new kinds of data.
+
 ## [0.10.0] - 2026-10-04
 
 First stable release of the 0.10 line. It replaces the eight pre-releases v0.10.0–v0.10.7, which were

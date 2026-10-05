@@ -16,6 +16,18 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 第 4 步：用户库与阅读历史（2026-10-05，同一分支，未发布）**：
+  - **用户库** `lib/core/userdata/`：独立文件 `<documents>/userdata/arklores_user.db`（与知识库不同目录，不 ATTACH、不建外键，
+    知识库更新/替换/删除都碰不到它）。结构版本用 `PRAGMA user_version`，由 `UserDataStore` 自己管理（`userDataMigrations`，
+    只追加不改已发布的步骤；不用 sqflite 的 version，因为较新 App 写的文件会被它降级盖章）；较新文件照常打开、不降级。
+  - **条目引用** `LibraryRef`（`story:<story_id>`、`record:<id>`、`document:<实体>/<类型>`、`user:<id>`）：用户库只存引用字符串，
+    目标消失时引用仍能解析，界面提示而不是崩。
+  - **阅读历史**只存“条目 + 一行锚点 + 该行原文开头 60 字”（`reading_history`，每条目一行，最多 200 条）；知识库变动后用
+    `reanchorLine` 按原文片段找回位置（原位置还在 → 最近的同文行 → 夹到范围内并提示“已定位到大致位置”）。
+    不记滚动位置、不记读到哪、不做书签——粒度留到第 5 步在真正的阅读器里定。
+  - **界面**：阅读页 `story_reader_page.dart` 打开时写历史（`ReadingHistoryPage`：Ask 页顶栏书本图标，点条目回到锚点行，
+    左滑删除、清空）。第 5 步的资料页复用这套用户库，不要另建文件。
+
 - **0.11 第 3 步：增量更新通道（2026-10-05，同一分支，未发布）**：
   - **用户**：知识库页“检查更新”显示上游变化（剧情/数据表/关卡文件数），“构建”做增量更新（只下变化的文件 + 缺的上下文数据表，
     不拉 850 MB 仓库；`SourceSync`、`.source_commit` 标记），完成后显示**更新报告**（`UpdateReport`），下面的“故事向量”卡片
@@ -25,7 +37,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
     与 App 同一套代码，另外会应用变化的关卡文件。
   - 费用常数来自实测：0.706 token/字；¥0.0005/千 token 是按百炼公开价格的**估算**，以账单为准（常量在 `story_vector_updater.dart`）。
   - 变化超过 3000 个文件（compare API 上限）或库是旧 schema 时退回完整重建；GitHub 匿名额度 60 次/小时，增量只用几次。
-  - 下一步（第 4 步）：用户库与阅读历史（数据层草稿在本地分支 `wip/v0.11-local-full`）。
+  - 下一步：第 4 步（见上）完成后是第 5 步：可阅读资料页（阅读器 + 用户资料）。
 
 - **0.11 第 2 步：知识库扩充与重构（2026-10-05，分支 `feature/v0.11-library`，未发布）**：
   - **按条目建模（schema 5）**：每个官方条目（故事、干员、敌人、关卡、物品、藏品、肉鸽事件…）一行 `entries`，归属某个 `collections`
