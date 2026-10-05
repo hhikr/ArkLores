@@ -236,7 +236,14 @@ class CollectionPage extends ConsumerWidget {
     final c = collection.valueOrNull;
 
     final storyList = stories.valueOrNull ?? const <LibraryEntry>[];
-    final typeList = types.valueOrNull ?? const <({String type, int count})>[];
+    final typeList = [...types.valueOrNull ?? const <({String type, int count})>[]]
+      ..sort((a, b) {
+        final byRank = typeRank(a.type).compareTo(typeRank(b.type));
+        return byRank != 0 ? byRank : b.count.compareTo(a.count);
+      });
+    // Roguelike and sandbox stories come in tens, under a heading each
+    // (ending, squad, character …): one folding section per heading.
+    final sections = _storySections(c, storyList);
     final read = storyList
         .where((s) =>
             progress[LibraryRef.story(s.rawId ?? '').toString()]?.finished ??
@@ -268,14 +275,55 @@ class CollectionPage extends ConsumerWidget {
                           code: 'stories',
                         ),
                       ),
-                      for (final s in storyList) ...[
-                        StoryRow(
-                          story: s,
-                          read: progress[
-                              LibraryRef.story(s.rawId ?? '').toString()],
-                        ),
-                        rowDivider(theme),
-                      ],
+                      if (sections == null)
+                        for (final s in storyList) ...[
+                          StoryRow(
+                            story: s,
+                            read: progress[
+                                LibraryRef.story(s.rawId ?? '').toString()],
+                          ),
+                          rowDivider(theme),
+                        ]
+                      else
+                        for (final g in sections.entries) ...[
+                          Theme(
+                            data: Theme.of(context)
+                                .copyWith(dividerColor: Colors.transparent),
+                            child: ExpansionTile(
+                              key: ValueKey('story-group-${g.key}'),
+                              shape: const Border(),
+                              collapsedShape: const Border(),
+                              tilePadding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              iconColor: theme.accentText,
+                              collapsedIconColor: theme.textMuted,
+                              title: Text(
+                                g.key,
+                                style: theme.titleFont.copyWith(fontSize: 15),
+                              ),
+                              subtitle: Text(
+                                context.t.libraryCountStories(g.value.length),
+                                style: theme.bodyFont.copyWith(
+                                  color: theme.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              children: [
+                                for (final s in g.value) ...[
+                                  StoryRow(
+                                    story: s,
+                                    showGroup: false,
+                                    read: progress[LibraryRef.story(
+                                      s.rawId ?? '',
+                                    ).toString()],
+                                  ),
+                                  rowDivider(theme),
+                                ],
+                              ],
+                            ),
+                          ),
+                          rowDivider(theme),
+                        ],
                     ],
                     if (typeList.isNotEmpty) ...[
                       Padding(
@@ -321,6 +369,22 @@ class CollectionPage extends ConsumerWidget {
                   ],
                 ),
     );
+  }
+
+  /// The stories of a roguelike or sandbox collection by their group, in
+  /// reading order; null when the stories are listed flat.
+  Map<String, List<LibraryEntry>>? _storySections(
+    LibraryCollection? c,
+    List<LibraryEntry> stories,
+  ) {
+    if (c == null || (c.kind != 'roguelike' && c.kind != 'sandbox')) {
+      return null;
+    }
+    final out = <String, List<LibraryEntry>>{};
+    for (final s in stories) {
+      (out[s.group ?? '其他'] ??= []).add(s);
+    }
+    return out.length >= 2 ? out : null;
   }
 
   Widget _headerCard(
@@ -388,6 +452,8 @@ class EntryListPage extends ConsumerStatefulWidget {
     this.collectionId,
     this.collectionName,
     this.title,
+    this.groups,
+    this.flat = false,
   });
 
   final String type;
@@ -397,8 +463,42 @@ class EntryListPage extends ConsumerStatefulWidget {
   /// Replaces the default title (the type's name).
   final String? title;
 
+  /// Only the entries of these groups (a null element is "no group"): one
+  /// entry of the menu a long, grouped list opens with.
+  final List<String?>? groups;
+
+  /// The whole list at once, without the group menu.
+  final bool flat;
+
   @override
   ConsumerState<EntryListPage> createState() => _EntryListPageState();
+}
+
+/// The groups of a long list as the reader names them (several game codes
+/// may share a name); null when a menu would not help: one heading, or a
+/// short list.
+List<({String label, List<String?> raws, int count})>? _groupMenu(
+  String type,
+  List<({String? group, int count})> groups,
+) {
+  final total = groups.fold<int>(0, (n, g) => n + g.count);
+  if (total < 30) return null;
+  final byLabel = <String, ({List<String?> raws, int count})>{};
+  for (final g in groups) {
+    final label = groupLabel(type, g.group) ?? '其他';
+    final prev = byLabel[label];
+    byLabel[label] = (
+      raws: [...?prev?.raws, g.group],
+      count: (prev?.count ?? 0) + g.count,
+    );
+  }
+  if (byLabel.length < 2) return null;
+  final labels = byLabel.keys.toList()
+    ..sort((a, b) => a == '其他' ? 1 : b == '其他' ? -1 : 0);
+  return [
+    for (final l in labels)
+      (label: l, raws: byLabel[l]!.raws, count: byLabel[l]!.count),
+  ];
 }
 
 class _EntryListPageState extends ConsumerState<EntryListPage> {
@@ -418,14 +518,34 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
       type: widget.type,
       collectionId: widget.collectionId,
       query: _query,
+      groups: groupsKey(widget.groups),
     );
+    final title = widget.title ??
+        [
+          if (widget.collectionName != null) widget.collectionName!,
+          entryTypeName(widget.type),
+        ].join(' · ');
+    final flat = widget.flat || widget.groups != null || _query.trim().isNotEmpty;
+    // A long list of grouped entries opens as a menu of its groups.
+    final groupData = flat
+        ? null
+        : ref.watch(
+            entryGroupsProvider(
+              (type: widget.type, collectionId: widget.collectionId),
+            ),
+          );
+    final menu = groupData?.valueOrNull == null
+        ? null
+        : _groupMenu(widget.type, groupData!.valueOrNull!);
+    if (!flat && groupData!.isLoading) {
+      return LibraryScaffold(
+        title: title,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     final entries = ref.watch(entriesOfTypeProvider(key));
     return LibraryScaffold(
-      title: widget.title ??
-          [
-            if (widget.collectionName != null) widget.collectionName!,
-            entryTypeName(widget.type),
-          ].join(' · '),
+      title: title,
       body: Column(
         children: [
           FilterField(
@@ -439,30 +559,79 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
             },
           ),
           Expanded(
-            child: entries.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => LibraryMessage(
-                icon: Icons.folder_off_rounded,
-                title: context.t.libraryEmpty,
-              ),
-              data: (list) => list.isEmpty
-                  ? LibraryMessage(
-                      icon: Icons.search_off_rounded,
-                      title: context.t.libraryNoResults,
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => rowDivider(theme),
-                      itemBuilder: (context, i) => EntryRow(
-                        entry: list[i],
-                        onTap: () => openEntry(context, list[i]),
-                      ),
+            child: menu != null
+                ? _menuList(theme, title, menu)
+                : entries.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (_, __) => LibraryMessage(
+                      icon: Icons.folder_off_rounded,
+                      title: context.t.libraryEmpty,
                     ),
-            ),
+                    data: (list) => list.isEmpty
+                        ? LibraryMessage(
+                            icon: Icons.search_off_rounded,
+                            title: context.t.libraryNoResults,
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            itemCount: list.length,
+                            separatorBuilder: (_, __) => rowDivider(theme),
+                            itemBuilder: (context, i) => EntryRow(
+                              entry: list[i],
+                              onTap: () => openEntry(context, list[i]),
+                            ),
+                          ),
+                  ),
           ),
         ],
       ),
+    );
+  }
+
+  /// The first level: the groups, then everything.
+  Widget _menuList(
+    AppThemeTokens theme,
+    String title,
+    List<({String label, List<String?> raws, int count})> menu,
+  ) {
+    final total = menu.fold<int>(0, (n, g) => n + g.count);
+    void open(String label, List<String?>? raws) => _push(
+          context,
+          (_) => EntryListPage(
+            type: widget.type,
+            collectionId: widget.collectionId,
+            collectionName: widget.collectionName,
+            title: '$title · $label',
+            groups: raws,
+            flat: true,
+          ),
+        );
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        for (final g in menu) ...[
+          LibraryRow(
+            key: ValueKey('group-${g.label}'),
+            title: g.label,
+            subtitle: context.t.libraryCountEntries(g.count),
+            subtitleLines: 1,
+            leading: Icon(Icons.folder_outlined, color: theme.accentText),
+            trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+            onTap: () => open(g.label, g.raws),
+          ),
+          rowDivider(theme),
+        ],
+        LibraryRow(
+          key: const ValueKey('group-all'),
+          title: context.t.libraryAllEntries,
+          subtitle: context.t.libraryCountEntries(total),
+          subtitleLines: 1,
+          leading: Icon(Icons.list_rounded, color: theme.textSecondary),
+          trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+          onTap: () => open(context.t.libraryAllEntries, null),
+        ),
+      ],
     );
   }
 }
@@ -539,8 +708,10 @@ class EntryPage extends ConsumerWidget {
             runSpacing: 6,
             children: [
               AccentPill(entryTypeName(e.type)),
-              if (e.code != null) AccentPill(e.code!, muted: true),
-              if (e.group != null) AccentPill(e.group!, muted: true),
+              if (codeCaption(e) != null)
+                AccentPill(codeCaption(e)!, muted: true),
+              if (groupLabel(e.type, e.group) != null)
+                AccentPill(groupLabel(e.type, e.group)!, muted: true),
             ],
           ),
         ],
@@ -574,14 +745,17 @@ class EntryPage extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
             ],
-            SelectableText(
-              text,
-              style: theme.bodyFont.copyWith(
-                color: theme.textPrimary,
-                fontSize: 15,
-                height: 1.7,
+            if (documentEntryTypes.contains(e.type))
+              MarkdownText(text)
+            else
+              SelectableText(
+                text,
+                style: theme.bodyFont.copyWith(
+                  color: theme.textPrimary,
+                  fontSize: 15,
+                  height: 1.7,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -702,6 +876,16 @@ class OperatorPage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: _headerCard(context, theme, e, records, byType),
           ),
+          // The profile (archive) leads: it is what the page is about.
+          if (blocks.isNotEmpty) ...[
+            header(context.t.libraryOperatorProfile, 'profile'),
+            const SizedBox(height: 4),
+            for (final b in blocks)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: EntryPage._textBlock(theme, e, b),
+              ),
+          ],
           if (records.isNotEmpty) ...[
             header(context.t.libraryOperatorRecords, 'records'),
             for (final c in records) ...[
@@ -721,9 +905,8 @@ class OperatorPage extends ConsumerWidget {
             for (final o in group.value) ...[
               LibraryRow(
                 key: ValueKey('operator-owned-${o.id}'),
-                titlePrefix: o.code,
                 title: o.name.isEmpty ? o.id : o.name,
-                subtitle: o.group,
+                subtitle: _ownedCaption(o),
                 subtitleLines: 1,
                 trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
                 onTap: () => openEntry(context, o),
@@ -731,18 +914,19 @@ class OperatorPage extends ConsumerWidget {
               rowDivider(theme),
             ],
           ],
-          if (blocks.isNotEmpty) ...[
-            header(context.t.libraryOperatorProfile, 'profile'),
-            const SizedBox(height: 4),
-            for (final b in blocks)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: EntryPage._textBlock(theme, e, b),
-              ),
-          ],
         ],
       ),
     );
+  }
+
+  /// The line under a module / skin / paradox simulation: a module's type
+  /// mark, a skin's series.
+  static String? _ownedCaption(LibraryEntry o) {
+    if (o.type == 'module') {
+      final code = o.code ?? '';
+      return code.isNotEmpty && code.length <= 3 ? '$code 型' : null;
+    }
+    return groupLabel(o.type, o.group);
   }
 
   Widget _headerCard(
@@ -774,6 +958,8 @@ class OperatorPage extends ConsumerWidget {
                   runSpacing: 6,
                   children: [
                     AccentPill(context.t.shelfMemory),
+                    if (codeCaption(e) != null)
+                      AccentPill(codeCaption(e)!, muted: true),
                     if (stories > 0)
                       AccentPill(
                         context.t.libraryCountStories(stories),

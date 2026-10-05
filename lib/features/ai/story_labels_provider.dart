@@ -37,6 +37,17 @@ final storyCatalogEntryProvider =
   }
 });
 
+/// The current readable label of one story. The reading history stores the
+/// label from the day a story was opened, which can be an id from an older
+/// knowledge base; lists show this one and keep the stored one as fallback.
+/// Null when the knowledge base does not know the story (then the stored
+/// title is the better name: a path-derived one is only a last resort).
+final storyLabelProvider =
+    FutureProvider.family<String?, String>((ref, storyId) async {
+  final entry = await ref.watch(storyCatalogEntryProvider(storyId).future);
+  return entry?.label;
+});
+
 /// R14: readable labels (`巴别塔 BB-7 行动前《…》`) of the same ids.
 final storyLabelsProvider =
     FutureProvider.family<Map<String, String>, String>((ref, key) async {

@@ -52,6 +52,8 @@ Future<void> main(List<String> args) async {
       stdout.writeln('re-import $path');
       await entries.importTable(path);
     }
+    stdout.writeln('re-import character profiles');
+    await importer.importCharacterTables();
     stdout.writeln('rebuild derived layer');
     await entries.rebuildDerived();
     stdout.writeln('rebuild search index');

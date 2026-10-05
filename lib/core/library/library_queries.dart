@@ -182,10 +182,15 @@ String escapeLike(String term) => term
     .replaceAll('%', r'\%')
     .replaceAll('_', r'\_');
 
-/// A readable entry has text of its own: a story file, a record, an operator
+/// Entry types whose text is a profile document (markdown-like) of a
+/// character-table row: operators, and the summons and deployable devices
+/// that share the table.
+const Set<String> documentEntryTypes = {'operator', 'token', 'trap'};
+
+/// A readable entry has text of its own: a story file, a record, a profile
 /// document.
-const String _readable =
-    "(e.type = 'story' OR e.record_id IS NOT NULL OR e.type = 'operator')";
+const String _readable = "(e.type = 'story' OR e.record_id IS NOT NULL OR "
+    "e.type IN ('operator', 'token', 'trap'))";
 
 Future<bool> _hasTable(DatabaseExecutor db, String name) async => (await db
         .rawQuery('SELECT 1 FROM sqlite_master WHERE name = ?', [name]))
@@ -364,6 +369,7 @@ Future<List<LibraryEntry>> entriesOfType(
   String type, {
   String? collectionId,
   String query = '',
+  List<String?>? groups,
   int limit = 2000,
 }) async {
   final q = query.trim();
@@ -371,6 +377,8 @@ Future<List<LibraryEntry>> entriesOfType(
   final args = <Object?>[
     if (q.isNotEmpty) ...['%${escapeLike(q)}%', '%${escapeLike(q)}%'],
   ];
+  final groupFilter = _groupFilter(groups, args);
+  final likeAndGroup = '$like$groupFilter';
   final String where;
   final String from;
   final List<Object?> head;
@@ -382,16 +390,53 @@ Future<List<LibraryEntry>> entriesOfType(
     from = 'entries e';
     where = collectionId == null
         ? 'e.collection_id IS NULL AND e.type = ?'
-        : 'e.collection_id = ? AND e.type = ?';    head = [if (collectionId != null) collectionId, type];
+        : 'e.collection_id = ? AND e.type = ?';
+    head = [if (collectionId != null) collectionId, type];
   }
   final rows = await db.rawQuery(
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
     'e.collection_id, e.entity_id FROM $from '
-    'WHERE $where AND $_readable $like'
+    'WHERE $where AND $_readable $likeAndGroup'
     'ORDER BY e.sort_key, e.name, e.id LIMIT ?',
     [...head, ...args, limit],
   );
   return [for (final r in rows) LibraryEntry.fromRow(r)];
+}
+
+/// `AND (e.group_name IN (…) [OR e.group_name IS NULL])` for [groups] (a null
+/// element is "no group"), appending the values to [args]; empty for null.
+String _groupFilter(List<String?>? groups, List<Object?> args) {
+  if (groups == null || groups.isEmpty) return '';
+  final named = [for (final g in groups) if (g != null) g];
+  args.addAll(named);
+  final parts = [
+    if (named.isNotEmpty) 'e.group_name IN (${List.filled(named.length, '?').join(',')})',
+    if (groups.contains(null)) "(e.group_name IS NULL OR e.group_name = '')",
+  ];
+  return 'AND (${parts.join(' OR ')}) ';
+}
+
+/// The groups of one type's entries (in a collection or in the codex) with
+/// their counts, in the order the entries come. A null group is "no group".
+Future<List<({String? group, int count})>> entryGroups(
+  DatabaseExecutor db,
+  String type, {
+  String? collectionId,
+}) async {
+  final enemies = type == 'enemy' && collectionId != null;
+  final rows = await db.rawQuery(
+    'SELECT NULLIF(e.group_name, \'\') AS g, COUNT(*) AS n, '
+    'MIN(e.sort_key) AS first FROM '
+    '${enemies ? 'entries e JOIN collection_enemies ce ON ce.enemy_id = e.id' : 'entries e'} '
+    'WHERE ${enemies ? 'ce.collection_id = ?' : collectionId == null ? 'e.collection_id IS NULL' : 'e.collection_id = ?'} '
+    'AND e.type = ? AND $_readable '
+    'GROUP BY g ORDER BY first, g',
+    [if (collectionId != null) collectionId, type],
+  );
+  return [
+    for (final r in rows)
+      (group: r['g'] as String?, count: (r['n'] as num).toInt()),
+  ];
 }
 
 /// One entry by id, with its collection name.
@@ -412,7 +457,7 @@ Future<List<EntryTextBlock>> entryTexts(
   DatabaseExecutor db,
   LibraryEntry entry,
 ) async {
-  if (entry.type == 'operator' && entry.entityId != null) {
+  if (documentEntryTypes.contains(entry.type) && entry.entityId != null) {
     final rows = await db.rawQuery(
       'SELECT title, content FROM entity_documents WHERE entity_id = ? '
       'ORDER BY document_type',

@@ -6,6 +6,7 @@ import 'package:arklores/core/userdata/user_data_provider.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/library/library_pages.dart';
+import 'package:arklores/features/library/library_widgets.dart';
 import 'package:arklores/features/library/my_materials.dart';
 import 'package:arklores/features/materials/materials_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
@@ -120,6 +121,16 @@ List<Override> overrides(MemoryUserStore store) => [
           ),
         ],
       ),
+      entryGroupsProvider.overrideWith(
+        (ref, key) async => key.type == 'roguelike_item'
+            ? const [
+                (group: 'relic', count: 20),
+                (group: 'copper', count: 15),
+                (group: 'copper_buff', count: 5),
+                (group: 'wrath', count: 2),
+              ]
+            : const [],
+      ),
       entryProvider.overrideWith(
         (ref, id) async => switch (id) {
           'enemy:e1' => _enemy,
@@ -202,6 +213,8 @@ List<Override> overrides(MemoryUserStore store) => [
       ),
       storyCatalogEntryProvider.overrideWith((ref, id) async => null),
     ];
+
+void _noop() {}
 
 void main() {
   late MemoryUserStore store;
@@ -344,13 +357,69 @@ void main() {
     expect(find.text('干员甲'), findsWidgets);
     expect(find.text('干员密录'), findsWidgets);
     expect(find.byKey(const ValueKey('operator-record-story_x_set_1')), findsOneWidget);
+    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('operator-owned-module:m1')), findsOneWidget);
     expect(find.byKey(const ValueKey('operator-owned-skin:s1')), findsOneWidget);
     // The simulation stages carry their own name, not "密录关卡".
     expect(find.text('悖论模拟'), findsWidgets);
     expect(find.byKey(const ValueKey('operator-owned-operator_stage:p1')), findsOneWidget);
     expect(find.textContaining('嗅觉敏锐'), findsOneWidget); // the profile text
+    // The ids of the paradox simulation / module codes are not shown, and
+    // the profile is the first section under the card.
+    expect(find.textContaining('模组甲'), findsOneWidget);
+    expect(find.text('EX'), findsNothing);
+    expect(find.text('X-A'), findsNothing);
+    await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
+    await tester.pumpAndSettle();
+    final profileAt = tester.getTopLeft(find.text('干员档案').first).dy;
+    final recordsAt = tester.getTopLeft(find.text('干员密录').last).dy;
+    expect(profileAt, lessThan(recordsAt));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a long grouped list opens as a menu of named groups',
+      (tester) async {
+    await pumpApp(
+      tester,
+      const EntryListPage(
+        type: 'roguelike_item',
+        collectionId: 'rogue_5',
+        collectionName: '主题',
+      ),
+    );
+    // Game codes are named; one without a name is "其他", never raw.
+    expect(find.byKey(const ValueKey('group-藏品')), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-铜钱')), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-铜钱效果')), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-其他')), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-all')), findsOneWidget);
+    expect(find.textContaining('copper'), findsNothing);
+    expect(find.textContaining('wrath'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('group-藏品')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a character shows its number after the name, not as a code',
+      (tester) async {
+    await pumpApp(
+      tester,
+      const Scaffold(
+        body: EntryRow(
+          entry: LibraryEntry(
+            id: 'operator:char_y',
+            type: 'operator',
+            name: '干员乙',
+            code: 'RCX7',
+          ),
+          onTap: _noop,
+        ),
+      ),
+    );
+    expect(find.textContaining('编号 RCX7'), findsOneWidget);
+    expect(find.text('RCX7'), findsNothing);
   });
 
   testWidgets('search offers collections and entries', (tester) async {

@@ -5,6 +5,8 @@ import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
 import 'package:arklores/core/gamedata/build/text_harvest.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart'
+    show queryCatalogEntries;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -87,7 +89,22 @@ void main() {
     setUp(() async {
       dir = await Directory.systemTemp.createTemp('arklores_entry_test');
       await writeJson('excel/character_table.json', {
-        'char_fx_1': {'name': '虚构干员', 'description': '一名虚构的干员。'},
+        'char_fx_1': {
+          'name': '虚构干员',
+          'description': '一名虚构的干员。',
+          'displayNumber': 'FX01',
+          'profession': 'PIONEER',
+        },
+        'token_fx_1': {
+          'name': '虚构召唤物',
+          'description': '一个召唤物的设定描述。',
+          'profession': 'TOKEN',
+        },
+        'trap_fx_1': {
+          'name': '虚构装置',
+          'description': '一个装置的设定描述。',
+          'profession': 'TRAP',
+        },
       });
       await writeJson('excel/handbook_info_table.json', {
         'handbookDict': {
@@ -149,6 +166,12 @@ void main() {
             'id': 'act_fx',
             'name': '虚构活动',
             'startTime': 1600000000,
+            'type': 'TYPE_FX',
+          },
+          'act1fxhub': {
+            'id': 'act1fxhub',
+            'name': '虚构展',
+            'startTime': 1600000001,
             'type': 'TYPE_FX',
           },
         },
@@ -256,6 +279,11 @@ void main() {
                 'usage': '每秒回复3点生命',
                 'type': 'RELIC',
               },
+              'rogue_fx_feature_1': {
+                'name': '规则替身',
+                'description': '规则替身的一段中文描述文字。',
+                'type': 'FEATURE',
+              },
             },
             'choiceScenes': {
               'scene_1': {'id': 'scene_1', 'title': '路口', 'description': '一个岔路口。'},
@@ -295,6 +323,10 @@ void main() {
       await writeText(
         'story/obt/rogue/rogue_fx/endbook/e1.txt',
         '[name="乙"]肉鸽里的故事。\n',
+      );
+      await writeText(
+        'story/activities/fxhub/guide_fx_entry.txt',
+        '[name="丙"]欢迎来到这里。\n',
       );
       await writeText(
         'story/obt/tutorial/t1.txt',
@@ -356,6 +388,72 @@ void main() {
         "SELECT 1 FROM normalized_records WHERE parent_id = 'obt/tutorial/t1.txt'",
       );
       expect(tutorialRecords, isEmpty);
+    });
+
+    test('a story outside the review table is labelled from the entry layer',
+        () async {
+      final labels = await queryCatalogEntries(db, [
+        'obt/rogue/rogue_fx/endbook/e1.txt',
+        'obt/main/level_main_00-01_beg.txt',
+      ]);
+      final rogue = labels['obt/rogue/rogue_fx/endbook/e1.txt']!;
+      expect(rogue.label, startsWith('集成战略·虚构肉鸽'));
+      expect(rogue.label, isNot(contains('e1')));
+      // A catalogued story keeps its catalogue label.
+      expect(labels['obt/main/level_main_00-01_beg.txt']!.label,
+          contains('开端'),);
+    });
+
+    test('summons and devices are told from operators by the table', () async {
+      final types = await q(
+        "SELECT id, type, code FROM entries WHERE id LIKE 'operator:%' ORDER BY id",
+      );
+      expect(types.map((r) => (r['id'], r['type'], r['code'])), [
+        ('operator:char_fx_1', 'operator', 'FX01'),
+        ('operator:token_fx_1', 'token', null),
+        ('operator:trap_fx_1', 'trap', null),
+      ]);
+    });
+
+    test('names are shown, not ids: stage zones, rule stand-ins, folders',
+        () async {
+      // A stage is grouped by the name of its zone.
+      final group = (await q(
+        "SELECT group_name FROM entries WHERE id = 'stage:main_00-01'",
+      ))
+          .single['group_name'];
+      expect(group, '序章 · 虚构之始');
+      // The id of a zone no table names is no group.
+      final act = (await q(
+        "SELECT group_name FROM entries WHERE id = 'stage:fx_01'",
+      ))
+          .single['group_name'];
+      expect(act, isNot('act_fx_zone1'));
+      // Feature items are rule stand-ins, not story.
+      expect(
+        await q("SELECT 1 FROM entries WHERE name = '规则替身'"),
+        isEmpty,
+      );
+      expect(
+        await q("SELECT 1 FROM entries WHERE name = '虚构藏品'"),
+        isNotEmpty,
+      );
+      // A story folder that is an activity's id without the `act<n>` prefix
+      // belongs to that activity; the activity's own `type` is not a code.
+      final guide = (await q(
+        "SELECT collection_id FROM entries WHERE raw_id = 'activities/fxhub/guide_fx_entry.txt'",
+      ))
+          .single['collection_id'];
+      expect(guide, 'act1fxhub');
+      final collection = (await q(
+        "SELECT kind, name FROM collections WHERE id = 'act1fxhub'",
+      ))
+          .single;
+      expect(collection['name'], '虚构展');
+      final activity = await q(
+        "SELECT code FROM entries WHERE type = 'activity' AND collection_id = 'act_fx'",
+      );
+      expect(activity.single['code'], isNull);
     });
 
     test('stages are attributed through zones; gameplay stages are skipped',

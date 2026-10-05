@@ -299,7 +299,7 @@ class _ContinueCard extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            entry.title,
+            readingTitle(ref, entry),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.titleFont.copyWith(fontSize: 17, height: 1.3),
@@ -338,7 +338,7 @@ class _RecentRow extends ConsumerWidget {
     final item = LibraryRef.tryParse(entry.ref);
     return LibraryRow(
       key: ValueKey('recent-${entry.ref}'),
-      title: entry.title,
+      title: readingTitle(ref, entry),
       subtitle: entry.snippet,
       subtitleLines: 1,
       progress: entry.progress != null && !entry.finished

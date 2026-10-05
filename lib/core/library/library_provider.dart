@@ -67,7 +67,22 @@ final collectionStoriesProvider = FutureProvider.autoDispose
 
 /// Which entries a list shows: one type, in a collection or (null) in the
 /// codex, filtered by [query].
-typedef EntryListKey = ({String type, String? collectionId, String query});
+typedef EntryListKey = ({
+  String type,
+  String? collectionId,
+  String query,
+  String groups,
+});
+
+/// [EntryListKey.groups] for a set of groups (a null element is "no group"):
+/// a plain string, so the key compares by value.
+String groupsKey(List<String?>? groups) => groups == null
+    ? ''
+    : groups.map((g) => g ?? '\u0000').join('\u0001');
+
+List<String?>? _groupsOf(String key) => key.isEmpty
+    ? null
+    : [for (final g in key.split('\u0001')) g == '\u0000' ? null : g];
 
 final entriesOfTypeProvider = FutureProvider.autoDispose
     .family<List<LibraryEntry>, EntryListKey>((ref, key) async =>
@@ -78,9 +93,22 @@ final entriesOfTypeProvider = FutureProvider.autoDispose
             key.type,
             collectionId: key.collectionId,
             query: key.query,
+            groups: _groupsOf(key.groups),
           ),
         ) ??
         const [],);
+
+/// The groups of one type's entries, for the menu above a long list.
+typedef EntryGroupsKey = ({String type, String? collectionId});
+
+final entryGroupsProvider = FutureProvider.autoDispose
+    .family<List<({String? group, int count})>, EntryGroupsKey>(
+        (ref, key) async =>
+            await _query(
+              ref,
+              (db) => entryGroups(db, key.type, collectionId: key.collectionId),
+            ) ??
+            const [],);
 
 final entryProvider = FutureProvider.autoDispose
     .family<LibraryEntry?, String>((ref, id) async =>

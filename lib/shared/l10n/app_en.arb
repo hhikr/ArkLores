@@ -190,6 +190,7 @@
   "shelfCodex": "Codex",
   "libraryOperatorRecords": "Operator records",
   "libraryOperatorProfile": "Operator file",
+  "libraryAllEntries": "All",
   "libraryCountCollections": "{n} sets",
   "@libraryCountCollections": {"placeholders": {"n": {"type": "int"}}},
   "libraryCountStories": "{n} stories",

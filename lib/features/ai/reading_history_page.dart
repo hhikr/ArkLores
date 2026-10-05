@@ -122,7 +122,7 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
       child: LibraryRow(
         key: ValueKey('reading-tile-${entry.ref}'),
         leading: Icon(Icons.menu_book_rounded, color: theme.accentText),
-        title: entry.title,
+        title: readingTitle(ref, entry),
         subtitle: [
           '${_time(entry.openedAt)} · '
               '${context.t.readingHistoryLine(entry.lineIndex + 1)}',

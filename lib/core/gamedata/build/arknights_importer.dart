@@ -226,7 +226,13 @@ class ArknightsImporter {
           await insertEntry(
             txn,
             id: 'operator:$charId',
-            type: 'operator',
+            // Summons and deployable devices share the table with the
+            // operators; the table's own `profession` tells them apart.
+            type: switch ('${data['profession'] ?? ''}'.toUpperCase()) {
+              'TOKEN' => 'token',
+              'TRAP' => 'trap',
+              _ => 'operator',
+            },
             name: name,
             code: '${data['displayNumber'] ?? ''}'.trim().isEmpty
                 ? null

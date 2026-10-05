@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_queries.dart';
+import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
+import '../ai/story_labels_provider.dart';
 import '../ai/story_reader_page.dart';
 
 /// Opens a story in the reader. [resume] continues where the reader left
@@ -22,6 +26,15 @@ void openStory(BuildContext context, String storyId, {ReadingEntry? resume}) {
       ),
     ),
   );
+}
+
+/// The title a reading-history row shows: the story's name in the installed
+/// knowledge base now (names change between builds), the title stored when it
+/// was opened until that is known.
+String readingTitle(WidgetRef ref, ReadingEntry entry) {
+  final item = LibraryRef.tryParse(entry.ref);
+  if (item == null || item.kind != LibraryRefKind.story) return entry.title;
+  return ref.watch(storyLabelProvider(item.id)).valueOrNull ?? entry.title;
 }
 
 /// A pushed library page: the app's usual secondary-page frame (transparent
@@ -286,10 +299,18 @@ Widget readMark(
 /// A story row (collection page, search): code, name, group, synopsis and
 /// the reader's progress.
 class StoryRow extends ConsumerWidget {
-  const StoryRow({super.key, required this.story, this.read});
+  const StoryRow({
+    super.key,
+    required this.story,
+    this.read,
+    this.showGroup = true,
+  });
 
   final LibraryEntry story;
   final ReadingEntry? read;
+
+  /// False under a heading that is the group already.
+  final bool showGroup;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -300,7 +321,9 @@ class StoryRow extends ConsumerWidget {
       titlePrefix: story.code,
       title: [
         story.name,
-        if (story.group != null && !story.name.contains(story.group!))
+        if (showGroup &&
+            story.group != null &&
+            !story.name.contains(story.group!))
           '· ${story.group}',
       ]
           .where((s) => s.isNotEmpty)
@@ -315,6 +338,50 @@ class StoryRow extends ConsumerWidget {
   }
 }
 
+/// A profile text (a character-table document) rendered as markdown: its
+/// `##` headings are headings, every line of the source its own line. The
+/// game's rich-text tags are removed first.
+class MarkdownText extends ConsumerWidget {
+  const MarkdownText(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final cleaned = cleanRichText(text)
+        .split('\n')
+        .map((l) => l.trimRight())
+        .join('  \n');
+    return MarkdownBody(
+      data: cleaned,
+      selectable: true,
+      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+        p: theme.bodyFont.copyWith(
+          color: theme.textPrimary,
+          fontSize: 15,
+          height: 1.7,
+        ),
+        h1: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 18),
+        h2: theme.titleFont.copyWith(
+          color: theme.accentText,
+          fontSize: 15,
+          height: 2,
+        ),
+        h3: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 14),
+        strong: theme.bodyFont.copyWith(
+          color: theme.textPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+        listBullet: theme.bodyFont.copyWith(color: theme.textPrimary),
+        horizontalRuleDecoration: BoxDecoration(
+          border: Border(top: BorderSide(color: theme.divider)),
+        ),
+      ),
+    );
+  }
+}
+
 /// A row of a non-story entry.
 class EntryRow extends ConsumerWidget {
   const EntryRow({super.key, required this.entry, required this.onTap});
@@ -325,13 +392,15 @@ class EntryRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
+    final numbered = numberedTypes.contains(entry.type);
     final context2 = [
       entryTypeName(entry.type),
+      if (numbered && codeCaption(entry) != null) codeCaption(entry)!,
       if (entry.collectionName != null) entry.collectionName!,
     ].join(' · ');
     return LibraryRow(
       key: ValueKey('entry-row-${entry.id}'),
-      titlePrefix: entry.code,
+      titlePrefix: numbered ? null : entry.code,
       title: entry.name.isEmpty ? entry.id : entry.name,
       subtitle: context2,
       subtitleLines: 1,

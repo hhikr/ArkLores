@@ -567,6 +567,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryOperatorProfile => '干员档案';
 
   @override
+  String get libraryAllEntries => '全部';
+
+  @override
   String libraryCountCollections(int n) {
     return '$n 项';
   }

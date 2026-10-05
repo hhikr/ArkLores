@@ -122,6 +122,8 @@ class StoryCatalogEntry {
   String get collectionLabel => switch (collectionType) {
         'MAINLINE' => '主线·$collectionName',
         'NONE' => '干员密录·$collectionName',
+        'ROGUELIKE' => '集成战略·$collectionName',
+        'SANDBOX' => '生息演算·$collectionName',
         _ => collectionName,
       };
 
@@ -140,6 +142,7 @@ class StoryCatalogEntry {
   /// Full label, e.g. `巴别塔 BB-7 行动前《…》`.
   String get label {
     final chapter = chapterLabel;
+    if (collectionName.trim().isEmpty) return chapter;
     return chapter.isEmpty ? collectionLabel : '$collectionLabel $chapter';
   }
 }
@@ -313,9 +316,10 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
   Iterable<String> storyIds,
 ) async {
   final ids = storyIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet().toList();
-  if (ids.isEmpty || !await hasStoryCatalog(db)) return const {};
+  if (ids.isEmpty) return const {};
+  final hasCatalog = await hasStoryCatalog(db);
   final result = <String, StoryCatalogEntry>{};
-  for (var i = 0; i < ids.length; i += 500) {
+  for (var i = 0; hasCatalog && i < ids.length; i += 500) {
     final chunk = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
     final rows = await db.rawQuery(
       'SELECT * FROM $storyCatalogTable WHERE story_id IN '
@@ -327,9 +331,14 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
       result[entry.storyId] = entry;
     }
   }
-  // Files outside the review table (in-level dialogue under
-  // `activities/<id>/level/…`) still belong to their activity: name them by
-  // that collection plus the file name (no invented chapter names).
+  // Files the review table does not list (training, guides, roguelike and
+  // sandbox stories, in-level dialogue) are named by the entry layer: the
+  // name the tables or their stage give them, in their collection.
+  await _fillFromEntryLayer(db, ids, result);
+  if (!hasCatalog) return result;
+  // Files outside the review table and the entry layer (in-level dialogue
+  // under `activities/<id>/level/…`) still belong to their activity: name
+  // them by that collection plus the file name (no invented chapter names).
   final missing = {
     for (final id in ids)
       if (!result.containsKey(id) && id.startsWith('activities/')) id,
@@ -361,6 +370,55 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
     }
   }
   return result;
+}
+
+/// Adds the stories of [ids] that [result] lacks from the entry layer
+/// (schema 5): `entries` + `collections`. Older databases have none.
+Future<void> _fillFromEntryLayer(
+  DatabaseExecutor db,
+  List<String> ids,
+  Map<String, StoryCatalogEntry> result,
+) async {
+  final todo = [for (final id in ids) if (!result.containsKey(id)) id];
+  if (todo.isEmpty ||
+      !await _hasTable(db, 'entries') ||
+      !await _hasTable(db, 'collections')) {
+    return;
+  }
+  for (var i = 0; i < todo.length; i += 500) {
+    final chunk = todo.sublist(i, i + 500 > todo.length ? todo.length : i + 500);
+    final rows = await db.rawQuery(
+      'SELECT e.raw_id, e.name, e.code, e.group_name, e.sort_key, '
+      'e.collection_id, c.name AS collection_name, c.kind AS kind '
+      'FROM entries e LEFT JOIN collections c ON c.id = e.collection_id '
+      "WHERE e.type = 'story' AND e.raw_id IN "
+      '(${List.filled(chunk.length, '?').join(',')})',
+      chunk,
+    );
+    for (final row in rows) {
+      final id = '${row['raw_id']}';
+      final group = (row['group_name'] as String?)?.trim() ?? '';
+      final name = (row['name'] as String?)?.trim() ?? '';
+      result[id] = StoryCatalogEntry(
+        storyId: id,
+        collectionId: '${row['collection_id'] ?? ''}',
+        collectionName: '${row['collection_name'] ?? ''}',
+        collectionType: switch ('${row['kind']}') {
+          'main' => 'MAINLINE',
+          'memory' => 'NONE',
+          'roguelike' => 'ROGUELIKE',
+          'sandbox' => 'SANDBOX',
+          'system' => 'SYSTEM',
+          _ => 'ACTIVITY',
+        },
+        storySort: (row['sort_key'] as num?)?.toInt() ?? 0,
+        storyCode: (row['code'] as String?)?.trim(),
+        storyName: name.isEmpty ? null : name,
+        // A group already part of the name is not said twice.
+        avgTag: group.isEmpty || name.contains(group) ? null : group,
+      );
+    }
+  }
 }
 
 /// R16: catalog entries whose level code is [code] (`10-10`, `EG-7`) — the

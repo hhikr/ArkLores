@@ -188,6 +188,7 @@
   "shelfCodex": "图鉴",
   "libraryOperatorRecords": "干员密录",
   "libraryOperatorProfile": "干员档案",
+  "libraryAllEntries": "全部",
   "libraryCountCollections": "{n} 项",
   "@libraryCountCollections": {"placeholders": {"n": {"type": "int"}}},
   "libraryCountStories": "{n} 个故事",

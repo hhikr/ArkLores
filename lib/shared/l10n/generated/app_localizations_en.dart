@@ -579,6 +579,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryOperatorProfile => 'Operator file';
 
   @override
+  String get libraryAllEntries => 'All';
+
+  @override
   String libraryCountCollections(int n) {
     return '$n sets';
   }

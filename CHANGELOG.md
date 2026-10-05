@@ -53,8 +53,17 @@ All notable changes to ArkLores will be documented in this file.
   stories are named after the stage they belong to (and are bound to it), ending-book pages and month chats take the names
   the game gives them, and what only has a kind is numbered (`指引 3`). Re-runs are no longer a shelf of their own — their
   stages belong to the event they re-run. *(Needs the new knowledge base.)*
-- **One page per operator.** The *Operators* shelf lists operators; an operator's page holds the record sets (密录),
-  modules, skins, paradox simulation stages (悖论模拟) and the profile. They no longer appear as separate lists in the codex.
+- **One page per operator.** The *Operators* shelf lists operators; an operator's page holds the profile (first, rendered
+  as formatted text), the record sets (密录), modules, skins and paradox simulation stages (悖论模拟). They no longer appear
+  as separate lists in the codex. The `RCX7`-style marks are the game's own operator numbers and are shown as *编号 RCX7*.
+- **Summons and devices are in the codex.** Deployable devices and summons used to be listed as operators; they are now
+  *装置* and *召唤物* in the codex. *(Needs the new knowledge base.)*
+- **No more game codes in lists.** The reading history, the continue card, the reader title and the evidence chains show a
+  story's real name (also for entries saved earlier); stage lists are grouped by chapter name, game enums (`TRADE`,
+  `copper_buff`, item kinds) are named, ids of paradox simulations, activity kinds and unnamed folders are gone, and
+  rule stand-ins of Integrated Strategies are no longer listed.
+- **Long lists are menus.** Integrated Strategies collections list their stories under folding headings (ending, squad …),
+  put endings and squads before the long lists, and open collectibles, events and choices as a menu of kinds first.
 - **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and
   never enter the knowledge base. *Ask about it* puts a text in the question box so you can finish the question and send it.
 

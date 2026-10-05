@@ -16,6 +16,19 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 资料页第二轮修正（2026-10-05，未发布，需重算知识库）**：真机再反馈四点。① 编码残留不止一层：阅读页标题/续读卡/历史/证据链
+  用的是 `story_catalog`（只含 71% 的故事）+ 路径兜底，所以训练、肉鸽等仍显示文件名——`queryCatalogEntries` 现在对目录没有的故事
+  从条目层（`entries`+`collections`）取名字（`集成战略·主题 分组《名》`），历史/续读卡显示“当前名字”（`storyLabelProvider`，库不认识时才用存的旧标题）；
+  列表里的分组码（关卡的 zone id、`TRADE`/`copper_buff`/物品类型、邮件发件人 id、活动文本的键名）：构建时 `rebuildDerived` 把关卡分组换成章节名、
+  邮件发件人换成干员名、其余 id 型分组置空，界面用 `groupLabel()` 给游戏枚举取中文名，没有名字的不显示原码；`operator_stage` 的 `code`
+  （`mem_x_1`）、活动的 `type`（`VEC_BREAK_V2`）不再当代号；模组的代号改为型号（`X`/`Y`）；没有表给名字的故事目录
+  （`bossrush`、`arkhub`）按 id 后缀并入对应活动，否则归“其他”系统集合，不再以文件夹名显示。② 集成战略：集合页的故事按分组（结局/分队…）折叠，
+  相关资料按 `typeRank` 排序，长列表（收藏品、事件选项…）先出分类菜单（`entryGroups` → `EntryListPage(groups:)`）；`feature` 类收藏品
+  是规则替身（“机制物品”），不再导入。③ 干员页：档案放在最前并按 markdown 渲染（`MarkdownText`）。④ `character_table` 里 `profession`
+  为 TOKEN/TRAP 的是召唤物/装置，之前被当成干员：条目类型拆成 `token`/`trap`（id 仍是 `operator:<charId>`，在图鉴里显示为“召唤物”“装置”）；
+  `RCX7` 是游戏自带的干员编号（`displayNumber`），界面写成“编号 RCX7”，不再当前缀。给已有的库补算：`rederive_gamedata.dart`（现在也重导角色表）。
+  产物 `build/gamedata_v5/rederived.db`，发布前需压缩并作为新资产上传。
+
 - **0.11 资料页修正（2026-10-05，未发布，需重建/重算知识库）**：真机反馈三点。① 训练/指引/教程/肉鸽/生息演算的剧情用的是解包文件名：
   新增 `build/story_naming.dart`（`rebuildDerived` 里调用）——名字优先级：表里给文件本身的名字（肉鸽 `archiveComp.endbook/chat`、
   生息演算 NPC 对话 `picName`、档案条目 `reads_story`）→ 所属关卡（`level_<关卡>_beg/end`、`training_<集合>_<nn>_x` → 关卡 `<集合>_tr<nn>`、

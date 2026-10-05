@@ -1118,6 +1118,12 @@ abstract class AppLocalizations {
   /// **'Operator file'**
   String get libraryOperatorProfile;
 
+  /// No description provided for @libraryAllEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get libraryAllEntries;
+
   /// No description provided for @libraryCountCollections.
   ///
   /// In en, this message translates to:

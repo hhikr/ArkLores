@@ -282,6 +282,56 @@ void main() {
     expect(entryHeadline(same), 'N-1 突入');
   });
 
+  test('game codes are named, a code without a name is not shown raw', () {
+    expect(groupLabel('roguelike_item', 'copper_buff'), '铜钱效果');
+    expect(groupLabel('roguelike_choice', 'TRADE_PROB_SHOW'), '交易');
+    expect(groupLabel('roguelike_item', 'brand_new_code'), isNull);
+    expect(groupLabel('item', 'VOUCHER_PICK'), '凭证与券');
+    expect(groupLabel('stage', '第九章 · 某章'), '第九章 · 某章');
+    expect(groupLabel('skin', 'WWF'), 'WWF');
+    expect(groupLabel('item', null), isNull);
+    // Characters are numbered, not coded.
+    const op = LibraryEntry(id: 'o', type: 'operator', name: '甲', code: 'RCX7');
+    expect(codeCaption(op), '编号 RCX7');
+    expect(entryHeadline(op), '甲');
+    expect(entryTypeName('trap'), '装置');
+    expect(entryTypeName('token'), '召唤物');
+    expect(typeRank('roguelike_ending'), lessThan(typeRank('roguelike_choice')));
+  });
+
+  test('entries are listed by group, and the groups are counted', () async {
+    final db = await databaseFactoryFfi.openDatabase(
+      inMemoryDatabasePath,
+      options: OpenDatabaseOptions(singleInstance: false),
+    );
+    await db.execute(
+      'CREATE TABLE entries (id TEXT, type TEXT, name TEXT, code TEXT, '
+      'collection_id TEXT, group_name TEXT, sort_key INTEGER, entity_id TEXT, '
+      'raw_id TEXT, record_id TEXT)',
+    );
+    for (final (i, g) in ['a', 'a', 'b', null, ''].indexed) {
+      await db.insert('entries', {
+        'id': 'e$i',
+        'type': 'item',
+        'name': '物$i',
+        'group_name': g,
+        'sort_key': i,
+        'record_id': 'r$i',
+      });
+    }
+    final groups = await entryGroups(db, 'item');
+    expect(groups.map((g) => (g.group, g.count)), [
+      ('a', 2),
+      ('b', 1),
+      (null, 2),
+    ]);
+    final onlyA = await entriesOfType(db, 'item', groups: ['a']);
+    expect(onlyA.map((e) => e.id), ['e0', 'e1']);
+    final none = await entriesOfType(db, 'item', groups: [null]);
+    expect(none.map((e) => e.id), ['e3', 'e4']);
+    await db.close();
+  });
+
   test('an older database without the entry layer is recognised', () async {
     final old = await databaseFactoryFfi.openDatabase(
       inMemoryDatabasePath,

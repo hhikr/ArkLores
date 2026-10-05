@@ -739,7 +739,11 @@ class EntryImporter {
           key: id,
           sourcePath: path,
           name: name,
-          code: '${_s(module['typeName1'])}-${_s(module['typeName2'])}',
+          // The module's own type mark (`X`, `Y`; the original badge has
+          // none beyond its kind).
+          code: _s(module['typeName2']).isNotEmpty
+              ? _s(module['typeName2'])
+              : _s(module['typeName1']),
           sections: [TextSection('', desc)],
         ),
       );
@@ -960,7 +964,7 @@ class EntryImporter {
           key: entry.key,
           sourcePath: path,
           name: name,
-          code: _s(_map(entry.value)['type']),
+          // `type` is the game's activity kind (an enum), not a code.
           collectionId: entry.key,
         ),
       );
@@ -1161,7 +1165,8 @@ class EntryImporter {
           key: id,
           sourcePath: path,
           name: name,
-          code: _s(stage['code']),
+          // `code` is the stage's file id (`mem_<operator>_1`), not a
+          // player-facing code.
           sections: [TextSection('', desc)],
         ),
       );
@@ -1351,6 +1356,9 @@ class EntryImporter {
       final name = _clean(item['name']);
       final desc = cleanDescription(_s(item['description']));
       if (name.isEmpty || !hasChinese(desc) || isMechanical(desc)) continue;
+      // `feature` items are stand-ins the game's rules use (potion drop
+      // control, resource refunds): mechanics, not story.
+      if (_s(item['type']).toLowerCase() == 'feature') continue;
       await _emit(
         txn,
         _Draft(
@@ -1874,16 +1882,21 @@ class EntryImporter {
           final system = parts.length >= 2 && parts.first == 'obt'
               ? systemNames[parts[1]]
               : null;
+          // A folder no table names (a mode's tutorials and guides, loose
+          // files) is a system collection, never shown under its folder id.
+          final kind = owner.startsWith('rogue_')
+              ? 'roguelike'
+              : owner.startsWith('sandbox_')
+                  ? 'sandbox'
+                  : system != null ||
+                          owner.startsWith('system_') ||
+                          storyId.startsWith('activities/')
+                      ? 'system'
+                      : 'activity';
           await putCollection(
             owner,
-            system != null
-                ? 'system'
-                : owner.startsWith('rogue_')
-                    ? 'roguelike'
-                    : owner.startsWith('sandbox_')
-                        ? 'sandbox'
-                        : 'activity',
-            system ?? owner,
+            kind,
+            kind == 'system' ? system ?? '其他' : owner,
             null,
             fallbackSort++,
           );
@@ -1968,6 +1981,46 @@ class EntryImporter {
           await _link(txn, '${r['id']}', 'belongs_to_stage', target, 'derived');
         }
       }
+      // Stages are grouped by the zone they are in: its name, or no group
+      // when the zone has none (an id is not a heading).
+      await txn.execute(
+        'UPDATE entries SET group_name = ('
+        "SELECT z.name FROM entries z WHERE z.type = 'zone' "
+        'AND z.raw_id = entries.group_name LIMIT 1) '
+        "WHERE type = 'stage' AND group_name IS NOT NULL AND EXISTS ("
+        "SELECT 1 FROM entries z WHERE z.type = 'zone' "
+        'AND z.raw_id = entries.group_name)',
+      );
+      await txn.execute(
+        "UPDATE entries SET group_name = NULL WHERE type = 'stage' "
+        "AND group_name NOT GLOB '*[^a-z0-9_]*'",
+      );
+      // Mail groups are the sender: the character's name when the sender is
+      // one, nothing otherwise. The key names of an activity's or a
+      // sandbox's text tables are not headings.
+      await txn.execute(
+        'UPDATE entries SET group_name = ('
+        "SELECT o.name FROM entries o WHERE o.id = 'operator:' || "
+        'entries.group_name) '
+        "WHERE type = 'mail' AND group_name LIKE 'char\\_%' ESCAPE '\\'",
+      );
+      await txn.execute(
+        "UPDATE entries SET group_name = NULL WHERE type = 'mail' "
+        "AND group_name NOT GLOB '*[^a-z0-9_]*'",
+      );
+      await txn.execute(
+        'UPDATE entries SET group_name = NULL '
+        "WHERE type IN ('activity_text', 'sandbox_text')",
+      );
+      // Rule stand-ins imported by earlier builds.
+      await txn.execute(
+        'DELETE FROM normalized_records WHERE entry_id IN (SELECT id FROM '
+        "entries WHERE type = 'roguelike_item' AND group_name = 'feature')",
+      );
+      await txn.execute(
+        "DELETE FROM entries WHERE type = 'roguelike_item' "
+        "AND group_name = 'feature'",
+      );
       // Bindings whose ends are not entries (an operator without a profile,
       // a zone without a name) are dropped.
       await txn.execute(
@@ -2052,7 +2105,11 @@ class EntryImporter {
     final parts = storyId.split('/').where((s) => s.isNotEmpty).toList();
     if (parts.length < 2) return null;
     if (parts.first == 'activities') {
-      return parts[1];
+      final folder = parts[1];
+      // A loose file under `activities/` belongs to no activity.
+      if (parts.length < 3) return 'system_activities';
+      if (ctx.collections.containsKey(folder)) return folder;
+      return _activityOfFolder(ctx, folder) ?? folder;
     }
     if (parts.first != 'obt') return null;
     final group = parts[1];
@@ -2078,5 +2135,22 @@ class EntryImporter {
       return '${record.group(1)}_set_${record.group(2)}';
     }
     return 'system_$group';
+  }
+
+  /// A story folder that is not an activity id (`arkhub`, `bossrush`) belongs
+  /// to the activity whose id carries it after the `act<n>` prefix
+  /// (`act1arkhub`), or a longer/shorter form of it (`vecbreak` ~ `act1vecb`).
+  /// The first such activity in id order wins. Null when none matches.
+  String? _activityOfFolder(_Context ctx, String folder) {
+    final ids = ctx.collections.keys.toList()..sort(naturalCompare);
+    for (final id in ids) {
+      if (ctx.collections[id]!.kind != 'activity') continue;
+      final tail = RegExp(r'^act\d+(.+)$').firstMatch(id)?.group(1);
+      if (tail == null || tail.length < 4) continue;
+      if (tail == folder || folder.startsWith(tail) || tail.startsWith(folder)) {
+        return id;
+      }
+    }
+    return null;
   }
 }
