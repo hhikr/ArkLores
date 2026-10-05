@@ -16,6 +16,10 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **预发布 v0.11.0-pre.1（2026-10-05）**：0.11 第 1–5 步的首个预发布（`pubspec` 0.11.0-pre.1+23）；知识库资产（schema 5，含向量，
+  195 MB gz）作为该 Release 的附件，`tools/release_gamedata.env` 已指向它。旧的 PR #8 已关闭并删除远端分支；
+  之后的 0.11 工作从 `release/v0.11.0-pre.1` 之后继续（本地分支 `feature/v0.11-library`）。
+
 - **0.11 第 5 步：可阅读资料页（2026-10-05，同一分支，未发布）**：
   - **“资料”标签页**（`features/materials/materials_page.dart`，原“暂停”占位被替换）：顶栏与 Ask 页一致的 TabBar [阅读 | 我的资料]。
     阅读：继续阅读卡（最近一篇，含进度）→ 书架（`collections.kind`：主线/活动/干员密录/集成战略/生息演算/复刻 + 图鉴=无归属条目类型）→ 最近阅读。
