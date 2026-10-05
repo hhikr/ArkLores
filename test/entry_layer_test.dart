@@ -775,14 +775,14 @@ void main() {
         'start',
       );
       expect(await q("SELECT 1 FROM entries WHERE name = '计数器'"), isEmpty);
-      // A coin and its buff with the same words are one; revised words stay two.
+      // A coin's buff twin is not imported: the coin is the entry.
       expect(
         (await q("SELECT raw_id FROM entries WHERE name = '双生币'")).single['raw_id'],
         'rogue_fx/rogue_fx_copper_1',
       );
       expect(
-        await q("SELECT 1 FROM entries WHERE name = '异文币'"),
-        hasLength(2),
+        (await q("SELECT raw_id FROM entries WHERE name = '异文币'")).single['raw_id'],
+        'rogue_fx/rogue_fx_copper_2',
       );
       // Options are not entries of their own: they are part of the event
       // that offers them (same id stem), the effect text left out.

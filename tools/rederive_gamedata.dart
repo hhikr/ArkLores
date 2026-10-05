@@ -14,6 +14,7 @@ import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/entry_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
+import 'package:arklores/core/library/library_labels.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 String? _arg(List<String> args, String name) {
@@ -60,6 +61,20 @@ Future<void> main(List<String> args) async {
     await entries.rebuildDerived();
     stdout.writeln('rebuild search index');
     await rebuildGamedataFts(db);
+    // Kinds of entries the interface has no name for: they show without a
+    // heading until someone looks the name up (the tables rarely give it;
+    // the wiki pages of the mode do).
+    final unnamed = await db.rawQuery(
+      'SELECT type, group_name, collection_id, COUNT(*) AS n FROM entries '
+      "WHERE type LIKE 'roguelike%' AND group_name IS NOT NULL AND group_name <> '' "
+      'GROUP BY 1, 2, 3 ORDER BY 3, 1, 2',
+    );
+    for (final r in unnamed) {
+      if (groupLabel('${r['type']}', '${r['group_name']}') == null) {
+        stdout.writeln('unnamed kind: ${r['collection_id']} ${r['type']} '
+            '${r['group_name']} (${r['n']} entries)');
+      }
+    }
     await stats.refreshFrom(db);
     await writeGamedataManifest(db, {
       'built_at': DateTime.now().toUtc().toIso8601String(),

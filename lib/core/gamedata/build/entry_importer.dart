@@ -365,6 +365,8 @@ class EntryImporter {
     'divination_kit',
     'stash_recruit_limit',
     'custom_ticket',
+    // The buff twin of a coin (same name and words, or a revised line).
+    'copper_buff',
   };
 
   Future<Object?> _json(String repoPath) async {
