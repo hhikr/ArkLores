@@ -16,7 +16,7 @@ Future<Database> buildFixture() async {
   await db.execute(storyCatalogDdl);
   await db.execute(
     'CREATE TABLE normalized_records (id TEXT PRIMARY KEY, title TEXT, '
-    'section TEXT, content TEXT, entry_id TEXT, line_start INTEGER)',
+    'section TEXT, content TEXT, entry_id TEXT, line_start INTEGER, raw_id TEXT)',
   );
   await db.execute(
     'CREATE TABLE entity_documents (id TEXT PRIMARY KEY, entity_id TEXT, '

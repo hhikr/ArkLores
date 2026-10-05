@@ -445,6 +445,52 @@ class CollectionPage extends ConsumerWidget {
     }
     final order = byType.keys.toList()
       ..sort((a, b) => typeRank(a).compareTo(typeRank(b)));
+    if (notes) {
+      // The notes are one folding row, not a section of their own.
+      final list = byType['roguelike_tip'];
+      if (list == null) return const [];
+      return [
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            key: const ValueKey('notes-group'),
+            shape: const Border(),
+            collapsedShape: const Border(),
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+            iconColor: theme.accentText,
+            collapsedIconColor: theme.textMuted,
+            title: Text(
+              entryTypeName('roguelike_tip'),
+              style: theme.titleFont.copyWith(fontSize: 15),
+            ),
+            subtitle: Text(
+              context.t.libraryCountEntries(list.length),
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            children: [
+              for (final e in list) ...[
+                LibraryRow(
+                  key: ValueKey('part-${e.id}'),
+                  title: e.name,
+                  subtitle: e.synopsis ?? '',
+                  subtitleLines: 2,
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    color: theme.textMuted,
+                  ),
+                  onTap: () => openEntry(context, e),
+                ),
+                rowDivider(theme),
+              ],
+            ],
+          ),
+        ),
+        rowDivider(theme),
+      ];
+    }
     return [
       for (final type in order) ...[
         Padding(
@@ -921,7 +967,9 @@ class EntryPage extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
             ],
-            if (markdownEntryTypes.contains(e.type))
+            if (e.type == 'roguelike_scene')
+              EventText(text)
+            else if (markdownEntryTypes.contains(e.type))
               MarkdownText(text)
             else
               SelectableText(

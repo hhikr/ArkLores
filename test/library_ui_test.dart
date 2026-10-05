@@ -503,8 +503,11 @@ void main() {
     // left under \
     // Notes first, then the opening story, the endings and squads; the kinds
     // of texts (zones to medals) are under one heading.
+    // The notes are one folding row; opening it lists them.
     expect(find.text('注释'), findsOneWidget);
     expect(find.text('相关资料'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('notes-group')));
+    await tester.pumpAndSettle();
     double rowTop(String key) => tester.getTopLeft(find.byKey(ValueKey(key))).dy;
     expect(
       rowTop('part-roguelike_tip:rogue_x/0'),

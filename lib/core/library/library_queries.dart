@@ -555,10 +555,24 @@ Future<List<EntryTextBlock>> entryTexts(
     ];
   }
   final rows = await db.rawQuery(
-    'SELECT title, section, content FROM normalized_records '
+    'SELECT title, section, content, raw_id FROM normalized_records '
     'WHERE entry_id = ? ORDER BY line_start, id',
     [entry.id],
   );
+  if (markdownEntryTypes.contains(entry.type) && rows.length > 1) {
+    // A long text was stored in pieces (`<id>`, `<id>#1`, …) cut on line
+    // boundaries; markdown nests across them, so it is read as one text.
+    int piece(Map<String, Object?> r) =>
+        int.tryParse('${r['raw_id']}'.split('#').skip(1).join()) ?? 0;
+    final ordered = [...rows]..sort((a, b) => piece(a).compareTo(piece(b)));
+    return [
+      EntryTextBlock(
+        title: '${ordered.first['title'] ?? ''}',
+        section: _text(ordered.first['section']),
+        content: ordered.map((r) => '${r['content'] ?? ''}').join('\n'),
+      ),
+    ];
+  }
   return [
     for (final r in rows)
       EntryTextBlock(

@@ -736,13 +736,12 @@ void main() {
       ))
           .single;
       expect(event['name'], '路口');
-      // The event's own text, the options (each once), and what is said
-      // after choosing.
+      // The event's own text, then the options, each followed by what is
+      // said after choosing it.
       expect(
         event['content'],
         '## 事件\n一个岔路口。\n\n'
-        '## 选项\n- **向左走**\n- **离开**\n\n'
-        '## 选择后\n**向左走**\n你向左走去。',
+        '## 选项\n- **向左走**\n你向左走去。\n- **离开**',
       );
     });
 

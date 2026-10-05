@@ -382,6 +382,153 @@ class MarkdownText extends ConsumerWidget {
   }
 }
 
+/// An event's text: the sections written as markdown, except `## 选项`, which
+/// is a list (option, the text after choosing it, the options that follow;
+/// see `eventOutline`) shown as folding rows, one level inside the other.
+class EventText extends ConsumerWidget {
+  const EventText(this.text, {super.key});
+
+  final String text;
+
+  static const optionsHeading = '选项';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sections = <({String? heading, List<String> lines})>[];
+    for (final line in text.split('\n')) {
+      if (line.startsWith('## ')) {
+        sections.add((heading: line.substring(3).trim(), lines: <String>[]));
+      } else {
+        if (sections.isEmpty) sections.add((heading: null, lines: <String>[]));
+        sections.last.lines.add(line);
+      }
+    }
+    final theme = ref.watch(themeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final s in sections)
+          if (s.heading == optionsHeading) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 2),
+              child: Text(
+                optionsHeading,
+                style: theme.titleFont.copyWith(
+                  color: theme.accentText,
+                  fontSize: 15,
+                  height: 2,
+                ),
+              ),
+            ),
+            for (final n in parseEventOptions(s.lines))
+              _OptionNode(n, theme: theme),
+          ] else
+            MarkdownText([
+              if (s.heading != null) '## ${s.heading}',
+              ...s.lines,
+            ].join('\n'),),
+      ],
+    );
+  }
+}
+
+/// One option of an event with what follows choosing it.
+class EventOption {
+  EventOption(this.title, this.depth);
+
+  final String title;
+  final int depth;
+  final List<String> body = [];
+  final List<EventOption> children = [];
+}
+
+/// The `## 选项` lines as a forest: `- **option**：text` (one dash more per
+/// level), the lines after it being what is said after choosing it.
+List<EventOption> parseEventOptions(List<String> lines) {
+  final roots = <EventOption>[];
+  final stack = <EventOption>[];
+  final bullet = RegExp(r'^(-+) (\*\*.*)$');
+  for (final raw in lines) {
+    final line = raw.trim();
+    if (line.isEmpty) continue;
+    final m = bullet.firstMatch(line);
+    if (m != null) {
+      final node = EventOption(m.group(2)!, m.group(1)!.length - 1);
+      while (stack.isNotEmpty && stack.last.depth >= node.depth) {
+        stack.removeLast();
+      }
+      (stack.isEmpty ? roots : stack.last.children).add(node);
+      stack.add(node);
+    } else if (stack.isNotEmpty) {
+      stack.last.body.add(line);
+    }
+  }
+  return roots;
+}
+
+class _OptionNode extends StatelessWidget {
+  const _OptionNode(this.node, {required this.theme});
+
+  final EventOption node;
+  final AppThemeTokens theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = RegExp(r'^\*\*(.*?)\*\*(?:：(.*))?$').firstMatch(node.title);
+    final title = m?.group(1) ?? node.title;
+    final said = m?.group(2);
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.titleFont.copyWith(fontSize: 14)),
+        if (said != null && said.isNotEmpty)
+          Text(
+            said,
+            style: theme.bodyFont.copyWith(
+              color: theme.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+      ],
+    );
+    if (node.body.isEmpty && node.children.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        child: heading,
+      );
+    }
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        key: ValueKey('event-option-${node.depth}-${node.title}'),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: const EdgeInsets.only(left: 14),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        iconColor: theme.accentText,
+        collapsedIconColor: theme.textMuted,
+        title: heading,
+        children: [
+          if (node.body.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: SelectableText(
+                node.body.join('\n'),
+                style: theme.bodyFont.copyWith(
+                  color: theme.textPrimary,
+                  fontSize: 14,
+                  height: 1.7,
+                ),
+              ),
+            ),
+          for (final c in node.children) _OptionNode(c, theme: theme),
+        ],
+      ),
+    );
+  }
+}
+
 /// A row of a non-story entry.
 class EntryRow extends ConsumerWidget {
   const EntryRow({super.key, required this.entry, required this.onTap});

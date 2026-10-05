@@ -25,6 +25,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite_common/sqlite_api.dart';
 
 import 'arknights_importer.dart';
+import 'event_outline.dart';
 import 'story_naming.dart';
 import 'text_harvest.dart';
 
@@ -1453,54 +1454,43 @@ class EntryImporter {
       final led = {
         for (final pick in picks) _s(pick.value['nextSceneId']),
       }..remove('');
+      // A scene numbered like a choice (`choice_<stem>_3` / `scene_<stem>_3`)
+      // that no choice leads to is what is said when that choice is made.
+      String ownOf(MapEntry<String, Map<String, dynamic>> pick) {
+        final k = 'scene_${pick.key.startsWith('choice_') ? pick.key.substring(7) : pick.key}';
+        return sceneTable.containsKey(k) && !led.contains(k) ? k : '';
+      }
+
+      final owned = {for (final pick in picks) ownOf(pick)}..remove('');
       // What the event says when it starts: the scenes no choice leads to
-      // (the first scene when every one is led to).
-      var opening = [for (final k in keys) if (!led.contains(k)) k];
+      // and none is the result of (the first scene when there are none).
+      var opening = [
+        for (final k in keys)
+          if (!led.contains(k) && !owned.contains(k)) k,
+      ];
       if (opening.isEmpty) opening = [keys.first];
       final start = [
         for (final k in opening)
           if (sceneProse(k).isNotEmpty) sceneProse(k),
       ].join('\n\n');
-      // The options, once each by title, with their own text when they have
-      // prose (most are effect text and are left out).
-      final options = <String, String>{};
-      for (final pick in picks) {
-        final title = _clean(pick.value['title']);
-        if (title.isEmpty) continue;
-        final said = _prose(_s(pick.value['description']));
-        if ((options[title] ?? '').isEmpty) options[title] = said;
-      }
-      // After choosing: for each scene a choice leads to, the options that
-      // lead there and the scene's text.
-      final after = <String, List<String>>{};
-      for (final pick in picks) {
-        final next = _s(pick.value['nextSceneId']);
-        final title = _clean(pick.value['title']);
-        if (next.isEmpty || title.isEmpty || opening.contains(next)) continue;
-        final into = after.putIfAbsent(next, () => <String>[]);
-        if (!into.contains(title)) into.add(title);
-      }
-      // Scenes with the same words (variants of one outcome) are one.
-      final byWords = <String, List<String>>{};
-      for (final e in after.entries) {
-        final words = sceneProse(e.key);
-        if (words.isEmpty) continue;
-        final into = byWords.putIfAbsent(words, () => <String>[]);
-        for (final title in e.value) {
-          if (!into.contains(title)) into.add(title);
-        }
-      }
-      final results = <String>[
-        for (final e in byWords.entries) '**${e.value.join(' / ')}**\n${e.key}',
-      ];
+      // The options, each with the text after choosing it, layer by layer
+      // (see [eventOutline]); their own text only when it is prose (most is
+      // effect text and is left out).
+      final outline = eventOutline(
+        [
+          for (final pick in picks)
+            (
+              title: _clean(pick.value['title']),
+              text: _prose(_s(pick.value['description'])),
+              next: _s(pick.value['nextSceneId']),
+              own: ownOf(pick),
+            ),
+        ],
+        sceneProse,
+      );
       final blocks = <String>[
         if (start.isNotEmpty) '## 事件\n$start',
-        if (options.isNotEmpty)
-          '## 选项\n${[
-            for (final o in options.entries)
-              '- **${o.key}**${o.value.isEmpty ? '' : '：${o.value}'}',
-          ].join('\n')}',
-        if (results.isNotEmpty) '## 选择后\n${results.join('\n\n')}',
+        if (outline.isNotEmpty) '## 选项\n$outline',
       ];
       if (blocks.isEmpty) continue;
       final text = blocks.join('\n\n');
