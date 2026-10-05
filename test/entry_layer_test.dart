@@ -391,6 +391,13 @@ void main() {
                 'usage': '每秒回复3点生命',
                 'type': 'RELIC',
               },
+              // The same collectible listed again (a variant copy).
+              'rogue_fx_relic_1_b': {
+                'name': '虚构藏品',
+                'description': '一件藏品的设定描述。',
+                'usage': '每秒回复3点生命\n变体效果',
+                'type': 'RELIC',
+              },
               'rogue_fx_feature_1': {
                 'name': '规则替身',
                 'description': '规则替身的一段中文描述文字。',
@@ -724,6 +731,12 @@ void main() {
           .single;
       expect(item['content'], '一件藏品的设定描述。');
       expect(item['collection_id'], 'rogue_fx');
+      // Listed twice by the game, one entry: the shorter id is kept.
+      expect(
+        (await q("SELECT raw_id FROM entries WHERE type = 'roguelike_item'"))
+            .single['raw_id'],
+        'rogue_fx/rogue_fx_relic_1',
+      );
       // Options are not entries of their own: they are part of the event
       // that offers them (same id stem), the effect text left out.
       expect(

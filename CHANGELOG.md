@@ -68,6 +68,8 @@ All notable changes to ArkLores will be documented in this file.
   separate story list and "related texts" headings are gone; what is left (areas, stages, collectibles, events …) are plain
   rows. Stages that exist in a normal and a raid form are marked *· 普通* / *· 突袭*. Tips that were only play advice and the
   rule stand-in items are no longer listed; tips that explain a term are kept under the term.
+- **Each collectible is listed once.** The game lists the same collectible several times (old and new table, variant and
+  upgrade copies that differ only in effect text); they are now one entry per topic (one topic went from 3,502 to 539).
 - **Event options fold, layer by layer.** An event's options are a nested, collapsible list: each option opens to the text
   that follows choosing it and to the options that come after, one layer inside the other (repeated rounds are listed once).
   The tables do not say which scene offers which choice, so the layers are read from the order the choices are listed in.

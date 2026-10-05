@@ -2178,6 +2178,45 @@ class EntryImporter {
         "DELETE FROM entries WHERE type = 'roguelike_item' "
         "AND group_name = 'feature'",
       );
+      // One collectible is one entry. The game lists the same one several
+      // times (a topic's old and new table, one copy per variant or upgrade
+      // step, differing only in effect text that is not imported): entries
+      // of a topic with the same name and kind are one. The one kept is the
+      // newer table's, then the shortest id; bindings of the others move to it.
+      await txn.execute(
+        'CREATE TEMP TABLE IF NOT EXISTS item_twin (id TEXT PRIMARY KEY, '
+        'keep TEXT NOT NULL)',
+      );
+      await txn.execute('DELETE FROM item_twin');
+      await txn.execute(
+        'INSERT INTO item_twin (id, keep) '
+        'SELECT e.id, (SELECT k.id FROM entries k '
+        "WHERE k.type = 'roguelike_item' AND k.collection_id = e.collection_id "
+        "AND k.name = e.name AND IFNULL(k.group_name, '') = "
+        "IFNULL(e.group_name, '') "
+        'ORDER BY k.source_path DESC, length(k.raw_id), k.raw_id LIMIT 1) '
+        "FROM entries e WHERE e.type = 'roguelike_item'",
+      );
+      await txn.execute('DELETE FROM item_twin WHERE id = keep');
+      for (final col in const ['src', 'dst']) {
+        await txn.execute(
+          'UPDATE OR IGNORE entry_links SET $col = '
+          '(SELECT keep FROM item_twin WHERE id = entry_links.$col) '
+          'WHERE $col IN (SELECT id FROM item_twin)',
+        );
+      }
+      await txn.execute(
+        'DELETE FROM entry_links WHERE src IN (SELECT id FROM item_twin) '
+        'OR dst IN (SELECT id FROM item_twin)',
+      );
+      await txn.execute(
+        'DELETE FROM normalized_records WHERE entry_id IN '
+        '(SELECT id FROM item_twin)',
+      );
+      await txn.execute(
+        'DELETE FROM entries WHERE id IN (SELECT id FROM item_twin)',
+      );
+      await txn.execute('DROP TABLE item_twin');
       // Bindings whose ends are not entries (an operator without a profile,
       // a zone without a name) are dropped.
       await txn.execute(
