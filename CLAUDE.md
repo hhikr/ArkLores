@@ -16,7 +16,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
-- **0.11 肉鸽页第六轮（2026-10-05，未发布，需重算知识库）**：⓪ 收藏品去重（`rebuildDerived`）：同主题、同名、同类（`group_name`）的 `roguelike_item` 只留一条
+- **0.11 肉鸽页第六轮（2026-10-05，未发布，需重算知识库）**：⓪ 收藏品去重（`rebuildDerived`）：同主题、同名且（同类 `group_name`，或导入后文字完全相同——钱币与它的加成、物品与它的票券、按槽位重复的变异加成）的 `roguelike_item`/`roguelike_buff` 只留一条；同名但文字不同且不同类的（钱币 vs 加成的修订措辞）保留两条
   （优先新表 `roguelike_topic_table`，再取最短 id），链接改指向保留的一条。原因：rogue_1 的新旧两张表各列一遍；rogue_5 的钱币每枚有 4 个朝向、
   新旧各一套、每套 a–k 共 11 个附加词条变体（差别只在不导入的玩法行），3502 条 → 539；rogue_6 传承物按阶段重复。
   ① 事件的选项按层折叠：`event_outline.dart` 的 `eventOutline`——表里只有

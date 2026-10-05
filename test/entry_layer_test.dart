@@ -391,6 +391,28 @@ void main() {
                 'usage': '每秒回复3点生命',
                 'type': 'RELIC',
               },
+              // A coin and its buff: the same words are one entry, different
+              // words (a revised line) stay two.
+              'rogue_fx_copper_1': {
+                'name': '双生币',
+                'description': '一枚铜币的设定描述。',
+                'type': 'COPPER',
+              },
+              'rogue_fx_copper_buff_1': {
+                'name': '双生币',
+                'description': '一枚铜币的设定描述。',
+                'type': 'COPPER_BUFF',
+              },
+              'rogue_fx_copper_2': {
+                'name': '异文币',
+                'description': '铜币的设定描述之一。',
+                'type': 'COPPER',
+              },
+              'rogue_fx_copper_buff_2': {
+                'name': '异文币',
+                'description': '铜币的设定描述之二。',
+                'type': 'COPPER_BUFF',
+              },
               // The same collectible listed again (a variant copy).
               'rogue_fx_relic_1_b': {
                 'name': '虚构藏品',
@@ -726,16 +748,25 @@ void main() {
     test('roguelike items keep flavor text and drop effects', () async {
       final item = (await q(
         'SELECT r.content, e.collection_id FROM entries e JOIN normalized_records r '
-        "ON r.id = e.record_id WHERE e.type = 'roguelike_item'",
+        "ON r.id = e.record_id WHERE e.type = 'roguelike_item' AND e.name = '虚构藏品'",
       ))
           .single;
       expect(item['content'], '一件藏品的设定描述。');
       expect(item['collection_id'], 'rogue_fx');
       // Listed twice by the game, one entry: the shorter id is kept.
       expect(
-        (await q("SELECT raw_id FROM entries WHERE type = 'roguelike_item'"))
+        (await q("SELECT raw_id FROM entries WHERE type = 'roguelike_item' AND name = '虚构藏品'"))
             .single['raw_id'],
         'rogue_fx/rogue_fx_relic_1',
+      );
+      // A coin and its buff with the same words are one; revised words stay two.
+      expect(
+        (await q("SELECT raw_id FROM entries WHERE name = '双生币'")).single['raw_id'],
+        'rogue_fx/rogue_fx_copper_1',
+      );
+      expect(
+        await q("SELECT 1 FROM entries WHERE name = '异文币'"),
+        hasLength(2),
       );
       // Options are not entries of their own: they are part of the event
       // that offers them (same id stem), the effect text left out.

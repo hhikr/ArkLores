@@ -2188,16 +2188,26 @@ class EntryImporter {
         'keep TEXT NOT NULL)',
       );
       await txn.execute('DELETE FROM item_twin');
+      // Of the same name: the same kind of item, or the very same words
+      // whatever the kind (a coin and its buff, an item and its ticket,
+      // the same buff listed per slot).
       await txn.execute(
         'INSERT INTO item_twin (id, keep) '
         'SELECT e.id, (SELECT k.id FROM entries k '
-        "WHERE k.type = 'roguelike_item' AND k.collection_id = e.collection_id "
-        "AND k.name = e.name AND IFNULL(k.group_name, '') = "
-        "IFNULL(e.group_name, '') "
+        'LEFT JOIN normalized_records kr ON kr.id = k.record_id '
+        'WHERE k.type = e.type AND k.collection_id = e.collection_id '
+        'AND k.name = e.name AND ('
+        "(e.type = 'roguelike_item' AND IFNULL(k.group_name, '') = "
+        "IFNULL(e.group_name, '')) OR kr.content = er.content) "
         'ORDER BY k.source_path DESC, length(k.raw_id), k.raw_id LIMIT 1) '
-        "FROM entries e WHERE e.type = 'roguelike_item'",
+        'FROM entries e LEFT JOIN normalized_records er ON er.id = e.record_id '
+        "WHERE e.type IN ('roguelike_item', 'roguelike_buff')",
       );
       await txn.execute('DELETE FROM item_twin WHERE id = keep');
+      // A twin whose kept one is itself a twin stays (never lose both).
+      await txn.execute(
+        'DELETE FROM item_twin WHERE keep IN (SELECT id FROM item_twin)',
+      );
       for (final col in const ['src', 'dst']) {
         await txn.execute(
           'UPDATE OR IGNORE entry_links SET $col = '
