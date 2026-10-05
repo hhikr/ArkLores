@@ -193,7 +193,7 @@ void main() {
       await tester.tap(find.text('第 61–62 行'));
       await tester.pumpAndSettle();
       expect(find.byType(StoryReaderPage), findsOneWidget);
-      expect(find.text('原文 · 第 61–62 行'), findsOneWidget);
+      // (The header with the range is far above: the page opens on the lines.)
       // Only the cited lines are highlighted, and they were scrolled to.
       expect(find.byKey(const ValueKey('story-line-target-60')), findsOneWidget);
       expect(find.byKey(const ValueKey('story-line-target-61')), findsOneWidget);

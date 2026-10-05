@@ -372,11 +372,17 @@ void main() {
     // Opened from the library: nothing is highlighted, the end offers the
     // previous and the next chapter.
     expect(find.byKey(const ValueKey('story-line-target-0')), findsNothing);
-    await tester.drag(
-      find.byKey(const ValueKey('story-reader-scroll')),
-      const Offset(0, -20000),
-    );
-    await tester.pumpAndSettle();
+    // The list is lazy: each drag reaches as far as what is built so far.
+    for (var i = 0; i < 30; i++) {
+      await tester.drag(
+        find.byKey(const ValueKey('story-reader-scroll')),
+        const Offset(0, -20000),
+      );
+      await tester.pumpAndSettle();
+      if (find.byKey(const ValueKey('story-reader-previous')).evaluate().isNotEmpty) {
+        break;
+      }
+    }
     await shoot(tester, 'library_reader_end');
     expect(find.byKey(const ValueKey('story-reader-previous')), findsOneWidget);
     expect(find.byKey(const ValueKey('story-reader-next')), findsOneWidget);

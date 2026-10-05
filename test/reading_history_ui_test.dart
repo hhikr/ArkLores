@@ -31,9 +31,11 @@ void main() {
   setUp(() => store = MemoryUserStore());
 
   Future<void> settle(WidgetTester tester) async {
+    // The reader scrolls to its target over a few frames (the list is lazy).
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pump(const Duration(milliseconds: 300));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
   }
 
   // A fresh scope per call: the providers cache their first result.
@@ -75,25 +77,27 @@ void main() {
     final saved = await store.recent();
     expect(saved, hasLength(1));
     expect(saved.single.ref, const LibraryRef.story(_story).toString());
-    expect(saved.single.lineIndex, 20);
-    expect(saved.single.snippet, '第20句');
+    // The anchor follows the reader: the first line on screen, which is a few
+    // above the cited block.
+    final at = saved.single.lineIndex;
+    expect(at, inInclusiveRange(10, 20));
+    expect(saved.single.snippet, '第$at句');
     expect(saved.single.title, isNotEmpty);
 
     // The history page lists it; the story gained 3 lines in front meanwhile.
     await tester.pumpWidget(app(const ReadingHistoryPage(), _lines(shift: 3)));
     await settle(tester);
     expect(find.text(saved.single.title), findsOneWidget);
-    expect(find.text('第 21 行', findRichText: true), findsNothing);
-    expect(find.textContaining('第 21 行'), findsOneWidget);
-    expect(find.textContaining('第20句'), findsOneWidget);
+    expect(find.textContaining('第 ${at + 1} 行'), findsOneWidget);
+    expect(find.textContaining('第$at句'), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey('reading-tile-${saved.single.ref}')));
     await settle(tester);
     expect(find.byType(StoryReaderPage), findsOneWidget);
-    // Found again by its text: line 20 is now line 23.
-    expect(find.byKey(const ValueKey('story-line-resume-23')), findsOneWidget);
-    expect(find.byKey(const ValueKey('story-line-resume-20')), findsNothing);
-    expect(find.byKey(const ValueKey('story-line-target-23')), findsNothing);
+    // Found again by its text: the line is now three further down.
+    expect(find.byKey(ValueKey('story-line-resume-${at + 3}')), findsOneWidget);
+    expect(find.byKey(ValueKey('story-line-resume-$at')), findsNothing);
+    expect(find.byKey(ValueKey('story-line-target-${at + 3}')), findsNothing);
     expect(find.text('原文有变动，已定位到大致位置'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -112,6 +116,9 @@ void main() {
     await tester.tap(find.text('故事 · 章'));
     await settle(tester);
     expect(find.byKey(const ValueKey('story-line-resume-12')), findsOneWidget);
+    // The note is in the header, above the line the reader was taken to.
+    await tester.drag(find.byKey(const ValueKey('story-reader-scroll')), const Offset(0, 3000));
+    await settle(tester);
     expect(find.text('原文有变动，已定位到大致位置'), findsOneWidget);
   });
 
@@ -195,5 +202,69 @@ void main() {
     ),);
     await settle(tester);
     expect(styleOf('全是叙述。')?.fontStyle, FontStyle.normal);
+  });
+
+  testWidgets('a very long story opens, jumps and saves like a short one',
+      (tester) async {
+    tall(tester);
+    final long = [
+      for (var i = 0; i < 20000; i++)
+        StoryLineEntry(
+          lineIndex: i,
+          speaker: i % 3 == 0 ? '甲' : null,
+          content: '第$i句，${'很长的一句话' * (i % 7)}',
+        ),
+    ];
+    await tester.pumpWidget(app(
+      const StoryReaderPage(storyId: _story, resumeLine: 15000, snippet: '第15000句'),
+      long,
+    ),);
+    await settle(tester);
+    // Only what is near the screen is built, far down the text.
+    expect(find.byType(Text).evaluate().length, lessThan(200));
+    expect(find.byKey(const ValueKey('story-line-resume-15000')), findsOneWidget);
+    final saved = (await store.recent()).single;
+    expect(saved.lineIndex, inInclusiveRange(14990, 15000));
+    expect(saved.totalLines, 20000);
+
+    // Scrolling on keeps the position saved.
+    await tester.drag(find.byKey(const ValueKey('story-reader-scroll')), const Offset(0, -3000));
+    await settle(tester);
+    expect((await store.recent()).single.lineIndex, greaterThan(15000));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a cited block deep in a long story is shown, and the jump button '
+      'brings it back', (tester) async {
+    tall(tester);
+    final long = [
+      for (var i = 0; i < 20000; i++)
+        StoryLineEntry(lineIndex: i, speaker: null, content: '第$i句。'),
+    ];
+    await tester.pumpWidget(app(
+      const StoryReaderPage(
+        storyId: _story,
+        highlightStart: 12000,
+        highlightEnd: 12001,
+      ),
+      long,
+    ),);
+    await settle(tester);
+    expect(find.byKey(const ValueKey('story-line-target-12000')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-line-target-12001')), findsOneWidget);
+
+    for (var i = 0; i < 8; i++) {
+      await tester.drag(
+        find.byKey(const ValueKey('story-reader-scroll')),
+        const Offset(0, -2000),
+      );
+    }
+    await settle(tester);
+    expect(find.byKey(const ValueKey('story-line-target-12000')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('story-reader-jump')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('story-line-target-12000')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

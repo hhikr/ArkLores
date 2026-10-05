@@ -24,6 +24,9 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
   ④ 进度百分比 = 页面首行（`ReadingEntry.progress` 用 `lineIndex`，与“继续阅读第 x 行”一致；“读完”标记仍看 `furthest`）。⑤ 阅读器：段间距（同说话人 14、换人 20）
   大于行距，字体是打包的霞鹜文楷屏幕阅读版（LXGW WenKai Screen v1.522，OFL，`assets/fonts/LXGWWenKaiScreen.ttf` 25.7 MB，`readingFontFamily`），旁白只在“有对白的
   故事”里斜体，纯叙述的故事（月度小队等）正体；`{@nickname}` 阅读时换成“设置 → 资料设置 → 称呼”（`withPlaceholders`，不改库；留空显示“博士”），`{@nbs}` 换成不换行空格。
+  阅读页是惰性列表（`CustomScrollView` + `center`：锚点之前的 sliver 往上建、之后的往下建，滚动偏移从锚点算起，不估高度；打开时锚在引用块/续读行上，
+  `anchor` 0.25/0.08；“回到引用处”= 滚动归零并换锚点）——任意长的故事打开、跳转、滚动的开销一样（之前一次性建出全部几千行，进页面卡；换小字体没用，
+  那不是字体的问题）。进度用已建出的行的 GlobalKey 取屏幕首/末行。列表高度靠滚动逐步校准，所以没有滚动条/不能一键拖到末尾，要连续滑。
   ⑥ 阅读历史每页 15 条。⑦ 没有结局书的主题（rogue_1）：`ending_<n>` 的结局对应文件 `level_*ending_<n>` 作为它自己的剧情（组 `结局`，`part_of`），
   `level_*_entry` 一律是开局剧情；条目页的“自己的故事”按组 `结局` 认，不再靠和结局同名。
 - **0.11 资料页学名核对（2026-10-05，未发布，需重算知识库）**：界面里凡由代码推出来的名词，一律以游戏表或 prts.wiki 为准，查不到的不起名
@@ -119,8 +122,8 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
     且 `story_lines` 里没有无条目的故事（都能从书架走到）；查询均 <30 ms。界面在 Ahem 字体下做了布局截图检查
     （`ARKLORES_SHOT_DIR=<目录> flutter test test/library_ui_test.dart` 导出 PNG，仅看布局不看字形）。
   - **已知局限**：数据层——主线章 `main_14` 的关卡被归到它的复刻活动（上一步已记的“活动与其复刻共用关卡，归属复刻”），所以该章页面没有关卡/敌人；
-    要修需在 `entry_importer` 里让主线关卡按 id 前缀归主线章并重建库。App 端——长篇故事（数千行）用单个 Column 渲染，
-    未做分段加载；条目类型与绑定的显示名只有中文。真机待确认：书架网格观感、阅读页滚动保存的进度、续读定位。
+    要修需在 `entry_importer` 里让主线关卡按 id 前缀归主线章并重建库。App 端——条目类型与绑定的显示名只有中文
+    （长故事的惰性渲染见上面“活动分类、阅读器与设置”一条）。真机待确认：书架网格观感、阅读页滚动保存的进度、续读定位。
 - **0.11 第 4 步：用户库与阅读历史（2026-10-05，同一分支，未发布）**：
   - **用户库** `lib/core/userdata/`：独立文件 `<documents>/userdata/arklores_user.db`（与知识库不同目录，不 ATTACH、不建外键，
     知识库更新/替换/删除都碰不到它）。结构版本用 `PRAGMA user_version`，由 `UserDataStore` 自己管理（`userDataMigrations`，

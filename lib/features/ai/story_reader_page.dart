@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
@@ -87,6 +88,18 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
   List<StoryLineEntry> _lines = const [];
   Timer? _saveTimer;
 
+  final ScrollController _scroll = ScrollController();
+  List<_Row> _rows = const [];
+  List<StoryLineEntry>? _preparedFor;
+  bool _spoken = false;
+  String _nickname = '';
+
+  /// The item the lazy list is anchored on (0 = the header, then one per row,
+  /// then the end block) and where on the screen it starts (a fraction of the
+  /// height). Everything is built outward from it, so opening deep into a
+  /// story, or jumping back to a place, costs the same as opening at the top.
+  int _center = 0;
+  double _centerAt = 0;
   /// Highlight strength: on-off-on-off over 1.2 s, then steady.
   late final AnimationController _flash = AnimationController(
     vsync: this,
@@ -104,6 +117,7 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     _saveTimer?.cancel();
     unawaited(_saveProgress());
     _flash.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -126,6 +140,19 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     if (found == null) return;
     _resume = lines[found.index].lineIndex;
     _moved = !found.exact;
+  }
+
+  /// Computes what the list needs from the text, once per text.
+  void _prepare(List<StoryLineEntry> lines) {
+    if (identical(_preparedFor, lines)) return;
+    _preparedFor = lines;
+    _lines = lines;
+    // Narration is set in italics only between spoken lines; a text that is
+    // all narration (a month squad's story, a document) is plain.
+    _spoken = lines.any((l) => (l.speaker ?? '').trim().isNotEmpty);
+    _rows = _makeRows(lines);
+    // Open anchored on the cited block or the line to resume at.
+    _anchorOnTarget();
   }
 
   // ─── History ───────────────────────────────────────────────────
@@ -161,9 +188,9 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     } catch (_) {}
   }
 
-  /// First and last line on screen, by position in the list: lines are in
-  /// one column, so their vertical positions are in order and a binary
-  /// search finds the edges.
+  /// First and last line on screen, by position. Only lines that are built
+  /// have a place to measure (the list is lazy), and those are the ones near
+  /// the screen.
   (int, int)? _visibleRange() {
     final viewport = _scrollKey.currentContext?.findRenderObject();
     if (viewport is! RenderBox || !viewport.attached || _lines.isEmpty) {
@@ -171,42 +198,18 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     }
     final top = viewport.localToGlobal(Offset.zero).dy + 8;
     final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy;
-
-    double? edge(int i, {required bool end}) {
-      final box = _lineKeys[i]?.currentContext?.findRenderObject();
-      if (box is! RenderBox || !box.attached) return null;
-      return box.localToGlobal(Offset(0, end ? box.size.height : 0)).dy;
-    }
-
-    // First line whose bottom edge is below the top of the viewport.
-    var lo = 0, hi = _lines.length - 1;
-    while (lo < hi) {
-      final mid = (lo + hi) ~/ 2;
-      final y = edge(mid, end: true);
-      if (y == null) return null;
-      if (y > top) {
-        hi = mid;
-      } else {
-        lo = mid + 1;
+    int? first, last;
+    for (final e in _lineKeys.entries) {
+      final box = e.value.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final y = box.localToGlobal(Offset.zero).dy;
+      if (y + box.size.height > top && y < bottom) {
+        if (first == null || e.key < first) first = e.key;
+        if (last == null || e.key > last) last = e.key;
       }
     }
-    final first = lo;
-    // Last line whose top edge is above the bottom of the viewport.
-    lo = first;
-    hi = _lines.length - 1;
-    while (lo < hi) {
-      final mid = (lo + hi + 1) ~/ 2;
-      final y = edge(mid, end: false);
-      if (y == null) return null;
-      if (y < bottom) {
-        lo = mid;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return (first, lo);
+    return first == null ? null : (first, last!);
   }
-
   Future<void> _saveProgress() async {
     final store = _store;
     final range = _visibleRange();
@@ -234,31 +237,38 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
 
   // ─── Scrolling ─────────────────────────────────────────────────
 
-  Future<void> _jumpToTarget() async {
-    final target =
-        _cited ? _targetKey.currentContext : _resumeKey()?.currentContext;
-    if (target == null || !mounted) return;
-    await Scrollable.ensureVisible(
-      target,
-      alignment: _cited ? 0.25 : 0.08,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-    );
-    if (mounted && _cited) _flash.forward(from: 0);
+  /// The row (not the item) holding the cited block or the line to resume at.
+  int? _targetRow() {
+    final at = _cited ? _start : _resume;
+    if (at == null) return null;
+    final p = _lines.indexWhere((l) => l.lineIndex == at);
+    if (p < 0) return null;
+    final r = _rows.indexWhere((row) => row.first <= p && p <= row.last);
+    return r < 0 ? null : r;
   }
 
-  GlobalKey? _resumeKey() {
-    final at = _resume;
-    if (at == null) return null;
-    final i = _lines.indexWhere((l) => l.lineIndex == at);
-    return i < 0 ? null : _keyOf(i);
+  /// Anchors the list on the cited block or the line to resume at.
+  void _anchorOnTarget() {
+    final r = _targetRow();
+    if (r == null) return;
+    _center = r + 1;
+    _centerAt = _cited ? 0.25 : 0.08;
+  }
+
+  /// Back to the cited block or the line the reader was at, from wherever
+  /// they have scrolled to.
+  void _jumpToTarget() {
+    if (_targetRow() == null || !mounted) return;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    setState(_anchorOnTarget);
+    if (_cited) _flash.forward(from: 0);
   }
 
   void _scrollToTarget() {
     if (_scrolled) return;
     _scrolled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (_cited || _resume != null) await _jumpToTarget();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_cited && mounted) _flash.forward(from: 0);
       // Short stories fit the screen: no scroll will report them.
       if (mounted) _saveSoon();
     });
@@ -280,6 +290,7 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     final lines = ref.watch(storyFullLinesProvider(widget.storyId));
     final canJump = _cited || _resume != null;
 
+    _nickname = ref.watch(nicknameProvider);
     return Scaffold(
       backgroundColor: theme.bgPrimary,
       appBar: AppBar(
@@ -310,6 +321,7 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
         data: (lines) {
           if (lines.isEmpty) return _unavailable(theme);
           _anchor(lines);
+          _prepare(lines);
           _recordLater(lines);
           _scrollToTarget();
           final range = !_cited
@@ -327,30 +339,76 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
               child: ConstrainedBox(
                 key: _scrollKey,
                 constraints: const BoxConstraints(maxWidth: 720),
-                child: SingleChildScrollView(
+                // Two lazy lists meet at the anchor item: what comes before it
+                // (built upward) and what comes from it on. The scroll offset
+                // is measured from the anchor, so no height is ever estimated
+                // and a story of any length is built the same way.
+                child: CustomScrollView(
                   key: const ValueKey('story-reader-scroll'),
-                  padding: const EdgeInsets.fromLTRB(6, 4, 6, 40),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _header(
-                        theme,
-                        collection,
-                        chapter,
-                        range,
-                        entry?.synopsis,
+                  controller: _scroll,
+                  center: const ValueKey('story-reader-center'),
+                  anchor: _centerAt,
+                  scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
+                  slivers: [
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, i) => _item(
+                            theme,
+                            _center - 1 - i,
+                            collection,
+                            chapter,
+                            range,
+                            entry?.synopsis,
+                          ),
+                          childCount: _center,
+                        ),
                       ),
-                      ..._body(theme, lines),
-                      _end(theme),
-                    ],
-                  ),
-                ),
-              ),
+                    ),
+                    SliverPadding(
+                      key: const ValueKey('story-reader-center'),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, i) => _item(
+                            theme,
+                            _center + i,
+                            collection,
+                            chapter,
+                            range,
+                            entry?.synopsis,
+                          ),
+                          childCount: _rows.length + 2 - _center,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),              ),
             ),
           );
         },
       ),
     );
+  }
+
+  /// Item `i` of the list: the header, a row, or the end of the text.
+  Widget _item(
+    AppThemeTokens theme,
+    int i,
+    String collection,
+    String chapter,
+    String? range,
+    String? synopsis,
+  ) {
+    if (i == 0) return _header(theme, collection, chapter, range, synopsis);
+    if (i == _rows.length + 1) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 40),
+        child: _end(theme),
+      );
+    }
+    return _rowWidget(theme, i - 1);
   }
 
   Widget _chip(AppThemeTokens theme, String text) => Container(
@@ -455,75 +513,93 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
         ),
       );
 
-  /// The lines, with the cited ones grouped into one highlighted block.
-  List<Widget> _body(AppThemeTokens theme, List<StoryLineEntry> lines) {
-    final out = <Widget>[];
-    final cited = <Widget>[];
-    String? previousSpeaker;
-    // Narration is set in italics only between spoken lines; a text that is
-    // all narration (a month squad's story, a document) is plain.
-    final spoken = lines.any((l) => (l.speaker ?? '').trim().isNotEmpty);
-    // Read once for the whole text, not once per line.
-    final nickname = ref.watch(nicknameProvider);
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final speaker = (line.speaker ?? '').trim();
-      final showName = speaker.isNotEmpty && speaker != previousSpeaker;
-      // Between paragraphs a little more than the leading inside one.
-      final gap = speaker != previousSpeaker ? 20.0 : 14.0;
-      previousSpeaker = speaker;
+  /// What the list is made of: one row per line, the cited lines together in
+  /// one highlighted block. Positions are indexes into [_lines].
+  List<_Row> _makeRows(List<StoryLineEntry> lines) {
+    final rows = <_Row>[];
+    var i = 0;
+    while (i < lines.length) {
+      if (_isTarget(lines[i].lineIndex)) {
+        var j = i;
+        while (j + 1 < lines.length && _isTarget(lines[j + 1].lineIndex)) {
+          j++;
+        }
+        rows.add(_Row(i, j));
+        i = j + 1;
+      } else {
+        rows.add(_Row(i, i));
+        i++;
+      }
+    }
+    return rows;
+  }
+
+  /// A line of the text, or the cited block. Built only while it is on (or
+  /// near) the screen: the list is lazy, so a story of any length opens and
+  /// scrolls the same.
+  Widget _rowWidget(AppThemeTokens theme, int index) {
+    final row = _rows[index];
+    final first = row.first == 0;
+    if (row.first == row.last && !_isTarget(_lines[row.first].lineIndex)) {
+      final line = _lines[row.first];
       final isResume = !_cited && line.lineIndex == _resume;
-      final row = Container(
-        key: _keyOf(i),
+      final child = Container(
+        key: _keyOf(row.first),
         child: _line(
           theme,
           line,
-          speaker: speaker,
-          showName: showName,
+          speaker: _speakerOf(row.first),
+          showName: _showName(row.first),
           marked: isResume,
-          italicNarration: spoken,
-          nickname: nickname,
+          italicNarration: _spoken,
+          nickname: _nickname,
         ),
       );
-      if (_isTarget(line.lineIndex)) {
-        if (cited.isNotEmpty) cited.add(SizedBox(height: gap));
-        cited.add(
-          KeyedSubtree(
-            key: ValueKey('story-line-target-${line.lineIndex}'),
-            child: row,
+      return Padding(
+        padding: EdgeInsets.fromLTRB(10, first ? 0 : _gapBefore(row.first), 10, 0),
+        child: isResume
+            ? KeyedSubtree(
+                key: ValueKey('story-line-resume-${line.lineIndex}'),
+                child: child,
+              )
+            : child,
+      );
+    }
+    final inside = <Widget>[];
+    for (var p = row.first; p <= row.last; p++) {
+      if (p > row.first) inside.add(SizedBox(height: _gapBefore(p)));
+      inside.add(
+        KeyedSubtree(
+          key: ValueKey('story-line-target-${_lines[p].lineIndex}'),
+          child: Container(
+            key: _keyOf(p),
+            child: _line(
+              theme,
+              _lines[p],
+              speaker: _speakerOf(p),
+              showName: _showName(p),
+              italicNarration: _spoken,
+              nickname: _nickname,
+            ),
           ),
-        );
-        continue;
-      }
-      if (cited.isNotEmpty) {
-        out
-          ..add(const SizedBox(height: 8))
-          ..add(_citedBlock(theme, List.of(cited)))
-          ..add(const SizedBox(height: 8));
-        cited.clear();
-      } else if (out.isNotEmpty) {
-        out.add(SizedBox(height: gap));
-      }
-      out.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: isResume
-              ? KeyedSubtree(
-                  key: ValueKey('story-line-resume-${line.lineIndex}'),
-                  child: row,
-                )
-              : row,
         ),
       );
     }
-    if (cited.isNotEmpty) {
-      out
-        ..add(const SizedBox(height: 8))
-        ..add(_citedBlock(theme, cited));
-    }
-    return out;
+    return Padding(
+      padding: EdgeInsets.only(top: first ? 0 : 8, bottom: 8),
+      child: _citedBlock(theme, inside),
+    );
   }
 
+  String _speakerOf(int p) => (_lines[p].speaker ?? '').trim();
+
+  bool _showName(int p) =>
+      _speakerOf(p).isNotEmpty && (p == 0 || _speakerOf(p) != _speakerOf(p - 1));
+
+  /// Between paragraphs a little more than the leading inside one; a new
+  /// speaker a little more still.
+  double _gapBefore(int p) =>
+      p > 0 && _speakerOf(p) == _speakerOf(p - 1) ? 14.0 : 20.0;
   Widget _citedBlock(AppThemeTokens theme, List<Widget> rows) =>
       AnimatedBuilder(
         key: _targetKey,
@@ -768,4 +844,13 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
       child: content,
     );
   }
+}
+
+/// A row of the lazy list: the lines irst to last (positions in the text);
+/// more than one only for the cited block.
+class _Row {
+  const _Row(this.first, this.last);
+
+  final int first;
+  final int last;
 }
