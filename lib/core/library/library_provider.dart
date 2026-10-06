@@ -181,5 +181,7 @@ final materialProvider = FutureProvider.autoDispose
 void invalidateReading(WidgetRef ref) {
   ref
     ..invalidate(recentReadingProvider)
+    ..invalidate(readingCountProvider)
+    ..invalidate(readingPageProvider)
     ..invalidate(readingProgressProvider);
 }

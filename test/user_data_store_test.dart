@@ -95,8 +95,8 @@ void main() {
       expect(await store.recent(), isEmpty);
     });
 
-    test('the oldest entries are dropped beyond the limit', () async {
-      for (var i = 0; i < historyLimit + 5; i++) {
+    test('the history has no limit and is read a page at a time', () async {
+      for (var i = 0; i < 1205; i++) {
         now = now.add(const Duration(seconds: 1));
         await store.recordOpen(
           LibraryRef.story('s/$i.txt'),
@@ -105,10 +105,12 @@ void main() {
           snippet: '',
         );
       }
-      final all = await store.recent(limit: 1000);
-      expect(all, hasLength(historyLimit));
-      expect(all.first.title, '${historyLimit + 4}');
-      expect(all.last.title, '5');
+      expect(await store.historyCount(), 1205);
+      final page = await store.recent(limit: 15, offset: 30);
+      expect(page, hasLength(15));
+      expect(page.first.title, '1174');
+      final last = await store.recent(limit: 15, offset: 1200);
+      expect(last.map((e) => e.title), ['4', '3', '2', '1', '0']);
     });
   });
 

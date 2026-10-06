@@ -62,10 +62,14 @@ class MemoryUserStore extends UserDataStore {
   Future<Map<String, ReadingEntry>> progressByRef() async => Map.of(rows);
 
   @override
-  Future<List<ReadingEntry>> recent({int limit = 50}) async =>
+  Future<List<ReadingEntry>> recent({int limit = 50, int offset = 0}) async =>
       (rows.values.toList()..sort((a, b) => b.openedAt.compareTo(a.openedAt)))
+          .skip(offset)
           .take(limit)
           .toList();
+
+  @override
+  Future<int> historyCount() async => rows.length;
 
   @override
   Future<void> clearHistory([LibraryRef? ref]) async =>

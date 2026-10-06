@@ -155,9 +155,14 @@ void main() {
     expect((await store.recent()), isEmpty);
   });
 
-  testWidgets('a long history is shown a page at a time', (tester) async {
-    tall(tester);
-    for (var i = 0; i < 20; i++) {
+  testWidgets('a long history is paged: page boxes above and below, jump, '
+      'first and last', (tester) async {
+    // Tall enough that the whole page, both pagers included, is built.
+    tester.view.physicalSize = const Size(800, 6000);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (var i = 0; i < 100; i++) {
       await store.recordOpen(
         LibraryRef.story('s/$i.txt'),
         title: '故事$i',
@@ -167,17 +172,40 @@ void main() {
     }
     await tester.pumpWidget(app(const ReadingHistoryPage(), const []));
     await settle(tester);
-    // Newest first: 19 … 5 on the first page, 4 … 0 on the second.
-    expect(find.text('故事19'), findsOneWidget);
-    expect(find.text('故事4'), findsNothing);
-    await tester.scrollUntilVisible(find.text('第 1 / 2 页'), 300);
-    await tester.tap(find.byKey(const ValueKey('reading-history-next')));
-    await settle(tester);
-    expect(find.text('故事4'), findsOneWidget);
-    expect(find.text('故事19'), findsNothing);
-    expect(find.text('第 2 / 2 页'), findsOneWidget);
-  });
+    // Newest first: 99 … 85 on the first page; 7 pages of 15.
+    expect(find.text('故事99'), findsOneWidget);
+    expect(find.text('故事84'), findsNothing);
+    expect(find.byKey(const ValueKey('reading-history-pager-top')), findsOneWidget);
+    expect(find.byKey(const ValueKey('reading-history-pager-bottom')), findsOneWidget);
+    expect(find.text('第 1 / 7 页'), findsNWidgets(2));
 
+    // A page box (the one in the top pager) opens that page.
+    await tester.tap(find.byKey(const ValueKey('reading-history-page-box-3')).first);
+    await settle(tester);
+    expect(find.text('故事69'), findsOneWidget); // 100 - 30 - 1
+    expect(find.text('故事99'), findsNothing);
+    expect(find.text('第 3 / 7 页'), findsNWidgets(2));
+
+    // The last page holds the oldest ten (100 = 6 × 15 + 10).
+    await tester.tap(find.byKey(const ValueKey('reading-history-last')).first);
+    await settle(tester);
+    expect(find.text('故事0'), findsOneWidget);
+    expect(find.text('第 7 / 7 页'), findsNWidgets(2));
+
+    // The label asks for a page number.
+    await tester.tap(find.byKey(const ValueKey('reading-history-jump')).first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('reading-history-jump-field')), '2');
+    await tester.tap(find.byKey(const ValueKey('reading-history-jump-go')));
+    await settle(tester);
+    expect(find.text('第 2 / 7 页'), findsNWidgets(2));
+    expect(find.text('故事84'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('reading-history-first')).first);
+    await settle(tester);
+    expect(find.text('故事99'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('narration is italic only between spoken lines; the Doctor '
       'placeholder shows the reader\'s form of address', (tester) async {
     tall(tester);

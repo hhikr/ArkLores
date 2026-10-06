@@ -1418,6 +1418,24 @@ abstract class AppLocalizations {
   /// **'Clear'**
   String get readingHistoryClear;
 
+  /// No description provided for @readingHistoryJumpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to page'**
+  String get readingHistoryJumpTitle;
+
+  /// No description provided for @readingHistoryJumpHint.
+  ///
+  /// In en, this message translates to:
+  /// **'1 – {pages}'**
+  String readingHistoryJumpHint(int pages);
+
+  /// No description provided for @readingHistoryJumpGo.
+  ///
+  /// In en, this message translates to:
+  /// **'Go'**
+  String get readingHistoryJumpGo;
+
   /// No description provided for @readingHistoryClearConfirm.
   ///
   /// In en, this message translates to:

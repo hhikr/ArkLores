@@ -22,9 +22,27 @@ final userDataStoreProvider = FutureProvider<UserDataStore>((ref) async {
   return store;
 });
 
-/// The reading history, newest first. Invalidate after changing it.
+/// Items per page of the reading history.
+const int historyPageSize = 15;
+
+/// The latest few items, for the front page of the library. Invalidate after
+/// changing the history.
 final recentReadingProvider =
     FutureProvider.autoDispose<List<ReadingEntry>>((ref) async {
   final store = await ref.watch(userDataStoreProvider.future);
-  return store.recent(limit: historyLimit);
+  return store.recent(limit: 5);
+});
+
+/// Size of the whole reading history.
+final readingCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final store = await ref.watch(userDataStoreProvider.future);
+  return store.historyCount();
+});
+
+/// One page (0-based) of the reading history, newest first: only that page is
+/// read from the database.
+final readingPageProvider =
+    FutureProvider.autoDispose.family<List<ReadingEntry>, int>((ref, page) async {
+  final store = await ref.watch(userDataStoreProvider.future);
+  return store.recent(limit: historyPageSize, offset: page * historyPageSize);
 });

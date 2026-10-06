@@ -749,6 +749,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readingHistoryClear => 'Clear';
 
   @override
+  String get readingHistoryJumpTitle => 'Go to page';
+
+  @override
+  String readingHistoryJumpHint(int pages) {
+    return '1 – $pages';
+  }
+
+  @override
+  String get readingHistoryJumpGo => 'Go';
+
+  @override
   String get readingHistoryClearConfirm => 'Clear the whole reading history?';
 
   @override

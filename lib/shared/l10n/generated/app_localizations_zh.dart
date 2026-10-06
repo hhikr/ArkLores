@@ -735,6 +735,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readingHistoryClear => '清空';
 
   @override
+  String get readingHistoryJumpTitle => '跳到第几页';
+
+  @override
+  String readingHistoryJumpHint(int pages) {
+    return '1 – $pages';
+  }
+
+  @override
+  String get readingHistoryJumpGo => '跳转';
+
+  @override
   String get readingHistoryClearConfirm => '清空全部阅读记录？';
 
   @override

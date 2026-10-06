@@ -21,9 +21,6 @@ const String userDataFileName = 'arklores_user.db';
 /// Longest snippet kept per history entry, in characters.
 const int historySnippetLength = 60;
 
-/// Entries kept in the history; the oldest are dropped beyond this.
-const int historyLimit = 1000;
-
 /// Ordered schema steps; step `i` upgrades `user_version` i → i + 1.
 final List<Future<void> Function(DatabaseExecutor db)> userDataMigrations = [
   // v1: reading history — one row per item: its title, one anchor line and
@@ -282,11 +279,6 @@ class UserDataStore {
           'total_lines': totalLines,
         });
       }
-      await txn.rawDelete(
-        'DELETE FROM reading_history WHERE ref NOT IN '
-        '(SELECT ref FROM reading_history ORDER BY opened_at DESC LIMIT ?)',
-        [historyLimit],
-      );
     });
   }
 
@@ -326,14 +318,23 @@ class UserDataStore {
   }
 
   /// Most recently read first.
-  Future<List<ReadingEntry>> recent({int limit = 50}) async {
+  /// [offset] skips that many of the newest (for paging).
+  Future<List<ReadingEntry>> recent({int limit = 50, int offset = 0}) async {
     final db = await _database;
     final rows = await db.query(
       'reading_history',
       orderBy: 'opened_at DESC, rowid DESC',
       limit: limit,
+      offset: offset,
     );
     return rows.map(ReadingEntry.fromRow).toList();
+  }
+
+  /// How many items the history holds.
+  Future<int> historyCount() async {
+    final db = await _database;
+    final rows = await db.rawQuery('SELECT COUNT(*) AS n FROM reading_history');
+    return (rows.first['n'] as int?) ?? 0;
   }
 
   /// Removes one item from the history, or all of it when [ref] is null.

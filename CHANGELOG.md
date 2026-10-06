@@ -74,7 +74,7 @@ All notable changes to ArkLores will be documented in this file.
 - **A better reader.** Stories are set in LXGW WenKai Screen with a little more room between paragraphs than between the lines of
   one; narration is italic only between spoken lines (a month squad's story is plain); `{@nickname}` shows the form of address
   set in Settings → Profile (the knowledge base is not changed); the reading percentage follows the first line on screen like
-  "continue reading"; the reading history is paged. Older Integrated Strategies topics without an ending book
+  "continue reading"; the reading history is paged (page boxes above and below the list, first/last, jump to a page; no limit on its length, read a page at a time). Older Integrated Strategies topics without an ending book
   get the same ending page as the others.
 - **Each collectible is listed once.** The game lists the same collectible several times (old and new table, variant and
   upgrade copies that differ only in effect text); they are now one entry per topic (one topic went from 3,502 to 539).
