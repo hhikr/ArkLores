@@ -219,6 +219,7 @@
   "libraryProgress": "{percent}% read",
   "@libraryProgress": {"placeholders": {"percent": {"type": "int"}}},
   "libraryFinished": "Finished",
+  "storyReaderBattleDialogue": "In-battle dialogue",
   "libraryReadTimes": "{count, plural, =1{Read once} other{Read {count} times}}",
   "@libraryReadTimes": {"placeholders": {"count": {"type": "int"}}},
   "libraryRelease": "Released {month}",

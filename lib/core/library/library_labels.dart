@@ -27,8 +27,12 @@ String entryTypeName(String type) => switch (type) {
       'home_theme' => '界面主题',
       'activity' => '活动',
       'activity_text' => '活动文本',
-      'sandbox_item' => '生息演算物品',
+      'sandbox_item' => '物品',
       'sandbox_text' => '生息演算文本',
+      'sandbox_stage' => '关卡',
+      'sandbox_topic' => '概述',
+      'sandbox_act' => '篇章',
+      'sandbox_event' => '事件',
       'roguelike_item' => '收藏品',
       'roguelike_scene' => '事件',
       'roguelike_choice' => '事件选项',
@@ -81,6 +85,7 @@ String entryHeadline(LibraryEntry entry) {
 int typeRank(String type) {
   const order = [
     'roguelike_topic',
+    'sandbox_act',
     'roguelike_ending',
     'roguelike_squad',
     'roguelike_zone',
@@ -90,6 +95,9 @@ int typeRank(String type) {
     'roguelike_scene',
     'roguelike_tip',
     'roguelike_prize',
+    'sandbox_stage',
+    'sandbox_event',
+    'sandbox_item',
   ];
   final i = order.indexOf(type);
   return i < 0 ? order.length : i;
@@ -172,16 +180,7 @@ String? groupLabel(String type, String? raw) {
       if (key == 'UNI_COLLECTION') return '收藏品';
       return null;
     case 'sandbox_item':
-      if (has('BUILDINGMAT') || has('SPECIALMAT') || key == 'PRODUCT' || key == 'CRAFT') {
-        return '材料与制作';
-      }
-      if (has('BUILDING')) return '建筑';
-      if (has('FOOD') || has('COOKBOOK')) return '食物';
-      if (key == 'TACTICAL' || key == 'BASETACTICAL') return '战术物资';
-      if (has('RECIPE')) return '配方';
-      if (has('ANIMAL') || key == 'INSECT') return '动物与昆虫';
-      if (has('RELIC')) return '藏品';
-      if (has('COIN') || key == 'GOLD' || key == 'CURRENCY') return '货币';
+      // Named by the table when built (its item types); the codes are not.
       return null;
     default:
       // Brands, authors, dates: names the tables give.

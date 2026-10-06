@@ -14,6 +14,7 @@ import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/entry_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
+import 'package:arklores/core/gamedata/build/story_coverage_builder.dart';
 import 'package:arklores/core/library/library_labels.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -47,6 +48,16 @@ Future<void> main(List<String> args) async {
       stats: stats,
       storyLimit: 0,
     );
+    // The script parser may have changed: stories whose lines differ from the
+    // source are imported again (their vectors are dropped, see
+    // deleteStoryRows; embed again with build_story_embeddings.dart).
+    stdout.writeln('re-parse stories');
+    final changed = await importer.reimportChangedStories();
+    stdout.writeln('stories changed: ${changed.length}');
+    if (changed.isNotEmpty) {
+      stdout.writeln('rebuild coverage layer');
+      await StoryCoverageBuilder(db: db, stats: stats).build();
+    }
     final entries = importer.entryImporter;
     for (final path in EntryTables.all) {
       if (!entries.handles(path)) continue;

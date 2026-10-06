@@ -75,6 +75,28 @@ void main() {
     ]);
   });
 
+  test('a command spread over several lines is one command with its text',
+      () {
+    final lines = parse('''
+[PopupDialog(dialogHead="\$avatar_a", dialogX="\$f_x")] \\
+第一句。
+
+[Tutorial(focusX=0, focusY=-85, anchor="Top",\\
+          animStyle="Highlight", focusStyle="HighlightRect", \\
+          protectTime=0.5, dialogHead="\$avatar_a")] \\
+第二句，<@tu.kw>重点</>。
+[Tutorial(startX=84, startY=10, endX=74, endY=206)] \\
+[name="甲"]后面还有命令。
+''');
+    expect(lines.map((l) => l.$2), ['第一句。', '第二句，重点。', '后面还有命令。']);
+    expect(lines.take(2).every((l) => l.$3 == StoryLineKind.system), isTrue);
+    expect(lines.last.$1, '甲');
+    // No attribute of a command ends up as text.
+    for (final l in lines) {
+      expect(l.$2, isNot(contains('=')));
+      expect(l.$2, isNot(contains('\\')));
+    }
+  });
   test('a bracket inside a quoted value does not end the command', () {
     final lines = parse('[Subtitle(text="他说：[出发]", x=1)]');
     expect(lines.single.$2, '他说：[出发]');

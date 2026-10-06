@@ -104,3 +104,43 @@ String eventOutline(
   write(root, 0);
   return out.toString().trimRight();
 }
+
+
+/// One option of a sandbox event as the tables give it: its title, its own
+/// prose, what is said after choosing it, and the options that the follow-up
+/// scene offers in turn.
+typedef SandboxOption = ({
+  String title,
+  String text,
+  String after,
+  List<String> then,
+});
+
+/// The options of a sandbox event, each followed by what is said after it and
+/// by the options that follow, as a list whose bullets say how deep they are
+/// (see [eventOutline]). The sandbox tables list the options of every scene
+/// themselves, so the layers are given, not read from an order.
+String sandboxEventOutline(
+  List<String> choices,
+  SandboxOption Function(String choice) option,
+) {
+  final out = StringBuffer();
+  void write(List<String> layer, int depth, Set<String> path) {
+    final mark = '-' * (depth + 1);
+    final said = <String>{};
+    for (final id in layer) {
+      if (path.contains(id) || depth > 6) continue;
+      final o = option(id);
+      if (o.title.isEmpty) continue;
+      if (!said.add('${o.title}|${o.text}|${o.after}')) continue;
+      out.writeln('$mark **${o.title}**${o.text.isEmpty ? '' : '：${o.text}'}');
+      for (final l in o.after.split('\n')) {
+        if (l.trim().isNotEmpty) out.writeln(l.trim());
+      }
+      write(o.then, depth + 1, {...path, id});
+    }
+  }
+
+  write(choices, 0, const {});
+  return out.toString().trimRight();
+}

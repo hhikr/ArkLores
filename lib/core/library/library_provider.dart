@@ -142,6 +142,15 @@ final operatorOwnedProvider = FutureProvider.autoDispose
     .family<List<LibraryEntry>, String>((ref, id) async =>
         await _query(ref, (db) => entriesOwnedBy(db, id)) ?? const [],);
 
+/// The in-battle dialogue attached to a stage or story entry, in order.
+final attachedStoriesProvider = FutureProvider.autoDispose
+    .family<List<LibraryEntry>, String>((ref, id) async =>
+        await _query(ref, (db) => attachedStories(db, id)) ?? const [],);
+
+/// The story whose end holds [storyId]'s dialogue (its file id), if any.
+final storyHostProvider = FutureProvider.autoDispose
+    .family<String?, String>((ref, storyId) async =>
+        _query<String?>(ref, (db) => storyHostOf(db, storyId)),);
 final storyPlaceProvider =FutureProvider.autoDispose
     .family<StoryPlace?, String>((ref, storyId) async =>
         _query<StoryPlace?>(ref, (db) => storyPlace(db, storyId)),);

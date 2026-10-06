@@ -1,4 +1,7 @@
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
+import 'package:arklores/core/library/library_provider.dart'
+    show attachedStoriesProvider, storyHostProvider;
+import 'package:arklores/core/library/library_queries.dart' show LibraryEntry;
 import 'package:arklores/core/userdata/library_ref.dart';
 import 'package:arklores/core/userdata/user_data_provider.dart';
 import 'package:arklores/core/userdata/user_data_store.dart';
@@ -46,6 +49,8 @@ void main() {
         overrides: [
           userDataStoreProvider.overrideWith((ref) async => store),
           storyFullLinesProvider.overrideWith((ref, id) async => lines),
+          storyHostProvider.overrideWith((ref, id) async => null),
+          attachedStoriesProvider.overrideWith((ref, id) async => const []),
           storyCatalogEntryProvider.overrideWith((ref, id) async => null),
         ],
         child: MaterialApp(
@@ -284,6 +289,85 @@ void main() {
     // The list says it in words, with the whole number.
     expect(find.textContaining('读过 1500 次'), findsOneWidget);
     expect(find.textContaining('读过 1 次'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('dialogue attached to a story is read at its end; a citation of '
+      'it opens there', (tester) async {
+    tall(tester);
+    const host = 'obt/main/level_host.txt';
+    const child = 'obt/tutorial/level/host.txt';
+    List<StoryLineEntry> text(String tag, int n) => [
+          for (var i = 0; i < n; i++)
+            StoryLineEntry(lineIndex: i, content: '$tag$i', speaker: i == 0 ? '甲' : null),
+        ];
+    Widget scoped(Widget home) => ProviderScope(
+          key: UniqueKey(),
+          overrides: [
+            userDataStoreProvider.overrideWith((ref) async => store),
+            storyFullLinesProvider.overrideWith(
+              (ref, id) async => id == host ? text('正文', 6) : text('战斗', 4),
+            ),
+            storyHostProvider.overrideWith(
+              (ref, id) async => id == child ? host : null,
+            ),
+            attachedStoriesProvider.overrideWith(
+              (ref, id) async => id == 'story:$host'
+                  ? const [
+                      LibraryEntry(
+                        id: 'story:$child',
+                        type: 'story',
+                        name: '教程',
+                        rawId: child,
+                      ),
+                    ]
+                  : const [],
+            ),
+            storyCatalogEntryProvider.overrideWith((ref, id) async => null),
+          ],
+          child: MaterialApp(
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: home,
+          ),
+        );
+
+    await tester.pumpWidget(scoped(const StoryReaderPage(storyId: host)));
+    await settle(tester);
+    expect(find.text('正文5'), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-reader-battle-dialogue')), findsOneWidget);
+    expect(find.text('关卡内对话'), findsOneWidget);
+    expect(find.text('战斗3'), findsOneWidget);
+    // The attached lines keep their own numbers (1–4), not their place.
+    expect(find.text('4'), findsWidgets);
+    expect(find.text('11'), findsNothing);
+    // History is kept under the story, with the whole text counted.
+    var saved = (await store.recent()).single;
+    expect(saved.ref, const LibraryRef.story(host).toString());
+    expect(saved.totalLines, 6 + 1 + 4);
+
+    // A citation of the attached dialogue's own lines opens the story it is
+    // read in, at those lines.
+    await store.clearHistory();
+    await tester.pumpWidget(
+      scoped(
+        const StoryReaderPage(
+          storyId: child,
+          highlightStart: 1,
+          highlightEnd: 2,
+        ),
+      ),
+    );
+    await settle(tester);
+    expect(find.byKey(const ValueKey('story-line-target-8')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-line-target-9')), findsOneWidget);
+    // The header says the lines by their own numbers.
+    await tester.drag(find.byKey(const ValueKey('story-reader-scroll')), const Offset(0, 3000));
+    await settle(tester);
+    expect(find.textContaining('第 2–3 行'), findsOneWidget);
+    expect(find.textContaining('第 9–10 行'), findsNothing);
+    saved = (await store.recent()).single;
+    expect(saved.ref, const LibraryRef.story(host).toString());
     expect(tester.takeException(), isNull);
   });
   testWidgets('narration is italic only between spoken lines; the Doctor '

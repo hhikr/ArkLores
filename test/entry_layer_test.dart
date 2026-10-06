@@ -9,6 +9,7 @@ import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
 import 'package:arklores/core/gamedata/build/text_harvest.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart'
     show queryCatalogEntries;
+import 'package:arklores/core/library/library_queries.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -187,6 +188,13 @@ void main() {
             'startTime': 1600000001,
             'type': 'TYPE_FX',
           },
+          // The first sandbox mode is an activity; the sandbox table lists it.
+          'act1fxsbx': {
+            'id': 'act1fxsbx',
+            'name': '虚构演算活动',
+            'startTime': 1500000000,
+            'type': 'TYPE_FX',
+          },
         },
         'zoneToActivity': {'act_fx_zone1': 'act_fx'},
         'activity': {
@@ -204,7 +212,234 @@ void main() {
           },
         },
       });
-      await writeJson('excel/skin_table.json', {
+      await writeJson('excel/sandbox_perm_table.json', {
+        'basicInfo': {
+          'sandbox_fx': {
+            'topicId': 'sandbox_fx',
+            'topicName': '虚构演算',
+            'topicStartTime': 1700000000,
+            'description': '一段虚构的简介。\\n第二行简介。',
+          },
+        },
+        'itemData': {
+          'sandbox_fx_wood': {
+            'itemId': 'sandbox_fx_wood',
+            'itemType': 'BUILDINGMAT',
+            'itemName': '虚构木材',
+            'itemDesc': '一块虚构的木材，写得足够长以便收录。',
+          },
+          'sandbox_fx_odd': {
+            'itemId': 'sandbox_fx_odd',
+            'itemType': 'NOBODYNAMEDIT',
+            'itemName': '虚构杂物',
+            'itemDesc': '一件没有类型名的杂物，也写得足够长。',
+          },
+        },
+        'detail': {
+          'SANDBOX_V2': {
+            'sandbox_fx': {
+              'itemTypeData': {
+                'BUILDINGMAT': {'itemType': 'BUILDINGMAT', 'itemTypeName': '建筑材料'},
+              },
+              'questLineData': {
+                'mainline1a': {
+                  'questLineId': 'mainline1a',
+                  'questLineTitle': '第一幕 虚构开端',
+                  'sortId': 1,
+                },
+                'sideline_x': {
+                  'questLineId': 'sideline_x',
+                  'questLineTitle': '虚构支线',
+                  'sortId': 2,
+                },
+              },
+              'questData': {
+                'mainline1_2_a': {
+                  'questId': 'mainline1_2_a',
+                  'questLine': 'mainline1a',
+                  'questTitle': '万事开头',
+                  'isDisplay': true,
+                },
+                'sideline_x_1': {
+                  'questId': 'sideline_x_1',
+                  'questLine': 'sideline_x',
+                  'questTitle': '支线一',
+                  'isDisplay': true,
+                },
+              },
+              'archiveQuestData': {
+                'story_1': {
+                  'id': 'story_1',
+                  'sortId': 1,
+                  'questType': 'MAIN',
+                  'name': '第一幕 虚构开端',
+                  'desc': '这一幕的概述。',
+                  'avgDataList': [
+                    {
+                      'avgId': 'Obt/SandboxPerm/sandbox_fx/sandbox_fx_entry',
+                      'avgName': '初来乍到',
+                    },
+                  ],
+                },
+                'story_2': {
+                  'id': 'story_2',
+                  'sortId': 1,
+                  'questType': 'SIDE',
+                  'name': '虚构支线',
+                  'desc': '支线的概述。',
+                  'avgDataList': <Object?>[],
+                },
+              },
+              'archiveQuestTypeData': {
+                'MAIN': {'type': 'MAIN', 'name': '主线篇章'},
+                'SIDE': {'type': 'SIDE', 'name': '支线片段'},
+              },
+              'npcData': {
+                'n1': {
+                  'npcId': 'n1',
+                  'picName': '某位NPC',
+                  'dialogIds': {
+                    'BEFORE': 'dialog_sandbox_fx_main1_2_op',
+                    'AFTER': 'dialog_sandbox_fx_main1_2_ed',
+                  },
+                },
+                'n2': {
+                  'npcId': 'n2',
+                  'picName': '商人',
+                  'dialogIds': {'REACT': 'dialog_sandbox_fx_market'},
+                },
+              },
+              'dialogData': {
+                'a': {
+                  'dialogId': 'dialog_sandbox_fx_main1_2_op',
+                  'avgId': 'Obt/SandboxPerm/sandbox_fx/BattleAVG/dialog_sandbox_fx_main1_2_op',
+                },
+                'b': {
+                  'dialogId': 'dialog_sandbox_fx_main1_2_ed',
+                  'avgId': 'Obt/SandboxPerm/sandbox_fx/BattleAVG/dialog_sandbox_fx_main1_2_ed',
+                },
+                'c': {
+                  'dialogId': 'dialog_sandbox_fx_market',
+                  'avgId': 'Obt/SandboxPerm/sandbox_fx/BattleAVG/dialog_sandbox_fx_market',
+                },
+              },
+              'stageData': {
+                'sandbox_fx_01': {
+                  'stageId': 'sandbox_fx_01',
+                  'levelId': 'Obt/Sandbox/sandbox_fx/level_fx_s1',
+                  'code': 'RA-1',
+                  'name': '起点',
+                  'description':
+                      '<@lv.sand2desc>虚构山谷</>\\n<@lv.sand2desc>资源上限降低30%</>\\n关卡的一段描述，写得足够长。',
+                },
+              },
+              'eventData': {
+                'questevent_gate': {
+                  'eventId': 'questevent_gate',
+                  'type': 'QUEST_EVENT',
+                  'iconName': '奇遇',
+                  'enterSceneId': 'scene_gate_enter',
+                },
+              },
+              'eventSceneData': {
+                'a': {
+                  'eventSceneId': 'scene_gate_enter',
+                  'title': '拦路',
+                  'desc': '前方有人拦路，要求交出一些东西。',
+                  'choiceIds': ['choice_gate_1', 'choice_gate_leave'],
+                },
+                'b': {
+                  'eventSceneId': 'scene_gate_1',
+                  'title': '拦路',
+                  'desc': '我们交出了东西，他们让开了路。',
+                  'choiceIds': ['choice_gate_1_ok'],
+                },
+              },
+              'eventChoiceData': {
+                'a': {
+                  'choiceId': 'choice_gate_1',
+                  'type': 'NEXT',
+                  'title': '交出东西',
+                  'desc': '<color=#d8d769>我们将支付50份稻谷。</color>',
+                },
+                'b': {
+                  'choiceId': 'choice_gate_1_ok',
+                  'type': 'LEAVE',
+                  'title': '继续赶路',
+                  'desc': '我们继续赶路了。',
+                },
+                'c': {
+                  'choiceId': 'choice_gate_leave',
+                  'type': 'LEAVE',
+                  'title': '掉头离开',
+                  'desc': '我们调头走了。',
+                },
+              },
+            },
+          },
+        },
+      });
+      await writeJson('excel/sandbox_table.json', {
+        'sandboxActTables': {
+          'act1fxsbx': {
+            'stageDatas': {
+              's1': {
+                'stageId': 'sbx_01',
+                'levelId': 'Activities/act1fxsbx/level_sbx_01',
+                'name': '林中空地',
+                'description': '一片林中空地，旧版的关卡描述。',
+              },
+            },
+            'eventSceneDatas': {
+              'e1': {
+                'choiceSceneId': 'scene_wood_enter',
+                'title': '树林的区别',
+                'description': '你们来到一片树林，两侧的树木很不一样。',
+                'choices': ['choice_wood_1'],
+              },
+            },
+            'eventChoiceDatas': {
+              'c1': {
+                'choiceId': 'choice_wood_1',
+                'title': '先砍了再说',
+                'description': '聊天后你们明白了缘由。\n【获得18-23个木材】',
+              },
+            },
+          },
+        },
+        'itemDatas': <String, Object?>{},
+      });
+      await writeJson('levels/obt/sandbox/sandbox_fx/level_fx_s1.json', {
+        'enemyDbRefs': [
+          {'id': 'enemy_fx_a'},
+        ],
+        'waves': <Object?>[],
+      });
+      await writeText(
+        'story/obt/sandboxperm/sandbox_fx/sandbox_fx_entry.txt',
+        '[name="甲"]这是一幕的开场。\n',
+      );
+      await writeText(
+        'story/obt/sandboxperm/sandbox_fx/battleavg/dialog_sandbox_fx_main1_2_op.txt',
+        '[name="某位NPC"]事情开始了。\n',
+      );
+      await writeText(
+        'story/obt/sandboxperm/sandbox_fx/battleavg/dialog_sandbox_fx_main1_2_ed.txt',
+        '[name="某位NPC"]事情结束了。\n',
+      );
+      await writeText(
+        'story/obt/sandboxperm/sandbox_fx/battleavg/dialog_sandbox_fx_market.txt',
+        '[name="商人"]欢迎光临。\n',
+      );
+      // A sign standing in a stage; a dialogue no table names.
+      await writeText(
+        'story/obt/sandboxperm/sandbox_fx/battleavg/dialog_sandbox_fx_level_01.txt',
+        '路牌上写着：前方施工。\n',
+      );
+      await writeText(
+        'story/obt/sandboxperm/sandbox_fx/battleavg/dialog_sandbox_fx_loose.txt',
+        '[name="路人乙"]没有表给我起名字。\n',
+      );      await writeJson('excel/skin_table.json', {
         'charSkins': {
           'skin_fx': {
             'skinId': 'skin_fx',
@@ -275,7 +510,19 @@ void main() {
         'enemyDbRefs': [
           {'id': 'enemy_fx_a'},
         ],
-        'waves': <Object?>[],
+        'waves': [
+          {
+            'fragments': [
+              {
+                'actions': [
+                  // The battle plays a tutorial story (the game writes the path
+                  // in its own case).
+                  {'actionType': 'STORY', 'key': 'Obt\\Tutorial\\Level\\Main_00-01'},
+                ],
+              },
+            ],
+          },
+        ],
       });
       await writeJson('levels/activities/act_fx/level_fx_01.json', {
         'enemyDbRefs': <Object?>[],
@@ -297,7 +544,17 @@ void main() {
         'enemyDbRefs': [
           {'id': 'enemy_fx_b'},
         ],
-        'waves': <Object?>[],
+        'waves': [
+          {
+            'fragments': [
+              {
+                'actions': [
+                  {'actionType': 'STORY', 'key': 'Obt/R/tutorial_fx_1-2'},
+                ],
+              },
+            ],
+          },
+        ],
       });
       await writeJson('excel/roguelike_topic_table.json', {
         'topics': {
@@ -542,6 +799,25 @@ void main() {
         'story/activities/fxhub/guide_fx_entry.txt',
         '[name="丙"]欢迎来到这里。\n',
       );
+      // Dialogue played in battles: attributes spread over lines, text after
+      // the closing bracket.
+      await writeText(
+        'story/obt/tutorial/level/main_00-01.txt',
+        '[HEADER(is_skippable=true)] 主线00-01关卡内剧情\n'
+        '[Tutorial(focusX=0, focusY=-85, anchor="Top",\\\n'
+        '          animStyle="Highlight", black=0.5, \\\n'
+        '          protectTime=0.5, dialogHead="\$avatar_x")] \\\n'
+        '敌人从右侧出现。\n',
+      );
+      await writeText(
+        'story/obt/r/tutorial_fx_1-2.txt',
+        '[PopupDialog(dialogHead="x")] 独关里的提示。\n',
+      );
+      // A file with nothing but a title is not a story.
+      await writeText(
+        'story/obt/rogue/rogue_fx/ref/ref_fx.txt',
+        '[HEADER(key="t")] fxref\n',
+      );
       await writeText(
         'story/obt/tutorial/t1.txt',
         '[PopupDialog(dialogHead="x")] 点击这里。\n',
@@ -604,6 +880,160 @@ void main() {
       expect(tutorialRecords, isEmpty);
     });
 
+    test('battle dialogue is read at the end of its stage story, or on the '
+        'stage', () async {
+      // The script is read whole: no attribute of a command is a line.
+      final lines = await q(
+        'SELECT kind, content FROM story_lines '
+        "WHERE story_id = 'obt/tutorial/level/main_00-01.txt' "
+        'ORDER BY line_index',
+      );
+      expect(lines.map((l) => l['content']), ['主线00-01关卡内剧情', '敌人从右侧出现。']);
+      expect(lines.last['kind'], 'system');
+
+      Future<List<String>> attachedTo(String story) async => [
+            for (final r in await q(
+              "SELECT dst FROM entry_links WHERE src = ? AND relation = 'attached_to'",
+              ['story:$story'],
+            ))
+              '${r['dst']}',
+          ];
+      // A stage with a story of its own: at the end of that story.
+      expect(
+        await attachedTo('obt/tutorial/level/main_00-01.txt'),
+        ['story:obt/main/level_main_00-01_beg.txt'],
+      );
+      // A stage without one: on the stage.
+      expect(
+        await attachedTo('obt/r/tutorial_fx_1-2.txt'),
+        ['roguelike_stage:rogue_fx/st_solo'],
+      );
+      // They are not listed as stories of their own, nor as bindings.
+      final listed = await storiesOf(db, 'main_0');
+      expect(listed.map((s) => s.rawId), ['obt/main/level_main_00-01_beg.txt']);
+      expect(
+        (await entryBindings(db, 'stage:main_00-01')).where(
+          (b) => b.relation == 'plays_in' || b.relation == 'attached_to',
+        ),
+        isEmpty,
+      );
+      final onStage = await attachedStories(db, 'roguelike_stage:rogue_fx/st_solo');
+      expect(onStage.map((s) => s.rawId), ['obt/r/tutorial_fx_1-2.txt']);
+      final host = await storyHostOf(db, 'obt/tutorial/level/main_00-01.txt');
+      expect(host, 'obt/main/level_main_00-01_beg.txt');
+      expect(await storyHostOf(db, 'obt/main/level_main_00-01_beg.txt'), isNull);
+      // A stage with dialogue attached is something to read.
+      final stage = await entryById(db, 'roguelike_stage:rogue_fx/st_solo');
+      expect(stage, isNotNull);
+    });
+
+    test('a sandbox topic: acts hold their stories, which the tables name',
+        () async {
+      final acts = await q(
+        "SELECT id, name, group_name FROM entries WHERE type = 'sandbox_act' "
+        'ORDER BY id',
+      );
+      expect(acts.map((a) => (a['name'], a['group_name'])), [
+        ('第一幕 虚构开端', '主线篇章'),
+        ('虚构支线', '支线片段'),
+      ]);
+      final act = acts.first['id']! as String;
+      final parts = await entryParts(db, act);
+      expect(parts.map((s) => s.name), ['初来乍到', '万事开头', '万事开头 · 2']);
+      // The entry story, the part's two dialogues: read from the act, not
+      // listed twice. A merchant and a stranger no part claims stay listed,
+      // named after who speaks; the sign stands in its stage.
+      final listed = await storiesOf(db, 'sandbox_fx');
+      expect(listed.map((s) => s.name), ['商人', '路人乙']);
+      expect(listed.map((s) => s.group), ['对话', '对话']);
+      expect(
+        await attachedStories(db, 'sandbox_stage:sandbox_fx/sandbox_fx_01'),
+        hasLength(1),
+      );
+      // The topic's own blurb introduces its page.
+      expect(
+        await collectionIntro(db, 'sandbox_fx'),
+        '一段虚构的简介。\n第二行简介。',
+      );
+    });
+
+    test('a sandbox event is its text and its options, without the effects',
+        () async {
+      final event = (await q(
+        "SELECT e.name, e.group_name, GROUP_CONCAT(r.content, '') AS t "
+        'FROM entries e JOIN normalized_records r ON r.entry_id = e.id '
+        "WHERE e.type = 'sandbox_event' AND e.collection_id = 'sandbox_fx'",
+      ))
+          .single;
+      expect(event['name'], '拦路');
+      expect(event['group_name'], '奇遇');
+      expect(
+        event['t'],
+        '## 事件\n前方有人拦路，要求交出一些东西。\n\n'
+        '## 选项\n'
+        '- **交出东西**\n'
+        '我们交出了东西，他们让开了路。\n'
+        '-- **继续赶路**：我们继续赶路了。\n'
+        '- **掉头离开**：我们调头走了。',
+      );
+      // The first mode keeps its events in the older shape.
+      final old = (await q(
+        "SELECT GROUP_CONCAT(r.content, '') AS t FROM entries e "
+        'JOIN normalized_records r ON r.entry_id = e.id '
+        "WHERE e.type = 'sandbox_event' AND e.collection_id = 'act1fxsbx'",
+      ))
+          .single['t'];
+      expect(old, contains('聊天后你们明白了缘由。'));
+      expect(old, isNot(contains('获得18')));
+    });
+
+    test('sandbox stages: where they are, what they say, who is in them',
+        () async {
+      final stage = (await q(
+        'SELECT e.name, e.code, e.group_name, r.content FROM entries e '
+        'JOIN normalized_records r ON r.entry_id = e.id '
+        "WHERE e.id = 'sandbox_stage:sandbox_fx/sandbox_fx_01'",
+      ))
+          .single;
+      expect(
+        (stage['name'], stage['code'], stage['group_name']),
+        ('起点', 'RA-1', '虚构山谷'),
+      );
+      expect(stage['content'], '关卡的一段描述，写得足够长。');
+      expect(
+        await q(
+          "SELECT 1 FROM entry_links WHERE src = 'enemy:enemy_fx_a' "
+          "AND relation = 'appears_in' "
+          "AND dst = 'sandbox_stage:sandbox_fx/sandbox_fx_01'",
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test('sandbox items are grouped by the names the table gives, the first '
+        'mode sits on the sandbox shelf', () async {
+      final groups = {
+        for (final r in await q(
+          "SELECT name, group_name FROM entries WHERE type = 'sandbox_item'",
+        ))
+          r['name']: r['group_name'],
+      };
+      expect(groups['虚构木材'], '建筑材料');
+      expect(groups['虚构杂物'], isNull);
+      final kinds = {
+        for (final r in await q('SELECT id, kind FROM collections'))
+          r['id']: r['kind'],
+      };
+      expect(kinds['act1fxsbx'], 'sandbox');
+      expect(kinds['sandbox_fx'], 'sandbox');
+      expect(kinds['act1fxhub'], 'activity');
+    });
+    test('a file with nothing but a title has no entry', () async {
+      expect(
+        await q("SELECT 1 FROM entries WHERE raw_id LIKE '%ref_fx.txt'"),
+        isEmpty,
+      );
+    });
     test('a story outside the review table is labelled from the entry layer',
         () async {
       final labels = await queryCatalogEntries(db, [
@@ -780,6 +1210,7 @@ void main() {
         'ORDER BY src, dst',
       );
       expect(links.map((l) => (l['src'], l['dst'])), [
+        ('enemy:enemy_fx_a', 'sandbox_stage:sandbox_fx/sandbox_fx_01'),
         ('enemy:enemy_fx_a', 'stage:fx_01'),
         ('enemy:enemy_fx_a', 'stage:main_00-01'),
         ('enemy:enemy_fx_b', 'roguelike_stage:rogue_fx/st_solo'),

@@ -1268,6 +1268,12 @@ abstract class AppLocalizations {
   /// **'Finished'**
   String get libraryFinished;
 
+  /// No description provided for @storyReaderBattleDialogue.
+  ///
+  /// In en, this message translates to:
+  /// **'In-battle dialogue'**
+  String get storyReaderBattleDialogue;
+
   /// No description provided for @libraryReadTimes.
   ///
   /// In en, this message translates to:

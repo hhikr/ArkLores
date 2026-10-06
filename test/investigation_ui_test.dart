@@ -1,6 +1,8 @@
 import 'package:arklores/core/agent/chat_message.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
+import 'package:arklores/core/library/library_provider.dart'
+    show attachedStoriesProvider, storyHostProvider;
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
@@ -165,6 +167,8 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            storyHostProvider.overrideWith((ref, id) async => null),
+            attachedStoriesProvider.overrideWith((ref, id) async => const []),
             storyFullLinesProvider.overrideWith((ref, id) async => [
                   for (var i = 0; i < 120; i++)
                     StoryLineEntry(

@@ -7,6 +7,7 @@ import '../../core/gamedata/build/story_naming.dart'
     show endingStoryKind, openingStoryKind;
 import '../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
+import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
@@ -19,6 +20,7 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import '../ai/story_labels_provider.dart' show storyFullLinesProvider;
 import 'library_widgets.dart';
 
 // ─── Shelves ───────────────────────────────────────────────────────
@@ -835,6 +837,8 @@ class EntryPage extends ConsumerWidget {
     final parts =
         ref.watch(entryPartsProvider(e.id)).valueOrNull ?? const <LibraryEntry>[];
     final progress = ref.watch(readingProgressProvider).valueOrNull ?? const {};
+    final attached = ref.watch(attachedStoriesProvider(e.id)).valueOrNull ??
+        const <LibraryEntry>[];
     final all = bindings.valueOrNull ?? const <EntryBinding>[];
     // A month squad's protagonist comes before its stories; the story that
     // has the entry's own name (an ending's) comes right after its sentence,
@@ -846,11 +850,17 @@ class EntryPage extends ConsumerWidget {
             b.outgoing)
           b,
     ];
-    final own = [
-      for (final s in parts)
-        if (s.name == e.name || s.group == endingStoryKind) s,
-    ];
-    final unlocked = [for (final s in parts) if (s.name != e.name) s];
+    // An act of a sandbox's plot holds all its stories in order; an ending
+    // or a squad has its own story and what it unlocks.
+    final own = e.type == 'sandbox_act'
+        ? parts
+        : [
+            for (final s in parts)
+              if (s.name == e.name || s.group == endingStoryKind) s,
+          ];
+    final unlocked = e.type == 'sandbox_act'
+        ? const <LibraryEntry>[]
+        : [for (final s in parts) if (s.name != e.name) s];
     Widget storyRow(LibraryEntry s) => Column(
           key: ValueKey('part-story-${s.id}'),
           children: [
@@ -880,6 +890,18 @@ class EntryPage extends ConsumerWidget {
             ),
           for (final b in blocks) _textBlock(theme, e, b, ref.watch(nicknameProvider)),
           for (final s in own) storyRow(s),
+          // Dialogue played in the battle of a stage, read here (a stage with
+          // a story of its own has it at the end of that story).
+          if (attached.isNotEmpty) ...[
+            IndustrialSectionHeader(
+              theme: theme,
+              title: context.t.storyReaderBattleDialogue,
+              code: 'battle',
+            ),
+            for (final s in attached)
+              _AttachedDialogue(key: ValueKey('attached-${s.id}'), story: s),
+            const SizedBox(height: 8),
+          ],
           if (protagonists.isNotEmpty) ...[
             IndustrialSectionHeader(
               theme: theme,
@@ -994,7 +1016,7 @@ class EntryPage extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
             ],
-            if (e.type == 'roguelike_scene')
+            if (eventEntryTypes.contains(e.type))
               EventText(text)
             else if (markdownEntryTypes.contains(e.type))
               MarkdownText(text)
@@ -1075,6 +1097,57 @@ class EntryPage extends ConsumerWidget {
   }
 }
 
+/// The lines of one attached story (in-battle dialogue), shown in the page of
+/// its stage.
+class _AttachedDialogue extends ConsumerWidget {
+  const _AttachedDialogue({super.key, required this.story});
+
+  final LibraryEntry story;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final nickname = ref.watch(nicknameProvider);
+    final lines = ref.watch(storyFullLinesProvider(story.rawId ?? '')).valueOrNull ??
+        const <StoryLineEntry>[];
+    final shown = [
+      for (final l in lines)
+        if (l.kind != 'title' && l.content.trim().isNotEmpty) l,
+    ];
+    if (shown.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ThemeAwareCard(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (i, l) in shown.indexed) ...[
+              if (i > 0) const SizedBox(height: 10),
+              if ((l.speaker ?? '').trim().isNotEmpty)
+                Text(
+                  l.speaker!.trim(),
+                  style: theme.bodyFont.copyWith(
+                    color: theme.accentText,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              Text(
+                withPlaceholders(l.content, nickname),
+                style: theme.bodyFont.copyWith(
+                  color: theme.textPrimary,
+                  fontSize: 15,
+                  height: 1.65,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 // ─── One operator ─────────────────────────────────────────────────
 
 /// An operator's page: everything the knowledge base holds about it in one

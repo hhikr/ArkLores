@@ -22,7 +22,6 @@ import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../story_catalog.dart';
-import '../story_vectors.dart';
 import 'arknights_importer.dart';
 import 'entry_importer.dart';
 import 'gamedata_db_validator.dart';
@@ -297,52 +296,7 @@ class GameDataBuildService {
   Future<void> _deletePathRows(Database db, String path) async {
     if (isStoryCatalogSource(path)) return;
     if (ArknightsSourcePaths.isStoryFile(path)) {
-      final storyId = path.substring('zh_CN/gamedata/story/'.length);
-      await db.delete(
-        'entity_story_mentions',
-        where: 'story_id = ?',
-        whereArgs: [storyId],
-      );
-      await db.delete(
-        'story_chapter_profiles',
-        where: 'story_id = ?',
-        whereArgs: [storyId],
-      );
-      await db.delete(
-        'story_scopes',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      await db.delete(
-        'story_lines',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      await db.delete(
-        'normalized_records',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      await db.delete(
-        'lore_chunks',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      // Optional vectors (R12) of a changed story point at the old line
-      // numbers; drop them so semantic recall never hints at stale ranges.
-      // Other stories keep their vectors (the in-app build cannot embed).
-      final hasVectors = (await db.rawQuery(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-        [storyChunkVectorsTable],
-      ))
-          .isNotEmpty;
-      if (hasVectors) {
-        await db.delete(
-          storyChunkVectorsTable,
-          where: 'story_id = ?',
-          whereArgs: [storyId],
-        );
-      }
+      await deleteStoryRows(db, path);
     } else {
       await db.delete(
         'normalized_records',

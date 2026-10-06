@@ -34,6 +34,7 @@ class StoryLineEntry {
     required this.content,
     this.speaker,
     this.kind,
+    this.shownIndex,
   });
   final int lineIndex;
   final String? speaker;
@@ -41,7 +42,12 @@ class StoryLineEntry {
 
   /// `story_lines.kind` (schema 5): `dialogue`, `narration`, `subtitle`,
   /// `document`, `choice`, `title` or `system`; null for older databases.
+  /// The reader adds `divider` (the heading of attached dialogue).
   final String? kind;
+
+  /// The line number to show when the line is read in another story (attached
+  /// dialogue): its own, whatever its place in the text it is read in.
+  final int? shownIndex;
 }
 
 /// Whether `story_lines` has the schema 5 `kind` column. Databases built

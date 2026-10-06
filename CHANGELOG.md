@@ -97,6 +97,14 @@ All notable changes to ArkLores will be documented in this file.
 - **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and
   never enter the knowledge base. *Ask about it* puts a text in the question box so you can finish the question and send it.
 
+### Battle dialogue and sandbox ("生息演算") (in development for 0.11)
+
+- **Dialogue played inside a battle is no longer a story of its own.** Tutorials, training and in-battle conversations (the stories a level file plays) are
+  read at the end of the story of their stage, or on the stage's page when it has none, and are left out of the lists and counts.
+- **Tutorial scripts read whole.** A command spread over several lines used to leave its animation settings behind as lines of "narration"
+  (about 1,500 lines in over 300 tutorial and training scripts); they are now read as one command with its text.
+- **Sandbox modes follow the game's own structure**: acts (main and side) with their summaries and stories, events with their options, stages (places, enemies),
+  items grouped by the names the table gives, dialogues named after the part of the plot they belong to. The first sandbox mode sits on the sandbox shelf.
 ### Reading history (in development for 0.11)
 
 - **Recently read.** Stories opened from an answer's evidence are remembered (book icon in the Ask tab's top bar): the chapter, the

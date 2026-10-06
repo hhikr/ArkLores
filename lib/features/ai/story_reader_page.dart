@@ -43,7 +43,7 @@ const String readingFontFamily = 'LXGWWenKaiScreen';
 /// 0.11: the page records the visit and where the reader is (first and last
 /// line on screen) in the reading history, and offers the previous and next
 /// chapter of the story's collection.
-class StoryReaderPage extends ConsumerStatefulWidget {
+class StoryReaderPage extends ConsumerWidget {
   const StoryReaderPage({
     super.key,
     required this.storyId,
@@ -64,10 +64,77 @@ class StoryReaderPage extends ConsumerStatefulWidget {
   final String? snippet;
 
   @override
-  ConsumerState<StoryReaderPage> createState() => _StoryReaderPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reading = ref.watch(storyReadingProvider(storyId));
+    final r = reading.valueOrNull;
+    if (r == null) {
+      final theme = ref.watch(themeProvider);
+      return Scaffold(
+        backgroundColor: theme.bgPrimary,
+        appBar: AppBar(
+          backgroundColor: theme.bgPrimary,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: reading.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    context.t.aiCitedLinesUnavailable,
+                    textAlign: TextAlign.center,
+                    style: theme.bodyFont.copyWith(color: theme.textSecondary),
+                  ),
+                ),
+              ),
+      );
+    }
+    // Dialogue attached to a story is read at the end of that story: the
+    // lines asked for move with it.
+    return _StoryReaderBody(
+      key: ValueKey('story-reader-${r.hostId}'),
+      storyId: r.hostId,
+      text: r.lines,
+      shift: r.offset,
+      highlightStart: highlightStart == null ? null : highlightStart! + r.offset,
+      highlightEnd: highlightEnd == null ? null : highlightEnd! + r.offset,
+      resumeLine: resumeLine == null ? null : resumeLine! + r.offset,
+      snippet: snippet,
+    );
+  }
 }
 
-class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
+class _StoryReaderBody extends ConsumerStatefulWidget {
+  const _StoryReaderBody({
+    super.key,
+    required this.storyId,
+    required this.text,
+    this.shift = 0,
+    this.highlightStart,
+    this.highlightEnd,
+    this.resumeLine,
+    this.snippet,
+  });
+
+  final String storyId;
+
+  /// The whole text: the story, then the dialogue attached to it.
+  final List<StoryLineEntry> text;
+
+  /// Where the story asked for begins in [text]; the numbers the reader shows
+  /// for a cited range are its own.
+  final int shift;
+  final int? highlightStart;
+  final int? highlightEnd;
+  final int? resumeLine;
+  final String? snippet;
+
+  @override
+  ConsumerState<_StoryReaderBody> createState() => _StoryReaderPageState();
+}
+
+class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     with SingleTickerProviderStateMixin {
   final GlobalKey _targetKey = GlobalKey();
   final GlobalKey _scrollKey = GlobalKey();
@@ -307,7 +374,6 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
         (cut < 0 ? fallback : fallback.substring(0, cut));
     final chapter =
         entry?.chapterLabel ?? (cut < 0 ? '' : fallback.substring(cut + 3));
-    final lines = ref.watch(storyFullLinesProvider(widget.storyId));
     final canJump = _cited || _resume != null;
 
     _nickname = ref.watch(nicknameProvider);
@@ -335,10 +401,9 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
             ),
         ],
       ),
-      body: lines.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => _unavailable(theme),
-        data: (lines) {
+      body: Builder(
+        builder: (context) {
+          final lines = widget.text;
           if (lines.isEmpty) return _unavailable(theme);
           _anchor(lines);
           _prepare(lines);
@@ -347,8 +412,11 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
           final range = !_cited
               ? null
               : _start == _stop
-                  ? context.t.aiCitationLine(_start! + 1)
-                  : context.t.aiCitationLines(_start! + 1, _stop! + 1);
+                  ? context.t.aiCitationLine(_start! - widget.shift + 1)
+                  : context.t.aiCitationLines(
+                      _start! - widget.shift + 1,
+                      _stop! - widget.shift + 1,
+                    );
           return NotificationListener<ScrollEndNotification>(
             onNotification: (_) {
               _saveSoon();
@@ -562,6 +630,13 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     final first = row.first == 0;
     if (row.first == row.last && !_isTarget(_lines[row.first].lineIndex)) {
       final line = _lines[row.first];
+      if (line.kind == 'divider') {
+        return Padding(
+          key: _keyOf(row.first),
+          padding: const EdgeInsets.fromLTRB(10, 36, 10, 6),
+          child: _divider(theme, line.content),
+        );
+      }
       final isResume = !_cited && line.lineIndex == _resume;
       final child = Container(
         key: _keyOf(row.first),
@@ -608,6 +683,31 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     return Padding(
       padding: EdgeInsets.only(top: first ? 0 : 8, bottom: 8),
       child: _citedBlock(theme, inside),
+    );
+  }
+
+  /// The heading of dialogue played in the battle, attached to the story
+  /// (`n/total` is the part's place among the parts).
+  Widget _divider(AppThemeTokens theme, String place) {
+    final parts = place.split('/');
+    final many = parts.length == 2 && parts[1] != '1';
+    return Row(
+      key: const ValueKey('story-reader-battle-dialogue'),
+      children: [
+        Expanded(child: Divider(color: theme.divider, endIndent: 12)),
+        Text(
+          many
+              ? '${context.t.storyReaderBattleDialogue} ${parts[0]}'
+              : context.t.storyReaderBattleDialogue,
+          style: theme.bodyFont.copyWith(
+            color: theme.accentText,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.4,
+          ),
+        ),
+        Expanded(child: Divider(color: theme.divider, indent: 12)),
+      ],
     );
   }
 
@@ -842,7 +942,7 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
               top: showName ? 20 : (storyKindLabel(line.kind) != null ? 18 : 4),
             ),
             child: Text(
-              '${line.lineIndex + 1}',
+              '${(line.shownIndex ?? line.lineIndex) + 1}',
               textAlign: TextAlign.right,
               style: theme.bodyFont.copyWith(
                 color: theme.textSecondary.withValues(alpha: 0.5),

@@ -173,7 +173,10 @@ List<Override> overrides(MemoryUserStore store) => [
             : const [],
       ),
       entryPartsProvider.overrideWith(
-        (ref, id) async => id.startsWith('roguelike_') ? _stories : const [],
+        (ref, id) async =>
+            id.startsWith('roguelike_') || id.startsWith('sandbox_act')
+                ? _stories
+                : const [],
       ),
       entryProvider.overrideWith(
         (ref, id) async => switch (id) {
@@ -188,6 +191,12 @@ List<Override> overrides(MemoryUserStore store) => [
               name: '小队甲',
             ),
           'enemy:e1' => _enemy,
+          'stage:fx' => const LibraryEntry(id: 'stage:fx', type: 'stage', name: '某关'),
+          'sandbox_act:s/1' => const LibraryEntry(
+              id: 'sandbox_act:s/1',
+              type: 'sandbox_act',
+              name: '第一幕',
+            ),
           'operator:char_x' => _operator,
           _ => null,
         },
@@ -266,6 +275,19 @@ List<Override> overrides(MemoryUserStore store) => [
           ],
           entries: [..._stories, _enemy],
         ),
+      ),
+      storyHostProvider.overrideWith((ref, id) async => null),
+      attachedStoriesProvider.overrideWith(
+        (ref, id) async => id == 'stage:fx'
+            ? const [
+                LibraryEntry(
+                  id: 'story:t/battle.txt',
+                  type: 'story',
+                  name: '教程',
+                  rawId: 't/battle.txt',
+                ),
+              ]
+            : const [],
       ),
       storyFullLinesProvider.overrideWith(
         (ref, id) async => [
@@ -552,6 +574,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a stage page reads the dialogue played in its battle',
+      (tester) async {
+    await pumpApp(tester, const EntryPage(entryId: 'stage:fx'));
+    await tester.pumpAndSettle();
+    expect(find.text('关卡内对话'), findsOneWidget);
+    expect(find.textContaining('第0句。'), findsWidgets);
+    // Not a row to open: the dialogue is on the page.
+    expect(find.byKey(const ValueKey('part-story-story:t/battle.txt')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('an act of a sandbox plot holds its stories in order, with no '
+      '"unlocked" heading', (tester) async {
+    await pumpApp(tester, const EntryPage(entryId: 'sandbox_act:s/1'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('part-story-story:a/1_beg.txt')), findsOneWidget);
+    expect(find.byKey(const ValueKey('part-story-story:a/2_beg.txt')), findsOneWidget);
+    expect(find.text('解锁的故事'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('search offers collections and entries', (tester) async {
     await pumpApp(tester, const MaterialsPage());
     await tester.tap(find.byKey(const ValueKey('library-search')));

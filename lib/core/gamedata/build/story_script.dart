@@ -74,13 +74,37 @@ final RegExp _attribute = RegExp(
   r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:"([^"]*)"|([^,\s)\]]+))',
 );
 
+/// The script's logical lines. A physical line ending in a backslash goes on
+/// in the next one: a command's attributes are spread over several lines
+/// (`[Tutorial(focusX=0, …,\` `animStyle="Highlight", …)] \`) and the text
+/// that the command carries is on the line after its closing bracket. Read
+/// line by line, the attribute lines would become "narration" made of
+/// animation settings.
+List<String> storyLogicalLines(String raw) {
+  final physical = raw.split('\n');
+  final out = <String>[];
+  var i = 0;
+  while (i < physical.length) {
+    var line = physical[i++].trim();
+    if (line.isEmpty) continue;
+    var joined = 0;
+    while (line.endsWith('\\') && i < physical.length && joined++ < 40) {
+      final next = physical[i].trim();
+      if (next.isEmpty) break;
+      i++;
+      line = '${line.substring(0, line.length - 1).trimRight()} $next';
+    }
+    // A backslash left at the end continued nothing.
+    if (line.endsWith('\\')) line = line.substring(0, line.length - 1).trimRight();
+    if (line.isNotEmpty) out.add(line);
+  }
+  return out;
+}
+
 /// Parses a whole script into its text lines, in order.
 List<StoryScriptLine> parseStoryScript(String raw) {
   final lines = <StoryScriptLine>[];
-  for (final original in raw.split('\n')) {
-    final line = original.trim();
-    if (line.isEmpty) continue;
-    if (!line.startsWith('[')) {
+  for (final line in storyLogicalLines(raw)) {    if (!line.startsWith('[')) {
       final content = cleanStoryText(line);
       if (content.isNotEmpty) {
         lines.add(StoryScriptLine(null, content, StoryLineKind.narration));
@@ -97,7 +121,10 @@ StoryScriptLine? _parseCommandLine(String line) {
   final end = _commandEnd(line);
   if (end < 0) return null;
   final body = line.substring(1, end).trim();
-  final trailing = cleanStoryText(line.substring(end + 1));
+  // Commands in a row ([A(…)] [B(…)]text): the text belongs to the last.
+  final rest = line.substring(end + 1).trim();
+  if (rest.startsWith('[')) return _parseCommandLine(rest);
+  final trailing = cleanStoryText(rest);
   final head = _commandHead.firstMatch(body);
   if (head == null) return null;
   final command = head.group(1)!.toLowerCase();

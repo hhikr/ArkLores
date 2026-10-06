@@ -313,6 +313,7 @@ void main() {
       'collection_id TEXT, group_name TEXT, sort_key INTEGER, entity_id TEXT, '
       'raw_id TEXT, record_id TEXT)',
     );
+    await db.execute(entryLinksDdl);
     for (final (i, g) in ['a', 'a', 'b', null, ''].indexed) {
       await db.insert('entries', {
         'id': 'e$i',

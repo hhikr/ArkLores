@@ -96,7 +96,7 @@ const List<(String, String)> _kinds = [
   ('traininglevel', '训练关卡'),
   ('training', '训练'),
   ('tutorial', '教程'),
-  ('battleavg', '战斗对话'),
+  ('battleavg', '对话'),
   ('dialog', '对话'),
   ('monthrecord', '月度对话'),
   ('month_record', '月度对话'),
@@ -400,8 +400,18 @@ Map<String, StoryHint> roguelikeStoryHints(
   }
   return out;
 }
-/// Names from the sandbox table: dialogs named after the NPC that speaks
-/// them, stage names by level file.
+/// What the sandbox ("生息演算") table says about its story files and stages.
+///
+/// Each topic lists its plot itself: acts (`questLineData`: the title and the
+/// summary of a main act, the name of a side story), the parts of an act
+/// (`questData`: a title, in order), the stories the acts open and close
+/// (`archiveQuestData.avgDataList`, with their own names) and the dialogues of
+/// the map's NPCs (`npcData` → `dialogData` → story file). A dialogue belongs
+/// to the part whose id it shares (`main1_2_op` → `mainline1_2`), and is named
+/// after it and filed under its act; one that no part claims (a merchant, a
+/// message box) is named after the NPC. The tutorial popups of the guides are
+/// named by the quest line that triggers them. Stage names come from the
+/// stages' `levelId`.
 ({Map<String, StoryHint> hints, Map<String, String> levelNames})
     sandboxStoryNames(
   Map<String, dynamic> table,
@@ -409,8 +419,11 @@ Map<String, StoryHint> roguelikeStoryHints(
 ) {
   final hints = <String, StoryHint>{};
   final levels = <String, String>{};
-  final dialogAvg = <String, String>{};
-  final dialogOwner = <String, String>{};
+  for (final template in _map(table['detail']).values) {
+    for (final topic in _map(template).entries) {
+      _sandboxPlotHints(topic.key, _map(topic.value), clean, hints);
+    }
+  }
 
   void walk(Object? node) {
     if (node is List) {
@@ -421,20 +434,10 @@ Map<String, StoryHint> roguelikeStoryHints(
     }
     if (node is! Map) return;
     final m = node.cast<String, dynamic>();
-    final avg = _s(m['avgId']);
-    final dialog = _s(m['dialogId']);
-    if (avg.isNotEmpty && dialog.isNotEmpty) dialogAvg[dialog] = avg;
     final levelId = _s(m['levelId']);
     final name = clean(m['name']);
     if (levelId.isNotEmpty && name.isNotEmpty) {
       levels[_baseOf(storyKey(levelId))] = name;
-    }
-    final npc = clean(m['picName']);
-    final dialogs = _map(m['dialogIds']);
-    if (npc.isNotEmpty) {
-      for (final id in dialogs.values) {
-        dialogOwner[_s(id)] = npc;
-      }
     }
     for (final v in m.values) {
       walk(v);
@@ -442,14 +445,200 @@ Map<String, StoryHint> roguelikeStoryHints(
   }
 
   walk(table);
-  for (final entry in dialogOwner.entries) {
-    final avg = dialogAvg[entry.key];
-    hints[avg != null ? storyKey(avg) : entry.key.toLowerCase()] =
-        StoryHint(entry.value, group: '战斗对话');
-  }
   return (hints: hints, levelNames: levels);
 }
 
+/// Group of the dialogues no part of the plot claims.
+const String npcDialogueGroup = '对话';
+
+/// `mainline1_2_a` → `main1_2`, `sideline_miner_1` → `miner_1`: the id a part
+/// shares with its dialogues (a trailing `_a`/`_b` only tells variants apart).
+String _questStem(String id) => id
+    .toLowerCase()
+    .replaceFirst(RegExp(r'^mainline'), 'main')
+    .replaceFirst(RegExp(r'^sideline_'), '')
+    .replaceFirst(RegExp(r'_[a-z]$'), '');
+
+/// `dialog_sandbox_1_main1_2_op` → `main1_2`.
+String _dialogStem(String id) => id
+    .toLowerCase()
+    .replaceFirst(RegExp(r'^dialog_(sandbox_?[a-z0-9]+_)?'), '')
+    .replaceFirst(RegExp(r'_(op|ed|end|react)$'), '');
+
+int? _intOf(Object? v) => v is num ? v.toInt() : int.tryParse('$v');
+
+void _sandboxPlotHints(
+  String topic,
+  Map<String, dynamic> d,
+  String Function(Object?) clean,
+  Map<String, StoryHint> hints,
+) {
+  // Acts: a line's title is the heading its parts and stories sit under.
+  final lineTitle = <String, String>{};
+  final actOrder = <String, int>{};
+  var seen = 0;
+  for (final entry in _map(d['questLineData']).entries) {
+    final line = _map(entry.value);
+    final id = _s(line['questLineId']).isEmpty ? entry.key : _s(line['questLineId']);
+    final title = clean(line['questLineTitle']);
+    if (title.isEmpty) continue;
+    lineTitle[id] = title;
+    actOrder.putIfAbsent(title, () => _intOf(line['sortId']) ?? seen);
+    seen++;
+  }
+  // The plot comes first in a topic's list (a negative order sorts before the
+  // files only a kind can be told of), then the NPCs' dialogues, then guides.
+  int orderOf(String act) => (actOrder[act] ?? 60).clamp(0, 60) * 100 - 20000;
+
+  // Parts, in the table's order, per act.
+  final partOf = <String, ({String title, String act, int index})>{};
+  final perAct = <String, int>{};
+  for (final entry in _map(d['questData']).entries) {
+    final q = _map(entry.value);
+    final title = clean(q['questTitle']);
+    final act = lineTitle[_s(q['questLine'])];
+    if (title.isEmpty || act == null || q['isDisplay'] == false) continue;
+    final index = perAct[act] = (perAct[act] ?? -1) + 1;
+    partOf.putIfAbsent(
+      _questStem(_s(q['questId']).isEmpty ? entry.key : _s(q['questId'])),
+      () => (title: title, act: act, index: index.clamp(0, 25)),
+    );
+  }
+
+  // The act entries (see [sandboxActs]) the stories are part of, by title.
+  final actEntry = {
+    for (final a in sandboxActsOf(topic, d, clean)) a.title: a.entryId,
+  };
+
+  // The stories an act opens and closes, with their own names.
+  for (final entry in _map(d['archiveQuestData']).entries) {
+    final q = _map(entry.value);
+    final act = clean(q['name']);
+    final files = _list(q['avgDataList']);
+    for (var i = 0; i < files.length; i++) {
+      final f = _map(files[i]);
+      final avg = _s(f['avgId']);
+      final name = clean(f['avgName']);
+      if (avg.isEmpty || name.isEmpty) continue;
+      hints[storyKey(avg)] = StoryHint(
+        name,
+        group: act.isEmpty ? null : act,
+        sort: orderOf(act) + (i == 0 ? 1 : 90 + i),
+        parent: actEntry[act],
+      );
+    }
+  }
+
+  // The dialogues of the NPCs.
+  final avgOf = {
+    for (final e in _map(d['dialogData']).entries)
+      if (_s(_map(e.value)['avgId']).isNotEmpty)
+        _s(_map(e.value)['dialogId']).isEmpty
+            ? e.key
+            : _s(_map(e.value)['dialogId']): _s(_map(e.value)['avgId']),
+  };
+  for (final entry in _map(d['npcData']).values) {
+    final npc = _map(entry);
+    final npcName = clean(npc['picName']);
+    final dialogs = _map(npc['dialogIds']);
+    void hint(Object? idRaw, int rank) {
+      final id = _s(idRaw);
+      final avg = avgOf[id];
+      if (avg == null) return;
+      final part = partOf[_dialogStem(id)];
+      if (part == null && npcName.isEmpty) return;
+      hints.putIfAbsent(
+        storyKey(avg),
+        () => part != null
+            ? StoryHint(
+                part.title,
+                group: part.act,
+                sort: orderOf(part.act) + 10 + part.index * 3 + rank,
+                parent: actEntry[part.act],
+              )
+            : StoryHint(npcName, group: npcDialogueGroup, sort: -10000),
+      );
+    }
+
+    for (final kind in const ['BEFORE', 'AFTER']) {
+      hint(dialogs[kind], kind == 'BEFORE' ? 0 : 1);
+    }
+    for (final e in dialogs.entries) {
+      if (e.key != 'BEFORE' && e.key != 'AFTER') hint(e.value, 2);
+    }
+  }
+
+  // Tutorial popups: named by the line that triggers them.
+  for (final entry in _map(d['guideQuestData']).entries) {
+    final g = _map(entry.value);
+    final story = _s(g['storyId']);
+    final title = lineTitle['${_s(g['questId']).isEmpty ? entry.key : _s(g['questId'])}_line'];
+    if (story.isEmpty || title == null) continue;
+    hints.putIfAbsent(
+      storyKey(story),
+      () => StoryHint(title, group: '指引', sort: -9000),
+    );
+  }
+}
+/// An act of a sandbox topic's plot: a main act or a side story, with the
+/// summary the game gives it.
+typedef SandboxAct = ({
+  String entryId,
+  String key,
+  String title,
+  String summary,
+  String kind,
+  int order,
+});
+
+/// The acts of one topic (`archiveQuestData`), in the game's order; the kind
+/// is the name the table gives the sort of act (`archiveQuestTypeData`).
+List<SandboxAct> sandboxActsOf(
+  String topic,
+  Map<String, dynamic> d,
+  String Function(Object?) clean,
+) {
+  final kinds = {
+    for (final k in _map(d['archiveQuestTypeData']).values)
+      _s(_map(k)['type']): clean(_map(k)['name']),
+  };
+  // Main acts before side stories, each in its own order.
+  final kindRank = {
+    for (final (i, k) in kinds.keys.indexed) k: i,
+  };
+  final out = <SandboxAct>[];
+  var seen = 0;
+  for (final entry in _map(d['archiveQuestData']).entries) {
+    final q = _map(entry.value);
+    final title = clean(q['name']);
+    if (title.isEmpty) continue;
+    final key = _s(q['id']).isEmpty ? entry.key : _s(q['id']);
+    out.add(
+      (
+        entryId: 'sandbox_act:$topic/$key',
+        key: '$topic/$key',
+        title: title,
+        summary: clean(q['desc']),
+        kind: kinds[_s(q['questType'])] ?? '',
+        order: (kindRank[_s(q['questType'])] ?? 0) * 1000 +
+            (_intOf(q['sortId']) ?? seen),
+      ),
+    );
+    seen++;
+  }
+  return out;
+}
+
+/// The acts of every topic of the sandbox table, by topic id.
+Map<String, List<SandboxAct>> sandboxActs(
+  Map<String, dynamic> table,
+  String Function(Object?) clean,
+) =>
+    {
+      for (final template in _map(table['detail']).values)
+        for (final topic in _map(template).entries)
+          topic.key: sandboxActsOf(topic.key, _map(topic.value), clean),
+    };
 /// Stage names by stage id and by level file, from a table's stage maps.
 void collectStageNames(
   Map<String, dynamic> stages,

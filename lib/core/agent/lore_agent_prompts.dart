@@ -29,7 +29,8 @@ const String loreDatabaseGuide = '''
   roguelike_item / roguelike_scene / roguelike_choice / roguelike_ending / roguelike_stage 等；code 是关卡号/敌人编号；
   collection_id 是所属的故事集/活动/主题；record_id 指向 normalized_records 里这个条目的文字。
 - entry_links(src, relation, dst)：条目之间的绑定。appears_in：敌人出现在哪些关卡；belongs_to：关卡属于地区、皮肤/模组/干员关卡属于干员；
-  belongs_to_stage：剧情文件对应的关卡；leads_to：肉鸽选项通向的场景；features：肉鸽分队的干员；reads_story：档案条目对应的剧情文件。
+  belongs_to_stage：剧情文件对应的关卡；leads_to：肉鸽选项通向的场景；features：肉鸽分队的干员；reads_story：档案条目对应的剧情文件；plays_in：战斗中会播放的剧情文件（教程、训练、战斗内对话）所在的关卡；
+  attached_to：这类关卡内对话归属的剧情（它读在那篇剧情的末尾）或关卡。
   视图 collection_enemies(collection_id, enemy_id) 列出某个故事集/活动/主题里出现过的敌人。
 梗概、章节简介、实体表、条目与绑定只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
 

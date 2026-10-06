@@ -156,6 +156,10 @@ const Map<String, _TypeSpec> _typeSpecs = {
   'roguelike_buff': _TypeSpec('roguelike', 'buff', 'roguelike_buff'),
   'sandbox_item': _TypeSpec('sandbox', 'item', 'sandbox_item'),
   'sandbox_text': _TypeSpec('sandbox', 'text', 'sandbox_text'),
+  'sandbox_stage': _TypeSpec('sandbox', 'stage', 'sandbox_stage'),
+  'sandbox_event': _TypeSpec('sandbox', 'event', 'sandbox_event'),
+  'sandbox_topic': _TypeSpec('sandbox', 'topic', 'sandbox_topic'),
+  'sandbox_act': _TypeSpec('sandbox', 'act', 'sandbox_act'),
 };
 
 _TypeSpec _specOf(String type) =>
@@ -201,6 +205,10 @@ const Map<String, String> _typeLabels = {
   'roguelike_buff': '集成战略加成',
   'sandbox_item': '生息演算物品',
   'sandbox_text': '生息演算文本',
+  'sandbox_stage': '生息演算关卡',
+  'sandbox_event': '生息演算事件',
+  'sandbox_topic': '生息演算',
+  'sandbox_act': '生息演算篇章',
 };
 
 /// One entry before it is written.
@@ -409,12 +417,19 @@ class EntryImporter {
     final activity = await _table(EntryTables.activity);
     final basic = _map(activity['basicInfo']);
     final review = await _table(EntryTables.storyReview);
+    // The first sandbox mode is an activity: the sandbox table lists it, so it
+    // sits on the sandbox shelf with the others.
+    final legacySandbox = _map(
+      _map(await _table(EntryTables.sandbox))['sandboxActTables'],
+    ).keys.toSet();
     var sort = 0;
     for (final entry in review.entries) {
       final c = _map(entry.value);
       final type = _s(c['entryType']);
       final id = _s(c['id']).isEmpty ? entry.key : _s(c['id']);
-      final kind = type == 'MAINLINE'
+      final kind = legacySandbox.contains(id)
+          ? 'sandbox'
+          : type == 'MAINLINE'
           ? 'main'
           : type == 'NONE'
               ? 'memory'
@@ -443,7 +458,9 @@ class EntryImporter {
       }
       ctx.add(
         entry.key,
-        _activityKind(_s(info['displayType']), ''),
+        legacySandbox.contains(entry.key)
+            ? 'sandbox'
+            : _activityKind(_s(info['displayType']), ''),
         name,
         start == null || start < 0 ? null : start,
         sort++,
@@ -1819,33 +1836,116 @@ class EntryImporter {
 
   // ─── Sandbox, ark events ────────────────────────────────────────
 
+  /// Item type names the sandbox table gives (`itemTypeData`), by type code.
+  Future<Map<String, String>> _sandboxTypeNames() async {
+    final names = <String, String>{};
+    final detail = _map((await _table(EntryTables.sandboxPerm))['detail']);
+    for (final template in detail.values) {
+      for (final topic in _map(template).values) {
+        for (final t in _map(_map(topic)['itemTypeData']).values) {
+          final code = _s(_map(t)['itemType']);
+          final name = _clean(_map(t)['itemTypeName']);
+          if (code.isNotEmpty && name.isNotEmpty) names.putIfAbsent(code, () => name);
+        }
+      }
+    }
+    return names;
+  }
+
   Future<void> _sandboxPerm(Transaction txn, _Context ctx) async {
     const path = EntryTables.sandboxPerm;
+    await _purgeSource(txn, path);
     final table = await _table(path);
-    await _sandboxItems(txn, ctx, path, _map(table['itemData']));
-    final detail = _map(table['detail']);
-    for (final byTemplate in detail.values) {
-      await _harvestGroups(
-        txn,
-        ctx,
-        _map(byTemplate),
-        path,
-        type: 'sandbox_text',
-      );
+    await _sandboxItems(
+      txn,
+      ctx,
+      path,
+      _map(table['itemData']),
+      await _sandboxTypeNames(),
+    );
+    // The mode's own blurb, and its plot: acts (main and side), each with the
+    // summary the game gives it; the stories are part of their act.
+    final blurbs = _map(table['basicInfo']);
+    final acts = sandboxActs(table, _clean);
+    for (final template in _map(table['detail']).values) {
+      for (final topic in _map(template).entries) {
+        final d = _map(topic.value);
+        final info = _map(blurbs[topic.key]);
+        final blurb = cleanDescription(_s(info['description']));
+        if (hasChinese(blurb)) {
+          await _emit(
+            txn,
+            _Draft(
+              type: 'sandbox_topic',
+              key: topic.key,
+              sourcePath: path,
+              name: _clean(info['topicName']),
+              collectionId: topic.key,
+              sections: [TextSection('', blurb)],
+            ),
+          );
+        }
+        for (final act in acts[topic.key] ?? const <SandboxAct>[]) {
+          await _emit(
+            txn,
+            _Draft(
+              type: 'sandbox_act',
+              key: act.key,
+              sourcePath: path,
+              name: act.title,
+              collectionId: topic.key,
+              groupName: act.kind.isEmpty ? null : act.kind,
+              sortKey: act.order,
+              sections: [if (hasChinese(act.summary)) TextSection('', act.summary)],
+            ),
+          );
+        }
+        await _sandboxStages(txn, path, topic.key, _map(d['stageData']));
+        // The events a quest line starts carry the game's name for them.
+        final kindOf = <String, String>{
+          for (final e in _map(d['eventData']).values)
+            if (_s(_map(e)['type']) == 'QUEST_EVENT' &&
+                _clean(_map(e)['iconName']).isNotEmpty)
+              _s(_map(e)['enterSceneId']): _clean(_map(e)['iconName']),
+        };
+        await _sandboxEvents(
+          txn,
+          path,
+          topic.key,
+          _map(d['eventSceneData']),
+          _map(d['eventChoiceData']),
+          kindOf,
+        );
+      }
     }
   }
 
   Future<void> _sandboxLegacy(Transaction txn, _Context ctx) async {
     const path = EntryTables.sandbox;
+    await _purgeSource(txn, path);
     final table = await _table(path);
-    await _sandboxItems(txn, ctx, path, _map(table['itemDatas']));
-    await _harvestGroups(
+    // The items of this table are the items of the one mode it describes.
+    final acts = _map(table['sandboxActTables']);
+    await _sandboxItems(
       txn,
       ctx,
-      _map(table['sandboxActTables']),
       path,
-      type: 'sandbox_text',
+      _map(table['itemDatas']),
+      await _sandboxTypeNames(),
+      owner: acts.length == 1 ? acts.keys.first : null,
     );
+    for (final act in acts.entries) {
+      final d = _map(act.value);
+      await _sandboxStages(txn, path, act.key, _map(d['stageDatas']));
+      await _sandboxEvents(
+        txn,
+        path,
+        act.key,
+        _map(d['eventSceneDatas']),
+        _map(d['eventChoiceDatas']),
+        const {},
+      );
+    }
   }
 
   Future<void> _sandboxItems(
@@ -1853,7 +1953,9 @@ class EntryImporter {
     _Context ctx,
     String path,
     Map<String, dynamic> items,
-  ) async {
+    Map<String, String> typeNames, {
+    String? owner,
+  }) async {
     for (final entry in items.entries) {
       final item = _map(entry.value);
       final name = _clean(item['itemName']);
@@ -1870,14 +1972,170 @@ class EntryImporter {
           key: _s(item['itemId']).isEmpty ? entry.key : _s(item['itemId']),
           sourcePath: path,
           name: name,
-          collectionId: ctx.collectionForId(entry.key),
-          groupName: _s(item['itemType']),
+          collectionId: ctx.collectionForId(entry.key) ?? owner,
+          // The table's own name for the kind of item; a kind it does not
+          // name has no heading.
+          groupName: typeNames[_s(item['itemType'])],
           sections: sections,
         ),
       );
     }
   }
 
+  /// The prose of a sandbox text: what the tables mark as an effect (a
+  /// `<color>` span, a line in 【】) is not text of the story.
+  String _sandboxProse(String raw) => _prose(
+        raw
+            .replaceAll(
+              RegExp(r'<color=[^>]*>.*?</color>', dotAll: true),
+              '',
+            )
+            .split(RegExp(r'\n|\\n'))
+            .where((l) => !RegExp(r'^\s*【.*】\s*$').hasMatch(l))
+            .join('\n'),
+      );
+
+  /// The stages of a sandbox topic: name, the prose of the description, and
+  /// the place the description opens with (a line the game marks `<@lv.…>`
+  /// that says where, not how).
+  Future<void> _sandboxStages(
+    Transaction txn,
+    String path,
+    String topic,
+    Map<String, dynamic> stages,
+  ) async {
+    final codes = <String, int>{};
+    for (final s in stages.values) {
+      final code = _s(_map(s)['code']);
+      if (code.isNotEmpty) codes[code] = (codes[code] ?? 0) + 1;
+    }
+    final nameCount = <String, int>{};
+    var rank = 0;
+    for (final entry in stages.entries) {
+      final s = _map(entry.value);
+      final id = _s(s['stageId']).isEmpty ? entry.key : _s(s['stageId']);
+      var name = _clean(s['name']);
+      if (name.isEmpty) continue;
+      String? place;
+      final prose = <String>[];
+      for (final line in _s(s['description']).split(RegExp(r'\n|\\n'))) {
+        final marked =
+            RegExp(r'^\s*<@lv\.[^>]*>(.*?)</>\s*$').firstMatch(line);
+        if (marked == null) {
+          prose.add(line);
+          continue;
+        }
+        final inner = _clean(marked[1]);
+        if (place == null && hasChinese(inner) && !RegExp(r'[\d%]').hasMatch(inner)) {
+          place = inner;
+        }
+      }
+      final text = _prose(prose.join('\n'));
+      // A code every stage shares says nothing.
+      final code = _s(s['code']);
+      final nth = nameCount[name] = (nameCount[name] ?? 0) + 1;
+      if (nth > 1) name = '$name · $nth';
+      await _emit(
+        txn,
+        _Draft(
+          type: 'sandbox_stage',
+          key: '$topic/$id',
+          sourcePath: path,
+          name: name,
+          code: (codes[code] ?? 0) <= 3 ? code : null,
+          collectionId: topic,
+          groupName: place,
+          sortKey: rank++,
+          sections: [if (text.isNotEmpty) TextSection('', text)],
+        ),
+      );
+    }
+  }
+
+  /// The events of a sandbox topic. An event starts at a scene whose id ends
+  /// in `_enter`; every scene lists the options it offers, and the scene shown
+  /// after an option is the one numbered like it (`choice_x_1` →
+  /// `scene_x_1`). The event is its opening text and its options layer by
+  /// layer; effects are left out.
+  Future<void> _sandboxEvents(
+    Transaction txn,
+    String path,
+    String topic,
+    Map<String, dynamic> sceneTable,
+    Map<String, dynamic> choiceTable,
+    Map<String, String> groupOf,
+  ) async {
+    final scenes = <String, ({String title, String text, List<String> choices})>{};
+    for (final entry in sceneTable.entries) {
+      final s = _map(entry.value);
+      final id = [
+        for (final k in const ['eventSceneId', 'sceneId', 'choiceSceneId'])
+          if (_s(s[k]).isNotEmpty) _s(s[k]),
+      ].firstOrNull;
+      if (id == null) continue;
+      scenes[id] = (
+        title: _clean(s['title']),
+        text: _sandboxProse(_s(s['desc'] ?? s['description'])),
+        choices: [
+          for (final c in _list(s['choiceIds'] ?? s['choiceIdList'] ?? s['choices']))
+            _s(c),
+        ],
+      );
+    }
+    final choices = <String, ({String title, String text})>{
+      for (final e in choiceTable.entries)
+        (_s(_map(e.value)['choiceId']).isEmpty
+            ? e.key
+            : _s(_map(e.value)['choiceId'])): (
+          title: _clean(_map(e.value)['title']),
+          text: _sandboxProse(
+            _s(_map(e.value)['desc'] ?? _map(e.value)['description']),
+          ),
+        ),
+    };
+    SandboxOption option(String id) {
+      final c = choices[id];
+      final result = 'scene_${id.startsWith('choice_') ? id.substring(7) : id}';
+      final scene = scenes[result];
+      return (
+        title: c?.title ?? '',
+        text: c?.text ?? '',
+        after: scene?.text ?? '',
+        then: scene?.choices ?? const <String>[],
+      );
+    }
+
+    final nameCount = <String, int>{};
+    var rank = 0;
+    for (final root in scenes.keys.where((k) => k.endsWith('_enter'))) {
+      final scene = scenes[root]!;
+      var name = scene.title;
+      if (name.isEmpty) continue;
+      final blocks = <String>[
+        if (scene.text.isNotEmpty) '## 事件\n${scene.text}',
+        () {
+          final outline = sandboxEventOutline(scene.choices, option);
+          return outline.isEmpty ? '' : '## 选项\n$outline';
+        }(),
+      ].where((b) => b.isNotEmpty).toList();
+      if (blocks.isEmpty) continue;
+      final nth = nameCount[name] = (nameCount[name] ?? 0) + 1;
+      if (nth > 1) name = '$name · $nth';
+      await _emit(
+        txn,
+        _Draft(
+          type: 'sandbox_event',
+          key: '$topic/$root',
+          sourcePath: path,
+          name: name,
+          collectionId: topic,
+          groupName: groupOf[root],
+          sortKey: rank++,
+          sections: [TextSection('', blocks.join('\n\n'))],
+        ),
+      );
+    }
+  }
   Future<void> _arkvent(Transaction txn, _Context ctx, String path) async {
     final table = await _table(path);
     for (final root in table.values) {
@@ -1921,6 +2179,31 @@ class EntryImporter {
         );
       }
     }
+    // Sandbox stages: the permanent topics and the first one (an activity).
+    final perm = _map((await _table(EntryTables.sandboxPerm))['detail']);
+    for (final template in perm.values) {
+      for (final topic in _map(template).entries) {
+        for (final entry in _map(_map(topic.value)['stageData']).entries) {
+          final stage = _map(entry.value);
+          add(
+            _s(stage['levelId']),
+            'sandbox_stage:${topic.key}/${_s(stage['stageId']).isEmpty ? entry.key : _s(stage['stageId'])}',
+          );
+        }
+      }
+    }
+    final legacy = _map(
+      _map(await _table(EntryTables.sandbox))['sandboxActTables'],
+    );
+    for (final act in legacy.entries) {
+      for (final entry in _map(_map(act.value)['stageDatas']).entries) {
+        final stage = _map(entry.value);
+        add(
+          _s(stage['levelId']),
+          'sandbox_stage:${act.key}/${_s(stage['stageId']).isEmpty ? entry.key : _s(stage['stageId'])}',
+        );
+      }
+    }
     return index;
   }
 
@@ -1939,7 +2222,7 @@ class EntryImporter {
     };
     final stages = {
       for (final r in await db.rawQuery(
-        "SELECT id FROM entries WHERE type IN ('stage', 'roguelike_stage')",
+        "SELECT id FROM entries WHERE type IN ('stage', 'roguelike_stage', 'sandbox_stage')",
       ))
         '${r['id']}',
     };
@@ -1967,7 +2250,7 @@ class EntryImporter {
     };
     final stages = _stageIdCache ??= {
       for (final r in await db.rawQuery(
-        "SELECT id FROM entries WHERE type IN ('stage', 'roguelike_stage')",
+        "SELECT id FROM entries WHERE type IN ('stage', 'roguelike_stage', 'sandbox_stage')",
       ))
         '${r['id']}',
     };
@@ -2010,6 +2293,8 @@ class EntryImporter {
     }
     final targets = [for (final s in stageIds) if (stages.contains(s)) s];
     if (targets.isEmpty) return;
+    final played = <String>{};
+    _storyKeysOf(level, played);
     await db.transaction((txn) async {
       for (final id in ids) {
         if (!enemies.contains('enemy:$id')) continue;
@@ -2017,7 +2302,33 @@ class EntryImporter {
           await _link(txn, 'enemy:$id', 'appears_in', stage, repoPath);
         }
       }
+      // The stories the battle itself plays (`STORY` actions: tutorials,
+      // training and in-battle dialogue). The story entries do not exist yet
+      // on a full build; the ids are matched to them in [rebuildDerived].
+      for (final key in played) {
+        for (final stage in targets) {
+          await _link(txn, 'story:$key', 'plays_in', stage, repoPath);
+        }
+      }
     });
+  }
+
+  /// The story files named by `STORY` actions anywhere in a level file, as
+  /// `<path>.txt` in lower case with forward slashes (the key of a story).
+  static void _storyKeysOf(Object? node, Set<String> out) {
+    if (node is List) {
+      for (final v in node) {
+        _storyKeysOf(v, out);
+      }
+    } else if (node is Map) {
+      if (node['actionType'] == 'STORY') {
+        final key = _s(node['key']).toLowerCase().replaceAll('\\', '/');
+        if (key.isNotEmpty) out.add(key.endsWith('.txt') ? key : '$key.txt');
+      }
+      for (final v in node.values) {
+        _storyKeysOf(v, out);
+      }
+    }
   }
 
   // ─── Derived layer: collections and story entries ───────────────
@@ -2099,16 +2410,28 @@ class EntryImporter {
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='story_catalog'",
       ))
           .isNotEmpty;
-      final rows = await txn.rawQuery(
-        hasCatalog
-            ? 'SELECT s.story_id, s.source_path, c.collection_id, c.story_code, '
-                'c.story_name, c.avg_tag, c.story_sort '
-                'FROM story_scopes s LEFT JOIN story_catalog c '
-                'ON c.story_id = s.story_id'
-            : 'SELECT story_id, source_path, NULL AS collection_id, '
-                'NULL AS story_code, NULL AS story_name, NULL AS avg_tag, '
-                'NULL AS story_sort FROM story_scopes',
-      );
+      // A file with nothing but a title line (a stub, a camera test) is not a
+      // story: it gets no entry.
+      final titleOnly = {
+        for (final r in await txn.rawQuery(
+          'SELECT story_id FROM story_lines GROUP BY story_id '
+          "HAVING SUM(kind <> 'title') = 0",
+        ))
+          '${r['story_id']}',
+      };
+      final rows = [
+        for (final r in await txn.rawQuery(
+          hasCatalog
+              ? 'SELECT s.story_id, s.source_path, c.collection_id, c.story_code, '
+                  'c.story_name, c.avg_tag, c.story_sort '
+                  'FROM story_scopes s LEFT JOIN story_catalog c '
+                  'ON c.story_id = s.story_id'
+              : 'SELECT story_id, source_path, NULL AS collection_id, '
+                  'NULL AS story_code, NULL AS story_name, NULL AS avg_tag, '
+                  'NULL AS story_sort FROM story_scopes',
+        ))
+          if (!titleOnly.contains('${r['story_id']}')) r,
+      ];
       final systemNames = {
         'tutorial': '教程',
         'guide': '指引',
@@ -2132,6 +2455,19 @@ class EntryImporter {
         final found = namer.resolve(storyId, collectionId: owner);
         if (found != null) {
           named[storyId] = found;
+        } else if (storyId.toLowerCase().contains('/battleavg/')) {
+          // A map dialogue no table names is named after who speaks first.
+          final first = await txn.rawQuery(
+            'SELECT speaker FROM story_lines WHERE story_id = ? '
+            "AND speaker IS NOT NULL AND speaker <> '' ORDER BY line_index LIMIT 1",
+            [storyId],
+          );
+          final speaker = first.isEmpty ? '' : '${first.first['speaker']}'.trim();
+          if (speaker.isNotEmpty) {
+            named[storyId] = StoryNaming(name: speaker, group: npcDialogueGroup);
+          } else {
+            unnamed.putIfAbsent(owner ?? '', () => []).add(storyId);
+          }
         } else {
           unnamed.putIfAbsent(owner ?? '', () => []).add(storyId);
         }
@@ -2143,6 +2479,30 @@ class EntryImporter {
       final order = named.keys.toList()..sort(naturalCompare);
       for (var i = 0; i < order.length; i++) {
         rank[order[i]] = i;
+      }
+      // Several files that carry one name (a merchant's visits, a part's two
+      // dialogues) are told apart by a number, in reading order.
+      final shownName = <String, String>{};
+      final sameName = <String, List<String>>{};
+      for (final row in rows) {
+        final storyId = '${row['story_id']}';
+        final naming = named[storyId];
+        if ((row['story_name'] as String?)?.trim().isNotEmpty ?? false) continue;
+        if (naming == null) continue;
+        sameName
+            .putIfAbsent('${owners[storyId]}|${naming.group}|${naming.name}', () => [])
+            .add(storyId);
+      }
+      for (final ids in sameName.values) {
+        if (ids.length < 2) continue;
+        ids.sort((a, b) {
+          final byOrder = ((named[a]!.sort ?? 0) * 10000 + rank[a]!)
+              .compareTo((named[b]!.sort ?? 0) * 10000 + rank[b]!);
+          return byOrder != 0 ? byOrder : naturalCompare(a, b);
+        });
+        for (var i = 1; i < ids.length; i++) {
+          shownName[ids[i]] = '${named[ids[i]]!.name} · ${i + 1}';
+        }
       }
       for (final row in rows) {
         final storyId = '${row['story_id']}';
@@ -2185,7 +2545,9 @@ class EntryImporter {
           type: 'story',
           name: fromCatalog
               ? catalogName
-              : naming?.name ?? p.posix.basenameWithoutExtension(storyId),
+              : shownName[storyId] ??
+                  naming?.name ??
+                  p.posix.basenameWithoutExtension(storyId),
           code: row['story_code'] as String?,
           collectionId: owner,
           groupName: fromCatalog
@@ -2293,6 +2655,7 @@ class EntryImporter {
         [openingStoryKind],
       );
 
+      await _attachLevelStories(txn, hasCatalog);
       // Stages are grouped by the zone they are in: its name, or no group
       // when the zone has none (an id is not a heading).
       await txn.execute(
@@ -2392,6 +2755,121 @@ class EntryImporter {
     });
   }
 
+  /// Dialogue played inside a battle (tutorial popups, training, in-battle
+  /// conversations) is not a story of its own: it is read at the end of the
+  /// story of its stage, or on the stage's page when the stage has none.
+  ///
+  /// A story is in-battle dialogue when a level file plays it (`STORY` action,
+  /// `plays_in`: the stage of that level), or when it is a training or
+  /// tutorial file the names bind to a stage. The stories of the catalog (the
+  /// chapters players read) are never in-battle dialogue. Each such story gets
+  /// an `attached_to` link to its host: the first story of its stage in
+  /// reading order, else the stage entry. Lists leave attached stories out.
+  Future<void> _attachLevelStories(Transaction txn, bool hasCatalog) async {
+    final storyIds = {
+      for (final r in await txn.rawQuery(
+        "SELECT id, raw_id FROM entries WHERE type = 'story'",
+      ))
+        '${r['raw_id']}'.toLowerCase(): '${r['id']}',
+    };
+    // Level files name stories in whatever case the game wrote.
+    for (final r in await txn.rawQuery(
+      "SELECT src, dst, source_path FROM entry_links WHERE relation = 'plays_in'",
+    )) {
+      final src = '${r['src']}';
+      final id =
+          storyIds[(src.length > 6 ? src.substring(6) : src).toLowerCase()];
+      if (id == src) continue;
+      await txn.delete(
+        'entry_links',
+        where: "src = ? AND relation = 'plays_in' AND dst = ?",
+        whereArgs: [src, r['dst']],
+      );
+      if (id != null) {
+        await _link(txn, id, 'plays_in', '${r['dst']}', '${r['source_path']}');
+      }
+    }
+    // Training and tutorial files the names bind to a stage play there too.
+    for (final r in await txn.rawQuery(
+      'SELECT l.src, l.dst, e.raw_id FROM entry_links l '
+      'JOIN entries e ON e.id = l.src '
+      "WHERE l.relation = 'belongs_to_stage' AND e.type = 'story'",
+    )) {
+      if (const {'训练', '训练关卡', '教程'}.contains(storyKindLabel('${r['raw_id']}'))) {
+        await _link(txn, '${r['src']}', 'plays_in', '${r['dst']}', 'derived');
+      }
+    }
+    // A map's signs and its stage-bound dialogues are named after the stage
+    // they stand in (`dialog_<topic>_level_<n>` → stage `<topic>_<n>`).
+    final sandboxStages = {
+      for (final r in await txn.rawQuery(
+        "SELECT id FROM entries WHERE type = 'sandbox_stage'",
+      ))
+        '${r['id']}',
+    };
+    if (sandboxStages.isNotEmpty) {
+      final named = RegExp(r'^dialog_(.+?)_level_(\d+)(?:_\d+)?$');
+      for (final r in await txn.rawQuery(
+        "SELECT id, raw_id FROM entries WHERE type = 'story' "
+        "AND raw_id LIKE '%/dialog_%level%'",
+      )) {
+        final base = p.posix.basenameWithoutExtension('${r['raw_id']}');
+        final m = named.firstMatch(base);
+        if (m == null) continue;
+        final stage = 'sandbox_stage:${m[1]}/${m[1]}_${m[2]}';
+        if (sandboxStages.contains(stage)) {
+          await _link(txn, '${r['id']}', 'plays_in', stage, 'derived');
+        }
+      }
+    }    // The catalog's chapters are stories, whoever plays them.
+    if (hasCatalog) {
+      await txn.execute(
+        'DELETE FROM entry_links WHERE relation = ? AND src IN '
+        '(SELECT e.id FROM entries e JOIN story_catalog c '
+        'ON c.story_id = e.raw_id '
+        "WHERE e.type = 'story' AND c.story_name IS NOT NULL "
+        "AND c.story_name <> '')",
+        ['plays_in'],
+      );
+    }
+    final inBattle = {
+      for (final r in await txn.rawQuery(
+        "SELECT DISTINCT src FROM entry_links WHERE relation = 'plays_in'",
+      ))
+        '${r['src']}',
+    };
+    if (inBattle.isEmpty) return;
+    // They are bound to their stage by `plays_in`, not `belongs_to_stage`.
+    await txn.execute(
+      "DELETE FROM entry_links WHERE relation = 'belongs_to_stage' AND src IN "
+      "(SELECT DISTINCT src FROM entry_links WHERE relation = 'plays_in')",
+    );
+    for (final story in inBattle) {
+      final stages = [
+        for (final r in await txn.rawQuery(
+          "SELECT dst FROM entry_links WHERE src = ? AND relation = 'plays_in' "
+          'ORDER BY dst',
+          [story],
+        ))
+          '${r['dst']}',
+      ];
+      String? host;
+      for (final stage in stages) {
+        final first = await txn.rawQuery(
+          'SELECT e.id FROM entry_links l JOIN entries e ON e.id = l.src '
+          "WHERE l.dst = ? AND l.relation = 'belongs_to_stage' "
+          "AND e.type = 'story' ORDER BY e.sort_key, e.id LIMIT 1",
+          [stage],
+        );
+        if (first.isNotEmpty) {
+          host = '${first.first['id']}';
+          break;
+        }
+      }
+      host ??= stages.isEmpty ? null : stages.first;
+      if (host != null) await _link(txn, story, 'attached_to', host, 'derived');
+    }
+  }
   /// The lookups that name story files the catalog does not name: names the
   /// tables give them, the stages of the library, stage names by id and by
   /// level file.

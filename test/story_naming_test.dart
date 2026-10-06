@@ -175,29 +175,89 @@ void main() {
       );
     });
 
-    test('sandbox dialogs take the name of the NPC, levels their stage name',
-        () {
+    test('sandbox dialogs take the name of their part, else of the NPC; '
+        'levels their stage name', () {
       final r = sandboxStoryNames({
         'detail': {
-          'npcs': {
-            'npc1': {
-              'picName': '旅人',
-              'dialogIds': {'REACT': 'dlg_1'},
+          'SANDBOX_V2': {
+            'box': {
+              'questLineData': {
+                'mainline1a': {
+                  'questLineId': 'mainline1a',
+                  'questLineTitle': '第一幕',
+                  'sortId': 1,
+                },
+              },
+              'questData': {
+                'mainline1_2_a': {
+                  'questId': 'mainline1_2_a',
+                  'questLine': 'mainline1a',
+                  'questTitle': '开头',
+                  'isDisplay': true,
+                },
+              },
+              'archiveQuestData': {
+                'story_1': {
+                  'id': 'story_1',
+                  'questType': 'MAIN',
+                  'name': '第一幕',
+                  'avgDataList': [
+                    {'avgId': 'Obt/Box/box_entry', 'avgName': '初来乍到'},
+                  ],
+                },
+              },
+              'npcData': {
+                'npc1': {
+                  'picName': '旅人',
+                  'dialogIds': {'REACT': 'dlg_1'},
+                },
+                'npc2': {
+                  'picName': '向导',
+                  'dialogIds': {
+                    'BEFORE': 'dialog_sandbox_1_main1_2_op',
+                    'AFTER': 'dialog_sandbox_1_main1_2_ed',
+                  },
+                },
+              },
+              'dialogData': {
+                'dlg_1': {'dialogId': 'dlg_1', 'avgId': 'Obt/Box/Avg/dlg_1'},
+                'a': {
+                  'dialogId': 'dialog_sandbox_1_main1_2_op',
+                  'avgId': 'Obt/Box/Avg/dialog_sandbox_1_main1_2_op',
+                },
+                'b': {
+                  'dialogId': 'dialog_sandbox_1_main1_2_ed',
+                  'avgId': 'Obt/Box/Avg/dialog_sandbox_1_main1_2_ed',
+                },
+              },
+              'guideQuestData': {
+                'g': {'questId': 'trig_guide_x', 'storyId': 'Obt/Guide/box/trig_guide_x'},
+              },
+              'stageData': {
+                's1': {
+                  'stageId': 's1',
+                  'levelId': 'Obt/Box/level_box_tr01',
+                  'name': '采掘训练',
+                },
+              },
             },
-          },
-          'dialogs': {
-            'dlg_1': {'dialogId': 'dlg_1', 'avgId': 'Obt/Box/Avg/dlg_1'},
-          },
-          'stages': {
-            's1': {'stageId': 's1', 'levelId': 'Obt/Box/level_box_tr01', 'name': '采掘训练'},
           },
         },
       }, _clean,);
+      // A dialogue no part claims is the NPC's; the group says so.
       expect(r.hints['obt/box/avg/dlg_1']!.name, '旅人');
+      expect(r.hints['obt/box/avg/dlg_1']!.group, npcDialogueGroup);
+      // A part's dialogues take its title and sit under its act, in order.
+      final op = r.hints['obt/box/avg/dialog_sandbox_1_main1_2_op']!;
+      final ed = r.hints['obt/box/avg/dialog_sandbox_1_main1_2_ed']!;
+      expect((op.name, op.group), ('开头', '第一幕'));
+      expect(ed.sort!, greaterThan(op.sort!));
+      // The story an act opens keeps the name the table gives it.
+      expect(r.hints['obt/box/box_entry']!.name, '初来乍到');
+      expect(r.hints['obt/box/box_entry']!.sort!, lessThan(op.sort!));
       expect(r.levelNames['level_box_tr01'], '采掘训练');
     });
   });
-
   group('files that only have a kind', () {
     test('are numbered in natural order, per kind', () {
       final out = numberedKinds([

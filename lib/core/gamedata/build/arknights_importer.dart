@@ -15,11 +15,59 @@ import 'dart:io';
 import 'package:arklores/core/gamedata/build/entry_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_script.dart';
+import 'package:arklores/core/gamedata/story_vectors.dart' show storyChunkVectorsTable;
 import 'package:arklores/core/rag/chunker.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common/sqlite_api.dart';
 
+/// Removes everything a story file wrote: its lines, scope, chunks, coverage
+/// rows and vectors. [path] is the repo-relative path
+/// (`zh_CN/gamedata/story/<story id>`). The entry layer is rebuilt separately
+/// (`EntryImporter.rebuildDerived`).
+Future<void> deleteStoryRows(Database db, String path) async {
+  final storyId = path.substring('zh_CN/gamedata/story/'.length);
+  // Databases built on Windows hold the backslash spelling of the path.
+  final paths = {path, path.replaceAll('/', r'\')}.toList();
+  final marks = List.filled(paths.length, '?').join(',');
+  await db.delete(
+    'entity_story_mentions',
+    where: 'story_id = ?',
+    whereArgs: [storyId],
+  );
+  await db.delete(
+    'story_chapter_profiles',
+    where: 'story_id = ?',
+    whereArgs: [storyId],
+  );
+  await db.delete('story_scopes', where: 'story_id = ?', whereArgs: [storyId]);
+  await db.delete('story_lines', where: 'story_id = ?', whereArgs: [storyId]);
+  await db.delete(
+    'normalized_records',
+    where: 'source_path IN ($marks) OR (parent_type = ? AND parent_id = ?)',
+    whereArgs: [...paths, 'story_file', storyId],
+  );
+  await db.delete(
+    'lore_chunks',
+    where: 'source_path IN ($marks)',
+    whereArgs: paths,
+  );
+  // Optional vectors (R12) of a changed story point at the old line numbers;
+  // drop them so semantic recall never hints at stale ranges. Other stories
+  // keep their vectors (the in-app build cannot embed).
+  final hasVectors = (await db.rawQuery(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [storyChunkVectorsTable],
+  ))
+      .isNotEmpty;
+  if (hasVectors) {
+    await db.delete(
+      storyChunkVectorsTable,
+      where: 'story_id = ?',
+      whereArgs: [storyId],
+    );
+  }
+}
 /// Imports Arknights GameData into an open [Database].
 class ArknightsImporter {
   ArknightsImporter({
@@ -93,6 +141,83 @@ class ArknightsImporter {
       throw StateError('Missing story file: $relativePath');
     }
     await _importStoryFile(file, relativePath);
+  }
+
+  /// Parses every story file of the source again and re-imports the ones
+  /// whose lines differ from what the database holds (after a change to the
+  /// script parser). Returns the repo-relative paths that changed. The
+  /// coverage layer and the entry layer need rebuilding afterwards.
+  Future<List<String>> reimportChangedStories({
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final storyRoot = Directory(
+      p.join(sourceDir.path, 'zh_CN', 'gamedata', 'story'),
+    );
+    if (!await storyRoot.exists()) return const [];
+    final files = <File>[
+      await for (final e in storyRoot.list(recursive: true))
+        if (e is File &&
+            e.path.endsWith('.txt') &&
+            !p
+                .relative(e.path, from: storyRoot.path)
+                .startsWith('[uc]info${p.separator}'))
+          e,
+    ]..sort((a, b) => a.path.compareTo(b.path));
+    // A signature of the stored lines of every story.
+    final stored = <String, String>{};
+    String? current;
+    var bytes = <int>[];
+    void flush() {
+      final id = current;
+      if (id != null) stored[id] = sha1.convert(bytes).toString();
+      bytes = <int>[];
+    }
+
+    for (final r in await db.rawQuery(
+      'SELECT story_id, kind, speaker, content FROM story_lines '
+      'ORDER BY story_id, line_index',
+    )) {
+      final id = '${r['story_id']}';
+      if (id != current) {
+        flush();
+        current = id;
+      }
+      bytes.addAll(
+        utf8.encode('${r['kind']}|${r['speaker']}|${r['content']}\n'),
+      );
+    }
+    flush();
+
+    final changed = <String>[];
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+      final storyId = p
+          .relative(file.path, from: storyRoot.path)
+          .replaceAll(p.separator, '/');
+      final parsed = parseStoryScript(await file.readAsString());
+      final signature = parsed.isEmpty
+          ? null
+          : sha1
+              .convert(
+                utf8.encode(
+                  [
+                    for (final l in parsed)
+                      '${l.kind.value}|${l.speaker}|${l.content}\n',
+                  ].join(),
+                ),
+              )
+              .toString();
+      if (signature != stored[storyId]) {
+        final relative = p
+            .relative(file.path, from: sourceDir.path)
+            .replaceAll(p.separator, '/');
+        await deleteStoryRows(db, relative);
+        await _importStoryFile(file, relative);
+        changed.add(relative);
+      }
+      onProgress?.call(i + 1, files.length);
+    }
+    return changed;
   }
 
   Future<void> _importCharacterProfiles() async {

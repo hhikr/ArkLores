@@ -217,6 +217,7 @@
   "libraryProgress": "已读 {percent}%",
   "@libraryProgress": {"placeholders": {"percent": {"type": "int"}}},
   "libraryFinished": "已读完",
+  "storyReaderBattleDialogue": "关卡内对话",
   "libraryReadTimes": "读过 {count} 次",
   "@libraryReadTimes": {"placeholders": {"count": {"type": "int"}}},
   "libraryRelease": "上线 {month}",

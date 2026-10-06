@@ -43,6 +43,16 @@ const String _ownedByOperator = 'EXISTS (SELECT 1 FROM entry_links ol '
 const String _isPart = 'EXISTS (SELECT 1 FROM entry_links pl '
     "WHERE pl.src = e.id AND pl.relation = 'part_of')";
 
+/// Dialogue played inside a battle (tutorial popups, training, in-battle
+/// talk): it is read at the end of the story of its stage, or on the stage's
+/// page, never listed on its own.
+const String _isAttached = 'EXISTS (SELECT 1 FROM entry_links al '
+    "WHERE al.src = e.id AND al.relation = 'attached_to')";
+
+/// A stage (or story) that has such dialogue attached.
+const String _hostsAttached = 'EXISTS (SELECT 1 FROM entry_links hl '
+    "WHERE hl.dst = e.id AND hl.relation = 'attached_to')";
+
 /// Types of a collection's entries that are its own parts and are listed
 /// right on its page (the notes, endings and month squads of a roguelike
 /// topic) instead of behind a menu.
@@ -50,6 +60,7 @@ const Set<String> inlineEntryTypes = {
   'roguelike_tip',
   'roguelike_ending',
   'roguelike_squad',
+  'sandbox_act',
 };
 
 /// Entry types whose text is written as markdown (headings, lists): the
@@ -59,10 +70,14 @@ const Set<String> markdownEntryTypes = {
   'token',
   'trap',
   'roguelike_scene',
+  'sandbox_event',
 };
 
-/// The type whose text introduces its collection.
-const String introEntryType = 'roguelike_topic';
+/// Events: their text is an opening and options nested under it.
+const Set<String> eventEntryTypes = {'roguelike_scene', 'sandbox_event'};
+
+/// The types whose text introduces their collection.
+const Set<String> introEntryTypes = {'roguelike_topic', 'sandbox_topic'};
 
 /// One shelf and how much is on it.
 class ShelfSummary {
@@ -219,7 +234,7 @@ const Set<String> documentEntryTypes = {'operator', 'token', 'trap'};
 /// A readable entry has text of its own: a story file, a record, a profile
 /// document.
 const String _readable = "(e.type = 'story' OR e.record_id IS NOT NULL OR "
-    "e.type IN ('operator', 'token', 'trap'))";
+    "e.type IN ('operator', 'token', 'trap') OR $_hostsAttached)";
 
 Future<bool> _hasTable(DatabaseExecutor db, String name) async => (await db
         .rawQuery('SELECT 1 FROM sqlite_master WHERE name = ?', [name]))
@@ -234,7 +249,7 @@ Future<bool> hasEntryLayer(DatabaseExecutor db) async =>
 Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
   final rows = await db.rawQuery(
     'SELECT c.kind AS kind, COUNT(DISTINCT COALESCE(c.parent_id, c.id)) AS collections, '
-    "SUM(CASE WHEN e.type = 'story' THEN 1 ELSE 0 END) AS stories "
+    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories "
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'GROUP BY c.kind',
   );
@@ -277,7 +292,7 @@ Future<List<LibraryCollection>> collectionsOfKind(
 ) async {
   final rows = await db.rawQuery(
     'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' THEN 1 ELSE 0 END) AS stories, "
+    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
     "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.kind = ? GROUP BY c.id',
@@ -303,7 +318,7 @@ Future<List<LibraryCollection>> collectionsOwnedBy(
 ) async {
   final rows = await db.rawQuery(
     'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' THEN 1 ELSE 0 END) AS stories, "
+    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
     "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.parent_id = ? GROUP BY c.id ORDER BY c.sort_key, c.id',
@@ -336,7 +351,7 @@ Future<List<LibraryEntry>> entriesOwnedBy(
 Future<LibraryCollection?> collectionById(DatabaseExecutor db, String id) async {
   final rows = await db.rawQuery(
     'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' THEN 1 ELSE 0 END) AS stories, "
+    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
     "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.id = ? GROUP BY c.id',
@@ -354,7 +369,7 @@ Future<List<({String type, int count})>> collectionTypes(
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
     "WHERE e.collection_id = ? AND e.type <> 'story' AND "
-    "e.type <> '$introEntryType' AND $_readable "
+    "e.type NOT IN ('roguelike_topic', 'sandbox_topic') AND $_readable "
     'GROUP BY e.type ORDER BY n DESC',
     [collectionId],
   );
@@ -380,7 +395,7 @@ Future<List<LibraryEntry>> storiesOf(
 ) async {
   final catalog = await _hasTable(db, 'story_catalog');
   final parts = await _hasTable(db, 'entry_links')
-      ? 'AND NOT $_isPart '
+      ? 'AND NOT $_isPart AND NOT $_isAttached '
       : '';
   final rows = await db.rawQuery(
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
@@ -400,7 +415,7 @@ Future<String?> collectionIntro(DatabaseExecutor db, String collectionId) async 
   final rows = await db.rawQuery(
     'SELECT r.content AS content FROM entries e '
     'JOIN normalized_records r ON r.entry_id = e.id '
-    "WHERE e.collection_id = ? AND e.type = '$introEntryType' "
+    "WHERE e.collection_id = ? AND e.type IN ('roguelike_topic', 'sandbox_topic') "
     'ORDER BY r.line_start, r.id',
     [collectionId],
   );
@@ -451,6 +466,36 @@ Future<List<LibraryEntry>> entryParts(
   return [for (final r in rows) LibraryEntry.fromRow(r)];
 }
 
+/// The stories attached to [hostId] (a story or a stage entry): in-battle
+/// dialogue, in reading order (see [_isAttached]).
+Future<List<LibraryEntry>> attachedStories(
+  DatabaseExecutor db,
+  String hostId,
+) async {
+  if (!await _hasTable(db, 'entry_links')) return const [];
+  final rows = await db.rawQuery(
+    'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
+    'e.collection_id FROM entry_links l JOIN entries e ON e.id = l.src '
+    "WHERE l.dst = ? AND l.relation = 'attached_to' AND e.type = 'story' "
+    'ORDER BY e.sort_key, e.id',
+    [hostId],
+  );
+  return [for (final r in rows) LibraryEntry.fromRow(r)];
+}
+
+/// The story that [storyId]'s dialogue is read in (its file id), or null
+/// when the story is not attached to another story.
+Future<String?> storyHostOf(DatabaseExecutor db, String storyId) async {
+  if (!await _hasTable(db, 'entry_links')) return null;
+  final rows = await db.rawQuery(
+    'SELECT h.raw_id AS raw FROM entries e '
+    "JOIN entry_links l ON l.src = e.id AND l.relation = 'attached_to' "
+    "JOIN entries h ON h.id = l.dst AND h.type = 'story' "
+    "WHERE e.type = 'story' AND e.raw_id = ? LIMIT 1",
+    [storyId],
+  );
+  return rows.isEmpty ? null : _text(rows.first['raw']);
+}
 /// The entries of one type, in a collection ([collectionId]) or, without it,
 /// the free entries of the codex. [query] filters by name or code.
 Future<List<LibraryEntry>> entriesOfType(
@@ -601,6 +646,7 @@ Future<List<EntryBinding>> entryBindings(
       'FROM entry_links l JOIN entries e ON e.id = '
       '${outgoing ? 'l.dst' : 'l.src'} '
       'WHERE ${outgoing ? 'l.src' : 'l.dst'} = ? '
+      "AND l.relation NOT IN ('plays_in', 'attached_to') "
       'ORDER BY l.relation, e.type, e.sort_key, e.name LIMIT ?',
       [entryId, limit],
     );
@@ -663,7 +709,7 @@ Future<({List<LibraryCollection> collections, List<LibraryEntry> entries})>
   final like = '%${escapeLike(q)}%';
   final collections = await db.rawQuery(
     'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' THEN 1 ELSE 0 END) AS stories, "
+    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
     "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     "WHERE c.name LIKE ? ESCAPE '\\' GROUP BY c.id "
@@ -674,7 +720,8 @@ Future<({List<LibraryCollection> collections, List<LibraryEntry> entries})>
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
     'e.collection_id, e.entity_id, c.name AS collection_name '
     'FROM entries e LEFT JOIN collections c ON c.id = e.collection_id '
-    "WHERE $_readable AND (e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\') "
+    'WHERE $_readable AND NOT $_isAttached '
+    "AND (e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\') "
     "ORDER BY (e.type = 'story') DESC, length(e.name), e.name LIMIT ?",
     [like, like, limit],
   );

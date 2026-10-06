@@ -16,7 +16,25 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
-- **0.11 活动分类、阅读器与设置（2026-10-05，未发布，需重算知识库）**：① 活动书架按游戏表分类（`_activityKind`）：活动表的 `displayType`
+- **0.11 关卡内对话、剧本解析、生息演算（2026-10-07，未发布，需重算知识库）**：① 剧本解析（`story_script.dart`）：命令可以跨行
+  （行尾 `\` 续行，`[Tutorial(…,\` 的属性在下面几行，文字在 `)] \` 之后的行），以前逐行读，属性行成了“旁白”（全库 1471 行、319 个故事，教程/训练/引导全中），
+  现在 `storyLogicalLines` 先合并续行，连续的命令（`[A(…)] [B(…)]文字`）文字归最后一个；给已有的库补算：`rederive_gamedata.dart` 现在先
+  `reimportChangedStories`（解析与库里行不同的故事，`deleteStoryRows` 清旧行——库里的 `source_path` 在 Windows 上是反斜杠写法，两种都要认——再补算覆盖层；
+  被重写的故事的向量会删掉，321 个故事 701 条，要用 `build_story_embeddings.dart` 或 App 里的“故事向量”补）。② 关卡内对话（教程、训练、战斗内对话）不单独成条目：
+  关卡文件里的 `STORY` 动作就是“这场战斗播放这篇剧情”（`_levelBindings` 写 `plays_in` 链接，故事→关卡；大小写按关卡文件的写法，`_attachLevelStories`
+  再对到故事条目；没有关卡文件的构建（App 内增量）沿用库里已有的链接），再由 `rebuildDerived` 写 `attached_to`：宿主是该关卡的第一篇真正的剧情（顺序最前，
+  通常是行动前），没有就是关卡条目本身；目录里有名字的章节永远是剧情而不是关卡内对话；名字能推出关卡的 `training_*`/`tutorial_*` 也算。
+  界面：列表、计数、搜索不列它们（`_isAttached`），关卡条目页把它们的内容放在“关卡内对话”小节里（`_AttachedDialogue`），阅读页在宿主剧情的末尾接上
+  （`storyReadingProvider`：宿主行 + 每段一个 `divider` 行 + 该段的行，行号显示它自己的；引用/续读用对话自己的 id 打开时换算到宿主，
+  历史记在宿主名下）。关卡没有条目的一百来个（obt/training、引导关卡、军团教程、周常…）仍是它们集合里的普通条目。只有标题行的文件（`ref_*`、镜头测试）不再有条目。
+  ③ 生息演算：表里本来就有剧情结构，旧导入把事件/档案文字揉成无标题的文本块（`sandbox_text`，已取消）。现在：`sandbox_act` 篇章（`archiveQuestData`：幕/支线的名字
+  和概述，条目 `part_of` 它）、`sandbox_topic` 简介、`sandbox_event` 事件（`_enter` 场景起头，每个场景自己列选项，选项后的场景按编号 `choice_x_1`→`scene_x_1`，
+  `<color>` 与 【】 里的效果文字不收；`sandboxEventOutline`）、`sandbox_stage` 关卡（名字、描述的文字，描述里 `<@lv.…>` 标出的第一句不含数字的是所在区域，作分组；
+  关卡文件绑定敌人）。剧情名字：幕里的故事用 `avgName`，NPC 对话按 id 干（`dialog_sandbox_1_main1_2_op` → 任务 `mainline1_2` 的标题）归入对应的幕，没有任务认领的
+  用 NPC 名，仍无名的 battleavg 用第一个说话人，重名的编号（“名 · n”，按阅读顺序，对所有未收录目录的故事生效）；引导弹窗用触发它的任务线标题；
+  `dialog_<主题>_level_<n>` 是关卡里的路牌，并入对应关卡。物品分组用表里的 `itemTypeData` 名（V2 独有的类型没有名字就没有标题，旧的 `groupLabel` 里自拟的分类删了）。
+  第一个生息演算（沙中之火）是活动，但 `sandbox_table.sandboxActTables` 列了它，于是放进生息演算书架，它的物品也归它。“战斗对话”改称“对话”（文件夹名 battleavg
+  不是玩家的词）。- **0.11 活动分类、阅读器与设置（2026-10-05，未发布，需重算知识库）**：① 活动书架按游戏表分类（`_activityKind`）：活动表的 `displayType`
   （SIDESTORY → `sidestory` “SideStory”、MINISTORY → `ministory` “故事集”、BRANCHLINE → `branchline` “插曲”），没有时看剧情回顾表的 `entryType`
   （ACTIVITY/MINI_ACTIVITY），其余（签到、登录、玩法类）仍是 `activity` “其他活动”；`shelfKinds` 里依次排开。② 复刻不再出现：`isReplicate` 或名字含“复刻”的活动、
   没有链到原活动的 `retroActList` 条目进 `ctx.dropped`，`rebuildDerived` 删掉它们名下的条目/记录/链接/实体（它们没有剧情，只是原活动的重复）。

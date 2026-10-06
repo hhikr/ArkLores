@@ -652,6 +652,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryFinished => '已读完';
 
   @override
+  String get storyReaderBattleDialogue => '关卡内对话';
+
+  @override
   String libraryReadTimes(int count) {
     return '读过 $count 次';
   }

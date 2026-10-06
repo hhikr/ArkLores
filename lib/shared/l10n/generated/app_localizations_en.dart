@@ -665,6 +665,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryFinished => 'Finished';
 
   @override
+  String get storyReaderBattleDialogue => 'In-battle dialogue';
+
+  @override
   String libraryReadTimes(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
