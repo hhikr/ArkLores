@@ -14,7 +14,7 @@ import '../../core/library/placeholders.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart'
-    show UserDataStore, reanchorLine;
+    show UserDataStore, readingEndDwell, readingEndLines, reanchorLine;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -88,6 +88,11 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
   List<StoryLineEntry> _lines = const [];
   Timer? _saveTimer;
 
+  /// The end of the text has been in view long enough, and the timer that
+  /// says so ([readingEndDwell] after it came into view).
+  bool _endStayed = false;
+  Timer? _endTimer;
+
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
   List<StoryLineEntry>? _preparedFor;
@@ -115,6 +120,7 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _endTimer?.cancel();
     unawaited(_saveProgress());
     _flash.dispose();
     _scroll.dispose();
@@ -216,13 +222,27 @@ class _StoryReaderPageState extends ConsumerState<StoryReaderPage>
     if (store == null || range == null) return;
     final first = _lines[range.$1];
     final last = _lines[range.$2];
-    try {
+    // The end counts as reached once it has stayed in view for a while: the
+    // timer says so; moving away from the end starts over.
+    final nearEnd = range.$2 >= _lines.length - readingEndLines;
+    if (!nearEnd) {
+      _endTimer?.cancel();
+      _endTimer = null;
+      _endStayed = false;
+    } else if (!_endStayed && _endTimer == null) {
+      _endTimer = Timer(readingEndDwell, () {
+        _endStayed = true;
+        _saveSoon();
+      });
+    }
+    final atEnd = nearEnd && _endStayed;    try {
       await store.updateProgress(
         LibraryRef.story(widget.storyId),
         lineIndex: first.lineIndex,
         snippet: first.content,
         totalLines: _lines.length,
         reached: last.lineIndex,
+        atEnd: atEnd,
       );
     } catch (_) {}
   }

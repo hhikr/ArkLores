@@ -217,6 +217,8 @@
   "libraryProgress": "已读 {percent}%",
   "@libraryProgress": {"placeholders": {"percent": {"type": "int"}}},
   "libraryFinished": "已读完",
+  "libraryReadTimes": "读过 {count} 次",
+  "@libraryReadTimes": {"placeholders": {"count": {"type": "int"}}},
   "libraryRelease": "上线 {month}",
   "@libraryRelease": {"placeholders": {"month": {"type": "String"}}},
   "libraryRelated": "关联",

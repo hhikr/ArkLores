@@ -17,8 +17,10 @@ import '../ai/story_labels_provider.dart';
 import '../ai/story_reader_page.dart';
 
 /// Opens a story in the reader. [resume] continues where the reader left
-/// off (the history entry), otherwise the story opens at the top.
+/// off (the history entry), otherwise the story opens at the top. A story
+/// whose pass reached the end opens at the top too: that is a new read.
 void openStory(BuildContext context, String storyId, {ReadingEntry? resume}) {
+  if (resume != null && resume.finished) resume = null;
   Navigator.of(context).push(
     smoothPageRoute<void>(
       builder: (_) => StoryReaderPage(
@@ -278,26 +280,73 @@ class LibraryRow extends ConsumerWidget {
 Widget rowDivider(AppThemeTokens theme) =>
     Divider(height: 1, indent: 16, endIndent: 16, color: theme.divider);
 
-/// The small trailing mark of a story row: a check when finished, the
-/// percent while reading, a chevron otherwise.
+/// How the count of read-throughs is written in a small badge: exact up to
+/// 999, "999+" beyond, so it never outgrows its place.
+String readTimesText(int times) => times > 999 ? '999+' : '$times';
+
+/// The check that says a story was read through, with the number of times
+/// from the second on ("✓ ×12"); the tooltip has the full count.
+class ReadTimesBadge extends ConsumerWidget {
+  const ReadTimesBadge(this.times, {super.key});
+
+  final int times;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    return Tooltip(
+      message: context.t.libraryReadTimes(times),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 64),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle_rounded, color: theme.accentText, size: 20),
+              if (times > 1) ...[
+                const SizedBox(width: 2),
+                Text(
+                  '×${readTimesText(times)}',
+                  style: theme.bodyFont.copyWith(
+                    color: theme.accentText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The small trailing mark of a story row: the percent of the pass in
+/// progress, the check with its count once the story was read through
+/// (both while a later pass is under way), a chevron otherwise.
 Widget readMark(
   BuildContext context,
   AppThemeTokens theme,
   ReadingEntry? read,
 ) {
-  if (read != null && read.finished) {
-    return Tooltip(
-      message: context.t.libraryFinished,
-      child: Icon(Icons.check_circle_rounded, color: theme.accentText, size: 20),
+  final times = read?.completedCount ?? 0;
+  final progress = read?.progress;
+  final reading =
+      read != null && !read.finished && progress != null && progress > 0;
+  final pill = reading ? AccentPill('${(progress * 100).round()}%') : null;
+  final badge = times > 0 ? ReadTimesBadge(times) : null;
+  if (pill != null && badge != null) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [pill, const SizedBox(width: 6), badge],
     );
   }
-  final progress = read?.progress;
-  if (progress != null && progress > 0) {
-    return AccentPill('${(progress * 100).round()}%');
-  }
-  return Icon(Icons.chevron_right_rounded, color: theme.textMuted, size: 22);
+  return pill ??
+      badge ??
+      Icon(Icons.chevron_right_rounded, color: theme.textMuted, size: 22);
 }
-
 /// A story row (collection page, search): code, name, group, synopsis and
 /// the reader's progress.
 class StoryRow extends ConsumerWidget {

@@ -1268,6 +1268,12 @@ abstract class AppLocalizations {
   /// **'Finished'**
   String get libraryFinished;
 
+  /// No description provided for @libraryReadTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Read once} other{Read {count} times}}'**
+  String libraryReadTimes(int count);
+
   /// No description provided for @libraryRelease.
   ///
   /// In en, this message translates to:

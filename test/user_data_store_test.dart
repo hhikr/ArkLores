@@ -156,7 +156,83 @@ void main() {
         totalLines: 100,
         reached: 99,
       );
-      expect((await store.recent()).single.finished, isTrue);
+      // In view, but not for long enough: the end is not reached.
+      expect((await store.recent()).single.finished, isFalse);
+      expect((await store.recent()).single.furthest, 99);
+      await store.updateProgress(
+        a,
+        lineIndex: 90,
+        snippet: 'end',
+        totalLines: 100,
+        reached: 99,
+        atEnd: true,
+      );
+      final done = (await store.recent()).single;
+      expect((done.finished, done.completedCount), (true, 1));
+    });
+
+    test('passes: each read from the top to the end counts once; look-ups '
+        'do not', () async {
+      Future<void> at(int first, int last, {bool end = false}) =>
+          store.updateProgress(
+            a,
+            lineIndex: first,
+            snippet: '',
+            totalLines: 100,
+            reached: last,
+            atEnd: end,
+          );
+      Future<ReadingEntry> now() async => (await store.recent()).single;
+
+      await store.recordOpen(a, title: 'A', lineIndex: 0, snippet: '');
+      await at(0, 12);
+      await at(40, 52);
+      await at(90, 99, end: true);
+      expect((await now()).completedCount, 1);
+      // Staying at the end, saved again and again, is the same pass.
+      await at(90, 99, end: true);
+      expect((await now()).completedCount, 1);
+      // Looking something up further down does not start a new pass.
+      await at(60, 70);
+      await at(90, 99, end: true);
+      var e = await now();
+      expect((e.completedCount, e.finished), (1, true));
+
+      // Back at the top: a new pass, the old count stays.
+      await at(0, 12);
+      e = await now();
+      expect((e.completedCount, e.finished, e.furthest), (1, false, 12));
+      await at(88, 99, end: true);
+      expect((await now()).completedCount, 2);
+
+      // Many read-throughs add up.
+      for (var i = 0; i < 1500; i++) {
+        await at(0, 5);
+        await at(95, 99, end: true);
+      }
+      expect((await now()).completedCount, 1502);
+    });
+
+    test('a pass that began from a citation in the middle never counts',
+        () async {
+      await store.recordOpen(a, title: 'A', lineIndex: 55, snippet: '');
+      await store.updateProgress(
+        a,
+        lineIndex: 55,
+        snippet: '',
+        totalLines: 100,
+        reached: 70,
+      );
+      await store.updateProgress(
+        a,
+        lineIndex: 90,
+        snippet: '',
+        totalLines: 100,
+        reached: 99,
+        atEnd: true,
+      );
+      final e = (await store.recent()).single;
+      expect((e.completedCount, e.finished), (0, false));
     });
 
     test('reopening keeps how far it was read; progress of unknown is null',
@@ -274,6 +350,38 @@ void main() {
       await db.close();
     });
 
+    test('a version 3 file: a story read to the end counts as read once',
+        () async {
+      final path = p.join(dir.path, userDataFileName);
+      final v3 = await databaseFactoryFfi.openDatabase(path);
+      for (var i = 0; i < 3; i++) {
+        await userDataMigrations[i](v3);
+      }
+      await v3.setVersion(3);
+      Map<String, Object?> row(String ref, int furthest) => {
+            'ref': ref,
+            'title': ref,
+            'line_index': 0,
+            'snippet': '',
+            'opened_at': 1,
+            'total_lines': 100,
+            'furthest': furthest,
+          };
+      await v3.insert('reading_history', row('story:s/done.txt', 98));
+      await v3.insert('reading_history', row('story:s/half.txt', 50));
+      await v3.close();
+
+      store = open();
+      final all = {for (final e in await store.recent()) e.ref: e};
+      expect(
+        (all['story:s/done.txt']!.completedCount, all['story:s/done.txt']!.finished),
+        (1, true),
+      );
+      expect(
+        (all['story:s/half.txt']!.completedCount, all['story:s/half.txt']!.finished),
+        (0, false),
+      );
+    });
     test('a version 1 file (history only) gains progress and materials',
         () async {
       final path = p.join(dir.path, userDataFileName);
@@ -298,7 +406,7 @@ void main() {
       await store.close();
       final db = await databaseFactoryFfi.openDatabase(path);
       expect(await db.getVersion(), userDataSchemaVersion);
-      expect(userDataSchemaVersion, 3);
+      expect(userDataSchemaVersion, 4);
       await db.close();
     });
 

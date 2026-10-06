@@ -32,6 +32,9 @@ class MemoryUserStore extends UserDataStore {
       openCount: (old?.openCount ?? 0) + 1,
       totalLines: totalLines > 0 ? totalLines : old?.totalLines ?? 0,
       furthest: old?.furthest ?? 0,
+      completedCount: old?.completedCount ?? 0,
+      passStart: old?.passStart ?? lineIndex,
+      passDone: old?.passDone ?? false,
     );
   }
 
@@ -42,22 +45,18 @@ class MemoryUserStore extends UserDataStore {
     required String snippet,
     required int totalLines,
     int? reached,
+    bool atEnd = false,
   }) async {
     final old = rows[ref.toString()];
     if (old == null) return;
-    final far = reached ?? lineIndex;
-    rows[ref.toString()] = ReadingEntry(
-      ref: old.ref,
-      title: old.title,
+    rows[ref.toString()] = old.afterProgress(
       lineIndex: lineIndex,
-      snippet: historySnippetOf(snippet),
-      openedAt: old.openedAt,
-      openCount: old.openCount,
+      snippet: snippet,
       totalLines: totalLines,
-      furthest: far > old.furthest ? far : old.furthest,
+      reached: reached,
+      atEnd: atEnd,
     );
   }
-
   @override
   Future<Map<String, ReadingEntry>> progressByRef() async => Map.of(rows);
 

@@ -68,7 +68,40 @@ final List<Future<void> Function(DatabaseExecutor db)> userDataMigrations = [
       'CREATE INDEX idx_materials_updated ON materials(updated_at)',
     );
   },
+  // v4: read-throughs. completed_count counts the passes that reached the
+  // end; pass_start is the line the current pass began at and pass_done says
+  // it has reached the end (see ReadingEntry.afterProgress). What v2 called
+  // read to the end counts as one pass.
+  (db) async {
+    await db.execute(
+      'ALTER TABLE reading_history '
+      'ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0',
+    );
+    await db.execute(
+      'ALTER TABLE reading_history '
+      'ADD COLUMN pass_start INTEGER NOT NULL DEFAULT 0',
+    );
+    await db.execute(
+      'ALTER TABLE reading_history '
+      'ADD COLUMN pass_done INTEGER NOT NULL DEFAULT 0',
+    );
+    await db.execute(
+      'UPDATE reading_history SET completed_count = 1, pass_done = 1 '
+      'WHERE total_lines > 0 AND furthest >= total_lines - 3',
+    );
+  },
 ];
+
+/// A pass over a story counts when it began within this share of the text
+/// from the top (so jumping in from a citation and scrolling down is a
+/// look-up, not a read), and again after one is done when the reader is back
+/// in this part.
+const double readingPassStartShare = 0.15;
+
+/// The end of a text: its last lines. Reaching it counts once the reader stays
+/// for [readingEndDwell] (dragging to the bottom and leaving does not).
+const int readingEndLines = 3;
+const Duration readingEndDwell = Duration(seconds: 3);
 
 /// Schema version produced by [userDataMigrations].
 int get userDataSchemaVersion => userDataMigrations.length;
@@ -84,6 +117,9 @@ class ReadingEntry {
     required this.openCount,
     this.totalLines = 0,
     this.furthest = 0,
+    this.completedCount = 0,
+    this.passStart = 0,
+    this.passDone = false,
   });
 
   factory ReadingEntry.fromRow(Map<String, Object?> row) => ReadingEntry(
@@ -97,6 +133,9 @@ class ReadingEntry {
         openCount: (row['open_count']! as num).toInt(),
         totalLines: (row['total_lines'] as num?)?.toInt() ?? 0,
         furthest: (row['furthest'] as num?)?.toInt() ?? 0,
+        completedCount: (row['completed_count'] as num?)?.toInt() ?? 0,
+        passStart: (row['pass_start'] as num?)?.toInt() ?? 0,
+        passDone: ((row['pass_done'] as num?)?.toInt() ?? 0) != 0,
       );
 
   /// Serialized [LibraryRef]; parse with [LibraryRef.tryParse].
@@ -123,8 +162,62 @@ class ReadingEntry {
   double? get progress =>
       totalLines <= 0 ? null : ((lineIndex + 1) / totalLines).clamp(0.0, 1.0);
 
-  /// Read to (nearly) the end.
-  bool get finished => totalLines > 0 && furthest >= totalLines - 3;
+  /// How many passes reached the end, the line the current pass began at, and
+  /// whether the current pass has reached the end.
+  final int completedCount;
+  final int passStart;
+  final bool passDone;
+
+  /// The current pass reached the end.
+  bool get finished => passDone;
+
+  /// This entry was read through at least once.
+  bool get hasCompleted => completedCount > 0;
+
+  /// This entry after the reader was seen at [lineIndex] (the first line on
+  /// screen) with [reached] the last one; [atEnd] says the end was in view
+  /// long enough to count. Both stores use this, so they cannot disagree.
+  ///
+  /// A pass starts when the entry is first opened. A finished pass ends the
+  /// next time the reader is back near the top, and a new one begins there.
+  /// A pass that began in the middle (a citation) never counts as read.
+  ReadingEntry afterProgress({
+    required int lineIndex,
+    required String snippet,
+    required int totalLines,
+    int? reached,
+    bool atEnd = false,
+  }) {
+    final far = reached ?? lineIndex;
+    final top = totalLines * readingPassStartShare;
+    var done = passDone;
+    var start = passStart;
+    var best = furthest;
+    var count = completedCount;
+    if (done && lineIndex <= top) {
+      done = false;
+      start = lineIndex;
+      best = 0;
+    }
+    if (far > best) best = far;
+    if (atEnd && !done && start <= top) {
+      done = true;
+      count++;
+    }
+    return ReadingEntry(
+      ref: ref,
+      title: title,
+      lineIndex: lineIndex,
+      snippet: historySnippetOf(snippet),
+      openedAt: openedAt,
+      openCount: openCount,
+      totalLines: totalLines,
+      furthest: best,
+      completedCount: count,
+      passStart: start,
+      passDone: done,
+    );
+  }
 }
 
 /// A text the user wrote or pasted.
@@ -277,6 +370,7 @@ class UserDataStore {
           'snippet': cut,
           'opened_at': now,
           'total_lines': totalLines,
+          'pass_start': lineIndex,
         });
       }
     });
@@ -292,21 +386,40 @@ class UserDataStore {
     required String snippet,
     required int totalLines,
     int? reached,
+    bool atEnd = false,
   }) async {
     final db = await _database;
-    await db.rawUpdate(
-      'UPDATE reading_history SET line_index = ?, snippet = ?, '
-      'total_lines = ?, furthest = MAX(furthest, ?) WHERE ref = ?',
-      [
-        lineIndex,
-        historySnippetOf(snippet),
-        totalLines,
-        reached ?? lineIndex,
-        ref.toString(),
-      ],
-    );
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'reading_history',
+        where: 'ref = ?',
+        whereArgs: [ref.toString()],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final next = ReadingEntry.fromRow(rows.first).afterProgress(
+        lineIndex: lineIndex,
+        snippet: snippet,
+        totalLines: totalLines,
+        reached: reached,
+        atEnd: atEnd,
+      );
+      await txn.update(
+        'reading_history',
+        {
+          'line_index': next.lineIndex,
+          'snippet': next.snippet,
+          'total_lines': next.totalLines,
+          'furthest': next.furthest,
+          'completed_count': next.completedCount,
+          'pass_start': next.passStart,
+          'pass_done': next.passDone ? 1 : 0,
+        },
+        where: 'ref = ?',
+        whereArgs: [ref.toString()],
+      );
+    });
   }
-
   /// Every entry by reference, for progress marks on lists.
   Future<Map<String, ReadingEntry>> progressByRef() async {
     final db = await _database;

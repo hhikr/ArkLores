@@ -286,7 +286,7 @@ class CollectionPage extends ConsumerWidget {
     final sections = _storySections(c, restStories);
     final read = storyList
         .where((s) =>
-            progress[LibraryRef.story(s.rawId ?? '').toString()]?.finished ??
+            progress[LibraryRef.story(s.rawId ?? '').toString()]?.hasCompleted ??
             false,)
         .length;
 

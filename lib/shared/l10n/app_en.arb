@@ -219,6 +219,8 @@
   "libraryProgress": "{percent}% read",
   "@libraryProgress": {"placeholders": {"percent": {"type": "int"}}},
   "libraryFinished": "Finished",
+  "libraryReadTimes": "{count, plural, =1{Read once} other{Read {count} times}}",
+  "@libraryReadTimes": {"placeholders": {"count": {"type": "int"}}},
   "libraryRelease": "Released {month}",
   "@libraryRelease": {"placeholders": {"month": {"type": "String"}}},
   "libraryRelated": "Related",

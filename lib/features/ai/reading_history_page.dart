@@ -173,7 +173,8 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
         title: readingTitle(ref, entry),
         subtitle: [
           '${_time(entry.openedAt)} · '
-              '${context.t.readingHistoryLine(entry.lineIndex + 1)}',
+              '${context.t.readingHistoryLine(entry.lineIndex + 1)}'
+              '${entry.hasCompleted ? ' · ${context.t.libraryReadTimes(entry.completedCount)}' : ''}',
           if (entry.snippet.isNotEmpty) entry.snippet,
         ].join('\n'),
         progress: entry.progress != null && !entry.finished

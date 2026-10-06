@@ -652,6 +652,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryFinished => '已读完';
 
   @override
+  String libraryReadTimes(int count) {
+    return '读过 $count 次';
+  }
+
+  @override
   String libraryRelease(String month) {
     return '上线 $month';
   }

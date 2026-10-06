@@ -1,9 +1,11 @@
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/userdata/library_ref.dart';
 import 'package:arklores/core/userdata/user_data_provider.dart';
+import 'package:arklores/core/userdata/user_data_store.dart';
 import 'package:arklores/features/ai/reading_history_page.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
+import 'package:arklores/features/library/library_widgets.dart' show openStory;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -204,6 +206,84 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('reading-history-first')).first);
     await settle(tester);
     expect(find.text('故事99'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('the end counts after it stayed in view; leaving at once does '
+      'not', (tester) async {
+    tall(tester);
+    final short = [
+      for (var i = 0; i < 3; i++)
+        StoryLineEntry(lineIndex: i, speaker: null, content: '短$i'),
+    ];
+    await tester.pumpWidget(app(const StoryReaderPage(storyId: _story), short));
+    await settle(tester);
+    // The whole text is in view, but only for a moment so far.
+    expect((await store.recent()).single.completedCount, 0);
+    await tester.pump(readingEndDwell + const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    var e = (await store.recent()).single;
+    expect((e.completedCount, e.finished), (1, true));
+
+    // Opened again from the list, a finished story starts at the top: a new
+    // pass, and the read count stays.
+    await tester.pumpWidget(app(const SizedBox(), short));
+    await tester.pumpWidget(app(
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () => openStory(context, _story, resume: e),
+          child: const Text('open'),
+        ),
+      ),
+      short,
+    ),);
+    await tester.tap(find.text('open'));
+    await settle(tester);
+    e = (await store.recent()).single;
+    expect((e.completedCount, e.finished), (1, false));
+  });
+
+  testWidgets('read counts show as a check, with the number from the second '
+      'time on, never wider than a small badge', (tester) async {
+    tall(tester);
+    var i = 0;
+    for (final times in [1, 2, 37, 1500]) {
+      await store.recordOpen(
+        LibraryRef.story('s/${i++}.txt'),
+        title: '故事$times',
+        lineIndex: 0,
+        snippet: '',
+        totalLines: 100,
+      );
+      await store.updateProgress(
+        LibraryRef.story('s/${i - 1}.txt'),
+        lineIndex: 0,
+        snippet: '',
+        totalLines: 100,
+        reached: 99,
+        atEnd: true,
+      );
+      store.rows['story:s/${i - 1}.txt'] = ReadingEntry(
+        ref: 'story:s/${i - 1}.txt',
+        title: '故事$times',
+        lineIndex: 0,
+        snippet: '',
+        openedAt: DateTime(2026, 10, 5, 12, i),
+        openCount: 1,
+        totalLines: 100,
+        furthest: 99,
+        completedCount: times,
+        passDone: true,
+      );
+    }
+    await tester.pumpWidget(app(const ReadingHistoryPage(), const []));
+    await settle(tester);
+    expect(find.text('×2'), findsOneWidget);
+    expect(find.text('×37'), findsOneWidget);
+    expect(find.text('×999+'), findsOneWidget);
+    expect(find.text('×1'), findsNothing);
+    // The list says it in words, with the whole number.
+    expect(find.textContaining('读过 1500 次'), findsOneWidget);
+    expect(find.textContaining('读过 1 次'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets('narration is italic only between spoken lines; the Doctor '

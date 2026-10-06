@@ -665,6 +665,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryFinished => 'Finished';
 
   @override
+  String libraryReadTimes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Read $count times',
+      one: 'Read once',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String libraryRelease(String month) {
     return 'Released $month';
   }
