@@ -101,6 +101,7 @@ class EndfieldImporter {
       ];
       // A character with nothing to read (a stand-in row) is not listed.
       if (records.isEmpty && voices.isEmpty) continue;
+      final tags = _operatorTags(id);
       final english = '${row['engName'] ?? ''}'.trim();
       final entity = await writer.entity(
         rawId: id,
@@ -121,6 +122,7 @@ class EndfieldImporter {
         category: 'operator',
         contentType: 'endfield_operator_profile',
         texts: [
+          if (tags.isNotEmpty) (section: '标签', text: tags.join('\n')),
           ...records,
           if (voices.isNotEmpty) (section: '语音', text: voices.join('\n')),
         ],
@@ -131,6 +133,7 @@ class EndfieldImporter {
         name: title,
         type: 'operator',
         content: [
+          if (tags.isNotEmpty) tags.join('\n'),
           for (final r in records) '## ${r.section}\n${r.text}',
           if (voices.isNotEmpty) '## 语音\n${voices.join('\n')}',
         ].join('\n\n'),
@@ -148,7 +151,43 @@ class EndfieldImporter {
     log?.call('operators: $count');
   }
 
-  /// Factions: names only (entities the coverage layer can find).
+  /// The tag groups of an operator's profile that players see, by the
+  /// game's own group names (`TagGroupDataTable`): faction, race, expertise,
+  /// hobbies. System-only groups, hidden tags and gift preferences
+  /// (gameplay) are left out.
+  static const List<(String, String)> _profileTagFields = [
+    ('blocTagId', 'tag_group_power'),
+    ('raceTagId', 'tag_group_race'),
+    ('expertTagIds', 'tag_group_expert'),
+    ('hobbyTagIds', 'tag_group_hobby'),
+  ];
+
+  /// `阵营：X` lines of [charId]'s profile tags.
+  List<String> _operatorTags(String charId) {
+    final row = tables.table('CharacterTagTable')[charId];
+    if (row is! Map) return const [];
+    final data = tables.table('TagDataTable');
+    final groups = tables.table('TagGroupDataTable');
+    return [
+      for (final (field, group) in _profileTagFields)
+        if (_tagNames(row[field], data) case final names when names.isNotEmpty)
+          if (groups[group] case final Map<String, dynamic> g
+              when _clean(g['tagGroupName']).isNotEmpty)
+            '${_clean(g['tagGroupName'])}：${names.join('、')}',
+    ];
+  }
+
+  List<String> _tagNames(Object? raw, Map<String, dynamic> data) => [
+        for (final id in raw is List ? raw : [raw])
+          if (data['$id'] case final Map<String, dynamic> tag
+              when tag['hideTag'] != true)
+            if (_clean(tag['tagName']) case final name
+                when name.isNotEmpty && name != '？？？')
+              name,
+      ];
+
+  /// Factions: names only (entities the coverage layer can find); from the
+  /// faction table, else from the operators' faction tags.
   Future<void> importFactions() async {
     const name = 'BlocDataTable';
     final source = tables.sourcePath(name);
@@ -167,6 +206,21 @@ class EndfieldImporter {
         aliases: [if (english.isNotEmpty) english],
       );
       count++;
+    }
+    if (count == 0) {
+      final names = <String>{
+        for (final row in tables.table('CharacterTagTable').values)
+          if (row is Map) ..._tagNames(row['blocTagId'], tables.table('TagDataTable')),
+      };
+      for (final name in names) {
+        await writer.entity(
+          rawId: 'power_$name',
+          name: name,
+          type: 'power',
+          sourcePath: tables.sourcePath('CharacterTagTable'),
+        );
+        count++;
+      }
     }
     log?.call('factions: $count');
   }

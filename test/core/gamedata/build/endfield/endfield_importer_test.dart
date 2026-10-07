@@ -74,6 +74,25 @@ void writeTables(Directory dir) {
       'type': 52,
     },
   });
+  table('CharacterTagTable', {
+    'chr_0001_a': {
+      'blocTagId': 'tag_power_x',
+      'raceTagId': 'tag_race_x',
+      'dispositionTagIds': ['tag_sys'],
+      'hobbyTagIds': ['tag_hidden'],
+    },
+  });
+  table('TagDataTable', {
+    'tag_power_x': {'tagName': tx(i18n, 110, '某工业'), 'tagGroupId': 'tag_group_power'},
+    'tag_race_x': {'tagName': tx(i18n, 111, '某族'), 'tagGroupId': 'tag_group_race'},
+    'tag_sys': {'tagName': tx(i18n, 112, '内部'), 'tagGroupId': 'tag_group_disposition'},
+    'tag_hidden': {'tagName': tx(i18n, 113, '隐藏'), 'tagGroupId': 'tag_group_hobby', 'hideTag': true},
+  });
+  table('TagGroupDataTable', {
+    'tag_group_power': {'tagGroupName': tx(i18n, 114, '阵营')},
+    'tag_group_race': {'tagGroupName': tx(i18n, 115, '种族')},
+    'tag_group_hobby': {'tagGroupName': tx(i18n, 116, '爱好')},
+  });
   table('DomainDataTable', {
     'domain_1': {'domainName': tx(i18n, 100, '谷地'), 'levelGroup': ['map01_lv001']},
   });
@@ -222,7 +241,11 @@ void main() {
     final texts = await q(
       "SELECT section, content FROM normalized_records WHERE entry_id = 'operator:ef/chr_0001_a'",
     );
-    expect(texts.map((t) => t['section']), containsAll(['基础档案', '语音']));
+    expect(texts.map((t) => t['section']), containsAll(['标签', '基础档案', '语音']));
+    final tags = texts.firstWhere((t) => t['section'] == '标签')['content'];
+    expect(tags, '阵营：某工业\n种族：某族');
+    final faction = await q("SELECT name FROM entities WHERE entity_type = 'power'");
+    expect(faction.single['name'], '某工业');
     expect(texts.first['content'], isNot(contains('<@')));
     final shelf =
         await q(
