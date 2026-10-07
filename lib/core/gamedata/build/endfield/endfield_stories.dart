@@ -180,6 +180,9 @@ class EndfieldStoryImporter {
   /// unnamed training stories are: `训练 3`).
   final Map<String, int> _unnamed = {};
 
+  /// Conversations numbered so far per mission and kind.
+  final Map<String, int> _ordinal = {};
+
   Future<void> _ensureMission(
     String id, {
     String? name,
@@ -329,9 +332,13 @@ class EndfieldStoryImporter {
     final mission = await _home(id);
     if (mission == null) return;
     final m = _missions[mission]!;
+    // Unnamed conversations are numbered in their mission, per kind
+    // (`对话 3`, `通讯 2`), in the order of their ids.
+    final kind = conversationLabel(id).split(' ').first;
+    final n = _ordinal.update('$mission/$kind', (v) => v + 1, ifAbsent: () => 1);
     await writer.story(
       rawId: id,
-      name: name ?? conversationLabel(id),
+      name: name ?? '$kind $n',
       lines: lines,
       collectionId: 'mission_$mission',
       collectionName: m.name,
@@ -465,7 +472,7 @@ class EndfieldStoryImporter {
         source: source,
         sort: 200000 + i,
         name: chat is Map && _clean(chat['name']).isNotEmpty
-            ? '${conversationLabel(id)} · ${_clean(chat['name'])}'
+            ? '短信 · ${_clean(chat['name'])}'
             : null,
         lines: lines,
       );

@@ -249,6 +249,8 @@ class EndfieldWriter {
           collectionId: collection,
           entityId: entityId,
           entityName: entityId == null ? null : name,
+          // The blocks of one entry read in the order given.
+          order: i,
         );
         firstRecord ??= id;
       }
@@ -385,6 +387,7 @@ class EndfieldWriter {
     String? entityId,
     String? entityName,
     String? storyId,
+    int? order,
   }) async {
     final clean = content.trim();
     final id = endfieldId(
@@ -412,6 +415,8 @@ class EndfieldWriter {
         'content': clean,
         'source_path': sourcePath,
         'raw_id': rawId,
+        'line_start': order,
+        'line_end': order,
         'source_repo': endfieldSourceLabel,
         'updated_at': nowSeconds(),
         'entry_id': entryId,

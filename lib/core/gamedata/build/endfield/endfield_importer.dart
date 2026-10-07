@@ -113,7 +113,10 @@ class EndfieldImporter {
         entityId: entity,
         name: title,
         type: 'operator',
-        content: records.map((r) => '【${r.section}】\n${r.text}').join('\n\n'),
+        content: [
+          for (final r in records) '## ${r.section}\n${r.text}',
+          if (voices.isNotEmpty) '## 语音\n${voices.join('\n')}',
+        ].join('\n\n'),
         sourcePath: source,
       );
       await writer.collection(
