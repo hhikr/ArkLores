@@ -14,13 +14,15 @@
 - **0.11（已发布）**：知识库重做为条目层（`entries`/`collections`/`entry_links`）、剧本全量解析、增量更新通道、用户库与阅读历史、
   资料页与阅读器、悬浮式界面与点击反馈、工作过程时间线、非 GLM 服务商兼容、删除角色扮演（开发者 2026-10-07 决定，不要恢复）。
   建库/更新/补算的经验与全部错误见 `docs/KNOWLEDGE_BASE_LESSONS.md`。
-- **0.12（进行中，`feature/v0.12-endfield`）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9。
-  已完成：每个游戏一个库文件、终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`find` 默认查两个库），
-  装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页按游戏分组书架、页面按 id 路由；知识库页每个游戏一张下载卡；
-  构建脚本传 `ENDFIELD_DB_URL/SHA256`。终末地建库：`tools/build_endfield_database.dart`（表 → 干员、档案库、敌人/武器/物品；剧情从表或 kit 的剧情发布）。
-  数据来自本机客户端，用 `Variante/endfield_research_kit` 解包（工具在 `C:\Users\hhikr\endfield\`，不提交）。
-  待办：接入 kit 的剧情发布（任务名、顺序、选项）；终末地资产发布（要开发者同意）；终末地剧情向量（花钱，要同意）。
-
+- **0.12（进行中，`feature/v0.12-endfield`）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9，
+  已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5。
+  - 架构：每个游戏一个库文件；终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`find` 默认两个库），
+    装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一组书架、页面按 id 路由；知识库页每个游戏一张下载卡。
+  - 终末地建库：`tools/unpack_endfield.ps1`（AnimeStudio 导出客户端两层的表与 JSON 数据，Persistent 覆盖 StreamingAssets，不用 kit 的完整流程）→
+    `tools/build_endfield_database.dart`：干员档案与语音、档案库（PRTS）、敌人/武器/物品描述、对话/通讯/短信（选项按组号插入），
+    任务名/简介/分类/所属干员来自 `MissionRuntimeAsset`，书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务）。两次构建逐表一致；库 52 MB、gz 16.5 MB。
+  - 待开发者决定：发布 v0.12.0（上传终末地资产；`release_gamedata.env` 已指向它）；终末地剧情向量（花钱）；真实 API 跑一两道双游戏问题验证选库。
+  - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据）。
 ## 文档索引
 
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
