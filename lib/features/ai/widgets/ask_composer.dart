@@ -43,8 +43,9 @@ class AskComposer extends StatefulWidget {
 }
 
 class _AskComposerState extends State<AskComposer> {
-  static const _toolbarHeight = 36.0;
-  static const _textPadding = EdgeInsets.fromLTRB(14, 8, 44, 0);
+  static const _toolbarHeight = 42.0;
+  // The text keeps a gap above the toolbar's buttons.
+  static const _textPadding = EdgeInsets.fromLTRB(14, 10, 44, 8);
   static const _maxCollapsedLines = 4;
   static const _duration = Duration(milliseconds: 220);
 
@@ -232,7 +233,7 @@ class _AskComposerState extends State<AskComposer> {
                   SizedBox(
                     height: _toolbarHeight,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 4, 4),
+                      padding: const EdgeInsets.fromLTRB(10, 0, 6, 8),
                       child: Row(
                         children: [
                           if (widget.leading != null) widget.leading!,

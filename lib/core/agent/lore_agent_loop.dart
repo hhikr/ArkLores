@@ -325,6 +325,30 @@ class LoreAgentLoop {
           turn--;
           continue;
         }
+        // An answer that came (status 200) but could not be read — a body
+        // that is neither a stream nor a completion, an error inside the
+        // stream: asked again another way, as an empty answer is.
+        // (A web page instead of an API answer is a wrong Base URL: asking
+        // again cannot help.)
+        if (e.statusCode == 200 &&
+            !(e.body ?? '').trimLeft().startsWith('<') &&
+            _nextTransport()) {
+          if (answerOpen) {
+            yield const ReActEvent(
+              type: ReActEventType.finalAnswerReset,
+              content: '回复无法读取，重试',
+            );
+          }
+          onRawLlmResponse?.call(++record, '（无法读取的回复：${e.message}）');
+          yield ReActEvent(
+            type: ReActEventType.status,
+            content: transport.textProtocol
+                ? '服务商的回复无法读取，改用文本方式调用工具重试'
+                : '服务商的回复无法读取，改用非流式请求重试',
+          );
+          turn--;
+          continue;
+        }
         yield ReActEvent(type: ReActEventType.error, content: e.message);
         return;
       } catch (e) {

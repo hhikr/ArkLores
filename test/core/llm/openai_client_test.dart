@@ -555,6 +555,55 @@ void main() {
       expect(done.finishReason, 'tool_calls');
     });
 
+    test('chunks one per line without "data:", or as a JSON array', () async {
+      final chunks = [
+        {
+          'choices': [
+            {
+              'delta': {'content': '甲'},
+            },
+          ],
+        },
+        {
+          'choices': [
+            {
+              'delta': {'content': '乙'},
+              'finish_reason': 'stop',
+            },
+          ],
+        },
+      ];
+      final lines = await streaming(chunks.map(jsonEncode).join('\n'))
+          .streamTurn([Message.user('q')]).toList();
+      expect(textOf(lines), '甲乙');
+      expect(lines.last.finishReason, 'stop');
+      final array = await streaming(jsonEncode(chunks))
+          .streamTurn([Message.user('q')]).toList();
+      expect(textOf(array), '甲乙');
+    });
+
+    test('a body nobody can read is reported with its start, as status 200',
+        () async {
+      await expectLater(
+        streaming('Bad gateway, try later')
+            .streamTurn([Message.user('q')]).toList(),
+        throwsA(isA<LLMException>()
+            .having((e) => e.message, 'message', contains('Bad gateway, try'))
+            .having((e) => e.statusCode, 'status', 200),),
+      );
+    });
+
+    test('a web page instead of an API answer points at the Base URL',
+        () async {
+      await expectLater(
+        streaming('<!doctype html><html><title>Relay</title></html>')
+            .streamTurn([Message.user('q')]).toList(),
+        throwsA(isA<LLMException>()
+            .having((e) => e.message, 'message', contains('Base URL'))
+            .having((e) => e.message, 'message', contains('/v1')),),
+      );
+    });
+
     test('an error inside a 200 stream is reported', () async {
       await expectLater(
         streaming(event({
@@ -690,6 +739,43 @@ void main() {
       // Remembered: the next request is right the first time.
       await client.chatCompletion(history);
       expect(bodies, hasLength(3));
+    });
+
+    test('GPT-5: max_completion_tokens and no temperature after rejections',
+        () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key', chatModel: 'gpt-5.4'),
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          bodies.add(body);
+          if (body.containsKey('max_tokens')) {
+            return http.Response(
+              '{"error":{"message":"Unsupported parameter: \'max_tokens\' is '
+              'not supported with this model. Use \'max_completion_tokens\' '
+              'instead."}}',
+              400,
+            );
+          }
+          if (body.containsKey('temperature')) {
+            return http.Response(
+              '{"error":{"message":"Unsupported value: \'temperature\' does '
+              'not support 0.3 with this model."}}',
+              400,
+            );
+          }
+          return http.Response('{"choices":[{"message":{"content":"ok"}}]}', 200);
+        }),
+      );
+      final result =
+          await client.chatCompletion([Message.user('q')], temperature: 0.3);
+      expect(result.content, 'ok');
+      expect(bodies, hasLength(3));
+      expect(bodies.last['max_completion_tokens'], 2048);
+      expect(bodies.last['reasoning_effort'], 'low');
+      // Remembered for the next requests.
+      await client.chatCompletion([Message.user('q')]);
+      expect(bodies, hasLength(4));
     });
 
     test('Gemini: thinking kept short (it counts against max_tokens)', () {

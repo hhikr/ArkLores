@@ -807,6 +807,23 @@ void main() {
       expect(events.map((e) => e.content), contains('服务商没有返回内容，改用非流式请求重试'));
     });
 
+    test('a streamed answer that cannot be read is asked again unstreamed',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _LossyClient(
+        [_call('read_story', {'story_id': id}), _answer('钟楼 `$id:1`')],
+        unreadableStream: true,
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        review: false,
+      ).run(query: '钟楼？').toList();
+      expect(client.modes, ['stream+tools', 'plain+tools', 'plain+tools']);
+      expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
+      expect(finalAnswerOf(events), contains('钟楼 `$id:1`'));
+    });
+
     test('native tool calls that never come: the tools go into the prompt',
         () async {
       const id = 'obt/main/level_main_fx-01.txt';
@@ -949,11 +966,15 @@ class _LossyClient extends LLMClient {
     this.emptyStream = false,
     this.emptyPlain = false,
     this.emptyWithTools = false,
+    this.unreadableStream = false,
     this.finishReason,
   });
 
   final List<_Turn> turns;
   final bool emptyStream;
+
+  /// Streamed turns fail as an answer (status 200) that cannot be read.
+  final bool unreadableStream;
   final bool emptyPlain;
   final bool emptyWithTools;
   final String? finishReason;
@@ -1002,6 +1023,13 @@ class _LossyClient extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
   }) async* {
+    if (unreadableStream) {
+      modes.add('stream${tools == null ? '' : '+tools'}');
+      throw const LLMException(
+        'Chat completion failed: the response is not JSON (x)',
+        statusCode: 200,
+      );
+    }
     final turn = _turn(true, tools);
     if (turn != null && turn.content.isNotEmpty) {
       yield CompletionDelta(content: turn.content);

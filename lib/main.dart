@@ -198,6 +198,11 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
         textStyle: tokens.titleFont.copyWith(fontSize: 14),
       ),
     ),
+    // Text buttons would take the primary colour (the signal yellow), which
+    // is too faint as text; text uses accentText.
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: tokens.accentText),
+    ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: tokens.textPrimary,

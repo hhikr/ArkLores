@@ -233,62 +233,104 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t.kbStructuredTitle,
-                      style: theme.titleFont.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle.isEmpty
-                          ? progressText
-                          : '$progressText · $subtitle',
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  context.t.kbStructuredTitle,
+                  style: theme.titleFont.copyWith(fontSize: 15),
                 ),
               ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                key: const Key('kb-download-button'),
-                onPressed: _isDownloadingGameData || upToDate
-                    ? null
-                    : _downloadGameData,
-                icon: Icon(
-                  _isDownloadingGameData
-                      ? Icons.downloading_rounded
-                      : upToDate
-                          ? Icons.check_rounded
-                          : Icons.download_rounded,
-                  size: 18,
-                ),
-                label: Text(
-                  _isDownloadingGameData
-                      ? context.t.kbDownloading
-                      : upToDate
-                          ? context.t.kbUpToDate
-                          : status.installed
-                              ? context.t.kbUpdate
-                              : context.t.kbDownload,
-                  style: theme.titleFont.copyWith(fontSize: 13),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.accentPrimary,
-                  foregroundColor: theme.bgPrimary,
-                  disabledBackgroundColor: theme.divider,
-                  disabledForegroundColor: theme.textSecondary,
+              if (upToDate && !_isDownloadingGameData)
+                Container(
+                  key: const Key('kb-status-current'),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: theme.accentPrimary.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_rounded,
+                          size: 14, color: theme.accentText,),
+                      const SizedBox(width: 3),
+                      Text(
+                        context.t.kbUpToDate,
+                        style: theme.bodyFont.copyWith(
+                          color: theme.accentText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 36),
+            child: Text(
+              subtitle.isEmpty ? progressText : '$progressText · $subtitle',
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12,
+                height: 1.4,
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (upToDate && !_isDownloadingGameData)
+                OutlinedButton.icon(
+                  key: const Key('kb-redownload'),
+                  onPressed: _redownloadGameData,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(
+                    context.t.kbRedownload,
+                    style: theme.titleFont.copyWith(fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.textPrimary,
+                    side: BorderSide(color: theme.cardBorder),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  key: const Key('kb-download-button'),
+                  onPressed: _isDownloadingGameData ? null : _downloadGameData,
+                  icon: Icon(
+                    _isDownloadingGameData
+                        ? Icons.downloading_rounded
+                        : Icons.download_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _isDownloadingGameData
+                        ? context.t.kbDownloading
+                        : status.installed
+                            ? context.t.kbUpdate
+                            : context.t.kbDownload,
+                    style: theme.titleFont.copyWith(fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.accentPrimary,
+                    foregroundColor: theme.onAccent,
+                    disabledBackgroundColor: theme.divider,
+                    disabledForegroundColor: theme.textSecondary,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
             ],
           ),
           if (_isDownloadingGameData) ...[
@@ -329,21 +371,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 ),
               ),
           ],
-          if (upToDate && !_isDownloadingGameData)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                key: const Key('kb-redownload'),
-                onPressed: _redownloadGameData,
-                child: Text(
-                  context.t.kbRedownload,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
           if (status.updateAvailable && !_isDownloadingGameData) ...[
             const SizedBox(height: 10),
             Row(

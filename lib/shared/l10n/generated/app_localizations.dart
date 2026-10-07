@@ -839,8 +839,8 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionLabel.
   ///
   /// In en, this message translates to:
-  /// **'ARKLORES / 0.9 DEVELOPMENT'**
-  String get settingsVersionLabel;
+  /// **'ARKLORES / {version}'**
+  String settingsVersionLabel(String version);
 
   /// No description provided for @settingsShowOnboarding.
   ///

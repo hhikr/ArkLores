@@ -50,6 +50,8 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
             TextButton(
               key: const ValueKey('reading-history-clear'),
               onPressed: _confirmClear,
+              // Not the theme's primary (the signal yellow, faint as text).
+              style: TextButton.styleFrom(foregroundColor: theme.textPrimary),
               child: Text(context.t.readingHistoryClear),
             ),
         ],

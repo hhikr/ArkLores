@@ -411,7 +411,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsHelpSectionCode => 'HELP & GUIDE';
 
   @override
-  String get settingsVersionLabel => 'ARKLORES / 0.9 开发版';
+  String settingsVersionLabel(String version) {
+    return 'ARKLORES / $version';
+  }
 
   @override
   String get settingsShowOnboarding => '新用户导览';

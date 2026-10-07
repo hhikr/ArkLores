@@ -418,7 +418,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsHelpSectionCode => 'HELP & GUIDE';
 
   @override
-  String get settingsVersionLabel => 'ARKLORES / 0.9 DEVELOPMENT';
+  String settingsVersionLabel(String version) {
+    return 'ARKLORES / $version';
+  }
 
   @override
   String get settingsShowOnboarding => 'Show Onboarding Guide';

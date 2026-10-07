@@ -55,6 +55,36 @@ class OpenAICompatibleClient extends LLMClient {
   /// sent without it (usage may then be missing).
   bool _streamOptionsRejected = false;
 
+  /// Reasoning models behind the OpenAI API (GPT-5, o-series; also through
+  /// relays) reject `max_tokens` ("use max_completion_tokens") and any
+  /// `temperature` but the default. Learned from the first rejection.
+  bool _maxCompletionTokens = false;
+  bool _temperatureRejected = false;
+
+  /// [body] changed to get past the 4xx [errorText] when it names
+  /// `max_tokens` or `temperature`; null when it does not.
+  Map<String, dynamic>? _adaptToRejection(
+    Map<String, dynamic> body,
+    String errorText,
+  ) {
+    final text = errorText.toLowerCase();
+    if (!_maxCompletionTokens &&
+        body.containsKey('max_tokens') &&
+        text.contains('max_tokens')) {
+      _maxCompletionTokens = true;
+      return Map.of(body)
+        ..['max_completion_tokens'] = body['max_tokens']
+        ..remove('max_tokens');
+    }
+    if (!_temperatureRejected &&
+        body.containsKey('temperature') &&
+        text.contains('temperature')) {
+      _temperatureRejected = true;
+      return Map.of(body)..remove('temperature');
+    }
+    return null;
+  }
+
   /// Whether a 4xx [errorText] for [body] is about the reasoning fields.
   bool _rejectsReasoningFields(Map<String, dynamic> body, String errorText) {
     final fields = reasoningFields.keys;
@@ -139,6 +169,15 @@ class OpenAICompatibleClient extends LLMClient {
             'thinking': {'type': 'enabled'},
             'reasoning_effort': 'high',
           },
+      };
+    }
+    if (RegExp(r'^(gpt-5|o\d)').hasMatch(model)) {
+      // OpenAI reasoning models (also through relays): they think at a
+      // medium effort by default; `low` is accepted by all of them.
+      return switch (level) {
+        ReasoningLevel.off => {'reasoning_effort': 'low'},
+        ReasoningLevel.low => {'reasoning_effort': 'medium'},
+        ReasoningLevel.high => {'reasoning_effort': 'high'},
       };
     }
     if (endpoint.contains('generativelanguage.googleapis.com') ||
@@ -256,8 +295,11 @@ class OpenAICompatibleClient extends LLMClient {
       {
         'model': config.chatModel,
         'messages': [for (final m in messages) _messageJson(m)],
-        'temperature': temperature,
-        'max_tokens': maxTokens,
+        if (!_temperatureRejected) 'temperature': temperature,
+        if (_maxCompletionTokens)
+          'max_completion_tokens': maxTokens
+        else
+          'max_tokens': maxTokens,
         if (stream) 'stream': true,
         if (stream && !_streamOptionsRejected)
           'stream_options': {'include_usage': true},
@@ -328,6 +370,10 @@ class OpenAICompatibleClient extends LLMClient {
       // `charset` in the content type, `response.body` decodes as latin1.
       final responseBody =
           utf8.decode(response.bodyBytes, allowMalformed: true);
+      if (response.statusCode == 400 || response.statusCode == 422) {
+        final adapted = _adaptToRejection(body, responseBody);
+        if (adapted != null) return await _complete(adapted);
+      }
       if ((response.statusCode == 400 || response.statusCode == 422) &&
           _rejectsReasoningFields(body, responseBody)) {
         return await _complete(_withoutReasoningFields(body));
@@ -382,15 +428,55 @@ class OpenAICompatibleClient extends LLMClient {
       events.forEach(answer.add);
       return answer;
     }
-    final Object? data;
+    Object? data;
     try {
       data = jsonDecode(body);
     } on FormatException {
-      throw LLMException(
-        'Chat completion failed: the response is not JSON',
-        statusCode: status,
-        body: body,
-      );
+      // One JSON chunk per line, without the `data:` of server-sent events
+      // (some relays stream that way).
+      final lines = [
+        for (final line in const LineSplitter().convert(body))
+          if (line.trim().isNotEmpty) line.trim(),
+      ];
+      final chunks = <Map<String, dynamic>>[];
+      for (final line in lines) {
+        try {
+          final chunk = jsonDecode(line);
+          if (chunk is Map<String, dynamic>) chunks.add(chunk);
+        } on FormatException {
+          // not a chunk
+        }
+      }
+      if (chunks.isEmpty) {
+        final start = body.trim();
+        if (start.startsWith('<')) {
+          // A web page: the Base URL leads to a site (a relay's front page),
+          // not to its API.
+          throw LLMException(
+            'Chat completion failed: the service answered with a web page, '
+            'not an API response. Check the Base URL in API settings: it '
+            'usually ends with the API path, such as /v1 '
+            '(requests go to <Base URL>/chat/completions).',
+            statusCode: status,
+            body: body,
+          );
+        }
+        throw LLMException(
+          'Chat completion failed: the response is not JSON '
+          '(${start.length > 160 ? '${start.substring(0, 160)}…' : start})',
+          statusCode: status,
+          body: body,
+        );
+      }
+      data = chunks;
+    }
+    // A JSON array of stream chunks.
+    if (data is List) {
+      final answer = _StreamAccumulator();
+      for (final chunk in data) {
+        if (chunk is Map<String, dynamic>) answer.add(chunk);
+      }
+      return answer;
     }
     final choices = data is Map ? data['choices'] : null;
     if (choices is! List || choices.isEmpty || choices.first is! Map) {
@@ -541,6 +627,11 @@ class OpenAICompatibleClient extends LLMClient {
       final errorBody = await response.stream.bytesToString();
       final badRequest =
           response.statusCode == 400 || response.statusCode == 422;
+      final adapted = badRequest ? _adaptToRejection(body, errorBody) : null;
+      if (adapted != null) {
+        yield* _stream(adapted);
+        return;
+      }
       if (badRequest && _rejectsReasoningFields(body, errorBody)) {
         yield* _stream(_withoutReasoningFields(body));
         return;
@@ -751,6 +842,8 @@ class _StreamAccumulator {
     if (json['error'] != null && json['choices'] == null) {
       throw LLMException(
         chatFailureMessage(jsonEncode(json), fallback: 'Chat completion failed'),
+        // Only answers that came with 200 are read here.
+        statusCode: 200,
         body: jsonEncode(json),
       );
     }

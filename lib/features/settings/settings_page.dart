@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
+import '../../shared/app_version.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -318,7 +319,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         const SizedBox(height: 28),
                         _SystemFooter(
                           theme: theme,
-                          label: context.t.settingsVersionLabel,
+                          label: context.t.settingsVersionLabel(appVersion),
                         ),
                       ],
                     ),

@@ -47,11 +47,11 @@ void main() {
         tester,
         installStatus(installed: true, installedSha: 'AA', releaseSha: 'aa'),
       );
+      // A badge says so; the one button is "download again".
+      expect(find.byKey(const Key('kb-status-current')), findsOneWidget);
       expect(find.text('已是最新'), findsOneWidget);
       expect(find.text('更新'), findsNothing);
-      final button = tester
-          .widget<ElevatedButton>(find.byKey(const Key('kb-download-button')));
-      expect(button.onPressed, isNull);
+      expect(find.byKey(const Key('kb-download-button')), findsNothing);
       expect(find.byKey(const Key('kb-redownload')), findsOneWidget);
     });
 

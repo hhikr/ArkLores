@@ -24,6 +24,15 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
   子 agent 共用）：一轮完全为空时依次改用 非流式 → 文本方式调用工具（流式）→ 文本方式（非流式）重试同一轮，都不行才报错；报错写出服务商给的结束原因
   （`length` 提示思考可能用光了输出上限，`content_filter`/`safety` 提示被内容审核拦下）。GLM、deepseek 的正常路径不变（只有空回复时才换方式）。
   待开发者用 Gemini/中转站各问一题确认；仍失败时把会话记录（设置里打开“保存 AI 对话记录”）里的空回复那一条发来。
+  真机第一次反馈：“Chat completion failed: the response is not JSON”（上面新加的读法报的：流式请求回来的既不是 SSE 也不是 JSON）。补上：每行一个 JSON 块、
+  没有 `data:` 前缀的流，以及 JSON 数组形式的块；读不懂的回复（200）也走上面的换方式重试，最后的报错带回复开头 160 字；回复是网页（`<` 开头，多半是
+  Base URL 少了 `/v1`，中转站返回了首页）时不重试，直接提示检查 Base URL。同一轮界面修正：输入框文字与工具栏按钮的间距、设置页底部版本号改为
+  `lib/shared/app_version.dart`（`test/shared/app_version_test.dart` 守卫与 pubspec 一致）、知识库卡片（“已是最新”改为标题旁的徽标，统计一行，
+  “重新下载”是描边按钮）、TextButton 全局用 `accentText`（以前是信号黄，浅色主题上几乎看不见），阅读历史的“清空”用正文色。
+  开发者用的中转站（灵算，Base URL `https://lingsuan.top/v1`）目前只有 GPT-5.x / Codex / Claude，Gemini 标为“即将支持”。GPT-5 与 o 系列推理模型
+  不接受 `max_tokens` 和非默认 `temperature`：被 400 拒绝时客户端改发 `max_completion_tokens`、去掉 `temperature` 并记住；它们的思考档位
+  按模型名（`gpt-5*`、`o<数字>*`）发 `reasoning_effort` low/medium/high。`install_local.ps1 -Build` 在没有 `ANDROID_HOME`/`JAVA_HOME` 时
+  指向本机 `C:\Users\hhikr\dev` 下的 SDK 与 JDK（`flutter config` 的设置按用户保存，开发者自己的终端里没有）。
 
 - **0.11 资料页检索、问答的可选步骤（2026-10-07，未发布，不需重算知识库）**：① 资料页每个子页面右上角都有搜索（`LibrarySearchButton`），
   默认只搜该页的范围（`LibraryScope`：书架、集合、某类条目列表、干员页=密录集+属于他的条目；条目页搜它所在的集合），范围显示为可删掉的标签，删掉即搜全部；

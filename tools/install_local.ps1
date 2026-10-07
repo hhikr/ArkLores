@@ -83,6 +83,15 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   $version = [regex]::Match((Get-Content pubspec.yaml -Raw), '(?m)^version:\s*([^+\s]+)').Groups[1].Value
   $out = "build\local_release\ArkLores-$version-local.apk"
   Write-Host "building $out (knowledge base SHA $($sha.Substring(0, 12))...)"
+  # `flutter config --android-sdk/--jdk-dir` is stored per user profile and
+  # may be missing in this shell: point Flutter at this machine's SDK and JDK
+  # through the environment when nothing else is set.
+  if (-not $env:ANDROID_HOME -and -not $env:ANDROID_SDK_ROOT -and (Test-Path 'C:\Users\hhikr\dev\android-sdk')) {
+    $env:ANDROID_HOME = 'C:\Users\hhikr\dev\android-sdk'
+  }
+  if (-not $env:JAVA_HOME -and (Test-Path 'C:\Users\hhikr\dev\jdk-17')) {
+    $env:JAVA_HOME = 'C:\Users\hhikr\dev\jdk-17'
+  }
   if (-not $DryRun) {
     # Gradle and Flutter write warnings to stderr; only the exit code counts.
     $ErrorActionPreference = 'Continue'
