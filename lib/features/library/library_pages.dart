@@ -70,6 +70,12 @@ IconData _shelfIcon(String kind) => switch (kind) {
       'memory' => Icons.badge_rounded,
       'roguelike' => Icons.diamond_rounded,
       'sandbox' => Icons.landscape_rounded,
+      // 0.12: Endfield's shelves (kinds without the ef/ namespace).
+      'discovery' => Icons.travel_explore_rounded,
+      'side' => Icons.alt_route_rounded,
+      'other' => Icons.assignment_rounded,
+      'world' => Icons.public_rounded,
+      'archive' => Icons.folder_special_rounded,
       _ => Icons.collections_bookmark_rounded,
     };
 

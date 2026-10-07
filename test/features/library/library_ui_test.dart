@@ -385,6 +385,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('both games installed: a section of shelves per game', (tester) async {
+    tester.view.physicalSize = const Size(1080, 3200);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          gameLibraryStatusProvider
+              .overrideWith((ref, game) async => LibraryStatus.ready),
+          shelfSummariesProvider.overrideWith(
+            (ref, game) async => game == Game.endfield
+                ? const [
+                    ShelfSummary(kind: 'ef/main', collections: 64, stories: 1656),
+                    ShelfSummary(kind: 'ef/archive', collections: 23, stories: 0),
+                    ShelfSummary(kind: 'ef/memory', collections: 80, stories: 1476),
+                  ]
+                : const [
+                    ShelfSummary(kind: 'main', collections: 18, stories: 463),
+                  ],
+          ),
+          codexTypesProvider.overrideWith(
+            (ref, game) async => const [(type: 'enemy', count: 92)],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => Shot(child: child!),
+          home: const MaterialsPage(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await shoot(tester, 'library_two_games');
+    expect(find.text('明日方舟'), findsOneWidget);
+    expect(find.text('终末地'), findsOneWidget);
+    for (final k in ['main', 'codex', 'ef/main', 'ef/archive', 'ef/memory', 'ef/codex']) {
+      expect(find.byKey(ValueKey('shelf-$k')), findsOneWidget, reason: k);
+    }
+    expect(find.text('主线任务'), findsOneWidget);
+    expect(find.text('档案库'), findsOneWidget);
+    expect(find.byKey(const ValueKey('library-missing-endfield')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Endfield not installed: a note instead of its shelves', (tester) async {
+    await pumpApp(tester, const MaterialsPage());
+    expect(find.byKey(const ValueKey('library-missing-endfield')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
+  });
+
   testWidgets('home without history shows only the shelves', (tester) async {
     await pumpApp(tester, const MaterialsPage());
     expect(find.byKey(const ValueKey('library-continue')), findsNothing);
