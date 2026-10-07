@@ -36,7 +36,7 @@ void writeTables(Directory dir) {
       'profileRecord': [
         {
           'recordTitle': tx(i18n, 2, '基础档案'),
-          'recordDesc': tx(i18n, 3, '<@profile.key>【代号】甲</>\n来自谷地。')
+          'recordDesc': tx(i18n, 3, '<@profile.key>【代号】甲</>\n来自谷地。'),
         },
       ],
       'profileVoice': [
@@ -47,8 +47,8 @@ void writeTables(Directory dir) {
     'chr_9000_x': {
       'charId': 'chr_9000_x',
       'name': tx(i18n, 6, '替身'),
-      'profileRecord': [],
-      'profileVoice': []
+      'profileRecord': <Object>[],
+      'profileVoice': <Object>[],
     },
   });
   table('ItemTable', {
@@ -56,7 +56,7 @@ void writeTables(Directory dir) {
       'id': 'item_a',
       'name': tx(i18n, 10, '石头'),
       'decoDesc': tx(i18n, 11, '谷地里随处可见的石头，据说能辟邪。'),
-      'type': 8
+      'type': 8,
     },
     // Three blueprints share one template line: dropped.
     for (final n in ['b', 'c', 'd'])
@@ -64,14 +64,14 @@ void writeTables(Directory dir) {
         'id': 'item_$n',
         'name': tx(i18n, 20 + n.codeUnitAt(0), '图纸$n'),
         'decoDesc': tx(i18n, 30 + n.codeUnitAt(0), '记录着“图纸$n”生产工艺的档案文件。'),
-        'type': 47
+        'type': 47,
       },
     // Mechanics: dropped.
     'item_e': {
       'id': 'item_e',
       'name': tx(i18n, 40, '药剂'),
       'decoDesc': tx(i18n, 41, '使用后恢复50%生命值。'),
-      'type': 52
+      'type': 52,
     },
   });
   table('ItemTypeTable', {
@@ -85,7 +85,7 @@ void writeTables(Directory dir) {
       'categoryId': 'paper',
       'name': tx(i18n, 61, '一封信'),
       'itemIds': ['nar_1'],
-      'order': 1
+      'order': 1,
     },
   });
   table('PrtsAllItem', {
@@ -103,20 +103,20 @@ void writeTables(Directory dir) {
   table('DialogTextTable', {
     'dlg_e1m1_1_001': {
       'actorName': tx(i18n, 70, '甲'),
-      'dialogText': tx(i18n, 71, '{F}她来了。{M}他来了。')
+      'dialogText': tx(i18n, 71, '{F}她来了。{M}他来了。'),
     },
     'dlg_e1m1_1_002': {
       'actorName': tx(i18n, 72, '乙'),
-      'dialogText': tx(i18n, 73, '欢迎，{player}。')
+      'dialogText': tx(i18n, 73, '欢迎，{player}。'),
     },
     'dlg_e1m1_1_010': {
       'actorName': tx(i18n, 74, ''),
-      'dialogText': tx(i18n, 75, '风停了。')
+      'dialogText': tx(i18n, 75, '风停了。'),
     },
   });
   table('DialogSummaryMapTable', {'dlg_e1m1_1': 'summary_e1m1_1_001'});
   table(
-      'DialogSummaryTable', {'summary_e1m1_1_001': tx(i18n, 80, '甲与乙在谷地相遇。')});
+      'DialogSummaryTable', {'summary_e1m1_1_001': tx(i18n, 80, '甲与乙在谷地相遇。')},);
   table('RadioTable', {
     'radio_sm1m2_1': {
       'radioSingleDataList': [
@@ -168,7 +168,7 @@ void main() {
       expect(rows, isNotEmpty, reason: table);
       for (final r in rows) {
         expect(gameOfId('${r['v']}'), Game.endfield,
-            reason: '$table.$column ${r['v']}');
+            reason: '$table.$column ${r['v']}',);
       }
     }
     final games = await q('SELECT DISTINCT game FROM story_lines');
