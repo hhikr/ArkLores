@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
-import 'react_loop.dart';
+import 'react_event.dart';
 import 'story_answer.dart';
 import 'tools/observation_data.dart';
 import 'turn_stats.dart';

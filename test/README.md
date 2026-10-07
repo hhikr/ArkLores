@@ -27,7 +27,7 @@
 - `source_fixture.dart`：一棵小的 ArknightsGameData 源码树（3 个角色、1 个物品、一个活动 5 章），
   构建、覆盖层、更新的测试都从它开始；`fake_github.dart` 把它按提交在内存里当作 GitHub 提供
   （提交、git 树、raw 文件、codeload zip）。
-- `amiya_fixture.dart`、`two_activities_fixture.dart`：检索、角色扮演、近似名与范围外命中用的小库。
+- `amiya_fixture.dart`、`two_activities_fixture.dart`：检索、近似名与范围外命中用的小库。
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
   `plain_theme.dart`（主题的 Google 字体在测试里会联网下载并失败，Widget 测试用 `plainThemeOverride()`）、

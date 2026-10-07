@@ -3,7 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/agent_provider.dart';
-import '../../../core/agent/react_loop.dart';
+import '../../../core/agent/react_event.dart';
 import '../../../core/agent/story_answer.dart';
 import '../../../core/agent/turn_stats.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
@@ -132,11 +132,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     } else if (msg.isStreaming && msg.liveStatus.isNotEmpty) {
       storyBody = stripWriterCoverage(content);
     }
-    if (content == '[ROLEPLAY_ERROR]') {
-      content = context.t.aiRoleplayError;
-    } else if (content == '[ROLEPLAY_CANCELED]') {
-      content = context.t.aiRoleplayCanceled;
-    } else if (content == '[ASK_ERROR]') {
+    if (content == '[ASK_ERROR]') {
       content = context.t.aiAskError;
     } else if (content == '[ASK_CANCELED]') {
       content = context.t.aiAskCanceled;

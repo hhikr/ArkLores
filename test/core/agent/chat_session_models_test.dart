@@ -1,5 +1,5 @@
 import 'package:arklores/core/agent/chat_session_models.dart';
-import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/turn_stats.dart';
 import 'package:arklores/core/llm/llm_client.dart';

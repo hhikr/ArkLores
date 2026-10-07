@@ -15,13 +15,12 @@ import 'chat_message.dart';
 import 'chat_notifier_base.dart';
 import 'chat_session_models.dart';
 import 'chat_session_store.dart';
-import 'react_loop.dart';
+import 'react_event.dart';
 import 'story_answer.dart';
 import 'story_qa_agent.dart';
 import 'turn_stats.dart';
 
 export 'chat_message.dart';
-export 'roleplay_provider.dart';
 
 /// Shared GameData retrieval store injected into every agent (R11.2): agents
 /// type their store as the `GameDataRetrieval` interface so the same tool

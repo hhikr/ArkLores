@@ -1,5 +1,6 @@
-// The AI page: its tabs and empty state, cancel and retry, a Wiki context
-// handed over, and (R17d) a list that never follows a streaming answer.
+// The AI page: floating actions and empty state, cancel and retry, the
+// focus after returning from a page, a Wiki context handed over, and (R17d)
+// a list that never follows a streaming answer.
 import 'dart:async';
 
 import 'package:arklores/core/agent/agent_provider.dart';
@@ -45,15 +46,19 @@ Future<void> settle(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('two tabs; Ask starts empty with the question box',
-      (tester) async {
+  testWidgets('no app bar: the actions float; Ask starts empty with the '
+      'question box', (tester) async {
     await tester.pumpWidget(
         _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
     await tester.pumpAndSettle();
-    // R15: the tabs are the app bar; the box (deep-thinking switch, send)
-    // sits at the bottom. No answer modes.
-    expect(find.text('AI 问答'), findsWidgets); // tab + empty-state title
-    expect(find.text('角色扮演'), findsOneWidget);
+    // The actions float over the conversation; the box (deep-thinking
+    // switch, send) sits at the bottom. No tabs, no answer modes.
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byType(TabBar), findsNothing);
+    expect(find.byKey(const ValueKey('ask-floating-actions')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ask-reading-history')), findsOneWidget);
+    expect(find.byType(BackButton), findsNothing);
+    expect(find.text('AI 问答'), findsOneWidget); // the empty-state title
     expect(find.byTooltip('回答方式'), findsNothing);
     expect(find.textContaining('直接问任何剧情问题'), findsOneWidget);
     expect(find.byKey(const ValueKey('ask-input-field')), findsOneWidget);
@@ -100,11 +105,80 @@ void main() {
     await tester.tap(find.byTooltip('取消'));
     await tester.pump();
     expect(find.text('已取消本次回答。'), findsOneWidget);
-    // R15: retry sits in the app bar's overflow menu.
+    // Retry sits in the floating actions' menu.
     await tester.tap(find.byTooltip('更多'));
     await tester.pumpAndSettle();
     expect(find.text('重试'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('back from a page opened in the conversation, the focus is on '
+      'the conversation, not the question box', (tester) async {
+    await tester.pumpWidget(
+        _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
+    await tester.pumpAndSettle();
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(AiChatPage)));
+    // ignore: invalid_use_of_protected_member
+    container.read(askChatProvider.notifier).state = [
+      ChatMessage(
+        id: 'q',
+        role: MessageRole.user,
+        content: '问题',
+        timestamp: DateTime(2026),
+      ),
+      ChatMessage(
+        id: 'a',
+        role: MessageRole.assistant,
+        content: '回答。',
+        timestamp: DateTime(2026),
+      ),
+    ];
+    await tester.pumpAndSettle();
+    final box = find.descendant(
+      of: find.byKey(const ValueKey('ask-input-field')),
+      matching: find.byType(EditableText),
+    );
+    bool boxFocused() =>
+        tester.widget<EditableText>(box).focusNode.hasFocus;
+
+    await tester.tap(box);
+    await tester.pump();
+    expect(boxFocused(), isTrue);
+    // Touching the conversation (e.g. a source) and opening a page from it.
+    await tester.tap(find.text('回答。'));
+    await tester.pump();
+    expect(boxFocused(), isFalse);
+    Navigator.of(tester.element(find.text('回答。'))).push(
+      MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('原文'))),
+    );
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.text('原文'))).pop();
+    await tester.pumpAndSettle();
+    expect(boxFocused(), isFalse);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'ask-chat');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opened from a Wiki page, the page has a way back',
+      (tester) async {
+    await tester.pumpWidget(_app(
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const AiChatPage()),
+          ),
+          child: const Text('打开'),
+        ),
+      ),
+      overrides: _withModel(ScriptedLLM(['x'])),
+    ),);
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BackButton), findsOneWidget);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(AiChatPage), findsNothing);
   });
 
   testWidgets('a Wiki selection arrives as context, not evidence',
@@ -124,7 +198,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('AI 问答'), findsOneWidget);
     expect(find.textContaining('Wiki reading context'), findsOneWidget);
     expect(find.textContaining('not GameData evidence'), findsOneWidget);
     expect(find.textContaining('阿米娅是罗德岛的公开领袖。'), findsOneWidget);

@@ -4,7 +4,7 @@
 
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Flutter 应用。
 当前版本 v0.10.0（正式版）使用中文 GameData release asset 作为主知识源，剧情问答由一个模型直接查询知识库（只读 SQL、全库检索、
-整章阅读）作答，提供带行级原文引用的剧情问答与调查、梗概、事实核查、证据约束的角色扮演，以及 Wiki 阅读上下文转交到 AI workflow；
+整章阅读）作答，提供带行级原文引用的剧情问答与调查、梗概、事实核查，以及 Wiki 阅读上下文转交到 AI workflow；
 可选的剧情向量召回需要在设置中配置向量 API。
 
 Latest release: [v0.10.0](https://github.com/hhikr/ArkLores/releases/tag/v0.10.0)

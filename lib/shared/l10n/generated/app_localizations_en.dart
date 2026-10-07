@@ -107,8 +107,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get apiSettingsChatSection => 'Chat API';
 
   @override
-  String get apiSettingsChatDesc =>
-      'Used for AI conversations (Fact Check, Summary, Roleplay).';
+  String get apiSettingsChatDesc => 'Used for Ask AI (story questions).';
 
   @override
   String get apiSettingsEmbeddingSection => 'Embedding API (optional)';
@@ -313,9 +312,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiChatTitle => 'Lore Advisor';
 
   @override
-  String get aiChatSubtitle => 'Fact Check · Summary · Roleplay';
-
-  @override
   String get aiChatComingSoon => 'Coming in v0.4';
 
   @override
@@ -383,7 +379,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingWelcomeDesc =>
-      'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• AI-powered fact checking & summaries\n• Import your lore books\n• Immersive character roleplay';
+      'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• Ask AI about the story, with sources from the original text\n• Read the stories and game records';
 
   @override
   String get onboardingGetStarted => 'Get Started';
@@ -476,9 +472,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiTabSummary => 'Summary';
-
-  @override
-  String get aiTabRoleplay => 'Roleplay';
 
   @override
   String get aiAnswerStatus => 'Answer status';
@@ -956,63 +949,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String aiHistoryTurns(int count) {
     return '$count turns';
   }
-
-  @override
-  String get aiRoleplayChoose => 'Choose a character';
-
-  @override
-  String get aiRoleplayChooseDesc =>
-      'The character is resolved to a stable GameData entity before dialogue begins.';
-
-  @override
-  String get aiRoleplayCharacter => 'Character name or alias';
-
-  @override
-  String get aiRoleplayScene => 'Scene (optional)';
-
-  @override
-  String get aiRoleplaySceneContext =>
-      'The scene is session context, not GameData evidence';
-
-  @override
-  String get aiRoleplayStart => 'Resolve character and start';
-
-  @override
-  String get aiRoleplayResolving => 'Resolving…';
-
-  @override
-  String get aiRoleplayNoDatabase =>
-      'The Chinese GameData knowledge base is not installed. Install it in Settings first.';
-
-  @override
-  String get aiRoleplayNotFound =>
-      'No matching character was found in GameData. Check the name or alias.';
-
-  @override
-  String get aiRoleplayDisambiguate => 'Choose the matching GameData entity';
-
-  @override
-  String get aiRoleplayContinue => 'Continue saved local session';
-
-  @override
-  String get aiRoleplayRestart => 'Restart';
-
-  @override
-  String get aiRoleplayGeneratedNotice =>
-      'Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.';
-
-  @override
-  String get aiRoleplayEmpty =>
-      'Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.';
-
-  @override
-  String get aiRoleplayInputPlaceholder => 'Talk to the character…';
-
-  @override
-  String get aiRoleplayError => 'Generation failed. Please retry.';
-
-  @override
-  String get aiRoleplayCanceled => 'Generation canceled.';
 
   @override
   String get settingsAppIcon => 'App icon';

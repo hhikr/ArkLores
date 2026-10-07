@@ -13,12 +13,10 @@ import 'chat_history_page.dart';
 import 'reading_history_page.dart';
 import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
-import 'widgets/roleplay_tab.dart';
 import 'wiki_ai_context.dart';
 
-/// The main AI Chat Page hosting the three AI modes (FactCheck, Summary, Roleplay).
-///
-/// Features a TabBar for fact-check, summary, and roleplay modes.
+/// The Ask page: the conversation fills the page, the conversation actions
+/// float at its top right, the question box sits at the bottom.
 class AiChatPage extends ConsumerStatefulWidget {
 
   const AiChatPage({super.key, this.initialWikiContext});
@@ -28,16 +26,16 @@ class AiChatPage extends ConsumerStatefulWidget {
   ConsumerState<AiChatPage> createState() => _AiChatPageState();
 }
 
-class _AiChatPageState extends ConsumerState<AiChatPage>
-    with SingleTickerProviderStateMixin {
+class _AiChatPageState extends ConsumerState<AiChatPage> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  // Ask tab first; the wiki handoff sets the mode, not the tab.
-  late final TabController _tabController = TabController(length: 2, vsync: this)
-    ..addListener(() {
-      if (!_tabController.indexIsChanging && mounted) setState(() {});
-    });
   bool _handledInitialWikiContext = false;
+
+  /// The conversation area takes the focus when it is touched (reading,
+  /// opening a source, the floating buttons). A page opened from there
+  /// gives the focus back to it on return, not to the question box, so the
+  /// keyboard does not come up.
+  final FocusNode _chatFocus = FocusNode(debugLabel: 'ask-chat');
 
   /// R17d: the list never follows a streaming answer — the thinking, the
   /// steps and the answer grow below and the reader scrolls at their own
@@ -47,7 +45,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _chatFocus.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -89,61 +87,62 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     ref.listen<String?>(askDraftProvider, (_, draft) {
       if (draft == null) return;
       ref.read(askDraftProvider.notifier).state = null;
-      _tabController.animateTo(0);
       _inputController.value = TextEditingValue(
         text: draft,
         selection: TextSelection.collapsed(offset: draft.length),
       );
     });
 
-    // R15: one bar — the Ask / Roleplay switch where the title was, the
-    // conversation actions on the right (Ask tab only).
-    final onAsk = _tabController.index == 0;
+    // No app bar: the conversation reaches the top of the screen and its
+    // actions float over it.
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        elevation: 0,
-        titleSpacing: 4,
-        title: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          dividerColor: Colors.transparent,
-          indicatorColor: theme.accentPrimary,
-          labelColor: theme.accentText,
-          unselectedLabelColor: theme.textSecondary,
-          labelStyle: theme.titleFont.copyWith(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
-          unselectedLabelStyle: theme.titleFont.copyWith(fontSize: 17),
-          tabs: [
-            Tab(text: context.t.aiTabAsk),
-            Tab(text: context.t.aiTabRoleplay),
-          ],
-        ),
-        actions: [
-          if (onAsk && isConfigured) ..._buildAskActions(theme),
-        ],
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // ── Ask Tab (unified: summarize / verify / investigate) ──
-          isConfigured ? _buildAskTab(theme) : _buildConfigRequiredTab(theme),
-
-          isConfigured ? const RoleplayTab() : _buildConfigRequiredTab(theme),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: isConfigured
+            ? _buildAskTab(theme)
+            : _buildConfigRequiredTab(theme),
       ),
     );
   }
 
-  /// History and new-conversation buttons plus a menu with retry / clear.
-  List<Widget> _buildAskActions(AppThemeTokens theme) {
+  /// The floating actions at the top right: history, reading history, new
+  /// conversation, and a menu with retry / clear.
+  Widget _buildFloatingActions(AppThemeTokens theme) {
     final chatHistory = ref.watch(askChatProvider);
     final chatNotifier = ref.read(askChatProvider.notifier);
     final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
+    return Material(
+      key: const ValueKey('ask-floating-actions'),
+      color: theme.surfaceElevated.withValues(alpha: 0.94),
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.25),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: theme.divider, width: 0.5),
+      ),
+      child: IconButtonTheme(
+        data: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            foregroundColor: theme.textPrimary,
+            iconSize: 21,
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: _buildAskActions(theme, chatHistory, chatNotifier, isSending),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildAskActions(
+    AppThemeTokens theme,
+    List<ChatMessage> chatHistory,
+    AskChatNotifier chatNotifier,
+    bool isSending,
+  ) {
     return [
       IconButton(
         onPressed: isSending
@@ -251,9 +250,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
     );
   }
 
-  /// Unified Ask tab: mode selector + chat list + input. The same message
-  /// list renders summary answers, fact-check verdicts and investigation
-  /// cards (chat_bubble dispatches by content).
+  /// The conversation (with the floating actions over it) and the question
+  /// box. Touching the conversation moves the focus off the question box
+  /// ([_chatFocus]).
   Widget _buildAskTab(AppThemeTokens theme) {
     final chatHistory = ref.watch(askChatProvider);
     final chatNotifier = ref.read(askChatProvider.notifier);
@@ -264,58 +263,49 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
       if ((prev?.length ?? 0) < next.length) _scrollToBottom(afterFrame: true);
     });
 
-    // R15: the conversation fills the tab; actions live in the app bar. The
-    // question box may grow to half or all of the tab (its height budget).
+    // The question box may grow to half or all of the page (its height
+    // budget).
     return LayoutBuilder(
       builder: (context, constraints) => Column(
       children: [
         Expanded(
-          child: chatHistory.isEmpty
-              ? _buildEmptyState(theme)
-              : Stack(
-                  children: [
-                    NotificationListener<ScrollMetricsNotification>(
-                      onNotification: (n) => n.depth == 0 &&
-                          _onScrollMetrics(n.metrics),
-                      child: NotificationListener<ScrollUpdateNotification>(
-                        onNotification: (n) => n.depth == 0 &&
-                            _onScrollMetrics(n.metrics),
-                        child: ListView.builder(
-                          key: const ValueKey('ask-chat-list'),
-                          controller: _scrollController,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          itemCount: chatHistory.length,
-                          itemBuilder: (context, index) {
-                            return ChatBubble(message: chatHistory[index]);
-                          },
+          child: Focus(
+            focusNode: _chatFocus,
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: (_) {
+                if (!_chatFocus.hasFocus) _chatFocus.requestFocus();
+              },
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: chatHistory.isEmpty
+                        ? _buildEmptyState(theme)
+                        : _buildChatList(theme, chatHistory),
+                  ),
+                  // Opened from a Wiki page (a route of its own): a way back.
+                  if (ModalRoute.of(context)?.canPop ?? false)
+                    Positioned(
+                      top: 6,
+                      left: 8,
+                      child: Material(
+                        color: theme.surfaceElevated.withValues(alpha: 0.94),
+                        elevation: 2,
+                        shape: CircleBorder(
+                          side: BorderSide(color: theme.divider, width: 0.5),
                         ),
+                        child: BackButton(color: theme.textPrimary),
                       ),
                     ),
-                    if (_showJumpToEnd)
-                      Positioned(
-                        right: 16,
-                        bottom: 12,
-                        child: Material(
-                          color: theme.accentPrimary,
-                          shape: const CircleBorder(),
-                          elevation: 3,
-                          shadowColor: Colors.black.withValues(alpha: 0.3),
-                          child: IconButton(
-                            key: const ValueKey('scroll-to-bottom'),
-                            tooltip: context.t.aiScrollToBottom,
-                            onPressed: _scrollToBottom,
-                            icon: Icon(
-                              Icons.arrow_downward_rounded,
-                              color: theme.onAccent,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                  Positioned(
+                    top: 6,
+                    right: 8,
+                    child: _buildFloatingActions(theme),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
         AskComposer(
           controller: _inputController,
@@ -335,6 +325,51 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
         ),
       ],
       ),
+    );
+  }
+
+  /// The messages, with the ↓ button while the end is out of view. The top
+  /// padding keeps the first message clear of the floating actions.
+  Widget _buildChatList(AppThemeTokens theme, List<ChatMessage> chatHistory) {
+    return Stack(
+      children: [
+        NotificationListener<ScrollMetricsNotification>(
+          onNotification: (n) => n.depth == 0 && _onScrollMetrics(n.metrics),
+          child: NotificationListener<ScrollUpdateNotification>(
+            onNotification: (n) =>
+                n.depth == 0 && _onScrollMetrics(n.metrics),
+            child: ListView.builder(
+              key: const ValueKey('ask-chat-list'),
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 56, 16, 12),
+              itemCount: chatHistory.length,
+              itemBuilder: (context, index) {
+                return ChatBubble(message: chatHistory[index]);
+              },
+            ),
+          ),
+        ),
+        if (_showJumpToEnd)
+          Positioned(
+            right: 16,
+            bottom: 12,
+            child: Material(
+              color: theme.accentPrimary,
+              shape: const CircleBorder(),
+              elevation: 3,
+              shadowColor: Colors.black.withValues(alpha: 0.3),
+              child: IconButton(
+                key: const ValueKey('scroll-to-bottom'),
+                tooltip: context.t.aiScrollToBottom,
+                onPressed: _scrollToBottom,
+                icon: Icon(
+                  Icons.arrow_downward_rounded,
+                  color: theme.onAccent,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

@@ -34,7 +34,7 @@ class ChatSessionSummary {
 ///   Other:                    `[Documents]`/ArkLores/chat_sessions/
 ///
 /// Each file is one full conversation (multi-turn); writes are atomic
-/// (temp file + rename, like [RoleplaySessionStore]) so a killed process
+/// (temp file + rename) so a killed process
 /// never leaves a half-written session. Corrupt files are surfaced in the
 /// history list instead of crashing the app.
 class ChatSessionStore {

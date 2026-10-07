@@ -7,7 +7,7 @@
 **0.10 线已收尾；0.11 开发中**，按下面的顺序分步做（开发者 2026-10-04 定）：
 ① 考察上游解包仓库（结构、更新频率、与现有知识库的覆盖差距）；② 知识库扩充与重构（补内容、按故事集/肉鸽/活动重新排布）；
 ③ 随时可用的增量更新通道；④ 用户库与阅读历史；⑤ 可阅读资料页（阅读器 + 用户资料），放最后。
-0.11 不重构角色扮演（保持现状，只修崩溃）。
+角色扮演已在 0.11 删除（开发者 2026-10-07 决定），不要恢复。
 未经开发者明确同意不要发版；发版时 Android build 号继续递增（当前 22），知识库资产的 URL 随 `tools/release_gamedata.env` 更新。
 **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、竞品分析等放本地 `notes/`（已 gitignore），不要提交、不要写进 PR。
 GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry_links`、`story_lines.kind`、确定性覆盖层，
@@ -15,6 +15,16 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 知识库页会在已安装的官方资产与本 APK 指向的资产不同（`.asset_sha256` 标记）时提示更新。
 
 ## 当前进度（每轮结束时更新）
+
+- **0.11 删除角色扮演、AI 页去掉顶栏（2026-10-07，未发布，不需重算知识库）**：① 开发者决定删除角色扮演的全部前后端：界面
+  （`roleplay_tab`、AI 页的标签）、`RoleplayAgent`/通知器/会话存储、它独用的文本式 `ReActLoop`（及 `react_parser`、`loop_memory`、
+  `evidence_summary`、`ToolRegistry`、`agent_prompts`）、`search_local_lore` 与 store 的实体检索（`search`/`resolveEntityId`/
+  `findEntityCandidates`、`gamedata_entity_search`、`gamedata_query_plan`、`gamedata_models`）、19 个 ARB 键；`AgentLogger` 只剩
+  “保存 AI 对话记录”的开关（旧的 `agent_logs/*.log` 只有角色扮演在写）。问答的事件类型在 `react_event.dart`（名字沿用 ReAct，
+  内容是 `LoreAgentLoop` 的原生工具调用）。手机上旧的 `roleplay_session.json` 不再读取，留在原处无害。
+  ② AI 页没有 AppBar：对话铺到顶，右上角“历史/阅读历史/新对话/更多”是悬浮的一组按钮（`ask-floating-actions`），列表顶部留 56 的空白；
+  从 Wiki 页推入时左上角有悬浮的返回键。③ 焦点：问答区包在一个 `FocusNode`（`ask-chat`）里，触到问答区（读答案、点证据、点悬浮按钮）
+  就把焦点移过去——以前焦点留在输入框，从证据页返回时路由恢复焦点，输入法又弹出来。
 
 - **0.11 非 GLM 服务商的兼容（2026-10-07，未发布）**：开发者反馈换成 Gemini 或中转站后问答报“模型没有给出答案”（模型一轮什么也没返回，提醒一次后仍为空）。
   没有用真实的 Gemini/中转站复现（未获准跑 live），按已知的 OpenAI 兼容差异逐项加了兼容并用 mock 测试：① 客户端（`openai_client.dart`，`_StreamAccumulator`
@@ -29,7 +39,10 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
   Base URL 少了 `/v1`，中转站返回了首页）时不重试，直接提示检查 Base URL。同一轮界面修正：输入框文字与工具栏按钮的间距、设置页底部版本号改为
   `lib/shared/app_version.dart`（`test/shared/app_version_test.dart` 守卫与 pubspec 一致）、知识库卡片（“已是最新”改为标题旁的徽标，统计一行，
   “重新下载”是描边按钮）、TextButton 全局用 `accentText`（以前是信号黄，浅色主题上几乎看不见），阅读历史的“清空”用正文色。
-  开发者用的中转站（灵算，Base URL `https://lingsuan.top/v1`）目前只有 GPT-5.x / Codex / Claude，Gemini 标为“即将支持”。GPT-5 与 o 系列推理模型
+  开发者用的中转站（灵算，Base URL `https://lingsuan.top/v1`）：key 所在分组有 17 个 Gemini 模型名。实测（2026-10-07，最小请求）
+  `gemini-3-flash` 对话、工具调用、流式、`reasoning_effort` 都正常，端到端问答一题通过（27 次调用、约 38 万输入 token、3.5 分钟）；
+  `gemini-3.5-flash` 中转站上游 404（“Resource not found”）；`gemini-3.7-flash` 不存在（只有 -low/-medium/-high）；
+  `gemini-3.6-flash`、`3.7-flash-*` 常把英文思考摘要写进 `content`（中转站的问题，不在 App 里过滤）。GPT-5 与 o 系列推理模型
   不接受 `max_tokens` 和非默认 `temperature`：被 400 拒绝时客户端改发 `max_completion_tokens`、去掉 `temperature` 并记住；它们的思考档位
   按模型名（`gpt-5*`、`o<数字>*`）发 `reasoning_effort` low/medium/high。`install_local.ps1 -Build` 在没有 `ANDROID_HOME`/`JAVA_HOME` 时
   指向本机 `C:\Users\hhikr\dev` 下的 SDK 与 JDK（`flutter config` 的设置按用户保存，开发者自己的终端里没有）。
@@ -333,7 +346,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 - 保护 `logs/`。
 - 保持 GameData 为 Agent 主知识源。
 - 保留 source path、raw id、content type、entity id。
-- 剧情问答 Agent 只查本地 GameData 库（`lore_tools.dart`），角色扮演只用 `search_local_lore`；Wiki 和用户文本只能作为浏览/上下文。
+- 剧情问答 Agent 只查本地 GameData 库（`lore_tools.dart`）；Wiki 和用户文本只能作为浏览/上下文。
 - 运行相关 tests / analyze 后再汇报。
 
 ## Do Not
@@ -591,7 +604,7 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
   Agent 依次发 `status` / `toolCall` / `toolObservation` / `finalAnswerToken`… →（继续查资料或出处退回时
   `finalAnswerReset`）→ `finalAnswerReplace`（信封 + 核对后正文）。测试取答案用 `finalAnswerOf(events)`。
 - 状态：没有核对通过的出处 → `not_covered`；模型写 `[COVERAGE: gaps]` 或到轮数上限 → `partial`；否则 `answered`。
-- 后台（v0.10.6）：长时操作（Ask 问答、角色扮演、知识库下载/构建）包在 `BackgroundWork.instance.run(...)`
+- 后台（v0.10.6）：长时操作（Ask 问答、知识库下载/构建）包在 `BackgroundWork.instance.run(...)`
   （`lib/core/background/background_work.dart`）里，Android 上由前台 service（`BackgroundWorkService.kt`，dataSync、
   唤醒锁、常驻通知）保活，否则退后台后 socket 被冻结、问答被截断。新增长时操作也要包进去。
   一轮被连接中断（无 HTTP 状态的超时/重置）打断时 `LoreAgentLoop` 重发该轮最多 2 次。

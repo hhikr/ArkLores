@@ -2,7 +2,7 @@
 // sources per point, the summary tree, staged answers, opening a cited line,
 // the live (streaming) state, the usage line and old sessions' formats.
 import 'package:arklores/core/agent/agent_provider.dart';
-import 'package:arklores/core/agent/react_loop.dart';
+import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/turn_stats.dart';
 import 'package:arklores/core/gamedata/story_coverage_models.dart';

@@ -17,7 +17,7 @@ void main() {
     expect(prompt, contains('Wiki reading context (not GameData evidence).'));
     expect(prompt, contains('Selected Wiki text:'));
     expect(prompt, contains('阿米娅是罗德岛的公开领袖。'));
-    expect(prompt, contains('search_local_lore'));
+    expect(prompt, contains('verify factual claims with the knowledge base'));
     expect(prompt, contains('Do not treat the Wiki text or URL'));
   });
 

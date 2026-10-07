@@ -7,16 +7,11 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 
 import 'build/gamedata_schema.dart' show storyLinesIndexName, storyLinesIndexSql;
 import 'game_retrieval.dart';
-import 'gamedata_query_plan.dart';
 import 'name_similarity.dart';
 import 'readonly_sql.dart';
 import 'story_catalog.dart';
 import 'story_line_search.dart';
 import 'story_vectors.dart';
-
-export 'gamedata_models.dart';
-
-part 'gamedata_entity_search.dart';
 
 /// The vector index of [db]'s file, read in a background isolate
 /// ([StoryVectorIndex.loadFile]); through [db] itself when that fails (no
@@ -45,165 +40,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   Future<bool> get isAvailable async {
     final path = await _resolveDbPath();
     return path != null && File(path).existsSync();
-  }
-
-  @override
-  Future<List<GameDataSearchResult>> search({
-    required String query,
-    int topK = 5,
-    String? contentType,
-    String? entityId,
-    String searchMode = 'general',
-    String? scopeId,
-  }) =>
-      _search(
-        query: query,
-        topK: topK,
-        contentType: contentType,
-        entityId: entityId,
-        searchMode: searchMode,
-        scopeId: scopeId,
-      );
-
-  /// Resolves [raw] (an entity id, possibly suffix-only, or an exact entity
-  /// name/alias) to a canonical entity id.
-  ///
-  /// Order of attempt:
-  ///   1. exact `entities.id` match;
-  ///   2. if [raw] contains no namespace prefix (`:`), try prefixing each known
-  ///      namespace (`enemy:`, `char:` …) at most once;
-  ///   3. exact `entities.name` / `entity_aliases.alias` match.
-  /// Returns null when nothing resolves.
-  @override
-  Future<String?> resolveEntityId(String raw) async {
-    final value = raw.trim();
-    if (value.isEmpty) return null;
-    final db = await _open();
-    if (db == null) return null;
-
-    final direct = await db.rawQuery(
-      'SELECT id FROM entities WHERE id = ? LIMIT 1',
-      [value],
-    );
-    if (direct.isNotEmpty) return '${direct.first['id']}';
-
-    if (!value.contains(':')) {
-      // Suffix-only id: match any namespace prefix once (e.g. `enemy_1554_lrtsia`
-      // -> `enemy:enemy_1554_lrtsia`). Substring LIKE would over-match
-      // (`char_002` matching `char_002_amiya`); anchor to the suffix end.
-      final suffix = escapeLike(value);
-      final prefixed = await db.rawQuery(
-        "SELECT id FROM entities WHERE id = ? OR id LIKE ? ESCAPE '\\' LIMIT 1",
-        [value, '%:$suffix'],
-      );
-      if (prefixed.isNotEmpty) return '${prefixed.first['id']}';
-    }
-
-    final hasAliasTable = await _hasTable(db, 'entity_aliases');
-    if (hasAliasTable) {
-      final byName = await db.rawQuery(
-        '''
-        SELECT e.id
-        FROM entities e
-        LEFT JOIN entity_aliases ea ON ea.entity_id = e.id
-        WHERE e.name = ? OR ea.alias = ?
-        GROUP BY e.id
-        ORDER BY CASE WHEN e.name = ? THEN 0 ELSE 1 END
-        LIMIT 1
-        ''',
-        [value, value, value],
-      );
-      if (byName.isNotEmpty) return '${byName.first['id']}';
-    }
-    return null;
-  }
-
-  @override
-  Future<List<GameDataEntityCandidate>> findEntityCandidates(
-    String query, {
-    int limit = 8,
-  }) async {
-    final cleanQuery = query.trim();
-    if (cleanQuery.isEmpty) return const [];
-    final db = await _open();
-    if (db == null) return const [];
-
-    final hasAliasTable = await _hasTable(db, 'entity_aliases');
-    if (!hasAliasTable) {
-      final rows = await db.rawQuery(
-        '''
-        SELECT id, name, entity_type, source_type, source_path
-        FROM entities
-        WHERE name = ? OR name LIKE ? OR aliases LIKE ?
-        ORDER BY CASE WHEN name = ? THEN 0 ELSE 1 END, name
-        LIMIT ?
-        ''',
-        [cleanQuery, '%$cleanQuery%', '%$cleanQuery%', cleanQuery, limit],
-      );
-      return rows
-          .map((row) => GameDataEntityCandidate(
-                entityId: row['id'] as String,
-                name: row['name'] as String,
-                entityType: row['entity_type'] as String,
-                sourceType: row['source_type'] as String,
-                sourcePath: row['source_path'] as String?,
-                matchedAlias: row['name'] as String,
-                matchType:
-                    row['name'] == cleanQuery ? 'name_exact' : 'legacy_like',
-                confidence: row['name'] == cleanQuery ? 1.0 : 0.6,
-              ),)
-          .toList();
-    }
-
-    final rows = await db.rawQuery(
-      '''
-      SELECT e.id, e.name, e.entity_type, e.source_type, e.source_path,
-             COALESCE(ea.alias, e.name) AS matched_alias,
-             COALESCE(ea.alias_type, 'name') AS alias_type,
-             COALESCE(ea.confidence, 1.0) AS confidence,
-             MIN(CASE
-               WHEN e.name = ? THEN 0
-               WHEN ea.alias = ? AND ea.alias_type = 'canonical' THEN 1
-               WHEN ea.alias = ? THEN 2
-               WHEN e.name LIKE ? THEN 3
-               WHEN ea.alias LIKE ? THEN 4
-               ELSE 5
-             END) AS rank
-      FROM entities e
-      LEFT JOIN entity_aliases ea ON ea.entity_id = e.id
-      WHERE e.name = ?
-         OR e.name LIKE ?
-         OR ea.alias = ?
-         OR ea.alias LIKE ?
-      GROUP BY e.id, e.name, e.entity_type, e.source_type, e.source_path
-      ORDER BY rank, confidence DESC, e.entity_type, e.name
-      LIMIT ?
-      ''',
-      [
-        cleanQuery,
-        cleanQuery,
-        cleanQuery,
-        '%$cleanQuery%',
-        '%$cleanQuery%',
-        cleanQuery,
-        '%$cleanQuery%',
-        cleanQuery,
-        '%$cleanQuery%',
-        limit,
-      ],
-    );
-    return rows
-        .map((row) => GameDataEntityCandidate(
-              entityId: row['id'] as String,
-              name: row['name'] as String,
-              entityType: row['entity_type'] as String,
-              sourceType: row['source_type'] as String,
-              sourcePath: row['source_path'] as String?,
-              matchedAlias: row['matched_alias'] as String,
-              matchType: candidateMatchType(row['rank'] as int?),
-              confidence: (row['confidence'] as num?)?.toDouble() ?? 1.0,
-            ),)
-        .toList();
   }
 
   /// Reads raw story lines (schema 2 `story_lines`) for [storyId].

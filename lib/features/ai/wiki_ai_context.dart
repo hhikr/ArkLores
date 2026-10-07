@@ -42,7 +42,7 @@ String buildWikiAiPrompt(WikiAiContext context) {
     ..writeln()
     ..writeln('Task: ${_targetInstruction(context.target)}')
     ..writeln('Important: independently verify factual claims with '
-        'search_local_lore and cite GameData observations separately. Do not '
+        'the knowledge base and cite what you read there. Do not '
         'treat the Wiki text or URL as official GameData evidence.');
   return buffer.toString().trim();
 }

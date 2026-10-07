@@ -13,8 +13,8 @@
 用户问题 ──► AskChatNotifier.sendMessage（没有模式：v0.10.7 起删除了 自动/概括/核查/回答）
               │   历史：紧接上一条回答时带上一问的完整对话（LoreConversation），否则带最近 3 轮问答文本
               │   “深度思考”开关 → 本问使用 low 档思考的 client
-              ├─ StoryQaAgent ─► LoreAgentLoop（R17_TOOL_AGENT.md；一份提示词，条目安排由模型按问题选）
-              └─ Roleplay tab ► RoleplayAgent ─► ReActLoop（不在统一范围）
+              └─ StoryQaAgent ─► LoreAgentLoop（R17_TOOL_AGENT.md；一份提示词，条目安排由模型按问题选）
+              （角色扮演及其文本式 ReActLoop、search_local_lore 已于 0.11 删除）
 
 LoreAgentLoop：system（库结构 + 工作方式 + 引用格式 + 输出格式）+ 只追加的 messages
                每轮 streamTurn(tools) → tool_calls 并发执行（delegate = 并行子 agent）→ 结果原样追加

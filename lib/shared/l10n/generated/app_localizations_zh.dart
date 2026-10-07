@@ -107,7 +107,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get apiSettingsChatSection => '对话 API';
 
   @override
-  String get apiSettingsChatDesc => '用于 AI 对话（事实核查、梗概生成、角色扮演）。';
+  String get apiSettingsChatDesc => '用于 AI 剧情问答。';
 
   @override
   String get apiSettingsEmbeddingSection => '向量 API（可选）';
@@ -310,9 +310,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiChatTitle => '剧情智囊';
 
   @override
-  String get aiChatSubtitle => '事实核查 · 梗概生成 · 角色扮演';
-
-  @override
   String get aiChatComingSoon => '即将在 v0.4 推出';
 
   @override
@@ -376,7 +373,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingWelcomeDesc =>
-      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 事实核查与梗概生成\n• 导入你的剧情书籍\n• 沉浸式角色扮演对话';
+      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 剧情问答，答案附原文出处\n• 阅读剧情与游戏资料';
 
   @override
   String get onboardingGetStarted => '开始使用';
@@ -465,9 +462,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiTabSummary => '剧情梗概';
-
-  @override
-  String get aiTabRoleplay => '角色扮演';
 
   @override
   String get aiAnswerStatus => '回答状态';
@@ -930,58 +924,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String aiHistoryTurns(int count) {
     return '$count 轮对话';
   }
-
-  @override
-  String get aiRoleplayChoose => '选择角色';
-
-  @override
-  String get aiRoleplayChooseDesc => '角色会先解析到 GameData 中的稳定实体，再开始生成对话。';
-
-  @override
-  String get aiRoleplayCharacter => '角色名或别名';
-
-  @override
-  String get aiRoleplayScene => '场景设定（可选）';
-
-  @override
-  String get aiRoleplaySceneContext => '场景属于会话上下文，不是 GameData 证据';
-
-  @override
-  String get aiRoleplayStart => '解析角色并开始';
-
-  @override
-  String get aiRoleplayResolving => '正在解析…';
-
-  @override
-  String get aiRoleplayNoDatabase => '未安装中文 GameData 知识库，请先前往设置安装。';
-
-  @override
-  String get aiRoleplayNotFound => '当前 GameData 未找到该角色，请检查名称或别名。';
-
-  @override
-  String get aiRoleplayDisambiguate => '请选择对应的 GameData 实体';
-
-  @override
-  String get aiRoleplayContinue => '继续本地保存的会话';
-
-  @override
-  String get aiRoleplayRestart => '重新开始';
-
-  @override
-  String get aiRoleplayGeneratedNotice =>
-      '角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。';
-
-  @override
-  String get aiRoleplayEmpty => '输入第一句话。首轮会先检索角色档案、语音、秘录、模组及相关任务剧情。';
-
-  @override
-  String get aiRoleplayInputPlaceholder => '与角色对话…';
-
-  @override
-  String get aiRoleplayError => '生成失败，请重试。';
-
-  @override
-  String get aiRoleplayCanceled => '已取消本次生成。';
 
   @override
   String get settingsAppIcon => '应用图标';

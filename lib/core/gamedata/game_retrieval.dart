@@ -8,14 +8,12 @@
 /// as this interface, which keeps them Flutter-free and identical everywhere.
 library;
 
-import 'gamedata_models.dart';
 import 'name_similarity.dart';
 import 'readonly_sql.dart';
 import 'story_catalog.dart';
 import 'story_coverage_models.dart';
 import 'story_vectors.dart';
 
-export 'gamedata_models.dart';
 export 'name_similarity.dart' show SimilarName, describeSimilarNames;
 export 'readonly_sql.dart' show SqlQueryResult;
 export 'story_catalog.dart'
@@ -33,25 +31,6 @@ export 'story_vectors.dart' show StoryChunkHit;
 abstract interface class GameDataRetrieval {
   /// Whether the local knowledge DB is present and readable.
   Future<bool> get isAvailable;
-
-  /// Multi-stage structured/FTs search (entity + alias + docs + chunks).
-  Future<List<GameDataSearchResult>> search({
-    required String query,
-    int topK,
-    String? contentType,
-    String? entityId,
-    String searchMode,
-    String? scopeId,
-  });
-
-  /// Resolves a raw entity id/name/alias to a canonical id (null when none).
-  Future<String?> resolveEntityId(String raw);
-
-  /// Returns exact candidates for a display name (for disambiguation).
-  Future<List<GameDataEntityCandidate>> findEntityCandidates(
-    String query, {
-    int limit,
-  });
 
   /// Raw story lines window for a story id.
   Future<StoryLinesPage> readStoryLines({
