@@ -22,7 +22,9 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
   阅读历史里旧库存下的片段读出时同样规范化（`historySnippetOf`），重新定位能对上新文字。干员档案的“基础信息”（`entity_documents`/
   `operator_basic_profile`，含 `description` 特性文字）以前不去标记、不换行（`<@ba.kw>`、`\n` 进库），现在用 `cleanRichText`。
   已用 `rederive_gamedata.dart` 重算本地库 → `build/gamedata_v5/arklores_gamedata_zh.nl.db`（162 个故事重解析，三张表的字面 `\n` 全部为 0）；
-  这 162 个故事的向量被删除（约 81 万字），待补嵌入后替换 `arklores_gamedata_zh.db`、压缩、更新 `release_gamedata.env` 的 SHA。
+  这 162 个故事的向量被重解析删掉后，用 `build_story_embeddings.dart --migrate-from=<旧库>` 全部迁回（迁移的对齐现在也认字面 `\n` = 换行；
+  54,846 条、3,284 个故事，与旧库一致，没有调用向量 API）。新库已替换 `build/gamedata_v5/arklores_gamedata_zh.db`（旧的留作 `.pre7`），
+  `.db.gz` 200 MB，`release_gamedata.env` 只改了 SHA（`695caa3e…b0ec`）；URL 仍指向已发布的 pre.5 资产——发版时上传这个 gz 并把 URL 改到新 Release。
   未改：特性文字（`description`）属于玩法文字，按规则不该进库，但召唤物/装置条目只有它，去掉会让这些条目消失，留待决定。
 
 - **0.11 工作过程可读、界面瘦身（2026-10-07，未发布，不需重算知识库）**：① 回答上方的过程不再是 Thought/Action/Observation 原文：

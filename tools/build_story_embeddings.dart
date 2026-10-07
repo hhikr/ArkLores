@@ -266,7 +266,10 @@ class _Migrator {
 
   Future<void> close() => _old.close();
 
+  // Older builds also kept the script's literal `\n` (now a real line
+  // break): the same text, written differently.
   static String _norm(String? s) => (s ?? '')
+      .replaceAll(RegExp(r'\\[nrt]'), '')
       .replaceAll(RegExp(r'\.{3,}|…+'), '…')
       .replaceAll(RegExp(r'\s+'), '');
 
