@@ -12,6 +12,8 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../ai/story_labels_provider.dart';
 import '../ai/story_reader_page.dart';
@@ -54,47 +56,31 @@ String readingTitle(WidgetRef ref, ReadingEntry entry) {
   return ref.watch(storyLabelProvider(item.id)).valueOrNull ?? entry.title;
 }
 
-/// A pushed library page: the app's usual secondary-page frame (transparent
-/// body over the backdrop, a quiet app bar), as the conversation history.
-class LibraryScaffold extends ConsumerWidget {
+/// A pushed library page: floating docks over the backdrop (back, title,
+/// actions; [FloatingScaffold]). [scrollUnder] when the body is one list
+/// that pads itself with `floatingPadding`.
+class LibraryScaffold extends StatelessWidget {
   const LibraryScaffold({
     super.key,
     required this.title,
     required this.body,
     this.actions = const [],
-    this.bottom,
+    this.scrollUnder = false,
   });
 
   final String title;
   final Widget body;
   final List<Widget> actions;
-  final PreferredSizeWidget? bottom;
+  final bool scrollUnder;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 0,
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
+  Widget build(BuildContext context) => FloatingScaffold(
+        title: title,
         actions: actions,
-        bottom: bottom,
-      ),
-      body: body,
-    );
-  }
+        scrollUnder: scrollUnder,
+        body: body,
+      );
 }
-
 /// A centred message with an icon: empty lists, a missing knowledge base.
 class LibraryMessage extends ConsumerWidget {
   const LibraryMessage({
@@ -240,8 +226,11 @@ class LibraryRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    return InkWell(
-      onTap: onTap,
+    return PressFeedback(
+      enabled: onTap != null,
+      pressedScale: 0.985,
+      child: InkWell(
+      onTap: withHaptic(onTap),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -293,6 +282,7 @@ class LibraryRow extends ConsumerWidget {
             if (trailing != null) ...[const SizedBox(width: 10), trailing!],
           ],
         ),
+      ),
       ),
     );
   }

@@ -19,6 +19,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
@@ -70,13 +71,9 @@ class StoryReaderPage extends ConsumerWidget {
     final r = reading.valueOrNull;
     if (r == null) {
       final theme = ref.watch(themeProvider);
-      return Scaffold(
+      return FloatingScaffold(
+        title: '',
         backgroundColor: theme.bgPrimary,
-        appBar: AppBar(
-          backgroundColor: theme.bgPrimary,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-        ),
         body: reading.isLoading
             ? const Center(child: CircularProgressIndicator())
             : Center(
@@ -398,21 +395,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final canJump = _cited || _resume != null;
 
     _nickname = ref.watch(nicknameProvider);
-    return Scaffold(
+    // Floating docks; the text starts below them (a cited line is placed
+    // near the top of the view and must not sit under the title).
+    return FloatingScaffold(
       backgroundColor: theme.bgPrimary,
-      appBar: AppBar(
-        backgroundColor: theme.bgPrimary,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0.5,
-        titleSpacing: 0,
-        title: Text(
-          chapter.isNotEmpty ? chapter : collection,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.titleFont.copyWith(fontSize: 16),
-        ),
-        actions: [
+      title: chapter.isNotEmpty ? chapter : collection,
+      actions: [
           if (widget.text.isNotEmpty)
             IconButton(
               key: const ValueKey('story-reader-find'),
@@ -428,7 +416,6 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               icon: Icon(Icons.my_location_rounded, color: theme.accentText),
             ),
         ],
-      ),
       body: Builder(
         builder: (context) {
           final lines = widget.text;

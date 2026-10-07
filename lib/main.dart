@@ -161,8 +161,20 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
     scaffoldBackgroundColor: Colors.transparent,
     canvasColor: tokens.bgSecondary,
     dividerColor: tokens.divider,
-    splashColor: tokens.accentPrimary.withValues(alpha: 0.08),
-    highlightColor: tokens.accentPrimary.withValues(alpha: 0.05),
+    // Touch feedback that can be seen: the signal yellow at 5–8 % vanished
+    // on the light grounds. A neutral wash of the text colour reads on both
+    // themes; the press scale and haptics come from `PressFeedback`.
+    splashColor: tokens.textPrimary.withValues(alpha: 0.12),
+    highlightColor: tokens.textPrimary.withValues(alpha: 0.07),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: SmoothPageTransitionsBuilder(),
+        TargetPlatform.iOS: SmoothPageTransitionsBuilder(),
+        TargetPlatform.windows: SmoothPageTransitionsBuilder(),
+        TargetPlatform.linux: SmoothPageTransitionsBuilder(),
+        TargetPlatform.macOS: SmoothPageTransitionsBuilder(),
+      },
+    ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: tokens.accentPrimary,
       selectionColor: tokens.accentPrimary.withValues(alpha: 0.24),

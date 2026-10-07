@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
+import 'press_feedback.dart';
 
 /// Height of a floating top bar ([FloatingBar] in a [FloatingTopBar]).
 const double floatingBarHeight = 44;
@@ -144,9 +147,11 @@ class FloatingSegment extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      child: InkWell(
+      child: PressFeedback(
+        pressedScale: 0.93,
+        child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: selected ? null : onTap,
+        onTap: selected ? null : withHaptic(onTap),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           constraints: const BoxConstraints(maxWidth: 180),
@@ -168,11 +173,138 @@ class FloatingSegment extends StatelessWidget {
             ),
           ),
         ),
+        ),
       ),
     );
   }
 }
 
+/// A pushed page with floating top docks instead of an app bar: a round
+/// back button and the [title] in a pill on the left (as wide as the title),
+/// the [actions] in a pill on the right, the page showing around them.
+///
+/// With [scrollUnder] the body starts at the top of the screen and scrolls
+/// beneath the docks (its scrollables use [floatingPadding]); without it
+/// the body starts below them.
+class FloatingScaffold extends ConsumerWidget {
+  const FloatingScaffold({
+    super.key,
+    required this.title,
+    required this.body,
+    this.actions = const [],
+    this.scrollUnder = false,
+    this.floatingActionButton,
+    this.backgroundColor,
+  });
+
+  final String title;
+  final Widget body;
+  final List<Widget> actions;
+  final bool scrollUnder;
+  final Widget? floatingActionButton;
+
+  /// The page's own ground (the reader's plain paper); the app backdrop
+  /// shows through when null.
+  final Color? backgroundColor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final top = MediaQuery.viewPaddingOf(context).top;
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
+    return Scaffold(
+      backgroundColor: backgroundColor ?? Colors.transparent,
+      floatingActionButton: floatingActionButton,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: scrollUnder
+                ? body
+                : Padding(
+                    padding: EdgeInsets.only(top: top + floatingTopInset),
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeTop: true,
+                      child: body,
+                    ),
+                  ),
+          ),
+          Positioned(
+            key: const ValueKey('floating-page-bar'),
+            top: top + 6,
+            left: 10,
+            right: 10,
+            child: IconButtonTheme(
+              data: IconButtonThemeData(
+                style: IconButton.styleFrom(
+                  foregroundColor: theme.textPrimary,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (canPop)
+                          SizedBox(
+                            width: floatingBarHeight,
+                            child: FloatingBar(
+                              theme: theme,
+                              height: floatingBarHeight,
+                              radius: floatingBarHeight / 2,
+                              child: const Center(child: BackButton()),
+                            ),
+                          ),
+                        if (canPop && title.isNotEmpty) const SizedBox(width: 8),
+                        if (title.isNotEmpty)
+                          Flexible(
+                            child: FloatingBar(
+                              theme: theme,
+                              height: floatingBarHeight,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: 1,
+                                child: Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.titleFont.copyWith(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (actions.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    FloatingBar(
+                      theme: theme,
+                      height: floatingBarHeight,
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: actions,
+                      ),
+                    ),
+                  ],
+                ],
+              ),            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 /// [base] plus the room the floating docks take: the top bar (when
 /// [topBar]) and the status bar above it, and whatever the shell reserves
 /// at the bottom (the floating navigation).
@@ -183,7 +315,8 @@ EdgeInsets floatingPadding(
 }) {
   final insets = MediaQuery.paddingOf(context);
   return base.copyWith(
-    top: base.top + (topBar ? insets.top + floatingTopInset : 0),
+    top: base.top +
+        (topBar ? MediaQuery.viewPaddingOf(context).top + floatingTopInset : 0),
     bottom: base.bottom + insets.bottom,
   );
 }

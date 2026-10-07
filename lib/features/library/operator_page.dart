@@ -8,6 +8,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'library_pages.dart';
@@ -61,6 +62,7 @@ class OperatorPage extends ConsumerWidget {
 
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
+      scrollUnder: true,
       actions: [
         LibrarySearchButton(
           scope: ownerScope(e.id),
@@ -68,7 +70,7 @@ class OperatorPage extends ConsumerWidget {
         ),
       ],
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
+        padding: floatingPadding(context, const EdgeInsets.only(bottom: 32)),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),

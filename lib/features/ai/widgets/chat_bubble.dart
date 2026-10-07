@@ -11,6 +11,7 @@ import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/press_feedback.dart';
 import '../evidence_observation.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
@@ -534,9 +535,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
     Widget chip(String key, String text,
             {required bool selected, VoidCallback? onTap,}) =>
-        InkWell(
+        PressFeedback(
+          pressedScale: 0.9,
+          child: InkWell(
           key: ValueKey('cite:$key'),
-          onTap: onTap ?? () => _toggle(key),
+          onTap: withHaptic(onTap ?? () => _toggle(key)),
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -557,6 +560,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 fontSize: 11,
               ),
             ),
+          ),
           ),
         );
 

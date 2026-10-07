@@ -7,6 +7,7 @@ import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/press_feedback.dart';
 import '../../../shared/widgets/smooth_page_route.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
@@ -472,9 +473,12 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
       Tooltip(
         message: tooltip,
         triggerMode: TooltipTriggerMode.longPress,
-        child: InkWell(
+        // The chip's fill hides the ripple: it sinks under the finger instead.
+        child: PressFeedback(
+          pressedScale: 0.9,
+          child: InkWell(
           key: ValueKey(key),
-          onTap: onTap,
+          onTap: withHaptic(onTap),
           borderRadius: BorderRadius.circular(7),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -506,6 +510,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
               ],
             ),
           ),
+        ),
         ),
       );
 }

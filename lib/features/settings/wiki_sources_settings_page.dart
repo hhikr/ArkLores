@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'settings_service.dart';
 
@@ -75,21 +76,16 @@ class _WikiSourcesSettingsPageState
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        title: Text(context.t.settingsWikiSources,
-            style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),),
-        iconTheme: IconThemeData(color: theme.textPrimary),
-        actions: [
-          IconButton(
-            tooltip: context.t.wikiSourcesReset,
-            icon: const Icon(Icons.restore_rounded),
-            onPressed: _resetSites,
-          ),
-        ],
-      ),
+    return FloatingScaffold(
+      title: context.t.settingsWikiSources,
+      scrollUnder: true,
+      actions: [
+        IconButton(
+          tooltip: context.t.wikiSourcesReset,
+          icon: const Icon(Icons.restore_rounded),
+          onPressed: _resetSites,
+        ),
+      ],
       floatingActionButton: FloatingActionButton(
         backgroundColor: theme.accentPrimary,
         foregroundColor: theme.bgPrimary,
@@ -101,7 +97,10 @@ class _WikiSourcesSettingsPageState
               child: CircularProgressIndicator(color: theme.accentPrimary),
             )
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              padding: floatingPadding(
+                context,
+                const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              ),
               itemBuilder: (context, index) {
                 final site = _sites[index];
                 return ThemeAwareCard(

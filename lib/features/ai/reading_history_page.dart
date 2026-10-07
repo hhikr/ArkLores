@@ -8,6 +8,7 @@ import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../library/library_widgets.dart';
 
 /// "Recently read": the stories the user opened, newest first. Tapping one
@@ -36,16 +37,10 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
     final pages = total == 0 ? 1 : (total + historyPageSize - 1) ~/ historyPageSize;
     final page = _page.clamp(0, pages - 1);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        elevation: 0,
-        title: Text(
-          context.t.readingHistoryTitle,
-          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        actions: [
+    return FloatingScaffold(
+      title: context.t.readingHistoryTitle,
+      scrollUnder: true,
+      actions: [
           if (total > 0)
             TextButton(
               key: const ValueKey('reading-history-clear'),
@@ -55,7 +50,6 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
               child: Text(context.t.readingHistoryClear),
             ),
         ],
-      ),
       body: count.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => _empty(context, theme),
@@ -87,7 +81,10 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
                   : null;
               return ListView(
                 key: ValueKey('reading-history-page-$page'),
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: floatingPadding(
+                  context,
+                  const EdgeInsets.symmetric(vertical: 8),
+                ),
                 children: [
                   if (pager != null) ...[
                     KeyedSubtree(

@@ -28,7 +28,16 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
   （`_SizeReporter` 量出输入框高度给列表留底）都悬浮；Wiki 的站点栏是悬浮胶囊，但网页夹在两个悬浮栏之间（网页不能从外部留白，盖住就看不到）。
   左右两边都有内容的顶栏拆成两块（`FloatingSplitBar`：左边的胶囊随内容宽，右边一个圆形按钮，中间露出页面）：资料页 = 标签 | 搜索/新建，Wiki = 站点 | 书签；
   标签与站点都用 `FloatingSegment`（选中的填色）。可滚动的 `TabBar` 会撑满胶囊，不要放进左边那块。
-  推入的二级页面（对话记录、设置子页、资料各级页面）仍是普通的 48 高 AppBar。新加主页面里的列表要用 `floatingPadding`。
+  ④ 同日第三轮（真机反馈）：**全 App 不再有 AppBar**（`test/guards/floating_docks_test.dart` 守卫）。推入的页面一律用 `FloatingScaffold`
+  （`floating_bar.dart`：圆形返回键 + 随标题宽的标题胶囊 + 右侧动作胶囊；`scrollUnder: true` 时正文从顶到底、列表用 `floatingPadding` 留白，
+  否则正文从悬浮栏下方开始——带筛选框的列表页和阅读页用后者，阅读页的引用行锚在视口上部，不能被标题盖住；`backgroundColor` 给阅读页的纯色纸面）。
+  `LibraryScaffold` 也是它。Wiki 页网页铺满（顶到状态栏下、底到屏幕底），用注入的样式给 `html` 上下留出悬浮栏的高度（`_applyDockInsets`），
+  网站自己 `fixed`/`sticky` 在顶部/底部的栏同样下移/上移；阅读模式两栏都隐藏、留白为 0（真机待确认：PRTS 等页面上没有被遮住的内容）。
+  点击反馈：`press_feedback.dart` 的 `PressFeedback`（按下即缩小、松手回弹，拖动即放开）+ `withHaptic`（轻触觉）用在卡片 `ThemeAwareCard`、
+  列表行 `LibraryRow`、对话记录行、`FloatingSegment`、出处小块、输入框按钮（发送键按下缩小、发送/停止图标旋转切换）、底栏；全局水波纹改为
+  正文色 12 %/7 %（原来信号黄 8 %/5 % 在浅底上看不见）；页面切换 `smoothPageTransition`（新页淡入并从 94 % 放大，被盖住的页退到 96 %，
+  主题 `pageTransitionsTheme` 让所有路由一致；以前新页的背景一出现就盖住旧页，点到的东西直接消失）。新加的推入页面用 `FloatingScaffold`，
+  新的可点块用 `PressFeedback` + `withHaptic`。新加主页面里的列表要用 `floatingPadding`。
 
 - **0.11 删除角色扮演、AI 页去掉顶栏（2026-10-07，未发布，不需重算知识库）**：① 开发者决定删除角色扮演的全部前后端：界面
   （`roleplay_tab`、AI 页的标签）、`RoleplayAgent`/通知器/会话存储、它独用的文本式 `ReActLoop`（及 `react_parser`、`loop_memory`、

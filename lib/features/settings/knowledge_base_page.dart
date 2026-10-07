@@ -8,6 +8,7 @@ import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 import 'source_build_card.dart';
@@ -52,19 +53,11 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       }
     });
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        title: Text(
-          context.t.kbTitle,
-          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        iconTheme: IconThemeData(color: theme.textPrimary),
-        elevation: 0,
-      ),
+    return FloatingScaffold(
+      title: context.t.kbTitle,
+      scrollUnder: true,
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: floatingPadding(context, const EdgeInsets.all(16)),
         children: [
           Center(
             child: Icon(

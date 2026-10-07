@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/ai/ai_chat_page.dart';
@@ -252,6 +253,7 @@ class _NavigationItemState extends State<_NavigationItem> {
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         onTap: () {
+          if (!widget.selected) HapticFeedback.selectionClick();
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) widget.onTap();
           });

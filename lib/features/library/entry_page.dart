@@ -14,6 +14,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import '../ai/story_labels_provider.dart' show storyFullLinesProvider;
@@ -86,6 +87,7 @@ class EntryPage extends ConsumerWidget {
 
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
+      scrollUnder: true,
       // An entry's search looks in its collection (the whole library for
       // the codex's free entries).
       actions: [
@@ -97,7 +99,10 @@ class EntryPage extends ConsumerWidget {
         ),
       ],
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: floatingPadding(
+          context,
+          const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        ),
         children: [
           _header(context, theme, e),
           const SizedBox(height: 16),

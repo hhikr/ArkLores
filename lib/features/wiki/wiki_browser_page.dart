@@ -12,6 +12,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/smooth_page_route.dart';
 import '../ai/ai_chat_page.dart';
 import '../ai/wiki_ai_context.dart';
 import '../settings/settings_service.dart';
@@ -423,9 +424,75 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         );
   }
 
+  /// Room the floating docks take over the web page (logical px = CSS px):
+  /// the site pill at the top, the navigation at the bottom. Set in
+  /// [build]; 0 in reader mode, where both docks are hidden.
+  double _dockTop = 0;
+  double _dockBottom = 0;
+
+  /// Records the docks' room and, when it changed, pads every open page.
+  void _syncDockInsets(double top, double bottom) {
+    if (top == _dockTop && bottom == _dockBottom) return;
+    _dockTop = top;
+    _dockBottom = bottom;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final controller in _controllers) {
+        if (controller != null) unawaited(_applyDockInsets(controller));
+      }
+    });
+  }
+
+  /// Pads the page by the docks' room, so its top and its end can be
+  /// scrolled clear of them, and moves the site's own fixed/sticky bars
+  /// (which ignore padding) down/up by the same amount.
+  Future<void> _applyDockInsets(InAppWebViewController controller) async {
+    final js = '''
+(function(t, b) {
+  var id = 'arklores-dock-insets';
+  var style = document.getElementById(id);
+  if (!style) {
+    style = document.createElement('style');
+    style.id = id;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  style.textContent = 'html{padding-top:' + t + 'px !important;' +
+      'padding-bottom:' + b + 'px !important;' +
+      'scroll-padding-top:' + t + 'px;}';
+  function shift() {
+    if (!document.body) return;
+    var all = document.body.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i];
+      var cs = window.getComputedStyle(e);
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      if (e.dataset.arkloresDock === undefined) {
+        if (parseFloat(cs.top) === 0) e.dataset.arkloresDock = 'top';
+        else if (cs.position === 'fixed' && parseFloat(cs.bottom) === 0)
+          e.dataset.arkloresDock = 'bottom';
+        else e.dataset.arkloresDock = '';
+      }
+      if (e.dataset.arkloresDock === 'top')
+        e.style.setProperty('top', t + 'px', 'important');
+      if (e.dataset.arkloresDock === 'bottom')
+        e.style.setProperty('bottom', b + 'px', 'important');
+    }
+  }
+  shift();
+  window.setTimeout(shift, 600);
+  window.setTimeout(shift, 1600);
+})($_dockTop, $_dockBottom);
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // A page that is still loading gets it with its appearance pass.
+    }
+  }
+
   Future<void> _applyNormalWebViewEnhancements(
     InAppWebViewController controller,
   ) async {
+    await _applyDockInsets(controller);
     await _applyPageScale(controller);
     await _applyPrtsOperatorResponsiveLayout(controller);
     await _applyPrtsScenarioFit(controller);
@@ -673,7 +740,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   Future<void> _openBookmarks() async {
     final bookmark = await Navigator.of(context).push<Bookmark>(
-      MaterialPageRoute(
+      smoothPageRoute(
         builder: (_) => const BookmarkPage(),
       ),
     );
@@ -725,7 +792,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     );
 
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+      smoothPageRoute<void>(
         builder: (_) => AiChatPage(initialWikiContext: contextPayload),
       ),
     );
@@ -841,6 +908,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         ) ??
         false;
 
+    _syncDockInsets(
+      _isReaderMode ? 0 : floatingTopInset,
+      _isReaderMode ? 0 : MediaQuery.paddingOf(context).bottom,
+    );
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -848,20 +919,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         bottom: false,
         child: Stack(
           children: [
-            // ── Main content column ────────────────────────────
-            Column(
-              children: [
-                // ── Site tab bar ─────────────────────────────────
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeInOutCubic,
-                  child: _isReaderMode
-                      ? const SizedBox.shrink()
-                      : _buildSiteBar(theme),
-                ),
-
-                // ── WebView area (IndexedStack = no horizontal swipes) ──
-                Expanded(
+            // ── The web page fills the page; the docks float over it and
+            // the page is padded to match (_applyDockInsets). IndexedStack:
+            // no horizontal swipes between sites. ──
+                Positioned.fill(
                   child: IndexedStack(
                     index: _tabController.index,
                     children: List.generate(_wikiSites.length, (i) {
@@ -887,10 +948,13 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     }),
                   ),
                 ),
-                // Clear of the floating navigation.
-                SizedBox(height: MediaQuery.paddingOf(context).bottom),
-              ],
-            ),
+            if (!_isReaderMode)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildSiteBar(theme),
+              ),
 
             if (_isReaderMode)
               ReaderToolbar(

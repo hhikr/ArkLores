@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
 /// Profile settings: one entry for now, how the stories address the reader.
@@ -33,18 +34,11 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        title: Text(
-          context.t.settingsProfile,
-          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        iconTheme: IconThemeData(color: theme.textPrimary),
-      ),
+    return FloatingScaffold(
+      title: context.t.settingsProfile,
+      scrollUnder: true,
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: floatingPadding(context, const EdgeInsets.all(16)),
         children: [
           ThemeAwareCard(
             padding: const EdgeInsets.all(16),

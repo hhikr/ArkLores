@@ -187,6 +187,7 @@ class MyMaterialPage extends ConsumerWidget {
     final m = material.valueOrNull;
     return LibraryScaffold(
       title: m?.title ?? '',
+      scrollUnder: true,
       actions: [
         if (m != null) ...[
           IconButton(
@@ -218,7 +219,10 @@ class MyMaterialPage extends ConsumerWidget {
                   title: context.t.libraryEmpty,
                 ))
           : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+              padding: floatingPadding(
+                context,
+                const EdgeInsets.fromLTRB(16, 12, 16, 40),
+              ),
               children: [
                 Text(
                   m.title,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/theme_provider.dart';
+import 'press_feedback.dart';
 
 /// A card widget that automatically adapts its visual style to the current
 /// theme (ArkTheme or EndfieldTheme).
@@ -38,16 +39,13 @@ class ThemeAwareCard extends ConsumerWidget {
       child: Material(
         color: theme.cardSurface,
         child: InkWell(
-          onTap: onTap,
-          overlayColor: WidgetStatePropertyAll(
-            theme.accentPrimary.withValues(alpha: 0.08),
-          ),
+          onTap: withHaptic(onTap),
           child: Padding(padding: padding, child: child),
         ),
       ),
     );
 
-    return Container(
+    final framed = Container(
       margin: margin,
       decoration: BoxDecoration(boxShadow: theme.cardShadow),
       child: CustomPaint(
@@ -60,6 +58,8 @@ class ThemeAwareCard extends ConsumerWidget {
         child: card,
       ),
     );
+    // A tappable card sinks a little under the finger.
+    return onTap == null ? framed : PressFeedback(child: framed);
   }
 }
 
