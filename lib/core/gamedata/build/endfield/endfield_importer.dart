@@ -47,6 +47,13 @@ class EndfieldImporter {
   String _clean(Object? field) =>
       stripAssetRefs(cleanRichText(tables.text(field))).trim();
 
+  /// The localized `name` of row [key] of a kind table (null when none).
+  String? _groupName(String table, Object? key) {
+    final row = tables.table(table)['${key ?? ''}'];
+    final name = row is Map ? _clean(row['name']) : '';
+    return name.isEmpty ? null : name;
+  }
+
   /// Operators: the archive records (档案) and the voice lines, one entry
   /// each, an entity for the coverage layer, and a `memory` collection that
   /// carries the operator shelf (like Arknights' record sets).
@@ -87,7 +94,6 @@ class EndfieldImporter {
         type: 'operator',
         rawId: id,
         name: title,
-        code: english.isEmpty ? null : english,
         group: '${row['department'] ?? ''}'.trim().isEmpty
             ? null
             : '${row['department']}'.trim(),
@@ -158,6 +164,7 @@ class EndfieldImporter {
         type: 'enemy',
         rawId: id,
         name: title,
+        group: _groupName('DisplayEnemyTypeTable', row['displayType']),
         sourcePath: source,
         category: 'enemy',
         texts: [(section: '介绍', text: text)],
@@ -224,7 +231,8 @@ class EndfieldImporter {
         type: 'item',
         rawId: id,
         name: title,
-        group: '${row['type'] ?? ''}',
+        // The game's own name of the item kind (ItemTypeTable).
+        group: _groupName('ItemTypeTable', row['type']),
         sourcePath: source,
         category: 'world_item',
         texts: [(section: '描述', text: text)],

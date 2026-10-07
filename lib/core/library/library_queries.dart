@@ -27,6 +27,18 @@ const List<String> shelfKinds = [
   'sandbox',
 ];
 
+/// 0.12: Endfield's shelves in order (kinds without the ef/ namespace;
+/// the build writes the same list, endfieldShelfKinds).
+const List<String> endfieldShelfOrder = [
+  'main',
+  'side',
+  'character',
+  'event',
+  'world',
+  'archive',
+  'memory',
+];
+
 /// The shelf of items that belong to no collection (enemies, items, medals,
 /// mails, world-view texts …). Operators have a shelf of their own (their
 /// record sets are the `memory` collections), and everything that belongs
@@ -279,13 +291,17 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
         stories: (r['stories'] as num?)?.toInt() ?? 0,
       ),
   };
+  final known = [
+    ...shelfKinds,
+    for (final kind in endfieldShelfOrder) '$endfieldIdPrefix$kind',
+  ];
   return [
-    for (final kind in shelfKinds)
+    for (final kind in known)
       if (byKind[kind] != null) byKind[kind]!,
     // A kind a later build introduces still gets a shelf, after the known
     // ones (it reads as "其他" until the interface names it).
     for (final kind in byKind.keys.toList()..sort())
-      if (!shelfKinds.contains(kind)) byKind[kind]!,
+      if (!known.contains(kind)) byKind[kind]!,
   ];
 }
 

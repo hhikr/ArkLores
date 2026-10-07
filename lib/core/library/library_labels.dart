@@ -51,6 +51,10 @@ String entryTypeName(String type) => switch (type) {
       'archive_file' => '档案文件',
       'archive_news' => '新闻',
       'archive_avg' => '档案剧情',
+      // 0.12: Endfield (the PRTS archive's terms as the game names them).
+      'weapon' => '武器',
+      'document' => '档案',
+      'investigation' => '调查',
       _ => _familyName(type),
     };
 
@@ -236,4 +240,12 @@ String bindingName(
 
 /// 0.12: names of the Endfield shelves (collection kinds without the `ef/`
 /// namespace) where they differ from the Arknights ones. As in-game terms.
-const Map<String, String> endfieldShelfNames = {};
+const Map<String, String> endfieldShelfNames = {
+  'main': '主线',
+  'side': '支线任务',
+  'character': '干员任务',
+  'event': '活动',
+  'world': '世界',
+  'archive': '档案库',
+  'memory': '干员',
+};
