@@ -6,7 +6,7 @@ All notable changes to ArkLores will be documented in this file.
 
 ### Endfield (in development for 0.12)
 
-- **A second knowledge base for Arknights: Endfield**: operators' archives and voice lines, the in-game archive (documents, papers, records, investigations), enemy, weapon and item descriptions, and the conversations (dialogue, radio, messages) grouped by mission; character missions sit on their operator's page. Built on a computer from the game client and downloaded separately.
+- **A second knowledge base for Arknights: Endfield**: operators' archives, voice lines and profile tags (faction, race, expertise, hobbies); the in-game archive (documents, papers, records, investigations) and the notes read in the world; enemy (with where they are found), weapon and item descriptions; dungeons with their enemies; characters' mails; and the conversations — dialogue with the player's choices, radio, remote calls, ambient talk and messages — grouped by mission in the game's order, missions shelved as in the game's mission panel (main, discovery, side, activity, commissions), each operator's missions and message topics on their page. Built on a computer from the game client (`tools/unpack_endfield.ps1`) and downloaded separately.
 - **The library shows each game's shelves**; search covers both.
 - **Answers look in the right game**: the assistant is told which library a question belongs to, searches both when it cannot tell, and marks steps and sources from Endfield.
 
