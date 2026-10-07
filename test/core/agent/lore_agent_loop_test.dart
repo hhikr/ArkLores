@@ -6,7 +6,9 @@ import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
+import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/gamedata/readonly_sql.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -266,6 +268,29 @@ void main() {
     tearDown(() async {
       await store.close();
       await deleteTempDir(dir);
+    });
+
+    test('0.12: the two-game section is sent only when Endfield is installed',
+        () async {
+      Future<String> systemOf(MultiGameRetrieval both) async {
+        final client = _ScriptedClient([_answer('没有查到。\n[COVERAGE: gaps]')]);
+        await LoreAgentLoop(client: client, store: both, review: false)
+            .run(query: '问题')
+            .toList();
+        return client.requests.first.first.content;
+      }
+
+      final efPath = p.join(dir.path, 'ef.db');
+      final missing = MultiGameRetrieval({
+        Game.arknights: store,
+        Game.endfield: GameDataKnowledgeStore(dbPath: efPath, game: Game.endfield),
+      });
+      expect(await systemOf(missing), isNot(contains('两个游戏')));
+      await _createFixture(efPath);
+      final ef = GameDataKnowledgeStore(dbPath: efPath, game: Game.endfield);
+      final both = MultiGameRetrieval({Game.arknights: store, Game.endfield: ef});
+      expect(await systemOf(both), contains('两个游戏'));
+      await ef.close();
     });
 
     test('searches, reads, answers with checked citations; requests only '

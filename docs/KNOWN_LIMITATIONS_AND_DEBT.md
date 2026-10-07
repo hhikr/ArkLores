@@ -44,6 +44,18 @@
 | 长文件 | `wiki_browser_page.dart`、`lore_agent_loop.dart`、`arknights_importer.dart`、`chat_bubble.dart`、`story_reader_page.dart` 各是一个整体，未拆 |
 | 签名 keystore 只有维护者一份备份 | 丢失后无法再发布可覆盖安装的版本 |
 
-## 5. 范围
+## 5. 终末地知识库（0.12）
 
-- **终末地没有知识库**（0.12 的目标）：App 有终末地主题与 Wiki 浏览，但 AI 没有终末地证据。建库经验与清单见 `KNOWLEDGE_BASE_LESSONS.md` §8。
+| 问题 | 现状 |
+| --- | --- |
+| 只能在电脑上从游戏客户端重建 | 没有可增量跟随的社区仓库；App 里没有终末地的“检查更新/构建”，只能下载发布的资产（`tools/unpack_endfield.ps1`） |
+| 任务内对话的先后按对话 id | 游戏里的实际顺序在 DialogTree/Timeline 里（kit 的剧情重建能恢复一部分），这里按 id 编号排序；选项按 `DialogOptionTable` 的组号插在行号空位上，分支不展开 |
+| 主角台词只收女性版本 | `{F}…{M}…` 两种写法只留一种（kit 默认）；男性版本不在库里 |
+| 少数任务没有定义 | 约二十个任务在两层客户端里都没有 `MissionRuntimeAsset`，按分类编号命名（“支线任务 3”） |
+| 没有剧情向量 | 嵌入要花钱，需开发者同意后跑 `build_story_embeddings.dart`；在此之前终末地的 `find` 只做关键词检索 |
+| 资产尚未发布 | `release_gamedata.env` 指向将要创建的 v0.12.0 资产；发版前 App 里点终末地的“下载”会 404 |
+| 势力表为空 | 当前客户端热更新层里的 `BlocDataTable` 是空的，势力名暂无实体 |
+
+## 6. 范围
+
+- 明日方舟与终末地是两个独立的库；跨游戏只在检索面合并（`MultiGameRetrieval`），不建跨游戏的关系。
