@@ -66,6 +66,13 @@ void main() {
       );
     });
 
+    test('markup goes, names between angle brackets stay', () {
+      expect(cleanRichText('<@lv.rem>提示</>'), '提示');
+      expect(cleanRichText('<color=#fff>红字</color>'), '红字');
+      expect(cleanRichText('有<热泵通道>和<<“甲”，乙>>。<newsimg/>'), '有热泵通道和“甲”，乙。');
+      expect(cleanRichText('x<5 且 y>3'), 'x<5 且 y>3');
+    });
+
     test('splitText keeps lines whole', () {
       final pieces = splitText('${'甲' * 10}\n${'乙' * 10}', max: 12);
       expect(pieces, ['甲' * 10, '乙' * 10]);
@@ -98,6 +105,8 @@ void main() {
           'description': '一名虚构的干员。',
           'displayNumber': 'FX01',
           'profession': 'PIONEER',
+          'potentialItemId': 'p_char_fx_1',
+          'displayTokenDict': {'token_fx_1': true},
         },
         'token_fx_1': {
           'name': '虚构召唤物',
@@ -209,8 +218,111 @@ void main() {
                 't1': {'desc': '通关关卡并获得奖励的任务说明，写得也很长，但属于玩法。'},
               },
             },
+            // What the re-run says is said of the activity it re-runs.
+            'act_fxre': {
+              'newsInfoList': {
+                'news_9': {
+                  'newsText': '复刻活动期间发布的另一条新闻，同样写得足够长，用来测试复刻的归属。',
+                },
+              },
+            },
           },
         },
+        // An item only the activity's tables name.
+        'stageRewardsData': {
+          'act_fx': {'rewards': ['fx_mentioned_item']},
+        },
+      });
+      await writeJson('excel/item_table.json', {
+        'items': {
+          'p_char_fx_1': {
+            'itemId': 'p_char_fx_1',
+            'name': '虚构干员的信物',
+            'description': '一枚信物的设定描述。',
+            'itemType': 'MATERIAL',
+          },
+          // The id names the activity.
+          'act_fx_token_a': {
+            'itemId': 'act_fx_token_a',
+            'name': '虚构代币',
+            'description': '活动代币的设定描述。',
+            'itemType': 'ACTIVITY_ITEM',
+          },
+          // The stage it drops in.
+          'fx_drop_item': {
+            'itemId': 'fx_drop_item',
+            'name': '掉落物',
+            'description': '关卡里掉落的活动道具。',
+            'itemType': 'ACTIVITY_ITEM',
+            'stageDropList': [
+              {'stageId': 'fx_01', 'occPer': 'ALWAYS'},
+            ],
+          },
+          'fx_mentioned_item': {
+            'itemId': 'fx_mentioned_item',
+            'name': '被提到的道具',
+            'description': '只在活动表里出现的道具。',
+            'itemType': 'ACTIVITY_ITEM',
+          },
+          // The same coin listed once per banner.
+          'fx_coin_1': {
+            'itemId': 'fx_coin_1',
+            'name': '虚构契约',
+            'description': '同一枚货币的设定描述。',
+            'itemType': 'LMTGS_COIN',
+          },
+          'fx_coin_22': {
+            'itemId': 'fx_coin_22',
+            'name': '虚构契约',
+            'description': '同一枚货币的设定描述。',
+            'itemType': 'LMTGS_COIN',
+          },
+          // Same name, other words: another item.
+          'fx_coin_3': {
+            'itemId': 'fx_coin_3',
+            'name': '虚构契约',
+            'description': '另一段不同的设定描述。',
+            'itemType': 'LMTGS_COIN',
+          },
+        },
+      });
+      await writeJson('excel/medal_table.json', {
+        'medalTypeData': {
+          'activityMedal': {'medalName': '活动奖章'},
+          'storyMedal': {'medalName': '记录奖章'},
+          'stageMedal': {'medalName': '章节奖章'},
+        },
+        'medalList': [
+          {
+            'medalId': 'medal_activity_act_fx_01',
+            'medalName': '虚构活动奖章',
+            'medalType': 'activityMedal',
+            'description': '您在虚构活动中完成了考核。',
+          },
+          // The activity id lacks its `act`; the condition names a skin.
+          {
+            'medalId': 'medal_activity_1fxhub_02',
+            'medalName': '虚构展奖章',
+            'medalType': 'activityMedal',
+            'unlockParam': ['1', 'char_fx_1@fx#1', '1792699199'],
+            'description': '您获得了虚构展的时装。',
+          },
+          // Only the condition names the stage.
+          {
+            'medalId': 'medal_stage_fx_01',
+            'medalName': '虚构章节奖章',
+            'medalType': 'stageMedal',
+            'unlockParam': ['2', 'main_00-01', '1'],
+            'description': '您通关了虚构的一关。',
+          },
+          {
+            'medalId': 'medal_story_fx_1',
+            'medalName': '虚构记录奖章',
+            'medalType': 'storyMedal',
+            'unlockParam': ['char_fx_1', 'story_fx_set_1'],
+            'description': '您解锁了干员密录。',
+          },
+        ],
       });
       await writeJson('excel/sandbox_perm_table.json', {
         'basicInfo': {
@@ -449,7 +561,27 @@ void main() {
               'description': '第一段设定文字。\n第二段设定文字。',
               'content': '第二段设定文字。\n第三段设定文字。',
               'skinGroupName': '虚构系列',
+              'skinGroupId': 'FXG1',
             },
+          },
+          'char_fx_1@fx#1': {
+            'skinId': 'char_fx_1@fx#1',
+            'charId': 'char_fx_1',
+            'displaySkin': {
+              'skinName': '虚构联动时装',
+              'description': '联动时装的设定文字。',
+              'skinGroupId': 'FXG1',
+            },
+          },
+        },
+        'brandList': {
+          'fxbrand': {
+            'brandId': 'fxbrand',
+            'brandName': '虚构品牌',
+            'description': '品牌的设定文字。',
+            'groupList': [
+              {'skinGroupId': 'FXG1', 'publishTime': 0},
+            ],
           },
         },
       });
@@ -470,7 +602,7 @@ void main() {
             'zoneId': 'act_fx_zone1',
             'code': 'FX-1',
             'name': '虚构活动关',
-            'description': '活动关卡的描述。',
+            'description': '活动关卡的描述。\\n<@rolv.rem>场地内有能阻挡敌人的<热泵通道>和<蓝色路障>。</>',
             'levelId': 'Activities/act_fx/level_fx_01',
           },
           'weekly_stage': {
@@ -526,6 +658,14 @@ void main() {
       });
       await writeJson('levels/activities/act_fx/level_fx_01.json', {
         'enemyDbRefs': <Object?>[],
+        'predefines': {
+          'tokenInsts': [
+            {
+              'inst': {'characterKey': 'trap_fx_1'},
+            },
+          ],
+          'characterInsts': <Object?>[],
+        },
         'waves': [
           {
             'fragments': [
@@ -848,6 +988,87 @@ void main() {
     Future<List<Map<String, Object?>>> q(String sql, [List<Object?>? a]) =>
         db.rawQuery(sql, a);
 
+    test('small entries are bound to what they are about', () async {
+      Future<String?> owner(String id) async => (await q(
+            'SELECT collection_id AS c FROM entries WHERE id = ?',
+            [id],
+          ))
+              .single['c'] as String?;
+      Future<bool> linked(String src, String rel, String dst) async =>
+          (await q(
+            'SELECT 1 FROM entry_links WHERE src = ? AND relation = ? '
+            'AND dst = ?',
+            [src, rel, dst],
+          ))
+              .isNotEmpty;
+
+      // Medals: the id, else what the condition names.
+      expect(await owner('medal:medal_activity_act_fx_01'), 'act_fx');
+      expect(await owner('medal:medal_activity_1fxhub_02'), 'act1fxhub');
+      expect(await owner('medal:medal_stage_fx_01'), 'main_0');
+      expect(
+        await linked(
+          'medal:medal_activity_1fxhub_02',
+          'features',
+          'skin:char_fx_1@fx#1',
+        ),
+        isTrue,
+      );
+      expect(
+        await linked('medal:medal_story_fx_1', 'features', 'operator:char_fx_1'),
+        isTrue,
+      );
+
+      // Items: the id, the stage it drops in, the activity that names it.
+      expect(await owner('item:act_fx_token_a'), 'act_fx');
+      expect(await owner('item:fx_drop_item'), 'act_fx');
+      expect(await owner('item:fx_mentioned_item'), 'act_fx');
+      expect(
+        await linked('item:p_char_fx_1', 'belongs_to', 'operator:char_fx_1'),
+        isTrue,
+      );
+      // The same coin listed twice is one; another text is another item.
+      final coins = await q(
+        "SELECT id FROM entries WHERE type = 'item' AND name = '虚构契约' "
+        'ORDER BY id',
+      );
+      expect(coins.map((c) => c['id']), ['item:fx_coin_1', 'item:fx_coin_3']);
+
+      // A summon names its operator; a level's trap names the stage.
+      expect(
+        await linked('operator:token_fx_1', 'summoned_by', 'operator:char_fx_1'),
+        isTrue,
+      );
+      expect(
+        await linked('operator:trap_fx_1', 'appears_in', 'stage:fx_01'),
+        isTrue,
+      );
+
+      // A skin and the series that released it.
+      expect(
+        await linked('skin:skin_fx', 'belongs_to', 'skin_brand:fxbrand'),
+        isTrue,
+      );
+      expect(
+        await linked('skin:char_fx_1@fx#1', 'belongs_to', 'skin_brand:fxbrand'),
+        isTrue,
+      );
+
+      // What a re-run says is said of the activity it re-runs.
+      expect(await owner('activity_text:act_fxre/newsInfoList'), 'act_fx');
+    });
+
+    test('names between angle brackets stay in descriptions', () async {
+      final stage = (await q(
+        'SELECT r.content AS c FROM entries e JOIN normalized_records r '
+        "ON r.entry_id = e.id WHERE e.id = 'stage:fx_01'",
+      ))
+          .map((r) => '${r['c']}')
+          .join('\n');
+      expect(stage, contains('场地内有能阻挡敌人的热泵通道和蓝色路障'));
+      expect(stage, isNot(contains('<')));
+    });
+
     test('stories get kinds, entries and an owner', () async {
       final lines = await q(
         'SELECT kind, content FROM story_lines '
@@ -1168,7 +1389,7 @@ void main() {
     test('a paragraph the skin fields share is said once', () async {
       final text = (await q(
         'SELECT group_concat(r.content, char(10)) AS t FROM entries e JOIN '
-        "normalized_records r ON r.entry_id = e.id WHERE e.type = 'skin'",
+        "normalized_records r ON r.entry_id = e.id WHERE e.id = 'skin:skin_fx'",
       ))
           .single['t'];
       expect(text, '第一段设定文字。\n第二段设定文字。\n第三段设定文字。');
@@ -1215,6 +1436,8 @@ void main() {
         ('enemy:enemy_fx_a', 'stage:main_00-01'),
         ('enemy:enemy_fx_b', 'roguelike_stage:rogue_fx/st_solo'),
         ('enemy:enemy_fx_b', 'stage:fx_01'),
+        // The level also places a trap.
+        ('operator:trap_fx_1', 'stage:fx_01'),
       ]);
       final inActivity = await q(
         "SELECT enemy_id FROM collection_enemies WHERE collection_id = 'act_fx' "
@@ -1223,6 +1446,9 @@ void main() {
       expect(inActivity.map((r) => r['enemy_id']), [
         'enemy:enemy_fx_a',
         'enemy:enemy_fx_b',
+        // Whatever a level places appears in its collection; the library
+        // tells the types apart.
+        'operator:trap_fx_1',
       ]);
     });
 
@@ -1244,7 +1470,8 @@ void main() {
       final owner = await q(
         "SELECT collection_id FROM entries WHERE type = 'activity_text'",
       );
-      expect(owner.single['collection_id'], 'act_fx');
+      // The re-run's text is the activity's too.
+      expect(owner.map((r) => r['collection_id']).toSet(), {'act_fx'});
     });
 
     test('roguelike items keep flavor text and drop effects', () async {

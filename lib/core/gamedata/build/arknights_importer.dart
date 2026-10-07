@@ -272,6 +272,7 @@ class ArknightsImporter {
           aliases: aliases,
           sourcePath: sourcePath,
         );
+        await _linkCharacterRefs(txn, charId, data, sourcePath);
 
         final basicProfile = [
           if ('${data['description'] ?? ''}'.trim().isNotEmpty)
@@ -369,6 +370,53 @@ class ArknightsImporter {
         }
       }
     });
+  }
+
+  /// What a character's own row names: the summons and devices it deploys
+  /// (`displayTokenDict`, `overrideTokenKey` of its skills: `summoned_by`, from
+  /// the summon to the character) and its potential items (the token of the
+  /// operator, the folder an activity gives it: `belongs_to`). Ends that are
+  /// not entries are dropped when the entry layer is derived.
+  Future<void> _linkCharacterRefs(
+    Transaction txn,
+    String charId,
+    Map<String, dynamic> data,
+    String sourcePath,
+  ) async {
+    final profession = '${data['profession'] ?? ''}'.toUpperCase();
+    if (profession != 'TOKEN' && profession != 'TRAP') {
+      final summons = <String>{
+        if (data['displayTokenDict'] is Map)
+          for (final k in (data['displayTokenDict'] as Map).keys) '$k',
+        for (final s in (data['skills'] as List? ?? const []))
+          if (s is Map && '${s['overrideTokenKey'] ?? ''}'.isNotEmpty)
+            '${s['overrideTokenKey']}',
+      };
+      for (final token in summons) {
+        await insertLink(
+          txn,
+          src: 'operator:$token',
+          relation: 'summoned_by',
+          dst: 'operator:$charId',
+          sourcePath: sourcePath,
+        );
+      }
+    }
+    for (final key in const [
+      'potentialItemId',
+      'activityPotentialItemId',
+      'classicPotentialItemId',
+    ]) {
+      final item = '${data[key] ?? ''}'.trim();
+      if (item.isEmpty || item == 'null') continue;
+      await insertLink(
+        txn,
+        src: 'item:$item',
+        relation: 'belongs_to',
+        dst: 'operator:$charId',
+        sourcePath: sourcePath,
+      );
+    }
   }
 
   Future<void> _importCharacterVoices() async {

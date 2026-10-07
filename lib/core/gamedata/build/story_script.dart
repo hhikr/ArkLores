@@ -14,6 +14,8 @@
 /// tell story from system (tutorial) text.
 library;
 
+import 'text_harvest.dart' show stripMarkup;
+
 /// What a story line is. Stored in `story_lines.kind`.
 enum StoryLineKind {
   /// A named character speaks (or a speaker-less dialogue box).
@@ -63,8 +65,7 @@ class StoryScriptLine {
 
 /// Removes rich-text tags and collapses whitespace.
 String cleanStoryText(String value) {
-  return value
-      .replaceAll(RegExp(r'<[^>]+>'), '')
+  return stripMarkup(value)
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 }

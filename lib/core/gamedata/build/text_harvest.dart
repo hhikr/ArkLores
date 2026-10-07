@@ -15,7 +15,13 @@
 /// Everything is deterministic: the same source yields the same text.
 library;
 
-final RegExp _tag = RegExp(r'<[^>]+>');
+/// Rich-text markup: `<@x.y>`, `<$x.y>`, `</…>`, `<color=…>`, and the other
+/// ASCII-only tags (`<newsimg/>`).
+final RegExp _tag = RegExp(r'<[@$/][^>]*>|<[A-Za-z][^>一-鿿]*>');
+
+/// A name the game writes between angle brackets (`<热泵通道>`): it is text,
+/// only the brackets go.
+final RegExp _bracketedName = RegExp(r'<(?![\d\s=])([^<>\n]*[一-鿿][^<>\n]*)>');
 final RegExp _cjk = RegExp(r'[一-鿿]');
 final RegExp _mechanicalWords = RegExp(
   r'(攻击力|攻击速度|生命上限|最大生命|生命值|防御力|法术抗性|每秒|部署费用|技力|冷却|阻挡数|'
@@ -26,11 +32,23 @@ final RegExp _mechanicalWords = RegExp(
 /// Whether [text] has any Chinese character.
 bool hasChinese(String text) => _cjk.hasMatch(text);
 
+/// [value] without its rich-text markup. Only markup goes: a name between
+/// angle brackets stays, without the brackets.
+String stripMarkup(String value) {
+  var text = value.replaceAll(_tag, '');
+  // A name can be bracketed twice (`<<名字>>`).
+  for (var again = true; again;) {
+    final next = text.replaceAllMapped(_bracketedName, (m) => m.group(1)!);
+    again = next != text;
+    text = next;
+  }
+  return text;
+}
+
 /// Removes rich-text tags, turns literal `\n` into a newline and collapses
 /// blanks. The text of a game table is stored with `<@tag>` markup.
 String cleanRichText(String value) {
-  return value
-      .replaceAll(_tag, '')
+  return stripMarkup(value)
       .replaceAll(r'\n', '\n')
       .replaceAll(RegExp(r'[ \t　]+'), ' ')
       .replaceAll(RegExp(r'\n[ \t]+'), '\n')

@@ -16,6 +16,20 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 图鉴小条目的关联（2026-10-07，未发布，需重算知识库）**：规则都在建库代码里（全量/增量/`rederive_gamedata.dart` 同一套），不改库本身。
+  ① 奖章归属（`_medalOwner`）：`medal_activity_<活动>_n`（活动 id 可缺 `act`）→ 活动；否则看通关条件里点名的东西（集合 id、关卡 id → 它的区域 → 集合、区域 id）；
+  记录奖章的条件 `[干员, story_<干员>_set_n]` 就是密录集合 id；条件里的 `char_…` → `features` 链接到干员，`char_…@…#n` → 皮肤。②物品归属：id 前缀、`main16_…`→`main_16`、
+  `iconId`；活动类（`ACTIVITY*`、`ET_STAGE`）再看 `stageDropList` 的关卡所在集合（唯一时）、最后看唯一一个在活动表（各分区按活动 id）里点名它的活动
+  （`_activityMentions`）。③ 复刻：`ctx.alias`（复刻 id → 原活动：`retro_table.linkedActId`，其余按“名字·复刻”找同名活动），复刻的活动文本、奖章、掉落并入原活动（`ctx.home`、`collectionForId`
+  认复刻 id）；复刻的关卡仍不单独出条目。④ 同名且同文字、同集合的物品只留一条（`rebuildDerived` 的 `item_twin` 现在也管 `item`：寻访数据契约 26 条→1、ID 信息更新卡 23→1…）。
+  ⑤ 装置/召唤物：关卡文件 `predefines`/`hardPredefines` 的 `characterInsts`/`tokenInsts` 里的 `trap_…`/`token_…` → `appears_in` 关卡；集合页的敌人菜单里也列装置、召唤物
+  （`stageBoundTypes`，视图 `collection_enemies` 不变，按条目类型筛）；召唤物 → 干员用新关系 `summoned_by`（角色表 `displayTokenDict`/技能 `overrideTokenKey`，
+  `arknights_importer._linkCharacterRefs`），干员页列出召唤物；干员信物（`p_char_…`）及活动给的文件夹用角色表的 `potentialItemId` 等 → `belongs_to` 干员（从图鉴物品列表移到干员页）。
+  ⑥ 皮肤 → 皮肤系列：系列（`brandList`）的 `groupList[].skinGroupId` 对皮肤的 `skinGroupId`，`belongs_to`；条目页最多 400 条绑定（系列有上百个皮肤）。
+  ⑦ 描述里的 `<热泵通道>`（尖括号括起的名字）以前被当成标签删了，句子变成“场地内有……的和”：`stripMarkup` 只删真正的标签（`<@x>`、`<$x>`、`</…>`、`<color=…>`、纯 ASCII 标签），
+  名字只去尖括号；剧本里的 `<清香花束>` 同理（`cleanStoryText` 用同一函数，rederive 会重解析变化的故事）。⑧ 自拟名字按 prts.wiki 改：护符→标志物（多索雷斯假日“标志物一览”）、
+  表情→表情套组、勋章→奖章、背景→首页场景；没有依据的物品分组名（理智与补给、凭证与券、补给包、经验、剧情道具、收藏品）去掉。条目页头的集合名可点，进集合页。
+
 - **0.11 关卡内对话、剧本解析、生息演算（2026-10-07，未发布，需重算知识库）**：① 剧本解析（`story_script.dart`）：命令可以跨行
   （行尾 `\` 续行，`[Tutorial(…,\` 的属性在下面几行，文字在 `)] \` 之后的行），以前逐行读，属性行成了“旁白”（全库 1471 行、319 个故事，教程/训练/引导全中），
   现在 `storyLogicalLines` 先合并续行，连续的命令（`[A(…)] [B(…)]文字`）文字归最后一个；给已有的库补算：`rederive_gamedata.dart` 现在先

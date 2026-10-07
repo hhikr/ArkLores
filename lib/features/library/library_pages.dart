@@ -958,13 +958,32 @@ class EntryPage extends ConsumerWidget {
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // The collection the entry belongs to opens its page.
           if (e.collectionName != null)
-            Text(
-              e.collectionName!,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-                letterSpacing: 0.5,
+            InkWell(
+              key: const ValueKey('entry-collection'),
+              onTap: e.collectionId == null
+                  ? null
+                  : () => openCollection(context, e.collectionId!),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: e.collectionName!),
+                      if (e.collectionId != null)
+                        const WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Icon(Icons.chevron_right_rounded, size: 16),
+                        ),
+                    ],
+                  ),
+                  style: theme.bodyFont.copyWith(
+                    color: theme.accentText,
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
             ),
           const SizedBox(height: 2),

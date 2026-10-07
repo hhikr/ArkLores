@@ -340,7 +340,7 @@ Future<List<LibraryEntry>> entriesOwnedBy(
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
     'e.collection_id, e.entity_id FROM entry_links l '
     'JOIN entries e ON e.id = l.src '
-    "WHERE l.dst = ? AND l.relation = 'belongs_to' "
+    "WHERE l.dst = ? AND l.relation IN ('belongs_to', 'summoned_by') "
     'ORDER BY e.type, e.sort_key, e.code, e.name, e.id',
     [ownerEntryId],
   );
@@ -377,15 +377,26 @@ Future<List<({String type, int count})>> collectionTypes(
     for (final r in rows) (type: '${r['type']}', count: (r['n'] as num).toInt()),
   ];
   if (await _hasTable(db, 'entry_links')) {
-    final enemies = await db.rawQuery(
-      'SELECT COUNT(*) AS n FROM collection_enemies WHERE collection_id = ?',
+    final placed = await db.rawQuery(
+      'SELECT e.type AS type, COUNT(*) AS n FROM collection_enemies ce '
+      'JOIN entries e ON e.id = ce.enemy_id WHERE ce.collection_id = ? '
+      'GROUP BY e.type',
       [collectionId],
     );
-    final n = (enemies.first['n'] as num).toInt();
-    if (n > 0) out.add((type: 'enemy', count: n));
+    for (final r in placed) {
+      final n = (r['n'] as num).toInt();
+      if (n > 0 && stageBoundTypes.contains('${r['type']}')) {
+        out.add((type: '${r['type']}', count: n));
+      }
+    }
   }
   return out;
 }
+
+/// The types whose place in a collection is the stages they appear in
+/// (`appears_in`), not a collection of their own: enemies, and the traps and
+/// summons a level places.
+const Set<String> stageBoundTypes = {'enemy', 'trap', 'token'};
 
 /// The stories of a collection in reading order, with the official synopsis
 /// when the knowledge base has the story catalog.
@@ -516,7 +527,7 @@ Future<List<LibraryEntry>> entriesOfType(
   final String where;
   final String from;
   final List<Object?> head;
-  if (type == 'enemy' && collectionId != null) {
+  if (stageBoundTypes.contains(type) && collectionId != null) {
     from = 'entries e JOIN collection_enemies ce ON ce.enemy_id = e.id';
     where = 'ce.collection_id = ? AND e.type = ?';
     head = [collectionId, type];
@@ -557,7 +568,7 @@ Future<List<({String? group, int count})>> entryGroups(
   String type, {
   String? collectionId,
 }) async {
-  final enemies = type == 'enemy' && collectionId != null;
+  final enemies = stageBoundTypes.contains(type) && collectionId != null;
   final rows = await db.rawQuery(
     'SELECT NULLIF(e.group_name, \'\') AS g, COUNT(*) AS n, '
     'MIN(e.sort_key) AS first FROM '
@@ -635,7 +646,7 @@ Future<List<EntryTextBlock>> entryTexts(
 Future<List<EntryBinding>> entryBindings(
   DatabaseExecutor db,
   String entryId, {
-  int limit = 80,
+  int limit = 400,
 }) async {
   if (!await _hasTable(db, 'entry_links')) return const [];
   final out = <EntryBinding>[];

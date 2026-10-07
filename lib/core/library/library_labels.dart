@@ -21,7 +21,7 @@ String entryTypeName(String type) => switch (type) {
       'skin_brand' => '皮肤系列',
       'module' => '模组',
       'medal' => '奖章',
-      'charm' => '护符',
+      'charm' => '标志物',
       'mail' => '邮件',
       'worldview' => '世界观',
       'home_theme' => '界面主题',
@@ -154,7 +154,7 @@ String? groupLabel(String type, String? raw) {
         'MAINLINE_ACTIVITY' => '主线活动',
         'MAINLINE_RETRO' => '主线复刻',
         'ACTIVITY' => '活动',
-        'SIDESTORY' => '支线',
+        'SIDESTORY' => 'SideStory',
         'BRANCHLINE' => '插曲',
         _ => null,
       };
@@ -165,19 +165,15 @@ String? groupLabel(String type, String? raw) {
         _ => null,
       };
     case 'item':
-      if (has('MATERIAL')) return '材料';
+      // Only the names the wiki's item pages use (材料, 活动道具, 货币,
+      // 表情套组, 奖章); a kind nobody named has no heading.
+      if (key == 'MATERIAL') return '材料';
       if (key.startsWith('ACTIVITY')) return '活动道具';
-      if (key.startsWith('AP_')) return '理智与补给';
-      if (has('TKT') || has('VOUCHER')) return '凭证与券';
       if (has('COIN') || has('SHD') || key == 'GOLD' || has('DIAMOND')) {
         return '货币';
       }
-      if (has('PACK') || has('GIFT')) return '补给包';
-      if (has('EXP')) return '经验';
-      if (key == 'PLOT_ITEM') return '剧情道具';
-      if (key == 'MEDAL') return '勋章';
-      if (has('EMOTICON')) return '表情';
-      if (key == 'UNI_COLLECTION') return '收藏品';
+      if (key == 'MEDAL') return '奖章';
+      if (has('EMOTICON')) return '表情套组';
       return null;
     case 'sandbox_item':
       // Named by the table when built (its item types); the codes are not.
@@ -210,6 +206,8 @@ String bindingName(
       ('leads_to', false) => '来自',
       ('features', true) => '涉及',
       ('features', false) => '出现于',
+      ('summoned_by', true) => '召唤者',
+      ('summoned_by', false) => '召唤物',
       ('reads_story', true) => '阅读剧情',
       ('reads_story', false) => '收录于',
       (_, true) => relation,

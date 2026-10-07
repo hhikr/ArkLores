@@ -121,6 +121,12 @@ Future<Database> buildFixture() async {
     await db.insert('entry_links', {'src': owned, 'relation': 'belongs_to', 'dst': 'operator:char_x'});
   }
 
+  await entry('operator:trap_t1', 'trap', '陷阱甲', record: 'r_t1');
+  await record('r_t1', 'operator:trap_t1', '陷阱甲', '一个装置。');
+  await entry('operator:token_t1', 'token', '召唤物甲', record: 'r_k1');
+  await record('r_k1', 'operator:token_t1', '召唤物甲', '一个召唤物。');
+  await db.insert('entry_links', {'src': 'operator:trap_t1', 'relation': 'appears_in', 'dst': 'stage:st1'});
+  await db.insert('entry_links', {'src': 'operator:token_t1', 'relation': 'summoned_by', 'dst': 'operator:char_x'});
   await db.insert('entry_links', {'src': 'enemy:e1', 'relation': 'appears_in', 'dst': 'stage:st1'});
   await db.insert('entry_links', {'src': 'stage:st1', 'relation': 'belongs_to', 'dst': 'activity:act_empty'});
 
@@ -157,6 +163,9 @@ void main() {
     expect({for (final t in types) t.type: t.count}, {
       'enemy': 2,
       'item': 1,
+      // Summons stay in the codex though they name their operator.
+      'token': 1,
+      'trap': 1,
     });
   });
 
@@ -170,7 +179,8 @@ void main() {
       'module:m1',
       'operator_stage:p1',
       'skin:s1',
-    ]);
+      // The operator's summons are on its page too.
+      'operator:token_t1',    ]);
     expect(await entriesOwnedBy(db, 'operator:nobody'), isEmpty);
     expect(entryTypeName('operator_stage'), '悖论模拟');
   });
@@ -194,7 +204,12 @@ void main() {
   test('a collection lists readable types and the enemies of its stages',
       () async {
     final types = await collectionTypes(db, 'act_new');
-    expect({for (final t in types) t.type: t.count}, {'stage': 1, 'enemy': 1});
+    // A level's traps are listed with its enemies.
+    expect({for (final t in types) t.type: t.count}, {'stage': 1, 'enemy': 1, 'trap': 1});
+    expect(
+        (await entriesOfType(db, 'trap', collectionId: 'act_new')).map((e) => e.name),
+        ['陷阱甲'],
+      );
     final enemies =
         await entriesOfType(db, 'enemy', collectionId: 'act_new');
     expect(enemies.map((e) => e.name), ['哨兵']);
@@ -243,7 +258,11 @@ void main() {
     final stage = await entryBindings(db, 'stage:st1');
     expect(
       {for (final b in stage) '${b.relation}/${b.outgoing}/${b.entry.id}'},
-      {'appears_in/false/enemy:e1', 'belongs_to/true/activity:act_empty'},
+      {
+        'appears_in/false/enemy:e1',
+        'appears_in/false/operator:trap_t1',
+        'belongs_to/true/activity:act_empty',
+      },
     );
     expect(bindingName('appears_in', outgoing: false), '出场');
     expect(bindingName('unknown', outgoing: true), 'unknown');
@@ -290,7 +309,11 @@ void main() {
     expect(groupLabel('roguelike_item', 'copper_buff'), isNull);
     expect(groupLabel('roguelike_buff', 'variationData'), isNull);
     expect(groupLabel('roguelike_item', 'brand_new_code'), isNull);
-    expect(groupLabel('item', 'VOUCHER_PICK'), '凭证与券');
+    expect(groupLabel('item', 'VOUCHER_PICK'), isNull);
+    expect(groupLabel('item', 'MATERIAL'), '材料');
+    expect(groupLabel('item', 'MATERIAL_ISSUE_VOUCHER'), isNull);
+    expect(groupLabel('item', 'EMOTICON_SET'), '表情套组');
+    expect(entryTypeName('charm'), '标志物');
     expect(groupLabel('stage', '第九章 · 某章'), '第九章 · 某章');
     expect(groupLabel('skin', 'WWF'), 'WWF');
     expect(groupLabel('item', null), isNull);

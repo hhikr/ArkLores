@@ -172,8 +172,8 @@ const Map<String, String> _typeLabels = {
   'item': '物品',
   'skin': '皮肤',
   'skin_brand': '皮肤系列',
-  'medal': '勋章',
-  'charm': '护符',
+  'medal': '奖章',
+  'charm': '标志物',
   'module': '干员模组',
   'operator_stage': '悖论模拟关卡',
   'enemy': '敌人',
@@ -259,6 +259,13 @@ class _Context {
   /// of the library (their rows are removed in [EntryImporter.rebuildDerived]).
   final Set<String> dropped = {};
 
+  /// A re-run's id → the id of the activity it re-runs. What the re-run's
+  /// tables say (texts, drops, medals) is said of that activity.
+  final Map<String, String> alias = {};
+
+  /// Stage id → the zone it is in (stages of every table that has them).
+  final Map<String, String> stageZone = {};
+
   /// Every known collection: id → (kind, name, start, sort).
   final Map<String, ({String kind, String name, int? start, int sort})>
       collections = {};
@@ -273,16 +280,20 @@ class _Context {
     _byLength = null;
   }
 
+  /// [id], or the activity it is a re-run of.
+  String? home(String? id) => id == null ? null : (alias[id] ?? id);
+
   /// The collection whose id is a prefix of [rawId] (followed by `_`), after
-  /// dropping leading tokens (`item_sandbox_1_x` → `sandbox_1_x`).
+  /// dropping leading tokens (`item_sandbox_1_x` → `sandbox_1_x`). A re-run's
+  /// id stands for the activity it re-runs.
   String? collectionForId(String rawId) {
-    _byLength ??= (collections.keys.toList()
+    _byLength ??= ({...collections.keys, ...alias.keys}.toList()
       ..sort((a, b) => b.length.compareTo(a.length)));
     var id = rawId.toLowerCase();
     while (true) {
       for (final known in _byLength!) {
         final k = known.toLowerCase();
-        if (id == k || id.startsWith('${k}_')) return known;
+        if (id == k || id.startsWith('${k}_')) return alias[known] ?? known;
       }
       final cut = id.indexOf('_');
       if (cut < 0) return null;
@@ -294,6 +305,13 @@ class _Context {
       zoneToActivity[zoneId] ??
       zoneToRetro[zoneId] ??
       (collections.containsKey(zoneId) ? zoneId : collectionForId(zoneId));
+
+  /// The collection a stage belongs to, a re-run's stage counted with the
+  /// activity it re-runs.
+  String? collectionOfStage(String stageId) {
+    final zone = stageZone[stageId];
+    return zone == null ? null : home(collectionOfZone(zone));
+  }
 }
 
 Map<String, dynamic> _map(Object? v) =>
@@ -490,6 +508,44 @@ class EntryImporter {
       final id = '${entry.value}';
       ctx.zoneToRetro[entry.key] = retroHome[id] ?? id;
     }
+    ctx.alias.addAll(retroHome);
+    // A re-run the retro table does not link is the activity of the same
+    // name (the game writes “<名>·复刻”).
+    final named = <String, List<String>>{};
+    for (final e in ctx.collections.entries) {
+      (named[e.value.name] ??= []).add(e.key);
+    }
+    for (final entry in basic.entries) {
+      final info = _map(entry.value);
+      final name = _clean(info['name']);
+      if (!ctx.dropped.contains(entry.key) || ctx.alias.containsKey(entry.key)) {
+        continue;
+      }
+      final base = name.replaceFirst(RegExp(r'[·・\s]*复刻$'), '').trim();
+      final same = [
+        for (final id in named[base] ?? const <String>[])
+          if (id != entry.key) id,
+      ];
+      if (base == name || same.isEmpty) continue;
+      // Of several (a name two activities share) the one of the same kind.
+      final kind = _s(info['type']);
+      ctx.alias[entry.key] = same.firstWhere(
+        (id) => _s(_map(basic[id])['type']) == kind,
+        orElse: () => same.first,
+      );
+    }
+    for (final source in [
+      _map((await _table(EntryTables.stage))['stages']),
+      _map(retro['stageList']),
+    ]) {
+      for (final entry in source.entries) {
+        final stage = _map(entry.value);
+        final zone = _s(stage['zoneId']);
+        if (zone.isEmpty) continue;
+        final id = _s(stage['stageId']).isEmpty ? entry.key : _s(stage['stageId']);
+        ctx.stageZone.putIfAbsent(id, () => zone);
+      }
+    }
     final topics = _map((await _table(EntryTables.roguelikeTopic))['topics']);
     for (final entry in topics.entries) {
       final info = _map(entry.value);
@@ -552,8 +608,9 @@ class EntryImporter {
       final first = splitText(content).first;
       final same = await txn.rawQuery(
         'SELECT 1 FROM normalized_records WHERE content_type = ? '
-        "AND content = ? AND raw_id NOT LIKE '%#%' LIMIT 1",
-        [spec.contentType, first],
+        "AND content = ? AND raw_id NOT LIKE '%#%' "
+        'AND (entry_id IS NULL OR entry_id <> ?) LIMIT 1',
+        [spec.contentType, first, d.id],
       );
       if (same.isNotEmpty) {
         _seen.remove(d.id);
@@ -706,6 +763,33 @@ class EntryImporter {
   Future<void> _items(Transaction txn, _Context ctx) async {
     const path = EntryTables.item;
     final items = _map((await _table(path))['items']);
+    // An activity's items: the id says it (`act12side_token_x`), else the
+    // stage it drops in, else the one activity whose tables mention it.
+    final owners = <String, String?>{};
+    final pending = <String>{};
+    for (final entry in items.entries) {
+      final item = _map(entry.value);
+      final id = _s(item['itemId']).isEmpty ? entry.key : _s(item['itemId']);
+      var owner = ctx.collectionForId(id) ?? _chapterOfItem(ctx, id);
+      final icon = _s(item['iconId']);
+      if (owner == null &&
+          (ctx.collections.containsKey(icon) || ctx.alias.containsKey(icon))) {
+        owner = ctx.home(icon);
+      }
+      if (owner == null && _isActivityItem(_s(item['itemType']))) {
+        final drops = {
+          for (final d in _list(item['stageDropList']))
+            ctx.collectionOfStage(_s(_map(d)['stageId'])),
+        }..remove(null);
+        if (drops.length == 1) {
+          owner = drops.single;
+        } else {
+          pending.add(id);
+        }
+      }
+      owners[id] = owner;
+    }
+    owners.addAll(await _activityMentions(ctx, pending));
     for (final entry in items.entries) {
       final item = _map(entry.value);
       final id = _s(item['itemId']).isEmpty ? entry.key : _s(item['itemId']);
@@ -724,13 +808,71 @@ class EntryImporter {
           key: id,
           sourcePath: path,
           name: name,
-          collectionId: ctx.collectionForId(id),
+          collectionId: owners[id],
           groupName: _s(item['itemType']),
           sortKey: _int(item['sortId']),
           sections: sections,
         ),
       );
     }
+  }
+
+  /// The item types that belong to an activity (its tokens, coins, stage
+  /// tickets, operator folders).
+  static bool _isActivityItem(String type) =>
+      type.startsWith('ACTIVITY') || type == 'ET_STAGE';
+
+  /// A main chapter's story items (`main16_spitem_1`: the chapter's id is
+  /// written without its underscore).
+  String? _chapterOfItem(_Context ctx, String id) {
+    final n = RegExp(r'^main(\d+)_').firstMatch(id)?.group(1);
+    if (n == null) return null;
+    final chapter = 'main_${int.parse(n)}';
+    return ctx.collections.containsKey(chapter) ? chapter : null;
+  }
+
+  /// For each of [ids], the one activity whose tables (the activity table's
+  /// sections, by activity id) name it, when there is exactly one.
+  Future<Map<String, String>> _activityMentions(
+    _Context ctx,
+    Set<String> ids,
+  ) async {
+    if (ids.isEmpty) return const {};
+    final table = await _table(EntryTables.activity);
+    final basic = _map(table['basicInfo']);
+    final found = <String, Set<String>>{};
+    void scan(String actId, Object? node) {
+      final text = jsonEncode(node);
+      for (final id in ids) {
+        if (text.contains('"$id"')) (found[id] ??= {}).add(ctx.home(actId)!);
+      }
+    }
+
+    for (final section in const [
+      'activity',
+      'dynActs',
+      'extraData',
+      'stageRewardsData',
+      'actFunData',
+      'missionData',
+      'missionGroup',
+    ]) {
+      final root = _map(table[section]);
+      for (final entry in root.entries) {
+        if (basic.containsKey(entry.key)) {
+          scan(entry.key, entry.value);
+        } else {
+          for (final inner in _map(entry.value).entries) {
+            if (basic.containsKey(inner.key)) scan(inner.key, inner.value);
+          }
+        }
+      }
+    }
+    return {
+      for (final e in found.entries)
+        if (e.value.length == 1 && ctx.collections.containsKey(e.value.single))
+          e.key: e.value.single,
+    };
   }
 
   /// One section per text, each line (paragraph) only where it first
@@ -755,6 +897,16 @@ class EntryImporter {
   Future<void> _skins(Transaction txn, _Context ctx) async {
     const path = EntryTables.skin;
     final table = await _table(path);
+    // A brand (series) lists the groups of skins it released.
+    final brandOfGroup = <String, String>{};
+    for (final entry in _map(table['brandList']).entries) {
+      final brand = _map(entry.value);
+      final brandId = _s(brand['brandId']).isEmpty ? entry.key : _s(brand['brandId']);
+      for (final group in _list(brand['groupList'])) {
+        final groupId = _s(_map(group)['skinGroupId']);
+        if (groupId.isNotEmpty) brandOfGroup.putIfAbsent(groupId, () => brandId);
+      }
+    }
     for (final entry in _map(table['charSkins']).entries) {
       final skin = _map(entry.value);
       final display = _map(skin['displaySkin']);
@@ -787,6 +939,10 @@ class EntryImporter {
       if (written && charId.isNotEmpty) {
         await _link(txn, entryId, 'belongs_to', 'operator:$charId', path);
       }
+      final brand = brandOfGroup[_s(display['skinGroupId'])];
+      if (written && brand != null) {
+        await _link(txn, entryId, 'belongs_to', 'skin_brand:$brand', path);
+      }
     }
     for (final entry in _map(table['brandList']).entries) {
       final brand = _map(entry.value);
@@ -818,20 +974,65 @@ class EntryImporter {
       final name = _clean(medal['medalName']);
       final desc = cleanDescription(_s(medal['description']));
       if (id.isEmpty || name.isEmpty || !hasChinese(desc)) continue;
-      await _emit(
+      // What the condition names: stages, activities, a record set, characters.
+      final params = [
+        for (final p in _list(medal['unlockParam']))
+          ...'$p'.split(RegExp(r'[;,]')).map((s) => s.trim()),
+      ].where((s) => s.isNotEmpty).toList();
+      final written = await _emit(
         txn,
         _Draft(
           type: 'medal',
           key: id,
           sourcePath: path,
           name: name,
-          collectionId: ctx.collectionForId(id),
+          collectionId: _medalOwner(ctx, id, params),
           groupName: _clean(_map(groups[_s(medal['medalType'])])['medalName']),
           sortKey: _int(medal['slotId']),
           sections: [TextSection('', desc)],
         ),
       );
+      if (!written) continue;
+      for (final token in params) {
+        // A character (an operator, or the skin `<char>@<set>#<n>`).
+        if (!RegExp(r'^char_[A-Za-z0-9]+_[A-Za-z0-9_]+(@[^#]+#\d+)?$')
+            .hasMatch(token)) {
+          continue;
+        }
+        final target = token.contains('@')
+            ? 'skin:$token'
+            : 'operator:$token';
+        await _link(txn, 'medal:$id', 'features', target, path);
+      }
     }
+  }
+
+  /// The collection a medal is about. Its id says it (`medal_activity_<活动>_n`),
+  /// else what its condition names: a record set, an activity, a stage's
+  /// chapter (a stage or zone id).
+  String? _medalOwner(_Context ctx, String id, List<String> params) {
+    // `medal_activity_<活动>_<n>`; the activity id may lack its `act`.
+    final stem = RegExp(r'^medal_activity_(.+?)_\d+$').firstMatch(id)?.group(1);
+    for (final candidate in [if (stem != null) ...[stem, 'act$stem']]) {
+      if (ctx.collections.containsKey(candidate) ||
+          ctx.alias.containsKey(candidate)) {
+        return ctx.home(candidate);
+      }
+    }
+    final byId = ctx.collectionForId(id);
+    if (byId != null) return byId;
+    for (final token in params) {
+      if (ctx.collections.containsKey(token) || ctx.alias.containsKey(token)) {
+        return ctx.home(token);
+      }
+      final byStage = ctx.collectionOfStage(token);
+      if (byStage != null) return byStage;
+      if (ctx.zoneType.containsKey(token)) {
+        final byZone = ctx.home(ctx.collectionOfZone(token));
+        if (byZone != null) return byZone;
+      }
+    }
+    return null;
   }
 
   Future<void> _modules(Transaction txn, _Context ctx) async {
@@ -1384,7 +1585,7 @@ class EntryImporter {
           key: 'bg/${_s(bg['bgId'])}',
           sourcePath: path,
           name: name,
-          groupName: '背景',
+          groupName: '首页场景',
           sections: sections,
         ),
       );
@@ -2216,7 +2417,7 @@ class EntryImporter {
     final index = await _levelIndex(ctx);
     final enemies = {
       for (final r in await db.rawQuery(
-        "SELECT id FROM entries WHERE type = 'enemy'",
+        "SELECT id FROM entries WHERE type IN ('enemy', 'trap', 'token')",
       ))
         '${r['id']}',
     };
@@ -2244,7 +2445,7 @@ class EntryImporter {
     if (stagesOfLevel == null) return;
     final enemies = _enemyIdCache ??= {
       for (final r in await db.rawQuery(
-        "SELECT id FROM entries WHERE type = 'enemy'",
+        "SELECT id FROM entries WHERE type IN ('enemy', 'trap', 'token')",
       ))
         '${r['id']}',
     };
@@ -2291,15 +2492,27 @@ class EntryImporter {
         }
       }
     }
+    // Traps and summons the level places (`predefines`, and the harder
+    // variant's own list): character-table entries under `operator:`.
+    for (final key in const ['predefines', 'hardPredefines']) {
+      final defs = _map(level[key]);
+      for (final list in const ['characterInsts', 'tokenInsts']) {
+        for (final inst in _list(defs[list])) {
+          final character = _s(_map(_map(inst)['inst'])['characterKey']);
+          if (character.isNotEmpty) ids.add('operator:$character');
+        }
+      }
+    }
     final targets = [for (final s in stageIds) if (stages.contains(s)) s];
     if (targets.isEmpty) return;
     final played = <String>{};
     _storyKeysOf(level, played);
     await db.transaction((txn) async {
       for (final id in ids) {
-        if (!enemies.contains('enemy:$id')) continue;
+        final entry = id.startsWith('operator:') ? id : 'enemy:$id';
+        if (!enemies.contains(entry)) continue;
         for (final stage in targets) {
-          await _link(txn, 'enemy:$id', 'appears_in', stage, repoPath);
+          await _link(txn, entry, 'appears_in', stage, repoPath);
         }
       }
       // The stories the battle itself plays (`STORY` actions: tutorials,
@@ -2714,13 +2927,14 @@ class EntryImporter {
         'INSERT INTO item_twin (id, keep) '
         'SELECT e.id, (SELECT k.id FROM entries k '
         'LEFT JOIN normalized_records kr ON kr.id = k.record_id '
-        'WHERE k.type = e.type AND k.collection_id = e.collection_id '
+        "WHERE k.type = e.type AND IFNULL(k.collection_id, '') = "
+        "IFNULL(e.collection_id, '') "
         'AND k.name = e.name AND ('
         "(e.type = 'roguelike_item' AND IFNULL(k.group_name, '') = "
         "IFNULL(e.group_name, '')) OR kr.content = er.content) "
         'ORDER BY k.source_path DESC, length(k.raw_id), k.raw_id LIMIT 1) '
         'FROM entries e LEFT JOIN normalized_records er ON er.id = e.record_id '
-        "WHERE e.type IN ('roguelike_item', 'roguelike_buff')",
+        "WHERE e.type IN ('roguelike_item', 'roguelike_buff', 'item')",
       );
       await txn.execute('DELETE FROM item_twin WHERE id = keep');
       // A twin whose kept one is itself a twin stays (never lose both).
@@ -2742,6 +2956,12 @@ class EntryImporter {
         'DELETE FROM normalized_records WHERE entry_id IN '
         '(SELECT id FROM item_twin)',
       );
+      for (final table in const ['entity_aliases', 'entities']) {
+        await txn.execute(
+          'DELETE FROM $table WHERE ${table == 'entities' ? 'id' : 'entity_id'} '
+          'IN (SELECT id FROM item_twin)',
+        );
+      }
       await txn.execute(
         'DELETE FROM entries WHERE id IN (SELECT id FROM item_twin)',
       );

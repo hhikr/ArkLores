@@ -17,6 +17,12 @@ All notable changes to ArkLores will be documented in this file.
 - **New text**: activity archives, news, letters and event narration, roguelike relic flavor text, scenes and endings,
   handbook stages, world-view texts, mails. Gameplay text (skills, rules, effects, how to obtain) is not imported.
 - Story vectors of the previous knowledge base are carried over to the new one; only the new lines are embedded.
+- **Small entries point at what they are about.** Medals and activity items name their activity, chapter or record set
+  (from ids, stage drops and what the activity's own tables mention); re-run texts count with the activity they re-run;
+  traps and summons list the stages that place them and the operator that summons them; operator tokens belong to their
+  operator; skins and the skin series that released them point at each other; items listed several times (the same coin
+  once per banner) are one entry. Names in angle brackets in stage descriptions and scripts are no longer dropped, and
+  a few names the app had made up were replaced by the wiki's (标志物, 表情套组, 奖章, 首页场景).
 
 ### Incremental updates (in development for 0.11)
 
