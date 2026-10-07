@@ -148,6 +148,18 @@ void main() {
       expect('${result.rows.single.single}', startsWith('ef/'));
     });
 
+    test('tools offer the game choice; an unknown game value searches both', () async {
+      final seen = SeenLines();
+      for (final tool in [SqlTool(both, seen), GrepTool(both, seen)]) {
+        final game = (tool.parameters['properties'] as Map)['game'] as Map;
+        expect(game['enum'], ['arknights', 'endfield']);
+      }
+      final grep = GrepTool(both, seen);
+      final all = await grep.execute({'pattern': '灯塔', 'game': 'nonsense'});
+      expect(all, contains('ef/dlg_test_1.txt'));
+      expect(all, contains('level_act1_01_beg.txt'));
+    });
+
     test('a missing database answers empty; the other still works', () async {
       final only = MultiGameRetrieval({
         Game.arknights: both.stores[Game.arknights]!,
