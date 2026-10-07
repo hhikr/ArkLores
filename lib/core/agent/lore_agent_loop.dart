@@ -20,6 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
+import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import 'lore_agent_prompts.dart';
@@ -161,6 +162,10 @@ class LoreAgentLoop {
     void Function(int turn, String rawResponse)? onRawLlmResponse,
   }) async* {
     final seen = prior?.seen ?? SeenLines();
+    // 0.12: the prompt describes every installed game's library.
+    final games = store is MultiGameRetrieval
+        ? await (store as MultiGameRetrieval).installedGames()
+        : const [Game.arknights];
     final tools = {
       for (final t in [
         ...loreTools(store, seen, embeddingClient: embeddingClient),
@@ -175,7 +180,7 @@ class LoreAgentLoop {
     var converted = false;
 
     String systemPrompt() {
-      final base = loreSystemPrompt(subtask: subtask);
+      final base = loreSystemPrompt(subtask: subtask, games: games);
       return transport.textProtocol
           ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
           : base;

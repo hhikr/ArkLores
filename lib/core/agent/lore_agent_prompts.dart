@@ -5,6 +5,9 @@
 /// retrieval or judging rule here depends on the kind of question.
 library;
 
+import '../gamedata/game.dart';
+import 'lore_endfield_prompts.dart';
+
 /// Tables and columns the agent can query (`sql`), with the conventions it
 /// needs to read results and cite lines.
 const String loreDatabaseGuide = '''
@@ -129,11 +132,33 @@ const String loreSubtaskInstructions = '''
 不要写开场白和总结，也不要回答任务以外的问题。查不到时如实说明查了哪些范围。
 最后单独一行写 [COVERAGE: full]（交给你的内容都读到了）或 [COVERAGE: gaps]（有没读到的部分）。''';
 
-/// The whole system prompt (or a sub-agent's when [subtask]).
-String loreSystemPrompt({bool subtask = false}) => subtask
-    ? '$loreAgentRules\n\n$loreSubtaskInstructions'
-    : '$loreAgentRules\n\n$loreDelegationRules\n\n$loreAnswerFormat\n\n'
-        '$loreEntryLayout';
+/// 0.12: when the Endfield knowledge base is installed too — which library
+/// a question belongs to, and how the second one differs. Like the rest of
+/// the prompt it names no character, place or event of either game.
+const String loreGamesGuide = '''
+两个游戏
+本地装了两个知识库：《明日方舟》（默认）和《明日方舟：终末地》。它们是两部不同的作品，世界、人物、地点、组织都不同；两边偶有相同的名字或词，不能因此当作同一个人或同一件事。
+- 终末地库的表结构与上面相同，所有 id 都以 ef/ 开头：story_id、collection_id、collections.kind、条目原始 id（entries.id 形如 <type>:ef/...）、normalized_records.id。看到 ef/ 就是终末地的内容。
+- sql 一次只查一个库：game 参数选 arknights（默认）或 endfield。grep、find 不给 game 时查两个库，给了只查那一个；read_story、outline 按 id 自动找到对应的库。
+- 判断问题问的是哪个游戏：问题点名了游戏，或者问的人物、地点、组织、事件明显属于其中一个时，只查那个游戏；看不出来，或问题同时涉及两者时，两个都查（先不带 game 用 grep 看分布），再按查到的结果作答。不要只凭名字相似就把一个游戏的内容套到另一个游戏上。
+- 两个游戏都有相关内容时分开写（各自一个小节），并写明哪部分出自终末地。
+$loreEndfieldLibraryGuide''';
+
+/// The whole system prompt (or a sub-agent's when [subtask]); [games] are
+/// the installed knowledge bases (the two-game section only when there is
+/// more than Arknights).
+String loreSystemPrompt({
+  bool subtask = false,
+  List<Game> games = const [Game.arknights],
+}) {
+  final rules = games.contains(Game.endfield)
+      ? '$loreAgentRules\n\n$loreGamesGuide'
+      : loreAgentRules;
+  return subtask
+      ? '$rules\n\n$loreSubtaskInstructions'
+      : '$rules\n\n$loreDelegationRules\n\n$loreAnswerFormat\n\n'
+          '$loreEntryLayout';
+}
 
 /// R18: system prompt of the reviewer — a second model reading the main
 /// agent's answer as a reader, without the text. It only raises questions;
