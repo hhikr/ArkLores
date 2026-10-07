@@ -54,7 +54,9 @@
 | 少数任务没有定义 | 约二十个任务在两层客户端里都没有 `MissionRuntimeAsset`，按分类编号命名（“支线任务 3”） |
 | 没有剧情向量 | 嵌入要花钱，需开发者同意后跑 `build_story_embeddings.dart`；在此之前终末地的 `find` 只做关键词检索 |
 | 资产尚未发布 | `release_gamedata.env` 指向将要创建的 v0.12.0 资产；发版前 App 里点终末地的“下载”会 404 |
-| 势力表为空 | 当前客户端热更新层里的 `BlocDataTable` 是空的，势力名暂无实体 |
+| 势力表为空 | 当前客户端的 `BlocDataTable` 是空的；势力名改从干员的阵营标签取（`CharacterTagTable` → `TagDataTable`） |
+| 闲话多半没有说话人 | `EnvTalkTable` 的 `actorId` 大多为空，这些行在库里不带说话人 |
+| 部分来信看不出寄信人 | 委托回信的寄信人 id 在 NPC 表里查不到名字，只留游戏给的标题 |
 
 ## 6. 范围
 

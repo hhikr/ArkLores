@@ -143,9 +143,11 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<MissionRuntimeAsset 目录> --version=<客户端版本> --output=build/endfield --force
 ```
 
-- 表 → 干员（档案、语音）、档案库（PRTS：分类 → 文档 → 页面 → `RichContentTable` 正文；调查与线索）、敌人/武器/物品的描述（物品只收 `decoDesc`，
-  去掉多件物品共用的模板句和机制句）、势力名。
-- 剧情：`DialogTextTable`（按行 id 排序；`DialogOptionTable` 的选项组 `option_<对话>_<组>_<n>` 填在行号的空位上）、`RadioTable`、`SNSDialogTable`。
+- 表 → 干员（阵营/种族/专长/爱好标签、档案、语音）、档案库（PRTS：分类 → 文档 → 页面 → `RichContentTable` 正文；调查与线索）、
+  敌人/武器/物品的描述（敌人带分布地点；物品只收 `decoDesc`，去掉多件物品共用的模板句和机制句）、副本（`DungeonTable`：名字、简介、地区，敌人 `appears_in`）、
+  角色来信（`MailTemplateTable`，系统邮件不收）、势力名；档案库不列的留言与告示（`RichContentTable`）归到所在任务或地点。
+- 剧情：`DialogTextTable`（按行 id 排序；`DialogOptionTable` 的选项组 `option_<对话>_<组>_<n>` 填在行号的空位上）、`RadioTable`、`RemoteCommonTable`、
+  `EnvTalkTable`（只收属于已知任务或地点的）、`SNSDialogTable`；同一任务里按游戏的编号交错排列（`0d5` = 0.5）。
   任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`）；任务名、简介（`mission_intro` 条目）、分类（书架）、所属干员来自任务定义。
   干员的任务、短信话题（`SNSDialogTopicTable`）与礼物对话挂在干员下（kind `ef/memory`）；地图上的交互按地点（`LevelDescTable`）、敌人遭遇的通讯按敌人归组
   （kind `ef/world`，书架显示为“其他”）；没有定义的任务按分类编号（“支线任务 3”）；对话之间的插话、工业教学、测试对话不收。
