@@ -120,31 +120,35 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 
 ### 9.1 解包（不启动游戏）
 
-工具：[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit)（命令行，内含 AnimeStudio 的终末地分支：
-自定义 VFS 解密、表与 Unity 对象导出、剧情重建）。本机环境：Python 3（embeddable 版装在 `C:\Users\hhikr\endfield\python312`，`._pth` 里加了 kit 目录才能
-`python -m scripts…`）、kit 自己下载的 .NET 9 SDK（`tools\AnimeStudio\.dotnet`，运行 AnimeStudio 时要把 `DOTNET_ROOT` 指过去）。
-工作目录必须在 NTFS 上（exFAT 不记录所有权，git 拒绝；也不能建硬链接）。Claude Code 的 shell 设了 `NoDefaultCurrentDirectoryInExePath`，
-批处理要用完整路径调用。
+工具：[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 里的 AnimeStudio 终末地分支（自定义 VFS 解密、表与 JSON 数据导出）。
+只第一次需要跑 kit 的 `setup.bat` 构建 AnimeStudio CLI；之后直接用 CLI 导出，不走 kit 的完整导出流程（它要一两个小时，且在本机卡死过）。
 
-```bat
-:: 只导出文字（表、JsonData、剧情相关的 Unity 类）并重建剧情；首次约 1–2 小时，需要约 10 GB 临时空间
-C:\Users\hhikr\endfield\run_setup.cmd     :: = setup.bat --game-root "<安装目录>\Endfield_Data" --no-serve
+```powershell
+.\tools\unpack_endfield.ps1 -Version <客户端版本>   # 导出两层 → 合并 → 建库（约 4 分钟）
+.\tools\unpack_endfield.ps1 -SkipUnpack              # 用上次导出的数据重建
 ```
 
-产物：`export_full/game/Table/*.json`（解码后的游戏表，文字是 `{id, text}`，字符串在 `I18nTextTable_CN.json`）、
-`webui/data/lang/CN/`（kit 重建的剧情：按任务分组、排序、选项、任务名）。客户端的 Persistent 目录是热更新层，覆盖 StreamingAssets；
-两层都导出后以 kit 发布的结果为准。
+- 导出两个块：`table`（游戏表，文字是 `{id, text}`，字符串在 `I18nTextTable_CN.json`）和 `json-data`（其中 `MissionRuntimeAsset/<任务>.json` 是任务定义：
+  名字与简介的文字键、任务类型、所属干员）。客户端有两层：StreamingAssets 是安装包，Persistent 是热更新层；**先放 StreamingAssets，再用 Persistent 覆盖**。
+- **不要加 `--packed-game-store`**：kit 的完整流程会把 Json/LipSync 写进一个 SQLite，这一步在本机卡死（上千个线程、无 CPU 无 IO），而它只存口型数据。
+- 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（`tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
+  （`C:\Users\hhikr\endfield\python312`，`._pth` 里加 kit 目录）。工作目录要在 NTFS 上（exFAT 上 git 拒绝、不能建硬链接）。
+  Claude Code 的 shell 设了 `NoDefaultCurrentDirectoryInExePath`，批处理要用完整路径调用。
+- 任务面板的分类名在 Lua UI 脚本里（`-b lua` 导出的是明文 Lua）：`MissionCtrl.lua` 用 `GEnums.MissionViewType` 的 Main/Discovery/Side/Activity/Other，
+  文字键 `ui_mis_panel_tab_*` → 主线任务/探索任务/支线任务/活动任务/委派任务；任务类型到分类见 `MissionTypeInfoTable.missionViewType`。
 
 ### 9.2 建库
 
 ```bash
-dart run tools/build_endfield_database.dart --tables=<…/Table 目录> [--story=<kit>/webui/data] --version=<客户端版本> --output=build/endfield --force
+dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<MissionRuntimeAsset 目录> --version=<客户端版本> --output=build/endfield --force
 ```
 
 - 表 → 干员（档案、语音）、档案库（PRTS：分类 → 文档 → 页面 → `RichContentTable` 正文；调查与线索）、敌人/武器/物品的描述（物品只收 `decoDesc`，
   去掉多件物品共用的模板句和机制句）、势力名。
-- 剧情：有 kit 的剧情发布时从它读（任务名、顺序、选项）；没有时从 `DialogTextTable`（按行 id 排序）、`RadioTable`、`SNSDialogTable` 读，
-  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`），书架按任务 id 的字母前缀（`e` 主线、`c` 干员任务、其余支线），
+- 剧情：`DialogTextTable`（按行 id 排序；`DialogOptionTable` 的选项组 `option_<对话>_<组>_<n>` 填在行号的空位上）、`RadioTable`、`SNSDialogTable`。
+  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`）；任务名、简介（`mission_intro` 条目）、分类（书架）、所属干员来自任务定义。
+  干员的任务、短信话题（`SNSDialogTopicTable`）与礼物对话挂在干员下（kind `ef/memory`）；地图上的交互按地点（`LevelDescTable`）、敌人遭遇的通讯按敌人归组
+  （kind `ef/world`，书架显示为“其他”）；没有定义的任务按分类编号（“支线任务 3”）；对话之间的插话、工业教学、测试对话不收。
   `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要（进 `story_catalog.synopsis`）。
 - 文字规范化（`endfieldText`）：去标记与资源路径；主角台词的 `{F}…{M}…` 只留女性版本（kit 的默认）；`{player}` 写作“管理员”；
   说话人名后面花括号里的内部注释（`{c13-…}`，可能是剧情里尚未揭示的身份）去掉。
