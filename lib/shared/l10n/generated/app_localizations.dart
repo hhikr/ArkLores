@@ -2707,6 +2707,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Find in this story'**
   String get storyReaderFindHint;
+
+  /// No description provided for @gameArknights.
+  ///
+  /// In en, this message translates to:
+  /// **'Arknights'**
+  String get gameArknights;
+
+  /// No description provided for @gameEndfield.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield'**
+  String get gameEndfield;
+
+  /// No description provided for @libraryGameMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'{game} knowledge base not installed'**
+  String libraryGameMissing(String game);
 }
 
 class _AppLocalizationsDelegate

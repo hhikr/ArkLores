@@ -1521,4 +1521,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storyReaderFindHint => 'Find in this story';
+
+  @override
+  String get gameArknights => 'Arknights';
+
+  @override
+  String get gameEndfield => 'Endfield';
+
+  @override
+  String libraryGameMissing(String game) {
+    return '$game knowledge base not installed';
+  }
 }

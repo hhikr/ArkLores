@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/providers/settings_provider.dart';
 import '../background/background_work.dart';
+import '../gamedata/game.dart';
 import '../gamedata/gamedata_knowledge_store.dart';
+import '../gamedata/multi_game_retrieval.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../llm/usage_meter.dart';
@@ -30,12 +32,37 @@ final sharedGameDataStoreProvider = Provider<GameDataKnowledgeStore>((ref) {
   return GameDataKnowledgeStore();
 });
 
+/// 0.12: the Endfield knowledge base (its own file, same schema).
+final endfieldGameDataStoreProvider = Provider<GameDataKnowledgeStore>((ref) {
+  return GameDataKnowledgeStore(game: Game.endfield);
+});
+
+/// The knowledge base of [game].
+final gameStoreProvider = Provider.family<GameDataKnowledgeStore, Game>(
+  (ref, game) => switch (game) {
+    Game.arknights => ref.watch(sharedGameDataStoreProvider),
+    Game.endfield => ref.watch(endfieldGameDataStoreProvider),
+  },
+);
+
+/// The knowledge base an id belongs to (story, record, collection, entry or
+/// user-data ref; see `game.dart`).
+GameDataKnowledgeStore storeOfId(Ref ref, String id) =>
+    ref.watch(gameStoreProvider(gameOfId(id)));
+
+/// Every installed knowledge base as one retrieval surface (the agent's).
+final loreRetrievalProvider = Provider<MultiGameRetrieval>((ref) {
+  return MultiGameRetrieval({
+    for (final game in Game.values) game: ref.watch(gameStoreProvider(game)),
+  });
+});
+
 /// The story QA pipeline: one agent for every question. Story questions run
 /// without hidden reasoning unless "深度思考" is on (R16/R17).
 final storyQaAgentProvider = Provider<StoryQaAgent>((ref) {
   return StoryQaAgent(
     llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
-    gameDataStore: ref.watch(sharedGameDataStoreProvider),
+    gameDataStore: ref.watch(loreRetrievalProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
     usage: ref.watch(usageMeterProvider),
   );
@@ -137,9 +164,10 @@ class AskChatNotifier extends ChatNotifierBase {
     // R17: continue the last answer's conversation when it is the last
     // message (an error or a cancel in between starts from the texts).
     final lastMessage = state.isEmpty ? null : state.last;
-    final prior = lastMessage == null || lastMessage.role != MessageRole.assistant
-        ? null
-        : _conversations[lastMessage.id];
+    final prior =
+        lastMessage == null || lastMessage.role != MessageRole.assistant
+            ? null
+            : _conversations[lastMessage.id];
 
     final assistantId = newId();
     state = [
@@ -206,7 +234,6 @@ class AskChatNotifier extends ChatNotifierBase {
       };
     }
 
-
     void onConversation(LoreConversation conversation) =>
         _conversations[assistantId] = conversation;
     final client = _clientReader?.call();
@@ -243,28 +270,34 @@ class AskChatNotifier extends ChatNotifierBase {
         }
         switch (event.type) {
           case ReActEventType.thought:
-            steps.add(ReActStep(
-              type: event.type,
-              content: event.content,
-            ),);
+            steps.add(
+              ReActStep(
+                type: event.type,
+                content: event.content,
+              ),
+            );
             updateMessage(assistantId, steps: List.of(steps));
             if (recording) {
-              iterations.putIfAbsent(
-                currentIteration,
-                () => ReActIterationRecord(
-                  iteration: currentIteration,
-                  rawResponse: '',
-                ),
-              ).thought = event.content;
+              iterations
+                  .putIfAbsent(
+                    currentIteration,
+                    () => ReActIterationRecord(
+                      iteration: currentIteration,
+                      rawResponse: '',
+                    ),
+                  )
+                  .thought = event.content;
             }
             break;
           case ReActEventType.toolCall:
-            steps.add(ReActStep(
-              type: event.type,
-              content: event.content,
-              toolName: event.toolName,
-              toolArgs: event.toolArgs,
-            ),);
+            steps.add(
+              ReActStep(
+                type: event.type,
+                content: event.content,
+                toolName: event.toolName,
+                toolArgs: event.toolArgs,
+              ),
+            );
             updateMessage(assistantId, steps: List.of(steps));
             if (recording) {
               final record = iterations.putIfAbsent(
@@ -284,20 +317,24 @@ class AskChatNotifier extends ChatNotifierBase {
             }
             break;
           case ReActEventType.toolObservation:
-            steps.add(ReActStep(
-              type: event.type,
-              content: event.content,
-              toolName: event.toolName,
-            ),);
+            steps.add(
+              ReActStep(
+                type: event.type,
+                content: event.content,
+                toolName: event.toolName,
+              ),
+            );
             updateMessage(assistantId, steps: List.of(steps));
             if (recording) {
-              iterations.putIfAbsent(
-                currentIteration,
-                () => ReActIterationRecord(
-                  iteration: currentIteration,
-                  rawResponse: '',
-                ),
-              ).observation = event.content;
+              iterations
+                  .putIfAbsent(
+                    currentIteration,
+                    () => ReActIterationRecord(
+                      iteration: currentIteration,
+                      rawResponse: '',
+                    ),
+                  )
+                  .observation = event.content;
             }
             break;
           case ReActEventType.finalAnswerToken:

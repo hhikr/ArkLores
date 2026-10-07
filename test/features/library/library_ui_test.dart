@@ -1,4 +1,5 @@
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
+import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/library/library_provider.dart';
 import 'package:arklores/core/library/library_queries.dart';
 import 'package:arklores/core/userdata/library_ref.dart';
@@ -66,8 +67,13 @@ const _enemy = LibraryEntry(
 List<Override> overrides(MemoryUserStore store) => [
       userDataStoreProvider.overrideWith((ref) async => store),
       libraryStatusProvider.overrideWith((ref) async => LibraryStatus.ready),
+      gameLibraryStatusProvider.overrideWith(
+        (ref, game) async => game == Game.arknights
+            ? LibraryStatus.ready
+            : LibraryStatus.notInstalled,
+      ),
       shelfSummariesProvider.overrideWith(
-        (ref) async => const [
+        (ref, game) async => const [
           ShelfSummary(kind: 'main', collections: 18, stories: 463),
           ShelfSummary(kind: 'activity', collections: 327, stories: 1963),
           ShelfSummary(kind: 'memory', collections: 387, stories: 390),
@@ -76,7 +82,7 @@ List<Override> overrides(MemoryUserStore store) => [
         ],
       ),
       codexTypesProvider.overrideWith(
-        (ref) async => const [
+        (ref, game) async => const [
           (type: 'enemy', count: 1747),
         ],
       ),
@@ -769,6 +775,11 @@ void main() {
           overrides: [
             ...overrides(store),
             libraryStatusProvider.overrideWith((ref) async => status),
+            gameLibraryStatusProvider.overrideWith(
+              (ref, game) async => game == Game.arknights
+                  ? status
+                  : LibraryStatus.notInstalled,
+            ),
           ],
           child: MaterialApp(
             locale: const Locale('zh'),

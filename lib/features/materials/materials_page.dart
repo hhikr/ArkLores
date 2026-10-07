@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
 import '../../core/userdata/library_ref.dart';
@@ -99,88 +100,89 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage>
     );
   }
 }
-/// "Read": continue reading, the shelves, the recently read.
+
+/// "Read": continue reading, each game's shelves, the recently read.
 class LibraryReadView extends ConsumerWidget {
   const LibraryReadView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    final status = ref.watch(libraryStatusProvider);
-    return status.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => LibraryMessage(
-        icon: Icons.folder_off_rounded,
-        title: context.t.libraryNotInstalledTitle,
-        description: context.t.libraryNotInstalledDesc,
-      ),
-      data: (s) => switch (s) {
-        LibraryStatus.notInstalled => LibraryMessage(
-            icon: Icons.download_for_offline_rounded,
-            title: context.t.libraryNotInstalledTitle,
-            description: context.t.libraryNotInstalledDesc,
-          ),
-        LibraryStatus.oldSchema => LibraryMessage(
-            icon: Icons.system_update_alt_rounded,
-            title: context.t.libraryOldSchemaTitle,
-            description: context.t.libraryOldSchemaDesc,
-          ),
-        LibraryStatus.ready => _shelves(context, ref, theme),
-      },
-    );
+    final statuses = {
+      for (final game in Game.values)
+        game: ref.watch(gameLibraryStatusProvider(game)),
+    };
+    if (statuses.values.any((s) => s.isLoading)) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final ready = [
+      for (final game in Game.values)
+        if (statuses[game]!.valueOrNull == LibraryStatus.ready) game,
+    ];
+    if (ready.isEmpty) {
+      final old =
+          statuses.values.any((s) => s.valueOrNull == LibraryStatus.oldSchema);
+      return old
+          ? LibraryMessage(
+              icon: Icons.system_update_alt_rounded,
+              title: context.t.libraryOldSchemaTitle,
+              description: context.t.libraryOldSchemaDesc,
+            )
+          : LibraryMessage(
+              icon: Icons.download_for_offline_rounded,
+              title: context.t.libraryNotInstalledTitle,
+              description: context.t.libraryNotInstalledDesc,
+            );
+    }
+    return _shelves(context, ref, theme, ready);
   }
 
-  Widget _shelves(BuildContext context, WidgetRef ref, AppThemeTokens theme) {
-    final summaries = ref.watch(shelfSummariesProvider).valueOrNull ?? const [];
-    final codex = ref.watch(codexTypesProvider).valueOrNull ?? const [];
+  Widget _shelves(
+    BuildContext context,
+    WidgetRef ref,
+    AppThemeTokens theme,
+    List<Game> ready,
+  ) {
     final recent = ref.watch(recentReadingProvider).valueOrNull ?? const [];
-    final codexCount = codex.fold<int>(0, (n, t) => n + t.count);
-
-    final cards = <Widget>[
-      for (final s in summaries)
-        _ShelfCard(
-          kind: s.kind,
-          subtitle: [
-            context.t.libraryCountCollections(s.collections),
-            if (s.stories > 0) context.t.libraryCountStories(s.stories),
-          ].join(' · '),
-        ),
-      if (codexCount > 0)
-        _ShelfCard(
-          kind: codexShelf,
-          subtitle: context.t.libraryCountEntries(codexCount),
-        ),
+    final missing = [
+      for (final game in Game.values)
+        if (!ready.contains(game)) game,
     ];
 
     return RefreshIndicator(
       onRefresh: () async {
-        ref
-          ..invalidate(libraryStatusProvider)
-          ..invalidate(shelfSummariesProvider)
-          ..invalidate(codexTypesProvider);
+        ref.invalidate(libraryStatusProvider);
+        for (final game in Game.values) {
+          ref
+            ..invalidate(gameLibraryStatusProvider(game))
+            ..invalidate(shelfSummariesProvider(game))
+            ..invalidate(codexTypesProvider(game));
+        }
         invalidateReading(ref);
       },
       child: ListView(
-        padding: floatingPadding(context, const EdgeInsets.fromLTRB(16, 4, 16, 32)),
+        padding:
+            floatingPadding(context, const EdgeInsets.fromLTRB(16, 4, 16, 32)),
         children: [
           if (recent.isNotEmpty) ...[
             const SizedBox(height: 12),
             _ContinueCard(entry: recent.first),
           ],
-          IndustrialSectionHeader(
-            theme: theme,
-            title: context.t.libraryShelves,
-            code: 'shelves',
-          ),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.55,
-            children: cards,
-          ),
+          for (final game in ready)
+            _GameShelves(
+                game: game, titled: ready.length > 1 || game != Game.arknights,),
+          for (final game in missing)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: LibraryRow(
+                key: ValueKey('library-missing-${game.key}'),
+                title: context.t.libraryGameMissing(gameLabel(context, game)),
+                subtitle: context.t.libraryNotInstalledDesc,
+                subtitleLines: 2,
+                leading: Icon(Icons.download_for_offline_rounded,
+                    color: theme.textMuted,),
+              ),
+            ),
           if (recent.length > 1) ...[
             IndustrialSectionHeader(
               theme: theme,
@@ -209,6 +211,59 @@ class LibraryReadView extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// One game's shelves: a heading (when there is more than one game) and the
+/// shelf cards, its codex last.
+class _GameShelves extends ConsumerWidget {
+  const _GameShelves({required this.game, required this.titled});
+
+  final Game game;
+  final bool titled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final summaries =
+        ref.watch(shelfSummariesProvider(game)).valueOrNull ?? const [];
+    final codex = ref.watch(codexTypesProvider(game)).valueOrNull ?? const [];
+    final codexCount = codex.fold<int>(0, (n, t) => n + t.count);
+    final cards = <Widget>[
+      for (final s in summaries)
+        _ShelfCard(
+          kind: s.kind,
+          subtitle: [
+            context.t.libraryCountCollections(s.collections),
+            if (s.stories > 0) context.t.libraryCountStories(s.stories),
+          ].join(' · '),
+        ),
+      if (codexCount > 0)
+        _ShelfCard(
+          kind: codexShelfOf(game),
+          subtitle: context.t.libraryCountEntries(codexCount),
+        ),
+    ];
+    return Column(
+      key: ValueKey('library-game-${game.key}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        IndustrialSectionHeader(
+          theme: theme,
+          title: titled ? gameLabel(context, game) : context.t.libraryShelves,
+          code: game == Game.arknights ? 'shelves' : 'endfield',
+        ),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.55,
+          children: cards,
+        ),
+      ],
     );
   }
 }
@@ -280,8 +335,11 @@ class _ContinueCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.play_circle_fill_rounded,
-                  color: theme.accentText, size: 18,),
+              Icon(
+                Icons.play_circle_fill_rounded,
+                color: theme.accentText,
+                size: 18,
+              ),
               const SizedBox(width: 6),
               Text(
                 context.t.libraryContinue,
@@ -345,9 +403,8 @@ class _RecentRow extends ConsumerWidget {
       title: readingTitle(ref, entry),
       subtitle: entry.snippet,
       subtitleLines: 1,
-      progress: entry.progress != null && !entry.finished
-          ? entry.progress
-          : null,
+      progress:
+          entry.progress != null && !entry.finished ? entry.progress : null,
       trailing: readMark(context, theme, entry),
       onTap: item == null || item.kind != LibraryRefKind.story
           ? null

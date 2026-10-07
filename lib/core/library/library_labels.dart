@@ -233,3 +233,7 @@ String bindingName(
       // A relation of a later build: said plainly, not as its id.
       (_, _) => '相关',
     };
+
+/// 0.12: names of the Endfield shelves (collection kinds without the `ef/`
+/// namespace) where they differ from the Arknights ones. As in-game terms.
+const Map<String, String> endfieldShelfNames = {};

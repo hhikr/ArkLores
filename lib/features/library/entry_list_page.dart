@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
@@ -24,9 +25,14 @@ class EntryListPage extends ConsumerStatefulWidget {
     this.title,
     this.groups,
     this.flat = false,
+    this.game,
   });
 
   final String type;
+
+  /// The game whose codex this is (without a collection); a collection's
+  /// list is in its collection's game.
+  final Game? game;
   final String? collectionId;
   final String? collectionName;
 
@@ -65,7 +71,11 @@ List<({String label, List<String?> raws, int count})>? _groupMenu(
   }
   if (byLabel.length < 2) return null;
   final labels = byLabel.keys.toList()
-    ..sort((a, b) => a == other ? 1 : b == other ? -1 : 0);
+    ..sort((a, b) => a == other
+        ? 1
+        : b == other
+            ? -1
+            : 0,);
   return [
     for (final l in labels)
       (label: l, raws: byLabel[l]!.raws, count: byLabel[l]!.count),
@@ -85,24 +95,31 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final game = widget.game ?? gameOfId(widget.collectionId ?? '');
     final key = (
       type: widget.type,
       collectionId: widget.collectionId,
       query: _query,
       groups: groupsKey(widget.groups),
+      game: game,
     );
     final title = widget.title ??
         [
           if (widget.collectionName != null) widget.collectionName!,
           entryTypeName(widget.type),
         ].join(' · ');
-    final flat = widget.flat || widget.groups != null || _query.trim().isNotEmpty;
+    final flat =
+        widget.flat || widget.groups != null || _query.trim().isNotEmpty;
     // A long list of grouped entries opens as a menu of its groups.
     final groupData = flat
         ? null
         : ref.watch(
             entryGroupsProvider(
-              (type: widget.type, collectionId: widget.collectionId),
+              (
+                type: widget.type,
+                collectionId: widget.collectionId,
+                game: game
+              ),
             ),
           );
     final menu = groupData?.valueOrNull == null
@@ -122,7 +139,7 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
     // The operator shelf is this list of operators; its search also finds
     // their record stories.
     final scope = widget.type == 'operator' && widget.collectionId == null
-        ? shelfScope(operatorShelf)
+        ? shelfScope(operatorShelfOf(game))
         : listScope(collectionId: widget.collectionId, type: widget.type);
     return LibraryScaffold(
       title: title,

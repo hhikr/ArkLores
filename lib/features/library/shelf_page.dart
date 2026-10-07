@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
@@ -33,14 +34,13 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
       actions: [
         LibrarySearchButton(scope: shelfScope(widget.kind), label: label),
       ],
-      body: widget.kind == codexShelf
-          ? _codex(theme)
-          : _collections(theme),
+      body: isCodexShelf(widget.kind) ? _codex(theme) : _collections(theme),
     );
   }
 
   Widget _codex(AppThemeTokens theme) {
-    final types = ref.watch(codexTypesProvider);
+    final game = gameOfId(widget.kind);
+    final types = ref.watch(codexTypesProvider(game));
     return types.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => LibraryMessage(
@@ -68,7 +68,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
                 ),
                 onTap: () => pushLibraryPage(
                   context,
-                  (_) => EntryListPage(type: list[i].type),
+                  (_) => EntryListPage(type: list[i].type, game: game),
                 ),
               ),
             ),

@@ -4,6 +4,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/gamedata/game.dart';
+import '../../core/library/library_labels.dart';
 import '../../core/library/library_queries.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/widgets/smooth_page_route.dart';
@@ -24,7 +26,24 @@ export 'shelf_page.dart';
 
 // ─── Shelves ───────────────────────────────────────────────────────
 
-String shelfLabel(BuildContext context, String kind) => switch (kind) {
+/// [game]'s name in the interface language.
+String gameLabel(BuildContext context, Game game) => switch (game) {
+      Game.arknights => context.t.gameArknights,
+      Game.endfield => context.t.gameEndfield,
+    };
+
+/// A shelf's name: an Endfield shelf by its kind without the id namespace,
+/// with Endfield's own names where its shelves differ.
+String shelfLabel(BuildContext context, String kind) {
+  if (gameOfId(kind) == Game.endfield) {
+    final bare = kind.substring(endfieldIdPrefix.length);
+    return endfieldShelfNames[bare] ?? _arknightsShelfLabel(context, bare);
+  }
+  return _arknightsShelfLabel(context, kind);
+}
+
+String _arknightsShelfLabel(BuildContext context, String kind) =>
+    switch (kind) {
       'main' => context.t.shelfMain,
       'sidestory' => context.t.shelfSideStory,
       'ministory' => context.t.shelfMiniStory,
@@ -38,7 +57,11 @@ String shelfLabel(BuildContext context, String kind) => switch (kind) {
       _ => context.t.shelfCodex,
     };
 
-IconData shelfIcon(String kind) => switch (kind) {
+IconData shelfIcon(String kind) => _shelfIcon(gameOfId(kind) == Game.endfield
+    ? kind.substring(endfieldIdPrefix.length)
+    : kind,);
+
+IconData _shelfIcon(String kind) => switch (kind) {
       'main' => Icons.auto_stories_rounded,
       'sidestory' => Icons.menu_book_rounded,
       'ministory' => Icons.bookmarks_rounded,
@@ -57,8 +80,12 @@ void pushLibraryPage(BuildContext context, WidgetBuilder builder) =>
 /// collections (the codex its entry types).
 void openShelf(BuildContext context, String kind) => pushLibraryPage(
       context,
-      (_) => kind == operatorShelf
-          ? EntryListPage(type: 'operator', title: shelfLabel(context, kind))
+      (_) => kind == operatorShelfOf(gameOfId(kind))
+          ? EntryListPage(
+              type: 'operator',
+              title: shelfLabel(context, kind),
+              game: gameOfId(kind),
+            )
           : ShelfPage(kind: kind),
     );
 

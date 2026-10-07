@@ -9,6 +9,7 @@ library;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../gamedata/game.dart';
 import '../gamedata/name_similarity.dart' show homophoneCost, nameDistance;
 import '../gamedata/story_catalog.dart' show escapeLike;
 
@@ -32,9 +33,22 @@ const List<String> shelfKinds = [
 /// to an operator is on the operator's page.
 const String codexShelf = 'codex';
 
+/// [game]'s codex shelf (Endfield's is in its id namespace, so it routes to
+/// its database like every other Endfield id).
+String codexShelfOf(Game game) =>
+    game == Game.endfield ? '${endfieldIdPrefix}codex' : codexShelf;
+
+/// Whether [shelf] is a game's codex.
+bool isCodexShelf(String? shelf) =>
+    shelf == codexShelf || shelf == '${endfieldIdPrefix}codex';
+
 /// The shelf kind whose list is the operators (the record collections hang
 /// below them).
 const String operatorShelf = 'memory';
+
+/// [game]'s operator shelf.
+String operatorShelfOf(Game game) =>
+    game == Game.endfield ? '$endfieldIdPrefix$operatorShelf' : operatorShelf;
 
 /// An entry bound to an operator (`belongs_to` an `operator:` entry): a
 /// module, a skin, a paradox simulation stage. It is shown on the operator's
@@ -194,7 +208,8 @@ String? _text(Object? value) {
 
 /// One block of an entry's text.
 class EntryTextBlock {
-  const EntryTextBlock({required this.title, required this.content, this.section});
+  const EntryTextBlock(
+      {required this.title, required this.content, this.section,});
 
   final String title;
   final String? section;
@@ -239,9 +254,9 @@ const Set<String> documentEntryTypes = {'operator', 'token', 'trap'};
 const String _readable = "(e.type = 'story' OR e.record_id IS NOT NULL OR "
     "e.type IN ('operator', 'token', 'trap') OR $_hostsAttached)";
 
-Future<bool> _hasTable(DatabaseExecutor db, String name) async => (await db
-        .rawQuery('SELECT 1 FROM sqlite_master WHERE name = ?', [name]))
-    .isNotEmpty;
+Future<bool> _hasTable(DatabaseExecutor db, String name) async =>
+    (await db.rawQuery('SELECT 1 FROM sqlite_master WHERE name = ?', [name]))
+        .isNotEmpty;
 
 /// True when the database has the entry layer (schema 5).
 Future<bool> hasEntryLayer(DatabaseExecutor db) async =>
@@ -281,9 +296,8 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
 const Set<String> codexSpanningTypes = {'medal', 'item', 'charm'};
 
 Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
-  final owned = await _hasTable(db, 'entry_links')
-      ? 'AND NOT $_ownedByOperator '
-      : '';
+  final owned =
+      await _hasTable(db, 'entry_links') ? 'AND NOT $_ownedByOperator ' : '';
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
     "WHERE (e.collection_id IS NULL OR e.type IN ('medal', 'item', 'charm')) "
@@ -292,7 +306,8 @@ Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
     'GROUP BY e.type ORDER BY n DESC',
   );
   return [
-    for (final r in rows) (type: '${r['type']}', count: (r['n'] as num).toInt()),
+    for (final r in rows)
+      (type: '${r['type']}', count: (r['n'] as num).toInt()),
   ];
 }
 
@@ -384,7 +399,8 @@ Future<List<LibraryEntry>> samePersonOf(
 }
 
 /// One collection with its release time, or null.
-Future<LibraryCollection?> collectionById(DatabaseExecutor db, String id) async {
+Future<LibraryCollection?> collectionById(
+    DatabaseExecutor db, String id,) async {
   final rows = await db.rawQuery(
     'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
     "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
@@ -410,7 +426,8 @@ Future<List<({String type, int count})>> collectionTypes(
     [collectionId],
   );
   final out = [
-    for (final r in rows) (type: '${r['type']}', count: (r['n'] as num).toInt()),
+    for (final r in rows)
+      (type: '${r['type']}', count: (r['n'] as num).toInt()),
   ];
   if (await _hasTable(db, 'entry_links')) {
     final placed = await db.rawQuery(
@@ -458,7 +475,8 @@ Future<List<LibraryEntry>> storiesOf(
 }
 
 /// The introduction of a collection: the text of its `roguelike_topic` entry.
-Future<String?> collectionIntro(DatabaseExecutor db, String collectionId) async {
+Future<String?> collectionIntro(
+    DatabaseExecutor db, String collectionId,) async {
   final rows = await db.rawQuery(
     'SELECT r.content AS content FROM entries e '
     'JOIN normalized_records r ON r.entry_id = e.id '
@@ -466,7 +484,8 @@ Future<String?> collectionIntro(DatabaseExecutor db, String collectionId) async 
     'ORDER BY r.line_start, r.id',
     [collectionId],
   );
-  final text = rows.map((r) => '${r['content'] ?? ''}'.trim()).join('\n').trim();
+  final text =
+      rows.map((r) => '${r['content'] ?? ''}'.trim()).join('\n').trim();
   return text.isEmpty ? null : text;
 }
 
@@ -543,6 +562,7 @@ Future<String?> storyHostOf(DatabaseExecutor db, String storyId) async {
   );
   return rows.isEmpty ? null : _text(rows.first['raw']);
 }
+
 /// The entries of one type, in a collection ([collectionId]) or, without it,
 /// the free entries of the codex. [query] filters by name or code.
 Future<List<LibraryEntry>> entriesOfType(
@@ -554,7 +574,9 @@ Future<List<LibraryEntry>> entriesOfType(
   int limit = 2000,
 }) async {
   final q = query.trim();
-  final like = q.isEmpty ? '' : "AND (e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\') ";
+  final like = q.isEmpty
+      ? ''
+      : "AND (e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\') ";
   final args = <Object?>[
     if (q.isNotEmpty) ...['%${escapeLike(q)}%', '%${escapeLike(q)}%'],
   ];
@@ -592,10 +614,14 @@ Future<List<LibraryEntry>> entriesOfType(
 /// element is "no group"), appending the values to [args]; empty for null.
 String _groupFilter(List<String?>? groups, List<Object?> args) {
   if (groups == null || groups.isEmpty) return '';
-  final named = [for (final g in groups) if (g != null) g];
+  final named = [
+    for (final g in groups)
+      if (g != null) g,
+  ];
   args.addAll(named);
   final parts = [
-    if (named.isNotEmpty) 'e.group_name IN (${List.filled(named.length, '?').join(',')})',
+    if (named.isNotEmpty)
+      'e.group_name IN (${List.filled(named.length, '?').join(',')})',
     if (groups.contains(null)) "(e.group_name IS NULL OR e.group_name = '')",
   ];
   return 'AND (${parts.join(' OR ')}) ';
@@ -651,7 +677,8 @@ Future<List<EntryTextBlock>> entryTexts(
     );
     return [
       for (final r in rows)
-        EntryTextBlock(title: '${r['title'] ?? ''}', content: '${r['content'] ?? ''}'),
+        EntryTextBlock(
+            title: '${r['title'] ?? ''}', content: '${r['content'] ?? ''}',),
     ];
   }
   final rows = await db.rawQuery(
@@ -703,11 +730,13 @@ Future<List<EntryBinding>> entryBindings(
       [entryId, limit],
     );
     for (final r in rows) {
-      out.add(EntryBinding(
-        relation: '${r['relation']}',
-        outgoing: outgoing,
-        entry: LibraryEntry.fromRow(r),
-      ),);
+      out.add(
+        EntryBinding(
+          relation: '${r['relation']}',
+          outgoing: outgoing,
+          entry: LibraryEntry.fromRow(r),
+        ),
+      );
     }
   }
   return out;

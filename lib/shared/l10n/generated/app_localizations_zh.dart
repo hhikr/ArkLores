@@ -1472,4 +1472,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get storyReaderFindHint => '在本篇中查找';
+
+  @override
+  String get gameArknights => '明日方舟';
+
+  @override
+  String get gameEndfield => '终末地';
+
+  @override
+  String libraryGameMissing(String game) {
+    return '$game知识库未安装';
+  }
 }

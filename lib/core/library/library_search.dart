@@ -26,6 +26,11 @@ typedef LibraryScope = ({
 const LibraryScope everywhere =
     (shelf: null, collectionId: null, ownerId: null, type: null);
 
+/// The game whose library [scope] is in (the default game for [everywhere],
+/// which the search providers spread over every game).
+Game gameOfScope(LibraryScope scope) =>
+    gameOfId(scope.collectionId ?? scope.ownerId ?? scope.shelf ?? '');
+
 LibraryScope shelfScope(String kind) =>
     (shelf: kind, collectionId: null, ownerId: null, type: null);
 
@@ -88,6 +93,23 @@ class LibrarySearchResult {
 
   bool get hasNameHits => collections.isNotEmpty || entries.isNotEmpty;
 
+  /// This game's hits followed by [other]'s (0.12: a search of the whole
+  /// library runs in every game's database). Near names only matter where
+  /// neither game has a name that contains the query.
+  LibrarySearchResult merge(LibrarySearchResult other) {
+    final names = hasNameHits || other.hasNameHits;
+    return LibrarySearchResult(
+      collections: [...collections, ...other.collections],
+      entries: [...entries, ...other.entries],
+      similarCollections: names
+          ? const []
+          : [...similarCollections, ...other.similarCollections],
+      similar: names ? const [] : [...similar, ...other.similar],
+      mentions: [...mentions, ...other.mentions],
+      searchedText: searchedText || other.searchedText,
+    );
+  }
+
   bool get isEmpty =>
       !hasNameHits &&
       similarCollections.isEmpty &&
@@ -127,7 +149,7 @@ List<String> searchTerms(String query) => [
     parts.add("(e.type = 'operator' OR e.collection_id IN "
         '(SELECT id FROM collections WHERE kind = ?))');
     args.add(shelf);
-  } else if (shelf == codexShelf || (shelf == null && type != null)) {
+  } else if (isCodexShelf(shelf) || (shelf == null && type != null)) {
     // The codex: free entries (some types span collections), never what is
     // shown on an operator's page.
     if (type == null || !codexSpanningTypes.contains(type)) {
@@ -153,7 +175,7 @@ List<String> searchTerms(String query) => [
     return (sql: 'c.parent_id = ?', args: [scope.ownerId]);
   }
   final shelf = scope.shelf;
-  if (shelf == codexShelf) return null;
+  if (isCodexShelf(shelf)) return null;
   if (shelf != null) return (sql: 'c.kind = ?', args: [shelf]);
   return (sql: '1 = 1', args: const []);
 }
@@ -214,15 +236,17 @@ Future<({List<LibraryCollection> collections, List<LibraryEntry> entries})>
   var collections = const <LibraryCollection>[];
   final cScope = _collectionScope(scope);
   if (cScope != null) {
-    collections = _readableCollections(await db.rawQuery(
-      'SELECT $_collectionColumns '
-      'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
-      'WHERE ${cScope.sql} AND '
-      "${[for (final _ in likes) "c.name LIKE ? ESCAPE '\\'"].join(' AND ')} "
-      'GROUP BY c.id ORDER BY (c.name = ?) DESC, c.start_time DESC, '
-      'c.sort_key LIMIT 30',
-      [...cScope.args, ...likes, terms.join(' ')],
-    ),);
+    collections = _readableCollections(
+      await db.rawQuery(
+        'SELECT $_collectionColumns '
+        'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
+        'WHERE ${cScope.sql} AND '
+        "${[for (final _ in likes) "c.name LIKE ? ESCAPE '\\'"].join(' AND ')} "
+        'GROUP BY c.id ORDER BY (c.name = ?) DESC, c.start_time DESC, '
+        'c.sort_key LIMIT 30',
+        [...cScope.args, ...likes, terms.join(' ')],
+      ),
+    );
   }
   final eScope = _entryScope(scope);
   const own = "(e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\')";
@@ -262,7 +286,12 @@ Future<({List<LibraryCollection> collections, List<LibraryEntry> entries})>
   int limit = 20,
 }) async {
   final chars = query.runes.map(String.fromCharCode).toList();
-  if (chars.length < 2) return (collections: const <LibraryCollection>[], entries: const <LibraryEntry>[]);
+  if (chars.length < 2) {
+    return (
+      collections: const <LibraryCollection>[],
+      entries: const <LibraryEntry>[]
+    );
+  }
   final inOrder = '%${chars.map(escapeLike).join('%')}%';
   // A two-character name one character off is a different name (城 → 坚城,
   // 摧城 …): only a homophone counts there. Longer names may be off by
@@ -306,31 +335,37 @@ Future<({List<LibraryCollection> collections, List<LibraryEntry> entries})>
   var collections = const <LibraryCollection>[];
   final cScope = _collectionScope(scope);
   if (cScope != null) {
-    final ids = rank(await db.rawQuery(
-      "SELECT c.id, c.name, (c.name LIKE ? ESCAPE '\\') AS seq "
-      'FROM collections c WHERE ${cScope.sql} AND '
-      '${candidates('c.name')}',
-      [inOrder, ...cScope.args, ...candidateArgs],
-    ),);
+    final ids = rank(
+      await db.rawQuery(
+        "SELECT c.id, c.name, (c.name LIKE ? ESCAPE '\\') AS seq "
+        'FROM collections c WHERE ${cScope.sql} AND '
+        '${candidates('c.name')}',
+        [inOrder, ...cScope.args, ...candidateArgs],
+      ),
+    );
     if (ids.isNotEmpty) {
-      final rows = _readableCollections(await db.rawQuery(
-        'SELECT $_collectionColumns '
-        'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
-        'WHERE c.id IN (${List.filled(ids.length, '?').join(',')}) '
-        'GROUP BY c.id',
-        ids,
-      ),);
+      final rows = _readableCollections(
+        await db.rawQuery(
+          'SELECT $_collectionColumns '
+          'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
+          'WHERE c.id IN (${List.filled(ids.length, '?').join(',')}) '
+          'GROUP BY c.id',
+          ids,
+        ),
+      );
       final order = {for (final (i, id) in ids.indexed) id: i};
       collections = rows..sort((a, b) => order[a.id]!.compareTo(order[b.id]!));
     }
   }
   final eScope = _entryScope(scope);
-  final ids = rank(await db.rawQuery(
-    "SELECT e.id, e.name, (e.name LIKE ? ESCAPE '\\') AS seq FROM entries e "
-    'WHERE ${eScope.sql} AND $_readable AND NOT $_isAttached AND '
-    '${candidates('e.name')}',
-    [inOrder, ...eScope.args, ...candidateArgs],
-  ),);
+  final ids = rank(
+    await db.rawQuery(
+      "SELECT e.id, e.name, (e.name LIKE ? ESCAPE '\\') AS seq FROM entries e "
+      'WHERE ${eScope.sql} AND $_readable AND NOT $_isAttached AND '
+      '${candidates('e.name')}',
+      [inOrder, ...eScope.args, ...candidateArgs],
+    ),
+  );
   var entries = const <LibraryEntry>[];
   if (ids.isNotEmpty) {
     final rows = await db.rawQuery(
@@ -365,14 +400,16 @@ Future<List<LibraryTextHit>> textHits(
   final others = scope.type != 'story';
 
   // Stories. SQLite gives the bare columns of the row MIN() picked.
-  final lines = !stories ? const <Map<String, Object?>>[] : await db.rawQuery(
-    'SELECT sl.story_id AS story_id, COUNT(*) AS n, '
-    'MIN(sl.line_index) AS first, sl.content AS content FROM story_lines sl '
-    'WHERE ${all('sl.content')} '
-    "${scoped ? "AND sl.story_id IN (SELECT e.raw_id FROM entries e WHERE e.type = 'story' AND ${eScope.sql}) " : ''}"
-    'GROUP BY sl.story_id ORDER BY n DESC LIMIT ?',
-    [...likes, if (scoped) ...eScope.args, limit],
-  );
+  final lines = !stories
+      ? const <Map<String, Object?>>[]
+      : await db.rawQuery(
+          'SELECT sl.story_id AS story_id, COUNT(*) AS n, '
+          'MIN(sl.line_index) AS first, sl.content AS content FROM story_lines sl '
+          'WHERE ${all('sl.content')} '
+          "${scoped ? "AND sl.story_id IN (SELECT e.raw_id FROM entries e WHERE e.type = 'story' AND ${eScope.sql}) " : ''}"
+          'GROUP BY sl.story_id ORDER BY n DESC LIMIT ?',
+          [...likes, if (scoped) ...eScope.args, limit],
+        );
   if (lines.isNotEmpty) {
     final byStory = {for (final r in lines) '${r['story_id']}': r};
     final ids = byStory.keys.toList();
@@ -387,33 +424,39 @@ Future<List<LibraryTextHit>> textHits(
       final entry = LibraryEntry.fromRow(r);
       final line = byStory.remove(entry.rawId);
       if (line == null) continue;
-      hits.add(LibraryTextHit(
-        entry: entry,
-        count: (line['n'] as num).toInt(),
-        line: (line['first'] as num?)?.toInt(),
-        snippet: snippetAround('${line['content'] ?? ''}', terms),
-      ),);
+      hits.add(
+        LibraryTextHit(
+          entry: entry,
+          count: (line['n'] as num).toInt(),
+          line: (line['first'] as num?)?.toInt(),
+          snippet: snippetAround('${line['content'] ?? ''}', terms),
+        ),
+      );
     }
   }
 
   // Other entries: their text blocks, and the profile documents of
   // operators, summons and devices.
-  final records = !others ? const <Map<String, Object?>>[] : await db.rawQuery(
-    'SELECT r.entry_id AS entry_id, COUNT(*) AS n, r.content AS content '
-    'FROM normalized_records r JOIN entries e ON e.id = r.entry_id '
-    "WHERE e.type <> 'story' AND ${eScope.sql} AND NOT $_isAttached "
-    'AND ${all('r.content')} '
-    'GROUP BY r.entry_id ORDER BY n DESC LIMIT ?',
-    [...eScope.args, ...likes, limit],
-  );
-  final documents = !others ? const <Map<String, Object?>>[] : await db.rawQuery(
-    'SELECT e.id AS entry_id, COUNT(*) AS n, d.content AS content '
-    'FROM entity_documents d JOIN entries e ON e.entity_id = d.entity_id '
-    'WHERE e.type IN (${_sqlList(documentEntryTypes)}) AND ${eScope.sql} '
-    'AND ${all('d.content')} '
-    'GROUP BY e.id ORDER BY n DESC LIMIT ?',
-    [...eScope.args, ...likes, limit],
-  );
+  final records = !others
+      ? const <Map<String, Object?>>[]
+      : await db.rawQuery(
+          'SELECT r.entry_id AS entry_id, COUNT(*) AS n, r.content AS content '
+          'FROM normalized_records r JOIN entries e ON e.id = r.entry_id '
+          "WHERE e.type <> 'story' AND ${eScope.sql} AND NOT $_isAttached "
+          'AND ${all('r.content')} '
+          'GROUP BY r.entry_id ORDER BY n DESC LIMIT ?',
+          [...eScope.args, ...likes, limit],
+        );
+  final documents = !others
+      ? const <Map<String, Object?>>[]
+      : await db.rawQuery(
+          'SELECT e.id AS entry_id, COUNT(*) AS n, d.content AS content '
+          'FROM entity_documents d JOIN entries e ON e.entity_id = d.entity_id '
+          'WHERE e.type IN (${_sqlList(documentEntryTypes)}) AND ${eScope.sql} '
+          'AND ${all('d.content')} '
+          'GROUP BY e.id ORDER BY n DESC LIMIT ?',
+          [...eScope.args, ...likes, limit],
+        );
   final byEntry = {
     for (final r in [...records, ...documents]) '${r['entry_id']}': r,
   };
@@ -428,11 +471,13 @@ Future<List<LibraryTextHit>> textHits(
     for (final r in rows) {
       final entry = LibraryEntry.fromRow(r);
       final block = byEntry[entry.id]!;
-      hits.add(LibraryTextHit(
-        entry: entry,
-        count: (block['n'] as num).toInt(),
-        snippet: snippetAround('${block['content'] ?? ''}', terms),
-      ),);
+      hits.add(
+        LibraryTextHit(
+          entry: entry,
+          count: (block['n'] as num).toInt(),
+          snippet: snippetAround('${block['content'] ?? ''}', terms),
+        ),
+      );
     }
   }
   hits.sort((a, b) => b.count.compareTo(a.count));
@@ -490,15 +535,17 @@ Future<List<LibraryTextHit>> storyChunkEntries(
       "BETWEEN ? AND ? AND trim(content) <> '' ORDER BY line_index LIMIT 1",
       [id, hit.lineStart, hit.lineEnd],
     );
-    out.add(LibraryTextHit(
-      entry: entry,
-      line: hit.lineStart,
-      lineEnd: hit.lineEnd,
-      snippet: snippetAround(
-        first.isEmpty ? '' : '${first.first['content'] ?? ''}',
-        const [],
+    out.add(
+      LibraryTextHit(
+        entry: entry,
+        line: hit.lineStart,
+        lineEnd: hit.lineEnd,
+        snippet: snippetAround(
+          first.isEmpty ? '' : '${first.first['content'] ?? ''}',
+          const [],
+        ),
       ),
-    ),);
+    );
     if (out.length >= limit) break;
   }
   return out;

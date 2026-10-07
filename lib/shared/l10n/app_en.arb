@@ -507,5 +507,9 @@
   "@librarySearchMatchCount": {"placeholders": {"n": {"type": "int"}}},
   "librarySearchFurther": "Search for “{query}” (close names and texts too)",
   "@librarySearchFurther": {"placeholders": {"query": {"type": "String"}}},
-  "storyReaderFindHint": "Find in this story"
+  "storyReaderFindHint": "Find in this story",
+  "gameArknights": "Arknights",
+  "gameEndfield": "Endfield",
+  "libraryGameMissing": "{game} knowledge base not installed",
+  "@libraryGameMissing": {"placeholders": {"game": {"type": "String"}}}
 }

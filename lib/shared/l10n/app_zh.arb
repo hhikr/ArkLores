@@ -505,5 +505,9 @@
   "@librarySearchMatchCount": {"placeholders": {"n": {"type": "int"}}},
   "librarySearchFurther": "搜索「{query}」（含相近名字与正文）",
   "@librarySearchFurther": {"placeholders": {"query": {"type": "String"}}},
-  "storyReaderFindHint": "在本篇中查找"
+  "storyReaderFindHint": "在本篇中查找",
+  "gameArknights": "明日方舟",
+  "gameEndfield": "终末地",
+  "libraryGameMissing": "{game}知识库未安装",
+  "@libraryGameMissing": {"placeholders": {"game": {"type": "String"}}}
 }

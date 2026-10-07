@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/gamedata/build/story_naming.dart'
-    show openingStoryKind;
+import '../../core/gamedata/build/story_naming.dart' show openingStoryKind;
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
@@ -38,9 +38,15 @@ class CollectionPage extends ConsumerWidget {
     // Special rules are named by what the game calls each kind.
     final ruleKinds = [
       for (final g in ref
-              .watch(entryGroupsProvider(
-                (type: 'roguelike_buff', collectionId: collectionId),
-              ),)
+              .watch(
+                entryGroupsProvider(
+                  (
+                    type: 'roguelike_buff',
+                    collectionId: collectionId,
+                    game: gameOfId(collectionId),
+                  ),
+                ),
+              )
               .valueOrNull ??
           const <({String? group, int count})>[])
         if (g.group != null) g.group!,
@@ -50,8 +56,9 @@ class CollectionPage extends ConsumerWidget {
 
     final storyList = stories.valueOrNull ?? const <LibraryEntry>[];
     final intro = ref.watch(collectionIntroProvider(collectionId)).valueOrNull;
-    final inline = ref.watch(collectionInlineProvider(collectionId)).valueOrNull ??
-        const <LibraryEntry>[];
+    final inline =
+        ref.watch(collectionInlineProvider(collectionId)).valueOrNull ??
+            const <LibraryEntry>[];
     // A topic whose endings and squads carry their own stories lists them
     // first; the stories left over and the kinds of texts follow, without
     // headings of their own.
@@ -70,17 +77,26 @@ class CollectionPage extends ConsumerWidget {
     // stories of older topics) follow the endings and squads, each kind
     // under its own folding heading.
     final opening = ownParts
-        ? [for (final s in storyList) if (s.group == openingStoryKind) s]
+        ? [
+            for (final s in storyList)
+              if (s.group == openingStoryKind) s,
+          ]
         : const <LibraryEntry>[];
     final restStories = ownParts
-        ? [for (final s in storyList) if (s.group != openingStoryKind) s]
+        ? [
+            for (final s in storyList)
+              if (s.group != openingStoryKind) s,
+          ]
         : storyList;
     final sections =
         _storySections(c, restStories, other: context.t.shelfOther);
     final read = storyList
-        .where((s) =>
-            progress[LibraryRef.story(s.rawId ?? '').toString()]?.hasCompleted ??
-            false,)
+        .where(
+          (s) =>
+              progress[LibraryRef.story(s.rawId ?? '').toString()]
+                  ?.hasCompleted ??
+              false,
+        )
         .length;
 
     return LibraryScaffold(
@@ -122,7 +138,8 @@ class CollectionPage extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    ..._ownParts(context, theme, inline, notes: true, nickname: nickname),
+                    ..._ownParts(context, theme, inline,
+                        notes: true, nickname: nickname,),
                     if (opening.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -142,7 +159,8 @@ class CollectionPage extends ConsumerWidget {
                         rowDivider(theme),
                       ],
                     ],
-                    ..._ownParts(context, theme, inline, notes: false, nickname: nickname),
+                    ..._ownParts(context, theme, inline,
+                        notes: false, nickname: nickname,),
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
                         Padding(
@@ -216,9 +234,10 @@ class CollectionPage extends ConsumerWidget {
                       for (final t in typeList) ...[
                         LibraryRow(
                           key: ValueKey('collection-type-${t.type}'),
-                          title: t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
-                              ? ruleKinds.join('、')
-                              : entryTypeName(t.type),
+                          title:
+                              t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
+                                  ? ruleKinds.join('、')
+                                  : entryTypeName(t.type),
                           subtitle: context.t.libraryCountEntries(t.count),
                           subtitleLines: 1,
                           trailing: Icon(
