@@ -183,3 +183,9 @@
 - **玩家角色有男女两套台词**（`{F}…{M}…`），**说话人名带内部注释**（`名字{内部名}`，可能剧透身份）：建库前要扫一遍全库的 `{`、`<`、`#`、`\n` 等记号，
   逐个决定怎么处理，并写进测试。
 - **表会被热更新层覆盖**：Persistent 里同名的表是新版本（有的变成空表，例如势力表），不要把两层合并成“取最长的一份”。
+- **按文字量普查一遍再决定收什么**：对每张表统计它引用的中文去重字数，列出没读的大表逐个判断（0.12 用 Python 脚本扫 i18n 引用）。
+  这样找出了漏掉的：地图上读到的留言（`RichContentTable` 里档案库不列的 232 条）、远程通话、角色闲话、副本简介与敌人绑定、角色来信、干员的阵营/种族/专长/爱好标签。
+  明确不收的：技能、天赋、潜能、成长、成就、教学页（`WikiTutorialPageTable`、`InstructionBook`、`IntroTable`）、加载提示、超链接术语表（多为玩法说明）、系统邮件。
+- **地区、地点、分类名都去游戏表里找**：地区（`DomainDataTable.domainName` + `levelGroup`）、地点（`LevelDescTable.showName`、`DistributionInfoTable.areaName`）、
+  标签分组（`TagGroupDataTable`；仅系统用的分组和 `hideTag` 的标签不收）、任务分类（Lua UI 脚本 + `ui_mis_panel_tab_*`）。
+- **PowerShell 里写中文文档要小心**：双引号字符串里的中文弯引号会被当作字符串结束符，脚本直接报语法错；改中文文本用编辑工具或单引号 here-string。
