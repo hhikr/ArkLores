@@ -1,4 +1,4 @@
-# 资料页结构说明（给问答 Agent 的 agent.md）
+# 资料页结构说明
 
 资料页（图鉴）是知识库条目层（`collections` / `entries` / `entry_links`）的阅读视图。问答 Agent 在查库前先参考这份说明，
 判断要找的东西在哪一类、对剧情有什么用。**正文以 `lib/core/agent/lore_agent_prompts.dart` 的 `loreLibraryGuide` 为准**
@@ -6,7 +6,7 @@
 
 ## 结构概要
 
-| 书架（`collections.kind`） | 内容 | 对剧情的作用 |
+| 书架 collections.kind | 内容 | 对剧情的作用 |
 |---|---|---|
 | `main` 主线 | 每章一个集合，行动前/后剧情，章内关卡、敌人、物品、奖章 | 主干事件 |
 | `sidestory` / `ministory` / `branchline` | SideStory、故事集、插曲 | 完整支线 / 短篇 / 与主线联系紧密的补充 |
