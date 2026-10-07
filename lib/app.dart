@@ -157,8 +157,9 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 }
 
-/// The bottom navigation: a floating pill (52 high) off the screen edges,
-/// the selected tab's icon in a small pill inside it.
+/// The bottom navigation: a short floating pill (52 high), centred, the
+/// tabs close together (64 wide each), the selected tab's icon in a small
+/// pill inside it.
 class _IndustrialNavigation extends StatelessWidget {
   const _IndustrialNavigation({
     required this.theme,
@@ -173,23 +174,27 @@ class _IndustrialNavigation extends StatelessWidget {
   final List<(IconData, String)> items;
 
   static const double height = 52;
+  static const double itemWidth = 64;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+      child: Center(
+        heightFactor: 1,
         child: FloatingBar(
           key: const ValueKey('main-navigation'),
           theme: theme,
           radius: 26,
           height: height,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               for (var index = 0; index < items.length; index++)
-                Expanded(
+                SizedBox(
+                  width: itemWidth,
                   child: _NavigationItem(
                     theme: theme,
                     icon: items[index].$1,

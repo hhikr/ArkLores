@@ -23,7 +23,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
   小胶囊里，去掉了第二条下划线）；全局 AppBar 48 高、标题 16、细分隔线，各页写死的 18/20 号标题改为 16；资料页标签短下划线；Wiki 站点栏
   从 TabBar 改为 40 高的一行小胶囊（`wiki-site-bar`）。效果图在本地 `notes/ui_slim_2026-10-07.svg`。
   ③ 同日再改为悬浮（开发者要求）：样式统一在 `shared/widgets/floating_bar.dart`（`FloatingBar` 圆角半透明卡片 + 细边 + 软阴影，
-  `FloatingTopBar`，`floatingPadding`）。外壳 `extendBody: true`，底部导航是离开屏幕边缘的胶囊，页面拿到它的高度作为
+  `FloatingTopBar`，`floatingPadding`）。外壳 `extendBody: true`，底部导航是居中的短胶囊（每项 64 宽，四项共约 268），页面拿到它的高度作为
   `MediaQuery.padding.bottom`、内容从它下面滚过；键盘弹出时导航隐藏（否则输入框和键盘之间会空出一截）。资料页的标签栏、AI 页的输入框
   （`_SizeReporter` 量出输入框高度给列表留底）都悬浮；Wiki 的站点栏是悬浮胶囊，但网页夹在两个悬浮栏之间（网页不能从外部留白，盖住就看不到）。
   推入的二级页面（对话记录、设置子页、资料各级页面）仍是普通的 48 高 AppBar。新加主页面里的列表要用 `floatingPadding`。
