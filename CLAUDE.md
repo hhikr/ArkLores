@@ -14,7 +14,12 @@
 - **0.11（已发布）**：知识库重做为条目层（`entries`/`collections`/`entry_links`）、剧本全量解析、增量更新通道、用户库与阅读历史、
   资料页与阅读器、悬浮式界面与点击反馈、工作过程时间线、非 GLM 服务商兼容、删除角色扮演（开发者 2026-10-07 决定，不要恢复）。
   建库/更新/补算的经验与全部错误见 `docs/KNOWLEDGE_BASE_LESSONS.md`。
-- **0.12（进行中）**：终末地知识库与双游戏资料页/问答。
+- **0.12（进行中，`feature/v0.12-endfield`）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9。
+  已完成：每个游戏一个库文件、终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`find` 默认查两个库），
+  装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页按游戏分组书架、页面按 id 路由；知识库页每个游戏一张下载卡；
+  构建脚本传 `ENDFIELD_DB_URL/SHA256`。终末地建库：`tools/build_endfield_database.dart`（表 → 干员、档案库、敌人/武器/物品；剧情从表或 kit 的剧情发布）。
+  数据来自本机客户端，用 `Variante/endfield_research_kit` 解包（工具在 `C:\Users\hhikr\endfield\`，不提交）。
+  待办：接入 kit 的剧情发布（任务名、顺序、选项）；终末地资产发布（要开发者同意）；终末地剧情向量（花钱，要同意）。
 
 ## 文档索引
 

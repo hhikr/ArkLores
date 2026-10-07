@@ -4,6 +4,12 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Endfield (in development for 0.12)
+
+- **A second knowledge base for Arknights: Endfield**: operators' archives and voice lines, the in-game archive (documents, papers, records, investigations), enemy, weapon and item descriptions, and the conversations (dialogue, radio, messages) grouped by mission; character missions sit on their operator's page. Built on a computer from the game client and downloaded separately.
+- **The library shows each game's shelves**; search covers both.
+- **Answers look in the right game**: the assistant is told which library a question belongs to, searches both when it cannot tell, and marks steps and sources from Endfield.
+
 ## [0.11.0] - 2026-10-08
 
 Stable release of the 0.11 line; it replaces the pre-releases v0.11.0-pre.1–pre.4, which were withdrawn. The knowledge base
