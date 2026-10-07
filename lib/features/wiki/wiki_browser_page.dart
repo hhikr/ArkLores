@@ -63,10 +63,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   bool _restoredState = false;
   bool _hasStoredDarkMode = false;
   Timer? _readerControlsTimer;
+  late final SettingsService _settings;
 
   @override
   void initState() {
     super.initState();
+    _settings = ref.read(settingsServiceProvider);
     WidgetsBinding.instance.addObserver(this);
     _isDarkMode =
         WidgetsBinding.instance.platformDispatcher.platformBrightness ==
@@ -144,20 +146,27 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     var urls = <String>[];
     var appliedUrls = <String>[];
     try {
-      final service = ref.read(settingsServiceProvider);
+      final service = _settings;
       sites = await service.loadWikiSites();
-      urls = [
-        for (var i = 0; i < sites.length; i++)
-          await service.loadWikiUrl(i) ?? sites[i].url,
-      ];
-      appliedUrls = [
-        for (var i = 0; i < sites.length; i++)
-          await service.loadWikiAppliedUrl(i) ?? sites[i].url,
-      ];
-      tabIndex = await service.loadWikiTabIndex();
-      readerMode = await service.loadWikiReaderMode();
-      readerFontScale = await service.loadWikiReaderFontScale();
-      storedDarkMode = await service.loadWikiDarkMode();
+      final loadedSites = sites;
+      // Each read is a secure-storage platform call: run them together.
+      (urls, appliedUrls, tabIndex, readerMode, readerFontScale, storedDarkMode) =
+          await (
+        Future.wait([
+          for (var i = 0; i < loadedSites.length; i++)
+            service.loadWikiUrl(i).then((url) => url ?? loadedSites[i].url),
+        ]),
+        Future.wait([
+          for (var i = 0; i < loadedSites.length; i++)
+            service
+                .loadWikiAppliedUrl(i)
+                .then((url) => url ?? loadedSites[i].url),
+        ]),
+        service.loadWikiTabIndex(),
+        service.loadWikiReaderMode(),
+        service.loadWikiReaderFontScale(),
+        service.loadWikiDarkMode(),
+      ).wait;
     } catch (e) {
       debugPrint('[WikiBrowser] Error restoring browsing state: $e');
     }
@@ -188,22 +197,30 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
   }
 
+  /// Saves the tabs, URLs and reader settings. Called from [dispose] too,
+  /// where `ref` can no longer be used: the service was taken in
+  /// [initState] and the state is copied before the first await.
   Future<void> _persistBrowsingState() async {
+    final service = _settings;
+    final tabIndex = _tabController.index;
+    final readerMode = _isReaderMode;
+    final fontScale = _readerFontScale;
+    final darkMode = _hasStoredDarkMode ? _isDarkMode : null;
+    final urls = List.of(_currentUrls);
+    final appliedUrls = List.of(_appliedSourceUrls);
     try {
-      final service = ref.read(settingsServiceProvider);
-      await service.saveWikiTabIndex(_tabController.index);
-      await service.saveWikiReaderMode(_isReaderMode);
-      await service.saveWikiReaderFontScale(_readerFontScale);
-      if (_hasStoredDarkMode) {
-        await service.saveWikiDarkMode(_isDarkMode);
+      await service.saveWikiTabIndex(tabIndex);
+      await service.saveWikiReaderMode(readerMode);
+      await service.saveWikiReaderFontScale(fontScale);
+      if (darkMode != null) {
+        await service.saveWikiDarkMode(darkMode);
       }
       await Future.wait([
-        for (var i = 0; i < _currentUrls.length; i++)
-          if (_currentUrls[i].trim().isNotEmpty)
-            service.saveWikiUrl(i, _currentUrls[i]),
-        for (var i = 0; i < _appliedSourceUrls.length; i++)
-          if (_appliedSourceUrls[i].trim().isNotEmpty)
-            service.saveWikiAppliedUrl(i, _appliedSourceUrls[i]),
+        for (var i = 0; i < urls.length; i++)
+          if (urls[i].trim().isNotEmpty) service.saveWikiUrl(i, urls[i]),
+        for (var i = 0; i < appliedUrls.length; i++)
+          if (appliedUrls[i].trim().isNotEmpty)
+            service.saveWikiAppliedUrl(i, appliedUrls[i]),
       ]);
     } catch (e) {
       debugPrint('[WikiBrowser] Error saving browsing state: $e');
@@ -827,7 +844,13 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                                             color: theme.accentPrimary,
                                           ),
                                           const SizedBox(width: 6),
-                                          Text(site.label),
+                                          Flexible(
+                                            child: Text(
+                                              site.label,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     );
