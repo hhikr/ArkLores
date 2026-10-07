@@ -118,6 +118,10 @@ void writeTables(Directory dir) {
       'dialogText': tx(i18n, 75, '风停了。'),
     },
   });
+  table('DialogOptionTable', {
+    'option_dlg_e1m1_1_3_001': {'optionText': tx(i18n, 90, '跟上去')},
+    'option_dlg_e1m1_1_3_002': {'optionText': tx(i18n, 91, '留下来')},
+  });
   table('DialogSummaryMapTable', {'dlg_e1m1_1': 'summary_e1m1_1_001'});
   table(
       'DialogSummaryTable', {'summary_e1m1_1_001': tx(i18n, 80, '甲与乙在谷地相遇。')},);
@@ -184,7 +188,11 @@ void main() {
     final lines = await q(
       "SELECT speaker, content, kind FROM story_lines WHERE story_id = 'ef/dlg_e1m1_1.txt' ORDER BY line_index",
     );
-    expect(lines.map((l) => l['content']), ['她来了。', '欢迎，管理员。', '风停了。']);
+    expect(
+      lines.map((l) => l['content']),
+      ['她来了。', '欢迎，管理员。', '跟上去／留下来', '风停了。'],
+    );
+    expect(lines[2]['kind'], 'choice');
     expect(lines.last['kind'], 'narration');
     final catalog = await q(
       "SELECT collection_type, synopsis FROM story_catalog WHERE story_id = 'ef/dlg_e1m1_1.txt'",
@@ -207,7 +215,9 @@ void main() {
     expect(texts.map((t) => t['section']), containsAll(['基础档案', '语音']));
     expect(texts.first['content'], isNot(contains('<@')));
     final shelf =
-        await q("SELECT parent_id FROM collections WHERE kind = 'ef/memory'");
+        await q(
+      "SELECT parent_id FROM collections WHERE id = 'ef/operator_chr_0001_a'",
+    );
     expect(shelf.single['parent_id'], 'operator:ef/chr_0001_a');
   });
 
@@ -227,7 +237,7 @@ void main() {
     final owner = await q(
       "SELECT kind, parent_id FROM collections WHERE id = 'ef/mission_c1m1'",
     );
-    expect(owner.single['kind'], 'ef/character');
+    expect(owner.single['kind'], 'ef/memory');
     expect(owner.single['parent_id'], 'operator:ef/chr_0001_a');
     final line = await q(
       "SELECT speaker FROM story_lines WHERE story_id = 'ef/dlg_c1m1_1.txt'",

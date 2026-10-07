@@ -355,22 +355,44 @@ class EndfieldStoryImporter {
           .putIfAbsent(m.group(1)!, () => [])
           .add((int.parse(m.group(2)!), value));
     }
+    // Player choices: `option_<conversation>_<group>_<n>`; a group takes the
+    // place of the line number it fills in the conversation (its lines skip
+    // that number).
+    final choices = <String, Map<int, List<String>>>{};
+    for (final MapEntry(:key, :value) in tables.table('DialogOptionTable').entries) {
+      final m = RegExp(r'^option_(.+)_(\d+)_(\d+)$').firstMatch(key);
+      if (m == null || value is! Map) continue;
+      final text = _clean(value['optionText']);
+      if (text.isEmpty) continue;
+      choices
+          .putIfAbsent(m.group(1)!, () => {})
+          .putIfAbsent(int.parse(m.group(2)!), () => [])
+          .add(text);
+    }
     final ids = byConversation.keys.toList()..sort(_naturalCompare);
     final source = tables.sourcePath('DialogTextTable');
     for (final (i, id) in ids.indexed) {
       final rows = byConversation[id]!..sort((a, b) => a.$1.compareTo(b.$1));
-      await _story(
-        id: id,
-        source: source,
-        sort: i,
-        lines: [
-          for (final (_, r) in rows)
+      final groups = choices[id] ?? const <int, List<String>>{};
+      final placed = <(int, int, EndfieldLine)>[
+        for (final (n, r) in rows)
+          (
+            n,
+            0,
             EndfieldLine(
               _clean(r['dialogText']),
               speaker: _speaker(r['actorName']),
               kind: _speaker(r['actorName']).isEmpty ? 'narration' : 'dialogue',
             ),
-        ],
+          ),
+        for (final MapEntry(key: n, value: texts) in groups.entries)
+          (n, 1, EndfieldLine(texts.join('／'), kind: 'choice')),
+      ]..sort((a, b) => a.$1 != b.$1 ? a.$1.compareTo(b.$1) : a.$2.compareTo(b.$2));
+      await _story(
+        id: id,
+        source: source,
+        sort: i,
+        lines: [for (final p in placed) p.$3],
       );
       count++;
     }
