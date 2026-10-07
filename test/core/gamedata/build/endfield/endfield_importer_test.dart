@@ -121,6 +121,12 @@ void writeTables(Directory dir) {
     'nar_1': {'contentId': 'text_1', 'name': tx(i18n, 62, '一封信'), 'order': 1},
   });
   table('RichContentTable', {
+    'text_e1m1_1': {
+      'title': tx(i18n, 500, '留言'),
+      'contentList': [
+        {'content': tx(i18n, 501, '我先走了。')},
+      ],
+    },
     'text_1': {
       'title': tx(i18n, 63, '一封信'),
       'contentList': [
@@ -261,7 +267,7 @@ void main() {
     expect(items.map((i) => i['name']), ['石头']);
     expect(items.single['group_name'], '材料');
     final doc = await q(
-      "SELECT r.content FROM entries e JOIN normalized_records r ON r.entry_id = e.id WHERE e.type = 'document'",
+      "SELECT r.content FROM entries e JOIN normalized_records r ON r.entry_id = e.id WHERE e.raw_id = 'ef/paper_map01_1'",
     );
     expect(doc.single['content'], '亲爱的朋友：\n谷地的春天来了。');
   });
@@ -290,8 +296,16 @@ void main() {
       "SELECT r.content FROM normalized_records r WHERE r.entry_id = 'enemy:ef/eny_0001_a' AND r.section = '分布'",
     );
     expect(where.single['content'], '枢纽区');
-    final doc = await q("SELECT group_name FROM entries WHERE type = 'document'");
+    final doc = await q("SELECT group_name FROM entries WHERE raw_id = 'ef/paper_map01_1'");
     expect(doc.single['group_name'], '谷地');
+  });
+
+  test('texts read in a mission outside the archive are documents of that mission', () async {
+    final rows = await q(
+      "SELECT name, collection_id FROM entries WHERE raw_id = 'ef/text_e1m1_1'",
+    );
+    expect(rows.single['name'], '留言');
+    expect(rows.single['collection_id'], 'ef/mission_e1m1');
   });
 
   test("the build's shelf list is the library's", () {

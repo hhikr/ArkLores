@@ -439,6 +439,72 @@ class EndfieldStoryImporter {
     }
     log?.call('radio: $count');
     await _importSns();
+    await _importReadings();
+  }
+
+  /// Texts the player reads in the world or in a mission (`RichContentTable`
+  /// rows the archive does not list: notes, messages, signs). Each is a
+  /// document in its mission (by id), at its level, or in the codex.
+  Future<void> _importReadings() async {
+    final rich = tables.table('RichContentTable');
+    final inArchive = <String>{
+      for (final page in tables.table('PrtsAllItem').values)
+        if (page is Map) '${page['contentId']}',
+      for (final reading in tables.table('PrtsReading').values)
+        if (reading is Map)
+          for (final item in listOfMaps(reading['list'])) '${item['contentId']}',
+    };
+    final popupTitle = <String, String>{
+      for (final p in tables.table('ReadingPopUpTable').values)
+        if (p is Map) '${p['contentId']}': endfieldText(tables.text(p['title'])),
+    };
+    final source = tables.sourcePath('RichContentTable');
+    var count = 0;
+    final ids = rich.keys.where((k) => !inArchive.contains(k)).toList()..sort(_naturalCompare);
+    for (final id in ids) {
+      final row = rich[id];
+      if (row is! Map<String, dynamic>) continue;
+      final text = [
+        for (final c in listOfMaps(row['contentList'])) _clean(c['content']),
+      ].where((t) => t.isNotEmpty).join('\n');
+      if (text.isEmpty) continue;
+      final title = _clean(row['title']).isNotEmpty
+          ? _clean(row['title'])
+          : (popupTitle[id] ?? '');
+      if (title.isEmpty) continue;
+      final bare = id.replaceFirst(RegExp(r'^text_'), '');
+      final cut = bare.lastIndexOf('_');
+      final mission = cut > 0 ? bare.substring(0, cut) : bare;
+      final level = RegExp(r'^(map\d+_lv\d+)').firstMatch(bare)?.group(1);
+      String? collection;
+      if (missions.containsKey(mission) || _missions.containsKey(mission)) {
+        await _ensureMission(mission);
+        collection = 'mission_$mission';
+      } else if (level != null && _levelName(level) != null) {
+        // The same collection as the level's interactions (see [_home]).
+        final key = 'level_$level';
+        final place = _levelName(level)!;
+        final region = importer.regionOf(level);
+        await _ensureMission(
+          key,
+          name: region == null || region == place ? place : '$region·$place',
+          kind: 'world',
+        );
+        collection = 'mission_$key';
+      }
+      await writer.entry(
+        type: 'document',
+        rawId: id,
+        name: title,
+        collectionId: collection,
+        group: importer.regionOf(bare),
+        sourcePath: source,
+        category: 'archive',
+        texts: [(section: title, text: text)],
+      );
+      count++;
+    }
+    log?.call('readings: $count');
   }
 
   /// Messages (SNS): each thread in content order, options as choice lines.
