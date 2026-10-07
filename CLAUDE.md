@@ -16,6 +16,15 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 剧本里的字面 `\n`（2026-10-08，未发布，需重算知识库）**：剧本把引号里的换行写成字面 `\n`（书信、诗、笔记的 `[Sticker]`/`[Subtitle]`），
+  `cleanStoryText` 以前原样保留，阅读页和历史里显示成“\n\n推演算力已突破上限。”（全库 1853 行故事 + 428 条记录）。现在变成真换行并保留
+  （首尾空行去掉、连续空行最多一行；表格文字的 `cleanRichText` 早就这样做）；工具输出仍是一行一个 `L<n>`，行内换行印成 ` / `（`oneLine`）；
+  阅读历史里旧库存下的片段读出时同样规范化（`historySnippetOf`），重新定位能对上新文字。干员档案的“基础信息”（`entity_documents`/
+  `operator_basic_profile`，含 `description` 特性文字）以前不去标记、不换行（`<@ba.kw>`、`\n` 进库），现在用 `cleanRichText`。
+  已用 `rederive_gamedata.dart` 重算本地库 → `build/gamedata_v5/arklores_gamedata_zh.nl.db`（162 个故事重解析，三张表的字面 `\n` 全部为 0）；
+  这 162 个故事的向量被删除（约 81 万字），待补嵌入后替换 `arklores_gamedata_zh.db`、压缩、更新 `release_gamedata.env` 的 SHA。
+  未改：特性文字（`description`）属于玩法文字，按规则不该进库，但召唤物/装置条目只有它，去掉会让这些条目消失，留待决定。
+
 - **0.11 工作过程可读、界面瘦身（2026-10-07，未发布，不需重算知识库）**：① 回答上方的过程不再是 Thought/Action/Observation 原文：
   `work_steps.dart`（纯 Dart）把工具调用与它的输出配对（并行调用按同名工具的先后配），`chat_bubble` 画成时间线：一步一行“搜索「X」/
   阅读《章名》/查看目录/查询资料库/派助手”，右侧是结果（“n 处 · m 篇”“第 a–b 行”“n 条”“没有结果”），模型的中间说明是灰色斜体两行；

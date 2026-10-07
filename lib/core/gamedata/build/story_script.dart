@@ -63,11 +63,29 @@ class StoryScriptLine {
   final StoryLineKind kind;
 }
 
-/// Removes rich-text tags and collapses whitespace.
+/// Removes rich-text tags and collapses whitespace. The script writes a
+/// line break inside quoted text as a literal `\n` (letters, poems and
+/// notes in `[Sticker]`/`[Subtitle]` are several lines; the game shows them
+/// so): it becomes a real line break, kept, with blank lines at the start
+/// and end dropped and at most one blank line in a row (`\n\n展信佳。` →
+/// `展信佳。`). Other blanks collapse to one space within a line.
 String cleanStoryText(String value) {
-  return stripMarkup(value)
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
+  final lines = stripMarkup(value)
+      .replaceAll(r'\r', '')
+      .replaceAll(r'\n', '\n')
+      .replaceAll(r'\t', ' ')
+      .split(RegExp(r'\r?\n'))
+      .map((line) => line.replaceAll(RegExp(r'\s+'), ' ').trim())
+      .toList();
+  final out = <String>[];
+  for (final line in lines) {
+    if (line.isEmpty && (out.isEmpty || out.last.isEmpty)) continue;
+    out.add(line);
+  }
+  while (out.isNotEmpty && out.last.isEmpty) {
+    out.removeLast();
+  }
+  return out.join('\n');
 }
 
 final RegExp _commandHead = RegExp(r'^([A-Za-z_][A-Za-z0-9_.]*)\s*(=|\(|$|\s)');

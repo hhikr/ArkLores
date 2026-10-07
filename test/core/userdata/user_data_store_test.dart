@@ -301,6 +301,15 @@ void main() {
       expect(reanchorLine(twice, 3, '同'), (index: 4, exact: true));
     });
 
+    test("a snippet saved with the old knowledge base's literal \\n reads "
+        'and re-anchors as the text is now', () {
+      final old = historySnippetOf(r'\n\n推演算力已突破上限。');
+      expect(old, '推演算力已突破上限。');
+      final fixed = ['标题', '推演算力已突破上限。', '拉特兰……爆发。'];
+      expect(reanchorLine(fixed, 1, old), (index: 1, exact: true));
+      expect(historySnippetOf(r'展信佳。\n恩希亚'), '展信佳。\n恩希亚');
+    });
+
     test('falls back to the clamped position when the text is gone', () {
       expect(reanchorLine(lines, 3, '没有'), (index: 3, exact: false));
       expect(reanchorLine(lines, 99, '没有'), (index: 4, exact: false));

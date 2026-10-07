@@ -67,11 +67,18 @@ class SeenLines {
 /// results fit the conversation.
 const int maxToolResultChars = 16000;
 
+/// [text] on one line: its line breaks shown as ` / `.
+String oneLine(String text) =>
+    text.contains('\n') ? text.split('\n').where((l) => l.isNotEmpty).join(' / ') : text;
+
 String _clip(String text, int max) =>
     text.length <= max ? text : '${text.substring(0, max)}…';
 
 /// One story line as the tools print it: `L12 [阿米娅] 内容`. Lines that are
 /// not dialogue or narration carry their kind instead: `L40 [字幕] 内容`.
+/// A line with line breaks of its own (a letter, a poem) stays on one
+/// printed line, its breaks shown as ` / `, so every printed line starts
+/// with its `L` number.
 String formatStoryLine(
   int index,
   String? speaker,
@@ -82,7 +89,7 @@ String formatStoryLine(
       ? storyKindLabel(kind)
       : speaker;
   final who = label == null || label.trim().isEmpty ? '' : '[$label] ';
-  return 'L$index $who$content';
+  return 'L$index $who${oneLine(content)}';
 }
 
 /// Readable chapter name for [storyId] from [entries] (path-derived when the

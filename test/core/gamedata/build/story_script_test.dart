@@ -102,6 +102,20 @@ void main() {
     expect(lines.single.$2, '他说：[出发]');
   });
 
+  test("the script's literal \\n is a real line break, kept; blank lines "
+      'at the ends dropped, at most one in a row', () {
+    final lines = parse(r'''
+[Sticker(id="st1", text="\n\n推演算力已突破上限。")]
+[Subtitle(text="展信佳。\n恩希亚，你好。\n\n\n\n另：记得回信。\n", x=1)]
+[name="甲"]  一句\t话  ''');
+    expect(lines[0].$2, '推演算力已突破上限。');
+    expect(lines[1].$2, '展信佳。\n恩希亚，你好。\n\n另：记得回信。');
+    expect(lines[2].$2, '一句 话');
+    for (final l in lines) {
+      expect(l.$2, isNot(contains(r'\n')));
+    }
+  });
+
   test('unbalanced and empty lines are skipped', () {
     expect(parse('[name="甲" 缺括号\n\n   \n'), isEmpty);
   });

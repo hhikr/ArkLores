@@ -126,7 +126,7 @@ class ReadingEntry {
         ref: row['ref']! as String,
         title: row['title']! as String,
         lineIndex: (row['line_index']! as num).toInt(),
-        snippet: row['snippet']! as String,
+        snippet: historySnippetOf(row['snippet']! as String),
         openedAt: DateTime.fromMillisecondsSinceEpoch(
           (row['opened_at']! as num).toInt(),
         ),
@@ -254,7 +254,10 @@ class UserMaterial {
 
 /// The text kept for an anchor line.
 String historySnippetOf(String content) {
-  final text = content.trim();
+  // Knowledge bases before 0.11 kept the script's literal `\n` in letters
+  // and notes; snippets saved from them read (and re-anchor) as the text
+  // does now, with real line breaks and no leading blank lines.
+  final text = content.replaceAll(r'\n', '\n').trim();
   return text.length <= historySnippetLength
       ? text
       : text.substring(0, historySnippetLength);

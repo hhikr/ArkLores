@@ -15,6 +15,7 @@ import 'dart:io';
 import 'package:arklores/core/gamedata/build/entry_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_script.dart';
+import 'package:arklores/core/gamedata/build/text_harvest.dart' show cleanRichText;
 import 'package:arklores/core/gamedata/story_vectors.dart' show storyChunkVectorsTable;
 import 'package:arklores/core/rag/chunker.dart';
 import 'package:crypto/crypto.dart';
@@ -274,13 +275,12 @@ class ArknightsImporter {
         );
         await _linkCharacterRefs(txn, charId, data, sourcePath);
 
+        // Cleaned like every table text: markup off, the table's literal
+        // `\n` a line break.
         final basicProfile = [
-          if ('${data['description'] ?? ''}'.trim().isNotEmpty)
-            '${data['description']}'.trim(),
-          if ('${data['itemUsage'] ?? ''}'.trim().isNotEmpty)
-            '${data['itemUsage']}'.trim(),
-          if ('${data['itemDesc'] ?? ''}'.trim().isNotEmpty)
-            '${data['itemDesc']}'.trim(),
+          for (final field in ['description', 'itemUsage', 'itemDesc'])
+            if (cleanRichText('${data[field] ?? ''}').isNotEmpty)
+              cleanRichText('${data[field]}'),
         ].join('\n').trim();
         if (basicProfile.isNotEmpty) {
           documentSections.add(TextSection('基础信息', basicProfile));
