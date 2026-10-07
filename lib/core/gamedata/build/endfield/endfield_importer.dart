@@ -44,8 +44,7 @@ class EndfieldImporter {
     await importArchive();
   }
 
-  String _clean(Object? field) =>
-      stripAssetRefs(cleanRichText(tables.text(field))).trim();
+  String _clean(Object? field) => endfieldText(tables.text(field));
 
   /// The localized `name` of row [key] of a kind table (null when none).
   String? _groupName(String table, Object? key) {
@@ -352,3 +351,20 @@ String stripAssetRefs(String text) => text
     .replaceAll(RegExp(r'[A-Za-z][A-Za-z0-9_]*(?:/[A-Za-z0-9_.\-]+)+'), '')
     .replaceAll(RegExp(r'[ \t]{2,}'), ' ')
     .replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+/// An Endfield text as the knowledge base stores it: markup and asset
+/// references removed, the player character's lines in one form. The game
+/// writes a line for either gender of the Endministrator as `{F}…{M}…`; the
+/// female form is kept (the research kit's default too). `{player}` is the
+/// player's name, written as the title every character uses for them.
+String endfieldText(String raw) {
+  var text = raw;
+  if (text.contains('{F}') && text.contains('{M}')) {
+    text = text.replaceAllMapped(
+      RegExp(r'\{F\}([\s\S]*?)\s*\{M\}[\s\S]*?(?=\{F\}|$)'),
+      (m) => m.group(1)!,
+    );
+  }
+  text = text.replaceAll(RegExp(r'@?\{player\}'), '管理员');
+  return stripAssetRefs(cleanRichText(text)).trim();
+}

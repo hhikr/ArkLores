@@ -83,7 +83,10 @@ class EndfieldWriter {
           'id': endfieldId(id),
           'kind': endfieldId(kind),
           'name': name,
-          'parent_id': parentId == null ? null : endfieldId(parentId),
+          // An entry id (<type>:ef/…) is already in the namespace.
+          'parent_id': parentId == null || gameOfId(parentId) == Game.endfield
+              ? parentId
+              : endfieldId(parentId),
           'sort_key': sortKey,
           'start_time': startTime,
           'source_path': sourcePath,

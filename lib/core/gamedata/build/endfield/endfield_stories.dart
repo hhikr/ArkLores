@@ -16,7 +16,6 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../../story_catalog.dart' show endfieldCollectionTypePrefix;
-import '../text_harvest.dart' show cleanRichText;
 import 'endfield_importer.dart';
 import 'endfield_tables.dart';
 import 'endfield_writer.dart';
@@ -52,7 +51,7 @@ class EndfieldStoryImporter {
 
   final Map<String, ({String name, String kind, int sort})> _missions = {};
 
-  String _clean(Object? field) => cleanRichText(tables.text(field)).trim();
+  String _clean(Object? field) => endfieldText(tables.text(field));
 
   /// The official one-paragraph summary of a conversation, if any.
   String? _summary(String conversation) {
