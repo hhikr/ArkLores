@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/agent/tools/agent_tool.dart';
@@ -11,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../../support/source_fixture.dart';
 import '../../../support/temp_dir.dart';
 
 /// Synthetic 5-chapter fixture (from the R1 retrieval design, see git
@@ -268,126 +268,18 @@ Future<void> _buildFixtureDb(Directory sourceDir, String dbPath) async {
   }
 }
 
-/// Writes a minimal but complete ArknightsGameData-shaped source tree.
+/// The shared fixture source plus a frequent speaker without a character
+/// row (chapters 1–2) and chapters 9/10, whose names sort wrongly as text.
 Future<Directory> _writeFixtureSource(Directory tempDir) async {
-  final sourceDir = Directory(p.join(tempDir.path, 'src'));
-  final excel = Directory(
-    p.join(sourceDir.path, 'zh_CN', 'gamedata', 'excel'),
-  )..createSync(recursive: true);
-  final story = Directory(
-    p.join(sourceDir.path, 'zh_CN', 'gamedata', 'story'),
-  )..createSync(recursive: true);
-
-  void writeJson(String name, Object data) {
-    File(p.join(excel.path, name))
-        .writeAsStringSync(jsonEncode(data), flush: true);
-  }
-
-  writeJson('character_table.json', {
-    'char_victim': {
-      'name': '受害者',
-      'appellation': '',
-      'displayNumber': '',
-      'description': '测试受害者角色。',
-      'itemUsage': '',
-      'itemDesc': '',
-    },
-    'char_a': {
-      'name': '角色A',
-      'appellation': '',
-      'displayNumber': '',
-      'description': '误导角色。',
-      'itemUsage': '',
-      'itemDesc': '',
-    },
-    'char_b': {
-      'name': '角色B',
-      'appellation': '',
-      'displayNumber': '',
-      'description': '真相角色。',
-      'itemUsage': '',
-      'itemDesc': '',
-    },
+  final c2 = fixtureSource()['$fixtureStoryDir/level_fixture_c2.txt']!;
+  return writeSourceTree(Directory(p.join(tempDir.path, 'src')), {
+    ...fixtureSource(),
+    '$fixtureStoryDir/level_fixture_c1.txt':
+        '[name="旁白"]那天夜里，染血的匕首在灰烬里闪着寒光。\n[name="角色A"]我什么都没看见。\n'
+        '[name="npc路人"]我好像看见了什么。\n[name="npc路人"]但我不确定。\n',
+    '$fixtureStoryDir/level_fixture_c2.txt': '$c2[name="npc路人"]那晚确实有怪事。\n',
+    // Natural (chapter-number) order keeps c9 before c10 (M4a).
+    '$fixtureStoryDir/level_fixture_c9.txt': '[name="角色B"]第九章：死亡现场的回响。\n',
+    '$fixtureStoryDir/level_fixture_c10.txt': '[name="角色B"]第十章：最后的真相。\n',
   });
-  writeJson('handbook_info_table.json', {'handbookDict': <String, dynamic>{}});
-  writeJson('charword_table.json', {'charWords': <String, dynamic>{}});
-  for (final name in const [
-    'item_table',
-    'skin_table',
-    'medal_table',
-    'uniequip_table',
-    'enemy_handbook_table',
-    'stage_table',
-    'zone_table',
-    'campaign_table',
-    'activity_table',
-    'retro_table',
-    'mission_table',
-    'roguelike_table',
-    'roguelike_topic_table',
-    'sandbox_table',
-    'sandbox_perm_table',
-  ]) {
-    writeJson('$name.json', <String, dynamic>{});
-  }
-
-  void writeStory(String rel, String content) {
-    final file = File(p.join(story.path, rel));
-    file.parent.createSync(recursive: true);
-    file.writeAsStringSync(content, flush: true);
-  }
-
-  // Chapter 1: foreshadowing without the victim name or the word 死亡.
-  writeStory(
-    'activities/act_fixture/level_fixture_c1.txt',
-    '[name="旁白"]那天夜里，染血的匕首在灰烬里闪着寒光。\n'
-    '[name="角色A"]我什么都没看见。\n'
-    // A frequent speaker without a character-table row.
-    '[name="npc路人"]我好像看见了什么。\n'
-    '[name="npc路人"]但我不确定。\n',
-  );
-
-  // Chapter 2: 40 lines of 角色A denying (misleading direction).
-  final c2 = StringBuffer();
-  for (var i = 1; i <= 40; i++) {
-    c2.writeln('[name="角色A"]这是第$i次否认，我什么都没做。');
-  }
-  c2.writeln('[name="npc路人"]那晚确实有怪事。');
-  writeStory(
-    'activities/act_fixture/level_fixture_c2.txt',
-    c2.toString(),
-  );
-
-  // Chapter 3: explicit death statement (triage keyword hit).
-  writeStory(
-    'activities/act_fixture/level_fixture_c3.txt',
-    '[name="角色A"]受害者已经死亡，我亲眼看见那场死亡。\n',
-  );
-
-  // Chapter 4: victim and 角色B appear together.
-  writeStory(
-    'activities/act_fixture/level_fixture_c4.txt',
-    '[name="受害者"]我会回来的。\n'
-    '[name="角色B"]匕首一直在我这里。\n',
-  );
-
-  // Chapter 5: past-timeline reveal by 角色B.
-  writeStory(
-    'activities/act_fixture/level_fixture_c5.txt',
-    '[name="角色B"]当年我藏起匕首，是为了掩盖那场死亡的真相。\n',
-  );
-
-  // Chapters 9/10: lexicographic order would put c10 before c9; natural
-  // (chapter-number) order must keep c9 before c10 (M4a).
-  writeStory(
-    'activities/act_fixture/level_fixture_c9.txt',
-    '[name="角色B"]第九章：死亡现场的回响。\n',
-  );
-  writeStory(
-    'activities/act_fixture/level_fixture_c10.txt',
-    '[name="角色B"]第十章：最后的真相。\n',
-  );
-
-  return sourceDir;
 }
-

@@ -16,6 +16,18 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **测试重整（2026-10-07，为之后的代码优化做准备）**：测试目录改为与 `lib/` 一一对应（`test/README.md`），拆掉按开发轮次堆起来的
+  大文件（`agent_test`、`investigation_test`、`locality_test`、`streaming_test`、`fact_check_widget_test`）；GameData 夹具一律用生产
+  schema（`test/support/gamedata_fixture.dart`）——原来 9 个文件手写建表，已与真实表分叉（`story_lines` 列不同、`lore_chunks_fts`
+  分词器不同）。删掉：已删除的核查模式的 live 测试、只测 Riverpod 本身的测试、两个重复的 ReAct 测试、一个不可能失败的测试，以及
+  `main.dart` 走不到的旧 Wiki 爬虫代码（`core/wiki/*`、`citation_card.dart`）。补上原来几乎没测的：App 内构建/更新的通知器
+  （`gamedata_build_provider`，用内存里的 GitHub 端到端跑：首次 zip、增量、上游提交消失、无相关变化、检查更新）、角色扮演通知器、
+  `SettingsService`、API 设置页、嵌入客户端与故事向量卡、App 外壳（四个标签页、记住的标签、命名路由）、会话日志的隐私截断与清理。
+  行覆盖率 71% → 79%（不计 WebView 里的 Wiki 浏览器和生成的 l10n：85%）；仍偏低的是设置页、知识库页的界面分支和
+  `rag/chunker.dart`，没有自动测试的部分见 `test/README.md` 末尾。473 项通过、5 项跳过（opt-in live 与 POSIX 专用）。
+  测试中发现、未改：Wiki 页站点标签的 `Text` 不能收缩（自定义长站名会溢出）；`WikiBrowserPage` 在 dispose 里用 `ref` 保存浏览状态，
+  Riverpod 不允许，状态没存上（日志 “Error saving browsing state”）。
+
 - **0.11 一致性复测与同一人物（2026-10-07，未发布，需重算知识库；`tools/release_gamedata.env` 已指向新的本地库）**：① 第二轮一致性实验：早库也带关卡文件
   （App 完整重建现在读 `levels/`），更新到 `a550f5e`，与全量新建库逐项对比，**条目、故事行、记录、绑定、集合全部一致**（`build/consist/cmp.dart` 对比）。
   这一轮抓到的问题：导入一张表时没有先清掉它上次写的行（只有肉鸽表清），规则变过之后旧行留着——更新库和 `rederive_gamedata.dart` 都和新建库不一样
@@ -254,6 +266,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 - `docs/CLOUD_DEV.md`：云端会话的环境、每次开始要跑的脚本、能做/不能做的事、发版。
 - `docs/AI_ARCHITECTURE.md`：Agent 与检索架构（当前状态 + 演进简史）——改 agent/检索层前先读。
 - `docs/LIBRARY_AGENT_GUIDE.md`：资料页结构说明（问答 Agent 查库前参考；正文在 `loreLibraryGuide`）。
+- `test/README.md`：测试目录（与 `lib/` 一一对应）、共用夹具、约定（测试库一律用生产 schema，不手写表）、没有自动测试的部分。
 - `docs/R17_TOOL_AGENT.md`：剧情问答 Agent 的结构、工具、子 agent、出处核对与验收数据。
 - `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：已知限制与根因。
 - `docs/RETRIEVAL_QA.md`：验收清单（离线 + 真机同链路）。
