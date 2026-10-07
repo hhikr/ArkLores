@@ -5,8 +5,9 @@
 ## 目录
 
 测试目录与 `lib/` 一一对应：`lib/core/x/y.dart` 的测试是 `test/core/x/y_test.dart`。
-找某段代码的测试、给新文件加测试，都按这个路径。一个 lib 文件里有两个独立部分时可以拆成
-`y_<部分>_test.dart`（如 `agent_provider_ask_test.dart` / `agent_provider_roleplay_test.dart`）。
+找某段代码的测试、给新文件加测试，都按这个路径。一个 lib 文件里有两个独立部分时，先考虑把 lib 文件拆开；
+用 `part` 拆成几个文件的（如 `entry_importer_*.dart`）仍按主文件测（`entry_importer_test.dart`）。
+资料页的各个页面（`features/library/*_page.dart`）一起在 `library_ui_test.dart` 里测。
 
 | 目录 | 内容 |
 |---|---|
