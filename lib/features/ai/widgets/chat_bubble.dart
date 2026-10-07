@@ -6,6 +6,7 @@ import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/react_event.dart';
 import '../../../core/agent/story_answer.dart';
 import '../../../core/agent/turn_stats.dart';
+import '../../../core/gamedata/game.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
@@ -1114,7 +1115,15 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
+  /// The step's title, with the game when it looked in Endfield's library.
   (IconData, String) _workTitle(WorkStep step) {
+    final (icon, title) = _workTitleOf(step);
+    return step.game == Game.endfield
+        ? (icon, '$title · ${context.t.gameEndfield}')
+        : (icon, title);
+  }
+
+  (IconData, String) _workTitleOf(WorkStep step) {
     String clip(String s, [int n = 40]) =>
         s.length <= n ? s : '${s.substring(0, n)}…';
     final t = context.t;

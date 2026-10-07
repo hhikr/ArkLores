@@ -1,5 +1,6 @@
 import '../../core/agent/chat_message.dart';
 import '../../core/agent/react_event.dart';
+import '../../core/gamedata/game.dart';
 
 /// What one step of the answer's work was, for the reader: a tool call
 /// with what it found, a note the model wrote between calls, a rewrite of
@@ -39,6 +40,17 @@ class WorkStep {
     if (value == null) return '';
     if (value is List) return value.join(' / ');
     return '$value'.trim();
+  }
+
+  /// The game the step looked in when it named one (its `game` argument,
+  /// or an Endfield story id); null for "every installed game".
+  Game? get game {
+    final named = Game.parse(args['game']);
+    if (named != null) return named;
+    final story = arg('story_id');
+    return story.isNotEmpty && gameOfId(story) == Game.endfield
+        ? Game.endfield
+        : null;
   }
 
   /// The story read ([WorkKind.read]): its title from the output, else the
