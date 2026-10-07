@@ -121,6 +121,10 @@ Future<Database> buildFixture() async {
     await db.insert('entry_links', {'src': owned, 'relation': 'belongs_to', 'dst': 'operator:char_x'});
   }
 
+  await entry('medal:m_free', 'medal', '自由奖章', group: '履历奖章', record: 'r_mf');
+  await record('r_mf', 'medal:m_free', '自由奖章', '一枚奖章。');
+  await entry('medal:m_act', 'medal', '活动奖章', group: '活动奖章', collection: 'act_new', record: 'r_ma');
+  await record('r_ma', 'medal:m_act', '活动奖章', '一枚活动奖章。');
   await entry('operator:trap_t1', 'trap', '陷阱甲', record: 'r_t1');
   await record('r_t1', 'operator:trap_t1', '陷阱甲', '一个装置。');
   await entry('operator:token_t1', 'token', '召唤物甲', record: 'r_k1');
@@ -163,6 +167,8 @@ void main() {
     expect({for (final t in types) t.type: t.count}, {
       'enemy': 2,
       'item': 1,
+      // A medal of an activity is in the codex too.
+      'medal': 2,
       // Summons stay in the codex though they name their operator.
       'token': 1,
       'trap': 1,
@@ -194,7 +200,7 @@ void main() {
       () async {
     final acts = await collectionsOfKind(db, 'activity');
     expect(acts.map((c) => c.id), ['act_new', 'act_old']);
-    expect((acts.first.stories, acts.first.others), (1, 1));
+    expect((acts.first.stories, acts.first.others), (1, 2));
     final main = await collectionsOfKind(db, 'main');
     expect(main.map((c) => c.id), ['main_1']); // main_2 has nothing to read
     expect((await collectionById(db, 'main_1'))!.stories, 3);
@@ -205,7 +211,7 @@ void main() {
       () async {
     final types = await collectionTypes(db, 'act_new');
     // A level's traps are listed with its enemies.
-    expect({for (final t in types) t.type: t.count}, {'stage': 1, 'enemy': 1, 'trap': 1});
+    expect({for (final t in types) t.type: t.count}, {'stage': 1, 'enemy': 1, 'trap': 1, 'medal': 1});
     expect(
         (await entriesOfType(db, 'trap', collectionId: 'act_new')).map((e) => e.name),
         ['陷阱甲'],
@@ -215,6 +221,8 @@ void main() {
     expect(enemies.map((e) => e.name), ['哨兵']);
     // Enemies of the codex: all of them.
     expect((await entriesOfType(db, 'enemy')).length, 2);
+    expect((await entriesOfType(db, 'medal')).length, 2);
+    expect((await entryGroups(db, 'medal')).length, 2);
   });
 
   test('stories come in reading order with their synopsis', () async {

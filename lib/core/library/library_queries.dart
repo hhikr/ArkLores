@@ -268,13 +268,19 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
 }
 
 /// Entry types of the codex shelf with their counts.
+/// Types the codex lists whole, the entries that belong to a collection too
+/// (a medal of an activity is still a medal): they are reached from the
+/// codex and from their collection.
+const Set<String> codexSpanningTypes = {'medal', 'item', 'charm'};
+
 Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
   final owned = await _hasTable(db, 'entry_links')
       ? 'AND NOT $_ownedByOperator '
       : '';
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
-    "WHERE e.collection_id IS NULL AND e.type <> 'operator' AND $_readable "
+    "WHERE (e.collection_id IS NULL OR e.type IN ('medal', 'item', 'charm')) "
+    "AND e.type <> 'operator' AND $_readable "
     '$owned'
     'GROUP BY e.type ORDER BY n DESC',
   );
@@ -534,14 +540,18 @@ Future<List<LibraryEntry>> entriesOfType(
   } else {
     from = 'entries e';
     where = collectionId == null
-        ? 'e.collection_id IS NULL AND e.type = ?'
+        ? (codexSpanningTypes.contains(type)
+            ? 'e.type = ?'
+            : 'e.collection_id IS NULL AND e.type = ?')
         : 'e.collection_id = ? AND e.type = ?';
     head = [if (collectionId != null) collectionId, type];
   }
   final rows = await db.rawQuery(
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
     'e.collection_id, e.entity_id FROM $from '
-    'WHERE $where AND $_readable $likeAndGroup'
+    'WHERE $where AND $_readable '
+    "${collectionId == null ? 'AND NOT $_ownedByOperator ' : ''}"
+    '$likeAndGroup'
     'ORDER BY e.sort_key, e.name, e.id LIMIT ?',
     [...head, ...args, limit],
   );
@@ -573,8 +583,9 @@ Future<List<({String? group, int count})>> entryGroups(
     'SELECT NULLIF(e.group_name, \'\') AS g, COUNT(*) AS n, '
     'MIN(e.sort_key) AS first FROM '
     '${enemies ? 'entries e JOIN collection_enemies ce ON ce.enemy_id = e.id' : 'entries e'} '
-    'WHERE ${enemies ? 'ce.collection_id = ?' : collectionId == null ? 'e.collection_id IS NULL' : 'e.collection_id = ?'} '
+    'WHERE ${enemies ? 'ce.collection_id = ?' : collectionId == null ? (codexSpanningTypes.contains(type) ? '1 = 1' : 'e.collection_id IS NULL') : 'e.collection_id = ?'} '
     'AND e.type = ? AND $_readable '
+    "${collectionId == null ? 'AND NOT $_ownedByOperator ' : ''}"
     'GROUP BY g ORDER BY first, g',
     [if (collectionId != null) collectionId, type],
   );
