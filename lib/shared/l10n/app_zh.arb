@@ -509,5 +509,7 @@
   "gameArknights": "明日方舟",
   "gameEndfield": "终末地",
   "libraryGameMissing": "{game}知识库未安装",
-  "@libraryGameMissing": {"placeholders": {"game": {"type": "String"}}}
+  "@libraryGameMissing": {"placeholders": {"game": {"type": "String"}}},
+  "kbEndfieldTitle": "终末地知识库",
+  "kbEndfieldDescription": "《明日方舟：终末地》的剧情与资料（从游戏客户端解包整理，独立的文件，与明日方舟知识库分开下载）。安装后资料页会出现终末地的书架，问答会按问题查一个或两个游戏的库。"
 }

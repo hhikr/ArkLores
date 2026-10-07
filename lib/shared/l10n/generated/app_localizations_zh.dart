@@ -1483,4 +1483,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String libraryGameMissing(String game) {
     return '$game知识库未安装';
   }
+
+  @override
+  String get kbEndfieldTitle => '终末地知识库';
+
+  @override
+  String get kbEndfieldDescription =>
+      '《明日方舟：终末地》的剧情与资料（从游戏客户端解包整理，独立的文件，与明日方舟知识库分开下载）。安装后资料页会出现终末地的书架，问答会按问题查一个或两个游戏的库。';
 }

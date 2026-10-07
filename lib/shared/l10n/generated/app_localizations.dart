@@ -2725,6 +2725,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{game} knowledge base not installed'**
   String libraryGameMissing(String game);
+
+  /// No description provided for @kbEndfieldTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield knowledge base'**
+  String get kbEndfieldTitle;
+
+  /// No description provided for @kbEndfieldDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Story and texts of Arknights: Endfield (unpacked from the game client; a separate file, downloaded apart from the Arknights one). Once installed, the library shows Endfield\'s shelves and answers look in one or both games.'**
+  String get kbEndfieldDescription;
 }
 
 class _AppLocalizationsDelegate

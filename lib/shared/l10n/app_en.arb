@@ -511,5 +511,7 @@
   "gameArknights": "Arknights",
   "gameEndfield": "Endfield",
   "libraryGameMissing": "{game} knowledge base not installed",
-  "@libraryGameMissing": {"placeholders": {"game": {"type": "String"}}}
+  "@libraryGameMissing": {"placeholders": {"game": {"type": "String"}}},
+  "kbEndfieldTitle": "Endfield knowledge base",
+  "kbEndfieldDescription": "Story and texts of Arknights: Endfield (unpacked from the game client; a separate file, downloaded apart from the Arknights one). Once installed, the library shows Endfield's shelves and answers look in one or both games."
 }
