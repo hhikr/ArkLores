@@ -30,6 +30,15 @@ flutter test        # 约 1 分钟，全部离线
 | 向量 | 迁移后向量条数与旧库一致，`--dry-run` 显示 0 块需要嵌入（或只有真正新增的） |
 | 安装 | `$env:ARKLORES_RUN_ASSET_INSTALL='true'`（+ `ARKLORES_ASSET_URL/SHA`）跑 `test/live/release_asset_install_live_test.dart`，桌面完整下载安装一遍 |
 
+### 终末地库（0.12）
+
+| 检查 | 命令 / 做法 |
+| --- | --- |
+| 单元测试 | `flutter test test/core/gamedata/build/endfield test/core/gamedata/multi_game_retrieval_test.dart`（合成的小表组） |
+| 重建 | `.\tools\unpack_endfield.ps1 -SkipUnpack`（客户端更新后去掉 `-SkipUnpack`），会更新 `ENDFIELD_DB_SHA256` |
+| 真实库验收 | `$env:ARKLORES_RUN_EF_CHECK='true'; flutter test test/live/endfield_acceptance_test.dart`：安装器校验、`ef/` id、每篇剧情有条目/集合/目录、无标记与男女双写、名字不是 id、内容计数 |
+| 确定性 | 建两次逐表比对（两次构建应完全一致） |
+
 ## 3. 改了问答 Agent / 检索工具
 
 离线（mock LLM）：
