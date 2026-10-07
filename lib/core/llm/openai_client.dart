@@ -386,7 +386,8 @@ class OpenAICompatibleClient extends LLMClient {
       if (response.statusCode != 200) {
         throw LLMException(
           chatFailureMessage(responseBody,
-              fallback: 'Chat completion failed',),
+              fallback: 'Chat completion failed',
+              status: response.statusCode,),
           statusCode: response.statusCode,
           body: responseBody,
         );
@@ -673,7 +674,8 @@ class OpenAICompatibleClient extends LLMClient {
         return;
       }
       throw LLMException(
-        chatFailureMessage(errorBody, fallback: 'Chat completion failed'),
+        chatFailureMessage(errorBody,
+            fallback: 'Chat completion failed', status: response.statusCode,),
         statusCode: response.statusCode,
         body: errorBody,
       );
@@ -954,12 +956,27 @@ List<Map<String, dynamic>>? sseEvents(String body) {
 }
 
 /// Renders a user-friendly error message for a non-200 chat response.
-String chatFailureMessage(String body, {required String fallback}) {
-  final message = _responseErrorMessage(body, fallback: fallback);
+/// [status] (when given) is named in the message; a 404 also says what to
+/// check, since the provider's own text ("Resource not found") does not.
+String chatFailureMessage(
+  String body, {
+  required String fallback,
+  int? status,
+}) {
+  final message = _responseErrorMessage(
+    body,
+    fallback: status == null || status == 200
+        ? fallback
+        : '$fallback (HTTP $status)',
+  );
   if (message.contains('Insufficient Balance') ||
       message.contains('insufficient_quota') ||
       message.contains('402')) {
     return 'Chat API 余额不足，请充值后重试。';
+  }
+  if (status == 404) {
+    return '$message\n服务商找不到这个模型或接口：请核对模型名与 Base URL（一般以 /v1 结尾），'
+        '中转站还要确认这个 API Key 所在的分组里有这个模型，且该渠道支持 OpenAI 格式的 /chat/completions。';
   }
   return message;
 }

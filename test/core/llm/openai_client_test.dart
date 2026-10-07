@@ -593,6 +593,17 @@ void main() {
       );
     });
 
+    test('a 404 names its status and what to check', () async {
+      await expectLater(
+        streaming('{"error":{"message":"Resource not found"}}', status: 404)
+            .streamTurn([Message.user('q')]).toList(),
+        throwsA(isA<LLMException>()
+            .having((e) => e.message, 'message', contains('(HTTP 404)'))
+            .having((e) => e.message, 'message', contains('Resource not found'))
+            .having((e) => e.message, 'message', contains('分组')),),
+      );
+    });
+
     test('a web page instead of an API answer points at the Base URL',
         () async {
       await expectLater(
