@@ -69,4 +69,7 @@ $gz = New-Object IO.Compression.GZipStream($out, [IO.Compression.CompressionLeve
 $in.CopyTo($gz); $gz.Dispose(); $in.Dispose(); $out.Dispose()
 $sha = (Get-FileHash "$db.gz" -Algorithm SHA256).Hash.ToLower()
 "$db.gz: {0:N1} MB, SHA-256 $sha" -f ((Get-Item "$db.gz").Length / 1MB)
-"Put it in tools/release_gamedata.env as ENDFIELD_DB_SHA256 before building an APK."
+$envFile = 'tools\release_gamedata.env'
+$envText = [IO.File]::ReadAllText((Resolve-Path $envFile))
+[IO.File]::WriteAllText((Resolve-Path $envFile), ($envText -replace 'ENDFIELD_DB_SHA256=\w*', "ENDFIELD_DB_SHA256=$sha"))
+"ENDFIELD_DB_SHA256 in $envFile updated (an APK built from this tree accepts this file)."

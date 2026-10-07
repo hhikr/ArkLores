@@ -272,8 +272,10 @@ class EndfieldStoryImporter {
     }
     final level = RegExp(r'^((?:map|indie|base)\w*?_(?:lv|dg)\d+)').firstMatch(bare)?.group(1);
     if (level != null) {
-      final name = _levelName(level);
-      if (name == null) return null;
+      final place = _levelName(level);
+      if (place == null) return null;
+      final region = importer.regionOf(level);
+      final name = region == null || region == place ? place : '$region·$place';
       await _ensureMission('level_$level', name: name, kind: 'world');
       return 'level_$level';
     }

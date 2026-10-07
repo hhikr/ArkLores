@@ -74,19 +74,29 @@ void writeTables(Directory dir) {
       'type': 52,
     },
   });
+  table('DomainDataTable', {
+    'domain_1': {'domainName': tx(i18n, 100, '谷地'), 'levelGroup': ['map01_lv001']},
+  });
+  table('DistributionInfoTable', {
+    'distribution_map01_lv001': {'areaName': tx(i18n, 101, '枢纽区')},
+  });
+  table('EnemyTemplateDisplayInfoTable', {
+    'eny_0001_a': {
+      'templateId': 'eny_0001_a',
+      'name': tx(i18n, 102, '某种野兽'),
+      'description': tx(i18n, 103, '潜伏在地下的野兽。'),
+      'distributionIds': ['distribution_map01_lv001'],
+      'displayType': 0,
+    },
+  });
+  table('PrtsFirstLv', {
+    'paper_map01_1': {'categoryId': 'paper', 'name': tx(i18n, 104, '一封信'), 'itemIds': ['nar_1'], 'order': 1},
+  });
   table('ItemTypeTable', {
     '8': {'name': tx(i18n, 50, '材料')},
   });
   table('PrtsCategory', {
     'paper': {'categoryId': 'paper', 'name': tx(i18n, 60, '纸张'), 'order': 1},
-  });
-  table('PrtsFirstLv', {
-    'paper_1': {
-      'categoryId': 'paper',
-      'name': tx(i18n, 61, '一封信'),
-      'itemIds': ['nar_1'],
-      'order': 1,
-    },
   });
   table('PrtsAllItem', {
     'nar_1': {'contentId': 'text_1', 'name': tx(i18n, 62, '一封信'), 'order': 1},
@@ -250,6 +260,15 @@ void main() {
       ..sort((a, b) => conversationOrder(a)!.compareTo(conversationOrder(b)!));
     expect(ids, ['radio_e1m1_0d5', 'dlg_e1m1_1', 'radio_e1m1_1d5', 'dlg_e1m1_2', 'sns_e1m1_2']);
     expect(conversationOrder('dlg_x'), isNull);
+  });
+
+  test('enemies say where they are found; documents and places carry their region', () async {
+    final where = await q(
+      "SELECT r.content FROM normalized_records r WHERE r.entry_id = 'enemy:ef/eny_0001_a' AND r.section = '分布'",
+    );
+    expect(where.single['content'], '枢纽区');
+    final doc = await q("SELECT group_name FROM entries WHERE type = 'document'");
+    expect(doc.single['group_name'], '谷地');
   });
 
   test("the build's shelf list is the library's", () {

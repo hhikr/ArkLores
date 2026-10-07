@@ -49,6 +49,23 @@ class EndfieldImporter {
 
   String _clean(Object? field) => endfieldText(tables.text(field));
 
+  /// The region (地区, `DomainDataTable`) a level or an id mentioning a map
+  /// (`map01…`) is in, by the regions' own level lists.
+  String? regionOf(String id) {
+    final map = RegExp(r'map\d+').firstMatch(id)?.group(0);
+    for (final row in tables.table('DomainDataTable').values) {
+      if (row is! Map) continue;
+      final levels = listOfStrings(row['levelGroup']);
+      final hit = levels.contains(id) ||
+          (map != null && levels.any((l) => l.startsWith('${map}_')));
+      if (hit) {
+        final name = _clean(row['domainName']);
+        if (name.isNotEmpty) return name;
+      }
+    }
+    return null;
+  }
+
   /// The localized `name` of row [key] of a kind table (null when none).
   String? _groupName(String table, Object? key) {
     final row = tables.table(table)['${key ?? ''}'];
@@ -165,6 +182,12 @@ class EndfieldImporter {
       final title = _clean(row['name']);
       final text = _clean(row['description']);
       if (title.isEmpty || text.isEmpty) continue;
+      // Where it is found, as the game names the areas.
+      final areas = <String>{
+        for (final d in listOfStrings(row['distributionIds']))
+          if (tables.table('DistributionInfoTable')[d] case final Map<String, dynamic> info)
+            _clean(info['areaName']),
+      }..remove('');
       await writer.entry(
         type: 'enemy',
         rawId: id,
@@ -172,7 +195,10 @@ class EndfieldImporter {
         group: _groupName('DisplayEnemyTypeTable', row['displayType']),
         sourcePath: source,
         category: 'enemy',
-        texts: [(section: '介绍', text: text)],
+        texts: [
+          (section: '介绍', text: text),
+          if (areas.isNotEmpty) (section: '分布', text: areas.join('、')),
+        ],
       );
       count++;
     }
@@ -296,6 +322,7 @@ class EndfieldImporter {
         rawId: id,
         name: title,
         collectionId: category.isEmpty ? null : 'prts_$category',
+        group: regionOf(id),
         sortKey: (row['order'] as num?)?.toInt(),
         sourcePath: sourcePath,
         category: 'archive',
