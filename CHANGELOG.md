@@ -4,7 +4,43 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
-### Knowledge base (schema 5, in development for 0.11)
+## [0.11.0] - 2026-10-08
+
+Stable release of the 0.11 line; it replaces the pre-releases v0.11.0-pre.1–pre.4, which were withdrawn. The knowledge base
+is new (schema 5) and must be downloaded again: `arklores_gamedata_zh.db.gz` 209,900,351 B, SHA-256
+`695caa3e0e598ce92e7d588973bb6c00b3d6345171003c9532df16babf3eb0ec` (uncompressed 679,129,088 B, SHA-256
+`cc83c432ea6b29b690ead7d364f6c829311a170d8410d272db1fadfc98f374a9`; upstream `a550f5e`; 54,846 story vectors).
+`ArkLores-0.11.0.apk` 56,012,464 B, SHA-256 `06ba13d5f811665c0160582714c56b745062150576726efc2ef03e3467d26caa`, built by
+GitHub Actions from `2d83bb4` and signed with the project key; it installs over v0.10.0.
+
+### Interface
+
+- **Floating docks.** No page has an app bar any more: a round back button, a title pill and an actions pill float over the
+  content (`FloatingScaffold`); top bars with something on each side split into two pills; the bottom navigation is a short
+  centred pill that hides with the keyboard; the Ask composer floats. The Wiki page runs full screen under its docks, with
+  matching padding injected into the page.
+- **Taps answer.** Cards, rows, chips and buttons scale down on press and spring back, with a light haptic; ripples are
+  visible on both themes; page transitions show both pages (the new one fades and grows in, the covered one recedes).
+- **The work behind an answer is a timeline** ("搜索「X」 · n 处", "阅读《章名》 · 第 a–b 行" …) instead of raw
+  Thought/Action/Observation text; tap a step for its raw output. The header reads "已作答 · 查阅 n 次 · 读了 m 篇原文".
+- The Ask page has no top bar: history, reading history, new chat and the menu float at the top right. Touching the
+  conversation takes the focus, so coming back from an evidence page no longer brings the keyboard up.
+- Review and digest steps of an answer can be switched off (tune button in the composer).
+- Search on every library page (names, near names, text), "find in this story" in the reader, "find stories by meaning"
+  (vectors) on demand.
+
+### Removed
+
+- **Role-play** and everything only it used (its text ReAct loop, `search_local_lore`, the entity search of the store).
+
+### Fixed
+
+- Letters, poems and notes in the scripts wrote their line breaks as a literal `\n`; the reader and the history showed
+  "\n\n…". They are real line breaks now (1,853 story lines, 428 records); old history snippets are cleaned when read.
+  Operator profile text is cleaned of markup like other table text.
+- Answers with providers other than GLM (Gemini, relays, GPT-5 / o-series): array content, reasoning fields, streams without
+  `data:`, tool calls without `index`, empty turns retried another way, a clear message when the Base URL returns a web page.
+### Knowledge base (schema 5)
 
 - **More of the story is in the database.** The story parser now reads every text line of the game scripts: scene captions,
   letters and notes shown in scenes, the options of player choices, other dialogue spellings and the tutorial scripts.
@@ -41,7 +77,7 @@ All notable changes to ArkLores will be documented in this file.
 - **The question-answering agent reads a description of the library pages** (shelves, entry types, what each is for)
   before it queries (`docs/LIBRARY_AGENT_GUIDE.md`).
 
-### Incremental updates (in development for 0.11)
+### Incremental updates
 
 - **The knowledge base page updates incrementally.** "Check for updates" shows what changed upstream (story files, data tables,
   level files). "Build" downloads only the changed files and the few data tables it needs, instead of the whole 850 MB
@@ -52,7 +88,7 @@ All notable changes to ArkLores will be documented in this file.
   stories just get keyword search.
 - Developers get the same update from the command line: `tools/update_gamedata.dart`.
 
-### Knowledge base download (0.11.0-pre.2)
+### Knowledge base download
 
 - **The download shows where it is and can be cancelled.** A download that waits for the server now says "connecting, attempt n"
   (each attempt is a fresh connection, up to six), then the progress, "checking the file" and "unzipping and installing"; a
@@ -60,7 +96,7 @@ All notable changes to ArkLores will be documented in this file.
   when the network cannot reach the server: put the downloaded `.gz` into the app folder as `arklores_gamedata_zh.db.download.gz`
   and tap Download; it is checked against the expected SHA-256 and installed. A failed start no longer leaves a stray `.key` file.
 
-### Library (in development for 0.11)
+### Library
 
 - **The Materials tab is now a library.** *Read*: continue the story you were reading, browse the shelves — main story,
   events, operators, Integrated Strategies, Sandbox and the codex (enemies, items, medals …) —
@@ -120,7 +156,7 @@ All notable changes to ArkLores will be documented in this file.
 - **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and
   never enter the knowledge base. *Ask about it* puts a text in the question box so you can finish the question and send it.
 
-### Battle dialogue and sandbox ("生息演算") (in development for 0.11)
+### Battle dialogue and sandbox ("生息演算")
 
 - **Dialogue played inside a battle is no longer a story of its own.** Tutorials, training and in-battle conversations (the stories a level file plays) are
   read at the end of the story of their stage, or on the stage's page when it has none, and are left out of the lists and counts.
@@ -128,7 +164,7 @@ All notable changes to ArkLores will be documented in this file.
   (about 1,500 lines in over 300 tutorial and training scripts); they are now read as one command with its text.
 - **Sandbox modes follow the game's own structure**: acts (main and side) with their summaries and stories, events with their options, stages (places, enemies),
   items grouped by the names the table gives, dialogues named after the part of the plot they belong to. The first sandbox mode sits on the sandbox shelf.
-### Reading history (in development for 0.11)
+### Reading history
 
 - **Recently read.** Stories opened from an answer's evidence are remembered (book icon in the Ask tab's top bar): the chapter, the
   line you were at and the start of that line. Tapping an entry reopens the story at that line; if the story's text changed after

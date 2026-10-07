@@ -56,7 +56,7 @@ bash tools/cloud/session_start.sh
 bash tools/cloud/fetch_gamedata.sh
 ```
 
-它按 `tools/release_gamedata.env` 下载并校验 v0.10.0 Release 上的知识库，解压到
+它按 `tools/release_gamedata.env` 下载并校验当前 Release 上的知识库，解压到
 `build/gamedata_mobile/arklores_gamedata_zh.db`（live 测试的默认路径）。
 
 ## 3. 云端能做和不能做的
@@ -80,23 +80,15 @@ bash tools/cloud/fetch_gamedata.sh
 
 ## 4. 新会话的第一条消息（模板）
 
-在 ArkLores-Cloud 环境、**分支选 `feature/r18-answer-quality`** 新建会话，粘贴：
+在 ArkLores-Cloud 环境、选当前开发分支（见 CLAUDE.md 开头）新建会话，粘贴：
 
 ```text
-这是 ArkLores（明日方舟剧情问答 Flutter App）的云端会话。先做三件事，再开始工作：
+这是 ArkLores（明日方舟剧情阅读与问答 Flutter App）的云端会话。先做三件事，再开始工作：
 
-1. 运行 `bash tools/cloud/session_start.sh`，然后 `flutter analyze` 和 `flutter test`，确认环境正常（全量测试约半分钟）。
-2. 读这些文档了解现状：CLAUDE.md（项目规则，尤其“禁止特判”“禁止针对验收样例编程”“提交规范”
-   “真实 API 测试的成本约束”）、docs/CLOUD_DEV.md（云端环境）、docs/R17_TOOL_AGENT.md（当前问答 Agent）、
-   docs/KNOWN_LIMITATIONS_AND_DEBT.md §5.9（本轮要做的问题）、CHANGELOG.md 最近两个版本。
-3. 读完后用几句话复述：当前版本、问答 Agent 的结构、§5.9 的现象和候选方案；我确认后再动手。
+1. 运行 `bash tools/cloud/session_start.sh`，然后 `flutter analyze` 和 `flutter test`，确认环境正常。
+2. 读 CLAUDE.md（项目规则与当前进度）以及它的文档索引里与本轮有关的文档；改知识库先读 docs/KNOWLEDGE_BASE_LESSONS.md。
+3. 用几句话复述当前版本、本轮目标和相关约束；我确认后再动手。
 
-本轮目标：处理 §5.9 的答案质量问题，先做成本最低的候选方案 1–3（两层答案、写作前先确认故事集的叙述框架、
-人物问题先做全库覆盖统计）。先出计划给我看。约束：
-- 提示词和代码里不得出现具体人物、章节、活动或剧情桥段（包括“梦境”“叙诡”这类词），只写对任意故事都成立的工作方式；
-- 先离线（mock LLM）测试，再按成本约束挑最多 2 个用例跑真实 API，逐题串行；
-- 提交作者只能是 hhikr，不加任何 AI 署名；不要推 main 或 dev；在 feature/r18-answer-quality 上工作；
-- 版本号停在 0.10.x，发版要我明确说；
-- 工作中发现的长期有效的规则、流程变化，更新到 CLAUDE.md（它在仓库里，会随克隆生效）；本轮进度写进
-  CLAUDE.md 的“当前进度”一节和相关 docs，不要只留在对话里。
+约束：提交作者只能是 hhikr，不加任何 AI 署名；不推 main；发版要我明确同意；真实 API 测试按成本约束并先问我；
+长期有效的规则写进 CLAUDE.md，本轮进度写进 CLAUDE.md 的“当前进度”和相关 docs。
 ```
