@@ -67,3 +67,4 @@ android/key.properties
 *.sw?
 .DS_Store
 coverage/
+test/live/scratch/

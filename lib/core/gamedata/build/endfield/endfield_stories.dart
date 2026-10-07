@@ -29,6 +29,20 @@ String missionOfConversation(String id) {
   return cut > 0 ? bare.substring(0, cut) : bare;
 }
 
+/// A readable name of a conversation without a name of its own: its kind
+/// (from the id prefix) and its number in the mission (`dlg_a1m2_3` →
+/// `对话 3`). Nothing is invented beyond what the id says.
+String conversationLabel(String id) {
+  final kind = switch (RegExp(r'^[a-z]+').firstMatch(id)?.group(0)) {
+    'dlg' => '对话',
+    'radio' => '通讯',
+    'sns' => '短信',
+    _ => '对话',
+  };
+  final number = RegExp(r'_([0-9a-z]+)$').firstMatch(id)?.group(1);
+  return number == null ? kind : '$kind $number';
+}
+
 /// The shelf of a mission id from its letter prefix, as the game's ids are
 /// formed (`e<n>m<n>` main story, `c…` character stories, the rest side
 /// stories). The publication's own kind replaces this when present.
@@ -87,12 +101,11 @@ class EndfieldStoryImporter {
     final m = _missions[mission]!;
     await writer.story(
       rawId: id,
-      name: name ?? id,
+      name: name ?? conversationLabel(id),
       lines: lines,
       collectionId: 'mission_$mission',
       collectionName: m.name,
       collectionType: '$endfieldCollectionTypePrefix${m.kind.toUpperCase()}',
-      code: id,
       synopsis: _summary(id),
       sortKey: sort,
       sourcePath: source,
@@ -203,8 +216,8 @@ class EndfieldStoryImporter {
         source: source,
         sort: 200000 + i,
         name: chat is Map && _clean(chat['name']).isNotEmpty
-            ? '${_clean(chat['name'])} · $id'
-            : id,
+            ? '${conversationLabel(id)} · ${_clean(chat['name'])}'
+            : null,
         lines: lines,
       );
       count++;
