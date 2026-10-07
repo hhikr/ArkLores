@@ -245,6 +245,13 @@ void main() {
     expect(line.single['speaker'], '路人');
   });
 
+  test('conversations of a mission interleave by the game numbering', () {
+    final ids = ['sns_e1m1_2', 'dlg_e1m1_1', 'radio_e1m1_0d5', 'dlg_e1m1_2', 'radio_e1m1_1d5']
+      ..sort((a, b) => conversationOrder(a)!.compareTo(conversationOrder(b)!));
+    expect(ids, ['radio_e1m1_0d5', 'dlg_e1m1_1', 'radio_e1m1_1d5', 'dlg_e1m1_2', 'sns_e1m1_2']);
+    expect(conversationOrder('dlg_x'), isNull);
+  });
+
   test("the build's shelf list is the library's", () {
     expect(endfieldShelfKinds, endfieldShelfOrder);
   });

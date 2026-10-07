@@ -37,6 +37,22 @@ String conversationLabel(String id) {
   return number == null ? kind : '$kind $number';
 }
 
+/// The place of a conversation in its mission: its number (`0d5` is half
+/// way between 0 and 1: `d` marks a decimal point in the game's ids), then
+/// dialogue before radio before messages. Null when the id has no number.
+int? conversationOrder(String id) {
+  final m = RegExp(r'_(\d+)(?:d(\d+))?$').firstMatch(id);
+  if (m == null) return null;
+  final whole = int.parse(m.group(1)!);
+  final part = m.group(2) == null ? 0 : int.parse(m.group(2)!.padRight(2, '0').substring(0, 2));
+  final kind = switch (RegExp(r'^[a-z]+').firstMatch(id)?.group(0)) {
+    'dlg' => 0,
+    'radio' => 1,
+    _ => 2,
+  };
+  return (whole * 100 + part) * 10 + kind;
+}
+
 /// The operator entry a character mission belongs to: `c<n>m…` is the
 /// story of the operator numbered `n` (`chr_00<n>_…`), when there is one.
 String? operatorOfMission(String mission, Map<String, String> operators) {
@@ -338,7 +354,8 @@ class EndfieldStoryImporter {
       collectionName: m.name,
       collectionType: '$endfieldCollectionTypePrefix${m.kind.toUpperCase()}',
       synopsis: _summary(id),
-      sortKey: sort,
+      // Within a mission the three kinds share the game's numbering.
+      sortKey: conversationOrder(id) ?? sort,
       sourcePath: source,
     );
   }
