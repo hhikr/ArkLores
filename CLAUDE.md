@@ -16,6 +16,26 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 收尾检查（2026-10-07，未发布，不需重算知识库）**：① 修了测试整理时发现的两个问题：Wiki 页站点标签可收缩（长站名显示省略号）；
+  `WikiBrowserPage` 在 `initState` 里取 `SettingsService`、`dispose` 时先复制状态再保存（以前 dispose 里用 `ref`，状态从来没存上）。
+  ② 性能（用真实库 `build/gamedata_v5` 计时）：资料页查询都很快（最慢的图鉴书架 96 ms），不用改；剧情向量索引（约 28 MB）改为后台 isolate 用 FFI SQLite 读
+  （`StoryVectorIndex.loadFile`，`Isolate.run` 零拷贝交回）——以前经 sqflite 平台通道一次性传进 UI isolate 解码，手机上会卡住界面；
+  向量检索本身桌面 AOT 27 ms，改写循环只快 20%，没改。启动时的 9 项设置、Wiki 页恢复状态、API/向量配置的逐项读取改为并行（都是 secure storage 平台调用）。
+  ③ 后台：问答、角色扮演、知识库下载/构建、故事向量都包在 `BackgroundWork` 里（“检查更新”只是十来个短请求，没包）；修了两处：从最近任务里划掉 App
+  时前台服务现在随之停止（`onTaskRemoved`，以前通知和唤醒锁会留到 3 小时超时），服务已在运行时只更新通知文字、不再重新 `startForegroundService`
+  （Android 12+ 在后台会拒绝）。④ 长文件：`entry_importer.dart` 3242 行 → 主文件 803 行 + 按数据来源分的 8 个 `part`（items/stages/activities/
+  handbook/roguelike/sandbox/levels/derived，私有 extension，公开入口仍在类上）；`library_pages.dart` 拆成每页一个文件（它保留导航函数并 re-export）；
+  知识库页拆出 `SourceBuildCard`、`StoryVectorCard`；设置页拆出资料设置页、Wiki 来源页；角色扮演的状态与通知器移到 `roleplay_provider.dart`
+  （`agent_provider.dart` re-export）；知识库 store 的角色扮演用实体检索移到 `gamedata_entity_search.dart`（part）。删掉没人调用的代码：
+  store 的 `searchStoryCoverage`/`getStoryMap`/`namesInText`/`namedStoryTargets`/`filterRareTerms` 等 8 个方法、`queryNamedStoryTargets`、
+  `namesMentionedIn`、`collectCompletion`、旧的引用格式化（`humanizeCitations` 等）；LIKE 转义合并为 `story_catalog.escapeLike` 一处。
+  没拆的：`wiki_browser_page.dart`（WebView，只能真机验证）、`lore_agent_loop.dart`（一个循环）、`arknights_importer.dart`、`chat_bubble.dart`、
+  `story_reader_page.dart`（各是一个整体）、`wiki_reader_scripts/css.dart`（注入页面的 JS/CSS 文本）。⑤ 提示词留在 Dart 里（与解析器的格式同版本、
+  有守卫测试、桌面工具与 live 测试同步可用；不是界面文字，不进 ARB）。界面文字绝大多数走 ARB（中英各 411+5 个键）；这轮把阅读页的行类型标记、
+  Wiki 书签按钮提示、资料页无名分组改成跟随界面语言。仍只有中文的：资料页的条目类型/分组/绑定名（`library_labels.dart`，游戏内容用语，与库内容同语言）、
+  LLM 错误信息（中英混杂）。未改、建议 0.11 之后处理：角色扮演提示词（`agent_prompts.dart`）还有旧功能的残留（“Endfield”、“用户导入 Book”、
+  要求列出 source path 而第 7 条又要求只输出对白）——0.11 冻结角色扮演，没动；问答提示词没有规定回答语言（英文界面的用户也会得到中文回答）。
+
 - **测试重整（2026-10-07，为之后的代码优化做准备）**：测试目录改为与 `lib/` 一一对应（`test/README.md`），拆掉按开发轮次堆起来的
   大文件（`agent_test`、`investigation_test`、`locality_test`、`streaming_test`、`fact_check_widget_test`）；GameData 夹具一律用生产
   schema（`test/support/gamedata_fixture.dart`）——原来 9 个文件手写建表，已与真实表分叉（`story_lines` 列不同、`lore_chunks_fts`
