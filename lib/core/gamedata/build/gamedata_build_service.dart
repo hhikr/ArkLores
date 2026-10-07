@@ -220,10 +220,9 @@ class GameDataBuildService {
           if (!c.isRemoval) c.path,
       };
       if (applied.any(EntryTables.contextTables.contains)) {
-        for (final path in EntryTables.ownerDependents) {
-          if (applied.contains(path)) continue;
-          await importer.entryImporter.importTable(path);
-        }
+        // All entry tables in a complete build's order: the first table to
+        // write an id keeps it, so the order decides.
+        await importer.entryImporter.importAllTables();
       }
       await StoryCoverageBuilder(
         db: db,
@@ -292,6 +291,8 @@ class GameDataBuildService {
     if (ArknightsSourcePaths.isStoryFile(path)) {
       await importer.importStoryFile(path);
     } else if (path == 'zh_CN/gamedata/excel/character_table.json') {
+      await importer.importCharacterTables();
+    } else if (path == 'zh_CN/gamedata/excel/char_meta_table.json') {
       await importer.importCharacterTables();
     } else if (path == 'zh_CN/gamedata/excel/handbook_info_table.json') {
       await importer.importCharacterTables();

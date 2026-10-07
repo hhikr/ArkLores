@@ -39,6 +39,8 @@ class ArknightsSourcePaths {
     'zh_CN/gamedata/excel/character_table.json',
     'zh_CN/gamedata/excel/handbook_info_table.json',
     'zh_CN/gamedata/excel/charword_table.json',
+    // Alternate versions of one operator (`same_person`).
+    'zh_CN/gamedata/excel/char_meta_table.json',
     'zh_CN/gamedata/excel/item_table.json',
     'zh_CN/gamedata/excel/skin_table.json',
     'zh_CN/gamedata/excel/medal_table.json',

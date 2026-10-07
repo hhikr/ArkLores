@@ -357,6 +357,29 @@ Future<List<LibraryEntry>> entriesOwnedBy(
   return [for (final r in rows) LibraryEntry.fromRow(r)];
 }
 
+/// The other operators that are the same person as [entryId] (`same_person`:
+/// alternate versions of one operator): the original first, then the
+/// alternates. Empty for an operator with no alternate.
+Future<List<LibraryEntry>> samePersonOf(
+  DatabaseExecutor db,
+  String entryId,
+) async {
+  if (!await _hasTable(db, 'entry_links')) return const [];
+  final rows = await db.rawQuery(
+    'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
+    'e.collection_id, e.entity_id, '
+    "(e.id IN (SELECT dst FROM entry_links WHERE relation = 'same_person')) AS original "
+    'FROM entries e WHERE e.id <> ?1 AND ('
+    "e.id IN (SELECT dst FROM entry_links WHERE relation = 'same_person' AND src = ?1) "
+    "OR e.id IN (SELECT src FROM entry_links WHERE relation = 'same_person' AND dst = ?1) "
+    "OR e.id IN (SELECT src FROM entry_links WHERE relation = 'same_person' AND dst IN "
+    "(SELECT dst FROM entry_links WHERE relation = 'same_person' AND src = ?1))) "
+    'ORDER BY original DESC, e.id',
+    [entryId],
+  );
+  return [for (final r in rows) LibraryEntry.fromRow(r)];
+}
+
 /// One collection with its release time, or null.
 Future<LibraryCollection?> collectionById(DatabaseExecutor db, String id) async {
   final rows = await db.rawQuery(

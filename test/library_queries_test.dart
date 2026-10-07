@@ -134,6 +134,14 @@ Future<Database> buildFixture() async {
   await db.insert('entry_links', {'src': 'enemy:e1', 'relation': 'appears_in', 'dst': 'stage:st1'});
   await db.insert('entry_links', {'src': 'stage:st1', 'relation': 'belongs_to', 'dst': 'activity:act_empty'});
 
+  // One person in three versions (the first of the group is the original).
+  for (final c in ['a', 'a2', 'a3', 'lone']) {
+    await entry('operator:char_$c', 'operator', '干员$c', entity: 'char_$c');
+  }
+  for (final c in ['a2', 'a3']) {
+    await db.insert('entry_links', {'src': 'operator:char_$c', 'relation': 'same_person', 'dst': 'operator:char_a'});
+  }
+
   await db.insert('story_catalog', {
     'story_id': 'main/s1.txt',
     'collection_id': 'main_1',
@@ -278,6 +286,17 @@ void main() {
     expect(bindingName('unknown', outgoing: true), '相关');
     expect(entryTypeName('roguelike_future'), '集成战略资料');
     expect(entryTypeName('future_kind'), 'future_kind');
+  });
+
+  test('versions of one operator list each other, the original first',
+      () async {
+    List<String> ids(List<LibraryEntry> l) => [for (final e in l) e.id];
+    expect(ids(await samePersonOf(db, 'operator:char_a')),
+        ['operator:char_a2', 'operator:char_a3'],);
+    expect(ids(await samePersonOf(db, 'operator:char_a2')),
+        ['operator:char_a', 'operator:char_a3'],);
+    expect(await samePersonOf(db, 'operator:char_lone'), isEmpty);
+    expect(bindingName('same_person', outgoing: false), '同一人物');
   });
 
   test('a story knows the chapter before and after it', () async {

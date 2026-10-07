@@ -108,6 +108,12 @@ void main() {
           'potentialItemId': 'p_char_fx_1',
           'displayTokenDict': {'token_fx_1': true},
         },
+        'char_fx_2': {
+          'name': '虚构干员·异',
+          'description': '同一名虚构干员的另一个版本。',
+          'displayNumber': 'FX02',
+          'profession': 'PIONEER',
+        },
         'token_fx_1': {
           'name': '虚构召唤物',
           'description': '一个召唤物的设定描述。',
@@ -117,6 +123,12 @@ void main() {
           'name': '虚构装置',
           'description': '一个装置的设定描述。',
           'profession': 'TRAP',
+        },
+      });
+      await writeJson('excel/char_meta_table.json', {
+        'spCharGroups': {
+          'char_fx_1': ['char_fx_1', 'char_fx_2'],
+          'token_fx_1': ['token_fx_1'],
         },
       });
       await writeJson('excel/handbook_info_table.json', {
@@ -1044,6 +1056,16 @@ void main() {
         isTrue,
       );
 
+      // An alternate version points at the original.
+      expect(
+        await linked('operator:char_fx_2', 'same_person', 'operator:char_fx_1'),
+        isTrue,
+      );
+      expect(
+        await q("SELECT 1 FROM entry_links WHERE relation = 'same_person'"),
+        hasLength(1),
+      );
+
       // A skin and the series that released it.
       expect(
         await linked('skin:skin_fx', 'belongs_to', 'skin_brand:fxbrand'),
@@ -1340,6 +1362,7 @@ void main() {
       );
       expect(types.map((r) => (r['id'], r['type'], r['code'])), [
         ('operator:char_fx_1', 'operator', 'FX01'),
+        ('operator:char_fx_2', 'operator', 'FX02'),
         ('operator:token_fx_1', 'token', null),
         ('operator:trap_fx_1', 'trap', null),
       ]);

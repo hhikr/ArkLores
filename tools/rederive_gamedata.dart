@@ -11,7 +11,6 @@
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/arknights_importer.dart';
-import 'package:arklores/core/gamedata/build/entry_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_coverage_builder.dart';
@@ -59,13 +58,10 @@ Future<void> main(List<String> args) async {
       await StoryCoverageBuilder(db: db, stats: stats).build();
     }
     final entries = importer.entryImporter;
-    for (final path in EntryTables.all) {
-      if (!entries.handles(path)) continue;
-      stdout.writeln('re-import $path');
-      await entries.importTable(path);
-    }
-    stdout.writeln('bind enemies to stages (level files)');
-    await entries.importLevels();
+    // Every table in a complete build's order, each purged first, then the
+    // level files: the same result as building from scratch.
+    stdout.writeln('re-import the entry tables and bind the level files');
+    await entries.importAllTables();
     stdout.writeln('re-import character profiles');
     await importer.importCharacterTables();
     stdout.writeln('rebuild derived layer');

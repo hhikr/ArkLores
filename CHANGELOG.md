@@ -30,6 +30,12 @@ All notable changes to ArkLores will be documented in this file.
   a download of files under `[uc]info` that failed with HTTP 404, owners of items, medals and stages that stayed as they
   were when only an activity or zone table changed, and a complete in-app build that left out the level files (so no
   enemy, trap or summon bindings). Changed files are downloaded six at a time.
+- **Re-importing a table starts from a clean slate.** A table read again (an update, a rule change) first removes what its
+  last import wrote, so an updated knowledge base, a re-derived one and a complete build now end with the same entries,
+  texts and bindings (checked on the real data).
+- **Versions of one operator are linked.** An alternate version points at the original (`same_person`, from the game's own
+  groups) and the operator page lists them. The question-answering agent is told that release time is not story time, that
+  later material can overturn earlier material, and to read the archives of each version before treating them as one person.
 - **Names the app does not know yet.** A new shelf kind shows as "其他", a new entry type by the family it belongs to
   (集成战略资料, 生息演算资料, 档案资料), a new relation as "相关"; nothing is dropped or shown as a raw id where a name exists.
 - **The question-answering agent reads a description of the library pages** (shelves, entry types, what each is for)

@@ -142,6 +142,11 @@ final operatorOwnedProvider = FutureProvider.autoDispose
     .family<List<LibraryEntry>, String>((ref, id) async =>
         await _query(ref, (db) => entriesOwnedBy(db, id)) ?? const [],);
 
+/// The alternate versions of an operator (and its original).
+final samePersonProvider = FutureProvider.autoDispose
+    .family<List<LibraryEntry>, String>((ref, id) async =>
+        await _query(ref, (db) => samePersonOf(db, id)) ?? const [],);
+
 /// The in-battle dialogue attached to a stage or story entry, in order.
 final attachedStoriesProvider = FutureProvider.autoDispose
     .family<List<LibraryEntry>, String>((ref, id) async =>

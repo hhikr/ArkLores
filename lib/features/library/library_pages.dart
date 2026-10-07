@@ -1201,6 +1201,8 @@ class OperatorPage extends ConsumerWidget {
         const <LibraryEntry>[];
     final blocks = ref.watch(entryTextsProvider(e)).valueOrNull ??
         const <EntryTextBlock>[];
+    final samePerson = ref.watch(samePersonProvider(e.id)).valueOrNull ??
+        const <LibraryEntry>[];
 
     // Owned entries by type, in the order the query returns them.
     final byType = <String, List<LibraryEntry>>{};
@@ -1231,6 +1233,20 @@ class OperatorPage extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: EntryPage._textBlock(theme, e, b, ref.watch(nicknameProvider)),
               ),
+          ],
+          if (samePerson.isNotEmpty) ...[
+            header(bindingName('same_person', outgoing: true), 'same_person'),
+            for (final o in samePerson) ...[
+              LibraryRow(
+                key: ValueKey('operator-same-${o.id}'),
+                title: o.name.isEmpty ? o.id : o.name,
+                subtitle: codeCaption(o),
+                subtitleLines: 1,
+                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                onTap: () => openEntry(context, o),
+              ),
+              rowDivider(theme),
+            ],
           ],
           if (records.isNotEmpty) ...[
             header(context.t.libraryOperatorRecords, 'records'),

@@ -16,6 +16,15 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 一致性复测与同一人物（2026-10-07，未发布，需重算知识库；`tools/release_gamedata.env` 已指向新的本地库）**：① 第二轮一致性实验：早库也带关卡文件
+  （App 完整重建现在读 `levels/`），更新到 `a550f5e`，与全量新建库逐项对比，**条目、故事行、记录、绑定、集合全部一致**（`build/consist/cmp.dart` 对比）。
+  这一轮抓到的问题：导入一张表时没有先清掉它上次写的行（只有肉鸽表清），规则变过之后旧行留着——更新库和 `rederive_gamedata.dart` 都和新建库不一样
+  （之前发给你装的本地库就有 1340 条多余的复刻关卡条目、213 个故事名不同）。现在 `_importTableWith` 先 `_purgeSource`（条目、记录、本表写的绑定、实体与别名），
+  上下文表（活动/关卡/分区/复刻/回顾/沙盘）有变化时增量构建按完整构建的顺序重读全部条目表（`importAllTables`；先到先得的重复 id 取决于顺序），
+  `rederive_gamedata.dart` 也改成 `importAllTables`；重算后的库与全量新建库完全一致。② 同一人物：`char_meta_table.spCharGroups`（37 组，组内第一个是原型）→
+  `same_person` 链接（异格 → 原型），干员页“同一人物”小节（`samePersonOf`）；`char_meta_table.json` 加进下载的表。表里没有“是否假设线”，没有干员上线时间
+  （`gacha_table` 只覆盖 82/458 个干员），也没有故事内时间表，所以不造这些表；提示词（`loreLibraryGuide`）讲清：上线时间不是故事时间、后出的可以推翻先出的、
+  同一干员的多个版本要读档案与剧情判断。提示词标题里的括号说明已去掉。
 - **0.11 新建库/更新库一致性、名字兜底、资料页结构说明（2026-10-07，未发布）**：① 一致性实验（`build/consist/`，不用向量）：从上游较早提交
   `fa63359`（2026-06-26）建“早库”，用 App 同一套增量代码（`tools/update_gamedata.dart`）更新到 `a550f5e`，与 `a550f5e` 的新建库逐项对比：
   条目、故事行、记录、绑定（除依赖关卡文件的 `appears_in`/`plays_in`/`attached_to`，因为早库没读关卡文件）完全一致；`system` 集合的排序号以前取决于行的

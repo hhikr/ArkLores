@@ -369,7 +369,35 @@ class ArknightsImporter {
           );
         }
       }
+      await _linkSamePerson(txn);
     });
+  }
+
+  /// Operators that are one person (the table's `spCharGroups`: the first of
+  /// a group is the original, the others its alternate versions). Each
+  /// alternate points at the original with `same_person`. The tables do not
+  /// say whether an alternate is a later stage of the same story or a
+  /// what-if; that is for the archives to say.
+  Future<void> _linkSamePerson(Transaction txn) async {
+    const path = 'zh_CN/gamedata/excel/char_meta_table.json';
+    if (!File(p.join(sourceDir.path, path)).existsSync()) return;
+    final meta = await readJsonMap(p.join(sourceDir.path, path));
+    final groups = meta['spCharGroups'];
+    if (groups is! Map) return;
+    for (final group in groups.entries) {
+      final members = group.value;
+      if (members is! List) continue;
+      for (final member in members) {
+        if ('$member' == '${group.key}') continue;
+        await insertLink(
+          txn,
+          src: 'operator:$member',
+          relation: 'same_person',
+          dst: 'operator:${group.key}',
+          sourcePath: path,
+        );
+      }
+    }
   }
 
   /// What a character's own row names: the summons and devices it deploys

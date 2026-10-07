@@ -223,6 +223,9 @@ String bindingName(
       ('leads_to', false) => '来自',
       ('features', true) => '涉及',
       ('features', false) => '出现于',
+      // Two operators that are one person: the alternate points at the
+      // original, both ways read the same.
+      ('same_person', _) => '同一人物',
       ('summoned_by', true) => '召唤者',
       ('summoned_by', false) => '召唤物',
       ('reads_story', true) => '阅读剧情',

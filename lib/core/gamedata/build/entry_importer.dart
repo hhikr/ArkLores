@@ -87,9 +87,10 @@ class EntryTables {
   ];
 
   /// Tables the owner of an entry is read from (which activity, chapter or
-  /// zone a stage, item or medal belongs to). When one of them changes, the
-  /// tables in [ownerDependents] are read again even if they did not change,
-  /// or an update would leave their owners as they were.
+  /// zone a stage, item or medal belongs to, which zone a re-run folds into).
+  /// When one of them changes, every other entry table is read again too even
+  /// if it did not change, or an update would leave their owners and links as
+  /// they were (a complete build and an update must end the same).
   static const Set<String> contextTables = {
     storyReview,
     activity,
@@ -98,9 +99,6 @@ class EntryTables {
     zone,
     sandbox,
   };
-
-  /// Entry tables whose owners come from [contextTables].
-  static const List<String> ownerDependents = [zone, stage, item, medal, charm];
 
   /// Whether [path] is a level file (`levels/**.json`): the source of the
   /// enemy ↔ stage bindings.
@@ -746,7 +744,13 @@ class EntryImporter {
     _levelIndexCache = null;
     _enemyIdCache = null;
     _stageIdCache = null;
-    await db.transaction((txn) => run(this, txn, ctx));
+    // What an earlier import of the table wrote goes first: a table read again
+    // is exactly what its rules make of it now (an update, a rule change and a
+    // complete build end the same), not that plus what older rules left.
+    await db.transaction((txn) async {
+      await _purgeSource(txn, path);
+      await run(this, txn, ctx);
+    });
   }
 
   static final Map<String,
@@ -1644,6 +1648,13 @@ class EntryImporter {
     // the level files) stay and meet the re-imported entry by its id.
     await txn.rawDelete('DELETE FROM entry_links WHERE source_path = ?', [path]);
     await txn.rawDelete('DELETE FROM entries WHERE source_path = ?', [path]);
+    // The names it put in the name index.
+    const entities = 'SELECT id FROM entities WHERE source_path = ?';
+    await txn.rawDelete(
+      'DELETE FROM entity_aliases WHERE entity_id IN ($entities)',
+      [path],
+    );
+    await txn.rawDelete('DELETE FROM entities WHERE source_path = ?', [path]);
   }
 
   /// The lines of [text] that are prose: Chinese and not rule text.
