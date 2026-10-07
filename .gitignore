@@ -66,3 +66,4 @@ android/key.properties
 *.sln
 *.sw?
 .DS_Store
+coverage/
