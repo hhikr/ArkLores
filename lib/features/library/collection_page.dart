@@ -74,7 +74,8 @@ class CollectionPage extends ConsumerWidget {
     final restStories = ownParts
         ? [for (final s in storyList) if (s.group != openingStoryKind) s]
         : storyList;
-    final sections = _storySections(c, restStories);
+    final sections =
+        _storySections(c, restStories, other: context.t.shelfOther);
     final read = storyList
         .where((s) =>
             progress[LibraryRef.story(s.rawId ?? '').toString()]?.hasCompleted ??
@@ -334,17 +335,19 @@ class CollectionPage extends ConsumerWidget {
   }
 
   /// The stories of a roguelike or sandbox collection by their group, in
-  /// reading order; null when the stories are listed flat.
+  /// reading order (stories without a group under [other]); null when the
+  /// stories are listed flat.
   Map<String, List<LibraryEntry>>? _storySections(
     LibraryCollection? c,
-    List<LibraryEntry> stories,
-  ) {
+    List<LibraryEntry> stories, {
+    required String other,
+  }) {
     if (c == null || (c.kind != 'roguelike' && c.kind != 'sandbox')) {
       return null;
     }
     final out = <String, List<LibraryEntry>>{};
     for (final s in stories) {
-      (out[s.group ?? '其他'] ??= []).add(s);
+      (out[s.group ?? other] ??= []).add(s);
     }
     return out.length >= 2 ? out : null;
   }

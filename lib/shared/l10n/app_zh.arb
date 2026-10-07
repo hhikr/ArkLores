@@ -464,5 +464,10 @@
   "kbVectorConfirmTitle": "为全部故事生成向量？",
   "kbVectorConfirmBody": "预计 {stories} 个故事、约 {chunks} 块，约 {tokens} 万 token。会产生向量服务的费用，可以随时停止，已完成的故事会保留。",
   "@kbVectorConfirmBody": {"placeholders": {"stories": {"type": "int"}, "chunks": {"type": "int"}, "tokens": {"type": "String"}}},
-  "kbVectorConfirm": "开始"
+  "kbVectorConfirm": "开始",
+  "lineKindSubtitle": "字幕",
+  "lineKindDocument": "文档",
+  "lineKindChoice": "选项",
+  "lineKindTitle": "标题",
+  "lineKindTutorial": "教程"
 }

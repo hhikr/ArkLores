@@ -2563,6 +2563,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start'**
   String get kbVectorConfirm;
+
+  /// No description provided for @lineKindSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Caption'**
+  String get lineKindSubtitle;
+
+  /// No description provided for @lineKindDocument.
+  ///
+  /// In en, this message translates to:
+  /// **'Document'**
+  String get lineKindDocument;
+
+  /// No description provided for @lineKindChoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Choice'**
+  String get lineKindChoice;
+
+  /// No description provided for @lineKindTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get lineKindTitle;
+
+  /// No description provided for @lineKindTutorial.
+  ///
+  /// In en, this message translates to:
+  /// **'Tutorial'**
+  String get lineKindTutorial;
 }
 
 class _AppLocalizationsDelegate

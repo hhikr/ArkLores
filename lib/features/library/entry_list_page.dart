@@ -45,16 +45,17 @@ class EntryListPage extends ConsumerStatefulWidget {
 
 /// The groups of a long list as the reader names them (several game codes
 /// may share a name); null when a menu would not help: one heading, or a
-/// short list.
+/// short list. Groups without a name go last, under [other].
 List<({String label, List<String?> raws, int count})>? _groupMenu(
   String type,
-  List<({String? group, int count})> groups,
-) {
+  List<({String? group, int count})> groups, {
+  required String other,
+}) {
   final total = groups.fold<int>(0, (n, g) => n + g.count);
   if (total < 30) return null;
   final byLabel = <String, ({List<String?> raws, int count})>{};
   for (final g in groups) {
-    final label = groupLabel(type, g.group) ?? '其他';
+    final label = groupLabel(type, g.group) ?? other;
     final prev = byLabel[label];
     byLabel[label] = (
       raws: [...?prev?.raws, g.group],
@@ -63,7 +64,7 @@ List<({String label, List<String?> raws, int count})>? _groupMenu(
   }
   if (byLabel.length < 2) return null;
   final labels = byLabel.keys.toList()
-    ..sort((a, b) => a == '其他' ? 1 : b == '其他' ? -1 : 0);
+    ..sort((a, b) => a == other ? 1 : b == other ? -1 : 0);
   return [
     for (final l in labels)
       (label: l, raws: byLabel[l]!.raws, count: byLabel[l]!.count),
@@ -105,7 +106,11 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
           );
     final menu = groupData?.valueOrNull == null
         ? null
-        : _groupMenu(widget.type, groupData!.valueOrNull!);
+        : _groupMenu(
+            widget.type,
+            groupData!.valueOrNull!,
+            other: context.t.shelfOther,
+          );
     if (!flat && groupData!.isLoading) {
       return LibraryScaffold(
         title: title,

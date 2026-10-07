@@ -466,5 +466,10 @@
   "kbVectorConfirmTitle": "Generate vectors for all stories?",
   "kbVectorConfirmBody": "About {stories} stories, {chunks} chunks, {tokens}×10k tokens. This costs money at your vector service. You can stop any time; finished stories are kept.",
   "@kbVectorConfirmBody": {"placeholders": {"stories": {"type": "int"}, "chunks": {"type": "int"}, "tokens": {"type": "String"}}},
-  "kbVectorConfirm": "Start"
+  "kbVectorConfirm": "Start",
+  "lineKindSubtitle": "Caption",
+  "lineKindDocument": "Document",
+  "lineKindChoice": "Choice",
+  "lineKindTitle": "Title",
+  "lineKindTutorial": "Tutorial"
 }

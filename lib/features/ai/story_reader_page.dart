@@ -874,6 +874,17 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         ),
       );
 
+  /// The tag above a line that is neither dialogue nor narration, in the
+  /// interface language (the agent's tools use [storyKindLabel]).
+  String? _kindTag(String? kind) => switch (kind) {
+        'subtitle' => context.t.lineKindSubtitle,
+        'document' => context.t.lineKindDocument,
+        'choice' => context.t.lineKindChoice,
+        'title' => context.t.lineKindTitle,
+        'system' => context.t.lineKindTutorial,
+        _ => null,
+      };
+
   Widget _line(
     AppThemeTokens theme,
     StoryLineEntry line, {
@@ -885,6 +896,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   }) {
     final narration = speaker.isEmpty;
     final plain = narration && !italicNarration;
+    final kindTag = _kindTag(line.kind);
     final content = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -905,11 +917,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                     ),
                   ),
                 ),
-              if (storyKindLabel(line.kind) != null)
+              if (kindTag != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
-                    storyKindLabel(line.kind)!,
+                    kindTag,
                     style: theme.bodyFont.copyWith(
                       color: theme.textMuted,
                       fontSize: 10.5,
@@ -939,7 +951,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           width: 26,
           child: Padding(
             padding: EdgeInsets.only(
-              top: showName ? 20 : (storyKindLabel(line.kind) != null ? 18 : 4),
+              top: showName ? 20 : (kindTag != null ? 18 : 4),
             ),
             child: Text(
               '${(line.shownIndex ?? line.lineIndex) + 1}',

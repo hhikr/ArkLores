@@ -1416,4 +1416,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbVectorConfirm => 'Start';
+
+  @override
+  String get lineKindSubtitle => 'Caption';
+
+  @override
+  String get lineKindDocument => 'Document';
+
+  @override
+  String get lineKindChoice => 'Choice';
+
+  @override
+  String get lineKindTitle => 'Title';
+
+  @override
+  String get lineKindTutorial => 'Tutorial';
 }

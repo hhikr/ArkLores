@@ -1366,4 +1366,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbVectorConfirm => '开始';
+
+  @override
+  String get lineKindSubtitle => '字幕';
+
+  @override
+  String get lineKindDocument => '文档';
+
+  @override
+  String get lineKindChoice => '选项';
+
+  @override
+  String get lineKindTitle => '标题';
+
+  @override
+  String get lineKindTutorial => '教程';
 }

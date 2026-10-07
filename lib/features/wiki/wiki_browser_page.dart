@@ -860,7 +860,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                               IconButton(
                                 icon: const Icon(Icons.bookmarks_rounded),
                                 color: theme.textSecondary,
-                                tooltip: 'Bookmarks',
+                                tooltip: context.t.bookmarksTitle,
                                 onPressed: _openBookmarks,
                               ),
                               const SizedBox(width: 6),
