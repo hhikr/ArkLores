@@ -47,14 +47,23 @@ class FloatingBar extends StatelessWidget {
   }
 }
 
-/// A [FloatingBar] at the top of a page, below the status bar, over the
-/// content. Put it last in a [Stack] whose content leaves
-/// [floatingTopInset] (plus the status bar) free at the top.
+/// The top docks of a page, below the status bar, over the content: what
+/// sits on the left ([leading], e.g. tabs) and what sits on the right
+/// ([trailing], e.g. one action) are separate floating pills, each as wide
+/// as its content, the page showing between them. Put it last in a
+/// [Stack] whose content leaves [floatingTopInset] (plus the status bar)
+/// free at the top.
 class FloatingTopBar extends StatelessWidget {
-  const FloatingTopBar({super.key, required this.theme, required this.child});
+  const FloatingTopBar({
+    super.key,
+    required this.theme,
+    required this.leading,
+    this.trailing,
+  });
 
   final AppThemeTokens theme;
-  final Widget child;
+  final Widget leading;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +71,103 @@ class FloatingTopBar extends StatelessWidget {
       top: MediaQuery.paddingOf(context).top + 6,
       left: 10,
       right: 10,
-      child: FloatingBar(
+      child: FloatingSplitBar(
         theme: theme,
-        height: floatingBarHeight,
-        child: child,
+        leading: leading,
+        trailing: trailing,
+      ),
+    );
+  }
+}
+
+/// The row of [FloatingTopBar]: a pill hugging [leading] on the left, a
+/// round pill around [trailing] on the right.
+class FloatingSplitBar extends StatelessWidget {
+  const FloatingSplitBar({
+    super.key,
+    required this.theme,
+    required this.leading,
+    this.trailing,
+  });
+
+  final AppThemeTokens theme;
+  final Widget leading;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(
+          child: FloatingBar(
+            theme: theme,
+            height: floatingBarHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: leading,
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          SizedBox(
+            width: floatingBarHeight,
+            child: FloatingBar(
+              theme: theme,
+              height: floatingBarHeight,
+              radius: floatingBarHeight / 2,
+              child: Center(child: trailing),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// One choice in a floating pill (a tab, a site): the selected one filled.
+class FloatingSegment extends StatelessWidget {
+  const FloatingSegment({
+    super.key,
+    required this.theme,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppThemeTokens theme;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: selected ? null : onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          constraints: const BoxConstraints(maxWidth: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? theme.accentPrimary.withValues(alpha: 0.28)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.bodyFont.copyWith(
+              fontSize: 13.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? theme.textPrimary : theme.textSecondary,
+            ),
+          ),
+        ),
       ),
     );
   }

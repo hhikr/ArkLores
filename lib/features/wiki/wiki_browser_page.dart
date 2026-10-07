@@ -778,87 +778,44 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
-  /// The site switch: a floating pill of small segments, the selected site
-  /// filled, bookmarks at the end. The web page starts below it (a page
-  /// cannot be told to leave room under a dock).
+  /// The site switch: the sites in a floating pill on the left (as wide as
+  /// they need), bookmarks in a round pill on the right. The web page starts
+  /// below them (a page cannot be told to leave room under a dock).
   Widget _buildSiteBar(AppThemeTokens theme) {
     return Padding(
+      key: const ValueKey('wiki-site-bar'),
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-      child: FloatingBar(
-        key: const ValueKey('wiki-site-bar'),
+      child: FloatingSplitBar(
         theme: theme,
-        height: floatingBarHeight,
-        padding: const EdgeInsets.only(left: 8),
-        child: _siteBarRow(theme),
-      ),
-    );
-  }
-
-  Widget _siteBarRow(AppThemeTokens theme) {
-    return Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var i = 0; i < _wikiSites.length; i++)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: _siteSegment(theme, i),
-                    ),
-                ],
-              ),
-            ),
+        leading: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < _wikiSites.length; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: _siteSegment(theme, i),
+                ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.bookmarks_outlined, size: 20),
-            color: theme.textSecondary,
-            visualDensity: VisualDensity.compact,
-            tooltip: context.t.bookmarksTitle,
-            onPressed: _openBookmarks,
-          ),
-          const SizedBox(width: 4),
-        ],
-    );
-  }
-
-  Widget _siteSegment(AppThemeTokens theme, int index) {
-    final selected = _tabController.index == index;
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: InkWell(
-        key: ValueKey('wiki-site-$index'),
-        borderRadius: BorderRadius.circular(14),
-        onTap: () {
-          if (!selected) _tabController.index = index;
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          constraints: const BoxConstraints(maxWidth: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: selected
-                ? theme.accentPrimary.withValues(alpha: 0.28)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            _wikiSites[index].label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.bodyFont.copyWith(
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? theme.textPrimary : theme.textSecondary,
-            ),
-          ),
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.bookmarks_outlined, size: 20),
+          color: theme.textPrimary,
+          tooltip: context.t.bookmarksTitle,
+          onPressed: _openBookmarks,
         ),
       ),
     );
   }
-
+  Widget _siteSegment(AppThemeTokens theme, int index) => FloatingSegment(
+        key: ValueKey('wiki-site-$index'),
+        theme: theme,
+        label: _wikiSites[index].label,
+        selected: _tabController.index == index,
+        onTap: () => _tabController.index = index,
+      );
   // ─── Build ───────────────────────────────────────────────────────
 
   @override

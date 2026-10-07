@@ -16,6 +16,7 @@ import 'package:arklores/features/wiki/wiki_browser_page.dart';
 import 'package:arklores/main.dart';
 import 'package:arklores/shared/providers/handoff_provider.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
+import 'package:arklores/shared/widgets/floating_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -134,6 +135,24 @@ void main() {
     addTearDown(tester.view.resetViewInsets);
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byKey(const ValueKey('main-navigation')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('top docks with something on each side are two pills, the '
+      'page showing between them', (tester) async {
+    await start(tester, tab: 2);
+    Rect pillAround(Finder child) => tester.getRect(find
+        .ancestor(of: child, matching: find.byType(FloatingBar))
+        .first,);
+    final tabs = pillAround(find.byKey(const ValueKey('library-tabs')));
+    final action = pillAround(find.byKey(const ValueKey('library-search')));
+    expect(action.left - tabs.right, greaterThan(100));
+    expect(action.width, action.height); // round
+
+    await tapTab(tester, 'Wiki');
+    final sites = pillAround(find.byKey(const ValueKey('wiki-site-0')));
+    final bookmarks = pillAround(find.byTooltip('书签'));
+    expect(bookmarks.left - sites.right, greaterThan(100));
     expect(tester.takeException(), isNull);
   });
 

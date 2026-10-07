@@ -56,52 +56,43 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage>
               MyMaterialsView(),
             ],
           ),
+          // Tabs on the left, the action on the right: two pills.
           FloatingTopBar(
             theme: theme,
-            child: Row(
+            leading: Row(
+              key: const ValueKey('library-tabs'),
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(width: 4),
-                TabBar(
-                  controller: _tabs,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  dividerColor: Colors.transparent,
-                  indicatorColor: theme.accentPrimary,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  indicatorWeight: 2.5,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  labelColor: theme.textPrimary,
-                  unselectedLabelColor: theme.textSecondary,
-                  labelStyle: theme.titleFont.copyWith(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
+                for (final (i, label) in [
+                  context.t.libraryTabRead,
+                  context.t.libraryTabMine,
+                ].indexed)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: FloatingSegment(
+                      theme: theme,
+                      label: label,
+                      selected: _tabs.index == i,
+                      onTap: () => _tabs.animateTo(i),
+                    ),
                   ),
-                  unselectedLabelStyle: theme.titleFont.copyWith(fontSize: 15),
-                  tabs: [
-                    Tab(text: context.t.libraryTabRead, height: 42),
-                    Tab(text: context.t.libraryTabMine, height: 42),
-                  ],
-                ),
-                const Spacer(),
-                if (reading)
-                  IconButton(
+              ],
+            ),
+            trailing: reading
+                ? IconButton(
                     key: const ValueKey('library-search'),
                     tooltip: context.t.librarySearchHint,
                     color: theme.textPrimary,
                     icon: const Icon(Icons.search_rounded, size: 22),
                     onPressed: () => openSearch(context),
                   )
-                else
-                  IconButton(
+                : IconButton(
                     key: const ValueKey('library-new-material'),
                     tooltip: context.t.materialsNew,
                     color: theme.textPrimary,
                     icon: const Icon(Icons.add_rounded, size: 22),
                     onPressed: () => newMaterial(context),
                   ),
-                const SizedBox(width: 2),
-              ],
-            ),
           ),
         ],
       ),

@@ -26,6 +26,8 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
   `FloatingTopBar`，`floatingPadding`）。外壳 `extendBody: true`，底部导航是居中的短胶囊（每项 64 宽，四项共约 268），页面拿到它的高度作为
   `MediaQuery.padding.bottom`、内容从它下面滚过；键盘弹出时导航隐藏（否则输入框和键盘之间会空出一截）。资料页的标签栏、AI 页的输入框
   （`_SizeReporter` 量出输入框高度给列表留底）都悬浮；Wiki 的站点栏是悬浮胶囊，但网页夹在两个悬浮栏之间（网页不能从外部留白，盖住就看不到）。
+  左右两边都有内容的顶栏拆成两块（`FloatingSplitBar`：左边的胶囊随内容宽，右边一个圆形按钮，中间露出页面）：资料页 = 标签 | 搜索/新建，Wiki = 站点 | 书签；
+  标签与站点都用 `FloatingSegment`（选中的填色）。可滚动的 `TabBar` 会撑满胶囊，不要放进左边那块。
   推入的二级页面（对话记录、设置子页、资料各级页面）仍是普通的 48 高 AppBar。新加主页面里的列表要用 `floatingPadding`。
 
 - **0.11 删除角色扮演、AI 页去掉顶栏（2026-10-07，未发布，不需重算知识库）**：① 开发者决定删除角色扮演的全部前后端：界面
