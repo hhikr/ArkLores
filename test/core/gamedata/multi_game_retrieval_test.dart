@@ -8,6 +8,8 @@ import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart';
+import 'package:arklores/core/library/library_queries.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/gamedata_fixture.dart';
@@ -29,6 +31,28 @@ void main() {
     expect(Game.parse('终末地'), Game.endfield);
     expect(Game.parse('arknights'), Game.arknights);
     expect(Game.parse(null), isNull);
+  });
+
+  test('library shelves and scopes name their game', () {
+    expect(codexShelfOf(Game.arknights), codexShelf);
+    expect(gameOfId(codexShelfOf(Game.endfield)), Game.endfield);
+    expect(isCodexShelf(codexShelfOf(Game.endfield)), isTrue);
+    expect(isCodexShelf('main'), isFalse);
+    expect(gameOfId(operatorShelfOf(Game.endfield)), Game.endfield);
+    expect(gameOfScope(listScope(collectionId: 'ef/m1')), Game.endfield);
+    expect(gameOfScope(shelfScope('main')), Game.arknights);
+    expect(gameOfScope(everywhere), Game.arknights);
+  });
+
+  test("an Endfield story's label starts with the game's name", () {
+    const entry = StoryCatalogEntry(
+      storyId: 'ef/dlg_x_1.txt',
+      collectionId: 'ef/m1',
+      collectionName: '某个任务',
+      collectionType: 'EF_MAIN',
+      storySort: 1,
+    );
+    expect(entry.label, startsWith('终末地·某个任务'));
   });
 
   group('two games', () {
