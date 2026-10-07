@@ -218,8 +218,15 @@ class MultiGameRetrieval implements GameDataRetrieval {
     String sql, {
     int maxRows = 200,
     Game? game,
-  }) =>
-      only(game ?? Game.arknights).readOnlySql(sql, maxRows: maxRows);
+  }) async {
+    // Without a game: the default one, or the only one installed.
+    final installed = await installedGames();
+    final which = game ??
+        (installed.isEmpty || installed.contains(Game.arknights)
+            ? Game.arknights
+            : installed.first);
+    return only(which).readOnlySql(sql, maxRows: maxRows);
+  }
 
   @override
   Future<List<StoryLineHitRow>> grepStoryLines(

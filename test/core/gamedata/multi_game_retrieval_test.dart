@@ -138,6 +138,16 @@ void main() {
       expect(seen.covers('ef/dlg_test_1.txt', 0, 1), isTrue);
     });
 
+    test('with only Endfield installed, sql without a game reads Endfield', () async {
+      final onlyEf = MultiGameRetrieval({
+        Game.arknights: GameDataKnowledgeStore(dbPath: '${dir.path}/none.db'),
+        Game.endfield: both.stores[Game.endfield]!,
+      });
+      final result = await onlyEf.readOnlySql('SELECT story_id FROM story_lines LIMIT 1');
+      expect(result.error, isNull);
+      expect('${result.rows.single.single}', startsWith('ef/'));
+    });
+
     test('a missing database answers empty; the other still works', () async {
       final only = MultiGameRetrieval({
         Game.arknights: both.stores[Game.arknights]!,
