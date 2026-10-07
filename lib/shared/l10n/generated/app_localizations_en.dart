@@ -886,6 +886,79 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String aiWorkSummary(int calls, int reads) {
+    return '$calls lookups · $reads stories read';
+  }
+
+  @override
+  String get aiWorkSql => 'Query the knowledge base';
+
+  @override
+  String aiWorkGrep(String pattern) {
+    return 'Search for “$pattern”';
+  }
+
+  @override
+  String aiWorkGrepIn(String scope, String pattern) {
+    return 'Search “$pattern” in $scope';
+  }
+
+  @override
+  String aiWorkRead(String story) {
+    return 'Read “$story”';
+  }
+
+  @override
+  String aiWorkOutline(String collection) {
+    return 'Chapter list of $collection';
+  }
+
+  @override
+  String aiWorkFind(String query) {
+    return 'Find by meaning: “$query”';
+  }
+
+  @override
+  String aiWorkSimilar(String name) {
+    return 'Names like “$name”';
+  }
+
+  @override
+  String aiWorkDelegate(String task) {
+    return 'Helper: $task';
+  }
+
+  @override
+  String get aiWorkRedo => 'Sources did not match; rewriting';
+
+  @override
+  String aiWorkHits(int hits, int stories) {
+    return '$hits hits · $stories stories';
+  }
+
+  @override
+  String aiWorkRows(int count) {
+    return '$count rows';
+  }
+
+  @override
+  String aiWorkLines(int start, int end) {
+    return 'lines $start–$end';
+  }
+
+  @override
+  String get aiWorkNone => 'nothing found';
+
+  @override
+  String get aiWorkFailed => 'failed';
+
+  @override
+  String get aiWorkRunning => 'running';
+
+  @override
+  String get aiWorkRaw => 'Raw output';
+
+  @override
   String aiStepsStatus(String status, int count) {
     return '$status ($count steps)';
   }

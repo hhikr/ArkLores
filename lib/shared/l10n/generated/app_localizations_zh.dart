@@ -865,6 +865,79 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String aiWorkSummary(int calls, int reads) {
+    return '查阅 $calls 次 · 读了 $reads 篇原文';
+  }
+
+  @override
+  String get aiWorkSql => '查询资料库';
+
+  @override
+  String aiWorkGrep(String pattern) {
+    return '搜索「$pattern」';
+  }
+
+  @override
+  String aiWorkGrepIn(String scope, String pattern) {
+    return '在「$scope」中搜索「$pattern」';
+  }
+
+  @override
+  String aiWorkRead(String story) {
+    return '阅读《$story》';
+  }
+
+  @override
+  String aiWorkOutline(String collection) {
+    return '查看「$collection」的章节目录';
+  }
+
+  @override
+  String aiWorkFind(String query) {
+    return '按意思找「$query」';
+  }
+
+  @override
+  String aiWorkSimilar(String name) {
+    return '找与「$name」相近的名字';
+  }
+
+  @override
+  String aiWorkDelegate(String task) {
+    return '派助手：$task';
+  }
+
+  @override
+  String get aiWorkRedo => '出处没对上，重写答案';
+
+  @override
+  String aiWorkHits(int hits, int stories) {
+    return '$hits 处 · $stories 篇';
+  }
+
+  @override
+  String aiWorkRows(int count) {
+    return '$count 条';
+  }
+
+  @override
+  String aiWorkLines(int start, int end) {
+    return '第 $start–$end 行';
+  }
+
+  @override
+  String get aiWorkNone => '没有结果';
+
+  @override
+  String get aiWorkFailed => '出错';
+
+  @override
+  String get aiWorkRunning => '进行中';
+
+  @override
+  String get aiWorkRaw => '原始输出';
+
+  @override
   String aiStepsStatus(String status, int count) {
     return '$status（$count 步）';
   }

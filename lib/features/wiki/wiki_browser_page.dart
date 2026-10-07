@@ -777,6 +777,82 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
+  /// The site switch: one slim row (40 high) of small segments, the
+  /// selected site filled, bookmarks at the end.
+  Widget _buildSiteBar(AppThemeTokens theme) {
+    return Container(
+      key: const ValueKey('wiki-site-bar'),
+      height: 40,
+      padding: const EdgeInsets.only(left: 10),
+      decoration: BoxDecoration(
+        color: theme.bgSecondary,
+        border: Border(bottom: BorderSide(color: theme.divider, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _wikiSites.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: _siteSegment(theme, i),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.bookmarks_outlined, size: 20),
+            color: theme.textSecondary,
+            visualDensity: VisualDensity.compact,
+            tooltip: context.t.bookmarksTitle,
+            onPressed: _openBookmarks,
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _siteSegment(AppThemeTokens theme, int index) {
+    final selected = _tabController.index == index;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        key: ValueKey('wiki-site-$index'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          if (!selected) _tabController.index = index;
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          constraints: const BoxConstraints(maxWidth: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: selected
+                ? theme.accentPrimary.withValues(alpha: 0.28)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            _wikiSites[index].label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.bodyFont.copyWith(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? theme.textPrimary : theme.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─── Build ───────────────────────────────────────────────────────
 
   @override
@@ -818,55 +894,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                   curve: Curves.easeInOutCubic,
                   child: _isReaderMode
                       ? const SizedBox.shrink()
-                      : Container(
-                          color: theme.bgSecondary,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TabBar(
-                                  controller: _tabController,
-                                  indicatorColor: theme.accentPrimary,
-                                  labelColor: theme.accentPrimary,
-                                  unselectedLabelColor: theme.textSecondary,
-                                  labelStyle:
-                                      theme.titleFont.copyWith(fontSize: 14),
-                                  unselectedLabelStyle:
-                                      theme.bodyFont.copyWith(fontSize: 14),
-                                  indicatorWeight: 2,
-                                  tabs: _wikiSites.map((site) {
-                                    return Tab(
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.public_rounded,
-                                            size: 16,
-                                            color: theme.accentPrimary,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Flexible(
-                                            child: Text(
-                                              site.label,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.bookmarks_rounded),
-                                color: theme.textSecondary,
-                                tooltip: context.t.bookmarksTitle,
-                                onPressed: _openBookmarks,
-                              ),
-                              const SizedBox(width: 6),
-                            ],
-                          ),
-                        ),
+                      : _buildSiteBar(theme),
                 ),
 
                 // ── WebView area (IndexedStack = no horizontal swipes) ──

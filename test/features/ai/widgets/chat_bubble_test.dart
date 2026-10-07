@@ -445,4 +445,60 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('work timeline', () {
+    testWidgets('the steps read as what was searched and read, with what '
+        'they found; raw output on tap', (tester) async {
+      final message = ChatMessage(
+        id: 'a',
+        role: MessageRole.assistant,
+        content: _answered('回答正文。'),
+        timestamp: DateTime(2026),
+        steps: const [
+          ReActStep(type: ReActEventType.thought, content: '先找故事集。'),
+          ReActStep(
+            type: ReActEventType.toolCall,
+            content: 'Executing tool "grep"',
+            toolName: 'grep',
+            toolArgs: {'pattern': '甲|乙', 'collection': 'act_fixture'},
+          ),
+          ReActStep(
+            type: ReActEventType.toolObservation,
+            content: '## 《第一章》 $_c5（3 处）\n  L4 [甲] 你好\n'
+                '## 《第二章》 $_c6（2 处）\n  L9 [乙] 再见',
+            toolName: 'grep',
+          ),
+          ReActStep(
+            type: ReActEventType.toolCall,
+            content: 'Executing tool "read_story"',
+            toolName: 'read_story',
+            toolArgs: {'story_id': _c5, 'start': 0},
+          ),
+          ReActStep(
+            type: ReActEventType.toolObservation,
+            content: '【第一章】 $_c5\nL0 [甲] 一\nL1 [乙] 二\nL40 [甲] 三',
+            toolName: 'read_story',
+          ),
+        ],
+      );
+      await _pump(tester, message);
+      expect(find.text('已作答 · 查阅 2 次 · 读了 1 篇原文'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('answer-header')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('work-timeline')), findsOneWidget);
+      expect(find.text('先找故事集。'), findsOneWidget);
+      expect(find.text('在「act_fixture」中搜索「甲 / 乙」'), findsOneWidget);
+      expect(find.text('5 处 · 2 篇'), findsOneWidget);
+      expect(find.text('阅读《第一章》'), findsOneWidget);
+      expect(find.text('第 0–40 行'), findsOneWidget);
+      expect(find.textContaining('Observation'), findsNothing);
+      expect(find.textContaining('Executing tool'), findsNothing);
+
+      expect(find.byKey(const ValueKey('work-raw-1')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('work-step-1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('work-raw-1')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

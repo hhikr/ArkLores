@@ -39,7 +39,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
         backgroundColor: theme.bgSecondary,
         title: Text(
           context.t.settingsProfile,
-          style: theme.titleFont.copyWith(fontSize: 18),
+          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         iconTheme: IconThemeData(color: theme.textPrimary),
       ),

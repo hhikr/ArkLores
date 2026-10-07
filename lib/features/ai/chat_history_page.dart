@@ -34,7 +34,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
         elevation: 0,
         title: Text(
           context.t.aiHistoryTitle,
-          style: theme.titleFont.copyWith(fontSize: 20),
+          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
       body: summaries.when(
@@ -236,7 +236,7 @@ class _ChatSessionDetailPageState extends ConsumerState<ChatSessionDetailPage> {
         elevation: 0,
         title: Text(
           context.t.aiHistoryView,
-          style: theme.titleFont.copyWith(fontSize: 20),
+          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
       body: FutureBuilder<ChatSessionFile?>(

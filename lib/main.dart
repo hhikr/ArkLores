@@ -171,9 +171,20 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
       backgroundColor: tokens.bgSecondary,
       foregroundColor: tokens.textPrimary,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
-      shape: Border(bottom: BorderSide(color: tokens.divider)),
-      titleTextStyle: tokens.titleFont.copyWith(fontSize: 18),
+      // Slim: 48 high, a hairline below, a title the size of a heading
+      // rather than a banner.
+      toolbarHeight: 48,
+      titleSpacing: 4,
+      shape: Border(bottom: BorderSide(color: tokens.divider, width: 0.5)),
+      iconTheme: IconThemeData(color: tokens.textPrimary, size: 22),
+      actionsIconTheme: IconThemeData(color: tokens.textSecondary, size: 22),
+      titleTextStyle: tokens.titleFont.copyWith(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: tokens.textPrimary,
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,

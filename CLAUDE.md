@@ -16,6 +16,13 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 工作过程可读、界面瘦身（2026-10-07，未发布，不需重算知识库）**：① 回答上方的过程不再是 Thought/Action/Observation 原文：
+  `work_steps.dart`（纯 Dart）把工具调用与它的输出配对（并行调用按同名工具的先后配），`chat_bubble` 画成时间线：一步一行“搜索「X」/
+  阅读《章名》/查看目录/查询资料库/派助手”，右侧是结果（“n 处 · m 篇”“第 a–b 行”“n 条”“没有结果”），模型的中间说明是灰色斜体两行；
+  点一步展开原始输出（SQL 语句与工具原文，等宽小字）。标题行改为“已作答 · 查阅 n 次 · 读了 m 篇原文”。② 底栏 68 → 52（选中的图标在
+  小胶囊里，去掉了第二条下划线）；全局 AppBar 48 高、标题 16、细分隔线，各页写死的 18/20 号标题改为 16；资料页标签短下划线；Wiki 站点栏
+  从 TabBar 改为 40 高的一行小胶囊（`wiki-site-bar`）。效果图在本地 `notes/ui_slim_2026-10-07.svg`。
+
 - **0.11 删除角色扮演、AI 页去掉顶栏（2026-10-07，未发布，不需重算知识库）**：① 开发者决定删除角色扮演的全部前后端：界面
   （`roleplay_tab`、AI 页的标签）、`RoleplayAgent`/通知器/会话存储、它独用的文本式 `ReActLoop`（及 `react_parser`、`loop_memory`、
   `evidence_summary`、`ToolRegistry`、`agent_prompts`）、`search_local_lore` 与 store 的实体检索（`search`/`resolveEntityId`/

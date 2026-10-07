@@ -58,7 +58,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         backgroundColor: theme.bgSecondary,
         title: Text(
           context.t.kbTitle,
-          style: theme.titleFont.copyWith(fontSize: 18),
+          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         iconTheme: IconThemeData(color: theme.textPrimary),
         elevation: 0,

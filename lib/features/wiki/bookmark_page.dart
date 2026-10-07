@@ -25,7 +25,7 @@ class BookmarkPage extends ConsumerWidget {
         backgroundColor: theme.bgSecondary,
         title: Text(
           context.t.bookmarksTitle,
-          style: theme.titleFont.copyWith(fontSize: 18),
+          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),

@@ -150,6 +150,8 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 }
 
+/// The bottom navigation: slim (52 high), a hairline on top, the selected
+/// tab's icon in a small pill. No second indicator.
 class _IndustrialNavigation extends StatelessWidget {
   const _IndustrialNavigation({
     required this.theme,
@@ -163,6 +165,8 @@ class _IndustrialNavigation extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final List<(IconData, String)> items;
 
+  static const double height = 52;
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -170,9 +174,12 @@ class _IndustrialNavigation extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Container(
-          height: 68,
+          key: const ValueKey('main-navigation'),
+          height: height,
           decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: theme.cardBorder)),
+            border: Border(
+              top: BorderSide(color: theme.divider, width: 0.5),
+            ),
           ),
           child: Row(
             children: [
@@ -222,11 +229,10 @@ class _NavigationItemState extends State<_NavigationItem> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = widget.theme;
     final color = widget.selected
-        ? (widget.theme.isEndfield
-            ? widget.theme.textPrimary
-            : widget.theme.navSelectedItem)
-        : widget.theme.navUnselectedItem;
+        ? (theme.isEndfield ? theme.textPrimary : theme.navSelectedItem)
+        : theme.navUnselectedItem;
     return Semantics(
       button: true,
       selected: widget.selected,
@@ -245,61 +251,36 @@ class _NavigationItemState extends State<_NavigationItem> {
           scale: _pressed ? 0.94 : 1,
           duration: const Duration(milliseconds: 110),
           curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            decoration: BoxDecoration(
-              color: widget.selected
-                  ? widget.theme.accentPrimary.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOutCubic,
-                  bottom: 3,
-                  left: widget.selected ? 26 : 32,
-                  right: widget.selected ? 26 : 32,
-                  height: 3,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: widget.selected
-                          ? widget.theme.accentPrimary
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: 48,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: widget.selected
+                      ? theme.accentPrimary.withValues(alpha: 0.28)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AnimatedScale(
-                      scale: widget.selected ? 1.04 : 1,
-                      duration: const Duration(milliseconds: 240),
-                      curve: Curves.easeOutBack,
-                      child: Icon(widget.icon, color: color, size: 24),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: widget.theme.bodyFont.copyWith(
-                        color: color,
-                        fontSize: 11,
-                        fontWeight:
-                            widget.selected ? FontWeight.w700 : FontWeight.w500,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
+                child: Icon(widget.icon, color: color, size: 20),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.bodyFont.copyWith(
+                  color: color,
+                  fontSize: 10.5,
+                  fontWeight:
+                      widget.selected ? FontWeight.w700 : FontWeight.w500,
+                  height: 1.1,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

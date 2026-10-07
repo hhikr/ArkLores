@@ -14,6 +14,7 @@ import '../../../shared/theme/app_theme.dart';
 import '../evidence_observation.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
+import '../work_steps.dart';
 import 'story_answer_body.dart';
 
 /// Renders a single chat bubble with support for ReAct steps disclosure
@@ -285,8 +286,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       statusLabel,
       if (envelope?.confidence != null)
         '${context.t.aiInvestigationConfidence} ${envelope!.confidence}',
-      if (msg.steps.isNotEmpty)
-        context.t.aiStepsStatus(context.t.aiReasoningComplete, msg.steps.length),
+      if (msg.steps.isNotEmpty) _workSummary(),
     ];
     final icon = status == StoryAnswerStatus.answered
         ? Icons.check_circle_outline_rounded
@@ -779,7 +779,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      context.t.aiStepsStatus(statusText, stepsCount),
+                      isThinking
+                          ? context.t.aiStepsStatus(statusText, stepsCount)
+                          : _workSummary(),
                       softWrap: true,
                       style: theme.bodyFont.copyWith(
                         color: theme.textSecondary,
@@ -809,17 +811,29 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  Widget _buildStepsList(AppThemeTokens theme) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Divider(height: 10),
-            ...widget.message.steps.map((step) => _buildStepRow(theme, step)),
-          ],
-        ),
-      );
+  /// The work behind the answer as a timeline in the reader's words (what
+  /// was searched or read, what it found); raw outputs on tap.
+  Widget _buildStepsList(AppThemeTokens theme) {
+    final steps = workStepsOf(widget.message.steps);
+    return Container(
+      key: const ValueKey('work-timeline'),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(2, 6, 4, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < steps.length; i++)
+            _buildWorkRow(theme, steps[i], i, last: i == steps.length - 1),
+        ],
+      ),
+    );
+  }
+
+  /// "查阅 n 次 · 读了 m 篇原文".
+  String _workSummary() {
+    final counts = workCounts(workStepsOf(widget.message.steps));
+    return context.t.aiWorkSummary(counts.calls, counts.reads);
+  }
 
   Widget _buildEvidenceRecord(AppThemeTokens theme, EvidenceRecord record) {
     final coverage = record.isDirectCandidate
@@ -901,73 +915,255 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 fontWeight: FontWeight.bold,),),
       );
 
-  Widget _buildStepRow(AppThemeTokens theme, ReActStep step) {
-    IconData icon;
-    Color color;
-    String prefix;
+  /// Steps whose raw output is unfolded (by index in [workStepsOf]).
+  final Set<int> _openSteps = {};
 
-    switch (step.type) {
-      case ReActEventType.thought:
-        icon = Icons.lightbulb_outline_rounded;
-        color = theme.accentText;
-        prefix = 'Thought';
-        break;
-      case ReActEventType.toolCall:
-        icon = Icons.construction_rounded;
-        color = theme.accentSecondary;
-        prefix = 'Action [${step.toolName}]';
-        break;
-      case ReActEventType.toolObservation:
-        icon = Icons.analytics_outlined;
-        color = theme.wikiBadgeColor;
-        prefix = 'Observation';
-        break;
-      case ReActEventType.error:
-        icon = Icons.error_outline_rounded;
-        color = theme.danger;
-        prefix = 'Error';
-        break;
-      default:
-        icon = Icons.info_outline_rounded;
-        color = theme.textSecondary;
-        prefix = 'Step';
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 12, color: color),
-              const SizedBox(width: 6),
-              Text(
-                prefix,
-                style: theme.titleFont.copyWith(
-                  color: color,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Padding(
-            padding: const EdgeInsets.only(left: 18),
+  /// One row of the work timeline: what was done, in the reader's words,
+  /// and what it found; tap for the tool's raw output.
+  Widget _buildWorkRow(AppThemeTokens theme, WorkStep step, int index,
+      {required bool last,}) {
+    final open = _openSteps.contains(index);
+    final small = theme.bodyFont.copyWith(fontSize: 11, height: 1.35);
+    if (step.kind == WorkKind.note) {
+      return _timelineRow(
+        theme,
+        last: last,
+        dot: null,
+        child: InkWell(
+          onTap: () => setState(() {
+            if (!_openSteps.remove(index)) _openSteps.add(index);
+          }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
             child: Text(
-              step.content.trim(),
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 11,
-                height: 1.4,
+              step.text,
+              maxLines: open ? null : 2,
+              overflow: open ? null : TextOverflow.ellipsis,
+              style: small.copyWith(
+                color: theme.textMuted,
+                fontStyle: FontStyle.italic,
               ),
-              maxLines: step.type == ReActEventType.toolObservation ? 4 : 20,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
+        ),
+      );
+    }
+    final (icon, title) = _workTitle(step);
+    final color = switch (step.kind) {
+      WorkKind.error => theme.danger,
+      WorkKind.redo => theme.warning,
+      _ when step.failed => theme.danger,
+      _ => theme.accentText,
+    };
+    final result = _workResult(step);
+    final detail = step.kind == WorkKind.sql ? step.arg('query') : '';
+    final canOpen = step.isTool && step.done && step.text.isNotEmpty;
+    return _timelineRow(
+      theme,
+      last: last,
+      dot: Icon(icon, size: 13, color: color),
+      child: InkWell(
+        key: ValueKey('work-step-$index'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: canOpen
+            ? () => setState(() {
+                  if (!_openSteps.remove(index)) _openSteps.add(index);
+                })
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.bodyFont.copyWith(
+                        fontSize: 12.5,
+                        height: 1.35,
+                        color: step.kind == WorkKind.error
+                            ? theme.danger
+                            : theme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (step.isTool && !step.done)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.2,
+                          valueColor: AlwaysStoppedAnimation(theme.accentText),
+                        ),
+                      ),
+                    )
+                  else if (result.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        result,
+                        style: small.copyWith(
+                          color: step.failed ? theme.danger : theme.textMuted,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (detail.isNotEmpty && !open)
+                Text(
+                  detail.replaceAll(RegExp(r'\s+'), ' '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: small.copyWith(
+                    color: theme.textMuted,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              if (open)
+                Container(
+                  key: ValueKey('work-raw-$index'),
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.bgSecondary.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: SelectableText(
+                    [
+                      if (detail.isNotEmpty) detail,
+                      step.text.trim(),
+                    ].join('\n\n'),
+                    maxLines: 16,
+                    style: small.copyWith(
+                      color: theme.textSecondary,
+                      fontFamily: 'monospace',
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A timeline row: a dot (or a short tick for notes) on a thin rail.
+  Widget _timelineRow(AppThemeTokens theme,
+      {required bool last, required Widget? dot, required Widget child,}) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 22,
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                Positioned(
+                  top: 0,
+                  bottom: last ? null : 0,
+                  height: last ? 12 : null,
+                  child: Container(width: 1, color: theme.divider),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: dot == null
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: theme.divider,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: theme.cardSurface,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: theme.divider),
+                          ),
+                          child: dot,
+                        ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: child),
         ],
       ),
     );
+  }
+
+  (IconData, String) _workTitle(WorkStep step) {
+    String clip(String s, [int n = 40]) =>
+        s.length <= n ? s : '${s.substring(0, n)}…';
+    final t = context.t;
+    switch (step.kind) {
+      case WorkKind.sql:
+        return (Icons.storage_rounded, t.aiWorkSql);
+      case WorkKind.grep:
+        final pattern = clip(step.arg('pattern').replaceAll('|', ' / '));
+        final scope = step.arg('collection');
+        return (
+          Icons.search_rounded,
+          scope.isEmpty ? t.aiWorkGrep(pattern) : t.aiWorkGrepIn(clip(scope, 20), pattern),
+        );
+      case WorkKind.read:
+        return (Icons.menu_book_rounded, t.aiWorkRead(clip(step.storyTitle)));
+      case WorkKind.outline:
+        return (
+          Icons.format_list_bulleted_rounded,
+          t.aiWorkOutline(clip(step.arg('collection'))),
+        );
+      case WorkKind.find:
+        return (Icons.travel_explore_rounded, t.aiWorkFind(clip(step.arg('query'))));
+      case WorkKind.similarNames:
+        return (Icons.spellcheck_rounded, t.aiWorkSimilar(clip(step.arg('name'))));
+      case WorkKind.delegate:
+        return (Icons.call_split_rounded, t.aiWorkDelegate(clip(step.arg('task'), 60)));
+      case WorkKind.redo:
+        return (Icons.replay_rounded, t.aiWorkRedo);
+      case WorkKind.error:
+        return (Icons.error_outline_rounded, clip(step.text, 120));
+      case WorkKind.otherTool:
+      case WorkKind.note:
+        return (Icons.build_outlined, step.tool ?? '');
+    }
+  }
+
+  String _workResult(WorkStep step) {
+    final t = context.t;
+    if (!step.isTool || !step.done) return '';
+    if (step.failed) return t.aiWorkFailed;
+    if (step.empty) return t.aiWorkNone;
+    switch (step.kind) {
+      case WorkKind.grep:
+        final (hits, stories) = step.grepCounts;
+        return stories == 0 ? '' : t.aiWorkHits(hits, stories);
+      case WorkKind.sql:
+        final rows = step.rowCount;
+        return rows == null ? '' : t.aiWorkRows(rows);
+      case WorkKind.read:
+        final range = step.lineRange;
+        return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
+      default:
+        return '';
+    }
   }
 }

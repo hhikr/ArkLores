@@ -43,7 +43,7 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
         elevation: 0,
         title: Text(
           context.t.readingHistoryTitle,
-          style: theme.titleFont.copyWith(fontSize: 20),
+          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         actions: [
           if (total > 0)

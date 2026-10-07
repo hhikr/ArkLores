@@ -80,7 +80,7 @@ class _WikiSourcesSettingsPageState
       appBar: AppBar(
         backgroundColor: theme.bgSecondary,
         title: Text(context.t.settingsWikiSources,
-            style: theme.titleFont.copyWith(fontSize: 18),),
+            style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),),
         iconTheme: IconThemeData(color: theme.textPrimary),
         actions: [
           IconButton(

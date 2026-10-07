@@ -85,7 +85,7 @@ class LibraryScaffold extends ConsumerWidget {
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.titleFont.copyWith(fontSize: 18),
+          style: theme.titleFont.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         actions: actions,
         bottom: bottom,

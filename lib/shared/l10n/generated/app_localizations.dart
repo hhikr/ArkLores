@@ -1646,6 +1646,108 @@ abstract class AppLocalizations {
   /// **'Using tool: {tool}'**
   String aiUsingTool(String tool);
 
+  /// No description provided for @aiWorkSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{calls} lookups · {reads} stories read'**
+  String aiWorkSummary(int calls, int reads);
+
+  /// No description provided for @aiWorkSql.
+  ///
+  /// In en, this message translates to:
+  /// **'Query the knowledge base'**
+  String get aiWorkSql;
+
+  /// No description provided for @aiWorkGrep.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for “{pattern}”'**
+  String aiWorkGrep(String pattern);
+
+  /// No description provided for @aiWorkGrepIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Search “{pattern}” in {scope}'**
+  String aiWorkGrepIn(String scope, String pattern);
+
+  /// No description provided for @aiWorkRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read “{story}”'**
+  String aiWorkRead(String story);
+
+  /// No description provided for @aiWorkOutline.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter list of {collection}'**
+  String aiWorkOutline(String collection);
+
+  /// No description provided for @aiWorkFind.
+  ///
+  /// In en, this message translates to:
+  /// **'Find by meaning: “{query}”'**
+  String aiWorkFind(String query);
+
+  /// No description provided for @aiWorkSimilar.
+  ///
+  /// In en, this message translates to:
+  /// **'Names like “{name}”'**
+  String aiWorkSimilar(String name);
+
+  /// No description provided for @aiWorkDelegate.
+  ///
+  /// In en, this message translates to:
+  /// **'Helper: {task}'**
+  String aiWorkDelegate(String task);
+
+  /// No description provided for @aiWorkRedo.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources did not match; rewriting'**
+  String get aiWorkRedo;
+
+  /// No description provided for @aiWorkHits.
+  ///
+  /// In en, this message translates to:
+  /// **'{hits} hits · {stories} stories'**
+  String aiWorkHits(int hits, int stories);
+
+  /// No description provided for @aiWorkRows.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} rows'**
+  String aiWorkRows(int count);
+
+  /// No description provided for @aiWorkLines.
+  ///
+  /// In en, this message translates to:
+  /// **'lines {start}–{end}'**
+  String aiWorkLines(int start, int end);
+
+  /// No description provided for @aiWorkNone.
+  ///
+  /// In en, this message translates to:
+  /// **'nothing found'**
+  String get aiWorkNone;
+
+  /// No description provided for @aiWorkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get aiWorkFailed;
+
+  /// No description provided for @aiWorkRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get aiWorkRunning;
+
+  /// No description provided for @aiWorkRaw.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw output'**
+  String get aiWorkRaw;
+
   /// No description provided for @aiStepsStatus.
   ///
   /// In en, this message translates to:
