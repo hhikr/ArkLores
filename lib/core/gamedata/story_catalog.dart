@@ -123,6 +123,9 @@ class StoryCatalogEntry {
         'MAINLINE' => '主线·$collectionName',
         'NONE' => '干员密录·$collectionName',
         'SANDBOX' => '生息演算·$collectionName',
+        // 0.12: an Endfield story says which game it is from.
+        final type when type.startsWith(endfieldCollectionTypePrefix) =>
+          '终末地·$collectionName',
         _ => collectionName,
       };
 
@@ -471,7 +474,7 @@ Future<StoryCollection?> queryStoryCollection(
   }
   // R16: the label prefixes [StoryCatalogEntry.collectionLabel] adds
   // (`主线·风暴瞭望`, `干员密录·…`) are not part of the stored name.
-  final name = q.replaceFirst(RegExp(r'^(主线|干员密录)[·・•]'), '');
+  final name = q.replaceFirst(RegExp(r'^(主线|干员密录|终末地)[·・•]'), '');
   collectionId ??= await first(
     'SELECT collection_id FROM $storyCatalogTable WHERE collection_name = ? '
     'ORDER BY collection_id LIMIT 1',
@@ -593,6 +596,10 @@ class StoryCollection {
   String? get releaseMonth =>
       entries.isEmpty ? null : entries.first.releaseMonth;
 }
+
+/// Prefix of the catalog's collection types in an Endfield database
+/// (`EF_MAIN`, …): its labels start with the game's name.
+const String endfieldCollectionTypePrefix = 'EF_';
 
 /// Escapes LIKE wildcards (`\` is the ESCAPE character).
 String escapeLike(String term) => term
