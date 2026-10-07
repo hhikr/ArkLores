@@ -112,3 +112,40 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 - 安装器只接受 schema 5；校验必需表、版本、计数与 SHA；失败保留旧库。断点续传、阶段显示、取消、手动放置 `arklores_gamedata_zh.db.download.gz`。
 - 知识库页在已安装的官方资产与 APK 指向的不同（`.asset_sha256` 标记）时提示更新。
 - 首次打开旧库时补建缺的索引（`story_lines(story_id, line_index)`）。
+
+## 9. 终末地知识库（0.12）
+
+终末地没有可以增量跟随的社区数据仓库，数据从本机安装的游戏客户端解包，在电脑上整库重建，作为单独的 Release 资产发布
+（`arklores_endfield_zh.db.gz`，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256`）。表结构与明日方舟库相同（schema 5），所有 id 带 `ef/`。
+
+### 9.1 解包（不启动游戏）
+
+工具：[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit)（命令行，内含 AnimeStudio 的终末地分支：
+自定义 VFS 解密、表与 Unity 对象导出、剧情重建）。本机环境：Python 3（embeddable 版装在 `C:\Users\hhikr\endfield\python312`，`._pth` 里加了 kit 目录才能
+`python -m scripts…`）、kit 自己下载的 .NET 9 SDK（`tools\AnimeStudio\.dotnet`，运行 AnimeStudio 时要把 `DOTNET_ROOT` 指过去）。
+工作目录必须在 NTFS 上（exFAT 不记录所有权，git 拒绝；也不能建硬链接）。Claude Code 的 shell 设了 `NoDefaultCurrentDirectoryInExePath`，
+批处理要用完整路径调用。
+
+```bat
+:: 只导出文字（表、JsonData、剧情相关的 Unity 类）并重建剧情；首次约 1–2 小时，需要约 10 GB 临时空间
+C:\Users\hhikr\endfield\run_setup.cmd     :: = setup.bat --game-root "<安装目录>\Endfield_Data" --no-serve
+```
+
+产物：`export_full/game/Table/*.json`（解码后的游戏表，文字是 `{id, text}`，字符串在 `I18nTextTable_CN.json`）、
+`webui/data/lang/CN/`（kit 重建的剧情：按任务分组、排序、选项、任务名）。客户端的 Persistent 目录是热更新层，覆盖 StreamingAssets；
+两层都导出后以 kit 发布的结果为准。
+
+### 9.2 建库
+
+```bash
+dart run tools/build_endfield_database.dart --tables=<…/Table 目录> [--story=<kit>/webui/data] --version=<客户端版本> --output=build/endfield --force
+```
+
+- 表 → 干员（档案、语音）、档案库（PRTS：分类 → 文档 → 页面 → `RichContentTable` 正文；调查与线索）、敌人/武器/物品的描述（物品只收 `decoDesc`，
+  去掉多件物品共用的模板句和机制句）、势力名。
+- 剧情：有 kit 的剧情发布时从它读（任务名、顺序、选项）；没有时从 `DialogTextTable`（按行 id 排序）、`RadioTable`、`SNSDialogTable` 读，
+  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`），书架按任务 id 的字母前缀（`e` 主线、`c` 干员任务、其余支线），
+  `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要（进 `story_catalog.synopsis`）。
+- 文字规范化（`endfieldText`）：去标记与资源路径；主角台词的 `{F}…{M}…` 只留女性版本（kit 的默认）；`{player}` 写作“管理员”；
+  说话人名后面花括号里的内部注释（`{c13-…}`，可能是剧情里尚未揭示的身份）去掉。
+- 一个 40 秒左右的整库构建；向量需要另跑 `build_story_embeddings.dart`（花钱，要开发者同意）。
