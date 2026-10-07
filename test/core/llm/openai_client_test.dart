@@ -504,6 +504,213 @@ void main() {
     });
   });
 
+  // Gemini's OpenAI-compatible API and relays (new-api / one-api style)
+  // answer in shapes GLM and deepseek never used.
+  group('other providers and relays', () {
+    const tools = [
+      {
+        'type': 'function',
+        'function': {'name': 'sql', 'parameters': <String, dynamic>{}},
+      },
+    ];
+    const config = LLMConfig(chatApiKey: 'test-key', chatModel: 'some-model');
+    String event(Map<String, dynamic> json) => 'data: ${jsonEncode(json)}\n\n';
+    OpenAICompatibleClient streaming(String body, {int status = 200}) =>
+        OpenAICompatibleClient(
+          config: config,
+          httpClient: MockClient.streaming(
+            (request, _) async =>
+                http.StreamedResponse(Stream.value(utf8.encode(body)), status),
+          ),
+        );
+    String textOf(List<CompletionDelta> deltas) =>
+        deltas.map((d) => d.content).join();
+
+    test('a stream request answered with a plain completion body', () async {
+      final deltas = await streaming(jsonEncode({
+        'choices': [
+          {
+            'finish_reason': 'tool_calls',
+            'message': {
+              'content': null,
+              'tool_calls': [
+                {
+                  'id': 'a',
+                  'type': 'function',
+                  'function': {'name': 'sql', 'arguments': '{"q":1}'},
+                },
+                {
+                  'id': 'b',
+                  'type': 'function',
+                  'function': {'name': 'grep', 'arguments': '{}'},
+                },
+              ],
+            },
+          },
+        ],
+      }),).streamTurn([Message.user('q')], tools: tools).toList();
+      final done = deltas.last;
+      expect(done.toolCalls.map((c) => c.name), ['sql', 'grep']);
+      expect(done.toolCalls.first.arguments, '{"q":1}');
+      expect(done.finishReason, 'tool_calls');
+    });
+
+    test('an error inside a 200 stream is reported', () async {
+      await expectLater(
+        streaming(event({
+          'error': {'message': 'upstream overloaded'},
+        }),).streamTurn([Message.user('q')]).toList(),
+        throwsA(isA<LLMException>().having(
+          (e) => e.message,
+          'message',
+          contains('upstream overloaded'),
+        ),),
+      );
+    });
+
+    test('text as a list of parts, reasoning under "reasoning"', () async {
+      final deltas = await streaming([
+        event({
+          'choices': [
+            {
+              'delta': {
+                'reasoning': '想',
+                'content': [
+                  {'type': 'thinking', 'text': '不显示'},
+                  {'type': 'text', 'text': '甲'},
+                ],
+              },
+            },
+          ],
+        }),
+        event({
+          'choices': [
+            {
+              'delta': {'content': '乙'},
+              'finish_reason': 'stop',
+            },
+          ],
+        }),
+        'data: [DONE]\n\n',
+      ].join(),).streamTurn([Message.user('q')]).toList();
+      expect(textOf(deltas), '甲乙');
+      expect(deltas.map((d) => d.reasoningContent).join(), '想');
+    });
+
+    test('unnumbered streamed calls are told apart by their ids', () async {
+      Map<String, dynamic> call(String id, String name, String args) => {
+            'choices': [
+              {
+                'delta': {
+                  'tool_calls': [
+                    {
+                      'id': id,
+                      'function': {'name': name, 'arguments': args},
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+      final done = (await streaming([
+        event(call('a', 'sql', '{"q":1}')),
+        event(call('b', 'grep', '{"p":2}')),
+      ].join(),).streamTurn([Message.user('q')], tools: tools).toList())
+          .last;
+      expect(done.toolCalls.map((c) => c.arguments), ['{"q":1}', '{"p":2}']);
+    });
+
+    test('a request that did not ask for a stream answered with one',
+        () async {
+      final client = OpenAICompatibleClient(
+        config: config,
+        httpClient: MockClient((request) async => http.Response.bytes(
+              utf8.encode([
+                event({
+                  'choices': [
+                    {
+                      'delta': {'content': '答'},
+                    },
+                  ],
+                }),
+                event({
+                  'choices': [
+                    {
+                      'delta': {'content': '案'},
+                      'finish_reason': 'stop',
+                    },
+                  ],
+                }),
+              ].join(),),
+              200,
+            ),),
+      );
+      final result = await client.chatCompletion([Message.user('q')]);
+      expect(result.content, '答案');
+      expect(result.finishReason, 'stop');
+    });
+
+    test('empty text of a tool-call turn is sent as null after a rejection',
+        () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = OpenAICompatibleClient(
+        config: config,
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          bodies.add(body);
+          final turn = (body['messages'] as List)[1] as Map;
+          return turn['content'] == ''
+              ? http.Response(
+                  '{"error":{"message":"contents.parts must not be empty"}}',
+                  400,
+                )
+              : http.Response.bytes(
+                  utf8.encode(jsonEncode({
+                    'choices': [
+                      {
+                        'message': {'content': '好'},
+                      },
+                    ],
+                  }),),
+                  200,
+                );
+        }),
+      );
+      final history = [
+        Message.user('q'),
+        Message.assistantToolCalls(
+          '',
+          const [ToolCall(id: 'a', name: 'sql', arguments: '{}')],
+        ),
+        Message.toolResult('a', 'rows'),
+      ];
+      expect((await client.chatCompletion(history)).content, '好');
+      expect(bodies, hasLength(2));
+      expect(((bodies.last['messages'] as List)[1] as Map)['content'], isNull);
+      // Remembered: the next request is right the first time.
+      await client.chatCompletion(history);
+      expect(bodies, hasLength(3));
+    });
+
+    test('Gemini: thinking kept short (it counts against max_tokens)', () {
+      const gemini = LLMConfig(
+        chatBaseUrl:
+            'https://generativelanguage.googleapis.com/v1beta/openai',
+        chatModel: 'gemini-2.5-pro',
+      );
+      const relayed = LLMConfig(
+        chatBaseUrl: 'https://relay.example.com/v1',
+        chatModel: 'gemini-3-flash',
+      );
+      for (final c in [gemini, relayed]) {
+        expect(
+          OpenAICompatibleClient.reasoningFieldsFor(c, ReasoningLevel.off),
+          {'reasoning_effort': 'low'},
+        );
+      }
+    });
+  });
+
   test('pasted text that is not an API key is refused before any request',
       () async {
     final client = OpenAICompatibleClient(

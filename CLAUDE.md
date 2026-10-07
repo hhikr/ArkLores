@@ -16,6 +16,15 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 非 GLM 服务商的兼容（2026-10-07，未发布）**：开发者反馈换成 Gemini 或中转站后问答报“模型没有给出答案”（模型一轮什么也没返回，提醒一次后仍为空）。
+  没有用真实的 Gemini/中转站复现（未获准跑 live），按已知的 OpenAI 兼容差异逐项加了兼容并用 mock 测试：① 客户端（`openai_client.dart`，`_StreamAccumulator`
+  统一读流和非流式回复）：`content` 是分段数组、思考在 `reasoning`/`thinking` 字段、请求流式却回了普通 JSON（或反过来）、200 的流里夹着 `error`、流式工具调用
+  不带 `index`（按 id 区分）、参数是对象而不是字符串；工具调用轮次的空文本被 400 拒绝时改发 `content: null` 并记住（Gemini 拒绝空的文本段）；Gemini 模型（官方地址或
+  模型名含 gemini）加思考档位 `reasoning_effort` low/medium/high（它的思考算在 `max_tokens` 里，中转站不认这个字段时按原有逻辑去掉重发）。② Agent（`AgentTransport`，
+  子 agent 共用）：一轮完全为空时依次改用 非流式 → 文本方式调用工具（流式）→ 文本方式（非流式）重试同一轮，都不行才报错；报错写出服务商给的结束原因
+  （`length` 提示思考可能用光了输出上限，`content_filter`/`safety` 提示被内容审核拦下）。GLM、deepseek 的正常路径不变（只有空回复时才换方式）。
+  待开发者用 Gemini/中转站各问一题确认；仍失败时把会话记录（设置里打开“保存 AI 对话记录”）里的空回复那一条发来。
+
 - **0.11 资料页检索、问答的可选步骤（2026-10-07，未发布，不需重算知识库）**：① 资料页每个子页面右上角都有搜索（`LibrarySearchButton`），
   默认只搜该页的范围（`LibraryScope`：书架、集合、某类条目列表、干员页=密录集+属于他的条目；条目页搜它所在的集合），范围显示为可删掉的标签，删掉即搜全部；
   列表的筛选框没有结果时给“搜索「…」”按钮。检索分层（`library_search.dart`，`library_queries` 的 part）：名字/代号包含全部词（空格分词，某个词可以是集合名，

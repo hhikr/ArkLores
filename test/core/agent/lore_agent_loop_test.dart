@@ -788,6 +788,68 @@ void main() {
       expect(events.last.type, ReActEventType.error);
     });
 
+    // Providers other than GLM / deepseek (Gemini's OpenAI endpoint, relays)
+    // may answer a turn with nothing at all.
+    test('an empty streamed turn is asked again without streaming', () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _LossyClient(
+        [_call('read_story', {'story_id': id}), _answer('钟楼 `$id:1`')],
+        emptyStream: true,
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        review: false,
+      ).run(query: '钟楼？').toList();
+      expect(client.modes, ['stream+tools', 'plain+tools', 'plain+tools']);
+      expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
+      expect(finalAnswerOf(events), contains('钟楼 `$id:1`'));
+      expect(events.map((e) => e.content), contains('服务商没有返回内容，改用非流式请求重试'));
+    });
+
+    test('native tool calls that never come: the tools go into the prompt',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _LossyClient(
+        [
+          _answer('```tool\n{"name": "read_story", "arguments": '
+              '{"story_id": "$id"}}\n```'),
+          _answer('钟楼 `$id:1`'),
+        ],
+        emptyWithTools: true,
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        review: false,
+      ).run(query: '钟楼？').toList();
+      expect(client.modes, ['stream+tools', 'plain+tools', 'stream', 'stream']);
+      expect(finalAnswerOf(events), contains('钟楼 `$id:1`'));
+      expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('nothing comes back any way: the error says why', () async {
+      final client = _LossyClient(
+        const [],
+        emptyStream: true,
+        emptyPlain: true,
+        finishReason: 'length',
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        review: false,
+      ).run(query: '钟楼？').toList();
+      expect(client.modes.take(4),
+          ['stream+tools', 'plain+tools', 'stream', 'plain'],);
+      final error = events.last;
+      expect(error.type, ReActEventType.error);
+      expect(error.content, contains('结束原因：length'));
+      expect(error.content, contains('输出长度上限'));
+      expect(error.content, contains('已换用非流式请求'));
+    });
+
     test('falls back to text tool calls when the provider rejects tools',
         () async {
       final client = _ScriptedClient(
@@ -875,6 +937,81 @@ void main() {
           StoryAnswerStatus.answered,);
     });
   });
+}
+
+/// A provider (or relay) that answers some ways of asking with nothing:
+/// streamed turns when [emptyStream], unstreamed ones when [emptyPlain],
+/// any turn with native tools when [emptyWithTools]. Other turns replay
+/// [turns]. [modes] records how each turn was asked.
+class _LossyClient extends LLMClient {
+  _LossyClient(
+    this.turns, {
+    this.emptyStream = false,
+    this.emptyPlain = false,
+    this.emptyWithTools = false,
+    this.finishReason,
+  });
+
+  final List<_Turn> turns;
+  final bool emptyStream;
+  final bool emptyPlain;
+  final bool emptyWithTools;
+  final String? finishReason;
+  final List<String> modes = [];
+  var _next = 0;
+
+  bool _empty(bool streamed, List<Map<String, dynamic>>? tools) =>
+      (streamed ? emptyStream : emptyPlain) || (emptyWithTools && tools != null);
+
+  _Turn? _turn(bool streamed, List<Map<String, dynamic>>? tools) {
+    modes.add('${streamed ? 'stream' : 'plain'}${tools == null ? '' : '+tools'}');
+    return _empty(streamed, tools) ? null : turns[_next++];
+  }
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<ChatCompletionResult> chatCompletion(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    final turn = _turn(false, tools);
+    return ChatCompletionResult(
+      content: turn?.content ?? '',
+      toolCalls: turn?.calls ?? const [],
+      finishReason: turn == null ? finishReason : 'stop',
+    );
+  }
+
+  @override
+  Stream<CompletionDelta> streamTurn(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    String? toolChoice,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+  }) async* {
+    final turn = _turn(true, tools);
+    if (turn != null && turn.content.isNotEmpty) {
+      yield CompletionDelta(content: turn.content);
+    }
+    yield CompletionDelta(
+      done: true,
+      toolCalls: turn?.calls ?? const [],
+      finishReason: turn == null ? finishReason : 'stop',
+    );
+  }
 }
 
 /// One scripted model turn.

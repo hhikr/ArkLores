@@ -68,6 +68,28 @@ class OpenAICompatibleClient extends LLMClient {
         text.contains('参数');
   }
 
+  /// Set when a request with tool-call turns whose text is empty was
+  /// rejected: such turns are then sent with content: null (as OpenAI
+  /// documents it; Gemini's endpoint rejects an empty text part).
+  bool _nullToolCallContent = false;
+
+  static bool _hasEmptyToolCallContent(Map<String, dynamic> body) {
+    final messages = body['messages'];
+    return messages is List &&
+        messages.any((m) => m is Map && m['tool_calls'] != null && m['content'] == '');
+  }
+
+  Map<String, dynamic> _withNullToolCallContent(Map<String, dynamic> body) {
+    _nullToolCallContent = true;
+    return Map.of(body)
+      ..['messages'] = [
+        for (final m in body['messages'] as List)
+          m is Map && m['tool_calls'] != null && m['content'] == ''
+              ? (Map<String, dynamic>.of(m.cast<String, dynamic>())..['content'] = null)
+              : m,
+      ];
+  }
+
   Map<String, dynamic> _withoutReasoningFields(Map<String, dynamic> body) {
     _reasoningFieldsRejected = true;
     return Map.of(body)..removeWhere((k, _) => reasoningFields.containsKey(k));
@@ -117,6 +139,18 @@ class OpenAICompatibleClient extends LLMClient {
             'thinking': {'type': 'enabled'},
             'reasoning_effort': 'high',
           },
+      };
+    }
+    if (endpoint.contains('generativelanguage.googleapis.com') ||
+        model.contains('gemini')) {
+      // Gemini's OpenAI-compatible API: thinking counts against
+      // max_tokens and cannot be switched off on every model; low
+      // keeps it short. A relay that rejects the field gets the request
+      // again without it.
+      return switch (level) {
+        ReasoningLevel.off => {'reasoning_effort': 'low'},
+        ReasoningLevel.low => {'reasoning_effort': 'medium'},
+        ReasoningLevel.high => {'reasoning_effort': 'high'},
       };
     }
     if (isZhipu(config)) {
@@ -202,6 +236,11 @@ class OpenAICompatibleClient extends LLMClient {
         this.reasoning != ReasoningLevel.off) {
       json['reasoning_content'] = reasoning;
     }
+    if (_nullToolCallContent &&
+        message.toolCalls != null &&
+        message.content.isEmpty) {
+      json['content'] = null;
+    }
     return json;
   }
 
@@ -234,20 +273,6 @@ class OpenAICompatibleClient extends LLMClient {
           'tool_choice': toolChoice,
         if (!_reasoningFieldsRejected) ...reasoningFields,
       };
-
-  /// R17: function calls of a non-streamed `message`.
-  static List<ToolCall> _toolCallsOf(Object? raw) {
-    if (raw is! List) return const [];
-    return [
-      for (final (i, call) in raw.indexed)
-        if (call is Map && call['function'] is Map)
-          ToolCall(
-            id: '${call['id'] ?? 'call_$i'}',
-            name: '${(call['function'] as Map)['name'] ?? ''}',
-            arguments: '${(call['function'] as Map)['arguments'] ?? ''}',
-          ),
-    ];
-  }
 
   Future<ChatCompletionResult> _complete(Map<String, dynamic> body) async {
     final startedAt = DateTime.now();
@@ -307,6 +332,11 @@ class OpenAICompatibleClient extends LLMClient {
           _rejectsReasoningFields(body, responseBody)) {
         return await _complete(_withoutReasoningFields(body));
       }
+      if ((response.statusCode == 400 || response.statusCode == 422) &&
+          !_nullToolCallContent &&
+          _hasEmptyToolCallContent(body)) {
+        return await _complete(_withNullToolCallContent(body));
+      }
       if (response.statusCode != 200) {
         throw LLMException(
           chatFailureMessage(responseBody,
@@ -316,23 +346,15 @@ class OpenAICompatibleClient extends LLMClient {
         );
       }
 
-      final data = jsonDecode(responseBody) as Map<String, dynamic>;
-      final choices = data['choices'] as List<dynamic>;
-      if (choices.isEmpty) {
-        throw const LLMException('Empty response from chat completion');
-      }
-
-      final firstChoice = choices[0] as Map<String, dynamic>;
-      final message = firstChoice['message'] as Map<String, dynamic>;
-      final usage = _usageOf(data['usage']);
+      final answer = _answerOfBody(responseBody, response.statusCode);
       final result = ChatCompletionResult(
-        content: (message['content'] as String?) ?? '',
-        finishReason: firstChoice['finish_reason'] as String?,
-        promptTokens: usage.prompt,
-        completionTokens: usage.completion,
-        cachedPromptTokens: usage.cached,
-        toolCalls: _toolCallsOf(message['tool_calls']),
-        reasoningContent: (message['reasoning_content'] as String?) ?? '',
+        content: answer.content.toString(),
+        finishReason: answer.finishReason,
+        promptTokens: answer.usage.prompt,
+        completionTokens: answer.usage.completion,
+        cachedPromptTokens: answer.usage.cached,
+        toolCalls: answer.toolCalls,
+        reasoningContent: answer.reasoning.toString(),
         timing: CallTiming(
           startedAt: startedAt,
           endedAt: DateTime.now(),
@@ -348,6 +370,50 @@ class OpenAICompatibleClient extends LLMClient {
     } on TimeoutException {
       throw const LLMException('Request timed out');
     }
+  }
+
+  /// The answer in a response [body]: a completion, or a stream (some
+  /// relays stream although not asked to, or do not although asked).
+  /// Throws an [LLMException] for an error body or one with no answer.
+  static _StreamAccumulator _answerOfBody(String body, int status) {
+    final events = sseEvents(body);
+    if (events != null) {
+      final answer = _StreamAccumulator();
+      events.forEach(answer.add);
+      return answer;
+    }
+    final Object? data;
+    try {
+      data = jsonDecode(body);
+    } on FormatException {
+      throw LLMException(
+        'Chat completion failed: the response is not JSON',
+        statusCode: status,
+        body: body,
+      );
+    }
+    final choices = data is Map ? data['choices'] : null;
+    if (choices is! List || choices.isEmpty || choices.first is! Map) {
+      throw LLMException(
+        data is Map && data['error'] != null
+            ? chatFailureMessage(body, fallback: 'Chat completion failed')
+            : 'Empty response from chat completion',
+        statusCode: status,
+        body: body,
+      );
+    }
+    final choice = choices.first as Map;
+    // Read as a stream of one event holding the whole message.
+    return _StreamAccumulator()
+      ..add({
+        'choices': [
+          {
+            'finish_reason': choice['finish_reason'],
+            'message': choice['message'] ?? choice['delta'] ?? const <String, dynamic>{},
+          },
+        ],
+        if ((data as Map)['usage'] != null) 'usage': data['usage'],
+      });
   }
 
   static ({int? prompt, int? completion, int? cached}) _usageOf(
@@ -479,6 +545,12 @@ class OpenAICompatibleClient extends LLMClient {
         yield* _stream(_withoutReasoningFields(body));
         return;
       }
+      if (badRequest &&
+          !_nullToolCallContent &&
+          _hasEmptyToolCallContent(body)) {
+        yield* _stream(_withNullToolCallContent(body));
+        return;
+      }
       if (badRequest && body.containsKey('stream_options')) {
         // Some providers stream fine but reject `stream_options`.
         _streamOptionsRejected = true;
@@ -516,19 +588,22 @@ class OpenAICompatibleClient extends LLMClient {
       );
     }
 
-    final content = StringBuffer();
-    final reasoningBuffer = StringBuffer();
-    final calls = <int, ({StringBuffer id, StringBuffer name, StringBuffer args})>{};
-    String? finishReason;
-    ({int? prompt, int? completion, int? cached}) usage =
-        (prompt: null, completion: null, cached: null);
+    final answer = _StreamAccumulator();
+    // Lines that are not events: a relay that answered a stream request
+    // with a plain JSON body (or an error) instead of a stream.
+    final other = StringBuffer();
     try {
       final lines = response.stream
           .timeout(_streamIdleTimeout)
           .transform(utf8.decoder)
           .transform(const LineSplitter());
       await for (final line in lines) {
-        if (!line.startsWith('data:')) continue;
+        if (!line.startsWith('data:')) {
+          if (firstDataAt == null && other.length < 4 << 20) {
+            other.writeln(line);
+          }
+          continue;
+        }
         final data = line.substring(5).trim();
         if (data.isEmpty || data == '[DONE]') continue;
         Map<String, dynamic> json;
@@ -538,43 +613,13 @@ class OpenAICompatibleClient extends LLMClient {
           continue; // a malformed event never ends the answer
         }
         firstDataAt ??= DateTime.now();
-        if (json['usage'] is Map) usage = _usageOf(json['usage']);
-        final choices = json['choices'];
-        if (choices is! List || choices.isEmpty) continue;
-        final choice = choices.first as Map<String, dynamic>;
-        finishReason = (choice['finish_reason'] as String?) ?? finishReason;
-        final delta = choice['delta'];
-        if (delta is! Map) continue;
-        final toolDeltas = delta['tool_calls'];
-        if (toolDeltas is List) {
-          for (final (i, raw) in toolDeltas.indexed) {
-            if (raw is! Map) continue;
-            final index = (raw['index'] as num?)?.toInt() ?? i;
-            final call = calls.putIfAbsent(
-              index,
-              () => (id: StringBuffer(), name: StringBuffer(), args: StringBuffer()),
-            );
-            final id = raw['id'];
-            if (id is String && id.isNotEmpty && call.id.isEmpty) {
-              call.id.write(id);
-            }
-            final function = raw['function'];
-            if (function is Map) {
-              // Names are not split; a provider may repeat it per chunk.
-              final name = function['name'];
-              if (name is String && call.name.isEmpty) call.name.write(name);
-              final args = function['arguments'];
-              if (args is String) call.args.write(args);
-            }
-          }
-        }
-        final text = delta['content'] as String? ?? '';
-        final reasoningText = delta['reasoning_content'] as String? ?? '';
-        if (text.isEmpty && reasoningText.isEmpty) continue;
+        final added = answer.add(json);
+        if (added.text.isEmpty && added.reasoning.isEmpty) continue;
         firstTokenAt ??= DateTime.now();
-        content.write(text);
-        reasoningBuffer.write(reasoningText);
-        yield CompletionDelta(content: text, reasoningContent: reasoningText);
+        yield CompletionDelta(
+          content: added.text,
+          reasoningContent: added.reasoning,
+        );
       }
     } on TimeoutException {
       throw const LLMException('Request timed out');
@@ -584,27 +629,26 @@ class OpenAICompatibleClient extends LLMClient {
       throw LLMException('Network error: ${e.message}');
     }
 
-    final indexes = calls.keys.toList()..sort();
-    final toolCalls = [
-      for (final index in indexes)
-        if (calls[index]!.name.isNotEmpty)
-          ToolCall(
-            id: calls[index]!.id.isEmpty
-                ? 'call_$index'
-                : calls[index]!.id.toString(),
-            name: calls[index]!.name.toString(),
-            arguments: calls[index]!.args.toString(),
-          ),
-    ];
+    var whole = answer;
+    if (firstDataAt == null && other.toString().trim().isNotEmpty) {
+      whole = _answerOfBody(other.toString(), response.statusCode);
+      if (whole.content.isNotEmpty || whole.reasoning.isNotEmpty) {
+        yield CompletionDelta(
+          content: whole.content.toString(),
+          reasoningContent: whole.reasoning.toString(),
+        );
+      }
+    }
+    final toolCalls = whole.toolCalls;
     onCompletion?.call(
       ChatCompletionResult(
-        content: content.toString(),
-        finishReason: finishReason,
-        promptTokens: usage.prompt,
-        completionTokens: usage.completion,
-        cachedPromptTokens: usage.cached,
+        content: whole.content.toString(),
+        finishReason: whole.finishReason,
+        promptTokens: whole.usage.prompt,
+        completionTokens: whole.usage.completion,
+        cachedPromptTokens: whole.usage.cached,
         toolCalls: toolCalls,
-        reasoningContent: reasoningBuffer.toString(),
+        reasoningContent: whole.reasoning.toString(),
         timing: CallTiming(
           startedAt: startedAt,
           endedAt: DateTime.now(),
@@ -619,10 +663,10 @@ class OpenAICompatibleClient extends LLMClient {
     );
     yield CompletionDelta(
       done: true,
-      finishReason: finishReason,
-      promptTokens: usage.prompt,
-      completionTokens: usage.completion,
-      cachedPromptTokens: usage.cached,
+      finishReason: whole.finishReason,
+      promptTokens: whole.usage.prompt,
+      completionTokens: whole.usage.completion,
+      cachedPromptTokens: whole.usage.cached,
       toolCalls: toolCalls,
     );
   }
@@ -655,6 +699,165 @@ class OpenAICompatibleClient extends LLMClient {
   void dispose() {
     _httpClient.close();
   }
+}
+
+/// Text of a message's `content`: a string, or a list of parts (some relays
+/// and multimodal providers) whose text parts are joined; thinking parts are
+/// left out.
+String completionText(Object? content) {
+  if (content is String) return content;
+  if (content is! List) return '';
+  final out = StringBuffer();
+  for (final part in content) {
+    if (part is String) {
+      out.write(part);
+    } else if (part is Map && part['text'] is String) {
+      final type = part['type'];
+      if (type == null || type == 'text' || type == 'output_text') {
+        out.write(part['text']);
+      }
+    }
+  }
+  return out.toString();
+}
+
+/// Hidden reasoning of a message or delta, under the names providers use
+/// (`reasoning_content`: deepseek, GLM; `reasoning`: OpenRouter and some
+/// relays; `thinking`).
+String completionReasoning(Map<dynamic, dynamic> message) {
+  for (final key in const ['reasoning_content', 'reasoning', 'thinking']) {
+    final value = message[key];
+    if (value is String && value.isNotEmpty) return value;
+  }
+  return '';
+}
+
+/// Collects one streamed answer from its server-sent events (also used for
+/// a stream that came back to a request that did not ask for one).
+class _StreamAccumulator {
+  final StringBuffer content = StringBuffer();
+  final StringBuffer reasoning = StringBuffer();
+  final Map<int, ({StringBuffer id, StringBuffer name, StringBuffer args})>
+      _calls = {};
+  String? finishReason;
+  ({int? prompt, int? completion, int? cached}) usage =
+      (prompt: null, completion: null, cached: null);
+
+  /// Adds one event; returns its new text and reasoning. Throws an
+  /// [LLMException] for an error event (some relays answer 200 and put the
+  /// error in the stream).
+  ({String text, String reasoning}) add(Map<String, dynamic> json) {
+    const none = (text: '', reasoning: '');
+    if (json['error'] != null && json['choices'] == null) {
+      throw LLMException(
+        chatFailureMessage(jsonEncode(json), fallback: 'Chat completion failed'),
+        body: jsonEncode(json),
+      );
+    }
+    if (json['usage'] is Map) {
+      usage = OpenAICompatibleClient._usageOf(json['usage']);
+    }
+    final choices = json['choices'];
+    if (choices is! List || choices.isEmpty || choices.first is! Map) {
+      return none;
+    }
+    final choice = choices.first as Map;
+    finishReason = (choice['finish_reason'] as String?) ?? finishReason;
+    // A whole `message` instead of a `delta` (some relays, or a final
+    // event repeating the answer): taken only while nothing came as deltas.
+    final delta = choice['delta'] is Map
+        ? choice['delta'] as Map
+        : (choice['message'] is Map &&
+                content.isEmpty &&
+                reasoning.isEmpty &&
+                _calls.isEmpty
+            ? choice['message'] as Map
+            : null);
+    if (delta == null) return none;
+    // A whole message lists its calls in order (often without index).
+    final whole = choice['delta'] is! Map;
+    final toolDeltas = delta['tool_calls'];
+    if (toolDeltas is List) {
+      for (final (i, raw) in toolDeltas.indexed) {
+        if (raw is! Map) continue;
+        final call = _calls.putIfAbsent(
+          whole ? i : _indexOf(raw, i),
+          () => (id: StringBuffer(), name: StringBuffer(), args: StringBuffer()),
+        );
+        final id = raw['id'];
+        if (id is String && id.isNotEmpty && call.id.isEmpty) call.id.write(id);
+        final function = raw['function'];
+        if (function is Map) {
+          // Names are not split; a provider may repeat it per chunk.
+          final name = function['name'];
+          if (name is String && call.name.isEmpty) call.name.write(name);
+          final args = function['arguments'];
+          if (args is String) {
+            call.args.write(args);
+          } else if (args is Map) {
+            call.args.write(jsonEncode(args));
+          }
+        }
+      }
+    }
+    final text = completionText(delta['content']);
+    final thought = completionReasoning(delta);
+    content.write(text);
+    reasoning.write(thought);
+    return (text: text, reasoning: thought);
+  }
+
+  /// The call a fragment belongs to: its `index`; without one (some
+  /// providers send each call whole, unnumbered) a new call when it brings
+  /// an id not seen yet, else the latest call.
+  int _indexOf(Map<dynamic, dynamic> raw, int position) {
+    final index = raw['index'];
+    if (index is num) return index.toInt();
+    if (_calls.isEmpty) return position;
+    final id = raw['id'];
+    if (id is String && id.isNotEmpty) {
+      for (final e in _calls.entries) {
+        if (e.value.id.toString() == id) return e.key;
+      }
+      return _calls.keys.reduce((a, b) => a > b ? a : b) + 1;
+    }
+    return _calls.keys.reduce((a, b) => a > b ? a : b);
+  }
+
+  List<ToolCall> get toolCalls {
+    final indexes = _calls.keys.toList()..sort();
+    return [
+      for (final index in indexes)
+        if (_calls[index]!.name.isNotEmpty)
+          ToolCall(
+            id: _calls[index]!.id.isEmpty
+                ? 'call_$index'
+                : _calls[index]!.id.toString(),
+            name: _calls[index]!.name.toString(),
+            arguments: _calls[index]!.args.toString(),
+          ),
+    ];
+  }
+}
+
+/// The events of a server-sent-events [body] (lines `data: {...}`), or null
+/// when it is not one.
+List<Map<String, dynamic>>? sseEvents(String body) {
+  if (!body.trimLeft().startsWith('data:') &&
+      !body.contains('\ndata:')) {
+    return null;
+  }
+  final events = <Map<String, dynamic>>[];
+  for (final line in const LineSplitter().convert(body)) {
+    if (!line.startsWith('data:')) continue;
+    final data = line.substring(5).trim();
+    if (data.isEmpty || data == '[DONE]') continue;
+    try {
+      final json = jsonDecode(data);
+      if (json is Map<String, dynamic>) events.add(json);
+    } catch (_) {}
+  }
+  return events;
 }
 
 /// Renders a user-friendly error message for a non-200 chat response.
