@@ -2,14 +2,21 @@
 # can put a locally built knowledge base next to it. Nothing goes through
 # GitHub.
 #
+#   .\tools\install_local.ps1 -Build          # build the APK from this tree, then install
 #   .\tools\install_local.ps1                 # install the newest local APK
 #   .\tools\install_local.ps1 -Kb             # ... and copy the knowledge base
 #   .\tools\install_local.ps1 -Kb -KbOnly     # only the knowledge base
 #   .\tools\install_local.ps1 -DryRun         # show what would happen
 #
 # The APK is build\local_release\ArkLores-*-local.apk, else the newest
-# *.apk under build\ (the last `flutter build apk --release`). The knowledge
-# base is build\gamedata_v5\arklores_gamedata_zh.db.gz.
+# *.apk under build\ (the last `flutter build apk --release`). Without
+# -Build nothing is compiled: an APK older than the last commit is reported.
+# -Build runs `flutter build apk --release` with the knowledge base URL and
+# SHA of tools/release_gamedata.env (as the release workflow does) and signs
+# it with the release key (tools/arklores-release.jks +
+# tools/android_signing.properties, never printed), so it updates an app
+# installed from a release without uninstalling. The knowledge base is
+# build\gamedata_v5\arklores_gamedata_zh.db.gz.
 #
 # The knowledge base is copied as `arklores_gamedata_zh.db.download.gz` into
 # the app's own folder on the phone. Open the app, Settings > Knowledge base,
@@ -20,6 +27,7 @@ param(
   [string]$Apk,
   [string]$KbFile,
   [string]$Device,
+  [switch]$Build,
   [switch]$Kb,
   [switch]$KbOnly,
   [switch]$NoLaunch,
@@ -66,6 +74,52 @@ if ($Device) {
   Write-Host "several devices; using the only non-emulator one: $Device"
 }
 
+# --- Build ---
+if ($Build -and -not $KbOnly -and -not $Apk) {
+  $envText = Get-Content tools\release_gamedata.env -Raw
+  $url = [regex]::Match($envText, '(?m)^GAMEDATA_DB_URL=(\S+)').Groups[1].Value
+  $sha = [regex]::Match($envText, '(?m)^GAMEDATA_DB_SHA256=(\S+)').Groups[1].Value
+  if (-not $url -or -not $sha) { throw 'tools/release_gamedata.env has no GAMEDATA_DB_URL / GAMEDATA_DB_SHA256' }
+  $version = [regex]::Match((Get-Content pubspec.yaml -Raw), '(?m)^version:\s*([^+\s]+)').Groups[1].Value
+  $out = "build\local_release\ArkLores-$version-local.apk"
+  Write-Host "building $out (knowledge base SHA $($sha.Substring(0, 12))...)"
+  if (-not $DryRun) {
+    # Gradle and Flutter write warnings to stderr; only the exit code counts.
+    $ErrorActionPreference = 'Continue'
+    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha"
+    if ($LASTEXITCODE -ne 0) { throw 'flutter build failed' }
+    New-Item -ItemType Directory -Force build\local_release | Out-Null
+    $built = 'build\app\outputs\flutter-apk\app-release.apk'
+    # Without android/key.properties the build is signed with the debug key;
+    # re-sign it with the release key when it is here.
+    $propsFile = 'tools\android_signing.properties'
+    $sdk = 'C:\Users\hhikr\dev\android-sdk'
+    $bt = Get-ChildItem "$sdk\build-tools" -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1
+    if ((Test-Path $propsFile) -and $bt) {
+      $props = @{}
+      Get-Content $propsFile | Where-Object { $_ -match '^\w+=' } | ForEach-Object { $k, $v = $_ -split '=', 2; $props[$k] = $v }
+      $ks = $props['storeFile']
+      if (-not $ks -or -not [IO.Path]::IsPathRooted($ks)) { $ks = Join-Path (Resolve-Path tools).Path ([IO.Path]::GetFileName("$ks")) }
+      if (-not (Test-Path $ks)) { $ks = (Resolve-Path tools\arklores-release.jks).Path }
+      if (-not $env:JAVA_HOME -and (Test-Path 'C:\Users\hhikr\dev\jdk-17')) { $env:JAVA_HOME = 'C:\Users\hhikr\dev\jdk-17' }
+      $env:ARK_KSP = $props['storePassword']; $env:ARK_KEYP = $props['keyPassword']
+      try {
+        & "$($bt.FullName)\apksigner.bat" sign --ks $ks --ks-key-alias $props['keyAlias'] --ks-pass env:ARK_KSP --key-pass env:ARK_KEYP --out $out $built
+        if ($LASTEXITCODE -ne 0) { throw 'apksigner failed' }
+      } finally {
+        Remove-Item Env:ARK_KSP, Env:ARK_KEYP -ErrorAction SilentlyContinue
+      }
+      Remove-Item "$out.idsig" -ErrorAction SilentlyContinue
+      Write-Host 'signed with the release key.'
+    } else {
+      Copy-Item $built $out -Force
+      Write-Warning 'release key not found: the APK keeps the debug signature and cannot update an app installed from a release.'
+    }
+    $ErrorActionPreference = 'Stop'
+    $Apk = (Resolve-Path $out).Path
+  }
+}
+
 # --- App ---
 if (-not $KbOnly) {
   if (-not $Apk) {
@@ -81,6 +135,10 @@ if (-not $KbOnly) {
   if (-not (Test-Path $Apk)) { throw "APK not found: $Apk" }
   $apkItem = Get-Item $Apk
   Write-Host ("APK: {0} ({1:N1} MB, {2})" -f $apkItem.Name, ($apkItem.Length / 1MB), $apkItem.LastWriteTime)
+  $lastCommit = [DateTimeOffset]::FromUnixTimeSeconds([int64](git log -1 --format=%ct)).LocalDateTime
+  if (-not $Build -and $apkItem.LastWriteTime -lt $lastCommit) {
+    Write-Warning ("this APK is older than the last commit ({0}): it does not have the latest changes. Run with -Build to build it from this tree." -f $lastCommit)
+  }
   if (-not $DryRun) {
     # -r keeps the app's data; an APK signed with another key cannot replace
     # the installed app (INSTALL_FAILED_UPDATE_INCOMPATIBLE): uninstall it first
