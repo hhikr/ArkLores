@@ -55,6 +55,7 @@ String entryTypeName(String type) => switch (type) {
       'weapon' => '武器',
       'document' => '档案',
       'investigation' => '调查',
+      'mission_intro' => '任务简介',
       _ => _familyName(type),
     };
 
@@ -241,11 +242,12 @@ String bindingName(
 /// 0.12: names of the Endfield shelves (collection kinds without the `ef/`
 /// namespace) where they differ from the Arknights ones. As in-game terms.
 const Map<String, String> endfieldShelfNames = {
-  'main': '主线',
+  // The tabs of the game's mission panel (`ui_mis_panel_tab_*`).
+  'main': '主线任务',
+  'discovery': '探索任务',
   'side': '支线任务',
-  'character': '干员任务',
-  'event': '活动',
-  'world': '世界',
+  'activity': '活动任务',
+  'other': '委派任务',
   'archive': '档案库',
   'memory': '干员',
 };

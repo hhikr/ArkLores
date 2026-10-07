@@ -31,9 +31,12 @@ const List<String> shelfKinds = [
 /// the build writes the same list, endfieldShelfKinds).
 const List<String> endfieldShelfOrder = [
   'main',
+  'discovery',
   'side',
-  'character',
-  'event',
+  'activity',
+  'other',
+  // Conversations outside missions (a level's interactions, an enemy's
+  // encounter): unnamed in the game, shown as 其他.
   'world',
   'archive',
   'memory',
@@ -108,7 +111,12 @@ const Set<String> markdownEntryTypes = {
 const Set<String> eventEntryTypes = {'roguelike_scene', 'sandbox_event'};
 
 /// The types whose text introduces their collection.
-const Set<String> introEntryTypes = {'roguelike_topic', 'sandbox_topic'};
+const Set<String> introEntryTypes = {
+  'roguelike_topic',
+  'sandbox_topic',
+  // 0.12: an Endfield mission's own description.
+  'mission_intro',
+};
 
 /// `'a','b'` for an SQL `IN (…)` of [types] (fixed identifiers, not input).
 String _sqlList(Set<String> types) => types.map((t) => "'$t'").join(',');

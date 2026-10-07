@@ -3,6 +3,7 @@
 //
 //   dart run tools/build_endfield_database.dart \
 //     --tables=<dir with the decoded game tables, e.g. <kit>/export_full/game/Table> \
+//     [--missions=<a JsonData dump's Data/Json/MissionRuntimeAsset>] \
 //     [--story=<the research kit's Story publication: <kit>/webui/data>] \
 //     [--version=<client version>] \
 //     --output=build/endfield [--force]
@@ -59,7 +60,18 @@ Future<void> main(List<String> args) async {
     final importer = EndfieldImporter(tables, writer, log: log);
     await importer.importTables();
     final story = arg('story');
-    final stories = EndfieldStoryImporter(tables, writer, importer, log: log);
+    final missionsDir = arg('missions');
+    final missions = missionsDir == null
+        ? const <String, EndfieldMission>{}
+        : EndfieldStoryImporter.loadMissions(Directory(missionsDir), tables);
+    log('missions defined: ${missions.length}');
+    final stories = EndfieldStoryImporter(
+      tables,
+      writer,
+      importer,
+      log: log,
+      missions: missions,
+    );
     if (story != null && Directory(story).existsSync()) {
       await stories.importPublication(Directory(story));
     } else {

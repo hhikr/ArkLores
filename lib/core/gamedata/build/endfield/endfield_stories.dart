@@ -55,25 +55,114 @@ String? operatorOfMission(String mission, Map<String, String> operators) {
   return null;
 }
 
-/// The shelf of a mission id from its letter prefix, as the game's ids are
-/// formed (`e<n>m<n>` main story, `c…` character stories, the rest side
-/// stories). The publication's own kind replaces this when present.
+/// The shelf of a mission without a definition, from its id's letter prefix
+/// (`e<n>m<n>` main story, `c…` an operator's story, the rest side stories).
 String shelfOfMission(String mission) {
   final letters = RegExp(r'^[a-z]+').firstMatch(mission)?.group(0) ?? '';
   return switch (letters) {
     'e' => 'main',
-    'c' => 'character',
+    'c' => 'memory',
     _ => 'side',
   };
 }
 
+/// One mission as the game defines it (`MissionRuntimeAsset/<id>.json`).
+typedef EndfieldMission = ({
+  String name,
+  String? description,
+  int type,
+  String? charId,
+  int sortId,
+});
+
+/// The mission tabs of the game's mission panel (`GEnums.MissionViewType`,
+/// in declaration order), as shelf kinds. A mission's tab is
+/// `MissionTypeInfoTable[missionType].missionViewType`.
+const List<String> missionViewShelves = [
+  'main',
+  'discovery',
+  'side',
+  'activity',
+  'other',
+];
+
+/// The game's names of its mission tabs (`ui_mis_panel_tab_*`), for
+/// numbering a mission without a name.
+const Map<String, String> missionTabNames = {
+  'main': '主线任务',
+  'discovery': '探索任务',
+  'side': '支线任务',
+  'activity': '活动任务',
+  'other': '委派任务',
+  // The game lists an operator's missions under its side-mission tab.
+  'memory': '支线任务',
+};
+
 class EndfieldStoryImporter {
-  EndfieldStoryImporter(this.tables, this.writer, this.importer, {this.log});
+  EndfieldStoryImporter(
+    this.tables,
+    this.writer,
+    this.importer, {
+    this.log,
+    this.missions = const {},
+  });
 
   final EndfieldTables tables;
   final EndfieldWriter writer;
   final EndfieldImporter importer;
   final void Function(String message)? log;
+
+  /// The game's mission definitions by id (empty: the id rules decide).
+  final Map<String, EndfieldMission> missions;
+
+  /// Reads the mission definitions from a JsonData dump's
+  /// `MissionRuntimeAsset` folder; names and descriptions are text keys of
+  /// `TextTable`.
+  static Map<String, EndfieldMission> loadMissions(
+    Directory dir,
+    EndfieldTables tables,
+  ) {
+    final out = <String, EndfieldMission>{};
+    if (!dir.existsSync()) return out;
+    for (final file in dir.listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.json') || file.path.endsWith('_meta.json')) {
+        continue;
+      }
+      final Object? json;
+      try {
+        json = jsonDecode(file.readAsStringSync());
+      } catch (_) {
+        continue;
+      }
+      if (json is! Map<String, dynamic>) continue;
+      final id = '${json['missionId'] ?? ''}';
+      if (id.isEmpty) continue;
+      String keyText(Object? field) => field is Map && field['key'] != null
+          ? endfieldText(tables.text(tables.table('TextTable')['${field['key']}']))
+          : '';
+      final description = keyText(json['missionDescription']);
+      final charId = '${json['charId'] ?? ''}';
+      out[id] = (
+        name: keyText(json['missionName']),
+        description: description.isEmpty ? null : description,
+        type: (json['missionType'] as num?)?.toInt() ?? -1,
+        charId: charId.isEmpty ? null : charId,
+        sortId: (json['sortId'] as num?)?.toInt() ?? 0,
+      );
+    }
+    return out;
+  }
+
+  /// The shelf of a defined mission: its operator's (`memory`) when it is
+  /// an operator's story, else the game's mission tab.
+  String _shelfOf(String id, EndfieldMission m) {
+    if (m.charId != null) return 'memory';
+    final info = tables.table('MissionTypeInfoTable')['${m.type}'];
+    final view = info is Map ? (info['missionViewType'] as num?)?.toInt() : null;
+    return view != null && view >= 0 && view < missionViewShelves.length
+        ? missionViewShelves[view]
+        : shelfOfMission(id);
+  }
 
   final Map<String, ({String name, String kind, int sort})> _missions = {};
 
@@ -87,11 +176,30 @@ class EndfieldStoryImporter {
     return text.isEmpty ? null : text;
   }
 
-  Future<void> _ensureMission(String id, {String? name, String? kind}) async {
+  /// Missions without a name of their own, numbered per shelf (as Arknights'
+  /// unnamed training stories are: `训练 3`).
+  final Map<String, int> _unnamed = {};
+
+  Future<void> _ensureMission(
+    String id, {
+    String? name,
+    String? kind,
+    String? owner,
+  }) async {
     if (_missions.containsKey(id)) return;
-    final shelf = kind ?? shelfOfMission(id);
-    final owner = operatorOfMission(id, importer.operators);
-    final entry = (name: name ?? id, kind: shelf, sort: _missions.length);
+    final defined = missions[id];
+    final shelf = kind ?? (defined == null ? shelfOfMission(id) : _shelfOf(id, defined));
+    owner ??= defined?.charId != null
+        ? importer.operators[defined!.charId]
+        : operatorOfMission(id, importer.operators);
+    final title = defined == null || defined.name.isEmpty ? null : defined.name;
+    String numbered() {
+      final label = missionTabNames[shelf] ?? '任务';
+      final n = _unnamed.update(label, (v) => v + 1, ifAbsent: () => 1);
+      return '$label $n';
+    }
+
+    final entry = (name: name ?? title ?? numbered(), kind: shelf, sort: _missions.length);
     _missions[id] = entry;
     await writer.collection(
       id: 'mission_$id',
@@ -100,9 +208,21 @@ class EndfieldStoryImporter {
       // A character mission hangs below its operator (the operator page
       // lists it, like an Arknights record set).
       parentId: owner,
-      sortKey: entry.sort,
+      sortKey: defined?.sortId ?? entry.sort,
       sourcePath: 'mission:$id',
     );
+    final description = defined?.description;
+    if (description != null) {
+      await writer.entry(
+        type: 'mission_intro',
+        rawId: 'mission_$id',
+        name: entry.name,
+        collectionId: 'mission_$id',
+        sourcePath: 'MissionRuntimeAsset/$id.json',
+        category: 'story',
+        texts: [(section: '任务简介', text: description)],
+      );
+    }
   }
 
   /// A speaker as players see it: the game appends an internal note in
@@ -110,15 +230,104 @@ class EndfieldStoryImporter {
   String _speaker(Object? field) =>
       _clean(field).replaceAll(RegExp(r'\{[^{}]*\}'), '').trim();
 
+  /// Where a conversation goes: a mission, an operator's topic, a level's
+  /// interactions, an enemy's encounter; null for filler the game plays
+  /// between lines, factory tutorials and tests (not story).
+  Future<String?> _home(String id) async {
+    final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns)_'), '');
+    if (RegExp(r'^(continue|blackbox|timeline_blackbox|sr|test)').hasMatch(bare)) {
+      return null;
+    }
+    // A topic of an operator's messages (SNSDialogTopicTable).
+    final topic = _topicOf(id);
+    if (topic != null) {
+      await _ensureMission(
+        topic.key,
+        name: topic.name,
+        kind: 'memory',
+        owner: topic.owner,
+      );
+      return topic.key;
+    }
+    final gift = RegExp(r'^sim_gift_([a-z]+)').firstMatch(bare)?.group(1);
+    if (gift != null) {
+      final owner = _operatorBySuffix(gift);
+      if (owner == null) return null;
+      final key = 'gift_$gift';
+      await _ensureMission(key, name: _itemTypeName(33) ?? key, kind: 'memory', owner: owner);
+      return key;
+    }
+    final level = RegExp(r'^((?:map|indie|base)\w*?_(?:lv|dg)\d+)').firstMatch(bare)?.group(1);
+    if (level != null) {
+      final name = _levelName(level);
+      if (name == null) return null;
+      await _ensureMission('level_$level', name: name, kind: 'world');
+      return 'level_$level';
+    }
+    final enemy = RegExp(r'^(eny_\d+)').firstMatch(bare)?.group(1);
+    if (enemy != null) {
+      final name = _enemyName(enemy);
+      if (name == null) return null;
+      await _ensureMission(enemy, name: name, kind: 'world');
+      return enemy;
+    }
+    final mission = missionOfConversation(id);
+    await _ensureMission(mission);
+    return mission;
+  }
+
+  ({String key, String name, String? owner})? _topicOf(String id) {
+    for (final MapEntry(:key, :value) in tables.table('SNSDialogTopicTable').entries) {
+      if (value is! Map) continue;
+      if (!listOfStrings(value['includeDialogIds']).contains(id)) continue;
+      final char = RegExp(r'chr_\d+_[a-z]+').firstMatch(key)?.group(0);
+      final name = endfieldText(tables.text(value['topicName']));
+      return (
+        key: key,
+        name: name.isEmpty ? key : name,
+        owner: char == null ? null : importer.operators[char],
+      );
+    }
+    return null;
+  }
+
+  String? _operatorBySuffix(String suffix) {
+    for (final MapEntry(:key, :value) in importer.operators.entries) {
+      if (key.endsWith('_$suffix')) return value;
+    }
+    return null;
+  }
+
+  String? _itemTypeName(int type) {
+    final row = tables.table('ItemTypeTable')['$type'];
+    final name = row is Map ? endfieldText(tables.text(row['name'])) : '';
+    return name.isEmpty ? null : name;
+  }
+
+  String? _levelName(String level) {
+    final row = tables.table('LevelDescTable')[level];
+    final name = row is Map ? endfieldText(tables.text(row['showName'])) : '';
+    return name.isEmpty ? null : name;
+  }
+
+  String? _enemyName(String enemy) {
+    for (final MapEntry(:key, :value) in tables.table('EnemyTemplateDisplayInfoTable').entries) {
+      if (!key.startsWith('${enemy}_') || value is! Map) continue;
+      final name = endfieldText(tables.text(value['name']));
+      if (name.isNotEmpty) return name;
+    }
+    return null;
+  }
+
   Future<void> _story({
     required String id,
-    required String mission,
     required List<EndfieldLine> lines,
     required String source,
     String? name,
     int? sort,
   }) async {
-    await _ensureMission(mission);
+    final mission = await _home(id);
+    if (mission == null) return;
     final m = _missions[mission]!;
     await writer.story(
       rawId: id,
@@ -152,7 +361,6 @@ class EndfieldStoryImporter {
       final rows = byConversation[id]!..sort((a, b) => a.$1.compareTo(b.$1));
       await _story(
         id: id,
-        mission: missionOfConversation(id),
         source: source,
         sort: i,
         lines: [
@@ -178,7 +386,6 @@ class EndfieldStoryImporter {
         ..sort((a, b) => ((a['index'] as num?) ?? 0).compareTo((b['index'] as num?) ?? 0));
       await _story(
         id: id,
-        mission: missionOfConversation(id),
         source: radioSource,
         sort: 100000 + i,
         lines: [
@@ -233,7 +440,6 @@ class EndfieldStoryImporter {
       final chat = chats['${row['chatId'] ?? ''}'];
       await _story(
         id: id,
-        mission: missionOfConversation(id),
         source: source,
         sort: 200000 + i,
         name: chat is Map && _clean(chat['name']).isNotEmpty

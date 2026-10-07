@@ -17,9 +17,12 @@ import 'endfield_writer.dart';
 /// in shelf order. `memory` is the operator shelf, as in Arknights.
 const List<String> endfieldShelfKinds = [
   'main',
+  'discovery',
   'side',
-  'character',
-  'event',
+  'activity',
+  'other',
+  // Conversations outside missions (a level's interactions, an enemy's
+  // encounter): unnamed in the game, shown as 其他.
   'world',
   'archive',
   'memory',
