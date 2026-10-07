@@ -60,3 +60,13 @@ if (-not $SkipUnpack) {
 
 & dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--version=$Version" --output=build/endfield --force
 if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+
+# The release asset and its SHA-256 (for tools/release_gamedata.env).
+$db = 'build\endfield\arklores_endfield_zh.db'
+$in = [IO.File]::OpenRead((Resolve-Path $db))
+$out = [IO.File]::Create((Join-Path (Get-Location) "$db.gz"))
+$gz = New-Object IO.Compression.GZipStream($out, [IO.Compression.CompressionLevel]::Optimal)
+$in.CopyTo($gz); $gz.Dispose(); $in.Dispose(); $out.Dispose()
+$sha = (Get-FileHash "$db.gz" -Algorithm SHA256).Hash.ToLower()
+"$db.gz: {0:N1} MB, SHA-256 $sha" -f ((Get-Item "$db.gz").Length / 1MB)
+"Put it in tools/release_gamedata.env as ENDFIELD_DB_SHA256 before building an APK."
