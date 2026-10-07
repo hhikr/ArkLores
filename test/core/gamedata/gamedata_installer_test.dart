@@ -62,7 +62,7 @@ void main() {
       expect(status.entityCount, '1');
     });
 
-    test("each game installs into its own file; one never replaces the other", () async {
+    test('each game installs into its own file; one never replaces the other', () async {
       final arknights = GameDataInstaller(installDirectory: dir);
       const endfield = GameDataInstaller.forGame(Game.endfield);
       final ef = GameDataInstaller(
