@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:arklores/core/agent/agent_logger.dart';
 import 'package:arklores/core/agent/agent_provider.dart';
+import 'package:arklores/core/agent/answer_options.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
 import 'package:arklores/core/agent/story_qa_agent.dart';
@@ -90,6 +91,32 @@ void main() {
       expect(turn.timeline, hasLength(4));
       expect(notifier.state.last.stats!.calls, 4);
       expect(notifier.state.last.stats!.cacheRate, 0.5);
+    });
+
+    test('the answer options are read per question: review off, no review',
+        () async {
+      AgentLogger.setEnabled(true);
+      final mock = _RecorderLLM()
+        ..reads = 2
+        ..meter = meter;
+      var options = const AnswerOptions(review: false);
+      final notifier = AskChatNotifier(
+        agent: StoryQaAgent(llmClient: mock, gameDataStore: knowledge),
+        usage: meter,
+        sessionStore: store,
+        configReader: () => const LLMConfig(),
+        optionsReader: () => options,
+      );
+      await notifier.sendMessage('甲是谁');
+      final first = (await singleSession()).turns.single;
+      expect(first.iterations, hasLength(3));
+      expect(first.iterations.map((i) => i.rawResponse),
+          isNot(contains(startsWith('（审稿）'))),);
+      options = const AnswerOptions();
+      mock.resetAgentCalls();
+      await notifier.sendMessage('乙是谁');
+      final second = (await singleSession()).turns.last;
+      expect(second.iterations.last.rawResponse, startsWith('（审稿）'));
     });
 
     test('the cost is counted per question, not accumulated', () async {

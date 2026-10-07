@@ -307,15 +307,15 @@ void main() {
 
   test('search finds collections by name and entries by name or code',
       () async {
-    final r = await searchLibrary(db, '活动');
+    final r = await searchLibraryIn(db, '活动');
     expect(r.collections.map((c) => c.id), ['act_new', 'act_old']);
-    final byCode = await searchLibrary(db, '1-2');
+    final byCode = await searchLibraryIn(db, '1-2');
     expect(byCode.entries.single.name, '章节2');
-    final byName = await searchLibrary(db, '票');
+    final byName = await searchLibraryIn(db, '票');
     expect(byName.entries.map((e) => e.id), ['roguelike_item:ri1']);
-    expect((await searchLibrary(db, '  ')).entries, isEmpty);
+    expect((await searchLibraryIn(db, '  ')).isEmpty, isTrue);
     // Entries without text are not offered.
-    expect((await searchLibrary(db, '无文字')).entries, isEmpty);
+    expect((await searchLibraryIn(db, '无文字')).isEmpty, isTrue);
   });
 
   test('labels cover the types and read as a headline', () {

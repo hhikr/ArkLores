@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/agent/agent_logger.dart';
+import 'core/agent/answer_options.dart';
 import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
 import 'features/settings/api_settings_page.dart';
@@ -40,7 +41,7 @@ void main() async {
     appTheme,
     appLocale,
     sessionLogsEnabled,
-    nickname,
+    (nickname, answerOptions),
     _,
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
@@ -51,7 +52,12 @@ void main() async {
     load('theme', settingsService.loadTheme, AppTheme.ark),
     load('locale', settingsService.loadLocale, SupportedLocale.zh),
     load('session log toggle', settingsService.loadSessionLogsEnabled, false),
-    load('nickname', settingsService.loadNickname, ''),
+    // A record's .wait takes at most nine futures.
+    (
+      load('nickname', settingsService.loadNickname, ''),
+      load('answer options', settingsService.loadAnswerOptions,
+          const AnswerOptions(),),
+    ).wait,
     load(
       'launcher icon',
       () async =>
@@ -73,6 +79,7 @@ void main() async {
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
         initialNicknameProvider.overrideWithValue(nickname),
+        initialAnswerOptionsProvider.overrideWithValue(answerOptions),
       ],
       child: const ArkLoresApp(),
     ),

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common/sqlite_api.dart' show DatabaseExecutor;
 
 import '../agent/agent_provider.dart' show sharedGameDataStoreProvider;
+import '../llm/llm_provider.dart' show embeddingClientProvider;
 import '../userdata/user_data_provider.dart';
 import '../userdata/user_data_store.dart';
 import 'library_queries.dart';
@@ -160,12 +161,66 @@ final storyPlaceProvider =FutureProvider.autoDispose
     .family<StoryPlace?, String>((ref, storyId) async =>
         _query<StoryPlace?>(ref, (db) => storyPlace(db, storyId)),);
 
-final librarySearchProvider = FutureProvider.autoDispose.family<
-    ({List<LibraryCollection> collections, List<LibraryEntry> entries}),
-    String>((ref, query) async {
-  final result = await _query(ref, (db) => searchLibrary(db, query));
-  return result ??
-      (collections: const <LibraryCollection>[], entries: const <LibraryEntry>[]);
+/// One search: the query, where it looks, whether the texts are searched
+/// even when names match.
+typedef LibrarySearchKey = ({String query, LibraryScope scope, bool text});
+
+final librarySearchProvider = FutureProvider.autoDispose
+    .family<LibrarySearchResult, LibrarySearchKey>((ref, key) async =>
+        await _query(
+          ref,
+          (db) => searchLibraryIn(
+            db,
+            key.query,
+            scope: key.scope,
+            text: key.text,
+          ),
+        ) ??
+        const LibrarySearchResult(),);
+
+/// Why the semantic search cannot run.
+enum SemanticSearchProblem { noService, noVectors, otherModel }
+
+class SemanticSearchUnavailable implements Exception {
+  const SemanticSearchUnavailable(this.problem);
+  final SemanticSearchProblem problem;
+}
+
+/// Stories close in meaning to the query (the story vectors): the query is
+/// sent to the embedding service, so the page runs it only on request.
+/// Fails with [SemanticSearchUnavailable] when it cannot run.
+final librarySemanticProvider = FutureProvider.autoDispose
+    .family<List<LibraryTextHit>, ({String query, LibraryScope scope})>(
+        (ref, key) async {
+  final client = ref.watch(embeddingClientProvider);
+  if (client == null) {
+    throw const SemanticSearchUnavailable(SemanticSearchProblem.noService);
+  }
+  final store = ref.watch(sharedGameDataStoreProvider);
+  final info = await store.storyVectorInfo;
+  if (info == null) {
+    throw const SemanticSearchUnavailable(SemanticSearchProblem.noVectors);
+  }
+  if (info.model != client.model || info.dims != client.dimensions) {
+    throw const SemanticSearchUnavailable(SemanticSearchProblem.otherModel);
+  }
+  final vector = (await client.embed([key.query])).single;
+  // A page's scope keeps a part of the hits: look further down the list.
+  final hits = await store.searchStoryChunksByVector(
+    vector,
+    topK: key.scope == everywhere ? 60 : 400,
+  );
+  return await store.withDatabase(
+    (db) => storyChunkEntries(
+      db,
+      [
+        for (final h in hits)
+          (storyId: h.storyId, lineStart: h.lineStart, lineEnd: h.lineEnd),
+      ],
+      scope: key.scope,
+    ),
+  ) ??
+      const [];
 });
 
 /// Reading progress of every story the user opened, by `story:<id>`.

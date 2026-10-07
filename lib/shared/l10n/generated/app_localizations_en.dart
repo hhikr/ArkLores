@@ -1431,4 +1431,83 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lineKindTutorial => 'Tutorial';
+
+  @override
+  String get aiAnswerOptions => 'Answer options';
+
+  @override
+  String get aiAnswerReview => 'Review';
+
+  @override
+  String get aiAnswerReviewHint =>
+      'Another model reads the draft and raises questions, checked in the text before the final answer (slower)';
+
+  @override
+  String get aiAnswerDigest => 'Digest';
+
+  @override
+  String get aiAnswerDigestHint =>
+      'Long answers open with a few summary paragraphs, the details folded below (one more call)';
+
+  @override
+  String librarySearchIn(String name) {
+    return 'In “$name”';
+  }
+
+  @override
+  String get librarySearchEverywhere => 'Search the whole library';
+
+  @override
+  String librarySearchNoNameMatch(String query) {
+    return 'Nothing is named “$query”; below are close names and texts that contain it';
+  }
+
+  @override
+  String get librarySearchSimilar => 'Close names';
+
+  @override
+  String get librarySearchMentions => 'In the text';
+
+  @override
+  String get librarySearchNoMentions => 'Not found in the texts';
+
+  @override
+  String librarySearchInText(String query) {
+    return 'Search the texts for “$query”';
+  }
+
+  @override
+  String get librarySearchSemantic => 'Find stories by meaning';
+
+  @override
+  String get librarySearchSemanticTitle => 'Stories close in meaning';
+
+  @override
+  String get librarySearchSemanticNeedsService =>
+      'Set up an embedding service to find stories by meaning (Settings → API settings → Embedding)';
+
+  @override
+  String get librarySearchSemanticNoVectors =>
+      'This knowledge base has no story vectors (they can be made on the knowledge base page)';
+
+  @override
+  String get librarySearchSemanticOtherModel =>
+      'The knowledge base’s vectors were made with another embedding model than the one configured';
+
+  @override
+  String get librarySearchSemanticFailed =>
+      'The embedding service request failed';
+
+  @override
+  String librarySearchMatchCount(int n) {
+    return '$n matches';
+  }
+
+  @override
+  String librarySearchFurther(String query) {
+    return 'Search for “$query” (close names and texts too)';
+  }
+
+  @override
+  String get storyReaderFindHint => 'Find in this story';
 }

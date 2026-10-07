@@ -1381,4 +1381,78 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get lineKindTutorial => '教程';
+
+  @override
+  String get aiAnswerOptions => '回答选项';
+
+  @override
+  String get aiAnswerReview => '复核';
+
+  @override
+  String get aiAnswerReviewHint => '另一个模型以读者身份提出疑问，回原文核实后再定稿（更慢）';
+
+  @override
+  String get aiAnswerDigest => '提要';
+
+  @override
+  String get aiAnswerDigestHint => '长答案先给几段提要，详细经过折叠在下面（多一次调用）';
+
+  @override
+  String librarySearchIn(String name) {
+    return '在「$name」中';
+  }
+
+  @override
+  String get librarySearchEverywhere => '搜索全部资料';
+
+  @override
+  String librarySearchNoNameMatch(String query) {
+    return '没有名字含「$query」的条目，下面是相近的名字和正文里的结果';
+  }
+
+  @override
+  String get librarySearchSimilar => '相近的名字';
+
+  @override
+  String get librarySearchMentions => '正文提到';
+
+  @override
+  String get librarySearchNoMentions => '正文里没有找到';
+
+  @override
+  String librarySearchInText(String query) {
+    return '在正文里搜索「$query」';
+  }
+
+  @override
+  String get librarySearchSemantic => '按意思找剧情';
+
+  @override
+  String get librarySearchSemanticTitle => '意思相近的剧情';
+
+  @override
+  String get librarySearchSemanticNeedsService =>
+      '配置向量服务后可以按意思找剧情（设置 → API 设置 → 向量）';
+
+  @override
+  String get librarySearchSemanticNoVectors => '当前知识库没有剧情向量（可以在知识库页生成）';
+
+  @override
+  String get librarySearchSemanticOtherModel => '知识库的向量不是用当前配置的向量模型生成的';
+
+  @override
+  String get librarySearchSemanticFailed => '向量服务请求失败';
+
+  @override
+  String librarySearchMatchCount(int n) {
+    return '$n 处';
+  }
+
+  @override
+  String librarySearchFurther(String query) {
+    return '搜索「$query」（含相近名字与正文）';
+  }
+
+  @override
+  String get storyReaderFindHint => '在本篇中查找';
 }

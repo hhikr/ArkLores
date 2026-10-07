@@ -68,6 +68,24 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
+  testWidgets('find in the story opens the line picked, marked',
+      (tester) async {
+    tall(tester);
+    await tester.pumpWidget(app(const StoryReaderPage(storyId: _story), _lines()));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('story-reader-find')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('story-find-field')), '第25句',);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('story-find-25')), findsOneWidget);
+    expect(find.text('1 处'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('story-find-25')));
+    await settle(tester);
+    expect(find.byKey(const ValueKey('story-line-target-25')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('opening a story writes the history; the list reopens it',
       (tester) async {
     tall(tester);

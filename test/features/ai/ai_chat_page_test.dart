@@ -3,14 +3,17 @@
 import 'dart:async';
 
 import 'package:arklores/core/agent/agent_provider.dart';
+import 'package:arklores/core/agent/answer_options.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
 import 'package:arklores/features/ai/wiki_ai_context.dart';
+import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/fake_llm.dart';
@@ -56,6 +59,32 @@ void main() {
     expect(find.byKey(const ValueKey('ask-input-field')), findsOneWidget);
     expect(find.byKey(const ValueKey('deep-thinking-toggle')), findsOneWidget);
     expect(find.byTooltip('发送'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the answer options turn the review and the digest off, and '
+      'are saved', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    await tester.pumpWidget(
+        _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AiChatPage)),
+    );
+    expect(container.read(answerOptionsProvider), const AnswerOptions());
+    await tester.tap(find.byKey(const ValueKey('answer-options')));
+    await tester.pumpAndSettle();
+    expect(find.text('复核'), findsOneWidget);
+    expect(find.text('提要'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('answer-option-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('answer-options')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('answer-option-digest')));
+    await tester.pumpAndSettle();
+    const off = AnswerOptions(review: false, digest: false);
+    expect(container.read(answerOptionsProvider), off);
+    expect(await SettingsService().loadAnswerOptions(), off);
     expect(tester.takeException(), isNull);
   });
 

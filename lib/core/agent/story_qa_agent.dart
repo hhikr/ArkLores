@@ -4,6 +4,7 @@ import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import '../llm/usage_meter.dart';
+import 'answer_options.dart';
 import 'lore_agent_loop.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
@@ -32,11 +33,13 @@ class StoryQaAgent {
 
   /// Answers [query]. [prior] continues an earlier answer's conversation
   /// (follow-ups); [onConversation] receives this one's. [client] replaces
-  /// the default client for this question (the "深度思考" switch).
+  /// the default client for this question (the "深度思考" switch);
+  /// [options] turns the reader's review and the digest on or off.
   Stream<ReActEvent> run({
     required String query,
     List<Message> history = const [],
     LLMClient? client,
+    AnswerOptions options = const AnswerOptions(),
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
@@ -58,6 +61,8 @@ class StoryQaAgent {
       client: client ?? _llmClient,
       store: store,
       embeddingClient: _embeddingClient,
+      review: options.review,
+      digest: options.digest,
       onSpan: _usage?.addSpan,
     ).run(
       query: query,

@@ -263,18 +263,32 @@ List<Override> overrides(MemoryUserStore store) => [
         ),
       ),
       librarySearchProvider.overrideWith(
-        (ref, q) async => (
-          collections: const [
-            LibraryCollection(
-              id: 'main_9',
-              kind: 'main',
-              name: '风暴瞭望',
-              stories: 3,
-              others: 0,
-            ),
-          ],
-          entries: [..._stories, _enemy],
-        ),
+        (ref, key) async => key.query == '无此名'
+            // No name has it: a close name and a story whose text has it.
+            ? LibrarySearchResult(
+                similar: [_enemy],
+                mentions: [
+                  LibraryTextHit(
+                    entry: _stories[0],
+                    count: 2,
+                    line: 4,
+                    snippet: '…提到无此名的一行…',
+                  ),
+                ],
+                searchedText: true,
+              )
+            : LibrarySearchResult(
+                collections: const [
+                  LibraryCollection(
+                    id: 'main_9',
+                    kind: 'main',
+                    name: '风暴瞭望',
+                    stories: 3,
+                    others: 0,
+                  ),
+                ],
+                entries: [..._stories, _enemy],
+              ),
       ),
       storyHostProvider.overrideWith((ref, id) async => null),
       attachedStoriesProvider.overrideWith(
@@ -604,6 +618,60 @@ void main() {
     expect(find.byKey(const ValueKey('hit-collection-main_9')), findsOneWidget);
     expect(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')), findsOneWidget);
     expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
+    // Names matched: the texts are searched only on request.
+    expect(find.byKey(const ValueKey('search-text')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a search no name matches shows close names and the texts',
+      (tester) async {
+    await pumpApp(tester, const MaterialsPage());
+    await tester.tap(find.byKey(const ValueKey('library-search')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '无此名');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    await shoot(tester, 'library_search_fallback');
+    expect(find.textContaining('没有名字含「无此名」'), findsOneWidget);
+    expect(find.text('相近的名字'), findsOneWidget);
+    expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
+    expect(find.text('正文提到'), findsOneWidget);
+    expect(find.byKey(const ValueKey('hit-text-story:a/1_beg.txt')), findsOneWidget);
+    expect(find.textContaining('…提到无此名的一行…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('search-text')), findsNothing);
+    // No embedding service configured: no semantic button.
+    expect(find.byKey(const ValueKey('search-semantic')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("a page's search looks in the page until widened",
+      (tester) async {
+    await pumpApp(tester, const CollectionPage(collectionId: 'rogue_x'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('library-search')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('search-scope')), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(LibrarySearchPage)),
+    );
+    await tester.enterText(find.byType(TextField), '风暴');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(
+      container.exists(librarySearchProvider(
+        (query: '风暴', scope: listScope(collectionId: 'rogue_x'), text: false),
+      ),),
+      isTrue,
+    );
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('search-scope')), findsNothing);
+    expect(
+      container.exists(librarySearchProvider(
+        (query: '风暴', scope: everywhere, text: false),
+      ),),
+      isTrue,
+    );
     expect(tester.takeException(), isNull);
   });
 

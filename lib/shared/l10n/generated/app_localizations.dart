@@ -2593,6 +2593,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tutorial'**
   String get lineKindTutorial;
+
+  /// No description provided for @aiAnswerOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer options'**
+  String get aiAnswerOptions;
+
+  /// No description provided for @aiAnswerReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get aiAnswerReview;
+
+  /// No description provided for @aiAnswerReviewHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Another model reads the draft and raises questions, checked in the text before the final answer (slower)'**
+  String get aiAnswerReviewHint;
+
+  /// No description provided for @aiAnswerDigest.
+  ///
+  /// In en, this message translates to:
+  /// **'Digest'**
+  String get aiAnswerDigest;
+
+  /// No description provided for @aiAnswerDigestHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Long answers open with a few summary paragraphs, the details folded below (one more call)'**
+  String get aiAnswerDigestHint;
+
+  /// No description provided for @librarySearchIn.
+  ///
+  /// In en, this message translates to:
+  /// **'In “{name}”'**
+  String librarySearchIn(String name);
+
+  /// No description provided for @librarySearchEverywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the whole library'**
+  String get librarySearchEverywhere;
+
+  /// No description provided for @librarySearchNoNameMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is named “{query}”; below are close names and texts that contain it'**
+  String librarySearchNoNameMatch(String query);
+
+  /// No description provided for @librarySearchSimilar.
+  ///
+  /// In en, this message translates to:
+  /// **'Close names'**
+  String get librarySearchSimilar;
+
+  /// No description provided for @librarySearchMentions.
+  ///
+  /// In en, this message translates to:
+  /// **'In the text'**
+  String get librarySearchMentions;
+
+  /// No description provided for @librarySearchNoMentions.
+  ///
+  /// In en, this message translates to:
+  /// **'Not found in the texts'**
+  String get librarySearchNoMentions;
+
+  /// No description provided for @librarySearchInText.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the texts for “{query}”'**
+  String librarySearchInText(String query);
+
+  /// No description provided for @librarySearchSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Find stories by meaning'**
+  String get librarySearchSemantic;
+
+  /// No description provided for @librarySearchSemanticTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories close in meaning'**
+  String get librarySearchSemanticTitle;
+
+  /// No description provided for @librarySearchSemanticNeedsService.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up an embedding service to find stories by meaning (Settings → API settings → Embedding)'**
+  String get librarySearchSemanticNeedsService;
+
+  /// No description provided for @librarySearchSemanticNoVectors.
+  ///
+  /// In en, this message translates to:
+  /// **'This knowledge base has no story vectors (they can be made on the knowledge base page)'**
+  String get librarySearchSemanticNoVectors;
+
+  /// No description provided for @librarySearchSemanticOtherModel.
+  ///
+  /// In en, this message translates to:
+  /// **'The knowledge base’s vectors were made with another embedding model than the one configured'**
+  String get librarySearchSemanticOtherModel;
+
+  /// No description provided for @librarySearchSemanticFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The embedding service request failed'**
+  String get librarySearchSemanticFailed;
+
+  /// No description provided for @librarySearchMatchCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} matches'**
+  String librarySearchMatchCount(int n);
+
+  /// No description provided for @librarySearchFurther.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for “{query}” (close names and texts too)'**
+  String librarySearchFurther(String query);
+
+  /// No description provided for @storyReaderFindHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Find in this story'**
+  String get storyReaderFindHint;
 }
 
 class _AppLocalizationsDelegate

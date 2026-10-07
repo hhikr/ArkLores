@@ -16,6 +16,18 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 资料页检索、问答的可选步骤（2026-10-07，未发布，不需重算知识库）**：① 资料页每个子页面右上角都有搜索（`LibrarySearchButton`），
+  默认只搜该页的范围（`LibraryScope`：书架、集合、某类条目列表、干员页=密录集+属于他的条目；条目页搜它所在的集合），范围显示为可删掉的标签，删掉即搜全部；
+  列表的筛选框没有结果时给“搜索「…」”按钮。检索分层（`library_search.dart`，`library_queries` 的 part）：名字/代号包含全部词（空格分词，某个词可以是集合名，
+  但至少一个词要在条目自己的名字里）→ 都没有时自动给“相近的名字”（同序字符 `%a%b%`、`nameDistance` 读音感知编辑距离；两个字的名字只认同音字，否则
+  “切城”会配上“坚城”）和“正文提到”（故事行、记录、干员档案里同一行/块含全部词，按命中数排，故事点进去在命中行高亮打开）；名字有命中时正文只在点“在正文里搜索”后才查。
+  实测（真实库）：全库名字检索 <10 ms，回退层约 250 ms（冷缓存第一次约 1–2 s，后台线程，界面不卡）；页面范围内都是个位数毫秒。
+  向量检索（“按意思找剧情”，`librarySemanticProvider`）要把问题发给向量服务、首次还要载入约 28 MB 索引，是用户能感觉到的等待，所以做成按钮，不自动跑；
+  没配向量服务、库没有向量、模型不一致时分别提示。阅读页加了“在本篇中查找”（`story_find_sheet.dart`，点结果以引用方式高亮打开该行）。
+  ② 问答的“复核”（R18 读者审稿）和“提要”（长答案整理成几段、详细版折叠）改为可选：输入框工具栏一个小按钮（`answer-options`，tune 图标）弹出两个勾选项，
+  默认都开、保存在 secure storage（`AnswerOptions`，`ask_answer_options`），每问读取（`AskChatNotifier.optionsReader` → `StoryQaAgent.run(options:)` →
+  `LoreAgentLoop(review:, digest:)`）；关掉不改检索、不改出处核对。
+
 - **0.11 收尾检查（2026-10-07，未发布，不需重算知识库）**：① 修了测试整理时发现的两个问题：Wiki 页站点标签可收缩（长站名显示省略号）；
   `WikiBrowserPage` 在 `initState` 里取 `SettingsService`、`dispose` 时先复制状态再保存（以前 dispose 里用 `ref`，状态从来没存上）。
   ② 性能（用真实库 `build/gamedata_v5` 计时）：资料页查询都很快（最慢的图鉴书架 96 ms），不用改；剧情向量索引（约 28 MB）改为后台 isolate 用 FFI SQLite 读

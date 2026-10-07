@@ -584,6 +584,29 @@ void main() {
       expect(answer, contains('夜里星灯到来。 `$main:0`'));
     });
 
+    test('with the digest and the review off, a long answer is final as '
+        'written', () async {
+      final client = _ScriptedClient(
+        [
+          _call('read_story', {'story_id': main}),
+          _call('read_story', {'story_id': act}),
+          _answer(fiveEntries),
+        ],
+        reviews: ['{"issues": ["后来呢？"]}'],
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        review: false,
+        digest: false,
+      ).run(query: '星灯做了什么？').toList();
+      expect(client.requests, hasLength(3));
+      expect(client.reviewRequests, isEmpty);
+      final answer = finalAnswerOf(events);
+      expect(answer, isNot(contains('[DETAILS]')));
+      expect(answer, contains('星灯离开了城市。 `$main:3`'));
+    });
+
     test('a short answer is not reorganised', () async {
       final client = _ScriptedClient([
         _call('read_story', {'story_id': main}),

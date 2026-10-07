@@ -84,6 +84,12 @@ class CollectionPage extends ConsumerWidget {
 
     return LibraryScaffold(
       title: c?.name ?? '',
+      actions: [
+        LibrarySearchButton(
+          scope: listScope(collectionId: collectionId),
+          label: c?.name,
+        ),
+      ],
       body: collection.isLoading && c == null
           ? const Center(child: CircularProgressIndicator())
           : c == null

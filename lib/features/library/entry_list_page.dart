@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
+import '../../core/library/library_queries.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -118,8 +119,14 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
       );
     }
     final entries = ref.watch(entriesOfTypeProvider(key));
+    // The operator shelf is this list of operators; its search also finds
+    // their record stories.
+    final scope = widget.type == 'operator' && widget.collectionId == null
+        ? shelfScope(operatorShelf)
+        : listScope(collectionId: widget.collectionId, type: widget.type);
     return LibraryScaffold(
       title: title,
+      actions: [LibrarySearchButton(scope: scope, label: title)],
       body: Column(
         children: [
           FilterField(
@@ -146,6 +153,13 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
                         ? LibraryMessage(
                             icon: Icons.search_off_rounded,
                             title: context.t.libraryNoResults,
+                            action: _query.trim().isEmpty
+                                ? null
+                                : SearchFurtherButton(
+                                    query: _query,
+                                    scope: scope,
+                                    label: title,
+                                  ),
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.only(bottom: 24),

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/agent/answer_options.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../shared/l10n/locale_provider.dart';
@@ -97,6 +98,7 @@ class SettingsService {
 
   // ── Agent session log keys ──────────────────────────────
   static const _keySessionLogsEnabled = 'session_logs_enabled';
+  static const _keyAnswerOptions = 'ask_answer_options';
 
   // ── Profile keys ─────────────────────────────────────────
   static const _keyNickname = 'profile_nickname';
@@ -221,6 +223,13 @@ class SettingsService {
   Future<void> saveSessionLogsEnabled(bool enabled) async {
     await _storage.write(key: _keySessionLogsEnabled, value: '$enabled');
   }
+
+  /// The Ask answer options (default: both passes on).
+  Future<AnswerOptions> loadAnswerOptions() async =>
+      AnswerOptions.decode(await _storage.read(key: _keyAnswerOptions));
+
+  Future<void> saveAnswerOptions(AnswerOptions options) =>
+      _storage.write(key: _keyAnswerOptions, value: options.encode());
 
   /// Returns `true` if onboarding has been completed.
   Future<bool> isOnboardingDone() async {

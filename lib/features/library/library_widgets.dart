@@ -32,6 +32,19 @@ void openStory(BuildContext context, String storyId, {ReadingEntry? resume}) {
   );
 }
 
+/// Opens a story in the reader at lines [start]–[end], marked (a search hit).
+void openStoryAt(BuildContext context, String storyId, int start, int end) {
+  Navigator.of(context).push(
+    smoothPageRoute<void>(
+      builder: (_) => StoryReaderPage(
+        storyId: storyId,
+        highlightStart: start,
+        highlightEnd: end,
+      ),
+    ),
+  );
+}
+
 /// The title a reading-history row shows: the story's name in the installed
 /// knowledge base now (names change between builds), the title stored when it
 /// was opened until that is known.
@@ -89,11 +102,15 @@ class LibraryMessage extends ConsumerWidget {
     required this.icon,
     required this.title,
     this.description,
+    this.action,
   });
 
   final IconData icon;
   final String title;
   final String? description;
+
+  /// A button below the message.
+  final Widget? action;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -126,6 +143,10 @@ class LibraryMessage extends ConsumerWidget {
                   height: 1.5,
                 ),
               ),
+            ],
+            if (action != null) ...[
+              const SizedBox(height: 12),
+              action!,
             ],
           ],
         ),

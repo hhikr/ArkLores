@@ -27,8 +27,12 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final label = shelfLabel(context, widget.kind);
     return LibraryScaffold(
-      title: shelfLabel(context, widget.kind),
+      title: label,
+      actions: [
+        LibrarySearchButton(scope: shelfScope(widget.kind), label: label),
+      ],
       body: widget.kind == codexShelf
           ? _codex(theme)
           : _collections(theme),
@@ -129,6 +133,11 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
                   ? LibraryMessage(
                       icon: Icons.search_off_rounded,
                       title: context.t.libraryNoResults,
+                      action: SearchFurtherButton(
+                        query: _filter,
+                        scope: shelfScope(widget.kind),
+                        label: shelfLabel(context, widget.kind),
+                      ),
                     )
                   : ListView(
                       padding: const EdgeInsets.only(bottom: 24),

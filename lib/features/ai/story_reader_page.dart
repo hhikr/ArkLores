@@ -20,6 +20,7 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
+import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
 
 /// The story reader's font: LXGW WenKai Screen (bundled, see pubspec).
@@ -361,6 +362,26 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     });
   }
 
+  /// Find in this text; the line picked opens marked, as a cited line.
+  Future<void> _find(AppThemeTokens theme) async {
+    final line = await showStoryFind(
+      context,
+      lines: widget.text,
+      theme: theme,
+      nickname: _nickname,
+    );
+    if (line == null || !mounted) return;
+    await Navigator.of(context).pushReplacement(
+      smoothPageRoute<void>(
+        builder: (_) => StoryReaderPage(
+          storyId: widget.storyId,
+          highlightStart: line,
+          highlightEnd: line,
+        ),
+      ),
+    );
+  }
+
   // ─── Build ─────────────────────────────────────────────────────
 
   @override
@@ -392,6 +413,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           style: theme.titleFont.copyWith(fontSize: 16),
         ),
         actions: [
+          if (widget.text.isNotEmpty)
+            IconButton(
+              key: const ValueKey('story-reader-find'),
+              tooltip: context.t.storyReaderFindHint,
+              onPressed: () => _find(theme),
+              icon: const Icon(Icons.search_rounded),
+            ),
           if (canJump)
             IconButton(
               key: const ValueKey('story-reader-jump'),

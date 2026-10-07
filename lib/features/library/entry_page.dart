@@ -86,6 +86,16 @@ class EntryPage extends ConsumerWidget {
 
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
+      // An entry's search looks in its collection (the whole library for
+      // the codex's free entries).
+      actions: [
+        LibrarySearchButton(
+          scope: e.collectionId == null
+              ? everywhere
+              : listScope(collectionId: e.collectionId),
+          label: e.collectionName,
+        ),
+      ],
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [

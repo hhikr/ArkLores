@@ -324,7 +324,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
           onSend: isSending ? chatNotifier.cancel : _handleAskSend,
           hintText: context.t.aiAskInputPlaceholder,
           maxHeight: constraints.maxHeight,
-          leading: _buildDeepThinkingToggle(theme),
+          leading: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildDeepThinkingToggle(theme),
+              const SizedBox(width: 6),
+              _buildAnswerOptions(theme),
+            ],
+          ),
         ),
       ],
       ),
@@ -365,6 +372,69 @@ class _AiChatPageState extends ConsumerState<AiChatPage>
               color: on ? theme.accentText : theme.textSecondary,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// R18 passes after the draft, both optional: "复核" (a reader's review)
+  /// and "提要" (a digest of a long answer). One small button with a menu, so
+  /// the toolbar stays short; lit while either pass is on.
+  Widget _buildAnswerOptions(AppThemeTokens theme) {
+    final options = ref.watch(answerOptionsProvider);
+    final on = options.review || options.digest;
+    PopupMenuItem<String> item(String value, bool checked, String title,
+            String hint,) =>
+        CheckedPopupMenuItem<String>(
+          key: ValueKey('answer-option-$value'),
+          value: value,
+          checked: checked,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: theme.bodyFont.copyWith(fontSize: 14)),
+              const SizedBox(height: 2),
+              Text(
+                hint,
+                style: theme.bodyFont
+                    .copyWith(fontSize: 11.5, color: theme.textSecondary),
+              ),
+            ],
+          ),
+        );
+    return PopupMenuButton<String>(
+      key: const ValueKey('answer-options'),
+      tooltip: context.t.aiAnswerOptions,
+      color: theme.surfaceElevated,
+      constraints: const BoxConstraints(maxWidth: 300),
+      onSelected: (value) => ref.read(answerOptionsProvider.notifier).set(
+            value == 'review'
+                ? options.copyWith(review: !options.review)
+                : options.copyWith(digest: !options.digest),
+          ),
+      itemBuilder: (context) => [
+        item('review', options.review, context.t.aiAnswerReview,
+            context.t.aiAnswerReviewHint,),
+        item('digest', options.digest, context.t.aiAnswerDigest,
+            context.t.aiAnswerDigestHint,),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: on
+              ? theme.accentPrimary.withValues(alpha: 0.18)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: on ? theme.accentText.withValues(alpha: 0.4) : theme.divider,
+            width: 0.5,
+          ),
+        ),
+        child: Icon(
+          Icons.tune_rounded,
+          size: 18,
+          color: on ? theme.accentText : theme.textSecondary,
         ),
       ),
     );

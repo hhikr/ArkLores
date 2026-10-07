@@ -9,7 +9,10 @@ library;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../gamedata/name_similarity.dart' show homophoneCost, nameDistance;
 import '../gamedata/story_catalog.dart' show escapeLike;
+
+part 'library_search.dart';
 
 /// Shelves are the collection kinds of the entry layer.
 const List<String> shelfKinds = [
@@ -743,41 +746,5 @@ Future<StoryPlace?> storyPlace(DatabaseExecutor db, String storyId) async {
     entry: entry,
     previous: await neighbour(true),
     next: await neighbour(false),
-  );
-}
-
-/// Collections and entries whose name or code contains [query].
-Future<({List<LibraryCollection> collections, List<LibraryEntry> entries})>
-    searchLibrary(
-  DatabaseExecutor db,
-  String query, {
-  int limit = 60,
-}) async {
-  final q = query.trim();
-  if (q.isEmpty) return (collections: const <LibraryCollection>[], entries: const <LibraryEntry>[]);
-  final like = '%${escapeLike(q)}%';
-  final collections = await db.rawQuery(
-    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
-    'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
-    "WHERE c.name LIKE ? ESCAPE '\\' GROUP BY c.id "
-    'ORDER BY c.start_time DESC LIMIT 30',
-    [like],
-  );
-  final entries = await db.rawQuery(
-    'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
-    'e.collection_id, e.entity_id, c.name AS collection_name '
-    'FROM entries e LEFT JOIN collections c ON c.id = e.collection_id '
-    'WHERE $_readable AND NOT $_isAttached '
-    "AND (e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\') "
-    "ORDER BY (e.type = 'story') DESC, length(e.name), e.name LIMIT ?",
-    [like, like, limit],
-  );
-  return (
-    collections: [
-      for (final r in collections) LibraryCollection.fromRow(r),
-    ].where((c) => c.stories + c.others > 0).toList(),
-    entries: [for (final r in entries) LibraryEntry.fromRow(r)],
   );
 }

@@ -10,6 +10,7 @@ import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../llm/usage_meter.dart';
 import 'agent_logger.dart';
+import 'answer_options.dart';
 import 'chat_message.dart';
 import 'chat_notifier_base.dart';
 import 'chat_session_models.dart';
@@ -58,17 +59,22 @@ class AskChatNotifier extends ChatNotifierBase {
     ChatSessionStore sessionStore = const ChatSessionStore(),
     required LLMConfig Function() configReader,
     LLMClient? Function()? clientReader,
+    AnswerOptions Function()? optionsReader,
     UsageMeter? usage,
   })  : _agent = agent,
         _sessionStore = sessionStore,
         _configReader = configReader,
         _clientReader = clientReader,
+        _optionsReader = optionsReader,
         _usage = usage,
         super([]);
 
   /// R16: the client for the next question (the thinking client when
   /// "深度思考" is on); null keeps the agent's own client.
   final LLMClient? Function()? _clientReader;
+
+  /// The answer options for the next question (review, digest).
+  final AnswerOptions Function()? _optionsReader;
 
   /// Adds up the usage of every LLM call of the running question (all
   /// clients report into it); null in tests that do not look at it.
@@ -209,6 +215,7 @@ class AskChatNotifier extends ChatNotifierBase {
       query: query,
       history: history,
       client: client,
+      options: _optionsReader?.call() ?? const AnswerOptions(),
       onRawLlmResponse: onRaw,
       prior: prior,
       onConversation: onConversation,
@@ -461,5 +468,6 @@ final askChatProvider =
     clientReader: () => ref.read(deepThinkingProvider)
         ? ref.read(llmClientProvider(ReasoningLevel.low))
         : null,
+    optionsReader: () => ref.read(answerOptionsProvider),
   );
 });

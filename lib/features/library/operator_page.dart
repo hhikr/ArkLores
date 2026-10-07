@@ -61,6 +61,12 @@ class OperatorPage extends ConsumerWidget {
 
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
+      actions: [
+        LibrarySearchButton(
+          scope: ownerScope(e.id),
+          label: e.name.isEmpty ? e.id : e.name,
+        ),
+      ],
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [

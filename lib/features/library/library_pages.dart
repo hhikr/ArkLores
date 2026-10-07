@@ -79,5 +79,19 @@ void openEntry(BuildContext context, LibraryEntry entry) {
   );
 }
 
-void openSearch(BuildContext context) =>
-    pushLibraryPage(context, (_) => const LibrarySearchPage());
+/// The search, limited to [scope] (named [label]: the page it was opened
+/// from) until the reader widens it.
+void openSearch(
+  BuildContext context, {
+  LibraryScope scope = everywhere,
+  String? label,
+  String query = '',
+}) =>
+    pushLibraryPage(
+      context,
+      (_) => LibrarySearchPage(
+        scope: scope,
+        scopeLabel: label,
+        initialQuery: query,
+      ),
+    );

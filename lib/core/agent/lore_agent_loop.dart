@@ -74,6 +74,7 @@ class LoreAgentLoop {
     this.subtask = false,
     this.subtaskMaxTurns = 20,
     this.review = true,
+    this.digest = true,
     this.stageMinEntries = 5,
     this.streamRetryDelay = const Duration(seconds: 2),
     this.onSpan,
@@ -116,6 +117,9 @@ class LoreAgentLoop {
   /// raises questions the main agent checks in the text (once per
   /// question).
   final bool review;
+
+  /// R18: whether a long answer is reorganised (see [stageMinEntries]).
+  final bool digest;
 
   /// R18: a JSON answer with at least this many text entries is
   /// reorganised into a few paragraphs, the detailed answer kept below.
@@ -540,8 +544,9 @@ class LoreAgentLoop {
 
       // R18: reorganise a long JSON answer into a few paragraphs; the
       // detailed answer stays below the marker.
-      final entries =
-          fromJson == null || subtask || lastTurn ? null : loreAnswerEntries(content);
+      final entries = !digest || fromJson == null || subtask || lastTurn
+          ? null
+          : loreAnswerEntries(content);
       if (entries != null &&
           entries.where((e) => e.isText).length >= stageMinEntries) {
         final checked = [
