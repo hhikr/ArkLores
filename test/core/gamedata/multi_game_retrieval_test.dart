@@ -107,8 +107,11 @@ void main() {
       final counts = await both.storyLineHitCounts(['灯塔']);
       expect(
           counts.keys,
-          containsAll(
-              ['ef/dlg_test_1.txt', 'activities/act1/level_act1_01_beg.txt']));
+          containsAll([
+            'ef/dlg_test_1.txt',
+            'activities/act1/level_act1_01_beg.txt',
+          ]),
+        );
       final grep = GrepTool(both, SeenLines());
       final all = await grep.execute({'pattern': '灯塔'});
       expect(all, contains('ef/dlg_test_1.txt'));
