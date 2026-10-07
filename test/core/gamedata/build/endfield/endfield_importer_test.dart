@@ -361,6 +361,12 @@ void main() {
     );
   });
 
+  test('missions order by the numbers of their ids', () {
+    final ids = ['e10m1', 'e1m2', 'e1m10', 'e1m2d5', 'e0m0']
+      ..sort((a, b) => missionOrder(a)!.compareTo(missionOrder(b)!));
+    expect(ids, ['e0m0', 'e1m2', 'e1m2d5', 'e1m10', 'e10m1']);
+  });
+
   test("the build's shelf list is the library's", () {
     expect(endfieldShelfKinds, endfieldShelfOrder);
   });

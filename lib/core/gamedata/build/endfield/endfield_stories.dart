@@ -54,6 +54,21 @@ int? conversationOrder(String id) {
   return (whole * 100 + part) * 10 + kind;
 }
 
+/// A mission's place on its shelf: the numbers of its id in order, each
+/// given three digits (`e1m2d5` → 001 002 005), so `e1m2` comes before
+/// `e10m1`. Null when the id has no number.
+int? missionOrder(String id) {
+  final numbers = [
+    for (final m in RegExp(r'\d+').allMatches(id)) int.parse(m.group(0)!).clamp(0, 999),
+  ];
+  if (numbers.isEmpty) return null;
+  var key = 0;
+  for (var i = 0; i < 3; i++) {
+    key = key * 1000 + (i < numbers.length ? numbers[i] : 0);
+  }
+  return key;
+}
+
 /// The operator entry a character mission belongs to: `c<n>m…` is the
 /// story of the operator numbered `n` (`chr_00<n>_…`), when there is one.
 String? operatorOfMission(String mission, Map<String, String> operators) {
@@ -222,7 +237,8 @@ class EndfieldStoryImporter {
       // A character mission hangs below its operator (the operator page
       // lists it, like an Arknights record set).
       parentId: owner,
-      sortKey: defined?.sortId ?? entry.sort,
+      // Missions read in the order of their ids' numbers (e1m2 before e10m1).
+      sortKey: missionOrder(id) ?? entry.sort,
       sourcePath: 'mission:$id',
     );
     final description = defined?.description;
