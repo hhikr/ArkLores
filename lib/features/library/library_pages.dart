@@ -34,6 +34,8 @@ String shelfLabel(BuildContext context, String kind) => switch (kind) {
       'memory' => context.t.shelfMemory,
       'roguelike' => context.t.shelfRoguelike,
       'sandbox' => context.t.shelfSandbox,
+      // A kind of a later build the interface has no name for.
+      final other when other != codexShelf => context.t.shelfOther,
       _ => context.t.shelfCodex,
     };
 

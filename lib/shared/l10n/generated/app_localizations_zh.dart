@@ -589,6 +589,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shelfCodex => '图鉴';
 
   @override
+  String get shelfOther => '其他';
+
+  @override
   String get libraryOperatorRecords => '干员密录';
 
   @override

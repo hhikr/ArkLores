@@ -51,8 +51,24 @@ String entryTypeName(String type) => switch (type) {
       'archive_file' => '档案文件',
       'archive_news' => '新闻',
       'archive_avg' => '档案剧情',
-      _ => type,
+      _ => _familyName(type),
     };
+
+/// What a type nobody has named yet is called: the family its id says
+/// (`roguelike_…`, `sandbox_…`, `archive_…`), else the id itself, so a table
+/// a later build adds is shown and never breaks a page. The order of names:
+/// the name the game or the wiki gives (the switch above), the family, the id.
+String _familyName(String type) {
+  for (final (prefix, name) in const [
+    ('roguelike_', '集成战略资料'),
+    ('sandbox_', '生息演算资料'),
+    ('archive_', '档案资料'),
+    ('activity_', '活动资料'),
+  ]) {
+    if (type.startsWith(prefix)) return name;
+  }
+  return type;
+}
 
 /// Types whose `code` is the game's own serial number of the character
 /// (`RCX7`), not a stage code: it is said as "编号", after the name.
@@ -179,7 +195,8 @@ String? groupLabel(String type, String? raw) {
       // Named by the table when built (its item types); the codes are not.
       return null;
     default:
-      // Brands, authors, dates: names the tables give.
+      // Brands, authors, dates: names the tables give (a brand can be written
+      // in Latin letters).
       return g;
   }
 }
@@ -210,6 +227,6 @@ String bindingName(
       ('summoned_by', false) => '召唤物',
       ('reads_story', true) => '阅读剧情',
       ('reads_story', false) => '收录于',
-      (_, true) => relation,
-      (_, false) => relation,
+      // A relation of a later build: said plainly, not as its id.
+      (_, _) => '相关',
     };

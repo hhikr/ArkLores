@@ -23,6 +23,17 @@ All notable changes to ArkLores will be documented in this file.
   operator; skins and the skin series that released them point at each other; items listed several times (the same coin
   once per banner) are one entry. Names in angle brackets in stage descriptions and scripts are no longer dropped, and
   a few names the app had made up were replaced by the wiki's (标志物, 表情套组, 奖章, 首页场景).
+- **Updates and complete builds in the app give the same result as the desktop build.** Checked by building a knowledge
+  base from an upstream commit eleven weeks old, updating it to the latest one and comparing it entry by entry with a
+  complete build of the latest. Fixed along the way: an update that missed every table and story file when one upstream
+  commit touched hundreds of unrelated files (the changed files are now read from the two commits' file trees),
+  a download of files under `[uc]info` that failed with HTTP 404, owners of items, medals and stages that stayed as they
+  were when only an activity or zone table changed, and a complete in-app build that left out the level files (so no
+  enemy, trap or summon bindings). Changed files are downloaded six at a time.
+- **Names the app does not know yet.** A new shelf kind shows as "其他", a new entry type by the family it belongs to
+  (集成战略资料, 生息演算资料, 档案资料), a new relation as "相关"; nothing is dropped or shown as a raw id where a name exists.
+- **The question-answering agent reads a description of the library pages** (shelves, entry types, what each is for)
+  before it queries (`docs/LIBRARY_AGENT_GUIDE.md`).
 
 ### Incremental updates (in development for 0.11)
 

@@ -273,7 +273,11 @@ void main() {
       },
     );
     expect(bindingName('appears_in', outgoing: false), '出场');
-    expect(bindingName('unknown', outgoing: true), 'unknown');
+    // A relation of a later build is said plainly, not as its id; a type
+    // nobody named reads by its family, else by its id.
+    expect(bindingName('unknown', outgoing: true), '相关');
+    expect(entryTypeName('roguelike_future'), '集成战略资料');
+    expect(entryTypeName('future_kind'), 'future_kind');
   });
 
   test('a story knows the chapter before and after it', () async {

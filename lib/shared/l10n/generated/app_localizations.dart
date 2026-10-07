@@ -1160,6 +1160,12 @@ abstract class AppLocalizations {
   /// **'Codex'**
   String get shelfCodex;
 
+  /// No description provided for @shelfOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get shelfOther;
+
   /// No description provided for @libraryOperatorRecords.
   ///
   /// In en, this message translates to:

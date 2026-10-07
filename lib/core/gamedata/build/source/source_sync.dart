@@ -109,25 +109,33 @@ class SourceSync {
           onProgress?.call(SourceSyncStage.contextTables, done, total),
     );
 
-    for (var i = 0; i < changes.length; i++) {
-      final change = changes[i];
-      final target = File(p.join(sourceDir.path, change.path));
-      final previous = change.previousPath;
-      if (change.status == 'renamed' && previous != null) {
-        final old = File(p.join(sourceDir.path, previous));
-        if (await old.exists()) await old.delete();
+    // A few files at a time: an update after weeks of upstream changes is
+    // thousands of small files, and one request after another is slow.
+    var done = 0;
+    var next = 0;
+    Future<void> worker() async {
+      while (next < changes.length) {
+        final change = changes[next++];
+        final target = File(p.join(sourceDir.path, change.path));
+        final previous = change.previousPath;
+        if (change.status == 'renamed' && previous != null) {
+          final old = File(p.join(sourceDir.path, previous));
+          if (await old.exists()) await old.delete();
+        }
+        if (change.isRemoval) {
+          if (await target.exists()) await target.delete();
+        } else {
+          await client.downloadFile(
+            sha: latestSha,
+            path: change.path,
+            outputPath: target.path,
+          );
+        }
+        onProgress?.call(SourceSyncStage.changedFiles, ++done, changes.length);
       }
-      if (change.isRemoval) {
-        if (await target.exists()) await target.delete();
-      } else {
-        await client.downloadFile(
-          sha: latestSha,
-          path: change.path,
-          outputPath: target.path,
-        );
-      }
-      onProgress?.call(SourceSyncStage.changedFiles, i + 1, changes.length);
     }
+
+    await Future.wait([for (var i = 0; i < 6; i++) worker()]);
     return SourceSyncResult(
       changes: changes,
       latestSha: latestSha,

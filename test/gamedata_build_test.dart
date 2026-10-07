@@ -16,6 +16,7 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/git_tree_mock.dart';
 import 'support/temp_dir.dart';
 
 void main() {
@@ -124,61 +125,70 @@ void main() {
       );
     });
 
-    test('compareCommits filters to the importer whitelist and paginates',
+    test('compareCommits diffs the trees and keeps what the importer reads',
         () async {
-      var calls = 0;
+      const base = 'zh_CN/gamedata';
+      final old = {
+        '$base/story/main/removed_1.txt': 'r1',
+        '$base/story/main/same.txt': 's1',
+        '$base/excel/activity_table.json': 'a1',
+        // Hundreds of unrelated files, the way a model-data commit looks.
+        for (var i = 0; i < 300; i++) '$base/bakemuzzledata/m$i.json': 'x',
+      };
+      final latest = {
+        '$base/story/activities/act_x/level_1.txt': 'n1',
+        '$base/story/main/same.txt': 's1',
+        '$base/excel/activity_table.json': 'a2',
+        '$base/levels/obt/x/level_a.json': 'l1',
+        '$base/levels/enemydata/enemy_database.json': 'e1',
+        for (var i = 0; i < 300; i++) '$base/bakemuzzledata/m$i.json': 'y',
+      };
       final client = ArknightsSourceClient(
-        client: MockClient((request) async {
-          calls++;
-          final page = request.url.queryParameters['page'];
-          if (page == '1') {
-            final files = [
-              {
-                'filename':
-                    'zh_CN/gamedata/story/activities/act_x/level_1.txt',
-                'status': 'added',
-              },
-              for (var i = 0; i < 99; i++)
-                {
-                  'filename': 'zh_CN/gamedata/bakemuzzledata/model_$i.json',
-                  'status': 'added',
-                },
-            ];
-            return http.Response(jsonEncode({'files': files}), 200);
-          }
-          return http.Response(
-            jsonEncode({
-              'files': [
-                {
-                  'filename': 'zh_CN/gamedata/excel/activity_table.json',
-                  'status': 'modified',
-                },
-                {
-                  'filename':
-                      'zh_CN/gamedata/story/main/removed_1.txt',
-                  'status': 'removed',
-                },
-              ],
-            }),
-            200,
-          );
-        }),
+        client: MockClient(
+          gitTreeHandler({'old': old, 'new': latest}),
+        ),
       );
       final changes = await client.compareCommits(
         baseSha: 'old',
         headSha: 'new',
       );
       expect(
-        changes.map((c) => c.path).toList(),
-        [
-          'zh_CN/gamedata/story/activities/act_x/level_1.txt',
-          'zh_CN/gamedata/excel/activity_table.json',
-          'zh_CN/gamedata/story/main/removed_1.txt',
-        ],
+        {for (final c in changes) c.path: c.status},
+        {
+          '$base/story/activities/act_x/level_1.txt': 'added',
+          '$base/excel/activity_table.json': 'modified',
+          '$base/levels/obt/x/level_a.json': 'added',
+          '$base/story/main/removed_1.txt': 'removed',
+        },
       );
-      expect(changes.first.isRemoval, isFalse);
-      expect(changes.last.isRemoval, isTrue);
-      expect(calls, 2);
+    });
+
+    test('a commit that is gone upstream asks for a complete rebuild', () {
+      final client = ArknightsSourceClient(
+        client: MockClient(gitTreeHandler({'new': const {}})),
+      );
+      expect(
+        client.compareCommits(baseSha: 'old', headSha: 'new'),
+        throwsA(isA<GameDataSourceTooManyChangesException>()),
+      );
+    });
+
+    test('a file under [uc]info is requested with single percent-encoding',
+        () async {
+      late Uri seen;
+      final client = ArknightsSourceClient(
+        client: MockClient((request) async {
+          seen = request.url;
+          return http.Response('x', 200);
+        }),
+      );
+      await client.downloadFile(
+        sha: 'abc',
+        path: 'zh_CN/gamedata/story/[uc]info/activities/a/b.txt',
+        outputPath: p.join(tempDir.path, 'b.txt'),
+      );
+      expect(seen.toString(), contains('/story/%5Buc%5Dinfo/activities/a/b.txt'));
+      expect(seen.toString(), isNot(contains('%25')));
     });
 
     test('whitelist predicates', () {
@@ -192,12 +202,12 @@ void main() {
         ArknightsSourcePaths.isStoryFile('zh_CN/gamedata/levels/x.json'),
         isFalse,
       );
-      // Changed level files are followed by an update, but the repository
-      // zip of a first pull never extracts `levels/`.
+      // Level files are followed by an update, and the repository zip of a
+      // first pull extracts them too (a complete build binds enemies).
       const level = 'zh_CN/gamedata/levels/obt/main/level_main_01-01.json';
       expect(ArknightsSourcePaths.isLevelFile(level), isTrue);
       expect(ArknightsSourcePaths.isImporterRelevant(level), isTrue);
-      expect(ArknightsSourcePaths.isZipRelevant(level), isFalse);
+      expect(ArknightsSourcePaths.isZipRelevant(level), isTrue);
       expect(
         ArknightsSourcePaths.isLevelFile(
           'zh_CN/gamedata/levels/enemydata/enemy_database.json',

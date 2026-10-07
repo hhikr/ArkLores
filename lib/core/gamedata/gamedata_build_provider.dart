@@ -290,6 +290,20 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
                 await _swapInBuiltDatabase(event, dirs.installPath);
                 // The source directory now matches the installed database.
                 await sync.markSynced(latest);
+                if (!incrementalOk) {
+                  // A complete build read the level files (500 MB); keep
+                  // the disk free, an update fetches the ones that change.
+                  final levels = Directory(
+                    p.join(dirs.sourceDir.path, 'zh_CN', 'gamedata', 'levels'),
+                  );
+                  try {
+                    if (await levels.exists()) {
+                      await levels.delete(recursive: true);
+                    }
+                  } on FileSystemException {
+                    // Best effort; the next build clears the folder anyway.
+                  }
+                }
                 if (!completer.isCompleted) completer.complete();
               case GameDataBuildEventType.error:
                 state = state.copyWith(

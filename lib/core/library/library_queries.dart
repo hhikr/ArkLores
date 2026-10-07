@@ -264,6 +264,10 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
   return [
     for (final kind in shelfKinds)
       if (byKind[kind] != null) byKind[kind]!,
+    // A kind a later build introduces still gets a shelf, after the known
+    // ones (it reads as "其他" until the interface names it).
+    for (final kind in byKind.keys.toList()..sort())
+      if (!shelfKinds.contains(kind)) byKind[kind]!,
   ];
 }
 

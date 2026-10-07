@@ -22,23 +22,46 @@ const String loreDatabaseGuide = '''
 - entity_story_mentions(entity_id, story_id, line_start, line_end, mention_count, matched_alias)：实体在各故事中出现的行段。
 - normalized_records(id, category, subtype, content_type, title, entity_name, content, entry_id, collection_id, ...)：剧情以外的资料
   （干员档案、语音、敌人介绍、道具/勋章/皮肤描述、肉鸽藏品与事件、活动档案/新闻/来信等）的原文；每条属于一个条目（entry_id）。
-- collections(id, kind, name, parent_id, sort_key, start_time)：故事集的“归属单位”：kind 为 main 主线章节、activity 活动、memory 干员密录、
-  roguelike 肉鸽主题、sandbox 沙盘、system 教程/指引（复刻并入原活动）；parent_id 指向所属干员条目（密录）。
+- collections(id, kind, name, parent_id, sort_key, start_time)：故事集的“归属单位”，kind 见下面的“资料页结构”；parent_id 指向所属干员条目（密录）。
 - entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, record_id)：每个官方条目一行，id 形如 <type>:<原始id>。
   type 有 story、operator、enemy、stage、zone、item、skin、medal、module、power、worldview、mail、activity_text、archive_*、
   roguelike_item / roguelike_scene / roguelike_choice / roguelike_ending / roguelike_stage 等；code 是关卡号/敌人编号；
   collection_id 是所属的故事集/活动/主题；record_id 指向 normalized_records 里这个条目的文字。
 - entry_links(src, relation, dst)：条目之间的绑定。appears_in：敌人出现在哪些关卡；belongs_to：关卡属于地区、皮肤/模组/干员关卡属于干员；
-  belongs_to_stage：剧情文件对应的关卡；leads_to：肉鸽选项通向的场景；features：肉鸽分队的干员；reads_story：档案条目对应的剧情文件；plays_in：战斗中会播放的剧情文件（教程、训练、战斗内对话）所在的关卡；
-  attached_to：这类关卡内对话归属的剧情（它读在那篇剧情的末尾）或关卡。
+  belongs_to_stage：剧情文件对应的关卡；leads_to：肉鸽选项通向的场景；features：肉鸽分队/奖章/皮肤相关的干员；reads_story：档案条目对应的剧情文件；plays_in：战斗中会播放的剧情文件（教程、训练、战斗内对话）所在的关卡；
+  attached_to：这类关卡内对话归属的剧情（它读在那篇剧情的末尾）或关卡；part_of：故事属于结局/小队/篇章；summoned_by：召唤物属于哪位干员。
   视图 collection_enemies(collection_id, enemy_id) 列出某个故事集/活动/主题里出现过的敌人。
 梗概、章节简介、实体表、条目与绑定只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
+
+/// How the library pages (the player's reading view) are arranged and what
+/// each part is for. The knowledge base is the same structure: read it before
+/// querying to know where a thing lives. Nothing here names a character, a
+/// chapter or an activity; the kinds are named as prts.wiki names them.
+const String loreLibraryGuide = '''
+资料页结构（玩家在 App 里看到的资料页，与库里的 collections / entries / entry_links 一一对应；查库前先按它判断要找的东西在哪一类）：
+书架（collections.kind），每个书架下是一个个集合，集合里是它的剧情和资料：
+- main 主线：每一章一个集合（id 形如 main_<章>）。章内是各关卡的行动前/行动后剧情；关卡、敌人、物品、奖章也挂在章下。主线讲整部作品的主干事件。
+- sidestory SideStory：篇幅大、有完整剧情的支线活动，每个活动一个集合。ministory 故事集：篇幅较短的活动短篇。branchline 插曲：与主线联系紧密的支线，常补充主线事件的背景或后续。
+  activity 其他活动：签到、玩法类活动，剧情很少，但活动文本、物品、奖章的描述可能有设定。复刻不单独成集合，并入原活动（同名同内容的只留原活动）。
+- memory 干员：这个书架列的是干员。干员页汇集该干员的档案（设定资料，随信赖解锁，是人物设定的第一手文字）、
+  干员密录（该干员个人经历的剧情，集合的 parent_id 指向干员）、悖论模拟（该干员的战斗回忆关卡，带关卡剧情）、模组（模组的故事文字）、皮肤、干员信物、召唤物与装置。
+- roguelike 集成战略：每个主题一个集合。结局（结局书的页面与同名故事，part_of 结局）、月度小队（起始干员和一句话简介，features 指向主角）、区域与关卡、收藏品（设定文字）、
+  事件（场景与选项，选项通向下一个场景）、注释（名词词条）、开局剧情。主题的叙事主要在结局故事和开局剧情里；收藏品、事件、注释提供氛围与设定，不是主线叙述。
+- sandbox 生息演算：篇章（幕与支线的名字和概述，part_of 它）、事件、关卡、物品、简介；剧情在篇章下的故事里。
+- 图鉴（不挂在任何集合下，或跨集合）：敌人、物品（材料、活动道具、货币、表情套组）、奖章、标志物、邮件、世界观、势力、人物、皮肤系列等。奖章和活动道具同时挂在所属的活动/章节下（belongs_to），也在图鉴里列出。
+各类条目对剧情的作用：
+- 剧情（story）是证据的主体：行动前/后、幕间、结局、密录。关卡内对话（教程、训练、战斗中的对话）读在它所属剧情的末尾（attached_to）。
+- 档案、世界观、势力、人物是设定；敌人、物品、奖章、皮肤、模组、标志物、收藏品的描述是背景文字，常交代来历、用途、与某事件的关系；邮件、活动新闻、来信是活动期间的旁证。它们是 normalized_records 里的原文，可以作出处；与剧情台词冲突时以剧情为准，并说明两者的出处。
+- 绑定帮助找关系：奖章/物品 belongs_to 活动或干员；召唤物 summoned_by 干员；皮肤 belongs_to 皮肤系列和干员；装置、召唤物、敌人 appears_in 关卡；剧情 belongs_to_stage 关卡。要找某个活动里相关的物品、奖章、敌人，就按 collection_id 或绑定反查。
+使用顺序：先用 collections / entries 判断问题落在哪个集合（或哪位干员），再读该集合的剧情；设定类问题先找对应条目的原文。库里出现你不认识的 kind、type 或 group_name 时不要猜它的含义，读它的原文再判断。''';
 
 /// How the agent works and cites.
 const String loreAgentRules = '''
 你熟悉《明日方舟》的剧情，负责为玩家讲清剧情。查资料时用工具读本地知识库的原文，答案只依据读到的原文；写答案时面对的是玩家，不是数据库。
 
 $loreDatabaseGuide
+
+$loreLibraryGuide
 
 工作方式：
 - 先看全局再读原文：问题涉及某个人物/事件时，先用 grep（不给范围）或 sql 统计它在哪些故事里出现、出现多少，再按时间顺序挑出相关章节，用 read_story 整章阅读，必要时在章内 grep。问题限定在某个故事集时也先看全库分布：其他故事里对同一人物/事件的叙述可能印证或修正这个故事集里的内容。

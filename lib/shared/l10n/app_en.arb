@@ -197,6 +197,7 @@
   "shelfSandbox": "Sandbox",
   "shelfRetro": "Re-runs",
   "shelfCodex": "Codex",
+  "shelfOther": "Other",
   "libraryOperatorRecords": "Operator records",
   "libraryOperatorProfile": "Operator file",
   "libraryAllEntries": "All",

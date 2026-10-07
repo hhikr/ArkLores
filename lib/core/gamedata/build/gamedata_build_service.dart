@@ -213,6 +213,18 @@ class GameDataBuildService {
         onProgress?.call('incremental', i + 1, changes.length);
         await _applyChange(db, importer, changes[i]);
       }
+      // A changed owner table (activities, zones, stages …) moves the owners
+      // of the tables that read it, changed or not.
+      final applied = {
+        for (final c in changes)
+          if (!c.isRemoval) c.path,
+      };
+      if (applied.any(EntryTables.contextTables.contains)) {
+        for (final path in EntryTables.ownerDependents) {
+          if (applied.contains(path)) continue;
+          await importer.entryImporter.importTable(path);
+        }
+      }
       await StoryCoverageBuilder(
         db: db,
         stats: stats,

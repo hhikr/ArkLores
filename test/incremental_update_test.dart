@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
@@ -13,6 +12,7 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'support/git_tree_mock.dart';
 import 'support/temp_dir.dart';
 
 /// The incremental update channel: what an update downloads, the vectors it
@@ -30,14 +30,32 @@ void main() {
 
     ArknightsSourceClient clientWith(List<Map<String, String>> changes) {
       downloads = [];
+      // The two commits as trees: what a change adds or removes is there on
+      // one side only, a modified file has another hash.
+      final oldTree = <String, String>{};
+      final newTree = <String, String>{};
+      for (final c in changes) {
+        final path = c['filename']!;
+        switch (c['status']) {
+          case 'added':
+            newTree[path] = 'h1';
+          case 'removed':
+            oldTree[path] = 'h1';
+          default:
+            oldTree[path] = 'h1';
+            newTree[path] = 'h2';
+        }
+      }
+      final trees = gitTreeHandler({
+        'old': oldTree,
+        'new': newTree,
+        'installed': oldTree,
+        'latest': newTree,
+      });
       return ArknightsSourceClient(
         client: MockClient((request) async {
           if (request.url.host == 'api.github.com') {
-            final page = int.parse(request.url.queryParameters['page']!);
-            return http.Response(
-              jsonEncode({'files': page == 1 ? changes : <Object?>[]}),
-              200,
-            );
+            return trees(request);
           }
           // raw.githubusercontent.com/<repo>/<sha>/<path>
           final path = request.url.path.split('/').skip(4).join('/');
@@ -70,12 +88,12 @@ void main() {
       );
       final result = await sync.sync(installedSha: 'old', latestSha: 'new');
 
-      expect(result.changes.map((c) => c.path), [
+      expect(result.changes.map((c) => c.path), unorderedEquals([
         '$base/story/a/new.txt',
         '$base/story/old.txt',
         '$base/excel/item_table.json',
         '$base/levels/obt/x/level_a.json',
-      ]);
+      ],),);
       final summary = result.summary;
       expect((summary.storyAdded, summary.storyRemoved), (1, 1));
       expect(summary.tables, ['item_table.json']);
@@ -128,17 +146,15 @@ void main() {
       expect(downloads, isEmpty);
     });
 
-    test('more changes than the compare API lists is reported', () async {
+    test('a folder too large for one tree response is reported', () async {
       final client = ArknightsSourceClient(
         client: MockClient(
-          (request) async => http.Response(
-            jsonEncode({
-              'files': [
-                for (var i = 0; i < 100; i++)
-                  {'filename': '$base/story/s_$i.txt', 'status': 'added'},
-              ],
-            }),
-            200,
+          gitTreeHandler(
+            {
+              'a': {'$base/story/s.txt': 'h'},
+              'b': {'$base/story/s.txt': 'h'},
+            },
+            truncated: {'b|zh_CN~gamedata~story'},
           ),
         ),
       );

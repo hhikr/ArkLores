@@ -86,6 +86,22 @@ class EntryTables {
     arkOdc,
   ];
 
+  /// Tables the owner of an entry is read from (which activity, chapter or
+  /// zone a stage, item or medal belongs to). When one of them changes, the
+  /// tables in [ownerDependents] are read again even if they did not change,
+  /// or an update would leave their owners as they were.
+  static const Set<String> contextTables = {
+    storyReview,
+    activity,
+    retro,
+    stage,
+    zone,
+    sandbox,
+  };
+
+  /// Entry tables whose owners come from [contextTables].
+  static const List<String> ownerDependents = [zone, stage, item, medal, charm];
+
   /// Whether [path] is a level file (`levels/**.json`): the source of the
   /// enemy ↔ stage bindings.
   static bool isLevelFile(String path) =>
@@ -2638,10 +2654,10 @@ class EntryImporter {
               ? 'SELECT s.story_id, s.source_path, c.collection_id, c.story_code, '
                   'c.story_name, c.avg_tag, c.story_sort '
                   'FROM story_scopes s LEFT JOIN story_catalog c '
-                  'ON c.story_id = s.story_id'
+                  'ON c.story_id = s.story_id ORDER BY s.story_id'
               : 'SELECT story_id, source_path, NULL AS collection_id, '
                   'NULL AS story_code, NULL AS story_name, NULL AS avg_tag, '
-                  'NULL AS story_sort FROM story_scopes',
+                  'NULL AS story_sort FROM story_scopes ORDER BY story_id',
         ))
           if (!titleOnly.contains('${r['story_id']}')) r,
       ];

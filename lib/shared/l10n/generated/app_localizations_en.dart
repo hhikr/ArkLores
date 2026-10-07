@@ -601,6 +601,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shelfCodex => 'Codex';
 
   @override
+  String get shelfOther => 'Other';
+
+  @override
   String get libraryOperatorRecords => 'Operator records';
 
   @override

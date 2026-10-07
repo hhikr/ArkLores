@@ -16,6 +16,18 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 ## 当前进度（每轮结束时更新）
 
+- **0.11 新建库/更新库一致性、名字兜底、资料页结构说明（2026-10-07，未发布）**：① 一致性实验（`build/consist/`，不用向量）：从上游较早提交
+  `fa63359`（2026-06-26）建“早库”，用 App 同一套增量代码（`tools/update_gamedata.dart`）更新到 `a550f5e`，与 `a550f5e` 的新建库逐项对比：
+  条目、故事行、记录、绑定（除依赖关卡文件的 `appears_in`/`plays_in`/`attached_to`，因为早库没读关卡文件）完全一致；`system` 集合的排序号以前取决于行的
+  物理顺序，现在按 story_id 排序（`rebuildDerived`）。实验抓到并修了四个更新通道的真问题：GitHub compare 接口一次最多给 300 个文件，一个提交里有几百个
+  `bakemuzzledata` 文件就把所有表、剧情文件挤掉（App 会说“没有相关变化”）→ `compareCommits` 改为读两个提交的文件树（excel/story/levels 三个文件夹按 blob
+  哈希比，约十个请求，与提交大小无关；旧提交已不在上游或文件夹过大 → 完整重建）；`[uc]info` 目录下的文件下载被二次编码成 404；活动表/关卡表/分区表变了而物品表、
+  奖章表没变时，它们的归属不重算（`EntryTables.contextTables`/`ownerDependents`，增量构建里重读）；App 完整重建的 zip 提取不含 `levels/`，建出的库没有敌人/装置/召唤物
+  绑定（现在提取，建完删除该目录）。变化文件改为 6 个并发下载。知识库页的“构建”就是同一条路径（没有装、版本旧、上游变化太多时自动完整重建），没有过时的重复入口。
+  ② 名字兜底（`library_labels.dart`、`shelfSummaries`）：表或 prts 的名字 → 家族默认名（`roguelike_`/`sandbox_`/`archive_`/`activity_`）→ 类型 id；未知书架
+  排在已知书架之后显示“其他”，未知绑定关系显示“相关”，没有名字的分组不显示标题。③ 问答提示词新增 `loreLibraryGuide`（`lore_agent_prompts.dart`，主/子 agent 都读到）：
+  资料页书架、条目类型、绑定与对剧情的作用，来源依据见 `docs/LIBRARY_AGENT_GUIDE.md`；不含具体人物/章节/活动名。
+
 - **0.11 图鉴小条目的关联（2026-10-07，未发布，需重算知识库）**：规则都在建库代码里（全量/增量/`rederive_gamedata.dart` 同一套），不改库本身。
   ① 奖章归属（`_medalOwner`）：`medal_activity_<活动>_n`（活动 id 可缺 `act`）→ 活动；否则看通关条件里点名的东西（集合 id、关卡 id → 它的区域 → 集合、区域 id）；
   记录奖章的条件 `[干员, story_<干员>_set_n]` 就是密录集合 id；条件里的 `char_…` → `features` 链接到干员，`char_…@…#n` → 皮肤。②物品归属：id 前缀、`main16_…`→`main_16`、
@@ -232,6 +244,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 
 - `docs/CLOUD_DEV.md`：云端会话的环境、每次开始要跑的脚本、能做/不能做的事、发版。
 - `docs/AI_ARCHITECTURE.md`：Agent 与检索架构（当前状态 + 演进简史）——改 agent/检索层前先读。
+- `docs/LIBRARY_AGENT_GUIDE.md`：资料页结构说明（问答 Agent 查库前参考；正文在 `loreLibraryGuide`）。
 - `docs/R17_TOOL_AGENT.md`：剧情问答 Agent 的结构、工具、子 agent、出处核对与验收数据。
 - `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：已知限制与根因。
 - `docs/RETRIEVAL_QA.md`：验收清单（离线 + 真机同链路）。
