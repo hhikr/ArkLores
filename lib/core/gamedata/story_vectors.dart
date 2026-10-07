@@ -18,6 +18,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:sqflite_common/sqlite_api.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show sqfliteFfiInit;
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 const int chunkWindow = 12;
 const int chunkStride = 8;
@@ -195,11 +197,50 @@ class StoryVectorIndex {
     final model = manifest[manifestEmbeddingModel];
     final dims = int.tryParse(manifest[manifestEmbeddingDims] ?? '');
     if (model == null || dims == null || dims <= 0) return null;
+    return _fromRows(model, dims, await db.rawQuery(_rowsSql));
+  }
 
-    final rows = await db.rawQuery(
+  /// [load] from the DB file at [path] through its own read-only FFI
+  /// connection, for a background isolate: the app's sqflite connection
+  /// would bring the ~28 MB of vectors over the platform channel and decode
+  /// them on the UI isolate in one piece, which freezes the interface.
+  /// The result moves to the calling isolate without a copy
+  /// (`Isolate.run`).
+  static StoryVectorIndex? loadFile(String path) {
+    sqfliteFfiInit(); // the bundled SQLite on desktop; a no-op elsewhere
+    final db = sqlite.sqlite3.open(path, mode: sqlite.OpenMode.readOnly);
+    try {
+      if (db.select(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        [storyChunkVectorsTable],
+      ).isEmpty) {
+        return null;
+      }
+      final manifest = {
+        for (final row in db.select(
+          'SELECT key, value FROM gamedata_manifest WHERE key IN (?, ?, ?)',
+          [manifestEmbeddingModel, manifestEmbeddingDims, manifestEmbeddingChunking],
+        ))
+          '${row['key']}': '${row['value']}',
+      };
+      final model = manifest[manifestEmbeddingModel];
+      final dims = int.tryParse(manifest[manifestEmbeddingDims] ?? '');
+      if (model == null || dims == null || dims <= 0) return null;
+      return _fromRows(model, dims, db.select(_rowsSql));
+    } finally {
+      db.dispose();
+    }
+  }
+
+  static const String _rowsSql =
       'SELECT story_id, scope_id, line_start, line_end, scale, vec '
-      'FROM $storyChunkVectorsTable ORDER BY chunk_id',
-    );
+      'FROM $storyChunkVectorsTable ORDER BY chunk_id';
+
+  static StoryVectorIndex _fromRows(
+    String model,
+    int dims,
+    List<Map<String, Object?>> rows,
+  ) {
     final n = rows.length;
     final storyIds = List<String>.filled(n, '');
     final scopeIds = List<String?>.filled(n, null);

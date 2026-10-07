@@ -23,72 +23,44 @@ void main() async {
 
   final settingsService = SettingsService();
 
-  // Load onboarding status
-  bool onboardingDone = false;
-  try {
-    onboardingDone = await settingsService.isOnboardingDone();
-  } catch (e) {
-    debugPrint('[Startup] Error reading onboarding status: $e');
-  }
+  /// One saved setting, or [fallback] when it cannot be read.
+  Future<T> load<T>(String what, Future<T> Function() read, T fallback) =>
+      read().catchError((Object e) {
+        debugPrint('[Startup] Error loading $what: $e');
+        return fallback;
+      });
 
-  // Load API config
-  LLMConfig apiConfig = const LLMConfig();
-  try {
-    apiConfig = await settingsService.loadApiConfig();
-  } catch (e) {
-    debugPrint('[Startup] Error loading API config: $e');
-  }
-
-  var embeddingConfig = defaultEmbeddingConfig;
-  try {
-    embeddingConfig = await settingsService.loadEmbeddingConfig();
-  } catch (e) {
-    debugPrint('[Startup] Error loading embedding config: $e');
-  }
-
-  var mainTabIndex = 0;
-  try {
-    mainTabIndex = await settingsService.loadMainTabIndex();
-  } catch (e) {
-    debugPrint('[Startup] Error loading main tab index: $e');
-  }
-
-  var appTheme = AppTheme.ark;
-  try {
-    appTheme = await settingsService.loadTheme();
-  } catch (e) {
-    debugPrint('[Startup] Error loading theme: $e');
-  }
-
-  var appLocale = SupportedLocale.zh;
-  try {
-    appLocale = await settingsService.loadLocale();
-  } catch (e) {
-    debugPrint('[Startup] Error loading locale: $e');
-  }
-
-  try {
-    await AppIconService.setIcon(await settingsService.loadAppLauncherIcon());
-  } catch (e) {
-    debugPrint('[Startup] Error applying launcher icon: $e');
-  }
-
+  // The reads go to secure storage (a platform call each), so they run
+  // together instead of one after another before the first frame.
+  final (
+    onboardingDone,
+    apiConfig,
+    embeddingConfig,
+    mainTabIndex,
+    appTheme,
+    appLocale,
+    sessionLogsEnabled,
+    nickname,
+    _,
+  ) = await (
+    load('onboarding status', settingsService.isOnboardingDone, false),
+    load('API config', settingsService.loadApiConfig, const LLMConfig()),
+    load('embedding config', settingsService.loadEmbeddingConfig,
+        defaultEmbeddingConfig,),
+    load('main tab index', settingsService.loadMainTabIndex, 0),
+    load('theme', settingsService.loadTheme, AppTheme.ark),
+    load('locale', settingsService.loadLocale, SupportedLocale.zh),
+    load('session log toggle', settingsService.loadSessionLogsEnabled, false),
+    load('nickname', settingsService.loadNickname, ''),
+    load(
+      'launcher icon',
+      () async =>
+          AppIconService.setIcon(await settingsService.loadAppLauncherIcon()),
+      null,
+    ),
+  ).wait;
   // Apply the user's per-session AI log toggle before any agent runs.
-  var sessionLogsEnabled = false;
-  try {
-    sessionLogsEnabled = await settingsService.loadSessionLogsEnabled();
-    AgentLogger.setEnabled(sessionLogsEnabled);
-  } catch (e) {
-    debugPrint('[Startup] Error loading session log toggle: $e');
-  }
-
-
-  var nickname = '';
-  try {
-    nickname = await settingsService.loadNickname();
-  } catch (e) {
-    debugPrint('[Startup] Error loading nickname: $e');
-  }
+  AgentLogger.setEnabled(sessionLogsEnabled);
 
   runApp(
     ProviderScope(

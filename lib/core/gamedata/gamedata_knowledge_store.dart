@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -15,6 +16,18 @@ import 'story_line_search.dart';
 import 'story_vectors.dart';
 
 export 'gamedata_models.dart';
+
+/// The vector index of [db]'s file, read in a background isolate
+/// ([StoryVectorIndex.loadFile]); through [db] itself when that fails (no
+/// FFI SQLite). Top level so the isolate's closure captures only the path.
+Future<StoryVectorIndex?> _loadVectorsInBackground(sqflite.Database db) async {
+  final path = db.path;
+  try {
+    return await Isolate.run(() => StoryVectorIndex.loadFile(path));
+  } catch (_) {
+    return StoryVectorIndex.load(db);
+  }
+}
 
 class GameDataKnowledgeStore implements GameDataRetrieval {
 
@@ -635,7 +648,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   Future<StoryVectorIndex?> _loadVectorIndex() async {
     final db = await _open();
     if (db == null) return null;
-    return _vectorIndex ??= StoryVectorIndex.load(db);
+    return _vectorIndex ??= _loadVectorsInBackground(db);
   }
 
   @override

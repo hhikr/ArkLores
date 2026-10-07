@@ -8,6 +8,8 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi;
+
 import '../../support/gamedata_fixture.dart';
 import '../../support/sqlite.dart';
 import '../../support/temp_dir.dart';
@@ -78,6 +80,22 @@ void main() {
       );
       expect(scoped.every((h) => h.scopeId == 'activity:other'), isTrue);
       await store.close();
+    });
+
+    test('the file loader (background isolate) reads what load() reads',
+        () async {
+      final fromFile = StoryVectorIndex.loadFile(dbPath)!;
+      final db = await databaseFactoryFfi.openDatabase(dbPath);
+      final fromDb = (await StoryVectorIndex.load(db))!;
+      await db.close();
+      expect(fromFile.length, fromDb.length);
+      expect((fromFile.model, fromFile.dims), (fromDb.model, fromDb.dims));
+      final query = (await _FakeEmbedder().embed(['藏匕首的人'])).single;
+      String ranked(StoryVectorIndex i) => i
+          .search(query, topK: 5)
+          .map((h) => '${h.storyId}#${h.lineStart}:${h.score.toStringAsFixed(4)}')
+          .join(',');
+      expect(ranked(fromFile), ranked(fromDb));
     });
 
     test('FIND fuses semantic hits even without keyword overlap', () async {
