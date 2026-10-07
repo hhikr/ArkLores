@@ -9,6 +9,8 @@ library;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../gamedata/story_catalog.dart' show escapeLike;
+
 /// Shelves are the collection kinds of the entry layer.
 const List<String> shelfKinds = [
   'main',
@@ -78,6 +80,9 @@ const Set<String> eventEntryTypes = {'roguelike_scene', 'sandbox_event'};
 
 /// The types whose text introduces their collection.
 const Set<String> introEntryTypes = {'roguelike_topic', 'sandbox_topic'};
+
+/// `'a','b'` for an SQL `IN (…)` of [types] (fixed identifiers, not input).
+String _sqlList(Set<String> types) => types.map((t) => "'$t'").join(',');
 
 /// One shelf and how much is on it.
 class ShelfSummary {
@@ -220,11 +225,6 @@ class StoryPlace {
   final LibraryEntry? previous;
   final LibraryEntry? next;
 }
-
-String escapeLike(String term) => term
-    .replaceAll(r'\', r'\\')
-    .replaceAll('%', r'\%')
-    .replaceAll('_', r'\_');
 
 /// Entry types whose text is a profile document (markdown-like) of a
 /// character-table row: operators, and the summons and deployable devices
@@ -402,7 +402,7 @@ Future<List<({String type, int count})>> collectionTypes(
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
     "WHERE e.collection_id = ? AND e.type <> 'story' AND "
-    "e.type NOT IN ('roguelike_topic', 'sandbox_topic') AND $_readable "
+    'e.type NOT IN (${_sqlList(introEntryTypes)}) AND $_readable '
     'GROUP BY e.type ORDER BY n DESC',
     [collectionId],
   );
@@ -459,7 +459,7 @@ Future<String?> collectionIntro(DatabaseExecutor db, String collectionId) async 
   final rows = await db.rawQuery(
     'SELECT r.content AS content FROM entries e '
     'JOIN normalized_records r ON r.entry_id = e.id '
-    "WHERE e.collection_id = ? AND e.type IN ('roguelike_topic', 'sandbox_topic') "
+    'WHERE e.collection_id = ? AND e.type IN (${_sqlList(introEntryTypes)}) '
     'ORDER BY r.line_start, r.id',
     [collectionId],
   );
@@ -474,7 +474,7 @@ Future<List<LibraryEntry>> inlineEntries(
   DatabaseExecutor db,
   String collectionId,
 ) async {
-  final types = inlineEntryTypes.map((t) => "'$t'").join(',');
+  final types = _sqlList(inlineEntryTypes);
   final rows = await db.rawQuery(
     'SELECT e.id, e.type, e.name, e.code, e.group_name, e.raw_id, '
     'e.collection_id, e.entity_id, (SELECT r.content FROM normalized_records r '

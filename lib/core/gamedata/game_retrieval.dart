@@ -20,7 +20,6 @@ export 'name_similarity.dart' show SimilarName, describeSimilarNames;
 export 'readonly_sql.dart' show SqlQueryResult;
 export 'story_catalog.dart'
     show
-        NamedStoryTarget,
         StoryCatalogEntry,
         StoryCollection,
         collectionReleaseKey,
@@ -54,12 +53,6 @@ abstract interface class GameDataRetrieval {
     int limit,
   });
 
-  /// Every appearance run of an entity across stories.
-  Future<List<StoryCoverageEntry>> searchStoryCoverage({
-    required String entityId,
-    String? scopeFilter,
-  });
-
   /// Raw story lines window for a story id.
   Future<StoryLinesPage> readStoryLines({
     required String storyId,
@@ -67,12 +60,6 @@ abstract interface class GameDataRetrieval {
     int? endLine,
     int? maxLines,
     String? pageToken,
-  });
-
-  /// Chapter profiles (line range, speakers, entities, summary).
-  Future<List<StoryChapterProfile>> getStoryMap({
-    List<String>? storyIds,
-    String? scopeId,
   });
 
   /// R12/R14: stories whose lines (content or speaker) contain any of
@@ -97,13 +84,6 @@ abstract interface class GameDataRetrieval {
     List<double> queryVector, {
     String? scopeId,
     int topK,
-  });
-
-  /// LIKE search of story-line content restricted to some story ids.
-  Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
-    String term,
-    List<String> storyIds, {
-    int limit,
   });
 
   /// R14: catalog entries (readable names, order, official synopsis) of
@@ -144,12 +124,6 @@ abstract interface class GameDataRetrieval {
     List<String> terms, {
     String? scopeId,
   });
-
-  /// R15: character / speaker names written verbatim in [text].
-  Future<List<String>> namesInText(String text);
-
-  /// R15: catalog collections / chapters named verbatim in [text].
-  Future<List<NamedStoryTarget>> namedStoryTargets(String text);
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at
   /// most [maxRows] rows; rejections, errors and timeouts come back in

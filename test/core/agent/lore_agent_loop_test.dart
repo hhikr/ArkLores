@@ -9,7 +9,6 @@ import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/readonly_sql.dart';
 import 'package:arklores/core/llm/llm_client.dart';
-import 'package:arklores/features/ai/investigation_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -50,15 +49,6 @@ void main() {
             reason: sql,);
       }
     });
-  });
-
-  test('record citations are numbered in the displayed answer', () {
-    const answer = '甲 `record:aa1`，乙 `record:bb2`，再提甲 `record:aa1`。';
-    expect(extractCitedRecordIds(answer), ['aa1', 'bb2']);
-    expect(
-      humanizeCitations(answer, const {}),
-      '甲 〔资料 1〕，乙 〔资料 2〕，再提甲 〔资料 1〕。',
-    );
   });
 
   group('tools over a fixture DB', () {

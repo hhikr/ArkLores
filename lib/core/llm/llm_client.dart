@@ -272,32 +272,6 @@ class CompletionDelta {
   final int? cachedPromptTokens;
 }
 
-/// Collects a delta stream into the completed result, forwarding each delta
-/// to [onDelta] as it arrives.
-Future<ChatCompletionResult> collectCompletion(
-  Stream<CompletionDelta> deltas, {
-  void Function(CompletionDelta delta)? onDelta,
-}) async {
-  final content = StringBuffer();
-  final reasoning = StringBuffer();
-  CompletionDelta? last;
-  await for (final delta in deltas) {
-    content.write(delta.content);
-    reasoning.write(delta.reasoningContent);
-    onDelta?.call(delta);
-    if (delta.done) last = delta;
-  }
-  return ChatCompletionResult(
-    content: content.toString(),
-    finishReason: last?.finishReason,
-    promptTokens: last?.promptTokens,
-    completionTokens: last?.completionTokens,
-    cachedPromptTokens: last?.cachedPromptTokens,
-    toolCalls: last?.toolCalls ?? const [],
-    reasoningContent: reasoning.toString(),
-  );
-}
-
 /// Abstract LLM client interface.
 ///
 /// Implementations connect to OpenAI-compatible APIs.

@@ -34,15 +34,4 @@ void main() {
     expect(hint, contains('谬安（干员，2 次）'));
     expect(hint, contains('只是字符串相近'));
   });
-
-  test('names in a question: longer known strings block their parts', () {
-    const known = [
-      NameOccurrence('伊塔利亚', 300, '剧情提及'),
-      NameOccurrence('塔利', 40, '说话人'),
-      NameOccurrence('凯伦', 50, '说话人'),
-      NameOccurrence('路人', 2, '说话人'),
-    ];
-    expect(namesMentionedIn('伊塔利亚的凯伦和路人', known), ['凯伦']);
-    expect(namesMentionedIn('塔利去哪了', known), ['塔利']);
-  });
 }

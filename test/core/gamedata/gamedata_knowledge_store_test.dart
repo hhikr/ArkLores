@@ -10,7 +10,6 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../support/sqlite.dart';
 import '../../support/temp_dir.dart';
-import '../../support/two_activities_fixture.dart';
 
 void main() {
   late Directory dir;
@@ -89,21 +88,5 @@ void main() {
       await store.readStoryLines(storyId: 's1', startLine: 0, endLine: 3);
       expect(File(path).lengthSync(), before);
     });
-  });
-
-  test('collections named in a question are found verbatim', () async {
-    final path = '${dir.path}/two.db';
-    await createTwoActivitiesDb(path);
-    final store = GameDataKnowledgeStore(dbPath: path);
-    addTearDown(store.close);
-    final targets = await store.namedStoryTargets('凯伦在远方之路里做了什么');
-    expect(targets.single.collectionId, 'act_new');
-    expect(targets.single.releaseMonth, '2024-06');
-    // Chapter names shorter than 3 characters only count inside 《》.
-    expect(await store.namedStoryTargets('关于启程的问题'), isEmpty);
-    expect(
-      (await store.namedStoryTargets('《启程》讲了什么')).single.storyId,
-      'activities/act_new/level_act_new_01.txt',
-    );
   });
 }

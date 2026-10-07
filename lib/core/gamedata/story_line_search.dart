@@ -20,6 +20,7 @@ import 'dart:math' as math;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
+import 'story_catalog.dart' show escapeLike;
 import 'story_coverage_models.dart';
 
 /// Upper bound of terms per query (each adds a LIKE per scanned line).
@@ -45,7 +46,7 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   String matchExpr() =>
       "(l.content LIKE ? ESCAPE '\\' OR l.speaker LIKE ? ESCAPE '\\')";
   List<Object?> matchArgs(String term) {
-    final pattern = '%${_escapeLike(term)}%';
+    final pattern = '%${escapeLike(term)}%';
     return [pattern, pattern];
   }
 
@@ -167,7 +168,7 @@ Future<Map<String, ({int all, int inScope})>> queryTermLineCounts(
   final sql = StringBuffer('SELECT 0 AS z');
   final args = <Object?>[];
   for (var i = 0; i < cleaned.length; i++) {
-    final pattern = '%${_escapeLike(cleaned[i])}%';
+    final pattern = '%${escapeLike(cleaned[i])}%';
     sql.write(', SUM(CASE WHEN $match THEN 1 ELSE 0 END) AS a$i');
     args.addAll([pattern, pattern]);
     if (scoped) {
@@ -191,8 +192,3 @@ Future<Map<String, ({int all, int inScope})>> queryTermLineCounts(
       ),
   };
 }
-
-String _escapeLike(String term) => term
-    .replaceAll(r'\', r'\\')
-    .replaceAll('%', r'\%')
-    .replaceAll('_', r'\_');

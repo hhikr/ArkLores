@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
@@ -260,7 +259,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       // Suffix-only id: match any namespace prefix once (e.g. `enemy_1554_lrtsia`
       // -> `enemy:enemy_1554_lrtsia`). Substring LIKE would over-match
       // (`char_002` matching `char_002_amiya`); anchor to the suffix end.
-      final suffix = value.replaceAll('%', r'\%').replaceAll('_', r'\_');
+      final suffix = escapeLike(value);
       final prefixed = await db.rawQuery(
         "SELECT id FROM entities WHERE id = ? OR id LIKE ? ESCAPE '\\' LIMIT 1",
         [value, '%:$suffix'],
@@ -375,51 +374,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
         .toList();
   }
 
-  /// Returns every appearance run of [entityId] across stories
-  /// (schema v3 `entity_story_mentions`), optionally limited to [scopeFilter]
-  /// (canonical scope key, e.g. `activity:act21mini`).
-  ///
-  /// Empty when the coverage tables are absent (old schema) or the entity has
-  /// no recorded mentions.
-  @override
-  Future<List<StoryCoverageEntry>> searchStoryCoverage({
-    required String entityId,
-    String? scopeFilter,
-  }) async {
-    final db = await _open();
-    if (db == null || !await _hasTable(db, 'entity_story_mentions')) {
-      return const [];
-    }
-    var sql = '''
-      SELECT m.entity_id, m.story_id, m.scope_id, m.line_start, m.line_end,
-             m.mention_count, m.matched_alias, p.title
-      FROM entity_story_mentions m
-      LEFT JOIN story_chapter_profiles p ON p.story_id = m.story_id
-      WHERE m.entity_id = ?
-    ''';
-    final args = <Object?>[entityId.trim()];
-    final scope = scopeFilter?.trim();
-    if (scope != null && scope.isNotEmpty) {
-      sql += ' AND m.scope_id = ?';
-      args.add(scope);
-    }
-    sql += ' ORDER BY m.scope_id, m.story_id, m.line_start';
-    final rows = await db.rawQuery(sql, args);
-    return [
-      for (final row in rows)
-        StoryCoverageEntry(
-          entityId: '${row['entity_id']}',
-          storyId: '${row['story_id']}',
-          scopeId: '${row['scope_id']}',
-          title: row['title'] as String?,
-          lineStart: (row['line_start'] as num).toInt(),
-          lineEnd: (row['line_end'] as num).toInt(),
-          mentionCount: (row['mention_count'] as num).toInt(),
-          matchedAlias: row['matched_alias'] as String?,
-        ),
-    ];
-  }
-
   /// Reads raw story lines (schema 2 `story_lines`) for [storyId].
   ///
   /// Window semantics: [startLine]/[endLine] bound the range; [maxLines]
@@ -497,132 +451,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     );
   }
 
-  /// Returns chapter profiles (schema v3 `story_chapter_profiles`) for the
-  /// given [storyIds] or all stories of [scopeId].
-  @override
-  Future<List<StoryChapterProfile>> getStoryMap({
-    List<String>? storyIds,
-    String? scopeId,
-  }) async {
-    final db = await _open();
-    if (db == null || !await _hasTable(db, 'story_chapter_profiles')) {
-      return const [];
-    }
-    var sql = 'SELECT * FROM story_chapter_profiles';
-    final args = <Object?>[];
-    final ids = storyIds
-        ?.map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toList(growable: false);
-    final scope = scopeId?.trim();
-    if (ids != null && ids.isNotEmpty) {
-      sql +=
-          ' WHERE story_id IN (${List.filled(ids.length, '?').join(',')})';
-      args.addAll(ids);
-    } else if (scope != null && scope.isNotEmpty) {
-      sql += ' WHERE scope_id = ?';
-      args.add(scope);
-    } else {
-      return const [];
-    }
-    sql += ' ORDER BY story_id';
-    final rows = await db.rawQuery(sql, args);
-    return [
-      for (final row in rows) _profileFromRow(row),
-    ];
-  }
-
-  StoryChapterProfile _profileFromRow(Map<String, Object?> row) {
-    List<String> stringList(Object? raw) {
-      if (raw is! String) return const [];
-      final decoded = _tryDecode(raw);
-      if (decoded is! List) return const [];
-      return [
-        for (final item in decoded) '$item',
-      ];
-    }
-
-    Map<String, int> intMap(Object? raw) {
-      if (raw is! String) return const {};
-      final decoded = _tryDecode(raw);
-      if (decoded is! Map) return const {};
-      return {
-        for (final entry in decoded.entries)
-          if (entry.value is num) '${entry.key}': (entry.value as num).toInt(),
-      };
-    }
-
-    return StoryChapterProfile(
-      storyId: '${row['story_id']}',
-      scopeId: '${row['scope_id']}',
-      title: row['title'] as String?,
-      lineStart: (row['line_start'] as num).toInt(),
-      lineEnd: (row['line_end'] as num).toInt(),
-      speakerSet: stringList(row['speaker_set']),
-      entityDensity: intMap(row['entity_density']),
-      summary: row['summary'] as String?,
-    );
-  }
-
-  Object? _tryDecode(String value) {
-    try {
-      return jsonDecode(value);
-    } on FormatException {
-      return null;
-    }
-  }
-
-  /// Returns the subset of [bigrams] that exist in the `rare_terms` table
-  /// (schema v3). Used by `find_detail_echoes` as the IDF whitelist.
-  Future<Set<String>> filterRareTerms(Iterable<String> bigrams) async {
-    final db = await _open();
-    if (db == null || !await _hasTable(db, 'rare_terms')) return const {};
-    final unique = bigrams.toSet().toList(growable: false);
-    if (unique.isEmpty) return const {};
-    final rows = await db.rawQuery(
-      'SELECT term FROM rare_terms '
-      'WHERE term IN (${List.filled(unique.length, '?').join(',')})',
-      unique,
-    );
-    return {
-      for (final row in rows) '${row['term']}',
-    };
-  }
-
-  /// Returns all entity canonical names and aliases, used to exclude entity
-  /// names from detail-term extraction so they cannot dominate echo search.
-  Future<Set<String>> loadEntityNamesAndAliases() async {
-    final db = await _open();
-    if (db == null) return const {};
-    final names = await db.rawQuery('SELECT name FROM entities');
-    final namesSet = {
-      for (final row in names) '${row['name']}'.trim(),
-    }..remove('');
-    if (await _hasTable(db, 'entity_aliases')) {
-      final aliases = await db.rawQuery('SELECT alias FROM entity_aliases');
-      for (final row in aliases) {
-        final alias = '${row['alias']}'.trim();
-        if (alias.isNotEmpty) namesSet.add(alias);
-      }
-    }
-    return namesSet;
-  }
-
-  /// Searches `story_lines.content` with a LIKE pattern across all stories.
-  /// Returns raw rows; callers exclude the source story for echo searches.
-  Future<List<Map<String, Object?>>> searchStoryLinesContentLike(
-    String term, {
-    int limit = 50,
-  }) async {
-    final db = await _open();
-    if (db == null) return const [];
-    return db.rawQuery(
-      'SELECT story_id, line_index, speaker, content FROM story_lines '
-      'WHERE content LIKE ? ORDER BY story_id, line_index LIMIT ?',
-      ['%$term%', limit],
-    );
-  }
-
   @override
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
@@ -666,30 +494,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final index = await _loadVectorIndex();
     if (index == null) return const [];
     return index.search(queryVector, topK: topK, scopeId: scopeId);
-  }
-
-  /// LIKE search restricted to a set of story ids (M4b: global term
-  /// prioritization for `collect_entity_evidence`). Escapes LIKE wildcards
-  /// in [term] so user-provided terms cannot broaden the match.
-  @override
-  Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
-    String term,
-    List<String> storyIds, {
-    int limit = 500,
-  }) async {
-    final db = await _open();
-    if (db == null || storyIds.isEmpty) return const [];
-    final escaped = term
-        .replaceAll(r'\', r'\\')
-        .replaceAll('%', r'\%')
-        .replaceAll('_', r'\_');
-    final placeholders = List.filled(storyIds.length, '?').join(',');
-    return db.rawQuery(
-      'SELECT story_id, line_index, speaker, content FROM story_lines '
-      'WHERE content LIKE ? ESCAPE \'\\\' AND story_id IN ($placeholders) '
-      'ORDER BY story_id, line_index LIMIT ?',
-      ['%$escaped%', ...storyIds, limit],
-    );
   }
 
   @override
@@ -764,21 +568,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
-  Future<List<String>> namesInText(String text) async {
-    final db = await _open();
-    if (db == null || text.trim().isEmpty) return const [];
-    final inventory = await (_nameInventory ??= loadNameInventory(db));
-    return namesMentionedIn(text, inventory);
-  }
-
-  @override
-  Future<List<NamedStoryTarget>> namedStoryTargets(String text) async {
-    final db = await _open();
-    if (db == null) return const [];
-    return queryNamedStoryTargets(db, text);
-  }
-
-  @override
   Future<SqlQueryResult> readOnlySql(String sql, {int maxRows = 200}) async {
     final path = await _resolveDbPath();
     if (path == null || !File(path).existsSync()) {
@@ -792,10 +581,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final parts = <String>[];
     final args = <Object?>[];
     for (final term in terms) {
-      final escaped = term
-          .replaceAll(r'\', r'\\')
-          .replaceAll('%', r'\%')
-          .replaceAll('_', r'\_');
+      final escaped = escapeLike(term);
       parts.add(
         "content LIKE ? ESCAPE '\\' OR speaker LIKE ? ESCAPE '\\'",
       );

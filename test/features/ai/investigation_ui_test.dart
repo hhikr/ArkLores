@@ -10,17 +10,13 @@ void main() {
   const b = 'activities/act_x/level_act_x_02_end.txt';
 
   group('markers', () {
-    test('line references are extracted and markers stripped', () {
+    test('markers are stripped', () {
       final content =
           '${formatStoryAnswerEnvelope(StoryAnswerStatus.answered, confidence: '0.8')}\n'
           '证据：activities/act_fixture/level_fixture_c5.txt:0 与 '
           'activities/act_fixture/level_fixture_c1.txt:2。\n\n'
           'Coverage: read=1 | mapped=1 | skipped=0';
       expect(isStoryAnswer(content), isTrue);
-      expect(extractLineReferences(content), [
-        'activities/act_fixture/level_fixture_c1.txt:2',
-        'activities/act_fixture/level_fixture_c5.txt:0',
-      ]);
       final stripped = stripStoryAnswerMarkers(content);
       expect(stripped, isNot(contains('STORY_ANSWER')));
       expect(stripped, isNot(contains('Coverage: read=')));
@@ -42,16 +38,13 @@ void main() {
   });
 
   group('citations', () {
-    test('story ids become labels with 1-based lines', () {
+    test('cited story and record ids, in order of first citation', () {
       const id = 'activities/act_fx/level_act_fx_02_beg.txt';
-      final labels = {id: '虚构活动 FX-2 行动前《转折》'};
+      expect(extractCitedStoryIds('`$id:1` b/c.txt:2-5'), {id, 'b/c.txt'});
       expect(
-        humanizeCitations('见 `$id:4` 与 $id:7-9。', labels),
-        '见 〔虚构活动 FX-2 行动前《转折》 第 5 行〕 与 〔虚构活动 FX-2 行动前《转折》 第 8–10 行〕。',
+        extractCitedRecordIds('甲 `record:aa1`，乙 `record:bb2`，再提甲 `record:aa1`。'),
+        ['aa1', 'bb2'],
       );
-      expect(formatLineReference('$id:0', const {}),
-          '活动 act_fx · level_act_fx_02_beg · 第 1 行',);
-      expect(extractCitedStoryIds('$id:1 b/c.txt:2'), {id, 'b/c.txt'});
     });
 
     test('grouped: collection → chapter → merged line ranges', () {

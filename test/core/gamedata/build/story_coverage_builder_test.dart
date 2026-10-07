@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/agent/tools/agent_tool.dart';
@@ -62,23 +63,37 @@ void main() {
     });
   });
 
-  group('story coverage builder (schema v3)', () {
-    test('writes entity_story_mentions with merged runs', () async {
-      final store = GameDataKnowledgeStore(dbPath: dbPath);
+  /// Rows of [sql] on the built fixture.
+  Future<List<Map<String, Object?>>> query(String sql, [List<Object?>? args]) async {
+    final db = await databaseFactory.openDatabase(dbPath);
+    try {
+      return await db.rawQuery(sql, args);
+    } finally {
+      await db.close();
+    }
+  }
 
-      final victim = await store.searchStoryCoverage(entityId: 'char_victim');
-      expect(
-        victim.map((e) => e.storyId).toSet(),
-        {
-          'activities/act_fixture/level_fixture_c3.txt',
-          'activities/act_fixture/level_fixture_c4.txt',
-        },
+  /// The mention runs of [entityId], by story and line.
+  Future<List<Map<String, Object?>>> mentions(String entityId) => query(
+        'SELECT story_id, scope_id, line_start, line_end, mention_count '
+        'FROM entity_story_mentions WHERE entity_id = ? '
+        'ORDER BY story_id, line_start',
+        [entityId],
       );
 
-      final a = await store.searchStoryCoverage(entityId: 'char_a');
-      final aStories = a.map((e) => e.storyId).toList();
+  Set<Object?> storiesOf(List<Map<String, Object?>> rows) =>
+      rows.map((r) => r['story_id']).toSet();
+
+  group('story coverage builder (schema v3)', () {
+    test('writes entity_story_mentions with merged runs', () async {
+      expect(storiesOf(await mentions('char_victim')), {
+        'activities/act_fixture/level_fixture_c3.txt',
+        'activities/act_fixture/level_fixture_c4.txt',
+      });
+
+      final a = await mentions('char_a');
       expect(
-        aStories,
+        storiesOf(a),
         containsAll([
           'activities/act_fixture/level_fixture_c1.txt',
           'activities/act_fixture/level_fixture_c2.txt',
@@ -88,41 +103,38 @@ void main() {
       // Chapter 2 has 40 consecutive mention lines -> a single merged run
       // (importer line_index starts at 0).
       final c2 = a.firstWhere(
-        (e) => e.storyId.endsWith('level_fixture_c2.txt'),
+        (r) => '${r['story_id']}'.endsWith('level_fixture_c2.txt'),
       );
-      expect(c2.lineStart, 0);
-      expect(c2.lineEnd, 39);
-      expect(c2.mentionCount, 40);
-      expect(c2.scopeId, 'activity:act_fixture');
-
-      final b = await store.searchStoryCoverage(entityId: 'char_b');
       expect(
-        b.map((e) => e.storyId).toSet(),
-        {
-          'activities/act_fixture/level_fixture_c4.txt',
-          'activities/act_fixture/level_fixture_c5.txt',
-          'activities/act_fixture/level_fixture_c9.txt',
-          'activities/act_fixture/level_fixture_c10.txt',
-        },
+        [c2['line_start'], c2['line_end'], c2['mention_count'], c2['scope_id']],
+        [0, 39, 40, 'activity:act_fixture'],
       );
-      await store.close();
+
+      expect(storiesOf(await mentions('char_b')), {
+        'activities/act_fixture/level_fixture_c4.txt',
+        'activities/act_fixture/level_fixture_c5.txt',
+        'activities/act_fixture/level_fixture_c9.txt',
+        'activities/act_fixture/level_fixture_c10.txt',
+      });
     });
 
     test('writes story_chapter_profiles with keyword hits and summary', () async {
-      final store = GameDataKnowledgeStore(dbPath: dbPath);
-      final profiles = await store.getStoryMap(
-        scopeId: 'activity:act_fixture',
+      final profiles = await query(
+        'SELECT * FROM story_chapter_profiles WHERE scope_id = ?',
+        ['activity:act_fixture'],
       );
       expect(profiles, hasLength(7));
 
       final c3 = profiles.firstWhere(
-        (profile) => profile.storyId.endsWith('level_fixture_c3.txt'),
+        (r) => '${r['story_id']}'.endsWith('level_fixture_c3.txt'),
       );
-      expect(c3.entityDensity.containsKey('char_a'), isTrue);
-      expect(c3.lineStart, 0);
-      expect(c3.summary, isNotNull);
-      expect(c3.speakerSet, isNotEmpty);
-      await store.close();
+      expect(
+        (jsonDecode('${c3['entity_density']}') as Map).containsKey('char_a'),
+        isTrue,
+      );
+      expect(c3['line_start'], 0);
+      expect(c3['summary'], isNotNull);
+      expect(jsonDecode('${c3['speaker_set']}') as List, isNotEmpty);
     });
 
     test('writes rare_terms for low doc_freq bigrams only', () async {
@@ -182,11 +194,8 @@ void main() {
       expect(speakers.map((r) => r['name']), ['npc路人']);
       expect(named.first['c'], 1);
 
-      final store = GameDataKnowledgeStore(dbPath: dbPath);
-      addTearDown(store.close);
-      final coverage = await store.searchStoryCoverage(entityId: 'speaker:npc路人');
       expect(
-        coverage.map((e) => e.storyId),
+        storiesOf(await mentions('speaker:npc路人')),
         containsAll([
           'activities/act_fixture/level_fixture_c1.txt',
           'activities/act_fixture/level_fixture_c2.txt',
