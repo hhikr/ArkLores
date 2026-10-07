@@ -9,6 +9,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'library_widgets.dart';
@@ -61,7 +62,8 @@ class MyMaterialsView extends ConsumerWidget {
         title: context.t.libraryEmpty,
       ),
       data: (list) => ListView(
-        padding: const EdgeInsets.only(bottom: 32),
+        // Under the library tab's floating bars.
+        padding: floatingPadding(context, const EdgeInsets.only(bottom: 32)),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),

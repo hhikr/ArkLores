@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
@@ -36,6 +37,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   /// gives the focus back to it on return, not to the question box, so the
   /// keyboard does not come up.
   final FocusNode _chatFocus = FocusNode(debugLabel: 'ask-chat');
+
+  /// Height of the floating question box (with what it leaves for the
+  /// navigation below it), for the list's bottom padding.
+  double _composerHeight = 0;
 
   /// R17d: the list never follows a streaming answer — the thinking, the
   /// steps and the answer grow below and the reader scrolls at their own
@@ -263,71 +268,89 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       if ((prev?.length ?? 0) < next.length) _scrollToBottom(afterFrame: true);
     });
 
-    // The question box may grow to half or all of the page (its height
-    // budget).
+    // Everything floats over the conversation: the actions at the top, the
+    // question box at the bottom (above the floating navigation). The list
+    // scrolls underneath both; its padding follows the box's height. The
+    // box may grow to half or all of the page (its height budget).
     return LayoutBuilder(
-      builder: (context, constraints) => Column(
-      children: [
-        Expanded(
-          child: Focus(
-            focusNode: _chatFocus,
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: (_) {
-                if (!_chatFocus.hasFocus) _chatFocus.requestFocus();
-              },
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: chatHistory.isEmpty
-                        ? _buildEmptyState(theme)
-                        : _buildChatList(theme, chatHistory),
-                  ),
-                  // Opened from a Wiki page (a route of its own): a way back.
-                  if (ModalRoute.of(context)?.canPop ?? false)
+      builder: (context, constraints) => Stack(
+        children: [
+          Positioned.fill(
+            child: Focus(
+              focusNode: _chatFocus,
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (_) {
+                  if (!_chatFocus.hasFocus) _chatFocus.requestFocus();
+                },
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: chatHistory.isEmpty
+                          ? Padding(
+                              padding:
+                                  EdgeInsets.only(bottom: _composerHeight),
+                              child: _buildEmptyState(theme),
+                            )
+                          : _buildChatList(theme, chatHistory),
+                    ),
+                    // Opened from a Wiki page (a route of its own): a way back.
+                    if (ModalRoute.of(context)?.canPop ?? false)
+                      Positioned(
+                        top: 6,
+                        left: 8,
+                        child: Material(
+                          color: theme.surfaceElevated.withValues(alpha: 0.96),
+                          elevation: 3,
+                          shadowColor: Colors.black.withValues(alpha: 0.22),
+                          shape: CircleBorder(
+                            side: BorderSide(color: theme.divider, width: 0.5),
+                          ),
+                          child: BackButton(color: theme.textPrimary),
+                        ),
+                      ),
                     Positioned(
                       top: 6,
-                      left: 8,
-                      child: Material(
-                        color: theme.surfaceElevated.withValues(alpha: 0.94),
-                        elevation: 2,
-                        shape: CircleBorder(
-                          side: BorderSide(color: theme.divider, width: 0.5),
-                        ),
-                        child: BackButton(color: theme.textPrimary),
-                      ),
+                      right: 8,
+                      child: _buildFloatingActions(theme),
                     ),
-                  Positioned(
-                    top: 6,
-                    right: 8,
-                    child: _buildFloatingActions(theme),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        AskComposer(
-          controller: _inputController,
-          theme: theme,
-          isSending: isSending,
-          onSend: isSending ? chatNotifier.cancel : _handleAskSend,
-          hintText: context.t.aiAskInputPlaceholder,
-          maxHeight: constraints.maxHeight,
-          leading: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDeepThinkingToggle(theme),
-              const SizedBox(width: 6),
-              _buildAnswerOptions(theme),
-            ],
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _SizeReporter(
+              onHeight: (height) {
+                if ((height - _composerHeight).abs() > 0.5) {
+                  setState(() => _composerHeight = height);
+                }
+              },
+              child: AskComposer(
+                controller: _inputController,
+                theme: theme,
+                isSending: isSending,
+                onSend: isSending ? chatNotifier.cancel : _handleAskSend,
+                hintText: context.t.aiAskInputPlaceholder,
+                maxHeight: constraints.maxHeight,
+                leading: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildDeepThinkingToggle(theme),
+                    const SizedBox(width: 6),
+                    _buildAnswerOptions(theme),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
-
   /// The messages, with the ↓ button while the end is out of view. The top
   /// padding keeps the first message clear of the floating actions.
   Widget _buildChatList(AppThemeTokens theme, List<ChatMessage> chatHistory) {
@@ -341,7 +364,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             child: ListView.builder(
               key: const ValueKey('ask-chat-list'),
               controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 56, 16, 12),
+              padding: EdgeInsets.fromLTRB(16, 56, 16, 12 + _composerHeight),
               itemCount: chatHistory.length,
               itemBuilder: (context, index) {
                 return ChatBubble(message: chatHistory[index]);
@@ -352,7 +375,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         if (_showJumpToEnd)
           Positioned(
             right: 16,
-            bottom: 12,
+            bottom: 12 + _composerHeight,
             child: Material(
               color: theme.accentPrimary,
               shape: const CircleBorder(),
@@ -604,5 +627,40 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         );
       },
     );
+  }
+}
+
+/// Reports its child's height after each layout (the floating question box
+/// grows with its text).
+class _SizeReporter extends SingleChildRenderObjectWidget {
+  const _SizeReporter({required this.onHeight, required super.child});
+
+  final ValueChanged<double> onHeight;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderSizeReporter(onHeight);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderSizeReporter renderObject,
+  ) =>
+      renderObject.onHeight = onHeight;
+}
+
+class _RenderSizeReporter extends RenderProxyBox {
+  _RenderSizeReporter(this.onHeight);
+
+  ValueChanged<double> onHeight;
+  double? _last;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final height = size.height;
+    if (height == _last) return;
+    _last = height;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onHeight(height));
   }
 }

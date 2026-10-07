@@ -91,7 +91,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 MediaQuery.sizeOf(context).width >= 400 ? 28 : 20,
                 12,
                 MediaQuery.sizeOf(context).width >= 400 ? 28 : 20,
-                40,
+                // Clear of the floating navigation.
+                40 + MediaQuery.paddingOf(context).bottom,
               ),
               sliver: SliverToBoxAdapter(
                 child: Center(

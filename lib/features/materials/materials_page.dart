@@ -9,6 +9,7 @@ import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
@@ -43,61 +44,70 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage>
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final reading = _tabs.index == 0;
+    // The tabs float over the lists, which scroll underneath them.
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        elevation: 0,
-        titleSpacing: 4,
-        title: TabBar(
-          controller: _tabs,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          dividerColor: Colors.transparent,
-          indicatorColor: theme.accentPrimary,
-          indicatorSize: TabBarIndicatorSize.label,
-          indicatorWeight: 2.5,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-          labelColor: theme.textPrimary,
-          unselectedLabelColor: theme.textSecondary,
-          labelStyle: theme.titleFont.copyWith(
-            fontSize: 15.5,
-            fontWeight: FontWeight.bold,
+      body: Stack(
+        children: [
+          TabBarView(
+            controller: _tabs,
+            children: const [
+              LibraryReadView(),
+              MyMaterialsView(),
+            ],
           ),
-          unselectedLabelStyle: theme.titleFont.copyWith(fontSize: 15.5),
-          tabs: [
-            Tab(text: context.t.libraryTabRead),
-            Tab(text: context.t.libraryTabMine),
-          ],
-        ),
-        actions: [
-          if (reading)
-            IconButton(
-              key: const ValueKey('library-search'),
-              tooltip: context.t.librarySearchHint,
-              icon: const Icon(Icons.search_rounded),
-              onPressed: () => openSearch(context),
-            )
-          else
-            IconButton(
-              key: const ValueKey('library-new-material'),
-              tooltip: context.t.materialsNew,
-              icon: const Icon(Icons.add_rounded),
-              onPressed: () => newMaterial(context),
+          FloatingTopBar(
+            theme: theme,
+            child: Row(
+              children: [
+                const SizedBox(width: 4),
+                TabBar(
+                  controller: _tabs,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  dividerColor: Colors.transparent,
+                  indicatorColor: theme.accentPrimary,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  indicatorWeight: 2.5,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  labelColor: theme.textPrimary,
+                  unselectedLabelColor: theme.textSecondary,
+                  labelStyle: theme.titleFont.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  unselectedLabelStyle: theme.titleFont.copyWith(fontSize: 15),
+                  tabs: [
+                    Tab(text: context.t.libraryTabRead, height: 42),
+                    Tab(text: context.t.libraryTabMine, height: 42),
+                  ],
+                ),
+                const Spacer(),
+                if (reading)
+                  IconButton(
+                    key: const ValueKey('library-search'),
+                    tooltip: context.t.librarySearchHint,
+                    color: theme.textPrimary,
+                    icon: const Icon(Icons.search_rounded, size: 22),
+                    onPressed: () => openSearch(context),
+                  )
+                else
+                  IconButton(
+                    key: const ValueKey('library-new-material'),
+                    tooltip: context.t.materialsNew,
+                    color: theme.textPrimary,
+                    icon: const Icon(Icons.add_rounded, size: 22),
+                    onPressed: () => newMaterial(context),
+                  ),
+                const SizedBox(width: 2),
+              ],
             ),
-        ],
-      ),
-      body: TabBarView(
-        controller: _tabs,
-        children: const [
-          LibraryReadView(),
-          MyMaterialsView(),
+          ),
         ],
       ),
     );
   }
 }
-
 /// "Read": continue reading, the shelves, the recently read.
 class LibraryReadView extends ConsumerWidget {
   const LibraryReadView({super.key});
@@ -160,7 +170,7 @@ class LibraryReadView extends ConsumerWidget {
         invalidateReading(ref);
       },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        padding: floatingPadding(context, const EdgeInsets.fromLTRB(16, 4, 16, 32)),
         children: [
           if (recent.isNotEmpty) ...[
             const SizedBox(height: 12),

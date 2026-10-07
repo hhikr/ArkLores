@@ -11,6 +11,7 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../ai/ai_chat_page.dart';
 import '../ai/wiki_ai_context.dart';
 import '../settings/settings_service.dart';
@@ -777,18 +778,24 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
-  /// The site switch: one slim row (40 high) of small segments, the
-  /// selected site filled, bookmarks at the end.
+  /// The site switch: a floating pill of small segments, the selected site
+  /// filled, bookmarks at the end. The web page starts below it (a page
+  /// cannot be told to leave room under a dock).
   Widget _buildSiteBar(AppThemeTokens theme) {
-    return Container(
-      key: const ValueKey('wiki-site-bar'),
-      height: 40,
-      padding: const EdgeInsets.only(left: 10),
-      decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        border: Border(bottom: BorderSide(color: theme.divider, width: 0.5)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      child: FloatingBar(
+        key: const ValueKey('wiki-site-bar'),
+        theme: theme,
+        height: floatingBarHeight,
+        padding: const EdgeInsets.only(left: 8),
+        child: _siteBarRow(theme),
       ),
-      child: Row(
+    );
+  }
+
+  Widget _siteBarRow(AppThemeTokens theme) {
+    return Row(
         children: [
           Expanded(
             child: SingleChildScrollView(
@@ -813,7 +820,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
           ),
           const SizedBox(width: 4),
         ],
-      ),
     );
   }
 
@@ -924,6 +930,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     }),
                   ),
                 ),
+                // Clear of the floating navigation.
+                SizedBox(height: MediaQuery.paddingOf(context).bottom),
               ],
             ),
 

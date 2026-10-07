@@ -110,13 +110,13 @@ class _AskComposerState extends State<AskComposer> {
     final scaler = MediaQuery.textScalerOf(context);
     final expanded = _size != AskComposerSize.collapsed;
     final focused = _focus.hasFocus;
+    // What the floating navigation (or the system bar) takes below the box.
+    final below = MediaQuery.paddingOf(context).bottom;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-      decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        border: Border(top: BorderSide(color: theme.divider, width: 0.5)),
-      ),
+    // A floating card, no strip behind it: the conversation shows around
+    // and under it.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       child: SafeArea(
         top: false,
         child: LayoutBuilder(
@@ -135,8 +135,9 @@ class _AskComposerState extends State<AskComposer> {
                     (lines > _maxCollapsedLines ? _maxCollapsedLines : lines) +
                 _toolbarHeight +
                 2;
-            // The bar's own padding (6 + 8) and its top border take 15.
-            final room = widget.maxHeight - 15;
+            // The padding around the card (6 + 8) takes 14, plus 1 to spare,
+            // and the room below it.
+            final room = widget.maxHeight - 15 - below;
             final target = switch (_size) {
               AskComposerSize.collapsed => collapsedHeight,
               AskComposerSize.half => (room * 0.5).clamp(collapsedHeight, room),
@@ -152,8 +153,15 @@ class _AskComposerState extends State<AskComposer> {
               curve: Curves.easeOutCubic,
               height: target,
               decoration: BoxDecoration(
-                color: theme.bgPrimary,
+                color: theme.cardSurface.withValues(alpha: 0.97),
                 borderRadius: BorderRadius.circular(expanded ? 22 : 20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.14),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
                 border: Border.all(
                   color: focused
                       ? theme.accentText.withValues(alpha: 0.55)

@@ -311,7 +311,8 @@ class ExpandableTray extends ConsumerWidget {
 
     return Positioned(
       right: _trayMargin,
-      bottom: _trayBottomOffset,
+      // Above the floating navigation (the page reaches under it).
+      bottom: _trayBottomOffset + MediaQuery.paddingOf(context).bottom,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOutCubic,

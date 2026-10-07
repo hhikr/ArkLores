@@ -11,6 +11,7 @@ import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/providers/wiki_navigation_provider.dart';
 import 'shared/theme/app_theme.dart';
+import 'shared/widgets/floating_bar.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
 ///
@@ -65,6 +66,9 @@ class _MainShellState extends ConsumerState<MainShell> {
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        // The navigation floats over the pages; they get its height as
+        // bottom padding (MediaQuery) and scroll underneath it.
+        extendBody: true,
         body: Stack(
           fit: StackFit.expand,
           children: [
@@ -78,7 +82,10 @@ class _MainShellState extends ConsumerState<MainShell> {
         bottomNavigationBar: AnimatedSize(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeInOutCubic,
-          child: wikiReaderFullscreen && _currentIndex == 0
+          // Hidden while the keyboard is up: the question box then sits on
+          // the keyboard, not on the navigation.
+          child: (wikiReaderFullscreen && _currentIndex == 0) ||
+                  MediaQuery.viewInsetsOf(context).bottom > 0
               ? const SizedBox.shrink()
               : _IndustrialNavigation(
                   theme: theme,
@@ -150,8 +157,8 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 }
 
-/// The bottom navigation: slim (52 high), a hairline on top, the selected
-/// tab's icon in a small pill. No second indicator.
+/// The bottom navigation: a floating pill (52 high) off the screen edges,
+/// the selected tab's icon in a small pill inside it.
 class _IndustrialNavigation extends StatelessWidget {
   const _IndustrialNavigation({
     required this.theme,
@@ -169,18 +176,16 @@ class _IndustrialNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: theme.bgSecondary,
-      child: SafeArea(
-        top: false,
-        child: Container(
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+        child: FloatingBar(
           key: const ValueKey('main-navigation'),
+          theme: theme,
+          radius: 26,
           height: height,
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: theme.divider, width: 0.5),
-            ),
-          ),
           child: Row(
             children: [
               for (var index = 0; index < items.length; index++)
@@ -200,7 +205,6 @@ class _IndustrialNavigation extends StatelessWidget {
     );
   }
 }
-
 class _NavigationItem extends StatefulWidget {
   const _NavigationItem({
     required this.theme,

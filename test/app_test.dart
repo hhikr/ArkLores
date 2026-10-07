@@ -119,6 +119,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the navigation floats: off the edges, the pages reach under '
+      'it, and it steps aside for the keyboard', (tester) async {
+    await start(tester, tab: 3);
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final nav = tester.getRect(find.byKey(const ValueKey('main-navigation')));
+    expect(nav.left, greaterThan(0));
+    expect(nav.right, lessThan(screen.width));
+    expect(nav.bottom, lessThan(screen.height));
+    final page = tester.getRect(find.byType(IndexedStack).first);
+    expect(page.bottom, screen.height);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 600);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('main-navigation')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('another page can ask for a tab', (tester) async {
     final container = await start(tester);
     container.read(mainTabRequestProvider.notifier).state = 1;
