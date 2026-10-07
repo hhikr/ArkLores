@@ -48,7 +48,7 @@ Set<String> extractCitedStoryIds(String content) => {
     };
 
 /// R17: a cited non-story record, `record:<id>` (optionally backticked).
-final RegExp _recordCitationPattern = RegExp(r'`?record:([\w\-]+)`?');
+final RegExp _recordCitationPattern = RegExp(r'`?record:([\w\-]+(?:/[\w\-]+)*)`?');
 
 /// R17: record ids cited in [content], in order of first citation.
 List<String> extractCitedRecordIds(String content) => [

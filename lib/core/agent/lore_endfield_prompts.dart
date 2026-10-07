@@ -5,4 +5,4 @@ library;
 
 const String loreEndfieldLibraryGuide = '''
 终末地库的结构（与明日方舟库的不同之处）
-- 剧情：story_lines 里每个 story_id 是一段对话（ef/<对话 id>），按任务（collections）归组；任务归在章节或任务类型的书架下。''';
+- 剧情：story_lines 里每个 story_id 是一段对话（ef/<对话 id>.txt），按任务（collections）归组；任务归在章节或任务类型的书架下。''';

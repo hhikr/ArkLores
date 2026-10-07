@@ -1110,7 +1110,7 @@ final RegExp _processLeadIn = RegExp(
 );
 
 /// `record:<id>` — a non-story record (R17).
-final RegExp _recordCitation = RegExp(r'record:([\w\-]+)');
+final RegExp _recordCitation = RegExp(r'record:([\w\-]+(?:/[\w\-]+)*)');
 
 /// A backticked story file with no line number after it.
 final RegExp _bareStoryCitation = RegExp(r'`([\w\-/\.\[\]]+\.txt)`');

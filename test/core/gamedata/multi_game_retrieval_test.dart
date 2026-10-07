@@ -48,7 +48,7 @@ void main() {
       final e = await createGameDataDb(ef);
       await insertStory(
         e,
-        'ef/dlg_test_1',
+        'ef/dlg_test_1.txt',
         ['丙：灯塔下面有人。', '丁：去看看。'],
         scopeType: 'mission',
         scopeId: 'ef/mission_1',
@@ -69,7 +69,7 @@ void main() {
 
     test('both are installed; a story is read from its own database', () async {
       expect(await both.installedGames(), [Game.arknights, Game.endfield]);
-      final ef = await both.readStoryLines(storyId: 'ef/dlg_test_1');
+      final ef = await both.readStoryLines(storyId: 'ef/dlg_test_1.txt');
       expect(ef.storyFound, isTrue);
       expect(ef.lines.first.speaker, '丙');
       final ak = await both.readStoryLines(
@@ -84,13 +84,13 @@ void main() {
       expect(
           counts.keys,
           containsAll(
-              ['ef/dlg_test_1', 'activities/act1/level_act1_01_beg.txt']));
+              ['ef/dlg_test_1.txt', 'activities/act1/level_act1_01_beg.txt']));
       final grep = GrepTool(both, SeenLines());
       final all = await grep.execute({'pattern': '灯塔'});
-      expect(all, contains('ef/dlg_test_1'));
+      expect(all, contains('ef/dlg_test_1.txt'));
       expect(all, contains('level_act1_01_beg.txt'));
       final onlyEf = await grep.execute({'pattern': '灯塔', 'game': 'endfield'});
-      expect(onlyEf, contains('ef/dlg_test_1'));
+      expect(onlyEf, contains('ef/dlg_test_1.txt'));
       expect(onlyEf, isNot(contains('level_act1_01_beg.txt')));
     });
 
@@ -101,14 +101,14 @@ void main() {
         'query': 'SELECT story_id, line_index, content FROM story_lines',
         'game': 'endfield',
       });
-      expect(ef, contains('ef/dlg_test_1'));
+      expect(ef, contains('ef/dlg_test_1.txt'));
       expect(ef, isNot(contains('level_act1')));
       final ak = await sql.execute({
         'query': 'SELECT story_id, line_index, content FROM story_lines',
       });
       expect(ak, contains('level_act1'));
       // Lines a query showed can be cited, in either game.
-      expect(seen.covers('ef/dlg_test_1', 0, 1), isTrue);
+      expect(seen.covers('ef/dlg_test_1.txt', 0, 1), isTrue);
     });
 
     test('a missing database answers empty; the other still works', () async {
