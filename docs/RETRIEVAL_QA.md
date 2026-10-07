@@ -68,19 +68,24 @@ skipped）、既有固定检索 QA 全绿。
 
 ### 离线（每次改动 Agent/检索层都要跑）
 
-- `test/lore_agent_test.dart`（R17 Agent）：
+测试目录与 `lib/` 一一对应，结构和约定见 `test/README.md`。
+
+- `test/core/agent/lore_agent_loop_test.dart`（R17 Agent）：
   - 只读 SQL 语句检查（拒绝写入、多语句、ATTACH、PRAGMA），失控查询在超时处被 `sqlite3_interrupt` 中止且库仍可用；
   - 工具在 fixture 库上的输出：全库统计、范围 grep 加上下文、`read_story` 翻页和找不到时的建议、零命中附近名、目录；
   - 循环：请求只追加、出处核对退回一次（含 `record:` 和只写文件名的出处）、无出处判为 not_covered、
     核查结论无出处时降级、去掉只讲过程的开头；
   - 子 agent：独立对话、没有 `delegate`、看过的行并入主 agent；
   - 文本协议回退、最后一轮不带工具作答、上下文折叠、追问继续上一问的对话；`record:` 出处的显示编号。
-- `test/story_coverage_test.dart`、`test/story_vectors_test.dart`、`test/locality_test.dart`、`test/story_catalog_test.dart`：
-  覆盖层与目录构建、`search_story_lines`（`find` 的实现）关键词/向量/RRF、向量切块与量化、近似名、上线顺序、引用分组。
-- `test/investigation_test.dart`、`test/investigation_ui_test.dart`：状态信封解析与渲染。
-- `test/streaming_test.dart`：SSE 跨块拼行、空闲超时、拒绝流式时回退、ReAct 实时预览、刷新合并、生成中的状态行与思考面板。
-- `test/reasoning_level_test.dart`：各 provider 的思考参数、默认全部不思考、“深度思考”不重建会话。
-- `test/ask_router_test.dart`、`test/chat_session_recorder_test.dart`：自动路由、会话记录（每个工具调用一条记录）、出错与取消。
+- `test/core/gamedata/build/story_coverage_builder_test.dart`、`test/core/gamedata/story_vectors_test.dart`、
+  `test/core/gamedata/story_catalog_test.dart`、`test/core/gamedata/name_similarity_test.dart`、
+  `test/core/agent/tools/search_story_lines_test.dart`：覆盖层与目录构建、`search_story_lines`（`find` 的实现）
+  关键词/向量/RRF、范围外命中、向量切块与量化、近似名、上线顺序。
+- `test/core/agent/story_answer_test.dart`、`test/features/ai/investigation_ui_test.dart`、
+  `test/features/ai/widgets/chat_bubble_test.dart`：状态信封、引用分组与可读化、答案气泡（含生成中的状态行与思考面板）。
+- `test/core/llm/openai_client_test.dart`：各 provider 的思考参数与怪癖、429 重试、SSE 跨块拼行、空闲超时、拒绝流式时回退；
+  `test/core/llm/llm_provider_test.dart`：默认全部不思考、“深度思考”不重建会话。
+- `test/core/agent/chat_session_recorder_test.dart`：会话记录（每个工具调用一条记录）、出错与取消。
 
 ### 真机同链路（opt-in，花钱）
 
@@ -105,21 +110,13 @@ token 用量）。
 
 ## Current Unit Coverage
 
-`test/agent_test.dart` 覆盖：
+角色扮演用的 `search_local_lore` 与 ReAct 循环（`test/core/agent/tools/search_local_lore_test.dart`、
+`test/core/agent/react_loop_test.dart`），安装（`test/core/gamedata/gamedata_installer_test.dart`）覆盖：
 
-- GameData entity document 优先级。
-- `content_type` 过滤。
-- alias 结构化解析。
-- entity document FTS。
-- observation 长度边界。
-- exact alias 歧义候选。
-- Summary mode 检索计划与 story context。
-- `阿米娅 主线` story intent 检索。
-- `阿米娅 语音` query 归一化。
-- ReAct loose Action Input 解析。
-- ReAct truncated / empty final answer 错误处理。
-- fallback source guard。
-- GameData installer schema 校验与坏库不覆盖旧库。
+- GameData entity document 优先级、`content_type` 过滤、alias 结构化解析、entity document FTS、observation 长度边界。
+- exact alias 歧义候选；Summary mode 检索计划与 story context；story intent 检索与 query 归一化。
+- ReAct loose Action Input 解析；truncated / empty final answer 错误处理；fallback source guard。
+- GameData installer schema 校验与坏库不覆盖旧库；断点续传、重试、取消、手动放置的文件。
 
 ## v0.4.5 Verification Record
 

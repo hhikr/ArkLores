@@ -253,7 +253,7 @@ schema 已预留 `game` 字段，未来接入不需要改表。
 
 **根因分析**：
 
-- 规则表是"成本最低、可解释、可测试"的方案：`agent_test.dart` 直接覆盖
+- 规则表是"成本最低、可解释、可测试"的方案：`test/core/agent/tools/search_local_lore_test.dart` 直接覆盖
   归一化行为，映射表变化可回归验证；而完整同义词知识库需要词典资源
   （社区俗语、缩写、错别字变体）与持续维护机制，是数据工程投入。
 - 在测试阶段，已知高频俗语的规则表已经覆盖了绝大多数用户提问；
@@ -282,7 +282,7 @@ schema 已预留 `game` 字段，未来接入不需要改表。
   代码化（verdict transform），但候选展示仍是行为层。
 
 **当前缓解（R11 前）**：Fact-check prompt 明确要求歧义时输出存疑并要求用户消歧；
-`agent_test.dart` 覆盖实体歧义场景；live QA 验证过真实 provider 下的歧义处理。
+`search_local_lore_test.dart` 覆盖实体歧义场景；live QA 验证过真实 provider 下的歧义处理。
 
 **修复**：消歧从"prompt 期望"升级为代码协议。R11：`EntityDisambiguator`
 （一次轻量 LLM 调用）按问题语义选候选，失败回退候选 #1；候选清单与已尝试集合
@@ -316,7 +316,7 @@ factCheck}` 只决定 writer 的输出格式；`SummaryAgent` / `FactCheckAgent`
 **修复（R13）**：换成与问题类型无关的 `[STORY_ANSWER: status=answered|partial|not_covered
 | confidence=x]`，status 由代码按实际状态判定；删除门槛、S5–S7、basis 枚举；工具改名为
 `collect_entity_evidence`。新规则：禁止任何只对某类问题或桥段生效的代码分支、阈值、
-提示词步骤或输出字段，`test/no_special_case_test.dart` 守卫。
+提示词步骤或输出字段，`test/guards/no_special_case_test.dart` 守卫。
 
 ### 5.6 宽问题在 24 步预算内读不全（Closed，R17：预算与分步流程已删除）
 
@@ -472,7 +472,7 @@ v0.10.4 预发布待真机确认。
   注入脚本、观察器、布局保护逻辑在修 bug 的过程中增长；拆分前需要先固化
   注入脚本的测试契约，否则拆分会破坏站点适配行为。
 
-**当前缓解**：技术报告附录 A 提供逐文件职责索引；`agent_test.dart` 与 Widget 测试
+**当前缓解**：技术报告附录 A 提供逐文件职责索引；与 `lib/` 一一对应的单元测试与 Widget 测试（`test/README.md`）
 覆盖关键行为；CLAUDE.md 约束代理"相关 tests / analyze 后再汇报"防止盲目重构。
 
 **修复记录（agent 模块）**：
@@ -686,7 +686,7 @@ DB 安装、内存峰值、长会话帧率）；无自动化测量。
 golden 对比基线，首次搭建成本高，且 golden 对字体渲染、平台差异敏感，
 容易产生噪音；个人开发流程中人工检查成本可接受，因此未立项。
 
-**当前缓解**：`settings_redesign_test.dart` 等 Widget 测试覆盖关键尺寸/
+**当前缓解**：`test/features/settings/settings_page_test.dart` 等 Widget 测试覆盖关键尺寸/
 字号下的 RenderFlex overflow 断言；真机人工验收已覆盖主要页面。
 
 **修复方向与触发条件**：v1.0 前建立自动化截图管线，或明确放弃并记录

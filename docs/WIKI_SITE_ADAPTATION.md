@@ -69,8 +69,8 @@ fz 的条目正文由卡片组件组成，图片可能通过卡片容器的
 
 ```text
 flutter analyze
-flutter test test/wiki_appearance_test.dart test/wiki_site_adapter_test.dart
-flutter test test/bookmark_service_test.dart
+flutter test test/features/wiki/wiki_appearance_test.dart test/features/wiki/wiki_site_adapter_test.dart
+flutter test test/features/wiki/bookmark_service_test.dart
 ```
 
 真机验收需要分别验证：

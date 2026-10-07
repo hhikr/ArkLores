@@ -173,7 +173,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
     **不改 agent**，资料只是用户提供的上下文，不是证据（`handoff_provider.dart`）。
   - **验证**：纯 Dart 查询在合成条目层上有单测，并在真实 schema 5 库（上游 a550f5e）上核过：3660 个故事全部有条目、有名字、有归属，
     且 `story_lines` 里没有无条目的故事（都能从书架走到）；查询均 <30 ms。界面在 Ahem 字体下做了布局截图检查
-    （`ARKLORES_SHOT_DIR=<目录> flutter test test/library_ui_test.dart` 导出 PNG，仅看布局不看字形）。
+    （`ARKLORES_SHOT_DIR=<目录> flutter test test/features/library/library_ui_test.dart` 导出 PNG，仅看布局不看字形）。
   - **已知局限**：数据层——主线章 `main_14` 的关卡被归到它的复刻活动（上一步已记的“活动与其复刻共用关卡，归属复刻”），所以该章页面没有关卡/敌人；
     要修需在 `entry_importer` 里让主线关卡按 id 前缀归主线章并重建库。App 端——条目类型与绑定的显示名只有中文
     （长故事的惰性渲染见上面“活动分类、阅读器与设置”一条）。真机待确认：书架网格观感、阅读页滚动保存的进度、续读定位。
@@ -351,7 +351,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
    grep -rnE "culprit|suspect|嫌疑|凶手|罪魁" lib/
    ```
 
-   结果必须为空（`test/no_special_case_test.dart` 在 `flutter test` 中守卫这一点）。
+   结果必须为空（`test/guards/no_special_case_test.dart` 在 `flutter test` 中守卫这一点）。
    换成任意其他类型的问题（"怎样""什么关系""在哪"），逻辑路径应完全相同。
 
 ## 禁止针对验收样例编程（anti-fixture-hardcoding）
@@ -379,7 +379,7 @@ GameData schema：5（0.11 起；含条目层 `collections` / `entries` / `entry
 ## Useful Commands
 
 ```bash
-/home/hhikr/flutter/bin/flutter test test/agent_test.dart
+/home/hhikr/flutter/bin/flutter test test/core/agent
 /home/hhikr/flutter/bin/flutter test
 /home/hhikr/flutter/bin/flutter analyze
 /home/hhikr/flutter/bin/dart run tools/build_gamedata_database.dart --help
@@ -491,7 +491,7 @@ R15 起目录带 `start_time`（活动上线时间；主线、密录为空），
 - 出处：`story_id:起始行-结束行` 或 `record:<normalized_records.id>`，代码核对必须是工具实际给模型看过的
   （`SeenLines`）。写错的名字靠“模型用自身知识构造查询 + 零命中如实报告 + 自动附近名”解决，不加别名表。
 - 提示词与工具说明里**不放任何具体人物、章节、活动或剧情示例**（开发者要求，2026-10）：示例会把模型带向那类问题，
-  等于特化优化。需要示意格式时只用占位符（`X`、`<story_id>`、`main_<章>`）；`lore_agent_test.dart` 守卫。
+  等于特化优化。需要示意格式时只用占位符（`X`、`<story_id>`、`main_<章>`）；`test/core/agent/lore_agent_loop_test.dart` 守卫。
   R18 起也不写具体剧情手法的名字（梦境、幻觉、叙诡等），只写“故事后来揭示了另一种性质”这类对任意故事成立的说法；
   守卫覆盖审稿和整理的提示词。
 - 答案写给玩家（R17b）：正文不提库/表/文件名/id，用自己的话叙述；出处在每条末尾，界面把它们放到该条下面的证据链，

@@ -30,7 +30,7 @@
 
 ## 维护
 
-- 新增条目类型、书架、绑定关系时，同步改 `loreLibraryGuide`，并确认里面没有具体人物、章节、活动名（`lore_agent_test.dart` 守卫）。
+- 新增条目类型、书架、绑定关系时，同步改 `loreLibraryGuide`，并确认里面没有具体人物、章节、活动名（`test/core/agent/lore_agent_loop_test.dart` 守卫）。
 - 提示词只讲结构与用法，不放示例；库里出现不认识的 kind/type/group_name 时，Agent 读原文判断，不猜含义。
 - 界面名字的兜底顺序（`library_labels.dart`）：表或 prts 给的名字 → 所属家族的默认名（集成战略资料、生息演算资料、档案资料、活动资料）→ 类型 id；
   未知书架显示“其他”，未知绑定显示“相关”，没有名字的分组不显示标题。
