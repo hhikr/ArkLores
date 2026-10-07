@@ -1,19 +1,13 @@
 /// 0.12: the Endfield conversations.
 ///
-/// Two sources, the same output (one story per conversation, grouped into a
-/// collection per mission, missions on a shelf by their kind):
-/// - [importPublication]: the research kit's Story publication
-///   (`webui/data`), which reconstructs the order, the options and the
-///   mission each conversation belongs to from the game's own structures;
-/// - [importDialogTables]: the dialog tables alone (`DialogTextTable`,
-///   `RadioTable`, `SNSDialogTable`), ordered by their row ids — the
-///   fallback when no publication is available.
+/// One story per conversation of the dialog tables (`DialogTextTable`,
+/// `RadioTable`, `SNSDialogTable`), ordered by their row ids, grouped into a
+/// collection per mission (named and shelved by the game's mission
+/// definitions when given).
 library;
 
 import 'dart:convert';
 import 'dart:io';
-
-import 'package:path/path.dart' as p;
 
 import '../../story_catalog.dart' show endfieldCollectionTypePrefix;
 import 'endfield_importer.dart';
@@ -479,18 +473,6 @@ class EndfieldStoryImporter {
       count++;
     }
     log?.call('sns: $count');
-  }
-
-  /// Conversations from the research kit's Story publication. Reads
-  /// `lang/CN/index.json` for the tree (kind → story line → mission →
-  /// conversations) and `lang/CN/conv/<key>.json` for each conversation.
-  Future<void> importPublication(Directory data) async {
-    final lang = Directory(p.join(data.path, 'lang', 'CN'));
-    final index = jsonDecode(
-      await File(p.join(lang.path, 'index.json')).readAsString(),
-    );
-    log?.call('publication index: ${index is Map ? index.keys.take(12).join(', ') : index.runtimeType}');
-    throw UnimplementedError('publication format to be mapped');
   }
 }
 

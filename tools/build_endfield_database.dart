@@ -4,13 +4,13 @@
 //   dart run tools/build_endfield_database.dart \
 //     --tables=<dir with the decoded game tables, e.g. <kit>/export_full/game/Table> \
 //     [--missions=<a JsonData dump's Data/Json/MissionRuntimeAsset>] \
-//     [--story=<the research kit's Story publication: <kit>/webui/data>] \
 //     [--version=<client version>] \
 //     --output=build/endfield [--force]
 //
 // The tables give the operator archives, the PRTS archive, enemy, weapon and
-// item flavour text; the Story publication gives the conversations grouped
-// by mission (without it, conversations are read from the dialog tables).
+// item flavour text and the conversations; the mission definitions (a JSON
+// data dump's MissionRuntimeAsset) name and shelve the missions. Use
+// tools/unpack_endfield.ps1 to unpack and build in one go.
 // See docs/GAMEDATA_BUILD_PIPELINE.md (Endfield) and
 // docs/KNOWLEDGE_BASE_LESSONS.md.
 import 'dart:convert';
@@ -59,7 +59,6 @@ Future<void> main(List<String> args) async {
     final tables = EndfieldTables(Directory(tablesDir));
     final importer = EndfieldImporter(tables, writer, log: log);
     await importer.importTables();
-    final story = arg('story');
     final missionsDir = arg('missions');
     final missions = missionsDir == null
         ? const <String, EndfieldMission>{}
@@ -72,11 +71,7 @@ Future<void> main(List<String> args) async {
       log: log,
       missions: missions,
     );
-    if (story != null && Directory(story).existsSync()) {
-      await stories.importPublication(Directory(story));
-    } else {
-      await stories.importDialogTables();
-    }
+    await stories.importDialogTables();
     log('derived layers');
     await writer.finish();
     await validateGameDataDatabase(db);
