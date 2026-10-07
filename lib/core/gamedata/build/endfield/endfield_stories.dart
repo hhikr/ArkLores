@@ -18,7 +18,7 @@ import 'endfield_writer.dart';
 /// prefix (`dlg_`, `radio_`, `sns_`) and its trailing conversation number
 /// (`dlg_a1m2_1` → `a1m2`).
 String missionOfConversation(String id) {
-  final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns)_'), '');
+  final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk)_'), '');
   final cut = bare.lastIndexOf('_');
   return cut > 0 ? bare.substring(0, cut) : bare;
 }
@@ -29,7 +29,7 @@ String missionOfConversation(String id) {
 String conversationLabel(String id) {
   final kind = switch (RegExp(r'^[a-z]+').firstMatch(id)?.group(0)) {
     'dlg' => '对话',
-    'radio' => '通讯',
+    'radio' || 'remotecomm' => '通讯',
     'sns' => '短信',
     _ => '对话',
   };
@@ -47,7 +47,8 @@ int? conversationOrder(String id) {
   final part = m.group(2) == null ? 0 : int.parse(m.group(2)!.padRight(2, '0').substring(0, 2));
   final kind = switch (RegExp(r'^[a-z]+').firstMatch(id)?.group(0)) {
     'dlg' => 0,
-    'radio' => 1,
+    'radio' || 'remotecomm' => 1,
+    'envTalk' => 3,
     _ => 2,
   };
   return (whole * 100 + part) * 10 + kind;
@@ -247,7 +248,7 @@ class EndfieldStoryImporter {
   /// interactions, an enemy's encounter; null for filler the game plays
   /// between lines, factory tutorials and tests (not story).
   Future<String?> _home(String id) async {
-    final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns)_'), '');
+    final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk)_'), '');
     if (RegExp(r'^(continue|blackbox|timeline_blackbox|sr|test)').hasMatch(bare)) {
       return null;
     }
@@ -287,6 +288,11 @@ class EndfieldStoryImporter {
       return enemy;
     }
     final mission = missionOfConversation(id);
+    // Ambient talk outside a known mission or place (a named passer-by's
+    // lines) has no home worth a shelf.
+    if (id.startsWith('envTalk_') && !missions.containsKey(mission) && !_missions.containsKey(mission)) {
+      return null;
+    }
     await _ensureMission(mission);
     return mission;
   }
@@ -438,8 +444,72 @@ class EndfieldStoryImporter {
       count++;
     }
     log?.call('radio: $count');
+    await _importRemoteCalls();
+    await _importEnvTalk();
     await _importSns();
     await _importReadings();
+  }
+
+  /// Remote calls during missions (`RemoteCommonTable`).
+  Future<void> _importRemoteCalls() async {
+    final table = tables.table('RemoteCommonTable');
+    final source = tables.sourcePath('RemoteCommonTable');
+    var count = 0;
+    final ids = table.keys.toList()..sort(_naturalCompare);
+    for (final (i, id) in ids.indexed) {
+      final row = table[id];
+      if (row is! Map<String, dynamic>) continue;
+      final lines = listOfMaps(row['remoteCommSingleDataList'])
+        ..sort((a, b) => ((a['index'] as num?) ?? 0).compareTo((b['index'] as num?) ?? 0));
+      await _story(
+        id: id,
+        source: source,
+        sort: 150000 + i,
+        lines: [
+          for (final l in lines)
+            EndfieldLine(_clean(l['remoteCommText']), speaker: _speaker(l['actorName'])),
+        ],
+      );
+      count++;
+    }
+    log?.call('remote calls: $count');
+  }
+
+  /// What characters say around the player in a mission or a place
+  /// (`EnvTalkTable`); speakers by their character or NPC id.
+  Future<void> _importEnvTalk() async {
+    final table = tables.table('EnvTalkTable');
+    final source = tables.sourcePath('EnvTalkTable');
+    final names = <String, String>{
+      for (final MapEntry(:key, :value) in tables.table('CharacterTable').entries)
+        if (value is Map) key: _clean(value['name']),
+      for (final value in tables.table('NpcTable').values)
+        if (value is Map) '${value['npcId']}': _clean(value['name']),
+    };
+    var count = 0;
+    final ids = table.keys.where((k) => k.startsWith('envTalk_')).toList()..sort(_naturalCompare);
+    for (final (i, id) in ids.indexed) {
+      final row = table[id];
+      if (row is! Map<String, dynamic>) continue;
+      final lines = listOfMaps(row['envTalkDataList'])
+        ..sort((a, b) => ((a['index'] as num?) ?? 0).compareTo((b['index'] as num?) ?? 0));
+      await _story(
+        id: id,
+        source: source,
+        sort: 300000 + i,
+        lines: [
+          for (final l in lines)
+            EndfieldLine(
+              _clean(l['text']),
+              speaker: (names['${l['actorId'] ?? ''}'] ?? '').isEmpty
+                  ? null
+                  : names['${l['actorId']}'],
+            ),
+        ],
+      );
+      count++;
+    }
+    log?.call('ambient talk: $count');
   }
 
   /// Texts the player reads in the world or in a mission (`RichContentTable`

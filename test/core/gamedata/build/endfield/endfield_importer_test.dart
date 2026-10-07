@@ -93,6 +93,38 @@ void writeTables(Directory dir) {
     'tag_group_race': {'tagGroupName': tx(i18n, 115, '种族')},
     'tag_group_hobby': {'tagGroupName': tx(i18n, 116, '爱好')},
   });
+  table('DungeonTable', {
+    'dung_1': {
+      'dungeonId': 'dung_1',
+      'dungeonName': tx(i18n, 600, '兽穴'),
+      'dungeonDesc': tx(i18n, 601, '野兽聚集的洞穴。'),
+      'domainId': 'domain_1',
+      'enemyIds': ['eny_0001_a', 'eny_9999_none'],
+    },
+  });
+  table('MailTemplateTable', {
+    'mail_1': {'templateId': 'mail_1', 'senderId': 'a', 'title': tx(i18n, 610, '来信'), 'mailContent': tx(i18n, 611, '一切安好。')},
+    'mail_2': {'templateId': 'mail_2', 'senderId': 'system', 'title': tx(i18n, 612, '补发'), 'mailContent': tx(i18n, 613, '请领取。')},
+  });
+  table('RemoteCommonTable', {
+    'remotecomm_e1m1_2': {
+      'remoteCommSingleDataList': [
+        {'index': 1, 'actorName': '乙', 'remoteCommText': '听得到吗？'},
+      ],
+    },
+  });
+  table('EnvTalkTable', {
+    'envTalk_e1m1_1': {
+      'envTalkDataList': [
+        {'index': 1, 'actorId': '', 'text': '今天风好大。'},
+      ],
+    },
+    'envTalk_Someone_1': {
+      'envTalkDataList': [
+        {'index': 1, 'actorId': '', 'text': '路过。'},
+      ],
+    },
+  });
   table('DomainDataTable', {
     'domain_1': {'domainName': tx(i18n, 100, '谷地'), 'levelGroup': ['map01_lv001']},
   });
@@ -306,6 +338,27 @@ void main() {
     );
     expect(rows.single['name'], '留言');
     expect(rows.single['collection_id'], 'ef/mission_e1m1');
+  });
+
+  test('dungeons bind their enemies; character mails are kept, system ones not', () async {
+    final links = await q("SELECT src, dst FROM entry_links WHERE relation = 'appears_in'");
+    expect(links.single['src'], 'enemy:ef/eny_0001_a');
+    expect(links.single['dst'], 'stage:ef/dung_1');
+    final mails = await q("SELECT name FROM entries WHERE type = 'mail'");
+    expect(mails.single['name'], '来信 · 甲');
+  });
+
+  test('remote calls and ambient talk join their mission; stray talk is left out', () async {
+    final stories = await q(
+      "SELECT raw_id, collection_id FROM entries WHERE type = 'story' AND (raw_id LIKE 'ef/remotecomm%' OR raw_id LIKE 'ef/envTalk%')",
+    );
+    expect(
+      {for (final s in stories) '${s['raw_id']}': s['collection_id']},
+      {
+        'ef/remotecomm_e1m1_2.txt': 'ef/mission_e1m1',
+        'ef/envTalk_e1m1_1.txt': 'ef/mission_e1m1',
+      },
+    );
   });
 
   test("the build's shelf list is the library's", () {

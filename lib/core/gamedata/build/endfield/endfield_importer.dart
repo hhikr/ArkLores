@@ -9,6 +9,7 @@
 /// Owners and bindings come from the tables' ids only.
 library;
 
+import '../../game.dart' show endfieldId;
 import '../text_harvest.dart' show cleanRichText, isMechanical;
 import 'endfield_tables.dart';
 import 'endfield_writer.dart';
@@ -45,6 +46,96 @@ class EndfieldImporter {
     await importWeapons();
     await importItems();
     await importArchive();
+    await importDungeons();
+    await importMails();
+  }
+
+  /// Dungeons (`DungeonTable`): a stage entry each with its flavour line,
+  /// its region, and the enemies it places (`appears_in`, as Arknights'
+  /// enemies appear in stages). Mechanics-only descriptions are skipped.
+  Future<void> importDungeons() async {
+    const name = 'DungeonTable';
+    final source = tables.sourcePath(name);
+    final regions = {
+      for (final MapEntry(:key, :value) in tables.table('DomainDataTable').entries)
+        if (value is Map) key: _clean(value['domainName']),
+    };
+    var count = 0;
+    var links = 0;
+    for (final MapEntry(key: key, value: row) in tables.table(name).entries) {
+      if (row is! Map<String, dynamic>) continue;
+      final id = '${row['dungeonId'] ?? key}';
+      final title = _clean(row['dungeonName']);
+      final desc = _clean(row['dungeonDesc']);
+      if (title.isEmpty || desc.isEmpty || isMechanical(desc)) continue;
+      final entry = await writer.entry(
+        type: 'stage',
+        rawId: id,
+        name: title,
+        group: regions['${row['domainId'] ?? ''}'],
+        sourcePath: source,
+        category: 'stage',
+        texts: [(section: '简介', text: desc)],
+      );
+      for (final enemy in listOfStrings(row['enemyIds']).toSet()) {
+        await writer.link('enemy:${endfieldId(enemy)}', 'appears_in', entry, name);
+        links++;
+      }
+      count++;
+    }
+    // Links to enemies without an entry (no description) point nowhere.
+    await writer.db.rawDelete(
+      "DELETE FROM entry_links WHERE relation = 'appears_in' AND src NOT IN "
+      '(SELECT id FROM entries)',
+    );
+    log?.call('dungeons: $count ($links enemy bindings)');
+  }
+
+  /// The name of a mail's sender: an operator (`pelica`), or the NPC its id
+  /// names (`deliver_thank_002_<npc>_01`).
+  String? _senderName(String sender) {
+    for (final MapEntry(:key, :value) in tables.table('CharacterTable').entries) {
+      if (key.endsWith('_$sender') && value is Map) {
+        final name = _clean(value['name']);
+        if (name.isNotEmpty) return name;
+      }
+    }
+    final npcs = tables.table('NpcTable');
+    for (final part in sender.split('_').reversed) {
+      for (final value in npcs.values) {
+        if (value is Map && value['npcId'] == part) {
+          final name = _clean(value['name']);
+          if (name.isNotEmpty) return name;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Mails a character sends (thanks, news); system notices are not story.
+  Future<void> importMails() async {
+    const name = 'MailTemplateTable';
+    final source = tables.sourcePath(name);
+    var count = 0;
+    for (final MapEntry(key: key, value: row) in tables.table(name).entries) {
+      if (row is! Map<String, dynamic>) continue;
+      final sender = '${row['senderId'] ?? ''}';
+      if (sender.isEmpty || sender.startsWith('sys')) continue;
+      final title = _clean(row['title']);
+      final text = _clean(row['mailContent']);
+      if (title.isEmpty || text.isEmpty) continue;
+      final from = _senderName(sender);
+      await writer.entry(
+        type: 'mail',
+        rawId: '${row['templateId'] ?? key}',
+        name: from == null ? title : '$title · $from',
+        sourcePath: source,
+        category: 'world',
+        texts: [(section: '邮件', text: text)],
+      );
+      count++;
+    }
+    log?.call('mails: $count');
   }
 
   String _clean(Object? field) => endfieldText(tables.text(field));
