@@ -65,7 +65,9 @@ jobs:
           flutter build apk --release \
             --target-platform android-arm,android-arm64 \
             --dart-define=ARKLORES_GAMEDATA_DB_URL="$url" \
-            --dart-define=ARKLORES_GAMEDATA_DB_SHA256="$sha"
+            --dart-define=ARKLORES_GAMEDATA_DB_SHA256="$sha" \
+            --dart-define=ARKLORES_ENDFIELD_DB_URL="${ENDFIELD_DB_URL:-}" \
+            --dart-define=ARKLORES_ENDFIELD_DB_SHA256="${ENDFIELD_DB_SHA256:-}"
 
       - name: Verify signature and name the APK
         run: |
