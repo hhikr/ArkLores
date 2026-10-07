@@ -43,6 +43,18 @@ String conversationLabel(String id) {
   return number == null ? kind : '$kind $number';
 }
 
+/// The operator entry a character mission belongs to: `c<n>m…` is the
+/// story of the operator numbered `n` (`chr_00<n>_…`), when there is one.
+String? operatorOfMission(String mission, Map<String, String> operators) {
+  final n = RegExp(r'^c(\d+)m').firstMatch(mission)?.group(1);
+  if (n == null) return null;
+  final prefix = 'chr_${n.padLeft(4, '0')}_';
+  for (final MapEntry(:key, :value) in operators.entries) {
+    if (key.startsWith(prefix)) return value;
+  }
+  return null;
+}
+
 /// The shelf of a mission id from its letter prefix, as the game's ids are
 /// formed (`e<n>m<n>` main story, `c…` character stories, the rest side
 /// stories). The publication's own kind replaces this when present.
@@ -78,16 +90,25 @@ class EndfieldStoryImporter {
   Future<void> _ensureMission(String id, {String? name, String? kind}) async {
     if (_missions.containsKey(id)) return;
     final shelf = kind ?? shelfOfMission(id);
+    final owner = operatorOfMission(id, importer.operators);
     final entry = (name: name ?? id, kind: shelf, sort: _missions.length);
     _missions[id] = entry;
     await writer.collection(
       id: 'mission_$id',
       kind: shelf,
       name: entry.name,
+      // A character mission hangs below its operator (the operator page
+      // lists it, like an Arknights record set).
+      parentId: owner,
       sortKey: entry.sort,
       sourcePath: 'mission:$id',
     );
   }
+
+  /// A speaker as players see it: the game appends an internal note in
+  /// braces (`工作人员{c13-…}`, a hidden identity) that is not shown.
+  String _speaker(Object? field) =>
+      _clean(field).replaceAll(RegExp(r'\{[^{}]*\}'), '').trim();
 
   Future<void> _story({
     required String id,
@@ -138,8 +159,8 @@ class EndfieldStoryImporter {
           for (final (_, r) in rows)
             EndfieldLine(
               _clean(r['dialogText']),
-              speaker: _clean(r['actorName']),
-              kind: _clean(r['actorName']).isEmpty ? 'narration' : 'dialogue',
+              speaker: _speaker(r['actorName']),
+              kind: _speaker(r['actorName']).isEmpty ? 'narration' : 'dialogue',
             ),
         ],
       );
@@ -162,7 +183,7 @@ class EndfieldStoryImporter {
         sort: 100000 + i,
         lines: [
           for (final l in lines)
-            EndfieldLine(_clean(l['radioText']), speaker: _clean(l['actorName'])),
+            EndfieldLine(_clean(l['radioText']), speaker: _speaker(l['actorName'])),
         ],
       );
       count++;

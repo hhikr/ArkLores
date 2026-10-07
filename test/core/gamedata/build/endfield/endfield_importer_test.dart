@@ -109,6 +109,10 @@ void writeTables(Directory dir) {
       'actorName': tx(i18n, 72, '乙'),
       'dialogText': tx(i18n, 73, '欢迎，{player}。'),
     },
+    'dlg_c1m1_1_001': {
+      'actorName': tx(i18n, 76, '路人{c1-内部名}'),
+      'dialogText': tx(i18n, 77, '甲的故事开始了。'),
+    },
     'dlg_e1m1_1_010': {
       'actorName': tx(i18n, 74, ''),
       'dialogText': tx(i18n, 75, '风停了。'),
@@ -217,6 +221,18 @@ void main() {
       "SELECT r.content FROM entries e JOIN normalized_records r ON r.entry_id = e.id WHERE e.type = 'document'",
     );
     expect(doc.single['content'], '亲爱的朋友：\n谷地的春天来了。');
+  });
+
+  test('a character mission hangs below its operator; speakers lose internal notes', () async {
+    final owner = await q(
+      "SELECT kind, parent_id FROM collections WHERE id = 'ef/mission_c1m1'",
+    );
+    expect(owner.single['kind'], 'ef/character');
+    expect(owner.single['parent_id'], 'operator:ef/chr_0001_a');
+    final line = await q(
+      "SELECT speaker FROM story_lines WHERE story_id = 'ef/dlg_c1m1_1.txt'",
+    );
+    expect(line.single['speaker'], '路人');
   });
 
   test("the build's shelf list is the library's", () {
