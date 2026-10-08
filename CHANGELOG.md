@@ -4,6 +4,8 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-08 (pre-release)
+
 ### Endfield stories read like the game's missions
 
 - **A mission is one text**: its dialogue, radio, remote calls, talk around the player and messages in one page instead of a list of numbered "对话 3 / 通讯 2" pieces; each conversation opens with a rule naming its kind (named where the kind changes), the kinds one after another, each in the game's numbering.
