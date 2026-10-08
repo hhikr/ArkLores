@@ -116,7 +116,15 @@ const Set<String> introEntryTypes = {
   'sandbox_topic',
   // 0.12: an Endfield mission's own description.
   'mission_intro',
+  // 0.12: the part of the Endfield archive a collection is in (no text;
+  // its group heads the archive shelf).
+  'archive_section',
 };
+
+/// 0.12: collection kinds (without the game's namespace) that only hang
+/// below an operator (its Baker topics, its interactions on the Dijiang):
+/// listed on the operator's page, never as shelves.
+const Set<String> ownedCollectionKinds = {'baker', 'ship'};
 
 /// `'a','b'` for an SQL `IN (…)` of [types] (fixed identifiers, not input).
 String _sqlList(Set<String> types) => types.map((t) => "'$t'").join(',');
@@ -147,6 +155,10 @@ class LibraryCollection {
     this.sortKey,
     this.intro,
     this.group,
+    this.firstStory,
+    this.otherTypes = 0,
+    this.otherType,
+    this.otherEntry,
   });
 
   factory LibraryCollection.fromRow(Map<String, Object?> row) =>
@@ -160,6 +172,10 @@ class LibraryCollection {
         sortKey: (row['sort_key'] as num?)?.toInt(),
         intro: _text(row['intro']),
         group: _text(row['group_name']),
+        firstStory: _text(row['first_story']),
+        otherTypes: (row['other_types'] as num?)?.toInt() ?? 0,
+        otherType: _text(row['other_type']),
+        otherEntry: _text(row['other_entry']),
       );
 
   final String id;
@@ -181,6 +197,17 @@ class LibraryCollection {
   /// Where the collection is (the group of its introduction entry: an
   /// Endfield mission's region); a shelf groups its collections by it.
   final String? group;
+
+  /// The story file of its first listed story (with [stories] == 1, the
+  /// only one).
+  final String? firstStory;
+
+  /// How many types its other entries are of, the (first) type, and the
+  /// (first) entry: a collection with one entry, or one kind of entry,
+  /// opens it right away instead of a page with one row.
+  final int otherTypes;
+  final String? otherType;
+  final String? otherEntry;
 }
 
 /// One entry in a list.
@@ -315,13 +342,16 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
     ...shelfKinds,
     for (final kind in endfieldShelfOrder) '$endfieldIdPrefix$kind',
   ];
+  bool owned(String kind) => ownedCollectionKinds.contains(
+        kind.startsWith(endfieldIdPrefix) ? kind.substring(endfieldIdPrefix.length) : kind,
+      );
   return [
     for (final kind in known)
       if (byKind[kind] != null) byKind[kind]!,
     // A kind a later build introduces still gets a shelf, after the known
     // ones (it reads as "其他" until the interface names it).
     for (final kind in byKind.keys.toList()..sort())
-      if (!known.contains(kind)) byKind[kind]!,
+      if (!known.contains(kind) && !owned(kind)) byKind[kind]!,
   ];
 }
 
@@ -358,7 +388,14 @@ final String _collectionColumns =
     '(SELECT r.content FROM entries i JOIN normalized_records r ON r.id = i.record_id '
     'WHERE i.collection_id = c.id AND i.type IN (${_sqlList(introEntryTypes)}) LIMIT 1) AS intro, '
     '(SELECT i.group_name FROM entries i WHERE i.collection_id = c.id '
-    'AND i.type IN (${_sqlList(introEntryTypes)}) AND i.group_name IS NOT NULL LIMIT 1) AS group_name';
+    'AND i.type IN (${_sqlList(introEntryTypes)}) AND i.group_name IS NOT NULL LIMIT 1) AS group_name, '
+    "MIN(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN e.raw_id END) AS first_story, "
+    "COUNT(DISTINCT CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN e.type END) AS other_types, '
+    "MIN(CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN e.type END) AS other_type, '
+    "MIN(CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN e.id END) AS other_entry';
 
 /// The collections of [kind]: newest release first when they have a release
 /// time, otherwise in game order. Collections with nothing to read are left

@@ -2,6 +2,7 @@
 /// bindings. The game text is Chinese, so these are too.
 library;
 
+import '../gamedata/game.dart';
 import 'library_queries.dart';
 
 /// Chinese name of an entry type (the type itself when unknown).
@@ -58,6 +59,18 @@ String entryTypeName(String type) => switch (type) {
       'mission_intro' => '任务简介',
       _ => _familyName(type),
     };
+
+/// The name of an entry type in [game]: Endfield's own words where its
+/// interface names the kind differently (the codex: 威胁图鉴 for enemies;
+/// the archive's documents and investigations), else [entryTypeName].
+String entryTypeNameIn(String type, Game game) =>
+    game == Game.endfield ? endfieldTypeNames[type] ?? entryTypeName(type) : entryTypeName(type);
+
+/// 0.12: Endfield's names of entry types (`ui_wiki_common_*`, `ui_prts_*`).
+const Map<String, String> endfieldTypeNames = {
+  'enemy': '威胁',
+  'investigation': '事件调查',
+};
 
 /// What a type nobody has named yet is called: the family its id says
 /// (`roguelike_…`, `sandbox_…`, `archive_…`), else the id itself, so a table
@@ -248,6 +261,17 @@ const Map<String, String> endfieldShelfNames = {
   'side': '支线任务',
   'activity': '活动任务',
   'other': '委派任务',
-  'archive': '档案库',
+  // The PRTS archive's title (`ui_prts_title`).
+  'archive': '情报档案库',
   'memory': '干员',
+};
+
+/// 0.12: headings of what hangs below an operator, by collection kind
+/// (without the namespace): Endfield's operator missions, Baker topics and
+/// the Dijiang (`LUA_SPACESHIP_NAME`). Arknights' record sets keep their
+/// own name (密录).
+const Map<String, String> endfieldOwnedNames = {
+  'memory': '干员任务',
+  'baker': 'Baker 话题',
+  'ship': '帝江号',
 };

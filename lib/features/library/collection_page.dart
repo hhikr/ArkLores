@@ -21,6 +21,54 @@ import 'library_widgets.dart';
 
 // ─── One collection ───────────────────────────────────────────────
 
+/// The longest list of one kind a collection page shows in place (longer
+/// ones open their own page, with a filter).
+const int inlineListLimit = 12;
+
+/// The entries of one type of a collection, listed in place under an
+/// optional [heading] (several kinds on the page).
+class _InlineEntries extends ConsumerWidget {
+  const _InlineEntries({
+    super.key,
+    required this.type,
+    required this.collectionId,
+    this.heading,
+  });
+
+  final String type;
+  final String collectionId;
+  final String? heading;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final list = ref
+            .watch(
+              entriesOfTypeProvider(
+                (
+                  type: type,
+                  collectionId: collectionId,
+                  query: '',
+                  groups: groupsKey(null),
+                  game: gameOfId(collectionId),
+                ),
+              ),
+            )
+            .valueOrNull ??
+        const <LibraryEntry>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (heading != null) GroupHeading(title: heading!),
+        for (final e in list) ...[
+          EntryRow(entry: e, onTap: () => openEntry(context, e)),
+          rowDivider(theme),
+        ],
+      ],
+    );
+  }
+}
+
 /// A story set, activity, operator record set or roguelike topic: its
 /// stories in reading order and the other texts that belong to it.
 class CollectionPage extends ConsumerWidget {
@@ -127,15 +175,11 @@ class CollectionPage extends ConsumerWidget {
                     ),
                     if (intro != null)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                        child: Text(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                        child: ReadingText(
                           intro,
                           key: const ValueKey('collection-intro'),
-                          style: theme.bodyFont.copyWith(
-                            color: theme.textSecondary,
-                            fontSize: 14,
-                            height: 1.7,
-                          ),
+                          size: 14.5,
                         ),
                       ),
                     ..._ownParts(context, theme, inline,
@@ -231,13 +275,28 @@ class CollectionPage extends ConsumerWidget {
                           code: 'related',
                         ),
                       ),
-                      for (final t in typeList) ...[
+                      for (final t in typeList)
+                        // A short list is shown in place: no page that
+                        // only holds it.
+                        if (t.count <= inlineListLimit &&
+                            !stageBoundTypes.contains(t.type))
+                          _InlineEntries(
+                            key: ValueKey('collection-inline-${t.type}'),
+                            type: t.type,
+                            collectionId: collectionId,
+                            heading: typeList.length > 1
+                                ? (t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
+                                    ? ruleKinds.join('、')
+                                    : entryTypeNameIn(t.type, gameOfId(collectionId)))
+                                : null,
+                          )
+                        else ...[
                         LibraryRow(
                           key: ValueKey('collection-type-${t.type}'),
                           title:
                               t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
                                   ? ruleKinds.join('、')
-                                  : entryTypeName(t.type),
+                                  : entryTypeNameIn(t.type, gameOfId(collectionId)),
                           subtitle: context.t.libraryCountEntries(t.count),
                           subtitleLines: 1,
                           trailing: Icon(

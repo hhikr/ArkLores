@@ -58,7 +58,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
               separatorBuilder: (_, __) => rowDivider(theme),
               itemBuilder: (context, i) => LibraryRow(
                 key: ValueKey('codex-type-${list[i].type}'),
-                title: entryTypeName(list[i].type),
+                title: entryTypeNameIn(list[i].type, game),
                 subtitle: context.t.libraryCountEntries(list[i].count),
                 subtitleLines: 1,
                 leading: Icon(Icons.folder_outlined, color: theme.accentText),
@@ -187,7 +187,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
       subtitle: intro ?? parts.join(' · '),
       subtitleLines: intro == null ? 1 : 2,
       trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
-      onTap: () => openCollection(context, c.id),
+      onTap: () => openCollectionOf(context, c),
     );
   }
 }

@@ -150,9 +150,15 @@ URL 仍指向已发布的资产，带着新 SHA 构建的 APK 会拒收它。
 dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<MissionRuntimeAsset 目录> --version=<客户端版本> --output=build/endfield --force
 ```
 
-- 表 → 干员（阵营/种族/专长/爱好标签、档案、语音）、档案库（PRTS：分类 → 文档 → 页面 → `RichContentTable` 正文；调查与线索）、
+- 先读任务定义（`--missions`），再导表：文字的地区可能要从它 id 里的任务的关卡推出。
+- 表 → 干员（干员情报：阵营/种族/专长/爱好；干员档案；语音记录——段名取游戏的界面文字 `ui_char_profile_*`）、
+  情报档案库（PRTS：分页 `PrtsPage` → 分类 → 文档 → 页面 → `RichContentTable` 正文，音像存档的页面是 `RadioTable` 的录音；
+  分类按它页面的类型归到中枢档案/见闻辑录/音像存档，调查报告归情报采集；每个分类集合带一条无正文的 `archive_section` 条目，`group_name` 是分页名；
+  事件调查 `PrtsInvestigate` 带地区 `domainId`、它收集的页面和它解锁的报告 `unlockPrts`）、
   敌人/武器/物品的描述（敌人带分布地点；物品只收 `decoDesc`，去掉多件物品共用的模板句和机制句）、副本（`DungeonTable`：名字、简介、地区，敌人 `appears_in`）、
   角色来信（`MailTemplateTable`，系统邮件不收）、势力名；档案库不列的留言与告示（`RichContentTable`）归到所在任务或地点。
+  文档的地区只看 id（`regionOfIds`）：调查收集或解锁的页面取调查的地区；否则看文档、页面、正文的 id 里的地图号（`map01…`），
+  再看 id 里的任务（`paper_sm1l1m4_2` → 任务 `sm1l1m4` → 它的关卡 → 地区）。中枢档案是通用设定，没有地区。
 - 剧情：`DialogTextTable`、`RadioTable`、`RemoteCommonTable`、`EnvTalkTable`（只收属于已知任务或地点的）、`SNSDialogTable`。
   **一个任务是一篇剧情**（`ef/<任务>.txt`；地点、敌人、短信话题、礼物对话同样各一篇），每段对话前一行 `kind = 'section'`，内容是这段的种类
   （对话/通讯/远程通话/闲话/短信）。一篇里按种类分块（对话 → 通讯 → 远程通话 → 闲话 → 短信），块内按游戏编号（`0d5` = 0.5）：
@@ -160,13 +166,22 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   一段对话内部的顺序按它的**对话树**（`dlg_…` TextAsset，`readDialogTree`）：台词节点的 `_trunkId` 是文本行，选项节点的出边依次是各选项的回应，分支在汇合处接上；
   分叉的选项写成“选项 → 它的回应”，不分叉的写成一行“甲／乙”；`Ex…` 节点是设置，不走。过场节点处放这段对话的时间线台词（按片段的 `startTime`，
   绑定的选项接在那句后面）。两者都没覆盖的行与选项组按行号补在后面，选项组填在行号的空位上（2026-10 客户端：约 11% 的台词行）。
-  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`）；任务名、简介（`mission_intro` 条目，`group_name` 是任务所在地区）、分类（书架）、所属干员来自任务定义。
+  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`），再经 `canonicalMission`：子任务 `<任务>d<n>` 与基础任务同名、没有名字、
+  类型在任务面板不可见（`MissionTypeInfoTable.isVisible = false`，隐藏步骤）或没有定义时，并进基础任务（以前这些隐藏步骤落在委派任务里）。
+  任务名依次取：任务定义 → `TextTable` 的 `<任务>_name`（客户端不再带定义的任务，名字和 `<任务>_desc_001` 简介还在）→ 子任务共同的名字
+  （`据点建设·难民暂居处·其一/其二` → `据点建设·难民暂居处`）；都没有就叫“无名任务（<任务 id>）”，不编号、不编名字。
+  简介（`mission_intro` 条目，`group_name` 是任务所在地区）、分类（书架）、所属干员来自任务定义（没有定义的看它的子任务）；
+  干员任务的 `group_name` 是该干员任务系列的名字（`TextTable` 的 `chr_<编号>_ep1_name`）。
 - `section` 行不进检索记录；向量切块在 `section` 处断开（`chunkStory`），所以合并前后每段切出的块文字相同，按内容哈希缓存的向量全部沿用（0.12 合并时 9969 块零新增）。
-  干员的任务、短信话题（`SNSDialogTopicTable`）与礼物对话挂在干员下（kind `ef/memory`）；地图上的交互按地点（`LevelDescTable`）、敌人遭遇的通讯按敌人归组
-  （kind `ef/world`，书架显示为“其他”）；没有定义的任务按分类编号（“支线任务 3”）；对话之间的插话、工业教学、测试对话不收。
+  挂在干员下的三种集合：干员任务（kind `ef/memory`）、Baker 话题（`SNSDialogTopicTable`，kind `ef/baker`）、帝江号上的互动
+  （`sim_talk/gift/rest/work_<干员>`：闲谈按信赖等级、送礼、休息、工作，一位干员一篇，kind `ef/ship`）；`ef/baker`、`ef/ship` 不是书架。
+  地图上的交互按地点（`LevelDescTable`；`map01lv005_…` 也是关卡 `map01_lv005`）、敌人遭遇的通讯按敌人归组
+  （kind `ef/world`，书架显示为“其他”）；对话之间的插话、工业教学、测试对话不收。
   `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要（进 `story_catalog.synopsis`）。
 - 文字规范化（`endfieldText`）：去标记与资源路径；主角台词的 `{F}…{M}…` 只留女性版本（kit 的默认）；`{player}` 写作“管理员”；
   说话人名后面花括号里的内部注释（`{c13-…}`，可能是剧情里尚未揭示的身份）去掉。
 - 一个 40 秒左右的整库构建；重建后的库没有向量，加 `-Embed`（脚本在压缩前跑 `build_story_embeddings.dart`）。
   向量按内容哈希缓存在 `build/embedding_cache/`，没变的块不再收费；新块要花钱，先问开发者。
   v0.12.0：8379 段对话、9969 块、约 115 万字，嵌入 77 秒、约 ¥0.4；两个库用同一个模型（`qwen3.7-text-embedding`@512），`find` 跨库合并分数。
+  只改归类或命名时先用 `build_story_embeddings.dart --migrate-from=<旧库>` 按行对齐搬旧向量，剩下的块多半在缓存里
+  （0.12 归类修正：447 篇整篇对齐、其余 349 块全部命中缓存，零费用）；`--dry-run` 会报“to embed”的块数，非零才要问开发者。

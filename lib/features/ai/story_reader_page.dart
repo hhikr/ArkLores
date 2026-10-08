@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../core/gamedata/story_coverage_models.dart'
     show StoryLineEntry, storyKindLabel;
@@ -22,6 +23,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/smooth_page_route.dart';
+import '../library/reading_text.dart' show FoldSection, ReadingText;
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
 
@@ -167,6 +169,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   List<StoryLineEntry>? _preparedFor;
   bool _spoken = false;
   String _nickname = '';
+
+  /// The description of the Endfield mission this story is (or null).
+  String? _intro;
 
   /// The item the lazy list is anchored on (0 = the header, then one per row,
   /// then the end block) and where on the screen it starts (a fraction of the
@@ -406,6 +411,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final chapter =
         entry?.chapterLabel ?? (cut < 0 ? '' : fallback.substring(cut + 3));
     final canJump = _cited || _resume != null;
+    // An Endfield mission's own description heads its story: the mission
+    // opens straight in the reader, without a page that would show it.
+    _intro = entry != null && gameOfId(entry.collectionId) == Game.endfield
+        ? ref.watch(collectionIntroProvider(entry.collectionId)).valueOrNull
+        : null;
 
     _nickname = ref.watch(nicknameProvider);
     // Floating docks; the text starts below them (a cited line is placed
@@ -588,39 +598,24 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               const SizedBox(height: 10),
               _chip(theme, context.t.storyReaderResumed(_resume! + 1)),
             ],
+            // The mission's description: what the game shows before it.
+            if (_intro != null && _intro!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ReadingText(
+                _intro!,
+                key: const ValueKey('story-reader-intro'),
+                size: 14.5,
+              ),
+            ],
+            // The official synopsis tells the whole story (it is what the
+            // game shows when a story is skipped): folded until asked for.
             if (synopsis != null && synopsis.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                decoration: BoxDecoration(
-                  color: theme.cardSurface,
-                  borderRadius: BorderRadius.zero,
-                  border: Border(
-                    left: BorderSide(color: theme.accentPrimary, width: 3),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t.storyReaderSynopsis,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 11,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      withPlaceholders(synopsis.trim(), ref.watch(nicknameProvider)),
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textPrimary,
-                        fontSize: 13,
-                        height: 1.55,
-                      ),
-                    ),
-                  ],
-                ),
+              FoldSection(
+                key: const ValueKey('story-reader-synopsis'),
+                title: context.t.storyReaderSynopsis,
+                initiallyOpen: false,
+                child: ReadingText(synopsis.trim(), size: 14.5),
               ),
             ],
             const SizedBox(height: 14),

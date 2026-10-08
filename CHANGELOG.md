@@ -11,6 +11,16 @@ All notable changes to ArkLores will be documented in this file.
 - **Motion without bounce**: a pressed surface sinks and settles back without overshoot; a new page slides in a short way from the right while it fades in (the page below shifts a little left) instead of growing from 94 %; switching library pages fades and slides in from the side the tab lies on.
 - A guard test keeps rounded shapes, the rounded icon set and springy curves out of `lib/`.
 
+### Library: long text that reads well; fewer menus; Endfield named as the game names it
+
+- **Long text in the reading font**: archive documents, profiles, descriptions, mission descriptions and synopses use the story reader's font (LXGW WenKai Screen) with room between paragraphs; `【标签】` fields and lists of facts are set off from their values.
+- **Profiles in parts that fold**: an operator's profile (both games) is a set of sections — 干员情报, 基础档案, each 档案资料 … — each folding, all open. **Voice lines** are a list of quotes, numbered lines of one kind (信赖对话 1–5, 交谈 1–5) under one heading.
+- **The official synopsis at the top of a story is folded** (both games): it tells the whole story, as the game does when a story is skipped. An Endfield mission's own description heads its story instead.
+- **No page that holds a single row**: a mission that is one story opens it; an archive category opens its list; an investigation opens itself; a short list of one kind sits in place on its collection's page; a long grouped list (regions, item kinds) is one list with group headings and chips that pick a group in place, instead of a menu of groups first.
+- **Endfield operators**: their page lists 干员任务 (under the name of the operator's mission series), Baker 话题 and the Dijiang (帝江号: what they say when you talk to them, give them a gift, send them to rest or work — gathered per operator, formerly scattered as unnamed side missions); the profile parts are named as the game names them (干员情报, 语音记录).
+- **Endfield's archive is the game's 情报档案库**: 中枢档案, 见闻辑录, 音像存档 (recordings, missing before) and 情报采集 (事件调查 with the reports they unlock); documents are placed in 四号谷地 or 武陵 by the mission or investigation their ids name, so far fewer fall under 其他.
+- **Endfield missions**: hidden steps and same-named follow-ups of a mission are read in it (they no longer fill 委派任务 with main-story pieces); missions without a definition take the name the game's text table keeps, or the shared name of their parts; the few the game names nowhere say so (无名任务（id）) instead of a made-up number. Places in ids written without a separator are found too.
+
 ## [0.12.1] - 2026-10-08 (pre-release)
 
 ### Endfield stories read like the game's missions

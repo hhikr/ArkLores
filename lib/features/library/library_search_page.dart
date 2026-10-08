@@ -287,7 +287,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
                     Icons.chevron_right_sharp,
                     color: theme.textMuted,
                   ),
-                  onTap: () => openCollection(context, c.id),
+                  onTap: () => openCollectionOf(context, c),
                 ),
                 rowDivider(theme),
               ],

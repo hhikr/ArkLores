@@ -64,13 +64,15 @@ Future<void> main(List<String> args) async {
     final writer = EndfieldWriter(db);
     await writer.createSchema(sourceVersion: arg('version') ?? 'unknown');
     final tables = EndfieldTables(Directory(tablesDir));
-    final importer = EndfieldImporter(tables, writer, log: log);
-    await importer.importTables();
+    // The mission definitions first: a text's region can come from the
+    // level of the mission its id names.
     final missionsDir = arg('missions');
     final missions = missionsDir == null
         ? const <String, EndfieldMission>{}
         : EndfieldStoryImporter.loadMissions(Directory(missionsDir), tables);
     log('missions defined: ${missions.length}');
+    final importer = EndfieldImporter(tables, writer, log: log, missions: missions);
+    await importer.importTables();
     final trees = EndfieldStoryImporter.loadDialogTrees([
       for (final d in (arg('trees') ?? '').split(';'))
         if (d.trim().isNotEmpty) Directory(d.trim()),

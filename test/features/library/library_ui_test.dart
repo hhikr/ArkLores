@@ -1,4 +1,5 @@
 import 'package:arklores/core/gamedata/game.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/library/library_provider.dart';
 import 'package:arklores/core/library/library_queries.dart';
@@ -448,7 +449,7 @@ void main() {
     }
     expect(find.byKey(const ValueKey('shelf-main')), findsNothing);
     expect(find.text('主线任务'), findsOneWidget);
-    expect(find.text('档案库'), findsOneWidget);
+    expect(find.text('情报档案库'), findsOneWidget);
     expect(find.byKey(const ValueKey('library-missing-endfield')), findsNothing);
 
     // Back to Arknights: the page is as it was.
@@ -473,6 +474,7 @@ void main() {
           sortKey: i,
           intro: '任务$i的简介：一行说明。',
           group: region,
+          firstStory: 'ef/m$i.txt',
         );
     await tester.pumpWidget(
       ProviderScope(
@@ -520,6 +522,12 @@ void main() {
       lessThan(headings[1]),
     );
     expect(find.text('任务1的简介：一行说明。'), findsOneWidget);
+    // A mission that is one story opens it: no page with a single row.
+    await tester.tap(find.byKey(const ValueKey('collection-ef/mission_m1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(StoryReaderPage), findsOneWidget);
+    expect(find.byType(CollectionPage), findsNothing);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -536,6 +544,18 @@ void main() {
               StoryLineEntry(lineIndex: 5, speaker: '甲', content: '通讯里的一句。'),
             ],
           ),
+          storyCatalogEntryProvider.overrideWith(
+            (ref, id) async => const StoryCatalogEntry(
+              storyId: 'ef/m1.txt',
+              collectionId: 'ef/mission_m1',
+              collectionName: '任务1',
+              collectionType: 'EF_MAIN',
+              storySort: 0,
+              storyName: '任务1',
+              synopsis: '甲与乙在谷地相遇。\n乙独自离开。',
+            ),
+          ),
+          collectionIntroProvider.overrideWith((ref, id) async => '任务1的简介。'),
         ],
         child: MaterialApp(
           locale: const Locale('zh'),
@@ -556,6 +576,18 @@ void main() {
     expect(find.text('对话'), findsOneWidget);
     expect(find.text('通讯'), findsOneWidget);
     expect(find.text('第二段。'), findsOneWidget);
+    // The mission's description heads the story; the official synopsis
+    // (the whole story told short) is folded until it is asked for.
+    // (The description is asked for once the story's mission is known.)
+    await tester.pump();
+    expect(find.byKey(const ValueKey('story-reader-synopsis')), findsOneWidget);
+    expect(find.text('任务1的简介。'), findsOneWidget);
+    expect(find.text('甲与乙在谷地相遇。'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('fold-官方梗概')));
+    await tester.pumpAndSettle();
+    // One paragraph per line of the synopsis.
+    expect(find.text('甲与乙在谷地相遇。'), findsOneWidget);
+    expect(find.text('乙独自离开。'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -589,7 +621,9 @@ void main() {
     expect(find.text('风暴瞭望'), findsWidgets);
     expect(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')), findsOneWidget);
     expect(find.textContaining('官方梗概'), findsOneWidget);
-    expect(find.byKey(const ValueKey('collection-type-stage')), findsOneWidget);
+    // A short list of one kind is listed in place, not behind a row.
+    expect(find.byKey(const ValueKey('collection-inline-stage')), findsOneWidget);
+    expect(find.byKey(const ValueKey('collection-type-stage')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')));
     await tester.pumpAndSettle();
@@ -675,7 +709,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a long grouped list opens as a menu of named groups',
+  testWidgets('a long grouped list is shown by named group; a chip picks one in place',
       (tester) async {
     await pumpApp(
       tester,
@@ -692,9 +726,50 @@ void main() {
     expect(find.byKey(const ValueKey('group-all')), findsOneWidget);
     expect(find.textContaining('copper'), findsNothing);
     expect(find.textContaining('wrath'), findsNothing);
+    // The whole list carries the group headings; no page of groups first.
+    expect(find.byKey(const ValueKey('group-heading-其他')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('group-藏品')));
     await tester.pumpAndSettle();
+    expect(find.byType(EntryListPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-heading-其他')), findsNothing);
     expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a profile reads in parts that fold, open; voice lines are quotes, '
+      'numbered ones under one heading', (tester) async {
+    await pumpApp(
+      tester,
+      Scaffold(
+        body: ListView(
+          children: const [
+            ProfileText(
+              '## 干员情报\n阵营：某工业\n种族：某族\n'
+              '## 基础档案\n【代号】甲\n【矿石病感染情况】\n确认为非感染者。\n'
+              '## 语音记录\n问候：你好，管理员。\n信赖对话1：第一次。\n信赖对话2：第二次。',
+            ),
+          ],
+        ),
+      ),
+    );
+    await shoot(tester, 'library_profile');
+    // Every part is open; a fact list and 【】 fields set off their labels.
+    expect(find.text('某工业'), findsOneWidget);
+    expect(find.text('阵营'), findsOneWidget);
+    expect(find.text('代号'), findsOneWidget);
+    expect(find.text('确认为非感染者。'), findsOneWidget);
+    // Voice lines: the title over the line; numbered titles of one kind
+    // under one heading, each by its number.
+    expect(find.text('问候'), findsOneWidget);
+    expect(find.text('你好，管理员。'), findsOneWidget);
+    expect(find.text('信赖对话'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('第二次。'), findsOneWidget);
+    // A part folds when its head is tapped.
+    await tester.tap(find.byKey(const ValueKey('fold-基础档案')));
+    await tester.pumpAndSettle();
+    expect(find.text('确认为非感染者。'), findsNothing);
+    expect(find.text('某工业'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -745,7 +820,7 @@ void main() {
     );
     await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('collection-type-stage')), findsOneWidget);
+    expect(find.byKey(const ValueKey('collection-inline-stage')), findsOneWidget);
     await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
     await tester.pumpAndSettle();
     // An ending's page: its stories, in order.

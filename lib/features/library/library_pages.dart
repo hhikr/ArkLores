@@ -22,6 +22,7 @@ export 'entry_list_page.dart';
 export 'entry_page.dart';
 export 'library_search_page.dart';
 export 'operator_page.dart';
+export 'reading_text.dart';
 export 'shelf_page.dart';
 
 // ─── Shelves ───────────────────────────────────────────────────────
@@ -97,6 +98,36 @@ void openShelf(BuildContext context, String kind) => pushLibraryPage(
 
 void openCollection(BuildContext context, String id) =>
     pushLibraryPage(context, (_) => CollectionPage(collectionId: id));
+
+/// Opens a collection from a list row, without a page that would hold a
+/// single row: a collection with one story and nothing else opens the
+/// story (an Endfield mission: its description is at the top of the
+/// reader), one with one entry opens the entry, one with one kind of entry
+/// opens that list; the others open their page.
+void openCollectionOf(BuildContext context, LibraryCollection c) {
+  if (c.stories == 1 && c.others == 0 && c.firstStory != null) {
+    openStory(context, c.firstStory!);
+  } else if (c.stories == 0 && c.others == 1 && c.otherEntry != null) {
+    pushLibraryPage(
+      context,
+      (_) => c.otherType == 'operator'
+          ? OperatorPage(entryId: c.otherEntry!)
+          : EntryPage(entryId: c.otherEntry!),
+    );
+  } else if (c.stories == 0 && c.otherTypes == 1 && c.otherType != null) {
+    pushLibraryPage(
+      context,
+      (_) => EntryListPage(
+        type: c.otherType!,
+        collectionId: c.id,
+        collectionName: c.name,
+        title: c.name,
+      ),
+    );
+  } else {
+    openCollection(context, c.id);
+  }
+}
 
 void openEntry(BuildContext context, LibraryEntry entry) {
   final story = entry.rawId;

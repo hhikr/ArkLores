@@ -66,6 +66,11 @@ class EndfieldTables {
     return '';
   }
 
+  /// The text `TextTable` holds under [key] (the game's interface strings
+  /// and the names of things kept by key: `ui_prts_title`, `<mission>_name`);
+  /// empty when there is none.
+  String textOfKey(String key) => text(table('TextTable')[key]).trim();
+
   /// Drops the cached tables (memory) except the strings.
   void release(String name) => _cache.remove(name);
 }

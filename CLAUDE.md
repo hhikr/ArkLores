@@ -20,7 +20,10 @@
     装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一页（明日方舟 / 终末地 / 我的资料）、页面按 id 路由；知识库页每个游戏一张下载卡。
   - 终末地建库：`tools/unpack_endfield.ps1`（AnimeStudio 导出客户端两层的表与 JSON 数据，Persistent 覆盖 StreamingAssets，不用 kit 的完整流程）→
     `tools/build_endfield_database.dart`：干员档案与语音、档案库（PRTS）、敌人/武器/物品描述、对话/通讯/短信（选项按组号插入），
-    任务名/简介/分类/所属干员/关卡来自 `MissionRuntimeAsset`，书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务），书架内按地区分组、显示任务简介。
+    任务名/简介/分类/所属干员/关卡来自 `MissionRuntimeAsset`（没有定义的取 `TextTable` 的 `<任务>_name`、子任务共同名，都没有叫“无名任务（id）”；
+    隐藏/同名的子任务并进基础任务），书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务），书架内按地区分组、显示任务简介。
+    干员下挂三种集合：`memory` 干员任务（按系列名分组）、`baker` Baker 话题、`ship` 帝江号互动（后两种不是书架）；档案库按游戏分页（中枢档案/见闻辑录/音像存档/情报采集）。
+    界面里的名词一律到 `TextTable` 的界面文字里查（每一层都查），查不到就不起名。
   - **一个任务一篇剧情**（参考 warfarin/fz 的编排）：段前一行 `section` 标种类，按种类分块、块内按编号；一段对话内部按对话树（`dlg_…` TextAsset）
     与过场时间线片段（`DialogTrunk/OptionPlayableAsset`）排，89% 台词行由它们定位，其余按行号。阅读器只在种类变化处写种类名。
   - 终末地资产带剧情向量（与明日方舟同一模型；重建后 `unpack_endfield.ps1 -Embed` 补，缓存命中不收费；切块在 `section` 处断开）。
@@ -48,6 +51,10 @@
 - 形状与动效照两款游戏：方角（卡片用切角 `ThemeAwareCard`），图标用 `Icons.*_sharp`，选中的标签用 `SelectionBar` 擦入的横条，
   悬浮板用 `FloatingBar`（角标）；动效短、直线、无回弹（`easeOutCubic`/`easeOutExpo`）。圆角、圆形、`_rounded` 图标、回弹曲线有守卫测试（`test/guards/square_shapes_test.dart`）。
 - 资料页每个游戏一页（顶部标签切换，`SwitchedPages`），不能左右滑动换页。
+- 资料页不做只有一行的中间页：集合从列表打开走 `openCollectionOf`（一篇剧情直接进阅读器、一类条目直接进列表）；短列表在集合页里就地列出；
+  分组的长列表用组标题 + 选择条，不先列一页分组。
+- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠、默认展开），语音用 `VoiceLines`；
+  剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 颜色：信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 - 问答列表不随流式内容自动滚动（只在发新问题时滚到底一次）；思考窗口固定高度；阅读位置上方的内容在流式中不变高。不要加“贴底跟随”。
 - 提交前 `git checkout -- android/gradle.properties`（Flutter 迁移器会往里加两行）。

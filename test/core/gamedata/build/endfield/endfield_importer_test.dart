@@ -142,17 +142,93 @@ void writeTables(Directory dir) {
   });
   table('PrtsFirstLv', {
     'paper_map01_1': {'categoryId': 'paper', 'name': tx(i18n, 104, '一封信'), 'itemIds': ['nar_1'], 'order': 1},
+    // Its region only by the mission its id names (e1m1, played in 谷地).
+    'paper_e1m1_2': {'categoryId': 'paper', 'name': tx(i18n, 105, '便条'), 'itemIds': ['nar_2'], 'order': 2},
+    // Its region only by the investigation that gathers it.
+    'paper_q_3': {'categoryId': 'paper', 'name': tx(i18n, 106, '旧报纸'), 'itemIds': ['nar_3'], 'order': 3},
+    'media_1': {'categoryId': 'media', 'name': tx(i18n, 107, '录音'), 'itemIds': ['nar_m1'], 'order': 1},
+    'report_1': {'categoryId': 'report', 'name': tx(i18n, 108, '调查结论'), 'itemIds': ['nar_rep'], 'order': 1},
   });
   table('ItemTypeTable', {
     '8': {'name': tx(i18n, 50, '材料')},
   });
   table('PrtsCategory', {
     'paper': {'categoryId': 'paper', 'name': tx(i18n, 60, '纸张'), 'order': 1},
+    'media': {'categoryId': 'media', 'name': tx(i18n, 61, '多媒体'), 'order': 1},
+    'report': {'categoryId': 'report', 'name': tx(i18n, 66, '调查报告'), 'order': 2},
+  });
+  table('PrtsPage', {
+    'document': {'name': tx(i18n, 67, '中枢档案'), 'pageType': 'document'},
+    'multi_media': {'name': tx(i18n, 68, '音像存档'), 'pageType': 'multi_media'},
+    'text': {'name': tx(i18n, 69, '见闻辑录'), 'pageType': 'text'},
   });
   table('PrtsAllItem', {
-    'nar_1': {'contentId': 'text_1', 'name': tx(i18n, 62, '一封信'), 'order': 1},
+    'nar_1': {'contentId': 'text_1', 'name': tx(i18n, 62, '一封信'), 'order': 1, 'type': 'text'},
+    'nar_2': {'contentId': 'text_note', 'name': tx(i18n, 1120, '便条'), 'order': 1, 'type': 'text'},
+    'nar_3': {'contentId': 'text_paper', 'name': tx(i18n, 1121, '旧报纸'), 'order': 1, 'type': 'text'},
+    'nar_m1': {
+      'contentId': 'radio_rec_1',
+      'name': tx(i18n, 1122, '受困者的录音'),
+      'desc': tx(i18n, 1123, '在洞穴里录下的话。'),
+      'order': 1,
+      'type': 'multi_media',
+    },
+    'nar_rep': {'contentId': 'text_report', 'name': tx(i18n, 1124, '调查结论'), 'order': 1, 'type': 'document'},
+  });
+  table('PrtsInvestigate', {
+    'research_1': {
+      'name': tx(i18n, 1125, '谷地旧事'),
+      'desc': tx(i18n, 1126, '谷地从前发生了什么？'),
+      'domainId': 'domain_1',
+      'collectionIdList': ['nar_3'],
+      'unlockPrts': 'nar_rep',
+      'index': 1,
+    },
+  });
+  table('TextTable', {
+    'ui_prts_research_title': tx(i18n, 1130, '情报采集'),
+    'chr_0001_ep1_name': tx(i18n, 1131, '甲的故事'),
+    'gm9m1_name': tx(i18n, 1132, '某支线'),
+    'gm9m1_desc_001': tx(i18n, 1133, '去看看发生了什么。'),
+  });
+  table('MissionTypeInfoTable', {
+    '0': {'isVisible': true, 'missionViewType': 0},
+    '2': {'isVisible': true, 'missionViewType': 1},
+    '4': {'isVisible': false, 'missionViewType': 4},
+  });
+  table('SNSDialogTopicTable', {
+    'topic_chr_0001_a_1': {
+      'includeDialogIds': ['sns_topic_chr_0001_a_1'],
+      'topicName': tx(i18n, 1134, '闲聊'),
+    },
+  });
+  table('SNSDialogTable', {
+    'sns_topic_chr_0001_a_1': {
+      'chatId': 'sns_chr_0001_a',
+      'dialogContentData': {
+        '1': {'content': tx(i18n, 1135, '在吗？'), 'speaker': 'sns_chr_0001_a'},
+      },
+    },
   });
   table('RichContentTable', {
+    'text_note': {
+      'title': tx(i18n, 1140, '便条'),
+      'contentList': [
+        {'content': tx(i18n, 1141, '晚饭在桌上。')},
+      ],
+    },
+    'text_paper': {
+      'title': tx(i18n, 1142, '旧报纸'),
+      'contentList': [
+        {'content': tx(i18n, 1143, '谷地日报。')},
+      ],
+    },
+    'text_report': {
+      'title': tx(i18n, 1144, '调查结论'),
+      'contentList': [
+        {'content': tx(i18n, 1145, '真相大白。')},
+      ],
+    },
     'text_e1m1_1': {
       'title': tx(i18n, 500, '留言'),
       'contentList': [
@@ -184,6 +260,39 @@ void writeTables(Directory dir) {
       'actorName': tx(i18n, 74, ''),
       'dialogText': tx(i18n, 75, '风停了。'),
     },
+    // A hidden step of e1m1: read in e1m1.
+    'dlg_e1m1d5_1_001': {
+      'actorName': tx(i18n, 1150, '乙'),
+      'dialogText': tx(i18n, 1151, '准备好了。'),
+    },
+    // A mission without a definition, named by its sub-missions.
+    'dlg_f1m4_1_001': {
+      'actorName': tx(i18n, 1152, '乙'),
+      'dialogText': tx(i18n, 1153, '据点缺粮了。'),
+    },
+    // Named only by the text table.
+    'dlg_gm9m1_1_001': {
+      'actorName': tx(i18n, 1154, '乙'),
+      'dialogText': tx(i18n, 1155, '有人吗？'),
+    },
+    // Named nowhere.
+    'dlg_zz1m1_1_001': {
+      'actorName': tx(i18n, 1156, '乙'),
+      'dialogText': tx(i18n, 1157, '比一比？'),
+    },
+    // 甲 on the Dijiang: a talk, a gift, a rest.
+    'sim_talk_a_lv01_01': {
+      'actorName': tx(i18n, 1158, '甲'),
+      'dialogText': tx(i18n, 1159, '今天的风景不错。'),
+    },
+    'sim_gift_a_recv_01': {
+      'actorName': tx(i18n, 1160, '甲'),
+      'dialogText': tx(i18n, 1161, '给我的？'),
+    },
+    'sim_rest_a_01': {
+      'actorName': tx(i18n, 1162, '甲'),
+      'dialogText': tx(i18n, 1163, '那就歇一会儿。'),
+    },
   });
   table('DialogOptionTable', {
     'option_dlg_e1m1_1_3_001': {'optionText': tx(i18n, 90, '跟上去')},
@@ -193,6 +302,11 @@ void writeTables(Directory dir) {
   table(
       'DialogSummaryTable', {'summary_e1m1_1_001': tx(i18n, 80, '甲与乙在谷地相遇。')},);
   table('RadioTable', {
+    'radio_rec_1': {
+      'radioSingleDataList': [
+        {'index': 1, 'actorName': '受困者', 'radioText': '有人能听到吗……'},
+      ],
+    },
     'radio_sm1m2_1': {
       'radioSingleDataList': [
         {'index': 2, 'actorName': '乙', 'radioText': '收到。'},
@@ -216,22 +330,27 @@ void main() {
     final writer = EndfieldWriter(db);
     await writer.createSchema(sourceVersion: 'test');
     final tables = EndfieldTables(tablesDir);
-    final importer = EndfieldImporter(tables, writer);
+    EndfieldMission mission(String name, int type, {String? description, String? level}) => (
+          name: name,
+          description: description,
+          type: type,
+          charId: null,
+          sortId: 0,
+          levelId: level,
+        );
+    final missions = {
+      'e1m1': mission('启程', 0, description: '出发前往谷地。', level: 'map01_lv001'),
+      'e1m1d5': mission('准备工作', 4),
+      'f1m4d1': mission('据点建设·难民处·其一', 2, level: 'map01_lv001'),
+      'f1m4d2': mission('据点建设·难民处·其二', 2, level: 'map01_lv001'),
+    };
+    final importer = EndfieldImporter(tables, writer, missions: missions);
     await importer.importTables();
     await EndfieldStoryImporter(
       tables,
       writer,
       importer,
-      missions: {
-        'e1m1': (
-          name: '启程',
-          description: '出发前往谷地。',
-          type: 0,
-          charId: null,
-          sortId: 0,
-          levelId: 'map01_lv001',
-        ),
-      },
+      missions: missions,
     ).importDialogTables();
     await writer.finish();
   });
@@ -273,13 +392,19 @@ void main() {
       lines.map((l) => l['content']),
       [
         '对话', '她来了。', '欢迎，管理员。', '跟上去／留下来', '风停了。',
+        // The hidden step e1m1d5 is read in its mission.
+        '对话', '准备好了。',
         '远程通话', '听得到吗？',
         '闲话', '今天风好大。',
       ],
     );
     expect(
       [for (final l in lines) if (l['kind'] == 'section') l['content']],
-      ['对话', '远程通话', '闲话'],
+      ['对话', '对话', '远程通话', '闲话'],
+    );
+    expect(
+      await q("SELECT id FROM collections WHERE id = 'ef/mission_e1m1d5'"),
+      isEmpty,
     );
     expect(lines[3]['kind'], 'choice');
     expect(lines[4]['kind'], 'narration');
@@ -324,8 +449,9 @@ void main() {
     final texts = await q(
       "SELECT section, content FROM normalized_records WHERE entry_id = 'operator:ef/chr_0001_a'",
     );
-    expect(texts.map((t) => t['section']), containsAll(['标签', '基础档案', '语音']));
-    final tags = texts.firstWhere((t) => t['section'] == '标签')['content'];
+    // The parts as the game's profile page names them.
+    expect(texts.map((t) => t['section']), containsAll(['干员情报', '基础档案', '语音记录']));
+    final tags = texts.firstWhere((t) => t['section'] == '干员情报')['content'];
     expect(tags, '阵营：某工业\n种族：某族');
     final faction = await q("SELECT name FROM entities WHERE entity_type = 'power'");
     expect(faction.single['name'], '某工业');
@@ -428,6 +554,77 @@ void main() {
     final ids = ['e10m1', 'e1m2', 'e1m10', 'e1m2d5', 'e0m0']
       ..sort((a, b) => missionOrder(a)!.compareTo(missionOrder(b)!));
     expect(ids, ['e0m0', 'e1m2', 'e1m2d5', 'e1m10', 'e10m1']);
+  });
+
+  test('a mission without a definition is named by its sub-missions, the text table, '
+      'or said to have no name', () async {
+    Future<Map<String, Object?>> collection(String id) async =>
+        (await q('SELECT kind, name FROM collections WHERE id = ?', ['ef/mission_$id'])).single;
+    // The name its sub-missions share; their shelf (探索任务).
+    expect(await collection('f1m4'), {'kind': 'ef/discovery', 'name': '据点建设·难民处'});
+    // The name and description the text table keeps.
+    expect((await collection('gm9m1'))['name'], '某支线');
+    expect(await collectionIntro(db, 'ef/mission_gm9m1'), '去看看发生了什么。');
+    // No name anywhere: said so, with its id; never a made-up number.
+    expect((await collection('zz1m1'))['name'], '无名任务（zz1m1）');
+    final numbered = await q("SELECT name FROM collections WHERE name GLOB '*任务 [0-9]*'");
+    expect(numbered, isEmpty);
+  });
+
+  test("an operator's missions are listed under its series; its Baker topics and "
+      'Dijiang interactions are on its page, not shelves', () async {
+    final owned = await q(
+      'SELECT id, kind, name FROM collections WHERE parent_id = ? ORDER BY id',
+      ['operator:ef/chr_0001_a'],
+    );
+    final byKind = {for (final c in owned) '${c['id']}': '${c['kind']}'};
+    expect(byKind['ef/mission_c1m1'], 'ef/memory');
+    expect(byKind['ef/mission_topic_chr_0001_a_1'], 'ef/baker');
+    expect(byKind['ef/mission_ship_a'], 'ef/ship');
+    final missions = await collectionsOwnedBy(db, 'operator:ef/chr_0001_a');
+    expect(missions.singleWhere((c) => c.id == 'ef/mission_c1m1').group, '甲的故事');
+    // The Dijiang: talk, gift and rest in one story, the gift under its name.
+    final ship = await q(
+      "SELECT content FROM story_lines WHERE story_id = 'ef/ship_a.txt' ORDER BY line_index",
+    );
+    expect(ship.map((l) => l['content']), [
+      '对话', '今天的风景不错。',
+      '赠送礼物', '给我的？',
+      '对话', '那就歇一会儿。',
+    ]);
+    final shelves = (await shelfSummaries(db)).map((s) => s.kind);
+    expect(shelves, isNot(contains('ef/baker')));
+    expect(shelves, isNot(contains('ef/ship')));
+  });
+
+  test("the archive is laid out by the game's pages; recordings and regions by id", () async {
+    final shelf = await collectionsOfKind(db, 'ef/archive');
+    final section = {for (final c in shelf) c.name: c.group};
+    expect(section['纸张'], '见闻辑录');
+    expect(section['多媒体'], '音像存档');
+    // Reports are unlocked by investigations: on the investigations' page.
+    expect(section['调查报告'], '情报采集');
+    expect(section['谷地旧事'], '情报采集');
+    // A category of one kind of entry opens its list right away.
+    final paper = shelf.singleWhere((c) => c.name == '纸张');
+    expect((paper.stories, paper.otherTypes, paper.otherType), (0, 1, 'document'));
+    // A recording: its line and the radio lines with who speaks.
+    final recording = await q(
+      "SELECT r.section, r.content FROM entries e JOIN normalized_records r ON r.entry_id = e.id "
+      "WHERE e.raw_id = 'ef/media_1'",
+    );
+    expect(recording.single['section'], '受困者的录音');
+    expect(recording.single['content'], '在洞穴里录下的话。\n受困者：有人能听到吗……');
+    // Regions: by the mission an id names, by the investigation.
+    Future<Object?> region(String raw) async =>
+        (await q('SELECT group_name FROM entries WHERE raw_id = ?', ['ef/$raw'])).single['group_name'];
+    expect(await region('paper_e1m1_2'), '谷地');
+    expect(await region('paper_q_3'), '谷地');
+    expect(await region('report_1'), '谷地');
+    final report = await q(
+      "SELECT dst FROM entry_links WHERE src = 'document:ef/report_1' AND relation = 'part_of'",
+    );
+    expect(report.single['dst'], 'investigation:ef/research_1');
   });
 
   test("the build's shelf list is the library's", () {

@@ -17,6 +17,7 @@ import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../ai/story_labels_provider.dart';
 import '../ai/story_reader_page.dart';
+import 'reading_text.dart' show readingStyle;
 
 /// Opens a story in the reader. [resume] continues where the reader left
 /// off (the history entry), otherwise the story opens at the top. A story
@@ -421,11 +422,7 @@ class MarkdownText extends ConsumerWidget {
       data: cleaned,
       selectable: true,
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-        p: theme.bodyFont.copyWith(
-          color: theme.textPrimary,
-          fontSize: 15,
-          height: 1.7,
-        ),
+        p: readingStyle(theme, size: 15),
         h1: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 18),
         h2: theme.titleFont.copyWith(
           color: theme.accentText,
@@ -579,11 +576,7 @@ class _OptionNode extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: SelectableText(
                 node.body.join('\n'),
-                style: theme.bodyFont.copyWith(
-                  color: theme.textPrimary,
-                  fontSize: 14,
-                  height: 1.7,
-                ),
+                style: readingStyle(theme, size: 14.5),
               ),
             ),
           for (final c in node.children) _OptionNode(c, theme: theme),

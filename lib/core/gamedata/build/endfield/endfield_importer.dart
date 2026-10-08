@@ -11,6 +11,7 @@ library;
 
 import '../../game.dart' show endfieldId;
 import '../text_harvest.dart' show cleanRichText, isMechanical;
+import 'endfield_stories.dart' show EndfieldMission;
 import 'endfield_tables.dart';
 import 'endfield_writer.dart';
 
@@ -29,12 +30,32 @@ const List<String> endfieldShelfKinds = [
   'memory',
 ];
 
+/// Kinds of the collections that hang below an operator besides its
+/// missions (`memory`): its Baker topics and its interactions on the
+/// Dijiang. They are listed on the operator's page, not as shelves.
+const String bakerTopicKind = 'baker';
+const String shipInteractionKind = 'ship';
+
+/// The entry type that names the section of the archive a collection is in
+/// (`PrtsPage`: 中枢档案, 见闻辑录, 音像存档, and 情报采集); it has no text
+/// of its own and groups the archive shelf.
+const String archiveSectionType = 'archive_section';
+
 class EndfieldImporter {
-  EndfieldImporter(this.tables, this.writer, {this.log});
+  EndfieldImporter(
+    this.tables,
+    this.writer, {
+    this.log,
+    this.missions = const {},
+  });
 
   final EndfieldTables tables;
   final EndfieldWriter writer;
   final void Function(String message)? log;
+
+  /// The game's mission definitions (for the region of a text whose id
+  /// names its mission).
+  final Map<String, EndfieldMission> missions;
 
   /// Operator entry ids by character id (for bindings).
   final Map<String, String> operators = {};
@@ -140,6 +161,13 @@ class EndfieldImporter {
 
   String _clean(Object? field) => endfieldText(tables.text(field));
 
+  /// An interface string of the game by its key ([fallback] when the
+  /// tables do not have it).
+  String _ui(String key, String fallback) {
+    final text = endfieldText(tables.textOfKey(key));
+    return text.isEmpty ? fallback : text;
+  }
+
   /// The region (地区, `DomainDataTable`) a level or an id mentioning a map
   /// (`map01…`) is in, by the regions' own level lists.
   String? regionOf(String id) {
@@ -155,6 +183,42 @@ class EndfieldImporter {
       }
     }
     return null;
+  }
+
+  /// The mission an id names (`paper_sm1l1m4_2`, `text_c13m3_4`): an
+  /// underscore-separated part that is a defined mission, or one once its
+  /// sub-mission mark (`d<n>`) is cut. Null when none.
+  String? missionIn(String id) {
+    for (final part in id.split('_')) {
+      if (missions.containsKey(part)) return part;
+      final base = part.replaceFirst(RegExp(r'd\d+$'), '');
+      if (base != part && missions.containsKey(base)) return base;
+    }
+    return null;
+  }
+
+  /// The region of a text by its ids (its own, its pages', its contents'):
+  /// a map named in one of them, else the level of a mission named in one.
+  /// Ids only; null when none says.
+  String? regionOfIds(Iterable<String> ids) {
+    final list = ids.where((i) => i.isNotEmpty).toList();
+    for (final id in list) {
+      final region = regionOf(id);
+      if (region != null) return region;
+    }
+    for (final id in list) {
+      final level = missions[missionIn(id)]?.levelId;
+      final region = level == null ? null : regionOf(level);
+      if (region != null) return region;
+    }
+    return null;
+  }
+
+  /// The name of a region by its id (`domain_1`).
+  String? regionName(String? domainId) {
+    final row = tables.table('DomainDataTable')[domainId ?? ''];
+    final name = row is Map ? _clean(row['domainName']) : '';
+    return name.isEmpty ? null : name;
   }
 
   /// The localized `name` of row [key] of a kind table (null when none).
@@ -193,6 +257,9 @@ class EndfieldImporter {
       // A character with nothing to read (a stand-in row) is not listed.
       if (records.isEmpty && voices.isEmpty) continue;
       final tags = _operatorTags(id);
+      // The parts of the profile as the game's profile page names them.
+      final tagSection = _ui('ui_char_profile_message_title', '干员情报');
+      final voiceSection = _ui('ui_char_profile_voice', '语音记录');
       final english = '${row['engName'] ?? ''}'.trim();
       final entity = await writer.entity(
         rawId: id,
@@ -213,9 +280,9 @@ class EndfieldImporter {
         category: 'operator',
         contentType: 'endfield_operator_profile',
         texts: [
-          if (tags.isNotEmpty) (section: '标签', text: tags.join('\n')),
+          if (tags.isNotEmpty) (section: tagSection, text: tags.join('\n')),
           ...records,
-          if (voices.isNotEmpty) (section: '语音', text: voices.join('\n')),
+          if (voices.isNotEmpty) (section: voiceSection, text: voices.join('\n')),
         ],
       );
       operators[id] = entryId;
@@ -224,9 +291,9 @@ class EndfieldImporter {
         name: title,
         type: 'operator',
         content: [
-          if (tags.isNotEmpty) tags.join('\n'),
+          if (tags.isNotEmpty) '## $tagSection\n${tags.join('\n')}',
           for (final r in records) '## ${r.section}\n${r.text}',
-          if (voices.isNotEmpty) '## 语音\n${voices.join('\n')}',
+          if (voices.isNotEmpty) '## $voiceSection\n${voices.join('\n')}',
         ].join('\n\n'),
         sourcePath: source,
       );
@@ -418,69 +485,157 @@ class EndfieldImporter {
     log?.call('items: $count');
   }
 
-  /// The PRTS archive: categories → archive entries (`PrtsFirstLv`) → pages
-  /// (`PrtsAllItem`) whose text is a `RichContentTable` row. Each category
-  /// is a collection on the archive shelf; each archive entry one document
-  /// with its pages as text blocks. Investigations (`PrtsInvestigate`) are
-  /// collections of their own, listing the documents they gather.
+  /// The PRTS archive (情报档案库), in the game's layout: its pages
+  /// (`PrtsPage`: 中枢档案, 见闻辑录, 音像存档) hold categories
+  /// (`PrtsCategory`) of archive entries (`PrtsFirstLv`), each with its pages
+  /// (`PrtsAllItem`) whose text is a `RichContentTable` row, or the lines of a
+  /// `RadioTable` recording (音像存档). Each category is a collection on the
+  /// archive shelf, marked with its page ([archiveSectionType]); each archive
+  /// entry one document with its pages as text blocks. Investigations
+  /// (`PrtsInvestigate`, 情报采集) are collections of their own: the
+  /// investigation, the documents it gathers and the report it unlocks.
   Future<void> importArchive() async {
     final categories = tables.table('PrtsCategory');
     final firstLv = tables.table('PrtsFirstLv');
     final pages = tables.table('PrtsAllItem');
     final rich = tables.table('RichContentTable');
+    final radio = tables.table('RadioTable');
+    final investigateTable = tables.table('PrtsInvestigate');
     const source = 'PrtsFirstLv';
     final sourcePath = tables.sourcePath(source);
+    // The pages of the archive by the type of item they show, in the
+    // game's order, and the investigations' page.
+    final pageNames = <String, String>{
+      for (final MapEntry(:key, :value) in tables.table('PrtsPage').entries)
+        if (value is Map && _clean(value['name']).isNotEmpty)
+          '${value['pageType'] ?? key}': _clean(value['name']),
+    };
+    final researchPage = _ui('ui_prts_research_title', '情报采集');
+    // What an investigation says about the pages it gathers and the report
+    // it unlocks: their region, and that the report is part of it.
+    final reportOf = <String, String>{}; // report page id -> investigation id
+    final investigationRegion = <String, String>{}; // page id -> region
+    for (final MapEntry(key: id, value: row) in investigateTable.entries) {
+      if (row is! Map<String, dynamic>) continue;
+      final region = regionName('${row['domainId'] ?? ''}');
+      final report = '${row['unlockPrts'] ?? ''}';
+      if (report.isNotEmpty) reportOf[report] = id;
+      for (final page in [...listOfStrings(row['collectionIdList']), report]) {
+        if (region != null && page.isNotEmpty) investigationRegion[page] = region;
+      }
+    }
+    // A category's page: the page of the type of its items; a category of
+    // investigation reports is on the investigations' page.
+    final sectionOf = <String, String>{};
+    for (final row in firstLv.values) {
+      if (row is! Map<String, dynamic>) continue;
+      final category = '${row['categoryId'] ?? ''}';
+      for (final pageId in listOfStrings(row['itemIds'])) {
+        final page = pages[pageId];
+        if (page is! Map) continue;
+        final section = reportOf.containsKey(pageId)
+            ? researchPage
+            : pageNames['${page['type'] ?? ''}'];
+        if (section != null) sectionOf.putIfAbsent(category, () => section);
+      }
+    }
+    final sectionOrder = [...pageNames.values, researchPage];
+    int sectionRank(String? section) {
+      final i = section == null ? -1 : sectionOrder.indexOf(section);
+      return i < 0 ? sectionOrder.length : i;
+    }
+
+    Future<void> markSection(String collection, String section) => writer.entry(
+          type: archiveSectionType,
+          rawId: 'section_$collection',
+          name: section,
+          collectionId: collection,
+          group: section,
+          sourcePath: tables.sourcePath('PrtsPage'),
+          category: 'archive',
+        );
+
     for (final MapEntry(key: id, value: row) in categories.entries) {
       if (row is! Map<String, dynamic>) continue;
+      final section = sectionOf[id];
       await writer.collection(
         id: 'prts_$id',
         kind: 'archive',
         name: _clean(row['name']).isEmpty ? id : _clean(row['name']),
-        sortKey: (row['order'] as num?)?.toInt(),
+        sortKey: sectionRank(section) * 1000 + ((row['order'] as num?)?.toInt() ?? 0),
         sourcePath: tables.sourcePath('PrtsCategory'),
       );
+      if (section != null) await markSection('prts_$id', section);
     }
     final documentOf = <String, String>{}; // page id -> document entry id
-    var count = 0;
+    var count = 0, recordings = 0;
     for (final MapEntry(key: id, value: row) in firstLv.entries) {
       if (row is! Map<String, dynamic>) continue;
       final category = '${row['categoryId'] ?? ''}';
       final title = _clean(row['name']);
       final blocks = <({String section, String text})>[];
+      final contentIds = <String>[];
       for (final pageId in listOfStrings(row['itemIds'])) {
         final page = pages[pageId];
         if (page is! Map<String, dynamic>) continue;
-        final content = rich['${page['contentId'] ?? ''}'];
-        if (content is! Map<String, dynamic>) continue;
-        final text = [
-          for (final c in listOfMaps(content['contentList'])) _clean(c['content']),
-        ].where((t) => t.isNotEmpty).join('\n');
-        if (text.isEmpty) continue;
-        final pageTitle = _clean(content['title']).isNotEmpty
-            ? _clean(content['title'])
-            : _clean(page['name']);
-        blocks.add((section: pageTitle.isEmpty ? title : pageTitle, text: text));
+        final contentId = '${page['contentId'] ?? ''}';
+        contentIds.add(contentId);
+        final content = rich[contentId];
+        if (content is Map<String, dynamic>) {
+          final text = [
+            for (final c in listOfMaps(content['contentList'])) _clean(c['content']),
+          ].where((t) => t.isNotEmpty).join('\n');
+          if (text.isEmpty) continue;
+          final pageTitle = _clean(content['title']).isNotEmpty
+              ? _clean(content['title'])
+              : _clean(page['name']);
+          blocks.add((section: pageTitle.isEmpty ? title : pageTitle, text: text));
+          continue;
+        }
+        // A recording (音像存档): the lines of its radio row, with who
+        // speaks, under the page's own name and line.
+        final recording = radio[contentId];
+        if (recording is Map<String, dynamic>) {
+          final lines = listOfMaps(recording['radioSingleDataList'])
+            ..sort((a, b) => ((a['index'] as num?) ?? 0).compareTo((b['index'] as num?) ?? 0));
+          final text = [
+            if (_clean(page['desc']).isNotEmpty) _clean(page['desc']),
+            for (final l in lines)
+              if (_clean(l['radioText']).isNotEmpty)
+                _clean(l['actorName']).replaceAll(RegExp(r'\{[^{}]*\}'), '').trim().isEmpty
+                    ? _clean(l['radioText'])
+                    : '${_clean(l['actorName']).replaceAll(RegExp(r'\{[^{}]*\}'), '').trim()}：'
+                        '${_clean(l['radioText'])}',
+          ].join('\n');
+          if (lines.isEmpty || text.isEmpty) continue;
+          blocks.add((section: _clean(page['name']).isEmpty ? title : _clean(page['name']), text: text));
+          recordings++;
+        }
       }
       if (blocks.isEmpty || title.isEmpty) continue;
+      final itemIds = listOfStrings(row['itemIds']);
       final entryId = await writer.entry(
         type: 'document',
         rawId: id,
         name: title,
         collectionId: category.isEmpty ? null : 'prts_$category',
-        group: regionOf(id),
+        group: [
+          for (final p in itemIds)
+            if (investigationRegion[p] != null) investigationRegion[p]!,
+        ].firstOrNull ??
+            regionOfIds([id, ...itemIds, ...contentIds]),
         sortKey: (row['order'] as num?)?.toInt(),
         sourcePath: sourcePath,
         category: 'archive',
         texts: blocks,
       );
-      for (final pageId in listOfStrings(row['itemIds'])) {
+      for (final pageId in itemIds) {
         documentOf[pageId] = entryId;
       }
       count++;
     }
     var investigations = 0;
-    for (final MapEntry(key: id, value: row)
-        in tables.table('PrtsInvestigate').entries) {
+    for (final MapEntry(key: id, value: row) in investigateTable.entries) {
       if (row is! Map<String, dynamic>) continue;
       final title = _clean(row['name']);
       if (title.isEmpty) continue;
@@ -489,9 +644,10 @@ class EndfieldImporter {
         id: collection,
         kind: 'archive',
         name: title,
-        sortKey: 1000 + ((row['index'] as num?)?.toInt() ?? 0),
+        sortKey: sectionRank(researchPage) * 1000 + 500 + ((row['index'] as num?)?.toInt() ?? 0),
         sourcePath: tables.sourcePath('PrtsInvestigate'),
       );
+      await markSection(collection, researchPage);
       final desc = _clean(row['desc']);
       final notes = [
         for (final cat in listOfMaps(row['categoryDataList']))
@@ -503,6 +659,7 @@ class EndfieldImporter {
         rawId: id,
         name: title,
         collectionId: collection,
+        group: regionName('${row['domainId'] ?? ''}'),
         sortKey: 0,
         sourcePath: tables.sourcePath('PrtsInvestigate'),
         category: 'archive',
@@ -511,7 +668,10 @@ class EndfieldImporter {
           if (notes.isNotEmpty) (section: '线索', text: notes.join('\n')),
         ],
       );
-      for (final page in listOfStrings(row['collectionIdList'])) {
+      for (final page in [
+        ...listOfStrings(row['collectionIdList']),
+        '${row['unlockPrts'] ?? ''}',
+      ]) {
         final doc = documentOf[page];
         if (doc != null) {
           await writer.link(doc, 'part_of', intro, 'PrtsInvestigate');
@@ -519,7 +679,8 @@ class EndfieldImporter {
       }
       investigations++;
     }
-    log?.call('archive documents: $count, investigations: $investigations');
+    log?.call('archive documents: $count ($recordings recordings), '
+        'investigations: $investigations');
   }
 }
 
