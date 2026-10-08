@@ -4,6 +4,10 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-09
+
+The stable release of the 0.12 line (Arknights: Endfield). It replaces the 0.12.0 and 0.12.1 pre-releases, which are withdrawn; everything they brought is below and in their sections. The Endfield knowledge base is a new asset on this release (the Arknights one is still the v0.11.0 asset).
+
 ### Library: one page per game; square shapes and straight motion
 
 - **Each game has its own library page**: the top bar reads 明日方舟 / 终末地 / 我的资料; a game's page has its shelves, its last-read story to continue and its recent reads. A missing knowledge base is explained on its game's page. The pages are chosen with the tabs only — a sideways drag no longer changes the page.
@@ -23,7 +27,7 @@ All notable changes to ArkLores will be documented in this file.
 - **Missions the game does not have** (conversations left in the client without a mission: an older version of an operator's story, cut missions) are on their own shelf, 未实装任务, named from the game's text table; the few named nowhere say so (无名任务（id）) instead of a made-up number.
 - **Operators**: each expertise and hobby carries the operator's own line about it; three operators' Baker topics, lost to the side missions because their ids spell the operator differently, are back on their pages; a place's Baker topics are read with the place.
 
-## [0.12.1] - 2026-10-08 (pre-release)
+## [0.12.1] - 2026-10-08 (pre-release, withdrawn: see 0.12.2)
 
 ### Endfield stories read like the game's missions
 
@@ -32,7 +36,7 @@ All notable changes to ArkLores will be documented in this file.
 - **The mission shelves read like the game's mission panel**: each mission with its description, grouped by the region it is played in.
 - The assistant reads a whole mission at once and is told which order the text can and cannot vouch for.
 
-## [0.12.0] - 2026-10-08 (pre-release)
+## [0.12.0] - 2026-10-08 (pre-release, withdrawn: see 0.12.2)
 
 ### Endfield
 

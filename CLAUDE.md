@@ -3,8 +3,8 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.11.0（正式版，2026-10-08，Android build 28；知识库资产在 v0.11.0 Release，`tools/release_gamedata.env` 指向它）。
-- **预发布**：v0.12.1（2026-10-08，build 30）—— 终末地知识库，按任务编排（分支 `feature/v0.12-endfield`；资产在 v0.12.1 Release，v0.12.0 的旧结构资产已不用）。
+- **已发布**：v0.12.2（正式版，2026-10-09，Android build 31）。明日方舟知识库资产仍在 v0.11.0 Release，终末地知识库资产在 v0.12.2 Release，`tools/release_gamedata.env` 指向两者。
+- 0.12 的两个预发布（v0.12.0、v0.12.1）已撤下（Release 与 tag 已删），由 v0.12.2 取代。下一轮开发从 `main` 新开分支。
 - 未经开发者明确同意不发版、不跑花钱的真实 API 测试；Android build 号每次发版递增。
 - **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、普查数据放本地 `notes/`（gitignored），不提交、不写进 PR。
 - 用中文和开发者交流。
@@ -14,7 +14,7 @@
 - **0.11（已发布）**：知识库重做为条目层（`entries`/`collections`/`entry_links`）、剧本全量解析、增量更新通道、用户库与阅读历史、
   资料页与阅读器、悬浮式界面与点击反馈、工作过程时间线、非 GLM 服务商兼容、删除角色扮演（开发者 2026-10-07 决定，不要恢复）。
   建库/更新/补算的经验与全部错误见 `docs/KNOWLEDGE_BASE_LESSONS.md`。
-- **0.12（v0.12.0 预发布，`feature/v0.12-endfield`）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9，
+- **0.12（已发布，v0.12.2）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9，
   已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5。
   - 架构：每个游戏一个库文件；终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`find` 默认两个库），
     装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一页（明日方舟 / 终末地 / 我的资料）、页面按 id 路由；知识库页每个游戏一张下载卡。
@@ -28,7 +28,7 @@
   - **一个任务一篇剧情**（参考 warfarin/fz 的编排）：段前一行 `section` 标种类，按种类分块、块内按编号；一段对话内部按对话树（`dlg_…` TextAsset）
     与过场时间线片段（`DialogTrunk/OptionPlayableAsset`）排，89% 台词行由它们定位，其余按行号。阅读器只在种类变化处写种类名。
   - 终末地资产带剧情向量（与明日方舟同一模型；重建后 `unpack_endfield.ps1 -Embed` 补，缓存命中不收费；切块在 `section` 处断开）。
-  - 待开发者决定：真实 API 跑一两道双游戏问题验证选库；转正式版。
+  - 待开发者决定：真实 API 跑一两道双游戏问题验证选库（花钱，未跑）。
   - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据）。
 ## 文档索引
 
