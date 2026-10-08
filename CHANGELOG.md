@@ -4,9 +4,9 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
-## [0.12.2] - 2026-10-09
+## [0.12.0] - 2026-10-09
 
-The stable release of the 0.12 line (Arknights: Endfield). It replaces the 0.12.0 and 0.12.1 pre-releases, which are withdrawn; everything they brought is below and in their sections. The Endfield knowledge base is a new asset on this release (the Arknights one is still the v0.11.0 asset).
+The stable release of the 0.12 line (Arknights: Endfield), Android build 31. The pre-releases that came before it (v0.12.0 build 29, v0.12.1 build 30) are withdrawn; what they brought is part of this release (the last two sections). The Endfield knowledge base is an asset of this release (the Arknights one is still the v0.11.0 asset).
 
 ### Library: one page per game; square shapes and straight motion
 
@@ -27,8 +27,6 @@ The stable release of the 0.12 line (Arknights: Endfield). It replaces the 0.12.
 - **Missions the game does not have** (conversations left in the client without a mission: an older version of an operator's story, cut missions) are on their own shelf, 未实装任务, named from the game's text table; the few named nowhere say so (无名任务（id）) instead of a made-up number.
 - **Operators**: each expertise and hobby carries the operator's own line about it; three operators' Baker topics, lost to the side missions because their ids spell the operator differently, are back on their pages; a place's Baker topics are read with the place.
 
-## [0.12.1] - 2026-10-08 (pre-release, withdrawn: see 0.12.2)
-
 ### Endfield stories read like the game's missions
 
 - **A mission is one text**: its dialogue, radio, remote calls, talk around the player and messages in one page instead of a list of numbered "对话 3 / 通讯 2" pieces; each conversation opens with a rule naming its kind (named where the kind changes), the kinds one after another, each in the game's numbering.
@@ -36,9 +34,7 @@ The stable release of the 0.12 line (Arknights: Endfield). It replaces the 0.12.
 - **The mission shelves read like the game's mission panel**: each mission with its description, grouped by the region it is played in.
 - The assistant reads a whole mission at once and is told which order the text can and cannot vouch for.
 
-## [0.12.0] - 2026-10-08 (pre-release, withdrawn: see 0.12.2)
-
-### Endfield
+### Endfield knowledge base and two-game answers
 
 - **A second knowledge base for Arknights: Endfield**: operators' archives, voice lines and profile tags (faction, race, expertise, hobbies); the in-game archive (documents, papers, records, investigations) and the notes read in the world; enemy (with where they are found), weapon and item descriptions; dungeons with their enemies; characters' mails; and the conversations — dialogue with the player's choices, radio, remote calls, ambient talk and messages — grouped by mission in the game's order, missions shelved as in the game's mission panel (main, discovery, side, activity, commissions), each operator's missions and message topics on their page. Built on a computer from the game client (`tools/unpack_endfield.ps1`) and downloaded separately, with story vectors (search by meaning works in both games).
 - **The library shows each game's shelves**; search covers both.
