@@ -4,6 +4,13 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Endfield stories read like the game's missions
+
+- **A mission is one text**: its dialogue, radio, remote calls, talk around the player and messages in one page instead of a list of numbered "对话 3 / 通讯 2" pieces; each conversation opens with a rule naming its kind (named where the kind changes), the kinds one after another, each in the game's numbering.
+- **Conversations in the order the game plays them**: each conversation's lines follow its dialog tree — the player's choices sit where they are offered, and a choice with different replies reads option by option before the story goes on.
+- **The mission shelves read like the game's mission panel**: each mission with its description, grouped by the region it is played in.
+- The assistant reads a whole mission at once and is told which order the text can and cannot vouch for.
+
 ## [0.12.0] - 2026-10-08 (pre-release)
 
 ### Endfield

@@ -17,6 +17,7 @@ List<int> findStoryLines(List<StoryLineEntry> lines, String query) {
   return [
     for (final (i, line) in lines.indexed)
       if (line.kind != 'divider' &&
+          line.kind != 'section' &&
           words.every((w) =>
               line.content.toLowerCase().contains(w) ||
               (line.speaker ?? '').toLowerCase().contains(w),))

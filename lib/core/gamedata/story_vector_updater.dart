@@ -222,7 +222,7 @@ Future<VectorUpdateResult> updateStoryVectors({
       final story = stories[next++];
       final storyId = '${story['story_id']}';
       final lines = await db.rawQuery(
-        'SELECT line_index, speaker, content FROM story_lines '
+        "SELECT line_index, speaker, content${hasKind ? ', kind' : ''} FROM story_lines "
         "WHERE story_id = ? ${hasKind ? "AND kind <> 'system'" : ''} "
         'ORDER BY line_index',
         [storyId],
@@ -233,6 +233,7 @@ Future<VectorUpdateResult> updateStoryVectors({
             (l['line_index'] as num).toInt(),
             l['speaker'] as String?,
             '${l['content'] ?? ''}',
+            isBreak: l['kind'] == sectionLineKind,
           ),
       ]);
       if (chunks.isNotEmpty) {

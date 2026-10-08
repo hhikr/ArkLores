@@ -129,8 +129,14 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 .\tools\unpack_endfield.ps1 -SkipUnpack -Embed       # 重建并补剧情向量（发布用）
 ```
 
+脚本会把新 gz 的 SHA 写进 `release_gamedata.env`。只在本地重建、不发布时，提交前 `git checkout -- tools/release_gamedata.env`：
+URL 仍指向已发布的资产，带着新 SHA 构建的 APK 会拒收它。
+
 - 导出两个块：`table`（游戏表，文字是 `{id, text}`，字符串在 `I18nTextTable_CN.json`）和 `json-data`（其中 `MissionRuntimeAsset/<任务>.json` 是任务定义：
-  名字与简介的文字键、任务类型、所属干员）。客户端有两层：StreamingAssets 是安装包，Persistent 是热更新层；**先放 StreamingAssets，再用 Persistent 覆盖**。
+  名字与简介的文字键、任务类型、所属干员、关卡）。客户端有两层：StreamingAssets 是安装包，Persistent 是热更新层；**先放 StreamingAssets，再用 Persistent 覆盖**。
+- 对话树是 Unity 资源包里的 TextAsset，不在上面两个块里：`AnimeStudio.CLI <层> <输出> --game ArknightsEndfield --types TextAsset --names ^dlg_ --export_type Convert`
+  （`--logger_flags` 用逗号分隔，写成 `A|B` 时 CLI 只打印帮助）。过场时间线的台词片段同理：`--types MonoBehaviour --names ^Dialog(Trunk|Option)PlayableAsset --export_type JSON`。
+  每次都要读遍资源包，是解包里最慢的一步（StreamingAssets 首次约 20 分钟）；两层各导一次，建库时 Persistent 覆盖前者。偶尔中途以退出码 4 结束，看文件数，不全就重跑。
 - **不要加 `--packed-game-store`**：kit 的完整流程会把 Json/LipSync 写进一个 SQLite，这一步在本机卡死（上千个线程、无 CPU 无 IO），而它只存口型数据。
 - 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（`tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
   （`C:\Users\hhikr\endfield\python312`，`._pth` 里加 kit 目录）。工作目录要在 NTFS 上（exFAT 上 git 拒绝、不能建硬链接）。
@@ -147,9 +153,15 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
 - 表 → 干员（阵营/种族/专长/爱好标签、档案、语音）、档案库（PRTS：分类 → 文档 → 页面 → `RichContentTable` 正文；调查与线索）、
   敌人/武器/物品的描述（敌人带分布地点；物品只收 `decoDesc`，去掉多件物品共用的模板句和机制句）、副本（`DungeonTable`：名字、简介、地区，敌人 `appears_in`）、
   角色来信（`MailTemplateTable`，系统邮件不收）、势力名；档案库不列的留言与告示（`RichContentTable`）归到所在任务或地点。
-- 剧情：`DialogTextTable`（按行 id 排序；`DialogOptionTable` 的选项组 `option_<对话>_<组>_<n>` 填在行号的空位上）、`RadioTable`、`RemoteCommonTable`、
-  `EnvTalkTable`（只收属于已知任务或地点的）、`SNSDialogTable`；同一任务里按游戏的编号交错排列（`0d5` = 0.5）。
-  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`）；任务名、简介（`mission_intro` 条目）、分类（书架）、所属干员来自任务定义。
+- 剧情：`DialogTextTable`、`RadioTable`、`RemoteCommonTable`、`EnvTalkTable`（只收属于已知任务或地点的）、`SNSDialogTable`。
+  **一个任务是一篇剧情**（`ef/<任务>.txt`；地点、敌人、短信话题、礼物对话同样各一篇），每段对话前一行 `kind = 'section'`，内容是这段的种类
+  （对话/通讯/远程通话/闲话/短信）。一篇里按种类分块（对话 → 通讯 → 远程通话 → 闲话 → 短信），块内按游戏编号（`0d5` = 0.5）：
+  各表的编号互相独立，跨种类的先后游戏数据只给了一部分（见 `KNOWLEDGE_BASE_LESSONS.md` §10），所以不交错。
+  一段对话内部的顺序按它的**对话树**（`dlg_…` TextAsset，`readDialogTree`）：台词节点的 `_trunkId` 是文本行，选项节点的出边依次是各选项的回应，分支在汇合处接上；
+  分叉的选项写成“选项 → 它的回应”，不分叉的写成一行“甲／乙”；`Ex…` 节点是设置，不走。过场节点处放这段对话的时间线台词（按片段的 `startTime`，
+  绑定的选项接在那句后面）。两者都没覆盖的行与选项组按行号补在后面，选项组填在行号的空位上（2026-10 客户端：约 11% 的台词行）。
+  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`）；任务名、简介（`mission_intro` 条目，`group_name` 是任务所在地区）、分类（书架）、所属干员来自任务定义。
+- `section` 行不进检索记录；向量切块在 `section` 处断开（`chunkStory`），所以合并前后每段切出的块文字相同，按内容哈希缓存的向量全部沿用（0.12 合并时 9969 块零新增）。
   干员的任务、短信话题（`SNSDialogTopicTable`）与礼物对话挂在干员下（kind `ef/memory`）；地图上的交互按地点（`LevelDescTable`）、敌人遭遇的通讯按敌人归组
   （kind `ef/world`，书架显示为“其他”）；没有定义的任务按分类编号（“支线任务 3”）；对话之间的插话、工业教学、测试对话不收。
   `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要（进 `story_catalog.synopsis`）。

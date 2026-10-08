@@ -121,8 +121,44 @@ void main() {
   test('the content is all there (counts of the 2026-10 client)', () async {
     expect(await count("SELECT COUNT(*) FROM entries WHERE type = 'operator'"), greaterThanOrEqualTo(30));
     expect(await count("SELECT COUNT(*) FROM entries WHERE type = 'document'"), greaterThanOrEqualTo(400));
-    expect(await count('SELECT COUNT(DISTINCT story_id) FROM story_lines'), greaterThanOrEqualTo(6000));
+    // One story per mission, place, enemy and message topic (520 in the
+    // 2026-10 client), all ~8,400 conversations in them.
+    expect(await count('SELECT COUNT(DISTINCT story_id) FROM story_lines'), greaterThanOrEqualTo(400));
+    expect(await count("SELECT COUNT(*) FROM story_lines WHERE kind = 'section'"), greaterThanOrEqualTo(8000));
+    expect(await count("SELECT COUNT(*) FROM story_lines WHERE kind <> 'section'"), greaterThanOrEqualTo(38000));
     expect(await count("SELECT COUNT(*) FROM collections WHERE kind = 'ef/main'"), greaterThanOrEqualTo(50));
+  }, skip: !run,);
+
+  test('a mission reads as one story that opens with a section line', () async {
+    expect(
+      await count(
+        "SELECT COUNT(*) FROM (SELECT collection_id FROM entries WHERE type = 'story' "
+        'GROUP BY collection_id HAVING COUNT(*) > 1)',
+      ),
+      0,
+    );
+    expect(
+      await count(
+        "SELECT COUNT(*) FROM story_lines WHERE line_index = 0 AND kind <> 'section'",
+      ),
+      0,
+    );
+    // Story ids are missions, places, enemies, topics: not conversations.
+    expect(
+      await count(
+        "SELECT COUNT(DISTINCT story_id) FROM story_lines WHERE story_id GLOB 'ef/dlg_*' "
+        "OR story_id GLOB 'ef/radio_*' OR story_id GLOB 'ef/sns_*'",
+      ),
+      0,
+    );
+    // Main missions say where they are played.
+    expect(
+      await count(
+        'SELECT COUNT(*) FROM entries e JOIN collections c ON c.id = e.collection_id '
+        "WHERE c.kind = 'ef/main' AND e.type = 'mission_intro' AND e.group_name IS NOT NULL",
+      ),
+      greaterThanOrEqualTo(50),
+    );
   }, skip: !run,);
 
   test('story vectors, when present, cover every story inside its lines', () async {

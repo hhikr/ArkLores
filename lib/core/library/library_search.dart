@@ -183,11 +183,6 @@ List<String> searchTerms(String query) => [
 const String _entryColumns = 'e.id, e.type, e.name, e.code, e.group_name, '
     'e.raw_id, e.collection_id, e.entity_id, c.name AS collection_name';
 
-const String _collectionColumns = 'c.id, c.kind, c.name, c.start_time, '
-    'c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others";
-
 List<LibraryCollection> _readableCollections(List<Map<String, Object?>> rows) =>
     [
       for (final r in rows) LibraryCollection.fromRow(r),

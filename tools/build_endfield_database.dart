@@ -4,18 +4,25 @@
 //   dart run tools/build_endfield_database.dart \
 //     --tables=<dir with the decoded game tables, e.g. <kit>/export_full/game/Table> \
 //     [--missions=<a JsonData dump's Data/Json/MissionRuntimeAsset>] \
+//     [--trees=<TextAsset dir>[;<TextAsset dir> …]] \
+//     [--clips=<MonoBehaviour dir>[;<MonoBehaviour dir> …]] \
 //     [--version=<client version>] \
 //     --output=build/endfield [--force]
 //
 // The tables give the operator archives, the PRTS archive, enemy, weapon and
 // item flavour text and the conversations; the mission definitions (a JSON
-// data dump's MissionRuntimeAsset) name and shelve the missions. Use
+// data dump's MissionRuntimeAsset) name and shelve the missions; the dialog
+// trees (`dlg_…` TextAssets; StreamingAssets first, then Persistent) give
+// the order of each conversation's lines and choices, and the cutscene clips
+// (`DialogTrunkPlayableAsset`/`DialogOptionPlayableAsset` MonoBehaviours)
+// the order of the lines a cutscene shows. Use
 // tools/unpack_endfield.ps1 to unpack and build in one go.
 // See docs/GAMEDATA_BUILD_PIPELINE.md (Endfield) and
 // docs/KNOWLEDGE_BASE_LESSONS.md.
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arklores/core/gamedata/build/endfield/endfield_dialog_tree.dart';
 import 'package:arklores/core/gamedata/build/endfield/endfield_importer.dart';
 import 'package:arklores/core/gamedata/build/endfield/endfield_stories.dart';
 import 'package:arklores/core/gamedata/build/endfield/endfield_tables.dart';
@@ -64,12 +71,24 @@ Future<void> main(List<String> args) async {
         ? const <String, EndfieldMission>{}
         : EndfieldStoryImporter.loadMissions(Directory(missionsDir), tables);
     log('missions defined: ${missions.length}');
+    final trees = EndfieldStoryImporter.loadDialogTrees([
+      for (final d in (arg('trees') ?? '').split(';'))
+        if (d.trim().isNotEmpty) Directory(d.trim()),
+    ]);
+    log('dialog trees: ${trees.length}');
+    final timelines = loadTimelineLines([
+      for (final d in (arg('clips') ?? '').split(';'))
+        if (d.trim().isNotEmpty) Directory(d.trim()),
+    ]);
+    log('conversations with cutscene lines: ${timelines.length}');
     final stories = EndfieldStoryImporter(
       tables,
       writer,
       importer,
       log: log,
       missions: missions,
+      dialogTrees: trees,
+      timelineLines: timelines,
     );
     await stories.importDialogTables();
     log('derived layers');

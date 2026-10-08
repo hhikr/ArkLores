@@ -30,6 +30,24 @@ void main() {
       expect(chunks.first.text.split('\n')[1], '第1行');
     });
 
+    test('a break line ends the windows: each part chunks as it would alone', () {
+      final part = [for (var i = 0; i < 14; i++) ChunkLine(i, 'A', '第$i行')];
+      final merged = [
+        const ChunkLine(0, null, '通讯', isBreak: true),
+        for (final l in part) ChunkLine(l.index + 1, l.speaker, l.content),
+        const ChunkLine(15, null, '对话', isBreak: true),
+        const ChunkLine(16, 'B', '另一段'),
+      ];
+      final chunks = chunkStory('m.txt', null, merged);
+      expect(chunks.map((c) => '${c.lineStart}-${c.lineEnd}'), ['1-12', '9-14', '16-16']);
+      // The same texts as the part alone: vectors cached by text carry over.
+      expect(
+        chunks.take(2).map((c) => c.text),
+        chunkStory('p.txt', null, part).map((c) => c.text),
+      );
+      expect(chunks.map((c) => c.text).join(), isNot(contains('通讯')));
+    });
+
     test('quantize keeps direction (cosine with original ~ 1)', () {
       const raw = [3.0, -4.0, 0.0, 1.0];
       final q = quantize(raw);

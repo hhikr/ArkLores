@@ -14,6 +14,12 @@
 # Persistent is the hot-update layer: its files replace StreamingAssets'.
 # The dump is run without `--packed-game-store` (the kit's packed SQLite
 # store hung on this machine; it only holds lip-sync data).
+# The dialog trees (`dlg_…` TextAssets: the order of a conversation's lines
+# and choices) and the clips of cutscene timelines (`DialogTrunkPlayableAsset`
+# with each line's start time, `DialogOptionPlayableAsset`) are Unity
+# objects, exported from each layer's asset bundles by name; each export
+# reads every bundle (about 20 minutes for StreamingAssets) and is the slow
+# step.
 param(
   [string]$GameRoot = 'C:\Program Files\Hypergryph Launcher\games\Arknights Endfield\Endfield_Data',
   [string]$Kit = 'C:\Users\hhikr\endfield\kit',
@@ -41,13 +47,34 @@ function Dump($layer, $out) {
   Get-Content "$out.log" -Tail 4
 }
 
+# Unity objects of one class whose names match, from one layer's bundles.
+function UnityObjects($layer, $out, $type, $names, $exportType) {
+  if (Test-Path $out) { Remove-Item $out -Recurse -Force -Confirm:$false }
+  $source = Join-Path $GameRoot $layer
+  $objectArgs = @("`"$source`"", "`"$out`"", '--game', 'ArknightsEndfield', '--types', $type,
+    '--names', $names, '--export_type', $exportType, '--logger_flags', 'Warning,Error')
+  $p = Start-Process $exe -ArgumentList $objectArgs -PassThru -NoNewWindow -Wait `
+    -RedirectStandardOutput "$out.log" -RedirectStandardError "$out.err"
+  if ($p.ExitCode -ne 0) { throw "AnimeStudio $type export of $layer failed ($($p.ExitCode)); see $out.log" }
+  "${type} of ${layer}: $((Get-ChildItem $out -Recurse -File | Measure-Object).Count) files"
+}
+
 $tables = Join-Path $Work 'tables'
 $missions = Join-Path $Work 'missions'
+# Dialog trees (TextAsset) and the clips of cutscene timelines (the lines a
+# cutscene shows with their start times, and the options bound to them).
+$treeDirs = @((Join-Path $Work 'tree_sa'), (Join-Path $Work 'tree_persistent'))
+$clipDirs = @((Join-Path $Work 'clips_sa'), (Join-Path $Work 'clips_persistent'))
 if (-not $SkipUnpack) {
   if (-not (Test-Path $exe)) { throw "AnimeStudio CLI not found: $exe (run the kit's setup.bat once)" }
   New-Item -ItemType Directory -Force $Work | Out-Null
   Dump 'StreamingAssets' (Join-Path $Work 'sa')
   Dump 'Persistent' (Join-Path $Work 'persistent')
+  foreach ($i in 0, 1) {
+    $layer = @('StreamingAssets', 'Persistent')[$i]
+    UnityObjects $layer $treeDirs[$i] 'TextAsset' '^dlg_' 'Convert'
+    UnityObjects $layer $clipDirs[$i] 'MonoBehaviour' '^Dialog(Trunk|Option)PlayableAsset' 'JSON'
+  }
   foreach ($dir in $tables, $missions) {
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -Confirm:$false }
     New-Item -ItemType Directory -Force $dir | Out-Null
@@ -61,7 +88,7 @@ if (-not $SkipUnpack) {
   "tables: $((Get-ChildItem $tables -File).Count), missions: $((Get-ChildItem $missions -File).Count)"
 }
 
-& dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--version=$Version" --output=build/endfield --force
+& dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--trees=$($treeDirs -join ';')" "--clips=$($clipDirs -join ';')" "--version=$Version" --output=build/endfield --force
 if ($LASTEXITCODE -ne 0) { throw 'build failed' }
 # A rebuild has no vectors; the embedding cache (build/embedding_cache) makes
 # unchanged chunks free, only new or changed text is paid for.

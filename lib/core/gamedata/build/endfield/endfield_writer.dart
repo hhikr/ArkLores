@@ -13,6 +13,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 import '../../../rag/chunker.dart';
 import '../../game.dart';
 import '../../story_catalog.dart';
+import '../../story_vectors.dart' show sectionLineKind;
 import '../arknights_importer.dart' show BuildStats, nowSeconds, stableContentId;
 import '../gamedata_build_service.dart' show countManifest;
 import '../gamedata_schema.dart';
@@ -32,7 +33,8 @@ class EndfieldLine {
   final String content;
 
   /// `story_lines.kind`: dialogue, narration, subtitle, document, choice,
-  /// title, system.
+  /// title, system, section (the start of a conversation in a merged story;
+  /// the content names its kind).
   final String kind;
 }
 
@@ -150,7 +152,7 @@ class EndfieldWriter {
         stats.storyLines++;
       }
       final text = kept
-          .where((l) => l.kind != 'system')
+          .where((l) => l.kind != 'system' && l.kind != sectionLineKind)
           .map((l) => _blankToNull(l.speaker) == null
               ? l.content.trim()
               : '${l.speaker!.trim()}: ${l.content.trim()}',)

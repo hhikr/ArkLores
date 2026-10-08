@@ -20,9 +20,12 @@
     装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一组书架、页面按 id 路由；知识库页每个游戏一张下载卡。
   - 终末地建库：`tools/unpack_endfield.ps1`（AnimeStudio 导出客户端两层的表与 JSON 数据，Persistent 覆盖 StreamingAssets，不用 kit 的完整流程）→
     `tools/build_endfield_database.dart`：干员档案与语音、档案库（PRTS）、敌人/武器/物品描述、对话/通讯/短信（选项按组号插入），
-    任务名/简介/分类/所属干员来自 `MissionRuntimeAsset`，书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务）。两次构建逐表一致；库 52 MB、gz 16.5 MB。
-  - 终末地资产带剧情向量（与明日方舟同一模型；重建后 `unpack_endfield.ps1 -Embed` 补，缓存命中不收费）。
-  - 待开发者决定：真实 API 跑一两道双游戏问题验证选库；转正式版。
+    任务名/简介/分类/所属干员/关卡来自 `MissionRuntimeAsset`，书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务），书架内按地区分组、显示任务简介。
+  - **一个任务一篇剧情**（参考 warfarin/fz 的编排）：段前一行 `section` 标种类，按种类分块、块内按编号；一段对话内部按对话树（`dlg_…` TextAsset）
+    与过场时间线片段（`DialogTrunk/OptionPlayableAsset`）排，89% 台词行由它们定位，其余按行号。阅读器只在种类变化处写种类名。
+  - 终末地资产带剧情向量（与明日方舟同一模型；重建后 `unpack_endfield.ps1 -Embed` 补，缓存命中不收费；切块在 `section` 处断开）。
+  - v0.12.0 预发布的资产是旧结构（一段对话一篇）；新结构要重新发资产，补向量约 2500 块（约 ¥0.21），都等开发者同意。
+  - 待开发者决定：上面的重新发布与向量；真实 API 跑一两道双游戏问题验证选库；转正式版。
   - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据）。
 ## 文档索引
 

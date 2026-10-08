@@ -1,15 +1,20 @@
 /// 0.12: the Endfield conversations.
 ///
-/// One story per conversation of the dialog tables (`DialogTextTable`,
-/// `RadioTable`, `SNSDialogTable`), ordered by their row ids, grouped into a
-/// collection per mission (named and shelved by the game's mission
-/// definitions when given).
+/// The conversations of the dialog tables (`DialogTextTable`, `RadioTable`,
+/// `RemoteCommonTable`, `EnvTalkTable`, `SNSDialogTable`) are read as one
+/// story per mission (or per place, enemy, message topic): all of its
+/// conversations in the game's numbering, each opened by a `section` line
+/// that names its kind. A mission is one collection (named and shelved by
+/// the game's mission definitions when given) holding that story, the
+/// mission's description and the texts read in it.
 library;
 
 import 'dart:convert';
 import 'dart:io';
 
 import '../../story_catalog.dart' show endfieldCollectionTypePrefix;
+import '../../story_vectors.dart' show sectionLineKind;
+import 'endfield_dialog_tree.dart';
 import 'endfield_importer.dart';
 import 'endfield_tables.dart';
 import 'endfield_writer.dart';
@@ -23,36 +28,47 @@ String missionOfConversation(String id) {
   return cut > 0 ? bare.substring(0, cut) : bare;
 }
 
-/// A readable name of a conversation without a name of its own: its kind
-/// (from the id prefix) and its number in the mission (`dlg_a1m2_3` →
-/// `对话 3`). Nothing is invented beyond what the id says.
-String conversationLabel(String id) {
-  final kind = switch (RegExp(r'^[a-z]+').firstMatch(id)?.group(0)) {
-    'dlg' => '对话',
-    'radio' || 'remotecomm' => '通讯',
-    'sns' => '短信',
-    _ => '对话',
-  };
-  final number = RegExp(r'_([0-9a-z]+)$').firstMatch(id)?.group(1);
-  return number == null ? kind : '$kind $number';
-}
+/// The kind of a conversation as its section line names it, from the id
+/// prefix (the table it comes from): dialogue, radio, a remote call, talk
+/// around the player, messages.
+String conversationKind(String id) =>
+    switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
+      'radio' => '通讯',
+      'remotecomm' => '远程通话',
+      'envTalk' => '闲话',
+      'sns' => '短信',
+      _ => '对话',
+    };
 
-/// The place of a conversation in its mission: its number (`0d5` is half
-/// way between 0 and 1: `d` marks a decimal point in the game's ids), then
-/// dialogue before radio before messages. Null when the id has no number.
+/// The place of a conversation among those of its kind in a mission: its
+/// number (`0d5` is half way between 0 and 1: `d` marks a decimal point in
+/// the game's ids). Null when the id has no number.
+///
+/// Each table numbers its conversations on its own (radio 3 is not between
+/// dialogue 2 and 3), and the client says in what order the kinds play only
+/// for some of them (the level scripts that start them, the cutscene
+/// timelines); so a mission reads kind by kind ([conversationKindRank]),
+/// each kind in its own numbering.
 int? conversationOrder(String id) {
   final m = RegExp(r'_(\d+)(?:d(\d+))?$').firstMatch(id);
   if (m == null) return null;
   final whole = int.parse(m.group(1)!);
   final part = m.group(2) == null ? 0 : int.parse(m.group(2)!.padRight(2, '0').substring(0, 2));
-  final kind = switch (RegExp(r'^[a-z]+').firstMatch(id)?.group(0)) {
-    'dlg' => 0,
-    'radio' || 'remotecomm' => 1,
-    'envTalk' => 3,
-    _ => 2,
-  };
-  return (whole * 100 + part) * 10 + kind;
+  return whole * 100 + part;
 }
+
+/// The kinds of a mission in reading order: the dialogue that carries the
+/// story, then what is said over the radio and in remote calls on the way,
+/// then talk around the player, then messages.
+int conversationKindRank(String id) =>
+    switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
+      'dlg' => 0,
+      'radio' => 1,
+      'remotecomm' => 2,
+      'envTalk' => 3,
+      'sns' => 4,
+      _ => 5,
+    };
 
 /// A mission's place on its shelf: the numbers of its id in order, each
 /// given three digits (`e1m2d5` → 001 002 005), so `e1m2` comes before
@@ -99,6 +115,17 @@ typedef EndfieldMission = ({
   int type,
   String? charId,
   int sortId,
+  String? levelId,
+});
+
+/// One conversation waiting to be placed in its mission's story.
+typedef _Part = ({
+  String id,
+  int order,
+  String kind,
+  List<EndfieldLine> lines,
+  String source,
+  String? summary,
 });
 
 /// The mission tabs of the game's mission panel (`GEnums.MissionViewType`,
@@ -131,6 +158,8 @@ class EndfieldStoryImporter {
     this.importer, {
     this.log,
     this.missions = const {},
+    this.dialogTrees = const {},
+    this.timelineLines = const {},
   });
 
   final EndfieldTables tables;
@@ -140,6 +169,42 @@ class EndfieldStoryImporter {
 
   /// The game's mission definitions by id (empty: the id rules decide).
   final Map<String, EndfieldMission> missions;
+
+  /// The conversations' dialog trees by conversation id (empty: the lines
+  /// keep the table's numbering).
+  final Map<String, Map<String, dynamic>> dialogTrees;
+
+  /// The lines cutscene timelines show, by conversation id, in the order
+  /// they start ([loadTimelineLines]).
+  final Map<String, List<TimelineLine>> timelineLines;
+
+  /// Reads the dialog trees from an AnimeStudio TextAsset export: files
+  /// `<conversation>_p<path id>.txt` (or `<conversation>.json`), the
+  /// `_extra_config` ones left out. Later files of the same conversation
+  /// replace earlier ones (list the hot-update layer last).
+  static Map<String, Map<String, dynamic>> loadDialogTrees(Iterable<Directory> dirs) {
+    final out = <String, Map<String, dynamic>>{};
+    for (final dir in dirs) {
+      if (!dir.existsSync()) continue;
+      final files = dir.listSync(recursive: true).whereType<File>().toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
+      for (final file in files) {
+        final name = file.uri.pathSegments.last;
+        final m = RegExp(r'^(dlg_.+?)(?:_p[0-9A-Fa-f]{16})?(?: \(\d+\))?\.(?:txt|json)$').firstMatch(name);
+        if (m == null || m.group(1)!.endsWith('_extra_config')) continue;
+        final Object? json;
+        try {
+          json = jsonDecode(file.readAsStringSync());
+        } catch (_) {
+          continue;
+        }
+        if (json is Map<String, dynamic> && json['type'] == 'Beyond.Gameplay.DialogTree') {
+          out[m.group(1)!] = json;
+        }
+      }
+    }
+    return out;
+  }
 
   /// Reads the mission definitions from a JsonData dump's
   /// `MissionRuntimeAsset` folder; names and descriptions are text keys of
@@ -168,12 +233,14 @@ class EndfieldStoryImporter {
           : '';
       final description = keyText(json['missionDescription']);
       final charId = '${json['charId'] ?? ''}';
+      final levelId = '${json['levelId'] ?? ''}';
       out[id] = (
         name: keyText(json['missionName']),
         description: description.isEmpty ? null : description,
         type: (json['missionType'] as num?)?.toInt() ?? -1,
         charId: charId.isEmpty ? null : charId,
         sortId: (json['sortId'] as num?)?.toInt() ?? 0,
+        levelId: levelId.isEmpty ? null : levelId,
       );
     }
     return out;
@@ -206,8 +273,9 @@ class EndfieldStoryImporter {
   /// unnamed training stories are: `训练 3`).
   final Map<String, int> _unnamed = {};
 
-  /// Conversations numbered so far per mission and kind.
-  final Map<String, int> _ordinal = {};
+  /// The conversations of each mission (or place, enemy, topic) so far, in
+  /// the order they were read; [_writeStories] writes them as one story.
+  final Map<String, List<_Part>> _parts = {};
 
   Future<void> _ensureMission(
     String id, {
@@ -241,16 +309,21 @@ class EndfieldStoryImporter {
       sortKey: missionOrder(id) ?? entry.sort,
       sourcePath: 'mission:$id',
     );
-    final description = defined?.description;
-    if (description != null) {
+    // The mission's own description, and the region it is played in (the
+    // game's region of its level): the shelf lists a mission with both.
+    if (defined != null) {
+      final description = defined.description;
       await writer.entry(
         type: 'mission_intro',
         rawId: 'mission_$id',
         name: entry.name,
         collectionId: 'mission_$id',
+        group: defined.levelId == null ? null : importer.regionOf(defined.levelId!),
         sourcePath: 'MissionRuntimeAsset/$id.json',
         category: 'story',
-        texts: [(section: '任务简介', text: description)],
+        texts: [
+          if (description != null) (section: '任务简介', text: description),
+        ],
       );
     }
   }
@@ -365,23 +438,58 @@ class EndfieldStoryImporter {
   }) async {
     final mission = await _home(id);
     if (mission == null) return;
-    final m = _missions[mission]!;
-    // Unnamed conversations are numbered in their mission, per kind
-    // (`对话 3`, `通讯 2`), in the order of their ids.
-    final kind = conversationLabel(id).split(' ').first;
-    final n = _ordinal.update('$mission/$kind', (v) => v + 1, ifAbsent: () => 1);
-    await writer.story(
-      rawId: id,
-      name: name ?? '$kind $n',
-      lines: lines,
-      collectionId: 'mission_$mission',
-      collectionName: m.name,
-      collectionType: '$endfieldCollectionTypePrefix${m.kind.toUpperCase()}',
-      synopsis: _summary(id),
-      // Within a mission the three kinds share the game's numbering.
-      sortKey: conversationOrder(id) ?? sort,
-      sourcePath: source,
+    if (!lines.any((l) => l.content.trim().isNotEmpty)) return;
+    _parts.putIfAbsent(mission, () => []).add(
+      (
+        id: id,
+        // Within a mission the kinds share the game's numbering.
+        order: conversationOrder(id) ?? sort ?? 0,
+        kind: name ?? conversationKind(id),
+        lines: lines,
+        source: source,
+        summary: _summary(id),
+      ),
     );
+  }
+
+  /// Each mission's conversations as one story, kind by kind, each kind in
+  /// the game's numbering (ties by id; see [conversationOrder]): a `section`
+  /// line naming the kind before each conversation. The catalog synopsis is
+  /// the official summaries of its conversations, in the same order (a
+  /// locating hint, not evidence).
+  Future<void> _writeStories() async {
+    var count = 0;
+    for (final MapEntry(key: mission, value: parts) in _parts.entries) {
+      final m = _missions[mission]!;
+      parts.sort((a, b) {
+        final byKind = conversationKindRank(a.id).compareTo(conversationKindRank(b.id));
+        if (byKind != 0) return byKind;
+        return a.order != b.order ? a.order.compareTo(b.order) : _naturalCompare(a.id, b.id);
+      });
+      final summaries = [
+        for (final p in parts)
+          if (p.summary != null) p.summary!,
+      ];
+      final written = await writer.story(
+        rawId: mission,
+        name: m.name,
+        lines: [
+          for (final p in parts) ...[
+            EndfieldLine(p.kind, kind: sectionLineKind),
+            ...p.lines,
+          ],
+        ],
+        collectionId: 'mission_$mission',
+        collectionName: m.name,
+        collectionType: '$endfieldCollectionTypePrefix${m.kind.toUpperCase()}',
+        synopsis: summaries.isEmpty ? null : summaries.join('\n'),
+        sortKey: 0,
+        sourcePath: {for (final p in parts) p.source}.join(';'),
+      );
+      if (written != null) count++;
+    }
+    _parts.clear();
+    log?.call('stories (one per mission, place, enemy, topic): $count');
   }
 
   /// Conversations from the dialog tables, ordered by row id.
@@ -397,15 +505,17 @@ class EndfieldStoryImporter {
           .putIfAbsent(m.group(1)!, () => [])
           .add((int.parse(m.group(2)!), value));
     }
-    // Player choices: `option_<conversation>_<group>_<n>`; a group takes the
-    // place of the line number it fills in the conversation (its lines skip
-    // that number).
+    // Player choices: `option_<conversation>_<group>_<n>`.
     final choices = <String, Map<int, List<String>>>{};
+    final optionGroup = <String, int>{};
+    final optionText = <String, String>{};
     for (final MapEntry(:key, :value) in tables.table('DialogOptionTable').entries) {
       final m = RegExp(r'^option_(.+)_(\d+)_(\d+)$').firstMatch(key);
       if (m == null || value is! Map) continue;
       final text = _clean(value['optionText']);
       if (text.isEmpty) continue;
+      optionText[key] = text;
+      optionGroup[key] = int.parse(m.group(2)!);
       choices
           .putIfAbsent(m.group(1)!, () => {})
           .putIfAbsent(int.parse(m.group(2)!), () => [])
@@ -413,32 +523,89 @@ class EndfieldStoryImporter {
     }
     final ids = byConversation.keys.toList()..sort(_naturalCompare);
     final source = tables.sourcePath('DialogTextTable');
+    var byTree = 0, placedRows = 0, allRows = 0;
     for (final (i, id) in ids.indexed) {
       final rows = byConversation[id]!..sort((a, b) => a.$1.compareTo(b.$1));
+      EndfieldLine lineOf(Map<String, dynamic> r) => EndfieldLine(
+            _clean(r['dialogText']),
+            speaker: _speaker(r['actorName']),
+            kind: _speaker(r['actorName']).isEmpty ? 'narration' : 'dialogue',
+          );
+      // The order the game plays: the conversation's dialog tree, and the
+      // start times of the lines its cutscene timelines show.
+      final steps = dialogTrees[id] == null
+          ? const <DialogStep>[]
+          : readDialogTree(dialogTrees[id]!);
+      final timeline = timelineLines[id] ?? const <TimelineLine>[];
+      final ordered = <EndfieldLine>[];
+      final usedRows = <int>{};
+      final usedGroups = <int>{};
+      void addChoice(List<String> options) {
+        final texts = [
+          for (final o in options)
+            if (optionText[o] != null) optionText[o]!,
+        ];
+        if (texts.isEmpty) return;
+        ordered.add(EndfieldLine(texts.join('／'), kind: 'choice'));
+        for (final o in options) {
+          if (optionGroup[o] != null) usedGroups.add(optionGroup[o]!);
+        }
+      }
+
+      void addRow(String rowId) {
+        final n = int.tryParse(rowId.substring(rowId.lastIndexOf('_') + 1));
+        final row = n == null || !rowId.startsWith('${id}_')
+            ? null
+            : rows.where((r) => r.$1 == n).firstOrNull;
+        if (row == null || !usedRows.add(n!)) return;
+        ordered.add(lineOf(row.$2));
+      }
+
+      var timelinePlayed = false;
+      void playTimeline() {
+        if (timelinePlayed) return;
+        timelinePlayed = true;
+        for (final l in timeline) {
+          addRow(l.rowId);
+          if (l.options.isNotEmpty) addChoice(l.options);
+        }
+      }
+
+      if (steps.isNotEmpty || timeline.isNotEmpty) byTree++;
+      for (final step in steps) {
+        if (step.isCutscene) {
+          // Every cutscene line goes where the first cutscene plays (the
+          // clips do not say which of several timelines they are in).
+          playTimeline();
+        } else if (step.isChoice) {
+          addChoice(step.options);
+        } else {
+          addRow(step.rowId!);
+        }
+      }
+      playTimeline();
+      // Lines and choices the tree does not reach (a conversation played by
+      // a cutscene timeline has no tree of lines) keep the table's numbering:
+      // a choice group fills the line number its lines skip.
       final groups = choices[id] ?? const <int, List<String>>{};
-      final placed = <(int, int, EndfieldLine)>[
+      final rest = <(int, int, EndfieldLine)>[
         for (final (n, r) in rows)
-          (
-            n,
-            0,
-            EndfieldLine(
-              _clean(r['dialogText']),
-              speaker: _speaker(r['actorName']),
-              kind: _speaker(r['actorName']).isEmpty ? 'narration' : 'dialogue',
-            ),
-          ),
+          if (!usedRows.contains(n)) (n, 0, lineOf(r)),
         for (final MapEntry(key: n, value: texts) in groups.entries)
-          (n, 1, EndfieldLine(texts.join('／'), kind: 'choice')),
+          if (!usedGroups.contains(n)) (n, 1, EndfieldLine(texts.join('／'), kind: 'choice')),
       ]..sort((a, b) => a.$1 != b.$1 ? a.$1.compareTo(b.$1) : a.$2.compareTo(b.$2));
+      placedRows += usedRows.length;
+      allRows += rows.length;
       await _story(
         id: id,
         source: source,
         sort: i,
-        lines: [for (final p in placed) p.$3],
+        lines: [...ordered, for (final p in rest) p.$3],
       );
       count++;
     }
-    log?.call('dialogs: $count');
+    log?.call('dialogs: $count ($byTree with a tree or timeline; lines placed by them '
+        '$placedRows of $allRows, the rest by number)');
     count = 0;
     final radio = tables.table('RadioTable');
     final radioSource = tables.sourcePath('RadioTable');
@@ -463,6 +630,7 @@ class EndfieldStoryImporter {
     await _importRemoteCalls();
     await _importEnvTalk();
     await _importSns();
+    await _writeStories();
     await _importReadings();
   }
 

@@ -434,6 +434,107 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an Endfield shelf lists missions by region with their descriptions; '
+      'a mission reads as one text, its conversations set off by kind', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2160);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    LibraryCollection mission(int i, String? region) => LibraryCollection(
+          id: 'ef/mission_m$i',
+          kind: 'ef/main',
+          name: '任务$i',
+          stories: 1,
+          others: 0,
+          sortKey: i,
+          intro: '任务$i的简介：一行说明。',
+          group: region,
+        );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          collectionsOfKindProvider.overrideWith(
+            (ref, kind) async => [
+              mission(0, null),
+              mission(1, '甲地'),
+              mission(2, '乙地'),
+              mission(3, '甲地'),
+            ],
+          ),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => const [
+              StoryLineEntry(lineIndex: 0, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 1, speaker: '甲', content: '第一段。'),
+              StoryLineEntry(lineIndex: 2, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 3, speaker: '乙', content: '第二段。'),
+              StoryLineEntry(lineIndex: 4, content: '通讯', kind: 'section'),
+              StoryLineEntry(lineIndex: 5, speaker: '甲', content: '通讯里的一句。'),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => Shot(child: child!),
+          home: const ShelfPage(kind: 'ef/main'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await shoot(tester, 'library_endfield_shelf');
+    // Regions in the order they first come up, a mission without one last.
+    final headings = [
+      for (final h in ['甲地', '乙地', '其他'])
+        tester.getTopLeft(find.byKey(ValueKey('shelf-heading-$h'))).dy,
+    ];
+    expect(headings, orderedEquals([...headings]..sort()));
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('collection-ef/mission_m3'))).dy,
+      lessThan(headings[1]),
+    );
+    expect(find.text('任务1的简介：一行说明。'), findsOneWidget);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        key: UniqueKey(),
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => const [
+              StoryLineEntry(lineIndex: 0, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 1, speaker: '甲', content: '第一段。'),
+              StoryLineEntry(lineIndex: 2, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 3, speaker: '乙', content: '第二段。'),
+              StoryLineEntry(lineIndex: 4, content: '通讯', kind: 'section'),
+              StoryLineEntry(lineIndex: 5, speaker: '甲', content: '通讯里的一句。'),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => Shot(child: child!),
+          home: const StoryReaderPage(storyId: 'ef/m1.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await shoot(tester, 'library_endfield_reader');
+    // The kind is named where it changes; the next part of the same kind is
+    // set off by a rule alone.
+    expect(find.byKey(const ValueKey('story-reader-section-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-reader-section-2')), findsOneWidget);
+    expect(find.text('对话'), findsOneWidget);
+    expect(find.text('通讯'), findsOneWidget);
+    expect(find.text('第二段。'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Endfield not installed: a note instead of its shelves', (tester) async {
     await pumpApp(tester, const MaterialsPage());
     expect(find.byKey(const ValueKey('library-missing-endfield')), findsOneWidget);

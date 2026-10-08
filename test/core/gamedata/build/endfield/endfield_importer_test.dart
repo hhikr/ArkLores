@@ -218,7 +218,21 @@ void main() {
     final tables = EndfieldTables(tablesDir);
     final importer = EndfieldImporter(tables, writer);
     await importer.importTables();
-    await EndfieldStoryImporter(tables, writer, importer).importDialogTables();
+    await EndfieldStoryImporter(
+      tables,
+      writer,
+      importer,
+      missions: {
+        'e1m1': (
+          name: '启程',
+          description: '出发前往谷地。',
+          type: 0,
+          charId: null,
+          sortId: 0,
+          levelId: 'map01_lv001',
+        ),
+      },
+    ).importDialogTables();
     await writer.finish();
   });
 
@@ -250,26 +264,57 @@ void main() {
     expect(games.single['game'], endfieldGame);
   });
 
-  test('a conversation reads in order, one gender form, the player as 管理员',
+  test('a mission is one story: its conversations in the game numbering, each under a section line',
       () async {
     final lines = await q(
-      "SELECT speaker, content, kind FROM story_lines WHERE story_id = 'ef/dlg_e1m1_1.txt' ORDER BY line_index",
+      "SELECT speaker, content, kind FROM story_lines WHERE story_id = 'ef/e1m1.txt' ORDER BY line_index",
     );
     expect(
       lines.map((l) => l['content']),
-      ['她来了。', '欢迎，管理员。', '跟上去／留下来', '风停了。'],
+      [
+        '对话', '她来了。', '欢迎，管理员。', '跟上去／留下来', '风停了。',
+        '远程通话', '听得到吗？',
+        '闲话', '今天风好大。',
+      ],
     );
-    expect(lines[2]['kind'], 'choice');
-    expect(lines.last['kind'], 'narration');
+    expect(
+      [for (final l in lines) if (l['kind'] == 'section') l['content']],
+      ['对话', '远程通话', '闲话'],
+    );
+    expect(lines[3]['kind'], 'choice');
+    expect(lines[4]['kind'], 'narration');
     final catalog = await q(
-      "SELECT collection_type, synopsis FROM story_catalog WHERE story_id = 'ef/dlg_e1m1_1.txt'",
+      "SELECT story_name, collection_name, collection_type, synopsis FROM story_catalog WHERE story_id = 'ef/e1m1.txt'",
     );
+    expect(catalog.single['story_name'], '启程');
     expect(catalog.single['collection_type'], 'EF_MAIN');
     expect(catalog.single['synopsis'], '甲与乙在谷地相遇。');
     final radio = await q(
-      "SELECT content FROM story_lines WHERE story_id = 'ef/radio_sm1m2_1.txt' ORDER BY line_index",
+      "SELECT content FROM story_lines WHERE story_id = 'ef/sm1m2.txt' ORDER BY line_index",
     );
-    expect(radio.map((l) => l['content']), ['这里是甲。', '收到。']);
+    expect(radio.map((l) => l['content']), ['通讯', '这里是甲。', '收到。']);
+    // The section lines are not part of the retrieval text.
+    final text = await q(
+      "SELECT content FROM normalized_records WHERE parent_id = 'ef/e1m1.txt'",
+    );
+    expect(text.map((r) => r['content']).join(), isNot(contains('远程通话')));
+  });
+
+  test('a mission carries its description and the region it is played in', () async {
+    final intro = await q(
+      'SELECT e.group_name, r.content FROM entries e '
+      'JOIN normalized_records r ON r.entry_id = e.id '
+      "WHERE e.type = 'mission_intro' AND e.collection_id = 'ef/mission_e1m1'",
+    );
+    expect(intro.single['content'], '出发前往谷地。');
+    expect(intro.single['group_name'], '谷地');
+    expect(await collectionIntro(db, 'ef/mission_e1m1'), '出发前往谷地。');
+    final shelf = await collectionsOfKind(db, 'ef/main');
+    final mission = shelf.singleWhere((c) => c.id == 'ef/mission_e1m1');
+    expect(mission.name, '启程');
+    expect(mission.intro, '出发前往谷地。');
+    expect(mission.group, '谷地');
+    expect(mission.stories, 1);
   });
 
   test('operators carry their archive and voices; stand-ins are left out',
@@ -311,15 +356,27 @@ void main() {
     expect(owner.single['kind'], 'ef/memory');
     expect(owner.single['parent_id'], 'operator:ef/chr_0001_a');
     final line = await q(
-      "SELECT speaker FROM story_lines WHERE story_id = 'ef/dlg_c1m1_1.txt'",
+      "SELECT speaker FROM story_lines WHERE story_id = 'ef/c1m1.txt' AND kind <> 'section'",
     );
     expect(line.single['speaker'], '路人');
   });
 
-  test('conversations of a mission interleave by the game numbering', () {
-    final ids = ['sns_e1m1_2', 'dlg_e1m1_1', 'radio_e1m1_0d5', 'dlg_e1m1_2', 'radio_e1m1_1d5']
-      ..sort((a, b) => conversationOrder(a)!.compareTo(conversationOrder(b)!));
-    expect(ids, ['radio_e1m1_0d5', 'dlg_e1m1_1', 'radio_e1m1_1d5', 'dlg_e1m1_2', 'sns_e1m1_2']);
+  test('a mission reads kind by kind, each kind in its own numbering', () {
+    int compare(String a, String b) {
+      final byKind = conversationKindRank(a).compareTo(conversationKindRank(b));
+      return byKind != 0 ? byKind : conversationOrder(a)!.compareTo(conversationOrder(b)!);
+    }
+
+    final ids = [
+      'sns_e1m1_2', 'dlg_e1m1_10', 'radio_e1m1_0d5', 'dlg_e1m1_2', 'radio_e1m1_1d5',
+      'remotecomm_e1m1_1', 'dlg_e1m1_2d5',
+    ]..sort(compare);
+    expect(ids, [
+      'dlg_e1m1_2', 'dlg_e1m1_2d5', 'dlg_e1m1_10',
+      'radio_e1m1_0d5', 'radio_e1m1_1d5',
+      'remotecomm_e1m1_1',
+      'sns_e1m1_2',
+    ]);
     expect(conversationOrder('dlg_x'), isNull);
   });
 
@@ -350,14 +407,20 @@ void main() {
 
   test('remote calls and ambient talk join their mission; stray talk is left out', () async {
     final stories = await q(
-      "SELECT raw_id, collection_id FROM entries WHERE type = 'story' AND (raw_id LIKE 'ef/remotecomm%' OR raw_id LIKE 'ef/envTalk%')",
+      "SELECT raw_id FROM entries WHERE type = 'story' AND collection_id = 'ef/mission_e1m1'",
     );
+    expect(stories.single['raw_id'], 'ef/e1m1.txt');
+    final stray = await q("SELECT COUNT(*) AS n FROM story_lines WHERE content = '路过。'");
+    expect(stray.single['n'], 0);
+  });
+
+  test('the kinds a section line names come from the table a conversation is in', () {
     expect(
-      {for (final s in stories) '${s['raw_id']}': s['collection_id']},
-      {
-        'ef/remotecomm_e1m1_2.txt': 'ef/mission_e1m1',
-        'ef/envTalk_e1m1_1.txt': 'ef/mission_e1m1',
-      },
+      [
+        for (final id in ['dlg_a1m1_1', 'radio_a1m1_2', 'remotecomm_a1m1_3', 'envTalk_a1m1_4', 'sns_a1m1_5'])
+          conversationKind(id),
+      ],
+      ['对话', '通讯', '远程通话', '闲话', '短信'],
     );
   });
 

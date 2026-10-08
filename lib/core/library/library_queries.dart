@@ -145,6 +145,8 @@ class LibraryCollection {
     required this.others,
     this.startTime,
     this.sortKey,
+    this.intro,
+    this.group,
   });
 
   factory LibraryCollection.fromRow(Map<String, Object?> row) =>
@@ -156,6 +158,8 @@ class LibraryCollection {
         others: (row['others'] as num?)?.toInt() ?? 0,
         startTime: (row['start_time'] as num?)?.toInt(),
         sortKey: (row['sort_key'] as num?)?.toInt(),
+        intro: _text(row['intro']),
+        group: _text(row['group_name']),
       );
 
   final String id;
@@ -169,6 +173,14 @@ class LibraryCollection {
   /// Release time, unix seconds.
   final int? startTime;
   final int? sortKey;
+
+  /// The first block of the collection's introduction ([introEntryTypes]):
+  /// an Endfield mission's description, a roguelike topic's lead.
+  final String? intro;
+
+  /// Where the collection is (the group of its introduction entry: an
+  /// Endfield mission's region); a shelf groups its collections by it.
+  final String? group;
 }
 
 /// One entry in a list.
@@ -335,6 +347,19 @@ Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
   ];
 }
 
+/// The columns of a [LibraryCollection] row, over `collections c LEFT JOIN
+/// entries e ON e.collection_id = c.id` grouped by `c.id`. The introduction
+/// counts as neither a story nor another entry: it is the collection's own.
+final String _collectionColumns =
+    'c.id, c.kind, c.name, c.start_time, c.sort_key, '
+    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
+    "SUM(CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN 1 ELSE 0 END) AS others, '
+    '(SELECT r.content FROM entries i JOIN normalized_records r ON r.id = i.record_id '
+    'WHERE i.collection_id = c.id AND i.type IN (${_sqlList(introEntryTypes)}) LIMIT 1) AS intro, '
+    '(SELECT i.group_name FROM entries i WHERE i.collection_id = c.id '
+    'AND i.type IN (${_sqlList(introEntryTypes)}) AND i.group_name IS NOT NULL LIMIT 1) AS group_name';
+
 /// The collections of [kind]: newest release first when they have a release
 /// time, otherwise in game order. Collections with nothing to read are left
 /// out.
@@ -343,9 +368,7 @@ Future<List<LibraryCollection>> collectionsOfKind(
   String kind,
 ) async {
   final rows = await db.rawQuery(
-    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
+    'SELECT $_collectionColumns '
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.kind = ? GROUP BY c.id',
     [kind],
@@ -369,9 +392,7 @@ Future<List<LibraryCollection>> collectionsOwnedBy(
   String ownerEntryId,
 ) async {
   final rows = await db.rawQuery(
-    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
+    'SELECT $_collectionColumns '
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.parent_id = ? GROUP BY c.id ORDER BY c.sort_key, c.id',
     [ownerEntryId],
@@ -426,9 +447,7 @@ Future<List<LibraryEntry>> samePersonOf(
 Future<LibraryCollection?> collectionById(
     DatabaseExecutor db, String id,) async {
   final rows = await db.rawQuery(
-    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
+    'SELECT $_collectionColumns '
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.id = ? GROUP BY c.id',
     [id],
