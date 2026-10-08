@@ -16,6 +16,9 @@
 //   ARKLORES_LIVE_CONVERSATION=true  (all queries as turns of ONE session)
 //   ARKLORES_LIVE_DEEP_THINKING=true (the "深度思考" switch on)
 //   ARKLORES_GAMEDATA_DB=<db path>  (default build/gamedata_mobile/...)
+//   ARKLORES_ENDFIELD_DB=<db path>  (the Endfield knowledge base; without it
+//                                    only Arknights is installed, as on a
+//                                    phone that has not downloaded Endfield)
 //   ARKLORES_LIVE_OUT=<dir>         (default build/live_sessions)
 // API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL),
 // or from the file named by ARKLORES_API_INFO (another provider).
@@ -28,6 +31,7 @@ import 'package:arklores/core/agent/agent_logger.dart';
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
+import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
@@ -60,6 +64,9 @@ void main() {
   ).absolute.path;
   final outDir = Directory(env['ARKLORES_LIVE_OUT'] ?? 'build/live_sessions')
       .absolute;
+  final endfieldDb = env['ARKLORES_ENDFIELD_DB'] == null
+      ? null
+      : File(env['ARKLORES_ENDFIELD_DB']!).absolute.path;
 
   final Object skip = !enabled
       ? 'Set ARKLORES_RUN_LIVE_ASK=true to run the live Ask pipeline.'
@@ -69,7 +76,9 @@ void main() {
               ? 'Set ARKLORES_LIVE_QUERIES or ARKLORES_LIVE_EVAL.'
               : !File(dbPath).existsSync()
                   ? 'GameData DB not found: $dbPath'
-                  : false;
+                  : endfieldDb != null && !File(endfieldDb).existsSync()
+                      ? 'Endfield DB not found: $endfieldDb'
+                      : false;
 
   final deepThinking =
       env['ARKLORES_LIVE_DEEP_THINKING']?.toLowerCase() == 'true';
@@ -100,6 +109,14 @@ void main() {
         // Platform paths (the app resolves these via path_provider):
         sharedGameDataStoreProvider
             .overrideWithValue(GameDataKnowledgeStore(dbPath: dbPath)),
+        // The Endfield knowledge base when given; otherwise a path that
+        // does not exist (not installed), never the app's own directory.
+        endfieldGameDataStoreProvider.overrideWithValue(
+          GameDataKnowledgeStore(
+            dbPath: endfieldDb ?? '${outDir.path}/no_endfield.db',
+            game: Game.endfield,
+          ),
+        ),
         chatSessionStoreProvider
             .overrideWithValue(ChatSessionStore(filePath: outDir.path)),
         // The app's own usage meter, shared with this harness: the Ask

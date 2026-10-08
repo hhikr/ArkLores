@@ -24,7 +24,7 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 
 | 表 | 内容 |
 | --- | --- |
-| `collections(id, kind, name, parent_id, sort_key, start_time)` | 归属单位（书架）。`kind`：`main`、`sidestory`、`ministory`、`branchline`、`activity`、`memory`（干员密录，`parent_id`=干员条目）、`roguelike`、`sandbox`、`system` |
+| `collections(id, kind, name, parent_id, sort_key, start_time)` | 归属单位（书架）。`kind`：`main`、`sidestory`、`ministory`、`branchline`、`activity`、`memory`（干员密录，`parent_id`=干员条目；终末地的 kind 带 `ef/`，见 §9）、`roguelike`、`sandbox`、`system` |
 | `entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, raw_id, record_id, source_path)` | 每个官方条目一行，`id = <type>:<原始 id>`；`record_id` 指向承载文字的记录 |
 | `entry_links(src, relation, dst, source_path)` | 绑定：`appears_in`、`plays_in`、`attached_to`、`belongs_to`、`belongs_to_stage`、`part_of`、`summoned_by`、`same_person`、`features`、`reads_story`…；视图 `collection_enemies` |
 | `story_lines(story_id, line_index, speaker, content, kind, …)` | 剧情逐行（约 44 万行）；索引 `(story_id, line_index)`；行内换行是真换行 |
@@ -103,6 +103,9 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 4. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
 5. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。
+6. 终末地库（只在它变了时）：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
+   形如 `{game, database: {fileName}, manifest: {...}}`）上传到同一个 Release，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256` 指向它。
+   两个库可以在不同的 Release 上（v0.12.0 时明日方舟库仍是 v0.11.0 的资产）。上传后用公开地址 HEAD 一次确认 200。
 
 未发布时在手机上试：`tools/install_local.ps1 -Build -Kb`（用 release key 签名、烘入 env 的 SHA，并把本地 gz 放进应用目录，
 在知识库页点“下载”即离线校验安装）。
@@ -137,6 +140,8 @@ URL 仍指向已发布的资产，带着新 SHA 构建的 APK 会拒收它。
 - 对话树是 Unity 资源包里的 TextAsset，不在上面两个块里：`AnimeStudio.CLI <层> <输出> --game ArknightsEndfield --types TextAsset --names ^dlg_ --export_type Convert`
   （`--logger_flags` 用逗号分隔，写成 `A|B` 时 CLI 只打印帮助）。过场时间线的台词片段同理：`--types MonoBehaviour --names ^Dialog(Trunk|Option)PlayableAsset --export_type JSON`。
   每次都要读遍资源包，是解包里最慢的一步（StreamingAssets 首次约 20 分钟）；两层各导一次，建库时 Persistent 覆盖前者。偶尔中途以退出码 4 结束，看文件数，不全就重跑。
+  任务面板的章节同理：`--types MonoBehaviour --names ^(main_e\d+|chr_\d+_[a-z]+_e\d+)$ --export_type JSON`（`ChapterInfo` 对象，由 `ChapterTable` 列出；
+  2026-10 客户端在 StreamingAssets 有 21 个，Persistent 没有覆盖）。不知道类名时先按名字导出 `MonoScript` 找类（`ChapterTable`、`ChapterInfo`），再导实例。
 - **不要加 `--packed-game-store`**：kit 的完整流程会把 Json/LipSync 写进一个 SQLite，这一步在本机卡死（上千个线程、无 CPU 无 IO），而它只存口型数据。
 - 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（`tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
   （`C:\Users\hhikr\endfield\python312`，`._pth` 里加 kit 目录）。工作目录要在 NTFS 上（exFAT 上 git 拒绝、不能建硬链接）。
@@ -147,8 +152,11 @@ URL 仍指向已发布的资产，带着新 SHA 构建的 APK 会拒收它。
 ### 9.2 建库
 
 ```bash
-dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<MissionRuntimeAsset 目录> --version=<客户端版本> --output=build/endfield --force
+dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<MissionRuntimeAsset 目录> \
+  --trees=<对话树目录>;<…> --clips=<时间线片段目录>;<…> --chapters=<章节目录>;<…> --version=<客户端版本> --output=build/endfield --force
 ```
+
+`unpack_endfield.ps1` 会按上面的导出目录（StreamingAssets 在前、Persistent 在后）填好这些参数。
 
 - 先读任务定义（`--missions`），再导表：文字的地区可能要从它 id 里的任务的关卡推出。
 - 表 → 干员（干员情报：阵营/种族/专长/爱好，及每项专长、爱好在这位干员身上的描述 `CharacterTagDesTable`；干员档案；语音记录——段名取游戏的界面文字 `ui_char_profile_*`）、

@@ -56,8 +56,9 @@ bash tools/cloud/session_start.sh
 bash tools/cloud/fetch_gamedata.sh
 ```
 
-它按 `tools/release_gamedata.env` 下载并校验当前 Release 上的知识库，解压到
-`build/gamedata_mobile/arklores_gamedata_zh.db`（live 测试的默认路径）。
+它按 `tools/release_gamedata.env` 下载并校验当前 Release 上的两个知识库：明日方舟解压到
+`build/gamedata_mobile/arklores_gamedata_zh.db`（live 测试的默认路径），终末地解压到 `build/endfield/arklores_endfield_zh.db`
+（双游戏的 live 测试用 `ARKLORES_ENDFIELD_DB` 指向它；不给时测试里只装了明日方舟）。终末地库只能在本机从游戏客户端重建，云端只能下载已发布的。
 
 ## 3. 云端能做和不能做的
 
