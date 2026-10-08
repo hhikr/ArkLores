@@ -151,7 +151,7 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
 ```
 
 - 先读任务定义（`--missions`），再导表：文字的地区可能要从它 id 里的任务的关卡推出。
-- 表 → 干员（干员情报：阵营/种族/专长/爱好；干员档案；语音记录——段名取游戏的界面文字 `ui_char_profile_*`）、
+- 表 → 干员（干员情报：阵营/种族/专长/爱好，及每项专长、爱好在这位干员身上的描述 `CharacterTagDesTable`；干员档案；语音记录——段名取游戏的界面文字 `ui_char_profile_*`）、
   情报档案库（PRTS：分页 `PrtsPage` → 分类 → 文档 → 页面 → `RichContentTable` 正文，音像存档的页面是 `RadioTable` 的录音；
   分类按它页面的类型归到中枢档案/见闻辑录/音像存档，调查报告归情报采集；每个分类集合带一条无正文的 `archive_section` 条目，`group_name` 是分页名；
   事件调查 `PrtsInvestigate` 带地区 `domainId`、它收集的页面和它解锁的报告 `unlockPrts`）、
@@ -167,13 +167,17 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   分叉的选项写成“选项 → 它的回应”，不分叉的写成一行“甲／乙”；`Ex…` 节点是设置，不走。过场节点处放这段对话的时间线台词（按片段的 `startTime`，
   绑定的选项接在那句后面）。两者都没覆盖的行与选项组按行号补在后面，选项组填在行号的空位上（2026-10 客户端：约 11% 的台词行）。
   任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`），再经 `canonicalMission`：子任务 `<任务>d<n>` 与基础任务同名、没有名字、
-  类型在任务面板不可见（`MissionTypeInfoTable.isVisible = false`，隐藏步骤）或没有定义时，并进基础任务（以前这些隐藏步骤落在委派任务里）。
-  任务名依次取：任务定义 → `TextTable` 的 `<任务>_name`（客户端不再带定义的任务，名字和 `<任务>_desc_001` 简介还在）→ 子任务共同的名字
-  （`据点建设·难民暂居处·其一/其二` → `据点建设·难民暂居处`）；都没有就叫“无名任务（<任务 id>）”，不编号、不编名字。
-  简介（`mission_intro` 条目，`group_name` 是任务所在地区）、分类（书架）、所属干员来自任务定义（没有定义的看它的子任务）；
-  干员任务的 `group_name` 是该干员任务系列的名字（`TextTable` 的 `chr_<编号>_ep1_name`）。
+  或基础任务有定义而它自己没有时，并进基础任务；有自己名字的隐藏步骤（`e1m9d5`“准备工作”）是单独的任务，放在基础任务的书架上（以前落在委派任务里）。
+  **没有 `MissionRuntimeAsset` 的任务不在游戏里**（客户端留下的旧版剧情、删掉的任务；warfarin/fz 都没有它们的页面），放在 `unused` 书架（“未实装任务”）。
+  任务名依次取：任务定义 → `TextTable` 的 `<任务>_name` / `<任务>_desc_001` → 子任务共同的名字；都没有就叫“无名任务（<任务 id>）”（只出现在未实装书架上）。
+  同一书架上重名的任务按游戏顺序加“·一阶段”“·二阶段”（与 fz.wiki 一致）。没有名字、不是别的任务的步骤的隐藏任务归到它关卡所在的地点（`ef/world`）。
+  **章节**：任务面板的章节是资源包里的 `ChapterInfo` 对象（`main_e<n>`、`chr_<编号>_<名>_e<n>`，`unpack_endfield.ps1` 导出到 `chapters_*`，
+  构建参数 `--chapters`），带章号/进程号/进程名的文字键和 `missionIdList`；章节里的任务 `group_name` 是“第一章 · 进程Ⅰ · 碎裂大地”或“篇章Ⅰ · 离群之狼”，
+  `sort_key` 是章节内顺序（主线书架因此按章、进程分组，和游戏一致）；不在章节里的任务 `group_name` 是所在地区。
+  干员任务挂在干员下（`parent_id`）；任务面板列在主线的（汤汤的任务）仍在主线书架上。
 - `section` 行不进检索记录；向量切块在 `section` 处断开（`chunkStory`），所以合并前后每段切出的块文字相同，按内容哈希缓存的向量全部沿用（0.12 合并时 9969 块零新增）。
-  挂在干员下的三种集合：干员任务（kind `ef/memory`）、Baker 话题（`SNSDialogTopicTable`，kind `ef/baker`）、帝江号上的互动
+  挂在干员下的三种集合：干员任务（kind `ef/memory`）、Baker 话题（`SNSDialogTopicTable`，kind `ef/baker`；话题键里的干员按编号 `chr_0033` 找，
+  名字部分和角色表不一定相同，如 `kamiu`/`camille`；地点的话题 `topic_map01_lv001_*` 归到该地点，各自一篇）、帝江号上的互动
   （`sim_talk/gift/rest/work_<干员>`：闲谈按信赖等级、送礼、休息、工作，一位干员一篇，kind `ef/ship`）；`ef/baker`、`ef/ship` 不是书架。
   地图上的交互按地点（`LevelDescTable`；`map01lv005_…` 也是关卡 `map01_lv005`）、敌人遭遇的通讯按敌人归组
   （kind `ef/world`，书架显示为“其他”）；对话之间的插话、工业教学、测试对话不收。

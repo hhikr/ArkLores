@@ -6,6 +6,7 @@
 //     [--missions=<a JsonData dump's Data/Json/MissionRuntimeAsset>] \
 //     [--trees=<TextAsset dir>[;<TextAsset dir> …]] \
 //     [--clips=<MonoBehaviour dir>[;<MonoBehaviour dir> …]] \
+//     [--chapters=<MonoBehaviour dir>[;<MonoBehaviour dir> …]] \
 //     [--version=<client version>] \
 //     --output=build/endfield [--force]
 //
@@ -83,6 +84,11 @@ Future<void> main(List<String> args) async {
         if (d.trim().isNotEmpty) Directory(d.trim()),
     ]);
     log('conversations with cutscene lines: ${timelines.length}');
+    final chapters = EndfieldStoryImporter.loadChapters([
+      for (final d in (arg('chapters') ?? '').split(';'))
+        if (d.trim().isNotEmpty) Directory(d.trim()),
+    ]);
+    log('chapters: ${chapters.length}');
     final stories = EndfieldStoryImporter(
       tables,
       writer,
@@ -91,6 +97,7 @@ Future<void> main(List<String> args) async {
       missions: missions,
       dialogTrees: trees,
       timelineLines: timelines,
+      chapters: chapters,
     );
     await stories.importDialogTables();
     log('derived layers');

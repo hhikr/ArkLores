@@ -31,8 +31,7 @@ String missionOfConversation(String id) {
 /// The kind of a conversation as its section line names it, from the id
 /// prefix (the table it comes from): dialogue, radio, a remote call, talk
 /// around the player, messages.
-String conversationKind(String id) =>
-    switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
+String conversationKind(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
       'radio' => '通讯',
       'remotecomm' => '远程通话',
       'envTalk' => '闲话',
@@ -60,8 +59,7 @@ int? conversationOrder(String id) {
 /// The kinds of a mission in reading order: the dialogue that carries the
 /// story, then what is said over the radio and in remote calls on the way,
 /// then talk around the player, then messages.
-int conversationKindRank(String id) =>
-    switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
+int conversationKindRank(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
       'dlg' => 0,
       'radio' => 1,
       'remotecomm' => 2,
@@ -118,6 +116,17 @@ typedef EndfieldMission = ({
   String? levelId,
 });
 
+/// One chapter of the game's mission panel (`Beyond.Gameplay.ChapterInfo`,
+/// listed by the `ChapterTable` asset): the main story's chapters and
+/// processes (`main_e<n>`) and each operator's chapters (`chr_…_e<n>`), with
+/// the text keys of their headings and their missions in order.
+typedef EndfieldChapter = ({
+  String id,
+  int type,
+  List<String> headingKeys,
+  List<String> missions,
+});
+
 /// One conversation waiting to be placed in its mission's story.
 typedef _Part = ({
   String id,
@@ -148,7 +157,69 @@ class EndfieldStoryImporter {
     this.missions = const {},
     this.dialogTrees = const {},
     this.timelineLines = const {},
-  });
+    this.chapters = const [],
+  }) {
+    // Each chapter's missions: under the chapter's heading, in its order.
+    for (final (c, chapter) in chapters.indexed) {
+      final heading = [
+        for (final key in chapter.headingKeys)
+          if (_keyText(key) case final text?) text,
+      ].join(' · ');
+      for (final (i, mission) in chapter.missions.indexed) {
+        _chapterOf.putIfAbsent(
+          mission,
+          () => (heading: heading.isEmpty ? null : heading, order: (c + 1) * 1000 + i),
+        );
+      }
+    }
+  }
+
+  /// The game's chapters, main story first ([loadChapters]).
+  final List<EndfieldChapter> chapters;
+
+  /// The heading and place of each mission listed in a chapter.
+  final Map<String, ({String? heading, int order})> _chapterOf = {};
+
+  /// Reads the chapters from an AnimeStudio MonoBehaviour export (JSON) of
+  /// the `main_e<n>` and `chr_…_e<n>` objects; later directories replace
+  /// earlier ones (list the hot-update layer last). The main story comes
+  /// first, then the operators' chapters, each in its number order.
+  static List<EndfieldChapter> loadChapters(Iterable<Directory> dirs) {
+    final byId = <String, EndfieldChapter>{};
+    for (final dir in dirs) {
+      if (!dir.existsSync()) continue;
+      for (final file in dir.listSync(recursive: true).whereType<File>()) {
+        if (!file.path.endsWith('.json')) continue;
+        final Object? json;
+        try {
+          json = jsonDecode(file.readAsStringSync());
+        } catch (_) {
+          continue;
+        }
+        if (json is! Map<String, dynamic>) continue;
+        final id = '${json['m_Name'] ?? ''}';
+        final missions = listOfStrings(json['missionIdList']);
+        if (id.isEmpty || missions.isEmpty) continue;
+        String key(Object? field) => field is Map ? '${field['key'] ?? ''}' : '';
+        byId[id] = (
+          id: id,
+          type: (json['type'] as num?)?.toInt() ?? 0,
+          headingKeys: [
+            for (final f in [json['chapterNum'], json['episodeNum'], json['episodeName']])
+              // An operator's chapter is headed by its number and name; the
+              // series title (`狼卫纪事`) is the operator's page itself.
+              if (key(f).isNotEmpty && !key(f).endsWith('_title')) key(f),
+          ],
+          missions: missions,
+        );
+      }
+    }
+    return byId.values.toList()
+      ..sort((a, b) {
+        if (a.type != b.type) return a.type.compareTo(b.type);
+        return _naturalCompare(a.id, b.id);
+      });
+  }
 
   final EndfieldTables tables;
   final EndfieldWriter writer;
@@ -174,8 +245,7 @@ class EndfieldStoryImporter {
     final out = <String, Map<String, dynamic>>{};
     for (final dir in dirs) {
       if (!dir.existsSync()) continue;
-      final files = dir.listSync(recursive: true).whereType<File>().toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
+      final files = dir.listSync(recursive: true).whereType<File>().toList()..sort((a, b) => a.path.compareTo(b.path));
       for (final file in files) {
         final name = file.uri.pathSegments.last;
         final m = RegExp(r'^(dlg_.+?)(?:_p[0-9A-Fa-f]{16})?(?: \(\d+\))?\.(?:txt|json)$').firstMatch(name);
@@ -272,22 +342,53 @@ class EndfieldStoryImporter {
 
   /// The mission whose story a mission's conversations are part of. A
   /// sub-mission (`<base>d<n>`) is read in its base mission when it is a
-  /// step of it: it has its base's name, or no name, or a type the mission
-  /// panel does not show (a hidden step), or no definition at all.
+  /// step of it: it has its base's name, or no name, or no definition at all
+  /// while its base has one. A step with a name of its own (a hidden
+  /// `准备工作`) is a mission of its own, on its base's shelf.
   String canonicalMission(String id) {
-    final m = RegExp(r'^(.+?\d)d\d+$').firstMatch(id);
+    final m = _subMission.firstMatch(id);
     if (m == null) return id;
     final base = m.group(1)!;
-    final baseName = _nameOf(base);
-    if (baseName == null && !missions.containsKey(base)) return id;
+    if (!missions.containsKey(base)) return id;
     final defined = missions[id];
-    if (defined == null ||
-        defined.name.isEmpty ||
-        defined.name == baseName ||
-        !_visible(defined.type)) {
+    if (defined == null || defined.name.isEmpty || defined.name == _nameOf(base)) {
       return canonicalMission(base);
     }
     return id;
+  }
+
+  static final RegExp _subMission = RegExp(r'^(.+?\d)d\d+$');
+
+  /// The shelf of a mission. A defined mission the mission panel shows is
+  /// on its tab (an operator's own on the operator shelf); a hidden one on
+  /// its base mission's shelf, else by its id's letters. A mission without a
+  /// definition is not in the game the client runs (its conversations are
+  /// left in the tables: an older version of a story, a cut mission; the
+  /// wikis have no page for any of them): it is on [unusedMissionShelf].
+  String _shelfFor(String id) {
+    final defined = missions[id];
+    if (defined == null) return unusedMissionShelf;
+    if (_visible(defined.type)) {
+      // An operator's mission the panel lists as main story stays there
+      // (it is still on its operator's page); the others are the
+      // operator's own.
+      final tab = _shelfOf(
+        id,
+        (
+          name: defined.name,
+          description: defined.description,
+          type: defined.type,
+          charId: null,
+          sortId: defined.sortId,
+          levelId: defined.levelId,
+        ),
+      );
+      return defined.charId != null && tab != 'main' ? 'memory' : tab;
+    }
+    final base = _subMission.firstMatch(id)?.group(1);
+    if (base != null && missions.containsKey(base)) return _shelfFor(base);
+    final byId = shelfOfMission(id);
+    return byId == 'memory' && operatorOfMission(id, importer.operators) == null ? 'side' : byId;
   }
 
   /// The defined sub-missions of [id] (`<id>d<n>`), in number order.
@@ -338,11 +439,15 @@ class EndfieldStoryImporter {
     return null;
   }
 
-  /// The name of an operator's mission series (`chr_0006_ep1_name`: the
-  /// game names an operator's missions as one story, 离群之狼).
+  /// The heading of an operator's mission series as the game writes it:
+  /// its chapter number and name (`chr_ep_num1` · `chr_0006_ep1_name`:
+  /// 篇章Ⅰ · 离群之狼).
   String? _seriesOf(String? charId) {
     final n = charId == null ? null : RegExp(r'^chr_\d+').firstMatch(charId)?.group(0);
-    return n == null ? null : _keyText('${n}_ep1_name');
+    final name = n == null ? null : _keyText('${n}_ep1_name');
+    if (name == null) return null;
+    final number = _keyText('chr_ep_num1');
+    return number == null ? name : '$number · $name';
   }
 
   /// The official one-paragraph summary of a conversation, if any.
@@ -357,6 +462,10 @@ class EndfieldStoryImporter {
   /// the order they were read; [_writeStories] writes them as one story.
   final Map<String, List<_Part>> _parts = {};
 
+  /// Stories written into another key's collection (a place's Baker topics
+  /// into the place's): story key → host key.
+  final Map<String, String> _hostOf = {};
+
   Future<void> _ensureMission(
     String id, {
     String? name,
@@ -365,23 +474,14 @@ class EndfieldStoryImporter {
   }) async {
     if (_missions.containsKey(id)) return;
     final defined = missions[id];
-    // A mission without a definition reads like its defined sub-missions
-    // (their shelf, level and shared name).
-    final subs = defined == null ? _subMissions(id) : const <String>[];
-    final like = defined ?? (subs.isEmpty ? null : missions[subs.first]);
-    owner ??= defined?.charId != null
-        ? importer.operators[defined!.charId]
-        : operatorOfMission(id, importer.operators);
-    final String shelf;
-    if (kind != null) {
-      shelf = kind;
-    } else if (like != null && _visible(like.type)) {
-      shelf = like.charId != null ? 'memory' : _shelfOf(id, like);
+    final shelf = kind ?? _shelfFor(id);
+    // An operator's mission hangs below it; a mission the game does not
+    // have (see [_shelfFor]) belongs to nobody.
+    if (shelf == unusedMissionShelf) {
+      owner = null;
     } else {
-      // Hidden or undefined: by the id's letters; an operator mission
-      // whose operator is not in the tables is a side mission.
-      final byId = shelfOfMission(id);
-      shelf = byId == 'memory' && owner == null ? 'side' : byId;
+      owner ??=
+          defined?.charId != null ? importer.operators[defined!.charId] : operatorOfMission(id, importer.operators);
     }
     final title = name ?? _nameOf(id) ?? _sharedName(id);
     // A mission the game names nowhere (no definition, no name text, no
@@ -397,22 +497,25 @@ class EndfieldStoryImporter {
       // A character mission hangs below its operator (the operator page
       // lists it, like an Arknights record set).
       parentId: owner,
-      // Missions read in the order of their ids' numbers (e1m2 before e10m1).
-      sortKey: missionOrder(id) ?? entry.sort,
+      // Missions read in their chapter's order (the game's), the others in
+      // the order of their ids' numbers (e1m2 before e10m1).
+      sortKey: _chapterOf[id]?.order ?? missionOrder(id) ?? entry.sort,
       sourcePath: 'mission:$id',
     );
-    // The mission's own description, and where it is listed: an operator
-    // mission under the name of its operator's mission series, any other
-    // under the region it is played in (the game's region of its level).
-    // The shelf lists a mission with both.
+    // The mission's own description, and where it is listed: a mission of a
+    // chapter under the chapter's heading (第一章 · 进程Ⅰ · 碎裂大地;
+    // 篇章Ⅰ · 离群之狼), any other operator mission under its series' name,
+    // the rest under the region it is played in (the game's region of its
+    // level). The shelf lists a mission with both.
     if (kind != null) return;
     final description = defined?.description ?? _keyText('${id}_desc_001');
-    final level = like?.levelId;
-    final group = shelf == 'memory'
-        ? _seriesOf(defined?.charId ?? _charIdOf(owner))
-        : level == null
-            ? importer.regionOfIds([id])
-            : importer.regionOf(level);
+    final level = defined?.levelId;
+    final group = _chapterOf[id]?.heading ??
+        (owner != null
+            ? _seriesOf(defined?.charId ?? _charIdOf(owner))
+            : level == null
+                ? importer.regionOfIds([id])
+                : importer.regionOf(level));
     if (description == null && group == null) return;
     await writer.entry(
       type: 'mission_intro',
@@ -430,8 +533,7 @@ class EndfieldStoryImporter {
 
   /// A speaker as players see it: the game appends an internal note in
   /// braces (`工作人员{c13-…}`, a hidden identity) that is not shown.
-  String _speaker(Object? field) =>
-      _clean(field).replaceAll(RegExp(r'\{[^{}]*\}'), '').trim();
+  String _speaker(Object? field) => _clean(field).replaceAll(RegExp(r'\{[^{}]*\}'), '').trim();
 
   /// Where a conversation goes: a mission, an operator's topic, a level's
   /// interactions, an enemy's encounter; null for filler the game plays
@@ -444,6 +546,17 @@ class EndfieldStoryImporter {
     // A topic of an operator's messages (SNSDialogTopicTable).
     final topic = _topicOf(id);
     if (topic != null) {
+      // A place's topic (`topic_map01_lv001_1`: a contact or group chat of
+      // that place) is read with the place, a story of its own there.
+      final place = topic.owner != null
+          ? null
+          : RegExp(r'^topic_((?:map|indie|base)\w*?_(?:lv|dg)\d+)_').firstMatch(topic.key)?.group(1);
+      final host = place == null ? null : await _levelHome(place);
+      if (host != null) {
+        _hostOf[topic.key] = host;
+        _missions.putIfAbsent(topic.key, () => (name: topic.name, kind: 'world', sort: _missions.length));
+        return topic.key;
+      }
       // An operator's topic is on its page (Baker); a topic of nobody's is
       // a story of its own on the side shelf.
       await _ensureMission(
@@ -470,21 +583,12 @@ class EndfieldStoryImporter {
       );
       return key;
     }
-    final levelMatch = RegExp(r'^((?:map|indie|base)\w*?_(?:lv|dg)\d+|map\d+(?:lv|dg)\d+)')
-        .firstMatch(bare)
-        ?.group(1);
+    final levelMatch = RegExp(r'^((?:map|indie|base)\w*?_(?:lv|dg)\d+|map\d+(?:lv|dg)\d+)').firstMatch(bare)?.group(1);
     // `map01lv005_…` names the level `map01_lv005`.
     final level = levelMatch == null || levelMatch.contains('_')
         ? levelMatch
         : levelMatch.replaceFirstMapped(RegExp(r'(lv|dg)'), (m) => '_${m[1]}');
-    if (level != null) {
-      final place = _levelName(level);
-      if (place == null) return null;
-      final region = importer.regionOf(level);
-      final name = region == null || region == place ? place : '$region·$place';
-      await _ensureMission('level_$level', name: name, kind: 'world');
-      return 'level_$level';
-    }
+    if (level != null) return _levelHome(level);
     final enemy = RegExp(r'^(eny_\d+)').firstMatch(bare)?.group(1);
     if (enemy != null) {
       final name = _enemyName(enemy);
@@ -498,15 +602,46 @@ class EndfieldStoryImporter {
     if (id.startsWith('envTalk_') && !missions.containsKey(mission) && !_missions.containsKey(mission)) {
       return null;
     }
+    return _missionHome(mission);
+  }
+
+  /// The collection key of [mission] (made when first met). A hidden
+  /// mission the game names nowhere, that is no step of another (the game
+  /// plays it as something that happens at a place), is read with the
+  /// interactions of its level.
+  Future<String?> _missionHome(String mission) async {
+    final defined = missions[mission];
+    if (defined != null &&
+        !_visible(defined.type) &&
+        _nameOf(mission) == null &&
+        defined.levelId != null &&
+        _levelName(defined.levelId!) != null) {
+      return _levelHome(defined.levelId!);
+    }
     await _ensureMission(mission);
     return mission;
+  }
+
+  /// The collection of the interactions at [level] (a place on the map).
+  Future<String?> _levelHome(String level) async {
+    final place = _levelName(level);
+    if (place == null) return null;
+    final region = importer.regionOf(level);
+    final name = region == null || region == place ? place : '$region·$place';
+    await _ensureMission('level_$level', name: name, kind: 'world');
+    return 'level_$level';
   }
 
   ({String key, String name, String? owner})? _topicOf(String id) {
     for (final MapEntry(:key, :value) in tables.table('SNSDialogTopicTable').entries) {
       if (value is! Map) continue;
       if (!listOfStrings(value['includeDialogIds']).contains(id)) continue;
-      final char = RegExp(r'chr_\d+_[a-z]+').firstMatch(key)?.group(0);
+      // The topic names its operator by number (`chr_0033_…`); the name part
+      // after it is not always the character table's (`kamiu`, `camille`).
+      final number = RegExp(r'chr_\d+').firstMatch(key)?.group(0);
+      final char = number == null
+          ? null
+          : importer.operators.keys.where((k) => k.startsWith('${number}_')).firstOrNull;
       final name = endfieldText(tables.text(value['topicName']));
       return (
         key: key,
@@ -576,16 +711,11 @@ class EndfieldStoryImporter {
     final part = m.group(2) ?? '';
     return switch (m.group(1)) {
       'talk' => (
-          order: part.startsWith('lv')
-              ? int.tryParse(part.substring(2)) ?? 40
-              : 50,
+          order: part.startsWith('lv') ? int.tryParse(part.substring(2)) ?? 40 : 50,
           kind: '对话',
         ),
       'gift' => (
-          order: 100 +
-              const ['give', 'recv', 'recvsuccess', 'recvbye', 'givebye']
-                  .indexOf(part)
-                  .clamp(0, 9),
+          order: 100 + const ['give', 'recv', 'recvsuccess', 'recvbye', 'givebye'].indexOf(part).clamp(0, 9),
           kind: _ui('LUA_GIFT_SEND_TITLE', '赠送礼物'),
         ),
       'rest' => (order: 200, kind: '对话'),
@@ -611,6 +741,9 @@ class EndfieldStoryImporter {
         for (final p in parts)
           if (p.summary != null) p.summary!,
       ];
+      // A story kept in another's collection (a place's Baker topic) comes
+      // after that collection's own story.
+      final host = _hostOf[mission];
       final written = await writer.story(
         rawId: mission,
         name: m.name,
@@ -620,11 +753,11 @@ class EndfieldStoryImporter {
             ...p.lines,
           ],
         ],
-        collectionId: 'mission_$mission',
-        collectionName: m.name,
+        collectionId: 'mission_${host ?? mission}',
+        collectionName: host == null ? m.name : _missions[host]!.name,
         collectionType: '$endfieldCollectionTypePrefix${m.kind.toUpperCase()}',
         synopsis: summaries.isEmpty ? null : summaries.join('\n'),
-        sortKey: 0,
+        sortKey: host == null ? 0 : 1 + m.sort,
         sourcePath: {for (final p in parts) p.source}.join(';'),
       );
       if (written != null) count++;
@@ -642,9 +775,7 @@ class EndfieldStoryImporter {
       if (value is! Map<String, dynamic>) continue;
       final m = RegExp(r'^(.*)_(\d+)$').firstMatch(key);
       if (m == null) continue;
-      byConversation
-          .putIfAbsent(m.group(1)!, () => [])
-          .add((int.parse(m.group(2)!), value));
+      byConversation.putIfAbsent(m.group(1)!, () => []).add((int.parse(m.group(2)!), value));
     }
     // Player choices: `option_<conversation>_<group>_<n>`.
     final choices = <String, Map<int, List<String>>>{};
@@ -657,10 +788,7 @@ class EndfieldStoryImporter {
       if (text.isEmpty) continue;
       optionText[key] = text;
       optionGroup[key] = int.parse(m.group(2)!);
-      choices
-          .putIfAbsent(m.group(1)!, () => {})
-          .putIfAbsent(int.parse(m.group(2)!), () => [])
-          .add(text);
+      choices.putIfAbsent(m.group(1)!, () => {}).putIfAbsent(int.parse(m.group(2)!), () => []).add(text);
     }
     final ids = byConversation.keys.toList()..sort(_naturalCompare);
     final source = tables.sourcePath('DialogTextTable');
@@ -674,9 +802,7 @@ class EndfieldStoryImporter {
           );
       // The order the game plays: the conversation's dialog tree, and the
       // start times of the lines its cutscene timelines show.
-      final steps = dialogTrees[id] == null
-          ? const <DialogStep>[]
-          : readDialogTree(dialogTrees[id]!);
+      final steps = dialogTrees[id] == null ? const <DialogStep>[] : readDialogTree(dialogTrees[id]!);
       final timeline = timelineLines[id] ?? const <TimelineLine>[];
       final ordered = <EndfieldLine>[];
       final usedRows = <int>{};
@@ -695,9 +821,7 @@ class EndfieldStoryImporter {
 
       void addRow(String rowId) {
         final n = int.tryParse(rowId.substring(rowId.lastIndexOf('_') + 1));
-        final row = n == null || !rowId.startsWith('${id}_')
-            ? null
-            : rows.where((r) => r.$1 == n).firstOrNull;
+        final row = n == null || !rowId.startsWith('${id}_') ? null : rows.where((r) => r.$1 == n).firstOrNull;
         if (row == null || !usedRows.add(n!)) return;
         ordered.add(lineOf(row.$2));
       }
@@ -761,8 +885,7 @@ class EndfieldStoryImporter {
         source: radioSource,
         sort: 100000 + i,
         lines: [
-          for (final l in lines)
-            EndfieldLine(_clean(l['radioText']), speaker: _speaker(l['actorName'])),
+          for (final l in lines) EndfieldLine(_clean(l['radioText']), speaker: _speaker(l['actorName'])),
         ],
       );
       count++;
@@ -773,6 +896,47 @@ class EndfieldStoryImporter {
     await _importSns();
     await _writeStories();
     await _importReadings();
+    await _numberRepeatedNames();
+  }
+
+  /// Missions of one shelf that share a name (the game reuses a name for
+  /// the steps of a daily commission, for two preparations) are told apart
+  /// as the wiki does: `准备工作·一阶段`, `准备工作·二阶段`, in game order.
+  Future<void> _numberRepeatedNames() async {
+    final db = writer.db;
+    final rows = await db.rawQuery(
+      "SELECT id, kind, name FROM collections WHERE id LIKE 'ef/mission_%' "
+      "AND kind NOT IN ('ef/world', 'ef/$bakerTopicKind', 'ef/$shipInteractionKind') "
+      "AND EXISTS (SELECT 1 FROM entries e WHERE e.collection_id = collections.id AND e.type <> 'mission_intro') "
+      'ORDER BY kind, name, sort_key, id',
+    );
+    final groups = <String, List<String>>{};
+    for (final r in rows) {
+      (groups['${r['kind']}\u0000${r['name']}'] ??= []).add('${r['id']}');
+    }
+    var renamed = 0;
+    for (final MapEntry(key: key, value: ids) in groups.entries) {
+      if (ids.length < 2) continue;
+      final name = key.split('\u0000').last;
+      for (final (i, id) in ids.indexed) {
+        final numbered = '$name·${chineseNumber(i + 1)}阶段';
+        await db.update('collections', {'name': numbered}, where: 'id = ?', whereArgs: [id]);
+        await db.update(
+          'entries',
+          {'name': numbered},
+          where: "collection_id = ? AND type IN ('story', 'mission_intro')",
+          whereArgs: [id],
+        );
+        await db.update(
+          'story_catalog',
+          {'collection_name': numbered, 'story_name': numbered},
+          where: 'collection_id = ?',
+          whereArgs: [id],
+        );
+        renamed++;
+      }
+    }
+    log?.call('missions told apart by stage: $renamed');
   }
 
   /// Remote calls during missions (`RemoteCommonTable`).
@@ -791,8 +955,7 @@ class EndfieldStoryImporter {
         source: source,
         sort: 150000 + i,
         lines: [
-          for (final l in lines)
-            EndfieldLine(_clean(l['remoteCommText']), speaker: _speaker(l['actorName'])),
+          for (final l in lines) EndfieldLine(_clean(l['remoteCommText']), speaker: _speaker(l['actorName'])),
         ],
       );
       count++;
@@ -826,9 +989,7 @@ class EndfieldStoryImporter {
           for (final l in lines)
             EndfieldLine(
               _clean(l['text']),
-              speaker: (names['${l['actorId'] ?? ''}'] ?? '').isEmpty
-                  ? null
-                  : names['${l['actorId']}'],
+              speaker: (names['${l['actorId'] ?? ''}'] ?? '').isEmpty ? null : names['${l['actorId']}'],
             ),
         ],
       );
@@ -863,9 +1024,7 @@ class EndfieldStoryImporter {
         for (final c in listOfMaps(row['contentList'])) _clean(c['content']),
       ].where((t) => t.isNotEmpty).join('\n');
       if (text.isEmpty) continue;
-      final title = _clean(row['title']).isNotEmpty
-          ? _clean(row['title'])
-          : (popupTitle[id] ?? '');
+      final title = _clean(row['title']).isNotEmpty ? _clean(row['title']) : (popupTitle[id] ?? '');
       if (title.isEmpty) continue;
       final bare = id.replaceFirst(RegExp(r'^text_'), '');
       final cut = bare.lastIndexOf('_');
@@ -873,8 +1032,7 @@ class EndfieldStoryImporter {
       final level = RegExp(r'^(map\d+_lv\d+)').firstMatch(bare)?.group(1);
       String? collection;
       if (missions.containsKey(mission) || _missions.containsKey(mission)) {
-        await _ensureMission(mission);
-        collection = 'mission_$mission';
+        collection = 'mission_${await _missionHome(mission) ?? mission}';
       } else if (level != null && _levelName(level) != null) {
         // The same collection as the level's interactions (see [_home]).
         final key = 'level_$level';
@@ -915,8 +1073,7 @@ class EndfieldStoryImporter {
       if (row is! Map<String, dynamic>) continue;
       final content = row['dialogContentData'];
       if (content is! Map) continue;
-      final keys = content.keys.map((k) => int.tryParse('$k') ?? -1).where((k) => k > 0).toList()
-        ..sort();
+      final keys = content.keys.map((k) => int.tryParse('$k') ?? -1).where((k) => k > 0).toList()..sort();
       String who(String speaker) {
         if (speaker.isEmpty) return '';
         if (speaker.startsWith('endmin')) return '管理员';
@@ -945,15 +1102,21 @@ class EndfieldStoryImporter {
         id: id,
         source: source,
         sort: 200000 + i,
-        name: chat is Map && _clean(chat['name']).isNotEmpty
-            ? '短信 · ${_clean(chat['name'])}'
-            : null,
+        name: chat is Map && _clean(chat['name']).isNotEmpty ? '短信 · ${_clean(chat['name'])}' : null,
         lines: lines,
       );
       count++;
     }
     log?.call('sns: $count');
   }
+}
+
+/// [n] (1–99) in Chinese numerals: 一, 十, 十二, 二十一.
+String chineseNumber(int n) {
+  const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  if (n < 10) return digits[n];
+  final tens = n ~/ 10, ones = n % 10;
+  return '${tens == 1 ? '' : digits[tens]}十${digits[ones]}';
 }
 
 /// Natural order of ids (`a1m2_10` after `a1m2_9`).

@@ -40,6 +40,8 @@ const List<String> endfieldShelfOrder = [
   'world',
   'archive',
   'memory',
+  // Missions the client keeps conversations of but does not define.
+  'unused',
 ];
 
 /// The shelf of items that belong to no collection (enemies, items, medals,

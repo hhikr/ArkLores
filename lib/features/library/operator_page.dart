@@ -54,7 +54,10 @@ class OperatorPage extends ConsumerWidget {
     // Dijiang), each kind in game order.
     final kinds = <String, List<LibraryCollection>>{};
     for (final c in records) {
-      (kinds[_bareKind(c.kind)] ??= []).add(c);
+      final kind = _bareKind(c.kind);
+      // Missions of any shelf are one group (an operator's mission may be on
+      // the main story shelf too).
+      (kinds[ownedCollectionKinds.contains(kind) ? kind : 'memory'] ??= []).add(c);
     }
     final kindOrder = ['memory', ...ownedCollectionKinds];
     final sortedKinds = Map.fromEntries(
@@ -168,7 +171,7 @@ class OperatorPage extends ConsumerWidget {
   /// The heading of one kind of what hangs below an operator.
   String _kindLabel(BuildContext context, String kind) =>
       gameOfId(entryId) == Game.endfield
-          ? endfieldOwnedNames[kind] ?? context.t.libraryOperatorRecords
+          ? endfieldOwnedNames[kind] ?? endfieldOperatorMissions
           : context.t.libraryOperatorRecords;
 
   /// The line under a module / skin / paradox simulation: a module's type

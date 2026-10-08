@@ -65,6 +65,9 @@ $missions = Join-Path $Work 'missions'
 # cutscene shows with their start times, and the options bound to them).
 $treeDirs = @((Join-Path $Work 'tree_sa'), (Join-Path $Work 'tree_persistent'))
 $clipDirs = @((Join-Path $Work 'clips_sa'), (Join-Path $Work 'clips_persistent'))
+# The mission panel's chapters (`ChapterInfo` objects: main story chapters and
+# processes, operators' chapters, each with its missions in order).
+$chapterDirs = @((Join-Path $Work 'chapters_sa'), (Join-Path $Work 'chapters_persistent'))
 if (-not $SkipUnpack) {
   if (-not (Test-Path $exe)) { throw "AnimeStudio CLI not found: $exe (run the kit's setup.bat once)" }
   New-Item -ItemType Directory -Force $Work | Out-Null
@@ -74,6 +77,7 @@ if (-not $SkipUnpack) {
     $layer = @('StreamingAssets', 'Persistent')[$i]
     UnityObjects $layer $treeDirs[$i] 'TextAsset' '^dlg_' 'Convert'
     UnityObjects $layer $clipDirs[$i] 'MonoBehaviour' '^Dialog(Trunk|Option)PlayableAsset' 'JSON'
+    UnityObjects $layer $chapterDirs[$i] 'MonoBehaviour' '^(main_e\d+|chr_\d+_[a-z]+_e\d+)$' 'JSON'
   }
   foreach ($dir in $tables, $missions) {
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -Confirm:$false }
@@ -88,7 +92,7 @@ if (-not $SkipUnpack) {
   "tables: $((Get-ChildItem $tables -File).Count), missions: $((Get-ChildItem $missions -File).Count)"
 }
 
-& dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--trees=$($treeDirs -join ';')" "--clips=$($clipDirs -join ';')" "--version=$Version" --output=build/endfield --force
+& dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--trees=$($treeDirs -join ';')" "--clips=$($clipDirs -join ';')" "--chapters=$($chapterDirs -join ';')" "--version=$Version" --output=build/endfield --force
 if ($LASTEXITCODE -ne 0) { throw 'build failed' }
 # A rebuild has no vectors; the embedding cache (build/embedding_cache) makes
 # unchanged chunks free, only new or changed text is paid for.

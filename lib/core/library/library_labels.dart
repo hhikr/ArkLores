@@ -264,14 +264,20 @@ const Map<String, String> endfieldShelfNames = {
   // The PRTS archive's title (`ui_prts_title`).
   'archive': '情报档案库',
   'memory': '干员',
+  // Missions whose conversations the client keeps but which it does not
+  // define (no wiki has them): what the community calls 未实装.
+  'unused': '未实装任务',
 };
 
 /// 0.12: headings of what hangs below an operator, by collection kind
-/// (without the namespace): Endfield's operator missions, Baker topics and
-/// the Dijiang (`LUA_SPACESHIP_NAME`). Arknights' record sets keep their
-/// own name (密录).
+/// (without the namespace): Baker topics and the Dijiang
+/// (`LUA_SPACESHIP_NAME`); every mission kind is the operator's 角色纪事 (the
+/// wiki's name; each operator's series is `<名>纪事`, 篇章Ⅰ … in the game).
+/// Arknights' record sets keep their own name (密录).
 const Map<String, String> endfieldOwnedNames = {
-  'memory': '干员任务',
   'baker': 'Baker 话题',
   'ship': '帝江号',
 };
+
+/// The heading of an Endfield operator's missions.
+const String endfieldOperatorMissions = '角色纪事';

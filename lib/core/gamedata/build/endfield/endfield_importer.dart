@@ -28,7 +28,13 @@ const List<String> endfieldShelfKinds = [
   'world',
   'archive',
   'memory',
+  // Missions the client keeps conversations of but does not define (an
+  // older version of a story, a cut mission): not in the game.
+  unusedMissionShelf,
 ];
+
+/// The shelf of missions the game does not have (see [endfieldShelfKinds]).
+const String unusedMissionShelf = 'unused';
 
 /// Kinds of the collections that hang below an operator besides its
 /// missions (`memory`): its Baker topics and its interactions on the
@@ -320,18 +326,41 @@ class EndfieldImporter {
     ('hobbyTagIds', 'tag_group_hobby'),
   ];
 
-  /// `阵营：X` lines of [charId]'s profile tags.
+  /// `阵营：X` lines of [charId]'s profile tags, then what the operator's
+  /// own description of each tag says (`CharacterTagDesTable`: an expertise
+  /// or a hobby as it shows in this operator, `【作战技巧·单兵作战】` and a line),
+  /// in the order of the tags.
   List<String> _operatorTags(String charId) {
     final row = tables.table('CharacterTagTable')[charId];
     if (row is! Map) return const [];
     final data = tables.table('TagDataTable');
     final groups = tables.table('TagGroupDataTable');
-    return [
+    final facts = [
       for (final (field, group) in _profileTagFields)
         if (_tagNames(row[field], data) case final names when names.isNotEmpty)
           if (groups[group] case final Map<String, dynamic> g
               when _clean(g['tagGroupName']).isNotEmpty)
             '${_clean(g['tagGroupName'])}：${names.join('、')}',
+    ];
+    final own = tables.table('CharacterTagDesTable')[charId];
+    final descs = own is Map ? own['tagDesc'] : null;
+    final notes = <String>[];
+    if (descs is Map) {
+      for (final (field, _) in _profileTagFields) {
+        final raw = row[field];
+        for (final id in raw is List ? raw : [raw]) {
+          final entry = descs['$id'];
+          final text = entry is Map ? _clean(entry['desc']) : '';
+          if (text.isEmpty) continue;
+          final cut = text.indexOf('\n');
+          notes.add(cut < 0 ? text : '【${text.substring(0, cut).trim()}】\n${text.substring(cut + 1).trim()}');
+        }
+      }
+    }
+    return [
+      ...facts,
+      if (facts.isNotEmpty && notes.isNotEmpty) '',
+      ...notes,
     ];
   }
 

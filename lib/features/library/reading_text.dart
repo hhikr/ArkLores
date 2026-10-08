@@ -34,11 +34,13 @@ TextStyle readingStyle(
 final RegExp _bracketField = RegExp(r'^【([^】]{1,16})】\s*(.*)$');
 final RegExp _colonField = RegExp(r'^([^：:\s]{1,10})[：:]\s*(.+)$');
 
-/// Whether every line of [text] is a short `标签：值` field (a list of facts,
-/// such as an Endfield operator's faction, race, expertise and hobbies).
+/// Whether [text] opens with a list of facts: every line of its first block
+/// (up to a blank line) a short `标签：值` field, such as an Endfield
+/// operator's faction, race, expertise and hobbies (what follows them, their
+/// descriptions, reads as text).
 bool isFieldList(String text) {
   final lines = [
-    for (final l in text.split('\n'))
+    for (final l in text.trim().split(RegExp(r'\n\s*\n')).first.split('\n'))
       if (l.trim().isNotEmpty) l.trim(),
   ];
   return lines.isNotEmpty &&
@@ -68,14 +70,19 @@ class ReadingText extends ConsumerWidget {
       gap = 8;
     }
 
+    // With [fields], the `标签：值` lines of the first block are fields.
+    var firstBlock = true;
     for (final raw in clean.split('\n')) {
       final line = raw.trim();
       if (line.isEmpty) {
-        if (children.isNotEmpty) gap = 18;
+        if (children.isNotEmpty) {
+          gap = 18;
+          firstBlock = false;
+        }
         continue;
       }
       final bracket = _bracketField.firstMatch(line);
-      final colon = fields ? _colonField.firstMatch(line) : null;
+      final colon = fields && firstBlock ? _colonField.firstMatch(line) : null;
       final field = bracket ?? colon;
       if (field != null && field.group(2)!.trim().isEmpty) {
         // A label alone: it heads the lines after it.

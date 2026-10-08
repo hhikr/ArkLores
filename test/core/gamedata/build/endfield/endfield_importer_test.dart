@@ -78,6 +78,7 @@ void writeTables(Directory dir) {
     'chr_0001_a': {
       'blocTagId': 'tag_power_x',
       'raceTagId': 'tag_race_x',
+      'expertTagIds': ['tag_expert_x'],
       'dispositionTagIds': ['tag_sys'],
       'hobbyTagIds': ['tag_hidden'],
     },
@@ -85,13 +86,23 @@ void writeTables(Directory dir) {
   table('TagDataTable', {
     'tag_power_x': {'tagName': tx(i18n, 110, '某工业'), 'tagGroupId': 'tag_group_power'},
     'tag_race_x': {'tagName': tx(i18n, 111, '某族'), 'tagGroupId': 'tag_group_race'},
+    'tag_expert_x': {'tagName': tx(i18n, 1170, '某专长'), 'tagGroupId': 'tag_group_expert'},
     'tag_sys': {'tagName': tx(i18n, 112, '内部'), 'tagGroupId': 'tag_group_disposition'},
     'tag_hidden': {'tagName': tx(i18n, 113, '隐藏'), 'tagGroupId': 'tag_group_hobby', 'hideTag': true},
   });
   table('TagGroupDataTable', {
     'tag_group_power': {'tagGroupName': tx(i18n, 114, '阵营')},
     'tag_group_race': {'tagGroupName': tx(i18n, 115, '种族')},
+    'tag_group_expert': {'tagGroupName': tx(i18n, 1180, '专长')},
     'tag_group_hobby': {'tagGroupName': tx(i18n, 116, '爱好')},
+  });
+  // What a tag is in this operator: a title line, then a line.
+  table('CharacterTagDesTable', {
+    'chr_0001_a': {
+      'tagDesc': {
+        'tag_expert_x': {'desc': tx(i18n, 1190, '某专长·独行\n总是一个人做完所有事。'), 'tagId': 'tag_expert_x'},
+      },
+    },
   });
   table('DungeonTable', {
     'dung_1': {
@@ -190,9 +201,13 @@ void writeTables(Directory dir) {
     'chr_0001_ep1_name': tx(i18n, 1131, '甲的故事'),
     'gm9m1_name': tx(i18n, 1132, '某支线'),
     'gm9m1_desc_001': tx(i18n, 1133, '去看看发生了什么。'),
+    'chapter1_num': tx(i18n, 1201, '第一章'),
+    'ep_num1': tx(i18n, 1202, '进程Ⅰ'),
+    'ep1_name': tx(i18n, 1203, '某进程'),
   });
   table('MissionTypeInfoTable', {
     '0': {'isVisible': true, 'missionViewType': 0},
+    '1': {'isVisible': true, 'missionViewType': 2},
     '2': {'isVisible': true, 'missionViewType': 1},
     '4': {'isVisible': false, 'missionViewType': 4},
   });
@@ -260,10 +275,20 @@ void writeTables(Directory dir) {
       'actorName': tx(i18n, 74, ''),
       'dialogText': tx(i18n, 75, '风停了。'),
     },
-    // A hidden step of e1m1: read in e1m1.
-    'dlg_e1m1d5_1_001': {
+    // A hidden step of e1m1 without a name: read in e1m1.
+    'dlg_e1m1d7_1_001': {
       'actorName': tx(i18n, 1150, '乙'),
       'dialogText': tx(i18n, 1151, '准备好了。'),
+    },
+    // Hidden steps with a name of their own (twice the same): missions of
+    // their own on their base's shelf, told apart by stage.
+    'dlg_e1m1d5_1_001': {
+      'actorName': tx(i18n, 1164, '乙'),
+      'dialogText': tx(i18n, 1165, '开工吧。'),
+    },
+    'dlg_e2m1d5_1_001': {
+      'actorName': tx(i18n, 1166, '乙'),
+      'dialogText': tx(i18n, 1167, '再准备一次。'),
     },
     // A mission without a definition, named by its sub-missions.
     'dlg_f1m4_1_001': {
@@ -330,17 +355,20 @@ void main() {
     final writer = EndfieldWriter(db);
     await writer.createSchema(sourceVersion: 'test');
     final tables = EndfieldTables(tablesDir);
-    EndfieldMission mission(String name, int type, {String? description, String? level}) => (
+    EndfieldMission mission(String name, int type, {String? description, String? level, String? charId}) => (
           name: name,
           description: description,
           type: type,
-          charId: null,
+          charId: charId,
           sortId: 0,
           levelId: level,
         );
     final missions = {
       'e1m1': mission('启程', 0, description: '出发前往谷地。', level: 'map01_lv001'),
       'e1m1d5': mission('准备工作', 4),
+      'e1m1d7': mission('', 4),
+      'e2m1d5': mission('准备工作', 4),
+      'c1m1': mission('甲的事', 1, charId: 'chr_0001_a'),
       'f1m4d1': mission('据点建设·难民处·其一', 2, level: 'map01_lv001'),
       'f1m4d2': mission('据点建设·难民处·其二', 2, level: 'map01_lv001'),
     };
@@ -351,6 +379,9 @@ void main() {
       writer,
       importer,
       missions: missions,
+      chapters: const [
+        (id: 'main_e1', type: 0, headingKeys: ['chapter1_num', 'ep_num1', 'ep1_name'], missions: ['e1m1', 'e1m1d5']),
+      ],
     ).importDialogTables();
     await writer.finish();
   });
@@ -392,7 +423,7 @@ void main() {
       lines.map((l) => l['content']),
       [
         '对话', '她来了。', '欢迎，管理员。', '跟上去／留下来', '风停了。',
-        // The hidden step e1m1d5 is read in its mission.
+        // The nameless hidden step e1m1d7 is read in its mission.
         '对话', '准备好了。',
         '远程通话', '听得到吗？',
         '闲话', '今天风好大。',
@@ -403,9 +434,17 @@ void main() {
       ['对话', '对话', '远程通话', '闲话'],
     );
     expect(
-      await q("SELECT id FROM collections WHERE id = 'ef/mission_e1m1d5'"),
+      await q("SELECT id FROM collections WHERE id = 'ef/mission_e1m1d7'"),
       isEmpty,
     );
+    // Hidden steps with names of their own are missions on their base's
+    // shelf; two of one name are told apart by stage, in game order.
+    final steps = await q(
+      "SELECT id, kind, name FROM collections WHERE id IN ('ef/mission_e1m1d5', 'ef/mission_e2m1d5') ORDER BY id",
+    );
+    expect(steps.map((s) => '${s['kind']} ${s['name']}'), ['ef/main 准备工作·一阶段', 'ef/main 准备工作·二阶段']);
+    final stepStory = await q("SELECT name FROM entries WHERE raw_id = 'ef/e1m1d5.txt'");
+    expect(stepStory.single['name'], '准备工作·一阶段');
     expect(lines[3]['kind'], 'choice');
     expect(lines[4]['kind'], 'narration');
     final catalog = await q(
@@ -425,21 +464,48 @@ void main() {
     expect(text.map((r) => r['content']).join(), isNot(contains('远程通话')));
   });
 
-  test('a mission carries its description and the region it is played in', () async {
+  test('a mission carries its description and is listed under its chapter, in the chapter\'s order',
+      () async {
     final intro = await q(
       'SELECT e.group_name, r.content FROM entries e '
       'JOIN normalized_records r ON r.entry_id = e.id '
       "WHERE e.type = 'mission_intro' AND e.collection_id = 'ef/mission_e1m1'",
     );
     expect(intro.single['content'], '出发前往谷地。');
-    expect(intro.single['group_name'], '谷地');
+    expect(intro.single['group_name'], '第一章 · 进程Ⅰ · 某进程');
     expect(await collectionIntro(db, 'ef/mission_e1m1'), '出发前往谷地。');
     final shelf = await collectionsOfKind(db, 'ef/main');
     final mission = shelf.singleWhere((c) => c.id == 'ef/mission_e1m1');
     expect(mission.name, '启程');
     expect(mission.intro, '出发前往谷地。');
-    expect(mission.group, '谷地');
+    expect(mission.group, '第一章 · 进程Ⅰ · 某进程');
     expect(mission.stories, 1);
+    // The chapter's missions first, in its order; then the others.
+    expect(shelf.map((c) => c.id).take(2), ['ef/mission_e1m1', 'ef/mission_e1m1d5']);
+  });
+
+  test('chapters are read from the exported ChapterInfo objects, main story first', () {
+    final out = Directory('${dir.path}/chapters')..createSync();
+    void obj(String name, int type, List<String> keys, List<String> missions) =>
+        File('${out.path}/${name}_p0000000000000001.json').writeAsStringSync(
+          jsonEncode({
+            'm_Name': name,
+            'type': type,
+            'chapterNum': {'key': keys[0]},
+            'episodeNum': {'key': keys[1]},
+            'episodeName': {'key': keys[2]},
+            'missionIdList': missions,
+          }),
+        );
+    obj('chr_0006_x_e1', 1, ['chr_0006_x_title', 'chr_ep_num1', 'chr_0006_ep1_name'], ['c6m1']);
+    obj('main_e10', 0, ['chapter2_num', 'ep_num6', 'ep10_name'], ['e10m1']);
+    obj('main_e2', 0, ['chapter1_num', 'ep_num2', 'ep2_name'], ['e1m9', 'e1m9d5']);
+    final chapters = EndfieldStoryImporter.loadChapters([out]);
+    expect(chapters.map((c) => c.id), ['main_e2', 'main_e10', 'chr_0006_x_e1']);
+    expect(chapters.first.missions, ['e1m9', 'e1m9d5']);
+    // An operator's chapter is headed by its number and name, not by the
+    // operator's series title.
+    expect(chapters.last.headingKeys, ['chr_ep_num1', 'chr_0006_ep1_name']);
   });
 
   test('operators carry their archive and voices; stand-ins are left out',
@@ -452,7 +518,8 @@ void main() {
     // The parts as the game's profile page names them.
     expect(texts.map((t) => t['section']), containsAll(['干员情报', '基础档案', '语音记录']));
     final tags = texts.firstWhere((t) => t['section'] == '干员情报')['content'];
-    expect(tags, '阵营：某工业\n种族：某族');
+    // The facts, then the operator's own line for each tag.
+    expect(tags, '阵营：某工业\n种族：某族\n专长：某专长\n\n【某专长·独行】\n总是一个人做完所有事。');
     final faction = await q("SELECT name FROM entities WHERE entity_type = 'power'");
     expect(faction.single['name'], '某工业');
     expect(texts.first['content'], isNot(contains('<@')));
@@ -556,12 +623,13 @@ void main() {
     expect(ids, ['e0m0', 'e1m2', 'e1m2d5', 'e1m10', 'e10m1']);
   });
 
-  test('a mission without a definition is named by its sub-missions, the text table, '
-      'or said to have no name', () async {
+  test('a mission without a definition is not in the game: on the 未实装 shelf, named by its '
+      'sub-missions, the text table, or said to have no name', () async {
     Future<Map<String, Object?>> collection(String id) async =>
         (await q('SELECT kind, name FROM collections WHERE id = ?', ['ef/mission_$id'])).single;
-    // The name its sub-missions share; their shelf (探索任务).
-    expect(await collection('f1m4'), {'kind': 'ef/discovery', 'name': '据点建设·难民处'});
+    // The name its sub-missions share.
+    expect(await collection('f1m4'), {'kind': 'ef/unused', 'name': '据点建设·难民处'});
+    expect((await collection('gm9m1'))['kind'], 'ef/unused');
     // The name and description the text table keeps.
     expect((await collection('gm9m1'))['name'], '某支线');
     expect(await collectionIntro(db, 'ef/mission_gm9m1'), '去看看发生了什么。');
@@ -610,7 +678,7 @@ void main() {
     expect((paper.stories, paper.otherTypes, paper.otherType), (0, 1, 'document'));
     // A recording: its line and the radio lines with who speaks.
     final recording = await q(
-      "SELECT r.section, r.content FROM entries e JOIN normalized_records r ON r.entry_id = e.id "
+      'SELECT r.section, r.content FROM entries e JOIN normalized_records r ON r.entry_id = e.id '
       "WHERE e.raw_id = 'ef/media_1'",
     );
     expect(recording.single['section'], '受困者的录音');

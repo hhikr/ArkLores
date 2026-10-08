@@ -76,6 +76,7 @@ IconData _shelfIcon(String kind) => switch (kind) {
       'side' => Icons.alt_route_sharp,
       'other' => Icons.assignment_sharp,
       'world' => Icons.public_sharp,
+      'unused' => Icons.inventory_2_sharp,
       'archive' => Icons.folder_special_sharp,
       _ => Icons.collections_bookmark_sharp,
     };
