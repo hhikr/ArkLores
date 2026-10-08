@@ -7,6 +7,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 
 /// Dedicated sub-page for configuring the Chat API provider.
@@ -120,19 +121,11 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     final theme = ref.watch(themeProvider);
     ref.watch(apiConfigProvider);
 
-    return Scaffold(
-      backgroundColor: theme.bgPrimary,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        title: Text(
-          context.t.apiSettingsTitle,
-          style: theme.titleFont.copyWith(fontSize: 18),
-        ),
-        iconTheme: IconThemeData(color: theme.textPrimary),
-        elevation: 0,
-      ),
+    return FloatingScaffold(
+      title: context.t.apiSettingsTitle,
+      scrollUnder: true,
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: floatingPadding(context, const EdgeInsets.all(16)),
         children: [
           Center(
             child: Icon(

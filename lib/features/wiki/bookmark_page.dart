@@ -5,6 +5,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'bookmark_service.dart';
 
@@ -19,22 +20,9 @@ class BookmarkPage extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        title: Text(
-          context.t.bookmarksTitle,
-          style: theme.titleFont.copyWith(fontSize: 18),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          color: theme.accentPrimary,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
+    return FloatingScaffold(
+      title: context.t.bookmarksTitle,
+      scrollUnder: true,
       body: bookmarkAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(
@@ -48,7 +36,10 @@ class BookmarkPage extends ConsumerWidget {
             return _EmptyState(theme: theme);
           }
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: floatingPadding(
+              context,
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
             itemCount: bookmarks.length,
             itemBuilder: (context, index) {
               final bookmark = bookmarks[index];

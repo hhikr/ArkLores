@@ -63,14 +63,20 @@ fz 的条目正文由卡片组件组成，图片可能通过卡片容器的
 窗口尺寸变化也会触发重新计算。退出阅读器时会移除观察器和临时 class，避免影响
 普通模式。
 
+## 悬浮栏与网页留白（0.11）
+
+App 的顶部站点栏（`wiki-site-bar`）和底部导航都是悬浮的，网页铺满整个屏幕（顶到状态栏下、底到屏幕底）。网页不能从外部留白，
+所以由 `_applyDockInsets` 注入样式：给 `html` 上下加悬浮栏高度的 padding，并把网站自己 `fixed`/`sticky` 在顶部/底部的栏同样下移/上移；
+每次 build 用 `_syncDockInsets` 同步高度。阅读模式两栏都隐藏、留白为 0。新增站点时要真机确认它的固定栏没有被悬浮栏盖住。
+
 ## 验证要求
 
 每次修改站点适配时至少运行：
 
 ```text
 flutter analyze
-flutter test test/wiki_appearance_test.dart test/wiki_site_adapter_test.dart
-flutter test test/bookmark_service_test.dart
+flutter test test/features/wiki/wiki_appearance_test.dart test/features/wiki/wiki_site_adapter_test.dart
+flutter test test/features/wiki/bookmark_service_test.dart
 ```
 
 真机验收需要分别验证：

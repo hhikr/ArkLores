@@ -9,23 +9,63 @@ library;
 /// needs to read results and cite lines.
 const String loreDatabaseGuide = '''
 知识库是一个 SQLite 数据库（明日方舟中文游戏数据），主要的表：
-- story_lines(story_id, line_index, speaker, content, ...)：全部剧情台词，约 41 万行。
+- story_lines(story_id, line_index, speaker, content, kind, ...)：全部剧情文本，约 44 万行。
   story_id 是故事文件名，形如 obt/main/level_main_<章>-<关>_beg.txt（主线）、activities/<活动id>/level_<活动id>_<关>_beg.txt（活动）；
   line_index 从 0 开始，是引用用的行号；speaker 为空表示旁白/叙述。
+  kind 是这一行的性质：dialogue 对白、narration 旁白、subtitle 场景字幕、document 剧情里出现的书信/文档/笔记、
+  choice 玩家选项（多个选项用“／”连接）、title 标题、system 教程与引导提示（不属于故事）。
 - story_catalog(story_id, collection_id, collection_name, collection_type, story_code, story_name, avg_tag, story_sort, synopsis, start_time)：
   每个故事文件属于哪个故事集、关卡号（形如 <章>-<关>）、章名、行动前/行动后/幕间、在故事集内的顺序、官方梗概、上线时间（unix 秒，主线为空）。
   collection_type：MAINLINE 主线（collection_id 形如 main_<章>）、ACTIVITY / MINI_ACTIVITY 活动、NONE 干员密录。
 - story_chapter_profiles(story_id, title, summary, speaker_set, ...)：每章的标题、梗概和说话人列表。
 - entities(id, name, entity_type, ...) 与 entity_aliases(alias, entity_id, ...)：人物、干员、敌人、地点、活动等名字及别名。
 - entity_story_mentions(entity_id, story_id, line_start, line_end, mention_count, matched_alias)：实体在各故事中出现的行段。
-- normalized_records(category, subtype, title, entity_name, content, ...)：剧情以外的资料（干员档案、语音、敌人介绍、道具/勋章描述等）。
-梗概、章节简介、实体表只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
+- normalized_records(id, category, subtype, content_type, title, entity_name, content, entry_id, collection_id, ...)：剧情以外的资料
+  （干员档案、语音、敌人介绍、道具/勋章/皮肤描述、肉鸽藏品与事件、活动档案/新闻/来信等）的原文；每条属于一个条目（entry_id）。
+- collections(id, kind, name, parent_id, sort_key, start_time)：故事集的“归属单位”，kind 见下面的“资料页结构”；parent_id 指向所属干员条目（密录）。
+- entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, record_id)：每个官方条目一行，id 形如 <type>:<原始id>。
+  type 有 story、operator、enemy、stage、zone、item、skin、medal、module、power、worldview、mail、activity_text、archive_*、
+  roguelike_item / roguelike_scene / roguelike_choice / roguelike_ending / roguelike_stage 等；code 是关卡号/敌人编号；
+  collection_id 是所属的故事集/活动/主题；record_id 指向 normalized_records 里这个条目的文字。
+- entry_links(src, relation, dst)：条目之间的绑定。appears_in：敌人出现在哪些关卡；belongs_to：关卡属于地区、皮肤/模组/干员关卡属于干员；
+  belongs_to_stage：剧情文件对应的关卡；leads_to：肉鸽选项通向的场景；features：肉鸽分队/奖章/皮肤相关的干员；reads_story：档案条目对应的剧情文件；plays_in：战斗中会播放的剧情文件（教程、训练、战斗内对话）所在的关卡；
+  attached_to：这类关卡内对话归属的剧情（它读在那篇剧情的末尾）或关卡；part_of：故事属于结局/小队/篇章；summoned_by：召唤物属于哪位干员。
+  视图 collection_enemies(collection_id, enemy_id) 列出某个故事集/活动/主题里出现过的敌人。
+梗概、章节简介、实体表、条目与绑定只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
+
+/// How the library pages (the player's reading view) are arranged and what
+/// each part is for. The knowledge base is the same structure: read it before
+/// querying to know where a thing lives. Nothing here names a character, a
+/// chapter or an activity; the kinds are named as prts.wiki names them.
+const String loreLibraryGuide = '''
+资料页结构
+书架：collections.kind
+- main 主线：每章一个集合，id 为 main_<章>。章内是各关卡的行动前、行动后剧情，关卡、敌人、物品、奖章挂在章下。主线是整部作品的主干事件。
+- sidestory SideStory：篇幅大、有完整剧情的支线活动。ministory 故事集：篇幅较短的活动短篇。branchline 插曲：与主线联系紧密的支线，常补充主线事件的背景或后续。activity 其他活动：签到、玩法类，剧情很少，活动文本、物品、奖章的描述可能有设定。复刻并入原活动。
+- memory 干员：干员页汇集档案、密录、悖论模拟、模组、皮肤、信物、召唤物与装置。档案是人物设定，随信赖解锁。密录是该干员个人经历的剧情，collections.parent_id 指向干员。悖论模拟是该干员的战斗回忆关卡，带关卡剧情。
+- roguelike 集成战略：每个主题一个集合，含结局、月度小队、区域、关卡、收藏品、事件、注释、开局剧情。叙事在结局故事和开局剧情里，part_of 把故事归到结局；收藏品、事件、注释是设定与氛围。月度小队的 features 指向主角。
+- sandbox 生息演算：篇章、事件、关卡、物品、简介。剧情在篇章下的故事里。
+- 图鉴：不属于集合或跨集合的条目，有敌人、物品、奖章、标志物、邮件、世界观、势力、人物、皮肤系列。奖章和活动道具既在图鉴里，也挂在所属活动或章节下。
+条目的作用
+- story 是证据的主体。关卡内对话读在所属剧情的末尾，attached_to 指向它。
+- 档案、世界观、势力、人物是设定。敌人、物品、奖章、皮肤、模组、标志物、收藏品的描述是背景文字，常交代来历、用途、与事件的关系。邮件、活动新闻、来信是活动期间的旁证。
+- 它们的原文在 normalized_records，可以作出处。与剧情台词冲突时以剧情为准，两处出处都写明。
+- 找关系：奖章、物品 belongs_to 活动或干员；召唤物 summoned_by 干员；皮肤 belongs_to 皮肤系列和干员；装置、召唤物、敌人 appears_in 关卡；剧情 belongs_to_stage 关卡。找某个活动里的物品、奖章、敌人，按 collection_id 或绑定反查。
+时间
+- collections.start_time、story_catalog.start_time 是上线时间，不是故事里的时间。后上线的内容可以补充、修正甚至推翻先上线的叙述，但它讲的事在故事里可能发生得更早。
+- 库里没有故事内的时间表。故事里的先后只能从原文判断：日期、几年前、人物的状态、别人的回忆与提及。不要用上线顺序推断先后。
+- 档案没有上线时间。档案与剧情冲突时分别写明，不用档案的先后下结论。
+同一人物
+- entry_links 的 same_person 把同一干员的不同版本连起来，组里第一个是原型，其余指向它。不同版本可能是同一个人后来的经历，名字或代号会变，也可能是另一条假设的时间线，表里不区分。读两者的档案和剧情再判断，不要因名字不同当作不同的人，也不要把假设线的经历当作原版的事实。
+使用顺序：先用 collections、entries 判断问题落在哪个集合或哪位干员，再读它的剧情；设定类问题先找对应条目的原文。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
 
 /// How the agent works and cites.
 const String loreAgentRules = '''
 你熟悉《明日方舟》的剧情，负责为玩家讲清剧情。查资料时用工具读本地知识库的原文，答案只依据读到的原文；写答案时面对的是玩家，不是数据库。
 
 $loreDatabaseGuide
+
+$loreLibraryGuide
 
 工作方式：
 - 先看全局再读原文：问题涉及某个人物/事件时，先用 grep（不给范围）或 sql 统计它在哪些故事里出现、出现多少，再按时间顺序挑出相关章节，用 read_story 整章阅读，必要时在章内 grep。问题限定在某个故事集时也先看全库分布：其他故事里对同一人物/事件的叙述可能印证或修正这个故事集里的内容。

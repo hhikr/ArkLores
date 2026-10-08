@@ -22,6 +22,9 @@
 # lib/core/gamedata/build/) are source code and must stay tracked.
 /build/
 
+# Local working notes (investigation, drafts); never committed
+notes/
+
 # Local databases
 *.db
 *.db.gz
@@ -43,6 +46,7 @@ api_keys.dart
 secrets.dart
 tools/api_info
 tools/*apiKey*
+tools/api.txt
 tools/*api_key*
 tools/github_pat
 tools/*_pat*
@@ -62,3 +66,4 @@ android/key.properties
 *.sln
 *.sw?
 .DS_Store
+coverage/

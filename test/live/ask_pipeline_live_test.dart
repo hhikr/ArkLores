@@ -17,7 +17,8 @@
 //   ARKLORES_LIVE_DEEP_THINKING=true (the "深度思考" switch on)
 //   ARKLORES_GAMEDATA_DB=<db path>  (default build/gamedata_mobile/...)
 //   ARKLORES_LIVE_OUT=<dir>         (default build/live_sessions)
-// API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL).
+// API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL),
+// or from the file named by ARKLORES_API_INFO (another provider).
 //
 //   flutter test test/live/ask_pipeline_live_test.dart
 import 'dart:convert';
@@ -44,7 +45,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final env = Platform.environment;
   final enabled = env['ARKLORES_RUN_LIVE_ASK']?.toLowerCase() == 'true';
-  final api = readApiInfo(File('tools/api_info'));
+  final api =
+      readApiInfo(File(env['ARKLORES_API_INFO'] ?? 'tools/api_info'));
   // ARKLORES_LIVE_NO_EMBEDDING=true simulates a user without an embedding key.
   final embedding = env['ARKLORES_LIVE_NO_EMBEDDING']?.toLowerCase() == 'true'
       ? defaultEmbeddingConfig

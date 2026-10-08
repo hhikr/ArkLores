@@ -4,6 +4,175 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-08
+
+Stable release of the 0.11 line; it replaces the pre-releases v0.11.0-pre.1–pre.4, which were withdrawn. The knowledge base
+is new (schema 5) and must be downloaded again: `arklores_gamedata_zh.db.gz` 209,900,351 B, SHA-256
+`695caa3e0e598ce92e7d588973bb6c00b3d6345171003c9532df16babf3eb0ec` (uncompressed 679,129,088 B, SHA-256
+`cc83c432ea6b29b690ead7d364f6c829311a170d8410d272db1fadfc98f374a9`; upstream `a550f5e`; 54,846 story vectors).
+`ArkLores-0.11.0.apk` 56,012,464 B, SHA-256 `06ba13d5f811665c0160582714c56b745062150576726efc2ef03e3467d26caa`, built by
+GitHub Actions from `2d83bb4` and signed with the project key; it installs over v0.10.0.
+
+### Interface
+
+- **Floating docks.** No page has an app bar any more: a round back button, a title pill and an actions pill float over the
+  content (`FloatingScaffold`); top bars with something on each side split into two pills; the bottom navigation is a short
+  centred pill that hides with the keyboard; the Ask composer floats. The Wiki page runs full screen under its docks, with
+  matching padding injected into the page.
+- **Taps answer.** Cards, rows, chips and buttons scale down on press and spring back, with a light haptic; ripples are
+  visible on both themes; page transitions show both pages (the new one fades and grows in, the covered one recedes).
+- **The work behind an answer is a timeline** ("搜索「X」 · n 处", "阅读《章名》 · 第 a–b 行" …) instead of raw
+  Thought/Action/Observation text; tap a step for its raw output. The header reads "已作答 · 查阅 n 次 · 读了 m 篇原文".
+- The Ask page has no top bar: history, reading history, new chat and the menu float at the top right. Touching the
+  conversation takes the focus, so coming back from an evidence page no longer brings the keyboard up.
+- Review and digest steps of an answer can be switched off (tune button in the composer).
+- Search on every library page (names, near names, text), "find in this story" in the reader, "find stories by meaning"
+  (vectors) on demand.
+
+### Removed
+
+- **Role-play** and everything only it used (its text ReAct loop, `search_local_lore`, the entity search of the store).
+
+### Fixed
+
+- Letters, poems and notes in the scripts wrote their line breaks as a literal `\n`; the reader and the history showed
+  "\n\n…". They are real line breaks now (1,853 story lines, 428 records); old history snippets are cleaned when read.
+  Operator profile text is cleaned of markup like other table text.
+- Answers with providers other than GLM (Gemini, relays, GPT-5 / o-series): array content, reasoning fields, streams without
+  `data:`, tool calls without `index`, empty turns retried another way, a clear message when the Base URL returns a web page.
+### Knowledge base (schema 5)
+
+- **More of the story is in the database.** The story parser now reads every text line of the game scripts: scene captions,
+  letters and notes shown in scenes, the options of player choices, other dialogue spellings and the tutorial scripts.
+  The old parser skipped about 4% of the lines (most of them in the main story and operator records) and 885 files.
+  Each line has a `kind`, and readers show non-dialogue lines with a label (`[字幕]`, `[文档]`, `[选项]` …).
+- **Entries, owners and bindings.** Every official item (story, operator, enemy, stage, item, skin, medal, roguelike relic /
+  event / ending, activity news and letters, archive documents …) is an entry owned by a story set, activity, main chapter,
+  operator record set, roguelike topic or sandbox. Enemies are bound to the stages they appear in, so "the enemies of one
+  story set / one roguelike topic" is a single query.
+- **New text**: activity archives, news, letters and event narration, roguelike relic flavor text, scenes and endings,
+  handbook stages, world-view texts, mails. Gameplay text (skills, rules, effects, how to obtain) is not imported.
+- Story vectors of the previous knowledge base are carried over to the new one; only the new lines are embedded.
+- **Small entries point at what they are about.** Medals and activity items name their activity, chapter or record set
+  (from ids, stage drops and what the activity's own tables mention); re-run texts count with the activity they re-run;
+  traps and summons list the stages that place them and the operator that summons them; operator tokens belong to their
+  operator; skins and the skin series that released them point at each other; items listed several times (the same coin
+  once per banner) are one entry. Names in angle brackets in stage descriptions and scripts are no longer dropped, and
+  a few names the app had made up were replaced by the wiki's (标志物, 表情套组, 奖章, 首页场景).
+- **Updates and complete builds in the app give the same result as the desktop build.** Checked by building a knowledge
+  base from an upstream commit eleven weeks old, updating it to the latest one and comparing it entry by entry with a
+  complete build of the latest. Fixed along the way: an update that missed every table and story file when one upstream
+  commit touched hundreds of unrelated files (the changed files are now read from the two commits' file trees),
+  a download of files under `[uc]info` that failed with HTTP 404, owners of items, medals and stages that stayed as they
+  were when only an activity or zone table changed, and a complete in-app build that left out the level files (so no
+  enemy, trap or summon bindings). Changed files are downloaded six at a time.
+- **Re-importing a table starts from a clean slate.** A table read again (an update, a rule change) first removes what its
+  last import wrote, so an updated knowledge base, a re-derived one and a complete build now end with the same entries,
+  texts and bindings (checked on the real data).
+- **Versions of one operator are linked.** An alternate version points at the original (`same_person`, from the game's own
+  groups) and the operator page lists them. The question-answering agent is told that release time is not story time, that
+  later material can overturn earlier material, and to read the archives of each version before treating them as one person.
+- **Names the app does not know yet.** A new shelf kind shows as "其他", a new entry type by the family it belongs to
+  (集成战略资料, 生息演算资料, 档案资料), a new relation as "相关"; nothing is dropped or shown as a raw id where a name exists.
+- **The question-answering agent reads a description of the library pages** (shelves, entry types, what each is for)
+  before it queries (`docs/LIBRARY_AGENT_GUIDE.md`).
+
+### Incremental updates
+
+- **The knowledge base page updates incrementally.** "Check for updates" shows what changed upstream (story files, data tables,
+  level files). "Build" downloads only the changed files and the few data tables it needs, instead of the whole 850 MB
+  repository, and then shows what the update changed: story files added/changed/removed, entries per type, new activities.
+- **Story vectors are updated separately and show their cost.** After an update the page lists how many stories lack vectors, the
+  estimated chunks and tokens, an estimated price at the default (Bailian) vector service, and how to configure the vector service
+  (Settings → API settings → Vectors). Vectors from a different model are never mixed in. Everything works without vectors; those
+  stories just get keyword search.
+- Developers get the same update from the command line: `tools/update_gamedata.dart`.
+
+### Knowledge base download
+
+- **The download shows where it is and can be cancelled.** A download that waits for the server now says "connecting, attempt n"
+  (each attempt is a fresh connection, up to six), then the progress, "checking the file" and "unzipping and installing"; a
+  *Cancel* button ends a wait without losing the partial file. From the second attempt the page explains how to install by hand
+  when the network cannot reach the server: put the downloaded `.gz` into the app folder as `arklores_gamedata_zh.db.download.gz`
+  and tap Download; it is checked against the expected SHA-256 and installed. A failed start no longer leaves a stray `.key` file.
+
+### Library
+
+- **The Materials tab is now a library.** *Read*: continue the story you were reading, browse the shelves — main story,
+  events, operators, Integrated Strategies, Sandbox and the codex (enemies, items, medals …) —
+  open a story set to see its chapters with the official synopsis and your progress, and the other texts that belong to it
+  (stages, enemies, relics, events …). An entry shows its text and what it is bound to (an enemy shows the stages it appears
+  in; tap to go there). Search finds story sets, entries and stage codes.
+- **The reader remembers where you are.** Opening a story from the library, or from an answer's evidence, records the line you
+  are at and how far you read; *Continue reading* and *Recently read* return to that line (found again by its text if the story
+  changed), with a progress bar and a check mark when finished. Chapters end with *previous / next chapter*. Captions, documents
+  and choices are labelled.
+- **Real names instead of file ids.** Training, guide, tutorial, Integrated Strategies and Sandbox stories used to be listed
+  under their raw file names (`training_…_01_a`, `endbook_rogue_…`). They now carry their real names: training and level
+  stories are named after the stage they belong to (and are bound to it), ending-book pages and month chats take the names
+  the game gives them, and what only has a kind is numbered (`指引 3`). Re-runs are no longer a shelf of their own — their
+  stages belong to the event they re-run. *(Needs the new knowledge base.)*
+- **One page per operator.** The *Operators* shelf lists operators; an operator's page holds the profile (first, rendered
+  as formatted text), the record sets (密录), modules, skins and paradox simulation stages (悖论模拟). They no longer appear
+  as separate lists in the codex. The `RCX7`-style marks are the game's own operator numbers and are shown as *编号 RCX7*.
+- **Summons and devices are in the codex.** Deployable devices and summons used to be listed as operators; they are now
+  *装置* and *召唤物* in the codex. *(Needs the new knowledge base.)*
+- **No more game codes in lists.** The reading history, the continue card, the reader title and the evidence chains show a
+  story's real name (also for entries saved earlier); stage lists are grouped by chapter name, game enums (`TRADE`,
+  `copper_buff`, item kinds) are named, ids of paradox simulations, activity kinds and unnamed folders are gone, and
+  rule stand-ins of Integrated Strategies are no longer listed.
+- **Integrated Strategies topics read as one page.** A topic opens with its introduction text; below it the *endings* (each
+  with its sentence, then the pages of its ending book, then the ending's own story) and the *month squads* (月度小队: month,
+  name, one-liner, protagonist — a link to the operator — and the three short stories). The
+  separate story list and "related texts" headings are gone; what is left (areas, stages, collectibles, events …) are plain
+  rows. Stages that exist in a normal and a raid form are marked *· 普通* / *· 突袭*. Tips that were only play advice and the
+  rule stand-in items are no longer listed; tips that explain a term are kept under the term.
+- **Events are sorted by kind; re-runs are gone.** Events are shelved as SideStory, story collections (故事集), interludes
+  (插曲) and other events (check-ins and battle modes, which carry little story); re-runs are no longer listed (they add
+  nothing the original does not). Skin texts no longer repeat a paragraph.
+- **A better reader.** Stories are set in LXGW WenKai Screen with a little more room between paragraphs than between the lines of
+  one; narration is italic only between spoken lines (a month squad's story is plain); `{@nickname}` shows the form of address
+  set in Settings → Profile (the knowledge base is not changed); the reading percentage follows the first line on screen like
+  "continue reading"; stories remember how many times they were read through (a read counts when it began at the start and the end stayed in view for a few seconds; looking something up from a citation does not), shown as a check with ×N; the reading history is paged (page boxes above and below the list, first/last, jump to a page; no limit on its length, read a page at a time). Older Integrated Strategies topics without an ending book
+  get the same ending page as the others.
+- **Each collectible is listed once.** The game lists the same collectible several times (old and new table, variant and
+  upgrade copies that differ only in effect text); they are now one entry per topic (one topic went from 3,502 to 539).
+- **Event options fold, layer by layer.** An event's options are a nested, collapsible list: each option opens to the text
+  that follows choosing it and to the options that come after, one layer inside the other (repeated rounds are listed once).
+  The tables do not say which scene offers which choice, so the layers are read from the order the choices are listed in.
+  The notes (注释) are one folding row on the topic page instead of a section of their own.
+- **Events read as what happens.** An Integrated Strategies event has the event's own text and its options, each with what is
+  said after choosing it (variants with the same words are one). Roguelike
+  stages list their enemies like all other stages (they had lost them), the topic page puts zones … medals under one heading
+  "相关资料", and the notes (注释, formerly background terms) come first, before the opening story. The tables link neither
+  events nor bonuses to zones, so a zone page lists its stages only.
+- **Events carry their options; zones are listed once.** In Integrated Strategies an event (a scene and its follow-ups, found
+  by their shared id stem) is one entry that ends with the options it offers and where each leads — the separate options list
+  is gone. Zones the game lists once per layer slot (identical text) are one zone (a topic had 337 "zones", now 8); a zone's page
+  lists its stages (from the level numbers: `level_<topic>_<zone>-<n>`). The tables link neither events nor bonuses to zones, so
+  those are not shown. The "集成战略" in front of every list name is gone (收藏品, 事件, 区域, 关卡 …).
+- **Long lists are menus.** Integrated Strategies collections list their stories under folding headings (ending, squad …),
+  put endings and squads before the long lists, and open collectibles, events and choices as a menu of kinds first.
+- **My texts.** Keep your own notes and excerpts: new, paste from the clipboard, edit, delete. They live in the app's own file and
+  never enter the knowledge base. *Ask about it* puts a text in the question box so you can finish the question and send it.
+
+### Battle dialogue and sandbox ("生息演算")
+
+- **Dialogue played inside a battle is no longer a story of its own.** Tutorials, training and in-battle conversations (the stories a level file plays) are
+  read at the end of the story of their stage, or on the stage's page when it has none, and are left out of the lists and counts.
+- **Tutorial scripts read whole.** A command spread over several lines used to leave its animation settings behind as lines of "narration"
+  (about 1,500 lines in over 300 tutorial and training scripts); they are now read as one command with its text.
+- **Sandbox modes follow the game's own structure**: acts (main and side) with their summaries and stories, events with their options, stages (places, enemies),
+  items grouped by the names the table gives, dialogues named after the part of the plot they belong to. The first sandbox mode sits on the sandbox shelf.
+### Reading history
+
+- **Recently read.** Stories opened from an answer's evidence are remembered (book icon in the Ask tab's top bar): the chapter, the
+  line you were at and the start of that line. Tapping an entry reopens the story at that line; if the story's text changed after
+  a knowledge base update, the line is found again by its text, or the page says it shows the approximate place. Swipe to remove an
+  entry, or clear the list.
+- **Your own data lives in its own file** (`userdata/arklores_user.db`), separate from the knowledge base: updating, replacing or
+  deleting the knowledge base never touches it. It upgrades itself when the app adds new kinds of data.
+
 ## [0.10.0] - 2026-10-04
 
 First stable release of the 0.10 line. It replaces the eight pre-releases v0.10.0–v0.10.7, which were

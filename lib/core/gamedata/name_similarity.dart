@@ -236,47 +236,6 @@ List<SimilarName> rankSimilarNames(
   return ranked.take(limit).toList(growable: false);
 }
 
-/// Names of [inventory] written verbatim in [text], longest first and
-/// non-overlapping. Only people-like names count: operator / enemy names
-/// and speaker labels with at least [minOccurrences] lines (one-off labels
-/// are often ordinary words). Story mentions are left out: the coverage
-/// layer also matches medal / stage names, which are ordinary words. Used to tell whether a question
-/// brings up someone the previous turn did not (R15 topic change).
-List<String> namesMentionedIn(
-  String text,
-  Iterable<NameOccurrence> inventory, {
-  int minOccurrences = 5,
-}) {
-  // People names are reported; every other known string (places, stories,
-  // story mentions) only occupies its span, so `比利` inside `伊比利亚`
-  // is not taken for a name.
-  final people = <String>{};
-  final others = <String>{};
-  for (final n in inventory) {
-    if (n.name.runes.length < 2 || !text.contains(n.name)) continue;
-    final isEntity = n.kind == '干员' || n.kind == '敌人';
-    final isSpeaker = n.kind == '说话人' && n.occurrences >= minOccurrences;
-    (isEntity || isSpeaker ? people : others).add(n.name);
-  }
-  others.removeAll(people);
-  final sorted = [...people, ...others]
-    ..sort((a, b) => b.runes.length.compareTo(a.runes.length));
-  final taken = <(int, int)>[];
-  final result = <String>[];
-  for (final name in sorted) {
-    var start = text.indexOf(name);
-    while (start >= 0) {
-      final span = (start, start + name.length);
-      if (!taken.any((t) => span.$1 < t.$2 && t.$1 < span.$2)) {
-        taken.add(span);
-        if (people.contains(name)) result.add(name);
-        break;
-      }
-      start = text.indexOf(name, start + 1);
-    }
-  }
-  return result;
-}
 int _kindRank(String kind) => switch (kind) {
       '干员' || '敌人' => 0,
       '说话人' => 1,

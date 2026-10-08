@@ -188,6 +188,42 @@ abstract class AppLocalizations {
   /// **'中文'**
   String get localeChineseShort;
 
+  /// No description provided for @settingsProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get settingsProfile;
+
+  /// No description provided for @settingsProfileDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'How the stories address you.'**
+  String get settingsProfileDesc;
+
+  /// No description provided for @settingsProfileSectionCode.
+  ///
+  /// In en, this message translates to:
+  /// **'PROFILE'**
+  String get settingsProfileSectionCode;
+
+  /// No description provided for @profileNicknameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Form of address'**
+  String get profileNicknameLabel;
+
+  /// No description provided for @profileNicknameHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories write the Doctor\'s name as a placeholder; it is shown as what you enter here (left empty: \"Doctor\"). The knowledge base is not changed.'**
+  String get profileNicknameHelp;
+
+  /// No description provided for @profileNicknameDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Doctor'**
+  String get profileNicknameDefault;
+
   /// No description provided for @settingsAiServices.
   ///
   /// In en, this message translates to:
@@ -257,7 +293,7 @@ abstract class AppLocalizations {
   /// No description provided for @apiSettingsChatDesc.
   ///
   /// In en, this message translates to:
-  /// **'Used for AI conversations (Fact Check, Summary, Roleplay).'**
+  /// **'Used for Ask AI (story questions).'**
   String get apiSettingsChatDesc;
 
   /// No description provided for @apiSettingsEmbeddingSection.
@@ -461,7 +497,7 @@ abstract class AppLocalizations {
   /// No description provided for @materialsEmptyDesc.
   ///
   /// In en, this message translates to:
-  /// **'Import PDF or TXT files to build your personal lore reference library.'**
+  /// **'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.'**
   String get materialsEmptyDesc;
 
   /// No description provided for @materialsNoApiKeyHint.
@@ -515,8 +551,8 @@ abstract class AppLocalizations {
   /// No description provided for @materialsDeleteConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Remove \"{name}\" and all its chunks from the knowledge base?'**
-  String materialsDeleteConfirm(Object name);
+  /// **'Delete this text?'**
+  String get materialsDeleteConfirm;
 
   /// No description provided for @materialsDelete.
   ///
@@ -607,12 +643,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Lore Advisor'**
   String get aiChatTitle;
-
-  /// No description provided for @aiChatSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Fact Check · Summary · Roleplay'**
-  String get aiChatSubtitle;
 
   /// No description provided for @aiChatComingSoon.
   ///
@@ -737,7 +767,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingWelcomeDesc.
   ///
   /// In en, this message translates to:
-  /// **'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• AI-powered fact checking & summaries\n• Import your lore books\n• Immersive character roleplay'**
+  /// **'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• Ask AI about the story, with sources from the original text\n• Read the stories and game records'**
   String get onboardingWelcomeDesc;
 
   /// No description provided for @onboardingGetStarted.
@@ -803,8 +833,8 @@ abstract class AppLocalizations {
   /// No description provided for @settingsVersionLabel.
   ///
   /// In en, this message translates to:
-  /// **'ARKLORES / 0.9 DEVELOPMENT'**
-  String get settingsVersionLabel;
+  /// **'ARKLORES / {version}'**
+  String settingsVersionLabel(String version);
 
   /// No description provided for @settingsShowOnboarding.
   ///
@@ -907,12 +937,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Summary'**
   String get aiTabSummary;
-
-  /// No description provided for @aiTabRoleplay.
-  ///
-  /// In en, this message translates to:
-  /// **'Roleplay'**
-  String get aiTabRoleplay;
 
   /// No description provided for @aiAnswerStatus.
   ///
@@ -1021,6 +1045,426 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'End of chapter'**
   String get aiStoryReaderEnd;
+
+  /// No description provided for @libraryTabRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get libraryTabRead;
+
+  /// No description provided for @libraryTabMine.
+  ///
+  /// In en, this message translates to:
+  /// **'My texts'**
+  String get libraryTabMine;
+
+  /// No description provided for @librarySearchTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get librarySearchTitle;
+
+  /// No description provided for @librarySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search chapters, entries, stage codes'**
+  String get librarySearchHint;
+
+  /// No description provided for @libraryContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue reading'**
+  String get libraryContinue;
+
+  /// No description provided for @libraryShelves.
+  ///
+  /// In en, this message translates to:
+  /// **'Shelves'**
+  String get libraryShelves;
+
+  /// No description provided for @libraryViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get libraryViewAll;
+
+  /// No description provided for @shelfMain.
+  ///
+  /// In en, this message translates to:
+  /// **'Main story'**
+  String get shelfMain;
+
+  /// No description provided for @shelfActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Other events'**
+  String get shelfActivity;
+
+  /// No description provided for @shelfSideStory.
+  ///
+  /// In en, this message translates to:
+  /// **'Side Story'**
+  String get shelfSideStory;
+
+  /// No description provided for @shelfMiniStory.
+  ///
+  /// In en, this message translates to:
+  /// **'Story collections'**
+  String get shelfMiniStory;
+
+  /// No description provided for @shelfBranchline.
+  ///
+  /// In en, this message translates to:
+  /// **'Interludes'**
+  String get shelfBranchline;
+
+  /// No description provided for @shelfMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Operators'**
+  String get shelfMemory;
+
+  /// No description provided for @shelfRoguelike.
+  ///
+  /// In en, this message translates to:
+  /// **'Integrated Strategies'**
+  String get shelfRoguelike;
+
+  /// No description provided for @shelfSandbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Sandbox'**
+  String get shelfSandbox;
+
+  /// No description provided for @shelfRetro.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-runs'**
+  String get shelfRetro;
+
+  /// No description provided for @shelfCodex.
+  ///
+  /// In en, this message translates to:
+  /// **'Codex'**
+  String get shelfCodex;
+
+  /// No description provided for @shelfOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get shelfOther;
+
+  /// No description provided for @libraryOperatorRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator records'**
+  String get libraryOperatorRecords;
+
+  /// No description provided for @libraryOperatorProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator file'**
+  String get libraryOperatorProfile;
+
+  /// No description provided for @libraryAllEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get libraryAllEntries;
+
+  /// No description provided for @libraryCountCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} sets'**
+  String libraryCountCollections(int n);
+
+  /// No description provided for @libraryCountStories.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} stories'**
+  String libraryCountStories(int n);
+
+  /// No description provided for @libraryCountEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} entries'**
+  String libraryCountEntries(int n);
+
+  /// No description provided for @libraryNotInstalledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No knowledge base yet'**
+  String get libraryNotInstalledTitle;
+
+  /// No description provided for @libraryNotInstalledDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Download or build it under Settings → Knowledge base; the stories and texts to read appear here.'**
+  String get libraryNotInstalledDesc;
+
+  /// No description provided for @libraryOldSchemaTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The knowledge base needs an update'**
+  String get libraryOldSchemaTitle;
+
+  /// No description provided for @libraryOldSchemaDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed knowledge base is an older version without the story-set index. Update it under Settings → Knowledge base to read here.'**
+  String get libraryOldSchemaDesc;
+
+  /// No description provided for @libraryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here yet'**
+  String get libraryEmpty;
+
+  /// No description provided for @libraryStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories'**
+  String get libraryStories;
+
+  /// No description provided for @libraryOtherSections.
+  ///
+  /// In en, this message translates to:
+  /// **'Related texts'**
+  String get libraryOtherSections;
+
+  /// No description provided for @libraryParts.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlocked stories'**
+  String get libraryParts;
+
+  /// No description provided for @libraryLeftoverStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Other stories'**
+  String get libraryLeftoverStories;
+
+  /// No description provided for @libraryFilterHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter this list'**
+  String get libraryFilterHint;
+
+  /// No description provided for @libraryProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% read'**
+  String libraryProgress(int percent);
+
+  /// No description provided for @libraryFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get libraryFinished;
+
+  /// No description provided for @storyReaderBattleDialogue.
+  ///
+  /// In en, this message translates to:
+  /// **'In-battle dialogue'**
+  String get storyReaderBattleDialogue;
+
+  /// No description provided for @libraryReadTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Read once} other{Read {count} times}}'**
+  String libraryReadTimes(int count);
+
+  /// No description provided for @libraryRelease.
+  ///
+  /// In en, this message translates to:
+  /// **'Released {month}'**
+  String libraryRelease(String month);
+
+  /// No description provided for @libraryRelated.
+  ///
+  /// In en, this message translates to:
+  /// **'Related'**
+  String get libraryRelated;
+
+  /// No description provided for @libraryNoText.
+  ///
+  /// In en, this message translates to:
+  /// **'This entry has no text'**
+  String get libraryNoText;
+
+  /// No description provided for @libraryNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing found'**
+  String get libraryNoResults;
+
+  /// No description provided for @librarySearchCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'Story sets and topics'**
+  String get librarySearchCollections;
+
+  /// No description provided for @librarySearchEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'Entries'**
+  String get librarySearchEntries;
+
+  /// No description provided for @storyReaderNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next chapter'**
+  String get storyReaderNext;
+
+  /// No description provided for @storyReaderPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous chapter'**
+  String get storyReaderPrevious;
+
+  /// No description provided for @storyReaderResumed.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue · line {line}'**
+  String storyReaderResumed(int line);
+
+  /// No description provided for @storyReaderSynopsis.
+  ///
+  /// In en, this message translates to:
+  /// **'Official synopsis'**
+  String get storyReaderSynopsis;
+
+  /// No description provided for @materialsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No texts of your own yet'**
+  String get materialsEmptyTitle;
+
+  /// No description provided for @materialsNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get materialsNew;
+
+  /// No description provided for @materialsPaste.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste from clipboard'**
+  String get materialsPaste;
+
+  /// No description provided for @materialsTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Title (optional)'**
+  String get materialsTitleHint;
+
+  /// No description provided for @materialsBodyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get materialsBodyHint;
+
+  /// No description provided for @materialsEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get materialsEdit;
+
+  /// No description provided for @materialsChars.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} characters'**
+  String materialsChars(int n);
+
+  /// No description provided for @materialsClipboardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard has no text'**
+  String get materialsClipboardEmpty;
+
+  /// No description provided for @materialsDiscard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard unsaved changes?'**
+  String get materialsDiscard;
+
+  /// No description provided for @materialsDiscardAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get materialsDiscardAction;
+
+  /// No description provided for @materialsAskAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about it'**
+  String get materialsAskAbout;
+
+  /// No description provided for @readingHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently read'**
+  String get readingHistoryTitle;
+
+  /// No description provided for @readingHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing read yet. Stories you open from an answer\'s evidence show up here.'**
+  String get readingHistoryEmpty;
+
+  /// No description provided for @readingHistoryPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} / {pages}'**
+  String readingHistoryPage(Object page, Object pages);
+
+  /// No description provided for @readingHistoryClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get readingHistoryClear;
+
+  /// No description provided for @readingHistoryJumpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to page'**
+  String get readingHistoryJumpTitle;
+
+  /// No description provided for @readingHistoryJumpHint.
+  ///
+  /// In en, this message translates to:
+  /// **'1 – {pages}'**
+  String readingHistoryJumpHint(int pages);
+
+  /// No description provided for @readingHistoryJumpGo.
+  ///
+  /// In en, this message translates to:
+  /// **'Go'**
+  String get readingHistoryJumpGo;
+
+  /// No description provided for @readingHistoryClearConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the whole reading history?'**
+  String get readingHistoryClearConfirm;
+
+  /// No description provided for @readingHistoryRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from history'**
+  String get readingHistoryRemove;
+
+  /// No description provided for @readingHistoryLine.
+  ///
+  /// In en, this message translates to:
+  /// **'line {line}'**
+  String readingHistoryLine(int line);
+
+  /// No description provided for @aiStoryReaderMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'The text changed; showing the approximate place'**
+  String get aiStoryReaderMoved;
 
   /// No description provided for @aiMoreActions.
   ///
@@ -1202,6 +1646,108 @@ abstract class AppLocalizations {
   /// **'Using tool: {tool}'**
   String aiUsingTool(String tool);
 
+  /// No description provided for @aiWorkSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{calls} lookups · {reads} stories read'**
+  String aiWorkSummary(int calls, int reads);
+
+  /// No description provided for @aiWorkSql.
+  ///
+  /// In en, this message translates to:
+  /// **'Query the knowledge base'**
+  String get aiWorkSql;
+
+  /// No description provided for @aiWorkGrep.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for “{pattern}”'**
+  String aiWorkGrep(String pattern);
+
+  /// No description provided for @aiWorkGrepIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Search “{pattern}” in {scope}'**
+  String aiWorkGrepIn(String scope, String pattern);
+
+  /// No description provided for @aiWorkRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read “{story}”'**
+  String aiWorkRead(String story);
+
+  /// No description provided for @aiWorkOutline.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapter list of {collection}'**
+  String aiWorkOutline(String collection);
+
+  /// No description provided for @aiWorkFind.
+  ///
+  /// In en, this message translates to:
+  /// **'Find by meaning: “{query}”'**
+  String aiWorkFind(String query);
+
+  /// No description provided for @aiWorkSimilar.
+  ///
+  /// In en, this message translates to:
+  /// **'Names like “{name}”'**
+  String aiWorkSimilar(String name);
+
+  /// No description provided for @aiWorkDelegate.
+  ///
+  /// In en, this message translates to:
+  /// **'Helper: {task}'**
+  String aiWorkDelegate(String task);
+
+  /// No description provided for @aiWorkRedo.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources did not match; rewriting'**
+  String get aiWorkRedo;
+
+  /// No description provided for @aiWorkHits.
+  ///
+  /// In en, this message translates to:
+  /// **'{hits} hits · {stories} stories'**
+  String aiWorkHits(int hits, int stories);
+
+  /// No description provided for @aiWorkRows.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} rows'**
+  String aiWorkRows(int count);
+
+  /// No description provided for @aiWorkLines.
+  ///
+  /// In en, this message translates to:
+  /// **'lines {start}–{end}'**
+  String aiWorkLines(int start, int end);
+
+  /// No description provided for @aiWorkNone.
+  ///
+  /// In en, this message translates to:
+  /// **'nothing found'**
+  String get aiWorkNone;
+
+  /// No description provided for @aiWorkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get aiWorkFailed;
+
+  /// No description provided for @aiWorkRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get aiWorkRunning;
+
+  /// No description provided for @aiWorkRaw.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw output'**
+  String get aiWorkRaw;
+
   /// No description provided for @aiStepsStatus.
   ///
   /// In en, this message translates to:
@@ -1315,108 +1861,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} turns'**
   String aiHistoryTurns(int count);
-
-  /// No description provided for @aiRoleplayChoose.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose a character'**
-  String get aiRoleplayChoose;
-
-  /// No description provided for @aiRoleplayChooseDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'The character is resolved to a stable GameData entity before dialogue begins.'**
-  String get aiRoleplayChooseDesc;
-
-  /// No description provided for @aiRoleplayCharacter.
-  ///
-  /// In en, this message translates to:
-  /// **'Character name or alias'**
-  String get aiRoleplayCharacter;
-
-  /// No description provided for @aiRoleplayScene.
-  ///
-  /// In en, this message translates to:
-  /// **'Scene (optional)'**
-  String get aiRoleplayScene;
-
-  /// No description provided for @aiRoleplaySceneContext.
-  ///
-  /// In en, this message translates to:
-  /// **'The scene is session context, not GameData evidence'**
-  String get aiRoleplaySceneContext;
-
-  /// No description provided for @aiRoleplayStart.
-  ///
-  /// In en, this message translates to:
-  /// **'Resolve character and start'**
-  String get aiRoleplayStart;
-
-  /// No description provided for @aiRoleplayResolving.
-  ///
-  /// In en, this message translates to:
-  /// **'Resolving…'**
-  String get aiRoleplayResolving;
-
-  /// No description provided for @aiRoleplayNoDatabase.
-  ///
-  /// In en, this message translates to:
-  /// **'The Chinese GameData knowledge base is not installed. Install it in Settings first.'**
-  String get aiRoleplayNoDatabase;
-
-  /// No description provided for @aiRoleplayNotFound.
-  ///
-  /// In en, this message translates to:
-  /// **'No matching character was found in GameData. Check the name or alias.'**
-  String get aiRoleplayNotFound;
-
-  /// No description provided for @aiRoleplayDisambiguate.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose the matching GameData entity'**
-  String get aiRoleplayDisambiguate;
-
-  /// No description provided for @aiRoleplayContinue.
-  ///
-  /// In en, this message translates to:
-  /// **'Continue saved local session'**
-  String get aiRoleplayContinue;
-
-  /// No description provided for @aiRoleplayRestart.
-  ///
-  /// In en, this message translates to:
-  /// **'Restart'**
-  String get aiRoleplayRestart;
-
-  /// No description provided for @aiRoleplayGeneratedNotice.
-  ///
-  /// In en, this message translates to:
-  /// **'Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.'**
-  String get aiRoleplayGeneratedNotice;
-
-  /// No description provided for @aiRoleplayEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.'**
-  String get aiRoleplayEmpty;
-
-  /// No description provided for @aiRoleplayInputPlaceholder.
-  ///
-  /// In en, this message translates to:
-  /// **'Talk to the character…'**
-  String get aiRoleplayInputPlaceholder;
-
-  /// No description provided for @aiRoleplayError.
-  ///
-  /// In en, this message translates to:
-  /// **'Generation failed. Please retry.'**
-  String get aiRoleplayError;
-
-  /// No description provided for @aiRoleplayCanceled.
-  ///
-  /// In en, this message translates to:
-  /// **'Generation canceled.'**
-  String get aiRoleplayCanceled;
 
   /// No description provided for @settingsAppIcon.
   ///
@@ -1573,6 +2017,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.'**
   String get kbErrorInvalidUrl;
+
+  /// No description provided for @kbConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to the server… (attempt {attempt})'**
+  String kbConnecting(int attempt);
+
+  /// No description provided for @kbVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the file…'**
+  String get kbVerifying;
+
+  /// No description provided for @kbInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Unzipping and installing, about a minute or two. Please do not quit…'**
+  String get kbInstalling;
+
+  /// No description provided for @kbCancelDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get kbCancelDownload;
+
+  /// No description provided for @kbManualHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If the network cannot reach the server: download arklores_gamedata_zh.db.gz from the Release on another network, rename it to arklores_gamedata_zh.db.download.gz, put it in {dir}, then tap Download.'**
+  String kbManualHint(String dir);
 
   /// No description provided for @kbErrorTimeout.
   ///
@@ -1915,6 +2389,324 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The device currently has no network connection.'**
   String get wikiErrorOffline;
+
+  /// No description provided for @kbBuildChangeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Upstream has updates: {stories} story files, {tables} data tables, {levels} level files.'**
+  String kbBuildChangeSummary(int stories, int tables, int levels);
+
+  /// No description provided for @kbBuildNoChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing upstream concerns the knowledge base; no update needed.'**
+  String get kbBuildNoChanges;
+
+  /// No description provided for @kbBuildTooManyChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Too much changed upstream to apply file by file; Build will rebuild completely instead (about 170 MB to download, takes a while).'**
+  String get kbBuildTooManyChanges;
+
+  /// No description provided for @kbBuildDownloadingContext.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the data tables the update needs…'**
+  String get kbBuildDownloadingContext;
+
+  /// No description provided for @kbBuildReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What this update changed'**
+  String get kbBuildReportTitle;
+
+  /// No description provided for @kbBuildReportStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Story files: {added} added, {changed} changed, {removed} removed'**
+  String kbBuildReportStories(int added, int changed, int removed);
+
+  /// No description provided for @kbBuildReportEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'Entries: {text}'**
+  String kbBuildReportEntries(String text);
+
+  /// No description provided for @kbBuildReportNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New collections: {names}'**
+  String kbBuildReportNew(String names);
+
+  /// No description provided for @kbBuildReportVectors.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} vectors became invalid because their story changed; you can add them below under Story vectors.'**
+  String kbBuildReportVectors(int count);
+
+  /// No description provided for @kbVectorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Story vectors (semantic search)'**
+  String get kbVectorTitle;
+
+  /// No description provided for @kbVectorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.'**
+  String get kbVectorDesc;
+
+  /// No description provided for @kbVectorStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{vectors} vectors covering {stories} stories'**
+  String kbVectorStatus(int vectors, int stories);
+
+  /// No description provided for @kbVectorNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No vectors yet'**
+  String get kbVectorNone;
+
+  /// No description provided for @kbVectorPending.
+  ///
+  /// In en, this message translates to:
+  /// **'To generate: {stories} stories, about {chunks} chunks, about {tokens}×10k tokens'**
+  String kbVectorPending(int stories, int chunks, String tokens);
+
+  /// No description provided for @kbVectorCost.
+  ///
+  /// In en, this message translates to:
+  /// **'About ¥{yuan} at Bailian\'s price (an estimate only; your provider\'s bill decides, and other providers charge differently: convert from the token count)'**
+  String kbVectorCost(String yuan);
+
+  /// No description provided for @kbVectorUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Every story has vectors; nothing to update.'**
+  String get kbVectorUpToDate;
+
+  /// No description provided for @kbVectorFirstBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'This generates vectors for all stories, which costs and takes far more than an incremental update.'**
+  String get kbVectorFirstBuild;
+
+  /// No description provided for @kbVectorConfigure.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure the vector service first: Settings → API settings → Vectors (default Bailian {model}, {dims} dimensions, needs that service\'s API key).'**
+  String kbVectorConfigure(String model, int dims);
+
+  /// No description provided for @kbVectorMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Existing vectors come from {have}, the configuration says {want}. They cannot be mixed: set the vector settings back to {have}.'**
+  String kbVectorMismatch(String have, String want);
+
+  /// No description provided for @kbVectorStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate vectors'**
+  String get kbVectorStart;
+
+  /// No description provided for @kbVectorRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Recalculate'**
+  String get kbVectorRefresh;
+
+  /// No description provided for @kbVectorRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating vectors: {done} / {total} stories ({chunks} chunks)'**
+  String kbVectorRunning(int done, int total, int chunks);
+
+  /// No description provided for @kbVectorDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated {chunks} chunks; the provider counted {tokens} tokens.'**
+  String kbVectorDone(int chunks, int tokens);
+
+  /// No description provided for @kbVectorCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get kbVectorCancel;
+
+  /// No description provided for @kbVectorConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate vectors for all stories?'**
+  String get kbVectorConfirmTitle;
+
+  /// No description provided for @kbVectorConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'About {stories} stories, {chunks} chunks, {tokens}×10k tokens. This costs money at your vector service. You can stop any time; finished stories are kept.'**
+  String kbVectorConfirmBody(int stories, int chunks, String tokens);
+
+  /// No description provided for @kbVectorConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get kbVectorConfirm;
+
+  /// No description provided for @lineKindSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Caption'**
+  String get lineKindSubtitle;
+
+  /// No description provided for @lineKindDocument.
+  ///
+  /// In en, this message translates to:
+  /// **'Document'**
+  String get lineKindDocument;
+
+  /// No description provided for @lineKindChoice.
+  ///
+  /// In en, this message translates to:
+  /// **'Choice'**
+  String get lineKindChoice;
+
+  /// No description provided for @lineKindTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get lineKindTitle;
+
+  /// No description provided for @lineKindTutorial.
+  ///
+  /// In en, this message translates to:
+  /// **'Tutorial'**
+  String get lineKindTutorial;
+
+  /// No description provided for @aiAnswerOptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer options'**
+  String get aiAnswerOptions;
+
+  /// No description provided for @aiAnswerReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get aiAnswerReview;
+
+  /// No description provided for @aiAnswerReviewHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Another model reads the draft and raises questions, checked in the text before the final answer (slower)'**
+  String get aiAnswerReviewHint;
+
+  /// No description provided for @aiAnswerDigest.
+  ///
+  /// In en, this message translates to:
+  /// **'Digest'**
+  String get aiAnswerDigest;
+
+  /// No description provided for @aiAnswerDigestHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Long answers open with a few summary paragraphs, the details folded below (one more call)'**
+  String get aiAnswerDigestHint;
+
+  /// No description provided for @librarySearchIn.
+  ///
+  /// In en, this message translates to:
+  /// **'In “{name}”'**
+  String librarySearchIn(String name);
+
+  /// No description provided for @librarySearchEverywhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the whole library'**
+  String get librarySearchEverywhere;
+
+  /// No description provided for @librarySearchNoNameMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is named “{query}”; below are close names and texts that contain it'**
+  String librarySearchNoNameMatch(String query);
+
+  /// No description provided for @librarySearchSimilar.
+  ///
+  /// In en, this message translates to:
+  /// **'Close names'**
+  String get librarySearchSimilar;
+
+  /// No description provided for @librarySearchMentions.
+  ///
+  /// In en, this message translates to:
+  /// **'In the text'**
+  String get librarySearchMentions;
+
+  /// No description provided for @librarySearchNoMentions.
+  ///
+  /// In en, this message translates to:
+  /// **'Not found in the texts'**
+  String get librarySearchNoMentions;
+
+  /// No description provided for @librarySearchInText.
+  ///
+  /// In en, this message translates to:
+  /// **'Search the texts for “{query}”'**
+  String librarySearchInText(String query);
+
+  /// No description provided for @librarySearchSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Find stories by meaning'**
+  String get librarySearchSemantic;
+
+  /// No description provided for @librarySearchSemanticTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories close in meaning'**
+  String get librarySearchSemanticTitle;
+
+  /// No description provided for @librarySearchSemanticNeedsService.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up an embedding service to find stories by meaning (Settings → API settings → Embedding)'**
+  String get librarySearchSemanticNeedsService;
+
+  /// No description provided for @librarySearchSemanticNoVectors.
+  ///
+  /// In en, this message translates to:
+  /// **'This knowledge base has no story vectors (they can be made on the knowledge base page)'**
+  String get librarySearchSemanticNoVectors;
+
+  /// No description provided for @librarySearchSemanticOtherModel.
+  ///
+  /// In en, this message translates to:
+  /// **'The knowledge base’s vectors were made with another embedding model than the one configured'**
+  String get librarySearchSemanticOtherModel;
+
+  /// No description provided for @librarySearchSemanticFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The embedding service request failed'**
+  String get librarySearchSemanticFailed;
+
+  /// No description provided for @librarySearchMatchCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} matches'**
+  String librarySearchMatchCount(int n);
+
+  /// No description provided for @librarySearchFurther.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for “{query}” (close names and texts too)'**
+  String librarySearchFurther(String query);
+
+  /// No description provided for @storyReaderFindHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Find in this story'**
+  String get storyReaderFindHint;
 }
 
 class _AppLocalizationsDelegate

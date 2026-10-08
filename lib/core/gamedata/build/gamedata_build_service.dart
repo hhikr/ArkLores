@@ -22,13 +22,14 @@ import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../story_catalog.dart';
-import '../story_vectors.dart';
 import 'arknights_importer.dart';
+import 'entry_importer.dart';
 import 'gamedata_db_validator.dart';
 import 'gamedata_schema.dart';
 import 'source/arknights_source_client.dart';
 import 'story_catalog_importer.dart';
 import 'story_coverage_builder.dart';
+import 'update_report.dart';
 
 /// Thrown when the user cancels a running build.
 class GameDataBuildCancelledException implements Exception {
@@ -66,10 +67,14 @@ class GameDataBuildResult {
     required this.outputDbPath,
     required this.incremental,
     required this.stats,
+    this.report,
   });
   final String outputDbPath;
   final bool incremental;
   final BuildStats stats;
+
+  /// What an incremental update changed (null for a full build).
+  final UpdateReport? report;
 }
 
 /// Orchestrates full and incremental GameData builds.
@@ -158,6 +163,7 @@ class GameDataBuildService {
         onProgress: onProgress,
       ).build();
       await _refreshStoryCatalog(db, sourceDir);
+      await importer.entryImporter.rebuildDerived();
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);
@@ -189,18 +195,34 @@ class GameDataBuildService {
 
     final db = await databaseFactoryFfi.openDatabase(options.outputDbPath);
     final stats = BuildStats();
+    UpdateReport? report;
     try {
+      final before = await DbSnapshot.take(db);
       final importer = ArknightsImporter(
         sourceDir: sourceDir,
         db: db,
         stats: stats,
         storyLimit: 0,
       );
-      final changes = options.changedFiles;
+      // Tables first (they define stages and owners), then level files
+      // (they bind enemies to those stages), then stories.
+      final changes = [...options.changedFiles]
+        ..sort((a, b) => _order(a.path).compareTo(_order(b.path)));
       for (var i = 0; i < changes.length; i++) {
         _checkCancel(shouldCancel);
         onProgress?.call('incremental', i + 1, changes.length);
         await _applyChange(db, importer, changes[i]);
+      }
+      // A changed owner table (activities, zones, stages …) moves the owners
+      // of the tables that read it, changed or not.
+      final applied = {
+        for (final c in changes)
+          if (!c.isRemoval) c.path,
+      };
+      if (applied.any(EntryTables.contextTables.contains)) {
+        // All entry tables in a complete build's order: the first table to
+        // write an id keeps it, so the order decides.
+        await importer.entryImporter.importAllTables();
       }
       await StoryCoverageBuilder(
         db: db,
@@ -208,6 +230,7 @@ class GameDataBuildService {
         onProgress: onProgress,
       ).build();
       await _refreshStoryCatalog(db, sourceDir);
+      await importer.entryImporter.rebuildDerived();
       _checkCancel(shouldCancel);
       onProgress?.call('fts', 0, 1);
       await rebuildGamedataFts(db);
@@ -218,6 +241,11 @@ class GameDataBuildService {
         'built_at': DateTime.now().toUtc().toIso8601String(),
         ...countManifest(stats),
       });
+      report = UpdateReport.compute(
+        before: before,
+        after: await DbSnapshot.take(db),
+        changes: changes,
+      );
     } finally {
       await db.close();
     }
@@ -226,7 +254,16 @@ class GameDataBuildService {
       outputDbPath: options.outputDbPath,
       incremental: true,
       stats: stats,
+      report: report,
     );
+  }
+
+  /// Order in which changed files are applied: data tables, level files,
+  /// then story files.
+  static int _order(String path) {
+    if (ArknightsSourcePaths.isStoryFile(path)) return 2;
+    if (ArknightsSourcePaths.isLevelFile(path)) return 1;
+    return 0;
   }
 
   Future<void> _applyChange(
@@ -253,65 +290,26 @@ class GameDataBuildService {
     if (isStoryCatalogSource(path)) return;
     if (ArknightsSourcePaths.isStoryFile(path)) {
       await importer.importStoryFile(path);
-    } else if (path == 'zh_CN/gamedata/excel/character_table.json' ||
-        path == 'zh_CN/gamedata/excel/handbook_info_table.json') {
+    } else if (path == 'zh_CN/gamedata/excel/character_table.json') {
       await importer.importCharacterTables();
+    } else if (path == 'zh_CN/gamedata/excel/char_meta_table.json') {
+      await importer.importCharacterTables();
+    } else if (path == 'zh_CN/gamedata/excel/handbook_info_table.json') {
+      await importer.importCharacterTables();
+      await importer.entryImporter.importTable(path);
     } else if (path == 'zh_CN/gamedata/excel/charword_table.json') {
       await importer.importVoiceTable();
+    } else if (EntryTables.isLevelFile(path)) {
+      await importer.entryImporter.importLevelFile(path);
     } else {
-      await importer.importStructuredTable(path);
+      await importer.entryImporter.importTable(path);
     }
   }
 
   Future<void> _deletePathRows(Database db, String path) async {
     if (isStoryCatalogSource(path)) return;
     if (ArknightsSourcePaths.isStoryFile(path)) {
-      final storyId = path.substring('zh_CN/gamedata/story/'.length);
-      await db.delete(
-        'entity_story_mentions',
-        where: 'story_id = ?',
-        whereArgs: [storyId],
-      );
-      await db.delete(
-        'story_chapter_profiles',
-        where: 'story_id = ?',
-        whereArgs: [storyId],
-      );
-      await db.delete(
-        'story_scopes',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      await db.delete(
-        'story_lines',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      await db.delete(
-        'normalized_records',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      await db.delete(
-        'lore_chunks',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
-      // Optional vectors (R12) of a changed story point at the old line
-      // numbers; drop them so semantic recall never hints at stale ranges.
-      // Other stories keep their vectors (the in-app build cannot embed).
-      final hasVectors = (await db.rawQuery(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-        [storyChunkVectorsTable],
-      ))
-          .isNotEmpty;
-      if (hasVectors) {
-        await db.delete(
-          storyChunkVectorsTable,
-          where: 'story_id = ?',
-          whereArgs: [storyId],
-        );
-      }
+      await deleteStoryRows(db, path);
     } else {
       await db.delete(
         'normalized_records',
@@ -320,6 +318,17 @@ class GameDataBuildService {
       );
       await db.delete(
         'lore_chunks',
+        where: 'source_path = ?',
+        whereArgs: [path],
+      );
+      // Entry layer: the entries and bindings this file produced.
+      await db.delete(
+        'entries',
+        where: 'source_path = ?',
+        whereArgs: [path],
+      );
+      await db.delete(
+        'entry_links',
         where: 'source_path = ?',
         whereArgs: [path],
       );

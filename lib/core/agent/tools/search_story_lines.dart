@@ -219,9 +219,12 @@ class SearchStoryLinesTool extends AgentTool {
         );
       }
       for (final line in keyword?.lines ?? const <StoryLineEntry>[]) {
+        // Letters and poems keep their breaks in the library; one printed
+        // line per story line here.
+        final content = line.content.replaceAll('\n', ' / ');
         final text = line.speaker == null || line.speaker!.trim().isEmpty
-            ? line.content
-            : '${line.speaker}：${line.content}';
+            ? content
+            : '${line.speaker}：$content';
         final clipped = text.length > _maxLineChars
             ? '${text.substring(0, _maxLineChars)}…'
             : text;

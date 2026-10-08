@@ -13,6 +13,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'gamedata_build_service.dart';
 import 'source/arknights_source_client.dart';
+import 'update_report.dart';
 
 /// Events emitted by the build isolate.
 enum GameDataBuildEventType { progress, done, error, cancelled }
@@ -27,6 +28,7 @@ class GameDataBuildEvent {
     this.incremental = false,
     this.message,
     this.stats = const {},
+    this.report,
   });
   final GameDataBuildEventType type;
   final String stage;
@@ -36,6 +38,10 @@ class GameDataBuildEvent {
   final bool incremental;
   final String? message;
   final Map<String, int> stats;
+
+  /// What an incremental update changed (set on `done` of an incremental
+  /// build).
+  final UpdateReport? report;
 
   static GameDataBuildEvent fromMap(Object? raw) {
     if (raw is! Map) {
@@ -62,6 +68,11 @@ class GameDataBuildEvent {
         for (final entry in ((raw['stats'] as Map?) ?? const {}).entries)
           if (entry.value is num) '${entry.key}': (entry.value as num).toInt(),
       },
+      report: raw['report'] is Map
+          ? UpdateReport.fromJson(
+              (raw['report'] as Map).cast<String, Object?>(),
+            )
+          : null,
     );
   }
 }
@@ -157,6 +168,7 @@ void gameDataBuildIsolateMain(Map<String, Object?> params) async {
       'outputPath': result.outputDbPath,
       'incremental': result.incremental,
       'stats': result.stats.toJson(),
+      if (result.report != null) 'report': result.report!.toJson(),
     });
   } catch (error) {
     sendPort.send({'type': 'error', 'message': '$error'});

@@ -54,6 +54,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localeChineseShort => '中文';
 
   @override
+  String get settingsProfile => 'Profile';
+
+  @override
+  String get settingsProfileDesc => 'How the stories address you.';
+
+  @override
+  String get settingsProfileSectionCode => 'PROFILE';
+
+  @override
+  String get profileNicknameLabel => 'Form of address';
+
+  @override
+  String get profileNicknameHelp =>
+      'Stories write the Doctor\'s name as a placeholder; it is shown as what you enter here (left empty: \"Doctor\"). The knowledge base is not changed.';
+
+  @override
+  String get profileNicknameDefault => 'Doctor';
+
+  @override
   String get settingsAiServices => 'AI Services';
 
   @override
@@ -88,8 +107,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get apiSettingsChatSection => 'Chat API';
 
   @override
-  String get apiSettingsChatDesc =>
-      'Used for AI conversations (Fact Check, Summary, Roleplay).';
+  String get apiSettingsChatDesc => 'Used for Ask AI (story questions).';
 
   @override
   String get apiSettingsEmbeddingSection => 'Embedding API (optional)';
@@ -204,7 +222,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get materialsEmptyDesc =>
-      'Import PDF or TXT files to build your personal lore reference library.';
+      'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.';
 
   @override
   String get materialsNoApiKeyHint =>
@@ -234,9 +252,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsDeleteTitle => 'Delete Book';
 
   @override
-  String materialsDeleteConfirm(Object name) {
-    return 'Remove \"$name\" and all its chunks from the knowledge base?';
-  }
+  String get materialsDeleteConfirm => 'Delete this text?';
 
   @override
   String get materialsDelete => 'Delete';
@@ -294,9 +310,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiChatTitle => 'Lore Advisor';
-
-  @override
-  String get aiChatSubtitle => 'Fact Check · Summary · Roleplay';
 
   @override
   String get aiChatComingSoon => 'Coming in v0.4';
@@ -366,7 +379,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingWelcomeDesc =>
-      'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• AI-powered fact checking & summaries\n• Import your lore books\n• Immersive character roleplay';
+      'Your AI-enhanced companion for exploring Arknights and Endfield lore.\n\n• Browse PRTS & Endfield Wikis\n• Ask AI about the story, with sources from the original text\n• Read the stories and game records';
 
   @override
   String get onboardingGetStarted => 'Get Started';
@@ -401,7 +414,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsHelpSectionCode => 'HELP & GUIDE';
 
   @override
-  String get settingsVersionLabel => 'ARKLORES / 0.9 DEVELOPMENT';
+  String settingsVersionLabel(String version) {
+    return 'ARKLORES / $version';
+  }
 
   @override
   String get settingsShowOnboarding => 'Show Onboarding Guide';
@@ -457,9 +472,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiTabSummary => 'Summary';
-
-  @override
-  String get aiTabRoleplay => 'Roleplay';
 
   @override
   String get aiAnswerStatus => 'Answer status';
@@ -531,6 +543,248 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiStoryReaderEnd => 'End of chapter';
+
+  @override
+  String get libraryTabRead => 'Read';
+
+  @override
+  String get libraryTabMine => 'My texts';
+
+  @override
+  String get librarySearchTitle => 'Search';
+
+  @override
+  String get librarySearchHint => 'Search chapters, entries, stage codes';
+
+  @override
+  String get libraryContinue => 'Continue reading';
+
+  @override
+  String get libraryShelves => 'Shelves';
+
+  @override
+  String get libraryViewAll => 'All';
+
+  @override
+  String get shelfMain => 'Main story';
+
+  @override
+  String get shelfActivity => 'Other events';
+
+  @override
+  String get shelfSideStory => 'Side Story';
+
+  @override
+  String get shelfMiniStory => 'Story collections';
+
+  @override
+  String get shelfBranchline => 'Interludes';
+
+  @override
+  String get shelfMemory => 'Operators';
+
+  @override
+  String get shelfRoguelike => 'Integrated Strategies';
+
+  @override
+  String get shelfSandbox => 'Sandbox';
+
+  @override
+  String get shelfRetro => 'Re-runs';
+
+  @override
+  String get shelfCodex => 'Codex';
+
+  @override
+  String get shelfOther => 'Other';
+
+  @override
+  String get libraryOperatorRecords => 'Operator records';
+
+  @override
+  String get libraryOperatorProfile => 'Operator file';
+
+  @override
+  String get libraryAllEntries => 'All';
+
+  @override
+  String libraryCountCollections(int n) {
+    return '$n sets';
+  }
+
+  @override
+  String libraryCountStories(int n) {
+    return '$n stories';
+  }
+
+  @override
+  String libraryCountEntries(int n) {
+    return '$n entries';
+  }
+
+  @override
+  String get libraryNotInstalledTitle => 'No knowledge base yet';
+
+  @override
+  String get libraryNotInstalledDesc =>
+      'Download or build it under Settings → Knowledge base; the stories and texts to read appear here.';
+
+  @override
+  String get libraryOldSchemaTitle => 'The knowledge base needs an update';
+
+  @override
+  String get libraryOldSchemaDesc =>
+      'The installed knowledge base is an older version without the story-set index. Update it under Settings → Knowledge base to read here.';
+
+  @override
+  String get libraryEmpty => 'Nothing here yet';
+
+  @override
+  String get libraryStories => 'Stories';
+
+  @override
+  String get libraryOtherSections => 'Related texts';
+
+  @override
+  String get libraryParts => 'Unlocked stories';
+
+  @override
+  String get libraryLeftoverStories => 'Other stories';
+
+  @override
+  String get libraryFilterHint => 'Filter this list';
+
+  @override
+  String libraryProgress(int percent) {
+    return '$percent% read';
+  }
+
+  @override
+  String get libraryFinished => 'Finished';
+
+  @override
+  String get storyReaderBattleDialogue => 'In-battle dialogue';
+
+  @override
+  String libraryReadTimes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Read $count times',
+      one: 'Read once',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryRelease(String month) {
+    return 'Released $month';
+  }
+
+  @override
+  String get libraryRelated => 'Related';
+
+  @override
+  String get libraryNoText => 'This entry has no text';
+
+  @override
+  String get libraryNoResults => 'Nothing found';
+
+  @override
+  String get librarySearchCollections => 'Story sets and topics';
+
+  @override
+  String get librarySearchEntries => 'Entries';
+
+  @override
+  String get storyReaderNext => 'Next chapter';
+
+  @override
+  String get storyReaderPrevious => 'Previous chapter';
+
+  @override
+  String storyReaderResumed(int line) {
+    return 'Continue · line $line';
+  }
+
+  @override
+  String get storyReaderSynopsis => 'Official synopsis';
+
+  @override
+  String get materialsEmptyTitle => 'No texts of your own yet';
+
+  @override
+  String get materialsNew => 'New';
+
+  @override
+  String get materialsPaste => 'Paste from clipboard';
+
+  @override
+  String get materialsTitleHint => 'Title (optional)';
+
+  @override
+  String get materialsBodyHint => 'Text';
+
+  @override
+  String get materialsEdit => 'Edit';
+
+  @override
+  String materialsChars(int n) {
+    return '$n characters';
+  }
+
+  @override
+  String get materialsClipboardEmpty => 'The clipboard has no text';
+
+  @override
+  String get materialsDiscard => 'Discard unsaved changes?';
+
+  @override
+  String get materialsDiscardAction => 'Discard';
+
+  @override
+  String get materialsAskAbout => 'Ask about it';
+
+  @override
+  String get readingHistoryTitle => 'Recently read';
+
+  @override
+  String get readingHistoryEmpty =>
+      'Nothing read yet. Stories you open from an answer\'s evidence show up here.';
+
+  @override
+  String readingHistoryPage(Object page, Object pages) {
+    return 'Page $page / $pages';
+  }
+
+  @override
+  String get readingHistoryClear => 'Clear';
+
+  @override
+  String get readingHistoryJumpTitle => 'Go to page';
+
+  @override
+  String readingHistoryJumpHint(int pages) {
+    return '1 – $pages';
+  }
+
+  @override
+  String get readingHistoryJumpGo => 'Go';
+
+  @override
+  String get readingHistoryClearConfirm => 'Clear the whole reading history?';
+
+  @override
+  String get readingHistoryRemove => 'Remove from history';
+
+  @override
+  String readingHistoryLine(int line) {
+    return 'line $line';
+  }
+
+  @override
+  String get aiStoryReaderMoved =>
+      'The text changed; showing the approximate place';
 
   @override
   String get aiMoreActions => 'More';
@@ -632,6 +886,79 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String aiWorkSummary(int calls, int reads) {
+    return '$calls lookups · $reads stories read';
+  }
+
+  @override
+  String get aiWorkSql => 'Query the knowledge base';
+
+  @override
+  String aiWorkGrep(String pattern) {
+    return 'Search for “$pattern”';
+  }
+
+  @override
+  String aiWorkGrepIn(String scope, String pattern) {
+    return 'Search “$pattern” in $scope';
+  }
+
+  @override
+  String aiWorkRead(String story) {
+    return 'Read “$story”';
+  }
+
+  @override
+  String aiWorkOutline(String collection) {
+    return 'Chapter list of $collection';
+  }
+
+  @override
+  String aiWorkFind(String query) {
+    return 'Find by meaning: “$query”';
+  }
+
+  @override
+  String aiWorkSimilar(String name) {
+    return 'Names like “$name”';
+  }
+
+  @override
+  String aiWorkDelegate(String task) {
+    return 'Helper: $task';
+  }
+
+  @override
+  String get aiWorkRedo => 'Sources did not match; rewriting';
+
+  @override
+  String aiWorkHits(int hits, int stories) {
+    return '$hits hits · $stories stories';
+  }
+
+  @override
+  String aiWorkRows(int count) {
+    return '$count rows';
+  }
+
+  @override
+  String aiWorkLines(int start, int end) {
+    return 'lines $start–$end';
+  }
+
+  @override
+  String get aiWorkNone => 'nothing found';
+
+  @override
+  String get aiWorkFailed => 'failed';
+
+  @override
+  String get aiWorkRunning => 'running';
+
+  @override
+  String get aiWorkRaw => 'Raw output';
+
+  @override
   String aiStepsStatus(String status, int count) {
     return '$status ($count steps)';
   }
@@ -695,63 +1022,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String aiHistoryTurns(int count) {
     return '$count turns';
   }
-
-  @override
-  String get aiRoleplayChoose => 'Choose a character';
-
-  @override
-  String get aiRoleplayChooseDesc =>
-      'The character is resolved to a stable GameData entity before dialogue begins.';
-
-  @override
-  String get aiRoleplayCharacter => 'Character name or alias';
-
-  @override
-  String get aiRoleplayScene => 'Scene (optional)';
-
-  @override
-  String get aiRoleplaySceneContext =>
-      'The scene is session context, not GameData evidence';
-
-  @override
-  String get aiRoleplayStart => 'Resolve character and start';
-
-  @override
-  String get aiRoleplayResolving => 'Resolving…';
-
-  @override
-  String get aiRoleplayNoDatabase =>
-      'The Chinese GameData knowledge base is not installed. Install it in Settings first.';
-
-  @override
-  String get aiRoleplayNotFound =>
-      'No matching character was found in GameData. Check the name or alias.';
-
-  @override
-  String get aiRoleplayDisambiguate => 'Choose the matching GameData entity';
-
-  @override
-  String get aiRoleplayContinue => 'Continue saved local session';
-
-  @override
-  String get aiRoleplayRestart => 'Restart';
-
-  @override
-  String get aiRoleplayGeneratedNotice =>
-      'Character facts use retrieved GameData. Dialogue and stage directions are AI-generated, not official game lines.';
-
-  @override
-  String get aiRoleplayEmpty =>
-      'Send the first message. The first turn retrieves profiles, voices, operator records, modules, and related mission stories.';
-
-  @override
-  String get aiRoleplayInputPlaceholder => 'Talk to the character…';
-
-  @override
-  String get aiRoleplayError => 'Generation failed. Please retry.';
-
-  @override
-  String get aiRoleplayCanceled => 'Generation canceled.';
 
   @override
   String get settingsAppIcon => 'App icon';
@@ -837,6 +1107,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get kbErrorInvalidUrl =>
       'Could not resolve the download URL. On a real device, make sure the phone can reach this GitHub / LAN URL.';
+
+  @override
+  String kbConnecting(int attempt) {
+    return 'Connecting to the server… (attempt $attempt)';
+  }
+
+  @override
+  String get kbVerifying => 'Checking the file…';
+
+  @override
+  String get kbInstalling =>
+      'Unzipping and installing, about a minute or two. Please do not quit…';
+
+  @override
+  String get kbCancelDownload => 'Cancel';
+
+  @override
+  String kbManualHint(String dir) {
+    return 'If the network cannot reach the server: download arklores_gamedata_zh.db.gz from the Release on another network, rename it to arklores_gamedata_zh.db.download.gz, put it in $dir, then tap Download.';
+  }
 
   @override
   String get kbErrorTimeout =>
@@ -1025,4 +1315,210 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wikiErrorOffline =>
       'The device currently has no network connection.';
+
+  @override
+  String kbBuildChangeSummary(int stories, int tables, int levels) {
+    return 'Upstream has updates: $stories story files, $tables data tables, $levels level files.';
+  }
+
+  @override
+  String get kbBuildNoChanges =>
+      'Nothing upstream concerns the knowledge base; no update needed.';
+
+  @override
+  String get kbBuildTooManyChanges =>
+      'Too much changed upstream to apply file by file; Build will rebuild completely instead (about 170 MB to download, takes a while).';
+
+  @override
+  String get kbBuildDownloadingContext =>
+      'Downloading the data tables the update needs…';
+
+  @override
+  String get kbBuildReportTitle => 'What this update changed';
+
+  @override
+  String kbBuildReportStories(int added, int changed, int removed) {
+    return 'Story files: $added added, $changed changed, $removed removed';
+  }
+
+  @override
+  String kbBuildReportEntries(String text) {
+    return 'Entries: $text';
+  }
+
+  @override
+  String kbBuildReportNew(String names) {
+    return 'New collections: $names';
+  }
+
+  @override
+  String kbBuildReportVectors(int count) {
+    return '$count vectors became invalid because their story changed; you can add them below under Story vectors.';
+  }
+
+  @override
+  String get kbVectorTitle => 'Story vectors (semantic search)';
+
+  @override
+  String get kbVectorDesc =>
+      'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.';
+
+  @override
+  String kbVectorStatus(int vectors, int stories) {
+    return '$vectors vectors covering $stories stories';
+  }
+
+  @override
+  String get kbVectorNone => 'No vectors yet';
+
+  @override
+  String kbVectorPending(int stories, int chunks, String tokens) {
+    return 'To generate: $stories stories, about $chunks chunks, about $tokens×10k tokens';
+  }
+
+  @override
+  String kbVectorCost(String yuan) {
+    return 'About ¥$yuan at Bailian\'s price (an estimate only; your provider\'s bill decides, and other providers charge differently: convert from the token count)';
+  }
+
+  @override
+  String get kbVectorUpToDate => 'Every story has vectors; nothing to update.';
+
+  @override
+  String get kbVectorFirstBuild =>
+      'This generates vectors for all stories, which costs and takes far more than an incremental update.';
+
+  @override
+  String kbVectorConfigure(String model, int dims) {
+    return 'Configure the vector service first: Settings → API settings → Vectors (default Bailian $model, $dims dimensions, needs that service\'s API key).';
+  }
+
+  @override
+  String kbVectorMismatch(String have, String want) {
+    return 'Existing vectors come from $have, the configuration says $want. They cannot be mixed: set the vector settings back to $have.';
+  }
+
+  @override
+  String get kbVectorStart => 'Generate vectors';
+
+  @override
+  String get kbVectorRefresh => 'Recalculate';
+
+  @override
+  String kbVectorRunning(int done, int total, int chunks) {
+    return 'Generating vectors: $done / $total stories ($chunks chunks)';
+  }
+
+  @override
+  String kbVectorDone(int chunks, int tokens) {
+    return 'Generated $chunks chunks; the provider counted $tokens tokens.';
+  }
+
+  @override
+  String get kbVectorCancel => 'Stop';
+
+  @override
+  String get kbVectorConfirmTitle => 'Generate vectors for all stories?';
+
+  @override
+  String kbVectorConfirmBody(int stories, int chunks, String tokens) {
+    return 'About $stories stories, $chunks chunks, $tokens×10k tokens. This costs money at your vector service. You can stop any time; finished stories are kept.';
+  }
+
+  @override
+  String get kbVectorConfirm => 'Start';
+
+  @override
+  String get lineKindSubtitle => 'Caption';
+
+  @override
+  String get lineKindDocument => 'Document';
+
+  @override
+  String get lineKindChoice => 'Choice';
+
+  @override
+  String get lineKindTitle => 'Title';
+
+  @override
+  String get lineKindTutorial => 'Tutorial';
+
+  @override
+  String get aiAnswerOptions => 'Answer options';
+
+  @override
+  String get aiAnswerReview => 'Review';
+
+  @override
+  String get aiAnswerReviewHint =>
+      'Another model reads the draft and raises questions, checked in the text before the final answer (slower)';
+
+  @override
+  String get aiAnswerDigest => 'Digest';
+
+  @override
+  String get aiAnswerDigestHint =>
+      'Long answers open with a few summary paragraphs, the details folded below (one more call)';
+
+  @override
+  String librarySearchIn(String name) {
+    return 'In “$name”';
+  }
+
+  @override
+  String get librarySearchEverywhere => 'Search the whole library';
+
+  @override
+  String librarySearchNoNameMatch(String query) {
+    return 'Nothing is named “$query”; below are close names and texts that contain it';
+  }
+
+  @override
+  String get librarySearchSimilar => 'Close names';
+
+  @override
+  String get librarySearchMentions => 'In the text';
+
+  @override
+  String get librarySearchNoMentions => 'Not found in the texts';
+
+  @override
+  String librarySearchInText(String query) {
+    return 'Search the texts for “$query”';
+  }
+
+  @override
+  String get librarySearchSemantic => 'Find stories by meaning';
+
+  @override
+  String get librarySearchSemanticTitle => 'Stories close in meaning';
+
+  @override
+  String get librarySearchSemanticNeedsService =>
+      'Set up an embedding service to find stories by meaning (Settings → API settings → Embedding)';
+
+  @override
+  String get librarySearchSemanticNoVectors =>
+      'This knowledge base has no story vectors (they can be made on the knowledge base page)';
+
+  @override
+  String get librarySearchSemanticOtherModel =>
+      'The knowledge base’s vectors were made with another embedding model than the one configured';
+
+  @override
+  String get librarySearchSemanticFailed =>
+      'The embedding service request failed';
+
+  @override
+  String librarySearchMatchCount(int n) {
+    return '$n matches';
+  }
+
+  @override
+  String librarySearchFurther(String query) {
+    return 'Search for “$query” (close names and texts too)';
+  }
+
+  @override
+  String get storyReaderFindHint => 'Find in this story';
 }

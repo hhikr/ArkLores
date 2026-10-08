@@ -122,6 +122,7 @@ class StoryCatalogEntry {
   String get collectionLabel => switch (collectionType) {
         'MAINLINE' => '主线·$collectionName',
         'NONE' => '干员密录·$collectionName',
+        'SANDBOX' => '生息演算·$collectionName',
         _ => collectionName,
       };
 
@@ -140,6 +141,7 @@ class StoryCatalogEntry {
   /// Full label, e.g. `巴别塔 BB-7 行动前《…》`.
   String get label {
     final chapter = chapterLabel;
+    if (collectionName.trim().isEmpty) return chapter;
     return chapter.isEmpty ? collectionLabel : '$collectionLabel $chapter';
   }
 }
@@ -313,9 +315,10 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
   Iterable<String> storyIds,
 ) async {
   final ids = storyIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet().toList();
-  if (ids.isEmpty || !await hasStoryCatalog(db)) return const {};
+  if (ids.isEmpty) return const {};
+  final hasCatalog = await hasStoryCatalog(db);
   final result = <String, StoryCatalogEntry>{};
-  for (var i = 0; i < ids.length; i += 500) {
+  for (var i = 0; hasCatalog && i < ids.length; i += 500) {
     final chunk = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
     final rows = await db.rawQuery(
       'SELECT * FROM $storyCatalogTable WHERE story_id IN '
@@ -327,9 +330,14 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
       result[entry.storyId] = entry;
     }
   }
-  // Files outside the review table (in-level dialogue under
-  // `activities/<id>/level/…`) still belong to their activity: name them by
-  // that collection plus the file name (no invented chapter names).
+  // Files the review table does not list (training, guides, roguelike and
+  // sandbox stories, in-level dialogue) are named by the entry layer: the
+  // name the tables or their stage give them, in their collection.
+  await _fillFromEntryLayer(db, ids, result);
+  if (!hasCatalog) return result;
+  // Files outside the review table and the entry layer (in-level dialogue
+  // under `activities/<id>/level/…`) still belong to their activity: name
+  // them by that collection plus the file name (no invented chapter names).
   final missing = {
     for (final id in ids)
       if (!result.containsKey(id) && id.startsWith('activities/')) id,
@@ -361,6 +369,55 @@ Future<Map<String, StoryCatalogEntry>> queryCatalogEntries(
     }
   }
   return result;
+}
+
+/// Adds the stories of [ids] that [result] lacks from the entry layer
+/// (schema 5): `entries` + `collections`. Older databases have none.
+Future<void> _fillFromEntryLayer(
+  DatabaseExecutor db,
+  List<String> ids,
+  Map<String, StoryCatalogEntry> result,
+) async {
+  final todo = [for (final id in ids) if (!result.containsKey(id)) id];
+  if (todo.isEmpty ||
+      !await _hasTable(db, 'entries') ||
+      !await _hasTable(db, 'collections')) {
+    return;
+  }
+  for (var i = 0; i < todo.length; i += 500) {
+    final chunk = todo.sublist(i, i + 500 > todo.length ? todo.length : i + 500);
+    final rows = await db.rawQuery(
+      'SELECT e.raw_id, e.name, e.code, e.group_name, e.sort_key, '
+      'e.collection_id, c.name AS collection_name, c.kind AS kind '
+      'FROM entries e LEFT JOIN collections c ON c.id = e.collection_id '
+      "WHERE e.type = 'story' AND e.raw_id IN "
+      '(${List.filled(chunk.length, '?').join(',')})',
+      chunk,
+    );
+    for (final row in rows) {
+      final id = '${row['raw_id']}';
+      final group = (row['group_name'] as String?)?.trim() ?? '';
+      final name = (row['name'] as String?)?.trim() ?? '';
+      result[id] = StoryCatalogEntry(
+        storyId: id,
+        collectionId: '${row['collection_id'] ?? ''}',
+        collectionName: '${row['collection_name'] ?? ''}',
+        collectionType: switch ('${row['kind']}') {
+          'main' => 'MAINLINE',
+          'memory' => 'NONE',
+          'roguelike' => 'ROGUELIKE',
+          'sandbox' => 'SANDBOX',
+          'system' => 'SYSTEM',
+          _ => 'ACTIVITY',
+        },
+        storySort: (row['sort_key'] as num?)?.toInt() ?? 0,
+        storyCode: (row['code'] as String?)?.trim(),
+        storyName: name.isEmpty ? null : name,
+        // A group already part of the name is not said twice.
+        avgTag: group.isEmpty || name.contains(group) ? null : group,
+      );
+    }
+  }
 }
 
 /// R16: catalog entries whose level code is [code] (`10-10`, `EG-7`) — the
@@ -537,106 +594,6 @@ class StoryCollection {
       entries.isEmpty ? null : entries.first.releaseMonth;
 }
 
-/// R15: a collection or chapter whose name appears in a question.
-class NamedStoryTarget {
-  const NamedStoryTarget({
-    required this.name,
-    required this.collectionId,
-    required this.label,
-    required this.chapters,
-    this.storyId,
-    this.releaseMonth,
-  });
-
-  /// The name as written in the question.
-  final String name;
-  final String collectionId;
-
-  /// Collection label, or the chapter label when [storyId] is set.
-  final String label;
-  final int chapters;
-
-  /// Set when the name is a chapter name.
-  final String? storyId;
-  final String? releaseMonth;
-}
-
-/// Collections and chapters whose names occur verbatim in [text], longest
-/// names first and non-overlapping. Short names are ambiguous with ordinary
-/// words, so a name must be at least 2 characters for an event / main
-/// collection and at least 3 for an operator-record collection or a chapter,
-/// unless the question puts it in 《》. Locating hints only.
-Future<List<NamedStoryTarget>> queryNamedStoryTargets(
-  DatabaseExecutor db,
-  String text, {
-  int limit = 4,
-}) async {
-  if (text.trim().isEmpty || !await hasStoryCatalog(db)) return const [];
-  final quoted = {
-    for (final m in RegExp('《([^》]+)》').allMatches(text)) m.group(1)!.trim(),
-  };
-  bool long(String name, int min) =>
-      name.runes.length >= min || quoted.contains(name);
-
-  final candidates = <NamedStoryTarget>[];
-  final collections = await db.rawQuery(
-    'SELECT * , COUNT(*) AS n FROM $storyCatalogTable '
-    'GROUP BY collection_id',
-  );
-  for (final row in collections) {
-    final entry = StoryCatalogEntry.fromRow(row);
-    final name = entry.collectionName.trim();
-    final min = entry.collectionType == 'NONE' ? 3 : 2;
-    if (!long(name, min) || !text.contains(name)) continue;
-    candidates.add(NamedStoryTarget(
-      name: name,
-      collectionId: entry.collectionId,
-      label: entry.collectionLabel,
-      chapters: (row['n'] as num).toInt(),
-      releaseMonth: entry.releaseMonth,
-    ),);
-  }
-  final chapters = await db.rawQuery(
-    'SELECT * FROM $storyCatalogTable WHERE story_name IS NOT NULL '
-    'AND story_name != collection_name',
-  );
-  final seenChapterNames = <String>{};
-  for (final row in chapters) {
-    final entry = StoryCatalogEntry.fromRow(row);
-    final name = entry.storyName!.trim();
-    if (!long(name, 3) || !text.contains(name)) continue;
-    // A chapter name shared by 行动前/行动后 (or reused across collections)
-    // is listed once per collection, at its first chapter.
-    if (!seenChapterNames.add('${entry.collectionId}#$name')) continue;
-    candidates.add(NamedStoryTarget(
-      name: name,
-      collectionId: entry.collectionId,
-      label: entry.label,
-      chapters: 1,
-      storyId: entry.storyId,
-      releaseMonth: entry.releaseMonth,
-    ),);
-  }
-  candidates.sort((a, b) {
-    final byLength = b.name.runes.length.compareTo(a.name.runes.length);
-    if (byLength != 0) return byLength;
-    return a.collectionId.compareTo(b.collectionId);
-  });
-  final taken = <(int, int)>[];
-  final result = <NamedStoryTarget>[];
-  for (final candidate in candidates) {
-    final start = text.indexOf(candidate.name);
-    final span = (start, start + candidate.name.length);
-    final overlaps = taken.any((t) => span.$1 < t.$2 && t.$1 < span.$2) &&
-        !taken.contains(span);
-    if (overlaps) continue;
-    taken.add(span);
-    result.add(candidate);
-    if (result.length >= limit) break;
-  }
-  return result;
-}
-
 /// Escapes LIKE wildcards (`\` is the ESCAPE character).
 String escapeLike(String term) => term
     .replaceAll(r'\', r'\\')
@@ -656,7 +613,7 @@ String fallbackStoryLabel(String storyId) {
     final group = switch (parts[1]) {
       'main' => '主线',
       'memory' => '干员密录',
-      'rogue' || 'roguelike' => '集成战略',
+      'rogue' || 'roguelike' => '肉鸽',
       'guide' => '引导',
       _ => parts[1],
     };

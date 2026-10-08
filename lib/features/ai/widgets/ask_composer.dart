@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/press_feedback.dart';
 
 /// How tall the question box is: grown to its text (up to four lines), half
 /// of the Ask tab, or all of it.
@@ -43,8 +45,9 @@ class AskComposer extends StatefulWidget {
 }
 
 class _AskComposerState extends State<AskComposer> {
-  static const _toolbarHeight = 36.0;
-  static const _textPadding = EdgeInsets.fromLTRB(14, 8, 44, 0);
+  static const _toolbarHeight = 42.0;
+  // The text keeps a gap above the toolbar's buttons.
+  static const _textPadding = EdgeInsets.fromLTRB(14, 10, 44, 8);
   static const _maxCollapsedLines = 4;
   static const _duration = Duration(milliseconds: 220);
 
@@ -109,13 +112,13 @@ class _AskComposerState extends State<AskComposer> {
     final scaler = MediaQuery.textScalerOf(context);
     final expanded = _size != AskComposerSize.collapsed;
     final focused = _focus.hasFocus;
+    // What the floating navigation (or the system bar) takes below the box.
+    final below = MediaQuery.paddingOf(context).bottom;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-      decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        border: Border(top: BorderSide(color: theme.divider, width: 0.5)),
-      ),
+    // A floating card, no strip behind it: the conversation shows around
+    // and under it.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       child: SafeArea(
         top: false,
         child: LayoutBuilder(
@@ -134,8 +137,9 @@ class _AskComposerState extends State<AskComposer> {
                     (lines > _maxCollapsedLines ? _maxCollapsedLines : lines) +
                 _toolbarHeight +
                 2;
-            // The bar's own padding (6 + 8) and its top border take 15.
-            final room = widget.maxHeight - 15;
+            // The padding around the card (6 + 8) takes 14, plus 1 to spare,
+            // and the room below it.
+            final room = widget.maxHeight - 15 - below;
             final target = switch (_size) {
               AskComposerSize.collapsed => collapsedHeight,
               AskComposerSize.half => (room * 0.5).clamp(collapsedHeight, room),
@@ -151,8 +155,15 @@ class _AskComposerState extends State<AskComposer> {
               curve: Curves.easeOutCubic,
               height: target,
               decoration: BoxDecoration(
-                color: theme.bgPrimary,
+                color: theme.cardSurface.withValues(alpha: 0.97),
                 borderRadius: BorderRadius.circular(expanded ? 22 : 20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.14),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
                 border: Border.all(
                   color: focused
                       ? theme.accentText.withValues(alpha: 0.55)
@@ -232,7 +243,7 @@ class _AskComposerState extends State<AskComposer> {
                   SizedBox(
                     height: _toolbarHeight,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 4, 4),
+                      padding: const EdgeInsets.fromLTRB(10, 0, 6, 8),
                       child: Row(
                         children: [
                           if (widget.leading != null) widget.leading!,
@@ -254,17 +265,37 @@ class _AskComposerState extends State<AskComposer> {
                             ),
                             const SizedBox(width: 6),
                           ],
-                          IconButton.filled(
+                          // Sinks under the finger, ticks, and the icon turns
+                          // (send ⇄ stop) with a small spin.
+                          PressFeedback(
+                            pressedScale: 0.86,
+                            child: IconButton.filled(
                             key: const ValueKey('ask-send'),
-                            onPressed: widget.onSend,
+                            onPressed: () {
+                              HapticFeedback.lightImpact();
+                              widget.onSend();
+                            },
                             tooltip: widget.isSending
                                 ? context.t.aiCancel
                                 : context.t.aiSend,
-                            icon: Icon(
-                              widget.isSending
-                                  ? Icons.stop_rounded
-                                  : Icons.arrow_upward_rounded,
-                              size: 20,
+                            icon: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              transitionBuilder: (child, animation) =>
+                                  RotationTransition(
+                                turns: Tween<double>(begin: -0.25, end: 0)
+                                    .animate(animation),
+                                child: ScaleTransition(
+                                  scale: animation,
+                                  child: child,
+                                ),
+                              ),
+                              child: Icon(
+                                widget.isSending
+                                    ? Icons.stop_rounded
+                                    : Icons.arrow_upward_rounded,
+                                key: ValueKey(widget.isSending),
+                                size: 20,
+                              ),
                             ),
                             style: IconButton.styleFrom(
                               backgroundColor: widget.isSending
@@ -277,6 +308,7 @@ class _AskComposerState extends State<AskComposer> {
                               padding: EdgeInsets.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
+                          ),
                           ),
                         ],
                       ),
@@ -301,11 +333,13 @@ class _AskComposerState extends State<AskComposer> {
     final theme = widget.theme;
     return Tooltip(
       message: tooltip,
-      child: InkResponse(
+      child: PressFeedback(
+        pressedScale: 0.88,
+        child: InkResponse(
         key: key,
         canRequestFocus: false,
         radius: 18,
-        onTap: onPressed,
+        onTap: withHaptic(onPressed),
         child: Container(
           width: 32,
           height: 32,
@@ -316,6 +350,7 @@ class _AskComposerState extends State<AskComposer> {
           ),
           child: Icon(icon, size: 18, color: theme.textSecondary),
         ),
+      ),
       ),
     );
   }

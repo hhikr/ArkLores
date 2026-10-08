@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/ai/ai_chat_page.dart';
@@ -6,10 +7,12 @@ import 'features/materials/materials_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
+import 'shared/providers/handoff_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/providers/wiki_navigation_provider.dart';
 import 'shared/theme/app_theme.dart';
+import 'shared/widgets/floating_bar.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
 ///
@@ -45,6 +48,12 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final wikiReaderFullscreen = ref.watch(wikiReaderFullscreenProvider);
+    // Another page asked for a tab (the library's "ask about it").
+    ref.listen<int?>(mainTabRequestProvider, (_, tab) {
+      if (tab == null) return;
+      ref.read(mainTabRequestProvider.notifier).state = null;
+      _selectTab(tab);
+    });
 
     return PopScope(
       canPop: false,
@@ -58,6 +67,9 @@ class _MainShellState extends ConsumerState<MainShell> {
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        // The navigation floats over the pages; they get its height as
+        // bottom padding (MediaQuery) and scroll underneath it.
+        extendBody: true,
         body: Stack(
           fit: StackFit.expand,
           children: [
@@ -71,7 +83,10 @@ class _MainShellState extends ConsumerState<MainShell> {
         bottomNavigationBar: AnimatedSize(
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeInOutCubic,
-          child: wikiReaderFullscreen && _currentIndex == 0
+          // Hidden while the keyboard is up: the question box then sits on
+          // the keyboard, not on the navigation.
+          child: (wikiReaderFullscreen && _currentIndex == 0) ||
+                  MediaQuery.viewInsetsOf(context).bottom > 0
               ? const SizedBox.shrink()
               : _IndustrialNavigation(
                   theme: theme,
@@ -143,6 +158,9 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 }
 
+/// The bottom navigation: a short floating pill (52 high), centred, the
+/// tabs close together (64 wide each), the selected tab's icon in a small
+/// pill inside it.
 class _IndustrialNavigation extends StatelessWidget {
   const _IndustrialNavigation({
     required this.theme,
@@ -156,21 +174,28 @@ class _IndustrialNavigation extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final List<(IconData, String)> items;
 
+  static const double height = 52;
+  static const double itemWidth = 64;
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: theme.bgSecondary,
-      child: SafeArea(
-        top: false,
-        child: Container(
-          height: 68,
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: theme.cardBorder)),
-          ),
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 10),
+      child: Center(
+        heightFactor: 1,
+        child: FloatingBar(
+          key: const ValueKey('main-navigation'),
+          theme: theme,
+          radius: 26,
+          height: height,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               for (var index = 0; index < items.length; index++)
-                Expanded(
+                SizedBox(
+                  width: itemWidth,
                   child: _NavigationItem(
                     theme: theme,
                     icon: items[index].$1,
@@ -186,7 +211,6 @@ class _IndustrialNavigation extends StatelessWidget {
     );
   }
 }
-
 class _NavigationItem extends StatefulWidget {
   const _NavigationItem({
     required this.theme,
@@ -215,11 +239,10 @@ class _NavigationItemState extends State<_NavigationItem> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = widget.theme;
     final color = widget.selected
-        ? (widget.theme.isEndfield
-            ? widget.theme.textPrimary
-            : widget.theme.navSelectedItem)
-        : widget.theme.navUnselectedItem;
+        ? (theme.isEndfield ? theme.textPrimary : theme.navSelectedItem)
+        : theme.navUnselectedItem;
     return Semantics(
       button: true,
       selected: widget.selected,
@@ -230,6 +253,7 @@ class _NavigationItemState extends State<_NavigationItem> {
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         onTap: () {
+          if (!widget.selected) HapticFeedback.selectionClick();
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) widget.onTap();
           });
@@ -238,61 +262,36 @@ class _NavigationItemState extends State<_NavigationItem> {
           scale: _pressed ? 0.94 : 1,
           duration: const Duration(milliseconds: 110),
           curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            decoration: BoxDecoration(
-              color: widget.selected
-                  ? widget.theme.accentPrimary.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOutCubic,
-                  bottom: 3,
-                  left: widget.selected ? 26 : 32,
-                  right: widget.selected ? 26 : 32,
-                  height: 3,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: widget.selected
-                          ? widget.theme.accentPrimary
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                width: 48,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: widget.selected
+                      ? theme.accentPrimary.withValues(alpha: 0.28)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AnimatedScale(
-                      scale: widget.selected ? 1.04 : 1,
-                      duration: const Duration(milliseconds: 240),
-                      curve: Curves.easeOutBack,
-                      child: Icon(widget.icon, color: color, size: 24),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: widget.theme.bodyFont.copyWith(
-                        color: color,
-                        fontSize: 11,
-                        fontWeight:
-                            widget.selected ? FontWeight.w700 : FontWeight.w500,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
+                child: Icon(widget.icon, color: color, size: 20),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.bodyFont.copyWith(
+                  color: color,
+                  fontSize: 10.5,
+                  fontWeight:
+                      widget.selected ? FontWeight.w700 : FontWeight.w500,
+                  height: 1.1,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

@@ -62,6 +62,17 @@ String _coverageOf(String word) {
 /// A plain-text tool call (providers without function calling).
 final RegExp _textToolCall = RegExp(r'```(?:tool|json)\s*([\s\S]*?)```');
 
+/// How turns reach the provider. Starts with streamed native function
+/// calls; a provider that answers a turn with nothing at all is asked again
+/// without streaming ([plain]: some relays break streams or do not stream),
+/// then with tools described in the prompt ([textProtocol]: tool calls
+/// dropped or malformed). Shared with the sub-agents of the same question,
+/// so they start with what worked.
+class AgentTransport {
+  bool plain = false;
+  bool textProtocol = false;
+}
+
 class LoreAgentLoop {
   LoreAgentLoop({
     required this.client,
@@ -74,10 +85,16 @@ class LoreAgentLoop {
     this.subtask = false,
     this.subtaskMaxTurns = 20,
     this.review = true,
+    this.digest = true,
     this.stageMinEntries = 5,
     this.streamRetryDelay = const Duration(seconds: 2),
     this.onSpan,
-  });
+    AgentTransport? transport,
+  }) : transport = transport ?? AgentTransport();
+
+  /// How turns are sent (see [AgentTransport]); changes when a provider
+  /// answers with nothing.
+  final AgentTransport transport;
 
   /// Measurement only: called when a tool run or a local check (citation
   /// text lookup, catalog lookup) finishes, with its name and wall-clock
@@ -117,6 +134,9 @@ class LoreAgentLoop {
   /// question).
   final bool review;
 
+  /// R18: whether a long answer is reorganised (see [stageMinEntries]).
+  final bool digest;
+
   /// R18: a JSON answer with at least this many text entries is
   /// reorganised into a few paragraphs, the detailed answer kept below.
   final int stageMinEntries;
@@ -149,11 +169,14 @@ class LoreAgentLoop {
         t.name: t,
     };
     final toolSpecs = [for (final t in tools.values) t.toJson()];
-    var textProtocol = false;
+    // Whether [conversation] is written in the text protocol (a sub-agent
+    // may switch [transport] while this conversation still has native
+    // calls).
+    var converted = false;
 
     String systemPrompt() {
       final base = loreSystemPrompt(subtask: subtask);
-      return textProtocol
+      return transport.textProtocol
           ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
           : base;
     }
@@ -184,12 +207,17 @@ class LoreAgentLoop {
 
     for (var turn = 1; turn <= maxTurns; turn++) {
       final lastTurn = turn == maxTurns;
-      if (lastTurn) {
+      // (Once: an empty last turn may be sent again another way.)
+      if (lastTurn && !hitTurnLimit) {
         hitTurnLimit = true;
         conversation.add(Message.user(
           '已到检索轮数上限，不能再调用工具。请根据目前读到的原文给出最终答案，'
           '并说明还有哪些部分没有查到或没有读完。',
         ),);
+      }
+      if (transport.textProtocol && !converted) {
+        converted = true;
+        _convertToTextProtocol(conversation, toolResults);
       }
       _foldOldToolResults(conversation, toolResults);
       yield ReActEvent(
@@ -206,13 +234,16 @@ class LoreAgentLoop {
       CompletionDelta? done;
       try {
         final messages = [Message.system(systemPrompt()), ...conversation];
-        final stream = client.streamTurn(
-          messages,
-          tools: textProtocol ? null : toolSpecs,
-          toolChoice: lastTurn && !textProtocol ? 'none' : null,
-          temperature: temperature,
-          maxTokens: maxTokens,
-        );
+        final turnTools = transport.textProtocol ? null : toolSpecs;
+        final stream = transport.plain
+            ? _plainTurn(messages, turnTools)
+            : client.streamTurn(
+                messages,
+                tools: turnTools,
+                toolChoice: lastTurn && !transport.textProtocol ? 'none' : null,
+                temperature: temperature,
+                maxTokens: maxTokens,
+              );
         await for (final delta in stream) {
           if (delta.reasoningContent.isNotEmpty) {
             reasoning.write(delta.reasoningContent);
@@ -269,11 +300,10 @@ class LoreAgentLoop {
           if (delta.done) done = delta;
         }
       } on LLMException catch (e) {
-        if (!textProtocol && _rejectsTools(e)) {
+        if (!transport.textProtocol && _rejectsTools(e)) {
           // The provider has no function calling: switch to plain-text tool
           // calls and ask again.
-          textProtocol = true;
-          _convertToTextProtocol(conversation, toolResults);
+          transport.textProtocol = true;
           turn--;
           continue;
         }
@@ -295,6 +325,30 @@ class LoreAgentLoop {
           turn--;
           continue;
         }
+        // An answer that came (status 200) but could not be read — a body
+        // that is neither a stream nor a completion, an error inside the
+        // stream: asked again another way, as an empty answer is.
+        // (A web page instead of an API answer is a wrong Base URL: asking
+        // again cannot help.)
+        if (e.statusCode == 200 &&
+            !(e.body ?? '').trimLeft().startsWith('<') &&
+            _nextTransport()) {
+          if (answerOpen) {
+            yield const ReActEvent(
+              type: ReActEventType.finalAnswerReset,
+              content: '回复无法读取，重试',
+            );
+          }
+          onRawLlmResponse?.call(++record, '（无法读取的回复：${e.message}）');
+          yield ReActEvent(
+            type: ReActEventType.status,
+            content: transport.textProtocol
+                ? '服务商的回复无法读取，改用文本方式调用工具重试'
+                : '服务商的回复无法读取，改用非流式请求重试',
+          );
+          turn--;
+          continue;
+        }
         yield ReActEvent(type: ReActEventType.error, content: e.message);
         return;
       } catch (e) {
@@ -312,6 +366,24 @@ class LoreAgentLoop {
           content = content.replaceAll(_textToolCall, '').trim();
         }
       }
+      // Nothing at all (no text, no call): the provider or a relay lost the
+      // turn — a broken stream, a body that is not a stream, tool calls it
+      // could not write. The same turn is sent again without streaming,
+      // then with the tools described in the prompt (streamed, then not).
+      if (content.trim().isEmpty && calls.isEmpty && _nextTransport()) {
+        onRawLlmResponse?.call(
+          ++record,
+          '（空回复：${_emptyTurnNote(done, reasoning.isNotEmpty)}）',
+        );
+        yield ReActEvent(
+          type: ReActEventType.status,
+          content: transport.textProtocol
+              ? '服务商没有返回内容，改用文本方式调用工具重试'
+              : '服务商没有返回内容，改用非流式请求重试',
+        );
+        turn--;
+        continue;
+      }
       // Session records keep one tool per iteration: each call of a turn
       // gets its own record (the first carries the turn's raw response).
       if (calls.isEmpty || lastTurn) {
@@ -328,7 +400,7 @@ class LoreAgentLoop {
         if (content.trim().isNotEmpty) {
           yield ReActEvent(type: ReActEventType.thought, content: content.trim());
         }
-        if (textProtocol) {
+        if (transport.textProtocol) {
           conversation.add(Message.assistant(text.toString()));
         } else {
           conversation.add(Message.assistantToolCalls(
@@ -374,7 +446,7 @@ class LoreAgentLoop {
           );
           toolResults.add(conversation.length);
           conversation.add(
-            textProtocol
+            transport.textProtocol
                 ? Message.user('工具结果（${call.name}）：\n$result')
                 : Message.toolResult(call.id, result),
           );
@@ -426,9 +498,10 @@ class LoreAgentLoop {
           conversation.add(Message.user('请继续：需要查资料就调用工具，否则给出最终答案。'));
           continue;
         }
-        yield const ReActEvent(
+        yield ReActEvent(
           type: ReActEventType.error,
-          content: '模型没有给出答案。',
+          content: '模型没有给出答案（${_emptyTurnNote(done, reasoning.isNotEmpty)}）。'
+              '${transport.plain && transport.textProtocol ? '已换用非流式请求和文本方式调用工具重试，仍然没有内容。' : ''}',
         );
         return;
       }
@@ -540,8 +613,9 @@ class LoreAgentLoop {
 
       // R18: reorganise a long JSON answer into a few paragraphs; the
       // detailed answer stays below the marker.
-      final entries =
-          fromJson == null || subtask || lastTurn ? null : loreAnswerEntries(content);
+      final entries = !digest || fromJson == null || subtask || lastTurn
+          ? null
+          : loreAnswerEntries(content);
       if (entries != null &&
           entries.where((e) => e.isText).length >= stageMinEntries) {
         final checked = [
@@ -561,7 +635,7 @@ class LoreAgentLoop {
           detail: body,
           conversation: conversation,
           systemPrompt: systemPrompt(),
-          tools: textProtocol ? null : toolSpecs,
+          tools: transport.textProtocol ? null : toolSpecs,
           onRaw: (raw) => onRawLlmResponse?.call(++record, '（整理）$raw'),
           onStaged: (markdown) => staged = markdown,
         )) {
@@ -654,13 +728,16 @@ class LoreAgentLoop {
     final text = StringBuffer();
     var shown = 0;
     try {
-      final stream = client.streamTurn(
-        [Message.system(systemPrompt), ...conversation, prompt],
-        tools: tools,
-        toolChoice: tools == null ? null : 'none',
-        temperature: temperature,
-        maxTokens: maxTokens,
-      );
+      final messages = [Message.system(systemPrompt), ...conversation, prompt];
+      final stream = transport.plain
+          ? _plainTurn(messages, tools)
+          : client.streamTurn(
+              messages,
+              tools: tools,
+              toolChoice: tools == null ? null : 'none',
+              temperature: temperature,
+              maxTokens: maxTokens,
+            );
       await for (final delta in stream) {
         if (delta.content.isEmpty) continue;
         text.write(delta.content);
@@ -722,6 +799,7 @@ class LoreAgentLoop {
       temperature: temperature,
       subtask: true,
       onSpan: onSpan,
+      transport: transport,
     )
         .run(
           query: task,
@@ -767,6 +845,73 @@ class LoreAgentLoop {
 
   /// A failure of the connection itself (no HTTP status): a timeout, a
   /// reset socket, a client closed by the system.
+  /// Moves [transport] to the next way of sending a turn after an empty
+  /// reply: streamed native calls → not streamed → tools in the prompt,
+  /// streamed → tools in the prompt, not streamed. False when all were
+  /// tried.
+  bool _nextTransport() {
+    final t = transport;
+    if (!t.plain && !t.textProtocol) {
+      t.plain = true;
+    } else if (t.plain && !t.textProtocol) {
+      t
+        ..plain = false
+        ..textProtocol = true;
+    } else if (!t.plain) {
+      t.plain = true;
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  /// One turn without streaming ([AgentTransport.plain]), as deltas.
+  Stream<CompletionDelta> _plainTurn(
+    List<Message> messages,
+    List<Map<String, dynamic>>? tools,
+  ) async* {
+    final r = await client.chatCompletion(
+      messages,
+      tools: tools,
+      temperature: temperature,
+      maxTokens: maxTokens,
+    );
+    if (r.content.isNotEmpty || r.reasoningContent.isNotEmpty) {
+      yield CompletionDelta(
+        content: r.content,
+        reasoningContent: r.reasoningContent,
+      );
+    }
+    yield CompletionDelta(
+      done: true,
+      finishReason: r.finishReason,
+      promptTokens: r.promptTokens,
+      completionTokens: r.completionTokens,
+      cachedPromptTokens: r.cachedPromptTokens,
+      toolCalls: r.toolCalls,
+    );
+  }
+
+  /// Why a reply may have been empty, for the record and the error.
+  static String _emptyTurnNote(CompletionDelta? done, bool reasoned) {
+    final reason = done?.finishReason;
+    final hint = switch (reason?.toLowerCase()) {
+      'length' || 'max_tokens' => '输出长度上限被用完了，可能都用在了思考上',
+      'content_filter' ||
+      'safety' ||
+      'recitation' ||
+      'prohibited_content' ||
+      'blocklist' =>
+        '服务商的内容审核拦下了回答',
+      _ => null,
+    };
+    return [
+      '结束原因：${reason ?? '服务商没有给出'}',
+      if (reasoned) '只有思考内容',
+      if (hint != null) hint,
+    ].join('，');
+  }
+
   static bool _isConnectionDrop(LLMException e) =>
       e.statusCode == null &&
       (e.message.contains('timed out') ||

@@ -1,72 +1,357 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/library/library_provider.dart';
+import '../../core/library/library_queries.dart';
+import '../../core/userdata/library_ref.dart';
+import '../../core/userdata/user_data_provider.dart';
+import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/industrial_ui.dart';
+import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import '../ai/reading_history_page.dart';
+import '../library/library_pages.dart';
+import '../library/library_widgets.dart';
+import '../library/my_materials.dart';
 
-/// Materials tab.
-///
-/// User-imported material indexing is paused while v0.4.5 stabilizes on the
-/// structured Chinese GameData knowledge base.
-class MaterialsPage extends ConsumerWidget {
+/// The library tab: what can be read (the knowledge base's stories and
+/// texts, by shelf) and the user's own texts.
+class MaterialsPage extends ConsumerStatefulWidget {
   const MaterialsPage({super.key});
+
+  @override
+  ConsumerState<MaterialsPage> createState() => _MaterialsPageState();
+}
+
+class _MaterialsPageState extends ConsumerState<MaterialsPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 2, vsync: this)
+    ..addListener(() {
+      if (!_tabs.indexIsChanging && mounted) setState(() {});
+    });
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    final reading = _tabs.index == 0;
+    // The tabs float over the lists, which scroll underneath them.
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          TabBarView(
+            controller: _tabs,
+            children: const [
+              LibraryReadView(),
+              MyMaterialsView(),
+            ],
+          ),
+          // Tabs on the left, the action on the right: two pills.
+          FloatingTopBar(
+            theme: theme,
+            leading: Row(
+              key: const ValueKey('library-tabs'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (i, label) in [
+                  context.t.libraryTabRead,
+                  context.t.libraryTabMine,
+                ].indexed)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: FloatingSegment(
+                      theme: theme,
+                      label: label,
+                      selected: _tabs.index == i,
+                      onTap: () => _tabs.animateTo(i),
+                    ),
+                  ),
+              ],
+            ),
+            trailing: reading
+                ? IconButton(
+                    key: const ValueKey('library-search'),
+                    tooltip: context.t.librarySearchHint,
+                    color: theme.textPrimary,
+                    icon: const Icon(Icons.search_rounded, size: 22),
+                    onPressed: () => openSearch(context),
+                  )
+                : IconButton(
+                    key: const ValueKey('library-new-material'),
+                    tooltip: context.t.materialsNew,
+                    color: theme.textPrimary,
+                    icon: const Icon(Icons.add_rounded, size: 22),
+                    onPressed: () => newMaterial(context),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+/// "Read": continue reading, the shelves, the recently read.
+class LibraryReadView extends ConsumerWidget {
+  const LibraryReadView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
+    final status = ref.watch(libraryStatusProvider);
+    return status.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => LibraryMessage(
+        icon: Icons.folder_off_rounded,
+        title: context.t.libraryNotInstalledTitle,
+        description: context.t.libraryNotInstalledDesc,
+      ),
+      data: (s) => switch (s) {
+        LibraryStatus.notInstalled => LibraryMessage(
+            icon: Icons.download_for_offline_rounded,
+            title: context.t.libraryNotInstalledTitle,
+            description: context.t.libraryNotInstalledDesc,
+          ),
+        LibraryStatus.oldSchema => LibraryMessage(
+            icon: Icons.system_update_alt_rounded,
+            title: context.t.libraryOldSchemaTitle,
+            description: context.t.libraryOldSchemaDesc,
+          ),
+        LibraryStatus.ready => _shelves(context, ref, theme),
+      },
+    );
+  }
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.menu_book_rounded, color: theme.warning, size: 28),
-                const SizedBox(width: 10),
-                Text(
-                  context.t.materialsTitle,
-                  style: theme.titleFont.copyWith(fontSize: 22),
-                ),
-              ],
+  Widget _shelves(BuildContext context, WidgetRef ref, AppThemeTokens theme) {
+    final summaries = ref.watch(shelfSummariesProvider).valueOrNull ?? const [];
+    final codex = ref.watch(codexTypesProvider).valueOrNull ?? const [];
+    final recent = ref.watch(recentReadingProvider).valueOrNull ?? const [];
+    final codexCount = codex.fold<int>(0, (n, t) => n + t.count);
+
+    final cards = <Widget>[
+      for (final s in summaries)
+        _ShelfCard(
+          kind: s.kind,
+          subtitle: [
+            context.t.libraryCountCollections(s.collections),
+            if (s.stories > 0) context.t.libraryCountStories(s.stories),
+          ].join(' · '),
+        ),
+      if (codexCount > 0)
+        _ShelfCard(
+          kind: codexShelf,
+          subtitle: context.t.libraryCountEntries(codexCount),
+        ),
+    ];
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref
+          ..invalidate(libraryStatusProvider)
+          ..invalidate(shelfSummariesProvider)
+          ..invalidate(codexTypesProvider);
+        invalidateReading(ref);
+      },
+      child: ListView(
+        padding: floatingPadding(context, const EdgeInsets.fromLTRB(16, 4, 16, 32)),
+        children: [
+          if (recent.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _ContinueCard(entry: recent.first),
+          ],
+          IndustrialSectionHeader(
+            theme: theme,
+            title: context.t.libraryShelves,
+            code: 'shelves',
+          ),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 1.55,
+            children: cards,
+          ),
+          if (recent.length > 1) ...[
+            IndustrialSectionHeader(
+              theme: theme,
+              title: context.t.readingHistoryTitle,
+              code: 'recent',
             ),
-            const SizedBox(height: 16),
-            ThemeAwareCard(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.pause_circle_outline_rounded,
-                      color: theme.warning, size: 24,),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.t.materialsPausedTitle,
-                          style: theme.titleFont.copyWith(fontSize: 16),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          context.t.materialsPausedDesc,
-                          style: theme.bodyFont.copyWith(
-                            color: theme.textSecondary,
-                            fontSize: 13,
-                            height: 1.45,
-                          ),
-                        ),
-                      ],
-                    ),
+            for (final e in recent.skip(1).take(4)) ...[
+              _RecentRow(entry: e),
+              rowDivider(theme),
+            ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: const ValueKey('library-all-recent'),
+                onPressed: () => Navigator.of(context).push(
+                  smoothPageRoute<void>(
+                    builder: (_) => const ReadingHistoryPage(),
                   ),
-                ],
+                ),
+                child: Text(
+                  context.t.libraryViewAll,
+                  style: TextStyle(color: theme.accentText),
+                ),
               ),
             ),
           ],
-        ),
+        ],
       ),
+    );
+  }
+}
+
+class _ShelfCard extends ConsumerWidget {
+  const _ShelfCard({required this.kind, required this.subtitle});
+
+  final String kind;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    return ThemeAwareCard(
+      key: ValueKey('shelf-$kind'),
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      onTap: () => openShelf(context, kind),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Icon(shelfIcon(kind), color: theme.accentText, size: 26),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                shelfLabel(context, kind),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.titleFont.copyWith(fontSize: 16),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11.5,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The story read last, with a way to continue it.
+class _ContinueCard extends ConsumerWidget {
+  const _ContinueCard({required this.entry});
+
+  final ReadingEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final ref0 = LibraryRef.tryParse(entry.ref);
+    final progress = entry.progress;
+    return ThemeAwareCard(
+      key: const ValueKey('library-continue'),
+      padding: const EdgeInsets.all(16),
+      onTap: ref0 == null || ref0.kind != LibraryRefKind.story
+          ? null
+          : () => openStory(context, ref0.id, resume: entry),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.play_circle_fill_rounded,
+                  color: theme.accentText, size: 18,),
+              const SizedBox(width: 6),
+              Text(
+                context.t.libraryContinue,
+                style: theme.bodyFont.copyWith(
+                  color: theme.accentText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const Spacer(),
+              if (progress != null)
+                AccentPill(
+                  entry.finished
+                      ? context.t.libraryFinished
+                      : context.t.libraryProgress((progress * 100).round()),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            readingTitle(ref, entry),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.titleFont.copyWith(fontSize: 17, height: 1.3),
+          ),
+          if (entry.snippet.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              entry.snippet,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12.5,
+                height: 1.5,
+              ),
+            ),
+          ],
+          if (progress != null) ...[
+            const SizedBox(height: 12),
+            ProgressLine(progress),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentRow extends ConsumerWidget {
+  const _RecentRow({required this.entry});
+
+  final ReadingEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final item = LibraryRef.tryParse(entry.ref);
+    return LibraryRow(
+      key: ValueKey('recent-${entry.ref}'),
+      title: readingTitle(ref, entry),
+      subtitle: entry.snippet,
+      subtitleLines: 1,
+      progress: entry.progress != null && !entry.finished
+          ? entry.progress
+          : null,
+      trailing: readMark(context, theme, entry),
+      onTap: item == null || item.kind != LibraryRefKind.story
+          ? null
+          : () => openStory(context, item.id, resume: entry),
     );
   }
 }

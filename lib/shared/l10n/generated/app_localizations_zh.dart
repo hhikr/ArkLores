@@ -54,6 +54,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get localeChineseShort => '中文';
 
   @override
+  String get settingsProfile => '资料设置';
+
+  @override
+  String get settingsProfileDesc => '设置剧情里怎样称呼你。';
+
+  @override
+  String get settingsProfileSectionCode => 'PROFILE';
+
+  @override
+  String get profileNicknameLabel => '称呼';
+
+  @override
+  String get profileNicknameHelp =>
+      '剧情文本里博士的名字是占位符，阅读时显示为这里填写的称呼（留空显示“博士”）。不会改动知识库。';
+
+  @override
+  String get profileNicknameDefault => '博士';
+
+  @override
   String get settingsAiServices => 'AI 服务';
 
   @override
@@ -88,7 +107,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get apiSettingsChatSection => '对话 API';
 
   @override
-  String get apiSettingsChatDesc => '用于 AI 对话（事实核查、梗概生成、角色扮演）。';
+  String get apiSettingsChatDesc => '用于 AI 剧情问答。';
 
   @override
   String get apiSettingsEmbeddingSection => '向量 API（可选）';
@@ -201,7 +220,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsNoBooks => '还没有书籍';
 
   @override
-  String get materialsEmptyDesc => '导入 PDF 或 TXT 文件来构建你的个人剧情资料库。';
+  String get materialsEmptyDesc =>
+      '把想留的文字放在这里：设定摘录、笔记、考据都可以。它们只保存在这台设备上，不会进入知识库。';
 
   @override
   String get materialsNoApiKeyHint => '请在设置中配置 API 密钥以启用导入功能。';
@@ -230,9 +250,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsDeleteTitle => '删除书籍';
 
   @override
-  String materialsDeleteConfirm(Object name) {
-    return '确定要删除 \"$name\" 及其所有知识库片段吗？';
-  }
+  String get materialsDeleteConfirm => '删除这份资料？';
 
   @override
   String get materialsDelete => '删除';
@@ -290,9 +308,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiChatTitle => '剧情智囊';
-
-  @override
-  String get aiChatSubtitle => '事实核查 · 梗概生成 · 角色扮演';
 
   @override
   String get aiChatComingSoon => '即将在 v0.4 推出';
@@ -358,7 +373,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingWelcomeDesc =>
-      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 事实核查与梗概生成\n• 导入你的剧情书籍\n• 沉浸式角色扮演对话';
+      '专为明日方舟与终末地剧情爱好者打造的 AI 增强阅读工具。\n\n• 浏览 PRTS 与终末地 Wiki\n• AI 剧情问答，答案附原文出处\n• 阅读剧情与游戏资料';
 
   @override
   String get onboardingGetStarted => '开始使用';
@@ -393,7 +408,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsHelpSectionCode => 'HELP & GUIDE';
 
   @override
-  String get settingsVersionLabel => 'ARKLORES / 0.9 开发版';
+  String settingsVersionLabel(String version) {
+    return 'ARKLORES / $version';
+  }
 
   @override
   String get settingsShowOnboarding => '新用户导览';
@@ -445,9 +462,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiTabSummary => '剧情梗概';
-
-  @override
-  String get aiTabRoleplay => '角色扮演';
 
   @override
   String get aiAnswerStatus => '回答状态';
@@ -518,6 +532,239 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiStoryReaderEnd => '本章完';
+
+  @override
+  String get libraryTabRead => '阅读';
+
+  @override
+  String get libraryTabMine => '我的资料';
+
+  @override
+  String get librarySearchTitle => '搜索';
+
+  @override
+  String get librarySearchHint => '搜索章节、条目、关卡代号';
+
+  @override
+  String get libraryContinue => '继续阅读';
+
+  @override
+  String get libraryShelves => '书架';
+
+  @override
+  String get libraryViewAll => '全部';
+
+  @override
+  String get shelfMain => '主线';
+
+  @override
+  String get shelfActivity => '其他活动';
+
+  @override
+  String get shelfSideStory => 'SideStory';
+
+  @override
+  String get shelfMiniStory => '故事集';
+
+  @override
+  String get shelfBranchline => '插曲';
+
+  @override
+  String get shelfMemory => '干员';
+
+  @override
+  String get shelfRoguelike => '集成战略';
+
+  @override
+  String get shelfSandbox => '生息演算';
+
+  @override
+  String get shelfRetro => '复刻';
+
+  @override
+  String get shelfCodex => '图鉴';
+
+  @override
+  String get shelfOther => '其他';
+
+  @override
+  String get libraryOperatorRecords => '干员密录';
+
+  @override
+  String get libraryOperatorProfile => '干员档案';
+
+  @override
+  String get libraryAllEntries => '全部';
+
+  @override
+  String libraryCountCollections(int n) {
+    return '$n 项';
+  }
+
+  @override
+  String libraryCountStories(int n) {
+    return '$n 个故事';
+  }
+
+  @override
+  String libraryCountEntries(int n) {
+    return '$n 条';
+  }
+
+  @override
+  String get libraryNotInstalledTitle => '还没有知识库';
+
+  @override
+  String get libraryNotInstalledDesc => '到 设置 → 知识库 下载或构建后，这里会出现可以阅读的剧情和资料。';
+
+  @override
+  String get libraryOldSchemaTitle => '知识库需要更新';
+
+  @override
+  String get libraryOldSchemaDesc =>
+      '当前的知识库是旧版本，没有按故事集分好的目录。到 设置 → 知识库 更新后即可阅读。';
+
+  @override
+  String get libraryEmpty => '这里还没有内容';
+
+  @override
+  String get libraryStories => '剧情';
+
+  @override
+  String get libraryOtherSections => '相关资料';
+
+  @override
+  String get libraryParts => '解锁的故事';
+
+  @override
+  String get libraryLeftoverStories => '其他剧情';
+
+  @override
+  String get libraryFilterHint => '在列表中筛选';
+
+  @override
+  String libraryProgress(int percent) {
+    return '已读 $percent%';
+  }
+
+  @override
+  String get libraryFinished => '已读完';
+
+  @override
+  String get storyReaderBattleDialogue => '关卡内对话';
+
+  @override
+  String libraryReadTimes(int count) {
+    return '读过 $count 次';
+  }
+
+  @override
+  String libraryRelease(String month) {
+    return '上线 $month';
+  }
+
+  @override
+  String get libraryRelated => '关联';
+
+  @override
+  String get libraryNoText => '这一条没有文字内容';
+
+  @override
+  String get libraryNoResults => '没有找到相关内容';
+
+  @override
+  String get librarySearchCollections => '故事集与主题';
+
+  @override
+  String get librarySearchEntries => '条目';
+
+  @override
+  String get storyReaderNext => '下一章';
+
+  @override
+  String get storyReaderPrevious => '上一章';
+
+  @override
+  String storyReaderResumed(int line) {
+    return '继续阅读 · 第 $line 行';
+  }
+
+  @override
+  String get storyReaderSynopsis => '官方梗概';
+
+  @override
+  String get materialsEmptyTitle => '还没有自己的资料';
+
+  @override
+  String get materialsNew => '新建';
+
+  @override
+  String get materialsPaste => '从剪贴板导入';
+
+  @override
+  String get materialsTitleHint => '标题（可留空）';
+
+  @override
+  String get materialsBodyHint => '正文';
+
+  @override
+  String get materialsEdit => '编辑';
+
+  @override
+  String materialsChars(int n) {
+    return '$n 字';
+  }
+
+  @override
+  String get materialsClipboardEmpty => '剪贴板里没有文字';
+
+  @override
+  String get materialsDiscard => '放弃未保存的修改？';
+
+  @override
+  String get materialsDiscardAction => '放弃';
+
+  @override
+  String get materialsAskAbout => '用它提问';
+
+  @override
+  String get readingHistoryTitle => '最近阅读';
+
+  @override
+  String get readingHistoryEmpty => '还没有阅读记录。在回答的证据链里点开原文后，会记在这里。';
+
+  @override
+  String readingHistoryPage(Object page, Object pages) {
+    return '第 $page / $pages 页';
+  }
+
+  @override
+  String get readingHistoryClear => '清空';
+
+  @override
+  String get readingHistoryJumpTitle => '跳到第几页';
+
+  @override
+  String readingHistoryJumpHint(int pages) {
+    return '1 – $pages';
+  }
+
+  @override
+  String get readingHistoryJumpGo => '跳转';
+
+  @override
+  String get readingHistoryClearConfirm => '清空全部阅读记录？';
+
+  @override
+  String get readingHistoryRemove => '删除这条记录';
+
+  @override
+  String readingHistoryLine(int line) {
+    return '第 $line 行';
+  }
+
+  @override
+  String get aiStoryReaderMoved => '原文有变动，已定位到大致位置';
 
   @override
   String get aiMoreActions => '更多';
@@ -618,6 +865,79 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String aiWorkSummary(int calls, int reads) {
+    return '查阅 $calls 次 · 读了 $reads 篇原文';
+  }
+
+  @override
+  String get aiWorkSql => '查询资料库';
+
+  @override
+  String aiWorkGrep(String pattern) {
+    return '搜索「$pattern」';
+  }
+
+  @override
+  String aiWorkGrepIn(String scope, String pattern) {
+    return '在「$scope」中搜索「$pattern」';
+  }
+
+  @override
+  String aiWorkRead(String story) {
+    return '阅读《$story》';
+  }
+
+  @override
+  String aiWorkOutline(String collection) {
+    return '查看「$collection」的章节目录';
+  }
+
+  @override
+  String aiWorkFind(String query) {
+    return '按意思找「$query」';
+  }
+
+  @override
+  String aiWorkSimilar(String name) {
+    return '找与「$name」相近的名字';
+  }
+
+  @override
+  String aiWorkDelegate(String task) {
+    return '派助手：$task';
+  }
+
+  @override
+  String get aiWorkRedo => '出处没对上，重写答案';
+
+  @override
+  String aiWorkHits(int hits, int stories) {
+    return '$hits 处 · $stories 篇';
+  }
+
+  @override
+  String aiWorkRows(int count) {
+    return '$count 条';
+  }
+
+  @override
+  String aiWorkLines(int start, int end) {
+    return '第 $start–$end 行';
+  }
+
+  @override
+  String get aiWorkNone => '没有结果';
+
+  @override
+  String get aiWorkFailed => '出错';
+
+  @override
+  String get aiWorkRunning => '进行中';
+
+  @override
+  String get aiWorkRaw => '原始输出';
+
+  @override
   String aiStepsStatus(String status, int count) {
     return '$status（$count 步）';
   }
@@ -677,58 +997,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String aiHistoryTurns(int count) {
     return '$count 轮对话';
   }
-
-  @override
-  String get aiRoleplayChoose => '选择角色';
-
-  @override
-  String get aiRoleplayChooseDesc => '角色会先解析到 GameData 中的稳定实体，再开始生成对话。';
-
-  @override
-  String get aiRoleplayCharacter => '角色名或别名';
-
-  @override
-  String get aiRoleplayScene => '场景设定（可选）';
-
-  @override
-  String get aiRoleplaySceneContext => '场景属于会话上下文，不是 GameData 证据';
-
-  @override
-  String get aiRoleplayStart => '解析角色并开始';
-
-  @override
-  String get aiRoleplayResolving => '正在解析…';
-
-  @override
-  String get aiRoleplayNoDatabase => '未安装中文 GameData 知识库，请先前往设置安装。';
-
-  @override
-  String get aiRoleplayNotFound => '当前 GameData 未找到该角色，请检查名称或别名。';
-
-  @override
-  String get aiRoleplayDisambiguate => '请选择对应的 GameData 实体';
-
-  @override
-  String get aiRoleplayContinue => '继续本地保存的会话';
-
-  @override
-  String get aiRoleplayRestart => '重新开始';
-
-  @override
-  String get aiRoleplayGeneratedNotice =>
-      '角色事实依据 GameData 检索；对白与舞台说明均为 AI 生成内容，不是游戏官方台词。';
-
-  @override
-  String get aiRoleplayEmpty => '输入第一句话。首轮会先检索角色档案、语音、秘录、模组及相关任务剧情。';
-
-  @override
-  String get aiRoleplayInputPlaceholder => '与角色对话…';
-
-  @override
-  String get aiRoleplayError => '生成失败，请重试。';
-
-  @override
-  String get aiRoleplayCanceled => '已取消本次生成。';
 
   @override
   String get settingsAppIcon => '应用图标';
@@ -810,6 +1078,25 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbErrorInvalidUrl => '无法解析下载地址。真机测试请确认手机能访问该 GitHub / 局域网 URL。';
+
+  @override
+  String kbConnecting(int attempt) {
+    return '正在连接服务器…（第 $attempt 次尝试）';
+  }
+
+  @override
+  String get kbVerifying => '正在校验文件…';
+
+  @override
+  String get kbInstalling => '正在解压并安装，约需一两分钟，请不要退出…';
+
+  @override
+  String get kbCancelDownload => '取消';
+
+  @override
+  String kbManualHint(String dir) {
+    return '网络连不上时：用别的网络下载 Release 里的 arklores_gamedata_zh.db.gz，改名为 arklores_gamedata_zh.db.download.gz，放进 $dir，再点“下载”。';
+  }
 
   @override
   String get kbErrorTimeout => '连接超时。请检查网络后重试，已下载的部分会保留。';
@@ -987,4 +1274,202 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get wikiErrorOffline => '设备当前没有可用网络连接。';
+
+  @override
+  String kbBuildChangeSummary(int stories, int tables, int levels) {
+    return '上游有更新：剧情文件 $stories 个、数据表 $tables 个、关卡文件 $levels 个。';
+  }
+
+  @override
+  String get kbBuildNoChanges => '上游没有与知识库相关的新变化，不需要更新。';
+
+  @override
+  String get kbBuildTooManyChanges =>
+      '上游变化太多，无法逐个增量应用；点“构建”将改为完整重建（需要下载约 170 MB，耗时较长）。';
+
+  @override
+  String get kbBuildDownloadingContext => '正在下载更新所需的数据表…';
+
+  @override
+  String get kbBuildReportTitle => '本次更新的内容';
+
+  @override
+  String kbBuildReportStories(int added, int changed, int removed) {
+    return '剧情文件：新增 $added 个，修改 $changed 个，删除 $removed 个';
+  }
+
+  @override
+  String kbBuildReportEntries(String text) {
+    return '条目变化：$text';
+  }
+
+  @override
+  String kbBuildReportNew(String names) {
+    return '新增集合：$names';
+  }
+
+  @override
+  String kbBuildReportVectors(int count) {
+    return '有 $count 条向量因所在剧情变化而失效，可在下面的“故事向量”里补上。';
+  }
+
+  @override
+  String get kbVectorTitle => '故事向量（语义检索）';
+
+  @override
+  String get kbVectorDesc =>
+      '向量让“找剧情”能按意思匹配，而不只是字面相同。没有向量也能用，只是这部分剧情只做关键词检索。向量只用来定位，答案的证据仍然是原文。';
+
+  @override
+  String kbVectorStatus(int vectors, int stories) {
+    return '已有 $vectors 条向量，覆盖 $stories 个故事';
+  }
+
+  @override
+  String get kbVectorNone => '还没有向量';
+
+  @override
+  String kbVectorPending(int stories, int chunks, String tokens) {
+    return '待生成：$stories 个故事，约 $chunks 块，约 $tokens 万 token';
+  }
+
+  @override
+  String kbVectorCost(String yuan) {
+    return '按百炼价格估算约 ¥$yuan（只是估算，以服务商账单为准；其他服务商价格不同，请按 token 数换算）';
+  }
+
+  @override
+  String get kbVectorUpToDate => '所有故事都有向量，不需要更新。';
+
+  @override
+  String get kbVectorFirstBuild => '这会为全部故事生成向量，费用和时间都比增量更新多得多。';
+
+  @override
+  String kbVectorConfigure(String model, int dims) {
+    return '生成向量需要先配置向量服务：设置 → API 设置 → 向量（默认百炼 $model，维度 $dims，需要该服务的 API Key）。';
+  }
+
+  @override
+  String kbVectorMismatch(String have, String want) {
+    return '已有向量来自 $have，当前配置是 $want。两者不能混用，请把向量设置改回 $have。';
+  }
+
+  @override
+  String get kbVectorStart => '生成向量';
+
+  @override
+  String get kbVectorRefresh => '重新计算';
+
+  @override
+  String kbVectorRunning(int done, int total, int chunks) {
+    return '正在生成向量：$done / $total 个故事（$chunks 块）';
+  }
+
+  @override
+  String kbVectorDone(int chunks, int tokens) {
+    return '已生成 $chunks 块向量，服务商记录用了 $tokens token。';
+  }
+
+  @override
+  String get kbVectorCancel => '停止';
+
+  @override
+  String get kbVectorConfirmTitle => '为全部故事生成向量？';
+
+  @override
+  String kbVectorConfirmBody(int stories, int chunks, String tokens) {
+    return '预计 $stories 个故事、约 $chunks 块，约 $tokens 万 token。会产生向量服务的费用，可以随时停止，已完成的故事会保留。';
+  }
+
+  @override
+  String get kbVectorConfirm => '开始';
+
+  @override
+  String get lineKindSubtitle => '字幕';
+
+  @override
+  String get lineKindDocument => '文档';
+
+  @override
+  String get lineKindChoice => '选项';
+
+  @override
+  String get lineKindTitle => '标题';
+
+  @override
+  String get lineKindTutorial => '教程';
+
+  @override
+  String get aiAnswerOptions => '回答选项';
+
+  @override
+  String get aiAnswerReview => '复核';
+
+  @override
+  String get aiAnswerReviewHint => '另一个模型以读者身份提出疑问，回原文核实后再定稿（更慢）';
+
+  @override
+  String get aiAnswerDigest => '提要';
+
+  @override
+  String get aiAnswerDigestHint => '长答案先给几段提要，详细经过折叠在下面（多一次调用）';
+
+  @override
+  String librarySearchIn(String name) {
+    return '在「$name」中';
+  }
+
+  @override
+  String get librarySearchEverywhere => '搜索全部资料';
+
+  @override
+  String librarySearchNoNameMatch(String query) {
+    return '没有名字含「$query」的条目，下面是相近的名字和正文里的结果';
+  }
+
+  @override
+  String get librarySearchSimilar => '相近的名字';
+
+  @override
+  String get librarySearchMentions => '正文提到';
+
+  @override
+  String get librarySearchNoMentions => '正文里没有找到';
+
+  @override
+  String librarySearchInText(String query) {
+    return '在正文里搜索「$query」';
+  }
+
+  @override
+  String get librarySearchSemantic => '按意思找剧情';
+
+  @override
+  String get librarySearchSemanticTitle => '意思相近的剧情';
+
+  @override
+  String get librarySearchSemanticNeedsService =>
+      '配置向量服务后可以按意思找剧情（设置 → API 设置 → 向量）';
+
+  @override
+  String get librarySearchSemanticNoVectors => '当前知识库没有剧情向量（可以在知识库页生成）';
+
+  @override
+  String get librarySearchSemanticOtherModel => '知识库的向量不是用当前配置的向量模型生成的';
+
+  @override
+  String get librarySearchSemanticFailed => '向量服务请求失败';
+
+  @override
+  String librarySearchMatchCount(int n) {
+    return '$n 处';
+  }
+
+  @override
+  String librarySearchFurther(String query) {
+    return '搜索「$query」（含相近名字与正文）';
+  }
+
+  @override
+  String get storyReaderFindHint => '在本篇中查找';
 }

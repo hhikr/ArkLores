@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/agent/agent_logger.dart';
+import 'core/agent/answer_options.dart';
 import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
 import 'features/settings/api_settings_page.dart';
@@ -23,65 +24,49 @@ void main() async {
 
   final settingsService = SettingsService();
 
-  // Load onboarding status
-  bool onboardingDone = false;
-  try {
-    onboardingDone = await settingsService.isOnboardingDone();
-  } catch (e) {
-    debugPrint('[Startup] Error reading onboarding status: $e');
-  }
+  /// One saved setting, or [fallback] when it cannot be read.
+  Future<T> load<T>(String what, Future<T> Function() read, T fallback) =>
+      read().catchError((Object e) {
+        debugPrint('[Startup] Error loading $what: $e');
+        return fallback;
+      });
 
-  // Load API config
-  LLMConfig apiConfig = const LLMConfig();
-  try {
-    apiConfig = await settingsService.loadApiConfig();
-  } catch (e) {
-    debugPrint('[Startup] Error loading API config: $e');
-  }
-
-  var embeddingConfig = defaultEmbeddingConfig;
-  try {
-    embeddingConfig = await settingsService.loadEmbeddingConfig();
-  } catch (e) {
-    debugPrint('[Startup] Error loading embedding config: $e');
-  }
-
-  var mainTabIndex = 0;
-  try {
-    mainTabIndex = await settingsService.loadMainTabIndex();
-  } catch (e) {
-    debugPrint('[Startup] Error loading main tab index: $e');
-  }
-
-  var appTheme = AppTheme.ark;
-  try {
-    appTheme = await settingsService.loadTheme();
-  } catch (e) {
-    debugPrint('[Startup] Error loading theme: $e');
-  }
-
-  var appLocale = SupportedLocale.zh;
-  try {
-    appLocale = await settingsService.loadLocale();
-  } catch (e) {
-    debugPrint('[Startup] Error loading locale: $e');
-  }
-
-  try {
-    await AppIconService.setIcon(await settingsService.loadAppLauncherIcon());
-  } catch (e) {
-    debugPrint('[Startup] Error applying launcher icon: $e');
-  }
-
+  // The reads go to secure storage (a platform call each), so they run
+  // together instead of one after another before the first frame.
+  final (
+    onboardingDone,
+    apiConfig,
+    embeddingConfig,
+    mainTabIndex,
+    appTheme,
+    appLocale,
+    sessionLogsEnabled,
+    (nickname, answerOptions),
+    _,
+  ) = await (
+    load('onboarding status', settingsService.isOnboardingDone, false),
+    load('API config', settingsService.loadApiConfig, const LLMConfig()),
+    load('embedding config', settingsService.loadEmbeddingConfig,
+        defaultEmbeddingConfig,),
+    load('main tab index', settingsService.loadMainTabIndex, 0),
+    load('theme', settingsService.loadTheme, AppTheme.ark),
+    load('locale', settingsService.loadLocale, SupportedLocale.zh),
+    load('session log toggle', settingsService.loadSessionLogsEnabled, false),
+    // A record's .wait takes at most nine futures.
+    (
+      load('nickname', settingsService.loadNickname, ''),
+      load('answer options', settingsService.loadAnswerOptions,
+          const AnswerOptions(),),
+    ).wait,
+    load(
+      'launcher icon',
+      () async =>
+          AppIconService.setIcon(await settingsService.loadAppLauncherIcon()),
+      null,
+    ),
+  ).wait;
   // Apply the user's per-session AI log toggle before any agent runs.
-  var sessionLogsEnabled = false;
-  try {
-    sessionLogsEnabled = await settingsService.loadSessionLogsEnabled();
-    AgentLogger.setEnabled(sessionLogsEnabled);
-  } catch (e) {
-    debugPrint('[Startup] Error loading session log toggle: $e');
-  }
-
+  AgentLogger.setEnabled(sessionLogsEnabled);
 
   runApp(
     ProviderScope(
@@ -93,6 +78,8 @@ void main() async {
         initialThemeProvider.overrideWithValue(appTheme),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
+        initialNicknameProvider.overrideWithValue(nickname),
+        initialAnswerOptionsProvider.overrideWithValue(answerOptions),
       ],
       child: const ArkLoresApp(),
     ),
@@ -174,8 +161,20 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
     scaffoldBackgroundColor: Colors.transparent,
     canvasColor: tokens.bgSecondary,
     dividerColor: tokens.divider,
-    splashColor: tokens.accentPrimary.withValues(alpha: 0.08),
-    highlightColor: tokens.accentPrimary.withValues(alpha: 0.05),
+    // Touch feedback that can be seen: the signal yellow at 5–8 % vanished
+    // on the light grounds. A neutral wash of the text colour reads on both
+    // themes; the press scale and haptics come from `PressFeedback`.
+    splashColor: tokens.textPrimary.withValues(alpha: 0.12),
+    highlightColor: tokens.textPrimary.withValues(alpha: 0.07),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: SmoothPageTransitionsBuilder(),
+        TargetPlatform.iOS: SmoothPageTransitionsBuilder(),
+        TargetPlatform.windows: SmoothPageTransitionsBuilder(),
+        TargetPlatform.linux: SmoothPageTransitionsBuilder(),
+        TargetPlatform.macOS: SmoothPageTransitionsBuilder(),
+      },
+    ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: tokens.accentPrimary,
       selectionColor: tokens.accentPrimary.withValues(alpha: 0.24),
@@ -184,9 +183,20 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
       backgroundColor: tokens.bgSecondary,
       foregroundColor: tokens.textPrimary,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
-      shape: Border(bottom: BorderSide(color: tokens.divider)),
-      titleTextStyle: tokens.titleFont.copyWith(fontSize: 18),
+      // Slim: 48 high, a hairline below, a title the size of a heading
+      // rather than a banner.
+      toolbarHeight: 48,
+      titleSpacing: 4,
+      shape: Border(bottom: BorderSide(color: tokens.divider, width: 0.5)),
+      iconTheme: IconThemeData(color: tokens.textPrimary, size: 22),
+      actionsIconTheme: IconThemeData(color: tokens.textSecondary, size: 22),
+      titleTextStyle: tokens.titleFont.copyWith(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: tokens.textPrimary,
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -210,6 +220,11 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
         shape: outline.copyWith(side: BorderSide.none),
         textStyle: tokens.titleFont.copyWith(fontSize: 14),
       ),
+    ),
+    // Text buttons would take the primary colour (the signal yellow), which
+    // is too faint as text; text uses accentText.
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(foregroundColor: tokens.accentText),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(

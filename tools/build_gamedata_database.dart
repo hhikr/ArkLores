@@ -53,7 +53,7 @@ Future<void> main(List<String> args) async {
         'language': gamedataLanguage,
         'source_arknights_repo': arknightsSourceRepoUrl,
         'source_arknights_branch': 'master',
-        'source_arknights_commit': await _gitCommit(cfg.arknightsSource),
+        'source_arknights_commit': cfg.sourceCommit ?? await _gitCommit(cfg.arknightsSource),
         'built_at': DateTime.now().toUtc().toIso8601String(),
       },
     );
@@ -81,6 +81,9 @@ Future<void> main(List<String> args) async {
               '${catalog.matchedStories} matched story files',
     );
 
+    // 0.11: owners, story entries and the bindings derived from them.
+    await importer.entryImporter.rebuildDerived();
+
     await rebuildGamedataFts(db);
     await stats.refreshFrom(db);
     await writeGamedataManifest(db, countManifest(stats));
@@ -100,7 +103,7 @@ Future<void> main(List<String> args) async {
       'arknights': {
         'repo': arknightsSourceRepoUrl,
         'branch': 'master',
-        'commit': await _gitCommit(cfg.arknightsSource),
+        'commit': cfg.sourceCommit ?? await _gitCommit(cfg.arknightsSource),
         'languagePath': 'zh_CN',
       },
     },
@@ -144,8 +147,12 @@ class _Config {
     required this.outputDir,
     required this.force,
     required this.storyLimit,
+    this.sourceCommit,
   });
   final String arknightsSource;
+
+  /// Commit recorded in the manifest when the source is not a git checkout.
+  final String? sourceCommit;
   final String outputDir;
   final bool force;
   final int storyLimit;
@@ -155,6 +162,7 @@ class _Config {
     var outputDir = 'build/gamedata';
     var force = false;
     var storyLimit = 0;
+    String? sourceCommit;
 
     for (final arg in args) {
       if (arg.startsWith('--arknights-source=')) {
@@ -163,6 +171,8 @@ class _Config {
         outputDir = arg.substring('--output='.length);
       } else if (arg == '--force') {
         force = true;
+      } else if (arg.startsWith('--source-commit=')) {
+        sourceCommit = arg.substring('--source-commit='.length);
       } else if (arg.startsWith('--story-limit=')) {
         storyLimit = int.parse(arg.substring('--story-limit='.length));
       } else if (arg == '--help' || arg == '-h') {
@@ -183,6 +193,7 @@ class _Config {
       outputDir: outputDir,
       force: force,
       storyLimit: storyLimit,
+      sourceCommit: sourceCommit,
     );
   }
 
@@ -196,6 +207,7 @@ Usage:
 
 Options:
   --story-limit=N  Import only N story txt files for smoke tests.
+  --source-commit=SHA  Commit to record when the source is not a git checkout.
 ''');
     exit(exitCode);
   }

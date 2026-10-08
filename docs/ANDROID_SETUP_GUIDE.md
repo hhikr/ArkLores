@@ -1,201 +1,48 @@
-# ArkLores Android 配置、构建与安装
+# Android：构建、试装与发布
 
-本文适用于 ArkLores v0.9.0 开发与发布验收。当前工程版本来自 `pubspec.yaml`，Android 工程使用
-API 36 编译，主知识源是单独下载的中文 GameData DB。
+## 工具链
 
-## 快速开始
+Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileSdk 36。
 
-推荐先检查环境，再使用脚本构建和安装：
+- Windows 开发机：Flutter 在 `C:\src\flutter\bin`；Android SDK 与 JDK 在 `C:\Users\hhikr\dev`（`android-sdk`、`jdk-17`，用
+  `flutter config --android-sdk/--jdk-dir` 指定，没有写环境变量；`install_local.ps1` 在缺 `ANDROID_HOME`/`JAVA_HOME` 时自动指向这里）。
+- Linux：`/home/hhikr/flutter/bin`；可用 `tools/setup.sh`（交互向导，构建/安装，可起本地 HTTP 服务提供知识库）。
+- 云端会话没有 Android SDK（见 `CLOUD_DEV.md`）。
+- Flutter 迁移器会往 `android/gradle.properties` 加 `android.builtInKotlin/newDsl=false`；提交前 `git checkout -- android/gradle.properties`。
+- 改了 `android/` 下的 Kotlin/清单后，`flutter build apk --debug` 本机编译检查（debug 包不能发布）。
 
-```bash
-/home/hhikr/flutter/bin/flutter doctor
-./tools/setup.sh -a build,install -p android -m debug
+## 本机试装（不经 GitHub）
+
+手机开 USB 调试并连上电脑：
+
+```powershell
+.\tools\install_local.ps1 -Build -Kb     # 构建 release APK（release key 签名、烘入 tools/release_gamedata.env 的 URL/SHA）、安装、拷知识库
+.\tools\install_local.ps1                # 只安装最新的本地 APK
+.\tools\install_local.ps1 -Kb -KbOnly    # 只拷知识库
+.\tools\install_local.ps1 -DryRun
 ```
 
-`adb install -r` 会保留已安装 App 的数据。无参数运行 `./tools/setup.sh` 时，交互向导的
-默认动作也是 `build + install`。只有需要 clean install 时才明确选择 `uninstall`；卸载会
-删除 App 数据、已安装 GameData 和本地会话。
+知识库 `build\gamedata_v5\arklores_gamedata_zh.db.gz` 被拷成应用目录里的 `arklores_gamedata_zh.db.download.gz`；打开 设置 → 知识库，
+点“下载”即离线校验 SHA 并安装。**APK 必须是用这个 gz 的 SHA 构建的**（改了知识库就先改 `release_gamedata.env` 再 `-Build`）。
 
-常用命令：
+签名：`tools/arklores-release.jks` + `tools/android_signing.properties`（gitignored，绝不提交、绝不打印）。没有它们时本地
+`flutter build apk --release` 会退回 debug key，这样的包不能覆盖安装正式版、也不能发布。
 
-| 命令 | 用途 |
-| --- | --- |
-| `./tools/setup.sh` | 交互式构建/安装向导，默认保留 App 数据 |
-| `./tools/setup.sh -a build -p android -m debug` | 仅构建 debug APK |
-| `./tools/setup.sh -a build,install -p android -m debug` | 构建并覆盖安装 debug APK |
-| `./tools/setup.sh -a uninstall,build,install -p android -m debug` | 明确执行 clean install |
-| `./tools/setup.sh -a build -p android -m release` | 构建本地 release-mode 验收包 |
-| `./tools/setup.sh --dry-run ...` | 只校验和显示参数，不检查环境或执行动作 |
+## 发布（开发者明确同意后）
 
-APK 产物：
+1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.11.0 是 28）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
+2. 知识库有变化：按 `GAMEDATA_BUILD_PIPELINE.md` §7 准备资产，`tools/release_gamedata.env` 指向将要创建的 Release。
+3. 工作区干净（`coverage/` 已 gitignore），提交并推送功能分支。
+4. `.\tools\release_app.ps1 -Version <v> -NotesFile <说明.md> [-Stable]`（Linux/云端：`tools/release_app.sh`，`STABLE=1`）：
+   推 `release/v<v>` → `android-release.yml` 构建签名并校验证书指纹 `b1b09ebf…e364` → 下载 APK → 建 Release 并上传 APK。
+5. 上传知识库 gz 与 manifest 到同一个 Release；用公开地址 HEAD 一次确认 200。
+6. 开 PR 把功能分支合回 `main`（开发者合并）。
 
-```text
-build/app/outputs/flutter-apk/app-debug.apk
-build/app/outputs/flutter-apk/app-release.apk
-```
-
-## 环境要求
-
-| 组件 | 当前要求 | 检查方式 |
-| --- | --- | --- |
-| Flutter | 项目支持的 Flutter / Dart SDK | `flutter --version` |
-| Java | JDK 17 或更新版本 | `java -version` |
-| Android SDK | platform 36、build-tools 34.0.0、platform-tools | `sdkmanager --list_installed` |
-| Android 设备 | 已开启 USB 调试并授权 | `adb devices` |
-
-默认路径：
-
-```text
-FLUTTER_HOME=$HOME/flutter
-ANDROID_HOME=$HOME/Android/Sdk
-```
-
-可通过同名环境变量覆盖。脚本在缺少 SDK 时会安装 command-line tools；已有 SDK 也会
-检查并补齐 API 36 和当前已验证的 build-tools 34.0.0。
-
-手动安装 SDK 组件：
-
-```bash
-$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-  --sdk_root="$ANDROID_HOME" \
-  "platform-tools" \
-  "platforms;android-36" \
-  "build-tools;34.0.0"
-
-/home/hhikr/flutter/bin/flutter doctor --android-licenses
-```
-
-## GameData 真机测试
-
-App 不内置数据库。构建时通过以下参数配置可下载的 `.db.gz`：
-
-```text
-ARKLORES_GAMEDATA_DB_URL
-ARKLORES_GAMEDATA_DB_SHA256
-```
-
-### 从本地 GameData 源构建
-
-连接并授权 Android 设备后运行：
-
-```bash
-./tools/setup.sh \
-  -a build,install \
-  -p android \
-  -m debug \
-  --with-gamedata \
-  --gamedata-source=/path/to/ArknightsGameData
-```
-
-脚本会构建并压缩 DB、计算 SHA256、启动临时 HTTP 服务，并优先配置：
-
-```text
-adb reverse tcp:8765 tcp:8765
-```
-
-此时注入 App 的 `http://127.0.0.1:8765/...` 通过 USB 转发访问开发机，而不是直接访问
-手机本身。若不使用 adb reverse，添加 `--no-adb-reverse`，脚本会尝试使用局域网地址；
-手机和电脑必须位于可互访网络。
-
-`--gamedata-story-limit=N` 只适合快速 schema/smoke DB，不得用来代替完整 DB 检索验收。
-
-### 使用本机已有下载资产
-
-若 `.db.gz` 已由当前 builder 完整构建，可直接复用，不再次解析 GameData source：
-
-```bash
-./tools/setup.sh \
-  -a build,install \
-  -p android \
-  -m debug \
-  --gamedata-asset=build/gamedata_mobile/arklores_gamedata_zh.db.gz
-```
-
-交互向导的 GameData 第 2 项提供相同行为。脚本会执行 gzip 完整性检查、计算 SHA256、
-启动临时 HTTP 服务、确认目标文件可通过本地 HTTP 访问并配置 adb reverse，但不会调用
-`build_gamedata_database.dart`。App 安装器仍会在下载后校验 GameData schema version 和
-必需表。
-
-### 使用已有远程下载资产
-
-推荐使用手机可访问的 HTTPS URL，并必须提供压缩文件 SHA256：
-
-```bash
-./tools/setup.sh \
-  -a build,install \
-  -p android \
-  -m debug \
-  --gamedata-url=https://example.invalid/arklores_gamedata_zh.db.gz \
-  --gamedata-sha=<64位十六进制SHA256>
-```
-
-若 URL 使用 `127.0.0.1` 或 `localhost`，脚本必须检测到已连接设备并成功配置
-`adb reverse`，否则会停止，避免生成手机无法下载的包。
-
-仅临时开发且明确接受压缩包未校验风险时可以使用：
-
-```text
---allow-unverified-gamedata
-```
-
-该选项不得用于 release 验收、分发或发布资产。
-
-安装后打开：`Settings -> Knowledge Base -> GameData 主知识库 -> 下载/更新`。
-
-## Release 签名边界
-
-当前 `android/app/build.gradle` 的 `release` build type 仍使用 debug signing config。
-因此：
-
-- `-m release` 可以生成优化后的本地验收 APK；
-- 该 APK 不是正式生产签名包；
-- 脚本检测到 debug signing 时会显示警告；
-- 正式发布必须另行配置受保护的 release keystore，且不得把 keystore、密码或
-  `key.properties` 提交到仓库。
-
-本指南和 `setup.sh` 不执行 tag、GitHub Release、asset 上传或 push。
+建 Release 的请求失败（v0.11.0 遇到 GitHub 500）时：APK 已在 `%TEMP%\arklores_release_<v>`，用 REST 补建 Release 并上传，不要重推 release 分支
+（重推会重新构建，APK 哈希会变）。
 
 ## 常见问题
 
-### 找不到设备
-
-```bash
-$ANDROID_HOME/platform-tools/adb devices
-```
-
-状态必须是 `device`。若为 `unauthorized`，解锁手机并确认 USB 调试授权。
-
-### GameData 下载失败
-
-依次检查：
-
-1. URL 是否能从手机访问；localhost 是否已成功配置 adb reverse。
-2. 临时 HTTP 服务是否仍在运行。
-3. SHA256 是否对应压缩后的 `.db.gz`，而不是解压后的 DB。
-4. Android 网络是否允许当前开发 URL；正式验收优先使用 HTTPS。
-
-### 需要保留数据升级
-
-不要选择 `uninstall`。使用：
-
-```bash
-./tools/setup.sh -a build,install -p android -m debug
-```
-
-### AGP 或 JDK 构建错误
-
-先运行：
-
-```bash
-/home/hhikr/flutter/bin/flutter doctor -v
-```
-
-工程当前 AGP 和 Gradle 版本以 `android/settings.gradle` 与
-`android/gradle/wrapper/gradle-wrapper.properties` 为准，不要仅根据旧教程盲目修改版本。
-
-## 相关文档
-
-- `docs/GAMEDATA_BUILD_PIPELINE.md`
-- `docs/RETRIEVAL_QA.md`
-- `../CONTRIBUTING.md`
-- <https://docs.flutter.dev/get-started/install/linux/android>
+- 找不到设备：`adb devices` 状态要是 `device`；`unauthorized` 时在手机上确认授权。
+- 知识库下载卡住：用 Release 页面手动下载 gz，改名为 `arklores_gamedata_zh.db.download.gz` 放进应用目录，再点“下载”。
+- 磁盘：C 盘满时 `flutter test` 编译失败后会卡住很久；全量测试正常约 1 分钟，明显变慢先查剩余空间。

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
-import 'react_loop.dart' show ReActEventType;
+import 'react_event.dart' show ReActEventType;
 import 'story_answer.dart' show FactCheckVerdict;
 import 'turn_stats.dart';
 

@@ -11,6 +11,8 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/smooth_page_route.dart';
 import '../ai/ai_chat_page.dart';
 import '../ai/wiki_ai_context.dart';
 import '../settings/settings_service.dart';
@@ -63,10 +65,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   bool _restoredState = false;
   bool _hasStoredDarkMode = false;
   Timer? _readerControlsTimer;
+  late final SettingsService _settings;
 
   @override
   void initState() {
     super.initState();
+    _settings = ref.read(settingsServiceProvider);
     WidgetsBinding.instance.addObserver(this);
     _isDarkMode =
         WidgetsBinding.instance.platformDispatcher.platformBrightness ==
@@ -144,20 +148,27 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     var urls = <String>[];
     var appliedUrls = <String>[];
     try {
-      final service = ref.read(settingsServiceProvider);
+      final service = _settings;
       sites = await service.loadWikiSites();
-      urls = [
-        for (var i = 0; i < sites.length; i++)
-          await service.loadWikiUrl(i) ?? sites[i].url,
-      ];
-      appliedUrls = [
-        for (var i = 0; i < sites.length; i++)
-          await service.loadWikiAppliedUrl(i) ?? sites[i].url,
-      ];
-      tabIndex = await service.loadWikiTabIndex();
-      readerMode = await service.loadWikiReaderMode();
-      readerFontScale = await service.loadWikiReaderFontScale();
-      storedDarkMode = await service.loadWikiDarkMode();
+      final loadedSites = sites;
+      // Each read is a secure-storage platform call: run them together.
+      (urls, appliedUrls, tabIndex, readerMode, readerFontScale, storedDarkMode) =
+          await (
+        Future.wait([
+          for (var i = 0; i < loadedSites.length; i++)
+            service.loadWikiUrl(i).then((url) => url ?? loadedSites[i].url),
+        ]),
+        Future.wait([
+          for (var i = 0; i < loadedSites.length; i++)
+            service
+                .loadWikiAppliedUrl(i)
+                .then((url) => url ?? loadedSites[i].url),
+        ]),
+        service.loadWikiTabIndex(),
+        service.loadWikiReaderMode(),
+        service.loadWikiReaderFontScale(),
+        service.loadWikiDarkMode(),
+      ).wait;
     } catch (e) {
       debugPrint('[WikiBrowser] Error restoring browsing state: $e');
     }
@@ -188,22 +199,30 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
   }
 
+  /// Saves the tabs, URLs and reader settings. Called from [dispose] too,
+  /// where `ref` can no longer be used: the service was taken in
+  /// [initState] and the state is copied before the first await.
   Future<void> _persistBrowsingState() async {
+    final service = _settings;
+    final tabIndex = _tabController.index;
+    final readerMode = _isReaderMode;
+    final fontScale = _readerFontScale;
+    final darkMode = _hasStoredDarkMode ? _isDarkMode : null;
+    final urls = List.of(_currentUrls);
+    final appliedUrls = List.of(_appliedSourceUrls);
     try {
-      final service = ref.read(settingsServiceProvider);
-      await service.saveWikiTabIndex(_tabController.index);
-      await service.saveWikiReaderMode(_isReaderMode);
-      await service.saveWikiReaderFontScale(_readerFontScale);
-      if (_hasStoredDarkMode) {
-        await service.saveWikiDarkMode(_isDarkMode);
+      await service.saveWikiTabIndex(tabIndex);
+      await service.saveWikiReaderMode(readerMode);
+      await service.saveWikiReaderFontScale(fontScale);
+      if (darkMode != null) {
+        await service.saveWikiDarkMode(darkMode);
       }
       await Future.wait([
-        for (var i = 0; i < _currentUrls.length; i++)
-          if (_currentUrls[i].trim().isNotEmpty)
-            service.saveWikiUrl(i, _currentUrls[i]),
-        for (var i = 0; i < _appliedSourceUrls.length; i++)
-          if (_appliedSourceUrls[i].trim().isNotEmpty)
-            service.saveWikiAppliedUrl(i, _appliedSourceUrls[i]),
+        for (var i = 0; i < urls.length; i++)
+          if (urls[i].trim().isNotEmpty) service.saveWikiUrl(i, urls[i]),
+        for (var i = 0; i < appliedUrls.length; i++)
+          if (appliedUrls[i].trim().isNotEmpty)
+            service.saveWikiAppliedUrl(i, appliedUrls[i]),
       ]);
     } catch (e) {
       debugPrint('[WikiBrowser] Error saving browsing state: $e');
@@ -405,9 +424,75 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         );
   }
 
+  /// Room the floating docks take over the web page (logical px = CSS px):
+  /// the site pill at the top, the navigation at the bottom. Set in
+  /// [build]; 0 in reader mode, where both docks are hidden.
+  double _dockTop = 0;
+  double _dockBottom = 0;
+
+  /// Records the docks' room and, when it changed, pads every open page.
+  void _syncDockInsets(double top, double bottom) {
+    if (top == _dockTop && bottom == _dockBottom) return;
+    _dockTop = top;
+    _dockBottom = bottom;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final controller in _controllers) {
+        if (controller != null) unawaited(_applyDockInsets(controller));
+      }
+    });
+  }
+
+  /// Pads the page by the docks' room, so its top and its end can be
+  /// scrolled clear of them, and moves the site's own fixed/sticky bars
+  /// (which ignore padding) down/up by the same amount.
+  Future<void> _applyDockInsets(InAppWebViewController controller) async {
+    final js = '''
+(function(t, b) {
+  var id = 'arklores-dock-insets';
+  var style = document.getElementById(id);
+  if (!style) {
+    style = document.createElement('style');
+    style.id = id;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  style.textContent = 'html{padding-top:' + t + 'px !important;' +
+      'padding-bottom:' + b + 'px !important;' +
+      'scroll-padding-top:' + t + 'px;}';
+  function shift() {
+    if (!document.body) return;
+    var all = document.body.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i];
+      var cs = window.getComputedStyle(e);
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      if (e.dataset.arkloresDock === undefined) {
+        if (parseFloat(cs.top) === 0) e.dataset.arkloresDock = 'top';
+        else if (cs.position === 'fixed' && parseFloat(cs.bottom) === 0)
+          e.dataset.arkloresDock = 'bottom';
+        else e.dataset.arkloresDock = '';
+      }
+      if (e.dataset.arkloresDock === 'top')
+        e.style.setProperty('top', t + 'px', 'important');
+      if (e.dataset.arkloresDock === 'bottom')
+        e.style.setProperty('bottom', b + 'px', 'important');
+    }
+  }
+  shift();
+  window.setTimeout(shift, 600);
+  window.setTimeout(shift, 1600);
+})($_dockTop, $_dockBottom);
+''';
+    try {
+      await controller.evaluateJavascript(source: js);
+    } catch (_) {
+      // A page that is still loading gets it with its appearance pass.
+    }
+  }
+
   Future<void> _applyNormalWebViewEnhancements(
     InAppWebViewController controller,
   ) async {
+    await _applyDockInsets(controller);
     await _applyPageScale(controller);
     await _applyPrtsOperatorResponsiveLayout(controller);
     await _applyPrtsScenarioFit(controller);
@@ -655,7 +740,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   Future<void> _openBookmarks() async {
     final bookmark = await Navigator.of(context).push<Bookmark>(
-      MaterialPageRoute(
+      smoothPageRoute(
         builder: (_) => const BookmarkPage(),
       ),
     );
@@ -707,7 +792,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     );
 
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
+      smoothPageRoute<void>(
         builder: (_) => AiChatPage(initialWikiContext: contextPayload),
       ),
     );
@@ -760,6 +845,44 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
+  /// The site switch: the sites in a floating pill on the left (as wide as
+  /// they need), bookmarks in a round pill on the right. The web page starts
+  /// below them (a page cannot be told to leave room under a dock).
+  Widget _buildSiteBar(AppThemeTokens theme) {
+    return Padding(
+      key: const ValueKey('wiki-site-bar'),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      child: FloatingSplitBar(
+        theme: theme,
+        leading: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < _wikiSites.length; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: _siteSegment(theme, i),
+                ),
+            ],
+          ),
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.bookmarks_outlined, size: 20),
+          color: theme.textPrimary,
+          tooltip: context.t.bookmarksTitle,
+          onPressed: _openBookmarks,
+        ),
+      ),
+    );
+  }
+  Widget _siteSegment(AppThemeTokens theme, int index) => FloatingSegment(
+        key: ValueKey('wiki-site-$index'),
+        theme: theme,
+        label: _wikiSites[index].label,
+        selected: _tabController.index == index,
+        onTap: () => _tabController.index = index,
+      );
   // ─── Build ───────────────────────────────────────────────────────
 
   @override
@@ -785,6 +908,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         ) ??
         false;
 
+    _syncDockInsets(
+      _isReaderMode ? 0 : floatingTopInset,
+      _isReaderMode ? 0 : MediaQuery.paddingOf(context).bottom,
+    );
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -792,62 +919,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         bottom: false,
         child: Stack(
           children: [
-            // ── Main content column ────────────────────────────
-            Column(
-              children: [
-                // ── Site tab bar ─────────────────────────────────
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeInOutCubic,
-                  child: _isReaderMode
-                      ? const SizedBox.shrink()
-                      : Container(
-                          color: theme.bgSecondary,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TabBar(
-                                  controller: _tabController,
-                                  indicatorColor: theme.accentPrimary,
-                                  labelColor: theme.accentPrimary,
-                                  unselectedLabelColor: theme.textSecondary,
-                                  labelStyle:
-                                      theme.titleFont.copyWith(fontSize: 14),
-                                  unselectedLabelStyle:
-                                      theme.bodyFont.copyWith(fontSize: 14),
-                                  indicatorWeight: 2,
-                                  tabs: _wikiSites.map((site) {
-                                    return Tab(
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.public_rounded,
-                                            size: 16,
-                                            color: theme.accentPrimary,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(site.label),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.bookmarks_rounded),
-                                color: theme.textSecondary,
-                                tooltip: 'Bookmarks',
-                                onPressed: _openBookmarks,
-                              ),
-                              const SizedBox(width: 6),
-                            ],
-                          ),
-                        ),
-                ),
-
-                // ── WebView area (IndexedStack = no horizontal swipes) ──
-                Expanded(
+            // ── The web page fills the page; the docks float over it and
+            // the page is padded to match (_applyDockInsets). IndexedStack:
+            // no horizontal swipes between sites. ──
+                Positioned.fill(
                   child: IndexedStack(
                     index: _tabController.index,
                     children: List.generate(_wikiSites.length, (i) {
@@ -873,8 +948,13 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                     }),
                   ),
                 ),
-              ],
-            ),
+            if (!_isReaderMode)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildSiteBar(theme),
+              ),
 
             if (_isReaderMode)
               ReaderToolbar(

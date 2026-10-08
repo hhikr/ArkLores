@@ -9,6 +9,8 @@ import '../../core/agent/chat_session_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'widgets/chat_bubble.dart';
 
@@ -27,16 +29,9 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
     final theme = ref.watch(themeProvider);
     final summaries = ref.watch(chatHistoryListProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        elevation: 0,
-        title: Text(
-          context.t.aiHistoryTitle,
-          style: theme.titleFont.copyWith(fontSize: 20),
-        ),
-      ),
+    return FloatingScaffold(
+      title: context.t.aiHistoryTitle,
+      scrollUnder: true,
       body: summaries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => Center(
@@ -72,8 +67,13 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(chatHistoryListProvider),
+            // Under the floating docks: the refresh spinner starts below them.
+            edgeOffset: floatingPadding(context, EdgeInsets.zero).top,
             child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: floatingPadding(
+                context,
+                const EdgeInsets.symmetric(vertical: 8),
+              ),
               itemCount: sessions.length,
               separatorBuilder: (_, __) => Divider(
                 height: 1,
@@ -92,7 +92,10 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
 
   Widget _buildSessionTile(AppThemeTokens theme, ChatSessionSummary summary) {
     final t = context.t;
-    return ListTile(
+    return PressFeedback(
+      enabled: !summary.corrupt,
+      pressedScale: 0.985,
+      child: ListTile(
       leading: Icon(
         summary.corrupt ? Icons.error_outline_rounded : Icons.chat_bubble_outline,
         color: summary.corrupt ? theme.danger : theme.accentPrimary,
@@ -117,7 +120,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
       ),
       onTap: summary.corrupt
           ? null
-          : () => _openDetail(context, summary.sessionId),
+          : withHaptic(() => _openDetail(context, summary.sessionId)),
       trailing: PopupMenuButton<String>(
         icon: Icon(Icons.more_vert_rounded, color: theme.textSecondary),
         onSelected: (action) {
@@ -140,6 +143,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
             PopupMenuItem(value: 'view', child: Text(t.aiHistoryView)),
           PopupMenuItem(value: 'delete', child: Text(t.aiHistoryDelete)),
         ],
+      ),
       ),
     );
   }
@@ -229,16 +233,9 @@ class _ChatSessionDetailPageState extends ConsumerState<ChatSessionDetailPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        elevation: 0,
-        title: Text(
-          context.t.aiHistoryView,
-          style: theme.titleFont.copyWith(fontSize: 20),
-        ),
-      ),
+    return FloatingScaffold(
+      title: context.t.aiHistoryView,
+      scrollUnder: true,
       body: FutureBuilder<ChatSessionFile?>(
         future: _future,
         builder: (context, snapshot) {
@@ -264,7 +261,10 @@ class _ChatSessionDetailPageState extends ConsumerState<ChatSessionDetailPage> {
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: floatingPadding(
+              context,
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
             itemCount: messages.length,
             itemBuilder: (context, index) => ChatBubble(message: messages[index]),
           );

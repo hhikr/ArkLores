@@ -3,14 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/gamedata/gamedata_build_provider.dart';
 import '../../core/gamedata/gamedata_installer.dart';
 import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
-import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import 'kb_common.dart';
+import 'source_build_card.dart';
+import 'story_vector_card.dart';
 
 /// Knowledge base management page for the structured Chinese GameData DB.
 class KnowledgeBasePage extends ConsumerStatefulWidget {
@@ -30,15 +32,6 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   String? get _gameDataDownloadError => _download.error == null
       ? null
       : _friendlyGameDataError(_download.error!);
-
-  final TextEditingController _tokenController = TextEditingController();
-  bool _tokenLoaded = false;
-
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,28 +53,11 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       }
     });
 
-    // Fill the token field once from secure storage (async, outside build).
-    ref.listen(githubTokenProvider, (previous, next) {
-      final token = next.valueOrNull;
-      if (!_tokenLoaded && token != null) {
-        _tokenLoaded = true;
-        _tokenController.text = token;
-      }
-    });
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: theme.bgSecondary,
-        title: Text(
-          context.t.kbTitle,
-          style: theme.titleFont.copyWith(fontSize: 18),
-        ),
-        iconTheme: IconThemeData(color: theme.textPrimary),
-        elevation: 0,
-      ),
+    return FloatingScaffold(
+      title: context.t.kbTitle,
+      scrollUnder: true,
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: floatingPadding(context, const EdgeInsets.all(16)),
         children: [
           Center(
             child: Icon(
@@ -132,324 +108,16 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             error: (_, __) => const SizedBox.shrink(),
           ),
           const SizedBox(height: 16),
-          _buildSourceBuildCard(context, theme),
+          const SourceBuildCard(),
+          const SizedBox(height: 16),
+          const StoryVectorCard(),
         ],
       ),
     );
   }
 
-  Widget _buildSourceBuildCard(
-    BuildContext context,
-    AppThemeTokens theme,
-  ) {
-    final build = ref.watch(gameDataBuildProvider);
-    return ThemeAwareCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.sync_rounded, color: theme.accentPrimary, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t.kbBuildSectionTitle,
-                      style: theme.titleFont.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      context.t.kbBuildSectionDesc,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (build.latestCommit != null)
-            Text(
-              '${context.t.kbBuildLatestCommit}: ${_shortCommit(build.latestCommit)}'
-              '${build.installedCommit != null ? ' (${context.t.kbBuildInstalledCommit}: ${_shortCommit(build.installedCommit)})' : ''}',
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-          if (build.phase == GameDataBuildPhase.done) ...[
-            const SizedBox(height: 8),
-            Text(
-              build.incremental
-                  ? context.t.kbBuildIncrementalDone
-                  : context.t.kbBuildFullDone,
-              style: theme.bodyFont.copyWith(
-                color: theme.accentPrimary,
-                fontSize: 12,
-              ),
-            ),
-          ],
-          if (build.error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${context.t.kbBuildError}: ${build.error}',
-              style: theme.bodyFont.copyWith(
-                color: theme.danger,
-                fontSize: 12,
-              ),
-            ),
-          ],
-          if (build.busy) ...[
-            const SizedBox(height: 12),
-            Text(
-              _buildStageLabel(context, build),
-              style: theme.bodyFont.copyWith(
-                color: theme.textPrimary,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
-              value: build.total > 0
-                  ? (build.done / build.total).clamp(0.0, 1.0)
-                  : null,
-              backgroundColor: theme.divider,
-              valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-              minHeight: 6,
-            ),
-            if (build.total > 0) ...[
-              const SizedBox(height: 4),
-              Text(
-                '${build.done} / ${build.total}',
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: build.busy
-                    ? null
-                    : () => ref
-                        .read(gameDataBuildProvider.notifier)
-                        .checkForUpdates(githubToken: _currentGithubToken()),
-                icon: const Icon(Icons.manage_search_rounded, size: 18),
-                label: Text(context.t.kbBuildCheckUpdates),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.accentPrimary,
-                  side: BorderSide(color: theme.divider),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (build.busy)
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      ref.read(gameDataBuildProvider.notifier).cancel(),
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  label: Text(context.t.kbBuildCancel),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.danger,
-                    side: BorderSide(color: theme.divider),
-                  ),
-                )
-              else
-                ElevatedButton.icon(
-                  onPressed: () => ref
-                      .read(gameDataBuildProvider.notifier)
-                      .buildFromSource(githubToken: _currentGithubToken()),
-                  icon: const Icon(Icons.build_rounded, size: 18),
-                  label: Text(context.t.kbBuildFromSource),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.accentPrimary,
-                    foregroundColor: theme.bgPrimary,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildGithubTokenSection(context, theme),
-        ],
-      ),
-    );
-  }
 
-  /// Optional GitHub Personal Access Token section: raises the GitHub API
-  /// quota from 60 to 5000 requests/hour, avoiding rate-limit failures when
-  /// pulling GameData source. Stored in OS secure storage.
-  Widget _buildGithubTokenSection(
-    BuildContext context,
-    AppThemeTokens theme,
-  ) {
-    final tokenAsync = ref.watch(githubTokenProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Divider(color: theme.divider, height: 1),
-        const SizedBox(height: 12),
-        Text(
-          context.t.kbBuildTokenTitle,
-          style: theme.titleFont.copyWith(fontSize: 13),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          context.t.kbBuildTokenDesc,
-          style: theme.bodyFont.copyWith(
-            color: theme.textSecondary,
-            fontSize: 11,
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _tokenController,
-                // Visible, but the keyboard must not learn or autocorrect it.
-                keyboardType: TextInputType.visiblePassword,
-                autocorrect: false,
-                enableSuggestions: false,
-                style: theme.bodyFont.copyWith(color: theme.textPrimary),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: context.t.kbBuildTokenPlaceholder,
-                  hintStyle: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 12,
-                  ),
-                  filled: true,
-                  fillColor: theme.bgPrimary,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
-                    borderSide: BorderSide(color: theme.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
-                    borderSide: BorderSide(color: theme.divider),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            FilledButton(
-              onPressed: _saveGithubToken,
-              style: FilledButton.styleFrom(
-                backgroundColor: theme.accentPrimary,
-                foregroundColor: theme.bgPrimary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              child: Text(
-                context.t.kbBuildTokenSave,
-                style: theme.titleFont.copyWith(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        if (tokenAsync.valueOrNull?.isNotEmpty ?? false) ...[
-          const SizedBox(height: 4),
-          Text(
-            context.t.kbBuildTokenSetHint,
-            style: theme.bodyFont.copyWith(
-              color: theme.accentPrimary,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
 
-  String? _currentGithubToken() {
-    final text = _tokenController.text.trim();
-    if (text.isNotEmpty) return text;
-    return ref.read(githubTokenProvider).valueOrNull;
-  }
-
-  Future<void> _saveGithubToken() async {
-    final token = _tokenController.text.trim();
-    await ref.read(settingsServiceProvider).saveGithubToken(token);
-    ref.invalidate(githubTokenProvider);
-    _tokenLoaded = false;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          token.isEmpty
-              ? context.t.kbBuildTokenCleared
-              : context.t.kbBuildTokenSaved,
-        ),
-      ),
-    );
-  }
-
-  String _buildStageLabel(
-    BuildContext context,
-    GameDataBuildUiState build,
-  ) {
-    switch (build.phase) {
-      case GameDataBuildPhase.checking:
-        return context.t.kbBuildChecking;
-      case GameDataBuildPhase.downloading:
-        return build.stage == 'zip'
-            ? context.t.kbBuildDownloadingZip
-            : context.t.kbBuildDownloadingChanges;
-      case GameDataBuildPhase.extracting:
-        return context.t.kbBuildExtracting;
-      case GameDataBuildPhase.swapping:
-        return context.t.kbBuildSwapping;
-      case GameDataBuildPhase.building:
-        switch (build.stage) {
-          case 'copy':
-            return context.t.kbBuildStageCopy;
-          case 'incremental':
-            return context.t.kbBuildStageIncremental;
-          case 'profiles':
-            return context.t.kbBuildStageProfiles;
-          case 'voices':
-            return context.t.kbBuildStageVoices;
-          case 'structured':
-            return context.t.kbBuildStageStructured;
-          case 'stories':
-            return context.t.kbBuildStageStories;
-          case 'coverage':
-            return context.t.kbBuildStageCoverage;
-          case 'coverage_speakers':
-            return context.t.kbBuildStageCoverageSpeakers;
-          case 'coverage_trie':
-            return context.t.kbBuildStageCoverageTrie;
-          case 'coverage_scan':
-            return context.t.kbBuildStageCoverageScan;
-          case 'coverage_rare':
-            return context.t.kbBuildStageCoverageRare;
-          case 'coverage_profiles':
-            return context.t.kbBuildStageCoverageProfiles;
-          case 'fts':
-            return context.t.kbBuildStageFts;
-          case 'start':
-            return context.t.kbBuildStageStart;
-          default:
-            return build.stage;
-        }
-      case GameDataBuildPhase.idle:
-      case GameDataBuildPhase.done:
-        return '';
-    }
-  }
 
   void _downloadGameData() {
     ref.read(gameDataDownloadProvider.notifier).start();
@@ -500,6 +168,14 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     return context.t.kbDownloadFailed(text);
   }
 
+  /// The folder the knowledge base lives in (where a hand-downloaded file
+  /// goes).
+  String _installDir(GameDataInstallStatus status) {
+    final path = status.dbPath.replaceAll('\\', '/');
+    final cut = path.lastIndexOf('/');
+    return cut > 0 ? path.substring(0, cut) : path;
+  }
+
   Widget _buildGameDataCard(
     BuildContext context,
     GameDataInstallStatus status,
@@ -511,7 +187,16 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
     final progress = total != null && total > 0
         ? (_gameDataDownloadedBytes / total).clamp(0.0, 1.0)
         : null;
-    final progressText = total != null && total > 0
+    final phase = _download.phase;
+    final progressText = _isDownloadingGameData &&
+            phase != GameDataInstallPhase.downloading
+        ? switch (phase) {
+            GameDataInstallPhase.connecting =>
+              context.t.kbConnecting(_download.attempt),
+            GameDataInstallPhase.verifying => context.t.kbVerifying,
+            _ => context.t.kbInstalling,
+          }
+        : total != null && total > 0
         ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} MB'
         : _gameDataDownloadedBytes > 0
             ? '${(_gameDataDownloadedBytes / 1024 / 1024).toStringAsFixed(1)} MB'
@@ -541,62 +226,104 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t.kbStructuredTitle,
-                      style: theme.titleFont.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle.isEmpty
-                          ? progressText
-                          : '$progressText · $subtitle',
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  context.t.kbStructuredTitle,
+                  style: theme.titleFont.copyWith(fontSize: 15),
                 ),
               ),
-              const SizedBox(width: 12),
-              ElevatedButton.icon(
-                key: const Key('kb-download-button'),
-                onPressed: _isDownloadingGameData || upToDate
-                    ? null
-                    : _downloadGameData,
-                icon: Icon(
-                  _isDownloadingGameData
-                      ? Icons.downloading_rounded
-                      : upToDate
-                          ? Icons.check_rounded
-                          : Icons.download_rounded,
-                  size: 18,
-                ),
-                label: Text(
-                  _isDownloadingGameData
-                      ? context.t.kbDownloading
-                      : upToDate
-                          ? context.t.kbUpToDate
-                          : status.installed
-                              ? context.t.kbUpdate
-                              : context.t.kbDownload,
-                  style: theme.titleFont.copyWith(fontSize: 13),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.accentPrimary,
-                  foregroundColor: theme.bgPrimary,
-                  disabledBackgroundColor: theme.divider,
-                  disabledForegroundColor: theme.textSecondary,
+              if (upToDate && !_isDownloadingGameData)
+                Container(
+                  key: const Key('kb-status-current'),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: theme.accentPrimary.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_rounded,
+                          size: 14, color: theme.accentText,),
+                      const SizedBox(width: 3),
+                      Text(
+                        context.t.kbUpToDate,
+                        style: theme.bodyFont.copyWith(
+                          color: theme.accentText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 36),
+            child: Text(
+              subtitle.isEmpty ? progressText : '$progressText · $subtitle',
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12,
+                height: 1.4,
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (upToDate && !_isDownloadingGameData)
+                OutlinedButton.icon(
+                  key: const Key('kb-redownload'),
+                  onPressed: _redownloadGameData,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(
+                    context.t.kbRedownload,
+                    style: theme.titleFont.copyWith(fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.textPrimary,
+                    side: BorderSide(color: theme.cardBorder),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                )
+              else
+                ElevatedButton.icon(
+                  key: const Key('kb-download-button'),
+                  onPressed: _isDownloadingGameData ? null : _downloadGameData,
+                  icon: Icon(
+                    _isDownloadingGameData
+                        ? Icons.downloading_rounded
+                        : Icons.download_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _isDownloadingGameData
+                        ? context.t.kbDownloading
+                        : status.installed
+                            ? context.t.kbUpdate
+                            : context.t.kbDownload,
+                    style: theme.titleFont.copyWith(fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.accentPrimary,
+                    foregroundColor: theme.onAccent,
+                    disabledBackgroundColor: theme.divider,
+                    disabledForegroundColor: theme.textSecondary,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
             ],
           ),
           if (_isDownloadingGameData) ...[
@@ -610,22 +337,33 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 minHeight: 6,
               ),
             ),
-          ],
-          if (upToDate && !_isDownloadingGameData)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                key: const Key('kb-redownload'),
-                onPressed: _redownloadGameData,
-                child: Text(
-                  context.t.kbRedownload,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 12,
+            if (phase == GameDataInstallPhase.connecting ||
+                phase == GameDataInstallPhase.downloading)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('kb-cancel-download'),
+                  onPressed: ref.read(gameDataDownloadProvider.notifier).cancel,
+                  child: Text(
+                    context.t.kbCancelDownload,
+                    style: theme.bodyFont.copyWith(
+                      color: theme.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ),
-            ),
+            if (phase == GameDataInstallPhase.connecting &&
+                _download.attempt >= 2)
+              Text(
+                context.t.kbManualHint(_installDir(status)),
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
+          ],
           if (status.updateAvailable && !_isDownloadingGameData) ...[
             const SizedBox(height: 10),
             Row(
@@ -654,6 +392,17 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
                 fontSize: 12,
               ),
             ),
+            if (isTransientNetworkError(_download.error!)) ...[
+              const SizedBox(height: 6),
+              Text(
+                context.t.kbManualHint(_installDir(status)),
+                style: theme.bodyFont.copyWith(
+                  color: theme.textSecondary,
+                  fontSize: 11.5,
+                  height: 1.45,
+                ),
+              ),
+            ],
           ],
           if (status.installed && status.dbPath.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -690,7 +439,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         _statTile(
           context,
           context.t.kbStatSourceCommit,
-          _shortCommit(status.sourceCommit),
+          shortCommit(status.sourceCommit),
           Icons.commit_rounded,
           theme,
         ),
@@ -747,11 +496,5 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         ],
       ),
     );
-  }
-
-  String _shortCommit(String? commit) {
-    if (commit == null || commit.isEmpty) return '-';
-    if (commit.length <= 7) return commit;
-    return commit.substring(0, 7);
   }
 }

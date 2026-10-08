@@ -8,19 +8,16 @@
 /// as this interface, which keeps them Flutter-free and identical everywhere.
 library;
 
-import 'gamedata_models.dart';
 import 'name_similarity.dart';
 import 'readonly_sql.dart';
 import 'story_catalog.dart';
 import 'story_coverage_models.dart';
 import 'story_vectors.dart';
 
-export 'gamedata_models.dart';
 export 'name_similarity.dart' show SimilarName, describeSimilarNames;
 export 'readonly_sql.dart' show SqlQueryResult;
 export 'story_catalog.dart'
     show
-        NamedStoryTarget,
         StoryCatalogEntry,
         StoryCollection,
         collectionReleaseKey,
@@ -35,31 +32,6 @@ abstract interface class GameDataRetrieval {
   /// Whether the local knowledge DB is present and readable.
   Future<bool> get isAvailable;
 
-  /// Multi-stage structured/FTs search (entity + alias + docs + chunks).
-  Future<List<GameDataSearchResult>> search({
-    required String query,
-    int topK,
-    String? contentType,
-    String? entityId,
-    String searchMode,
-    String? scopeId,
-  });
-
-  /// Resolves a raw entity id/name/alias to a canonical id (null when none).
-  Future<String?> resolveEntityId(String raw);
-
-  /// Returns exact candidates for a display name (for disambiguation).
-  Future<List<GameDataEntityCandidate>> findEntityCandidates(
-    String query, {
-    int limit,
-  });
-
-  /// Every appearance run of an entity across stories.
-  Future<List<StoryCoverageEntry>> searchStoryCoverage({
-    required String entityId,
-    String? scopeFilter,
-  });
-
   /// Raw story lines window for a story id.
   Future<StoryLinesPage> readStoryLines({
     required String storyId,
@@ -67,12 +39,6 @@ abstract interface class GameDataRetrieval {
     int? endLine,
     int? maxLines,
     String? pageToken,
-  });
-
-  /// Chapter profiles (line range, speakers, entities, summary).
-  Future<List<StoryChapterProfile>> getStoryMap({
-    List<String>? storyIds,
-    String? scopeId,
   });
 
   /// R12/R14: stories whose lines (content or speaker) contain any of
@@ -97,13 +63,6 @@ abstract interface class GameDataRetrieval {
     List<double> queryVector, {
     String? scopeId,
     int topK,
-  });
-
-  /// LIKE search of story-line content restricted to some story ids.
-  Future<List<Map<String, Object?>>> searchStoryLinesLikeInStories(
-    String term,
-    List<String> storyIds, {
-    int limit,
   });
 
   /// R14: catalog entries (readable names, order, official synopsis) of
@@ -144,12 +103,6 @@ abstract interface class GameDataRetrieval {
     List<String> terms, {
     String? scopeId,
   });
-
-  /// R15: character / speaker names written verbatim in [text].
-  Future<List<String>> namesInText(String text);
-
-  /// R15: catalog collections / chapters named verbatim in [text].
-  Future<List<NamedStoryTarget>> namedStoryTargets(String text);
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at
   /// most [maxRows] rows; rejections, errors and timeouts come back in

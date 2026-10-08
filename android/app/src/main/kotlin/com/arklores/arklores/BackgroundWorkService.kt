@@ -27,6 +27,7 @@ class BackgroundWorkService : Service() {
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "ArkLores"
         val text = intent?.getStringExtra(EXTRA_TEXT) ?: ""
         val notification = buildNotification(title, text)
+        instance = this
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -44,10 +45,27 @@ class BackgroundWorkService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * The user swiped the app away: the Flutter engine (and the operation in
+     * it) is gone with the activity, so the notification and the wake lock
+     * must not stay behind.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
+        if (instance === this) instance = null
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         super.onDestroy()
+    }
+
+    /** New text on the running service's notification. */
+    private fun update(title: String, text: String) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID, buildNotification(title, text))
     }
 
     private fun buildNotification(title: String, text: String): Notification {
@@ -90,8 +108,19 @@ class BackgroundWorkService : Service() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"
 
-        /** Starts the service, or updates its notification when it runs. */
+        /** The running service, if any (main thread only). */
+        private var instance: BackgroundWorkService? = null
+
+        /**
+         * Starts the service, or updates its notification when it runs. An
+         * update does not start the service again: from the background,
+         * Android 12+ may refuse a foreground-service start.
+         */
         fun start(context: Context, title: String, text: String) {
+            instance?.let {
+                it.update(title, text)
+                return
+            }
             val intent = Intent(context, BackgroundWorkService::class.java)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_TEXT, text)
@@ -103,6 +132,9 @@ class BackgroundWorkService : Service() {
         }
 
         fun stop(context: Context) {
+            // A start right after this must start a new service, not update
+            // the one that is stopping.
+            instance = null
             context.stopService(Intent(context, BackgroundWorkService::class.java))
         }
     }

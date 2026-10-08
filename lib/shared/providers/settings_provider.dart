@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/agent/answer_options.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../features/settings/settings_service.dart';
@@ -21,10 +22,42 @@ final initialSessionLogsEnabledProvider =
 
 final wikiSourcesRevisionProvider = StateProvider<int>((ref) => 0);
 
+/// The reader's form of address, loaded at startup (empty by default).
+final initialNicknameProvider = Provider<String>((ref) => '');
+
+/// What the stories call the reader in place of {@nickname} (see
+/// withPlaceholders); set in Settings → Profile.
+final nicknameProvider = StateProvider<String>((ref) {
+  return ref.watch(initialNicknameProvider);
+});
+
 /// Whether the user enabled per-session AI logs (default off; applied to
 /// [AgentLogger] at startup and on toggle in Settings).
 final sessionLogsEnabledProvider = StateProvider<bool>((ref) {
   return ref.watch(initialSessionLogsEnabledProvider);
+});
+
+/// The Ask answer options loaded at startup; overridden in main().
+final initialAnswerOptionsProvider =
+    Provider<AnswerOptions>((ref) => const AnswerOptions());
+
+/// The Ask answer options (reader's review, digest), saved on change.
+class AnswerOptionsNotifier extends StateNotifier<AnswerOptions> {
+  AnswerOptionsNotifier(this._service, AnswerOptions initial) : super(initial);
+  final SettingsService _service;
+
+  Future<void> set(AnswerOptions options) async {
+    state = options;
+    await _service.saveAnswerOptions(options);
+  }
+}
+
+final answerOptionsProvider =
+    StateNotifierProvider<AnswerOptionsNotifier, AnswerOptions>((ref) {
+  return AnswerOptionsNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialAnswerOptionsProvider),
+  );
 });
 
 /// Active state for onboarding status.

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/agent/answer_options.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
 import '../../shared/l10n/locale_provider.dart';
@@ -97,6 +98,10 @@ class SettingsService {
 
   // ── Agent session log keys ──────────────────────────────
   static const _keySessionLogsEnabled = 'session_logs_enabled';
+  static const _keyAnswerOptions = 'ask_answer_options';
+
+  // ── Profile keys ─────────────────────────────────────────
+  static const _keyNickname = 'profile_nickname';
 
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
@@ -135,9 +140,11 @@ class SettingsService {
 
   /// Loads the saved API configuration.
   Future<LLMConfig> loadApiConfig() async {
-    final chatBaseUrl = await _storage.read(key: _keyChatBaseUrl);
-    final chatApiKey = await _storage.read(key: _keyChatApiKey);
-    final chatModel = await _storage.read(key: _keyChatModel);
+    final (chatBaseUrl, chatApiKey, chatModel) = await (
+      _storage.read(key: _keyChatBaseUrl),
+      _storage.read(key: _keyChatApiKey),
+      _storage.read(key: _keyChatModel),
+    ).wait;
 
     return LLMConfig(
       chatBaseUrl: chatBaseUrl ?? 'https://api.z.ai/api/paas/v4',
@@ -158,14 +165,17 @@ class SettingsService {
   /// Loads the optional embedding endpoint (R12). Unset key -> vector recall
   /// stays off and `FIND` uses keyword search only.
   Future<EmbeddingConfig> loadEmbeddingConfig() async {
-    final dims = int.tryParse(await _storage.read(key: _keyEmbeddingDims) ?? '');
+    final (baseUrl, apiKey, model, dims) = await (
+      _storage.read(key: _keyEmbeddingBaseUrl),
+      _storage.read(key: _keyEmbeddingApiKey),
+      _storage.read(key: _keyEmbeddingModel),
+      _storage.read(key: _keyEmbeddingDims),
+    ).wait;
     return EmbeddingConfig(
-      baseUrl: await _storage.read(key: _keyEmbeddingBaseUrl) ??
-          defaultEmbeddingConfig.baseUrl,
-      apiKey: await _storage.read(key: _keyEmbeddingApiKey) ?? '',
-      model: await _storage.read(key: _keyEmbeddingModel) ??
-          defaultEmbeddingConfig.model,
-      dimensions: dims ?? defaultEmbeddingConfig.dimensions,
+      baseUrl: baseUrl ?? defaultEmbeddingConfig.baseUrl,
+      apiKey: apiKey ?? '',
+      model: model ?? defaultEmbeddingConfig.model,
+      dimensions: int.tryParse(dims ?? '') ?? defaultEmbeddingConfig.dimensions,
     );
   }
 
@@ -198,6 +208,13 @@ class SettingsService {
   }
 
   /// Loads whether the user enabled per-session AI logs (default off).
+  /// How the stories address the reader (empty: the default).
+  Future<String> loadNickname() async =>
+      (await _storage.read(key: _keyNickname)) ?? '';
+
+  Future<void> saveNickname(String nickname) =>
+      _storage.write(key: _keyNickname, value: nickname.trim());
+
   Future<bool> loadSessionLogsEnabled() async {
     return await _storage.read(key: _keySessionLogsEnabled) == 'true';
   }
@@ -206,6 +223,13 @@ class SettingsService {
   Future<void> saveSessionLogsEnabled(bool enabled) async {
     await _storage.write(key: _keySessionLogsEnabled, value: '$enabled');
   }
+
+  /// The Ask answer options (default: both passes on).
+  Future<AnswerOptions> loadAnswerOptions() async =>
+      AnswerOptions.decode(await _storage.read(key: _keyAnswerOptions));
+
+  Future<void> saveAnswerOptions(AnswerOptions options) =>
+      _storage.write(key: _keyAnswerOptions, value: options.encode());
 
   /// Returns `true` if onboarding has been completed.
   Future<bool> isOnboardingDone() async {

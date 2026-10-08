@@ -28,6 +28,10 @@ Future<void> validateGameDataDatabase(Database db) async {
     'story_chapter_profiles',
     'rare_terms',
     'story_lines_fts',
+    // Schema v5 entry layer (0.11).
+    'collections',
+    'entries',
+    'entry_links',
   };
   final tableRows = await db.rawQuery(
     '''
