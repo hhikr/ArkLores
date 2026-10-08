@@ -93,10 +93,10 @@ class _MainShellState extends ConsumerState<MainShell> {
                   currentIndex: _currentIndex,
                   onSelected: _selectTab,
                   items: [
-                    (Icons.language_rounded, context.t.navWiki),
-                    (Icons.psychology_alt_rounded, context.t.navAI),
-                    (Icons.menu_book_rounded, context.t.navMaterials),
-                    (Icons.settings_rounded, context.t.navSettings),
+                    (Icons.language_sharp, context.t.navWiki),
+                    (Icons.psychology_alt_sharp, context.t.navAI),
+                    (Icons.menu_book_sharp, context.t.navMaterials),
+                    (Icons.settings_sharp, context.t.navSettings),
                   ],
                 ),
         ),
@@ -158,9 +158,9 @@ class _MainShellState extends ConsumerState<MainShell> {
   }
 }
 
-/// The bottom navigation: a short floating pill (52 high), centred, the
-/// tabs close together (64 wide each), the selected tab's icon in a small
-/// pill inside it.
+/// The bottom navigation: a short floating plate (52 high), centred, the
+/// tabs close together (64 wide each), the selected tab on a faint tint
+/// with a bar wiping in along its top edge.
 class _IndustrialNavigation extends StatelessWidget {
   const _IndustrialNavigation({
     required this.theme,
@@ -187,9 +187,8 @@ class _IndustrialNavigation extends StatelessWidget {
         child: FloatingBar(
           key: const ValueKey('main-navigation'),
           theme: theme,
-          radius: 26,
           height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -258,38 +257,40 @@ class _NavigationItemState extends State<_NavigationItem> {
             if (mounted) widget.onTap();
           });
         },
-        child: AnimatedScale(
-          scale: _pressed ? 0.94 : 1,
-          duration: const Duration(milliseconds: 110),
+        child: AnimatedContainer(
+          duration: selectionDuration,
           curve: Curves.easeOutCubic,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          color: _pressed
+              ? theme.textPrimary.withValues(alpha: 0.07)
+              : widget.selected
+                  ? theme.accentPrimary.withValues(alpha: 0.14)
+                  : Colors.transparent,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                width: 48,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: widget.selected
-                      ? theme.accentPrimary.withValues(alpha: 0.28)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(widget.icon, color: color, size: 20),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(widget.icon, color: color, size: 20),
+                  const SizedBox(height: 3),
+                  Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.bodyFont.copyWith(
+                      color: color,
+                      fontSize: 10.5,
+                      fontWeight:
+                          widget.selected ? FontWeight.w700 : FontWeight.w500,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                widget.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.bodyFont.copyWith(
-                  color: color,
-                  fontSize: 10.5,
-                  fontWeight:
-                      widget.selected ? FontWeight.w700 : FontWeight.w500,
-                  height: 1.1,
-                ),
+              SelectionBar(
+                selected: widget.selected,
+                color: theme.accentPrimary,
+                top: true,
               ),
             ],
           ),

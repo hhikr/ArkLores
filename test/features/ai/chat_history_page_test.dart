@@ -182,7 +182,7 @@ void main() {
 /// The more-menu of the list tile whose title is [title].
 Finder _menuOf(String title) => find.descendant(
       of: find.widgetWithText(ListTile, title),
-      matching: find.byIcon(Icons.more_vert_rounded),
+      matching: find.byIcon(Icons.more_vert_sharp),
     );
 
 /// In-memory store: widget tests run under FakeAsync where real file IO never

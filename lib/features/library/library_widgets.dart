@@ -141,7 +141,7 @@ class LibraryMessage extends ConsumerWidget {
   }
 }
 
-/// A small rounded label in the accent colour (type, group, count).
+/// A small square tag in the accent colour (type, group, count).
 class AccentPill extends ConsumerWidget {
   const AccentPill(this.text, {super.key, this.muted = false});
 
@@ -159,7 +159,7 @@ class AccentPill extends ConsumerWidget {
         color: muted
             ? theme.textSecondary.withValues(alpha: 0.12)
             : theme.accentPrimary.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.zero,
       ),
       child: Text(
         text,
@@ -184,7 +184,7 @@ class ProgressLine extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
+      borderRadius: BorderRadius.zero,
       child: LinearProgressIndicator(
         value: value.clamp(0.0, 1.0),
         minHeight: 3,
@@ -314,7 +314,7 @@ class ReadTimesBadge extends ConsumerWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle_rounded, color: theme.accentText, size: 20),
+              Icon(Icons.check_circle_sharp, color: theme.accentText, size: 20),
               if (times > 1) ...[
                 const SizedBox(width: 2),
                 Text(
@@ -356,7 +356,7 @@ Widget readMark(
   }
   return pill ??
       badge ??
-      Icon(Icons.chevron_right_rounded, color: theme.textMuted, size: 22);
+      Icon(Icons.chevron_right_sharp, color: theme.textMuted, size: 22);
 }
 /// A story row (collection page, search): code, name, group, synopsis and
 /// the reader's progress.
@@ -615,7 +615,7 @@ class EntryRow extends ConsumerWidget {
       title: entry.name.isEmpty ? entry.id : entry.name,
       subtitle: context2,
       subtitleLines: 1,
-      trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted, size: 22),
+      trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted, size: 22),
       onTap: onTap,
     );
   }
@@ -654,20 +654,20 @@ class FilterField extends ConsumerWidget {
             color: theme.textMuted,
             fontSize: 14,
           ),
-          prefixIcon: Icon(Icons.search_rounded, color: theme.textMuted),
+          prefixIcon: Icon(Icons.search_sharp, color: theme.textMuted),
           filled: true,
           fillColor: theme.cardSurface,
           contentPadding: const EdgeInsets.symmetric(vertical: 10),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.zero,
             borderSide: BorderSide(color: theme.cardBorder),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.zero,
             borderSide: BorderSide(color: theme.cardBorder),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.zero,
             borderSide: BorderSide(color: theme.accentText),
           ),
         ),

@@ -58,7 +58,7 @@ class MyMaterialsView extends ConsumerWidget {
     return materials.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => LibraryMessage(
-        icon: Icons.sd_storage_rounded,
+        icon: Icons.sd_storage_sharp,
         title: context.t.libraryEmpty,
       ),
       data: (list) => ListView(
@@ -73,7 +73,7 @@ class MyMaterialsView extends ConsumerWidget {
                   child: FilledButton.icon(
                     key: const ValueKey('materials-new'),
                     onPressed: () => newMaterial(context),
-                    icon: const Icon(Icons.add_rounded, size: 20),
+                    icon: const Icon(Icons.add_sharp, size: 20),
                     label: Text(
                       context.t.materialsNew,
                       style: theme.titleFont.copyWith(fontSize: 13),
@@ -83,7 +83,7 @@ class MyMaterialsView extends ConsumerWidget {
                       foregroundColor: theme.onAccent,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.zero,
                       ),
                     ),
                   ),
@@ -93,7 +93,7 @@ class MyMaterialsView extends ConsumerWidget {
                   child: OutlinedButton.icon(
                     key: const ValueKey('materials-paste'),
                     onPressed: () => _paste(context),
-                    icon: const Icon(Icons.content_paste_rounded, size: 18),
+                    icon: const Icon(Icons.content_paste_sharp, size: 18),
                     label: Text(
                       context.t.materialsPaste,
                       style: theme.titleFont.copyWith(fontSize: 13),
@@ -102,7 +102,7 @@ class MyMaterialsView extends ConsumerWidget {
                       foregroundColor: theme.accentText,
                       side: BorderSide(color: theme.cardBorder),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.zero,
                       ),
                     ),
                   ),
@@ -114,7 +114,7 @@ class MyMaterialsView extends ConsumerWidget {
             SizedBox(
               height: 320,
               child: LibraryMessage(
-                icon: Icons.edit_note_rounded,
+                icon: Icons.edit_note_sharp,
                 title: context.t.materialsEmptyTitle,
                 description: context.t.materialsEmptyDesc,
               ),
@@ -123,7 +123,7 @@ class MyMaterialsView extends ConsumerWidget {
             for (final m in list) ...[
               LibraryRow(
                 key: ValueKey('material-${m.id}'),
-                leading: Icon(Icons.notes_rounded, color: theme.accentText),
+                leading: Icon(Icons.notes_sharp, color: theme.accentText),
                 title: m.title.isEmpty ? '—' : m.title,
                 subtitle: m.body.trim().replaceAll(RegExp(r'\s+'), ' '),
                 trailing: AccentPill(
@@ -193,7 +193,7 @@ class MyMaterialPage extends ConsumerWidget {
           IconButton(
             key: const ValueKey('material-ask'),
             tooltip: context.t.materialsAskAbout,
-            icon: Icon(Icons.psychology_alt_rounded, color: theme.accentText),
+            icon: Icon(Icons.psychology_alt_sharp, color: theme.accentText),
             onPressed: () => _ask(context, ref, m),
           ),
           IconButton(
@@ -206,7 +206,7 @@ class MyMaterialPage extends ConsumerWidget {
           IconButton(
             key: const ValueKey('material-delete'),
             tooltip: context.t.materialsDelete,
-            icon: Icon(Icons.delete_outline_rounded, color: theme.danger),
+            icon: Icon(Icons.delete_outline_sharp, color: theme.danger),
             onPressed: () => _delete(context, ref),
           ),
         ],
@@ -215,7 +215,7 @@ class MyMaterialPage extends ConsumerWidget {
           ? (material.isLoading
               ? const Center(child: CircularProgressIndicator())
               : LibraryMessage(
-                  icon: Icons.folder_off_rounded,
+                  icon: Icons.folder_off_sharp,
                   title: context.t.libraryEmpty,
                 ))
           : ListView(
@@ -424,7 +424,7 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
 
   InputDecoration _decoration(AppThemeTokens theme, String hint) {
     OutlineInputBorder border(Color c) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.zero,
           borderSide: BorderSide(color: c),
         );
     return InputDecoration(

@@ -31,7 +31,7 @@ class LibrarySearchButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
         key: const ValueKey('library-search'),
         tooltip: context.t.librarySearchHint,
-        icon: const Icon(Icons.search_rounded),
+        icon: const Icon(Icons.search_sharp),
         onPressed: () => openSearch(context, scope: scope, label: label),
       );
 }
@@ -55,7 +55,7 @@ class SearchFurtherButton extends StatelessWidget {
         key: const ValueKey('search-further'),
         onPressed: () =>
             openSearch(context, scope: scope, label: label, query: query.trim()),
-        icon: const Icon(Icons.manage_search_rounded, size: 18),
+        icon: const Icon(Icons.manage_search_sharp, size: 18),
         label: Text(context.t.librarySearchFurther(query.trim())),
       );
 }
@@ -149,7 +149,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
                   backgroundColor: theme.cardSurface,
                   side: BorderSide(color: theme.cardBorder),
                   visualDensity: VisualDensity.compact,
-                  deleteIcon: const Icon(Icons.close_rounded, size: 16),
+                  deleteIcon: const Icon(Icons.close_sharp, size: 16),
                   deleteButtonTooltipMessage: context.t.librarySearchEverywhere,
                   onDeleted: () => setState(() => _scope = everywhere),
                 ),
@@ -163,7 +163,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
                     error: (_, __) => LibraryMessage(
-                      icon: Icons.search_off_rounded,
+                      icon: Icons.search_off_sharp,
                       title: context.t.libraryNoResults,
                     ),
                     data: (r) => _results(theme, q, r),
@@ -181,7 +181,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
         : null;
     if (r.isEmpty && semantic == null && !semanticReady) {
       return LibraryMessage(
-        icon: Icons.search_off_rounded,
+        icon: Icons.search_off_sharp,
         title: context.t.libraryNoResults,
         description: context.t.librarySearchSemanticNeedsService,
       );
@@ -284,7 +284,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
                   subtitle: shelfLabel(context, c.kind),
                   subtitleLines: 1,
                   trailing: Icon(
-                    Icons.chevron_right_rounded,
+                    Icons.chevron_right_sharp,
                     color: theme.textMuted,
                   ),
                   onTap: () => openCollection(context, c.id),
@@ -333,7 +333,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
       title: e.name.isEmpty ? e.id : e.name,
       subtitle: [if (place.isNotEmpty) place, hit.snippet].join('\n'),
       subtitleLines: 3,
-      trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+      trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
       onTap: () => e.isStory && story != null && hit.line != null
           ? openStoryAt(
               context,

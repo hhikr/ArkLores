@@ -321,7 +321,7 @@ body.$readerBodyClass.arklores-reader-operator-profile #mw-content-text .equipte
   background: $componentSurface !important;
   color: $text !important;
   border: 1px solid $border !important;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
   box-shadow: 0 8px 24px ${dark ? 'rgba(0, 0, 0, 0.16)' : 'rgba(58, 76, 78, 0.10)'} !important;
   backdrop-filter: blur(14px) saturate(116%) !important;
   -webkit-backdrop-filter: blur(14px) saturate(116%) !important;
@@ -364,7 +364,7 @@ body.$readerBodyClass.arklores-reader-operator-profile #mw-content-text #voice-t
   background: $componentSurface !important;
   color: $text !important;
   border: 1px solid $border !important;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
   box-shadow: 0 8px 24px ${dark ? 'rgba(0, 0, 0, 0.16)' : 'rgba(58, 76, 78, 0.10)'} !important;
   backdrop-filter: blur(14px) saturate(116%) !important;
   -webkit-backdrop-filter: blur(14px) saturate(116%) !important;
@@ -502,7 +502,7 @@ body.$readerBodyClass:not(.arklores-reader-operator-profile) .arklores-reader-st
   background: $storySurface !important;
   color: $text !important;
   border: 1px solid $border !important;
-  border-radius: 2px !important;
+  border-radius: 0 !important;
 }
 
 body.$readerBodyClass:not(.arklores-reader-operator-profile) .arklores-reader-story-heading {
@@ -513,7 +513,7 @@ body.$readerBodyClass:not(.arklores-reader-operator-profile) .arklores-reader-st
   background: $storyHeader !important;
   color: $text !important;
   border: 1px solid $border !important;
-  border-radius: 2px !important;
+  border-radius: 0 !important;
 }
 
 body.$readerBodyClass .arklores-reader-story-block *,
@@ -643,7 +643,7 @@ body.$readerBodyClass:not(.arklores-reader-operator-profile) code {
   background: ${dark ? '#151E29' : '#EFE8DA'} !important;
   color: $text !important;
   border: 1px solid $border !important;
-  border-radius: 2px !important;
+  border-radius: 0 !important;
 }
 
 body.$readerBodyClass:not(.arklores-reader-operator-profile) button,
@@ -656,7 +656,7 @@ body.$readerBodyClass:not(.arklores-reader-operator-profile) .mw-collapsible-tog
   color: $controlText !important;
   background: $controlSurface !important;
   border: 1px solid $border !important;
-  border-radius: 2px !important;
+  border-radius: 0 !important;
   text-decoration: none !important;
 }
 
@@ -700,7 +700,7 @@ body.$readerBodyClass #arklores-prts-log-all-button {
   color: $controlText !important;
   background: $controlSurface !important;
   border: 1px solid $border !important;
-  border-radius: 4px !important;
+  border-radius: 0 !important;
   font-weight: 700 !important;
   letter-spacing: 0 !important;
 }

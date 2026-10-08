@@ -37,7 +37,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
         children: [
           Center(
             child: Icon(
-              Icons.storage_rounded,
+              Icons.storage_sharp,
               size: 48,
               color: theme.accentPrimary.withValues(alpha: 0.4),
             ),
@@ -52,7 +52,7 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded,
+                Icon(Icons.info_outline_sharp,
                     color: theme.accentPrimary, size: 22,),
                 const SizedBox(width: 12),
                 Expanded(
@@ -122,16 +122,16 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
       runSpacing: 12,
       children: [
         _statTile(context, context.t.kbStatEntities, status.entityCount ?? '-',
-            Icons.account_tree_rounded, theme,),
+            Icons.account_tree_sharp, theme,),
         _statTile(context, context.t.kbStatRecords, status.recordCount ?? '-',
-            Icons.dataset_rounded, theme,),
+            Icons.dataset_sharp, theme,),
         _statTile(context, context.t.kbStatChunks, status.chunkCount ?? '-',
-            Icons.article_rounded, theme,),
+            Icons.article_sharp, theme,),
         _statTile(
           context,
           context.t.kbStatSourceCommit,
           shortCommit(status.sourceCommit),
-          Icons.commit_rounded,
+          Icons.commit_sharp,
           theme,
         ),
       ],

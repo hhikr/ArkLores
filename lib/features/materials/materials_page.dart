@@ -9,7 +9,6 @@ import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
-import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/smooth_page_route.dart';
@@ -19,8 +18,10 @@ import '../library/library_pages.dart';
 import '../library/library_widgets.dart';
 import '../library/my_materials.dart';
 
-/// The library tab: what can be read (the knowledge base's stories and
-/// texts, by shelf) and the user's own texts.
+/// The library tab: one page per game (its shelves, what was read in it)
+/// and the user's own texts, chosen in the top bar. The pages are not
+/// swiped between (a sideways drag on a shelf is not a request to change
+/// game); the chosen one fades and slides in a short way.
 class MaterialsPage extends ConsumerStatefulWidget {
   const MaterialsPage({super.key});
 
@@ -28,70 +29,63 @@ class MaterialsPage extends ConsumerStatefulWidget {
   ConsumerState<MaterialsPage> createState() => _MaterialsPageState();
 }
 
-class _MaterialsPageState extends ConsumerState<MaterialsPage>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 2, vsync: this)
-    ..addListener(() {
-      if (!_tabs.indexIsChanging && mounted) setState(() {});
-    });
+class _MaterialsPageState extends ConsumerState<MaterialsPage> {
+  /// Index into [Game.values]; one past them is the user's own texts.
+  int _tab = 0;
 
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
+  bool get _mine => _tab == Game.values.length;
 
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final reading = _tabs.index == 0;
+    final labels = [
+      for (final game in Game.values) gameLabel(context, game),
+      context.t.libraryTabMine,
+    ];
     // The tabs float over the lists, which scroll underneath them.
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          TabBarView(
-            controller: _tabs,
-            children: const [
-              LibraryReadView(),
-              MyMaterialsView(),
+          SwitchedPages(
+            index: _tab,
+            children: [
+              for (final game in Game.values) GameLibraryView(game: game),
+              const MyMaterialsView(),
             ],
           ),
-          // Tabs on the left, the action on the right: two pills.
+          // Tabs on the left, the action on the right: two plates.
           FloatingTopBar(
             theme: theme,
             leading: Row(
               key: const ValueKey('library-tabs'),
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final (i, label) in [
-                  context.t.libraryTabRead,
-                  context.t.libraryTabMine,
-                ].indexed)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                for (final (i, label) in labels.indexed)
+                  Flexible(
                     child: FloatingSegment(
+                      key: ValueKey('library-tab-$i'),
                       theme: theme,
                       label: label,
-                      selected: _tabs.index == i,
-                      onTap: () => _tabs.animateTo(i),
+                      selected: _tab == i,
+                      onTap: () => setState(() => _tab = i),
                     ),
                   ),
               ],
             ),
-            trailing: reading
+            trailing: !_mine
                 ? IconButton(
                     key: const ValueKey('library-search'),
                     tooltip: context.t.librarySearchHint,
                     color: theme.textPrimary,
-                    icon: const Icon(Icons.search_rounded, size: 22),
+                    icon: const Icon(Icons.search_sharp, size: 22),
                     onPressed: () => openSearch(context),
                   )
                 : IconButton(
                     key: const ValueKey('library-new-material'),
                     tooltip: context.t.materialsNew,
                     color: theme.textPrimary,
-                    icon: const Icon(Icons.add_rounded, size: 22),
+                    icon: const Icon(Icons.add_sharp, size: 22),
                     onPressed: () => newMaterial(context),
                   ),
           ),
@@ -101,66 +95,109 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage>
   }
 }
 
-/// "Read": continue reading, each game's shelves, the recently read.
-class LibraryReadView extends ConsumerWidget {
-  const LibraryReadView({super.key});
+/// Pages of which one shows at a time, each keeping its state (scroll
+/// position) while hidden; changing [index] brings the new page in with a
+/// short fade and a slide from the side it lies on. Not swipeable.
+class SwitchedPages extends StatefulWidget {
+  const SwitchedPages({super.key, required this.index, required this.children});
+
+  final int index;
+  final List<Widget> children;
+
+  @override
+  State<SwitchedPages> createState() => _SwitchedPagesState();
+}
+
+class _SwitchedPagesState extends State<SwitchedPages>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _enter = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1,
+  );
+  late final Animation<double> _t =
+      CurvedAnimation(parent: _enter, curve: Curves.easeOutExpo);
+  double _from = 0;
+
+  @override
+  void didUpdateWidget(covariant SwitchedPages old) {
+    super.didUpdateWidget(old);
+    if (old.index != widget.index) {
+      _from = widget.index > old.index ? 24 : -24;
+      _enter.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _enter.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (context, child) => Opacity(
+        opacity: _t.value,
+        child: Transform.translate(
+          offset: Offset(_from * (1 - _t.value), 0),
+          child: child,
+        ),
+      ),
+      child: IndexedStack(index: widget.index, children: widget.children),
+    );
+  }
+}
+
+/// One game's page: continue reading (in that game), its shelves, what was
+/// read in it lately; a note when its knowledge base is missing.
+class GameLibraryView extends ConsumerWidget {
+  const GameLibraryView({super.key, required this.game});
+
+  final Game game;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
-    final statuses = {
-      for (final game in Game.values)
-        game: ref.watch(gameLibraryStatusProvider(game)),
-    };
-    if (statuses.values.any((s) => s.isLoading)) {
+    final status = ref.watch(gameLibraryStatusProvider(game));
+    if (status.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    final ready = [
-      for (final game in Game.values)
-        if (statuses[game]!.valueOrNull == LibraryStatus.ready) game,
-    ];
-    if (ready.isEmpty) {
-      final old =
-          statuses.values.any((s) => s.valueOrNull == LibraryStatus.oldSchema);
-      return old
-          ? LibraryMessage(
-              icon: Icons.system_update_alt_rounded,
-              title: context.t.libraryOldSchemaTitle,
-              description: context.t.libraryOldSchemaDesc,
-            )
-          : LibraryMessage(
-              icon: Icons.download_for_offline_rounded,
-              title: context.t.libraryNotInstalledTitle,
-              description: context.t.libraryNotInstalledDesc,
-            );
-    }
-    return _shelves(context, ref, theme, ready);
+    return switch (status.valueOrNull) {
+      LibraryStatus.ready => _page(context, ref),
+      LibraryStatus.oldSchema => LibraryMessage(
+          icon: Icons.system_update_alt_sharp,
+          title: context.t.libraryOldSchemaTitle,
+          description: context.t.libraryOldSchemaDesc,
+        ),
+      _ => LibraryMessage(
+          key: ValueKey('library-missing-${game.key}'),
+          icon: Icons.download_for_offline_sharp,
+          title: context.t.libraryGameMissing(gameLabel(context, game)),
+          description: context.t.libraryNotInstalledDesc,
+        ),
+    };
   }
 
-  Widget _shelves(
-    BuildContext context,
-    WidgetRef ref,
-    AppThemeTokens theme,
-    List<Game> ready,
-  ) {
-    final recent = ref.watch(recentReadingProvider).valueOrNull ?? const [];
-    final missing = [
-      for (final game in Game.values)
-        if (!ready.contains(game)) game,
+  Widget _page(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final recent = [
+      for (final e
+          in ref.watch(recentReadingProvider).valueOrNull ?? const <ReadingEntry>[])
+        if (_gameOf(e) == game) e,
     ];
 
     return RefreshIndicator(
       onRefresh: () async {
-        ref.invalidate(libraryStatusProvider);
-        for (final game in Game.values) {
-          ref
-            ..invalidate(gameLibraryStatusProvider(game))
-            ..invalidate(shelfSummariesProvider(game))
-            ..invalidate(codexTypesProvider(game));
-        }
+        ref
+          ..invalidate(libraryStatusProvider)
+          ..invalidate(gameLibraryStatusProvider(game))
+          ..invalidate(shelfSummariesProvider(game))
+          ..invalidate(codexTypesProvider(game));
         invalidateReading(ref);
       },
       child: ListView(
+        key: ValueKey('library-game-${game.key}'),
         padding:
             floatingPadding(context, const EdgeInsets.fromLTRB(16, 4, 16, 32)),
         children: [
@@ -168,21 +205,7 @@ class LibraryReadView extends ConsumerWidget {
             const SizedBox(height: 12),
             _ContinueCard(entry: recent.first),
           ],
-          for (final game in ready)
-            _GameShelves(
-                game: game, titled: ready.length > 1 || game != Game.arknights,),
-          for (final game in missing)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: LibraryRow(
-                key: ValueKey('library-missing-${game.key}'),
-                title: context.t.libraryGameMissing(gameLabel(context, game)),
-                subtitle: context.t.libraryNotInstalledDesc,
-                subtitleLines: 2,
-                leading: Icon(Icons.download_for_offline_rounded,
-                    color: theme.textMuted,),
-              ),
-            ),
+          _GameShelves(game: game),
           if (recent.length > 1) ...[
             IndustrialSectionHeader(
               theme: theme,
@@ -215,13 +238,17 @@ class LibraryReadView extends ConsumerWidget {
   }
 }
 
-/// One game's shelves: a heading (when there is more than one game) and the
-/// shelf cards, its codex last.
+/// The game a reading-history entry belongs to (by its id's namespace).
+Game? _gameOf(ReadingEntry entry) {
+  final item = LibraryRef.tryParse(entry.ref);
+  return item == null ? null : gameOfId(item.id);
+}
+
+/// One game's shelves: a heading and the shelf cards, its codex last.
 class _GameShelves extends ConsumerWidget {
-  const _GameShelves({required this.game, required this.titled});
+  const _GameShelves({required this.game});
 
   final Game game;
-  final bool titled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -246,13 +273,12 @@ class _GameShelves extends ConsumerWidget {
         ),
     ];
     return Column(
-      key: ValueKey('library-game-${game.key}'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         IndustrialSectionHeader(
           theme: theme,
-          title: titled ? gameLabel(context, game) : context.t.libraryShelves,
-          code: game == Game.arknights ? 'shelves' : 'endfield',
+          title: context.t.libraryShelves,
+          code: game == Game.arknights ? 'arknights' : 'endfield',
         ),
         GridView.count(
           shrinkWrap: true,
@@ -336,7 +362,7 @@ class _ContinueCard extends ConsumerWidget {
           Row(
             children: [
               Icon(
-                Icons.play_circle_fill_rounded,
+                Icons.play_circle_fill_sharp,
                 color: theme.accentText,
                 size: 18,
               ),

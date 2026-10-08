@@ -9,7 +9,7 @@ import '../../../shared/widgets/press_feedback.dart';
 /// of the Ask tab, or all of it.
 enum AskComposerSize { collapsed, half, full }
 
-/// The Ask page's question box: one rounded card with the text on top and a
+/// The Ask page's question box: one square card with the text on top and a
 /// toolbar (the "深度思考" switch, send) below. It grows with the text up to
 /// four lines; the expand button opens it to half of the tab, and from there
 /// to the full tab. The same [TextField] lives in every size (only the
@@ -156,7 +156,7 @@ class _AskComposerState extends State<AskComposer> {
               height: target,
               decoration: BoxDecoration(
                 color: theme.cardSurface.withValues(alpha: 0.97),
-                borderRadius: BorderRadius.circular(expanded ? 22 : 20),
+                borderRadius: BorderRadius.zero,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.14),
@@ -226,8 +226,8 @@ class _AskComposerState extends State<AskComposer> {
                                     ? context.t.aiInputCollapse
                                     : context.t.aiInputExpand,
                                 icon: expanded
-                                    ? Icons.unfold_less_rounded
-                                    : Icons.unfold_more_rounded,
+                                    ? Icons.unfold_less_sharp
+                                    : Icons.unfold_more_sharp,
                                 onPressed: () => _setSize(
                                   expanded
                                       ? AskComposerSize.collapsed
@@ -255,8 +255,8 @@ class _AskComposerState extends State<AskComposer> {
                                   ? context.t.aiInputExitFullscreen
                                   : context.t.aiInputFullscreen,
                               icon: _size == AskComposerSize.full
-                                  ? Icons.close_fullscreen_rounded
-                                  : Icons.open_in_full_rounded,
+                                  ? Icons.close_fullscreen_sharp
+                                  : Icons.open_in_full_sharp,
                               onPressed: () => _setSize(
                                 _size == AskComposerSize.full
                                     ? AskComposerSize.half
@@ -291,8 +291,8 @@ class _AskComposerState extends State<AskComposer> {
                               ),
                               child: Icon(
                                 widget.isSending
-                                    ? Icons.stop_rounded
-                                    : Icons.arrow_upward_rounded,
+                                    ? Icons.stop_sharp
+                                    : Icons.arrow_upward_sharp,
                                 key: ValueKey(widget.isSending),
                                 size: 20,
                               ),
@@ -338,14 +338,14 @@ class _AskComposerState extends State<AskComposer> {
         child: InkResponse(
         key: key,
         canRequestFocus: false,
-        radius: 18,
+        containedInkWell: true,
+        highlightShape: BoxShape.rectangle,
         onTap: withHaptic(onPressed),
         child: Container(
           width: 32,
           height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
             border: Border.all(color: theme.divider, width: 0.5),
           ),
           child: Icon(icon, size: 18, color: theme.textSecondary),

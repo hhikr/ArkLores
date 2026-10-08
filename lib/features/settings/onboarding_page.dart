@@ -117,7 +117,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       ref.read(settingsServiceProvider).saveLocale(next);
                     },
                     icon: Icon(
-                      Icons.translate_rounded,
+                      Icons.translate_sharp,
                       color: theme.accentPrimary,
                       size: 18,
                     ),
@@ -182,7 +182,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       color: _currentStep == i
                           ? theme.accentPrimary
                           : theme.divider,
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.zero,
                     ),
                   );
                 }),
@@ -201,7 +201,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.auto_stories_rounded,
+            Icons.auto_stories_sharp,
             size: 80,
             color: theme.accentPrimary,
           ),
@@ -234,7 +234,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               foregroundColor: theme.bgPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.zero,
               ),
             ),
             child: Text(
@@ -254,7 +254,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.key_rounded,
+            Icons.key_sharp,
             size: 56,
             color: theme.accentPrimary,
           ),
@@ -304,7 +304,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               foregroundColor: theme.bgPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.zero,
               ),
             ),
             child: Text(
@@ -335,7 +335,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.check_circle_rounded,
+            Icons.check_circle_sharp,
             size: 80,
             color: theme.accentPrimary,
           ),
@@ -363,7 +363,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               foregroundColor: theme.bgPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.zero,
               ),
             ),
             child: Text(
@@ -399,7 +399,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         Container(
           decoration: BoxDecoration(
             color: theme.bgSecondary,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.zero,
             border: Border.all(color: theme.divider, width: 1),
           ),
           child: TextField(

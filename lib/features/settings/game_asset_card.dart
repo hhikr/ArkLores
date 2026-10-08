@@ -170,8 +170,8 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
             children: [
               Icon(
                 status.installed
-                    ? Icons.verified_rounded
-                    : Icons.dataset_linked_rounded,
+                    ? Icons.verified_sharp
+                    : Icons.dataset_linked_sharp,
                 color: status.installed ? theme.accentPrimary : theme.warning,
                 size: 24,
               ),
@@ -189,12 +189,12 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: theme.accentPrimary.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.check_rounded,
+                      Icon(Icons.check_sharp,
                           size: 14, color: theme.accentText,),
                       const SizedBox(width: 3),
                       Text(
@@ -230,7 +230,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                 OutlinedButton.icon(
                   key: Key('kb-redownload${widget.keySuffix}'),
                   onPressed: _redownloadGameData,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  icon: const Icon(Icons.refresh_sharp, size: 18),
                   label: Text(
                     context.t.kbRedownload,
                     style: theme.titleFont.copyWith(fontSize: 13),
@@ -241,7 +241,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                 )
@@ -251,8 +251,8 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                   onPressed: _isDownloadingGameData ? null : _downloadGameData,
                   icon: Icon(
                     _isDownloadingGameData
-                        ? Icons.downloading_rounded
-                        : Icons.download_rounded,
+                        ? Icons.downloading_sharp
+                        : Icons.download_sharp,
                     size: 18,
                   ),
                   label: Text(
@@ -271,7 +271,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                 ),
@@ -280,7 +280,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
           if (_isDownloadingGameData) ...[
             const SizedBox(height: 12),
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.zero,
               child: LinearProgressIndicator(
                 value: progress,
                 backgroundColor: theme.divider,
@@ -319,7 +319,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Icon(Icons.new_releases_rounded,
+                Icon(Icons.new_releases_sharp,
                     size: 16, color: theme.accentPrimary,),
                 const SizedBox(width: 6),
                 Expanded(

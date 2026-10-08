@@ -17,7 +17,7 @@
 - **0.12（v0.12.0 预发布，`feature/v0.12-endfield`）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9，
   已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5。
   - 架构：每个游戏一个库文件；终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`find` 默认两个库），
-    装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一组书架、页面按 id 路由；知识库页每个游戏一张下载卡。
+    装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一页（明日方舟 / 终末地 / 我的资料）、页面按 id 路由；知识库页每个游戏一张下载卡。
   - 终末地建库：`tools/unpack_endfield.ps1`（AnimeStudio 导出客户端两层的表与 JSON 数据，Persistent 覆盖 StreamingAssets，不用 kit 的完整流程）→
     `tools/build_endfield_database.dart`：干员档案与语音、档案库（PRTS）、敌人/武器/物品描述、对话/通讯/短信（选项按组号插入），
     任务名/简介/分类/所属干员/关卡来自 `MissionRuntimeAsset`，书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务），书架内按地区分组、显示任务简介。
@@ -45,6 +45,9 @@
 - 新的推入页面用 `FloatingScaffold`（`shared/widgets/floating_bar.dart`，全 App 不用 `AppBar`，有守卫测试）；主页面里的列表用 `floatingPadding`；
   新的可点块用 `PressFeedback` + `withHaptic`。
 - 长时操作（问答、知识库下载/构建、向量）包在 `BackgroundWork.instance.run(...)` 里（Android 前台服务保活）。
+- 形状与动效照两款游戏：方角（卡片用切角 `ThemeAwareCard`），图标用 `Icons.*_sharp`，选中的标签用 `SelectionBar` 擦入的横条，
+  悬浮板用 `FloatingBar`（角标）；动效短、直线、无回弹（`easeOutCubic`/`easeOutExpo`）。圆角、圆形、`_rounded` 图标、回弹曲线有守卫测试（`test/guards/square_shapes_test.dart`）。
+- 资料页每个游戏一页（顶部标签切换，`SwitchedPages`），不能左右滑动换页。
 - 颜色：信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 - 问答列表不随流式内容自动滚动（只在发新问题时滚到底一次）；思考窗口固定高度；阅读位置上方的内容在流式中不变高。不要加“贴底跟随”。
 - 提交前 `git checkout -- android/gradle.properties`（Flutter 迁移器会往里加两行）。

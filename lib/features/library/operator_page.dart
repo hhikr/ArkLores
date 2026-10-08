@@ -35,7 +35,7 @@ class OperatorPage extends ConsumerWidget {
         body: entry.isLoading
             ? const Center(child: CircularProgressIndicator())
             : LibraryMessage(
-                icon: Icons.folder_off_rounded,
+                icon: Icons.folder_off_sharp,
                 title: context.t.libraryEmpty,
               ),
       );
@@ -94,7 +94,7 @@ class OperatorPage extends ConsumerWidget {
                 title: o.name.isEmpty ? o.id : o.name,
                 subtitle: codeCaption(o),
                 subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
                 onTap: () => openEntry(context, o),
               ),
               rowDivider(theme),
@@ -108,7 +108,7 @@ class OperatorPage extends ConsumerWidget {
                 title: c.name,
                 subtitle: context.t.libraryCountStories(c.stories),
                 subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
                 onTap: () => openCollection(context, c.id),
               ),
               rowDivider(theme),
@@ -122,7 +122,7 @@ class OperatorPage extends ConsumerWidget {
                 title: o.name.isEmpty ? o.id : o.name,
                 subtitle: _ownedCaption(o),
                 subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
                 onTap: () => openEntry(context, o),
               ),
               rowDivider(theme),

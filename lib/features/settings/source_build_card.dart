@@ -50,7 +50,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
         children: [
           Row(
             children: [
-              Icon(Icons.sync_rounded, color: theme.accentPrimary, size: 24),
+              Icon(Icons.sync_sharp, color: theme.accentPrimary, size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -167,7 +167,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                     : () => ref
                         .read(gameDataBuildProvider.notifier)
                         .checkForUpdates(githubToken: _currentGithubToken()),
-                icon: const Icon(Icons.manage_search_rounded, size: 18),
+                icon: const Icon(Icons.manage_search_sharp, size: 18),
                 label: Text(context.t.kbBuildCheckUpdates),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: theme.accentPrimary,
@@ -179,7 +179,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                 OutlinedButton.icon(
                   onPressed: () =>
                       ref.read(gameDataBuildProvider.notifier).cancel(),
-                  icon: const Icon(Icons.close_rounded, size: 18),
+                  icon: const Icon(Icons.close_sharp, size: 18),
                   label: Text(context.t.kbBuildCancel),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: theme.danger,
@@ -191,7 +191,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                   onPressed: () => ref
                       .read(gameDataBuildProvider.notifier)
                       .buildFromSource(githubToken: _currentGithubToken()),
-                  icon: const Icon(Icons.build_rounded, size: 18),
+                  icon: const Icon(Icons.build_sharp, size: 18),
                   label: Text(context.t.kbBuildFromSource),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.accentPrimary,
@@ -309,11 +309,11 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                     vertical: 8,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.zero,
                     borderSide: BorderSide(color: theme.divider),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.zero,
                     borderSide: BorderSide(color: theme.divider),
                   ),
                 ),

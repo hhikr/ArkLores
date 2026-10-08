@@ -112,7 +112,7 @@ class CollectionPage extends ConsumerWidget {
           ? const Center(child: CircularProgressIndicator())
           : c == null
               ? LibraryMessage(
-                  icon: Icons.folder_off_rounded,
+                  icon: Icons.folder_off_sharp,
                   title: context.t.libraryEmpty,
                 )
               : ListView(
@@ -241,7 +241,7 @@ class CollectionPage extends ConsumerWidget {
                           subtitle: context.t.libraryCountEntries(t.count),
                           subtitleLines: 1,
                           trailing: Icon(
-                            Icons.chevron_right_rounded,
+                            Icons.chevron_right_sharp,
                             color: theme.textMuted,
                           ),
                           onTap: () => pushLibraryPage(
@@ -263,7 +263,7 @@ class CollectionPage extends ConsumerWidget {
                       SizedBox(
                         height: 240,
                         child: LibraryMessage(
-                          icon: Icons.folder_open_rounded,
+                          icon: Icons.folder_open_sharp,
                           title: context.t.libraryEmpty,
                         ),
                       ),
@@ -323,7 +323,7 @@ class CollectionPage extends ConsumerWidget {
                   subtitle: withPlaceholders(e.synopsis ?? '', nickname),
                   subtitleLines: 2,
                   trailing: Icon(
-                    Icons.chevron_right_rounded,
+                    Icons.chevron_right_sharp,
                     color: theme.textMuted,
                   ),
                   onTap: () => openEntry(context, e),
@@ -355,7 +355,7 @@ class CollectionPage extends ConsumerWidget {
               if (e.synopsis != null) withPlaceholders(e.synopsis!, nickname),
             ].join('\n'),
             subtitleLines: 3,
-            trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+            trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
             onTap: () => openEntry(context, e),
           ),
           rowDivider(theme),

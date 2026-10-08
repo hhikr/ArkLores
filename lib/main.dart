@@ -149,10 +149,12 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
     onPrimary: tokens.isDark ? tokens.bgPrimary : tokens.textPrimary,
     onSurface: tokens.textPrimary,
   );
+  // Both games draw square panels: no Material control keeps its rounded
+  // or stadium default.
   final outline = RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(2),
     side: BorderSide(color: tokens.cardBorder),
   );
+  const square = RoundedRectangleBorder();
 
   return ThemeData(
     useMaterial3: true,
@@ -203,15 +205,50 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
       fillColor: tokens.surfaceElevated,
       labelStyle: tokens.bodyFont.copyWith(color: tokens.textSecondary),
       hintStyle: tokens.bodyFont.copyWith(color: tokens.textMuted),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: BorderSide(color: tokens.cardBorder),
+      ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: BorderRadius.zero,
         borderSide: BorderSide(color: tokens.cardBorder),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: BorderRadius.zero,
         borderSide: BorderSide(color: tokens.accentPrimary, width: 1.5),
       ),
     ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(shape: square),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(shape: square),
+    ),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      shape: square,
+    ),
+    chipTheme: ChipThemeData(
+      shape: outline.copyWith(side: BorderSide(color: tokens.divider)),
+    ),
+    cardTheme: const CardThemeData(shape: square),
+    dialogTheme: DialogThemeData(
+      shape: outline,
+      backgroundColor: tokens.cardSurface,
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      shape: Border(top: BorderSide(color: tokens.accentPrimary, width: 2)),
+      backgroundColor: tokens.cardSurface,
+      showDragHandle: false,
+    ),
+    popupMenuTheme: PopupMenuThemeData(shape: outline),
+    menuTheme: const MenuThemeData(
+      style: MenuStyle(shape: WidgetStatePropertyAll(square)),
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(color: tokens.textPrimary),
+      textStyle: tokens.bodyFont.copyWith(color: tokens.bgPrimary, fontSize: 12),
+    ),
+    listTileTheme: const ListTileThemeData(shape: square),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         elevation: 0,

@@ -371,7 +371,9 @@ void main() {
     await pumpApp(tester, const MaterialsPage());
     await shoot(tester, 'library_home');
 
-    expect(find.text('阅读'), findsOneWidget);
+    // One tab per game and one for the user's texts, not a "read" tab.
+    expect(find.text('明日方舟'), findsOneWidget);
+    expect(find.text('终末地'), findsOneWidget);
     expect(find.text('我的资料'), findsOneWidget);
     expect(find.byKey(const ValueKey('library-continue')), findsOneWidget);
     for (final k in ['main', 'activity', 'memory', 'roguelike', 'sandbox', 'codex']) {
@@ -422,15 +424,37 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    await shoot(tester, 'library_two_games');
-    expect(find.text('明日方舟'), findsOneWidget);
-    expect(find.text('终末地'), findsOneWidget);
-    for (final k in ['main', 'codex', 'ef/main', 'ef/archive', 'ef/memory', 'ef/codex']) {
+    // Arknights first: only its shelves are on the page.
+    for (final k in ['main', 'codex']) {
       expect(find.byKey(ValueKey('shelf-$k')), findsOneWidget, reason: k);
     }
+    expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
+
+    // A sideways drag does not change the game.
+    await tester.drag(
+      find.byKey(const ValueKey('library-game-arknights')),
+      const Offset(-600, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shelf-main')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
+
+    // The Endfield tab is its own page.
+    await tester.tap(find.byKey(const ValueKey('library-tab-1')));
+    await tester.pumpAndSettle();
+    await shoot(tester, 'library_endfield_home');
+    for (final k in ['ef/main', 'ef/archive', 'ef/memory', 'ef/codex']) {
+      expect(find.byKey(ValueKey('shelf-$k')), findsOneWidget, reason: k);
+    }
+    expect(find.byKey(const ValueKey('shelf-main')), findsNothing);
     expect(find.text('主线任务'), findsOneWidget);
     expect(find.text('档案库'), findsOneWidget);
     expect(find.byKey(const ValueKey('library-missing-endfield')), findsNothing);
+
+    // Back to Arknights: the page is as it was.
+    await tester.tap(find.byKey(const ValueKey('library-tab-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shelf-main')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -535,8 +559,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Endfield not installed: a note instead of its shelves', (tester) async {
+  testWidgets('Endfield not installed: its page has a note instead of shelves', (tester) async {
     await pumpApp(tester, const MaterialsPage());
+    expect(find.byKey(const ValueKey('library-missing-endfield')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('library-tab-1')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('library-missing-endfield')), findsOneWidget);
     expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
   });
@@ -825,7 +852,7 @@ void main() {
       ),),
       isTrue,
     );
-    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.tap(find.byIcon(Icons.close_sharp));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('search-scope')), findsNothing);
     expect(
@@ -922,7 +949,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     for (final (status, text) in [
-      (LibraryStatus.notInstalled, '还没有知识库'),
+      (LibraryStatus.notInstalled, '明日方舟知识库未安装'),
       (LibraryStatus.oldSchema, '知识库需要更新'),
     ]) {
       await tester.pumpWidget(

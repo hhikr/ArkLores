@@ -80,7 +80,7 @@ class _StoryFindState extends State<_StoryFind> {
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: context.t.storyReaderFindHint,
-                  prefixIcon: Icon(Icons.search_rounded, color: theme.textMuted),
+                  prefixIcon: Icon(Icons.search_sharp, color: theme.textMuted),
                   suffixText: _query.trim().isEmpty
                       ? null
                       : context.t.librarySearchMatchCount(found.length),

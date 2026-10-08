@@ -128,7 +128,7 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.menu_book_rounded,
+                Icons.menu_book_sharp,
                 size: 56,
                 color: theme.textSecondary.withValues(alpha: 0.4),
               ),
@@ -156,7 +156,7 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
         color: theme.danger.withValues(alpha: 0.15),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: Icon(Icons.delete_outline_rounded, color: theme.danger),
+        child: Icon(Icons.delete_outline_sharp, color: theme.danger),
       ),
       onDismissed: (_) async {
         setState(() => _removed.add(entry.ref));
@@ -168,7 +168,7 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
       },
       child: LibraryRow(
         key: ValueKey('reading-tile-${entry.ref}'),
-        leading: Icon(Icons.menu_book_rounded, color: theme.accentText),
+        leading: Icon(Icons.menu_book_sharp, color: theme.accentText),
         title: readingTitle(ref, entry),
         subtitle: [
           '${_time(entry.openedAt)} · '
@@ -277,7 +277,7 @@ class _Pager extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 2),
         child: InkWell(
           key: ValueKey('reading-history-page-box-${i + 1}'),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.zero,
           onTap: here ? null : () => onPage(i),
           child: Container(
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -286,7 +286,7 @@ class _Pager extends StatelessWidget {
             decoration: BoxDecoration(
               color: here ? theme.accentPrimary : null,
               border: Border.all(color: here ? theme.accentPrimary : theme.divider),
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.zero,
             ),
             child: Text(
               '${i + 1}',
@@ -312,12 +312,12 @@ class _Pager extends StatelessWidget {
               children: [
                 step(
                   const ValueKey('reading-history-first'),
-                  Icons.first_page_rounded,
+                  Icons.first_page_sharp,
                   page == 0 ? null : 0,
                 ),
                 step(
                   const ValueKey('reading-history-previous'),
-                  Icons.chevron_left_rounded,
+                  Icons.chevron_left_sharp,
                   page == 0 ? null : page - 1,
                 ),
                 for (final i in _slots)
@@ -333,12 +333,12 @@ class _Pager extends StatelessWidget {
                       : box(i),
                 step(
                   const ValueKey('reading-history-next'),
-                  Icons.chevron_right_rounded,
+                  Icons.chevron_right_sharp,
                   page >= pages - 1 ? null : page + 1,
                 ),
                 step(
                   const ValueKey('reading-history-last'),
-                  Icons.last_page_rounded,
+                  Icons.last_page_sharp,
                   page >= pages - 1 ? null : pages - 1,
                 ),
               ],

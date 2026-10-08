@@ -44,12 +44,12 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
     return types.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => LibraryMessage(
-        icon: Icons.folder_off_rounded,
+        icon: Icons.folder_off_sharp,
         title: context.t.libraryEmpty,
       ),
       data: (list) => list.isEmpty
           ? LibraryMessage(
-              icon: Icons.folder_open_rounded,
+              icon: Icons.folder_open_sharp,
               title: context.t.libraryEmpty,
             )
           : ListView.separated(
@@ -63,7 +63,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
                 subtitleLines: 1,
                 leading: Icon(Icons.folder_outlined, color: theme.accentText),
                 trailing: Icon(
-                  Icons.chevron_right_rounded,
+                  Icons.chevron_right_sharp,
                   color: theme.textMuted,
                 ),
                 onTap: () => pushLibraryPage(
@@ -80,7 +80,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
     return all.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => LibraryMessage(
-        icon: Icons.folder_off_rounded,
+        icon: Icons.folder_off_sharp,
         title: context.t.libraryEmpty,
       ),
       data: (list) {
@@ -138,7 +138,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
             Expanded(
               child: shown.isEmpty
                   ? LibraryMessage(
-                      icon: Icons.search_off_rounded,
+                      icon: Icons.search_off_sharp,
                       title: context.t.libraryNoResults,
                       action: SearchFurtherButton(
                         query: _filter,
@@ -186,7 +186,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
       title: c.name,
       subtitle: intro ?? parts.join(' · '),
       subtitleLines: intro == null ? 1 : 2,
-      trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+      trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
       onTap: () => openCollection(context, c.id),
     );
   }

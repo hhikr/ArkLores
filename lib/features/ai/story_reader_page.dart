@@ -419,14 +419,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               key: const ValueKey('story-reader-find'),
               tooltip: context.t.storyReaderFindHint,
               onPressed: () => _find(theme),
-              icon: const Icon(Icons.search_rounded),
+              icon: const Icon(Icons.search_sharp),
             ),
           if (canJump)
             IconButton(
               key: const ValueKey('story-reader-jump'),
               tooltip: context.t.aiStoryReaderJumpBack,
               onPressed: _jumpToTarget,
-              icon: Icon(Icons.my_location_rounded, color: theme.accentText),
+              icon: Icon(Icons.my_location_sharp, color: theme.accentText),
             ),
         ],
       body: Builder(
@@ -531,7 +531,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: theme.accentPrimary.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.zero,
         ),
         child: Text(
           text,
@@ -594,7 +594,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                 decoration: BoxDecoration(
                   color: theme.cardSurface,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.zero,
                   border: Border(
                     left: BorderSide(color: theme.accentPrimary, width: 3),
                   ),
@@ -801,7 +801,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             color: theme.accentPrimary.withValues(
               alpha: 0.10 + 0.22 * _strength.value,
             ),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.zero,
             border: Border.all(
               color: theme.accentText.withValues(alpha: 0.35),
               width: 0.8,
@@ -847,7 +847,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                     theme,
                     place.previous,
                     context.t.storyReaderPrevious,
-                    Icons.chevron_left_rounded,
+                    Icons.chevron_left_sharp,
                     key: const ValueKey('story-reader-previous'),
                   ),
                 ),
@@ -857,7 +857,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                     theme,
                     place.next,
                     context.t.storyReaderNext,
-                    Icons.chevron_right_rounded,
+                    Icons.chevron_right_sharp,
                     trailingIcon: true,
                     key: const ValueKey('story-reader-next'),
                   ),
@@ -888,11 +888,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       key: key,
       color: theme.cardSurface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.zero,
         side: BorderSide(color: theme.cardBorder),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.zero,
         onTap: () => Navigator.of(context).pushReplacement(
           smoothPageRoute<void>(
             builder: (_) => StoryReaderPage(storyId: target.rawId!),

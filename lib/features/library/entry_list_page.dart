@@ -163,12 +163,12 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
                     error: (_, __) => LibraryMessage(
-                      icon: Icons.folder_off_rounded,
+                      icon: Icons.folder_off_sharp,
                       title: context.t.libraryEmpty,
                     ),
                     data: (list) => list.isEmpty
                         ? LibraryMessage(
-                            icon: Icons.search_off_rounded,
+                            icon: Icons.search_off_sharp,
                             title: context.t.libraryNoResults,
                             action: _query.trim().isEmpty
                                 ? null
@@ -222,7 +222,7 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
             subtitle: context.t.libraryCountEntries(g.count),
             subtitleLines: 1,
             leading: Icon(Icons.folder_outlined, color: theme.accentText),
-            trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+            trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
             onTap: () => open(g.label, g.raws),
           ),
           rowDivider(theme),
@@ -232,8 +232,8 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
           title: context.t.libraryAllEntries,
           subtitle: context.t.libraryCountEntries(total),
           subtitleLines: 1,
-          leading: Icon(Icons.list_rounded, color: theme.textSecondary),
-          trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+          leading: Icon(Icons.list_sharp, color: theme.textSecondary),
+          trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
           onTap: () => open(context.t.libraryAllEntries, null),
         ),
       ],

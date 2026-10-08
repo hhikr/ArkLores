@@ -95,7 +95,7 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
         InkWell(
           key: const ValueKey('answer-details-toggle'),
           onTap: () => setState(() => _detailsOpen = !_detailsOpen),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.zero,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -103,8 +103,8 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
               children: [
                 Icon(
                   _detailsOpen
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
+                      ? Icons.expand_less_sharp
+                      : Icons.expand_more_sharp,
                   size: 18,
                   color: theme.accentText,
                 ),
@@ -179,7 +179,7 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
       markdown.trimLeft().startsWith('#');
 }
 
-/// R18b: the sources of one block, folded into one pill — "出处 N" and the
+/// R18b: the sources of one block, folded into one tag — "出处 N" and the
 /// story collections — that opens a card with `故事集 · 章` and the line
 /// chips. Folded by default; only the reader's tap changes its height.
 class _EvidenceChain extends ConsumerStatefulWidget {
@@ -243,14 +243,14 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
   Widget _toggle(int count, String collections) => InkWell(
         key: const ValueKey('evidence-toggle'),
         onTap: () => setState(() => _open = !_open),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.zero,
         child: Container(
           padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
           decoration: BoxDecoration(
             color: _open
                 ? theme.accentPrimary.withValues(alpha: 0.16)
                 : theme.bgSecondary,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.zero,
             border: Border.all(
               color: _open
                   ? theme.accentText.withValues(alpha: 0.45)
@@ -261,7 +261,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.menu_book_rounded, size: 13, color: theme.accentText),
+              Icon(Icons.menu_book_sharp, size: 13, color: theme.accentText),
               const SizedBox(width: 5),
               Text(
                 context.t.aiCitationSources(count),
@@ -289,7 +289,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                 turns: _open ? 0.5 : 0,
                 duration: const Duration(milliseconds: 180),
                 child: Icon(
-                  Icons.expand_more_rounded,
+                  Icons.expand_more_sharp,
                   size: 16,
                   color: theme.textSecondary,
                 ),
@@ -443,7 +443,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
         color: theme.bgSecondary,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: theme.divider, width: 0.5),
       ),
       child: Column(
@@ -479,12 +479,12 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
           child: InkWell(
           key: ValueKey(key),
           onTap: withHaptic(onTap),
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.zero,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
               color: theme.accentPrimary.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(7),
+              borderRadius: BorderRadius.zero,
               border: Border.all(
                 color: theme.accentText.withValues(alpha: 0.45),
                 width: 0.5,
@@ -503,7 +503,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                 ),
                 const SizedBox(width: 1),
                 Icon(
-                  Icons.chevron_right_rounded,
+                  Icons.chevron_right_sharp,
                   size: 12,
                   color: theme.accentText,
                 ),

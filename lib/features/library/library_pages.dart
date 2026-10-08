@@ -62,21 +62,21 @@ IconData shelfIcon(String kind) => _shelfIcon(gameOfId(kind) == Game.endfield
     : kind,);
 
 IconData _shelfIcon(String kind) => switch (kind) {
-      'main' => Icons.auto_stories_rounded,
-      'sidestory' => Icons.menu_book_rounded,
-      'ministory' => Icons.bookmarks_rounded,
-      'branchline' => Icons.alt_route_rounded,
-      'activity' => Icons.event_note_rounded,
-      'memory' => Icons.badge_rounded,
-      'roguelike' => Icons.diamond_rounded,
-      'sandbox' => Icons.landscape_rounded,
+      'main' => Icons.auto_stories_sharp,
+      'sidestory' => Icons.menu_book_sharp,
+      'ministory' => Icons.bookmarks_sharp,
+      'branchline' => Icons.alt_route_sharp,
+      'activity' => Icons.event_note_sharp,
+      'memory' => Icons.badge_sharp,
+      'roguelike' => Icons.diamond_sharp,
+      'sandbox' => Icons.landscape_sharp,
       // 0.12: Endfield's shelves (kinds without the ef/ namespace).
-      'discovery' => Icons.travel_explore_rounded,
-      'side' => Icons.alt_route_rounded,
-      'other' => Icons.assignment_rounded,
-      'world' => Icons.public_rounded,
-      'archive' => Icons.folder_special_rounded,
-      _ => Icons.collections_bookmark_rounded,
+      'discovery' => Icons.travel_explore_sharp,
+      'side' => Icons.alt_route_sharp,
+      'other' => Icons.assignment_sharp,
+      'world' => Icons.public_sharp,
+      'archive' => Icons.folder_special_sharp,
+      _ => Icons.collections_bookmark_sharp,
     };
 
 void pushLibraryPage(BuildContext context, WidgetBuilder builder) =>

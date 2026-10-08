@@ -4,6 +4,13 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Library: one page per game; square shapes and straight motion
+
+- **Each game has its own library page**: the top bar reads 明日方舟 / 终末地 / 我的资料; a game's page has its shelves, its last-read story to continue and its recent reads. A missing knowledge base is explained on its game's page. The pages are chosen with the tabs only — a sideways drag no longer changes the page.
+- **Square, like the games**: the floating bars, tabs, the bottom navigation, buttons, fields, dialogs, sheets, tags, the question box and the answer cards have square corners (cards keep their cut corners); the icons are Material's sharp set; the wiki reader styles drop their rounded corners. A chosen tab is marked by a bar that wipes in along its edge, and each floating plate carries a short corner mark.
+- **Motion without bounce**: a pressed surface sinks and settles back without overshoot; a new page slides in a short way from the right while it fades in (the page below shifts a little left) instead of growing from 94 %; switching library pages fades and slides in from the side the tab lies on.
+- A guard test keeps rounded shapes, the rounded icon set and springy curves out of `lib/`.
+
 ## [0.12.1] - 2026-10-08 (pre-release)
 
 ### Endfield stories read like the game's missions

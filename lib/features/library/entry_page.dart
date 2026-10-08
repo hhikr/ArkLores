@@ -38,7 +38,7 @@ class EntryPage extends ConsumerWidget {
         body: entry.isLoading
             ? const Center(child: CircularProgressIndicator())
             : LibraryMessage(
-                icon: Icons.folder_off_rounded,
+                icon: Icons.folder_off_sharp,
                 title: context.t.libraryEmpty,
               ),
       );
@@ -200,7 +200,7 @@ class EntryPage extends ConsumerWidget {
                       if (e.collectionId != null)
                         const WidgetSpan(
                           alignment: PlaceholderAlignment.middle,
-                          child: Icon(Icons.chevron_right_rounded, size: 16),
+                          child: Icon(Icons.chevron_right_sharp, size: 16),
                         ),
                     ],
                   ),
