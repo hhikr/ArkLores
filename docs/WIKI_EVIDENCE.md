@@ -63,4 +63,13 @@ fz.wiki 没有找到公开接口，且 2026-10-09 在开发机上连不上（命
 - 离线：`test/core/wiki/*`（HTML 规则、两个站点的请求与解析用 `MockClient`、快照与缓存）、`test/core/agent/lore_agent_wiki_test.dart`
   （工具输出、出处核对与退回、引语检查、Wiki 不可用时继续作答）、`test/features/ai/wiki_citations_test.dart`（解析、时间线、证据卡与快照弹窗、在 Wiki 打开）。
 - 联网（免费）：`$env:ARKLORES_RUN_WIKI_CHECK='true'; flutter test test/live/wiki_live_test.dart`，两个站点各搜一次、读一页。
-- 真实模型（花钱，需开发者同意）：`ask_pipeline_live_test.dart` 默认就带 Wiki 工具；建议各游戏 1 题，看 Agent 是否先查库、Wiki 只作补充并写明。
+- 真实模型：`ask_pipeline_live_test.dart` 默认就带 Wiki 工具。
+- 界面截图：用真实页面快照渲染证据卡与引用弹窗（本地 scratch 测试，加载文楷字形），布局正常。
+
+### 2026-10-09 真实模型验收（`tools/api_info` 的模型，复核与提要开着）
+
+| 问题 | 工具 | 结果 |
+|---|---|---|
+| 阿米娅档案里提到的萨卡兹君王奎隆是谁？与阿米娅的关系（第一次） | sql 24、grep 5、read_story 10、find 1；**没有用 Wiki** | 答案只依据原文，结尾写“档案里没检索到奎隆”（库里没有阿米娅的升变档案，PRTS 有）→ 提示词加一条通用规则：库里换写法仍查不到时，先查一次 Wiki 再下“没有记载” |
+| 同上（加规则后） | sql 38、grep 5、read_story 5、wiki_search 2、wiki_read 1；49 次调用，提示 104 万 token（缓存 96%） | answered；主体全部引原文，只用 Wiki 补了库里没有的一点并写明“据 PRTS Wiki 整理”，Wiki 出处通过核对。Wiki 上仍没找到升变档案那一页（搜索命中别的页面） |
+| 终末地佩丽卡的中文配音演员、在终末地工业负责什么 | sql 5、grep 9、read_story 1、wiki_search 2、wiki_read 2；21 次调用，48 万 token（缓存 92%），117 s | answered；配音只有 Wiki 有，引 Warfarin 段落并写明来自玩家 Wiki；职务与经历全部引库里原文 |
