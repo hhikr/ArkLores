@@ -85,6 +85,8 @@ dependencies:
   # Markdown rendering in AI chat
   flutter_markdown: ^0.7.4
   lpinyin: ^2.0.3
+  # 0.13: wiki pages (PRTS, Warfarin) as text for the Ask agent's wiki tools.
+  html: ^0.15.7
 
 dev_dependencies:
   flutter_test:

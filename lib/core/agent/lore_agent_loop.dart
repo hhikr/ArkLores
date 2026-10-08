@@ -23,6 +23,8 @@ import '../gamedata/game_retrieval.dart';
 import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
+import '../wiki/wiki_lookup.dart';
+import '../wiki/wiki_page.dart';
 import 'lore_agent_prompts.dart';
 import 'lore_answer_json.dart';
 import 'lore_answer_stages.dart';
@@ -30,6 +32,7 @@ import 'lore_tools.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
 import 'tools/agent_tool.dart';
+import 'tools/wiki_tools.dart';
 
 /// The messages and seen lines of a conversation, carried into follow-up
 /// questions so they continue with the text already read.
@@ -79,6 +82,7 @@ class LoreAgentLoop {
     required this.client,
     required this.store,
     this.embeddingClient,
+    this.wiki,
     this.maxTurns = 60,
     this.contextCharBudget = 360000,
     this.maxTokens = 8192,
@@ -122,6 +126,10 @@ class LoreAgentLoop {
 
   /// Optional story vectors for `find` (R12); keyword-only without.
   final EmbeddingClient? embeddingClient;
+
+  /// 0.13: the games' wikis (`wiki_search`, `wiki_read`, a third kind of
+  /// citation); null leaves them out of the tools and the prompt.
+  final WikiLookup? wiki;
 
   /// A sub-agent run by `delegate`: its own conversation, no `delegate`
   /// tool, findings instead of a full answer.
@@ -169,6 +177,7 @@ class LoreAgentLoop {
     final tools = {
       for (final t in [
         ...loreTools(store, seen, embeddingClient: embeddingClient),
+        if (wiki != null) ...wikiTools(wiki!, seen),
         if (!subtask) DelegateTool((args) => _runSubtask(args, seen)),
       ])
         t.name: t,
@@ -180,7 +189,8 @@ class LoreAgentLoop {
     var converted = false;
 
     String systemPrompt() {
-      final base = loreSystemPrompt(subtask: subtask, games: games);
+      final base =
+          loreSystemPrompt(subtask: subtask, games: games, wiki: wiki != null);
       return transport.textProtocol
           ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
           : base;
@@ -419,7 +429,7 @@ class LoreAgentLoop {
         final args = [for (final c in calls) decodeToolArguments(c.arguments)];
         final results = [
           for (final (k, call) in calls.indexed)
-            _runTool(tools[call.name], call, args[k]),
+            _runTool(tools[call.name], call, args[k], tools.keys),
         ];
         final delegates = calls.where((c) => c.name == 'delegate').length;
         for (final (k, call) in calls.indexed) {
@@ -692,6 +702,10 @@ class LoreAgentLoop {
           : await _span('catalog', () => store.storyCatalogEntries(ids));
       final stories = <String>{
         for (final id in ids) catalog[id]?.label ?? fallbackStoryLabel(id),
+        // 0.13: wiki pages, named as the site and title.
+        for (final m in wikiCitationPattern.allMatches(answer))
+          if (await wiki?.snapshot(_wikiPageIdOf(m)) case final page?)
+            '${page.site.label}《${page.title}》',
       }.take(40).toList();
       final result = await client.chatCompletion(
         [
@@ -798,6 +812,7 @@ class LoreAgentLoop {
       client: client,
       store: store,
       embeddingClient: embeddingClient,
+      wiki: wiki,
       maxTurns: subtaskMaxTurns,
       contextCharBudget: contextCharBudget,
       maxTokens: maxTokens,
@@ -830,10 +845,10 @@ class LoreAgentLoop {
     AgentTool? tool,
     ToolCall call,
     Map<String, dynamic> args,
+    Iterable<String> available,
   ) async {
     if (tool == null) {
-      return '没有名为 ${call.name} 的工具。可用：sql、grep、read_story、find、outline、similar_names'
-          '${subtask ? '' : '、delegate'}。';
+      return '没有名为 ${call.name} 的工具。可用：${available.join('、')}。';
     }
     if (args.isEmpty && call.arguments.trim().isNotEmpty) {
       final empty = _isEmptyJsonObject(call.arguments);
@@ -943,6 +958,8 @@ class LoreAgentLoop {
           '${arg('start').isEmpty ? '' : ' L${arg('start')} 起'}',
       'outline' => '查看故事集 ${arg('collection')}',
       'similar_names' => '查找与“${arg('name')}”相近的名字',
+      'wiki_search' => '在 Wiki 上搜索“${arg('query')}”',
+      'wiki_read' => '阅读 Wiki 页面 ${arg('page')}',
       'delegate' => '子任务：${arg('task').length > 40 ? '${arg('task').substring(0, 40)}…' : arg('task')}',
       _ => name,
     };
@@ -1039,6 +1056,7 @@ class LoreAgentLoop {
         first.startsWith('#') ||
         _citation.hasMatch(first) ||
         _recordCitation.hasMatch(first) ||
+        wikiCitationPattern.hasMatch(first) ||
         !_processLeadIn.hasMatch(first)) {
       return body;
     }
@@ -1069,12 +1087,25 @@ class LoreAgentLoop {
         // A citation that cannot be read is reported by the citation check.
       }
     }
+    // 0.13: cited wiki paragraphs (the version the agent read is kept).
+    final wiki = this.wiki;
+    if (wiki != null) {
+      for (final m in wikiCitationPattern.allMatches(body)) {
+        final page = await wiki.snapshot(_wikiPageIdOf(m));
+        if (page == null) continue;
+        final (lo, hi) = _wikiRange(m);
+        for (final (_, block) in page.range(lo, hi)) {
+          out.writeln(block.text);
+        }
+      }
+    }
     return out.toString();
   }
 
   static int _citationCount(String body) => {
         ..._citation.allMatches(body).map((m) => m.group(0)),
         ..._recordCitation.allMatches(body).map((m) => m.group(0)),
+        ...wikiCitationPattern.allMatches(body).map((m) => m.group(0)),
       }.length;
 
   /// Citations of [body] pointing at lines or records no tool showed in
@@ -1091,7 +1122,23 @@ class LoreAgentLoop {
     for (final m in _recordCitation.allMatches(body)) {
       if (!seen.hasRecord(m.group(1)!)) unseen.add(m.group(0)!);
     }
+    // 0.13: wiki paragraphs are recorded under their page id.
+    for (final m in wikiCitationPattern.allMatches(body)) {
+      final (lo, hi) = _wikiRange(m);
+      if (!seen.covers(_wikiPageIdOf(m), lo, hi)) unseen.add(m.group(0)!);
+    }
     return unseen.toList()..sort();
+  }
+
+  /// The page id of a [wikiCitationPattern] match.
+  static String _wikiPageIdOf(RegExpMatch m) =>
+      '$wikiIdPrefix${m.group(1)}:${m.group(2)}@${m.group(3)}';
+
+  /// The paragraph range of a [wikiCitationPattern] match.
+  static (int, int) _wikiRange(RegExpMatch m) {
+    final a = int.parse(m.group(4)!);
+    final b = int.tryParse(m.group(5) ?? '') ?? a;
+    return a <= b ? (a, b) : (b, a);
   }
 
   /// Story files cited without line numbers (`` `….txt` ``).
@@ -1106,7 +1153,7 @@ final RegExp _processLeadIn = RegExp(
   r'核实|核对|重新输出|最终答案|完整答案|信息(已经)?足够|足够(的)?信息|已经掌握|'
   r'(下面|以下|现在)(给出|回答|输出|作答|是答案)|整理(一下)?答案|让我(先|再)?(确认|查|看)|'
   // Talk about the tools themselves (R17b).
-  r'\b(grep|sql|read_story|find|outline|similar_names|delegate)\b',
+  r'\b(grep|sql|read_story|find|outline|similar_names|delegate|wiki_search|wiki_read)\b',
 );
 
 /// `record:<id>` — a non-story record (R17).

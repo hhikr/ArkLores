@@ -434,11 +434,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   }
 
   /// R18 passes after the draft, both optional: "复核" (a reader's review)
-  /// and "提要" (a digest of a long answer). One small button with a menu, so
-  /// the toolbar stays short; lit while either pass is on.
+  /// and "提要" (a digest of a long answer); 0.13 "Wiki 资料" (the wiki
+  /// tools). One small button with a menu, so the toolbar stays short; lit
+  /// while any of them is on.
   Widget _buildAnswerOptions(AppThemeTokens theme) {
     final options = ref.watch(answerOptionsProvider);
-    final on = options.review || options.digest;
+    final on = options.review || options.digest || options.wiki;
     PopupMenuItem<String> item(String value, bool checked, String title,
             String hint,) =>
         CheckedPopupMenuItem<String>(
@@ -465,15 +466,20 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       color: theme.surfaceElevated,
       constraints: const BoxConstraints(maxWidth: 300),
       onSelected: (value) => ref.read(answerOptionsProvider.notifier).set(
-            value == 'review'
-                ? options.copyWith(review: !options.review)
-                : options.copyWith(digest: !options.digest),
+            switch (value) {
+              'review' => options.copyWith(review: !options.review),
+              'wiki' => options.copyWith(wiki: !options.wiki),
+              _ => options.copyWith(digest: !options.digest),
+            },
           ),
       itemBuilder: (context) => [
         item('review', options.review, context.t.aiAnswerReview,
             context.t.aiAnswerReviewHint,),
         item('digest', options.digest, context.t.aiAnswerDigest,
             context.t.aiAnswerDigestHint,),
+        // 0.13: the games' wikis as a secondary source (online).
+        item('wiki', options.wiki, context.t.aiAnswerWiki,
+            context.t.aiAnswerWikiHint,),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

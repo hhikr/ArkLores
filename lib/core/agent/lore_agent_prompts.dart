@@ -80,7 +80,7 @@ $loreLibraryGuide
 - 一次只读真正需要的范围；同一段不要重复读。证据足够回答时就停止检索并作答；问题很宽时优先保证时间线上各阶段都有覆盖，而不是在一处读得过细。
 - 库里确实找不到时，如实说明查了什么、没查到什么。
 
-出处只有两种：
+知识库的出处有两种：
 - 剧情台词：故事文件名（story_id）加起始行、结束行。行号就是工具输出里 L 后面的数字（story_lines.line_index）。只有文件名、没有行号的出处无效。
 - 剧情以外的资料（normalized_records 等表里的档案、语音、介绍）：该记录的 id，查询时把 id 列一起选出来。
 只引用你在本次对话中通过工具实际看到的行和记录。''';
@@ -144,16 +144,31 @@ const String loreGamesGuide = '''
 - 两个游戏都有相关内容时分开写（各自一个小节），并写明哪部分出自终末地。
 $loreEndfieldLibraryGuide''';
 
+/// 0.13: when the wiki tools are on — what the wikis are good for, how they
+/// rank against the game text, and the third kind of citation. Names the
+/// sites only, no page, character or event.
+const String loreWikiGuide = '''
+Wiki 资料
+除了本地知识库，还可以查游戏 Wiki（wiki_search 搜索、wiki_read 读页面，需要联网）：明日方舟是 PRTS（prts.wiki），终末地是 Warfarin Wiki（warfarin.wiki）。
+- Wiki 是玩家社区编写的二手资料：有编者的整理和解读，可能有错漏，也可能收录了本地库没有的内容（游戏外的官方资料、本地库之后才上线的内容、整理好的人物关系与设定）。
+- 剧情事实以本地知识库的原文为准：能在库里读到原文的，引用库里的原文。Wiki 用来定位（人物出现在哪些活动或章节、某件事发生在哪里，再回库里读原文）、补充库里确实没有的内容、对照核实。
+- Wiki 与原文不一致时以原文为准，两处都写明。只有 Wiki 支持的说法，正文里要说明是 Wiki 的整理（例如“据 Wiki 整理”），不要写成游戏原文的叙述。
+- Wiki 的出处是第三种出处：wiki_read 输出开头的页面 id（形如 wiki:<站点>:<页面>@<版本>，原样照抄，含 @ 后的版本）加段号，段号是 P 后面的数字。
+  最终答案的 cite 里写 ["<页面 id>", <起始段>, <结束段>]；笔记里写 `<页面 id>:<起始段>-<结束段>`。只引用 wiki_read 实际给你看过的段；搜索结果的摘要不能当出处。
+- Wiki 不可用（网络错误、超时）时不要反复重试，只用本地知识库作答，并在 gaps 里说明。''';
+
 /// The whole system prompt (or a sub-agent's when [subtask]); [games] are
 /// the installed knowledge bases (the two-game section only when there is
-/// more than Arknights).
+/// more than Arknights); [wiki]: the wiki tools are on (0.13).
 String loreSystemPrompt({
   bool subtask = false,
   List<Game> games = const [Game.arknights],
+  bool wiki = false,
 }) {
-  final rules = games.contains(Game.endfield)
+  var rules = games.contains(Game.endfield)
       ? '$loreAgentRules\n\n$loreGamesGuide'
       : loreAgentRules;
+  if (wiki) rules = '$rules\n\n$loreWikiGuide';
   return subtask
       ? '$rules\n\n$loreSubtaskInstructions'
       : '$rules\n\n$loreDelegationRules\n\n$loreAnswerFormat\n\n'

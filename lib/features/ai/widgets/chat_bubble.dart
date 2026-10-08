@@ -498,7 +498,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final cited = citedPartOfAnswer(msg.content);
     final ids = extractCitedStoryIds(cited);
     final records = extractCitedRecordIds(cited);
-    if (ids.isEmpty && records.isEmpty) return const SizedBox.shrink();
+    final wikis = extractCitedWikiPages(cited);
+    if (ids.isEmpty && records.isEmpty && wikis.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final entries = ids.isEmpty
         ? const <String, StoryCatalogEntry>{}
         : ref
@@ -506,8 +509,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 .valueOrNull ??
             const <String, StoryCatalogEntry>{};
     final groups = groupCitations(cited, entries);
-    final total =
-        groups.fold<int>(0, (n, g) => n + g.citationCount) + records.length;
+    final total = groups.fold<int>(0, (n, g) => n + g.citationCount) +
+        records.length +
+        wikis.fold<int>(0, (n, w) => n + w.ranges.length);
     final open = _isOpen('*');
     final muted = theme.bodyFont.copyWith(
       color: theme.textSecondary,
@@ -684,6 +688,50 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                     child: citedRecord(id),
                   ),
               ],
+          ],
+          // 0.13: wiki pages, each with its paragraph chips (open the
+          // cited paragraphs).
+          if (open && wikis.isNotEmpty) ...[
+            row(
+              'wikis',
+              context.t.aiCitedWikiPages(wikis.length),
+              isOpen: _isOpen('wikis', byDefault: true),
+              indent: 14,
+              style: muted.copyWith(color: theme.textPrimary),
+            ),
+            if (_isOpen('wikis', byDefault: true))
+              for (final page in wikis)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 2, 0, 4),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        wikiPageLabel(ref, page.pageId),
+                        style: muted.copyWith(color: theme.textPrimary),
+                      ),
+                      for (final range in page.ranges)
+                        Tooltip(
+                          message: '${page.pageId}:${range.start}-${range.end}',
+                          triggerMode: TooltipTriggerMode.longPress,
+                          child: chip(
+                            'w:${page.pageId}:${range.start}',
+                            range.start == range.end
+                                ? context.t.aiCitationParagraph(range.start + 1)
+                                : context.t.aiCitationParagraphs(
+                                    range.start + 1,
+                                    range.end + 1,
+                                  ),
+                            selected: false,
+                            onTap: () =>
+                                showCitedWiki(context, page.pageId, range),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
           ],
         ],
       ),
@@ -1148,6 +1196,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         return (Icons.spellcheck_sharp, t.aiWorkSimilar(clip(step.arg('name'))));
       case WorkKind.delegate:
         return (Icons.call_split_sharp, t.aiWorkDelegate(clip(step.arg('task'), 60)));
+      case WorkKind.wikiSearch:
+        return (Icons.public_sharp, t.aiWorkWikiSearch(clip(step.arg('query'))));
+      case WorkKind.wikiRead:
+        return (Icons.article_sharp, t.aiWorkWikiRead(clip(step.wikiTitle)));
       case WorkKind.redo:
         return (Icons.replay_sharp, t.aiWorkRedo);
       case WorkKind.error:
@@ -1173,6 +1225,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       case WorkKind.read:
         final range = step.lineRange;
         return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
+      case WorkKind.wikiSearch:
+        final pages = step.wikiPageCount;
+        return pages == null ? '' : t.aiWorkWikiPages(pages);
+      case WorkKind.wikiRead:
+        final range = step.paragraphRange;
+        return range == null
+            ? ''
+            : t.aiWorkParagraphs(range.$1 + 1, range.$2 + 1);
       default:
         return '';
     }

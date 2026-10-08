@@ -4,6 +4,7 @@ import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import '../llm/usage_meter.dart';
+import '../wiki/wiki_lookup.dart';
 import 'answer_options.dart';
 import 'lore_agent_loop.dart';
 import 'react_event.dart';
@@ -19,11 +20,16 @@ class StoryQaAgent {
     required LLMClient llmClient,
     GameDataRetrieval? gameDataStore,
     EmbeddingClient? embeddingClient,
+    WikiLookup? wiki,
     UsageMeter? usage,
   })  : _llmClient = llmClient,
         _store = gameDataStore,
         _embeddingClient = embeddingClient,
+        _wiki = wiki,
         _usage = usage;
+
+  /// 0.13: the games' wikis, used when the "Wiki" option is on.
+  final WikiLookup? _wiki;
 
   /// Where tool runs and local checks report their wall-clock spans.
   final UsageMeter? _usage;
@@ -61,6 +67,7 @@ class StoryQaAgent {
       client: client ?? _llmClient,
       store: store,
       embeddingClient: _embeddingClient,
+      wiki: options.wiki ? _wiki : null,
       review: options.review,
       digest: options.digest,
       onSpan: _usage?.addSpan,

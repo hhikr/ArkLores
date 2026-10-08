@@ -31,6 +31,12 @@
     剩下的块多半在 `build/embedding_cache/` 里（`--dry-run` 看 “to embed”，非零才花钱，要先问）；`unpack_endfield.ps1 -Embed` 是直接补全。
   - 待开发者决定：真实 API 跑一两道双游戏问题验证选库（花钱，未跑；live 测试用 `ARKLORES_ENDFIELD_DB` 装上终末地库）。
   - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据；`python312\python.exe` 带 sqlite3，可直接查库）。
+- **0.13（开发中，分支 `feature/v0.13-wiki`）**：问答 Agent 的 Wiki 检索与证据，设计见 `docs/WIKI_EVIDENCE.md`。
+  - 工具 `wiki_search` / `wiki_read`（明日方舟 PRTS 的 MediaWiki API；终末地 Warfarin 的搜索 API + 服务端渲染页；fz.wiki 无公开接口且开发机连不上，没选）；
+    页面按段编号，出处 `wiki:<站点>:<页面>@<版本>:<段>`，与剧情出处同一套核对（只能引用展示过的段、照搬退回）；读过的版本存快照（`wiki_snapshots/`）。
+  - Wiki 是二手资料：剧情事实以库里原文为准，只有 Wiki 支持的说法要写明（`loreWikiGuide`）。输入框“回答选项”里的“Wiki 资料”开关，默认开。
+  - 界面：证据卡与出处树里的 Wiki 行、引用段落弹窗（快照、在 Wiki 标签打开）、工作过程里的 Wiki 步骤。
+  - 待开发者决定：真实模型各游戏 1 题验证 Wiki 的用法（花钱，未跑）；版本号仍是 0.12.0+31，发版时再改。
 
 ## 文档索引
 
@@ -38,6 +44,7 @@
 - `docs/GAMEDATA_BUILD_PIPELINE.md`：表、四条构建路径（全量/增量/补算/App 内）、向量、目录、发布命令。
 - `docs/AI_ARCHITECTURE.md`：问答链路与设计原则；`docs/R17_TOOL_AGENT.md`：Agent 的工具、提示词约定、出处核对、验收数据。
 - `docs/LLM_PROVIDERS.md`：各模型服务的思考参数与兼容怪癖。
+- `docs/WIKI_EVIDENCE.md`：问答的 Wiki 检索与证据（站点、段落、快照、出处）。
 - `docs/LIBRARY_AGENT_GUIDE.md`：资料页结构说明（问答 Agent 查库前参考；正文在 `loreLibraryGuide`）。
 - `docs/RETRIEVAL_QA.md`：按改动范围的验收清单。`test/README.md`：测试目录、夹具与约定。
 - `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：仍开放的问题。
@@ -47,7 +54,8 @@
 
 - 运行相关 tests / analyze 后再汇报。保护 `logs/`。
 - 保留 source path、raw id、content type、entity id。
-- 剧情问答 Agent 只查本地 GameData 库（`lore_tools.dart`）；Wiki 和用户文本只能作为浏览/上下文。
+- 剧情问答 Agent 查本地 GameData 库（`lore_tools.dart`），0.13 起可选查 PRTS / Warfarin Wiki（`wiki_tools.dart`，二手资料，出处同样核对）；
+  用户文本和 Wiki 页里选中的文字只作上下文，不是证据。
 - 新的推入页面用 `FloatingScaffold`（`shared/widgets/floating_bar.dart`，全 App 不用 `AppBar`，有守卫测试）；主页面里的列表用 `floatingPadding`；
   新的可点块用 `PressFeedback` + `withHaptic`。
 - 长时操作（问答、知识库下载/构建、向量）包在 `BackgroundWork.instance.run(...)` 里（Android 前台服务保活）。
@@ -112,11 +120,12 @@
 
 ## 问答 Agent 的约定（详见 `docs/R17_TOOL_AGENT.md`）
 
-- 一个模型 + 通用工具（只读 `sql`、`grep`、`read_story`、`find`、`outline`、`similar_names`，主 agent 另有 `delegate`），messages 只追加。
+- 一个模型 + 通用工具（只读 `sql`、`grep`、`read_story`、`find`、`outline`、`similar_names`，开着“Wiki 资料”时加 `wiki_search`、`wiki_read`，
+  主 agent 另有 `delegate`），messages 只追加。
   不要加手写的进度规则（预算提示、重读拒绝、阅读计划）；改进方向是工具表达力、工具输出的信息量和通用工作方式。
 - 审稿子 agent 只以读者身份提最多三个故事层面的问题，结论由主 agent 读原文决定；不让它逐条核实细节，不加针对某类剧情的检查项。
 - 按阶段整理：出处由代码按 `from` 合并；段数只软性提示，不加硬性限制或截断。
-- 出处：`story_id:起始行-结束行` 或 `record:<id>`，必须是工具实际给模型看过的（`SeenLines`）。
+- 出处：`story_id:起始行-结束行`、`record:<id>` 或 `wiki:<站点>:<页面>@<版本>:<段>`，必须是工具实际给模型看过的（`SeenLines`）。
 - 提示词与工具说明里**不放任何具体人物、章节、活动或剧情手法**；示意格式只用占位符（守卫测试）。
 - 提示词里凡是代码要严格解析的格式，都给完整骨架；解析器对常见变体容错，丢弃的出处计数并退回一次。
 - 答案写给玩家：正文不提库/表/文件名/id；不要写“哪些可以加引号”，照搬台词由代码检查退回。
@@ -149,6 +158,8 @@ $env:ARKLORES_RUN_LIVE_ASK='true'; $env:ARKLORES_LIVE_QUERIES='问题一||问题
 $env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_v5\arklores_gamedata_zh.db"
 $env:ARKLORES_ENDFIELD_DB="$PWD\build\endfield\arklores_endfield_zh.db"   # 可选：装上终末地库（双游戏问题）
 flutter test test/live/ask_pipeline_live_test.dart
+# Wiki 接口联网检查（免费）
+$env:ARKLORES_RUN_WIKI_CHECK='true'; flutter test test/live/wiki_live_test.dart
 ```
 
 - live 测试驱动 App 的 `askChatProvider`（只替换启动注入的 provider 与平台路径），输出 `build/live_sessions/` 下的会话 JSON 与 `*.summary.json`

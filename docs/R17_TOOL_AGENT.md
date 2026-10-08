@@ -66,6 +66,16 @@ R16 正好相反：
 `read_story`、`outline` 按 id 自己找库（终末地的 id 以 `ef/` 开头）。检索面是 `MultiGameRetrieval`；装了终末地时系统提示多一节“两个游戏”
 （`loreGamesGuide` + `lore_endfield_prompts.dart`：终末地库的结构，判断问题属于哪个游戏，看不出来就两个都查）。
 
+Wiki（0.13，输入框“回答选项”的“Wiki 资料”开着时；设计见 `WIKI_EVIDENCE.md`）：
+
+| 工具 | 作用 | 上限 |
+|---|---|---|
+| `wiki_search(query, game?, limit?)` | 在 PRTS（明日方舟）或 Warfarin Wiki（终末地）上搜索，返回页面引用 `wiki:<站点>:<页面>`、标题、摘要（摘要不能当出处） | 15 个页面 |
+| `wiki_read(page, game?, start, count, section?)` | 读一个页面：开头给页面 id（含版本）、网址、小节目录，正文 `P段号 内容`，`## 标题` 行是小节；`section` 只读某些小节 | 250 段 / 16k 字 |
+
+系统提示多一节 `loreWikiGuide`：Wiki 是二手资料，库里能读到原文的引用原文；不一致时以原文为准；只有 Wiki 支持的说法写明“据 Wiki 整理”；
+联网失败时不重试、只用库作答。关掉开关时这两个工具和这一节都不出现。
+
 ### 子 agent
 
 `delegate` 启动一个新的 `LoreAgentLoop`（`subtask: true`）：
@@ -96,11 +106,13 @@ R16 正好相反：
 
 - 剧情台词：`story_id:起始行-结束行`。行号是 `line_index`，从 0 开始。
 - 其他资料（`normalized_records`）：`record:<id>`。
+- Wiki 段落（0.13）：`wiki:<站点>:<页面>@<版本>:起始段-结束段`，JSON 里写 `["<页面 id>", 起始段, 结束段]`，段号从 0 开始（界面上从 1 显示）。
 
 核对规则：
 
 - 行号范围里的每一行都必须由工具给模型看过。`read_story` 的页面、`grep` 的命中和上下文、`sql` 结果中带 `story_id + line_index` 的行都算。
 - 记录 id 必须出现在某次 `sql` 结果里。
+- Wiki 段落必须由 `wiki_read` 展示过（按页面 id 含版本记录）；引号里照搬 Wiki 原句也按引语检查退回改写。
 - 只写文件名、没有行号的出处也会被退回。
 - 每个问题最多退回一次；仍无法核实的出处会附注在答案末尾。
 

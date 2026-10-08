@@ -50,6 +50,8 @@ flutter test        # 约 1 分钟，全部离线
 - `test/core/agent/tools/search_story_lines_test.dart`、`test/core/gamedata/*`：关键词/向量/RRF、近似名、目录。
 - `test/core/llm/openai_client_test.dart`：各服务商的怪癖（`LLM_PROVIDERS.md`）。
 - `test/features/ai/*`：答案气泡、工作过程时间线、出处、输入框。
+- Wiki（0.13）：`test/core/wiki/*`、`test/core/agent/lore_agent_wiki_test.dart`、`test/features/ai/wiki_citations_test.dart`；
+  联网（免费）：`$env:ARKLORES_RUN_WIKI_CHECK='true'; flutter test test/live/wiki_live_test.dart`（两站各搜一次、读一页）。
 
 真实 API（opt-in，花钱）：`test/live/ask_pipeline_live_test.dart`，用法见 CLAUDE.md。验收项：
 
@@ -62,6 +64,7 @@ flutter test        # 约 1 分钟，全部离线
 | 宽问题 | 跨多个故事集的人物经历：关键阶段齐全，可能派子 agent |
 | 写错的名字 | 按库中写法作答并在开头说明 |
 | 追问 | `ARKLORES_LIVE_CONVERSATION=true`：第二问能引用第一问读过的行 |
+| Wiki（0.13） | 库里有原文的事实引用原文；Wiki 出处只用在库里没有的内容，正文写明“据 Wiki 整理”；Wiki 不可用时照常作答 |
 
 ## 4. 改了界面
 

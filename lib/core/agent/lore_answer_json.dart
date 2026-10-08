@@ -332,8 +332,11 @@ class LoreAnswerStream {
   }
 }
 
-final RegExp _lineRange =
-    RegExp(r'^\s*L?(\d+)(?:\s*[-–~—]\s*L?(\d+))?\s*$', caseSensitive: false);
+// Story lines may be written "L97", wiki paragraphs "P3".
+final RegExp _lineRange = RegExp(
+  r'^\s*[LP]?(\d+)(?:\s*[-–~—]\s*[LP]?(\d+))?\s*$',
+  caseSensitive: false,
+);
 
 /// A line number, or a "97-127" / "L97" string, read as (start, end).
 (int, int)? _lineSpan(Object? v) {
@@ -344,9 +347,10 @@ final RegExp _lineRange =
   return (a, m.group(2) == null ? a : int.parse(m.group(2)!));
 }
 
-/// `story_id:a-b` / `record:id` of a citation tuple, or null. Also reads the
-/// slightly different shapes models write: lines as "L97" or "97-127", a
-/// story id without `.txt`, a reversed range.
+/// `story_id:a-b` / `record:id` / `wiki:<page id>:a-b` (0.13: a wiki page's
+/// paragraphs, cited like a story's lines) of a citation tuple, or null.
+/// Also reads the slightly different shapes models write: lines as "L97" or
+/// "97-127", a story id without `.txt`, a reversed range.
 String? loreCitationRef(List<Object?> parts) {
   if (parts.isEmpty) return null;
   var first = '${parts.first}'.trim().replaceAll('`', '');
@@ -364,7 +368,7 @@ String? loreCitationRef(List<Object?> parts) {
     if (end != null) b = end.$2;
   }
   if (b < a) (a, b) = (b, a);
-  if (!first.contains('.')) first = '$first.txt';
+  if (!first.contains('.') && !first.startsWith('wiki:')) first = '$first.txt';
   return b == a ? '$first:$a' : '$first:$a-$b';
 }
 

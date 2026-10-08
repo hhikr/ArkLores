@@ -1,6 +1,7 @@
 import '../../core/agent/chat_message.dart';
 import '../../core/agent/react_event.dart';
 import '../../core/gamedata/game.dart';
+import '../../core/wiki/wiki_page.dart';
 
 /// What one step of the answer's work was, for the reader: a tool call
 /// with what it found, a note the model wrote between calls, a rewrite of
@@ -14,6 +15,8 @@ enum WorkKind {
   find,
   similarNames,
   delegate,
+  wikiSearch,
+  wikiRead,
   otherTool,
   note,
   redo,
@@ -47,10 +50,44 @@ class WorkStep {
   Game? get game {
     final named = Game.parse(args['game']);
     if (named != null) return named;
+    // A wiki page names its site, and the site its game.
+    final page = WikiPageId.parse(_versionedPage(arg('page')));
+    if (page != null) return page.site.game == Game.endfield ? Game.endfield : null;
     final story = arg('story_id');
     return story.isNotEmpty && gameOfId(story) == Game.endfield
         ? Game.endfield
         : null;
+  }
+
+  /// A `wiki:<site>:<key>` ref with a placeholder version, so it parses.
+  static String _versionedPage(String ref) =>
+      ref.startsWith(wikiIdPrefix) && !ref.contains('@') ? '$ref@0' : ref;
+
+  /// [WorkKind.wikiRead]: the page title from the output (`《title》 …` on
+  /// its first line), else the page argument.
+  String get wikiTitle {
+    final title = RegExp(r'^《(.+?)》').firstMatch(text.trimLeft());
+    if (title != null) return title.group(1)!.trim();
+    final page = arg('page');
+    final id = WikiPageId.parse(_versionedPage(page));
+    return id == null ? page : id.key.split('/').last;
+  }
+
+  /// [WorkKind.wikiRead]: paragraphs shown (first and last `P<n>`).
+  (int, int)? get paragraphRange {
+    final numbers = [
+      for (final m in RegExp(r'^P(\d+) ', multiLine: true).allMatches(text))
+        int.parse(m.group(1)!),
+    ];
+    if (numbers.isEmpty) return null;
+    numbers.sort();
+    return (numbers.first, numbers.last);
+  }
+
+  /// [WorkKind.wikiSearch]: pages found, or null when not stated.
+  int? get wikiPageCount {
+    final m = RegExp(r'，(\d+) 个页面').firstMatch(text);
+    return m == null ? null : int.parse(m.group(1)!);
   }
 
   /// The story read ([WorkKind.read]): its title from the output, else the
@@ -94,7 +131,10 @@ class WorkStep {
   /// The tool said it found nothing or refused the call.
   bool get failed {
     final t = text.trimLeft();
-    return t.startsWith('错误') || t.startsWith('Error');
+    return t.startsWith('错误') ||
+        t.startsWith('Error') ||
+        // A wiki that could not be reached.
+        t.contains('暂时无法访问');
   }
 
   bool get empty {
@@ -115,6 +155,8 @@ WorkKind _kindOf(String tool) => switch (tool) {
       'find' => WorkKind.find,
       'similar_names' => WorkKind.similarNames,
       'delegate' => WorkKind.delegate,
+      'wiki_search' => WorkKind.wikiSearch,
+      'wiki_read' => WorkKind.wikiRead,
       _ => WorkKind.otherTool,
     };
 
