@@ -4,6 +4,8 @@
 #   .\tools\unpack_endfield.ps1                       # unpack + build
 #   .\tools\unpack_endfield.ps1 -SkipUnpack           # build from the last unpack
 #   .\tools\unpack_endfield.ps1 -Version 1.2.0
+#   .\tools\unpack_endfield.ps1 -SkipUnpack -Embed    # also story vectors (paid;
+#                                                     # cached chunks are free)
 #
 # Needs the AnimeStudio CLI of Variante/endfield_research_kit (built by its
 # setup.bat; see docs/GAMEDATA_BUILD_PIPELINE.md §9) and its .NET 9 runtime.
@@ -17,7 +19,8 @@ param(
   [string]$Kit = 'C:\Users\hhikr\endfield\kit',
   [string]$Work = 'C:\Users\hhikr\endfield\unpack',
   [string]$Version = 'unknown',
-  [switch]$SkipUnpack
+  [switch]$SkipUnpack,
+  [switch]$Embed
 )
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
@@ -60,6 +63,12 @@ if (-not $SkipUnpack) {
 
 & dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--version=$Version" --output=build/endfield --force
 if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+# A rebuild has no vectors; the embedding cache (build/embedding_cache) makes
+# unchanged chunks free, only new or changed text is paid for.
+if ($Embed) {
+  & dart run tools/build_story_embeddings.dart "--db=$((Resolve-Path 'build\endfield\arklores_endfield_zh.db').Path)"
+  if ($LASTEXITCODE -ne 0) { throw 'embedding failed' }
+}
 
 # The release asset and its SHA-256 (for tools/release_gamedata.env).
 $db = 'build\endfield\arklores_endfield_zh.db'

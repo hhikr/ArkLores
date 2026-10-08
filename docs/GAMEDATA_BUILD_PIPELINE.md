@@ -126,6 +126,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 ```powershell
 .\tools\unpack_endfield.ps1 -Version <客户端版本>   # 导出两层 → 合并 → 建库（约 4 分钟）
 .\tools\unpack_endfield.ps1 -SkipUnpack              # 用上次导出的数据重建
+.\tools\unpack_endfield.ps1 -SkipUnpack -Embed       # 重建并补剧情向量（发布用）
 ```
 
 - 导出两个块：`table`（游戏表，文字是 `{id, text}`，字符串在 `I18nTextTable_CN.json`）和 `json-data`（其中 `MissionRuntimeAsset/<任务>.json` 是任务定义：
@@ -154,4 +155,6 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要（进 `story_catalog.synopsis`）。
 - 文字规范化（`endfieldText`）：去标记与资源路径；主角台词的 `{F}…{M}…` 只留女性版本（kit 的默认）；`{player}` 写作“管理员”；
   说话人名后面花括号里的内部注释（`{c13-…}`，可能是剧情里尚未揭示的身份）去掉。
-- 一个 40 秒左右的整库构建；向量需要另跑 `build_story_embeddings.dart`（花钱，要开发者同意）。
+- 一个 40 秒左右的整库构建；重建后的库没有向量，加 `-Embed`（脚本在压缩前跑 `build_story_embeddings.dart`）。
+  向量按内容哈希缓存在 `build/embedding_cache/`，没变的块不再收费；新块要花钱，先问开发者。
+  v0.12.0：8379 段对话、9969 块、约 115 万字，嵌入 77 秒、约 ¥0.4；两个库用同一个模型（`qwen3.7-text-embedding`@512），`find` 跨库合并分数。

@@ -124,4 +124,33 @@ void main() {
     expect(await count('SELECT COUNT(DISTINCT story_id) FROM story_lines'), greaterThanOrEqualTo(6000));
     expect(await count("SELECT COUNT(*) FROM collections WHERE kind = 'ef/main'"), greaterThanOrEqualTo(50));
   }, skip: !run,);
+
+  test('story vectors, when present, cover every story inside its lines', () async {
+    final hasVectors = await count(
+      "SELECT COUNT(*) FROM sqlite_master WHERE name = 'story_chunk_vectors'",
+    );
+    if (hasVectors == 0) return;
+    expect(
+      await count(
+        'SELECT COUNT(DISTINCT story_id) FROM story_lines WHERE story_id NOT IN '
+        '(SELECT story_id FROM story_chunk_vectors)',
+      ),
+      0,
+    );
+    for (final r in await db.rawQuery(
+      'SELECT DISTINCT story_id AS v FROM story_chunk_vectors',
+    )) {
+      expect(gameOfId('${r['v']}'), Game.endfield, reason: '${r['v']}');
+    }
+    expect(
+      await count(
+        'SELECT COUNT(*) FROM story_chunk_vectors v WHERE NOT EXISTS '
+        '(SELECT 1 FROM story_lines l WHERE l.story_id = v.story_id '
+        'AND l.line_index = v.line_start) OR NOT EXISTS '
+        '(SELECT 1 FROM story_lines l WHERE l.story_id = v.story_id '
+        'AND l.line_index = v.line_end)',
+      ),
+      0,
+    );
+  }, skip: !run,);
 }
