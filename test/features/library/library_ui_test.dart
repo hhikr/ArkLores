@@ -1,3 +1,5 @@
+import 'package:arklores/core/gamedata/game.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/library/library_provider.dart';
 import 'package:arklores/core/library/library_queries.dart';
@@ -66,8 +68,13 @@ const _enemy = LibraryEntry(
 List<Override> overrides(MemoryUserStore store) => [
       userDataStoreProvider.overrideWith((ref) async => store),
       libraryStatusProvider.overrideWith((ref) async => LibraryStatus.ready),
+      gameLibraryStatusProvider.overrideWith(
+        (ref, game) async => game == Game.arknights
+            ? LibraryStatus.ready
+            : LibraryStatus.notInstalled,
+      ),
       shelfSummariesProvider.overrideWith(
-        (ref) async => const [
+        (ref, game) async => const [
           ShelfSummary(kind: 'main', collections: 18, stories: 463),
           ShelfSummary(kind: 'activity', collections: 327, stories: 1963),
           ShelfSummary(kind: 'memory', collections: 387, stories: 390),
@@ -76,7 +83,7 @@ List<Override> overrides(MemoryUserStore store) => [
         ],
       ),
       codexTypesProvider.overrideWith(
-        (ref) async => const [
+        (ref, game) async => const [
           (type: 'enemy', count: 1747),
         ],
       ),
@@ -365,7 +372,9 @@ void main() {
     await pumpApp(tester, const MaterialsPage());
     await shoot(tester, 'library_home');
 
-    expect(find.text('阅读'), findsOneWidget);
+    // One tab per game and one for the user's texts, not a "read" tab.
+    expect(find.text('明日方舟'), findsOneWidget);
+    expect(find.text('终末地'), findsOneWidget);
     expect(find.text('我的资料'), findsOneWidget);
     expect(find.byKey(const ValueKey('library-continue')), findsOneWidget);
     for (final k in ['main', 'activity', 'memory', 'roguelike', 'sandbox', 'codex']) {
@@ -377,6 +386,218 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byKey(const ValueKey('library-all-recent')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('both games installed: a section of shelves per game', (tester) async {
+    tester.view.physicalSize = const Size(1080, 3200);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          gameLibraryStatusProvider
+              .overrideWith((ref, game) async => LibraryStatus.ready),
+          shelfSummariesProvider.overrideWith(
+            (ref, game) async => game == Game.endfield
+                ? const [
+                    ShelfSummary(kind: 'ef/main', collections: 64, stories: 1656),
+                    ShelfSummary(kind: 'ef/archive', collections: 23, stories: 0),
+                    ShelfSummary(kind: 'ef/memory', collections: 80, stories: 1476),
+                  ]
+                : const [
+                    ShelfSummary(kind: 'main', collections: 18, stories: 463),
+                  ],
+          ),
+          codexTypesProvider.overrideWith(
+            (ref, game) async => const [(type: 'enemy', count: 92)],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => Shot(child: child!),
+          home: const MaterialsPage(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    // Arknights first: only its shelves are on the page.
+    for (final k in ['main', 'codex']) {
+      expect(find.byKey(ValueKey('shelf-$k')), findsOneWidget, reason: k);
+    }
+    expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
+
+    // A sideways drag does not change the game.
+    await tester.drag(
+      find.byKey(const ValueKey('library-game-arknights')),
+      const Offset(-600, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shelf-main')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
+
+    // The Endfield tab is its own page.
+    await tester.tap(find.byKey(const ValueKey('library-tab-1')));
+    await tester.pumpAndSettle();
+    await shoot(tester, 'library_endfield_home');
+    for (final k in ['ef/main', 'ef/archive', 'ef/memory', 'ef/codex']) {
+      expect(find.byKey(ValueKey('shelf-$k')), findsOneWidget, reason: k);
+    }
+    expect(find.byKey(const ValueKey('shelf-main')), findsNothing);
+    expect(find.text('主线任务'), findsOneWidget);
+    expect(find.text('情报档案库'), findsOneWidget);
+    expect(find.byKey(const ValueKey('library-missing-endfield')), findsNothing);
+
+    // Back to Arknights: the page is as it was.
+    await tester.tap(find.byKey(const ValueKey('library-tab-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shelf-main')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an Endfield shelf lists missions by region with their descriptions; '
+      'a mission reads as one text, its conversations set off by kind', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2160);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    LibraryCollection mission(int i, String? region) => LibraryCollection(
+          id: 'ef/mission_m$i',
+          kind: 'ef/main',
+          name: '任务$i',
+          stories: 1,
+          others: 0,
+          sortKey: i,
+          intro: '任务$i的简介：一行说明。',
+          group: region,
+          firstStory: 'ef/m$i.txt',
+        );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          collectionsOfKindProvider.overrideWith(
+            (ref, kind) async => [
+              mission(0, null),
+              mission(1, '甲地'),
+              mission(2, '乙地'),
+              mission(3, '甲地'),
+            ],
+          ),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => const [
+              StoryLineEntry(lineIndex: 0, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 1, speaker: '甲', content: '第一段。'),
+              StoryLineEntry(lineIndex: 2, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 3, speaker: '乙', content: '第二段。'),
+              StoryLineEntry(lineIndex: 4, content: '通讯', kind: 'section'),
+              StoryLineEntry(lineIndex: 5, speaker: '甲', content: '通讯里的一句。'),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => Shot(child: child!),
+          home: const ShelfPage(kind: 'ef/main'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await shoot(tester, 'library_endfield_shelf');
+    // Regions in the order they first come up, a mission without one last.
+    final headings = [
+      for (final h in ['甲地', '乙地', '其他'])
+        tester.getTopLeft(find.byKey(ValueKey('shelf-heading-$h'))).dy,
+    ];
+    expect(headings, orderedEquals([...headings]..sort()));
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('collection-ef/mission_m3'))).dy,
+      lessThan(headings[1]),
+    );
+    expect(find.text('任务1的简介：一行说明。'), findsOneWidget);
+    // A mission that is one story opens it: no page with a single row.
+    await tester.tap(find.byKey(const ValueKey('collection-ef/mission_m1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(StoryReaderPage), findsOneWidget);
+    expect(find.byType(CollectionPage), findsNothing);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        key: UniqueKey(),
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => const [
+              StoryLineEntry(lineIndex: 0, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 1, speaker: '甲', content: '第一段。'),
+              StoryLineEntry(lineIndex: 2, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 3, speaker: '乙', content: '第二段。'),
+              StoryLineEntry(lineIndex: 4, content: '通讯', kind: 'section'),
+              StoryLineEntry(lineIndex: 5, speaker: '甲', content: '通讯里的一句。'),
+            ],
+          ),
+          storyCatalogEntryProvider.overrideWith(
+            (ref, id) async => const StoryCatalogEntry(
+              storyId: 'ef/m1.txt',
+              collectionId: 'ef/mission_m1',
+              collectionName: '任务1',
+              collectionType: 'EF_MAIN',
+              storySort: 0,
+              storyName: '任务1',
+              synopsis: '甲与乙在谷地相遇。\n乙独自离开。',
+            ),
+          ),
+          collectionIntroProvider.overrideWith((ref, id) async => '任务1的简介。'),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => Shot(child: child!),
+          home: const StoryReaderPage(storyId: 'ef/m1.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await shoot(tester, 'library_endfield_reader');
+    // The kind is named where it changes; the next part of the same kind is
+    // set off by a rule alone.
+    expect(find.byKey(const ValueKey('story-reader-section-0')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-reader-section-2')), findsOneWidget);
+    expect(find.text('对话'), findsOneWidget);
+    expect(find.text('通讯'), findsOneWidget);
+    expect(find.text('第二段。'), findsOneWidget);
+    // The mission's description heads the story; the official synopsis
+    // (the whole story told short) is folded until it is asked for.
+    // (The description is asked for once the story's mission is known.)
+    await tester.pump();
+    expect(find.byKey(const ValueKey('story-reader-synopsis')), findsOneWidget);
+    expect(find.text('任务1的简介。'), findsOneWidget);
+    expect(find.text('甲与乙在谷地相遇。'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('fold-官方梗概')));
+    await tester.pumpAndSettle();
+    // One paragraph per line of the synopsis.
+    expect(find.text('甲与乙在谷地相遇。'), findsOneWidget);
+    expect(find.text('乙独自离开。'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Endfield not installed: its page has a note instead of shelves', (tester) async {
+    await pumpApp(tester, const MaterialsPage());
+    expect(find.byKey(const ValueKey('library-missing-endfield')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('library-tab-1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('library-missing-endfield')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
   });
 
   testWidgets('home without history shows only the shelves', (tester) async {
@@ -400,7 +621,9 @@ void main() {
     expect(find.text('风暴瞭望'), findsWidgets);
     expect(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')), findsOneWidget);
     expect(find.textContaining('官方梗概'), findsOneWidget);
-    expect(find.byKey(const ValueKey('collection-type-stage')), findsOneWidget);
+    // A short list of one kind is listed in place, not behind a row.
+    expect(find.byKey(const ValueKey('collection-inline-stage')), findsOneWidget);
+    expect(find.byKey(const ValueKey('collection-type-stage')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')));
     await tester.pumpAndSettle();
@@ -486,7 +709,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a long grouped list opens as a menu of named groups',
+  testWidgets('a long grouped list is shown by named group; a chip picks one in place',
       (tester) async {
     await pumpApp(
       tester,
@@ -503,9 +726,50 @@ void main() {
     expect(find.byKey(const ValueKey('group-all')), findsOneWidget);
     expect(find.textContaining('copper'), findsNothing);
     expect(find.textContaining('wrath'), findsNothing);
+    // The whole list carries the group headings; no page of groups first.
+    expect(find.byKey(const ValueKey('group-heading-其他')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('group-藏品')));
     await tester.pumpAndSettle();
+    expect(find.byType(EntryListPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('group-heading-其他')), findsNothing);
     expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a profile reads in parts that fold, open; voice lines are quotes, '
+      'numbered ones under one heading', (tester) async {
+    await pumpApp(
+      tester,
+      Scaffold(
+        body: ListView(
+          children: const [
+            ProfileText(
+              '## 干员情报\n阵营：某工业\n种族：某族\n'
+              '## 基础档案\n【代号】甲\n【矿石病感染情况】\n确认为非感染者。\n'
+              '## 语音记录\n问候：你好，管理员。\n信赖对话1：第一次。\n信赖对话2：第二次。',
+            ),
+          ],
+        ),
+      ),
+    );
+    await shoot(tester, 'library_profile');
+    // Every part is open; a fact list and 【】 fields set off their labels.
+    expect(find.text('某工业'), findsOneWidget);
+    expect(find.text('阵营'), findsOneWidget);
+    expect(find.text('代号'), findsOneWidget);
+    expect(find.text('确认为非感染者。'), findsOneWidget);
+    // Voice lines: the title over the line; numbered titles of one kind
+    // under one heading, each by its number.
+    expect(find.text('问候'), findsOneWidget);
+    expect(find.text('你好，管理员。'), findsOneWidget);
+    expect(find.text('信赖对话'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('第二次。'), findsOneWidget);
+    // A part folds when its head is tapped.
+    await tester.tap(find.byKey(const ValueKey('fold-基础档案')));
+    await tester.pumpAndSettle();
+    expect(find.text('确认为非感染者。'), findsNothing);
+    expect(find.text('某工业'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -556,7 +820,7 @@ void main() {
     );
     await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('collection-type-stage')), findsOneWidget);
+    expect(find.byKey(const ValueKey('collection-inline-stage')), findsOneWidget);
     await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
     await tester.pumpAndSettle();
     // An ending's page: its stories, in order.
@@ -663,7 +927,7 @@ void main() {
       ),),
       isTrue,
     );
-    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.tap(find.byIcon(Icons.close_sharp));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('search-scope')), findsNothing);
     expect(
@@ -760,7 +1024,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     for (final (status, text) in [
-      (LibraryStatus.notInstalled, '还没有知识库'),
+      (LibraryStatus.notInstalled, '明日方舟知识库未安装'),
       (LibraryStatus.oldSchema, '知识库需要更新'),
     ]) {
       await tester.pumpWidget(
@@ -769,6 +1033,11 @@ void main() {
           overrides: [
             ...overrides(store),
             libraryStatusProvider.overrideWith((ref) async => status),
+            gameLibraryStatusProvider.overrideWith(
+              (ref, game) async => game == Game.arknights
+                  ? status
+                  : LibraryStatus.notInstalled,
+            ),
           ],
           child: MaterialApp(
             locale: const Locale('zh'),

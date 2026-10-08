@@ -4,6 +4,42 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-09
+
+The stable release of the 0.12 line (Arknights: Endfield), Android build 31. The pre-releases that came before it (v0.12.0 build 29, v0.12.1 build 30) are withdrawn; what they brought is part of this release (the last two sections). The Endfield knowledge base is an asset of this release (the Arknights one is still the v0.11.0 asset).
+
+### Library: one page per game; square shapes and straight motion
+
+- **Each game has its own library page**: the top bar reads 明日方舟 / 终末地 / 我的资料; a game's page has its shelves, its last-read story to continue and its recent reads. A missing knowledge base is explained on its game's page. The pages are chosen with the tabs only — a sideways drag no longer changes the page.
+- **Square, like the games**: the floating bars, tabs, the bottom navigation, buttons, fields, dialogs, sheets, tags, the question box and the answer cards have square corners (cards keep their cut corners); the icons are Material's sharp set; the wiki reader styles drop their rounded corners. A chosen tab is marked by a bar that wipes in along its edge, and each floating plate carries a short corner mark.
+- **Motion without bounce**: a pressed surface sinks and settles back without overshoot; a new page slides in a short way from the right while it fades in (the page below shifts a little left) instead of growing from 94 %; switching library pages fades and slides in from the side the tab lies on.
+- A guard test keeps rounded shapes, the rounded icon set and springy curves out of `lib/`.
+
+### Library: long text that reads well; fewer menus; Endfield named as the game names it
+
+- **Long text in the reading font**: archive documents, profiles, descriptions, mission descriptions and synopses use the story reader's font (LXGW WenKai Screen) with room between paragraphs; `【标签】` fields and lists of facts are set off from their values.
+- **Profiles in parts that fold**: an operator's profile (both games) is a set of sections — 干员情报, 基础档案, each 档案资料 … — each folding, all open. **Voice lines** are a list of quotes, numbered lines of one kind (信赖对话 1–5, 交谈 1–5) under one heading.
+- **The official synopsis at the top of a story is folded** (both games): it tells the whole story, as the game does when a story is skipped. An Endfield mission's own description heads its story instead.
+- **No page that holds a single row**: a mission that is one story opens it; an archive category opens its list; an investigation opens itself; a short list of one kind sits in place on its collection's page; a long grouped list (regions, item kinds) is one list with group headings and chips that pick a group in place, instead of a menu of groups first.
+- **Endfield operators**: their page lists their 角色纪事 (the operator's missions, under the game's chapter of them), Baker 话题 and the Dijiang (帝江号: what they say when you talk to them, give them a gift, send them to rest or work — gathered per operator, formerly scattered as unnamed side missions); the profile parts are named as the game names them (干员情报, 语音记录).
+- **Endfield's archive is the game's 情报档案库**: 中枢档案, 见闻辑录, 音像存档 (recordings, missing before) and 情报采集 (事件调查 with the reports they unlock); documents are placed in 四号谷地 or 武陵 by the mission or investigation their ids name, so far fewer fall under 其他.
+- **Endfield missions as the game's mission panel has them**: the main story shelf is laid out by chapter and process (第一章 · 进程Ⅰ · 碎裂大地 …) in the game's order, from the panel's own chapter data; an operator's missions are its 角色纪事 under their chapter (篇章Ⅰ · 离群之狼); hidden steps and same-named follow-ups are read in their mission, hidden steps with a name of their own are missions on their mission's shelf (no more main-story pieces in 委派任务); missions that share a name on a shelf are told apart by stage (·一阶段, ·二阶段), as fz.wiki does.
+- **Missions the game does not have** (conversations left in the client without a mission: an older version of an operator's story, cut missions) are on their own shelf, 未实装任务, named from the game's text table; the few named nowhere say so (无名任务（id）) instead of a made-up number.
+- **Operators**: each expertise and hobby carries the operator's own line about it; three operators' Baker topics, lost to the side missions because their ids spell the operator differently, are back on their pages; a place's Baker topics are read with the place.
+
+### Endfield stories read like the game's missions
+
+- **A mission is one text**: its dialogue, radio, remote calls, talk around the player and messages in one page instead of a list of numbered "对话 3 / 通讯 2" pieces; each conversation opens with a rule naming its kind (named where the kind changes), the kinds one after another, each in the game's numbering.
+- **Conversations in the order the game plays them**: each conversation's lines follow its dialog tree — the player's choices sit where they are offered, and a choice with different replies reads option by option before the story goes on.
+- **The mission shelves read like the game's mission panel**: each mission with its description, grouped by the region it is played in.
+- The assistant reads a whole mission at once and is told which order the text can and cannot vouch for.
+
+### Endfield knowledge base and two-game answers
+
+- **A second knowledge base for Arknights: Endfield**: operators' archives, voice lines and profile tags (faction, race, expertise, hobbies); the in-game archive (documents, papers, records, investigations) and the notes read in the world; enemy (with where they are found), weapon and item descriptions; dungeons with their enemies; characters' mails; and the conversations — dialogue with the player's choices, radio, remote calls, ambient talk and messages — grouped by mission in the game's order, missions shelved as in the game's mission panel (main, discovery, side, activity, commissions), each operator's missions and message topics on their page. Built on a computer from the game client (`tools/unpack_endfield.ps1`) and downloaded separately, with story vectors (search by meaning works in both games).
+- **The library shows each game's shelves**; search covers both.
+- **Answers look in the right game**: the assistant is told which library a question belongs to, searches both when it cannot tell, and marks steps and sources from Endfield.
+
 ## [0.11.0] - 2026-10-08
 
 Stable release of the 0.11 line; it replaces the pre-releases v0.11.0-pre.1–pre.4, which were withdrawn. The knowledge base

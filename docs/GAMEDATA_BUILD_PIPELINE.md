@@ -112,3 +112,80 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 - 安装器只接受 schema 5；校验必需表、版本、计数与 SHA；失败保留旧库。断点续传、阶段显示、取消、手动放置 `arklores_gamedata_zh.db.download.gz`。
 - 知识库页在已安装的官方资产与 APK 指向的不同（`.asset_sha256` 标记）时提示更新。
 - 首次打开旧库时补建缺的索引（`story_lines(story_id, line_index)`）。
+
+## 9. 终末地知识库（0.12）
+
+终末地没有可以增量跟随的社区数据仓库，数据从本机安装的游戏客户端解包，在电脑上整库重建，作为单独的 Release 资产发布
+（`arklores_endfield_zh.db.gz`，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256`）。表结构与明日方舟库相同（schema 5），所有 id 带 `ef/`。
+
+### 9.1 解包（不启动游戏）
+
+工具：[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 里的 AnimeStudio 终末地分支（自定义 VFS 解密、表与 JSON 数据导出）。
+只第一次需要跑 kit 的 `setup.bat` 构建 AnimeStudio CLI；之后直接用 CLI 导出，不走 kit 的完整导出流程（它要一两个小时，且在本机卡死过）。
+
+```powershell
+.\tools\unpack_endfield.ps1 -Version <客户端版本>   # 导出两层 → 合并 → 建库（约 4 分钟）
+.\tools\unpack_endfield.ps1 -SkipUnpack              # 用上次导出的数据重建
+.\tools\unpack_endfield.ps1 -SkipUnpack -Embed       # 重建并补剧情向量（发布用）
+```
+
+脚本会把新 gz 的 SHA 写进 `release_gamedata.env`。只在本地重建、不发布时，提交前 `git checkout -- tools/release_gamedata.env`：
+URL 仍指向已发布的资产，带着新 SHA 构建的 APK 会拒收它。
+
+- 导出两个块：`table`（游戏表，文字是 `{id, text}`，字符串在 `I18nTextTable_CN.json`）和 `json-data`（其中 `MissionRuntimeAsset/<任务>.json` 是任务定义：
+  名字与简介的文字键、任务类型、所属干员、关卡）。客户端有两层：StreamingAssets 是安装包，Persistent 是热更新层；**先放 StreamingAssets，再用 Persistent 覆盖**。
+- 对话树是 Unity 资源包里的 TextAsset，不在上面两个块里：`AnimeStudio.CLI <层> <输出> --game ArknightsEndfield --types TextAsset --names ^dlg_ --export_type Convert`
+  （`--logger_flags` 用逗号分隔，写成 `A|B` 时 CLI 只打印帮助）。过场时间线的台词片段同理：`--types MonoBehaviour --names ^Dialog(Trunk|Option)PlayableAsset --export_type JSON`。
+  每次都要读遍资源包，是解包里最慢的一步（StreamingAssets 首次约 20 分钟）；两层各导一次，建库时 Persistent 覆盖前者。偶尔中途以退出码 4 结束，看文件数，不全就重跑。
+- **不要加 `--packed-game-store`**：kit 的完整流程会把 Json/LipSync 写进一个 SQLite，这一步在本机卡死（上千个线程、无 CPU 无 IO），而它只存口型数据。
+- 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（`tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
+  （`C:\Users\hhikr\endfield\python312`，`._pth` 里加 kit 目录）。工作目录要在 NTFS 上（exFAT 上 git 拒绝、不能建硬链接）。
+  Claude Code 的 shell 设了 `NoDefaultCurrentDirectoryInExePath`，批处理要用完整路径调用。
+- 任务面板的分类名在 Lua UI 脚本里（`-b lua` 导出的是明文 Lua）：`MissionCtrl.lua` 用 `GEnums.MissionViewType` 的 Main/Discovery/Side/Activity/Other，
+  文字键 `ui_mis_panel_tab_*` → 主线任务/探索任务/支线任务/活动任务/委派任务；任务类型到分类见 `MissionTypeInfoTable.missionViewType`。
+
+### 9.2 建库
+
+```bash
+dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<MissionRuntimeAsset 目录> --version=<客户端版本> --output=build/endfield --force
+```
+
+- 先读任务定义（`--missions`），再导表：文字的地区可能要从它 id 里的任务的关卡推出。
+- 表 → 干员（干员情报：阵营/种族/专长/爱好，及每项专长、爱好在这位干员身上的描述 `CharacterTagDesTable`；干员档案；语音记录——段名取游戏的界面文字 `ui_char_profile_*`）、
+  情报档案库（PRTS：分页 `PrtsPage` → 分类 → 文档 → 页面 → `RichContentTable` 正文，音像存档的页面是 `RadioTable` 的录音；
+  分类按它页面的类型归到中枢档案/见闻辑录/音像存档，调查报告归情报采集；每个分类集合带一条无正文的 `archive_section` 条目，`group_name` 是分页名；
+  事件调查 `PrtsInvestigate` 带地区 `domainId`、它收集的页面和它解锁的报告 `unlockPrts`）、
+  敌人/武器/物品的描述（敌人带分布地点；物品只收 `decoDesc`，去掉多件物品共用的模板句和机制句）、副本（`DungeonTable`：名字、简介、地区，敌人 `appears_in`）、
+  角色来信（`MailTemplateTable`，系统邮件不收）、势力名；档案库不列的留言与告示（`RichContentTable`）归到所在任务或地点。
+  文档的地区只看 id（`regionOfIds`）：调查收集或解锁的页面取调查的地区；否则看文档、页面、正文的 id 里的地图号（`map01…`），
+  再看 id 里的任务（`paper_sm1l1m4_2` → 任务 `sm1l1m4` → 它的关卡 → 地区）。中枢档案是通用设定，没有地区。
+- 剧情：`DialogTextTable`、`RadioTable`、`RemoteCommonTable`、`EnvTalkTable`（只收属于已知任务或地点的）、`SNSDialogTable`。
+  **一个任务是一篇剧情**（`ef/<任务>.txt`；地点、敌人、短信话题、礼物对话同样各一篇），每段对话前一行 `kind = 'section'`，内容是这段的种类
+  （对话/通讯/远程通话/闲话/短信）。一篇里按种类分块（对话 → 通讯 → 远程通话 → 闲话 → 短信），块内按游戏编号（`0d5` = 0.5）：
+  各表的编号互相独立，跨种类的先后游戏数据只给了一部分（见 `KNOWLEDGE_BASE_LESSONS.md` §10），所以不交错。
+  一段对话内部的顺序按它的**对话树**（`dlg_…` TextAsset，`readDialogTree`）：台词节点的 `_trunkId` 是文本行，选项节点的出边依次是各选项的回应，分支在汇合处接上；
+  分叉的选项写成“选项 → 它的回应”，不分叉的写成一行“甲／乙”；`Ex…` 节点是设置，不走。过场节点处放这段对话的时间线台词（按片段的 `startTime`，
+  绑定的选项接在那句后面）。两者都没覆盖的行与选项组按行号补在后面，选项组填在行号的空位上（2026-10 客户端：约 11% 的台词行）。
+  任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`），再经 `canonicalMission`：子任务 `<任务>d<n>` 与基础任务同名、没有名字、
+  或基础任务有定义而它自己没有时，并进基础任务；有自己名字的隐藏步骤（`e1m9d5`“准备工作”）是单独的任务，放在基础任务的书架上（以前落在委派任务里）。
+  **没有 `MissionRuntimeAsset` 的任务不在游戏里**（客户端留下的旧版剧情、删掉的任务；warfarin/fz 都没有它们的页面），放在 `unused` 书架（“未实装任务”）。
+  任务名依次取：任务定义 → `TextTable` 的 `<任务>_name` / `<任务>_desc_001` → 子任务共同的名字；都没有就叫“无名任务（<任务 id>）”（只出现在未实装书架上）。
+  同一书架上重名的任务按游戏顺序加“·一阶段”“·二阶段”（与 fz.wiki 一致）。没有名字、不是别的任务的步骤的隐藏任务归到它关卡所在的地点（`ef/world`）。
+  **章节**：任务面板的章节是资源包里的 `ChapterInfo` 对象（`main_e<n>`、`chr_<编号>_<名>_e<n>`，`unpack_endfield.ps1` 导出到 `chapters_*`，
+  构建参数 `--chapters`），带章号/进程号/进程名的文字键和 `missionIdList`；章节里的任务 `group_name` 是“第一章 · 进程Ⅰ · 碎裂大地”或“篇章Ⅰ · 离群之狼”，
+  `sort_key` 是章节内顺序（主线书架因此按章、进程分组，和游戏一致）；不在章节里的任务 `group_name` 是所在地区。
+  干员任务挂在干员下（`parent_id`）；任务面板列在主线的（汤汤的任务）仍在主线书架上。
+- `section` 行不进检索记录；向量切块在 `section` 处断开（`chunkStory`），所以合并前后每段切出的块文字相同，按内容哈希缓存的向量全部沿用（0.12 合并时 9969 块零新增）。
+  挂在干员下的三种集合：干员任务（kind `ef/memory`）、Baker 话题（`SNSDialogTopicTable`，kind `ef/baker`；话题键里的干员按编号 `chr_0033` 找，
+  名字部分和角色表不一定相同，如 `kamiu`/`camille`；地点的话题 `topic_map01_lv001_*` 归到该地点，各自一篇）、帝江号上的互动
+  （`sim_talk/gift/rest/work_<干员>`：闲谈按信赖等级、送礼、休息、工作，一位干员一篇，kind `ef/ship`）；`ef/baker`、`ef/ship` 不是书架。
+  地图上的交互按地点（`LevelDescTable`；`map01lv005_…` 也是关卡 `map01_lv005`）、敌人遭遇的通讯按敌人归组
+  （kind `ef/world`，书架显示为“其他”）；对话之间的插话、工业教学、测试对话不收。
+  `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要（进 `story_catalog.synopsis`）。
+- 文字规范化（`endfieldText`）：去标记与资源路径；主角台词的 `{F}…{M}…` 只留女性版本（kit 的默认）；`{player}` 写作“管理员”；
+  说话人名后面花括号里的内部注释（`{c13-…}`，可能是剧情里尚未揭示的身份）去掉。
+- 一个 40 秒左右的整库构建；重建后的库没有向量，加 `-Embed`（脚本在压缩前跑 `build_story_embeddings.dart`）。
+  向量按内容哈希缓存在 `build/embedding_cache/`，没变的块不再收费；新块要花钱，先问开发者。
+  v0.12.0：8379 段对话、9969 块、约 115 万字，嵌入 77 秒、约 ¥0.4；两个库用同一个模型（`qwen3.7-text-embedding`@512），`find` 跨库合并分数。
+  只改归类或命名时先用 `build_story_embeddings.dart --migrate-from=<旧库>` 按行对齐搬旧向量，剩下的块多半在缓存里
+  （0.12 归类修正：447 篇整篇对齐、其余 349 块全部命中缓存，零费用）；`--dry-run` 会报“to embed”的块数，非零才要问开发者。

@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../core/gamedata/story_coverage_models.dart'
     show StoryLineEntry, storyKindLabel;
+import '../../core/gamedata/story_vectors.dart' show sectionLineKind;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart' show LibraryEntry;
@@ -21,6 +23,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/smooth_page_route.dart';
+import '../library/reading_text.dart' show FoldSection, ReadingText;
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
 
@@ -160,9 +163,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
+
+  /// Positions of the section lines that follow one of the same kind.
+  Set<int> _quietSections = const {};
   List<StoryLineEntry>? _preparedFor;
   bool _spoken = false;
   String _nickname = '';
+
+  /// The description of the Endfield mission this story is (or null).
+  String? _intro;
 
   /// The item the lazy list is anchored on (0 = the header, then one per row,
   /// then the end block) and where on the screen it starts (a fraction of the
@@ -221,6 +230,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     // Narration is set in italics only between spoken lines; a text that is
     // all narration (a month squad's story, a document) is plain.
     _spoken = lines.any((l) => (l.speaker ?? '').trim().isNotEmpty);
+    // A section names its kind where the kind changes; the next parts of
+    // the same kind are set off by the rule alone.
+    _quietSections = {};
+    String? kind;
+    for (final (i, l) in lines.indexed) {
+      if (l.kind != sectionLineKind) continue;
+      if (l.content == kind) _quietSections.add(i);
+      kind = l.content;
+    }
     _rows = _makeRows(lines);
     // Open anchored on the cited block or the line to resume at.
     _anchorOnTarget();
@@ -393,6 +411,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final chapter =
         entry?.chapterLabel ?? (cut < 0 ? '' : fallback.substring(cut + 3));
     final canJump = _cited || _resume != null;
+    // An Endfield mission's own description heads its story: the mission
+    // opens straight in the reader, without a page that would show it.
+    _intro = entry != null && gameOfId(entry.collectionId) == Game.endfield
+        ? ref.watch(collectionIntroProvider(entry.collectionId)).valueOrNull
+        : null;
 
     _nickname = ref.watch(nicknameProvider);
     // Floating docks; the text starts below them (a cited line is placed
@@ -406,14 +429,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               key: const ValueKey('story-reader-find'),
               tooltip: context.t.storyReaderFindHint,
               onPressed: () => _find(theme),
-              icon: const Icon(Icons.search_rounded),
+              icon: const Icon(Icons.search_sharp),
             ),
           if (canJump)
             IconButton(
               key: const ValueKey('story-reader-jump'),
               tooltip: context.t.aiStoryReaderJumpBack,
               onPressed: _jumpToTarget,
-              icon: Icon(Icons.my_location_rounded, color: theme.accentText),
+              icon: Icon(Icons.my_location_sharp, color: theme.accentText),
             ),
         ],
       body: Builder(
@@ -518,7 +541,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: theme.accentPrimary.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.zero,
         ),
         child: Text(
           text,
@@ -575,39 +598,24 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               const SizedBox(height: 10),
               _chip(theme, context.t.storyReaderResumed(_resume! + 1)),
             ],
+            // The mission's description: what the game shows before it.
+            if (_intro != null && _intro!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ReadingText(
+                _intro!,
+                key: const ValueKey('story-reader-intro'),
+                size: 14.5,
+              ),
+            ],
+            // The official synopsis tells the whole story (it is what the
+            // game shows when a story is skipped): folded until asked for.
             if (synopsis != null && synopsis.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                decoration: BoxDecoration(
-                  color: theme.cardSurface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border(
-                    left: BorderSide(color: theme.accentPrimary, width: 3),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t.storyReaderSynopsis,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 11,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      withPlaceholders(synopsis.trim(), ref.watch(nicknameProvider)),
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textPrimary,
-                        fontSize: 13,
-                        height: 1.55,
-                      ),
-                    ),
-                  ],
-                ),
+              FoldSection(
+                key: const ValueKey('story-reader-synopsis'),
+                title: context.t.storyReaderSynopsis,
+                initiallyOpen: false,
+                child: ReadingText(synopsis.trim(), size: 14.5),
               ),
             ],
             const SizedBox(height: 14),
@@ -652,6 +660,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           child: _divider(theme, line.content),
         );
       }
+      // The start of one conversation of a merged story (an Endfield
+      // mission): a rule with its kind.
+      if (line.kind == sectionLineKind) {
+        final quiet = _quietSections.contains(row.first);
+        return Padding(
+          key: _keyOf(row.first),
+          padding: EdgeInsets.fromLTRB(10, first ? 4 : (quiet ? 22 : 34), 10, 4),
+          child: _ruled(
+            theme,
+            quiet ? null : line.content,
+            key: ValueKey('story-reader-section-${line.lineIndex}'),
+          ),
+        );
+      }
       final isResume = !_cited && line.lineIndex == _resume;
       final child = Container(
         key: _keyOf(row.first),
@@ -678,6 +700,19 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final inside = <Widget>[];
     for (var p = row.first; p <= row.last; p++) {
       if (p > row.first) inside.add(SizedBox(height: _gapBefore(p)));
+      if (_lines[p].kind == sectionLineKind) {
+        inside.add(
+          Container(
+            key: _keyOf(p),
+            child: _ruled(
+              theme,
+              _quietSections.contains(p) ? null : _lines[p].content,
+              key: ValueKey('story-reader-section-${_lines[p].lineIndex}'),
+            ),
+          ),
+        );
+        continue;
+      }
       inside.add(
         KeyedSubtree(
           key: ValueKey('story-line-target-${_lines[p].lineIndex}'),
@@ -706,25 +741,42 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   Widget _divider(AppThemeTokens theme, String place) {
     final parts = place.split('/');
     final many = parts.length == 2 && parts[1] != '1';
-    return Row(
+    return _ruled(
+      theme,
+      many
+          ? '${context.t.storyReaderBattleDialogue} ${parts[0]}'
+          : context.t.storyReaderBattleDialogue,
       key: const ValueKey('story-reader-battle-dialogue'),
-      children: [
-        Expanded(child: Divider(color: theme.divider, endIndent: 12)),
-        Text(
-          many
-              ? '${context.t.storyReaderBattleDialogue} ${parts[0]}'
-              : context.t.storyReaderBattleDialogue,
-          style: theme.bodyFont.copyWith(
-            color: theme.accentText,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.4,
-          ),
-        ),
-        Expanded(child: Divider(color: theme.divider, indent: 12)),
-      ],
     );
   }
+
+  /// A label between two rules: where a part of the text begins. Without a
+  /// label, a short rule (the next part of the same kind).
+  Widget _ruled(AppThemeTokens theme, String? label, {required Key key}) =>
+      label == null
+          ? Center(
+              key: key,
+              child: SizedBox(
+                width: 48,
+                child: Divider(color: theme.divider, thickness: 1),
+              ),
+            )
+          : Row(
+              key: key,
+              children: [
+                Expanded(child: Divider(color: theme.divider, endIndent: 12)),
+                Text(
+                  label,
+                  style: theme.bodyFont.copyWith(
+                    color: theme.accentText,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                Expanded(child: Divider(color: theme.divider, indent: 12)),
+              ],
+            );
 
   String _speakerOf(int p) => (_lines[p].speaker ?? '').trim();
 
@@ -744,7 +796,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             color: theme.accentPrimary.withValues(
               alpha: 0.10 + 0.22 * _strength.value,
             ),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.zero,
             border: Border.all(
               color: theme.accentText.withValues(alpha: 0.35),
               width: 0.8,
@@ -790,7 +842,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                     theme,
                     place.previous,
                     context.t.storyReaderPrevious,
-                    Icons.chevron_left_rounded,
+                    Icons.chevron_left_sharp,
                     key: const ValueKey('story-reader-previous'),
                   ),
                 ),
@@ -800,7 +852,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                     theme,
                     place.next,
                     context.t.storyReaderNext,
-                    Icons.chevron_right_rounded,
+                    Icons.chevron_right_sharp,
                     trailingIcon: true,
                     key: const ValueKey('story-reader-next'),
                   ),
@@ -831,11 +883,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       key: key,
       color: theme.cardSurface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.zero,
         side: BorderSide(color: theme.cardBorder),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.zero,
         onTap: () => Navigator.of(context).pushReplacement(
           smoothPageRoute<void>(
             builder: (_) => StoryReaderPage(storyId: target.rawId!),

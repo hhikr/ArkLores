@@ -1521,4 +1521,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storyReaderFindHint => 'Find in this story';
+
+  @override
+  String get gameArknights => 'Arknights';
+
+  @override
+  String get gameEndfield => 'Endfield';
+
+  @override
+  String libraryGameMissing(String game) {
+    return '$game knowledge base not installed';
+  }
+
+  @override
+  String get kbEndfieldTitle => 'Endfield knowledge base';
+
+  @override
+  String get kbEndfieldDescription =>
+      'Story and texts of Arknights: Endfield (unpacked from the game client; a separate file, downloaded apart from the Arknights one). Once installed, the library shows Endfield\'s shelves and answers look in one or both games.';
 }

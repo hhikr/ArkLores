@@ -72,7 +72,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.bookmark_border_rounded,
+            Icon(Icons.bookmark_border_sharp,
                 size: 64, color: theme.accentPrimary.withValues(alpha: 0.3),),
             const SizedBox(height: 16),
             Text(context.t.bookmarksEmpty,
@@ -112,16 +112,16 @@ class _BookmarkListItem extends StatelessWidget {
         padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
           color: theme.danger,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.zero,
         ),
-        child: Icon(Icons.delete_rounded, color: Colors.white, size: 28),
+        child: Icon(Icons.delete_sharp, color: Colors.white, size: 28),
       ),
       onDismissed: (_) => onDelete(),
       child: ThemeAwareCard(
         onTap: onTap,
         child: Row(
           children: [
-            Icon(Icons.bookmark_rounded, color: theme.wikiBadgeColor, size: 22),
+            Icon(Icons.bookmark_sharp, color: theme.wikiBadgeColor, size: 22),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -138,7 +138,7 @@ class _BookmarkListItem extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded,
+            Icon(Icons.chevron_right_sharp,
                 color: theme.textSecondary, size: 20,),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../background/background_work.dart';
+import 'game.dart';
 import 'gamedata_installer.dart';
 
 final gameDataInstallerProvider = Provider<GameDataInstaller>((ref) {
@@ -11,6 +12,32 @@ final gameDataInstallStatusProvider =
     FutureProvider<GameDataInstallStatus>((ref) async {
   return ref.read(gameDataInstallerProvider).getStatus();
 });
+
+/// 0.12: the Endfield knowledge base's installer (its own file and asset).
+final endfieldInstallerProvider = Provider<GameDataInstaller>((ref) {
+  return const GameDataInstaller.forGame(Game.endfield);
+});
+
+final endfieldInstallStatusProvider =
+    FutureProvider<GameDataInstallStatus>((ref) async {
+  return ref.read(endfieldInstallerProvider).getStatus();
+});
+
+/// [game]'s installer.
+ProviderListenable<GameDataInstaller> installerOf(Game game) =>
+    game == Game.endfield ? endfieldInstallerProvider : gameDataInstallerProvider;
+
+/// [game]'s installation status.
+FutureProvider<GameDataInstallStatus> installStatusOf(Game game) =>
+    game == Game.endfield
+        ? endfieldInstallStatusProvider
+        : gameDataInstallStatusProvider;
+
+/// [game]'s download.
+StateNotifierProvider<GameDataDownloadNotifier, GameDataDownloadState>
+    downloadOf(Game game) => game == Game.endfield
+        ? endfieldDownloadProvider
+        : gameDataDownloadProvider;
 
 /// Outcome of the last finished download.
 enum GameDataDownloadResult { none, installed, noAssetUrl, failed }
@@ -44,8 +71,12 @@ class GameDataDownloadState {
 /// parallel download of the same file (two concurrent ~185 MB downloads
 /// broke TLS handshakes on a phone).
 class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
-  GameDataDownloadNotifier(this._ref) : super(const GameDataDownloadState());
+  GameDataDownloadNotifier(this._ref, {this.game = Game.arknights})
+      : super(const GameDataDownloadState());
   final Ref _ref;
+
+  /// Whose knowledge base this downloads.
+  final Game game;
 
   /// Progress updates are throttled to this many bytes.
   static const int _progressStep = 512 * 1024;
@@ -63,7 +94,7 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
     if (state.downloading) return;
     if (!force) {
       try {
-        final status = await _ref.read(gameDataInstallerProvider).getStatus();
+        final status = await _ref.read(installerOf(game)).getStatus();
         if (status.installed && !status.updateAvailable) return;
       } catch (_) {
         // Cannot tell: download as before.
@@ -73,7 +104,12 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
     state = const GameDataDownloadState(downloading: true);
     _token = GameDataDownloadToken();
     await BackgroundWork.instance.run(
-      BackgroundWork.text('正在下载知识库', 'Downloading the knowledge base'),
+      BackgroundWork.text(
+        game == Game.endfield ? '正在下载终末地知识库' : '正在下载知识库',
+        game == Game.endfield
+            ? 'Downloading the Endfield knowledge base'
+            : 'Downloading the knowledge base',
+      ),
       _download,
     );
   }
@@ -82,7 +118,7 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
     var lastReported = 0;
     try {
       final installed =
-          await _ref.read(gameDataInstallerProvider).installFromReleaseAsset(
+          await _ref.read(installerOf(game)).installFromReleaseAsset(
         overwrite: true,
         cancelToken: _token,
         onPhase: (phase, attempt) {
@@ -116,7 +152,7 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
           );
         },
       );
-      _ref.invalidate(gameDataInstallStatusProvider);
+      _ref.invalidate(installStatusOf(game));
       if (!mounted) return;
       state = GameDataDownloadState(
         result: installed
@@ -141,4 +177,9 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
 final gameDataDownloadProvider =
     StateNotifierProvider<GameDataDownloadNotifier, GameDataDownloadState>(
   GameDataDownloadNotifier.new,
+);
+
+final endfieldDownloadProvider =
+    StateNotifierProvider<GameDataDownloadNotifier, GameDataDownloadState>(
+  (ref) => GameDataDownloadNotifier(ref, game: Game.endfield),
 );

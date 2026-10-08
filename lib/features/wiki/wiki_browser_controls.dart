@@ -18,8 +18,7 @@ class WikiAiTargetSheet extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: theme.cardSurface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          border: Border(top: BorderSide(color: theme.cardBorder)),
+          border: Border(top: BorderSide(color: theme.accentPrimary, width: 2)),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -42,7 +41,7 @@ class WikiAiTargetSheet extends StatelessWidget {
               const SizedBox(height: 12),
               TargetTile(
                 theme: theme,
-                icon: Icons.summarize_rounded,
+                icon: Icons.summarize_sharp,
                 title: context.t.aiTabSummary,
                 subtitle: context.t.wikiSendToSummaryDesc,
                 onTap: () => Navigator.pop(context, WikiAiTarget.summary),
@@ -133,7 +132,7 @@ class ReaderToolbar extends ConsumerWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: theme.cardSurface.withValues(alpha: 0.94),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.zero,
                   border: Border.all(color: theme.cardBorder),
                   boxShadow: theme.cardShadow,
                 ),
@@ -147,14 +146,14 @@ class ReaderToolbar extends ConsumerWidget {
                     children: [
                       ReaderToolButton(
                         theme: theme,
-                        icon: Icons.keyboard_arrow_down_rounded,
+                        icon: Icons.keyboard_arrow_down_sharp,
                         onTap: onHide,
                       ),
                       ReaderToolButton(
                         theme: theme,
                         icon: isDarkMode
-                            ? Icons.light_mode_rounded
-                            : Icons.dark_mode_rounded,
+                            ? Icons.light_mode_sharp
+                            : Icons.dark_mode_sharp,
                         onTap: onToggleDarkMode,
                       ),
                       ReaderToolButton(
@@ -169,7 +168,7 @@ class ReaderToolbar extends ConsumerWidget {
                       ),
                       ReaderToolButton(
                         theme: theme,
-                        icon: Icons.close_rounded,
+                        icon: Icons.close_sharp,
                         onTap: onExitReader,
                       ),
                     ],
@@ -236,7 +235,7 @@ class ReaderToolButtonState extends State<ReaderToolButton> {
                 color: _pressed
                     ? widget.theme.accentPrimary.withValues(alpha: 0.14)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.zero,
               ),
               child: Center(
                 child: widget.icon != null
@@ -267,7 +266,7 @@ const double _trayHeightFactor = 0.45;
 /// Floating tray anchored at bottom-right that morphs between a FAB and a
 /// tall vertical toolbar.
 ///
-/// Collapsed: a small round button.
+/// Collapsed: a small square button.
 /// Expanded: the same-width container "stretches" upward into a floating
 /// vertical toolbar with [WikiToolbar] inside and a close toggle at bottom.
 class ExpandableTray extends ConsumerWidget {
@@ -322,7 +321,7 @@ class ExpandableTray extends ConsumerWidget {
             : _traySize,
         decoration: BoxDecoration(
           color: theme.cardSurface,
-          borderRadius: BorderRadius.circular(expanded ? 16 : _traySize / 2),
+          borderRadius: BorderRadius.zero,
           boxShadow: theme.cardShadow,
         ),
         child: Column(
@@ -359,7 +358,7 @@ class ExpandableTray extends ConsumerWidget {
               height: _traySize,
               child: IconButton(
                 icon: Icon(
-                  expanded ? Icons.close_rounded : Icons.tune_rounded,
+                  expanded ? Icons.close_sharp : Icons.tune_sharp,
                   size: 22,
                 ),
                 color: theme.textPrimary,
@@ -370,7 +369,7 @@ class ExpandableTray extends ConsumerWidget {
                   splashFactory: NoSplash.splashFactory,
                   overlayColor: theme.accentPrimary.withValues(alpha: 0.12),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.zero,
                   ),
                 ),
               ),

@@ -2,7 +2,7 @@
 
 > 明日方舟剧情阅读与问答助手（Arknights lore reader & assistant）
 
-ArkLores 是一款面向《明日方舟》剧情爱好者的 Android 应用（Flutter）。它把游戏解包文本整理成一个本地知识库，
+ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Android 应用（Flutter）。它把游戏解包文本整理成本地知识库（每个游戏一个），
 在上面提供可以阅读的资料页和带原文出处的剧情问答，并内置 PRTS 与终末地 Wiki 的浏览。
 
 最新版本：[v0.11.0](https://github.com/hhikr/ArkLores/releases/tag/v0.11.0)
@@ -16,6 +16,7 @@ ArkLores 是一款面向《明日方舟》剧情爱好者的 Android 应用（Fl
   工作过程显示为时间线。支持任意 OpenAI 兼容的模型服务（默认智谱 `glm-5.3-flash`），可选配置向量服务做语义召回。
 - **Wiki**：PRTS 与终末地 Wiki（fz.wiki / Warfarin）双站浏览、阅读模式、书签。
 - **知识库更新**：从 Release 下载整包，或在 App 内检查上游变化、只下载变化的文件做增量更新。
+- **终末地（0.12 开发中）**：第二个知识库——干员档案与语音、档案库文件、任务对话与通讯、短信，按游戏的任务分类排在资料页；问答会判断问题属于哪个游戏，看不出来时两个都查。
 
 ## 发布资产（v0.11.0 Release）
 

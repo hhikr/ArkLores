@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,6 +60,22 @@ void main() {
       expect(status.installed, isTrue);
       expect(status.manifest['schema_version'], '5');
       expect(status.entityCount, '1');
+    });
+
+    test('each game installs into its own file; one never replaces the other', () async {
+      final arknights = GameDataInstaller(installDirectory: dir);
+      const endfield = GameDataInstaller.forGame(Game.endfield);
+      final ef = GameDataInstaller(
+        installDirectory: dir,
+        game: endfield.game,
+      );
+      await arknights.installFromBytes(await validDb(), overwrite: true);
+      await ef.installFromBytes(await validDb(name: 'ef.db'), overwrite: true);
+      expect(File(installed()).existsSync(), isTrue);
+      expect(File('${dir.path}/${Game.endfield.dbFileName}').existsSync(), isTrue);
+      expect((await ef.getStatus()).dbPath, endsWith(Game.endfield.dbFileName));
+      // No Endfield asset in a build without its URL: nothing to update to.
+      expect(endfield.releaseAssetUrl, isEmpty);
     });
 
     test('garbage is refused and the installed database is kept', () async {

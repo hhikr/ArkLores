@@ -3,8 +3,8 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.11.0（正式版，2026-10-08，Android build 28；知识库资产在 v0.11.0 Release，`tools/release_gamedata.env` 指向它）。
-- **开发中**：0.12 —— 终末地知识库（分支 `feature/v0.12-endfield`，进度见下）。
+- **已发布**：v0.12.0（正式版，2026-10-09，Android build 31）。明日方舟知识库资产仍在 v0.11.0 Release，终末地知识库资产在 v0.12.0 Release，`tools/release_gamedata.env` 指向两者。
+- 0.12 的预发布（v0.12.0 build 29、v0.12.1 build 30）已撤下（Release、tag、release 分支已删），由正式版 v0.12.0（build 31）取代。下一轮开发从 `main` 新开分支。
 - 未经开发者明确同意不发版、不跑花钱的真实 API 测试；Android build 号每次发版递增。
 - **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、普查数据放本地 `notes/`（gitignored），不提交、不写进 PR。
 - 用中文和开发者交流。
@@ -14,8 +14,22 @@
 - **0.11（已发布）**：知识库重做为条目层（`entries`/`collections`/`entry_links`）、剧本全量解析、增量更新通道、用户库与阅读历史、
   资料页与阅读器、悬浮式界面与点击反馈、工作过程时间线、非 GLM 服务商兼容、删除角色扮演（开发者 2026-10-07 决定，不要恢复）。
   建库/更新/补算的经验与全部错误见 `docs/KNOWLEDGE_BASE_LESSONS.md`。
-- **0.12（进行中）**：终末地知识库与双游戏资料页/问答。
-
+- **0.12（已发布，v0.12.0）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9，
+  已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5。
+  - 架构：每个游戏一个库文件；终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`find` 默认两个库），
+    装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一页（明日方舟 / 终末地 / 我的资料）、页面按 id 路由；知识库页每个游戏一张下载卡。
+  - 终末地建库：`tools/unpack_endfield.ps1`（AnimeStudio 导出客户端两层的表与 JSON 数据，Persistent 覆盖 StreamingAssets，不用 kit 的完整流程）→
+    `tools/build_endfield_database.dart`：干员档案与语音、档案库（PRTS）、敌人/武器/物品描述、对话/通讯/短信（选项按组号插入），
+    任务名/简介/分类/所属干员/关卡来自 `MissionRuntimeAsset`（没有定义的任务不在游戏里，放 `unused`“未实装任务”，名字取 `TextTable`，都没有叫“无名任务（id）”；
+    无名/同名的子任务并进基础任务，同书架重名加“·一阶段”），书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务）；
+    章节（主线的章·进程、干员的篇章）来自资源包的 `ChapterInfo`（`--chapters`），章节外的任务按地区分组。
+    干员下挂三种集合：角色纪事（干员任务）、`baker` Baker 话题、`ship` 帝江号互动（后两种不是书架）；档案库按游戏分页（中枢档案/见闻辑录/音像存档/情报采集）。
+    界面里的名词一律到 `TextTable` 的界面文字里查（每一层都查），查不到就不起名。
+  - **一个任务一篇剧情**（参考 warfarin/fz 的编排）：段前一行 `section` 标种类，按种类分块、块内按编号；一段对话内部按对话树（`dlg_…` TextAsset）
+    与过场时间线片段（`DialogTrunk/OptionPlayableAsset`）排，89% 台词行由它们定位，其余按行号。阅读器只在种类变化处写种类名。
+  - 终末地资产带剧情向量（与明日方舟同一模型；重建后 `unpack_endfield.ps1 -Embed` 补，缓存命中不收费；切块在 `section` 处断开）。
+  - 待开发者决定：真实 API 跑一两道双游戏问题验证选库（花钱，未跑）。
+  - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据）。
 ## 文档索引
 
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
@@ -35,6 +49,13 @@
 - 新的推入页面用 `FloatingScaffold`（`shared/widgets/floating_bar.dart`，全 App 不用 `AppBar`，有守卫测试）；主页面里的列表用 `floatingPadding`；
   新的可点块用 `PressFeedback` + `withHaptic`。
 - 长时操作（问答、知识库下载/构建、向量）包在 `BackgroundWork.instance.run(...)` 里（Android 前台服务保活）。
+- 形状与动效照两款游戏：方角（卡片用切角 `ThemeAwareCard`），图标用 `Icons.*_sharp`，选中的标签用 `SelectionBar` 擦入的横条，
+  悬浮板用 `FloatingBar`（角标）；动效短、直线、无回弹（`easeOutCubic`/`easeOutExpo`）。圆角、圆形、`_rounded` 图标、回弹曲线有守卫测试（`test/guards/square_shapes_test.dart`）。
+- 资料页每个游戏一页（顶部标签切换，`SwitchedPages`），不能左右滑动换页。
+- 资料页不做只有一行的中间页：集合从列表打开走 `openCollectionOf`（一篇剧情直接进阅读器、一类条目直接进列表）；短列表在集合页里就地列出；
+  分组的长列表用组标题 + 选择条，不先列一页分组。
+- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠、默认展开），语音用 `VoiceLines`；
+  剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 颜色：信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 - 问答列表不随流式内容自动滚动（只在发新问题时滚到底一次）；思考窗口固定高度；阅读位置上方的内容在流式中不变高。不要加“贴底跟随”。
 - 提交前 `git checkout -- android/gradle.properties`（Flutter 迁移器会往里加两行）。

@@ -6,6 +6,7 @@ import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/react_event.dart';
 import '../../../core/agent/story_answer.dart';
 import '../../../core/agent/turn_stats.dart';
+import '../../../core/gamedata/game.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
@@ -107,7 +108,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: theme.accentPrimary.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.zero,
         border: Border.all(
           color: theme.accentText.withValues(alpha: 0.35),
           width: 1,
@@ -221,22 +222,22 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   Widget _buildVerdictBanner(AppThemeTokens theme, FactCheckVerdict verdict) {
     final config = switch (verdict) {
       FactCheckVerdict.supported => (
-          Icons.check_circle_rounded,
+          Icons.check_circle_sharp,
           Colors.green,
           context.t.aiVerdictSupported
         ),
       FactCheckVerdict.refuted => (
-          Icons.cancel_rounded,
+          Icons.cancel_sharp,
           theme.danger,
           context.t.aiVerdictRefuted
         ),
       FactCheckVerdict.uncertain => (
-          Icons.help_rounded,
+          Icons.help_sharp,
           Colors.amber.shade800,
           context.t.aiVerdictUncertain
         ),
       FactCheckVerdict.unavailable => (
-          Icons.remove_circle_outline_rounded,
+          Icons.remove_circle_outline_sharp,
           theme.textSecondary,
           context.t.aiVerdictUnavailable
         ),
@@ -290,8 +291,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       if (msg.steps.isNotEmpty) _workSummary(),
     ];
     final icon = status == StoryAnswerStatus.answered
-        ? Icons.check_circle_outline_rounded
-        : Icons.error_outline_rounded;
+        ? Icons.check_circle_outline_sharp
+        : Icons.error_outline_sharp;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -300,7 +301,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           onTap: msg.steps.isEmpty
               ? null
               : () => setState(() => _showSteps = !_showSteps),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.zero,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -320,8 +321,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 if (msg.steps.isNotEmpty)
                   Icon(
                     _showSteps
-                        ? Icons.expand_less_rounded
-                        : Icons.chevron_right_rounded,
+                        ? Icons.expand_less_sharp
+                        : Icons.chevron_right_sharp,
                     size: 16,
                     color: theme.textSecondary,
                   ),
@@ -357,7 +358,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           onTap: msg.steps.isEmpty
               ? null
               : () => setState(() => _showSteps = !_showSteps),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.zero,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -386,8 +387,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 if (msg.steps.isNotEmpty)
                   Icon(
                     _showSteps
-                        ? Icons.expand_less_rounded
-                        : Icons.chevron_right_rounded,
+                        ? Icons.expand_less_sharp
+                        : Icons.chevron_right_sharp,
                     size: 16,
                     color: theme.textSecondary,
                   ),
@@ -438,8 +439,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 Text(context.t.aiThinkingProcess, style: muted),
                 Icon(
                   _showReasoning
-                      ? Icons.expand_less_rounded
-                      : Icons.chevron_right_rounded,
+                      ? Icons.expand_less_sharp
+                      : Icons.chevron_right_sharp,
                   size: 16,
                   color: theme.textSecondary,
                 ),
@@ -454,7 +455,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             height: reasoningWindowHeight,
             decoration: BoxDecoration(
               color: theme.bgSecondary.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.zero,
               border: Border.all(color: theme.divider, width: 0.5),
             ),
             child: Scrollbar(
@@ -522,7 +523,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             child: Row(
               children: [
                 Icon(
-                  isOpen ? Icons.expand_more_rounded : Icons.chevron_right_rounded,
+                  isOpen ? Icons.expand_more_sharp : Icons.chevron_right_sharp,
                   size: 16,
                   color: theme.textSecondary,
                 ),
@@ -540,14 +541,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           child: InkWell(
           key: ValueKey('cite:$key'),
           onTap: withHaptic(onTap ?? () => _toggle(key)),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.zero,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: selected
                   ? theme.accentPrimary.withValues(alpha: 0.15)
                   : theme.bgSecondary,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.zero,
               border: Border.all(
                 color: selected ? theme.accentText : theme.divider,
                 width: 0.5,
@@ -700,7 +701,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         onExpansionChanged: (value) => setState(() => _showEvidence = value),
         tilePadding: const EdgeInsets.symmetric(horizontal: 10),
         childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        leading: Icon(Icons.source_rounded, color: theme.accentText),
+        leading: Icon(Icons.source_sharp, color: theme.accentText),
         title: Text(
           context.t.aiEvidenceTitle(_evidenceRecords.length),
           style: theme.titleFont.copyWith(fontSize: 13),
@@ -760,7 +761,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     return Container(
       decoration: BoxDecoration(
         color: theme.bgSecondary,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: theme.divider, width: 0.5),
       ),
       child: Column(
@@ -768,15 +769,15 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         children: [
           InkWell(
             onTap: () => setState(() => _showSteps = !_showSteps),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.zero,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Row(
                 children: [
                   Icon(
                     _showSteps
-                        ? Icons.visibility_rounded
-                        : Icons.visibility_off_rounded,
+                        ? Icons.visibility_sharp
+                        : Icons.visibility_off_sharp,
                     size: 14,
                     color: theme.accentText,
                   ),
@@ -853,7 +854,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         decoration: BoxDecoration(
           color: theme.bgPrimary,
           border: Border.all(color: theme.divider),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.zero,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -910,7 +911,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         decoration: BoxDecoration(
           color: theme.accentPrimary.withValues(alpha: 0.12),
           border: Border.all(color: theme.accentText.withValues(alpha: 0.4)),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.zero,
         ),
         child: Text(label,
             style: theme.bodyFont.copyWith(
@@ -968,7 +969,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       dot: Icon(icon, size: 13, color: color),
       child: InkWell(
         key: ValueKey('work-step-$index'),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.zero,
         onTap: canOpen
             ? () => setState(() {
                   if (!_openSteps.remove(index)) _openSteps.add(index);
@@ -1039,7 +1040,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: theme.bgSecondary.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.zero,
                   ),
                   child: SelectableText(
                     [
@@ -1089,7 +1090,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                             height: 5,
                             decoration: BoxDecoration(
                               color: theme.divider,
-                              shape: BoxShape.circle,
                             ),
                           ),
                         )
@@ -1098,7 +1098,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                           height: 20,
                           decoration: BoxDecoration(
                             color: theme.cardSurface,
-                            shape: BoxShape.circle,
                             border: Border.all(color: theme.divider),
                           ),
                           child: dot,
@@ -1114,37 +1113,45 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
+  /// The step's title, with the game when it looked in Endfield's library.
   (IconData, String) _workTitle(WorkStep step) {
+    final (icon, title) = _workTitleOf(step);
+    return step.game == Game.endfield
+        ? (icon, '$title · ${context.t.gameEndfield}')
+        : (icon, title);
+  }
+
+  (IconData, String) _workTitleOf(WorkStep step) {
     String clip(String s, [int n = 40]) =>
         s.length <= n ? s : '${s.substring(0, n)}…';
     final t = context.t;
     switch (step.kind) {
       case WorkKind.sql:
-        return (Icons.storage_rounded, t.aiWorkSql);
+        return (Icons.storage_sharp, t.aiWorkSql);
       case WorkKind.grep:
         final pattern = clip(step.arg('pattern').replaceAll('|', ' / '));
         final scope = step.arg('collection');
         return (
-          Icons.search_rounded,
+          Icons.search_sharp,
           scope.isEmpty ? t.aiWorkGrep(pattern) : t.aiWorkGrepIn(clip(scope, 20), pattern),
         );
       case WorkKind.read:
-        return (Icons.menu_book_rounded, t.aiWorkRead(clip(step.storyTitle)));
+        return (Icons.menu_book_sharp, t.aiWorkRead(clip(step.storyTitle)));
       case WorkKind.outline:
         return (
-          Icons.format_list_bulleted_rounded,
+          Icons.format_list_bulleted_sharp,
           t.aiWorkOutline(clip(step.arg('collection'))),
         );
       case WorkKind.find:
-        return (Icons.travel_explore_rounded, t.aiWorkFind(clip(step.arg('query'))));
+        return (Icons.travel_explore_sharp, t.aiWorkFind(clip(step.arg('query'))));
       case WorkKind.similarNames:
-        return (Icons.spellcheck_rounded, t.aiWorkSimilar(clip(step.arg('name'))));
+        return (Icons.spellcheck_sharp, t.aiWorkSimilar(clip(step.arg('name'))));
       case WorkKind.delegate:
-        return (Icons.call_split_rounded, t.aiWorkDelegate(clip(step.arg('task'), 60)));
+        return (Icons.call_split_sharp, t.aiWorkDelegate(clip(step.arg('task'), 60)));
       case WorkKind.redo:
-        return (Icons.replay_rounded, t.aiWorkRedo);
+        return (Icons.replay_sharp, t.aiWorkRedo);
       case WorkKind.error:
-        return (Icons.error_outline_rounded, clip(step.text, 120));
+        return (Icons.error_outline_sharp, clip(step.text, 120));
       case WorkKind.otherTool:
       case WorkKind.note:
         return (Icons.build_outlined, step.tool ?? '');

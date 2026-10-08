@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
@@ -24,9 +25,14 @@ class EntryListPage extends ConsumerStatefulWidget {
     this.title,
     this.groups,
     this.flat = false,
+    this.game,
   });
 
   final String type;
+
+  /// The game whose codex this is (without a collection); a collection's
+  /// list is in its collection's game.
+  final Game? game;
   final String? collectionId;
   final String? collectionName;
 
@@ -65,7 +71,11 @@ List<({String label, List<String?> raws, int count})>? _groupMenu(
   }
   if (byLabel.length < 2) return null;
   final labels = byLabel.keys.toList()
-    ..sort((a, b) => a == other ? 1 : b == other ? -1 : 0);
+    ..sort((a, b) => a == other
+        ? 1
+        : b == other
+            ? -1
+            : 0,);
   return [
     for (final l in labels)
       (label: l, raws: byLabel[l]!.raws, count: byLabel[l]!.count),
@@ -76,6 +86,9 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
   String _query = '';
   Timer? _debounce;
 
+  /// The group chip chosen (null: all groups, under their headings).
+  String? _group;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -85,44 +98,62 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final key = (
-      type: widget.type,
-      collectionId: widget.collectionId,
-      query: _query,
-      groups: groupsKey(widget.groups),
-    );
+    final game = widget.game ?? gameOfId(widget.collectionId ?? '');
     final title = widget.title ??
         [
           if (widget.collectionName != null) widget.collectionName!,
-          entryTypeName(widget.type),
+          entryTypeNameIn(widget.type, game),
         ].join(' · ');
-    final flat = widget.flat || widget.groups != null || _query.trim().isNotEmpty;
-    // A long list of grouped entries opens as a menu of its groups.
+    final flat = widget.flat || widget.groups != null;
+    // A long list of grouped entries is shown by group: chips on top pick
+    // one group in place, and the whole list carries the group headings.
     final groupData = flat
         ? null
         : ref.watch(
             entryGroupsProvider(
-              (type: widget.type, collectionId: widget.collectionId),
+              (
+                type: widget.type,
+                collectionId: widget.collectionId,
+                game: game
+              ),
             ),
           );
+    final other = context.t.shelfOther;
     final menu = groupData?.valueOrNull == null
         ? null
-        : _groupMenu(
-            widget.type,
-            groupData!.valueOrNull!,
-            other: context.t.shelfOther,
-          );
+        : _groupMenu(widget.type, groupData!.valueOrNull!, other: other);
     if (!flat && groupData!.isLoading) {
       return LibraryScaffold(
         title: title,
         body: const Center(child: CircularProgressIndicator()),
       );
     }
+    final chosen = menu?.where((g) => g.label == _group).firstOrNull;
+    final key = (
+      type: widget.type,
+      collectionId: widget.collectionId,
+      query: _query,
+      groups: groupsKey(widget.groups ?? chosen?.raws),
+      game: game,
+    );
     final entries = ref.watch(entriesOfTypeProvider(key));
+    // Headings in the whole list: the entries by group, in the menu's order.
+    List<Object> rows(List<LibraryEntry> list) {
+      if (menu == null || chosen != null) return list;
+      final order = [for (final g in menu) g.label];
+      final byLabel = <String, List<LibraryEntry>>{};
+      for (final e in list) {
+        (byLabel[groupLabel(widget.type, e.group) ?? other] ??= []).add(e);
+      }
+      return [
+        for (final label in order)
+          if (byLabel[label] != null) ...[label, ...byLabel[label]!],
+      ];
+    }
     // The operator shelf is this list of operators; its search also finds
     // their record stories.
     final scope = widget.type == 'operator' && widget.collectionId == null
-        ? shelfScope(operatorShelf)
+        ? shelfScope(operatorShelfOf(game))
         : listScope(collectionId: widget.collectionId, type: widget.type);
     return LibraryScaffold(
       title: title,
@@ -139,87 +170,95 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
               );
             },
           ),
+          if (menu != null) _groupChips(theme, menu),
           Expanded(
-            child: menu != null
-                ? _menuList(theme, title, menu)
-                : entries.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (_, __) => LibraryMessage(
-                      icon: Icons.folder_off_rounded,
-                      title: context.t.libraryEmpty,
-                    ),
-                    data: (list) => list.isEmpty
-                        ? LibraryMessage(
-                            icon: Icons.search_off_rounded,
-                            title: context.t.libraryNoResults,
-                            action: _query.trim().isEmpty
-                                ? null
-                                : SearchFurtherButton(
-                                    query: _query,
-                                    scope: scope,
-                                    label: title,
-                                  ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            itemCount: list.length,
-                            separatorBuilder: (_, __) => rowDivider(theme),
-                            itemBuilder: (context, i) => EntryRow(
-                              entry: list[i],
-                              onTap: () => openEntry(context, list[i]),
-                            ),
+            child: entries.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, __) => LibraryMessage(
+                icon: Icons.folder_off_sharp,
+                title: context.t.libraryEmpty,
+              ),
+              data: (list) {
+                if (list.isEmpty) {
+                  return LibraryMessage(
+                    icon: Icons.search_off_sharp,
+                    title: context.t.libraryNoResults,
+                    action: _query.trim().isEmpty
+                        ? null
+                        : SearchFurtherButton(
+                            query: _query,
+                            scope: scope,
+                            label: title,
                           ),
-                  ),
+                  );
+                }
+                final items = rows(list);
+                return ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) {
+                    final item = items[i];
+                    if (item is String) {
+                      return GroupHeading(
+                        key: ValueKey('group-heading-$item'),
+                        title: item,
+                      );
+                    }
+                    final e = item as LibraryEntry;
+                    return Column(
+                      children: [
+                        EntryRow(entry: e, onTap: () => openEntry(context, e)),
+                        rowDivider(theme),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// The first level: the groups, then everything.
-  Widget _menuList(
+  /// The groups as chips: one picks a group in place, again shows all.
+  Widget _groupChips(
     AppThemeTokens theme,
-    String title,
     List<({String label, List<String?> raws, int count})> menu,
   ) {
     final total = menu.fold<int>(0, (n, g) => n + g.count);
-    void open(String label, List<String?>? raws) => pushLibraryPage(
-          context,
-          (_) => EntryListPage(
-            type: widget.type,
-            collectionId: widget.collectionId,
-            collectionName: widget.collectionName,
-            title: '$title · $label',
-            groups: raws,
-            flat: true,
+    Widget chip(String? label, String text, int count) {
+      final on = _group == label;
+      return Padding(
+        padding: const EdgeInsets.only(right: 6),
+        child: ChoiceChip(
+          key: ValueKey('group-${label ?? 'all'}'),
+          label: Text('$text  $count'),
+          selected: on,
+          showCheckmark: false,
+          labelStyle: theme.bodyFont.copyWith(
+            fontSize: 12.5,
+            color: on ? theme.onAccent : theme.textPrimary,
+            fontWeight: on ? FontWeight.w700 : FontWeight.w500,
           ),
-        );
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        for (final g in menu) ...[
-          LibraryRow(
-            key: ValueKey('group-${g.label}'),
-            title: g.label,
-            subtitle: context.t.libraryCountEntries(g.count),
-            subtitleLines: 1,
-            leading: Icon(Icons.folder_outlined, color: theme.accentText),
-            trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
-            onTap: () => open(g.label, g.raws),
-          ),
-          rowDivider(theme),
-        ],
-        LibraryRow(
-          key: const ValueKey('group-all'),
-          title: context.t.libraryAllEntries,
-          subtitle: context.t.libraryCountEntries(total),
-          subtitleLines: 1,
-          leading: Icon(Icons.list_rounded, color: theme.textSecondary),
-          trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
-          onTap: () => open(context.t.libraryAllEntries, null),
+          selectedColor: theme.accentPrimary,
+          backgroundColor: theme.cardSurface,
+          side: BorderSide(color: on ? theme.accentPrimary : theme.cardBorder),
+          onSelected: (_) => setState(() => _group = label),
         ),
-      ],
+      );
+    }
+
+    // A handful of chips: all built, scrolled sideways when they overflow.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+      child: Row(
+        children: [
+          chip(null, context.t.libraryAllEntries, total),
+          for (final g in menu) chip(g.label, g.label, g.count),
+        ],
+      ),
     );
   }
 }

@@ -108,6 +108,7 @@ Future<void> main(List<String> args) async {
             (l['line_index'] as num).toInt(),
             l['speaker'] as String?,
             '${l['content'] ?? ''}',
+            isBreak: l['kind'] == sectionLineKind,
           ),
     ]),);
   }

@@ -49,7 +49,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.history_rounded,
+                      Icons.history_sharp,
                       size: 56,
                       color: theme.textSecondary.withValues(alpha: 0.4),
                     ),
@@ -97,7 +97,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
       pressedScale: 0.985,
       child: ListTile(
       leading: Icon(
-        summary.corrupt ? Icons.error_outline_rounded : Icons.chat_bubble_outline,
+        summary.corrupt ? Icons.error_outline_sharp : Icons.chat_bubble_outline,
         color: summary.corrupt ? theme.danger : theme.accentPrimary,
       ),
       title: Text(
@@ -122,7 +122,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
           ? null
           : withHaptic(() => _openDetail(context, summary.sessionId)),
       trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert_rounded, color: theme.textSecondary),
+        icon: Icon(Icons.more_vert_sharp, color: theme.textSecondary),
         onSelected: (action) {
           switch (action) {
             case 'continue':

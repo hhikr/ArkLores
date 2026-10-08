@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common/sqlite_api.dart' show DatabaseExecutor;
 
-import '../agent/agent_provider.dart' show sharedGameDataStoreProvider;
+import '../agent/agent_provider.dart' show gameStoreProvider;
+import '../gamedata/game.dart';
 import '../llm/llm_provider.dart' show embeddingClientProvider;
 import '../userdata/user_data_provider.dart';
 import '../userdata/user_data_store.dart';
@@ -17,18 +18,30 @@ enum LibraryStatus {
   ready,
 }
 
-/// Runs [action] on the knowledge base; null when none is installed or the
+/// Runs [action] on a knowledge base: [game]'s, else the one [id] belongs to
+/// (`game.dart`), else the default one. Null when it is not installed or the
 /// query fails (the pages then show their empty state).
 Future<R?> _query<R>(
   Ref ref,
-  Future<R> Function(DatabaseExecutor db) action,
-) async {
+  Future<R> Function(DatabaseExecutor db) action, {
+  String? id,
+  Game? game,
+}) async {
+  final which = game ?? (id == null ? Game.arknights : gameOfId(id));
   try {
-    return await ref.watch(sharedGameDataStoreProvider).withDatabase(action);
+    return await ref.watch(gameStoreProvider(which)).withDatabase(action);
   } catch (_) {
     return null;
   }
 }
+
+/// Whether [game]'s library can be shown.
+final gameLibraryStatusProvider =
+    FutureProvider.autoDispose.family<LibraryStatus, Game>((ref, game) async {
+  final ready = await _query(ref, (db) => hasEntryLayer(db), game: game);
+  if (ready == null) return LibraryStatus.notInstalled;
+  return ready ? LibraryStatus.ready : LibraryStatus.oldSchema;
+});
 
 final libraryStatusProvider =
     FutureProvider.autoDispose<LibraryStatus>((ref) async {
@@ -43,40 +56,59 @@ final libraryStatusProvider =
 });
 
 final shelfSummariesProvider =
-    FutureProvider.autoDispose<List<ShelfSummary>>((ref) async =>
-        await _query(ref, (db) => shelfSummaries(db)) ?? const [],);
+    FutureProvider.autoDispose.family<List<ShelfSummary>, Game>(
+  (ref, game) async =>
+      await _query(ref, (db) => shelfSummaries(db), game: game) ?? const [],
+);
 
 final codexTypesProvider =
-    FutureProvider.autoDispose<List<({String type, int count})>>((ref) async =>
-        await _query(ref, (db) => codexTypes(db)) ?? const [],);
+    FutureProvider.autoDispose.family<List<({String type, int count})>, Game>(
+  (ref, game) async =>
+      await _query(ref, (db) => codexTypes(db), game: game) ?? const [],
+);
 
-final collectionsOfKindProvider = FutureProvider.autoDispose
-    .family<List<LibraryCollection>, String>((ref, kind) async =>
-        await _query(ref, (db) => collectionsOfKind(db, kind)) ?? const [],);
+final collectionsOfKindProvider =
+    FutureProvider.autoDispose.family<List<LibraryCollection>, String>(
+  (ref, kind) async =>
+      await _query(ref, (db) => collectionsOfKind(db, kind), id: kind) ??
+      const [],
+);
 
-final collectionProvider = FutureProvider.autoDispose
-    .family<LibraryCollection?, String>((ref, id) async =>
-        _query<LibraryCollection?>(ref, (db) => collectionById(db, id)),);
+final collectionProvider =
+    FutureProvider.autoDispose.family<LibraryCollection?, String>(
+  (ref, id) async =>
+      _query<LibraryCollection?>(ref, (db) => collectionById(db, id), id: id),
+);
 
-final collectionTypesProvider = FutureProvider.autoDispose
-    .family<List<({String type, int count})>, String>((ref, id) async =>
-        await _query(ref, (db) => collectionTypes(db, id)) ?? const [],);
+final collectionTypesProvider =
+    FutureProvider.autoDispose.family<List<({String type, int count})>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => collectionTypes(db, id), id: id) ?? const [],
+);
 
-final collectionIntroProvider = FutureProvider.autoDispose
-    .family<String?, String>((ref, id) async =>
-        _query<String?>(ref, (db) => collectionIntro(db, id)),);
+final collectionIntroProvider =
+    FutureProvider.autoDispose.family<String?, String>(
+  (ref, id) async =>
+      _query<String?>(ref, (db) => collectionIntro(db, id), id: id),
+);
 
-final collectionInlineProvider = FutureProvider.autoDispose
-    .family<List<LibraryEntry>, String>((ref, id) async =>
-        await _query(ref, (db) => inlineEntries(db, id)) ?? const [],);
+final collectionInlineProvider =
+    FutureProvider.autoDispose.family<List<LibraryEntry>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => inlineEntries(db, id), id: id) ?? const [],
+);
 
-final entryPartsProvider = FutureProvider.autoDispose
-    .family<List<LibraryEntry>, String>((ref, id) async =>
-        await _query(ref, (db) => entryParts(db, id)) ?? const [],);
+final entryPartsProvider =
+    FutureProvider.autoDispose.family<List<LibraryEntry>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => entryParts(db, id), id: id) ?? const [],
+);
 
-final collectionStoriesProvider = FutureProvider.autoDispose
-    .family<List<LibraryEntry>, String>((ref, id) async =>
-        await _query(ref, (db) => storiesOf(db, id)) ?? const [],);
+final collectionStoriesProvider =
+    FutureProvider.autoDispose.family<List<LibraryEntry>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => storiesOf(db, id), id: id) ?? const [],
+);
 
 /// Which entries a list shows: one type, in a collection or (null) in the
 /// codex, filtered by [query].
@@ -85,98 +117,126 @@ typedef EntryListKey = ({
   String? collectionId,
   String query,
   String groups,
+  Game game,
 });
 
 /// [EntryListKey.groups] for a set of groups (a null element is "no group"):
 /// a plain string, so the key compares by value.
-String groupsKey(List<String?>? groups) => groups == null
-    ? ''
-    : groups.map((g) => g ?? '\u0000').join('\u0001');
+String groupsKey(List<String?>? groups) =>
+    groups == null ? '' : groups.map((g) => g ?? '\u0000').join('\u0001');
 
 List<String?>? _groupsOf(String key) => key.isEmpty
     ? null
     : [for (final g in key.split('\u0001')) g == '\u0000' ? null : g];
 
-final entriesOfTypeProvider = FutureProvider.autoDispose
-    .family<List<LibraryEntry>, EntryListKey>((ref, key) async =>
-        await _query(
-          ref,
-          (db) => entriesOfType(
-            db,
-            key.type,
-            collectionId: key.collectionId,
-            query: key.query,
-            groups: _groupsOf(key.groups),
-          ),
-        ) ??
-        const [],);
+final entriesOfTypeProvider =
+    FutureProvider.autoDispose.family<List<LibraryEntry>, EntryListKey>(
+  (ref, key) async =>
+      await _query(
+        ref,
+        (db) => entriesOfType(
+          db,
+          key.type,
+          collectionId: key.collectionId,
+          query: key.query,
+          groups: _groupsOf(key.groups),
+        ),
+        game: key.game,
+      ) ??
+      const [],
+);
 
 /// The groups of one type's entries, for the menu above a long list.
-typedef EntryGroupsKey = ({String type, String? collectionId});
+typedef EntryGroupsKey = ({String type, String? collectionId, Game game});
 
 final entryGroupsProvider = FutureProvider.autoDispose
     .family<List<({String? group, int count})>, EntryGroupsKey>(
-        (ref, key) async =>
-            await _query(
-              ref,
-              (db) => entryGroups(db, key.type, collectionId: key.collectionId),
-            ) ??
-            const [],);
+  (ref, key) async =>
+      await _query(
+        ref,
+        (db) => entryGroups(db, key.type, collectionId: key.collectionId),
+        game: key.game,
+      ) ??
+      const [],
+);
 
-final entryProvider = FutureProvider.autoDispose
-    .family<LibraryEntry?, String>((ref, id) async =>
-        _query<LibraryEntry?>(ref, (db) => entryById(db, id)),);
+final entryProvider = FutureProvider.autoDispose.family<LibraryEntry?, String>(
+  (ref, id) async =>
+      _query<LibraryEntry?>(ref, (db) => entryById(db, id), id: id),
+);
 
-final entryTextsProvider = FutureProvider.autoDispose
-    .family<List<EntryTextBlock>, LibraryEntry>((ref, entry) async =>
-        await _query(ref, (db) => entryTexts(db, entry)) ?? const [],);
+final entryTextsProvider =
+    FutureProvider.autoDispose.family<List<EntryTextBlock>, LibraryEntry>(
+  (ref, entry) async =>
+      await _query(ref, (db) => entryTexts(db, entry), id: entry.id) ??
+      const [],
+);
 
-final entryBindingsProvider = FutureProvider.autoDispose
-    .family<List<EntryBinding>, String>((ref, id) async =>
-        await _query(ref, (db) => entryBindings(db, id)) ?? const [],);
+final entryBindingsProvider =
+    FutureProvider.autoDispose.family<List<EntryBinding>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => entryBindings(db, id), id: id) ?? const [],
+);
 
-final operatorMemoriesProvider = FutureProvider.autoDispose
-    .family<List<LibraryCollection>, String>((ref, id) async =>
-        await _query(ref, (db) => collectionsOwnedBy(db, id)) ?? const [],);
+final operatorMemoriesProvider =
+    FutureProvider.autoDispose.family<List<LibraryCollection>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => collectionsOwnedBy(db, id), id: id) ?? const [],
+);
 
-final operatorOwnedProvider = FutureProvider.autoDispose
-    .family<List<LibraryEntry>, String>((ref, id) async =>
-        await _query(ref, (db) => entriesOwnedBy(db, id)) ?? const [],);
+final operatorOwnedProvider =
+    FutureProvider.autoDispose.family<List<LibraryEntry>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => entriesOwnedBy(db, id), id: id) ?? const [],
+);
 
 /// The alternate versions of an operator (and its original).
-final samePersonProvider = FutureProvider.autoDispose
-    .family<List<LibraryEntry>, String>((ref, id) async =>
-        await _query(ref, (db) => samePersonOf(db, id)) ?? const [],);
+final samePersonProvider =
+    FutureProvider.autoDispose.family<List<LibraryEntry>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => samePersonOf(db, id), id: id) ?? const [],
+);
 
 /// The in-battle dialogue attached to a stage or story entry, in order.
-final attachedStoriesProvider = FutureProvider.autoDispose
-    .family<List<LibraryEntry>, String>((ref, id) async =>
-        await _query(ref, (db) => attachedStories(db, id)) ?? const [],);
+final attachedStoriesProvider =
+    FutureProvider.autoDispose.family<List<LibraryEntry>, String>(
+  (ref, id) async =>
+      await _query(ref, (db) => attachedStories(db, id), id: id) ?? const [],
+);
 
 /// The story whose end holds [storyId]'s dialogue (its file id), if any.
-final storyHostProvider = FutureProvider.autoDispose
-    .family<String?, String>((ref, storyId) async =>
-        _query<String?>(ref, (db) => storyHostOf(db, storyId)),);
-final storyPlaceProvider =FutureProvider.autoDispose
-    .family<StoryPlace?, String>((ref, storyId) async =>
-        _query<StoryPlace?>(ref, (db) => storyPlace(db, storyId)),);
+final storyHostProvider = FutureProvider.autoDispose.family<String?, String>(
+  (ref, storyId) async =>
+      _query<String?>(ref, (db) => storyHostOf(db, storyId), id: storyId),
+);
+final storyPlaceProvider =
+    FutureProvider.autoDispose.family<StoryPlace?, String>(
+  (ref, storyId) async =>
+      _query<StoryPlace?>(ref, (db) => storyPlace(db, storyId), id: storyId),
+);
 
 /// One search: the query, where it looks, whether the texts are searched
 /// even when names match.
 typedef LibrarySearchKey = ({String query, LibraryScope scope, bool text});
 
 final librarySearchProvider = FutureProvider.autoDispose
-    .family<LibrarySearchResult, LibrarySearchKey>((ref, key) async =>
-        await _query(
-          ref,
-          (db) => searchLibraryIn(
-            db,
-            key.query,
-            scope: key.scope,
-            text: key.text,
-          ),
-        ) ??
-        const LibrarySearchResult(),);
+    .family<LibrarySearchResult, LibrarySearchKey>((ref, key) async {
+  // A page's scope is in one game; the whole library is every game's.
+  final games =
+      key.scope == everywhere ? Game.values : [gameOfScope(key.scope)];
+  final results = [
+    for (final game in games)
+      await _query(
+        ref,
+        (db) =>
+            searchLibraryIn(db, key.query, scope: key.scope, text: key.text),
+        game: game,
+      ),
+  ].whereType<LibrarySearchResult>().toList();
+  return results.isEmpty
+      ? const LibrarySearchResult()
+      : results.reduce((a, b) => a.merge(b));
+});
 
 /// Why the semantic search cannot run.
 enum SemanticSearchProblem { noService, noVectors, otherModel }
@@ -196,7 +256,7 @@ final librarySemanticProvider = FutureProvider.autoDispose
   if (client == null) {
     throw const SemanticSearchUnavailable(SemanticSearchProblem.noService);
   }
-  final store = ref.watch(sharedGameDataStoreProvider);
+  final store = ref.watch(gameStoreProvider(gameOfScope(key.scope)));
   final info = await store.storyVectorInfo;
   if (info == null) {
     throw const SemanticSearchUnavailable(SemanticSearchProblem.noVectors);
@@ -211,15 +271,15 @@ final librarySemanticProvider = FutureProvider.autoDispose
     topK: key.scope == everywhere ? 60 : 400,
   );
   return await store.withDatabase(
-    (db) => storyChunkEntries(
-      db,
-      [
-        for (final h in hits)
-          (storyId: h.storyId, lineStart: h.lineStart, lineEnd: h.lineEnd),
-      ],
-      scope: key.scope,
-    ),
-  ) ??
+        (db) => storyChunkEntries(
+          db,
+          [
+            for (final h in hits)
+              (storyId: h.storyId, lineStart: h.lineStart, lineEnd: h.lineEnd),
+          ],
+          scope: key.scope,
+        ),
+      ) ??
       const [];
 });
 
@@ -240,8 +300,8 @@ final materialsProvider =
   return store.materials();
 });
 
-final materialProvider = FutureProvider.autoDispose
-    .family<UserMaterial?, String>((ref, id) async {
+final materialProvider =
+    FutureProvider.autoDispose.family<UserMaterial?, String>((ref, id) async {
   final store = await ref.watch(userDataStoreProvider.future);
   return store.material(id);
 });

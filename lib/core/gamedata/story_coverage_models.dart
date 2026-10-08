@@ -65,6 +65,9 @@ String? storyKindLabel(String? kind) => switch (kind) {
       'choice' => '选项',
       'title' => '标题',
       'system' => '教程',
+      // Where one conversation of a merged story ends and the next begins;
+      // the content names the kind of the part that follows.
+      'section' => '分段',
       _ => null,
     };
 

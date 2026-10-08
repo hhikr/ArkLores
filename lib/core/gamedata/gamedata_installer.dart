@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
 import 'build/gamedata_db_validator.dart';
+import 'game.dart';
 
 class GameDataInstallStatus {
 
@@ -125,8 +126,17 @@ class GameDataInstaller {
     this.installDirectory,
     this.releaseAssetUrl = _definedUrl,
     this.releaseAssetSha = _definedSha,
+    this.game = Game.arknights,
   });
-  static const _dbFileName = 'arklores_gamedata_zh.db';
+
+  /// The installer of [game]'s knowledge base, with the asset this build
+  /// points at for it.
+  const GameDataInstaller.forGame(this.game, {this.installDirectory})
+      : releaseAssetUrl = game == Game.endfield ? _endfieldUrl : _definedUrl,
+        releaseAssetSha = game == Game.endfield ? _endfieldSha : _definedSha;
+
+  /// Which game's database this installs (its own file).
+  final Game game;
 
   /// Sidecar recording which official asset (gz SHA-256) was installed.
   static const _assetMarkerSuffix = '.asset_sha256';
@@ -144,6 +154,10 @@ class GameDataInstaller {
   static const _definedUrl = String.fromEnvironment('ARKLORES_GAMEDATA_DB_URL');
   static const _definedSha =
       String.fromEnvironment('ARKLORES_GAMEDATA_DB_SHA256');
+  static const _endfieldUrl =
+      String.fromEnvironment('ARKLORES_ENDFIELD_DB_URL');
+  static const _endfieldSha =
+      String.fromEnvironment('ARKLORES_ENDFIELD_DB_SHA256');
 
   Future<GameDataInstallStatus> getStatus() async {
     final file = await _dbFile();
@@ -431,7 +445,7 @@ class GameDataInstaller {
 
   Future<File> _dbFile() async {
     final dir = await _writableDirectory();
-    return File(p.join(dir.path, _dbFileName));
+    return File(p.join(dir.path, game.dbFileName));
   }
 
   Future<Directory> _writableDirectory() async {

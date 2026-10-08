@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/gamedata/build/story_naming.dart'
-    show openingStoryKind;
+import '../../core/gamedata/build/story_naming.dart' show openingStoryKind;
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
@@ -21,6 +21,54 @@ import 'library_widgets.dart';
 
 // ─── One collection ───────────────────────────────────────────────
 
+/// The longest list of one kind a collection page shows in place (longer
+/// ones open their own page, with a filter).
+const int inlineListLimit = 12;
+
+/// The entries of one type of a collection, listed in place under an
+/// optional [heading] (several kinds on the page).
+class _InlineEntries extends ConsumerWidget {
+  const _InlineEntries({
+    super.key,
+    required this.type,
+    required this.collectionId,
+    this.heading,
+  });
+
+  final String type;
+  final String collectionId;
+  final String? heading;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final list = ref
+            .watch(
+              entriesOfTypeProvider(
+                (
+                  type: type,
+                  collectionId: collectionId,
+                  query: '',
+                  groups: groupsKey(null),
+                  game: gameOfId(collectionId),
+                ),
+              ),
+            )
+            .valueOrNull ??
+        const <LibraryEntry>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (heading != null) GroupHeading(title: heading!),
+        for (final e in list) ...[
+          EntryRow(entry: e, onTap: () => openEntry(context, e)),
+          rowDivider(theme),
+        ],
+      ],
+    );
+  }
+}
+
 /// A story set, activity, operator record set or roguelike topic: its
 /// stories in reading order and the other texts that belong to it.
 class CollectionPage extends ConsumerWidget {
@@ -38,9 +86,15 @@ class CollectionPage extends ConsumerWidget {
     // Special rules are named by what the game calls each kind.
     final ruleKinds = [
       for (final g in ref
-              .watch(entryGroupsProvider(
-                (type: 'roguelike_buff', collectionId: collectionId),
-              ),)
+              .watch(
+                entryGroupsProvider(
+                  (
+                    type: 'roguelike_buff',
+                    collectionId: collectionId,
+                    game: gameOfId(collectionId),
+                  ),
+                ),
+              )
               .valueOrNull ??
           const <({String? group, int count})>[])
         if (g.group != null) g.group!,
@@ -50,8 +104,9 @@ class CollectionPage extends ConsumerWidget {
 
     final storyList = stories.valueOrNull ?? const <LibraryEntry>[];
     final intro = ref.watch(collectionIntroProvider(collectionId)).valueOrNull;
-    final inline = ref.watch(collectionInlineProvider(collectionId)).valueOrNull ??
-        const <LibraryEntry>[];
+    final inline =
+        ref.watch(collectionInlineProvider(collectionId)).valueOrNull ??
+            const <LibraryEntry>[];
     // A topic whose endings and squads carry their own stories lists them
     // first; the stories left over and the kinds of texts follow, without
     // headings of their own.
@@ -70,17 +125,26 @@ class CollectionPage extends ConsumerWidget {
     // stories of older topics) follow the endings and squads, each kind
     // under its own folding heading.
     final opening = ownParts
-        ? [for (final s in storyList) if (s.group == openingStoryKind) s]
+        ? [
+            for (final s in storyList)
+              if (s.group == openingStoryKind) s,
+          ]
         : const <LibraryEntry>[];
     final restStories = ownParts
-        ? [for (final s in storyList) if (s.group != openingStoryKind) s]
+        ? [
+            for (final s in storyList)
+              if (s.group != openingStoryKind) s,
+          ]
         : storyList;
     final sections =
         _storySections(c, restStories, other: context.t.shelfOther);
     final read = storyList
-        .where((s) =>
-            progress[LibraryRef.story(s.rawId ?? '').toString()]?.hasCompleted ??
-            false,)
+        .where(
+          (s) =>
+              progress[LibraryRef.story(s.rawId ?? '').toString()]
+                  ?.hasCompleted ??
+              false,
+        )
         .length;
 
     return LibraryScaffold(
@@ -96,7 +160,7 @@ class CollectionPage extends ConsumerWidget {
           ? const Center(child: CircularProgressIndicator())
           : c == null
               ? LibraryMessage(
-                  icon: Icons.folder_off_rounded,
+                  icon: Icons.folder_off_sharp,
                   title: context.t.libraryEmpty,
                 )
               : ListView(
@@ -111,18 +175,15 @@ class CollectionPage extends ConsumerWidget {
                     ),
                     if (intro != null)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                        child: Text(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                        child: ReadingText(
                           intro,
                           key: const ValueKey('collection-intro'),
-                          style: theme.bodyFont.copyWith(
-                            color: theme.textSecondary,
-                            fontSize: 14,
-                            height: 1.7,
-                          ),
+                          size: 14.5,
                         ),
                       ),
-                    ..._ownParts(context, theme, inline, notes: true, nickname: nickname),
+                    ..._ownParts(context, theme, inline,
+                        notes: true, nickname: nickname,),
                     if (opening.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -142,7 +203,8 @@ class CollectionPage extends ConsumerWidget {
                         rowDivider(theme),
                       ],
                     ],
-                    ..._ownParts(context, theme, inline, notes: false, nickname: nickname),
+                    ..._ownParts(context, theme, inline,
+                        notes: false, nickname: nickname,),
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
                         Padding(
@@ -213,16 +275,32 @@ class CollectionPage extends ConsumerWidget {
                           code: 'related',
                         ),
                       ),
-                      for (final t in typeList) ...[
+                      for (final t in typeList)
+                        // A short list is shown in place: no page that
+                        // only holds it.
+                        if (t.count <= inlineListLimit &&
+                            !stageBoundTypes.contains(t.type))
+                          _InlineEntries(
+                            key: ValueKey('collection-inline-${t.type}'),
+                            type: t.type,
+                            collectionId: collectionId,
+                            heading: typeList.length > 1
+                                ? (t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
+                                    ? ruleKinds.join('、')
+                                    : entryTypeNameIn(t.type, gameOfId(collectionId)))
+                                : null,
+                          )
+                        else ...[
                         LibraryRow(
                           key: ValueKey('collection-type-${t.type}'),
-                          title: t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
-                              ? ruleKinds.join('、')
-                              : entryTypeName(t.type),
+                          title:
+                              t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
+                                  ? ruleKinds.join('、')
+                                  : entryTypeNameIn(t.type, gameOfId(collectionId)),
                           subtitle: context.t.libraryCountEntries(t.count),
                           subtitleLines: 1,
                           trailing: Icon(
-                            Icons.chevron_right_rounded,
+                            Icons.chevron_right_sharp,
                             color: theme.textMuted,
                           ),
                           onTap: () => pushLibraryPage(
@@ -244,7 +322,7 @@ class CollectionPage extends ConsumerWidget {
                       SizedBox(
                         height: 240,
                         child: LibraryMessage(
-                          icon: Icons.folder_open_rounded,
+                          icon: Icons.folder_open_sharp,
                           title: context.t.libraryEmpty,
                         ),
                       ),
@@ -304,7 +382,7 @@ class CollectionPage extends ConsumerWidget {
                   subtitle: withPlaceholders(e.synopsis ?? '', nickname),
                   subtitleLines: 2,
                   trailing: Icon(
-                    Icons.chevron_right_rounded,
+                    Icons.chevron_right_sharp,
                     color: theme.textMuted,
                   ),
                   onTap: () => openEntry(context, e),
@@ -336,7 +414,7 @@ class CollectionPage extends ConsumerWidget {
               if (e.synopsis != null) withPlaceholders(e.synopsis!, nickname),
             ].join('\n'),
             subtitleLines: 3,
-            trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+            trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
             onTap: () => openEntry(context, e),
           ),
           rowDivider(theme),

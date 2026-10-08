@@ -105,7 +105,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           theme: theme,
                           title: context.t.settingsTitle,
                           code: context.t.settingsSystemCode,
-                          icon: Icons.tune_rounded,
+                          icon: Icons.tune_sharp,
                         ),
                         _CompactSettingWidth(
                           child: ThemeAwareCard(
@@ -149,7 +149,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 Divider(height: 1, color: theme.divider),
                                 _PreferenceRow(
                                   theme: theme,
-                                  icon: Icons.language_rounded,
+                                  icon: Icons.language_sharp,
                                   title: context.t.settingsLanguage,
                                   subtitle: currentLocale.displayName,
                                   control: SegmentedButton<SupportedLocale>(
@@ -181,7 +181,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 Divider(height: 1, color: theme.divider),
                                 _PreferenceRow(
                                   theme: theme,
-                                  icon: Icons.apps_rounded,
+                                  icon: Icons.apps_sharp,
                                   title: context.t.settingsAppIcon,
                                   subtitle:
                                       _launcherIcon == AppLauncherIcon.light
@@ -224,7 +224,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _CompactSettingWidth(
                           child: _SettingsActionTile(
                             theme: theme,
-                            icon: Icons.person_outline_rounded,
+                            icon: Icons.person_outline_sharp,
                             title: context.t.settingsProfile,
                             subtitle: context.t.settingsProfileDesc,
                             onTap: () => Navigator.of(context).push(
@@ -243,7 +243,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _CompactSettingWidth(
                           child: _SettingsActionTile(
                             theme: theme,
-                            icon: Icons.api_rounded,
+                            icon: Icons.api_sharp,
                             title: context.t.settingsApiSettings,
                             subtitle: context.t.settingsApiSettingsDesc,
                             onTap: () => Navigator.pushNamed(
@@ -256,7 +256,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _CompactSettingWidth(
                           child: _PreferenceRow(
                             theme: theme,
-                            icon: Icons.receipt_long_rounded,
+                            icon: Icons.receipt_long_sharp,
                             title: context.t.settingsSessionLogs,
                             subtitle: context.t.settingsSessionLogsDesc,
                             control: _buildSessionLogsSwitch(theme),
@@ -287,7 +287,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         _CompactSettingWidth(
                           child: _SettingsActionTile(
                             theme: theme,
-                            icon: Icons.storage_rounded,
+                            icon: Icons.storage_sharp,
                             title: context.t.settingsKnowledgeBase,
                             subtitle: context.t.settingsKnowledgeBaseDesc,
                             onTap: () => Navigator.pushNamed(
@@ -534,7 +534,7 @@ class _SettingsActionTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Icon(Icons.chevron_right_rounded, color: theme.textSecondary),
+          Icon(Icons.chevron_right_sharp, color: theme.textSecondary),
         ],
       ),
     );

@@ -50,11 +50,18 @@ const String storyChunkVectorsIndexDdl =
 
 /// One story line as input to chunking.
 class ChunkLine {
-  const ChunkLine(this.index, this.speaker, this.content);
+  const ChunkLine(this.index, this.speaker, this.content, {this.isBreak = false});
   final int index;
   final String? speaker;
   final String content;
+
+  /// A `section` line (where one conversation of a merged story ends and the
+  /// next begins): not embedded, and no window spans it.
+  final bool isBreak;
 }
+
+/// `story_lines.kind` of the line that separates two parts of one story.
+const String sectionLineKind = 'section';
 
 /// One embedding unit: a window of consecutive story lines.
 class StoryChunk {
@@ -76,11 +83,26 @@ class StoryChunk {
 
 /// Splits one story's [lines] (ordered by index) into fixed windows.
 /// Blank lines are skipped in the text but windows stay index-anchored.
+/// A break line ([ChunkLine.isBreak]) ends the windows of the part before it;
+/// each part is windowed on its own.
 List<StoryChunk> chunkStory(
   String storyId,
   String? scopeId,
   List<ChunkLine> lines,
 ) {
+  if (lines.any((l) => l.isBreak)) {
+    final chunks = <StoryChunk>[];
+    var part = <ChunkLine>[];
+    for (final l in [...lines, const ChunkLine(-1, null, '', isBreak: true)]) {
+      if (!l.isBreak) {
+        part.add(l);
+        continue;
+      }
+      chunks.addAll(chunkStory(storyId, scopeId, part));
+      part = <ChunkLine>[];
+    }
+    return chunks;
+  }
   if (lines.isEmpty) return const [];
   final chunks = <StoryChunk>[];
   for (var start = 0; start < lines.length; start += chunkStride) {

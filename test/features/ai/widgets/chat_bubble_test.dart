@@ -99,8 +99,8 @@ void main() {
           scroll: false,);
       // R15: status and confidence share one line; no avatars.
       expect(find.text('已作答 · 置信度 0.8'), findsOneWidget);
-      expect(find.byIcon(Icons.psychology_rounded), findsNothing);
-      expect(find.byIcon(Icons.person_rounded), findsNothing);
+      expect(find.byIcon(Icons.psychology_sharp), findsNothing);
+      expect(find.byIcon(Icons.person_sharp), findsNothing);
       // R18b: the sources under the point are one pill (count + collection,
       // named from the path without a catalog) until tapped.
       expect(find.text('出处 1'), findsOneWidget);

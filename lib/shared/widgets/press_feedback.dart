@@ -11,16 +11,17 @@ VoidCallback? withHaptic(VoidCallback? onTap) => onTap == null
       };
 
 /// Makes a tappable surface answer the finger: it sinks a little (scales
-/// to [pressedScale]) as soon as it is touched and springs back on release,
-/// so a tap is felt even when it opens another page at once. A drag (a
-/// scroll starting on it) lets it go. Pointer-only: the child keeps its own
-/// tap handling and ripple.
+/// to [pressedScale]) as soon as it is touched and settles back on release,
+/// so a tap is felt even when it opens another page at once. Mechanical,
+/// not springy: a short ease without overshoot, like the games' panels. A
+/// drag (a scroll starting on it) lets it go. Pointer-only: the child keeps
+/// its own tap handling and ripple.
 class PressFeedback extends StatefulWidget {
   const PressFeedback({
     super.key,
     required this.child,
     this.enabled = true,
-    this.pressedScale = 0.97,
+    this.pressedScale = 0.98,
   });
 
   final Widget child;
@@ -57,8 +58,8 @@ class _PressFeedbackState extends State<PressFeedback> {
       onPointerCancel: (_) => _set(false),
       child: AnimatedScale(
         scale: _pressed ? widget.pressedScale : 1,
-        duration: Duration(milliseconds: _pressed ? 90 : 260),
-        curve: _pressed ? Curves.easeOutCubic : Curves.easeOutBack,
+        duration: Duration(milliseconds: _pressed ? 70 : 160),
+        curve: Curves.easeOutCubic,
         child: widget.child,
       ),
     );

@@ -8,12 +8,14 @@
 /// as this interface, which keeps them Flutter-free and identical everywhere.
 library;
 
+import 'game.dart';
 import 'name_similarity.dart';
 import 'readonly_sql.dart';
 import 'story_catalog.dart';
 import 'story_coverage_models.dart';
 import 'story_vectors.dart';
 
+export 'game.dart';
 export 'name_similarity.dart' show SimilarName, describeSimilarNames;
 export 'readonly_sql.dart' show SqlQueryResult;
 export 'story_catalog.dart'
@@ -106,8 +108,9 @@ abstract interface class GameDataRetrieval {
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at
   /// most [maxRows] rows; rejections, errors and timeouts come back in
-  /// [SqlQueryResult.error].
-  Future<SqlQueryResult> readOnlySql(String sql, {int maxRows});
+  /// [SqlQueryResult.error]. [game] picks the database where there is more
+  /// than one (0.12); null is the default one.
+  Future<SqlQueryResult> readOnlySql(String sql, {int maxRows, Game? game});
 
   /// R17: story lines whose content or speaker contains any of [terms], in
   /// [storyIds] (every story when null), by story then line; at most

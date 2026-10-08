@@ -19,7 +19,7 @@ final storyCatalogEntriesProvider =
   ];
   if (ids.isEmpty) return const {};
   try {
-    return await ref.watch(sharedGameDataStoreProvider).storyCatalogEntries(ids);
+    return await ref.watch(loreRetrievalProvider).storyCatalogEntries(ids);
   } catch (_) {
     return const {};
   }
@@ -32,7 +32,7 @@ final storyCatalogEntryProvider =
     FutureProvider.family<StoryCatalogEntry?, String>((ref, storyId) async {
   try {
     final entries =
-        await ref.watch(sharedGameDataStoreProvider).storyCatalogEntries([storyId]);
+        await ref.watch(loreRetrievalProvider).storyCatalogEntries([storyId]);
     return entries[storyId];
   } catch (_) {
     return null;
@@ -67,7 +67,7 @@ String storyLabelsKey(Iterable<String> storyIds) =>
 /// Empty when the story or the store is unavailable.
 final storyFullLinesProvider =
     FutureProvider.family<List<StoryLineEntry>, String>((ref, storyId) async {
-  final store = ref.watch(sharedGameDataStoreProvider);
+  final store = storeOfId(ref, storyId);
   final lines = <StoryLineEntry>[];
   String? next;
   try {
@@ -165,11 +165,11 @@ final storyReadingProvider =
 final citedRecordProvider =
     FutureProvider.family<({String title, String content})?, String>(
         (ref, id) async {
-  // Record ids are hex / word characters (see the citation pattern), so the
-  // literal is safe to inline.
-  if (!RegExp(r'^[\w\-]+$').hasMatch(id)) return null;
+  // Record ids are hex / word characters, Endfield's under ef/ (see the
+  // citation pattern), so the literal is safe to inline.
+  if (!RegExp(r'^[\w\-/]+$').hasMatch(id)) return null;
   try {
-    final result = await ref.watch(sharedGameDataStoreProvider).readOnlySql(
+    final result = await storeOfId(ref, id).readOnlySql(
           'SELECT title, category, subtype, entity_name, content '
           "FROM normalized_records WHERE id = '$id'",
           maxRows: 1,

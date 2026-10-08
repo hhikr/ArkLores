@@ -56,23 +56,23 @@ class WikiToolbar extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _TrayButton(
-            icon: Icons.zoom_out_rounded, theme: theme, onTap: onZoomOut,),
-        _TrayButton(icon: Icons.zoom_in_rounded, theme: theme, onTap: onZoomIn),
+            icon: Icons.zoom_out_sharp, theme: theme, onTap: onZoomOut,),
+        _TrayButton(icon: Icons.zoom_in_sharp, theme: theme, onTap: onZoomIn),
         _TrayButton(
-            icon: Icons.refresh_rounded, theme: theme, onTap: onRefresh,),
+            icon: Icons.refresh_sharp, theme: theme, onTap: onRefresh,),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           child: Divider(color: theme.divider, height: 1),
         ),
         _TrayButton(
-          icon: isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+          icon: isDarkMode ? Icons.light_mode_sharp : Icons.dark_mode_sharp,
           theme: theme,
           onTap: onToggleDarkMode,
           activeColor: theme.accentPrimary,
         ),
         _TrayButton(
           icon: isReaderMode
-              ? Icons.chrome_reader_mode_rounded
+              ? Icons.chrome_reader_mode_sharp
               : Icons.chrome_reader_mode_outlined,
           theme: theme,
           onTap: onToggleReaderMode,
@@ -81,13 +81,13 @@ class WikiToolbar extends ConsumerWidget {
         ),
         if (isReaderMode) ...[
           _TrayButton(
-            icon: Icons.text_decrease_rounded,
+            icon: Icons.text_decrease_sharp,
             theme: theme,
             onTap: onDecreaseReaderFont,
             tooltip: readerFontSmallerTooltip,
           ),
           _TrayButton(
-            icon: Icons.text_increase_rounded,
+            icon: Icons.text_increase_sharp,
             theme: theme,
             onTap: onIncreaseReaderFont,
             tooltip: readerFontLargerTooltip,
@@ -95,8 +95,8 @@ class WikiToolbar extends ConsumerWidget {
         ],
         _TrayButton(
           icon: isBookmarked
-              ? Icons.bookmark_rounded
-              : Icons.bookmark_border_rounded,
+              ? Icons.bookmark_sharp
+              : Icons.bookmark_border_sharp,
           theme: theme,
           onTap: onToggleBookmark,
           activeColor: isBookmarked ? theme.warning : null,
@@ -106,7 +106,7 @@ class WikiToolbar extends ConsumerWidget {
           child: Divider(color: theme.divider, height: 1),
         ),
         _TrayButton(
-          icon: Icons.psychology_alt_rounded,
+          icon: Icons.psychology_alt_sharp,
           theme: theme,
           onTap: onSendToAi,
           activeColor: theme.accentPrimary,
@@ -174,7 +174,7 @@ class _TrayButtonState extends State<_TrayButton> {
                 color: _pressed
                     ? widget.theme.accentPrimary.withValues(alpha: 0.14)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.zero,
               ),
               child: Center(
                 child: Icon(widget.icon, size: 20, color: color),

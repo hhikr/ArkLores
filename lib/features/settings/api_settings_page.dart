@@ -129,7 +129,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
         children: [
           Center(
             child: Icon(
-              Icons.api_rounded,
+              Icons.api_sharp,
               size: 48,
               color: theme.accentPrimary.withValues(alpha: 0.4),
             ),
@@ -137,7 +137,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           const SizedBox(height: 24),
           _sectionHeader(
             theme,
-            Icons.chat_rounded,
+            Icons.chat_sharp,
             context.t.apiSettingsChatSection,
           ),
           const SizedBox(height: 4),
@@ -180,7 +180,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
           const SizedBox(height: 24),
           _sectionHeader(
             theme,
-            Icons.hub_rounded,
+            Icons.hub_sharp,
             context.t.apiSettingsEmbeddingSection,
           ),
           const SizedBox(height: 4),
@@ -226,7 +226,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
             child: ElevatedButton.icon(
               onPressed: _saveConfig,
               icon: Icon(
-                _saved ? Icons.check_rounded : Icons.save_rounded,
+                _saved ? Icons.check_sharp : Icons.save_sharp,
                 size: 20,
               ),
               label: Text(
@@ -238,7 +238,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
                 foregroundColor: theme.bgPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.zero,
                 ),
               ),
             ),
@@ -281,7 +281,7 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     return Container(
       decoration: BoxDecoration(
         color: theme.bgSecondary,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.zero,
         border: Border.all(color: theme.divider, width: 1),
       ),
       child: TextField(

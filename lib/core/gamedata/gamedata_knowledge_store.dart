@@ -27,8 +27,11 @@ Future<StoryVectorIndex?> _loadVectorsInBackground(sqflite.Database db) async {
 
 class GameDataKnowledgeStore implements GameDataRetrieval {
 
-  GameDataKnowledgeStore({this.dbPath});
+  GameDataKnowledgeStore({this.dbPath, this.game = Game.arknights});
   final String? dbPath;
+
+  /// Which game's database this store reads (its own file).
+  final Game game;
   sqflite.Database? _db;
 
   /// File identity captured when [_db] was opened. When the underlying DB file
@@ -236,7 +239,13 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
-  Future<SqlQueryResult> readOnlySql(String sql, {int maxRows = 200}) async {
+  Future<SqlQueryResult> readOnlySql(
+    String sql, {
+    int maxRows = 200,
+    Game? game,
+  }) async {
+    // One store is one game's database; [game] picks between stores in a
+    // [MultiGameRetrieval].
     final path = await _resolveDbPath();
     if (path == null || !File(path).existsSync()) {
       return const SqlQueryResult(error: '本地知识库未安装');
@@ -410,7 +419,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       final extDir = await getExternalStorageDirectory();
       if (extDir != null) dir = extDir;
     }
-    return p.join(dir.path, 'arklores_gamedata_zh.db');
+    return p.join(dir.path, game.dbFileName);
   }
 
 

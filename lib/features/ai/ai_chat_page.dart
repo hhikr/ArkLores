@@ -123,7 +123,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       elevation: 2,
       shadowColor: Colors.black.withValues(alpha: 0.25),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.zero,
         side: BorderSide(color: theme.divider, width: 0.5),
       ),
       child: IconButtonTheme(
@@ -158,7 +158,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   ),
                 ),
         tooltip: context.t.aiHistoryTitle,
-        icon: const Icon(Icons.history_rounded),
+        icon: const Icon(Icons.history_sharp),
       ),
       IconButton(
         key: const ValueKey('ask-reading-history'),
@@ -178,7 +178,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       if (chatHistory.isNotEmpty)
         PopupMenuButton<String>(
           tooltip: context.t.aiMoreActions,
-          icon: const Icon(Icons.more_vert_rounded),
+          icon: const Icon(Icons.more_vert_sharp),
           color: theme.cardSurface,
           onSelected: (value) {
             if (value == 'retry') chatNotifier.retryLast();
@@ -191,7 +191,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               child: ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.refresh_rounded),
+                leading: const Icon(Icons.refresh_sharp),
                 title: Text(context.t.aiRetry),
               ),
             ),
@@ -200,7 +200,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               child: ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.delete_sweep_rounded, color: theme.danger),
+                leading: Icon(Icons.delete_sweep_sharp, color: theme.danger),
                 title: Text(context.t.aiClearHistory),
               ),
             ),
@@ -216,7 +216,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.vpn_key_off_rounded,
+            Icons.vpn_key_off_sharp,
             size: 64,
             color: theme.danger.withValues(alpha: 0.4),
           ),
@@ -238,7 +238,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               Navigator.pushNamed(context, '/api-settings');
             },
             icon: Icon(
-              Icons.settings_rounded,
+              Icons.settings_sharp,
               size: 21,
               color: theme.onAccent,
             ),
@@ -303,9 +303,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                           color: theme.surfaceElevated.withValues(alpha: 0.96),
                           elevation: 3,
                           shadowColor: Colors.black.withValues(alpha: 0.22),
-                          shape: CircleBorder(
-                            side: BorderSide(color: theme.divider, width: 0.5),
-                          ),
+                          shape: Border.fromBorderSide(BorderSide(color: theme.divider, width: 0.5)),
                           child: BackButton(color: theme.textPrimary),
                         ),
                       ),
@@ -378,7 +376,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             bottom: 12 + _composerHeight,
             child: Material(
               color: theme.accentPrimary,
-              shape: const CircleBorder(),
+              shape: const RoundedRectangleBorder(),
               elevation: 3,
               shadowColor: Colors.black.withValues(alpha: 0.3),
               child: IconButton(
@@ -386,7 +384,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 tooltip: context.t.aiScrollToBottom,
                 onPressed: _scrollToBottom,
                 icon: Icon(
-                  Icons.arrow_downward_rounded,
+                  Icons.arrow_downward_sharp,
                   color: theme.onAccent,
                 ),
               ),
@@ -408,7 +406,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         label: context.t.aiDeepThinking,
         child: InkWell(
           key: const ValueKey('deep-thinking-toggle'),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.zero,
           onTap: () => ref.read(deepThinkingProvider.notifier).state = !on,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -416,7 +414,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               color: on
                   ? theme.accentPrimary.withValues(alpha: 0.18)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.zero,
               border: Border.all(
                 color: on
                     ? theme.accentText.withValues(alpha: 0.4)
@@ -425,7 +423,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               ),
             ),
             child: Icon(
-              Icons.psychology_alt_rounded,
+              Icons.psychology_alt_sharp,
               size: 18,
               color: on ? theme.accentText : theme.textSecondary,
             ),
@@ -483,14 +481,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           color: on
               ? theme.accentPrimary.withValues(alpha: 0.18)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.zero,
           border: Border.all(
             color: on ? theme.accentText.withValues(alpha: 0.4) : theme.divider,
             width: 0.5,
           ),
         ),
         child: Icon(
-          Icons.tune_rounded,
+          Icons.tune_sharp,
           size: 18,
           color: on ? theme.accentText : theme.textSecondary,
         ),
@@ -505,7 +503,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         child: Column(
           children: [
             Icon(
-              Icons.auto_awesome_rounded,
+              Icons.auto_awesome_sharp,
               size: 48,
               color: theme.accentPrimary.withValues(alpha: 0.3),
             ),

@@ -9,6 +9,7 @@ library;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../gamedata/game.dart';
 import '../gamedata/name_similarity.dart' show homophoneCost, nameDistance;
 import '../gamedata/story_catalog.dart' show escapeLike;
 
@@ -26,15 +27,45 @@ const List<String> shelfKinds = [
   'sandbox',
 ];
 
+/// 0.12: Endfield's shelves in order (kinds without the ef/ namespace;
+/// the build writes the same list, endfieldShelfKinds).
+const List<String> endfieldShelfOrder = [
+  'main',
+  'discovery',
+  'side',
+  'activity',
+  'other',
+  // Conversations outside missions (a level's interactions, an enemy's
+  // encounter): unnamed in the game, shown as 其他.
+  'world',
+  'archive',
+  'memory',
+  // Missions the client keeps conversations of but does not define.
+  'unused',
+];
+
 /// The shelf of items that belong to no collection (enemies, items, medals,
 /// mails, world-view texts …). Operators have a shelf of their own (their
 /// record sets are the `memory` collections), and everything that belongs
 /// to an operator is on the operator's page.
 const String codexShelf = 'codex';
 
+/// [game]'s codex shelf (Endfield's is in its id namespace, so it routes to
+/// its database like every other Endfield id).
+String codexShelfOf(Game game) =>
+    game == Game.endfield ? '${endfieldIdPrefix}codex' : codexShelf;
+
+/// Whether [shelf] is a game's codex.
+bool isCodexShelf(String? shelf) =>
+    shelf == codexShelf || shelf == '${endfieldIdPrefix}codex';
+
 /// The shelf kind whose list is the operators (the record collections hang
 /// below them).
 const String operatorShelf = 'memory';
+
+/// [game]'s operator shelf.
+String operatorShelfOf(Game game) =>
+    game == Game.endfield ? '$endfieldIdPrefix$operatorShelf' : operatorShelf;
 
 /// An entry bound to an operator (`belongs_to` an `operator:` entry): a
 /// module, a skin, a paradox simulation stage. It is shown on the operator's
@@ -82,7 +113,20 @@ const Set<String> markdownEntryTypes = {
 const Set<String> eventEntryTypes = {'roguelike_scene', 'sandbox_event'};
 
 /// The types whose text introduces their collection.
-const Set<String> introEntryTypes = {'roguelike_topic', 'sandbox_topic'};
+const Set<String> introEntryTypes = {
+  'roguelike_topic',
+  'sandbox_topic',
+  // 0.12: an Endfield mission's own description.
+  'mission_intro',
+  // 0.12: the part of the Endfield archive a collection is in (no text;
+  // its group heads the archive shelf).
+  'archive_section',
+};
+
+/// 0.12: collection kinds (without the game's namespace) that only hang
+/// below an operator (its Baker topics, its interactions on the Dijiang):
+/// listed on the operator's page, never as shelves.
+const Set<String> ownedCollectionKinds = {'baker', 'ship'};
 
 /// `'a','b'` for an SQL `IN (…)` of [types] (fixed identifiers, not input).
 String _sqlList(Set<String> types) => types.map((t) => "'$t'").join(',');
@@ -111,6 +155,12 @@ class LibraryCollection {
     required this.others,
     this.startTime,
     this.sortKey,
+    this.intro,
+    this.group,
+    this.firstStory,
+    this.otherTypes = 0,
+    this.otherType,
+    this.otherEntry,
   });
 
   factory LibraryCollection.fromRow(Map<String, Object?> row) =>
@@ -122,6 +172,12 @@ class LibraryCollection {
         others: (row['others'] as num?)?.toInt() ?? 0,
         startTime: (row['start_time'] as num?)?.toInt(),
         sortKey: (row['sort_key'] as num?)?.toInt(),
+        intro: _text(row['intro']),
+        group: _text(row['group_name']),
+        firstStory: _text(row['first_story']),
+        otherTypes: (row['other_types'] as num?)?.toInt() ?? 0,
+        otherType: _text(row['other_type']),
+        otherEntry: _text(row['other_entry']),
       );
 
   final String id;
@@ -135,6 +191,25 @@ class LibraryCollection {
   /// Release time, unix seconds.
   final int? startTime;
   final int? sortKey;
+
+  /// The first block of the collection's introduction ([introEntryTypes]):
+  /// an Endfield mission's description, a roguelike topic's lead.
+  final String? intro;
+
+  /// Where the collection is (the group of its introduction entry: an
+  /// Endfield mission's region); a shelf groups its collections by it.
+  final String? group;
+
+  /// The story file of its first listed story (with [stories] == 1, the
+  /// only one).
+  final String? firstStory;
+
+  /// How many types its other entries are of, the (first) type, and the
+  /// (first) entry: a collection with one entry, or one kind of entry,
+  /// opens it right away instead of a page with one row.
+  final int otherTypes;
+  final String? otherType;
+  final String? otherEntry;
 }
 
 /// One entry in a list.
@@ -194,7 +269,8 @@ String? _text(Object? value) {
 
 /// One block of an entry's text.
 class EntryTextBlock {
-  const EntryTextBlock({required this.title, required this.content, this.section});
+  const EntryTextBlock(
+      {required this.title, required this.content, this.section,});
 
   final String title;
   final String? section;
@@ -239,9 +315,9 @@ const Set<String> documentEntryTypes = {'operator', 'token', 'trap'};
 const String _readable = "(e.type = 'story' OR e.record_id IS NOT NULL OR "
     "e.type IN ('operator', 'token', 'trap') OR $_hostsAttached)";
 
-Future<bool> _hasTable(DatabaseExecutor db, String name) async => (await db
-        .rawQuery('SELECT 1 FROM sqlite_master WHERE name = ?', [name]))
-    .isNotEmpty;
+Future<bool> _hasTable(DatabaseExecutor db, String name) async =>
+    (await db.rawQuery('SELECT 1 FROM sqlite_master WHERE name = ?', [name]))
+        .isNotEmpty;
 
 /// True when the database has the entry layer (schema 5).
 Future<bool> hasEntryLayer(DatabaseExecutor db) async =>
@@ -264,13 +340,20 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
         stories: (r['stories'] as num?)?.toInt() ?? 0,
       ),
   };
+  final known = [
+    ...shelfKinds,
+    for (final kind in endfieldShelfOrder) '$endfieldIdPrefix$kind',
+  ];
+  bool owned(String kind) => ownedCollectionKinds.contains(
+        kind.startsWith(endfieldIdPrefix) ? kind.substring(endfieldIdPrefix.length) : kind,
+      );
   return [
-    for (final kind in shelfKinds)
+    for (final kind in known)
       if (byKind[kind] != null) byKind[kind]!,
     // A kind a later build introduces still gets a shelf, after the known
     // ones (it reads as "其他" until the interface names it).
     for (final kind in byKind.keys.toList()..sort())
-      if (!shelfKinds.contains(kind)) byKind[kind]!,
+      if (!known.contains(kind) && !owned(kind)) byKind[kind]!,
   ];
 }
 
@@ -281,9 +364,8 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
 const Set<String> codexSpanningTypes = {'medal', 'item', 'charm'};
 
 Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
-  final owned = await _hasTable(db, 'entry_links')
-      ? 'AND NOT $_ownedByOperator '
-      : '';
+  final owned =
+      await _hasTable(db, 'entry_links') ? 'AND NOT $_ownedByOperator ' : '';
   final rows = await db.rawQuery(
     'SELECT e.type AS type, COUNT(*) AS n FROM entries e '
     "WHERE (e.collection_id IS NULL OR e.type IN ('medal', 'item', 'charm')) "
@@ -292,9 +374,30 @@ Future<List<({String type, int count})>> codexTypes(DatabaseExecutor db) async {
     'GROUP BY e.type ORDER BY n DESC',
   );
   return [
-    for (final r in rows) (type: '${r['type']}', count: (r['n'] as num).toInt()),
+    for (final r in rows)
+      (type: '${r['type']}', count: (r['n'] as num).toInt()),
   ];
 }
+
+/// The columns of a [LibraryCollection] row, over `collections c LEFT JOIN
+/// entries e ON e.collection_id = c.id` grouped by `c.id`. The introduction
+/// counts as neither a story nor another entry: it is the collection's own.
+final String _collectionColumns =
+    'c.id, c.kind, c.name, c.start_time, c.sort_key, '
+    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
+    "SUM(CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN 1 ELSE 0 END) AS others, '
+    '(SELECT r.content FROM entries i JOIN normalized_records r ON r.id = i.record_id '
+    'WHERE i.collection_id = c.id AND i.type IN (${_sqlList(introEntryTypes)}) LIMIT 1) AS intro, '
+    '(SELECT i.group_name FROM entries i WHERE i.collection_id = c.id '
+    'AND i.type IN (${_sqlList(introEntryTypes)}) AND i.group_name IS NOT NULL LIMIT 1) AS group_name, '
+    "MIN(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN e.raw_id END) AS first_story, "
+    "COUNT(DISTINCT CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN e.type END) AS other_types, '
+    "MIN(CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN e.type END) AS other_type, '
+    "MIN(CASE WHEN e.type <> 'story' AND e.type NOT IN (${_sqlList(introEntryTypes)}) "
+    'AND $_readable THEN e.id END) AS other_entry';
 
 /// The collections of [kind]: newest release first when they have a release
 /// time, otherwise in game order. Collections with nothing to read are left
@@ -304,9 +407,7 @@ Future<List<LibraryCollection>> collectionsOfKind(
   String kind,
 ) async {
   final rows = await db.rawQuery(
-    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
+    'SELECT $_collectionColumns '
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.kind = ? GROUP BY c.id',
     [kind],
@@ -330,9 +431,7 @@ Future<List<LibraryCollection>> collectionsOwnedBy(
   String ownerEntryId,
 ) async {
   final rows = await db.rawQuery(
-    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
+    'SELECT $_collectionColumns '
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.parent_id = ? GROUP BY c.id ORDER BY c.sort_key, c.id',
     [ownerEntryId],
@@ -384,11 +483,10 @@ Future<List<LibraryEntry>> samePersonOf(
 }
 
 /// One collection with its release time, or null.
-Future<LibraryCollection?> collectionById(DatabaseExecutor db, String id) async {
+Future<LibraryCollection?> collectionById(
+    DatabaseExecutor db, String id,) async {
   final rows = await db.rawQuery(
-    'SELECT c.id, c.kind, c.name, c.start_time, c.sort_key, '
-    "SUM(CASE WHEN e.type = 'story' AND NOT $_isAttached THEN 1 ELSE 0 END) AS stories, "
-    "SUM(CASE WHEN e.type <> 'story' AND $_readable THEN 1 ELSE 0 END) AS others "
+    'SELECT $_collectionColumns '
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
     'WHERE c.id = ? GROUP BY c.id',
     [id],
@@ -410,7 +508,8 @@ Future<List<({String type, int count})>> collectionTypes(
     [collectionId],
   );
   final out = [
-    for (final r in rows) (type: '${r['type']}', count: (r['n'] as num).toInt()),
+    for (final r in rows)
+      (type: '${r['type']}', count: (r['n'] as num).toInt()),
   ];
   if (await _hasTable(db, 'entry_links')) {
     final placed = await db.rawQuery(
@@ -458,7 +557,8 @@ Future<List<LibraryEntry>> storiesOf(
 }
 
 /// The introduction of a collection: the text of its `roguelike_topic` entry.
-Future<String?> collectionIntro(DatabaseExecutor db, String collectionId) async {
+Future<String?> collectionIntro(
+    DatabaseExecutor db, String collectionId,) async {
   final rows = await db.rawQuery(
     'SELECT r.content AS content FROM entries e '
     'JOIN normalized_records r ON r.entry_id = e.id '
@@ -466,7 +566,8 @@ Future<String?> collectionIntro(DatabaseExecutor db, String collectionId) async 
     'ORDER BY r.line_start, r.id',
     [collectionId],
   );
-  final text = rows.map((r) => '${r['content'] ?? ''}'.trim()).join('\n').trim();
+  final text =
+      rows.map((r) => '${r['content'] ?? ''}'.trim()).join('\n').trim();
   return text.isEmpty ? null : text;
 }
 
@@ -543,6 +644,7 @@ Future<String?> storyHostOf(DatabaseExecutor db, String storyId) async {
   );
   return rows.isEmpty ? null : _text(rows.first['raw']);
 }
+
 /// The entries of one type, in a collection ([collectionId]) or, without it,
 /// the free entries of the codex. [query] filters by name or code.
 Future<List<LibraryEntry>> entriesOfType(
@@ -554,7 +656,9 @@ Future<List<LibraryEntry>> entriesOfType(
   int limit = 2000,
 }) async {
   final q = query.trim();
-  final like = q.isEmpty ? '' : "AND (e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\') ";
+  final like = q.isEmpty
+      ? ''
+      : "AND (e.name LIKE ? ESCAPE '\\' OR e.code LIKE ? ESCAPE '\\') ";
   final args = <Object?>[
     if (q.isNotEmpty) ...['%${escapeLike(q)}%', '%${escapeLike(q)}%'],
   ];
@@ -592,10 +696,14 @@ Future<List<LibraryEntry>> entriesOfType(
 /// element is "no group"), appending the values to [args]; empty for null.
 String _groupFilter(List<String?>? groups, List<Object?> args) {
   if (groups == null || groups.isEmpty) return '';
-  final named = [for (final g in groups) if (g != null) g];
+  final named = [
+    for (final g in groups)
+      if (g != null) g,
+  ];
   args.addAll(named);
   final parts = [
-    if (named.isNotEmpty) 'e.group_name IN (${List.filled(named.length, '?').join(',')})',
+    if (named.isNotEmpty)
+      'e.group_name IN (${List.filled(named.length, '?').join(',')})',
     if (groups.contains(null)) "(e.group_name IS NULL OR e.group_name = '')",
   ];
   return 'AND (${parts.join(' OR ')}) ';
@@ -651,7 +759,8 @@ Future<List<EntryTextBlock>> entryTexts(
     );
     return [
       for (final r in rows)
-        EntryTextBlock(title: '${r['title'] ?? ''}', content: '${r['content'] ?? ''}'),
+        EntryTextBlock(
+            title: '${r['title'] ?? ''}', content: '${r['content'] ?? ''}',),
     ];
   }
   final rows = await db.rawQuery(
@@ -703,11 +812,13 @@ Future<List<EntryBinding>> entryBindings(
       [entryId, limit],
     );
     for (final r in rows) {
-      out.add(EntryBinding(
-        relation: '${r['relation']}',
-        outgoing: outgoing,
-        entry: LibraryEntry.fromRow(r),
-      ),);
+      out.add(
+        EntryBinding(
+          relation: '${r['relation']}',
+          outgoing: outgoing,
+          entry: LibraryEntry.fromRow(r),
+        ),
+      );
     }
   }
   return out;

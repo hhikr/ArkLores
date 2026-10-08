@@ -82,7 +82,7 @@ class _WikiSourcesSettingsPageState
       actions: [
         IconButton(
           tooltip: context.t.wikiSourcesReset,
-          icon: const Icon(Icons.restore_rounded),
+          icon: const Icon(Icons.restore_sharp),
           onPressed: _resetSites,
         ),
       ],
@@ -90,7 +90,7 @@ class _WikiSourcesSettingsPageState
         backgroundColor: theme.accentPrimary,
         foregroundColor: theme.bgPrimary,
         onPressed: () => _editSite(),
-        child: const Icon(Icons.add_rounded),
+        child: const Icon(Icons.add_sharp),
       ),
       body: _loading
           ? Center(
@@ -116,8 +116,8 @@ class _WikiSourcesSettingsPageState
                         ),
                         child: Icon(
                           site.builtIn
-                              ? Icons.public_rounded
-                              : Icons.travel_explore_rounded,
+                              ? Icons.public_sharp
+                              : Icons.travel_explore_sharp,
                           color: theme.accentPrimary,
                         ),
                       ),
@@ -147,14 +147,14 @@ class _WikiSourcesSettingsPageState
                       ),
                       IconButton(
                         tooltip: context.t.wikiSourcesEdit,
-                        icon: const Icon(Icons.edit_rounded),
+                        icon: const Icon(Icons.edit_sharp),
                         color: theme.textSecondary,
                         onPressed: () => _editSite(site: site, index: index),
                       ),
                       if (!site.builtIn)
                         IconButton(
                           tooltip: context.t.wikiSourcesDelete,
-                          icon: const Icon(Icons.delete_outline_rounded),
+                          icon: const Icon(Icons.delete_outline_sharp),
                           color: theme.danger,
                           onPressed: () => _deleteSite(index),
                         ),
@@ -279,7 +279,7 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
                 runSpacing: 8,
                 children: [
                   ActionChip(
-                    avatar: const Icon(Icons.public_rounded, size: 16),
+                    avatar: const Icon(Icons.public_sharp, size: 16),
                     label: const Text('Warfarin'),
                     onPressed: () => _selectEndfieldPreset(
                       url: 'https://warfarin.wiki/cn',
@@ -287,7 +287,7 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
                     ),
                   ),
                   ActionChip(
-                    avatar: const Icon(Icons.public_rounded, size: 16),
+                    avatar: const Icon(Icons.public_sharp, size: 16),
                     label: const Text('fz.wiki'),
                     onPressed: () => _selectEndfieldPreset(
                       url: 'https://fz.wiki',

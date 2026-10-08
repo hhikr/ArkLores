@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
@@ -35,7 +36,7 @@ class OperatorPage extends ConsumerWidget {
         body: entry.isLoading
             ? const Center(child: CircularProgressIndicator())
             : LibraryMessage(
-                icon: Icons.folder_off_rounded,
+                icon: Icons.folder_off_sharp,
                 title: context.t.libraryEmpty,
               ),
       );
@@ -48,6 +49,24 @@ class OperatorPage extends ConsumerWidget {
         const <EntryTextBlock>[];
     final samePerson = ref.watch(samePersonProvider(e.id)).valueOrNull ??
         const <LibraryEntry>[];
+
+    // The collections below it by kind (in kind order: missions, Baker,
+    // Dijiang), each kind in game order.
+    final kinds = <String, List<LibraryCollection>>{};
+    for (final c in records) {
+      final kind = _bareKind(c.kind);
+      // Missions of any shelf are one group (an operator's mission may be on
+      // the main story shelf too).
+      (kinds[ownedCollectionKinds.contains(kind) ? kind : 'memory'] ??= []).add(c);
+    }
+    final kindOrder = ['memory', ...ownedCollectionKinds];
+    final sortedKinds = Map.fromEntries(
+      kinds.entries.toList()
+        ..sort((a, b) => kindOrder.indexOf(a.key).compareTo(kindOrder.indexOf(b.key))),
+    );
+    kinds
+      ..clear()
+      ..addAll(sortedKinds);
 
     // Owned entries by type, in the order the query returns them.
     final byType = <String, List<LibraryEntry>>{};
@@ -76,7 +95,8 @@ class OperatorPage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: _headerCard(context, theme, e, records, byType),
           ),
-          // The profile (archive) leads: it is what the page is about.
+          // The profile (archive) leads: it is what the page is about. Each
+          // of its parts folds (all open).
           if (blocks.isNotEmpty) ...[
             header(context.t.libraryOperatorProfile, 'profile'),
             const SizedBox(height: 4),
@@ -94,22 +114,32 @@ class OperatorPage extends ConsumerWidget {
                 title: o.name.isEmpty ? o.id : o.name,
                 subtitle: codeCaption(o),
                 subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
                 onTap: () => openEntry(context, o),
               ),
               rowDivider(theme),
             ],
           ],
-          if (records.isNotEmpty) ...[
-            header(context.t.libraryOperatorRecords, 'records'),
-            for (final c in records) ...[
+          // What hangs below the operator, by kind: Arknights' record sets
+          // (密录); Endfield's operator missions (under the name of their
+          // series), Baker topics and Dijiang interactions. A row with one
+          // story opens it.
+          for (final kind in kinds.entries) ...[
+            header(_kindLabel(context, kind.key), 'records-${kind.key}'),
+            for (final (i, c) in kind.value.indexed) ...[
+              if (c.group != null &&
+                  (i == 0 || kind.value[i - 1].group != c.group))
+                GroupHeading(
+                  key: ValueKey('operator-series-${c.group}'),
+                  title: c.group!,
+                ),
               LibraryRow(
                 key: ValueKey('operator-record-${c.id}'),
                 title: c.name,
-                subtitle: context.t.libraryCountStories(c.stories),
-                subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
-                onTap: () => openCollection(context, c.id),
+                subtitle: c.intro ?? context.t.libraryCountStories(c.stories),
+                subtitleLines: c.intro == null ? 1 : 2,
+                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
+                onTap: () => openCollectionOf(context, c),
               ),
               rowDivider(theme),
             ],
@@ -122,7 +152,7 @@ class OperatorPage extends ConsumerWidget {
                 title: o.name.isEmpty ? o.id : o.name,
                 subtitle: _ownedCaption(o),
                 subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
+                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
                 onTap: () => openEntry(context, o),
               ),
               rowDivider(theme),
@@ -132,6 +162,17 @@ class OperatorPage extends ConsumerWidget {
       ),
     );
   }
+
+  /// A collection kind without the game's namespace.
+  static String _bareKind(String kind) => kind.startsWith(endfieldIdPrefix)
+      ? kind.substring(endfieldIdPrefix.length)
+      : kind;
+
+  /// The heading of one kind of what hangs below an operator.
+  String _kindLabel(BuildContext context, String kind) =>
+      gameOfId(entryId) == Game.endfield
+          ? endfieldOwnedNames[kind] ?? endfieldOperatorMissions
+          : context.t.libraryOperatorRecords;
 
   /// The line under a module / skin / paradox simulation: a module's type
   /// mark, a skin's series.

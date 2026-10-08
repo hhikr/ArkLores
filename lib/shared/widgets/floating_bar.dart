@@ -13,21 +13,21 @@ const double floatingBarHeight = 44;
 const double floatingTopInset = 6 + floatingBarHeight + 6;
 
 /// The look of every floating dock (top bars, the bottom navigation, the
-/// question box): a rounded, slightly translucent card with a hairline and
-/// a soft shadow, standing off the edges so the content shows around it.
+/// question box): a square, slightly translucent plate with a hairline, a
+/// soft shadow and a short accent tick on its top-left corner (the corner
+/// mark both games put on their panels), standing off the edges so the
+/// content shows around it.
 class FloatingBar extends StatelessWidget {
   const FloatingBar({
     super.key,
     required this.theme,
     required this.child,
-    this.radius = 22,
     this.height,
     this.padding = EdgeInsets.zero,
   });
 
   final AppThemeTokens theme;
   final Widget child;
-  final double radius;
   final double? height;
   final EdgeInsetsGeometry padding;
 
@@ -37,22 +37,84 @@ class FloatingBar extends StatelessWidget {
       color: theme.surfaceElevated.withValues(alpha: 0.96),
       elevation: 3,
       shadowColor: Colors.black.withValues(alpha: 0.22),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(radius),
-        side: BorderSide(color: theme.divider, width: 0.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        height: height,
-        child: Padding(padding: padding, child: child),
+      shape: Border.all(color: theme.divider, width: 0.5),
+      clipBehavior: Clip.hardEdge,
+      child: CustomPaint(
+        foregroundPainter: CornerTickPainter(theme.accentPrimary),
+        child: SizedBox(
+          height: height,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
   }
 }
 
+/// A short L of [color] on a panel's top-left corner.
+class CornerTickPainter extends CustomPainter {
+  const CornerTickPainter(this.color, {this.length = 10, this.width = 2});
+
+  final Color color;
+  final double length;
+  final double width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    canvas
+      ..drawRect(Rect.fromLTWH(0, 0, length, width), paint)
+      ..drawRect(Rect.fromLTWH(0, 0, width, length * 0.6), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CornerTickPainter old) =>
+      color != old.color || length != old.length || width != old.width;
+}
+
+/// How a selected tab is marked in every tab row (the library's games, the
+/// wiki's sites, the bottom navigation): a bar of [color] along one edge of
+/// the tab that wipes in from the left when it is chosen — the games mark a
+/// chosen tab with a bar, not a filled lozenge.
+class SelectionBar extends StatelessWidget {
+  const SelectionBar({
+    super.key,
+    required this.selected,
+    required this.color,
+    this.thickness = 2.5,
+    this.top = false,
+  });
+
+  final bool selected;
+  final Color color;
+  final double thickness;
+  final bool top;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: top ? Alignment.topLeft : Alignment.bottomLeft,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: selected ? 1 : 0),
+        duration: selectionDuration,
+        curve: Curves.easeOutExpo,
+        builder: (context, t, _) => FractionallySizedBox(
+          widthFactor: t,
+          child: SizedBox(
+            height: thickness,
+            child: ColoredBox(color: color),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The time a selection mark takes to move: short and without overshoot.
+const Duration selectionDuration = Duration(milliseconds: 220);
+
 /// The top docks of a page, below the status bar, over the content: what
 /// sits on the left ([leading], e.g. tabs) and what sits on the right
-/// ([trailing], e.g. one action) are separate floating pills, each as wide
+/// ([trailing], e.g. one action) are separate floating plates, each as wide
 /// as its content, the page showing between them. Put it last in a
 /// [Stack] whose content leaves [floatingTopInset] (plus the status bar)
 /// free at the top.
@@ -83,8 +145,8 @@ class FloatingTopBar extends StatelessWidget {
   }
 }
 
-/// The row of [FloatingTopBar]: a pill hugging [leading] on the left, a
-/// round pill around [trailing] on the right.
+/// The row of [FloatingTopBar]: a plate hugging [leading] on the left, a
+/// square plate around [trailing] on the right.
 class FloatingSplitBar extends StatelessWidget {
   const FloatingSplitBar({
     super.key,
@@ -117,7 +179,6 @@ class FloatingSplitBar extends StatelessWidget {
             child: FloatingBar(
               theme: theme,
               height: floatingBarHeight,
-              radius: floatingBarHeight / 2,
               child: Center(child: trailing),
             ),
           ),
@@ -127,7 +188,8 @@ class FloatingSplitBar extends StatelessWidget {
   }
 }
 
-/// One choice in a floating pill (a tab, a site): the selected one filled.
+/// One choice in a floating plate (a tab, a site): the selected one on a
+/// faint tint with a [SelectionBar] along its bottom edge.
 class FloatingSegment extends StatelessWidget {
   const FloatingSegment({
     super.key,
@@ -148,40 +210,51 @@ class FloatingSegment extends StatelessWidget {
       button: true,
       selected: selected,
       child: PressFeedback(
-        pressedScale: 0.93,
         child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: selected ? null : withHaptic(onTap),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          constraints: const BoxConstraints(maxWidth: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-          decoration: BoxDecoration(
+          onTap: selected ? null : withHaptic(onTap),
+          child: AnimatedContainer(
+            duration: selectionDuration,
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(maxWidth: 180),
             color: selected
-                ? theme.accentPrimary.withValues(alpha: 0.28)
+                ? theme.accentPrimary.withValues(alpha: 0.14)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.bodyFont.copyWith(
-              fontSize: 13.5,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? theme.textPrimary : theme.textSecondary,
+            child: Stack(
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.bodyFont.copyWith(
+                      fontSize: 13.5,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? theme.textPrimary : theme.textSecondary,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: SelectionBar(
+                    selected: selected,
+                    color: theme.accentPrimary,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
         ),
       ),
     );
   }
 }
 
-/// A pushed page with floating top docks instead of an app bar: a round
-/// back button and the [title] in a pill on the left (as wide as the title),
-/// the [actions] in a pill on the right, the page showing around them.
+/// A pushed page with floating top docks instead of an app bar: a square
+/// back button and the [title] in a plate on the left (as wide as the
+/// title), the [actions] in a plate on the right, the page showing around
+/// them.
 ///
 /// With [scrollUnder] the body starts at the top of the screen and scrolls
 /// beneath the docks (its scrollables use [floatingPadding]); without it
@@ -254,7 +327,6 @@ class FloatingScaffold extends ConsumerWidget {
                             child: FloatingBar(
                               theme: theme,
                               height: floatingBarHeight,
-                              radius: floatingBarHeight / 2,
                               child: const Center(child: BackButton()),
                             ),
                           ),

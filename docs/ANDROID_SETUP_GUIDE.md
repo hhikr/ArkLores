@@ -30,13 +30,13 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 
 ## 发布（开发者明确同意后）
 
-1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.11.0 是 28）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
+1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.12.0 正式版是 31）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
 2. 知识库有变化：按 `GAMEDATA_BUILD_PIPELINE.md` §7 准备资产，`tools/release_gamedata.env` 指向将要创建的 Release。
 3. 工作区干净（`coverage/` 已 gitignore），提交并推送功能分支。
 4. `.\tools\release_app.ps1 -Version <v> -NotesFile <说明.md> [-Stable]`（Linux/云端：`tools/release_app.sh`，`STABLE=1`）：
    推 `release/v<v>` → `android-release.yml` 构建签名并校验证书指纹 `b1b09ebf…e364` → 下载 APK → 建 Release 并上传 APK。
 5. 上传知识库 gz 与 manifest 到同一个 Release；用公开地址 HEAD 一次确认 200。
-6. 开 PR 把功能分支合回 `main`（开发者合并）。
+6. 开 PR 把功能分支合回 `main`（开发者合并）；合并后删掉功能分支，撤下被正式版取代的预发布（Release 与 tag），只留正式版的 `release/v<v>` 分支。
 
 建 Release 的请求失败（v0.11.0 遇到 GitHub 500）时：APK 已在 `%TEMP%\arklores_release_<v>`，用 REST 补建 Release 并上传，不要重推 release 分支
 （重推会重新构建，APK 哈希会变）。

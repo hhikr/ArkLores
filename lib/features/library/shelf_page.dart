@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
@@ -33,23 +34,22 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
       actions: [
         LibrarySearchButton(scope: shelfScope(widget.kind), label: label),
       ],
-      body: widget.kind == codexShelf
-          ? _codex(theme)
-          : _collections(theme),
+      body: isCodexShelf(widget.kind) ? _codex(theme) : _collections(theme),
     );
   }
 
   Widget _codex(AppThemeTokens theme) {
-    final types = ref.watch(codexTypesProvider);
+    final game = gameOfId(widget.kind);
+    final types = ref.watch(codexTypesProvider(game));
     return types.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => LibraryMessage(
-        icon: Icons.folder_off_rounded,
+        icon: Icons.folder_off_sharp,
         title: context.t.libraryEmpty,
       ),
       data: (list) => list.isEmpty
           ? LibraryMessage(
-              icon: Icons.folder_open_rounded,
+              icon: Icons.folder_open_sharp,
               title: context.t.libraryEmpty,
             )
           : ListView.separated(
@@ -58,17 +58,17 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
               separatorBuilder: (_, __) => rowDivider(theme),
               itemBuilder: (context, i) => LibraryRow(
                 key: ValueKey('codex-type-${list[i].type}'),
-                title: entryTypeName(list[i].type),
+                title: entryTypeNameIn(list[i].type, game),
                 subtitle: context.t.libraryCountEntries(list[i].count),
                 subtitleLines: 1,
                 leading: Icon(Icons.folder_outlined, color: theme.accentText),
                 trailing: Icon(
-                  Icons.chevron_right_rounded,
+                  Icons.chevron_right_sharp,
                   color: theme.textMuted,
                 ),
                 onTap: () => pushLibraryPage(
                   context,
-                  (_) => EntryListPage(type: list[i].type),
+                  (_) => EntryListPage(type: list[i].type, game: game),
                 ),
               ),
             ),
@@ -80,7 +80,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
     return all.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, __) => LibraryMessage(
-        icon: Icons.folder_off_rounded,
+        icon: Icons.folder_off_sharp,
         title: context.t.libraryEmpty,
       ),
       data: (list) {
@@ -91,31 +91,38 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
                 for (final c in list)
                   if (c.name.toLowerCase().contains(q)) c,
               ];
-        // Release-ordered shelves get a year heading; the others are in game
-        // order and need none.
+        // Release-ordered shelves get a year heading. Collections that say
+        // where they are (an Endfield mission's region) are listed by that
+        // place, the places in the order they first come up; the others are
+        // in game order and need no heading.
         final byYear = list.any((c) => c.startTime != null);
+        final byGroup = !byYear && list.any((c) => c.group != null);
+        final ordered = byGroup ? _byGroup(shown) : shown;
         final rows = <Widget>[];
-        String? year;
-        for (final c in shown) {
-          if (byYear) {
-            final y = releaseMonthOf(c.startTime)?.substring(0, 4);
-            if (y != year) {
-              year = y;
-              rows.add(
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                  child: Text(
-                    y ?? '—',
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
-                    ),
+        String? heading;
+        for (final (i, c) in ordered.indexed) {
+          final h = byYear
+              ? releaseMonthOf(c.startTime)?.substring(0, 4) ?? '—'
+              : byGroup
+                  ? c.group ?? context.t.shelfOther
+                  : null;
+          if (h != null && (i == 0 || h != heading)) {
+            heading = h;
+            rows.add(
+              Padding(
+                key: ValueKey('shelf-heading-$h'),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: Text(
+                  h,
+                  style: theme.bodyFont.copyWith(
+                    color: theme.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
                   ),
                 ),
-              );
-            }
+              ),
+            );
           }
           rows
             ..add(_collectionRow(theme, c))
@@ -131,7 +138,7 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
             Expanded(
               child: shown.isEmpty
                   ? LibraryMessage(
-                      icon: Icons.search_off_rounded,
+                      icon: Icons.search_off_sharp,
                       title: context.t.libraryNoResults,
                       action: SearchFurtherButton(
                         query: _filter,
@@ -150,6 +157,21 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
     );
   }
 
+  /// [list] with the collections of one group together, the groups in the
+  /// order they first come up (game order inside a group); collections
+  /// without a group last.
+  List<LibraryCollection> _byGroup(List<LibraryCollection> list) {
+    final groups = <String?, List<LibraryCollection>>{};
+    for (final c in list) {
+      (groups[c.group] ??= []).add(c);
+    }
+    return [
+      for (final e in groups.entries)
+        if (e.key != null) ...e.value,
+      ...?groups[null],
+    ];
+  }
+
   Widget _collectionRow(AppThemeTokens theme, LibraryCollection c) {
     final month = releaseMonthOf(c.startTime);
     final parts = [
@@ -157,13 +179,15 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
       if (c.others > 0) context.t.libraryCountEntries(c.others),
       if (month != null) month,
     ];
+    // A collection that introduces itself (a mission) says what it is about.
+    final intro = c.intro;
     return LibraryRow(
       key: ValueKey('collection-${c.id}'),
       title: c.name,
-      subtitle: parts.join(' · '),
-      subtitleLines: 1,
-      trailing: Icon(Icons.chevron_right_rounded, color: theme.textMuted),
-      onTap: () => openCollection(context, c.id),
+      subtitle: intro ?? parts.join(' · '),
+      subtitleLines: intro == null ? 1 : 2,
+      trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
+      onTap: () => openCollectionOf(context, c),
     );
   }
 }

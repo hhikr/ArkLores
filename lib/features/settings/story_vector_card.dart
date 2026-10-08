@@ -66,7 +66,7 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
         children: [
           Row(
             children: [
-              Icon(Icons.hub_rounded, color: theme.accentPrimary, size: 24),
+              Icon(Icons.hub_sharp, color: theme.accentPrimary, size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -181,7 +181,7 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 onPressed: vec.running || vec.loading
                     ? null
                     : () => ref.read(storyVectorProvider.notifier).refresh(),
-                icon: const Icon(Icons.refresh_rounded, size: 18),
+                icon: const Icon(Icons.refresh_sharp, size: 18),
                 label: Text(context.t.kbVectorRefresh),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: theme.accentText,
@@ -193,7 +193,7 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 OutlinedButton.icon(
                   onPressed: () =>
                       ref.read(storyVectorProvider.notifier).cancel(),
-                  icon: const Icon(Icons.stop_rounded, size: 18),
+                  icon: const Icon(Icons.stop_sharp, size: 18),
                   label: Text(context.t.kbVectorCancel),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: theme.danger,
@@ -204,7 +204,7 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 ElevatedButton.icon(
                   key: const Key('kb-vector-start'),
                   onPressed: canStart ? () => _startVectors(plan) : null,
-                  icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                  icon: const Icon(Icons.auto_awesome_sharp, size: 18),
                   label: Text(context.t.kbVectorStart),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.accentPrimary,

@@ -38,7 +38,7 @@ class EntryPage extends ConsumerWidget {
         body: entry.isLoading
             ? const Center(child: CircularProgressIndicator())
             : LibraryMessage(
-                icon: Icons.folder_off_rounded,
+                icon: Icons.folder_off_sharp,
                 title: context.t.libraryEmpty,
               ),
       );
@@ -200,7 +200,7 @@ class EntryPage extends ConsumerWidget {
                       if (e.collectionId != null)
                         const WidgetSpan(
                           alignment: PlaceholderAlignment.middle,
-                          child: Icon(Icons.chevron_right_rounded, size: 16),
+                          child: Icon(Icons.chevron_right_sharp, size: 16),
                         ),
                     ],
                   ),
@@ -240,40 +240,60 @@ class EntryPage extends ConsumerWidget {
   ) {
     final text = cleanRichText(withPlaceholders(b.content, nickname)).trim();
     if (text.isEmpty) return const SizedBox.shrink();
-    final showTitle = b.title.trim().isNotEmpty &&
-        b.title.trim() != e.name &&
-        !b.title.trim().endsWith(e.name);
+    // A profile document: its parts fold, each open.
+    if (markdownEntryTypes.contains(e.type) &&
+        !eventEntryTypes.contains(e.type) &&
+        text.contains('## ')) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: ProfileText(text),
+      );
+    }
+    // The heading of a block: its section (the record's own part name),
+    // else its title, when that is neither the entry's name again nor the
+    // name of its kind (`敌人`, `集成战略收藏品`).
+    final kind = entryTypeName(e.type);
+    final heading = [b.section, b.title]
+        .map((t) => t?.trim() ?? '')
+        .firstWhere(
+          (t) =>
+              t.isNotEmpty &&
+              t != e.name &&
+              !t.endsWith(e.name) &&
+              !t.contains(kind) &&
+              !kind.contains(t),
+          orElse: () => '',
+        );
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: ThemeAwareCard(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (showTitle) ...[
-              Text(
-                b.title.trim(),
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 12,
-                  letterSpacing: 0.3,
-                ),
+            if (heading.isNotEmpty) ...[
+              Row(
+                children: [
+                  Container(width: 3, height: 14, color: theme.accentPrimary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      heading,
+                      style: theme.titleFont.copyWith(fontSize: 14, height: 1.3),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 10),
             ],
             if (eventEntryTypes.contains(e.type))
               EventText(text)
             else if (markdownEntryTypes.contains(e.type))
               MarkdownText(text)
+            else if (ProfileText.isVoice(heading))
+              VoiceLines(text)
             else
-              SelectableText(
-                text,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textPrimary,
-                  fontSize: 15,
-                  height: 1.7,
-                ),
-              ),
+              ReadingText(text, fields: isFieldList(text)),
           ],
         ),
       ),
@@ -380,11 +400,7 @@ class _AttachedDialogue extends ConsumerWidget {
                 ),
               Text(
                 withPlaceholders(l.content, nickname),
-                style: theme.bodyFont.copyWith(
-                  color: theme.textPrimary,
-                  fontSize: 15,
-                  height: 1.65,
-                ),
+                style: readingStyle(theme, size: 15),
               ),
             ],
           ],

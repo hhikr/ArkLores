@@ -425,7 +425,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   /// Room the floating docks take over the web page (logical px = CSS px):
-  /// the site pill at the top, the navigation at the bottom. Set in
+  /// the site plate at the top, the navigation at the bottom. Set in
   /// [build]; 0 in reader mode, where both docks are hidden.
   double _dockTop = 0;
   double _dockBottom = 0;
@@ -845,8 +845,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
-  /// The site switch: the sites in a floating pill on the left (as wide as
-  /// they need), bookmarks in a round pill on the right. The web page starts
+  /// The site switch: the sites in a floating plate on the left (as wide as
+  /// they need), bookmarks in a square plate on the right. The web page starts
   /// below them (a page cannot be told to leave room under a dock).
   Widget _buildSiteBar(AppThemeTokens theme) {
     return Padding(
@@ -1304,7 +1304,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.wifi_off_rounded, color: theme.danger, size: 28),
+                    Icon(Icons.wifi_off_sharp, color: theme.danger, size: 28),
                     const SizedBox(height: 12),
                     Text(
                       context.t.wikiLoadFailed,
@@ -1326,7 +1326,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
                           setState(() => _loadError = null);
                           _controller?.reload();
                         },
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        icon: const Icon(Icons.refresh_sharp, size: 18),
                         label: Text(
                           context.t.wikiRetry,
                           style: theme.titleFont.copyWith(fontSize: 13),
@@ -1336,7 +1336,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
                           foregroundColor: theme.bgPrimary,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.zero,
                           ),
                         ),
                       ),

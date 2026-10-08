@@ -13,6 +13,7 @@ library;
 import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
+import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import 'tools/agent_tool.dart';
 import 'tools/observation_data.dart' show dataBlockPrefix;
@@ -132,6 +133,13 @@ List<String> _stringList(Object? raw) {
 
 int? _int(Object? raw) => raw is num ? raw.toInt() : int.tryParse('$raw');
 
+/// The `game` argument of a tool: which game's knowledge base to use.
+Map<String, dynamic> _gameParameter(String description) => {
+      'type': 'string',
+      'enum': [for (final g in Game.values) g.key],
+      'description': description,
+    };
+
 /// `sql`: one read-only query over the whole knowledge DB.
 class SqlTool extends AgentTool {
   SqlTool(this.store, this.seen);
@@ -146,9 +154,10 @@ class SqlTool extends AgentTool {
 
   @override
   String get description =>
-      '对知识库执行一条只读 SQL（SQLite 语法，只能是 SELECT/WITH）。'
+      '对一个游戏的知识库执行一条只读 SQL（SQLite 语法，只能是 SELECT/WITH）。'
       '适合做全局统计和定位，例如按 story_id 统计某个名字出现的行数并关联 story_catalog 排序，'
       '或在 entities / entity_aliases / story_lines.speaker 里模糊查名字。'
+      '两个游戏的库表结构相同、各是一个文件，一条 SQL 只查其中一个（game 参数）。'
       '最多返回 $maxRows 行；超过时请加条件、聚合或 LIMIT。';
 
   @override
@@ -156,6 +165,7 @@ class SqlTool extends AgentTool {
         'type': 'object',
         'properties': {
           'query': {'type': 'string', 'description': '一条 SELECT 或 WITH 语句'},
+          'game': _gameParameter('查哪个游戏的库，默认 arknights'),
         },
         'required': ['query'],
       };
@@ -164,7 +174,8 @@ class SqlTool extends AgentTool {
   Future<String> execute(Map<String, dynamic> arguments) async {
     final query = '${arguments['query'] ?? ''}'.trim();
     if (query.isEmpty) return '错误：query 为空';
-    final result = await store.readOnlySql(query, maxRows: maxRows);
+    final game = Game.parse(arguments['game']);
+    final result = await store.readOnlySql(query, maxRows: maxRows, game: game);
     if (result.error != null) return result.error!;
     if (result.rows.isEmpty) {
       final terms = [
@@ -172,7 +183,7 @@ class SqlTool extends AgentTool {
             .allMatches(query))
           m.group(1)!,
       ];
-      final hint = await _nearNamesHint(store, terms);
+      final hint = await _nearNamesHint(narrowTo(store, game), terms);
       return '0 行。${hint.isEmpty ? '' : '\n$hint'}';
     }
     final columns = result.columns;
@@ -313,7 +324,7 @@ class GrepTool extends AgentTool {
   String get description =>
       '在剧情台词里找包含某些词的行（正文或说话人，子串匹配，多个词用 | 分隔表示“任一”）。'
       '给 story_ids 或 collection 时返回命中行及上下文；都不给时在全库统计每个故事的命中行数'
-      '（只给分布，不给原文）。';
+      '（只给分布，不给原文；不给 game 时统计所有已安装的游戏）。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -340,12 +351,19 @@ class GrepTool extends AgentTool {
             'type': 'integer',
             'description': '最多返回多少命中行，默认 $defaultHits，最多 $maxHits',
           },
+          'game': _gameParameter('只在这个游戏里找（可选，默认所有已安装的游戏）'),
         },
         'required': ['pattern'],
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> arguments) async {
+  Future<String> execute(Map<String, dynamic> arguments) =>
+      _run(narrowTo(store, Game.parse(arguments['game'])), arguments);
+
+  Future<String> _run(
+    GameDataRetrieval store,
+    Map<String, dynamic> arguments,
+  ) async {
     final terms = [
       for (final t in '${arguments['pattern'] ?? ''}'.split('|'))
         if (t.trim().isNotEmpty) t.trim(),
@@ -369,7 +387,7 @@ class GrepTool extends AgentTool {
         for (final e in collection.entries) e.storyId,
       ];
     }
-    if (storyIds.isEmpty) return _corpusCounts(terms);
+    if (storyIds.isEmpty) return _corpusCounts(store, terms);
     final context = (_int(arguments['context']) ?? 2).clamp(0, 8);
     final limit =
         (_int(arguments['max_hits']) ?? defaultHits).clamp(1, maxHits);
@@ -437,7 +455,10 @@ class GrepTool extends AgentTool {
 
   /// Hit counts per story over the whole corpus, main story first, then by
   /// release.
-  Future<String> _corpusCounts(List<String> terms) async {
+  Future<String> _corpusCounts(
+    GameDataRetrieval store,
+    List<String> terms,
+  ) async {
     final counts = await store.storyLineHitCounts(terms);
     if (counts.isEmpty) {
       final hint = await _nearNamesHint(store, terms);
@@ -548,14 +569,10 @@ class OutlineTool extends AgentTool {
 /// fused with the optional story vectors (R12). For text that grep's exact
 /// substrings would miss.
 class FindTool extends AgentTool {
-  FindTool(this._store, EmbeddingClient? embeddingClient)
-      : _search = SearchStoryLinesTool(
-          gameDataStore: _store,
-          embeddingClient: embeddingClient,
-        );
+  FindTool(this._store, this._embeddingClient);
 
   final GameDataRetrieval _store;
-  final SearchStoryLinesTool _search;
+  final EmbeddingClient? _embeddingClient;
 
   @override
   String get name => 'find';
@@ -572,18 +589,24 @@ class FindTool extends AgentTool {
         'properties': {
           'query': {'type': 'string', 'description': '描述、台词或空格分隔的词'},
           'collection': {'type': 'string', 'description': '只在这个故事集里找（可选）'},
+          'game': _gameParameter('只在这个游戏里找（可选，默认所有已安装的游戏）'),
         },
         'required': ['query'],
       };
 
   @override
   Future<String> execute(Map<String, dynamic> arguments) async {
+    final store = narrowTo(_store, Game.parse(arguments['game']));
     // The search takes collection ids; resolve a collection name first.
     final collection = '${arguments['collection'] ?? ''}'.trim();
     final scope = collection.isEmpty
         ? null
-        : (await _store.storyCollection(collection))?.collectionId ?? collection;
-    final result = await _search.execute({
+        : (await store.storyCollection(collection))?.collectionId ?? collection;
+    final search = SearchStoryLinesTool(
+      gameDataStore: store,
+      embeddingClient: _embeddingClient,
+    );
+    final result = await search.execute({
       'query': arguments['query'],
       if (scope != null) 'scope_id': scope,
     });
