@@ -44,6 +44,7 @@
 | 测试覆盖偏低的部分 | 设置页、知识库页的界面分支、`rag/chunker.dart`；WebView、Android 前台服务、启动图标切换只能真机检查（`test/README.md`） |
 | 长文件 | `wiki_browser_page.dart`、`lore_agent_loop.dart`、`arknights_importer.dart`、`chat_bubble.dart`、`story_reader_page.dart` 各是一个整体，未拆 |
 | 签名 keystore 只有维护者一份备份 | 丢失后无法再发布可覆盖安装的版本 |
+| CI 的 push 触发还写着 `dev` | `.github/workflows/ci.yml` 的 `push.branches` 是 `[dev, main]`，`dev` 分支已不存在；功能分支只在开 PR 后才跑 CI。改成功能分支前缀（如 `feature/**`）或只留 `main` |
 
 ## 5. 终末地知识库（0.12）
 

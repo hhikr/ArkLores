@@ -1,6 +1,7 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：明日方舟中文知识库，schema 5（条目层 + 可选剧情向量 + 可选故事目录），v0.11.0 Release 资产。
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。明日方舟库是 v0.11.0 Release 资产（§1–8），
+> 终末地库是 v0.12.0 Release 资产（§9，只能在本机从游戏客户端构建）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `AI_ARCHITECTURE.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 

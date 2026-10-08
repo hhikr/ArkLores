@@ -39,10 +39,11 @@ ARKLORES_EMBEDDING_URL=<与 tools/embedding-apiKey.csv 的 openAiCompatible 相�
 
 `tools/cloud/session_start.sh` 会把这些变量写成 `tools/api_info`、`tools/embedding-apiKey.csv`（文件已存在则不动，不打印值）。
 
-### 建议：在 GitHub 上保护 main 和 dev
+### 建议：在 GitHub 上保护 main
 
-GitHub 代理只拒绝删分支和推 tag，**不限制推哪个分支**。“不直接 push main/dev”目前只靠 CLAUDE.md 约束；
-想要硬保证，在 GitHub 仓库 Settings → Branches（或 Rules → Rulesets）给 `main`、`dev` 加保护规则（要求 PR）。
+GitHub 代理只拒绝删分支和推 tag，**不限制推哪个分支**。“不直接 push main”目前只靠 CLAUDE.md 约束；
+想要硬保证，在 GitHub 仓库 Settings → Branches（或 Rules → Rulesets）给 `main` 加保护规则（要求 PR）。
+（以前的 `dev` 分支已不用：每个版本在自己的功能分支上开发，见 `CONTRIBUTING.md`。）
 
 ## 2. 每个会话开始
 

@@ -14,6 +14,7 @@ flutter test        # 约 1 分钟，全部离线
 
 - `test/guards/no_special_case_test.dart`：`lib/` 里没有问题类型特判（`culprit|suspect|嫌疑|凶手|罪魁`）。
 - `test/guards/floating_docks_test.dart`：`lib/` 里没有 `AppBar`（页面用 `FloatingScaffold`）。
+- `test/guards/square_shapes_test.dart`：没有圆角、圆形、`_rounded` 图标和回弹曲线。
 - `test/core/agent/lore_agent_loop_test.dart`：提示词与工具说明里没有具体人物/章节/活动名、没有具体剧情手法名。
 - `test/shared/app_version_test.dart`：`app_version.dart` 与 `pubspec.yaml` 一致。
 
