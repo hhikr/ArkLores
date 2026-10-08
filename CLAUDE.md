@@ -19,7 +19,7 @@
   - 架构：每个游戏一个库文件；终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`find` 默认两个库），
     装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一页（明日方舟 / 终末地 / 我的资料）、页面按 id 路由；知识库页每个游戏一张下载卡。
   - 终末地建库：`tools/unpack_endfield.ps1`（AnimeStudio 导出客户端两层的表与 JSON 数据，Persistent 覆盖 StreamingAssets，不用 kit 的完整流程）→
-    `tools/build_endfield_database.dart`：干员档案与语音、档案库（PRTS）、敌人/武器/物品描述、对话/通讯/短信（选项按组号插入），
+    `tools/build_endfield_database.dart`：干员情报/档案/语音记录、情报档案库（PRTS）、敌人/武器/物品描述、对话/通讯/短信，
     任务名/简介/分类/所属干员/关卡来自 `MissionRuntimeAsset`（没有定义的任务不在游戏里，放 `unused`“未实装任务”，名字取 `TextTable`，都没有叫“无名任务（id）”；
     无名/同名的子任务并进基础任务，同书架重名加“·一阶段”），书架是游戏任务面板的分类（主线/探索/支线/活动/委派任务）；
     章节（主线的章·进程、干员的篇章）来自资源包的 `ChapterInfo`（`--chapters`），章节外的任务按地区分组。
@@ -27,9 +27,11 @@
     界面里的名词一律到 `TextTable` 的界面文字里查（每一层都查），查不到就不起名。
   - **一个任务一篇剧情**（参考 warfarin/fz 的编排）：段前一行 `section` 标种类，按种类分块、块内按编号；一段对话内部按对话树（`dlg_…` TextAsset）
     与过场时间线片段（`DialogTrunk/OptionPlayableAsset`）排，89% 台词行由它们定位，其余按行号。阅读器只在种类变化处写种类名。
-  - 终末地资产带剧情向量（与明日方舟同一模型；重建后 `unpack_endfield.ps1 -Embed` 补，缓存命中不收费；切块在 `section` 处断开）。
-  - 待开发者决定：真实 API 跑一两道双游戏问题验证选库（花钱，未跑）。
-  - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据）。
+  - 终末地资产带剧情向量（与明日方舟同一模型；切块在 `section` 处断开）。重建后先 `build_story_embeddings.dart --migrate-from=<旧库>` 按行对齐搬旧向量，
+    剩下的块多半在 `build/embedding_cache/` 里（`--dry-run` 看 “to embed”，非零才花钱，要先问）；`unpack_endfield.ps1 -Embed` 是直接补全。
+  - 待开发者决定：真实 API 跑一两道双游戏问题验证选库（花钱，未跑；live 测试用 `ARKLORES_ENDFIELD_DB` 装上终末地库）。
+  - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据；`python312\python.exe` 带 sqlite3，可直接查库）。
+
 ## 文档索引
 
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
@@ -145,6 +147,7 @@ flutter analyze
 # 真实同链路问答（花钱，先问开发者）
 $env:ARKLORES_RUN_LIVE_ASK='true'; $env:ARKLORES_LIVE_QUERIES='问题一||问题二'
 $env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_v5\arklores_gamedata_zh.db"
+$env:ARKLORES_ENDFIELD_DB="$PWD\build\endfield\arklores_endfield_zh.db"   # 可选：装上终末地库（双游戏问题）
 flutter test test/live/ask_pipeline_live_test.dart
 ```
 

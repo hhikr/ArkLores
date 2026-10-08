@@ -62,6 +62,10 @@ R16 正好相反：
 | `similar_names(name)` | 读音或字形相近的名字（R15 `name_similarity`） | 8 个 |
 | `delegate(task, story_ids?, collection?)` | 把一部分阅读交给子 agent（只主 agent 有） | 子 agent 20 轮 |
 
+两个游戏（0.12）：`sql` 有 `game` 参数（`arknights` / `endfield`，默认 arknights），一条 SQL 只查一个库；`grep`、`find` 的 `game` 可选，不给时查所有已安装的库并合并；
+`read_story`、`outline` 按 id 自己找库（终末地的 id 以 `ef/` 开头）。检索面是 `MultiGameRetrieval`；装了终末地时系统提示多一节“两个游戏”
+（`loreGamesGuide` + `lore_endfield_prompts.dart`：终末地库的结构，判断问题属于哪个游戏，看不出来就两个都查）。
+
 ### 子 agent
 
 `delegate` 启动一个新的 `LoreAgentLoop`（`subtask: true`）：

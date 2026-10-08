@@ -13,7 +13,7 @@
 |---|---|
 | `core/`、`features/`、`shared/` | 对应 `lib/` 的单元测试与 Widget 测试 |
 | `app_test.dart` | 启动后的整个 App：引导页、四个标签页、记住的标签、命名路由 |
-| `guards/` | 全仓库守卫（禁止特判的 grep 等） |
+| `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用悬浮栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 图标/回弹曲线（`square_shapes_test`） |
 | `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md） |
 | `support/` | 共用的夹具与替身 |
 | `fixtures/` | 数据文件（live 评测题） |
@@ -28,6 +28,10 @@
   构建、覆盖层、更新的测试都从它开始；`fake_github.dart` 把它按提交在内存里当作 GitHub 提供
   （提交、git 树、raw 文件、codeload zip）。
 - `amiya_fixture.dart`、`two_activities_fixture.dart`：检索、近似名与范围外命中用的小库。
+- 终末地（0.12）的建库测试自带夹具：`core/gamedata/build/endfield/endfield_importer_test.dart` 的 `writeTables` 按客户端的形状写一小套表
+  （行按 id、文字是 `{id, text}` 经 `I18nTextTable_CN` 解析，名字都是虚构的），覆盖干员、情报档案库、任务归并与命名、章节、帝江号与 Baker、地区。
+  夹具里 i18n 的 id 要互不相同（物品行用 `20 + 字符码` 算 id，新加的用 1000 以上）。`endfield_dialog_tree_test.dart` 测对话树展开，
+  `core/gamedata/multi_game_retrieval_test.dart` 测两个库合成的检索面。真实终末地库的验收在 `live/endfield_acceptance_test.dart`（opt-in）。
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
   `plain_theme.dart`（主题的 Google 字体在测试里会联网下载并失败，Widget 测试用 `plainThemeOverride()`）、

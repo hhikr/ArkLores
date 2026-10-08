@@ -14,6 +14,7 @@
 | 推断出的结构 | 肉鸽事件的选项层级、生息演算事件的场景顺序，表里没有直接给出，按排列推断 | 规则写在 `event_outline.dart` 与文档；出现明显错层时再按新表结构修 |
 | 没有向量 key 时只有字面检索 | 向量需要用户配置服务 | `find` 写明退回原因；写错的名字靠近似名 |
 | 知识库下载在部分网络上卡住 | 手机到 GitHub 资产域名的连接不应答（未能复现根因） | 阶段显示、45 s 超时、6 次新连接、取消、手动放置 `.download.gz` 的退路 |
+| 11 篇剧情没有资料页条目（v0.11.0 资产） | `ref_` 参考文本、两个联机活动的训练镜头、几段生息演算/教程关卡对话有原文行但没有 `story` 条目（`gamedata_v5_acceptance_test` 的“every story has an entry”因此不过）；问答能检索到，资料页看不到 | 下次重建明日方舟库时查清这几类文件为什么没登记条目，修好后随新资产发布 |
 
 ## 2. 问答 Agent
 
@@ -32,7 +33,7 @@
 | Wiki 悬浮栏 | 网页铺满，靠注入 `html` 上下留白与平移站点自己的 fixed/sticky 栏；个别站点的结构可能仍被遮住，真机逐站确认 |
 | 阅读页没有滚动条，不能一键拖到末尾 | 惰性列表从锚点双向建，总高度靠滚动逐步校准；这是“任意长的故事打开不卡”的代价 |
 | 条目类型/分组/绑定名只有中文 | `library_labels.dart` 是游戏内容用语，与库内容同语言；LLM 错误信息中英混杂 |
-| iOS 未验证 | `IOS_SETUP_GUIDE.md` 停在 v0.9；0.10/0.11 只在 Android 上测过 |
+| iOS 未验证 | `IOS_SETUP_GUIDE.md` 停在 v0.9；0.10–0.12 只在 Android 上测过 |
 
 ## 4. 工程
 
@@ -43,6 +44,7 @@
 | 测试覆盖偏低的部分 | 设置页、知识库页的界面分支、`rag/chunker.dart`；WebView、Android 前台服务、启动图标切换只能真机检查（`test/README.md`） |
 | 长文件 | `wiki_browser_page.dart`、`lore_agent_loop.dart`、`arknights_importer.dart`、`chat_bubble.dart`、`story_reader_page.dart` 各是一个整体，未拆 |
 | 签名 keystore 只有维护者一份备份 | 丢失后无法再发布可覆盖安装的版本 |
+| CI 的 push 触发还写着 `dev` | `.github/workflows/ci.yml` 的 `push.branches` 是 `[dev, main]`，`dev` 分支已不存在；功能分支只在开 PR 后才跑 CI。改成功能分支前缀（如 `feature/**`）或只留 `main` |
 
 ## 5. 终末地知识库（0.12）
 

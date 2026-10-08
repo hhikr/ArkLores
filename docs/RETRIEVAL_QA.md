@@ -14,6 +14,7 @@ flutter test        # 约 1 分钟，全部离线
 
 - `test/guards/no_special_case_test.dart`：`lib/` 里没有问题类型特判（`culprit|suspect|嫌疑|凶手|罪魁`）。
 - `test/guards/floating_docks_test.dart`：`lib/` 里没有 `AppBar`（页面用 `FloatingScaffold`）。
+- `test/guards/square_shapes_test.dart`：没有圆角、圆形、`_rounded` 图标和回弹曲线。
 - `test/core/agent/lore_agent_loop_test.dart`：提示词与工具说明里没有具体人物/章节/活动名、没有具体剧情手法名。
 - `test/shared/app_version_test.dart`：`app_version.dart` 与 `pubspec.yaml` 一致。
 
@@ -36,7 +37,7 @@ flutter test        # 约 1 分钟，全部离线
 | --- | --- |
 | 单元测试 | `flutter test test/core/gamedata/build/endfield test/core/gamedata/multi_game_retrieval_test.dart`（合成的小表组） |
 | 重建 | `.\tools\unpack_endfield.ps1 -SkipUnpack`（客户端更新后去掉 `-SkipUnpack`），会更新 `ENDFIELD_DB_SHA256` |
-| 真实库验收 | `$env:ARKLORES_RUN_EF_CHECK='true'; flutter test test/live/endfield_acceptance_test.dart`：安装器校验、`ef/` id、每篇剧情有条目/集合/目录、无标记与男女双写、名字不是 id、内容计数、一个任务一篇且以分段行开头、主线任务带地区、向量覆盖每篇且落在原文行内 |
+| 真实库验收 | `$env:ARKLORES_RUN_EF_CHECK='true'; flutter test test/live/endfield_acceptance_test.dart`：安装器校验、`ef/` id、每篇剧情有条目/集合/目录、无标记与男女双写、名字不是 id、内容计数、一个任务一篇且以分段行开头、主线任务带章节分组、向量覆盖每篇且落在原文行内 |
 | 确定性 | 建两次逐表比对（两次构建应完全一致） |
 | 读起来对不对 | 挑两三个任务对照 warfarin.wiki / fz.wiki 的同一任务页：选项的位置与分支回应、段落种类、有无漏段（`test/live/scratch` 下的查看脚本，不提交） |
 | 向量 | 重建后先 `build_story_embeddings.dart --dry-run`：结构改动不该让 `to embed` 变多（切块在 `section` 处断开，文字不变就命中缓存） |

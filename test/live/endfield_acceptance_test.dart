@@ -83,7 +83,9 @@ void main() {
       for (final r in await db.rawQuery('SELECT DISTINCT kind FROM collections'))
         '${r['kind']}'.substring(endfieldIdPrefix.length),
     };
-    expect(endfieldShelfOrder, containsAll(kinds));
+    // Every kind is a shelf, or hangs below an operator (Baker topics, the
+    // Dijiang).
+    expect([...endfieldShelfOrder, ...ownedCollectionKinds], containsAll(kinds));
   }, skip: !run,);
 
   test('no markup, placeholders or gender pairs are left in the text', () async {
@@ -121,7 +123,7 @@ void main() {
   test('the content is all there (counts of the 2026-10 client)', () async {
     expect(await count("SELECT COUNT(*) FROM entries WHERE type = 'operator'"), greaterThanOrEqualTo(30));
     expect(await count("SELECT COUNT(*) FROM entries WHERE type = 'document'"), greaterThanOrEqualTo(400));
-    // One story per mission, place, enemy and message topic (520 in the
+    // One story per mission, place, enemy and message topic (481 in the
     // 2026-10 client), all ~8,400 conversations in them.
     expect(await count('SELECT COUNT(DISTINCT story_id) FROM story_lines'), greaterThanOrEqualTo(400));
     expect(await count("SELECT COUNT(*) FROM story_lines WHERE kind = 'section'"), greaterThanOrEqualTo(8000));
@@ -130,10 +132,13 @@ void main() {
   }, skip: !run,);
 
   test('a mission reads as one story that opens with a section line', () async {
+    // One story per mission; a place (ef/world) holds its interactions and,
+    // after them, its own Baker topics, one story each.
     expect(
       await count(
-        "SELECT COUNT(*) FROM (SELECT collection_id FROM entries WHERE type = 'story' "
-        'GROUP BY collection_id HAVING COUNT(*) > 1)',
+        'SELECT COUNT(*) FROM (SELECT e.collection_id FROM entries e '
+        "JOIN collections c ON c.id = e.collection_id WHERE e.type = 'story' "
+        "AND c.kind <> 'ef/world' GROUP BY e.collection_id HAVING COUNT(*) > 1)",
       ),
       0,
     );
@@ -151,7 +156,8 @@ void main() {
       ),
       0,
     );
-    // Main missions say where they are played.
+    // Main missions are listed under their chapter and process (the
+    // game's ChapterInfo): every main mission has its group.
     expect(
       await count(
         'SELECT COUNT(*) FROM entries e JOIN collections c ON c.id = e.collection_id '
