@@ -281,6 +281,9 @@ class _GameShelves extends ConsumerWidget {
           code: game == Game.arknights ? 'arknights' : 'endfield',
         ),
         GridView.count(
+          // Inside the padded list: without its own padding the grid would
+          // add the status bar and the floating bar's room again.
+          padding: EdgeInsets.zero,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 2,
