@@ -229,6 +229,67 @@ void main() {
       expect(seen.hasRecord('ef/rec_lighthouse'), isTrue);
     });
 
+    // 0.14 live: without vectors, a question about a place found only a
+    // short speaker name inside the place's name.
+    test('without vectors the question\'s own phrases are keywords',
+        () async {
+      expect(
+        SearchTool.phrasesOf('甲地的审判庭是做什么的？'),
+        ['甲地', '审判庭'],
+      );
+      expect(SearchTool.phrasesOf('有人说她是萨卡兹，这个说法对吗？'), ['萨卡兹']);
+      final result = await SearchTool(both, SeenLines()).run('灯塔是做什么的？');
+      expect(result.mode, SearchMode.keywordOnly);
+      expect(result.text, contains('关键词：灯塔'));
+      expect(result.text, contains('level_act1_01_beg.txt'));
+    });
+
+    // 0.14 live: an operator's race was in their file (entity_documents),
+    // which search did not look at; letters that mention the name came
+    // instead.
+    test('search lists the file of what a term names first, shown around '
+        'the other terms', () async {
+      final ef = both.stores[Game.endfield]! as GameDataKnowledgeStore;
+      final db = await sqflite.openDatabase(ef.dbPath!, singleInstance: false);
+      await insertRecord(
+        db,
+        'ef/rec_letter',
+        contentType: 'mail',
+        category: 'world',
+        subtype: 'mail',
+        content: '来自守灯人的信：今天也在擦灯。守灯人',
+        fields: {'title': '守灯人的信'},
+      );
+      await db.insert('entity_documents', {
+        // The v0.12.0 asset keeps these ids without ef/.
+        'id': 'doc_keeper',
+        'game': 'endfield',
+        'language': 'zh',
+        'entity_id': 'chr_keeper',
+        'entity_name': '守灯人',
+        'entity_type': 'operator',
+        'document_type': 'operator_profile_bundle',
+        'title': '守灯人',
+        'summary': '守灯人看守灯塔。',
+        'content': '## 基础档案\n守灯人看守灯塔。\n【种族】黎博利',
+        'source_paths': '[]',
+        'source_record_ids': '[]',
+      });
+      await db.close();
+      final seen = SeenLines();
+      final result = await SearchTool(both, seen).run('守灯人 种族');
+      final records = result.text.indexOf('## 终末地资料');
+      expect(records, greaterThan(0));
+      final lines = result.text
+          .substring(records)
+          .split('\n')
+          .where((l) => l.contains('record:'))
+          .toList();
+      expect(lines.first, contains('record:ef/doc_keeper | operator·operator_profile_bundle | 守灯人'));
+      expect(lines.first, contains('【种族】黎博利'));
+      expect(seen.hasRecord('ef/doc_keeper'), isTrue);
+    });
+
     test('a wrong column comes back with the real columns', () async {
       final result = await SqlTool(both, SeenLines())
           .execute({'query': 'SELECT name FROM story_lines'});

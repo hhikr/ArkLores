@@ -47,7 +47,8 @@ class RecordHit {
   /// The text around the first matched term.
   final String snippet;
 
-  /// Title matches count double, plus one per matched term.
+  /// Per term: 3 when the record is about what it names (`entity_name`), 2
+  /// when its title has it, 1 when its text does.
   final int score;
 }
 

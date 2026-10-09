@@ -107,17 +107,23 @@ class SearchTool extends AgentTool {
   }
 
   /// Searches for [query] (also used for the search before the first turn).
+  /// [earlier] (0.14) is the question [query] follows up: both are searched
+  /// together, so a follow-up that only says "they" finds what the earlier
+  /// question was about.
   Future<SearchResult> run(
     String query, {
     Game? game,
     String collection = '',
+    String earlier = '',
   }) async {
     final games = await _games(game);
-    final names = await store.namesInText(query);
-    final terms = _terms(query, names);
+    final text = earlier.isEmpty ? query : '$earlier\n$query';
+    final names = await store.namesInText(text);
 
     // Meaning: one embedding of the query, used for every game.
-    final (vector, modeNote) = await _embed(query);
+    final (vector, modeNote) = await _embed(text);
+    final terms =
+        _terms(query, names, earlier: earlier, phrases: vector == null);
 
     // A collection narrows the stories (in its own game).
     Set<String>? inCollection;
@@ -152,7 +158,8 @@ class SearchTool extends AgentTool {
     );
     final mode = vector == null ? SearchMode.keywordOnly : SearchMode.semantic;
     final buffer = StringBuffer()
-      ..writeln('检索“$query”${scopeLabel.isEmpty ? '' : '（$scopeLabel 内）'}：'
+      ..writeln('检索“$query”${earlier.isEmpty ? '' : '（接上一问“$earlier”）'}'
+          '${scopeLabel.isEmpty ? '' : '（$scopeLabel 内）'}：'
           '${mode == SearchMode.semantic ? '按意思检索 + 关键词' : '只有关键词检索（$modeNote）'}'
           '${terms.isEmpty ? '' : '；关键词：${terms.join('、')}'}');
     for (final (i, g) in games.indexed) {
@@ -189,7 +196,7 @@ class SearchTool extends AgentTool {
       }
     }
     buffer.writeln('（片段里的行和列出的资料已读到，可直接引用；要上下文用 read_story 从附近的行读，'
-        '资料全文用 sql 按 id 查 normalized_records'
+        '资料全文用 sql 按 id 查 normalized_records（类别是 *_profile_bundle 的在 entity_documents）'
         '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
     return SearchResult(buffer.toString().trimRight(), mode, modeNote: modeNote);
   }
@@ -205,18 +212,66 @@ class SearchTool extends AgentTool {
   }
 
   /// Keyword terms: the words of a query written with spaces or `|`, else
-  /// the names it mentions (Chinese questions have no spaces), else a short
-  /// query as it is.
-  static List<String> _terms(String query, List<String> names) {
+  /// the names it (or the question it follows up) mentions (Chinese
+  /// questions have no spaces). A name found in the middle of a longer word
+  /// of the question is a false hit and left out. With [phrases] (no
+  /// meaning search, 0.14), or when no name is left, the question's own
+  /// phrases count too: what is left between its function and question
+  /// words.
+  static List<String> _terms(
+    String query,
+    List<String> names, {
+    String earlier = '',
+    bool phrases = false,
+  }) {
     // Only spaces and `|` separate words: a comma separates clauses.
     final split = [
       for (final t in query.split(RegExp(r'[\s|]+')))
         if (t.trim().runes.length >= 2 && t.trim().runes.length <= 12) t.trim(),
     ];
     if (split.length > 1) return split.take(6).toList();
-    if (names.isNotEmpty) return names;
-    return query.runes.length <= 10 ? [query] : const [];
+    final segments = {
+      for (final q in [earlier, query]) ...phrasesOf(q),
+    };
+    final kept = [
+      for (final n in names)
+        if (!segments.any(
+          (s) =>
+              s.length > n.length &&
+              s.contains(n) &&
+              !s.startsWith(n) &&
+              !s.endsWith(n),
+        ))
+          n,
+    ];
+    // With meaning search, phrases only when no name is left.
+    final extra = !phrases && kept.isNotEmpty
+        ? const <String>[]
+        : [
+            for (final s in segments)
+              if (!kept.any((n) => s.contains(n) || n.contains(s))) s,
+          ];
+    return [...kept, ...extra].take(6).toList();
   }
+
+  /// The phrases of a question: what is left between its punctuation,
+  /// function words and question words, 2–8 characters long.
+  static List<String> phrasesOf(String question) => [
+        for (final s in question.split(_functionWords))
+          if (s.trim().runes.length >= 2 && s.trim().runes.length <= 8)
+            s.trim(),
+      ];
+
+  /// Grammar, not content: punctuation, particles, conjunctions and
+  /// question words, which every question has whatever it is about.
+  static final RegExp _functionWords = RegExp(
+    r'为什么|为何|什么|怎么样|怎么|怎样|如何|哪些|哪个|哪里|是不是|有没有|'
+    r'有人说|这个|那个|说法|对吗|还是|以及|之间|'
+    // Only characters that are rarely part of a name.
+    r'[的是和与跟及或在了吗呢吧啊呀么嘛哪谁]|'
+    r'[\s\p{P}]',
+    unicode: true,
+  );
 
   Future<(List<double>?, String?)> _embed(String query) async {
     final client = embeddingClient;

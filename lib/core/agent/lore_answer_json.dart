@@ -347,6 +347,8 @@ final RegExp _lineRange = RegExp(
   return (a, m.group(2) == null ? a : int.parse(m.group(2)!));
 }
 
+final RegExp _recordPrefixes = RegExp(r'^(?:record:)+');
+
 /// `story_id:a-b` / `record:id` / `wiki:<page id>:a-b` (0.13: a wiki page's
 /// paragraphs, cited like a story's lines) of a citation tuple, or null.
 /// Also reads the slightly different shapes models write: lines as "L97" or
@@ -354,9 +356,16 @@ final RegExp _lineRange = RegExp(
 String? loreCitationRef(List<Object?> parts) {
   if (parts.isEmpty) return null;
   var first = '${parts.first}'.trim().replaceAll('`', '');
-  if (first == 'record' && parts.length > 1) return 'record:${parts[1]}';
+  if (first == 'record' && parts.length > 1) {
+    return 'record:${'${parts[1]}'.trim().replaceFirst(_recordPrefixes, '')}';
+  }
   if (parts.length == 1) {
-    // Written as one string ("story_id:3-5" / "record:id").
+    // Written as one string ("story_id:3-5" / "record:id"); 0.14: the
+    // prefix written twice ("record:record:id", the id being shown as
+    // `record:id`) counts once.
+    if (first.startsWith(_recordPrefixes)) {
+      return 'record:${first.replaceFirst(_recordPrefixes, '')}';
+    }
     return first.contains(':') ? first : null;
   }
   final span = _lineSpan(parts[1]);

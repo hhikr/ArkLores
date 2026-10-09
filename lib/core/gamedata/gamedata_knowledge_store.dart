@@ -225,45 +225,78 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     if (db == null || cleaned.isEmpty || !await _hasTable(db, 'normalized_records')) {
       return const [];
     }
-    // Story text is searched in story_lines; its copies here are left out.
+    // A record about the thing a term names (its entity_name is the term)
+    // first, then title matches, then text matches.
     final score = <String>[];
     final where = <String>[];
     final args = <Object?>[];
     final whereArgs = <Object?>[];
     for (final term in cleaned) {
       final like = '%${escapeLike(term)}%';
-      score.add("(CASE WHEN title LIKE ? ESCAPE '\\' THEN 2 ELSE 0 END) + "
+      score.add('(CASE WHEN entity_name = ? THEN 3 ELSE 0 END) + '
+          "(CASE WHEN title LIKE ? ESCAPE '\\' THEN 2 ELSE 0 END) + "
           "(CASE WHEN content LIKE ? ESCAPE '\\' THEN 1 ELSE 0 END)");
-      args.addAll([like, like]);
-      where.add("title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'");
-      whereArgs.addAll([like, like]);
+      args.addAll([term, like, like]);
+      where.add("entity_name = ? OR title LIKE ? ESCAPE '\\' "
+          "OR content LIKE ? ESCAPE '\\'");
+      whereArgs.addAll([term, like, like]);
     }
+    final scoreSql = score.join(' + ');
+    final whereSql = where.join(' OR ');
+    // Story text is searched in story_lines; its copies here are left out.
     final rows = await db.rawQuery(
-      'SELECT id, category, subtype, title, content, (${score.join(' + ')}) AS s '
+      'SELECT id, category, subtype, entity_name, title, content, '
+      '($scoreSql) AS s '
       'FROM normalized_records '
       "WHERE category != 'story' AND COALESCE(subtype, '') != 'story' "
-      "AND (${where.join(' OR ')}) "
+      'AND ($whereSql) '
       'ORDER BY s DESC, length(content) DESC LIMIT ?',
       [...args, ...whereArgs, limit],
     );
-    return [
-      for (final row in rows)
+    // 0.14 live: an operator's file (race, record, archives) is one
+    // document in entity_documents, not in normalized_records.
+    final documents = await _hasTable(db, 'entity_documents')
+        ? await db.rawQuery(
+            'SELECT id, entity_type AS category, document_type AS subtype, '
+            'entity_name, title, content, ($scoreSql) AS s '
+            'FROM entity_documents WHERE $whereSql '
+            'ORDER BY s DESC, length(content) DESC LIMIT ?',
+            [...args, ...whereArgs, limit],
+          )
+        : const <Map<String, Object?>>[];
+    final hits = [
+      for (final (i, row) in [...rows, ...documents].indexed)
         RecordHit(
-          id: '${row['id']}',
+          // Every id of an Endfield database starts with ef/ (game.dart);
+          // the v0.12.0 asset's documents do not yet.
+          id: i >= rows.length && game == Game.endfield
+              ? endfieldId('${row['id']}')
+              : '${row['id']}',
           category: '${row['category'] ?? ''}',
           subtype: '${row['subtype'] ?? ''}',
           title: '${row['title'] ?? ''}',
-          snippet: _around('${row['content'] ?? ''}', cleaned),
+          snippet: _around(
+            '${row['content'] ?? ''}',
+            cleaned,
+            subject: '${row['entity_name'] ?? ''}',
+          ),
           score: (row['s'] as num?)?.toInt() ?? 0,
         ),
-    ];
+    ]..sort((a, b) => b.score.compareTo(a.score));
+    return hits.take(limit).toList();
   }
 
-  /// About 120 characters of [text] around the first of [terms] found.
-  static String _around(String text, List<String> terms) {
+  /// About 120 characters of [text] around the first of [terms] found; a
+  /// record about [subject] is shown around the other terms when it has
+  /// them (its subject's name is everywhere in it).
+  static String _around(String text, List<String> terms, {String subject = ''}) {
     final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     var at = -1;
-    for (final t in terms) {
+    final others = [
+      for (final t in terms)
+        if (t != subject && flat.contains(t)) t,
+    ];
+    for (final t in others.isEmpty ? terms : others) {
       final i = flat.indexOf(t);
       if (i >= 0 && (at < 0 || i < at)) at = i;
     }

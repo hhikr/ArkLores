@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:arklores/core/agent/lore_agent_loop.dart';
 import 'package:arklores/core/agent/lore_agent_prompts.dart';
+import 'package:arklores/core/agent/lore_answer_json.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
@@ -423,6 +424,33 @@ void main() {
       expect(parseStoryAnswerEnvelope(answer)!.status,
           StoryAnswerStatus.answered,);
       expect(answer, isNot(contains('未能在本次读到的原文中核实')));
+    });
+
+    // 0.14 live: search shows `record:<id>` and a model took the whole of it
+    // for the id.
+    test('a record cited with its prefix twice counts once', () async {
+      final client = _ScriptedClient([
+        _call('sql', {
+          'query': 'SELECT id, title, content FROM normalized_records '
+              "WHERE content LIKE '%星灯%'",
+        }),
+        _answer('星灯是一盏灯 `record:record:rec_fx_1`。'),
+      ]);
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+      ).run(query: '星灯是什么？').toList();
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('`record:rec_fx_1`'));
+      expect(answer, isNot(contains('record:record')));
+      expect(answer, isNot(contains('核实')));
+      expect(client.requests, hasLength(2));
+      expect(
+        loreCitationRef(['record:record:rec_fx_1']),
+        'record:rec_fx_1',
+      );
+      expect(loreCitationRef(['record', 'record:rec_fx_1']), 'record:rec_fx_1');
     });
 
     test('a delegated sub-agent reads; its checked citations count as seen',
@@ -1048,6 +1076,14 @@ void main() {
       final earlier = request.where((m) => m.role == MessageRole.tool).toList();
       expect(earlier.map((m) => m.content.startsWith('[已折叠]')), [true]);
       expect(request.last.content, startsWith('那后来呢？'));
+      // 0.14 live: the search before the first turn includes the question
+      // followed up ("那后来呢" alone finds nothing).
+      final search = events.firstWhere(
+        (e) =>
+            e.type == ReActEventType.toolObservation && e.toolName == 'search',
+      );
+      expect(search.content, contains('（接上一问“钟楼？”）'));
+      expect(search.content, contains('level_main_fx-01.txt'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
     });

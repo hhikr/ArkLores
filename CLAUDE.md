@@ -46,7 +46,9 @@
   - 已做：统一检索 `search`（取代 `find`）+ 问题预检索；工具调用守门（`tool_call_gate.dart`）；数据库连接独立（修 `database_closed`）；
     流式解析按 id 分开同 index 的调用；空回复只对一轮降级；等待与失败可见、取消立即生效；出处少量问题由代码删去；整理只发条目；工作过程显示故事名、失败原因、子助手步骤。
   - 真实 API 验收（2026-10-09，开发者同意）：两套 API（`tools/api_info` 较好的 GLM、`tools/garbage_api_info.txt` 较弱的 gemini 中转，键名 `API=`）× 两题全部 answered，
-    结果与据此做的修正见 `docs/R17_TOOL_AGENT.md` §5。`search` 现在也查资料（档案、干员资料、语音等）。
+    结果与据此做的修正见 `docs/R17_TOOL_AGENT.md` §5。`search` 现在也查资料（档案、干员资料、语音等，含 `entity_documents` 的干员档案合集）。
+    第二轮（同日）在电脑上验收追问、核查、无向量，修了追问预检索、`record:record:` 出处、无向量关键词（短语）。
+  - 真机测试工具：`tools/phone_ask.dart` + `install_local.ps1 -Bridge`（`lib/features/ai/phone_bridge.dart`，只在本地构建里），见 `docs/ANDROID_SETUP_GUIDE.md`。
   - 待开发者决定：真机检查；是否发版。
 
 ## 文档索引

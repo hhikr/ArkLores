@@ -47,7 +47,7 @@ import 'tools/wiki_tools.dart';
 /// The messages and seen lines of a conversation, carried into follow-up
 /// questions so they continue with the text already read.
 class LoreConversation {
-  LoreConversation({List<Message>? messages, SeenLines? seen})
+  LoreConversation({List<Message>? messages, SeenLines? seen, this.question = ''})
       : messages = messages ?? [],
         seen = seen ?? SeenLines();
 
@@ -55,6 +55,10 @@ class LoreConversation {
   /// results and answers.
   final List<Message> messages;
   final SeenLines seen;
+
+  /// The last question as the user wrote it (0.14: a follow-up's search
+  /// before the first turn includes it).
+  final String question;
 }
 
 /// `story_id:12` or `story_id:12-40` (story ids end in .txt).
@@ -256,9 +260,20 @@ class LoreAgentLoop {
         toolName: 'search',
         toolArgs: args,
       );
+      // A follow-up is searched together with the question before it
+      // ("它们" alone finds nothing); a restored conversation has its texts.
+      final earlier = prior != null
+          ? prior.question
+          : history.lastWhere(
+              (m) => m.role == MessageRole.user,
+              orElse: () => Message.user(''),
+            ).content;
       SearchResult? found;
       try {
-        found = await _span('tool:search', () => search.run(query));
+        found = await _span(
+          'tool:search',
+          () => search.run(query, earlier: earlier.trim()),
+        );
       } catch (e) {
         found = null;
         yield ReActEvent(
@@ -695,7 +710,10 @@ class LoreAgentLoop {
             RegExp(r'(\.txt\s*[:：]\s*)L(\d+)(\s*[-–~]\s*)?L?(\d+)?'),
             (m) => '${m.group(1)}${m.group(2)}'
                 '${m.group(4) == null ? '' : '${m.group(3) ?? '-'}${m.group(4)}'}',
-          );
+          )
+          // 0.14: a record id is shown as `record:<id>`; its prefix written
+          // twice counts once.
+          .replaceAll(_doubledRecordPrefix, 'record:');
       if (body.isEmpty) {
         if (!nudged && !lastTurn) {
           nudged = true;
@@ -883,7 +901,7 @@ class LoreAgentLoop {
               ? StoryAnswerStatus.partial
               : StoryAnswerStatus.answered;
       onConversation?.call(
-        LoreConversation(messages: visible(), seen: seen),
+        LoreConversation(messages: visible(), seen: seen, question: query),
       );
       yield ReActEvent(
         type: ReActEventType.finalAnswerReplace,
@@ -1411,6 +1429,10 @@ final RegExp _processLeadIn = RegExp(
 
 /// `record:<id>` — a non-story record (R17).
 final RegExp _recordCitation = RegExp(r'record:([\w\-]+(?:/[\w\-]+)*)');
+
+/// `record:record:<id>`, which models write when the id is shown as
+/// `record:<id>` (0.14).
+final RegExp _doubledRecordPrefix = RegExp(r'record:(?:record:)+');
 
 /// A backticked story file with no line number after it.
 final RegExp _bareStoryCitation = RegExp(r'`([\w\-/\.\[\]]+\.txt)`');
