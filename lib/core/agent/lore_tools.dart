@@ -174,7 +174,10 @@ class SqlTool extends AgentTool {
   Future<String> execute(Map<String, dynamic> arguments) async {
     final query = '${arguments['query'] ?? ''}'.trim();
     if (query.isEmpty) return '错误：query 为空';
-    final game = Game.parse(arguments['game']);
+    // 0.14 live: a query naming an Endfield id (`'ef/…'`) without `game`
+    // went to the Arknights database and found nothing; ids name their game.
+    final game = Game.parse(arguments['game']) ??
+        (RegExp("'$endfieldIdPrefix").hasMatch(query) ? Game.endfield : null);
     final result = await store.readOnlySql(query, maxRows: maxRows, game: game);
     if (result.error != null) {
       return '${result.error!}${await _columnsHint(query, result.error!, game)}';
@@ -186,7 +189,13 @@ class SqlTool extends AgentTool {
           m.group(1)!,
       ];
       final hint = await _nearNamesHint(narrowTo(store, game), terms);
-      return '0 行。${hint.isEmpty ? '' : '\n$hint'}';
+      final retrieval = store;
+      final other = game == null &&
+              retrieval is MultiGameRetrieval &&
+              (await retrieval.installedGames()).contains(Game.endfield)
+          ? '\n（这条 SQL 查的是明日方舟的库；终末地的内容要加 game=endfield。）'
+          : '';
+      return '0 行。${hint.isEmpty ? '' : '\n$hint'}$other';
     }
     final columns = result.columns;
     final storyCol = columns.indexOf('story_id');

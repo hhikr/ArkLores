@@ -18,6 +18,7 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 ### Searching everything at once
 
 - **`search`** replaces `find`: one call looks at the story text of both games — by meaning when an embedding service is set up, and by the names the question mentions — and at the wikis, with the results grouped by source (Arknights, Endfield, Wiki). The lines it prints count as read and can be cited.
+- `search` also looks at the texts outside the stories — archives, operator files, voice lines, enemy and item texts — and lists the best few with a citable reference.
 - **The question is searched before the model's first turn**, so it starts from candidate passages instead of spending turns finding where a name occurs.
 - **Both games are searched for every question**; the prompt no longer asks the model to decide the game first. Corpus counts list each game under its own heading with its totals.
 - **The wikis are a search source like the knowledge base**, no longer a last resort; answers still say which points come from a wiki.

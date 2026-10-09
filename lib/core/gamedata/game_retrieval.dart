@@ -29,6 +29,28 @@ export 'story_catalog.dart'
 export 'story_coverage_models.dart';
 export 'story_vectors.dart' show StoryChunkHit;
 
+/// 0.14: one record found by [GameDataRetrieval.searchRecordsLike].
+class RecordHit {
+  const RecordHit({
+    required this.id,
+    required this.category,
+    required this.subtype,
+    required this.title,
+    required this.snippet,
+    required this.score,
+  });
+  final String id;
+  final String category;
+  final String subtype;
+  final String title;
+
+  /// The text around the first matched term.
+  final String snippet;
+
+  /// Title matches count double, plus one per matched term.
+  final int score;
+}
+
 /// The retrieval surface the investigation tools depend on.
 abstract interface class GameDataRetrieval {
   /// Whether the local knowledge DB is present and readable.
@@ -94,6 +116,12 @@ abstract interface class GameDataRetrieval {
   /// 0.14: names of the DB (people, speakers, collections) written in
   /// [text], longest first — the names a question mentions.
   Future<List<String>> namesInText(String text, {int limit});
+
+  /// 0.14: records outside the story text (`normalized_records`: archives,
+  /// profiles, voice lines, item and enemy texts) whose title or text
+  /// contains any of [terms] — title matches first, then by how many terms
+  /// they hold; each with the text around its first match.
+  Future<List<RecordHit>> searchRecordsLike(List<String> terms, {int limit});
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at
   /// most [maxRows] rows; rejections, errors and timeouts come back in

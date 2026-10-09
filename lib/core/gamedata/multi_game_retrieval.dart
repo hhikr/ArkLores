@@ -172,6 +172,18 @@ class MultiGameRetrieval implements GameDataRetrieval {
   }
 
   @override
+  Future<List<RecordHit>> searchRecordsLike(
+    List<String> terms, {
+    int limit = 3,
+  }) async =>
+      ([
+        for (final store in await _installed())
+          ...await store.searchRecordsLike(terms, limit: limit),
+      ]..sort((a, b) => b.score.compareTo(a.score)))
+          .take(limit)
+          .toList();
+
+  @override
   Future<List<String>> namesInText(String text, {int limit = 6}) async {
     final names = <String>{
       for (final store in await _installed())

@@ -213,6 +213,67 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
+  Future<List<RecordHit>> searchRecordsLike(
+    List<String> terms, {
+    int limit = 3,
+  }) async {
+    final db = await _open();
+    final cleaned = [
+      for (final t in terms.take(6))
+        if (t.trim().isNotEmpty) t.trim(),
+    ];
+    if (db == null || cleaned.isEmpty || !await _hasTable(db, 'normalized_records')) {
+      return const [];
+    }
+    // Story text is searched in story_lines; its copies here are left out.
+    final score = <String>[];
+    final where = <String>[];
+    final args = <Object?>[];
+    final whereArgs = <Object?>[];
+    for (final term in cleaned) {
+      final like = '%${escapeLike(term)}%';
+      score.add("(CASE WHEN title LIKE ? ESCAPE '\\' THEN 2 ELSE 0 END) + "
+          "(CASE WHEN content LIKE ? ESCAPE '\\' THEN 1 ELSE 0 END)");
+      args.addAll([like, like]);
+      where.add("title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\'");
+      whereArgs.addAll([like, like]);
+    }
+    final rows = await db.rawQuery(
+      'SELECT id, category, subtype, title, content, (${score.join(' + ')}) AS s '
+      'FROM normalized_records '
+      "WHERE category != 'story' AND COALESCE(subtype, '') != 'story' "
+      "AND (${where.join(' OR ')}) "
+      'ORDER BY s DESC, length(content) DESC LIMIT ?',
+      [...args, ...whereArgs, limit],
+    );
+    return [
+      for (final row in rows)
+        RecordHit(
+          id: '${row['id']}',
+          category: '${row['category'] ?? ''}',
+          subtype: '${row['subtype'] ?? ''}',
+          title: '${row['title'] ?? ''}',
+          snippet: _around('${row['content'] ?? ''}', cleaned),
+          score: (row['s'] as num?)?.toInt() ?? 0,
+        ),
+    ];
+  }
+
+  /// About 120 characters of [text] around the first of [terms] found.
+  static String _around(String text, List<String> terms) {
+    final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    var at = -1;
+    for (final t in terms) {
+      final i = flat.indexOf(t);
+      if (i >= 0 && (at < 0 || i < at)) at = i;
+    }
+    final start = at < 40 ? 0 : at - 40;
+    final end = start + 120 > flat.length ? flat.length : start + 120;
+    return '${start > 0 ? '…' : ''}${flat.substring(start, end)}'
+        '${end < flat.length ? '…' : ''}';
+  }
+
+  @override
   Future<List<String>> namesInText(String text, {int limit = 6}) async {
     final db = await _open();
     if (db == null || text.trim().isEmpty) return const [];

@@ -57,6 +57,7 @@ class SearchTool extends AgentTool {
   /// Stories listed per game, lines shown per story, characters in all.
   static const int storiesPerGame = 5;
   static const int linesPerPassage = 8;
+  static const int recordsPerGame = 3;
   static const int maxChars = 7000;
   static const int _rrfK = 60;
 
@@ -66,7 +67,8 @@ class SearchTool extends AgentTool {
   @override
   String get description =>
       '一次检索所有资料：已安装的每个游戏的剧情原文（有向量服务时按意思检索，再用问题里的名字做关键词检索）'
-      '${wiki == null ? '' : '，以及游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段。'
+      '，以及剧情以外的资料原文（档案、干员资料、语音等）'
+      '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
       '适合任何“发生了什么、是什么、为什么、谁”的问题，用一句话或几个词描述要找的内容。'
       '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
       '要精确统计某个词出现在哪些故事里时用 grep。';
@@ -174,6 +176,11 @@ class SearchTool extends AgentTool {
         }
         buffer.write(block);
       }
+      final records = _renderRecords(r);
+      if (records.isNotEmpty) {
+        buffer.writeln('## ${g.label}资料（档案、干员资料、语音等；格式：出处 | 类别 | 标题 | 片段）');
+        records.forEach(buffer.write);
+      }
     }
     if (wikiPart.isNotEmpty) {
       buffer.writeln('## Wiki');
@@ -181,7 +188,8 @@ class SearchTool extends AgentTool {
         buffer.writeln(line);
       }
     }
-    buffer.writeln('（片段里的行已读到，可直接引用；要上下文用 read_story 从附近的行读'
+    buffer.writeln('（片段里的行和列出的资料已读到，可直接引用；要上下文用 read_story 从附近的行读，'
+        '资料全文用 sql 按 id 查 normalized_records'
         '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
     return SearchResult(buffer.toString().trimRight(), mode, modeNote: modeNote);
   }
@@ -281,14 +289,30 @@ class SearchTool extends AgentTool {
     }
     final ranked = score.keys.toList()
       ..sort((a, b) => score[b]!.compareTo(score[a]!));
+    // Archives, profiles, voice lines and the like (not story text), by
+    // the same keywords; not within a collection.
+    final records = terms.isEmpty || inCollection != null
+        ? const <RecordHit>[]
+        : await store.searchRecordsLike(terms, limit: recordsPerGame);
     return _Ranked(
       ranked.take(storiesPerGame).toList(),
       firstChunk,
       keywordOf,
+      records,
       best: chunks.isEmpty ? double.negativeInfinity : chunks.first.score,
-      anyKeyword: keywords.isNotEmpty,
+      anyKeyword: keywords.isNotEmpty || records.isNotEmpty,
     );
   }
+
+  /// [ranked]'s records as printed lines; the records printed become
+  /// citable (`record:<id>`).
+  List<String> _renderRecords(_Ranked ranked) => [
+        for (final r in ranked.records) () {
+          seen.addRecord(r.id);
+          return '   record:${r.id} | ${r.category}${r.subtype.isEmpty || r.subtype == r.category ? '' : '·${r.subtype}'}'
+              ' | ${r.title} | ${r.snippet}\n';
+        }(),
+      ];
 
   /// [ranked] as printed blocks; the lines printed become citable.
   Future<List<String>> _render(GameDataRetrieval store, _Ranked ranked) async {
@@ -387,13 +411,15 @@ class _Ranked {
   _Ranked(
     this.top,
     this.firstChunk,
-    this.keywordOf, {
+    this.keywordOf,
+    this.records, {
     required this.best,
     required this.anyKeyword,
   });
   final List<String> top;
   final Map<String, StoryChunkHit> firstChunk;
   final Map<String, StoryLineHit> keywordOf;
+  final List<RecordHit> records;
 
   /// Score of the game's closest passage (−∞ without vectors).
   final double best;

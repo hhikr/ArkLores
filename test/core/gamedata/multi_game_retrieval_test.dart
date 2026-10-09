@@ -138,6 +138,17 @@ void main() {
       expect(ak, contains('level_act1'));
       // Lines a query showed can be cited, in either game.
       expect(seen.covers('ef/dlg_test_1.txt', 0, 1), isTrue);
+      // 0.14: an Endfield id in the query picks Endfield without `game`;
+      // zero rows in the default game says how to ask the other.
+      final byId = await sql.execute({
+        'query': 'SELECT story_id, line_index FROM story_lines '
+            "WHERE story_id = 'ef/dlg_test_1.txt'",
+      });
+      expect(byId, contains('（共 2 行）'));
+      final none = await sql.execute({
+        'query': "SELECT story_id FROM story_lines WHERE content LIKE '%丙%'",
+      });
+      expect(none, contains('终末地的内容要加 game=endfield'));
     });
 
     test('with only Endfield installed, sql without a game reads Endfield', () async {
@@ -189,6 +200,33 @@ void main() {
       // One game when asked.
       final only = await search.execute({'query': '灯塔', 'game': 'endfield'});
       expect(only, isNot(contains('## 明日方舟')));
+    });
+
+    // 0.14 live: an archive held the answer, but search looked at story
+    // text only and the model went to the wiki for it.
+    test('search lists matching records (not story text) and they can be '
+        'cited', () async {
+      final ef = both.stores[Game.endfield]! as GameDataKnowledgeStore;
+      final db = await sqflite.openDatabase(ef.dbPath!, singleInstance: false);
+      await insertRecord(
+        db,
+        'ef/rec_lighthouse',
+        contentType: 'archive_document',
+        category: 'archive',
+        subtype: 'document',
+        content: '关于灯塔的记录：灯塔在第一次战争后熄灭。',
+        fields: {'title': '灯塔档案'},
+      );
+      await db.close();
+      final seen = SeenLines();
+      final result = await SearchTool(both, seen).run('灯塔');
+      final records = result.text.indexOf('## 终末地资料');
+      expect(records, greaterThan(0));
+      expect(
+        result.text.substring(records),
+        contains('record:ef/rec_lighthouse | archive·document | 灯塔档案 | 关于灯塔的记录'),
+      );
+      expect(seen.hasRecord('ef/rec_lighthouse'), isTrue);
     });
 
     test('a wrong column comes back with the real columns', () async {
