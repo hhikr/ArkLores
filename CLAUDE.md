@@ -3,8 +3,9 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.12.0（正式版，2026-10-09，Android build 31）。明日方舟知识库资产仍在 v0.11.0 Release，终末地知识库资产在 v0.12.0 Release，`tools/release_gamedata.env` 指向两者。
-- 0.12 的预发布（v0.12.0 build 29、v0.12.1 build 30）已撤下（Release、tag、release 分支已删），由正式版 v0.12.0（build 31）取代。下一轮开发从 `main` 新开分支。
+- **已发布**：v0.13.0（正式版，2026-10-09，Android build 32）。两个知识库没变，原样附在 v0.13.0 Release 上（v0.11.0 / v0.12.0 上的仍在），
+  `tools/release_gamedata.env` 指向 v0.13.0。v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
+  下一轮开发从 `main` 新开分支。
 - 未经开发者明确同意不发版、不跑花钱的真实 API 测试；Android build 号每次发版递增。
 - **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、普查数据放本地 `notes/`（gitignored），不提交、不写进 PR。
 - 用中文和开发者交流。
@@ -31,14 +32,13 @@
     剩下的块多半在 `build/embedding_cache/` 里（`--dry-run` 看 “to embed”，非零才花钱，要先问）；`unpack_endfield.ps1 -Embed` 是直接补全。
   - 待开发者决定：真实 API 跑一两道双游戏问题验证选库（花钱，未跑；live 测试用 `ARKLORES_ENDFIELD_DB` 装上终末地库）。
   - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据；`python312\python.exe` 带 sqlite3，可直接查库）。
-- **0.13（开发中，分支 `feature/v0.13-wiki`）**：问答 Agent 的 Wiki 检索与证据，设计见 `docs/WIKI_EVIDENCE.md`。
+- **0.13（已发布，v0.13.0）**：问答 Agent 的 Wiki 检索与证据，设计见 `docs/WIKI_EVIDENCE.md`，已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §6。
   - 工具 `wiki_search` / `wiki_read`（明日方舟 PRTS 的 MediaWiki API；终末地 Warfarin 的搜索 API + 服务端渲染页；fz.wiki 无公开接口且开发机连不上，没选）；
     页面按段编号，出处 `wiki:<站点>:<页面>@<版本>:<段>`，与剧情出处同一套核对（只能引用展示过的段、照搬退回）；读过的版本存快照（`wiki_snapshots/`）。
   - Wiki 是二手资料：剧情事实以库里原文为准，只有 Wiki 支持的说法要写明（`loreWikiGuide`）。输入框“回答选项”里的“Wiki 资料”开关，默认开。
   - 界面：证据卡与出处树里的 Wiki 行、引用段落弹窗（快照、在 Wiki 标签打开）、工作过程里的 Wiki 步骤。
-  - 真实模型已各游戏验收（2026-10-09，`docs/WIKI_EVIDENCE.md` §7）：先查库、Wiki 只补库里没有的并写明。真机未看（没连手机，本机也没装模拟器和系统镜像），
-    界面用真实页面快照渲染截图检查过；连上手机后 `tools/install_local.ps1 -Build -Kb` 装一遍看 Wiki 出处卡、弹窗和“在 Wiki 中打开”。
-    版本号仍是 0.12.0+31，发版时再改。
+  - 真实模型已各游戏验收（2026-10-09，`docs/WIKI_EVIDENCE.md` §7）：先查库、Wiki 只补库里没有的并写明。真机只看到安装与“回答选项”里的 Wiki 开关；
+    带 Wiki 出处的答案（出处卡、弹窗、“在 Wiki 中打开”）只用真实页面快照渲染截图检查过，下次真机检查时补看。
 
 ## 文档索引
 

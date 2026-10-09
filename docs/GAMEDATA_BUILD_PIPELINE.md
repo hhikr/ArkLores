@@ -1,7 +1,7 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。明日方舟库是 v0.11.0 Release 资产（§1–8），
-> 终末地库是 v0.12.0 Release 资产（§9，只能在本机从游戏客户端构建）。
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。明日方舟库（§1–8）与
+> 终末地库（§9，只能在本机从游戏客户端构建）都是 v0.13.0 Release 的资产（文件与 v0.11.0、v0.12.0 发布的相同）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `AI_ARCHITECTURE.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 
@@ -104,9 +104,10 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 4. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
 5. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。
-6. 终末地库（只在它变了时）：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
+6. 终末地库：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
    形如 `{game, database: {fileName}, manifest: {...}}`）上传到同一个 Release，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256` 指向它。
-   两个库可以在不同的 Release 上（v0.12.0 时明日方舟库仍是 v0.11.0 的资产）。上传后用公开地址 HEAD 一次确认 200。
+   从 v0.13.0 起每个 Release 都带齐两个库（没变的库原样再传一份，SHA 不变，已装好的不会重新下载），env 的两个 URL 都指向这次的 Release；
+   v0.12.0 时两个库曾分在两个 Release 上。上传后用公开地址 HEAD 一次确认 200。
 
 未发布时在手机上试：`tools/install_local.ps1 -Build -Kb`（用 release key 签名、烘入 env 的 SHA，并把本地 gz 放进应用目录，
 在知识库页点“下载”即离线校验安装）。

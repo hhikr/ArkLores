@@ -1,6 +1,6 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前：v0.12.0（0.13 开发中：Wiki 检索与证据）。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
+> 当前：v0.13.0。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
 > 0.12 起有两个知识库（明日方舟、终末地），Agent 看到的是合并的检索面（§3）。
 > 结构、工具、提示词约定与验收数据见 **`R17_TOOL_AGENT.md`**；服务商差异见 `LLM_PROVIDERS.md`；知识库表见 `GAMEDATA_BUILD_PIPELINE.md`。
 

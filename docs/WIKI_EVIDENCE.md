@@ -65,6 +65,7 @@ fz.wiki 没有找到公开接口，且 2026-10-09 在开发机上连不上（命
 - 联网（免费）：`$env:ARKLORES_RUN_WIKI_CHECK='true'; flutter test test/live/wiki_live_test.dart`，两个站点各搜一次、读一页。
 - 真实模型：`ask_pipeline_live_test.dart` 默认就带 Wiki 工具。
 - 界面截图：用真实页面快照渲染证据卡与引用弹窗（本地 scratch 测试，加载文楷字形），布局正常。
+- 真机（2026-10-09，发版前同一构建）：只看到“回答选项”里的 Wiki 开关；带 Wiki 出处的答案还没在手机上看过（`KNOWN_LIMITATIONS_AND_DEBT.md` §6）。
 
 ### 2026-10-09 真实模型验收（`tools/api_info` 的模型，复核与提要开着）
 
