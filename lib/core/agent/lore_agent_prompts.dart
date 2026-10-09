@@ -239,7 +239,8 @@ $numberedEntries
 /// 0.14: system prompt of the reorganising call, which sees only the
 /// answer's entries (not the whole conversation that wrote them).
 const String loreStageSystemPrompt =
-    '你替剧情问答整理答案的版面：把详细的条目归并成几段给玩家先读。只依据给你的条目，不增加内容。';
+    '你替剧情问答整理答案的版面：把详细的条目归并成几段给玩家先读。只依据给你的条目，不增加内容。'
+    '用和条目相同的语言写（条目是中文就写中文）。整条回复只有一个 JSON 对象：不写思考过程、说明或第二个版本。';
 
 /// Text-protocol fallback for providers without function calling: how to
 /// call a tool in plain text.

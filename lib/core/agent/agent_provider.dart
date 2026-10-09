@@ -208,6 +208,8 @@ class AskChatNotifier extends ChatNotifierBase {
     final config = _configReader();
     final iterations = <int, ReActIterationRecord>{};
     var currentIteration = 0;
+    // Recorded tool calls still waiting for their output: (record, tool).
+    final pendingCalls = <(int, String?)>[];
     var turnStatus = ChatTurnStatus.completed;
     String? turnError;
     var canceled = false;
@@ -310,6 +312,9 @@ class AskChatNotifier extends ChatNotifierBase {
             );
             updateMessage(assistantId, steps: List.of(steps));
             if (recording && event.subtask == null) {
+              // 0.14: the calls of a turn are announced together and their
+              // outputs follow; each output goes to its own call's record.
+              pendingCalls.add((currentIteration, event.toolName));
               final record = iterations.putIfAbsent(
                 currentIteration,
                 () => ReActIterationRecord(
@@ -339,11 +344,14 @@ class AskChatNotifier extends ChatNotifierBase {
             // A sub-agent's step is shown, not recorded as the main
             // agent's iteration.
             if (recording && event.subtask == null) {
+              final k = pendingCalls.indexWhere((p) => p.$2 == event.toolName);
+              final iteration =
+                  k < 0 ? currentIteration : pendingCalls.removeAt(k).$1;
               iterations
                   .putIfAbsent(
-                    currentIteration,
+                    iteration,
                     () => ReActIterationRecord(
-                      iteration: currentIteration,
+                      iteration: iteration,
                       rawResponse: '',
                     ),
                   )

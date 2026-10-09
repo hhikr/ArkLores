@@ -110,7 +110,7 @@ final RegExp _stagesStart = RegExp(r'\{\s*"stages"');
 /// numbers (1..[entryCount]); a paragraph covering no valid entry is
 /// dropped. Null when nothing usable is left.
 List<LoreAnswerStage>? parseLoreStages(String content, int entryCount) {
-  final stages = _decodeObject(content, _stagesStart)?['stages'];
+  final stages = _decodeObject(content, _stagesStart, last: true)?['stages'];
   if (stages is! List) return null;
   final out = <LoreAnswerStage>[];
   for (final s in stages) {
@@ -243,15 +243,62 @@ List<int> _numbers(Object? v) {
 
 /// The JSON object starting at [start] in [content] (text after its last
 /// closing brace is ignored), or null.
-Map<String, dynamic>? _decodeObject(String content, RegExp start) {
-  final m = start.firstMatch(content);
-  if (m == null) return null;
-  final end = content.lastIndexOf('}');
-  if (end < m.start) return null;
-  try {
-    final decoded = jsonDecode(content.substring(m.start, end + 1));
-    return decoded is Map<String, dynamic> ? decoded : null;
-  } on FormatException {
-    return null;
+Map<String, dynamic>? _decodeObject(
+  String content,
+  RegExp start, {
+  bool last = false,
+}) {
+  // 0.14: each candidate is cut at its own closing brace (strings
+  // respected), so text or a second object after it does not spoil it; a
+  // model that wrote several versions gives the [last] usable one when
+  // asked for.
+  Map<String, dynamic>? found;
+  for (final m in start.allMatches(content)) {
+    final end = _closingBrace(content, m.start);
+    final text = content.substring(m.start, end < 0 ? content.length : end + 1);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(text);
+    } on FormatException {
+      // Older shape: up to the last brace of the whole text.
+      final lastBrace = content.lastIndexOf('}');
+      if (end >= 0 || lastBrace < m.start) continue;
+      try {
+        decoded = jsonDecode(content.substring(m.start, lastBrace + 1));
+      } on FormatException {
+        continue;
+      }
+    }
+    if (decoded is! Map<String, dynamic>) continue;
+    found = decoded;
+    if (!last) return found;
   }
+  return found;
+}
+
+/// Index of the brace that closes the object opening at [open], or -1.
+int _closingBrace(String text, int open) {
+  var depth = 0;
+  var inString = false;
+  var escaped = false;
+  for (var i = open; i < text.length; i++) {
+    final c = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (c == r'\') {
+        escaped = true;
+      } else if (c == '"') {
+        inString = false;
+      }
+    } else if (c == '"') {
+      inString = true;
+    } else if (c == '{') {
+      depth++;
+    } else if (c == '}') {
+      depth--;
+      if (depth == 0) return i;
+    }
+  }
+  return -1;
 }

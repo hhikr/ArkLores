@@ -230,7 +230,8 @@ LLMConfig readApiInfo(File file) {
   }
   return LLMConfig(
     chatBaseUrl: values['URL'] ?? '',
-    chatApiKey: values['API_KEY'] ?? '',
+    // `API=` in some of the developer's files.
+    chatApiKey: values['API_KEY'] ?? values['API'] ?? '',
     chatModel: values['MODEL'] ?? '',
   );
 }

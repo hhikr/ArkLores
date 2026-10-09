@@ -77,6 +77,20 @@ void main() {
     expect(parseLoreStages('不是 JSON', 4), isNull);
   });
 
+  // 0.14 live (a weaker model): thinking first, a first version, prose, then
+  // the version meant; the whole text up to its last brace is not JSON.
+  test('a reply with thinking, prose and two versions gives the last one', () {
+    final stages = parseLoreStages(
+      'Thinking about it.\n```json\n{"stages": [{"text": "first", "from": [1]}]}\n```\n'
+      'Some prose (1, 2) with {braces}.\n'
+      '{"stages": [{"heading": "开始", "text": "甲来了。", "from": [1, 2]}]}\n'
+      'trailing {"stages": [{"text": "cut',
+      4,
+    )!;
+    expect(stages.single.text, '甲来了。');
+    expect(stages.single.from, [1, 2]);
+  });
+
   test('every citation of the detailed answer lands in some paragraph', () {
     final entries = loreAnswerEntries(detail)!;
     final markdown = stagedAnswerMarkdown(

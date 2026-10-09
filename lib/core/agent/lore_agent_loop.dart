@@ -814,10 +814,15 @@ class LoreAgentLoop {
       body = body.replaceAll(_coverageLine, '').trim();
       if (unseen.isNotEmpty) {
         if (fewUnseen) {
-          // 0.14: dropped rather than shown as unchecked.
+          // 0.14: dropped rather than shown as unchecked; which ones is in
+          // the work timeline (and the session record).
           for (final c in unseen) {
             body = body.replaceAll('`$c`', '');
           }
+          yield ReActEvent(
+            type: ReActEventType.thought,
+            content: '删去了没在读到的原文中核实的出处：${unseen.join('、')}',
+          );
           body = '$body\n\n> 已删去 ${unseen.length} 处没能在读到的原文中核实的出处。';
         } else {
           body = '$body\n\n> 以下出处未能在本次读到的原文中核实：'
