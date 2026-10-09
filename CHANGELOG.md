@@ -35,6 +35,10 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 
 - Stories read are shown by name (they showed as file names); every failure is marked and says why; a sub-agent's steps are labelled; a rewrite says what was wrong.
 
+### For developers
+
+- `tools/phone_ask.dart` asks a question in the app on a phone connected by USB and shows in the terminal, as it runs, what the app shows (steps, thinking, status, answer, cost); it needs a local build with the bridge (`install_local.ps1 -Build -Bridge`), which release builds do not have.
+
 ## [0.13.0] - 2026-10-09
 
 The stable release of the 0.13 line (wiki search and evidence for Ask), Android build 32; it installs over v0.10.0 and later. The knowledge bases are unchanged — the same files as before (Arknights `695caa3e…`, the v0.11.0 asset; Endfield `592d64a8…`, the v0.12.0 asset), now also attached to this release, which the app downloads them from; an installed knowledge base is not downloaded again. The releases before v0.10.0 were removed (their tags remain).

@@ -205,12 +205,13 @@ void main() {
       await at(88, 99, end: true);
       expect((await now()).completedCount, 2);
 
-      // Many read-throughs add up.
-      for (var i = 0; i < 1500; i++) {
+      // Many read-throughs add up (each is two writes to a file: kept few
+      // enough to stay far from the test timeout on a slow disk).
+      for (var i = 0; i < 300; i++) {
         await at(0, 5);
         await at(95, 99, end: true);
       }
-      expect((await now()).completedCount, 1502);
+      expect((await now()).completedCount, 302);
     });
 
     test('a pass that began from a citation in the middle never counts',

@@ -6,6 +6,7 @@ import 'core/agent/agent_logger.dart';
 import 'core/agent/answer_options.dart';
 import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
+import 'features/ai/phone_bridge.dart';
 import 'features/settings/api_settings_page.dart';
 import 'features/settings/app_icon_service.dart';
 import 'features/settings/knowledge_base_page.dart';
@@ -81,7 +82,10 @@ void main() async {
         initialNicknameProvider.overrideWithValue(nickname),
         initialAnswerOptionsProvider.overrideWithValue(answerOptions),
       ],
-      child: const ArkLoresApp(),
+      // Only in local test builds (`install_local.ps1 -Bridge`).
+      child: phoneBridgeEnabled
+          ? const PhoneBridgeHost(child: ArkLoresApp())
+          : const ArkLoresApp(),
     ),
   );
 }

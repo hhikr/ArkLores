@@ -170,6 +170,8 @@ $env:ARKLORES_RUN_LIVE_ASK='true'; $env:ARKLORES_LIVE_QUERIES='问题一||问题
 $env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_v5\arklores_gamedata_zh.db"
 $env:ARKLORES_ENDFIELD_DB="$PWD\build\endfield\arklores_endfield_zh.db"   # 可选：装上终末地库（双游戏问题）
 flutter test test/live/ask_pipeline_live_test.dart
+# 真机问答：带桥安装后在电脑上提问、实时看 App 的输出（docs/ANDROID_SETUP_GUIDE.md）
+.\tools\install_local.ps1 -Build -Bridge; dart run tools/phone_ask.dart "问题"
 # Wiki 接口联网检查（免费）
 $env:ARKLORES_RUN_WIKI_CHECK='true'; flutter test test/live/wiki_live_test.dart
 ```

@@ -8,6 +8,7 @@
 #   .\tools\install_local.ps1 -Kb -KbOnly     # only the knowledge base
 #   .\tools\install_local.ps1 -Ef             # ... and the Endfield knowledge base
 #   .\tools\install_local.ps1 -DryRun         # show what would happen
+#   .\tools\install_local.ps1 -Build -Bridge  # ... with the developer bridge for tools/phone_ask.dart
 #
 # The APK is build\local_release\ArkLores-*-local.apk, else the newest
 # *.apk under build\ (the last `flutter build apk --release`). Without
@@ -33,6 +34,9 @@ param(
   [switch]$KbOnly,
   # Also copy the Endfield knowledge base (build\endfield\arklores_endfield_zh.db.gz).
   [switch]$Ef,
+  # Build with the developer bridge (lib/features/ai/phone_bridge.dart): ask on
+  # the phone from the computer with tools/phone_ask.dart. Never for a release.
+  [switch]$Bridge,
   [switch]$NoLaunch,
   [switch]$DryRun
 )
@@ -101,7 +105,7 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   if (-not $DryRun) {
     # Gradle and Flutter write warnings to stderr; only the exit code counts.
     $ErrorActionPreference = 'Continue'
-    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha"
+    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha" "--dart-define=ARKLORES_PHONE_BRIDGE=$(if ($Bridge) { 'true' } else { 'false' })"
     if ($LASTEXITCODE -ne 0) { throw 'flutter build failed' }
     New-Item -ItemType Directory -Force build\local_release | Out-Null
     $built = 'build\app\outputs\flutter-apk\app-release.apk'

@@ -28,6 +28,27 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 签名：`tools/arklores-release.jks` + `tools/android_signing.properties`（gitignored，绝不提交、绝不打印）。没有它们时本地
 `flutter build apk --release` 会退回 debug key，这样的包不能覆盖安装正式版、也不能发布。
 
+## 真机问答调试（0.14，`tools/phone_ask.dart`）
+
+在电脑上向手机里的 App 提问，App 把界面上显示的内容实时传回终端：工作过程每一步（工具与参数、找到了什么、失败原因、子助手）、
+思考、状态行（等待服务商等）、答案文字（替换/重写也标出来）、最后的状态与用量。不是界面的逐像素还原，是大致的文字。
+
+```powershell
+.\tools\install_local.ps1 -Build -Bridge      # 带桥构建并安装（只用于本机测试，发布的包里没有桥）
+dart run tools/phone_ask.dart "问题"           # 提问并等答案
+dart run tools/phone_ask.dart -i "问题"        # 答完后在终端里接着追问
+dart run tools/phone_ask.dart                  # 只看：手机上手动提的问题也实时显示
+dart run tools/phone_ask.dart --new --wiki=off --full "问题"   # 新对话、关 Wiki、打印工具的完整输出
+```
+
+- 原理：`--dart-define=ARKLORES_PHONE_BRIDGE=true` 的 App 每 3 秒尝试连接手机上的 `ws://127.0.0.1:47321`；`phone_ask.dart` 运行
+  `adb reverse tcp:47321 tcp:47321` 并在电脑上监听，所以连接只经 USB 到达这台电脑，手机上不开端口。代码在 `lib/features/ai/phone_bridge.dart`。
+- 问题像在输入框里输入一样提出（App 切到问答页），之后的追问沿用同一对话；`--wiki/--review/--digest/--delegate/--think=on|off` 改的是 App 里的回答选项（会保存）。
+- 终端显示同时写入 `build/phone_sessions/<时间>.log`（文字）与 `.jsonl`（事件）；App 开着“保存 AI 对话记录”时，每题答完把会话文件
+  （`conversation_<id>.json`）从手机拉到同一目录。
+- Ctrl+C 一次取消当前问题，两次退出。App 被切到后台时系统可能暂停连接，回到前台会自动重连（问答本身在前台服务里继续）。
+- 没有手机时 `--no-adb` 连本机运行的 App（例如 `flutter run -d windows --dart-define=ARKLORES_PHONE_BRIDGE=true`）。
+
 ## 发布（开发者明确同意后）
 
 1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.13.0 正式版是 32）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
