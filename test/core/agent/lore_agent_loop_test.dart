@@ -125,6 +125,8 @@ void main() {
       expect(prompt, contains('["record", "<记录 id>"]'));
       expect(prompt, contains('"entries"'));
       expect(prompt, contains('"coverage"'));
+      // 0.14 live: a model thinking in English answered in English.
+      expect(prompt, contains('用用户提问的语言写'));
       // Sub-agents still hand back markdown notes.
       final sub = loreSystemPrompt(subtask: true);
       expect(sub, contains('[COVERAGE: full]'));
