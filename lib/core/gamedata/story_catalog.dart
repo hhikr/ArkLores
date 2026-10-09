@@ -499,40 +499,6 @@ Future<StoryCollection?> queryStoryCollection(
   );
 }
 
-/// Catalog entries whose synopsis, chapter name or collection name contains
-/// any of [terms], ranked by the number of distinct terms matched.
-Future<List<StoryCatalogEntry>> querySynopsisHits(
-  DatabaseExecutor db,
-  List<String> terms, {
-  String? collectionId,
-  int limit = 5,
-}) async {
-  final cleaned = {
-    for (final t in terms)
-      if (t.trim().isNotEmpty) t.trim(),
-  }.toList();
-  if (cleaned.isEmpty || !await hasStoryCatalog(db)) return const [];
-  final score = StringBuffer();
-  final args = <Object?>[];
-  for (final term in cleaned) {
-    if (score.isNotEmpty) score.write(' + ');
-    score.write(
-      "(COALESCE(synopsis, '') || ' ' || COALESCE(story_name, '') || ' ' || "
-      "collection_name LIKE ? ESCAPE '\\')",
-    );
-    args.add('%${escapeLike(term)}%');
-  }
-  var sql = 'SELECT *, ($score) AS matched FROM $storyCatalogTable WHERE matched > 0';
-  if (collectionId != null && collectionId.isNotEmpty) {
-    sql += ' AND collection_id = ?';
-    args.add(collectionId);
-  }
-  sql += ' ORDER BY matched DESC, collection_id, story_sort LIMIT ?';
-  args.add(limit);
-  final rows = await db.rawQuery(sql, args);
-  return [for (final row in rows) StoryCatalogEntry.fromRow(row)];
-}
-
 /// Collections (id, label, chapter count) whose name contains [like] and/or
 /// whose type is [type]; used when an OUTLINE target names no single
 /// collection (e.g. the whole main story).

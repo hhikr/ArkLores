@@ -159,25 +159,6 @@ class MultiGameRetrieval implements GameDataRetrieval {
       ];
 
   @override
-  Future<List<StoryCatalogEntry>> searchStorySynopses(
-    List<String> terms, {
-    String? collectionId,
-    int limit = 5,
-  }) async {
-    if (collectionId != null) {
-      return _of(collectionId).searchStorySynopses(
-        terms,
-        collectionId: collectionId,
-        limit: limit,
-      );
-    }
-    return [
-      for (final store in await _installed())
-        ...await store.searchStorySynopses(terms, limit: limit),
-    ].take(limit).toList();
-  }
-
-  @override
   Future<List<SimilarName>> similarNames(String term, {int limit = 3}) async {
     final all = [
       for (final store in await _installed())
@@ -203,29 +184,6 @@ class MultiGameRetrieval implements GameDataRetrieval {
       picked.add(name);
     }
     return picked.take(limit).toList();
-  }
-
-  @override
-  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
-    List<String> terms, {
-    String? scopeId,
-  }) async {
-    final total = <String, ({int all, int inScope})>{};
-    for (final store in await _installed()) {
-      final inThis = scopeId != null && identical(store, _of(scopeId));
-      final counts = await store.storyLineTermCounts(
-        terms,
-        scopeId: inThis ? scopeId : null,
-      );
-      for (final MapEntry(key: term, value: c) in counts.entries) {
-        final before = total[term] ?? (all: 0, inScope: 0);
-        total[term] = (
-          all: before.all + c.all,
-          inScope: before.inScope + (scopeId == null || inThis ? c.inScope : 0),
-        );
-      }
-    }
-    return total;
   }
 
   @override

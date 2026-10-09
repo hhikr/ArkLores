@@ -1,12 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/search_story_lines.dart';
 import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_coverage_builder.dart';
-import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -214,40 +211,6 @@ void main() {
       await db.close();
     });
   });
-
-  group('coverage tools', () {
-    test('search_story_lines finds stories by raw text (R12)', () async {
-      final tool = SearchStoryLinesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final dagger =
-          await tool.execute({'query': '匕首'}) as ToolExecutionResult;
-      for (final chapter in ['c1', 'c4', 'c5']) {
-        expect(dagger.observation, contains('level_fixture_$chapter.txt'));
-      }
-      expect(dagger.observation, contains('locating hints'));
-      expect(dagger.observation, contains('DATA: '));
-
-      // Terms are AND-ed within one line.
-      final both = await tool.execute({'query': '藏起 真相'})
-          as ToolExecutionResult;
-      expect(both.observation, contains('level_fixture_c5.txt'));
-      expect(both.observation, isNot(contains('level_fixture_c1.txt')));
-
-      final none = await tool.execute({'query': '不存在的短语'})
-          as ToolExecutionResult;
-      expect(none.observation, contains('No story line matches'));
-      expect(none.observation, contains('no embedding API configured'));
-
-      final scoped = await tool.execute({
-        'query': '匕首',
-        'scope_id': 'activity:no_such_scope',
-      }) as ToolExecutionResult;
-      expect(scoped.observation, contains('No story line matches'));
-    });
-
-  });
-
 }
 
 /// Builds a schema v3 DB from [sourceDir] using the production build pipeline

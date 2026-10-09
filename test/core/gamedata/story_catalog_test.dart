@@ -1,7 +1,5 @@
 import 'dart:io';
 
-import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/search_story_lines.dart';
 import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart';
@@ -124,18 +122,6 @@ void main() {
       expect(entries[inLevel]!.label, '虚构活动 fx_09_a1 关卡内对话');
       expect(entries.containsKey('obt/x/y.txt'), isFalse);
       await store.close();
-    });
-
-    test('FIND lists synopsis hits and labels the stories', () async {
-      final tool = SearchStoryLinesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
-      );
-      final result =
-          await tool.execute({'query': '会面 交易'}) as ToolExecutionResult;
-      final text = result.observation;
-      expect(text, contains('官方章节梗概命中'));
-      expect(text, contains('level_act_fx_02_beg.txt 《虚构活动 FX-2 行动前《转折》》'));
-      expect(text, contains('| 《虚构活动 FX-2 行动前《转折》》'));
     });
 
     test('keyword leg ORs terms and ranks lines with more terms first',

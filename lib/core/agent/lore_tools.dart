@@ -17,8 +17,6 @@ import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../wiki/wiki_lookup.dart';
 import 'tools/agent_tool.dart';
-import 'tools/observation_data.dart' show dataBlockPrefix;
-import 'tools/search_story_lines.dart';
 import 'tools/search_tool.dart';
 
 /// Story lines shown to the model in this run (per story, line indexes),
@@ -622,65 +620,6 @@ class OutlineTool extends AgentTool {
       }
     }
     return buffer.toString().trimRight();
-  }
-}
-
-/// `find`: ranked search for a phrase or a described scene — FTS keywords
-/// fused with the optional story vectors (R12). 0.14: replaced in the
-/// agent's tools by `search` (`tools/search_tool.dart`); kept for callers
-/// of the old search output.
-class FindTool extends AgentTool {
-  FindTool(this._store, this._embeddingClient);
-
-  final GameDataRetrieval _store;
-  final EmbeddingClient? _embeddingClient;
-
-  @override
-  String get name => 'find';
-
-  @override
-  String get description =>
-      '按意思找剧情：给一句描述、台词或几个词，返回最相关的故事和其中最相关的几行（关键词检索，'
-      '配置了向量模型时再加语义检索）。适合不知道确切用词的场景、事件；知道确切名字时用 grep 更准。'
-      '结果只是定位线索，要用 read_story 读原文。';
-
-  @override
-  Map<String, dynamic> get parameters => {
-        'type': 'object',
-        'properties': {
-          'query': {'type': 'string', 'description': '描述、台词或空格分隔的词'},
-          'collection': {'type': 'string', 'description': '只在这个故事集里找（可选）'},
-          'game': _gameParameter('只在这个游戏里找（可选，默认所有已安装的游戏）'),
-        },
-        'required': ['query'],
-      };
-
-  @override
-  Future<String> execute(Map<String, dynamic> arguments) async {
-    final store = narrowTo(_store, Game.parse(arguments['game']));
-    // The search takes collection ids; resolve a collection name first.
-    final collection = '${arguments['collection'] ?? ''}'.trim();
-    final scope = collection.isEmpty
-        ? null
-        : (await store.storyCollection(collection))?.collectionId ?? collection;
-    final search = SearchStoryLinesTool(
-      gameDataStore: store,
-      embeddingClient: _embeddingClient,
-    );
-    final result = await search.execute({
-      'query': arguments['query'],
-      if (scope != null) 'scope_id': scope,
-    });
-    final text = result is ToolExecutionResult ? result.observation : '$result';
-    return [
-      for (final line in text.split('\n'))
-        if (!line.startsWith(dataBlockPrefix))
-          // The search speaks the R16 planner's commands.
-          line
-              .replaceAll('READ', 'read_story')
-              .replaceAll('COVER', 'grep')
-              .replaceAll('FIND', 'find'),
-    ].join('\n').trim();
   }
 }
 

@@ -200,22 +200,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     return queryCollectionIndex(db, like: like, type: type);
   }
 
-  @override
-  Future<List<StoryCatalogEntry>> searchStorySynopses(
-    List<String> terms, {
-    String? collectionId,
-    int limit = 5,
-  }) async {
-    final db = await _open();
-    if (db == null) return const [];
-    return querySynopsisHits(
-      db,
-      terms,
-      collectionId: collectionId,
-      limit: limit,
-    );
-  }
-
   /// R15: name inventory of the currently open DB, loaded on first use and
   /// dropped with the connection (like [_vectorIndex]).
   Future<List<NameOccurrence>>? _nameInventory;
@@ -234,16 +218,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     if (db == null || text.trim().isEmpty) return const [];
     final inventory = await (_nameInventory ??= loadNameInventory(db));
     return namesOccurringIn(text, inventory, limit: limit);
-  }
-
-  @override
-  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
-    List<String> terms, {
-    String? scopeId,
-  }) async {
-    final db = await _open();
-    if (db == null) return const {};
-    return queryTermLineCounts(db, terms, scopeId: scopeId);
   }
 
   @override

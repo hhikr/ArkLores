@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:arklores/core/agent/tools/agent_tool.dart';
-import 'package:arklores/core/agent/tools/search_story_lines.dart';
+import 'package:arklores/core/agent/lore_tools.dart';
+import 'package:arklores/core/agent/tools/search_tool.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
@@ -116,36 +116,36 @@ void main() {
       expect(ranked(fromFile), ranked(fromDb));
     });
 
-    test('FIND fuses semantic hits even without keyword overlap', () async {
-      final tool = SearchStoryLinesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+    // 0.14: search (which replaced FIND) on the same fixture.
+    test('search finds by meaning without any keyword overlap; its lines are '
+        'citable', () async {
+      final seen = SeenLines();
+      final result = await SearchTool(
+        GameDataKnowledgeStore(dbPath: dbPath),
+        seen,
         embeddingClient: _FakeEmbedder(),
-      );
-      // No line contains this exact phrase -> keyword leg is empty.
-      final result =
-          await tool.execute({'query': '谁藏起了那把匕首呢'}) as ToolExecutionResult;
-      expect(result.observation, contains('semantic + keyword'));
-      expect(result.observation, contains('level_x_02.txt'));
-      expect(result.observation, contains('(semantic '));
-      // No literal hit anywhere -> stated plainly, per story too.
-      expect(result.observation, contains('没有任何一行包含这些词'));
-      expect(result.observation, contains('无字面命中'));
+      ).run('谁藏起了那把匕首呢');
+      expect(result.mode, SearchMode.semantic);
+      expect(result.text, contains('按意思检索'));
+      expect(result.text, contains('level_x_02.txt'));
+      expect(result.text, contains('意思相近'));
+      expect(result.text, contains('当年我藏起了匕首。'));
+      expect(seen.covers('activities/x/level_x_02.txt', 1, 1), isTrue);
     });
 
-    test('FIND falls back to keyword when the model does not match', () async {
-      final tool = SearchStoryLinesTool(
-        gameDataStore: GameDataKnowledgeStore(dbPath: dbPath),
+    test('search falls back to keywords when the vectors are from another '
+        'model, and says so', () async {
+      final result = await SearchTool(
+        GameDataKnowledgeStore(dbPath: dbPath),
+        SeenLines(),
         embeddingClient: _FakeEmbedder(model: 'other-model'),
-      );
-      final result =
-          await tool.execute({'query': '匕首'}) as ToolExecutionResult;
-      expect(result.observation, contains('keyword only: vectors are'));
-      expect(result.observation, contains('L1: 角色B：当年我藏起了匕首。'));
-      expect(result.observation, isNot(contains('没有任何一行包含这些词')));
+      ).run('匕首');
+      expect(result.mode, SearchMode.keywordOnly);
+      expect(result.modeNote, contains('库里的向量是'));
+      expect(result.text, contains('L1 [角色B] 当年我藏起了匕首。'));
     });
   });
 }
-
 /// Three stories; level_x_02 is about hiding a dagger.
 Future<void> _buildDb(String path, {required String model}) async {
   final db = await createGameDataDb(

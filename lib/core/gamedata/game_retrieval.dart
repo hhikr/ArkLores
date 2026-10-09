@@ -86,14 +86,6 @@ abstract interface class GameDataRetrieval {
     String? type,
   });
 
-  /// R14: catalog entries whose official synopsis / chapter name contains
-  /// any of [terms], best first. Locating hints, not evidence.
-  Future<List<StoryCatalogEntry>> searchStorySynopses(
-    List<String> terms, {
-    String? collectionId,
-    int limit,
-  });
-
   /// R15: names in the DB that are spelled or pronounced like [term] (a
   /// name the DB does not contain), best first. String similarity only —
   /// never a claim that they refer to the same person.
@@ -102,13 +94,6 @@ abstract interface class GameDataRetrieval {
   /// 0.14: names of the DB (people, speakers, collections) written in
   /// [text], longest first — the names a question mentions.
   Future<List<String>> namesInText(String text, {int limit});
-
-  /// R15: per term, story lines containing it in the whole DB and inside
-  /// [scopeId] (equal to the total without a scope).
-  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
-    List<String> terms, {
-    String? scopeId,
-  });
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at
   /// most [maxRows] rows; rejections, errors and timeouts come back in

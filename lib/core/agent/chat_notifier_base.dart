@@ -7,13 +7,15 @@ import '../llm/llm_client.dart';
 import 'chat_message.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
-import 'tools/observation_data.dart';
 import 'turn_stats.dart';
 
-/// R14: compact history for the story QA pipeline. Each earlier turn is the
-/// user question plus the final answer (envelope stripped) and the chapters
-/// that turn actually READ, so a follow-up question knows the context and
-/// can re-read those chapters directly. Tool observations are NOT replayed
+/// R14: compact history for the story QA pipeline (a restored session, or a
+/// question after an error or a cancel). Each earlier turn is the user
+/// question plus the final answer (envelope stripped) and the chapters that
+/// turn actually read (0.14: taken from its `read_story` steps; the data
+/// blocks they once came from no longer exist), so a follow-up question
+/// knows the context and can re-read those chapters directly. Tool
+/// observations are NOT replayed
 /// (they bloated every planner request and duplicated what the answer and
 /// the read list already say). Only the last [maxTurns] turns are kept.
 List<Message> buildStoryQaHistory(
@@ -29,16 +31,8 @@ List<Message> buildStoryQaHistory(
     }
     if (m.role != MessageRole.assistant) continue;
     final reads = <String, List<(int, int)>>{};
-    for (final step in m.steps) {
-      if (step.type != ReActEventType.toolObservation) continue;
-      for (final block in parseDataBlocks(step.content)) {
-        if (block['type'] != 'read_story_lines') continue;
-        final storyId = '${block['story_id'] ?? ''}';
-        final first = (block['first_line'] as num?)?.toInt();
-        final last = (block['last_line'] as num?)?.toInt();
-        if (storyId.isEmpty || first == null || last == null) continue;
-        reads.putIfAbsent(storyId, () => []).add((first, last));
-      }
+    for (final (storyId, first, last) in storyReadsOf(m.steps)) {
+      reads.putIfAbsent(storyId, () => []).add((first, last));
     }
     final buffer = StringBuffer(
       m.content.replaceAll(storyAnswerEnvelopePattern, '').trim(),
@@ -62,6 +56,38 @@ List<Message> buildStoryQaHistory(
     }
   }
   return history;
+}
+
+/// The stories an answer's `read_story` calls showed, with the first and
+/// last line of each output (`L<n>` lines), in order. A call's output is
+/// the next output of the same tool from the same agent (calls of a turn
+/// are announced first, their outputs follow in the same order).
+List<(String, int, int)> storyReadsOf(List<ReActStep> steps) {
+  final waiting = <ReActStep>[];
+  final out = <(String, int, int)>[];
+  for (final step in steps) {
+    if (step.toolName != 'read_story') continue;
+    if (step.type == ReActEventType.toolCall) {
+      waiting.add(step);
+      continue;
+    }
+    if (step.type != ReActEventType.toolObservation) continue;
+    final i = waiting.indexWhere((w) => w.subtask == step.subtask);
+    if (i < 0) continue;
+    final call = waiting.removeAt(i);
+    final storyId = '${call.toolArgs?['story_id'] ?? ''}'.trim();
+    final numbers = [
+      for (final m in RegExp(r'^L(\d+) ', multiLine: true).allMatches(step.content))
+        int.parse(m.group(1)!),
+    ];
+    if (storyId.isEmpty || numbers.isEmpty) continue;
+    out.add((
+      storyId.endsWith('.txt') ? storyId : '$storyId.txt',
+      numbers.first,
+      numbers.last,
+    ),);
+  }
+  return out;
 }
 
 /// R16: coalesces streamed-text updates so the message list (and its
