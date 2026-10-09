@@ -22,7 +22,7 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 - **The question is searched before the model's first turn**, so it starts from candidate passages instead of spending turns finding where a name occurs.
 - **Both games are searched for every question**; the prompt no longer asks the model to decide the game first. Corpus counts list each game under its own heading with its totals.
 - **The wikis are a search source like the knowledge base**, no longer a last resort; answers still say which points come from a wiki.
-- Without an embedding service, search uses keywords only and the Ask page warns that answers may be less accurate. The keywords are the names the question mentions and its own phrases (split at punctuation and function words), so places and concepts are found too; a short name found inside a longer word is ignored.
+- Without an embedding service, search matches the text literally and the Ask page warns that answers may be less accurate. The question is then not searched by code before the first turn: the model chooses the words (it knows how the stories name things), and each search says how many lines every word matched, so a word the text never uses is replaced. A question written as a sentence still gives keywords: the names it mentions and its own phrases.
 - `search` also lists operator files (race, records, archives), the file of what the question names first.
 - A follow-up is searched together with the question before it, so "what about her?" finds what the conversation is about.
 - A record cited as `record:record:<id>` is read as `record:<id>`.

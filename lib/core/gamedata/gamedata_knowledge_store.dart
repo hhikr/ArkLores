@@ -128,6 +128,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     String? scopeId,
     int storyLimit = 8,
     int linesPerStory = 3,
+    Map<String, int>? termLines,
   }) async {
     final db = await _open();
     if (db == null) return const [];
@@ -137,6 +138,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       scopeId: scopeId,
       storyLimit: storyLimit,
       linesPerStory: linesPerStory,
+      termLines: termLines,
     );
   }
 

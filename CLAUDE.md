@@ -134,7 +134,7 @@
 ## 问答 Agent 的约定（详见 `docs/R17_TOOL_AGENT.md`）
 
 - 一个模型 + 通用工具（`search`、`read_story`、`grep`、只读 `sql`、`outline`、`similar_names`，开着“Wiki 资料”时 `search` 含 Wiki 并加 `wiki_search`、`wiki_read`，
-  开着“子助手”时主 agent 另有 `delegate`），messages 只追加；问题先由代码预检索一次（0.14）。
+  开着“子助手”时主 agent 另有 `delegate`），messages 只追加；有向量时问题先由代码预检索一次（0.14），没有向量时由模型自己写检索词（2026-10-10）。
 - 工具调用先过守门（`tool_call_gate.dart`）：进入对话的调用参数必须是合法 JSON，非法调用不执行、报错写明正确写法；不要把模型的原始参数原样存进历史。
   不要加手写的进度规则（预算提示、重读拒绝、阅读计划）；改进方向是工具表达力、工具输出的信息量和通用工作方式。
 - 审稿子 agent 只以读者身份提最多三个故事层面的问题，结论由主 agent 读原文决定；不让它逐条核实细节，不加针对某类剧情的检查项。

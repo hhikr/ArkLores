@@ -11,7 +11,7 @@
               │   紧接上一条回答时带上一问的对话（LoreConversation，工具结果折叠），否则带最近 3 轮问答文本
               │   “深度思考”开关 → 本问使用 low 档思考的 client
               └─ StoryQaAgent ─► LoreAgentLoop
-                                   预检索（0.14）：问题原文先跑一次 search（两个游戏 + Wiki，按来源分组），附在问题下面
+                                   预检索（0.14，有向量时）：问题原文先跑一次 search（两个游戏 + Wiki，按来源分组），附在问题下面
                                    system：库结构（含资料页说明 loreLibraryGuide）+ 工作方式 + 出处格式 + 输出格式
                                    每轮 streamTurn(tools) → 守门（拆分粘连、按 schema 校验）→ 工具并发执行 → 结果追加
                                    最终答案（JSON）→ 出处核对（SeenLines；少量未核实由代码删去，多了退回一次）→ [审稿] → 按阶段整理（只发条目）

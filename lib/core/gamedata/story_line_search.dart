@@ -34,6 +34,7 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   String? scopeId,
   int storyLimit = 8,
   int linesPerStory = 3,
+  Map<String, int>? termLines,
 }) async {
   final cleaned = <String>[];
   for (final t in terms) {
@@ -63,6 +64,7 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   final present = <(String, double)>[];
   for (var i = 0; i < cleaned.length; i++) {
     final df = (dfRow['d$i'] as num?)?.toInt() ?? 0;
+    termLines?.update(cleaned[i], (n) => n + df, ifAbsent: () => df);
     if (df == 0) continue;
     present.add((cleaned[i], math.log((total + 1) / (df + 1)) + 0.01));
   }

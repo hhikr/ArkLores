@@ -315,15 +315,15 @@ void main() {
           StoryAnswerStatus.answered,);
       expect(answer, contains('`obt/main/level_main_fx-01.txt:1`'));
       expect(answer, isNot(contains('COVERAGE')));
-      // 0.14: the question is searched first, then the model's two calls.
+      // 0.14: no vectors here, so no search before the first turn (the
+      // vector tests have it): only the model's two calls.
       expect(
         events
             .where((e) => e.type == ReActEventType.toolCall)
             .map((e) => e.toolName),
-        ['search', 'grep', 'read_story'],
+        ['grep', 'read_story'],
       );
-      expect(client.requests.first[1].content, startsWith('星灯做了什么？'));
-      expect(client.requests.first[1].content, contains('预先做的一次 search'));
+      expect(client.requests.first[1].content, '星灯做了什么？');
       // Append-only: each request extends the previous one.
       for (var i = 1; i < client.requests.length; i++) {
         final before = client.requests[i - 1];
@@ -1075,15 +1075,7 @@ void main() {
       // citable.
       final earlier = request.where((m) => m.role == MessageRole.tool).toList();
       expect(earlier.map((m) => m.content.startsWith('[已折叠]')), [true]);
-      expect(request.last.content, startsWith('那后来呢？'));
-      // 0.14 live: the search before the first turn includes the question
-      // followed up ("那后来呢" alone finds nothing).
-      final search = events.firstWhere(
-        (e) =>
-            e.type == ReActEventType.toolObservation && e.toolName == 'search',
-      );
-      expect(search.content, contains('（接上一问“钟楼？”）'));
-      expect(search.content, contains('level_main_fx-01.txt'));
+      expect(request.last.content, '那后来呢？');
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
     });
@@ -1192,24 +1184,36 @@ void main() {
       expect(second, startsWith('错误：这个问题的子助手已经用完'));
     });
 
-    test('the question is searched before the first turn; without vectors '
-        'the run says the answer may suffer', () async {
-      final client = _ScriptedClient([_answer('没有查到。')]);
+    // 0.14: without vectors code could only cut up the question (a gold
+    // story for 16 of 29 eval questions); the model picks the words.
+    test('without vectors the model searches first, told the match is '
+        'literal, and the run says the answer may suffer', () async {
+      final client = _ScriptedClient([
+        _call('search', {'query': '星灯 钟楼 不存在的说法'}),
+        _answer('没有查到。'),
+      ]);
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯 钟楼')
+          .run(query: '星灯点亮了什么？')
           .toList();
-      final search = events.firstWhere(
-        (e) => e.type == ReActEventType.toolObservation,
-      );
-      expect(search.toolName, 'search');
-      expect(search.content, contains('只有关键词检索'));
-      expect(search.content, contains('obt/main/level_main_fx-01.txt'));
+      expect(client.requests.first.last.content, '星灯点亮了什么？');
       expect(
         events.any((e) =>
             e.type == ReActEventType.thought &&
             e.content.contains('问答质量可能下降'),),
         isTrue,
       );
+      final spec = client.toolSpecs.first.firstWhere(
+        (t) => (t['function'] as Map)['name'] == 'search',
+      );
+      expect('${(spec['function'] as Map)['description']}', contains('只按字面'));
+      final search = events.firstWhere(
+        (e) => e.type == ReActEventType.toolObservation,
+      );
+      expect(search.content, contains('只有关键词检索'));
+      // Each word says how many lines it matched; one no line has is marked.
+      expect(search.content, matches(RegExp(r'星灯（\d+ 行）')));
+      expect(search.content, contains('不存在的说法（0 行，原文里没有这个写法）'));
+      expect(search.content, contains('obt/main/level_main_fx-01.txt'));
     });
   });
 }
@@ -1370,6 +1374,7 @@ class _ScriptedClient extends LLMClient {
   final List<List<Message>> requests = [];
   final List<String?> toolChoices = [];
   final List<List<String>> toolNames = [];
+  final List<List<Map<String, dynamic>>> toolSpecs = [];
   var _next = 0;
 
   @override
@@ -1415,6 +1420,7 @@ class _ScriptedClient extends LLMClient {
       for (final t in tools ?? const <Map<String, dynamic>>[])
         '${(t['function'] as Map)['name']}',
     ]);
+    toolSpecs.add(List.of(tools ?? const <Map<String, dynamic>>[]));
     final turn = turns[_next++];
     if (turn.content.isNotEmpty) yield CompletionDelta(content: turn.content);
     yield CompletionDelta(done: true, toolCalls: turn.calls);

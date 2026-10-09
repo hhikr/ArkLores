@@ -13,6 +13,7 @@ import 'dart:async';
 
 import '../../gamedata/game_retrieval.dart';
 import '../../gamedata/multi_game_retrieval.dart';
+import '../../gamedata/story_line_search.dart' show maxKeywordTerms;
 import '../../llm/embedding_client.dart';
 import '../../wiki/wiki_lookup.dart';
 import '../../wiki/wiki_page.dart';
@@ -64,14 +65,26 @@ class SearchTool extends AgentTool {
   @override
   String get name => 'search';
 
+  /// 0.14: no meaning search for this question ([keywordOnlyReason]), set
+  /// by the agent before it describes its tools: the description then asks
+  /// for words that occur in the text.
+  bool keywordOnly = false;
+
   @override
-  String get description =>
-      '一次检索所有资料：已安装的每个游戏的剧情原文（有向量服务时按意思检索，再用问题里的名字做关键词检索）'
-      '，以及剧情以外的资料原文（档案、干员资料、语音等）'
-      '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
-      '适合任何“发生了什么、是什么、为什么、谁”的问题，用一句话或几个词描述要找的内容。'
-      '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
-      '要精确统计某个词出现在哪些故事里时用 grep。';
+  String get description => keywordOnly
+      ? '一次检索所有资料：已安装的每个游戏的剧情原文、剧情以外的资料原文（档案、干员资料、语音等）'
+          '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
+          '现在没有向量服务，只按字面（子串）匹配原文：query 写原文里会出现的词——人物、地点、组织、事件、物品的叫法，'
+          '以及它们的别称、相关的说法，空格分隔，每个词 2–6 个字，不要写整句或长短语（整句不会出现在原文里）。'
+          '一次最多 $maxKeywordTerms 个词；结果开头列出每个词命中多少行，命中 0 行的词换个说法再查。'
+          '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
+          '要精确统计某个词出现在哪些故事里时用 grep。'
+      : '一次检索所有资料：已安装的每个游戏的剧情原文（按意思检索，再用问题里的名字做关键词检索）'
+          '，以及剧情以外的资料原文（档案、干员资料、语音等）'
+          '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
+          '适合任何“发生了什么、是什么、为什么、谁”的问题，用一句话或几个词描述要找的内容。'
+          '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
+          '要精确统计某个词出现在哪些故事里时用 grep。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -79,7 +92,9 @@ class SearchTool extends AgentTool {
         'properties': {
           'query': {
             'type': 'string',
-            'description': '要找的内容：一句描述、一个问题，或空格分隔的几个词/名字',
+            'description': keywordOnly
+                ? '原文里会出现的词，空格分隔（名字、叫法、别称；不要写整句）'
+                : '要找的内容：一句描述、一个问题，或空格分隔的几个词/名字',
           },
           'game': {
             'type': 'string',
@@ -122,8 +137,11 @@ class SearchTool extends AgentTool {
 
     // Meaning: one embedding of the query, used for every game.
     final (vector, modeNote) = await _embed(text);
-    final terms =
+    final allTerms =
         _terms(query, names, earlier: earlier, phrases: vector == null);
+    final terms = allTerms.take(maxKeywordTerms).toList();
+    final unused = allTerms.skip(maxKeywordTerms).toList();
+    final termLines = <String, int>{};
 
     // A collection narrows the stories (in its own game).
     Set<String>? inCollection;
@@ -143,11 +161,14 @@ class SearchTool extends AgentTool {
 
     final ranked = await Future.wait([
       for (final g in games)
-        _rank(narrowTo(store, g), terms, vector, inCollection),
+        _rank(narrowTo(store, g), terms, vector, inCollection, termLines),
     ]);
     final wikiPart = wiki == null || inCollection != null
         ? const <String>[]
-        : await _searchWiki(games, names.isEmpty ? query : names.take(2).join(' '));
+        : await _searchWiki(
+            games,
+            terms.isEmpty ? query : terms.take(2).join(' '),
+          );
 
     // A game with no keyword hit whose closest passage is clearly further
     // from the query than another game's is listed as such, not printed
@@ -161,7 +182,8 @@ class SearchTool extends AgentTool {
       ..writeln('检索“$query”${earlier.isEmpty ? '' : '（接上一问“$earlier”）'}'
           '${scopeLabel.isEmpty ? '' : '（$scopeLabel 内）'}：'
           '${mode == SearchMode.semantic ? '按意思检索 + 关键词' : '只有关键词检索（$modeNote）'}'
-          '${terms.isEmpty ? '' : '；关键词：${terms.join('、')}'}');
+          '${terms.isEmpty ? '' : '；关键词：${_termCounts(terms, termLines, inCollection != null)}'}'
+          '${unused.isEmpty ? '' : '；一次最多 $maxKeywordTerms 个词，未使用：${unused.join('、')}'}');
     for (final (i, g) in games.indexed) {
       final r = ranked[i];
       if (r.top.isNotEmpty &&
@@ -229,19 +251,23 @@ class SearchTool extends AgentTool {
       for (final t in query.split(RegExp(r'[\s|]+')))
         if (t.trim().runes.length >= 2 && t.trim().runes.length <= 12) t.trim(),
     ];
-    if (split.length > 1) return split.take(6).toList();
+    if (split.length > 1) return split;
     final segments = {
       for (final q in [earlier, query]) ...phrasesOf(q),
     };
+    // A two-character name in the middle of a longer word is usually part
+    // of that word; a longer name is not (phrases are cut without a
+    // dictionary, so a phrase may hold a whole clause around a name).
     final kept = [
       for (final n in names)
-        if (!segments.any(
-          (s) =>
-              s.length > n.length &&
-              s.contains(n) &&
-              !s.startsWith(n) &&
-              !s.endsWith(n),
-        ))
+        if (n.runes.length > 2 ||
+            !segments.any(
+              (s) =>
+                  s.length > n.length &&
+                  s.contains(n) &&
+                  !s.startsWith(n) &&
+                  !s.endsWith(n),
+            ))
           n,
     ];
     // With meaning search, phrases only when no name is left.
@@ -251,8 +277,24 @@ class SearchTool extends AgentTool {
             for (final s in segments)
               if (!kept.any((n) => s.contains(n) || n.contains(s))) s,
           ];
-    return [...kept, ...extra].take(6).toList();
+    return [...kept, ...extra];
   }
+
+  /// `term（N 行）` for each of [terms]; a term no line has is marked, so
+  /// the next search tries other words.
+  static String _termCounts(
+    List<String> terms,
+    Map<String, int> lines,
+    bool scoped,
+  ) =>
+      [
+        for (final t in terms)
+          switch (lines[t]) {
+            null => t,
+            0 => '$t（0 行，原文里没有这个写法）',
+            final n => '$t（${scoped ? '全库 ' : ''}$n 行）',
+          },
+      ].join('、');
 
   /// The phrases of a question: what is left between its punctuation,
   /// function words and question words, 2–8 characters long.
@@ -273,16 +315,25 @@ class SearchTool extends AgentTool {
     unicode: true,
   );
 
-  Future<(List<double>?, String?)> _embed(String query) async {
+  /// Why a search will use keywords only (no embedding service, no vectors
+  /// in the knowledge base, vectors of another model), or null when it can
+  /// search by meaning. Checked without calling the embedding service.
+  Future<String?> keywordOnlyReason() async {
     final client = embeddingClient;
-    if (client == null) return (null, '没有配置向量服务');
+    if (client == null) return '没有配置向量服务';
     final info = await store.storyVectorInfo;
-    if (info == null) return (null, '知识库没有向量');
+    if (info == null) return '知识库没有向量';
     if (info.model != client.model || info.dims != client.dimensions) {
-      return (null, '库里的向量是 ${info.model}，配置的是 ${client.model}');
+      return '库里的向量是 ${info.model}，配置的是 ${client.model}';
     }
+    return null;
+  }
+
+  Future<(List<double>?, String?)> _embed(String query) async {
+    final reason = await keywordOnlyReason();
+    if (reason != null) return (null, reason);
     try {
-      return ((await client.embed([query])).single, null);
+      return ((await embeddingClient!.embed([query])).single, null);
     } catch (e) {
       return (null, '向量服务出错');
     }
@@ -298,6 +349,7 @@ class SearchTool extends AgentTool {
     List<String> terms,
     List<double>? vector,
     Set<String>? inCollection,
+    Map<String, int> termLines,
   ) async {
     bool keep(String storyId) =>
         inCollection == null || inCollection.contains(storyId);
@@ -323,6 +375,7 @@ class SearchTool extends AgentTool {
               terms,
               storyLimit: storiesPerGame * 2 * wide,
               linesPerStory: 3,
+              termLines: termLines,
             ))
               if (keep(h.storyId)) h,
           ];
@@ -362,11 +415,12 @@ class SearchTool extends AgentTool {
   /// [ranked]'s records as printed lines; the records printed become
   /// citable (`record:<id>`).
   List<String> _renderRecords(_Ranked ranked) => [
-        for (final r in ranked.records) () {
-          seen.addRecord(r.id);
-          return '   record:${r.id} | ${r.category}${r.subtype.isEmpty || r.subtype == r.category ? '' : '·${r.subtype}'}'
-              ' | ${r.title} | ${r.snippet}\n';
-        }(),
+        for (final r in ranked.records)
+          () {
+            seen.addRecord(r.id);
+            return '   record:${r.id} | ${r.category}${r.subtype.isEmpty || r.subtype == r.category ? '' : '·${r.subtype}'}'
+                ' | ${r.title} | ${r.snippet}\n';
+          }(),
       ];
 
   /// [ranked] as printed blocks; the lines printed become citable.
@@ -380,11 +434,12 @@ class SearchTool extends AgentTool {
       final chunk = ranked.firstChunk[storyId];
       final keyword = ranked.keywordOf[storyId];
       final block = StringBuffer()
-        ..writeln('${i + 1}. 《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》 $storyId'
+        ..writeln(
+            '${i + 1}. 《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》 $storyId'
             '（${[
-              if (chunk != null) '意思相近 ${chunk.score.toStringAsFixed(2)}',
-              if (keyword != null) '关键词 ${keyword.hits} 行',
-            ].join('；')}）');
+          if (chunk != null) '意思相近 ${chunk.score.toStringAsFixed(2)}',
+          if (keyword != null) '关键词 ${keyword.hits} 行',
+        ].join('；')}）');
       final shown = <int>{};
       if (chunk != null) {
         final end = chunk.lineEnd < chunk.lineStart + linesPerPassage - 1
@@ -453,7 +508,6 @@ class SearchTool extends AgentTool {
     ]);
     return [for (final p in parts) ...p];
   }
-
 
   static String _clip(String text, int max) {
     final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();

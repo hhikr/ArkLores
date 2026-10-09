@@ -229,6 +229,16 @@ class LoreAgentLoop {
       ])
         t.name: t,
     };
+    // 0.14: without meaning search the model chooses the search words (it
+    // knows how the stories name things; code can only cut up the question,
+    // which found a gold story for 16 of 29 eval questions), and `search`
+    // says it matches the text literally.
+    final search = tools['search'];
+    String? keywordOnly;
+    if (search is SearchTool) {
+      keywordOnly = await search.keywordOnlyReason();
+      search.keywordOnly = keywordOnly != null;
+    }
     final toolSpecs = [for (final t in tools.values) t.toJson()];
 
     String systemPrompt() {
@@ -247,10 +257,16 @@ class LoreAgentLoop {
     var record = 0;
 
     // 0.14: the question searched once before the first turn, so the model
-    // starts from candidate passages of every source.
+    // starts from candidate passages of every source; by meaning only.
     var question = query;
-    final search = tools['search'];
-    if (preSearch && !subtask && search is SearchTool) {
+    if (keywordOnly != null && !subtask) {
+      yield ReActEvent(
+        type: ReActEventType.thought,
+        content: '注意：$keywordOnly，只用关键词检索，问答质量可能下降。'
+            '可以在设置里配置向量服务。',
+      );
+    }
+    if (preSearch && !subtask && search is SearchTool && keywordOnly == null) {
       yield const ReActEvent(type: ReActEventType.status, content: '正在检索资料…');
       onRawLlmResponse?.call(++record, '（预检索）');
       final args = {'query': query};

@@ -59,6 +59,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
     String? scopeId,
     int storyLimit = 8,
     int linesPerStory = 3,
+    Map<String, int>? termLines,
   }) async {
     if (scopeId != null) {
       return _of(scopeId).searchStoryLinesLike(
@@ -66,6 +67,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
         scopeId: scopeId,
         storyLimit: storyLimit,
         linesPerStory: linesPerStory,
+        termLines: termLines,
       );
     }
     final all = <StoryLineHit>[
@@ -74,6 +76,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
           terms,
           storyLimit: storyLimit,
           linesPerStory: linesPerStory,
+          termLines: termLines,
         ),
     ];
     // Best first across games: lines with more of the terms, then more hits.

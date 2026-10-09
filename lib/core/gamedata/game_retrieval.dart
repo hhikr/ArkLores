@@ -70,12 +70,15 @@ abstract interface class GameDataRetrieval {
   /// [terms], ranked by their best line (IDF-weighted matched terms, so lines
   /// with every term come first), each with up to [linesPerStory] best
   /// matching lines. [scopeId] is a canonical scope key (e.g.
-  /// `activity:act21mini`). Locating hints, not evidence.
+  /// `activity:act21mini`). Locating hints, not evidence. [termLines], when
+  /// given, receives how many lines each term matches (0.14; added to what
+  /// it holds, so one map can collect several games).
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
     String? scopeId,
     int storyLimit,
     int linesPerStory,
+    Map<String, int>? termLines,
   });
 
   /// R12: model/dims of the DB's optional story-chunk vectors, or null when

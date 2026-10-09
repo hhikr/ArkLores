@@ -76,12 +76,12 @@ void main() {
       expect(turn.model, 'test-model');
       expect(turn.baseUrl, 'https://example.com/v1');
       expect(turn.status, ChatTurnStatus.completed);
-      // Every model response is recorded untruncated: (0.14) the search
-      // before the first turn, two reads, the answer, and (R18) the
-      // reader's review of it.
+      // Every model response is recorded untruncated: two reads, the
+      // answer, and (R18) the reader's review of it. No vectors in the
+      // fixture (0.14): no search before the first turn; the note that
+      // only keywords are searched is recorded first.
       expect(turn.iterations, hasLength(5));
-      expect(turn.iterations.first.rawResponse, '（预检索）');
-      expect(turn.iterations.first.tool, 'search');
+      expect(turn.iterations.first.thought, contains('问答质量可能下降'));
       expect(turn.iterations[1].rawResponse, contains('read_story'));
       expect(turn.iterations[1].tool, 'read_story');
       expect(turn.iterations[3].rawResponse, contains('结论：博士'));

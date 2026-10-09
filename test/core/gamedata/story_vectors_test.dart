@@ -2,11 +2,14 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:arklores/core/agent/lore_agent_loop.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
+import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/tools/search_tool.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
+import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi;
 
@@ -133,6 +136,42 @@ void main() {
       expect(seen.covers('activities/x/level_x_02.txt', 1, 1), isTrue);
     });
 
+    // 0.14: the search before the first turn runs only with vectors (the
+    // agent-loop tests run without them: the model searches first there).
+    test('with vectors the question is searched before the first turn; a '
+        'follow-up together with the question before it', () async {
+      final store = GameDataKnowledgeStore(dbPath: dbPath);
+      addTearDown(store.close);
+      final llm = _Answers();
+      LoreConversation? saved;
+      LoreAgentLoop agent() => LoreAgentLoop(
+            client: llm,
+            store: store,
+            embeddingClient: _FakeEmbedder(),
+          );
+      final first = await agent()
+          .run(query: '谁藏起了那把匕首呢', onConversation: (c) => saved = c)
+          .toList();
+      String searchOf(List<ReActEvent> events) => events
+          .firstWhere(
+            (e) =>
+                e.type == ReActEventType.toolObservation &&
+                e.toolName == 'search',
+          )
+          .content;
+      expect(searchOf(first), contains('按意思检索'));
+      expect(searchOf(first), contains('level_x_02.txt'));
+      expect(llm.requests.first.last.content, contains('预先做的一次 search'));
+      expect(
+        first.any((e) => e.content.contains('问答质量可能下降')),
+        isFalse,
+      );
+      // "那后来呢" alone finds nothing: the question before it goes along.
+      final second =
+          await agent().run(query: '那后来呢？', prior: saved).toList();
+      expect(searchOf(second), contains('（接上一问“谁藏起了那把匕首呢”）'));
+    });
+
     test('search falls back to keywords when the vectors are from another '
         'model, and says so', () async {
       final result = await SearchTool(
@@ -146,6 +185,23 @@ void main() {
     });
   });
 }
+/// Answers every turn at once, without citations; records the requests.
+class _Answers extends LLMClient {
+  final List<List<Message>> requests = [];
+
+  @override
+  Future<String> chat(
+    List<Message> messages, {
+    List<Map<String, dynamic>>? tools,
+    double temperature = 0.7,
+    int maxTokens = 2048,
+    List<String>? stop,
+  }) async {
+    requests.add(List.of(messages));
+    return '没有查到。';
+  }
+}
+
 /// Three stories; level_x_02 is about hiding a dagger.
 Future<void> _buildDb(String path, {required String model}) async {
   final db = await createGameDataDb(
