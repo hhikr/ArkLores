@@ -1,6 +1,6 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前：v0.12.0。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
+> 当前：v0.13.0。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
 > 0.12 起有两个知识库（明日方舟、终末地），Agent 看到的是合并的检索面（§3）。
 > 结构、工具、提示词约定与验收数据见 **`R17_TOOL_AGENT.md`**；服务商差异见 `LLM_PROVIDERS.md`；知识库表见 `GAMEDATA_BUILD_PIPELINE.md`。
 
@@ -16,13 +16,15 @@
                                    最终答案（JSON）→ 出处核对（SeenLines，最多退回一次）→ 审稿 → 按阶段整理
                                    → [STORY_ANSWER: status=answered|partial|not_covered]
        工具：sql（只读）/ grep / read_story / find / outline / similar_names / delegate
+             （0.13，“Wiki 资料”开着时）wiki_search / wiki_read → WikiLookup（PRTS / Warfarin，快照）
                                    │
               GameDataKnowledgeStore（共享只读连接；sql 另开只读 FFI 连接，超时 sqlite3_interrupt）
                                    │
               ChatSessionStore（chat_sessions/ 每对话一个 JSON：每次模型输出、工具、观察、答案、usage、timeline）
 ```
 
-- **知识源只有 GameData**。Wiki 与用户资料只作浏览/上下文（“用它提问”把资料文字放进提问框草稿），不是证据。
+- **主要知识源是 GameData**。0.13 起 Agent 还可以查 PRTS / Warfarin Wiki 作为**二手**证据（第三种出处 `wiki:…`，同一套核对；
+  原文优先，只有 Wiki 支持的说法要写明），见 `WIKI_EVIDENCE.md`。用户资料和 Wiki 页里选中的文字只作上下文（“用它提问”放进提问框草稿），不是证据。
 - 界面把工具调用与输出配对成时间线（`features/ai/work_steps.dart`），不显示 Thought/Action/Observation 原文。
 - 事件类型在 `react_event.dart`（名字沿用 ReAct，内容是原生工具调用）。角色扮演及其文本式 ReAct 已在 0.11 删除。
 
@@ -69,5 +71,6 @@
 | v0.10.7 | 删除 自动/概括/核查/回答 模式与路由 | 模式只改输出格式，路由多一次调用 |
 | 0.11 | 资料页说明进提示词（`loreLibraryGuide`）；复核/提要可选；服务商兼容；删除角色扮演；工作过程时间线 | 条目层上线；非 GLM 服务商空回复；界面可读 |
 | 0.12 | 终末地知识库；`MultiGameRetrieval`，工具带 `game`；提示词加“两个游戏”一节；一个任务一篇剧情，提示词说明跨种类的先后不可推断 | 第二个游戏；终末地的对话种类各自编号 |
+| 0.13 | Wiki 工具（`wiki_search`/`wiki_read`）与 Wiki 出处：段落编号、版本快照、同一套出处核对；“Wiki 资料”开关 | 库里没有的整理与资料；玩家常用的 Wiki 可以引证 |
 
 R12–R16 的逐轮真机数据已删（git 历史可查，`docs/AI_ARCHITECTURE.md` 2026-10-07 之前的版本）。

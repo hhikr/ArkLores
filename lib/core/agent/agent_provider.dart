@@ -11,6 +11,7 @@ import '../gamedata/multi_game_retrieval.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../llm/usage_meter.dart';
+import '../wiki/wiki_provider.dart';
 import 'agent_logger.dart';
 import 'answer_options.dart';
 import 'chat_message.dart';
@@ -64,6 +65,7 @@ final storyQaAgentProvider = Provider<StoryQaAgent>((ref) {
     llmClient: ref.watch(llmClientProvider(ReasoningLevel.off)),
     gameDataStore: ref.watch(loreRetrievalProvider),
     embeddingClient: ref.watch(embeddingClientProvider),
+    wiki: ref.watch(wikiLookupProvider),
     usage: ref.watch(usageMeterProvider),
   );
 });

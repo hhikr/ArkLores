@@ -90,6 +90,15 @@ void main() {
     const off = AnswerOptions(review: false, digest: false);
     expect(container.read(answerOptionsProvider), off);
     expect(await SettingsService().loadAnswerOptions(), off);
+    // 0.13: the wikis are the third option.
+    await tester.tap(find.byKey(const ValueKey('answer-options')));
+    await tester.pumpAndSettle();
+    expect(find.text('Wiki 资料'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('answer-option-wiki')));
+    await tester.pumpAndSettle();
+    const none = AnswerOptions(review: false, digest: false, wiki: false);
+    expect(container.read(answerOptionsProvider), none);
+    expect(await SettingsService().loadAnswerOptions(), none);
     expect(tester.takeException(), isNull);
   });
 

@@ -4,7 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
+import '../../../core/wiki/wiki_page.dart';
+import '../../../core/wiki/wiki_provider.dart';
 import '../../../shared/l10n/l10n.dart';
+import '../../../shared/providers/handoff_provider.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/press_feedback.dart';
@@ -32,6 +35,41 @@ void showCitedRecord(BuildContext context, String id) {
     showDragHandle: true,
     builder: (_) => _RecordSheet(id: id),
   );
+}
+
+/// 0.13: shows the cited paragraphs of a wiki page (the version the agent
+/// read) in a bottom sheet, with a way to open the page in the Wiki tab.
+void showCitedWiki(BuildContext context, String pageId, CitedRange range) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => WikiCitationSheet(pageId: pageId, range: range),
+  );
+}
+
+/// The wiki tab (its `WikiSiteConfig` id) that shows [site]'s pages.
+String wikiTabIdOf(WikiSite site) => switch (site) {
+      WikiSite.prts => 'prts',
+      WikiSite.warfarin => 'endfield',
+    };
+
+/// Opens [url] of [site] in the Wiki tab (leaving the pages pushed over the
+/// main tabs).
+void openInWikiTab(BuildContext context, WidgetRef ref, WikiSite site, Uri url) {
+  ref.read(wikiOpenRequestProvider.notifier).state =
+      WikiOpenRequest(wikiTabIdOf(site), url);
+  ref.read(mainTabRequestProvider.notifier).state = 0;
+  Navigator.of(context).popUntil((route) => route.isFirst);
+}
+
+/// The label of a cited wiki page: `PRTS《title》` once its kept version is
+/// loaded, the site's name before (or when it is not kept).
+String wikiPageLabel(WidgetRef ref, String pageId) {
+  final page = ref.watch(citedWikiPageProvider(pageId)).valueOrNull;
+  final site = WikiPageId.parse(pageId)?.site;
+  if (page != null) return '${page.site.label}《${page.title}》';
+  return site?.label ?? 'Wiki';
 }
 
 /// R17b: a story answer rendered block by block — each paragraph or list
@@ -216,10 +254,12 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
   Widget build(BuildContext context) {
     final block = widget.block;
     final count = block.stories.fold<int>(0, (n, s) => n + s.ranges.length) +
-        block.records.length;
+        block.records.length +
+        block.wikis.fold<int>(0, (n, w) => n + w.ranges.length);
     final collections = <String>{
       for (final story in block.stories) _labels(story.storyId).$1,
       if (block.records.isNotEmpty) context.t.aiCitedRecord,
+      if (block.wikis.isNotEmpty) context.t.aiCitedWiki,
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -437,6 +477,27 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
               ),
           ],
         ),
+      // 0.13: wiki pages — "PRTS《title》" and its paragraph chips.
+      for (final wiki in block.wikis)
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(wikiPageLabel(ref, wiki.pageId), style: chapterStyle),
+            for (final range in wiki.ranges)
+              _chip(
+                key: 'chain:${wiki.pageId}:${range.start}',
+                // Shown from 1, as line numbers are.
+                text: range.start == range.end
+                    ? context.t.aiCitationParagraph(range.start + 1)
+                    : context.t
+                        .aiCitationParagraphs(range.start + 1, range.end + 1),
+                tooltip: '${wiki.pageId}:${range.start}-${range.end}',
+                onTap: () => showCitedWiki(context, wiki.pageId, range),
+              ),
+          ],
+        ),
     ];
     return Container(
       width: double.infinity,
@@ -554,6 +615,141 @@ class _RecordSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 0.13: the cited paragraphs of a wiki page as the agent read them (with
+/// one paragraph around them for context), under their section headings;
+/// the page's site, title and when it was read; a button to the page.
+class WikiCitationSheet extends ConsumerWidget {
+  const WikiCitationSheet({super.key, required this.pageId, required this.range});
+
+  final String pageId;
+  final CitedRange range;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final id = WikiPageId.parse(pageId);
+    final page = ref.watch(citedWikiPageProvider(pageId));
+    final muted = theme.bodyFont.copyWith(
+      color: theme.textSecondary,
+      fontSize: 12,
+      height: 1.45,
+    );
+    final body = theme.bodyFont.copyWith(
+      color: theme.textPrimary,
+      height: 1.6,
+    );
+
+    Widget content(WikiPage? p) {
+      if (p == null) return Text(context.t.aiWikiPageUnavailable, style: muted);
+      final shown = p.range(range.start - 1, range.end + 1);
+      String? section;
+      final date =
+          MaterialLocalizations.of(context).formatShortDate(p.fetchedAt);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${p.site.label}《${p.title}》',
+            style: theme.titleFont.copyWith(fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          Text(context.t.aiWikiVersion(p.site.label, date), style: muted),
+          const SizedBox(height: 10),
+          for (final (i, block) in shown) ...[
+            if (block.section.isNotEmpty && block.section != section)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 4),
+                child: Text(
+                  section = block.section,
+                  style: theme.bodyFont.copyWith(
+                    color: theme.textSecondary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            _paragraph(
+              theme,
+              i,
+              block.text,
+              cited: i >= range.start && i <= range.end,
+              style: body,
+            ),
+          ],
+        ],
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            page.when(
+              loading: () => const LinearProgressIndicator(minHeight: 2),
+              error: (_, __) => content(null),
+              data: content,
+            ),
+            const SizedBox(height: 12),
+            Text(context.t.aiWikiSecondary, style: muted),
+            if (id != null) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                key: const ValueKey('wiki-citation-open'),
+                style: OutlinedButton.styleFrom(
+                  shape: const RoundedRectangleBorder(),
+                  foregroundColor: theme.accentText,
+                  side: BorderSide(color: theme.accentText.withValues(alpha: 0.5)),
+                ),
+                onPressed: withHaptic(() => openInWikiTab(
+                      context,
+                      ref,
+                      id.site,
+                      page.valueOrNull?.url ?? id.url,
+                    ),),
+                icon: const Icon(Icons.language_sharp, size: 18),
+                label: Text(context.t.aiWikiOpen),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One paragraph: the cited ones on the accent rail, the context ones
+  /// muted.
+  Widget _paragraph(
+    AppThemeTokens theme,
+    int index,
+    String text, {
+    required bool cited,
+    required TextStyle style,
+  }) =>
+      Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
+        decoration: BoxDecoration(
+          color: cited ? theme.accentPrimary.withValues(alpha: 0.08) : null,
+          border: Border(
+            left: BorderSide(
+              color: cited ? theme.accentPrimary : theme.divider,
+              width: cited ? 2 : 1,
+            ),
+          ),
+        ),
+        child: SelectableText(
+          text,
+          style: cited ? style : style.copyWith(color: theme.textSecondary),
+        ),
+      );
 }
 
 /// The chapters of one story collection cited by a block.

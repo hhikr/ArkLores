@@ -1461,6 +1461,67 @@ class AppLocalizationsEn extends AppLocalizations {
       'Long answers open with a few summary paragraphs, the details folded below (one more call)';
 
   @override
+  String get aiAnswerWiki => 'Wiki';
+
+  @override
+  String get aiAnswerWikiHint =>
+      'Look things up on PRTS / Warfarin Wiki (online) as a secondary source besides the game text';
+
+  @override
+  String get aiCitedWiki => 'Wiki';
+
+  @override
+  String aiCitedWikiPages(int count) {
+    return '$count wiki pages';
+  }
+
+  @override
+  String aiCitationParagraph(int n) {
+    return '¶$n';
+  }
+
+  @override
+  String aiCitationParagraphs(int start, int end) {
+    return '¶$start–$end';
+  }
+
+  @override
+  String get aiWikiOpen => 'Open in Wiki';
+
+  @override
+  String aiWikiVersion(String site, String date) {
+    return '$site · version read on $date';
+  }
+
+  @override
+  String get aiWikiSecondary =>
+      'Wikis are written by the community: a secondary source. Where they differ from the game text, the game text wins.';
+
+  @override
+  String get aiWikiPageUnavailable =>
+      'This version of the page is not kept on this device (the question may have been asked elsewhere); open the current version in the Wiki.';
+
+  @override
+  String aiWorkWikiSearch(String query) {
+    return 'Searching the wiki for “$query”';
+  }
+
+  @override
+  String aiWorkWikiRead(String title) {
+    return 'Reading wiki page “$title”';
+  }
+
+  @override
+  String aiWorkWikiPages(int count) {
+    return '$count pages';
+  }
+
+  @override
+  String aiWorkParagraphs(int start, int end) {
+    return '¶$start–$end';
+  }
+
+  @override
   String librarySearchIn(String name) {
     return 'In “$name”';
   }

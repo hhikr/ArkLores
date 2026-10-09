@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
+import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/providers/wiki_navigation_provider.dart';
@@ -197,6 +198,13 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       _restoredState = true;
     });
     ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
+    final pending = _pendingOpen;
+    if (pending != null) {
+      _pendingOpen = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openRequested(pending);
+      });
+    }
   }
 
   /// Saves the tabs, URLs and reader settings. Called from [dispose] too,
@@ -885,10 +893,46 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       );
   // ─── Build ───────────────────────────────────────────────────────
 
+  /// 0.13: a page asked for by another page (an answer's wiki citation)
+  /// before the tabs were restored; opened right after.
+  WikiOpenRequest? _pendingOpen;
+
+  /// Opens [request] in the tab of its site (by id, else by host, else the
+  /// first tab).
+  void _openRequested(WikiOpenRequest request) {
+    if (!_restoredState) {
+      _pendingOpen = request;
+      return;
+    }
+    var index = _wikiSites.indexWhere((s) => s.id == request.siteId);
+    if (index < 0) {
+      index = _wikiSites.indexWhere(
+        (s) => Uri.tryParse(s.url)?.host == request.url.host,
+      );
+    }
+    if (index < 0) index = 0;
+    if (_tabController.index != index) {
+      _tabController.index = index;
+      _saveWikiTabIndex(index);
+    }
+    final url = '${request.url}';
+    final controller = _controllers[index];
+    if (controller != null) {
+      controller.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+    } else {
+      setState(() => _currentUrls[index] = url);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
+    ref.listen<WikiOpenRequest?>(wikiOpenRequestProvider, (_, request) {
+      if (request == null) return;
+      ref.read(wikiOpenRequestProvider.notifier).state = null;
+      _openRequested(request);
+    });
     if (!_restoredState) {
       return Scaffold(
         backgroundColor: Colors.transparent,

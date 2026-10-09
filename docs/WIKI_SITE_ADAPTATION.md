@@ -69,6 +69,11 @@ App 的顶部站点栏（`wiki-site-bar`）和底部导航都是悬浮的，网�
 所以由 `_applyDockInsets` 注入样式：给 `html` 上下加悬浮栏高度的 padding，并把网站自己 `fixed`/`sticky` 在顶部/底部的栏同样下移/上移；
 每次 build 用 `_syncDockInsets` 同步高度。阅读模式两栏都隐藏、留白为 0。新增站点时要真机确认它的固定栏没有被悬浮栏盖住。
 
+## 从问答打开页面（0.13）
+
+答案里的 Wiki 出处弹窗有“在 Wiki 中打开”：写 `wikiOpenRequestProvider`（站点 id + 网址）并切到 Wiki 标签，`WikiBrowserPage` 按站点 id
+（找不到时按域名）选标签并加载；标签还没恢复好时先记下，恢复后再打开。问答查 Wiki 的部分见 `WIKI_EVIDENCE.md`。
+
 ## 验证要求
 
 每次修改站点适配时至少运行：

@@ -2,7 +2,18 @@
 
 All notable changes to ArkLores will be documented in this file.
 
-## [Unreleased]
+## [0.13.0] - 2026-10-09
+
+The stable release of the 0.13 line (wiki search and evidence for Ask), Android build 32; it installs over v0.10.0 and later. The knowledge bases are unchanged — the same files as before (Arknights `695caa3e…`, the v0.11.0 asset; Endfield `592d64a8…`, the v0.12.0 asset), now also attached to this release, which the app downloads them from; an installed knowledge base is not downloaded again. The releases before v0.10.0 were removed (their tags remain).
+
+### Answers can look things up on the wikis
+
+- The Ask agent can search and read the games' wikis — PRTS for Arknights, Warfarin Wiki for Endfield — with two new tools (`wiki_search`, `wiki_read`). A page is read as numbered paragraphs under its section headings; stat tables are left out.
+- Wiki paragraphs are a third kind of source, checked like story lines: only paragraphs the agent was shown can be cited, and sentences copied from a page inside quotation marks are sent back for retelling. The prompt treats the wikis as a secondary source: facts the game text has are cited from the game text; where the two differ the game text wins, and points only a wiki supports say so.
+- Every version of a page the agent read is kept on the device, so a citation shows the paragraphs as they were read, also offline or after the page was edited.
+- In the answer: wiki rows in each point's sources and in the source list, a sheet with the cited paragraphs (and the ones around them) that opens the page in the Wiki tab; wiki searches and reads in the work timeline.
+- "Wiki 资料" in the answer options turns it off (on by default); without it the agent works as in 0.12. A wiki that cannot be reached is reported in the timeline and the answer goes on from the knowledge base.
+- Docs: `docs/WIKI_EVIDENCE.md`. Also: documentation brought in line with v0.12.0 (build pipeline, cloud guide, test guards); the unmaintained iOS guide (last updated for v0.9.0) removed.
 
 ## [0.12.0] - 2026-10-09
 

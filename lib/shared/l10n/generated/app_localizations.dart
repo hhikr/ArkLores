@@ -2612,6 +2612,90 @@ abstract class AppLocalizations {
   /// **'Long answers open with a few summary paragraphs, the details folded below (one more call)'**
   String get aiAnswerDigestHint;
 
+  /// No description provided for @aiAnswerWiki.
+  ///
+  /// In en, this message translates to:
+  /// **'Wiki'**
+  String get aiAnswerWiki;
+
+  /// No description provided for @aiAnswerWikiHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Look things up on PRTS / Warfarin Wiki (online) as a secondary source besides the game text'**
+  String get aiAnswerWikiHint;
+
+  /// No description provided for @aiCitedWiki.
+  ///
+  /// In en, this message translates to:
+  /// **'Wiki'**
+  String get aiCitedWiki;
+
+  /// No description provided for @aiCitedWikiPages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} wiki pages'**
+  String aiCitedWikiPages(int count);
+
+  /// No description provided for @aiCitationParagraph.
+  ///
+  /// In en, this message translates to:
+  /// **'¶{n}'**
+  String aiCitationParagraph(int n);
+
+  /// No description provided for @aiCitationParagraphs.
+  ///
+  /// In en, this message translates to:
+  /// **'¶{start}–{end}'**
+  String aiCitationParagraphs(int start, int end);
+
+  /// No description provided for @aiWikiOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in Wiki'**
+  String get aiWikiOpen;
+
+  /// No description provided for @aiWikiVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'{site} · version read on {date}'**
+  String aiWikiVersion(String site, String date);
+
+  /// No description provided for @aiWikiSecondary.
+  ///
+  /// In en, this message translates to:
+  /// **'Wikis are written by the community: a secondary source. Where they differ from the game text, the game text wins.'**
+  String get aiWikiSecondary;
+
+  /// No description provided for @aiWikiPageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This version of the page is not kept on this device (the question may have been asked elsewhere); open the current version in the Wiki.'**
+  String get aiWikiPageUnavailable;
+
+  /// No description provided for @aiWorkWikiSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching the wiki for “{query}”'**
+  String aiWorkWikiSearch(String query);
+
+  /// No description provided for @aiWorkWikiRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading wiki page “{title}”'**
+  String aiWorkWikiRead(String title);
+
+  /// No description provided for @aiWorkWikiPages.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} pages'**
+  String aiWorkWikiPages(int count);
+
+  /// No description provided for @aiWorkParagraphs.
+  ///
+  /// In en, this message translates to:
+  /// **'¶{start}–{end}'**
+  String aiWorkParagraphs(int start, int end);
+
   /// No description provided for @librarySearchIn.
   ///
   /// In en, this message translates to:

@@ -1415,6 +1415,65 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiAnswerDigestHint => '长答案先给几段提要，详细经过折叠在下面（多一次调用）';
 
   @override
+  String get aiAnswerWiki => 'Wiki 资料';
+
+  @override
+  String get aiAnswerWikiHint => '联网查 PRTS / Warfarin Wiki，作为原文之外的补充出处';
+
+  @override
+  String get aiCitedWiki => 'Wiki';
+
+  @override
+  String aiCitedWikiPages(int count) {
+    return 'Wiki 资料 $count 页';
+  }
+
+  @override
+  String aiCitationParagraph(int n) {
+    return '第 $n 段';
+  }
+
+  @override
+  String aiCitationParagraphs(int start, int end) {
+    return '第 $start–$end 段';
+  }
+
+  @override
+  String get aiWikiOpen => '在 Wiki 中打开';
+
+  @override
+  String aiWikiVersion(String site, String date) {
+    return '$site · $date 读取的版本';
+  }
+
+  @override
+  String get aiWikiSecondary => 'Wiki 是社区编写的二手资料；与游戏原文不一致时以原文为准。';
+
+  @override
+  String get aiWikiPageUnavailable =>
+      '这个页面版本没有保存在本机（可能是在别的设备上问的），可以在 Wiki 中打开当前版本。';
+
+  @override
+  String aiWorkWikiSearch(String query) {
+    return '在 Wiki 上搜「$query」';
+  }
+
+  @override
+  String aiWorkWikiRead(String title) {
+    return '读 Wiki《$title》';
+  }
+
+  @override
+  String aiWorkWikiPages(int count) {
+    return '$count 个页面';
+  }
+
+  @override
+  String aiWorkParagraphs(int start, int end) {
+    return '第 $start–$end 段';
+  }
+
+  @override
   String librarySearchIn(String name) {
     return '在「$name」中';
   }

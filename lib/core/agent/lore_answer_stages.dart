@@ -24,7 +24,7 @@ class LoreAnswerEntry {
   final String? heading;
   final String text;
 
-  /// `story_id:a-b` / `record:id` references.
+  /// `story_id:a-b` / `record:id` / `wiki:<page id>:a-b` references.
   final List<String> cites;
 
   bool get isText => heading == null;
@@ -205,7 +205,10 @@ List<String> mergeCitationRefs(List<String> refs) {
   return [...out, ...records];
 }
 
-final RegExp _storyRef = RegExp(r'^(.+\.txt):L?(\d+)(?:-L?(\d+))?$');
+/// A story ref, or (0.13) a wiki ref: a page id with paragraph numbers.
+final RegExp _storyRef = RegExp(
+  r'^(.+\.txt|wiki:[a-z]+:[A-Za-z0-9_\-/]+@[A-Za-z0-9]+):[LP]?(\d+)(?:-[LP]?(\d+))?$',
+);
 
 /// The questions of a review reply (`{"issues": [...]}`); empty for
 /// `{"ok": true}` or a reply that cannot be read.
@@ -221,7 +224,10 @@ List<String> parseReviewIssues(String content, {int max = 3}) {
 /// [markdown] without its citations, for the reviewer (who reads the
 /// answer as a reader would).
 String withoutCitations(String markdown) => markdown
-    .replaceAll(RegExp(r'\s*`[^`\n]*(?:\.txt[:：][^`\n]*|record:[^`\n]*)`'), '')
+    .replaceAll(
+      RegExp(r'\s*`[^`\n]*(?:\.txt[:：][^`\n]*|record:[^`\n]*|wiki:[^`\n]*)`'),
+      '',
+    )
     .trim();
 
 /// An entry number, or a "3-5" range of them, as a list of numbers.

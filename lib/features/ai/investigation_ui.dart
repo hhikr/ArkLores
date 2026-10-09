@@ -5,6 +5,7 @@ import '../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../core/agent/story_answer.dart';
 import '../../core/gamedata/story_catalog.dart'
     show StoryCatalogEntry, fallbackStoryLabel;
+import '../../core/wiki/wiki_page.dart';
 
 /// Pre-R13 summary answers ended with
 /// `Coverage: read=.. | mapped=.. | skipped=..`; parsed only so old
@@ -56,6 +57,31 @@ List<String> extractCitedRecordIds(String content) => [
         for (final m in _recordCitationPattern.allMatches(content)) m.group(1)!,
       },
     ];
+
+/// 0.13: the cited paragraphs of one wiki page (page id with its version),
+/// merged when overlapping or adjacent.
+class CitedWikiPage {
+  CitedWikiPage(this.pageId);
+  final String pageId;
+  final List<CitedRange> ranges = [];
+
+  WikiPageId? get parsed => WikiPageId.parse(pageId);
+}
+
+/// 0.13: wiki pages cited in [content], in order of first citation.
+List<CitedWikiPage> extractCitedWikiPages(String content) {
+  final pages = <String, CitedWikiPage>{};
+  for (final m in wikiCitationPattern.allMatches(content)) {
+    final id = '$wikiIdPrefix${m.group(1)}:${m.group(2)}@${m.group(3)}';
+    final a = int.parse(m.group(4)!);
+    final b = m.group(5) == null ? a : int.parse(m.group(5)!);
+    _addRangeTo(
+      pages.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
+      CitedRange(a <= b ? a : b, a <= b ? b : a),
+    );
+  }
+  return pages.values.toList(growable: false);
+}
 
 /// Renders 1-based line numbers (`end` null for a single line).
 typedef LineRangeText = String Function(int start, int? end);
@@ -175,6 +201,7 @@ class AnswerBlock {
     required this.indent,
     required this.stories,
     required this.records,
+    this.wikis = const [],
   });
 
   /// The block without citations; list items are dedented (the UI indents
@@ -190,7 +217,11 @@ class AnswerBlock {
   /// Cited `record:` ids in order of first citation.
   final List<String> records;
 
-  bool get hasCitations => stories.isNotEmpty || records.isNotEmpty;
+  /// 0.13: cited wiki pages in order of first citation.
+  final List<CitedWikiPage> wikis;
+
+  bool get hasCitations =>
+      stories.isNotEmpty || records.isNotEmpty || wikis.isNotEmpty;
 }
 
 final RegExp _listItemStart = RegExp(r'^(\s*)(?:[-*+]|\d+[.)])\s+');
@@ -288,7 +319,20 @@ final RegExp _trailingSpaces = RegExp(r'[ \t]+$', multiLine: true);
 AnswerBlock _toAnswerBlock(String text, int indent) {
   final stories = <String, BlockStoryCitation>{};
   final records = <String>[];
+  final wikis = <String, CitedWikiPage>{};
   final marked = text
+      // Wiki refs first: a page key never ends in .txt, but its paragraph
+      // numbers must not be read as anything else.
+      .replaceAllMapped(_wikiCitationInText, (m) {
+        final id = '$wikiIdPrefix${m.group(1)}:${m.group(2)}@${m.group(3)}';
+        final a = int.parse(m.group(4)!);
+        final b = m.group(5) == null ? a : int.parse(m.group(5)!);
+        _addRangeTo(
+          wikis.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
+          CitedRange(a <= b ? a : b, a <= b ? b : a),
+        );
+        return _citeMark;
+      })
       .replaceAllMapped(_citationPattern, (m) {
         final a = int.parse(m.group(2)!);
         final b = m.group(3) == null ? a : int.parse(m.group(3)!);
@@ -312,12 +356,21 @@ AnswerBlock _toAnswerBlock(String text, int indent) {
     indent: indent,
     stories: stories.values.toList(growable: false),
     records: records,
+    wikis: wikis.values.toList(growable: false),
   );
 }
 
+/// A wiki citation, optionally backticked.
+final RegExp _wikiCitationInText =
+    RegExp('`?${wikiCitationPattern.pattern}`?');
+
 /// Adds [range] to [story], merging overlapping or adjacent ranges.
-void _addRange(BlockStoryCitation story, CitedRange range) {
-  final ranges = story.ranges..add(range);
+void _addRange(BlockStoryCitation story, CitedRange range) =>
+    _addRangeTo(story.ranges, range);
+
+/// Adds [range] to [ranges], merging overlapping or adjacent ranges.
+void _addRangeTo(List<CitedRange> ranges, CitedRange range) {
+  ranges.add(range);
   ranges.sort((x, y) => x.start.compareTo(y.start));
   final merged = <CitedRange>[];
   for (final r in ranges) {

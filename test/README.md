@@ -32,6 +32,8 @@
   （行按 id、文字是 `{id, text}` 经 `I18nTextTable_CN` 解析，名字都是虚构的），覆盖干员、情报档案库、任务归并与命名、章节、帝江号与 Baker、地区。
   夹具里 i18n 的 id 要互不相同（物品行用 `20 + 字符码` 算 id，新加的用 1000 以上）。`endfield_dialog_tree_test.dart` 测对话树展开，
   `core/gamedata/multi_game_retrieval_test.dart` 测两个库合成的检索面。真实终末地库的验收在 `live/endfield_acceptance_test.dart`（opt-in）。
+- `fake_wiki.dart`（0.13）：内存里的 Wiki（`FakeWikiSource`，可设为“不可用”、记录取页次数）和一个虚构页面的 `fakeWikiLookup()`；
+  站点的真实请求格式在 `core/wiki/wiki_sources_test.dart` 里用 `MockClient` 测，联网检查在 `live/wiki_live_test.dart`（免费，opt-in）。
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
   `plain_theme.dart`（主题的 Google 字体在测试里会联网下载并失败，Widget 测试用 `plainThemeOverride()`）、
