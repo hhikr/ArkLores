@@ -229,6 +229,14 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
+  Future<List<String>> namesInText(String text, {int limit = 6}) async {
+    final db = await _open();
+    if (db == null || text.trim().isEmpty) return const [];
+    final inventory = await (_nameInventory ??= loadNameInventory(db));
+    return namesOccurringIn(text, inventory, limit: limit);
+  }
+
+  @override
   Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
     List<String> terms, {
     String? scopeId,
@@ -349,7 +357,19 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     return action(db);
   }
 
-  Future<sqflite.Database?> _open() async {
+  /// The open in progress, so tools running at once (one turn's calls run
+  /// together) share it instead of each closing and reopening the handle.
+  Future<sqflite.Database?>? _opening;
+
+  Future<sqflite.Database?> _open() {
+    final pending = _opening;
+    if (pending != null) return pending;
+    final opening = _openNow();
+    _opening = opening;
+    return opening.whenComplete(() => _opening = null);
+  }
+
+  Future<sqflite.Database?> _openNow() async {
     final path = await _resolveDbPath();
     if (path == null) return null;
 
@@ -357,7 +377,11 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final stat = File(path).statSync();
     if (stat.type == FileSystemEntityType.notFound) return null;
 
+    // A handle closed behind this store's back (anything that once opened
+    // the same path with sqflite's shared instance and closed it) is opened
+    // again instead of failing every later query with database_closed.
     if (_db != null &&
+        _db!.isOpen &&
         _openedFileStat != null &&
         _sameFileStamp(_openedFileStat!, stat)) {
       return _db;
@@ -372,7 +396,12 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     await _ensureStoryLinesIndex(path);
     // Creating the index changed the file: remember the stamp it has now.
     final openedStat = File(path).statSync();
-    _db = await sqflite.openDatabase(path, readOnly: true);
+    // Its own connection: nothing else that opens this file can close it.
+    _db = await sqflite.openDatabase(
+      path,
+      readOnly: true,
+      singleInstance: false,
+    );
     _openedFileStat = openedStat;
     return _db;
   }
@@ -388,7 +417,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   Future<void> _ensureStoryLinesIndex(String path) async {
     if (!_indexChecked.add(path)) return;
     try {
-      final db = await sqflite.openDatabase(path);
+      final db = await sqflite.openDatabase(path, singleInstance: false);
       try {
         final has = await db.rawQuery(
           "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",

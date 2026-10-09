@@ -249,6 +249,13 @@ class AskChatNotifier extends ChatNotifierBase {
       onConversation: onConversation,
     );
 
+    // 0.14: cancel stops the run at once (not at its next event, which may
+    // be minutes away), so the turn is closed and its cost recorded then.
+    final stop = Completer<void>();
+    _stopActive = () {
+      if (!stop.isCompleted) stop.complete();
+    };
+
     final steps = <ReActStep>[];
     // R16: streamed answer text and live reasoning, pushed to the UI at most
     // once per coalescer interval.
@@ -265,7 +272,7 @@ class AskChatNotifier extends ChatNotifierBase {
     });
 
     try {
-      await for (final event in stream) {
+      await for (final event in _untilStopped(stream, stop.future)) {
         if (!isCurrentGeneration(generation)) {
           canceled = true;
           break;
@@ -298,10 +305,11 @@ class AskChatNotifier extends ChatNotifierBase {
                 content: event.content,
                 toolName: event.toolName,
                 toolArgs: event.toolArgs,
+                subtask: event.subtask,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
-            if (recording) {
+            if (recording && event.subtask == null) {
               final record = iterations.putIfAbsent(
                 currentIteration,
                 () => ReActIterationRecord(
@@ -324,10 +332,13 @@ class AskChatNotifier extends ChatNotifierBase {
                 type: event.type,
                 content: event.content,
                 toolName: event.toolName,
+                subtask: event.subtask,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
-            if (recording) {
+            // A sub-agent's step is shown, not recorded as the main
+            // agent's iteration.
+            if (recording && event.subtask == null) {
               iterations
                   .putIfAbsent(
                     currentIteration,
@@ -401,6 +412,8 @@ class AskChatNotifier extends ChatNotifierBase {
         turnError = '$e';
       }
     } finally {
+      if (stop.isCompleted || !isCurrentGeneration(generation)) canceled = true;
+      _stopActive = null;
       coalescer.cancel();
       TurnStats? stats;
       if (usage != null) {
@@ -471,6 +484,43 @@ class AskChatNotifier extends ChatNotifierBase {
   static String _truncateTitle(String query) => query.length <= _titleMaxChars
       ? query
       : '${query.substring(0, _titleMaxChars)}…';
+
+  /// Stops the running question (set while one runs).
+  void Function()? _stopActive;
+
+  @override
+  void cancel() {
+    _stopActive?.call();
+    super.cancel();
+  }
+
+  /// [events] until [stop] completes; the run is then left (its pending
+  /// work is dropped) instead of waited for.
+  static Stream<ReActEvent> _untilStopped(
+    Stream<ReActEvent> events,
+    Future<void> stop,
+  ) {
+    late final StreamController<ReActEvent> out;
+    StreamSubscription<ReActEvent>? sub;
+    out = StreamController<ReActEvent>(
+      onListen: () {
+        sub = events.listen(
+          out.add,
+          onError: out.addError,
+          onDone: () {
+            if (!out.isClosed) out.close();
+          },
+        );
+        stop.then((_) {
+          if (out.isClosed) return;
+          sub?.cancel();
+          out.close();
+        });
+      },
+      onCancel: () => sub?.cancel(),
+    );
+    return out.stream;
+  }
 
   @override
   String get canceledMarker => '[ASK_CANCELED]';

@@ -94,7 +94,7 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
         state = const StoryVectorUiState();
         return;
       }
-      final db = await sqflite.openDatabase(path, readOnly: true);
+      final db = await sqflite.openDatabase(path, readOnly: true, singleInstance: false);
       try {
         final plan = await planVectorUpdate(db);
         final config = _config();
@@ -148,7 +148,7 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
     final client = OpenAICompatibleEmbeddingClient(config: config);
     sqflite.Database? db;
     try {
-      db = await sqflite.openDatabase(path);
+      db = await sqflite.openDatabase(path, singleInstance: false);
       final result = await updateStoryVectors(
         db: db,
         client: client,

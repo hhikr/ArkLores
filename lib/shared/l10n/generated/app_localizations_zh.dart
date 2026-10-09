@@ -422,7 +422,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiTabAsk => 'AI 问答';
 
   @override
-  String get aiAskSource => '仅基于已安装的 GameData 剧情原文回答';
+  String get aiAskSource => '检索已安装的两个游戏的剧情原文，开着“Wiki 资料”时同时查 Wiki；答案里的每一点都有出处';
 
   @override
   String get aiAskEmpty => '直接问任何剧情问题——人物经历、事件前因后果、某个说法是否属实，都可以。';
@@ -894,7 +894,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aiWorkFind(String query) {
-    return '按意思找「$query」';
+    return '检索「$query」';
   }
 
   @override
@@ -908,7 +908,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get aiWorkRedo => '出处没对上，重写答案';
+  String get aiWorkRedo => '重写答案';
 
   @override
   String aiWorkHits(int hits, int stories) {
@@ -930,6 +930,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiWorkFailed => '出错';
+
+  @override
+  String aiWorkStories(int count) {
+    return '$count 篇';
+  }
+
+  @override
+  String aiWorkSubtask(int number, String title) {
+    return '助手 $number · $title';
+  }
 
   @override
   String get aiWorkRunning => '进行中';
@@ -1418,7 +1428,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiAnswerWiki => 'Wiki 资料';
 
   @override
-  String get aiAnswerWikiHint => '联网查 PRTS / Warfarin Wiki，作为原文之外的补充出处';
+  String get aiAnswerWikiHint =>
+      '联网查 PRTS / Warfarin Wiki，与本地原文一起检索；出自 Wiki 的说法会写明';
+
+  @override
+  String get aiAnswerDelegate => '子助手';
+
+  @override
+  String get aiAnswerDelegateHint => '问题很宽时，允许把部分检索交给最多两个子助手并行（调用和花费明显增加）';
+
+  @override
+  String get aiNoVectorWarning => '没有配置向量服务：只用关键词检索，问答质量可能下降。可在设置里配置向量服务。';
 
   @override
   String get aiCitedWiki => 'Wiki';

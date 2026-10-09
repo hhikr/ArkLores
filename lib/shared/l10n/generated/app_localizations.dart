@@ -857,7 +857,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiAskSource.
   ///
   /// In en, this message translates to:
-  /// **'Answers are grounded in installed GameData story text only'**
+  /// **'Searches the story text of both installed games, and the wikis when \"Wiki\" is on; every point of an answer has a source'**
   String get aiAskSource;
 
   /// No description provided for @aiAskEmpty.
@@ -1685,7 +1685,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiWorkFind.
   ///
   /// In en, this message translates to:
-  /// **'Find by meaning: “{query}”'**
+  /// **'Search: “{query}”'**
   String aiWorkFind(String query);
 
   /// No description provided for @aiWorkSimilar.
@@ -1703,7 +1703,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiWorkRedo.
   ///
   /// In en, this message translates to:
-  /// **'Sources did not match; rewriting'**
+  /// **'Rewriting the answer'**
   String get aiWorkRedo;
 
   /// No description provided for @aiWorkHits.
@@ -1735,6 +1735,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'failed'**
   String get aiWorkFailed;
+
+  /// No description provided for @aiWorkStories.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} stories'**
+  String aiWorkStories(int count);
+
+  /// No description provided for @aiWorkSubtask.
+  ///
+  /// In en, this message translates to:
+  /// **'Helper {number} · {title}'**
+  String aiWorkSubtask(int number, String title);
 
   /// No description provided for @aiWorkRunning.
   ///
@@ -2621,8 +2633,26 @@ abstract class AppLocalizations {
   /// No description provided for @aiAnswerWikiHint.
   ///
   /// In en, this message translates to:
-  /// **'Look things up on PRTS / Warfarin Wiki (online) as a secondary source besides the game text'**
+  /// **'Search PRTS / Warfarin Wiki (online) along with the game text; points taken from a wiki say so'**
   String get aiAnswerWikiHint;
+
+  /// No description provided for @aiAnswerDelegate.
+  ///
+  /// In en, this message translates to:
+  /// **'Sub-agents'**
+  String get aiAnswerDelegate;
+
+  /// No description provided for @aiAnswerDelegateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For wide questions, let up to two sub-agents search in parallel (many more calls and cost)'**
+  String get aiAnswerDelegateHint;
+
+  /// No description provided for @aiNoVectorWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.'**
+  String get aiNoVectorWarning;
 
   /// No description provided for @aiCitedWiki.
   ///

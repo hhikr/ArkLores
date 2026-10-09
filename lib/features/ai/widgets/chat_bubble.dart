@@ -1009,7 +1009,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       _ => theme.accentText,
     };
     final result = _workResult(step);
-    final detail = step.kind == WorkKind.sql ? step.arg('query') : '';
+    // 0.14: a failed step says why (the tool's own words) under its title.
+    final detail = step.failed
+        ? step.failure
+        : step.kind == WorkKind.sql
+            ? step.arg('query')
+            : '';
     final canOpen = step.isTool && step.done && step.text.isNotEmpty;
     return _timelineRow(
       theme,
@@ -1161,12 +1166,16 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// The step's title, with the game when it looked in Endfield's library.
+  /// The step's title, with the game when it looked in Endfield's library,
+  /// and the helper that took it (0.14).
   (IconData, String) _workTitle(WorkStep step) {
-    final (icon, title) = _workTitleOf(step);
-    return step.game == Game.endfield
-        ? (icon, '$title · ${context.t.gameEndfield}')
-        : (icon, title);
+    var (icon, title) = _workTitleOf(step);
+    if (step.game == Game.endfield) {
+      title = '$title · ${context.t.gameEndfield}';
+    }
+    final helper = step.subtask;
+    if (helper != null) title = context.t.aiWorkSubtask(helper, title);
+    return (icon, title);
   }
 
   (IconData, String) _workTitleOf(WorkStep step) {
@@ -1201,7 +1210,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       case WorkKind.wikiRead:
         return (Icons.article_sharp, t.aiWorkWikiRead(clip(step.wikiTitle)));
       case WorkKind.redo:
-        return (Icons.replay_sharp, t.aiWorkRedo);
+        // 0.14: the reason as the run gave it (which citations, which
+        // quote, what the reviewer asked).
+        return (
+          Icons.replay_sharp,
+          step.text.isEmpty ? t.aiWorkRedo : clip(step.text, 120),
+        );
       case WorkKind.error:
         return (Icons.error_outline_sharp, clip(step.text, 120));
       case WorkKind.otherTool:
@@ -1222,6 +1236,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       case WorkKind.sql:
         final rows = step.rowCount;
         return rows == null ? '' : t.aiWorkRows(rows);
+      case WorkKind.find:
+        final stories = step.searchStoryCount;
+        return stories == null ? '' : t.aiWorkStories(stories);
       case WorkKind.read:
         final range = step.lineRange;
         return range == null ? '' : t.aiWorkLines(range.$1, range.$2);

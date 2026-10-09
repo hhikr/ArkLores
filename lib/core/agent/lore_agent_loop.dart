@@ -6,12 +6,20 @@
 /// What they shared, and what this loop keeps:
 /// - the model that reads the text writes the answer (no digests, no
 ///   separate writer choosing excerpts);
-/// - expressive tools: read-only SQL over the whole corpus, whole-chapter
-///   reads, grep with context (`lore_tools.dart`);
+/// - expressive tools: one search over every source, read-only SQL over the
+///   whole corpus, chapter reads, grep with context (`lore_tools.dart`);
 /// - an append-only message list, so providers serve most of each request
 ///   from their prompt cache;
 /// - no hand-written progress rules — only a turn limit, a context budget
 ///   (oldest tool results folded) and one citation check at the end.
+///
+/// 0.14 (`notes/ask_0.14_review.md`, kept locally): the question is searched
+/// once before the first turn; tool calls pass a gate before they run or
+/// enter the conversation; a provider that answers a turn badly is asked
+/// again that turn only; the answer is rewritten at most once, and only when
+/// a few dropped citations would not do; the reorganising call sees the
+/// entries alone; sub-agents are off unless asked for, and their steps are
+/// shown.
 ///
 /// Every story question takes this same path (R13), with one prompt.
 library;
@@ -31,7 +39,9 @@ import 'lore_answer_stages.dart';
 import 'lore_tools.dart';
 import 'react_event.dart';
 import 'story_answer.dart';
+import 'tool_call_gate.dart';
 import 'tools/agent_tool.dart';
+import 'tools/search_tool.dart';
 import 'tools/wiki_tools.dart';
 
 /// The messages and seen lines of a conversation, carried into follow-up
@@ -67,14 +77,24 @@ String _coverageOf(String word) {
 final RegExp _textToolCall = RegExp(r'```(?:tool|json)\s*([\s\S]*?)```');
 
 /// How turns reach the provider. Starts with streamed native function
-/// calls; a provider that answers a turn with nothing at all is asked again
-/// without streaming ([plain]: some relays break streams or do not stream),
-/// then with tools described in the prompt ([textProtocol]: tool calls
-/// dropped or malformed). Shared with the sub-agents of the same question,
-/// so they start with what worked.
+/// calls. A turn that comes back empty is asked once more the same way,
+/// then without streaming ([plain]: some relays break streams or do not
+/// stream), then with tools described in the prompt ([textProtocol]: tool
+/// calls dropped or malformed). 0.14: that change holds for the turn that
+/// needed it; the next turn tries the usual way again, unless turns needed
+/// it [stickyAfter] times or the provider refused tools outright. Shared
+/// with the sub-agents of the same question.
 class AgentTransport {
   bool plain = false;
   bool textProtocol = false;
+
+  /// The provider answered a request with tools with an error about them:
+  /// tools stay in the prompt for the rest of the question.
+  bool toolsRefused = false;
+
+  /// Turns that had to be sent another way.
+  int degradedTurns = 0;
+  static const int stickyAfter = 2;
 }
 
 class LoreAgentLoop {
@@ -83,27 +103,30 @@ class LoreAgentLoop {
     required this.store,
     this.embeddingClient,
     this.wiki,
-    this.maxTurns = 60,
-    this.contextCharBudget = 360000,
+    this.maxTurns = 30,
+    this.contextCharBudget = 80000,
     this.maxTokens = 8192,
     this.temperature = 0.3,
     this.subtask = false,
-    this.subtaskMaxTurns = 20,
-    this.review = true,
+    this.subtaskMaxTurns = 10,
+    this.delegate = false,
+    this.maxSubtasks = 2,
+    this.review = false,
     this.digest = true,
+    this.preSearch = true,
     this.stageMinEntries = 5,
     this.streamRetryDelay = const Duration(seconds: 2),
+    this.heartbeat = const Duration(seconds: 10),
     this.onSpan,
     AgentTransport? transport,
   }) : transport = transport ?? AgentTransport();
 
-  /// How turns are sent (see [AgentTransport]); changes when a provider
-  /// answers with nothing.
+  /// How turns are sent (see [AgentTransport]).
   final AgentTransport transport;
 
-  /// Measurement only: called when a tool run or a local check (citation
-  /// text lookup, catalog lookup) finishes, with its name and wall-clock
-  /// start and end. Never changes behaviour.
+  /// Measurement only: called when a tool run, a local check (citation
+  /// text lookup, catalog lookup) or a failed model call finishes, with its
+  /// name and wall-clock start and end. Never changes behaviour.
   final void Function(String name, DateTime start, DateTime end)? onSpan;
 
   Future<T> _span<T>(String name, Future<T> Function() action) async {
@@ -121,14 +144,18 @@ class LoreAgentLoop {
   final Duration streamRetryDelay;
   static const int _maxStreamRetries = 2;
 
+  /// While a model call has sent nothing yet, the status line says how long
+  /// it has waited, every [heartbeat].
+  final Duration heartbeat;
+
   final LLMClient client;
   final GameDataRetrieval store;
 
-  /// Optional story vectors for `find` (R12); keyword-only without.
+  /// Optional story vectors for `search` (keyword-only without).
   final EmbeddingClient? embeddingClient;
 
   /// 0.13: the games' wikis (`wiki_search`, `wiki_read`, a third kind of
-  /// citation); null leaves them out of the tools and the prompt.
+  /// citation, and a part of `search`); null leaves them out.
   final WikiLookup? wiki;
 
   /// A sub-agent run by `delegate`: its own conversation, no `delegate`
@@ -138,13 +165,22 @@ class LoreAgentLoop {
   /// Turn limit of each sub-agent.
   final int subtaskMaxTurns;
 
+  /// 0.14: whether the main agent has the `delegate` tool (off by default:
+  /// sub-agents multiplied calls and time without better answers), and how
+  /// many sub-agents one question may start.
+  final bool delegate;
+  final int maxSubtasks;
+
   /// R18: a second model reads the main agent's answer as a reader and
   /// raises questions the main agent checks in the text (once per
-  /// question).
+  /// question). 0.14: off by default.
   final bool review;
 
   /// R18: whether a long answer is reorganised (see [stageMinEntries]).
   final bool digest;
+
+  /// 0.14: search the question before the first turn (main agent only).
+  final bool preSearch;
 
   /// R18: a JSON answer with at least this many text entries is
   /// reorganised into a few paragraphs, the detailed answer kept below.
@@ -160,7 +196,13 @@ class LoreAgentLoop {
   final double temperature;
 
   /// Messages kept whole at the end of the conversation when folding.
-  static const int _recentKept = 8;
+  static const int _recentKept = 6;
+
+  /// Sub-agents started so far in this question.
+  int _subtasks = 0;
+
+  /// Steps of running sub-agents, shown while the main agent waits.
+  StreamController<ReActEvent>? _side;
 
   Stream<ReActEvent> run({
     required String query,
@@ -174,26 +216,72 @@ class LoreAgentLoop {
     final games = store is MultiGameRetrieval
         ? await (store as MultiGameRetrieval).installedGames()
         : const [Game.arknights];
+    final delegating = delegate && !subtask;
     final tools = {
       for (final t in [
-        ...loreTools(store, seen, embeddingClient: embeddingClient),
+        ...loreTools(store, seen, embeddingClient: embeddingClient, wiki: wiki),
         if (wiki != null) ...wikiTools(wiki!, seen),
-        if (!subtask) DelegateTool((args) => _runSubtask(args, seen)),
+        if (delegating) DelegateTool((args) => _runSubtask(args, seen)),
       ])
         t.name: t,
     };
     final toolSpecs = [for (final t in tools.values) t.toJson()];
-    // Whether [conversation] is written in the text protocol (a sub-agent
-    // may switch [transport] while this conversation still has native
-    // calls).
-    var converted = false;
 
     String systemPrompt() {
-      final base =
-          loreSystemPrompt(subtask: subtask, games: games, wiki: wiki != null);
+      final base = loreSystemPrompt(
+        subtask: subtask,
+        games: games,
+        wiki: wiki != null,
+        delegate: delegating,
+      );
       return transport.textProtocol
           ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
           : base;
+    }
+
+    // Session-record index (one per tool call, see onRawLlmResponse).
+    var record = 0;
+
+    // 0.14: the question searched once before the first turn, so the model
+    // starts from candidate passages of every source.
+    var question = query;
+    final search = tools['search'];
+    if (preSearch && !subtask && search is SearchTool) {
+      yield const ReActEvent(type: ReActEventType.status, content: '正在检索资料…');
+      onRawLlmResponse?.call(++record, '（预检索）');
+      final args = {'query': query};
+      yield ReActEvent(
+        type: ReActEventType.toolCall,
+        content: _describeCall('search', args),
+        toolName: 'search',
+        toolArgs: args,
+      );
+      SearchResult? found;
+      try {
+        found = await _span('tool:search', () => search.run(query));
+      } catch (e) {
+        found = null;
+        yield ReActEvent(
+          type: ReActEventType.toolObservation,
+          content: '错误：预检索失败（$e）',
+          toolName: 'search',
+        );
+      }
+      if (found != null) {
+        yield ReActEvent(
+          type: ReActEventType.toolObservation,
+          content: found.text,
+          toolName: 'search',
+        );
+        if (found.mode == SearchMode.keywordOnly) {
+          yield ReActEvent(
+            type: ReActEventType.thought,
+            content: '注意：${found.modeNote ?? '没有向量检索'}，只用关键词检索，'
+                '问答质量可能下降。可以在设置里配置向量服务。',
+          );
+        }
+        question = '$query${lorePreSearchNote(found.text)}';
+      }
     }
 
     final conversation = <Message>[
@@ -201,13 +289,23 @@ class LoreAgentLoop {
         ...prior.messages
       else
         ...history,
-      Message.user(query),
+      Message.user(question),
     ];
     // Indexes (in [conversation]) of tool results that may be folded.
     final toolResults = <int>{
       for (final (i, m) in conversation.indexed)
         if (m.role == MessageRole.tool) i,
     };
+    // 0.14: a follow-up keeps the earlier questions, answers and what was
+    // read (citable), not the earlier tool output itself.
+    if (prior != null) {
+      _foldOldToolResults(conversation, toolResults, all: true);
+    }
+    // 0.14: messages of turns whose every call was refused by the gate are
+    // left out of later requests once a call has gone through (pending
+    // until then, so the model still sees why it was refused).
+    final hidden = <int>{};
+    final refusedTurns = <int>{};
 
     var citationRetried = false;
     var reviewed = false;
@@ -216,11 +314,36 @@ class LoreAgentLoop {
     // reader review); kept if the rewrite never comes.
     String? rewriteOf;
     var hitTurnLimit = false;
-    // Session-record index (one per tool call, see onRawLlmResponse).
-    var record = 0;
     var streamRetries = 0;
+    // 0.14: how this turn is being sent (see [AgentTransport]).
+    var retrying = false;
+    var emptyRetried = false;
+    var degradedThisTurn = false;
+    var turnBase = (transport.plain, transport.textProtocol);
+
+    List<Message> visible() => [
+          for (final (i, m) in conversation.indexed)
+            if (!hidden.contains(i)) m,
+        ];
 
     for (var turn = 1; turn <= maxTurns; turn++) {
+      if (!retrying) {
+        if (degradedThisTurn &&
+            transport.degradedTurns < AgentTransport.stickyAfter) {
+          transport
+            ..plain = turnBase.$1
+            ..textProtocol = turnBase.$2 || transport.toolsRefused;
+        }
+        degradedThisTurn = false;
+        emptyRetried = false;
+        turnBase = (transport.plain, transport.textProtocol);
+      }
+      retrying = false;
+      void degrade() {
+        if (!degradedThisTurn) transport.degradedTurns++;
+        degradedThisTurn = true;
+      }
+
       final lastTurn = turn == maxTurns;
       // (Once: an empty last turn may be sent again another way.)
       if (lastTurn && !hitTurnLimit) {
@@ -230,14 +353,14 @@ class LoreAgentLoop {
           '并说明还有哪些部分没有查到或没有读完。',
         ),);
       }
-      if (transport.textProtocol && !converted) {
-        converted = true;
+      if (transport.textProtocol) {
         _convertToTextProtocol(conversation, toolResults);
       }
       _foldOldToolResults(conversation, toolResults);
+      final statusPrefix = turn == 1 ? '正在思考' : '第 $turn 轮';
       yield ReActEvent(
         type: ReActEventType.status,
-        content: turn == 1 ? '正在查阅知识库…' : '第 $turn 轮 · 思考中',
+        content: turn == 1 ? '正在思考…' : '第 $turn 轮 · 思考中',
       );
 
       final text = StringBuffer();
@@ -247,8 +370,9 @@ class LoreAgentLoop {
       // streams.
       LoreAnswerStream? jsonAnswer;
       CompletionDelta? done;
+      final callStart = DateTime.now();
       try {
-        final messages = [Message.system(systemPrompt()), ...conversation];
+        final messages = [Message.system(systemPrompt()), ...visible()];
         final turnTools = transport.textProtocol ? null : toolSpecs;
         final stream = transport.plain
             ? _plainTurn(messages, turnTools)
@@ -259,7 +383,17 @@ class LoreAgentLoop {
                 temperature: temperature,
                 maxTokens: maxTokens,
               );
-        await for (final delta in stream) {
+        await for (final item in _withHeartbeat(stream)) {
+          if (item is Duration) {
+            if (text.isEmpty && reasoning.isEmpty) {
+              yield ReActEvent(
+                type: ReActEventType.status,
+                content: '$statusPrefix · 等待服务商响应（已 ${item.inSeconds} 秒）',
+              );
+            }
+            continue;
+          }
+          final delta = item as CompletionDelta;
           if (delta.reasoningContent.isNotEmpty) {
             reasoning.write(delta.reasoningContent);
             yield ReActEvent(
@@ -278,7 +412,7 @@ class LoreAgentLoop {
                 if (answerOpen) {
                   yield const ReActEvent(
                     type: ReActEventType.finalAnswerReset,
-                    content: '整理答案',
+                    content: '开始写正式答案',
                   );
                 }
                 answerOpen = true;
@@ -315,10 +449,15 @@ class LoreAgentLoop {
           if (delta.done) done = delta;
         }
       } on LLMException catch (e) {
+        // 0.14: a failed call is part of the timeline too.
+        onSpan?.call('llm_error:${_clip(e.message, 80)}', callStart, DateTime.now());
         if (!transport.textProtocol && _rejectsTools(e)) {
           // The provider has no function calling: switch to plain-text tool
           // calls and ask again.
-          transport.textProtocol = true;
+          transport
+            ..textProtocol = true
+            ..toolsRefused = true;
+          retrying = true;
           turn--;
           continue;
         }
@@ -334,9 +473,11 @@ class LoreAgentLoop {
           }
           yield ReActEvent(
             type: ReActEventType.status,
-            content: '连接中断，正在重试（$streamRetries/$_maxStreamRetries）',
+            content: '${e.message.contains('timed out') ? '服务商长时间没有响应' : '连接中断'}，'
+                '正在重试（$streamRetries/$_maxStreamRetries）',
           );
           await Future<void>.delayed(streamRetryDelay * streamRetries);
+          retrying = true;
           turn--;
           continue;
         }
@@ -348,6 +489,7 @@ class LoreAgentLoop {
         if (e.statusCode == 200 &&
             !(e.body ?? '').trimLeft().startsWith('<') &&
             _nextTransport()) {
+          degrade();
           if (answerOpen) {
             yield const ReActEvent(
               type: ReActEventType.finalAnswerReset,
@@ -358,9 +500,10 @@ class LoreAgentLoop {
           yield ReActEvent(
             type: ReActEventType.status,
             content: transport.textProtocol
-                ? '服务商的回复无法读取，改用文本方式调用工具重试'
-                : '服务商的回复无法读取，改用非流式请求重试',
+                ? '服务商的回复无法读取，这一轮改用文本方式调用工具重试'
+                : '服务商的回复无法读取，这一轮改用非流式请求重试',
           );
+          retrying = true;
           turn--;
           continue;
         }
@@ -382,22 +525,36 @@ class LoreAgentLoop {
         }
       }
       // Nothing at all (no text, no call): the provider or a relay lost the
-      // turn — a broken stream, a body that is not a stream, tool calls it
-      // could not write. The same turn is sent again without streaming,
-      // then with the tools described in the prompt (streamed, then not).
-      if (content.trim().isEmpty && calls.isEmpty && _nextTransport()) {
-        onRawLlmResponse?.call(
-          ++record,
-          '（空回复：${_emptyTurnNote(done, reasoning.isNotEmpty)}）',
-        );
-        yield ReActEvent(
-          type: ReActEventType.status,
-          content: transport.textProtocol
-              ? '服务商没有返回内容，改用文本方式调用工具重试'
-              : '服务商没有返回内容，改用非流式请求重试',
-        );
-        turn--;
-        continue;
+      // turn. 0.14: asked once more the same way, then without streaming,
+      // then with the tools described in the prompt — for this turn.
+      if (content.trim().isEmpty && calls.isEmpty) {
+        final note = _emptyTurnNote(done, reasoning.isNotEmpty);
+        if (!emptyRetried) {
+          emptyRetried = true;
+          onRawLlmResponse?.call(++record, '（空回复：$note）');
+          onSpan?.call('llm_empty', callStart, DateTime.now());
+          yield ReActEvent(
+            type: ReActEventType.status,
+            content: '服务商没有返回内容（$note），重试一次',
+          );
+          retrying = true;
+          turn--;
+          continue;
+        }
+        if (_nextTransport()) {
+          degrade();
+          onRawLlmResponse?.call(++record, '（空回复：$note）');
+          onSpan?.call('llm_empty', callStart, DateTime.now());
+          yield ReActEvent(
+            type: ReActEventType.status,
+            content: transport.textProtocol
+                ? '服务商没有返回内容，这一轮改用文本方式调用工具重试'
+                : '服务商没有返回内容，这一轮改用非流式请求重试',
+          );
+          retrying = true;
+          turn--;
+          continue;
+        }
       }
       // Session records keep one tool per iteration: each call of a turn
       // gets its own record (the first carries the turn's raw response).
@@ -415,24 +572,37 @@ class LoreAgentLoop {
         if (content.trim().isNotEmpty) {
           yield ReActEvent(type: ReActEventType.thought, content: content.trim());
         }
+        // 0.14: the gate — glued calls split, arguments checked against
+        // each tool's schema; what enters the conversation is valid JSON.
+        final checked = [
+          for (final c in splitGluedCalls(calls))
+            checkToolCall(c, tools[c.name], tools.keys),
+        ];
+        final turnStart = conversation.length;
         if (transport.textProtocol) {
           conversation.add(Message.assistant(text.toString()));
         } else {
           conversation.add(Message.assistantToolCalls(
             content,
-            calls,
+            [for (final c in checked) c.sanitized],
             reasoningContent: reasoning.isEmpty ? null : reasoning.toString(),
           ),);
         }
+        final delegates = [
+          for (final c in checked)
+            if (c.ok && c.call.name == 'delegate') c,
+        ].length;
         // All calls of a turn run at once (sub-agents in parallel); events
         // and tool messages still follow the calls' order.
-        final args = [for (final c in calls) decodeToolArguments(c.arguments)];
+        final side = delegates > 0 ? StreamController<ReActEvent>() : null;
+        _side = side;
         final results = [
-          for (final (k, call) in calls.indexed)
-            _runTool(tools[call.name], call, args[k], tools.keys),
+          for (final c in checked)
+            c.ok
+                ? _runTool(tools[c.call.name]!, c)
+                : Future<String>.value(c.error),
         ];
-        final delegates = calls.where((c) => c.name == 'delegate').length;
-        for (final (k, call) in calls.indexed) {
+        for (final (k, c) in checked.indexed) {
           onRawLlmResponse?.call(
             ++record,
             k == 0
@@ -440,31 +610,50 @@ class LoreAgentLoop {
                     .trim()
                 : '（第 $turn 轮的第 ${k + 1} 个调用）',
           );
-          final label = _describeCall(call.name, args[k]);
+          final label = _describeCall(c.call.name, c.arguments);
           yield ReActEvent(
             type: ReActEventType.toolCall,
             content: label,
-            toolName: call.name,
-            toolArgs: args[k],
+            toolName: c.call.name,
+            toolArgs: c.arguments,
           );
-          yield ReActEvent(
-            type: ReActEventType.status,
-            content: delegates > 1
-                ? '第 $turn 轮 · $delegates 个子任务并行查阅中'
-                : '第 $turn 轮 · $label',
-          );
-          final result = await results[k];
+        }
+        yield ReActEvent(
+          type: ReActEventType.status,
+          content: delegates > 1
+              ? '第 $turn 轮 · $delegates 个子任务并行查阅中'
+              : '第 $turn 轮 · ${checked.length > 1 ? '${checked.length} 个工具同时运行' : _describeCall(checked.first.call.name, checked.first.arguments)}',
+        );
+        if (side != null) {
+          // Sub-agents' steps show up while they work.
+          unawaited(Future.wait(results).whenComplete(side.close));
+          await for (final event in side.stream) {
+            yield event;
+          }
+          _side = null;
+        }
+        for (final (k, c) in checked.indexed) {
+          var result = await results[k];
+          if (c.ok && c.note != null) result = '$result\n${c.note}';
           yield ReActEvent(
             type: ReActEventType.toolObservation,
             content: result,
-            toolName: call.name,
+            toolName: c.call.name,
           );
           toolResults.add(conversation.length);
           conversation.add(
             transport.textProtocol
-                ? Message.user('工具结果（${call.name}）：\n$result')
-                : Message.toolResult(call.id, result),
+                ? Message.user('工具结果（${c.call.name}）：\n$result')
+                : Message.toolResult(c.call.id, result),
           );
+        }
+        if (checked.every((c) => !c.ok)) {
+          refusedTurns.addAll([
+            for (var i = turnStart; i < conversation.length; i++) i,
+          ]);
+        } else if (refusedTurns.isNotEmpty) {
+          hidden.addAll(refusedTurns);
+          refusedTurns.clear();
         }
         continue;
       }
@@ -485,7 +674,7 @@ class LoreAgentLoop {
           if (answerOpen) {
             yield const ReActEvent(
               type: ReActEventType.finalAnswerReset,
-              content: '继续作答',
+              content: '回复只描述了核对过程、没有答案，要求直接写答案',
             );
           }
           conversation
@@ -537,19 +726,28 @@ class LoreAgentLoop {
       final unreadable = parsedJson != null &&
           (parsedJson.dropped > 0 ||
               (!seen.isEmpty && _citationCount(body) == 0));
-      if ((unseen.isNotEmpty ||
-              bare.isNotEmpty ||
-              copied.isNotEmpty ||
-              unreadable) &&
-          !citationRetried &&
-          !lastTurn) {
+      // 0.14: a few citations of lines that were not read are dropped by
+      // code (the rest of the answer stands on checked ones); the answer
+      // is sent back only when many are, or for what code cannot fix.
+      final citations = _citationCount(body);
+      final fewUnseen = unseen.isNotEmpty && unseen.length * 3 <= citations;
+      final sendBack = (unseen.isNotEmpty && !fewUnseen) ||
+          bare.isNotEmpty ||
+          copied.isNotEmpty ||
+          unreadable;
+      if (sendBack && !citationRetried && !lastTurn) {
         citationRetried = true;
         rewriteOf = keep;
         yield ReActEvent(
           type: ReActEventType.finalAnswerReset,
-          content: unseen.isEmpty && bare.isEmpty && !unreadable
-              ? '改写引语'
-              : '核对出处',
+          content: '退回重写：${[
+            if (unreadable) '出处的写法无法识别',
+            if (unseen.isNotEmpty && !fewUnseen)
+              '${unseen.length} 处出处不在读过的原文里（如 ${unseen.first}）',
+            if (bare.isNotEmpty) '${bare.length} 处出处缺少行号',
+            if (copied.isNotEmpty)
+              '${copied.length} 处照搬了台词（如“${_clip(copied.first, 20)}”）',
+          ].join('；')}',
         );
         conversation
           ..add(Message.assistant(keep))
@@ -558,7 +756,7 @@ class LoreAgentLoop {
               '答案里有出处的写法无法识别。cite 必须是数组的数组，每个出处自己一对方括号，'
                   '例如 [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]；'
                   'story_id 与工具输出完全一致（含 .txt），行号是整数。',
-            if (unseen.isNotEmpty)
+            if (unseen.isNotEmpty && !fewUnseen)
               '下面这些出处不在你本次通过工具实际看到的行或记录里：${unseen.join('、')}。'
                   '请先读取核实（或找到真正的出处），无法核实的内容请删掉。',
             if (bare.isNotEmpty)
@@ -590,7 +788,7 @@ class LoreAgentLoop {
         if (issues.isNotEmpty) {
           yield ReActEvent(
             type: ReActEventType.finalAnswerReset,
-            content: '审稿提出 ${issues.length} 个问题，正在核实',
+            content: '审稿提出 ${issues.length} 个问题，回原文核实后重写',
           );
           yield ReActEvent(
             type: ReActEventType.thought,
@@ -615,13 +813,21 @@ class LoreAgentLoop {
       final coverage = coverageWord == null ? null : _coverageOf(coverageWord);
       body = body.replaceAll(_coverageLine, '').trim();
       if (unseen.isNotEmpty) {
-        body = '$body\n\n> 以下出处未能在本次读到的原文中核实：'
-            '${unseen.map((c) => '`$c`').join('、')}';
+        if (fewUnseen) {
+          // 0.14: dropped rather than shown as unchecked.
+          for (final c in unseen) {
+            body = body.replaceAll('`$c`', '');
+          }
+          body = '$body\n\n> 已删去 ${unseen.length} 处没能在读到的原文中核实的出处。';
+        } else {
+          body = '$body\n\n> 以下出处未能在本次读到的原文中核实：'
+              '${unseen.map((c) => '`$c`').join('、')}';
+        }
       }
       if (done?.finishReason == 'length') {
         body = '$body\n\n> 注意：答案达到长度上限，可能不完整。';
       }
-      final verified = _citationCount(body) - unseen.length;
+      final verified = _citationCount(body) - (fewUnseen ? 0 : unseen.length);
       // The model's own text (JSON) stays in the conversation, so a
       // follow-up sees the format it is asked for.
       conversation.add(Message.assistant(fromJson == null ? body : keep));
@@ -647,10 +853,8 @@ class LoreAgentLoop {
         String? staged;
         await for (final event in _stage(
           checked,
+          question: query,
           detail: body,
-          conversation: conversation,
-          systemPrompt: systemPrompt(),
-          tools: transport.textProtocol ? null : toolSpecs,
           onRaw: (raw) => onRawLlmResponse?.call(++record, '（整理）$raw'),
           onStaged: (markdown) => staged = markdown,
         )) {
@@ -674,7 +878,7 @@ class LoreAgentLoop {
               ? StoryAnswerStatus.partial
               : StoryAnswerStatus.answered;
       onConversation?.call(
-        LoreConversation(messages: List.of(conversation), seen: seen),
+        LoreConversation(messages: visible(), seen: seen),
       );
       yield ReActEvent(
         type: ReActEventType.finalAnswerReplace,
@@ -683,6 +887,35 @@ class LoreAgentLoop {
       yield const ReActEvent(type: ReActEventType.complete);
       return;
     }
+  }
+
+  /// [stream]'s deltas, with the time waited so far (a [Duration]) every
+  /// [heartbeat] until the stream ends.
+  Stream<Object> _withHeartbeat(Stream<CompletionDelta> stream) {
+    late final StreamController<Object> out;
+    Timer? timer;
+    StreamSubscription<CompletionDelta>? sub;
+    final start = DateTime.now();
+    out = StreamController<Object>(
+      onListen: () {
+        timer = Timer.periodic(heartbeat, (_) {
+          if (!out.isClosed) out.add(DateTime.now().difference(start));
+        });
+        sub = stream.listen(
+          out.add,
+          onError: out.addError,
+          onDone: () {
+            timer?.cancel();
+            out.close();
+          },
+        );
+      },
+      onCancel: () async {
+        timer?.cancel();
+        await sub?.cancel();
+      },
+    );
+    return out.stream;
   }
 
   /// R18: the reviewer's questions about [answer] (empty when it has none
@@ -725,35 +958,34 @@ class LoreAgentLoop {
     }
   }
 
-  /// R18: one more turn of the main conversation (no tools) that groups
-  /// [entries] into a few paragraphs. Streams the paragraphs above the
-  /// detailed answer ([detail]) as they are written; [onStaged] gets the
-  /// final markdown with merged citations, or nothing on any failure (only
-  /// the detailed answer is shown then). The request and reply are not
-  /// kept in [conversation]: a follow-up continues after the detailed JSON
-  /// answer, the format it is asked to write.
+  /// R18: one more call that groups [entries] into a few paragraphs.
+  /// Streams the paragraphs above the detailed answer ([detail]) as they
+  /// are written; [onStaged] gets the final markdown with merged citations,
+  /// or nothing on any failure (only the detailed answer is shown then).
+  /// 0.14: the call sees the question and the entries only — not the
+  /// conversation that wrote them (which made it the largest request of a
+  /// question), and nothing of it is kept in the conversation.
   Stream<ReActEvent> _stage(
     List<LoreAnswerEntry> entries, {
+    required String question,
     required String detail,
-    required List<Message> conversation,
-    required String systemPrompt,
-    required List<Map<String, dynamic>>? tools,
     required void Function(String raw) onRaw,
     required void Function(String markdown) onStaged,
   }) async* {
     final count = entries.where((e) => e.isText).length;
     yield const ReActEvent(type: ReActEventType.status, content: '整理答案');
-    final prompt = Message.user(loreStagePrompt(numberedEntries(entries)));
+    final messages = [
+      Message.system(loreStageSystemPrompt),
+      Message.user(loreStagePrompt(numberedEntries(entries), question: question)),
+    ];
     final text = StringBuffer();
     var shown = 0;
+    final start = DateTime.now();
     try {
-      final messages = [Message.system(systemPrompt), ...conversation, prompt];
       final stream = transport.plain
-          ? _plainTurn(messages, tools)
+          ? _plainTurn(messages, null)
           : client.streamTurn(
               messages,
-              tools: tools,
-              toolChoice: tools == null ? null : 'none',
               temperature: temperature,
               maxTokens: maxTokens,
             );
@@ -769,6 +1001,9 @@ class LoreAgentLoop {
           );
         }
       }
+    } on LLMException catch (e) {
+      onSpan?.call('llm_error:${_clip(e.message, 80)}', start, DateTime.now());
+      // Fall through: the detailed answer is shown as it is.
     } catch (_) {
       // Fall through: the detailed answer is shown as it is.
     }
@@ -800,15 +1035,21 @@ class LoreAgentLoop {
       RegExp(r'"(heading|text)"\s*:\s*"((?:[^"\\]|\\.)*)');
 
   /// Runs a `delegate` call: a sub-agent with its own conversation. What it
-  /// saw counts as seen here, so its checked citations can be reused.
+  /// saw counts as seen here, so its checked citations can be reused. Its
+  /// tool steps are shown as they happen (tagged with its number).
   Future<String> _runSubtask(
     Map<String, dynamic> args,
     SeenLines parentSeen,
   ) async {
     final task = delegateTaskText(args);
     if (task.trim().isEmpty) return '错误：task 为空';
+    if (_subtasks >= maxSubtasks) {
+      return '错误：这个问题的子助手已经用完（最多 $maxSubtasks 个），请自己检索和阅读。';
+    }
+    final number = ++_subtasks;
     final childSeen = SeenLines();
-    final events = await LoreAgentLoop(
+    final events = <ReActEvent>[];
+    await for (final event in LoreAgentLoop(
       client: client,
       store: store,
       embeddingClient: embeddingClient,
@@ -818,14 +1059,30 @@ class LoreAgentLoop {
       maxTokens: maxTokens,
       temperature: temperature,
       subtask: true,
+      preSearch: false,
+      heartbeat: heartbeat,
       onSpan: onSpan,
       transport: transport,
-    )
-        .run(
-          query: task,
-          prior: LoreConversation(seen: childSeen),
-        )
-        .toList();
+    ).run(
+      query: task,
+      prior: LoreConversation(seen: childSeen),
+    )) {
+      events.add(event);
+      if (event.type == ReActEventType.toolCall ||
+          event.type == ReActEventType.toolObservation ||
+          event.type == ReActEventType.error) {
+        final side = _side;
+        if (side != null && !side.isClosed) {
+          side.add(ReActEvent(
+            type: event.type,
+            content: event.content,
+            toolName: event.toolName,
+            toolArgs: event.toolArgs,
+            subtask: number,
+          ),);
+        }
+      }
+    }
     final error = events.where((e) => e.type == ReActEventType.error);
     if (error.isNotEmpty) return '子任务出错：${error.first.content}';
     parentSeen.addAll(childSeen);
@@ -841,30 +1098,16 @@ class LoreAgentLoop {
     return '$header：\n$findings';
   }
 
-  Future<String> _runTool(
-    AgentTool? tool,
-    ToolCall call,
-    Map<String, dynamic> args,
-    Iterable<String> available,
-  ) async {
-    if (tool == null) {
-      return '没有名为 ${call.name} 的工具。可用：${available.join('、')}。';
-    }
-    if (args.isEmpty && call.arguments.trim().isNotEmpty) {
-      final empty = _isEmptyJsonObject(call.arguments);
-      return empty
-          ? '缺少参数：${call.name} 需要的参数见工具说明。'
-          : '参数不是合法的 JSON：${call.arguments}';
-    }
+  /// Runs a call that passed the gate. Tool failures come back as text
+  /// that starts with “错误”, which the step list shows as a failed step.
+  Future<String> _runTool(AgentTool tool, CheckedCall call) async {
     try {
-      return '${await _span('tool:${call.name}', () => tool.execute(args))}';
+      return '${await _span('tool:${call.call.name}', () => tool.execute(call.arguments))}';
     } catch (e) {
-      return '工具出错：$e';
+      return '错误：工具 ${call.call.name} 出错（$e）。可以换个参数再试，或换一个工具。';
     }
   }
 
-  /// A failure of the connection itself (no HTTP status): a timeout, a
-  /// reset socket, a client closed by the system.
   /// Moves [transport] to the next way of sending a turn after an empty
   /// reply: streamed native calls → not streamed → tools in the prompt,
   /// streamed → tools in the prompt, not streamed. False when all were
@@ -932,25 +1175,23 @@ class LoreAgentLoop {
     ].join('，');
   }
 
+  /// A failure of the connection itself (no HTTP status): a timeout, a
+  /// reset socket, a client closed by the system.
   static bool _isConnectionDrop(LLMException e) =>
       e.statusCode == null &&
       (e.message.contains('timed out') ||
           e.message.contains('Network error') ||
           e.message.contains('Connection'));
 
-  static bool _isEmptyJsonObject(String raw) {
-    try {
-      final v = jsonDecode(raw);
-      return v is Map && v.isEmpty;
-    } on FormatException {
-      return false;
-    }
-  }
+  static String _clip(String text, int max) =>
+      text.length <= max ? text : '${text.substring(0, max)}…';
 
   /// Short description of a call, for the step list and status line.
   static String _describeCall(String name, Map<String, dynamic> args) {
     String arg(String key) => '${args[key] ?? ''}'.trim();
     return switch (name) {
+      'search' => '检索“${_clip(arg('query'), 40)}”'
+          '${arg('collection').isNotEmpty ? '（${arg('collection')}）' : ''}',
       'sql' => '查询数据库',
       'grep' => '搜索“${arg('pattern')}”'
           '${arg('collection').isNotEmpty ? '（${arg('collection')}）' : args['story_ids'] is List ? '（${(args['story_ids'] as List).length} 个故事）' : '（全库）'}',
@@ -960,7 +1201,7 @@ class LoreAgentLoop {
       'similar_names' => '查找与“${arg('name')}”相近的名字',
       'wiki_search' => '在 Wiki 上搜索“${arg('query')}”',
       'wiki_read' => '阅读 Wiki 页面 ${arg('page')}',
-      'delegate' => '子任务：${arg('task').length > 40 ? '${arg('task').substring(0, 40)}…' : arg('task')}',
+      'delegate' => '子任务：${_clip(arg('task'), 40)}',
       _ => name,
     };
   }
@@ -981,7 +1222,8 @@ class LoreAgentLoop {
   }
 
   /// Rewrites native tool-call turns as plain text (after switching to the
-  /// text protocol mid-question).
+  /// text protocol mid-question). Messages already in text form are left
+  /// as they are, so this can run every turn.
   static void _convertToTextProtocol(
     List<Message> conversation,
     Set<int> toolResults,
@@ -1024,12 +1266,18 @@ class LoreAgentLoop {
   }
 
   /// Folds the oldest tool results to a pointer while the conversation is
-  /// over [contextCharBudget] (the recent [_recentKept] messages stay whole).
-  void _foldOldToolResults(List<Message> conversation, Set<int> toolResults) {
+  /// over [contextCharBudget] (the recent [_recentKept] messages stay
+  /// whole); with [all], every tool result so far (a follow-up question).
+  /// Lines a folded result showed stay citable ([SeenLines] keeps them).
+  void _foldOldToolResults(
+    List<Message> conversation,
+    Set<int> toolResults, {
+    bool all = false,
+  }) {
     var size = conversation.fold<int>(0, (n, m) => n + m.content.length);
-    if (size <= contextCharBudget) return;
-    final target = contextCharBudget * 7 ~/ 10;
-    final limit = conversation.length - _recentKept;
+    if (!all && size <= contextCharBudget) return;
+    final target = all ? 0 : contextCharBudget * 7 ~/ 10;
+    final limit = all ? conversation.length : conversation.length - _recentKept;
     for (final i in toolResults.toList()..sort()) {
       if (size <= target || i >= limit) break;
       final m = conversation[i];
@@ -1037,7 +1285,7 @@ class LoreAgentLoop {
       final firstLine = m.content.split('\n').first;
       final folded = '[已折叠] 较早的工具结果（${m.content.length} 字）：'
           '${firstLine.length > 120 ? '${firstLine.substring(0, 120)}…' : firstLine}'
-          '。需要其中内容时请重新调用工具。';
+          '。其中读到的原文行仍可引用；需要原文内容时请重新读取。';
       size -= m.content.length - folded.length;
       conversation[i] = m.role == MessageRole.tool
           ? Message.toolResult(m.toolCallId ?? '', folded)
@@ -1153,7 +1401,7 @@ final RegExp _processLeadIn = RegExp(
   r'核实|核对|重新输出|最终答案|完整答案|信息(已经)?足够|足够(的)?信息|已经掌握|'
   r'(下面|以下|现在)(给出|回答|输出|作答|是答案)|整理(一下)?答案|让我(先|再)?(确认|查|看)|'
   // Talk about the tools themselves (R17b).
-  r'\b(grep|sql|read_story|find|outline|similar_names|delegate|wiki_search|wiki_read)\b',
+  r'\b(search|grep|sql|read_story|find|outline|similar_names|delegate|wiki_search|wiki_read)\b',
 );
 
 /// `record:<id>` — a non-story record (R17).

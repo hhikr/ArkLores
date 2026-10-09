@@ -44,6 +44,7 @@ class ReActEvent {
     this.content = '',
     this.toolName,
     this.toolArgs,
+    this.subtask,
   });
 
   final ReActEventType type;
@@ -51,9 +52,14 @@ class ReActEvent {
   final String? toolName;
   final Map<String, dynamic>? toolArgs;
 
+  /// 0.14: the step belongs to sub-agent number [subtask] (1-based) of a
+  /// `delegate` call; null for the main agent's own steps.
+  final int? subtask;
+
   @override
   String toString() =>
-      'ReActEvent(type: $type, content: $content, toolName: $toolName, toolArgs: $toolArgs)';
+      'ReActEvent(type: $type, content: $content, toolName: $toolName, toolArgs: $toolArgs'
+      '${subtask == null ? '' : ', subtask: $subtask'})';
 }
 
 /// Final answer text after [event] given the text [before] it (R16): tokens

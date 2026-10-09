@@ -65,6 +65,67 @@ void main() {
     expect(workCounts(steps), (calls: 2, reads: 0));
   });
 
+  // 0.14: read_story's output starts `《title》 story_id`; the row showed the
+  // file name because it looked for 【】.
+  test('a read is titled by the story name the tool printed', () {
+    final step = workStepsOf([
+      _call('read_story', {'story_id': 'activities/a/level_a_07_end.txt'}),
+      _out(
+        'read_story',
+        '《活动 A-7 行动后《结尾》》 activities/a/level_a_07_end.txt\nL0 一',
+      ),
+    ]).single;
+    expect(step.storyTitle, '活动 A-7 行动后《结尾》');
+  });
+
+  test('every way a tool refuses or fails is a failed step, with its reason',
+      () {
+    for (final text in [
+      '错误：grep 缺少必填参数 pattern\n收到的参数：{}',
+      '工具出错：DatabaseException(error database_closed)',
+      '参数不是合法的 JSON：{}{}',
+      'SQL 错误：no such column: name',
+      '子任务出错：x',
+    ]) {
+      final step = workStepsOf([_call('grep', {}), _out('grep', text)]).single;
+      expect(step.failed, isTrue, reason: text);
+      expect(step.failure, text.split('\n').first);
+    }
+    // A search whose wiki part could not be reached still found stories.
+    final search = workStepsOf([
+      _call('search', {'query': '甲'}),
+      _out('search', '## 明日方舟剧情（最相关的 2 篇）\n## 终末地剧情（最相关的 1 篇）\n'
+          '## Wiki\nPRTS 暂时无法访问（超时）'),
+    ]).single;
+    expect(search.kind, WorkKind.find);
+    expect(search.failed, isFalse);
+    expect(search.searchStoryCount, 3);
+  });
+
+  test("a helper's outputs go to the helper's own calls", () {
+    final steps = workStepsOf([
+      _call('delegate', {'task': '甲'}),
+      const ReActStep(
+        type: ReActEventType.toolCall,
+        content: '',
+        toolName: 'read_story',
+        toolArgs: {'story_id': 'a/x.txt'},
+        subtask: 1,
+      ),
+      _call('read_story', {'story_id': 'a/y.txt'}),
+      const ReActStep(
+        type: ReActEventType.toolObservation,
+        content: '《X》 a/x.txt\nL0 一',
+        toolName: 'read_story',
+        subtask: 1,
+      ),
+    ]);
+    expect(steps[1].subtask, 1);
+    expect(steps[1].done, isTrue);
+    expect(steps[1].storyTitle, 'X');
+    expect(steps[2].done, isFalse);
+  });
+
   test('grep counts hits and stories', () {
     final step = workStepsOf([
       _call('grep', {'pattern': '甲|乙'}),

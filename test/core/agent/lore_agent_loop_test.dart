@@ -115,7 +115,12 @@ void main() {
 
     test('the system prompt keeps the working rules', () {
       final prompt = loreSystemPrompt();
-      expect(prompt, contains('先看全局再读原文'));
+      // 0.14: search first (with the pre-search under the question), grep
+      // for exact counts; no sub-agent rules unless they are on.
+      expect(prompt, contains('search 是主要的检索方式'));
+      expect(prompt, contains('预先做的一次 search'));
+      expect(prompt, isNot(contains('delegate')));
+      expect(loreSystemPrompt(delegate: true), contains('delegate'));
       expect(prompt, contains('["record", "<记录 id>"]'));
       expect(prompt, contains('"entries"'));
       expect(prompt, contains('"coverage"'));
@@ -309,8 +314,15 @@ void main() {
           StoryAnswerStatus.answered,);
       expect(answer, contains('`obt/main/level_main_fx-01.txt:1`'));
       expect(answer, isNot(contains('COVERAGE')));
-      expect(events.where((e) => e.type == ReActEventType.toolCall),
-          hasLength(2),);
+      // 0.14: the question is searched first, then the model's two calls.
+      expect(
+        events
+            .where((e) => e.type == ReActEventType.toolCall)
+            .map((e) => e.toolName),
+        ['search', 'grep', 'read_story'],
+      );
+      expect(client.requests.first[1].content, startsWith('星灯做了什么？'));
+      expect(client.requests.first[1].content, contains('预先做的一次 search'));
       // Append-only: each request extends the previous one.
       for (var i = 1; i < client.requests.length; i++) {
         final before = client.requests[i - 1];
@@ -426,9 +438,12 @@ void main() {
         // Back in the main conversation:
         _answer('星灯点亮了钟楼 `obt/main/level_main_fx-01.txt:1`。'),
       ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？')
-          .toList();
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        delegate: true,
+        review: true,
+      ).run(query: '星灯做了什么？').toList();
       // R18: only the main agent's answer is reviewed.
       expect(client.reviewRequests, hasLength(1));
       expect(client.reviewRequests.single.first.content, loreReviewPrompt);
@@ -438,10 +453,22 @@ void main() {
       expect(client.toolNames[1], isNot(contains('delegate')));
       expect(client.toolNames[0], contains('delegate'));
       final observation = events
-          .firstWhere((e) => e.type == ReActEventType.toolObservation)
+          .firstWhere((e) =>
+              e.type == ReActEventType.toolObservation &&
+              e.toolName == 'delegate' &&
+              e.subtask == null,)
           .content;
       expect(observation, contains('子任务结果'));
       expect(observation, isNot(contains('STORY_ANSWER')));
+      // 0.14: the sub-agent's steps are shown, tagged with its number.
+      final helper = events.where((e) => e.subtask == 1).toList();
+      expect(
+        helper.map((e) => (e.type, e.toolName)),
+        [
+          (ReActEventType.toolCall, 'read_story'),
+          (ReActEventType.toolObservation, 'read_story'),
+        ],
+      );
       final answer = finalAnswerOf(events);
       expect(parseStoryAnswerEnvelope(answer)!.status,
           StoryAnswerStatus.answered,);
@@ -465,9 +492,10 @@ void main() {
         ],
         reviews: ['{"issues": ["后来离开城市的经过是否被漏掉？"]}', '{"issues": ["再问"]}'],
       );
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？')
-          .toList();
+      final events =
+          await LoreAgentLoop(client: client, store: store, review: true)
+              .run(query: '星灯做了什么？')
+              .toList();
       expect(client.reviewRequests, hasLength(1));
       final review = client.reviewRequests.single;
       expect(review.first.content, loreReviewPrompt);
@@ -484,7 +512,7 @@ void main() {
         events
             .where((e) => e.type == ReActEventType.finalAnswerReset)
             .map((e) => e.content),
-        ['审稿提出 1 个问题，正在核实'],
+        ['审稿提出 1 个问题，回原文核实后重写'],
       );
       expect(
         events.any((e) =>
@@ -511,9 +539,10 @@ void main() {
         ],
         reviews: ['{"issues": ["后来呢？"]}'],
       );
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？')
-          .toList();
+      final events =
+          await LoreAgentLoop(client: client, store: store, review: true)
+              .run(query: '星灯做了什么？')
+              .toList();
       expect(client.requests, hasLength(4));
       expect(client.requests.last.last.content, contains('这不是最终答案'));
       final answer = finalAnswerOf(events);
@@ -565,11 +594,14 @@ void main() {
           .toList();
       expect(client.requests, hasLength(4));
       final stage = client.requests.last;
-      expect(client.toolChoices.last, 'none');
+      // 0.14: the reorganising call sees the question and the entries only
+      // (not the conversation), and no tools.
+      expect(stage, hasLength(2));
+      expect(stage.first.content, loreStageSystemPrompt);
+      expect(client.toolNames.last, isEmpty);
+      expect(stage.last.content, contains('星灯做了什么？'));
       expect(stage.last.content, contains('1. 夜里星灯到来。'));
       expect(stage.last.content, contains('"stages"'));
-      // The model's detailed JSON stays before the reorganising request.
-      expect(stage[stage.length - 2].content, startsWith('{"entries"'));
       final answer = finalAnswerOf(events);
       final body = answer.substring(answer.indexOf('\n') + 1);
       expect(
@@ -814,22 +846,52 @@ void main() {
     });
 
     // Providers other than GLM / deepseek (Gemini's OpenAI endpoint, relays)
-    // may answer a turn with nothing at all.
-    test('an empty streamed turn is asked again without streaming', () async {
+    // may answer a turn with nothing at all. 0.14: asked once more the same
+    // way, then another way for that turn only; after two such turns the
+    // other way stays.
+    test('an empty streamed turn is asked again, then without streaming',
+        () async {
       const id = 'obt/main/level_main_fx-01.txt';
       final client = _LossyClient(
-        [_call('read_story', {'story_id': id}), _answer('钟楼 `$id:1`')],
+        [
+          _call('read_story', {'story_id': id}),
+          _call('grep', {'pattern': '钟楼'}),
+          _answer('钟楼 `$id:1`'),
+        ],
         emptyStream: true,
       );
       final events = await LoreAgentLoop(
         client: client,
         store: store,
-        review: false,
+        preSearch: false,
       ).run(query: '钟楼？').toList();
-      expect(client.modes, ['stream+tools', 'plain+tools', 'plain+tools']);
+      expect(client.modes, [
+        'stream+tools', 'stream+tools', 'plain+tools', // turn 1
+        'stream+tools', 'stream+tools', 'plain+tools', // turn 2
+        'plain+tools', // turn 3: twice needed, so it stays
+      ]);
       expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
       expect(finalAnswerOf(events), contains('钟楼 `$id:1`'));
-      expect(events.map((e) => e.content), contains('服务商没有返回内容，改用非流式请求重试'));
+      expect(
+        events.map((e) => e.content),
+        contains('服务商没有返回内容，这一轮改用非流式请求重试'),
+      );
+    });
+
+    test('one empty reply costs one retry, not the rest of the question',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _FlakyClient(
+        [_call('read_story', {'story_id': id}), _answer('钟楼 `$id:1`')],
+        emptyCalls: {0},
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+      ).run(query: '钟楼？').toList();
+      expect(client.modes, ['stream+tools', 'stream+tools', 'stream+tools']);
+      expect(finalAnswerOf(events), contains('钟楼 `$id:1`'));
     });
 
     test('a streamed answer that cannot be read is asked again unstreamed',
@@ -842,9 +904,14 @@ void main() {
       final events = await LoreAgentLoop(
         client: client,
         store: store,
-        review: false,
+        preSearch: false,
       ).run(query: '钟楼？').toList();
-      expect(client.modes, ['stream+tools', 'plain+tools', 'plain+tools']);
+      // Unreadable is asked again another way at once; the next turn tries
+      // streaming again.
+      expect(
+        client.modes,
+        ['stream+tools', 'plain+tools', 'stream+tools', 'plain+tools'],
+      );
       expect(events.where((e) => e.type == ReActEventType.error), isEmpty);
       expect(finalAnswerOf(events), contains('钟楼 `$id:1`'));
     });
@@ -863,9 +930,12 @@ void main() {
       final events = await LoreAgentLoop(
         client: client,
         store: store,
-        review: false,
+        preSearch: false,
       ).run(query: '钟楼？').toList();
-      expect(client.modes, ['stream+tools', 'plain+tools', 'stream', 'stream']);
+      expect(client.modes, [
+        'stream+tools', 'stream+tools', 'plain+tools', 'stream', // turn 1
+        'stream+tools', 'stream+tools', 'plain+tools', 'stream', // turn 2
+      ]);
       expect(finalAnswerOf(events), contains('钟楼 `$id:1`'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
@@ -881,10 +951,10 @@ void main() {
       final events = await LoreAgentLoop(
         client: client,
         store: store,
-        review: false,
+        preSearch: false,
       ).run(query: '钟楼？').toList();
-      expect(client.modes.take(4),
-          ['stream+tools', 'plain+tools', 'stream', 'plain'],);
+      expect(client.modes.take(5),
+          ['stream+tools', 'stream+tools', 'plain+tools', 'stream', 'plain'],);
       final error = events.last;
       expect(error.type, ReActEventType.error);
       expect(error.content, contains('结束原因：length'));
@@ -920,12 +990,12 @@ void main() {
         _call('grep', {'pattern': '钟楼'}),
         _answer('星灯 `obt/main/level_main_fx-01.txt:1`'),
       ]);
-      final events =
-          await LoreAgentLoop(client: client, store: store, maxTurns: 3)
-              .run(
-                query: '星灯？',
-              )
-              .toList();
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        maxTurns: 3,
+        preSearch: false,
+      ).run(query: '星灯？').toList();
       expect(client.toolChoices.last, 'none');
       expect(client.requests.last.last.content, contains('检索轮数上限'));
       // grep with no scope only gives counts, so line 1 was never shown.
@@ -973,12 +1043,151 @@ void main() {
           .run(query: '那后来呢？', prior: saved)
           .toList();
       final request = client.requests.single;
-      expect(request.where((m) => m.role == MessageRole.tool), hasLength(1));
-      expect(request.last.content, '那后来呢？');
+      // 0.14: the earlier tool output is folded; what it showed stays
+      // citable.
+      final earlier = request.where((m) => m.role == MessageRole.tool).toList();
+      expect(earlier.map((m) => m.content.startsWith('[已折叠]')), [true]);
+      expect(request.last.content, startsWith('那后来呢？'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
     });
+
+    // 0.14: the tool-call gate.
+    test('glued calls are split, a call with a missing argument is refused '
+        'and later left out, nothing malformed enters the conversation',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        const _Turn(calls: [
+          ToolCall(
+            id: 'g',
+            name: 'grep',
+            arguments: '{"pattern":"星灯"}{"pattern":"钟楼"}',
+          ),
+        ],),
+        _call('grep', {'description': 'pattern: 星灯'}),
+        _call('read_story', {'story_id': id}),
+        _answer('星灯点亮钟楼 `$id:1`'),
+      ]);
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+      ).run(query: '星灯？').toList();
+      expect(
+        events
+            .where((e) => e.type == ReActEventType.toolCall)
+            .map((e) => e.toolArgs),
+        [
+          {'pattern': '星灯'},
+          {'pattern': '钟楼'},
+          <String, dynamic>{},
+          {'story_id': id},
+        ],
+      );
+      // Every call kept in the conversation has JSON arguments.
+      for (final request in client.requests) {
+        for (final m in request) {
+          for (final call in m.toolCalls ?? const <Map<String, dynamic>>[]) {
+            final args = (call['function'] as Map)['arguments'] as String;
+            expect(jsonDecode(args), isA<Map<String, dynamic>>());
+          }
+        }
+      }
+      final refused = client.requests[2].last.content;
+      expect(refused, startsWith('错误：grep 缺少必填参数 pattern'));
+      expect(refused, contains('description 不是这个工具的参数'));
+      expect(refused, contains('正确的写法：{"pattern":"<pattern>"}'));
+      // Once a call went through, the refused turn is no longer sent.
+      expect(
+        client.requests[3].any((m) => m.content.contains('缺少必填参数')),
+        isFalse,
+      );
+      expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('a few citations of unread lines are dropped without a rewrite',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      const act = 'activities/act_fx/level_act_fx_01_beg.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': id}),
+        _answer('甲 `$id:0`。乙 `$id:1`。丙 `$id:2`。丁 `$act:1`。'),
+      ]);
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+      ).run(query: '星灯？').toList();
+      expect(client.requests, hasLength(2));
+      expect(
+        events.where((e) => e.type == ReActEventType.finalAnswerReset),
+        isEmpty,
+      );
+      final answer = finalAnswerOf(events);
+      expect(answer, isNot(contains(act)));
+      expect(answer, contains('已删去 1 处'));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('a refused sub-agent past the limit says so', () async {
+      final client = _ScriptedClient([
+        _call('delegate', {'task': '甲'}),
+        _answer('- 无 [COVERAGE: gaps]'),
+        _call('delegate', {'task': '乙'}),
+        _answer('没有查到。'),
+      ]);
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        delegate: true,
+        maxSubtasks: 1,
+        preSearch: false,
+      ).run(query: '星灯？').toList();
+      final second = events
+          .where((e) =>
+              e.type == ReActEventType.toolObservation &&
+              e.toolName == 'delegate' &&
+              e.subtask == null,)
+          .last
+          .content;
+      expect(second, startsWith('错误：这个问题的子助手已经用完'));
+    });
+
+    test('the question is searched before the first turn; without vectors '
+        'the run says the answer may suffer', () async {
+      final client = _ScriptedClient([_answer('没有查到。')]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯 钟楼')
+          .toList();
+      final search = events.firstWhere(
+        (e) => e.type == ReActEventType.toolObservation,
+      );
+      expect(search.toolName, 'search');
+      expect(search.content, contains('只有关键词检索'));
+      expect(search.content, contains('obt/main/level_main_fx-01.txt'));
+      expect(
+        events.any((e) =>
+            e.type == ReActEventType.thought &&
+            e.content.contains('问答质量可能下降'),),
+        isTrue,
+      );
+    });
   });
+}
+
+/// Answers the calls numbered in [emptyCalls] (0-based, every request
+/// counted) with nothing, the others from [turns]; records the modes.
+class _FlakyClient extends _LossyClient {
+  _FlakyClient(super.turns, {required this.emptyCalls});
+  final Set<int> emptyCalls;
+  var _calls = 0;
+
+  @override
+  bool _empty(bool streamed, List<Map<String, dynamic>>? tools) =>
+      emptyCalls.contains(_calls++);
 }
 
 /// A provider (or relay) that answers some ways of asking with nothing:

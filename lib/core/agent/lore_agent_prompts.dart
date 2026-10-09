@@ -60,7 +60,7 @@ const String loreLibraryGuide = '''
 - 档案没有上线时间。档案与剧情冲突时分别写明，不用档案的先后下结论。
 同一人物
 - entry_links 的 same_person 把同一干员的不同版本连起来，组里第一个是原型，其余指向它。不同版本可能是同一个人后来的经历，名字或代号会变，也可能是另一条假设的时间线，表里不区分。读两者的档案和剧情再判断，不要因名字不同当作不同的人，也不要把假设线的经历当作原版的事实。
-使用顺序：先用 collections、entries 判断问题落在哪个集合或哪位干员，再读它的剧情；设定类问题先找对应条目的原文。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
+设定、档案类问题可以用 sql 在 entries、normalized_records 里找对应条目的原文。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
 
 /// How the agent works and cites.
 const String loreAgentRules = '''
@@ -71,12 +71,17 @@ $loreDatabaseGuide
 $loreLibraryGuide
 
 工作方式：
-- 先看全局再读原文：问题涉及某个人物/事件时，先用 grep（不给范围）或 sql 统计它在哪些故事里出现、出现多少，再按时间顺序挑出相关章节，用 read_story 整章阅读，必要时在章内 grep。问题限定在某个故事集时也先看全库分布：其他故事里对同一人物/事件的叙述可能印证或修正这个故事集里的内容。
+- 问题后面附有用问题原文预先做的一次 search 的结果：先看它，从里面的段落和故事入手。
+- search 是主要的检索方式：给一句描述或几个名字，它按意思检索所有已安装游戏的剧情原文，并用名字做关键词检索，结果按来源分组。
+  问题涉及几个方面、几个阶段或几个人物时，分别检索（在同一轮里一起发出），换说法、换角度再检索，比一次读很多更有效。
+- grep 精确统计某个名字或词出现在哪些故事、多少行（不给范围时统计所有已安装的游戏），用来确认覆盖面和时间顺序；sql 查目录、条目、绑定、档案等结构化信息。
+- 用 read_story 读上下文：从检索命中的行附近开始，读需要的范围；一个事件的起因、经过、结果可能在相邻的几章里。
 - 可以用你对这部作品的了解来构造查询：猜名字的正确写法、别名、可能在哪些章节、相关人物。但这些了解只是找资料的线索，答案里的每一点都必须来自本次读到的原文。
-- 某个写法查出 0 行时，不要直接下“没有记载”的结论：先换写法再查（缩短成更短的子串、换同音字/近形字、查 entities / entity_aliases / story_lines.speaker / story_catalog 里相近的名字，或用 similar_names）。
+- 某个写法查出 0 行时，不要直接下“没有记载”的结论：先换写法再查（更短的子串、同音字/近形字、similar_names），或换成描述用 search 检索。
 - 用原文里的写法检索和作答。
-- 读原文时分清：人物亲自做的事、别人替他做或替他决定的事、只是计划/打算的事、回忆，以及故事后来揭示为另一种性质的经历。
-- 互不依赖的查询或阅读在同一轮里一起发出（一次回复里调用多个工具），不要一轮只发一个：每一轮都要等一次模型响应。
+- 读原文时分清：人物亲自做的事、别人替他做或替他决定的事、只是计划/打算的事、回忆，以及故事后来揭示为另一种性质的经历；也分清事情发生的时间（几年前的事、现在的事），回答与问题问的时间对应。
+- 互不依赖的检索或阅读在同一轮里一起发出（一次回复里调用多个工具），不要一轮只发一个：每一轮都要等一次模型响应。
+- 每次工具调用的参数是一个 JSON 对象，只用工具说明里列出的参数；工具报错时按报错里给出的正确写法重新调用。
 - 一次只读真正需要的范围；同一段不要重复读。证据足够回答时就停止检索并作答；问题很宽时优先保证时间线上各阶段都有覆盖，而不是在一处读得过细。
 - 库里确实找不到时，如实说明查了什么、没查到什么。
 
@@ -139,8 +144,9 @@ const String loreGamesGuide = '''
 两个游戏
 本地装了两个知识库：《明日方舟》（默认）和《明日方舟：终末地》。它们是两部不同的作品，世界、人物、地点、组织都不同；两边偶有相同的名字或词，不能因此当作同一个人或同一件事。
 - 终末地库的表结构与上面相同，所有 id 都以 ef/ 开头：story_id、collection_id、collections.kind、条目原始 id（entries.id 形如 <type>:ef/...）、normalized_records.id。看到 ef/ 就是终末地的内容。
-- sql 一次只查一个库：game 参数选 arknights（默认）或 endfield。grep、find 不给 game 时查两个库，给了只查那一个；read_story、outline 按 id 自动找到对应的库。
-- 判断问题问的是哪个游戏：问题点名了游戏，或者问的人物、地点、组织、事件明显属于其中一个时，只查那个游戏；看不出来，或问题同时涉及两者时，两个都查（先不带 game 用 grep 看分布），再按查到的结果作答。不要只凭名字相似就把一个游戏的内容套到另一个游戏上。
+- search、grep 不给 game 时同时查两个库，结果按游戏分组；read_story、outline 按 id 自动找到对应的库；sql 一次只查一个库：game 参数选 arknights（默认）或 endfield。
+- 不要先判断问题属于哪个游戏、再只查那一个：一律先看两个游戏的检索结果。一部作品里的概念、人物或事件可能在另一部里被提到、延续或解释，问题没说的部分也可能只在另一部里。
+  按原文判断哪些内容与问题有关；不要只凭名字相似就把一个游戏的内容套到另一个游戏上。
 - 两个游戏都有相关内容时分开写（各自一个小节），并写明哪部分出自终末地。
 $loreEndfieldLibraryGuide''';
 
@@ -149,22 +155,24 @@ $loreEndfieldLibraryGuide''';
 /// sites only, no page, character or event.
 const String loreWikiGuide = '''
 Wiki 资料
-除了本地知识库，还可以查游戏 Wiki（wiki_search 搜索、wiki_read 读页面，需要联网）：明日方舟是 PRTS（prts.wiki），终末地是 Warfarin Wiki（warfarin.wiki）。
-- Wiki 是玩家社区编写的二手资料：有编者的整理和解读，可能有错漏，也可能收录了本地库没有的内容（游戏外的官方资料、本地库之后才上线的内容、整理好的人物关系与设定）。
-- 剧情事实以本地知识库的原文为准：能在库里读到原文的，引用库里的原文。Wiki 用来定位（人物出现在哪些活动或章节、某件事发生在哪里，再回库里读原文）、补充库里确实没有的内容、对照核实。
-- 问题问到的某项资料在库里换了写法仍查不到时，先用 Wiki 查一次再下“没有记载”的结论：本地库并不收录游戏的全部文字，Wiki 上可能有。
-- Wiki 与原文不一致时以原文为准，两处都写明。只有 Wiki 支持的说法，正文里要说明是 Wiki 的整理（例如“据 Wiki 整理”），不要写成游戏原文的叙述。
+除了本地知识库，还可以查游戏 Wiki（需要联网）：明日方舟是 PRTS（prts.wiki），终末地是 Warfarin Wiki（warfarin.wiki）。
+search 的结果里有 Wiki 一组；wiki_search 专门搜索 Wiki 页面，wiki_read 读页面正文。
+- Wiki 和本地知识库同样是检索来源：两边的结果一起看，按问题的需要去读，不必等库里查不到才看 Wiki。人物关系、设定、事件梳理、本地库之后才上线的内容、游戏外的官方资料，Wiki 常有整理好的页面。
+- 两者的性质不同：本地知识库是游戏原文；Wiki 是玩家社区编写的整理，有编者的归纳和解读，可能有错漏。答案里要分清：出自 Wiki 的说法，正文里写明是 Wiki 的整理（例如“据 Wiki 整理”），不要写成游戏原文的叙述；
+  原文能印证的，同时引用原文；Wiki 与原文不一致时，两处都写明，以原文为准。
 - Wiki 的出处是第三种出处：wiki_read 输出开头的页面 id（形如 wiki:<站点>:<页面>@<版本>，原样照抄，含 @ 后的版本）加段号，段号是 P 后面的数字。
   最终答案的 cite 里写 ["<页面 id>", <起始段>, <结束段>]；笔记里写 `<页面 id>:<起始段>-<结束段>`。只引用 wiki_read 实际给你看过的段；搜索结果的摘要不能当出处。
 - Wiki 不可用（网络错误、超时）时不要反复重试，只用本地知识库作答，并在 gaps 里说明。''';
 
 /// The whole system prompt (or a sub-agent's when [subtask]); [games] are
 /// the installed knowledge bases (the two-game section only when there is
-/// more than Arknights); [wiki]: the wiki tools are on (0.13).
+/// more than Arknights); [wiki]: the wiki tools are on (0.13); [delegate]:
+/// the main agent may hand work to sub-agents (0.14: off by default).
 String loreSystemPrompt({
   bool subtask = false,
   List<Game> games = const [Game.arknights],
   bool wiki = false,
+  bool delegate = false,
 }) {
   var rules = games.contains(Game.endfield)
       ? '$loreAgentRules\n\n$loreGamesGuide'
@@ -172,9 +180,15 @@ String loreSystemPrompt({
   if (wiki) rules = '$rules\n\n$loreWikiGuide';
   return subtask
       ? '$rules\n\n$loreSubtaskInstructions'
-      : '$rules\n\n$loreDelegationRules\n\n$loreAnswerFormat\n\n'
-          '$loreEntryLayout';
+      : '$rules${delegate ? '\n\n$loreDelegationRules' : ''}\n\n'
+          '$loreAnswerFormat\n\n$loreEntryLayout';
 }
+
+/// 0.14: the search run on the question before the first turn, as the
+/// text added under the question.
+String lorePreSearchNote(String result) =>
+    '\n\n---\n（以下是用问题原文预先做的一次 search，只是检索结果，'
+    '不是答案；其中列出的原文行已读到，可以引用）\n$result';
 
 /// R18: system prompt of the reviewer — a second model reading the main
 /// agent's answer as a reader, without the text. It only raises questions;
@@ -209,9 +223,9 @@ String loreReviewFollowUp(List<String> issues, {required bool json}) => [
 /// R18: reorganising the detailed answer into a few paragraphs. The model
 /// names the entries each paragraph covers; the citations are merged by
 /// code from those entries.
-String loreStagePrompt(String numberedEntries) => '''
-把你上面的最终答案重新整理给玩家：按阶段或方面合并成几段，每段用几句话概括一个阶段的经过和结果，不逐条复述细节。
-上面答案的正文条目编号如下：
+String loreStagePrompt(String numberedEntries, {String? question}) => '''
+${question == null ? '' : '玩家的问题：$question\n\n'}把下面这份剧情问答的答案重新整理给玩家：按阶段或方面合并成几段，每段用几句话概括一个阶段的经过和结果，不逐条复述细节。
+答案的正文条目编号如下（【】里是原来的小节标题）：
 $numberedEntries
 
 只输出一个 JSON 对象，不写别的文字，不加代码块：
@@ -221,6 +235,11 @@ $numberedEntries
 - 每个条目编号都要归入某一段；只是回顾或罗列前文的条目归入相关的段，不单独成段。段数按内容决定，一般不超过十段左右，内容特别复杂时可以多一些。
 - 只用上面答案里的内容，不加新内容；不用引号引用台词；不提数据库、工具、查找过程。
 - 故事中有改变前面经历性质的揭示时，在第一段说明。''';
+
+/// 0.14: system prompt of the reorganising call, which sees only the
+/// answer's entries (not the whole conversation that wrote them).
+const String loreStageSystemPrompt =
+    '你替剧情问答整理答案的版面：把详细的条目归并成几段给玩家先读。只依据给你的条目，不增加内容。';
 
 /// Text-protocol fallback for providers without function calling: how to
 /// call a tool in plain text.

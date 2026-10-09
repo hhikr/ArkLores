@@ -460,7 +460,7 @@ class GameDataInstaller {
   Future<Map<String, String>> _readManifest(String dbPath) async {
     sqflite.Database? db;
     try {
-      db = await sqflite.openDatabase(dbPath, readOnly: true);
+      db = await sqflite.openDatabase(dbPath, readOnly: true, singleInstance: false);
       final rows = await db.query('gamedata_manifest');
       return {
         for (final row in rows) '${row['key']}': '${row['value']}',
@@ -480,7 +480,7 @@ class GameDataInstaller {
 
     sqflite.Database? db;
     try {
-      db = await sqflite.openDatabase(dbPath, readOnly: true);
+      db = await sqflite.openDatabase(dbPath, readOnly: true, singleInstance: false);
       await validateGameDataDatabase(db);
     } finally {
       await db?.close();

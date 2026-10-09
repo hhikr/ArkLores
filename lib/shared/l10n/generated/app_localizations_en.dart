@@ -430,7 +430,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskSource =>
-      'Answers are grounded in installed GameData story text only';
+      'Searches the story text of both installed games, and the wikis when \"Wiki\" is on; every point of an answer has a source';
 
   @override
   String get aiAskEmpty =>
@@ -915,7 +915,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aiWorkFind(String query) {
-    return 'Find by meaning: “$query”';
+    return 'Search: “$query”';
   }
 
   @override
@@ -929,7 +929,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get aiWorkRedo => 'Sources did not match; rewriting';
+  String get aiWorkRedo => 'Rewriting the answer';
 
   @override
   String aiWorkHits(int hits, int stories) {
@@ -951,6 +951,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiWorkFailed => 'failed';
+
+  @override
+  String aiWorkStories(int count) {
+    return '$count stories';
+  }
+
+  @override
+  String aiWorkSubtask(int number, String title) {
+    return 'Helper $number · $title';
+  }
 
   @override
   String get aiWorkRunning => 'running';
@@ -1465,7 +1475,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAnswerWikiHint =>
-      'Look things up on PRTS / Warfarin Wiki (online) as a secondary source besides the game text';
+      'Search PRTS / Warfarin Wiki (online) along with the game text; points taken from a wiki say so';
+
+  @override
+  String get aiAnswerDelegate => 'Sub-agents';
+
+  @override
+  String get aiAnswerDelegateHint =>
+      'For wide questions, let up to two sub-agents search in parallel (many more calls and cost)';
+
+  @override
+  String get aiNoVectorWarning =>
+      'No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.';
 
   @override
   String get aiCitedWiki => 'Wiki';

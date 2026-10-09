@@ -5,12 +5,14 @@ import 'dart:io';
 
 import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
+import 'package:arklores/core/agent/tools/search_tool.dart';
 import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart';
 import 'package:arklores/core/library/library_queries.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
 
 import '../../support/gamedata_fixture.dart';
 import '../../support/sqlite.dart';
@@ -158,6 +160,59 @@ void main() {
       final all = await grep.execute({'pattern': '灯塔', 'game': 'nonsense'});
       expect(all, contains('ef/dlg_test_1.txt'));
       expect(all, contains('level_act1_01_beg.txt'));
+    });
+
+    // 0.14: a game with few hits used to sit at the end of one long list.
+    test('grep counts list each game under its own heading with its totals',
+        () async {
+      final all = await GrepTool(both, SeenLines()).execute({'pattern': '灯塔'});
+      expect(all, contains('明日方舟 1 行 / 1 个故事'));
+      expect(all, contains('终末地 1 行 / 1 个故事'));
+      expect(all.indexOf('## 明日方舟'), lessThan(all.indexOf('## 终末地')));
+    });
+
+    test('search looks in both games at once, grouped, and its lines can be '
+        'cited', () async {
+      final seen = SeenLines();
+      final search = SearchTool(both, seen);
+      final result = await search.run('灯塔');
+      expect(result.mode, SearchMode.keywordOnly);
+      expect(result.text, contains('只有关键词检索（没有配置向量服务）'));
+      final ak = result.text.indexOf('## 明日方舟剧情');
+      final ef = result.text.indexOf('## 终末地剧情');
+      expect(ak, greaterThanOrEqualTo(0));
+      expect(ef, greaterThan(ak));
+      expect(result.text.substring(ak, ef), contains('level_act1_01_beg.txt'));
+      expect(result.text.substring(ef), contains('ef/dlg_test_1.txt'));
+      expect(seen.covers('ef/dlg_test_1.txt', 0, 0), isTrue);
+      expect(seen.covers('activities/act1/level_act1_01_beg.txt', 0, 0), isTrue);
+      // One game when asked.
+      final only = await search.execute({'query': '灯塔', 'game': 'endfield'});
+      expect(only, isNot(contains('## 明日方舟')));
+    });
+
+    test('a wrong column comes back with the real columns', () async {
+      final result = await SqlTool(both, SeenLines())
+          .execute({'query': 'SELECT name FROM story_lines'});
+      expect(result, contains('no such column'));
+      expect(result, contains('story_lines 的列：'));
+      expect(result, contains('content'));
+    });
+
+    test('another open of the same file closing does not close the store',
+        () async {
+      final ak = both.stores[Game.arknights]! as GameDataKnowledgeStore;
+      const id = 'activities/act1/level_act1_01_beg.txt';
+      expect((await ak.readStoryLines(storyId: id)).storyFound, isTrue);
+      // What the knowledge-base page does to read the manifest.
+      final other = await sqflite.openDatabase(ak.dbPath!, readOnly: true);
+      await other.close();
+      expect((await ak.readStoryLines(storyId: id)).storyFound, isTrue);
+      // Tools of one turn open the store at the same time.
+      final pages = await Future.wait([
+        for (var i = 0; i < 4; i++) ak.readStoryLines(storyId: id),
+      ]);
+      expect(pages.every((p) => p.storyFound), isTrue);
     });
 
     test('a missing database answers empty; the other still works', () async {

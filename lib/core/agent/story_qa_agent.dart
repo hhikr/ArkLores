@@ -70,6 +70,7 @@ class StoryQaAgent {
       wiki: options.wiki ? _wiki : null,
       review: options.review,
       digest: options.digest,
+      delegate: options.delegate,
       onSpan: _usage?.addSpan,
     ).run(
       query: query,

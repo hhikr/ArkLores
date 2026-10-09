@@ -3,7 +3,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
-import '../../core/llm/llm_provider.dart' show deepThinkingProvider;
+import '../../core/llm/llm_provider.dart'
+    show deepThinkingProvider, embeddingClientProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -439,7 +440,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   /// while any of them is on.
   Widget _buildAnswerOptions(AppThemeTokens theme) {
     final options = ref.watch(answerOptionsProvider);
-    final on = options.review || options.digest || options.wiki;
+    final on =
+        options.review || options.digest || options.wiki || options.delegate;
     PopupMenuItem<String> item(String value, bool checked, String title,
             String hint,) =>
         CheckedPopupMenuItem<String>(
@@ -469,17 +471,21 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             switch (value) {
               'review' => options.copyWith(review: !options.review),
               'wiki' => options.copyWith(wiki: !options.wiki),
+              'delegate' => options.copyWith(delegate: !options.delegate),
               _ => options.copyWith(digest: !options.digest),
             },
           ),
       itemBuilder: (context) => [
-        item('review', options.review, context.t.aiAnswerReview,
-            context.t.aiAnswerReviewHint,),
-        item('digest', options.digest, context.t.aiAnswerDigest,
-            context.t.aiAnswerDigestHint,),
-        // 0.13: the games' wikis as a secondary source (online).
+        // 0.13: the games' wikis, searched with the game text (online).
         item('wiki', options.wiki, context.t.aiAnswerWiki,
             context.t.aiAnswerWikiHint,),
+        item('digest', options.digest, context.t.aiAnswerDigest,
+            context.t.aiAnswerDigestHint,),
+        item('review', options.review, context.t.aiAnswerReview,
+            context.t.aiAnswerReviewHint,),
+        // 0.14: sub-agents, off by default.
+        item('delegate', options.delegate, context.t.aiAnswerDelegate,
+            context.t.aiAnswerDelegateHint,),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -533,6 +539,29 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   .copyWith(color: theme.textSecondary, fontSize: 11),
               textAlign: TextAlign.center,
             ),
+            // 0.14: search runs on meaning only with an embedding service.
+            if (ref.watch(embeddingClientProvider) == null) ...[
+              const SizedBox(height: 10),
+              Row(
+                key: const ValueKey('ask-no-vector-warning'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.warning_amber_sharp,
+                    size: 15,
+                    color: theme.warning,
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      context.t.aiNoVectorWarning,
+                      style: theme.bodyFont
+                          .copyWith(color: theme.warning, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
             Wrap(
               spacing: 8,

@@ -67,8 +67,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the answer options turn the review and the digest off, and '
-      'are saved', (tester) async {
+  testWidgets('the answer options turn the review on, the digest, the wikis '
+      'off and the sub-agents on, and are saved', (tester) async {
     FlutterSecureStorage.setMockInitialValues({});
     await tester.pumpWidget(
         _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
@@ -77,31 +77,42 @@ void main() {
       tester.element(find.byType(AiChatPage)),
     );
     expect(container.read(answerOptionsProvider), const AnswerOptions());
+    Future<void> toggle(String key) async {
+      await tester.tap(find.byKey(const ValueKey('answer-options')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(ValueKey('answer-option-$key')));
+      await tester.pumpAndSettle();
+    }
+
     await tester.tap(find.byKey(const ValueKey('answer-options')));
     await tester.pumpAndSettle();
-    expect(find.text('复核'), findsOneWidget);
-    expect(find.text('提要'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('answer-option-review')));
+    for (final title in ['复核', '提要', 'Wiki 资料', '子助手']) {
+      expect(find.text(title), findsOneWidget);
+    }
+    await tester.tapAt(Offset.zero);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('answer-options')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('answer-option-digest')));
-    await tester.pumpAndSettle();
-    const off = AnswerOptions(review: false, digest: false);
-    expect(container.read(answerOptionsProvider), off);
-    expect(await SettingsService().loadAnswerOptions(), off);
-    // 0.13: the wikis are the third option.
-    await tester.tap(find.byKey(const ValueKey('answer-options')));
-    await tester.pumpAndSettle();
-    expect(find.text('Wiki 资料'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('answer-option-wiki')));
-    await tester.pumpAndSettle();
-    const none = AnswerOptions(review: false, digest: false, wiki: false);
-    expect(container.read(answerOptionsProvider), none);
-    expect(await SettingsService().loadAnswerOptions(), none);
+    await toggle('review');
+    await toggle('digest');
+    const reviewed = AnswerOptions(review: true, digest: false);
+    expect(container.read(answerOptionsProvider), reviewed);
+    expect(await SettingsService().loadAnswerOptions(), reviewed);
+    await toggle('wiki');
+    await toggle('delegate');
+    const changed =
+        AnswerOptions(review: true, digest: false, wiki: false, delegate: true);
+    expect(container.read(answerOptionsProvider), changed);
+    expect(await SettingsService().loadAnswerOptions(), changed);
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('without an embedding service the empty page warns that '
+      'answers may suffer', (tester) async {
+    await tester.pumpWidget(
+        _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('ask-no-vector-warning')), findsOneWidget);
+    expect(find.textContaining('问答质量可能下降'), findsOneWidget);
+  });
   testWidgets('a question can be cancelled, then retried from the menu',
       (tester) async {
     await tester

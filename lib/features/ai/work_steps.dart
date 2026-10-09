@@ -24,11 +24,20 @@ enum WorkKind {
 }
 
 class WorkStep {
-  WorkStep(this.kind, {this.tool, this.args = const {}, this.text = ''});
+  WorkStep(
+    this.kind, {
+    this.tool,
+    this.args = const {},
+    this.text = '',
+    this.subtask,
+  });
 
   final WorkKind kind;
   final String? tool;
   final Map<String, dynamic> args;
+
+  /// 0.14: the sub-agent that took this step (1-based), or null.
+  final int? subtask;
 
   /// The note, the error, or (once it arrives) the tool's raw output.
   String text;
@@ -90,10 +99,11 @@ class WorkStep {
     return m == null ? null : int.parse(m.group(1)!);
   }
 
-  /// The story read ([WorkKind.read]): its title from the output, else the
-  /// file name without folders and extension.
+  /// The story read ([WorkKind.read]): its title from the output (its first
+  /// line, `《title》 story_id`), else the file name without folders and
+  /// extension.
   String get storyTitle {
-    final title = RegExp(r'^【(.+?)】', multiLine: true).firstMatch(text);
+    final title = RegExp(r'^\s*[《【](.+?)[》】]\s+\S+\.txt').firstMatch(text);
     if (title != null) return title.group(1)!.trim();
     final id = arg('story_id').replaceAll('\\', '/');
     final name = id.split('/').last;
@@ -128,14 +138,31 @@ class WorkStep {
     return m == null ? null : int.parse(m.group(1)!);
   }
 
-  /// The tool said it found nothing or refused the call.
-  bool get failed {
-    final t = text.trimLeft();
-    return t.startsWith('错误') ||
-        t.startsWith('Error') ||
-        // A wiki that could not be reached.
-        t.contains('暂时无法访问');
+  /// [WorkKind.find] (the `search` tool): stories listed, over all games.
+  int? get searchStoryCount {
+    final counts = [
+      for (final m in RegExp(r'最相关的 (\d+) 篇').allMatches(text))
+        int.parse(m.group(1)!),
+    ];
+    return counts.isEmpty ? null : counts.fold<int>(0, (n, c) => n + c);
   }
+
+  /// The tool refused the call or could not run it.
+  bool get failed {
+    if (!done) return false;
+    final t = text.trimLeft();
+    return _failurePrefix.hasMatch(t) ||
+        // A wiki that could not be reached (a search's wiki part aside).
+        (kind != WorkKind.find && t.contains('暂时无法访问'));
+  }
+
+  /// Why the step failed, in the tool's words (its first line), or ''.
+  String get failure => failed ? text.trimLeft().split('\n').first : '';
+
+  static final RegExp _failurePrefix = RegExp(
+    r'^(错误|Error|SQL 错误|子任务出错|工具出错|参数不是合法|缺少参数|没有名为|'
+    r'只允许|只读查询|一次只能|本地知识库未安装)',
+  );
 
   bool get empty {
     if (!done || failed) return false;
@@ -148,11 +175,12 @@ class WorkStep {
 }
 
 WorkKind _kindOf(String tool) => switch (tool) {
+      // 0.14: `search` took over from `find` (same row in the timeline).
+      'search' || 'find' => WorkKind.find,
       'sql' => WorkKind.sql,
       'grep' => WorkKind.grep,
       'read_story' => WorkKind.read,
       'outline' => WorkKind.outline,
-      'find' => WorkKind.find,
       'similar_names' => WorkKind.similarNames,
       'delegate' => WorkKind.delegate,
       'wiki_search' => WorkKind.wikiSearch,
@@ -174,12 +202,15 @@ List<WorkStep> workStepsOf(List<ReActStep> steps) {
           _kindOf(tool),
           tool: tool,
           args: step.toolArgs ?? const {},
+          subtask: step.subtask,
         );
         out.add(work);
         waiting.add(work);
       case ReActEventType.toolObservation:
         final i = waiting.indexWhere(
-          (w) => step.toolName == null || w.tool == step.toolName,
+          (w) =>
+              w.subtask == step.subtask &&
+              (step.toolName == null || w.tool == step.toolName),
         );
         if (i < 0) continue;
         waiting.removeAt(i)

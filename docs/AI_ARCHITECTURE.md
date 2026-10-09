@@ -1,21 +1,22 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前：v0.13.0。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
+> 当前：v0.13.0 + 开发中的 0.14（问答重构，见 `R17_TOOL_AGENT.md` §5）。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
 > 0.12 起有两个知识库（明日方舟、终末地），Agent 看到的是合并的检索面（§3）。
 > 结构、工具、提示词约定与验收数据见 **`R17_TOOL_AGENT.md`**；服务商差异见 `LLM_PROVIDERS.md`；知识库表见 `GAMEDATA_BUILD_PIPELINE.md`。
 
 ## 1. 链路
 
 ```
-用户问题 ──► AskChatNotifier.sendMessage（没有模式；复核/提要两个可选项来自 AnswerOptions）
-              │   紧接上一条回答时带上一问的完整对话（LoreConversation），否则带最近 3 轮问答文本
+用户问题 ──► AskChatNotifier.sendMessage（没有模式；Wiki/提要/复核/子助手四个可选项来自 AnswerOptions，后两个默认关）
+              │   紧接上一条回答时带上一问的对话（LoreConversation，工具结果折叠），否则带最近 3 轮问答文本
               │   “深度思考”开关 → 本问使用 low 档思考的 client
               └─ StoryQaAgent ─► LoreAgentLoop
+                                   预检索（0.14）：问题原文先跑一次 search（两个游戏 + Wiki，按来源分组），附在问题下面
                                    system：库结构（含资料页说明 loreLibraryGuide）+ 工作方式 + 出处格式 + 输出格式
-                                   每轮 streamTurn(tools) → 工具并发执行（delegate = 并行子 agent）→ 结果原样追加
-                                   最终答案（JSON）→ 出处核对（SeenLines，最多退回一次）→ 审稿 → 按阶段整理
+                                   每轮 streamTurn(tools) → 守门（拆分粘连、按 schema 校验）→ 工具并发执行 → 结果追加
+                                   最终答案（JSON）→ 出处核对（SeenLines；少量未核实由代码删去，多了退回一次）→ [审稿] → 按阶段整理（只发条目）
                                    → [STORY_ANSWER: status=answered|partial|not_covered]
-       工具：sql（只读）/ grep / read_story / find / outline / similar_names / delegate
+       工具：search / read_story / grep / sql（只读）/ outline / similar_names / [delegate]
              （0.13，“Wiki 资料”开着时）wiki_search / wiki_read → WikiLookup（PRTS / Warfarin，快照）
                                    │
               GameDataKnowledgeStore（共享只读连接；sql 另开只读 FFI 连接，超时 sqlite3_interrupt）
@@ -41,11 +42,12 @@
 
 - 表与构建见 `GAMEDATA_BUILD_PIPELINE.md`。Agent 主要用：`story_lines`（逐行原文，`kind`）、`entries`/`collections`/`entry_links`（条目、归属、绑定）、
   `normalized_records`（档案等，出处 `record:<id>`）、`story_catalog`（章节名、顺序、梗概、上线时间）、`story_chunk_vectors`（可选语义召回）。
-- `find`：关键词 OR 排序 + 可选向量（RRF 融合）；向量只在配置的模型/维度与 manifest 一致时启用，向量命中必须 `read_story` 读到原文才算证据。
+- `search`（0.14，取代 `find`）：有向量服务时按意思检索为主，问题里出现的库中名字做关键词，RRF 融合；所有已安装游戏和 Wiki 同时查、按来源分组；
+  打印出的原文行算读过、可以引用。向量只在配置的模型/维度与 manifest 一致时启用；没有向量时退回关键词并提示“问答质量可能下降”。
 - 覆盖层、目录、梗概、向量都只是**定位线索**，不参与事实判定。
 - 资料页的检索（`library_search.dart`）与 Agent 无关：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。
 - **两个游戏（0.12）**：每个游戏一个库文件，表结构相同；终末地的所有 id 以 `ef/` 开头（`game.dart` 的 `gameOfId`），所以出处、阅读历史、
-  资料页路由拿到 id 就知道去哪个库。`MultiGameRetrieval` 把两个库合成一个检索面：按 id 的调用去对应的库，`grep`/`find` 默认两个库都查并合并
+  资料页路由拿到 id 就知道去哪个库。`MultiGameRetrieval` 把两个库合成一个检索面：按 id 的调用去对应的库，`search`/`grep` 默认两个库都查、按游戏分组
   （同一个嵌入模型，分数可比），`sql` 用 `game` 参数选库。出处标签带“终末地·”前缀。工具参数见 `R17_TOOL_AGENT.md`。
 
 ## 4. 测试与成本
@@ -72,5 +74,6 @@
 | 0.11 | 资料页说明进提示词（`loreLibraryGuide`）；复核/提要可选；服务商兼容；删除角色扮演；工作过程时间线 | 条目层上线；非 GLM 服务商空回复；界面可读 |
 | 0.12 | 终末地知识库；`MultiGameRetrieval`，工具带 `game`；提示词加“两个游戏”一节；一个任务一篇剧情，提示词说明跨种类的先后不可推断 | 第二个游戏；终末地的对话种类各自编号 |
 | 0.13 | Wiki 工具（`wiki_search`/`wiki_read`）与 Wiki 出处：段落编号、版本快照、同一套出处核对；“Wiki 资料”开关 | 库里没有的整理与资料；玩家常用的 Wiki 可以引证 |
+| 0.14 | 统一检索 `search` + 预检索；工具调用守门；数据库连接独立；空回复只对一轮降级；出处少量问题由代码处理；整理只发条目；审稿/子助手默认关；工作过程可读 | 真机 10 个会话：17% 调用出错、数据库被关、一题 1.5–24 分钟、单题百万 token |
 
 R12–R16 的逐轮真机数据已删（git 历史可查，`docs/AI_ARCHITECTURE.md` 2026-10-07 之前的版本）。

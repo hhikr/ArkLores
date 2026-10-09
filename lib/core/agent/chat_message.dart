@@ -10,12 +10,16 @@ class ReActStep {
     required this.content,
     this.toolName,
     this.toolArgs,
+    this.subtask,
   });
 
   final ReActEventType type;
   final String content;
   final String? toolName;
   final Map<String, dynamic>? toolArgs;
+
+  /// 0.14: the sub-agent this step belongs to (see [ReActEvent.subtask]).
+  final int? subtask;
 }
 
 /// Message model for AI chats.

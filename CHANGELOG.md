@@ -2,6 +2,38 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [Unreleased] - 0.14
+
+Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancelled, 1.5–24 minutes and up to 1.5 million input tokens a question; one tool call in six went wrong). The one agent, its tools and the citation checks stay; what changed is around them.
+
+### Answers that do not break
+
+- **The knowledge base no longer drops out mid-question.** Opening the knowledge-base page (or the story-vector card) opened the same file with SQLite's shared connection and closed it, which closed Ask's connection too: every later search and read failed with `database_closed` until the app was restarted. Each opener now has its own connection, and Ask's reopens if it is ever closed.
+- **Calls made together stay apart.** Some relays number two calls of the same tool alike; they were merged into one call whose arguments were two JSON objects back to back.
+- **A gate before every tool call**: calls glued together are split; arguments are checked against the tool's parameters; a call that cannot run is not run and never kept in the conversation as written (malformed arguments in the history made one provider reject the whole question). The model is told what came, what is missing and what a correct call looks like; once a later call goes through, the refused turn is left out of the requests.
+- **One empty reply no longer changes the rest of the question**: it is asked again the same way first, then another way for that turn only.
+- **Waiting is visible**: while the provider has sent nothing, the status says for how long; failed and empty calls appear in the recorded timeline. **Cancel stops at once** and records what the question cost so far.
+- A wrong SQL column comes back with the table's real columns.
+
+### Searching everything at once
+
+- **`search`** replaces `find`: one call looks at the story text of both games — by meaning when an embedding service is set up, and by the names the question mentions — and at the wikis, with the results grouped by source (Arknights, Endfield, Wiki). The lines it prints count as read and can be cited.
+- **The question is searched before the model's first turn**, so it starts from candidate passages instead of spending turns finding where a name occurs.
+- **Both games are searched for every question**; the prompt no longer asks the model to decide the game first. Corpus counts list each game under its own heading with its totals.
+- **The wikis are a search source like the knowledge base**, no longer a last resort; answers still say which points come from a wiki.
+- Without an embedding service, search uses keywords only and the Ask page warns that answers may be less accurate.
+
+### Cheaper and faster
+
+- Tool results are half as long, old tool results are folded much earlier (what they showed stays citable), and a follow-up no longer carries the previous question's tool output.
+- A few citations of lines that were not read are removed by code instead of sending the whole answer back; the answer is rewritten only for more, or for what code cannot fix.
+- Reorganising a long answer sends only its entries, not the whole conversation.
+- The reader's review and sub-agents are off by default (both in the answer options); sub-agents are limited to two per question and their steps are shown.
+
+### The work timeline reads well
+
+- Stories read are shown by name (they showed as file names); every failure is marked and says why; a sub-agent's steps are labelled; a rewrite says what was wrong.
+
 ## [0.13.0] - 2026-10-09
 
 The stable release of the 0.13 line (wiki search and evidence for Ask), Android build 32; it installs over v0.10.0 and later. The knowledge bases are unchanged — the same files as before (Arknights `695caa3e…`, the v0.11.0 asset; Endfield `592d64a8…`, the v0.12.0 asset), now also attached to this release, which the app downloads them from; an installed knowledge base is not downloaded again. The releases before v0.10.0 were removed (their tags remain).

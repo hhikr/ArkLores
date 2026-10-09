@@ -15,9 +15,11 @@ import 'dart:convert';
 import '../gamedata/game_retrieval.dart';
 import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
+import '../wiki/wiki_lookup.dart';
 import 'tools/agent_tool.dart';
 import 'tools/observation_data.dart' show dataBlockPrefix;
 import 'tools/search_story_lines.dart';
+import 'tools/search_tool.dart';
 
 /// Story lines shown to the model in this run (per story, line indexes),
 /// and ids of other records (`normalized_records` …) a query returned.
@@ -63,10 +65,10 @@ class SeenLines {
   Iterable<String> get stories => _lines.keys;
 }
 
-/// Most characters a tool result may hand back (≈ one chapter of story
-/// lines): large enough to read a chapter whole, small enough that dozens of
-/// results fit the conversation.
-const int maxToolResultChars = 16000;
+/// Most characters a tool result may hand back (≈ 200 story lines). 0.14:
+/// halved from 16000 — every result is sent again with each later turn, so
+/// its size is paid many times; a longer chapter is read in pages.
+const int maxToolResultChars = 8000;
 
 /// [text] on one line: its line breaks shown as ` / `.
 String oneLine(String text) =>
@@ -176,7 +178,9 @@ class SqlTool extends AgentTool {
     if (query.isEmpty) return '错误：query 为空';
     final game = Game.parse(arguments['game']);
     final result = await store.readOnlySql(query, maxRows: maxRows, game: game);
-    if (result.error != null) return result.error!;
+    if (result.error != null) {
+      return '${result.error!}${await _columnsHint(query, result.error!, game)}';
+    }
     if (result.rows.isEmpty) {
       final terms = [
         for (final m in RegExp(r"LIKE\s+'%?([^'%_]+)%?'", caseSensitive: false)
@@ -214,6 +218,46 @@ class SqlTool extends AgentTool {
     }
     return buffer.toString().trimRight();
   }
+
+  /// 0.14: after a wrong column or table, the real columns of the tables
+  /// the query names, so the next try does not guess again.
+  Future<String> _columnsHint(String query, String error, Game? game) async {
+    if (!error.contains('no such column') && !error.contains('no such table')) {
+      return '';
+    }
+    final tables = <String>{
+      for (final m in RegExp(r'\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_]*)',
+              caseSensitive: false,)
+          .allMatches(query))
+        m.group(1)!,
+    };
+    final lines = <String>[];
+    for (final table in tables.take(4)) {
+      final columns = await store.readOnlySql(
+        "SELECT name FROM pragma_table_info('$table')",
+        maxRows: 60,
+        game: game,
+      );
+      if (columns.error != null) continue;
+      lines.add(
+        columns.rows.isEmpty
+            ? '没有表 $table'
+            : '$table 的列：${columns.rows.map((r) => r.first).join(', ')}',
+      );
+    }
+    if (error.contains('no such table') || lines.isEmpty) {
+      final all = await store.readOnlySql(
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') "
+        "AND name NOT LIKE '%fts%' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        maxRows: 80,
+        game: game,
+      );
+      if (all.error == null) {
+        lines.add('可用的表：${all.rows.map((r) => r.first).join(', ')}');
+      }
+    }
+    return lines.isEmpty ? '' : '\n${lines.join('\n')}';
+  }
 }
 
 /// `read_story`: consecutive lines of one chapter.
@@ -223,8 +267,8 @@ class ReadStoryTool extends AgentTool {
   final GameDataRetrieval store;
   final SeenLines seen;
 
-  static const int defaultCount = 400;
-  static const int maxCount = 500;
+  static const int defaultCount = 200;
+  static const int maxCount = 300;
 
   @override
   String get name => 'read_story';
@@ -494,18 +538,34 @@ class GrepTool extends AgentTool {
         return a.$4.compareTo(b.$4);
       });
     final total = counts.values.fold<int>(0, (n, c) => n + c);
+    // 0.14: one part per game, each with its own totals first, so a game
+    // with few hits is not lost at the end of a long list.
+    final byGame = <Game, List<String>>{};
+    for (final id in ids) {
+      byGame.putIfAbsent(gameOfId(id), () => []).add(id);
+    }
     final buffer = StringBuffer()
       ..writeln('全库共 $total 行命中，分布在 ${ids.length} 个故事'
+          '${byGame.length > 1 ? '（${[
+              for (final MapEntry(key: g, value: list) in byGame.entries)
+                '${g.label} ${list.fold<int>(0, (n, id) => n + counts[id]!)} 行 / ${list.length} 个故事',
+            ].join('；')}）' : ''}'
           '（主线在前，其余按上线时间；格式：story_id | 章节 | 命中行数）：');
-    var listed = 0;
-    for (final id in ids) {
-      if (listed >= maxStoriesListed) {
-        buffer.writeln('……还有 ${ids.length - listed} 个故事未列出；'
-            '可用 sql 按需要的条件统计。');
-        break;
+    final perGame = byGame.length > 1
+        ? (maxStoriesListed / byGame.length).floor()
+        : maxStoriesListed;
+    for (final MapEntry(key: game, value: list) in byGame.entries) {
+      if (byGame.length > 1) buffer.writeln('## ${game.label}');
+      var listed = 0;
+      for (final id in list) {
+        if (listed >= perGame) {
+          buffer.writeln('……还有 ${list.length - listed} 个故事未列出；'
+              '可用 sql 按需要的条件统计。');
+          break;
+        }
+        buffer.writeln('$id | ${_storyLabel(id, entries)} | ${counts[id]}');
+        listed++;
       }
-      buffer.writeln('$id | ${_storyLabel(id, entries)} | ${counts[id]}');
-      listed++;
     }
     buffer.writeln('（这里只是分布；读原文用 read_story，或带 story_ids 再 grep）');
     return buffer.toString().trimRight();
@@ -566,8 +626,9 @@ class OutlineTool extends AgentTool {
 }
 
 /// `find`: ranked search for a phrase or a described scene — FTS keywords
-/// fused with the optional story vectors (R12). For text that grep's exact
-/// substrings would miss.
+/// fused with the optional story vectors (R12). 0.14: replaced in the
+/// agent's tools by `search` (`tools/search_tool.dart`); kept for callers
+/// of the old search output.
 class FindTool extends AgentTool {
   FindTool(this._store, this._embeddingClient);
 
@@ -711,17 +772,20 @@ String delegateTaskText(Map<String, dynamic> arguments) {
   ].join('\n');
 }
 
-/// The story agent's tools, sharing one [SeenLines] log.
+/// The story agent's tools, sharing one [SeenLines] log. 0.14: `search`
+/// (story text of every game by meaning and names, and the wikis when
+/// [wiki] is given) comes first and replaces `find`.
 List<AgentTool> loreTools(
   GameDataRetrieval store,
   SeenLines seen, {
   EmbeddingClient? embeddingClient,
+  WikiLookup? wiki,
 }) =>
     [
-      SqlTool(store, seen),
-      GrepTool(store, seen),
+      SearchTool(store, seen, embeddingClient: embeddingClient, wiki: wiki),
       ReadStoryTool(store, seen),
-      FindTool(store, embeddingClient),
+      GrepTool(store, seen),
+      SqlTool(store, seen),
       OutlineTool(store),
       SimilarNamesTool(store),
     ];

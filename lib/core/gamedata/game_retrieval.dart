@@ -99,6 +99,10 @@ abstract interface class GameDataRetrieval {
   /// never a claim that they refer to the same person.
   Future<List<SimilarName>> similarNames(String term, {int limit});
 
+  /// 0.14: names of the DB (people, speakers, collections) written in
+  /// [text], longest first — the names a question mentions.
+  Future<List<String>> namesInText(String text, {int limit});
+
   /// R15: per term, story lines containing it in the whole DB and inside
   /// [scopeId] (equal to the total without a scope).
   Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(

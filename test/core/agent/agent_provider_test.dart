@@ -40,7 +40,7 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  AskChatNotifier makeNotifier(_RecorderLLM mock) {
+  AskChatNotifier makeNotifier(_RecorderLLM mock, {bool review = false}) {
     mock.meter = meter;
     return AskChatNotifier(
       agent: StoryQaAgent(llmClient: mock, gameDataStore: knowledge),
@@ -50,6 +50,7 @@ void main() {
         chatModel: 'test-model',
         chatBaseUrl: 'https://example.com/v1',
       ),
+      optionsReader: () => AnswerOptions(review: review),
     );
   }
 
@@ -64,7 +65,7 @@ void main() {
         () async {
       AgentLogger.setEnabled(true);
       final mock = _RecorderLLM()..reads = 2;
-      final notifier = makeNotifier(mock);
+      final notifier = makeNotifier(mock, review: true);
 
       await notifier.sendMessage('特雷西娅的死是谁造成的');
 
@@ -75,12 +76,15 @@ void main() {
       expect(turn.model, 'test-model');
       expect(turn.baseUrl, 'https://example.com/v1');
       expect(turn.status, ChatTurnStatus.completed);
-      // Every model response is recorded untruncated: two reads, the
-      // answer, and (R18) the reader's review of it.
-      expect(turn.iterations, hasLength(4));
-      expect(turn.iterations.first.rawResponse, contains('read_story'));
-      expect(turn.iterations.first.tool, 'read_story');
-      expect(turn.iterations[2].rawResponse, contains('结论：博士'));
+      // Every model response is recorded untruncated: (0.14) the search
+      // before the first turn, two reads, the answer, and (R18) the
+      // reader's review of it.
+      expect(turn.iterations, hasLength(5));
+      expect(turn.iterations.first.rawResponse, '（预检索）');
+      expect(turn.iterations.first.tool, 'search');
+      expect(turn.iterations[1].rawResponse, contains('read_story'));
+      expect(turn.iterations[1].tool, 'read_story');
+      expect(turn.iterations[3].rawResponse, contains('结论：博士'));
       expect(turn.iterations.last.rawResponse, startsWith('（审稿）'));
       // What the turn cost: the four calls, their tokens, one timeline row
       // per call; the same totals sit under the answer on screen.
@@ -109,10 +113,10 @@ void main() {
       );
       await notifier.sendMessage('甲是谁');
       final first = (await singleSession()).turns.single;
-      expect(first.iterations, hasLength(3));
+      expect(first.iterations, hasLength(4));
       expect(first.iterations.map((i) => i.rawResponse),
           isNot(contains(startsWith('（审稿）'))),);
-      options = const AnswerOptions();
+      options = const AnswerOptions(review: true);
       mock.resetAgentCalls();
       await notifier.sendMessage('乙是谁');
       final second = (await singleSession()).turns.last;
