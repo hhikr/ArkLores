@@ -48,6 +48,8 @@
   - 真实 API 验收（2026-10-09，开发者同意）：两套 API（`tools/api_info` 较好的 GLM、`tools/garbage_api_info.txt` 较弱的 gemini 中转，键名 `API=`）× 两题全部 answered，
     结果与据此做的修正见 `docs/R17_TOOL_AGENT.md` §5。`search` 现在也查资料（档案、干员资料、语音等，含 `entity_documents` 的干员档案合集）。
     第二轮（同日）在电脑上验收追问、核查、无向量，修了追问预检索、`record:record:` 出处、无向量关键词（短语）。
+    2026-10-10：无向量时不预检索、由模型写检索词（评测集上代码定的关键词只有 16/29 题命中金标），结果列出每个词的命中行数；
+    答案用提问的语言写；一次回复里有几份答案时取最后一份完整的。GLM 实测良好；较弱的 gemini 检索正常但作答不稳。
   - 真机测试工具：`tools/phone_ask.dart` + `install_local.ps1 -Bridge`（`lib/features/ai/phone_bridge.dart`，只在本地构建里），见 `docs/ANDROID_SETUP_GUIDE.md`。
   - 待开发者决定：真机检查；是否发版。
 

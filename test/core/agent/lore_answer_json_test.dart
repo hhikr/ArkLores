@@ -75,6 +75,41 @@ void main() {
     expect(md, '[FACT_CHECK_VERDICT:refuted]\n\n他说"不"了 `$a:4`\n\n[COVERAGE: full]');
   });
 
+  // 0.14 live: one reply of a weaker model held prose quoting the format's
+  // skeleton, a partial version in a code block, and then the whole answer.
+  test('of several JSON answers in one reply the last complete one is read',
+      () {
+    final whole = jsonEncode({
+      'entries': [
+        {
+          'text': '甲做了第一件事。',
+          'cite': [
+            ['a/b.txt', 1, 2],
+          ],
+        },
+        {'heading': '后来'},
+        {
+          'text': '甲做了第二件事。',
+          'cite': [
+            ['record', 'r1'],
+          ],
+        },
+      ],
+      'coverage': 'full',
+    });
+    final reply = 'The required format is {"entries": [条目, ...], '
+        '"coverage": "full 或 gaps"}. I must follow it.\n\n'
+        '```json\n{"entries": [{"text": "只有一条。", "cite": [["a/b.txt", 1, 1]]}], '
+        '"coverage": "full"}\n```\n\nMore notes in English.\n\n$whole';
+    final md = loreAnswerMarkdown(reply)!;
+    expect(md, contains('甲做了第一件事。'));
+    expect(md, contains('甲做了第二件事。'));
+    expect(md, isNot(contains('只有一条')));
+    expect(md, isNot(contains('full 或 gaps')));
+    // One answer as before: the same markdown.
+    expect(loreAnswerMarkdown(whole), md);
+  });
+
   test('markdown answers are not JSON answers', () {
     expect(loreAnswerMarkdown('星灯点亮钟楼 `$a:1`。'), isNull);
     expect(loreAnswerMarkdown('集合 {1, 2} 不是答案'), isNull);

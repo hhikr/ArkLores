@@ -26,6 +26,7 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 - `search` also lists operator files (race, records, archives), the file of what the question names first.
 - A follow-up is searched together with the question before it, so "what about her?" finds what the conversation is about.
 - A record cited as `record:record:<id>` is read as `record:<id>`.
+- Answers are written in the language of the question (a model thinking in English wrote whole answers in English); when one reply holds several versions of the answer (a weaker model's notes quoting the format, partial drafts, then the answer), the last complete one is used.
 
 ### Cheaper and faster
 

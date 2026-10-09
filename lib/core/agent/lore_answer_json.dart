@@ -25,12 +25,24 @@ String? loreAnswerMarkdown(String content) => loreAnswerParsed(content)?.markdow
 
 /// [loreAnswerMarkdown] plus how many citation items of the answer gave no
 /// usable ref (written in a shape that cannot be read).
+///
+/// 0.14 live: a weaker model wrote prose quoting the format's skeleton,
+/// two partial versions and then the whole answer, all in one reply. Every
+/// start is tried and the last complete object with entries wins (else
+/// the first start, as before).
 ({String markdown, int dropped})? loreAnswerParsed(String content) {
-  final start = loreAnswerJsonStart.firstMatch(content);
-  if (start == null) return null;
-  final stream = LoreAnswerStream()..add(content.substring(start.start));
-  final markdown = stream.finish();
-  return (markdown: markdown, dropped: stream.droppedCites);
+  final starts = loreAnswerJsonStart.allMatches(content).toList();
+  if (starts.isEmpty) return null;
+  ({String markdown, int dropped}) parse(int at, [LoreAnswerStream? s]) {
+    final stream = s ?? (LoreAnswerStream()..add(content.substring(at)));
+    return (markdown: stream.finish(), dropped: stream.droppedCites);
+  }
+
+  for (final start in starts.reversed) {
+    final stream = LoreAnswerStream()..add(content.substring(start.start));
+    if (stream.complete && stream.hasEntries) return parse(start.start, stream);
+  }
+  return parse(starts.first.start);
 }
 
 enum _Role { root, entries, entry, cites, tuple, ignore }
@@ -83,6 +95,12 @@ class LoreAnswerStream {
 
   /// Markdown produced so far.
   String get markdown => _md.toString();
+
+  /// The object has closed (its last brace came).
+  bool get complete => _closed;
+
+  /// At least one heading or text entry was written.
+  bool get hasEntries => _md.toString().trim().isNotEmpty;
 
   /// Feeds [chunk]; returns the markdown it added.
   String add(String chunk) {
