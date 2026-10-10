@@ -366,6 +366,11 @@ class _View {
                   '${e['verdict'] == null ? '' : ' · 核查结论 ${e['verdict']}'}'
                   '${e['stats'] == null ? '' : ' · ${e['stats']}'}'),
         );
+        // The app's own summary line (same counts as on screen).
+        final work = e['work'];
+        if (work is Map) {
+          plain('查阅 ${work['calls']} 次 · 读了 ${work['stories']} 篇原文');
+        }
         if (e['error'] != null) plain(_paint('31', '错误：${e['error']}'));
         final answer = '${e['answer']}'.trim();
         if (answer.isNotEmpty && answer != '[ASK_ERROR]') {

@@ -249,7 +249,7 @@ class SearchTool extends AgentTool {
       }
       final records = _renderRecords(r);
       if (records.isNotEmpty) {
-        buffer.writeln('## ${g.label}资料（档案、干员资料、语音等；格式：出处 | 类别 | 标题 | 片段）');
+        buffer.writeln('## ${g.label}资料（档案、干员资料、语音等；格式：出处 | 类别 | 标题（所属对象） | 片段）');
         records.forEach(buffer.write);
       }
     }
@@ -260,7 +260,7 @@ class SearchTool extends AgentTool {
       }
     }
     buffer.writeln('（上面列出的行可以引用，没有列出的行要先读；要上下文用 read_story 从附近的行读。'
-        '资料只列了片段，可以按片段引用，全文用 sql 按 id 查 normalized_records（类别是 *_profile_bundle 的在 entity_documents）'
+        '资料只列了片段，可以按片段引用，全文用 read_record 按 id 读'
         '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
     return SearchResult(buffer.toString().trimRight(), mode, modeNote: modeNote);
   }
@@ -432,7 +432,8 @@ class SearchTool extends AgentTool {
             // Only the excerpt was shown.
             seen.addRecord(r.id, partial: true);
             return '   record:${r.id} | ${r.category}${r.subtype.isEmpty || r.subtype == r.category ? '' : '·${r.subtype}'}'
-                ' | ${r.title} | ${r.snippet}\n';
+                ' | ${r.title}${r.owner.isEmpty || r.owner == r.title ? '' : '（${r.owner}）'}'
+                ' | ${r.snippet}\n';
           }(),
       ];
 

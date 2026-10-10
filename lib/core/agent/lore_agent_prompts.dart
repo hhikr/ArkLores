@@ -72,7 +72,7 @@ const String loreLibraryGuide = '''
 - 档案没有上线时间。档案与剧情冲突时分别写明，不用档案的先后下结论。
 同一人物
 - entry_links 的 same_person 把同一干员的不同版本连起来，组里第一个是原型，其余指向它。不同版本可能是同一个人后来的经历，名字或代号会变，也可能是另一条假设的时间线，表里不区分。读两者的档案和剧情再判断，不要因名字不同当作不同的人，也不要把假设线的经历当作原版的事实。
-设定、档案类问题可以用 sql 在 entries、normalized_records 里找对应条目的原文。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
+设定、档案类问题先用 search 按名字找到资料，再用 read_record 读全文；要按类别或绑定成批地找时用 sql 查 entries、normalized_records（干员的整份档案在 entity_documents）。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
 
 /// The works the agent knows, by the installed [games].
 String loreWorksOf(List<Game> games) => games.contains(Game.endfield)
@@ -94,6 +94,8 @@ const String loreWorkingRules = '''
   问题涉及几个方面、几个阶段或几个人物时，分别检索（在同一轮里一起发出），换说法、换角度再检索，比一次读很多更有效。
 - grep 精确统计某个名字或词出现在哪些故事、多少行（不给范围时统计所有已安装的游戏），用来确认覆盖面和时间顺序；sql 查目录、条目、绑定、档案等结构化信息。
 - 用 read_story 读上下文：从检索命中的行附近开始，读需要的范围；一个事件的起因、经过、结果可能在相邻的几章里。
+- 用 read_record 读剧情以外的资料全文（档案、语音、模组故事、各种描述）：检索结果里资料只有片段，要用它的内容先读全文。
+  资料属于谁（哪位干员的语音、谁的模组）看 read_record 开头一行或检索结果里标题后的括号，不要按内容猜。
 - 可以用你对这部作品的了解来构造查询：猜名字的正确写法、别名、可能在哪些章节、相关人物。但这些了解只是找资料的线索，答案里的每一点都必须来自本次读到的原文。
 - 某个写法查出 0 行时，不要直接下“没有记载”的结论：先换写法再查（更短的子串、同音字/近形字、similar_names），或换成描述用 search 检索。
 - 用原文里的写法检索和作答。
@@ -111,7 +113,7 @@ const String loreWorkingRules = '''
 String loreCitationRules({bool wiki = false}) => '''
 出处有${wiki ? '三' : '两'}种：
 - 剧情台词：故事文件名（story_id）加起始行、结束行。行号就是工具输出里 L 后面的数字（story_lines.line_index）。只有文件名、没有行号的出处无效。
-- 剧情以外的资料（normalized_records 等表里的档案、语音、介绍）：该记录的 id，查询时把 id 和 content 列一起选出来。${wiki ? '''
+- 剧情以外的资料（档案、语音、介绍等）：该记录的 id（检索结果里 record: 后面的部分；用 read_record 读全文，用 sql 查时把 id 和 content 列一起选出来）。${wiki ? '''
 
 - Wiki 段落：wiki_read 输出开头的页面 id（形如 wiki:<站点>:<页面>@<版本>，原样照抄，含 @ 后的版本）加段号，段号是 P 后面的数字。
   最终答案的 cite 里写 ["<页面 id>", <起始段>, <结束段>]；笔记里写 `<页面 id>:<起始段>-<结束段>`。只引用 wiki_read 实际给你看过的段；搜索结果的摘要不能当出处。''' : ''}
@@ -285,6 +287,8 @@ $searchDescription
 
 根据玩家的问题（以及给出的上文）写检索：
 - 每条检索是空格分隔的几个词：原文里会出现的叫法——人物、地点、组织、事件、物品的名字，它们的别称，以及相关的说法；每个词 2–6 个字，一条不超过 8 个词。不写整句，不照抄问题里的虚词和口语。
+- 每个词都要是故事或资料的正文里会写到的词。说明“要找哪一类资料”的词（资料的种类、体裁，或“经历”“介绍”“剧情”这样概括问题的词）不在正文里，不要写：
+  按名字检索时，这个名字的各类资料会一起列出，不需要另写一条去找某一类。
 - 问题只问一件事时写一条；涉及几个方面、几个阶段或几个人物时分开写，最多三条。
 - 追问里的指代（他们、这件事、那里）按上文换成具体的名字；上文与这一问无关时不要带上。
 - 可以用你对作品的了解补上问题没有写出的相关名字和叫法，这只是为了找到资料。
@@ -302,6 +306,7 @@ String loreSearchPlanRequest(String question, {String earlier = ''}) =>
 /// accepted. [json]: the main agent (a sub-agent writes notes).
 String loreRedoNote({
   bool unreadable = false,
+  bool cutShort = false,
   List<String> unseen = const [],
   List<String> bare = const [],
   bool json = true,
@@ -311,6 +316,9 @@ String loreRedoNote({
       if (unreadable)
         '- 答案里没有可识别的出处。'
             '${json ? '最终答案是一个 JSON 对象，每条正文都带 cite；$loreCiteShape。' : '每一点末尾用反引号写出处，带行号。'}',
+      if (cutShort)
+        '- 答案的 JSON 对象在中途就结束了，后面的条目没有被读到。'
+            '整个答案只能是一个 JSON 对象，所有条目都在同一个 entries 数组里，数组和对象只在最后闭合一次。',
       if (unseen.isNotEmpty)
         '- 这些出处不在你本次通过工具实际看到的行或记录里：${unseen.join('、')}。'
             '先读取核实（或找到真正的出处），无法核实的内容不要写。',

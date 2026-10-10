@@ -147,6 +147,11 @@ class BridgeTranscriber {
             : m.content,
         if (m.factCheckVerdict != null) 'verdict': m.factCheckVerdict!.name,
         if (errors.isNotEmpty) 'error': errors.last,
+        // The summary line the app shows under the answer.
+        'work': {
+          'calls': workCounts(steps).calls,
+          'stories': workCounts(steps).reads,
+        },
         if (m.stats != null) 'stats': formatUsageLine(m.stats!),
       });
     }
@@ -187,9 +192,11 @@ String stepSummary(WorkStep s) {
     case WorkKind.sql:
       final n = s.rowCount;
       return n == null ? _firstLine(s.text) : '$n 行';
+    case WorkKind.readRecord:
+      return s.recordTitle;
     case WorkKind.grep:
       final (hits, stories) = s.grepCounts;
-      return '$hits 处，$stories 篇';
+      return stories == 0 ? _firstLine(s.text) : '$hits 处，$stories 篇';
     case WorkKind.wikiSearch:
       final n = s.wikiPageCount;
       return n == null ? _firstLine(s.text) : '$n 个页面';

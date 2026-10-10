@@ -175,6 +175,17 @@ class MultiGameRetrieval implements GameDataRetrieval {
   }
 
   @override
+  Future<bool> hasName(String term) async {
+    for (final store in await _installed()) {
+      if (await store.hasName(term)) return true;
+    }
+    return false;
+  }
+
+  @override
+  Future<RecordText?> readRecord(String id) => _of(id).readRecord(id);
+
+  @override
   Future<List<RecordHit>> searchRecordsLike(
     List<String> terms, {
     int limit = 3,

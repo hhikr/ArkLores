@@ -243,14 +243,17 @@ int _kindRank(String kind) => switch (kind) {
       _ => 3,
     };
 
-/// One observation line listing [similar] for a [term] the DB lacks, or
-/// null when there is nothing to suggest.
+/// One observation line listing [similar] for a [term] that is not a name
+/// the DB has, or null when there is nothing to suggest. The caller checks
+/// that first ([rankSimilarNames] never returns the term itself, so a list
+/// of near names does not mean the term is missing); the line speaks of
+/// names only — the term may still occur in some text.
 String? describeSimilarNames(String term, List<SimilarName> similar) {
   if (similar.isEmpty) return null;
   final listed = similar.map((s) {
     final count = s.occurrences > 0 ? '，${s.occurrences} 次' : '';
     return '${s.name}（${s.kind}$count）';
   }).join('、');
-  return '库中没有“$term”这个写法；字形或读音相近的名字：$listed。'
+  return '库里的名字中没有“$term”这个写法；字形或读音相近的名字：$listed。'
       '这只是字符串相近，是否指同一对象要结合问题和原文判断。';
 }

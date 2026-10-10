@@ -482,7 +482,9 @@ void main() {
         ],
       );
       await _pump(tester, message);
-      expect(find.text('已作答 · 查阅 2 次 · 读了 1 篇原文'), findsOneWidget);
+      // Two stories: the grep showed lines of both (0.14: every tool that
+      // prints story lines counts, not read_story alone).
+      expect(find.text('已作答 · 查阅 2 次 · 读了 2 篇原文'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('answer-header')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('work-timeline')), findsOneWidget);

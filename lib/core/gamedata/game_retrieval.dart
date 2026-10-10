@@ -38,11 +38,16 @@ class RecordHit {
     required this.title,
     required this.snippet,
     required this.score,
+    this.owner = '',
   });
   final String id;
   final String category;
   final String subtype;
   final String title;
+
+  /// Whose record it is (the name of its `entity_id`: the operator of a
+  /// voice line, the owner of a module), or '' when it has none.
+  final String owner;
 
   /// The text around the first matched term.
   final String snippet;
@@ -50,6 +55,26 @@ class RecordHit {
   /// Per term: 3 when the record is about what it names (`entity_name`), 2
   /// when its title has it, 1 when its text does.
   final double score;
+}
+
+/// 0.14: one record read whole ([GameDataRetrieval.readRecord]).
+class RecordText {
+  const RecordText({
+    required this.id,
+    required this.category,
+    required this.subtype,
+    required this.title,
+    required this.owner,
+    required this.content,
+  });
+  final String id;
+  final String category;
+  final String subtype;
+  final String title;
+
+  /// See [RecordHit.owner].
+  final String owner;
+  final String content;
 }
 
 /// The retrieval surface the investigation tools depend on.
@@ -116,6 +141,15 @@ abstract interface class GameDataRetrieval {
   /// name the DB does not contain), best first. String similarity only —
   /// never a claim that they refer to the same person.
   Future<List<SimilarName>> similarNames(String term, {int limit});
+
+  /// 0.14: whether [term] is a name the DB has, written exactly so (an
+  /// operator, a speaker, a collection …). [similarNames] leaves the term
+  /// itself out, so its result alone cannot tell "not there" from "there".
+  Future<bool> hasName(String term);
+
+  /// 0.14: the record with [id] (`normalized_records`, or an operator's
+  /// file in `entity_documents`), or null.
+  Future<RecordText?> readRecord(String id);
 
   /// 0.14: records outside the story text (`normalized_records`: archives,
   /// profiles, voice lines, item and enemy texts) whose title or text

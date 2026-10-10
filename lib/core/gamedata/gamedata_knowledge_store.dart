@@ -215,6 +215,62 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
+  Future<bool> hasName(String term) async {
+    final db = await _open();
+    final name = term.trim();
+    if (db == null || name.isEmpty) return false;
+    final inventory = await (_nameInventory ??= loadNameInventory(db));
+    return inventory.any((n) => n.name == name);
+  }
+
+  /// `entity_name`, or the name of the record's `entity_id` (a voice line
+  /// carries only the id of its operator).
+  static const String _ownerSql =
+      "COALESCE(NULLIF(entity_name, ''), "
+      '(SELECT e.name FROM entities e WHERE e.id = entity_id), '
+      "'')";
+
+  @override
+  Future<RecordText?> readRecord(String id) async {
+    final db = await _open();
+    final key = id.trim();
+    if (db == null || key.isEmpty) return null;
+    final owner = await _hasTable(db, 'entities') ? _ownerSql : "''";
+    if (await _hasTable(db, 'normalized_records')) {
+      final rows = await db.rawQuery(
+        'SELECT id, category, subtype, title, content, $owner AS owner '
+        'FROM normalized_records WHERE id = ? LIMIT 1',
+        [key],
+      );
+      if (rows.isNotEmpty) return _recordText(key, rows.first);
+    }
+    if (await _hasTable(db, 'entity_documents')) {
+      // The v0.12.0 Endfield asset's documents have ids without `ef/`.
+      final bare = key.startsWith(endfieldIdPrefix)
+          ? key.substring(endfieldIdPrefix.length)
+          : key;
+      final rows = await db.rawQuery(
+        'SELECT id, entity_type AS category, document_type AS subtype, '
+        'title, content, entity_name AS owner '
+        'FROM entity_documents WHERE id IN (?, ?) LIMIT 1',
+        [key, bare],
+      );
+      if (rows.isNotEmpty) return _recordText(key, rows.first);
+    }
+    return null;
+  }
+
+  static RecordText _recordText(String id, Map<String, Object?> row) =>
+      RecordText(
+        id: id,
+        category: '${row['category'] ?? ''}',
+        subtype: '${row['subtype'] ?? ''}',
+        title: '${row['title'] ?? ''}',
+        owner: '${row['owner'] ?? ''}',
+        content: '${row['content'] ?? ''}',
+      );
+
+  @override
   Future<List<RecordHit>> searchRecordsLike(
     List<String> terms, {
     int limit = 3,
@@ -247,9 +303,10 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final scoreSql = score.join(' + ');
     final whereSql = where.join(' OR ');
     // Story text is searched in story_lines; its copies here are left out.
+    final owner = await _hasTable(db, 'entities') ? _ownerSql : "''";
     final rows = await db.rawQuery(
       'SELECT id, category, subtype, entity_name, title, content, '
-      '($scoreSql) AS s '
+      '$owner AS owner, ($scoreSql) AS s '
       'FROM normalized_records '
       "WHERE category != 'story' AND COALESCE(subtype, '') != 'story' "
       'AND ($whereSql) '
@@ -261,7 +318,8 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final documents = await _hasTable(db, 'entity_documents')
         ? await db.rawQuery(
             'SELECT id, entity_type AS category, document_type AS subtype, '
-            'entity_name, title, content, ($scoreSql) AS s '
+            'entity_name, title, content, entity_name AS owner, '
+            '($scoreSql) AS s '
             'FROM entity_documents WHERE $whereSql '
             'ORDER BY s DESC, length(content) DESC LIMIT ?',
             [...args, ...whereArgs, limit],
@@ -278,6 +336,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
           category: '${row['category'] ?? ''}',
           subtype: '${row['subtype'] ?? ''}',
           title: '${row['title'] ?? ''}',
+          owner: '${row['owner'] ?? ''}',
           snippet: _around(
             '${row['content'] ?? ''}',
             cleaned,

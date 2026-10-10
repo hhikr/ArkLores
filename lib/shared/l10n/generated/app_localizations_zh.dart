@@ -888,6 +888,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String aiWorkReadRecord(String title) {
+    return '查阅资料「$title」';
+  }
+
+  @override
   String aiWorkOutline(String collection) {
     return '查看「$collection」的章节目录';
   }

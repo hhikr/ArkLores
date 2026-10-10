@@ -1193,6 +1193,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         );
       case WorkKind.read:
         return (Icons.menu_book_sharp, t.aiWorkRead(clip(step.storyTitle)));
+      case WorkKind.readRecord:
+        return (
+          Icons.description_sharp,
+          t.aiWorkReadRecord(clip(step.recordTitle)),
+        );
       case WorkKind.outline:
         return (
           Icons.format_list_bulleted_sharp,

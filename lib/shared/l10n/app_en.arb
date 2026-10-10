@@ -305,6 +305,8 @@
   "@aiWorkGrepIn": {"placeholders": {"scope": {"type": "String"}, "pattern": {"type": "String"}}},
   "aiWorkRead": "Read “{story}”",
   "@aiWorkRead": {"placeholders": {"story": {"type": "String"}}},
+  "aiWorkReadRecord": "Read record “{title}”",
+  "@aiWorkReadRecord": {"placeholders": {"title": {"type": "String"}}},
   "aiWorkOutline": "Chapter list of {collection}",
   "@aiWorkOutline": {"placeholders": {"collection": {"type": "String"}}},
   "aiWorkFind": "Search: “{query}”",

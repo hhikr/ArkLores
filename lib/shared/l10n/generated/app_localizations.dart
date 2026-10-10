@@ -1676,6 +1676,12 @@ abstract class AppLocalizations {
   /// **'Read “{story}”'**
   String aiWorkRead(String story);
 
+  /// No description provided for @aiWorkReadRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Read record “{title}”'**
+  String aiWorkReadRecord(String title);
+
   /// No description provided for @aiWorkOutline.
   ///
   /// In en, this message translates to:

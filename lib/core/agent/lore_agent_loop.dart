@@ -531,7 +531,9 @@ class LoreAgentLoop {
                 jsonAnswer = LoreAnswerStream();
                 // R18: the detailed answer streams under the marker (folded
                 // in the app); the reorganised one is written above it.
-                live = '$loreDetailsMarker\n\n'
+                // 0.14: only when it will be reorganised — without that
+                // the marker folded the whole answer while it was written.
+                live = '${digest ? '$loreDetailsMarker\n\n' : ''}'
                     '${jsonAnswer.add(text.toString().substring(start.start))}';
               }
             }
@@ -804,6 +806,9 @@ class LoreAgentLoop {
         content = rewriteOf;
       }
       final parsedJson = subtask ? null : loreAnswerParsed(content);
+      // Read past a bracket that closed the object early: the rest of the
+      // turn (the kept answer, the reorganising) reads it as valid JSON.
+      if (parsedJson?.repaired != null) content = parsedJson!.repaired!;
       final fromJson = parsedJson?.markdown;
       // A flat or odd citation shape is written back in the nested form, so
       // later turns (rewrite, follow-ups) do not copy it.
@@ -846,12 +851,15 @@ class LoreAgentLoop {
       final unreadable = !subtask &&
           ((parsedJson != null && parsedJson.dropped > 0) ||
               (!seen.isEmpty && citations == 0));
+      // 0.14 live: the JSON object closed before its last entries (a
+      // bracket too many); what stands after it is not in the answer.
+      final cutShort = parsedJson != null && parsedJson.cutShort;
       // 0.14: a few citations of lines that were not read are dropped by
       // code (the rest of the answer stands on checked ones); the answer
       // is sent back only when many are, or for what code cannot fix.
       final fewUnseen = unseen.isNotEmpty && unseen.length * 3 <= citations;
       final manyUnseen = unseen.isNotEmpty && !fewUnseen;
-      final sendBack = manyUnseen || bare.isNotEmpty || unreadable;
+      final sendBack = manyUnseen || bare.isNotEmpty || unreadable || cutShort;
       if (sendBack && !citationRetried && !lastTurn) {
         citationRetried = true;
         rewriteOf = keep;
@@ -864,6 +872,7 @@ class LoreAgentLoop {
           type: ReActEventType.recordNote,
           content: '退回：${[
             if (unreadable) '没有可识别的出处',
+            if (cutShort) 'JSON 提前闭合，后面的条目没有读到',
             if (manyUnseen) '${unseen.length} 处出处不在读过的原文里（${unseen.join('、')}）',
             if (bare.isNotEmpty) '${bare.length} 处出处缺少行号（${bare.join('、')}）',
           ].join('；')}',
@@ -876,6 +885,7 @@ class LoreAgentLoop {
         conversation.add(Message.user(
           loreRedoNote(
             unreadable: unreadable,
+            cutShort: cutShort,
             unseen: manyUnseen ? unseen : const [],
             bare: bare,
             json: !subtask,

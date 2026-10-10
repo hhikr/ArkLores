@@ -191,7 +191,9 @@ String _storyLabel(String storyId, Map<String, StoryCatalogEntry> entries) =>
     entries[storyId]?.label ?? fallbackStoryLabel(storyId);
 
 /// Names that a zero-hit search may have misspelled: near names from the DB
-/// (R15 string similarity, never an identity claim).
+/// (R15 string similarity, never an identity claim). A term the DB has as
+/// a name is not misspelled (0.14 phone: a query that found nothing for
+/// another reason was told the name it asked for "is not in the library").
 Future<String> _nearNamesHint(
   GameDataRetrieval store,
   Iterable<String> terms,
@@ -199,6 +201,7 @@ Future<String> _nearNamesHint(
   final hints = <String>[];
   for (final term in terms.toSet()) {
     if (term.runes.length < 2 || term.runes.length > 12) continue;
+    if (await store.hasName(term)) continue;
     final similar = await store.similarNames(term, limit: 5);
     final line = describeSimilarNames(term, similar);
     if (line != null) hints.add(line);
@@ -235,6 +238,32 @@ Map<String, dynamic> _gameParameter(String description) => {
 /// The tables whose `id` is a record's (`record:<id>`).
 final RegExp _recordTables =
     RegExp(r'\b(normalized_records|entity_documents)\b', caseSensitive: false);
+
+/// What a query looks for in a name or in the text: `speaker LIKE '%x%'`,
+/// `e.name = 'x'`, `content LIKE '%x%'`. Only these may be a misspelled
+/// name (a category, a document type or a part of an id is not).
+final RegExp _comparedName = RegExp(
+  r'\b(?:speaker|name|entity_name|alias|matched_alias|title|story_name|'
+  r"collection_name|content)\s*(?:=|LIKE)\s*'%?([^'%_]+)%?'",
+  caseSensitive: false,
+);
+
+/// The select list of a query (between its first SELECT and FROM).
+final RegExp _selectList =
+    RegExp(r'\bSELECT\b(.*?)\bFROM\b', caseSensitive: false, dotAll: true);
+
+/// `id = '<id>'` in a query.
+final RegExp _idEquals =
+    RegExp(r"\bid\s*=\s*'([^']+)'", caseSensitive: false);
+
+final RegExp _recordPrefix = RegExp(r'^(?:record:)+');
+
+final RegExp _measured =
+    RegExp(r'\b(?:length|count)\s*\([^()]*\)', caseSensitive: false);
+
+/// `content` (bare or inside an expression) or `*` in a select list.
+final RegExp _contentOrAll =
+    RegExp(r'\bcontent\b|(?:^|[\s,.])\*', caseSensitive: false);
 
 /// `sql`: one read-only query over the whole knowledge DB.
 class SqlTool extends AgentTool {
@@ -273,16 +302,28 @@ class SqlTool extends AgentTool {
     // 0.14 live: a query naming an Endfield id (`'ef/…'`) without `game`
     // went to the Arknights database and found nothing; ids name their game.
     final game = Game.parse(arguments['game']) ??
-        (RegExp("'$endfieldIdPrefix").hasMatch(query) ? Game.endfield : null);
+        (RegExp("'(?:record:)?$endfieldIdPrefix").hasMatch(query)
+            ? Game.endfield
+            : null);
     final result = await store.readOnlySql(query, maxRows: maxRows, game: game);
     if (result.error != null) {
       return '${result.error!}${await _columnsHint(query, result.error!, game)}';
     }
+    final overRecords = _recordTables.hasMatch(query);
     if (result.rows.isEmpty) {
+      // 0.14 phone: a record's id was looked up in the table that does not
+      // hold it (an operator's file is in entity_documents), a dozen times.
+      if (overRecords) {
+        for (final m in _idEquals.allMatches(query)) {
+          final id = m.group(1)!.replaceFirst(_recordPrefix, '');
+          if (await store.readRecord(id) != null) {
+            return '0 行。这条记录在库里：用 read_record 读它的全文'
+                '（id 写 $id，不带 record: 前缀）。';
+          }
+        }
+      }
       final terms = [
-        for (final m in RegExp(r"LIKE\s+'%?([^'%_]+)%?'", caseSensitive: false)
-            .allMatches(query))
-          m.group(1)!,
+        for (final m in _comparedName.allMatches(query)) m.group(1)!,
       ];
       final hint = await _nearNamesHint(narrowTo(store, game), terms);
       final retrieval = store;
@@ -300,14 +341,28 @@ class SqlTool extends AgentTool {
     // 0.14: a line or a record counts as shown only with its text (a
     // column of, or cut from, `content`), and an id is a record's only in
     // a query over the tables that hold records.
-    final contentCol =
-        columns.indexWhere((c) => c.toLowerCase().contains('content'));
-    final wholeContent = contentCol >= 0 && columns[contentCol] == 'content';
-    final overRecords = _recordTables.hasMatch(query);
+    // 0.14 phone: the text is often selected under another name
+    // (`substr(content, 1, 500) c`), and a record read by `WHERE id = '…'`
+    // without its id column; neither was counted as shown.
+    final list = (_selectList.firstMatch(query)?.group(1) ?? '')
+        // Its length or a count shows none of the text.
+        .replaceAll(_measured, '');
+    final showsContent = _contentOrAll.hasMatch(list);
+    final contentCol = showsContent ? 0 : -1;
+    final wholeContent = columns.contains('content');
+    final onlyId = idCol < 0 && result.rows.length == 1
+        ? _idEquals.firstMatch(query)?.group(1)?.replaceFirst(_recordPrefix, '')
+        : null;
+    // One row is what was asked for: its cells are not cut short (the
+    // result as a whole still is). A cut cell was read 400 characters a
+    // call.
+    final cell = result.rows.length == 1
+        ? (maxToolResultChars - 400) ~/ columns.length
+        : 400;
     final buffer = StringBuffer()..writeln(columns.join(' | '));
     var shown = 0;
     for (final row in result.rows) {
-      final text = row.map((v) => _clip('${v ?? ''}', 400)).join(' | ');
+      final text = row.map((v) => _clip('${v ?? ''}', cell)).join(' | ');
       if (buffer.length + text.length > maxToolResultChars) break;
       buffer.writeln(text);
       shown++;
@@ -316,10 +371,12 @@ class SqlTool extends AgentTool {
         if (line != null) seen.add('${row[storyCol]}', line);
       }
       // A record shown with its id can be cited as `record:<id>`.
-      if (overRecords && idCol >= 0 && contentCol >= 0 && row[idCol] != null) {
+      final id = idCol >= 0 ? row[idCol] : onlyId;
+      if (overRecords && contentCol >= 0 && id != null) {
         seen.addRecord(
-          '${row[idCol]}',
-          partial: !wholeContent || '${row[contentCol] ?? ''}'.length > 400,
+          '$id',
+          partial: !wholeContent ||
+              '${row[columns.indexOf('content')] ?? ''}'.length > cell,
         );
       }
     }
@@ -372,6 +429,67 @@ class SqlTool extends AgentTool {
       }
     }
     return lines.isEmpty ? '' : '\n${lines.join('\n')}';
+  }
+}
+
+/// `read_record`: the text of one record outside the story text (an
+/// archive, a voice line, a module's story, an item's description).
+class ReadRecordTool extends AgentTool {
+  ReadRecordTool(this.store, this.seen);
+
+  final GameDataRetrieval store;
+  final SeenLines seen;
+
+  /// Characters of text per call.
+  static const int pageChars = maxToolResultChars - 400;
+
+  @override
+  String get name => 'read_record';
+
+  @override
+  String get description =>
+      '读取一条剧情以外的资料（档案、语音、模组故事、物品与敌人的描述等）的全文：'
+      'id 是检索结果或查询结果里的记录 id（record: 后面的部分）。'
+      '开头一行写它的标题、类别和所属对象（这条语音是谁的、这个模组是谁的）。'
+      '很长的资料分页给出，按提示用 start 接着读。读过的资料可以作出处（record:<id>）。';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'string', 'description': '记录 id'},
+          'start': {'type': 'integer', 'description': '从第几个字开始，默认 0'},
+        },
+        'required': ['id'],
+      };
+
+  @override
+  Future<String> execute(Map<String, dynamic> arguments) async {
+    final id =
+        '${arguments['id'] ?? ''}'.trim().replaceFirst(_recordPrefix, '');
+    if (id.isEmpty) return '缺少参数 id：写检索结果里 record: 后面的记录 id。';
+    final record = await store.readRecord(id);
+    if (record == null) {
+      return '没有 id 为 $id 的资料。id 要与检索或查询结果里的完全一致；'
+          '按名字找资料用 search，按条件找用 sql 查 normalized_records / entity_documents。';
+    }
+    final text = record.content;
+    final start = (_int(arguments['start']) ?? 0).clamp(0, text.length);
+    final end = start + pageChars > text.length ? text.length : start + pageChars;
+    final kind = record.subtype.isEmpty || record.subtype == record.category
+        ? record.category
+        : '${record.category}·${record.subtype}';
+    // Whole only when every character was shown in this call.
+    seen.addRecord(id, partial: start > 0 || end < text.length);
+    return [
+      'record:$id | $kind | ${record.title}'
+          '${record.owner.isEmpty || record.owner == record.title ? '' : ' | 所属：${record.owner}'}',
+      text.substring(start, end),
+      if (end < text.length)
+        '（本页到第 $end 个字，全文 ${text.length} 个字；继续读用 start=$end）'
+      else if (start > 0)
+        '（到全文末尾，共 ${text.length} 个字）',
+    ].join('\n');
   }
 }
 
@@ -840,6 +958,7 @@ List<AgentTool> loreTools(
     [
       SearchTool(store, seen, embeddingClient: embeddingClient, wiki: wiki),
       ReadStoryTool(store, seen),
+      ReadRecordTool(store, seen),
       GrepTool(store, seen),
       SqlTool(store, seen),
       OutlineTool(store),

@@ -11,6 +11,7 @@ enum WorkKind {
   sql,
   grep,
   read,
+  readRecord,
   outline,
   find,
   similarNames,
@@ -120,8 +121,64 @@ class WorkStep {
     return (lines.first, lines.last);
   }
 
-  /// [WorkKind.grep]: hits and stories in the output.
+  /// [WorkKind.readRecord]: what was read, from the output's first line
+  /// (`record:<id> | kind | title | 所属：owner`): `owner · title`, the
+  /// title alone, else the id asked for.
+  String get recordTitle {
+    final head = text.trimLeft().split('\n').first.split(' | ');
+    if (head.length < 3 || !head.first.startsWith('record:')) return arg('id');
+    final title = head[2].trim();
+    final owner = head.length > 3 ? head[3].replaceFirst('所属：', '').trim() : '';
+    return owner.isEmpty ? title : '$owner · $title';
+  }
+
+  /// The stories this step showed lines of, with their text (what the
+  /// agent's ledger of read lines counts): a header line carrying a story
+  /// id followed by `L<n>` lines, or the rows of a query that selects
+  /// story lines with their content.
+  Set<String> get storiesShown {
+    final out = <String>{};
+    if (!done || failed) return out;
+    final lines = text.split('\n');
+    if (kind == WorkKind.sql) {
+      final columns = lines.first.split(' | ');
+      final story = columns.indexOf('story_id');
+      if (story < 0 ||
+          !columns.contains('line_index') ||
+          !RegExp(r'\bcontent\b|\*').hasMatch(arg('query'))) {
+        return out;
+      }
+      for (final row in lines.skip(1)) {
+        final cells = row.split(' | ');
+        if (cells.length > story && cells[story].endsWith('.txt')) {
+          out.add(cells[story]);
+        }
+      }
+      return out;
+    }
+    String? current;
+    for (final line in lines) {
+      if (_shownLine.hasMatch(line)) {
+        if (current != null) out.add(current);
+        continue;
+      }
+      final id = _storyIdIn.firstMatch(line)?.group(1);
+      if (id != null) current = id;
+    }
+    return out;
+  }
+
+  static final RegExp _shownLine = RegExp(r'^[\s*]*L\d+\b');
+  static final RegExp _storyIdIn = RegExp(r'([\w./-]+\.txt)\b');
+
+  /// [WorkKind.grep]: hits and stories in the output. A search of the
+  /// whole library states its totals in a line of its own.
   (int hits, int stories) get grepCounts {
+    final corpus =
+        RegExp(r'全库共 (\d+) 行命中，分布在 (\d+) 个故事').firstMatch(text);
+    if (corpus != null) {
+      return (int.parse(corpus.group(1)!), int.parse(corpus.group(2)!));
+    }
     final stories = RegExp(r'^## ', multiLine: true).allMatches(text).length;
     var hits = 0;
     for (final m in RegExp(r'（(\d+) 处）').allMatches(text)) {
@@ -179,6 +236,7 @@ WorkKind _kindOf(String tool) => switch (tool) {
       'sql' => WorkKind.sql,
       'grep' => WorkKind.grep,
       'read_story' => WorkKind.read,
+      'read_record' => WorkKind.readRecord,
       'outline' => WorkKind.outline,
       'similar_names' => WorkKind.similarNames,
       'delegate' => WorkKind.delegate,
@@ -227,14 +285,17 @@ List<WorkStep> workStepsOf(List<ReActStep> steps) {
   return out;
 }
 
-/// Tool calls and stories read, for the one-line summary.
+/// Tool calls, and the stories whose text was shown, for the one-line
+/// summary. 0.14: every tool that prints story lines counts (a search or a
+/// grep lists lines that can be cited); counting `read_story` alone gave
+/// "nine citations, no story read".
 ({int calls, int reads}) workCounts(List<WorkStep> steps) {
   var calls = 0;
   final stories = <String>{};
   for (final s in steps) {
     if (!s.isTool) continue;
     calls++;
-    if (s.kind == WorkKind.read) stories.add(s.arg('story_id'));
+    stories.addAll(s.storiesShown);
   }
   return (calls: calls, reads: stories.length);
 }

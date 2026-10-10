@@ -1100,6 +1100,47 @@ void main() {
           StoryAnswerStatus.answered,);
     });
 
+    // 0.14 phone: the object closed after its first entry and the rest of
+    // the answer followed it; one sentence was shown as the whole answer.
+    test('an answer closed one entry early keeps every entry', () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': id}),
+        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
+            '"cite": [["$id", 1, 1]]}]},{"heading": "后来"},'
+            '{"text": "他离开了城。", "cite": [["$id", 2, 2]]}],'
+            '"coverage": "full"}'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '钟楼？')
+          .toList();
+      expect(client.requests, hasLength(2));
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('星灯点亮钟楼。'));
+      expect(answer, contains('## 后来'));
+      expect(answer, contains('他离开了城。'));
+    });
+
+    test('entries after the end of the answer send it back once', () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      const whole = '{"entries": [{"text": "星灯点亮钟楼。", '
+          '"cite": [["$id", 1, 1]]}, {"text": "他离开了城。", '
+          '"cite": [["$id", 2, 2]]}], "coverage": "full"}';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': id}),
+        _answer('{"entries": [{"text": "星灯点亮钟楼。", '
+            '"cite": [["$id", 1, 1]]}], "coverage": "full"}\n'
+            '{"text": "他离开了城。", "cite": [["$id", 2, 2]]}'),
+        _answer(whole),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '钟楼？')
+          .toList();
+      expect(client.requests, hasLength(3));
+      expect(client.requests.last.last.content, contains('同一个 entries 数组'));
+      expect(finalAnswerOf(events), contains('他离开了城。'));
+    });
+
     test('a turn cut by a dropped connection is asked again', () async {
       final client = _DroppingClient(
         [

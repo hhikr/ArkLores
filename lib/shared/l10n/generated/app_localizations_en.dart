@@ -909,6 +909,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String aiWorkReadRecord(String title) {
+    return 'Read record “$title”';
+  }
+
+  @override
   String aiWorkOutline(String collection) {
     return 'Chapter list of $collection';
   }

@@ -30,12 +30,35 @@ String? loreAnswerMarkdown(String content) => loreAnswerParsed(content)?.markdow
 /// two partial versions and then the whole answer, all in one reply. Every
 /// start is tried and the last complete object with entries wins (else
 /// the first start, as before).
-({String markdown, int dropped})? loreAnswerParsed(String content) {
+///
+/// `cutShort`: entries were written after the object's last brace (0.14
+/// live: a bracket too many closed the object after its first entry and the
+/// rest of the answer followed). What can be read on is read on
+/// ([LoreAnswerStream]); what cannot is reported, never dropped silently.
+/// `repaired`: [content] without the brackets that closed the object early
+/// (valid JSON again, for what reads the answer as a whole), or null when
+/// nothing was read on.
+({String markdown, int dropped, bool cutShort, String? repaired})?
+    loreAnswerParsed(String content) {
   final starts = loreAnswerJsonStart.allMatches(content).toList();
   if (starts.isEmpty) return null;
-  ({String markdown, int dropped}) parse(int at, [LoreAnswerStream? s]) {
+  ({String markdown, int dropped, bool cutShort, String? repaired}) parse(
+    int at, [
+    LoreAnswerStream? s,
+  ]) {
     final stream = s ?? (LoreAnswerStream()..add(content.substring(at)));
-    return (markdown: stream.finish(), dropped: stream.droppedCites);
+    final stray = {for (final i in stream.strayBrackets) at + i};
+    return (
+      markdown: stream.finish(),
+      dropped: stream.droppedCites,
+      cutShort: stream.entriesAfterEnd,
+      repaired: stray.isEmpty
+          ? null
+          : [
+              for (var i = 0; i < content.length; i++)
+                if (!stray.contains(i)) content[i],
+            ].join(),
+    );
   }
 
   for (final start in starts.reversed) {
@@ -65,6 +88,20 @@ class LoreAnswerStream {
   final List<_Frame> _stack = [];
   bool _started = false;
   bool _closed = false;
+
+  // After the last brace: 0 nothing yet, 1 a comma came, 2 not a
+  // continuation. `{"entries":[{…}]},{…},…]}` (the array and the object
+  // closed one entry early) is read on as the same array.
+  int _tail = 0;
+  bool _entriesClosedLast = false;
+  int _at = -1; // index of the character being read
+  int _entriesEnd = -1;
+  int _rootEnd = -1;
+
+  /// Indexes (from the object's first character fed to [add]) of the
+  /// brackets that closed the object early and were read past.
+  final List<int> strayBrackets = [];
+  final StringBuffer _rest = StringBuffer();
 
   // Lexer state.
   bool _inString = false;
@@ -99,6 +136,12 @@ class LoreAnswerStream {
   /// The object has closed (its last brace came).
   bool get complete => _closed;
 
+  /// Entries stand after the object's last brace (they are not in the
+  /// markdown).
+  bool get entriesAfterEnd => _entryStart.hasMatch(_rest.toString());
+
+  static final RegExp _entryStart = RegExp(r'\{\s*"(?:text|heading)"\s*:');
+
   /// At least one heading or text entry was written.
   bool get hasEntries => _md.toString().trim().isNotEmpty;
 
@@ -126,10 +169,35 @@ class LoreAnswerStream {
   }
 
   void _char(String c) {
-    if (_closed) return;
+    if (_started) _at++;
+    if (_closed) {
+      _rest.write(c);
+      if (_tail == 2 || c.trim().isEmpty) return;
+      if (_tail == 0 && c == ',' && _entriesClosedLast) {
+        _tail = 1;
+        return;
+      }
+      if (_tail != 1 || c != '{') {
+        _tail = 2;
+        return;
+      }
+      // More entries: back inside the object's `entries` array.
+      strayBrackets..add(_entriesEnd)..add(_rootEnd);
+      _closed = false;
+      _tail = 0;
+      _rest.clear();
+      _stack
+        ..add(
+          _Frame(_Role.root, isObject: true)
+            ..key = 'entries'
+            ..expectKey = false,
+        )
+        ..add(_Frame(_Role.entries, isObject: false));
+    }
     if (!_started) {
       if (c == '{') {
         _started = true;
+        _at = 0;
         _stack.add(_Frame(_Role.root, isObject: true));
       }
       return;
@@ -154,7 +222,11 @@ class LoreAnswerStream {
       case ']':
         final frame = _stack.removeLast();
         _closeFrame(frame);
-        if (_stack.isEmpty) _closed = true;
+        if (frame.role == _Role.entries) _entriesEnd = _at;
+        if (_stack.isEmpty) {
+          _closed = true;
+          _rootEnd = _at;
+        }
       case '"':
         _inString = true;
         _stringIsKey = top.isObject && top.expectKey;
@@ -205,6 +277,7 @@ class LoreAnswerStream {
     } else if (c == '"') {
       _inString = false;
       if (_stringIsKey) {
+        if (_stack.last.role == _Role.root) _entriesClosedLast = false;
         _stack.last
           ..key = _key.toString()
           ..expectKey = false;
@@ -307,6 +380,8 @@ class LoreAnswerStream {
       _tuple.clear();
     } else if (frame.role == _Role.cites) {
       _flushFlat();
+    } else if (frame.role == _Role.entries) {
+      _entriesClosedLast = true;
     }
   }
 

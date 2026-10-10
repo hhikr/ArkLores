@@ -129,6 +129,22 @@ void main() {
       expect(turn.answer, contains('结论：博士'));
     });
 
+    // 0.14 phone: the thinking of two turns ran together in the panel
+    // ("…警告".Need more: …").
+    test("each turn's thinking starts on a line of its own", () async {
+      final mock = _RecorderLLM()
+        ..reads = 2
+        ..thinking = true;
+      final notifier = makeNotifier(mock);
+
+      await notifier.sendMessage('她是谁');
+
+      expect(
+        notifier.state.last.reasoning,
+        'thought 1.\n\nthought 2.\n\nthought 3.',
+      );
+    });
+
     test('the answer options are read per question: review off, no review',
         () async {
       AgentLogger.setEnabled(true);
@@ -331,6 +347,9 @@ class _RecorderLLM extends LLMClient {
 
   /// The first answer names no source; the one after it does.
   bool uncitedFirst = false;
+
+  /// Every reply comes with a line of thinking (`thought <n>.`).
+  bool thinking = false;
   bool failNext = false;
   Completer<void>? gate;
   UsageMeter? meter;
@@ -374,6 +393,7 @@ class _RecorderLLM extends LLMClient {
         ChatCompletionResult(
           content: content,
           toolCalls: calls,
+          reasoningContent: thinking ? 'thought $agentCalls.' : '',
           promptTokens: 100,
           cachedPromptTokens: 50,
           completionTokens: 10,

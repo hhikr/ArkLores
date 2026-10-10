@@ -303,6 +303,8 @@
   "@aiWorkGrepIn": {"placeholders": {"scope": {"type": "String"}, "pattern": {"type": "String"}}},
   "aiWorkRead": "阅读《{story}》",
   "@aiWorkRead": {"placeholders": {"story": {"type": "String"}}},
+  "aiWorkReadRecord": "查阅资料「{title}」",
+  "@aiWorkReadRecord": {"placeholders": {"title": {"type": "String"}}},
   "aiWorkOutline": "查看「{collection}」的章节目录",
   "@aiWorkOutline": {"placeholders": {"collection": {"type": "String"}}},
   "aiWorkFind": "检索「{query}」",

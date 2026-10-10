@@ -36,7 +36,53 @@ void main() {
     // Still running: titled from its file name.
     expect(steps[2].done, isFalse);
     expect(steps[2].storyTitle, 'y');
-    expect(workCounts(steps), (calls: 3, reads: 2));
+    // A read still running has shown nothing yet.
+    expect(workCounts(steps), (calls: 3, reads: 1));
+  });
+
+  // 0.14 phone: "nine citations, no story read" — the summary counted
+  // read_story alone, while the lines a search or a grep prints are read
+  // (and can be cited) just the same.
+  test('the stories read are those any tool showed lines of', () {
+    final steps = workStepsOf([
+      _call('search', {'query': '甲 乙'}),
+      _out(
+        'search',
+        '检索“甲 乙”：按意思检索 + 关键词；关键词：甲（3 行）\n'
+            '## 明日方舟剧情（最相关的 2 篇）\n'
+            '1. 《一》 a/one.txt（意思相近 0.62；关键词 3 行）\n'
+            '   L12 [甲] 一句。\n'
+            '   …（L13-15 没有列出，要引用先用 read_story 读）\n'
+            '2. 《二》 a/two.txt（意思相近 0.60）\n'
+            '   L3 [乙] 一句。\n'
+            '## 明日方舟资料（档案、干员资料、语音等）\n'
+            '   record:r1 | item | 灯 | 一盏灯\n'
+            '## 终末地剧情：只有意思较远的段落（最接近 0.50），已略去',
+      ),
+      _call('grep', {'pattern': '甲', 'story_ids': ['ef/three.txt']}),
+      _out('grep', '## 《三》 ef/three.txt（1 处）\n* L7 [甲] 一句。\n  …\n（* 为命中行）'),
+      // Counts over the whole library show no line.
+      _call('grep', {'pattern': '乙'}),
+      _out('grep', '全库共 32 行命中，分布在 16 个故事\n《四》 a/four.txt 2 行'),
+      _call('read_story', {'story_id': 'a/one.txt'}),
+      _out('read_story', '《一》 a/one.txt\nL0 开头。'),
+      _call('sql', {
+        'query': 'SELECT story_id, line_index, content FROM story_lines',
+      }),
+      _out('sql', 'story_id | line_index | content\na/five.txt | 4 | 一句。\n（共 1 行）'),
+      _call('sql', {'query': 'SELECT story_id, line_index FROM story_lines'}),
+      _out('sql', 'story_id | line_index\na/six.txt | 4\n（共 1 行）'),
+      _call('read_record', {'id': 'r1'}),
+      _out('read_record', 'record:r1 | operator·voice | 交谈1 | 所属：守灯人\n一句话。'),
+    ]);
+    expect(steps[0].storiesShown, {'a/one.txt', 'a/two.txt'});
+    expect(steps[2].grepCounts, (32, 16));
+    expect(steps[2].storiesShown, isEmpty);
+    expect(steps.last.kind, WorkKind.readRecord);
+    expect(steps.last.recordTitle, '守灯人 · 交谈1');
+    // one, two, three, five: read_story of a story a search listed counts
+    // once; a query without the text and library-wide counts show nothing.
+    expect(workCounts(steps), (calls: 7, reads: 4));
   });
 
   // 0.14: an answer taken back is not a step.

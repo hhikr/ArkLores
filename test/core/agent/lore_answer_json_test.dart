@@ -110,6 +110,64 @@ void main() {
     expect(loreAnswerMarkdown(whole), md);
   });
 
+  // 0.14 phone: a bracket too many closed the object after its first entry
+  // (`…}]},{"heading":…},…],"coverage":"full"}`); twelve entries were lost
+  // and the one sentence left was shown as the answer.
+  test('entries after an early closing bracket are read on', () {
+    final whole = jsonEncode({
+      'entries': [
+        {
+          'text': '甲做了第一件事。',
+          'cite': [
+            ['a/b.txt', 1, 2],
+          ],
+        },
+        {'heading': '后来'},
+        {
+          'text': '甲做了第二件事。',
+          'cite': [
+            ['record', 'r1'],
+          ],
+        },
+      ],
+      'coverage': 'gaps',
+      'gaps': '后面没有读完。',
+    });
+    final first = whole.indexOf('},{') + 1;
+    final broken = '${whole.substring(0, first)}]}${whole.substring(first)}';
+    expect(() => jsonDecode(broken), throwsFormatException);
+
+    final parsed = loreAnswerParsed(broken)!;
+    expect(parsed.markdown, loreAnswerMarkdown(whole));
+    expect(parsed.cutShort, isFalse);
+    expect(parsed.repaired, whole);
+    expect(loreAnswerParsed(whole)!.repaired, isNull);
+
+    // Chunk by chunk (the streamed answer) reads on the same way.
+    final stream = LoreAnswerStream();
+    for (var i = 0; i < broken.length; i += 5) {
+      stream.add(broken.substring(i, (i + 5).clamp(0, broken.length)));
+    }
+    expect(stream.finish(), parsed.markdown);
+  });
+
+  test('entries that cannot be read on are reported, not dropped silently',
+      () {
+    const reply = '{"entries": [{"text": "甲做了第一件事。", '
+        '"cite": [["a/b.txt", 1, 2]]}], "coverage": "full"}\n'
+        '{"text": "甲做了第二件事。", "cite": [["a/b.txt", 3, 4]]}';
+    final parsed = loreAnswerParsed(reply)!;
+    expect(parsed.markdown, isNot(contains('第二件事')));
+    expect(parsed.cutShort, isTrue);
+    // Words after the answer are not entries.
+    expect(
+      loreAnswerParsed('{"entries": [{"text": "甲。", "cite": '
+              '[["a/b.txt", 1, 2]]}]}\n以上就是答案。')!
+          .cutShort,
+      isFalse,
+    );
+  });
+
   test('markdown answers are not JSON answers', () {
     expect(loreAnswerMarkdown('星灯点亮钟楼 `$a:1`。'), isNull);
     expect(loreAnswerMarkdown('集合 {1, 2} 不是答案'), isNull);
