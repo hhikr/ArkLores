@@ -460,9 +460,16 @@ class SearchTool extends AgentTool {
         hit.putIfAbsent(h.id, () => h);
       }
     }
-    final ids = score.keys.toList()
+    // Each way of finding keeps its own places: in one short list the
+    // keyword hits (equal rank, listed first) left none for a record found
+    // only by meaning.
+    final kept = {
+      for (final h in byKeyword.take(recordsPerGame)) h.id,
+      for (final h in byMeaning.take(recordsPerGame)) h.id,
+    };
+    final ids = kept.toList()
       ..sort((a, b) => score[b]!.compareTo(score[a]!));
-    return [for (final id in ids.take(recordsPerGame)) hit[id]!];
+    return [for (final id in ids) hit[id]!];
   }
 
   /// Measurement only (0.14): where a search spends its time — the

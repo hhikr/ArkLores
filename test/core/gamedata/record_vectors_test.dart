@@ -256,5 +256,34 @@ void main() {
       // What is far from the query is not listed for being a vector.
       expect(out, isNot(contains('record:doc_keeper')));
     });
+
+    test('records found by the query\'s words leave room for one found by '
+        'meaning', () async {
+      final db = await databaseFactoryFfi.openDatabase(path);
+      for (var i = 0; i < SearchTool.recordsPerGame; i++) {
+        await insertRecord(
+          db,
+          'rec_tool_$i',
+          contentType: 'item_description',
+          category: 'world_item',
+          subtype: 'item',
+          content: '第 $i 件器具，放在仓库里。',
+          fields: {'entity_name': '器具$i', 'title': '器具$i'},
+        );
+      }
+      final client = _TopicEmbedder();
+      await updateStoryVectors(db: db, client: client);
+      await db.close();
+
+      final store = GameDataKnowledgeStore(dbPath: path);
+      addTearDown(store.close);
+      final out = (await SearchTool(store, SeenLines(), embeddingClient: client)
+              .run('照明 器具'))
+          .text;
+      for (var i = 0; i < SearchTool.recordsPerGame; i++) {
+        expect(out, contains('record:rec_tool_$i'));
+      }
+      expect(out, contains('record:rec_lamp'));
+    });
   });
 }
