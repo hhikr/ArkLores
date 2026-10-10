@@ -248,6 +248,10 @@ void main() {
       () async {
     await buildC1();
     notifier().dismissDone();
+    // A build that failed earlier left its copy of the database behind.
+    final leftover = File(
+      p.join(docs.path, 'gamedata_build_tmp', 'build_1.db'),
+    )..writeAsStringSync('x');
 
     var again = Future<void>.value();
     var cancelledOnce = false;
@@ -265,6 +269,7 @@ void main() {
     });
     sub.close();
     expect(cancelledOnce, isTrue);
+    expect(leftover.existsSync(), isFalse);
     expect(state().phase, GameDataBuildPhase.idle);
     expect(state().error, isNull);
     expect((await manifest())['source_arknights_commit'], 'c1');

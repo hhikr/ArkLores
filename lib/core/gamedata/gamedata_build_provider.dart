@@ -224,6 +224,18 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     final dirs = await _dirs();
     await dirs.sourceDir.create(recursive: true);
     await dirs.tmpDir.create(recursive: true);
+    // What a failed or killed build left behind (a copy of the whole
+    // database each time); no other run is using the folder.
+    await for (final entry in dirs.tmpDir.list()) {
+      final name = p.basename(entry.path);
+      if (entry is File && name.startsWith('build_') && name.contains('.db')) {
+        try {
+          await entry.delete();
+        } on FileSystemException {
+          // Best effort.
+        }
+      }
+    }
     final outputDbPath = p.join(
       dirs.tmpDir.path,
       'build_${DateTime.now().millisecondsSinceEpoch}.db',
