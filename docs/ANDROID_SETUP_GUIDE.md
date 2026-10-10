@@ -39,6 +39,9 @@ dart run tools/phone_ask.dart "问题"           # 提问并等答案
 dart run tools/phone_ask.dart -i "问题"        # 答完后在终端里接着追问
 dart run tools/phone_ask.dart                  # 只看：手机上手动提的问题也实时显示
 dart run tools/phone_ask.dart --new --wiki=off --full "问题"   # 新对话、关 Wiki、打印工具的完整输出
+dart run tools/phone_ask.dart --kb=status                    # 知识库页的按钮：status / install / check / update
+dart run tools/phone_ask.dart --kb=install --game=endfield   # 装官方库（应用目录里有 *.download.gz 时离线装）
+dart run tools/phone_ask.dart --kb=update                    # 明日方舟“用游戏数据更新”，逐阶段打印进度与更新报告
 ```
 
 - 原理：`--dart-define=ARKLORES_PHONE_BRIDGE=true` 的 App 每 3 秒尝试连接手机上的 `ws://127.0.0.1:47321`；`phone_ask.dart` 运行
