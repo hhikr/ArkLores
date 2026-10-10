@@ -1,5 +1,6 @@
 // The knowledge-base page: the download/update button for each install
 // state, a download that cannot connect, and the build section.
+import 'package:arklores/core/gamedata/gamedata_build_provider.dart';
 import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:arklores/core/gamedata/gamedata_provider.dart';
 import 'package:arklores/features/settings/knowledge_base_page.dart';
@@ -123,6 +124,50 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // After an update the installed commit is the latest one: the button that
+  // pulls is off (it stayed live and ran the whole check again), the check
+  // button is not, and another database put in place turns it on again.
+  testWidgets('after an update there is nothing to pull', (tester) async {
+    final build = _DoneBuild();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          gameDataInstallStatusProvider.overrideWith(
+            (ref) async => installStatus(installed: true, builtLocally: true),
+          ),
+          endfieldInstallStatusProvider
+              .overrideWith((ref) async => installStatus(installed: false)),
+          gameDataBuildProvider.overrideWith((ref) => build),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const KnowledgeBasePage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    ElevatedButton pull() => tester
+        .widget<ElevatedButton>(find.byKey(const Key('kb-build-start')));
+    expect(pull().onPressed, isNull);
+    final check = tester.widget<OutlinedButton>(
+      find.ancestor(
+        of: find.text('检查更新'),
+        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
+      ),
+    );
+    expect(check.onPressed, isNotNull);
+    // The same once the "done" note is gone.
+    build.dismissDone();
+    await tester.pump();
+    expect(pull().onPressed, isNull);
+
+    build.installedChanged('older');
+    await tester.pump();
+    expect(pull().onPressed, isNotNull);
+  });
+
   // 0.14: one page per game, the same parts in the same order; nothing on
   // the page says what the AI uses as evidence (it was out of date).
   testWidgets('each game has its own page, chosen in the top bar',
@@ -185,4 +230,16 @@ void main() {
     expect(installer.downloads, 0);
     expect(tester.takeException(), isNull);
   });
+}
+
+/// The card's state right after a successful update.
+class _DoneBuild extends GameDataBuildNotifier {
+  _DoneBuild() : super(onInstalled: () {}) {
+    state = const GameDataBuildUiState(
+      phase: GameDataBuildPhase.done,
+      latestCommit: 'latest',
+      installedCommit: 'latest',
+      incremental: true,
+    );
+  }
 }
