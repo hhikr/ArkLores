@@ -199,6 +199,34 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     return index.search(queryVector, topK: topK, scopeId: scopeId);
   }
 
+  @override
+  Future<({int lineStart, int lineEnd, List<StoryChunkHit> hits})?>
+      storyChunksNear(String storyId, int line) async {
+    final db = await _open();
+    final index = await _loadVectorIndex();
+    if (db == null || index == null) return null;
+    final at = index.chunkAt(storyId, line);
+    if (at == null) return null;
+    final groups = await (_storyGroups ??= queryStoryGroups(db));
+    // A story no collection holds stands for itself.
+    String groupOf(String id) => groups.groupOf[id] ?? 'story:$id';
+    final own = groupOf(storyId);
+    final hits = <StoryChunkHit>[];
+    final taken = <String>{};
+    for (final hit in index.nearChunk(
+      storyId,
+      line,
+      topK: 200,
+      keep: (id) => groupOf(id) != own,
+    )) {
+      if (hit.score < nearMinSimilarity || hits.length >= nearMaxPassages) {
+        break;
+      }
+      if (taken.add(groupOf(hit.storyId))) hits.add(hit);
+    }
+    return (lineStart: at.lineStart, lineEnd: at.lineEnd, hits: hits);
+  }
+
   /// 0.14: the record vectors of the open DB, loaded on first use and
   /// dropped with the connection (like [_vectorIndex]).
   Future<RecordVectorIndex?>? _recordIndex;

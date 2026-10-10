@@ -920,6 +920,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get aiWorkNear => 'Passages like one already read';
+
+  @override
   String aiWorkSimilar(String name) {
     return 'Names like “$name”';
   }

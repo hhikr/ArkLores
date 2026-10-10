@@ -1409,6 +1409,8 @@ class LoreAgentLoop {
   static String _describeCall(String name, Map<String, dynamic> args) {
     String arg(String key) => '${args[key] ?? ''}'.trim();
     return switch (name) {
+      'search' when arg('query').isEmpty && arg('near').isNotEmpty =>
+        '找与 ${_clip(arg('near'), 60)} 相近的段落',
       'search' => '检索“${_clip(arg('query'), 40)}”'
           '${arg('collection').isNotEmpty ? '（${arg('collection')}）' : ''}',
       'sql' => '查询数据库',

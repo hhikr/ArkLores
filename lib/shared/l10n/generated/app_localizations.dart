@@ -1688,6 +1688,12 @@ abstract class AppLocalizations {
   /// **'Search: “{query}”'**
   String aiWorkFind(String query);
 
+  /// No description provided for @aiWorkNear.
+  ///
+  /// In en, this message translates to:
+  /// **'Passages like one already read'**
+  String get aiWorkNear;
+
   /// No description provided for @aiWorkSimilar.
   ///
   /// In en, this message translates to:

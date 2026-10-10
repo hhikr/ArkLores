@@ -308,6 +308,7 @@
   "@aiWorkOutline": {"placeholders": {"collection": {"type": "String"}}},
   "aiWorkFind": "检索「{query}」",
   "@aiWorkFind": {"placeholders": {"query": {"type": "String"}}},
+  "aiWorkNear": "找与读过的一段相近的段落",
   "aiWorkSimilar": "找与「{name}」相近的名字",
   "@aiWorkSimilar": {"placeholders": {"name": {"type": "String"}}},
   "aiWorkDelegate": "派助手：{task}",

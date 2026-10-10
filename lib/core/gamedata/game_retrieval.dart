@@ -132,6 +132,15 @@ abstract interface class GameDataRetrieval {
     int topK,
   });
 
+  /// 0.14: passages of other collections that read like the one of
+  /// [storyId] holding [line] — by the vectors the database has, nothing is
+  /// embedded. One per collection, the closest first, only those at
+  /// `nearMinSimilarity` or closer, at most `nearMaxPassages`; within the
+  /// story's own game. Null when the database has no vector for that line.
+  /// Locating hints, not evidence.
+  Future<({int lineStart, int lineEnd, List<StoryChunkHit> hits})?>
+      storyChunksNear(String storyId, int line);
+
   /// R14: catalog entries (readable names, order, official synopsis) of
   /// [storyIds]; empty when the DB has no story catalog.
   Future<Map<String, StoryCatalogEntry>> storyCatalogEntries(

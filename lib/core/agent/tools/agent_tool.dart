@@ -9,6 +9,11 @@ abstract class AgentTool {
   /// Parameter definition in JSON Schema format.
   Map<String, dynamic> get parameters;
 
+  /// Parameters of which a call must give at least one (none by default).
+  /// Checked before the call runs, like `required`; not part of the schema
+  /// sent to the model (providers differ in what they accept there).
+  List<String> get requireOneOf => const [];
+
   /// Executes the tool logic with the provided arguments.
   Future<dynamic> execute(Map<String, dynamic> arguments);
 

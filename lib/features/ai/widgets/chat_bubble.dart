@@ -1275,7 +1275,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           t.aiWorkOutline(clip(step.arg('collection'))),
         );
       case WorkKind.find:
-        return (Icons.travel_explore_sharp, t.aiWorkFind(clip(step.arg('query'))));
+        return (
+          Icons.travel_explore_sharp,
+          step.arg('query').isEmpty && step.arg('near').isNotEmpty
+              ? t.aiWorkNear
+              : t.aiWorkFind(clip(step.arg('query'))),
+        );
       case WorkKind.similarNames:
         return (Icons.spellcheck_sharp, t.aiWorkSimilar(clip(step.arg('name'))));
       case WorkKind.delegate:

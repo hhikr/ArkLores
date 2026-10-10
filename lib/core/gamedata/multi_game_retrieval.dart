@@ -134,6 +134,11 @@ class MultiGameRetrieval implements GameDataRetrieval {
   }
 
   @override
+  Future<({int lineStart, int lineEnd, List<StoryChunkHit> hits})?>
+      storyChunksNear(String storyId, int line) =>
+          _of(storyId).storyChunksNear(storyId, line);
+
+  @override
   Future<Map<String, StoryCatalogEntry>> storyCatalogEntries(
     Iterable<String> storyIds,
   ) async {

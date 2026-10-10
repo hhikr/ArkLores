@@ -16,6 +16,8 @@ import 'dart:math' as math;
 import '../../gamedata/game_retrieval.dart';
 import '../../gamedata/multi_game_retrieval.dart';
 import '../../gamedata/story_line_search.dart' show maxKeywordTerms;
+import '../../gamedata/story_vectors.dart'
+    show nearMaxPassages, nearMinSimilarity;
 import '../../llm/embedding_client.dart';
 import '../../wiki/wiki_lookup.dart';
 import '../../wiki/wiki_page.dart';
@@ -75,8 +77,16 @@ class SearchTool extends AgentTool {
   /// for words that occur in the text.
   bool keywordOnly = false;
 
+  /// The other use, said after either description.
+  static const String _nearNote =
+      '另一种用法：near 写一段读过的剧情的位置（<story_id>:<行号>）时不按 query，'
+      '而是找别的故事集里与那一段意思相近的段落——想知道一件事在别处有没有呼应时用；'
+      '只列足够相近的，常常一段也没有。';
+
   @override
-  String get description => keywordOnly
+  String get description => '$_queryDescription$_nearNote';
+
+  String get _queryDescription => keywordOnly
       ? '一次检索所有资料：已安装的每个游戏的剧情原文、剧情以外的资料原文（档案、干员资料、语音等）'
           '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
           '现在没有向量服务，只按字面（子串）匹配原文：query 写原文里会出现的词——人物、地点、组织、事件、物品的叫法，'
@@ -117,12 +127,21 @@ class SearchTool extends AgentTool {
               'type': 'string',
               'description': '在 Wiki 上搜的一个页面名或名词（可选；默认用 query 的第一个词）',
             },
+          'near': {
+            'type': 'string',
+            'description': '一段读过的剧情的位置，写 <story_id>:<行号>（可选；有它时不用写 query）',
+          },
         },
-        'required': ['query'],
+        // `query` or `near`: [requireOneOf].
       };
 
   @override
+  List<String> get requireOneOf => const ['query', 'near'];
+
+  @override
   Future<String> execute(Map<String, dynamic> arguments) async {
+    final near = '${arguments['near'] ?? ''}'.trim();
+    if (near.isNotEmpty) return runNear(near);
     final query = '${arguments['query'] ?? ''}'.trim();
     if (query.isEmpty) return '错误：query 为空';
     final result = await run(
@@ -324,6 +343,63 @@ class SearchTool extends AgentTool {
         '资料只列了片段，可以按片段引用，全文用 read_record 按 id 读'
         '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
     return SearchResult(buffer.toString().trimRight(), mode, modeNote: modeNote);
+  }
+
+  static final RegExp _nearPattern =
+      RegExp(r'^(.+?)\s*[:：]\s*L?(\d+)(?:\s*-\s*L?\d+)?$');
+
+  /// 0.14: passages of other collections that read like the one at [near]
+  /// (`<story_id>:<line>`), by the vectors the knowledge base has — no
+  /// embedding service is needed. Only those close enough are listed, so
+  /// often none is: not every passage is echoed elsewhere.
+  Future<String> runNear(String near) async {
+    final match = _nearPattern.firstMatch(near.trim());
+    if (match == null) {
+      return '错误：near 要写成 <story_id>:<行号>（一段读过的剧情的位置），收到：$near';
+    }
+    var storyId = match.group(1)!.trim();
+    if (!storyId.endsWith('.txt')) storyId = '$storyId.txt';
+    final line = int.parse(match.group(2)!);
+    final page = await store.readStoryLines(
+      storyId: storyId,
+      startLine: line,
+      maxLines: 1,
+    );
+    if (!page.storyFound) {
+      return '没有这个 story_id：$storyId。near 要写检索或阅读结果里的 story_id 和行号。';
+    }
+    final found = await _timed(
+      'near',
+      () => store.storyChunksNear(storyId, line),
+    );
+    final labels = await store.storyCatalogEntries([storyId]);
+    final source = '《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》';
+    if (found == null) {
+      return '$source L$line 没有向量（知识库没有向量，或这一行不在任何一段里），'
+          '不能按意思找相近的段落；用 query 检索。';
+    }
+    final scope = '只列相近程度 ${nearMinSimilarity.toStringAsFixed(2)} 以上的，'
+        '每个故事集一段，最多 $nearMaxPassages 段；这一段所在的故事集不列';
+    final where = '$source L${found.lineStart}-${found.lineEnd}';
+    if (found.hits.isEmpty) {
+      return '别处没有与$where 相近的段落（$scope）。';
+    }
+    final blocks = await _render(
+      narrowTo(store, gameOfId(storyId)),
+      _Ranked(
+        [for (final h in found.hits) h.storyId],
+        {for (final h in found.hits) h.storyId: h},
+        const {},
+        best: found.hits.first.score,
+        lines: 0,
+      ),
+    );
+    return (StringBuffer()
+          ..writeln('检索与$where 相近的段落（按意思）：')
+          ..writeAll(blocks)
+          ..writeln('（$scope。上面列出的行可以引用，没有列出的行要先读）'))
+        .toString()
+        .trimRight();
   }
 
   /// The games to search: [only] when given, else every installed one.

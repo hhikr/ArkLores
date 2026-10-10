@@ -900,6 +900,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get aiWorkNear => '找与读过的一段相近的段落';
+
+  @override
   String aiWorkSimilar(String name) {
     return '找与「$name」相近的名字';
   }

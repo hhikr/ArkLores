@@ -231,4 +231,45 @@ void main() {
     }
     await check(terms.take(8).toList());
   }, skip: enabled ? false : 'set ARKLORES_RUN_DB_CHECK=true',);
+
+  // 0.14: passages of other collections that read like one (`search` with
+  // `near`). Printed for a look: some passages spread over the vectors, and
+  // those named in `ARKLORES_NEAR_OF` (`<story_id>:<line>`, separated by
+  // `,`).
+  test('passages near some passages', () async {
+    final store = GameDataKnowledgeStore(dbPath: dbPath);
+    addTearDown(store.close);
+    final picked = await store.readOnlySql(
+      'SELECT story_id, line_start FROM story_chunk_vectors '
+      'WHERE (rowid % 9001) = 7 LIMIT 6',
+    );
+    final spots = <(String, int)>[
+      for (final row in picked.rows) ('${row[0]}', (row[1] as num).toInt()),
+      for (final spot in (Platform.environment['ARKLORES_NEAR_OF'] ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.contains(':')))
+        (
+          spot.substring(0, spot.lastIndexOf(':')),
+          int.parse(spot.substring(spot.lastIndexOf(':') + 1)),
+        ),
+    ];
+    expect(spots, isNotEmpty);
+    for (final (storyId, line) in spots) {
+      final watch = Stopwatch()..start();
+      final near = await store.storyChunksNear(storyId, line);
+      final ms = watch.elapsedMilliseconds;
+      expect(near, isNotNull, reason: '$storyId:$line');
+      final labels = await store.storyCatalogEntries(
+        [storyId, for (final h in near!.hits) h.storyId],
+      );
+      String name(String id) => labels[id]?.label ?? id;
+      // ignore: avoid_print
+      print('${name(storyId)} L${near.lineStart}-${near.lineEnd}（$ms ms）：'
+          '${near.hits.isEmpty ? '没有' : near.hits.map((h) => '${name(h.storyId)} L${h.lineStart} ${h.score.toStringAsFixed(2)}').join('；')}');
+      expect(near.hits.length, lessThanOrEqualTo(nearMaxPassages));
+      expect(near.hits.every((h) => h.score >= nearMinSimilarity), isTrue);
+      expect(near.hits.map((h) => h.storyId), isNot(contains(storyId)));
+    }
+  }, skip: enabled ? false : 'set ARKLORES_RUN_DB_CHECK=true',);
 }

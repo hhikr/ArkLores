@@ -310,6 +310,7 @@
   "@aiWorkOutline": {"placeholders": {"collection": {"type": "String"}}},
   "aiWorkFind": "Search: “{query}”",
   "@aiWorkFind": {"placeholders": {"query": {"type": "String"}}},
+  "aiWorkNear": "Passages like one already read",
   "aiWorkSimilar": "Names like “{name}”",
   "@aiWorkSimilar": {"placeholders": {"name": {"type": "String"}}},
   "aiWorkDelegate": "Helper: {task}",

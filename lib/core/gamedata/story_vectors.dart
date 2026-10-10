@@ -207,6 +207,18 @@ List<(int, double)> topByCosine(
   return scores;
 }
 
+/// 0.14: how close a passage of another collection must be to one read
+/// before it is listed as alike. Measured on the real database (2026-10-11:
+/// 500 random passages, each with the 5 closest of other collections;
+/// "related" taken as the two collections sharing a speaker who is not
+/// everywhere): about nine in ten are related from 0.70 up, six in ten
+/// between 0.65 and 0.70, a third below. Look at the real database again
+/// before changing it.
+const double nearMinSimilarity = 0.70;
+
+/// Passages listed as alike, one per collection.
+const int nearMaxPassages = 5;
+
 /// One vector hit: a story line range and its cosine similarity.
 class StoryChunkHit {
   const StoryChunkHit({
@@ -392,6 +404,57 @@ class StoryVectorIndex {
       centroids[collection] = unit;
     }
     return centroids;
+  }
+
+  /// 0.14: the line range of the chunk of [storyId] that holds [line] — the
+  /// first one (chunks overlap) — or null when no chunk does.
+  ({int lineStart, int lineEnd})? chunkAt(String storyId, int line) {
+    final at = _chunkAt(storyId, line);
+    return at < 0
+        ? null
+        : (lineStart: _lineStarts[at], lineEnd: _lineEnds[at]);
+  }
+
+  int _chunkAt(String storyId, int line) {
+    var found = -1;
+    for (var c = 0; c < length; c++) {
+      if (_storyIds[c] != storyId) continue;
+      if (_lineStarts[c] > line || _lineEnds[c] < line) continue;
+      if (found < 0 || _lineStarts[c] < _lineStarts[found]) found = c;
+    }
+    return found;
+  }
+
+  /// 0.14: the chunks closest to the one of [storyId] that holds [line],
+  /// among the stories [keep] lets through; the stored vector is the query,
+  /// so nothing is embedded. Empty when no chunk holds the line.
+  List<StoryChunkHit> nearChunk(
+    String storyId,
+    int line, {
+    int topK = 20,
+    bool Function(String storyId)? keep,
+  }) {
+    final at = _chunkAt(storyId, line);
+    if (at < 0) return const [];
+    final scores = topByCosine(
+      _vectors,
+      _scales,
+      dims,
+      // Cosine: the chunk's scale does not matter.
+      [for (var i = 0; i < dims; i++) _vectors[at * dims + i].toDouble()],
+      topK: topK,
+      keep: (c) => c != at && (keep == null || keep(_storyIds[c])),
+    );
+    return [
+      for (final (c, score) in scores)
+        StoryChunkHit(
+          storyId: _storyIds[c],
+          scopeId: _scopeIds[c],
+          lineStart: _lineStarts[c],
+          lineEnd: _lineEnds[c],
+          score: score,
+        ),
+    ];
   }
 
   /// Top [topK] chunks by cosine similarity to [query] (any length-[dims]

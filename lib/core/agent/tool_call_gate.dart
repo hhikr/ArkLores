@@ -178,6 +178,20 @@ CheckedCall checkToolCall(
       ].join('\n'),
     );
   }
+  final oneOf = tool.requireOneOf;
+  if (oneOf.isNotEmpty && oneOf.every((r) => _isBlank(kept[r]))) {
+    return CheckedCall(
+      call,
+      kept,
+      error: [
+        '错误：${call.name} 的参数 ${oneOf.join('、')} 至少要给一个'
+            '（${oneOf.map((m) => '$m：${_describe(properties[m] as Map?)}').join('；')}）。',
+        '收到的参数：${_clip(jsonEncode(args), 300)}'
+            '${unknown.isEmpty ? '' : '（${unknown.join('、')} 不是这个工具的参数）'}。',
+        '正确的写法：${exampleArguments(tool)}',
+      ].join('\n'),
+    );
+  }
   return CheckedCall(
     call,
     kept,
@@ -196,6 +210,8 @@ String exampleArguments(AgentTool tool) {
           const <String, dynamic>{};
   final required = [
     for (final r in (tool.parameters['required'] as List?) ?? const []) '$r',
+    // One of them is enough: the first.
+    if (tool.requireOneOf.isNotEmpty) tool.requireOneOf.first,
   ];
   final example = <String, Object>{
     for (final r in required)
