@@ -44,7 +44,7 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 `normalized_records` 里剧情的切块副本（`parent_type = 'story_file'`，正文在 `story_lines`）、由说话人名字造的实体（`source_type = 'story_speaker'`）。
 清单在 `gamedata_schema.dart` 的 `obsoleteGamedataTables` / `dropObsoleteGamedataData`。schema 版本没变（仍是 5）：有没有这些表对 App 是一样的，
 旧资产照常能装；App 内更新一个带着它们的库时先删掉再 `VACUUM`（进度“清理不再使用的数据”），命令行用 `tools/compact_gamedata.dart --db=<库>`。
-明日方舟库 701 MB → 约 400 MB（见 §4.1 的实测）。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
+明日方舟库 701 → 292 MB（下载 220 → 112 MB），终末地 62 → 31 MB；剧情行、资料、条目与之前逐行相同，向量按行迁移。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
 
 ## 4. 四条构建路径（同一套代码）
 
@@ -92,6 +92,9 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 - 取消会真正停下（`_run` 计数）：下载在两个文件之间停，上一次运行没有结束前不开始下一次（`_active`）。以前取消后下载还在后台继续，
   紧接着再点“更新”会有两次运行同时改源目录，导入时报“Missing required GameData file”（2026-10-10 真机上遇到）。
   每次运行开始时删掉临时目录里失败的构建留下的 `build_*.db`（每个都是整库的一份副本）。
+- 更新成功后状态里的已装提交就是最新提交（`GameDataBuildUiState.upToDate`）：“拉取并更新”不可按、更新前那次检查的计数不再显示；
+  “检查更新”查到新提交，或换了一个库（安装状态变化时 `installedChanged`），按钮恢复。每次更新都重新向上游问最新提交，
+  不沿用上一次检查看到的。
 - 真机实测（2026-10-10，PJH110，瘦身后的库）：`a550f5e` → `17759cc`，84 个变化的文件，连下载 187 秒，结果与电脑上同一次更新的报告逐项相同
   （+52 篇剧情、16 张表、15 个关卡文件）；更新后 284 MB，状态“本机更新”。
 - 完整重建建的是一个新库，**不带向量**。已装的库有向量（清单里有 `embedding_model`）而这次只能完整重建时

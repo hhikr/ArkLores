@@ -69,5 +69,7 @@ dart run tools/phone_ask.dart --kb=update                    # 明日方舟“�
 ## 常见问题
 
 - 找不到设备：`adb devices` 状态要是 `device`；`unauthorized` 时在手机上确认授权。
+- 调 `install_local.ps1` 时不要加 `2>&1`：PowerShell 5.1 会把 adb 写到 stderr 的进度当成错误，脚本中途停下（安装其实成功）。
+- 本机构建的知识库（SHA 与 `release_gamedata.env` 不同）怎样连包一起装、怎样经桥安装，见 `docs/ASK_0.14_HANDOFF.md` §7。
 - 知识库下载卡住：用 Release 页面手动下载 gz，改名为 `arklores_gamedata_zh.db.download.gz` 放进应用目录，再点“下载”。
 - 磁盘：C 盘满时 `flutter test` 编译失败后会卡住很久；全量测试正常约 1 分钟，明显变慢先查剩余空间。
