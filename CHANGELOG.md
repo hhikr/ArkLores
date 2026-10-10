@@ -6,6 +6,12 @@ All notable changes to ArkLores will be documented in this file.
 
 Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancelled, 1.5–24 minutes and up to 1.5 million input tokens a question; one tool call in six went wrong). The one agent, its tools and the citation checks stay; what changed is around them.
 
+### A knowledge base less than half the size
+
+- **The tables nothing reads are gone.** The knowledge base still carried the raw material of earlier ways of searching: every text cut into chunks a second time with a full-text index, a full-text index over story lines that cannot match a Chinese word inside a sentence, a table of where each name occurs in each story, rare two-character words, a "profile" per story, and the story text once more as records. No part of the app read them, and in forty recorded conversations the model never queried them. The Arknights knowledge base goes from 701 MB to 292 MB (the download from 220 MB to 112 MB), Endfield from 62 MB to 31 MB, with the same stories, records and vectors.
+- **Updating from the game data no longer goes through every story.** The update used to scan all 3,600 stories again for names and rewrite a profile for each ("scanning character appearances", "writing chapter profiles"); those steps are gone. A knowledge base installed from an older file loses the unused tables the first time it is updated ("removing data no longer used").
+- **An error on the update card goes away** when the next check or update starts. A failed check (the GitHub limit, for one) stayed on the card through a later successful update, until the app was restarted.
+
 ### Answers that do not break
 
 - **The knowledge base no longer drops out mid-question.** Opening the knowledge-base page (or the story-vector card) opened the same file with SQLite's shared connection and closed it, which closed Ask's connection too: every later search and read failed with `database_closed` until the app was restarted. Each opener now has its own connection, and Ask's reopens if it is ever closed.

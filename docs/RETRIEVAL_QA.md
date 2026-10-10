@@ -25,7 +25,6 @@ flutter test        # 约 1 分钟，全部离线
 | 单元测试 | `flutter test test/core/gamedata`（夹具用生产 schema 与小源码树 `support/source_fixture.dart`，GitHub 用 `fake_github.dart`） |
 | 规则影响面 | 在 `notes/` 写探测脚本对真实库计数（改前、改后各一次） |
 | 真实库验收 | `$env:ARKLORES_RUN_DB_CHECK='true'; flutter test test/live/gamedata_v5_acceptance_test.dart`（`ARKLORES_GAMEDATA_DB` 指向库，绝对路径） |
-| 固定检索 | `dart run tools/check_gamedata_retrieval.dart --db=<库>` |
 | 新建 = 增量 = 补算 | 一致性实验（`KNOWLEDGE_BASE_LESSONS.md` §4），改了建库结构时必做 |
 | 新名字 | `rederive_gamedata.dart` 末尾的 `unnamed kind:` 逐个去 prts.wiki 查 |
 | 向量 | 迁移后向量条数与旧库一致，`--dry-run` 显示 0 块需要嵌入（或只有真正新增的） |

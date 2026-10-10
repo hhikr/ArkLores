@@ -30,14 +30,21 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 | `entry_links(src, relation, dst, source_path)` | 绑定：`appears_in`、`plays_in`、`attached_to`、`belongs_to`、`belongs_to_stage`、`part_of`、`summoned_by`、`same_person`、`features`、`reads_story`…；视图 `collection_enemies` |
 | `story_lines(story_id, line_index, speaker, content, kind, …)` | 剧情逐行（约 44 万行）；索引 `(story_id, line_index)`；行内换行是真换行 |
 | `normalized_records` | 非剧情文字（档案、语音、描述…），`entry_id`/`collection_id`；可作为出处 `record:<id>`。只带 `entity_id` 的记录（干员语音）的 `entity_name` 在派生步骤里按 id 从 `entities` 填上 |
-| `entities` / `entity_aliases` / `entity_documents` | 实体与别名（覆盖层、近似名用）；`entity_documents` 是每位干员的整份档案（也可作为出处） |
-| `entity_story_mentions`、`story_chapter_profiles`、`rare_terms`、`story_lines_fts`、`lore_chunks(_fts)` | 确定性覆盖层与全文索引（定位线索） |
+| `entities` / `entity_aliases` / `entity_documents` | 实体与别名（资料的所属对象、近似名用）；`entity_documents` 是每位干员的整份档案（也可作为出处） |
 | `story_catalog`（可选） | 故事集名、关卡号、章名、行动前/后、顺序、官方梗概、上线时间（`story_review_table.json` + `[uc]info`） |
 | `story_chunk_vectors`（可选） | 剧情向量，12 行一块、步长 8，int8；模型/维度/切块记在 manifest |
 | `record_chunk_vectors`（可选，0.14） | 资料向量：`normalized_records` 里不是剧情副本的每条记录与 `entity_documents` 的每份档案；一条一块，超过 800 字的在 `## ` 小节处切、再按行切；每块存文字哈希与它覆盖的字符范围；与剧情向量同一模型 |
 | `gamedata_manifest` | schema 版本、上游提交、计数、向量与目录元数据 |
 
 关系、名字、复刻合并、去重等规则见 `KNOWLEDGE_BASE_LESSONS.md` §2。
+
+**0.14 删掉的（没有任何代码读，真机与 live 的 40 份会话里模型也没查过）**：`lore_chunks` 与它的全文索引（全部文字切块后的又一份副本）、
+`story_lines_fts`（unicode61 不切中文词，匹配不到句子里的词；关键词检索一直走 LIKE）、`entity_documents_fts`、
+`entity_relations`（只有“干员 ↔ 自己的语音”一种关系）、覆盖层三张表 `entity_story_mentions` / `rare_terms` / `story_chapter_profiles`、
+`normalized_records` 里剧情的切块副本（`parent_type = 'story_file'`，正文在 `story_lines`）、由说话人名字造的实体（`source_type = 'story_speaker'`）。
+清单在 `gamedata_schema.dart` 的 `obsoleteGamedataTables` / `dropObsoleteGamedataData`。schema 版本没变（仍是 5）：有没有这些表对 App 是一样的，
+旧资产照常能装；App 内更新一个带着它们的库时先删掉再 `VACUUM`（进度“清理不再使用的数据”），命令行用 `tools/compact_gamedata.dart --db=<库>`。
+明日方舟库 701 MB → 约 400 MB（见 §4.1 的实测）。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
 
 ## 4. 四条构建路径（同一套代码）
 
@@ -60,7 +67,7 @@ dart run tools/update_gamedata.dart --db=<库> --vectors-only [--embed]
 ```
 
 流程：比较两个提交的文件树（excel/story/levels 按 blob 哈希）→ 只下载变化的文件与缺的上下文表（6 个并发）→ 复制旧库，按
-“数据表 → 关卡文件 → 剧情文件”逐个先清后导；上下文表变化时按完整构建的顺序重读全部条目表 → 重算派生层、目录、FTS → 校验后原子替换 →
+“数据表 → 关卡文件 → 剧情文件”逐个先清后导；上下文表变化时按完整构建的顺序重读全部条目表 → 重算派生层、目录 → 校验后原子替换 →
 更新报告。没有装库、旧 schema、旧提交已不在上游时自动完整重建。GitHub 匿名额度 60 次/小时，token 来自 `tools/github_pat` 或 `GITHUB_TOKEN`。
 
 ### 4.3 补算（规则改了，不重建剧情和向量）
@@ -69,7 +76,7 @@ dart run tools/update_gamedata.dart --db=<库> --vectors-only [--embed]
 dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=<新库>]   # 默认 <库>.rederived
 ```
 
-重导全部条目表、重解析与库里不同的故事（这些故事的向量会被删）、重建派生层与 FTS。末尾打印 `unnamed kind:`（要去 wiki 查名字的新类型）。
+重导全部条目表、重解析与库里不同的故事（这些故事的向量会被删）、重建派生层，并删掉旧构建留下的没人读的表。末尾打印 `unnamed kind:`（要去 wiki 查名字的新类型）。
 补算后若有故事被重解析，接 §5 的向量迁移。补算结果必须与全量新建一致（`KNOWLEDGE_BASE_LESSONS.md` §4 一致性实验）。
 
 ### 4.4 App 内完整构建
@@ -120,7 +127,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 
 1. 压缩：`finalize_gamedata_assets.dart --output=<目录>`（没有 `.gz` 时自己压缩，Windows 不需要 gzip），写 manifest 的大小与 SHA。
 2. 验收：`flutter test`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
-   `dart run tools/check_gamedata_retrieval.dart --db=<库>`；改了建库结构时做一致性实验。
+   改了建库结构时做一致性实验。
 3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，提交。
 4. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
 5. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。

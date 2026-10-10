@@ -45,7 +45,7 @@ flutter run
 | --- | --- |
 | 框架 | Flutter / Dart，Riverpod |
 | 数据库 | SQLite（sqflite；构建与只读 SQL 用 FFI） |
-| 知识库 | 每个游戏一个库：中文条目层 + 全文/覆盖层 + 可选剧情向量 |
+| 知识库 | 每个游戏一个库：中文条目层 + 剧情原文与资料 + 可选向量 |
 | AI | OpenAI 兼容 Chat / Embedding API |
 
 ```text
