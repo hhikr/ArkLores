@@ -218,6 +218,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   Future<List<RecordHit>> searchRecordsLike(
     List<String> terms, {
     int limit = 3,
+    Map<String, double>? weights,
   }) async {
     final db = await _open();
     final cleaned = [
@@ -235,10 +236,10 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final whereArgs = <Object?>[];
     for (final term in cleaned) {
       final like = '%${escapeLike(term)}%';
-      score.add('(CASE WHEN entity_name = ? THEN 3 ELSE 0 END) + '
+      score.add('((CASE WHEN entity_name = ? THEN 3 ELSE 0 END) + '
           "(CASE WHEN title LIKE ? ESCAPE '\\' THEN 2 ELSE 0 END) + "
-          "(CASE WHEN content LIKE ? ESCAPE '\\' THEN 1 ELSE 0 END)");
-      args.addAll([term, like, like]);
+          "(CASE WHEN content LIKE ? ESCAPE '\\' THEN 1 ELSE 0 END)) * ?");
+      args.addAll([term, like, like, weights?[term] ?? 1.0]);
       where.add("entity_name = ? OR title LIKE ? ESCAPE '\\' "
           "OR content LIKE ? ESCAPE '\\'");
       whereArgs.addAll([term, like, like]);
@@ -282,7 +283,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
             cleaned,
             subject: '${row['entity_name'] ?? ''}',
           ),
-          score: (row['s'] as num?)?.toInt() ?? 0,
+          score: (row['s'] as num?)?.toDouble() ?? 0,
         ),
     ]..sort((a, b) => b.score.compareTo(a.score));
     return hits.take(limit).toList();

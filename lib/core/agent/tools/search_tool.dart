@@ -11,6 +11,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import '../../gamedata/game_retrieval.dart';
 import '../../gamedata/multi_game_retrieval.dart';
@@ -153,10 +154,10 @@ class SearchTool extends AgentTool {
     // The wikis answer over the network: asked while the library is read.
     final wikiSearch = wiki == null || collection.isNotEmpty || forWiki.isEmpty
         ? Future.value(const <String>[])
-        : _searchWiki(games, forWiki);
+        : _timed('wiki', () => _searchWiki(games, forWiki));
 
     // Meaning: one embedding of the query, used for every game.
-    final (vector, modeNote) = await _embed(query);
+    final (vector, modeNote) = await _timed('embed', () => _embed(query));
     final terms = allTerms.take(maxKeywordTerms).toList();
     final unused = allTerms.skip(maxKeywordTerms).toList();
     final termLines = <String, int>{};
@@ -179,17 +180,44 @@ class SearchTool extends AgentTool {
 
     final ranked = await Future.wait([
       for (final g in games)
-        _rank(narrowTo(store, g), terms, vector, inCollection, termLines),
+        _rank(g, narrowTo(store, g), terms, vector, inCollection, termLines),
     ]);
+    // Archives, profiles, voice lines and the like (not story text), by the
+    // same keywords; not within a collection. A word that is everywhere in
+    // the story text weighs less: without that, a common word of the query
+    // brought records that had nothing to do with it.
+    if (terms.isNotEmpty && inCollection == null) {
+      final weights = {
+        for (final t in terms)
+          t: 1 / (1 + math.log(1 + (termLines[t] ?? 0))),
+      };
+      final records = await _timed(
+        'records',
+        () => Future.wait([
+          for (final g in games)
+            narrowTo(store, g).searchRecordsLike(
+              terms,
+              limit: recordsPerGame,
+              weights: weights,
+            ),
+        ]),
+      );
+      for (final (i, r) in ranked.indexed) {
+        r.records = records[i];
+      }
+    }
     final wikiPart = await wikiSearch;
 
-    // A game with no keyword hit whose closest passage is clearly further
-    // from the query than another game's is listed as such, not printed
-    // (vector search always returns something; same model, same scale).
+    // A game whose closest passage is clearly further from the query than
+    // another game's is listed as such, not printed (vector search always
+    // returns something; same model, same scale) — unless the query's
+    // words are found there more than in the other game (0.14: any keyword
+    // hit used to keep it, and a common word always hits).
     final best = ranked.fold<double>(
       double.negativeInfinity,
       (b, r) => r.best > b ? r.best : b,
     );
+    final mostLines = ranked.fold<int>(0, (n, r) => r.lines > n ? r.lines : n);
     final mode = vector == null ? SearchMode.keywordOnly : SearchMode.semantic;
     final buffer = StringBuffer()
       ..writeln('检索“$query”'
@@ -200,11 +228,12 @@ class SearchTool extends AgentTool {
     for (final (i, g) in games.indexed) {
       final r = ranked[i];
       if (r.top.isNotEmpty &&
-          !r.anyKeyword &&
           games.length > 1 &&
-          r.best < best - farther) {
+          r.best < best - farther &&
+          (r.lines == 0 || r.lines < mostLines)) {
         buffer.writeln('## ${g.label}剧情：只有意思较远的段落（最接近 '
-            '${r.best.toStringAsFixed(2)}，另一游戏 ${best.toStringAsFixed(2)}），已略去；'
+            '${r.best.toStringAsFixed(2)}，另一游戏 ${best.toStringAsFixed(2)}'
+            '${r.lines == 0 && r.records.isEmpty ? '' : '；关键词命中 ${r.lines} 行、${r.records.length} 条资料'}），已略去；'
             '需要时用 search 指定 game=${g.key} 再查');
         continue;
       }
@@ -313,6 +342,7 @@ class SearchTool extends AgentTool {
 
   /// One game's best stories (not printed yet).
   Future<_Ranked> _rank(
+    Game game,
     GameDataRetrieval store,
     List<String> terms,
     List<double>? vector,
@@ -328,9 +358,12 @@ class SearchTool extends AgentTool {
       final info = await store.storyVectorInfo;
       if (info != null && info.model == embeddingClient?.model) {
         chunks = [
-          for (final c in await store.searchStoryChunksByVector(
-            vector,
-            topK: storiesPerGame * 4 * wide,
+          for (final c in await _timed(
+            'vectors:${game.key}',
+            () => store.searchStoryChunksByVector(
+              vector,
+              topK: storiesPerGame * 4 * wide,
+            ),
           ))
             if (keep(c.storyId)) c,
         ];
@@ -339,11 +372,14 @@ class SearchTool extends AgentTool {
     final keywords = terms.isEmpty
         ? const <StoryLineHit>[]
         : [
-            for (final h in await store.searchStoryLinesLike(
-              terms,
-              storyLimit: storiesPerGame * 2 * wide,
-              linesPerStory: 3,
-              termLines: termLines,
+            for (final h in await _timed(
+              'keywords:${game.key}',
+              () => store.searchStoryLinesLike(
+                terms,
+                storyLimit: storiesPerGame * 2 * wide,
+                linesPerStory: 3,
+                termLines: termLines,
+              ),
             ))
               if (keep(h.storyId)) h,
           ];
@@ -365,19 +401,27 @@ class SearchTool extends AgentTool {
     }
     final ranked = score.keys.toList()
       ..sort((a, b) => score[b]!.compareTo(score[a]!));
-    // Archives, profiles, voice lines and the like (not story text), by
-    // the same keywords; not within a collection.
-    final records = terms.isEmpty || inCollection != null
-        ? const <RecordHit>[]
-        : await store.searchRecordsLike(terms, limit: recordsPerGame);
     return _Ranked(
       ranked.take(storiesPerGame).toList(),
       firstChunk,
       keywordOf,
-      records,
       best: chunks.isEmpty ? double.negativeInfinity : chunks.first.score,
-      anyKeyword: keywords.isNotEmpty || records.isNotEmpty,
+      lines: keywords.fold(0, (n, h) => n + h.hits),
     );
+  }
+
+  /// Measurement only (0.14): where a search spends its time — the
+  /// embedding call, each game's vector scan and keyword scan, the records,
+  /// the wikis. Set by the agent; never changes behaviour.
+  void Function(String name, DateTime start, DateTime end)? onSpan;
+
+  Future<T> _timed<T>(String part, Future<T> Function() run) async {
+    final start = DateTime.now();
+    try {
+      return await run();
+    } finally {
+      onSpan?.call('search:$part', start, DateTime.now());
+    }
   }
 
   /// [ranked]'s records as printed lines; the records printed become
@@ -494,17 +538,18 @@ class _Ranked {
   _Ranked(
     this.top,
     this.firstChunk,
-    this.keywordOf,
-    this.records, {
+    this.keywordOf, {
     required this.best,
-    required this.anyKeyword,
+    required this.lines,
   });
   final List<String> top;
   final Map<String, StoryChunkHit> firstChunk;
   final Map<String, StoryLineHit> keywordOf;
-  final List<RecordHit> records;
+  List<RecordHit> records = const [];
 
   /// Score of the game's closest passage (−∞ without vectors).
   final double best;
-  final bool anyKeyword;
+
+  /// Story lines the keywords hit, over the stories found.
+  final int lines;
 }

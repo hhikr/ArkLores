@@ -251,7 +251,9 @@ class LoreAgentLoop {
     String? keywordOnly;
     if (search is SearchTool) {
       keywordOnly = await search.keywordOnlyReason();
-      search.keywordOnly = keywordOnly != null;
+      search
+        ..keywordOnly = keywordOnly != null
+        ..onSpan = onSpan;
     }
     final toolSpecs = [for (final t in tools.values) t.toJson()];
 

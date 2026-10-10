@@ -178,10 +178,15 @@ class MultiGameRetrieval implements GameDataRetrieval {
   Future<List<RecordHit>> searchRecordsLike(
     List<String> terms, {
     int limit = 3,
+    Map<String, double>? weights,
   }) async =>
       ([
         for (final store in await _installed())
-          ...await store.searchRecordsLike(terms, limit: limit),
+          ...await store.searchRecordsLike(
+            terms,
+            limit: limit,
+            weights: weights,
+          ),
       ]..sort((a, b) => b.score.compareTo(a.score)))
           .take(limit)
           .toList();

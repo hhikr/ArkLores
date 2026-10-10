@@ -297,6 +297,43 @@ void main() {
       expect(seen.hasRecord('ef/doc_keeper'), isTrue);
     });
 
+    // 0.14 on the phone: a common word of the query ("称呼") brought records
+    // that had nothing to do with the question; ties went to the longest.
+    test('records: a word that is everywhere weighs less', () async {
+      final ef = both.stores[Game.endfield]! as GameDataKnowledgeStore;
+      final db = await sqflite.openDatabase(ef.dbPath!, singleInstance: false);
+      await insertRecord(
+        db,
+        'ef/rec_common',
+        contentType: 'mail',
+        category: 'world',
+        content: '大家都这么称呼他。${'无关的长文字。' * 30}',
+        fields: {'title': '一封长信'},
+      );
+      await insertRecord(
+        db,
+        'ef/rec_rare',
+        contentType: 'archive_document',
+        category: 'archive',
+        content: '守塔人是灯塔下的住民。',
+        fields: {'title': '档案'},
+      );
+      await db.close();
+      Future<List<String>> ids(Map<String, double>? weights) async => [
+            for (final r in await ef.searchRecordsLike(
+              ['守塔人', '称呼'],
+              limit: 2,
+              weights: weights,
+            ))
+              r.id,
+          ];
+      expect(await ids(null), ['ef/rec_common', 'ef/rec_rare']);
+      expect(
+        await ids({'守塔人': 1.0, '称呼': 0.1}),
+        ['ef/rec_rare', 'ef/rec_common'],
+      );
+    });
+
     test('a wrong column comes back with the real columns', () async {
       final result = await SqlTool(both, SeenLines())
           .execute({'query': 'SELECT name FROM story_lines'});

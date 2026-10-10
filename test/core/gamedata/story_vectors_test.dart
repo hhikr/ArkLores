@@ -7,7 +7,9 @@ import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/tools/search_tool.dart';
+import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
+import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
@@ -229,6 +231,63 @@ void main() {
       expect(found, contains('level_x_02.txt'));
     });
 
+    // 0.14 on the phone: a question about one game brought a third of its
+    // search result from the other, because a common word of the query
+    // occurs there too.
+    test('a game whose passages are far and hold fewer of the words is '
+        'left out, with its counts', () async {
+      final ak = '${tempDir.path}/far_ak.db';
+      final ef = '${tempDir.path}/far_ef.db';
+      await _buildDb(ak, model: _FakeEmbedder.modelName, only: {
+        'activities/x/level_x_02.txt': (
+          'x',
+          ['角色B：当年我藏起了匕首。', '角色B：匕首还藏在那里。'],
+        ),
+      },);
+      await _buildDb(ef, model: _FakeEmbedder.modelName, only: {
+        'ef/far_1.txt': (
+          'm',
+          ['商人们在很远的集市上叫卖各种水果蔬菜粮食和布料。', '旁人说起过一把匕首。'],
+        ),
+      },);
+      final both = MultiGameRetrieval({
+        Game.arknights: GameDataKnowledgeStore(dbPath: ak),
+        Game.endfield: GameDataKnowledgeStore(dbPath: ef, game: Game.endfield),
+      });
+      addTearDown(() async {
+        for (final s in both.stores.values) {
+          await (s as GameDataKnowledgeStore).close();
+        }
+      });
+      final spans = <String>[];
+      final search = SearchTool(
+        both,
+        SeenLines(),
+        embeddingClient: _FakeEmbedder(),
+      )..onSpan = (name, _, __) => spans.add(name);
+      final text = (await search.run('匕首 藏起')).text;
+      expect(text, contains('## 明日方舟剧情（最相关的 1 篇）'));
+      expect(text, contains('level_x_02.txt'));
+      expect(text, contains('## 终末地剧情：只有意思较远的段落'));
+      expect(text, contains('关键词命中 1 行、0 条资料），已略去'));
+      expect(text, isNot(contains('ef/far_1.txt')));
+      // Asked for by name it is searched.
+      expect(
+        (await search.run('匕首 藏起', game: Game.endfield)).text,
+        contains('ef/far_1.txt'),
+      );
+      // Where a search spends its time is measured part by part.
+      expect(
+        spans.toSet(),
+        containsAll([
+          'search:embed',
+          'search:vectors:arknights',
+          'search:keywords:endfield',
+          'search:records',
+        ]),
+      );
+    });
+
     test('search falls back to keywords when the vectors are from another '
         'model, and says so', () async {
       final result = await SearchTool(
@@ -269,8 +328,12 @@ class _Answers extends LLMClient {
   }
 }
 
-/// Three stories; level_x_02 is about hiding a dagger.
-Future<void> _buildDb(String path, {required String model}) async {
+/// Three stories; level_x_02 is about hiding a dagger. Or [only] these.
+Future<void> _buildDb(
+  String path, {
+  required String model,
+  Map<String, (String, List<String>)>? only,
+}) async {
   final db = await createGameDataDb(
     path,
     vectors: true,
@@ -281,11 +344,12 @@ Future<void> _buildDb(String path, {required String model}) async {
       manifestEmbeddingChunking: chunkingSignature,
     },
   );
-  const stories = {
-    'activities/x/level_x_01.txt': ('x', ['天气晴朗。', '大家在吃饭。']),
-    'activities/x/level_x_02.txt': ('x', ['夜里很安静。', '角色B：当年我藏起了匕首。']),
-    'activities/o/level_o_01.txt': ('other', ['商人在叫卖。', '城门打开了。']),
-  };
+  final stories = only ??
+      const {
+        'activities/x/level_x_01.txt': ('x', ['天气晴朗。', '大家在吃饭。']),
+        'activities/x/level_x_02.txt': ('x', ['夜里很安静。', '角色B：当年我藏起了匕首。']),
+        'activities/o/level_o_01.txt': ('other', ['商人在叫卖。', '城门打开了。']),
+      };
   final embedder = _FakeEmbedder();
   for (final MapEntry(key: id, value: (scope, lines)) in stories.entries) {
     await insertStory(db, id, lines, scopeId: scope);

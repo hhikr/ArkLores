@@ -49,7 +49,7 @@ class RecordHit {
 
   /// Per term: 3 when the record is about what it names (`entity_name`), 2
   /// when its title has it, 1 when its text does.
-  final int score;
+  final double score;
 }
 
 /// The retrieval surface the investigation tools depend on.
@@ -121,7 +121,12 @@ abstract interface class GameDataRetrieval {
   /// profiles, voice lines, item and enemy texts) whose title or text
   /// contains any of [terms] — title matches first, then by how many terms
   /// they hold; each with the text around its first match.
-  Future<List<RecordHit>> searchRecordsLike(List<String> terms, {int limit});
+  /// [weights] scales what each term counts for (a common word less).
+  Future<List<RecordHit>> searchRecordsLike(
+    List<String> terms, {
+    int limit,
+    Map<String, double>? weights,
+  });
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at
   /// most [maxRows] rows; rejections, errors and timeouts come back in
