@@ -81,7 +81,7 @@ class SearchTool extends AgentTool {
           '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
           '现在没有向量服务，只按字面（子串）匹配原文：query 写原文里会出现的词——人物、地点、组织、事件、物品的叫法，'
           '以及它们的别称、相关的说法，空格分隔，每个词 2–6 个字，不要写整句或长短语（整句不会出现在原文里）。'
-          '一次最多 $maxKeywordTerms 个词；结果开头列出每个词命中多少行，命中 0 行的词换个说法再查。'
+          '一次最多 $maxKeywordTerms 个词；结果开头列出每个词命中多少行、分布在哪些故事集（没有列出原文的故事集也在里面），命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
           '要精确统计某个词出现在哪些故事里时用 grep。'
       : '一次检索所有资料：已安装的每个游戏的剧情原文和剧情以外的资料原文（档案、干员资料、语音等）'
@@ -89,7 +89,7 @@ class SearchTool extends AgentTool {
           '按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
           '适合任何“发生了什么、是什么、为什么、谁”的问题：写空格分隔的几个词（原文里会出现的名字、叫法和相关说法，'
           '每个词 2–6 个字，一次最多 $maxKeywordTerms 个），或一句描述（只按意思检索；Wiki 要靠词才查得到）。'
-          '结果开头列出每个词命中多少行，命中 0 行的词换个说法再查。'
+          '结果开头列出每个词命中多少行、分布在哪些故事集（没有列出原文的故事集也在里面），命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
           '要精确统计某个词出现在哪些故事里时用 grep。';
 
@@ -248,16 +248,41 @@ class SearchTool extends AgentTool {
     );
     final mostLines = ranked.fold<int>(0, (n, r) => r.lines > n ? r.lines : n);
     final mode = vector == null ? SearchMode.keywordOnly : SearchMode.semantic;
+    // Where each word's lines are, per game (not within a collection: the
+    // counts are the whole library's).
+    final spreads = <String, List<(Game, TermSpread)>>{};
+    if (inCollection == null) {
+      await _timed('spread', () async {
+        for (final term in terms) {
+          for (final (i, g) in games.indexed) {
+            final spread = await narrowTo(store, g)
+                .termSpread(ranked[i].termStories[term] ?? const {});
+            if (spread != null) (spreads[term] ??= []).add((g, spread));
+          }
+        }
+      });
+    }
     final buffer = StringBuffer()
       ..writeln('检索“$query”'
           '${scopeLabel.isEmpty ? '' : '（$scopeLabel 内）'}：'
           '${mode == SearchMode.semantic ? '按意思检索 + 关键词' : '只有关键词检索（$modeNote）'}'
-          '${terms.isNotEmpty ? '；关键词：${_termCounts(terms, termLines, inCollection != null, named.keys.toSet())}' : mode == SearchMode.keywordOnly ? '；query 里没有可以匹配的词：要写空格分隔的词（每个 2–12 个字），不是整句' : ''}'
+          '${terms.isEmpty && mode == SearchMode.keywordOnly ? '；query 里没有可以匹配的词：要写空格分隔的词（每个 2–12 个字），不是整句' : ''}'
           '${unused.isEmpty ? '' : '；一次最多 $maxKeywordTerms 个词，未使用：${unused.join('、')}'}');
+    if (terms.isNotEmpty) {
+      buffer.writeln('关键词：');
+      _termCounts(
+        terms,
+        termLines,
+        inCollection != null,
+        named.keys.toSet(),
+        spreads,
+      ).forEach(buffer.writeln);
+    }
     for (final MapEntry(key: term, value: c) in named.entries) {
       buffer.writeln('“$term”是故事集（${c.id}，${c.chapters} 章）：'
           '用 outline 看它的目录和相关的故事集。');
     }
+    var passageChars = 0;
     for (final (i, g) in games.indexed) {
       final r = ranked[i];
       if (r.top.isNotEmpty &&
@@ -274,11 +299,14 @@ class SearchTool extends AgentTool {
       buffer.writeln('## ${g.label}剧情'
           '${part.isEmpty ? '：没有相关段落' : '（最相关的 ${part.length} 篇）'}');
       for (final block in part) {
-        if (buffer.length + block.length > maxChars) {
+        // Only the passages count: the lines about the words above must
+        // not take their room.
+        if (passageChars + block.length > maxChars) {
           buffer.writeln('……（篇幅已满，其余从略）');
           break;
         }
         buffer.write(block);
+        passageChars += block.length;
       }
       final records = _renderRecords(r);
       if (records.isNotEmpty) {
@@ -329,13 +357,16 @@ class SearchTool extends AgentTool {
   /// Most characters of a query that is one word (a name).
   static const int loneWordChars = 8;
 
-  /// `term（N 行）` for each of [terms]; a term no line has is marked, so
-  /// the next search tries other words.
-  static String _termCounts(
+  /// One line for each of [terms]: how many lines hold it and, from
+  /// [spreads], in which collections (every word in the same form; with
+  /// hits in several games, each game's part under its name). A term no
+  /// line has is marked, so the next search tries other words.
+  static List<String> _termCounts(
     List<String> terms,
     Map<String, int> lines,
     bool scoped,
     Set<String> collections,
+    Map<String, List<(Game, TermSpread)>> spreads,
   ) =>
       [
         for (final t in terms)
@@ -343,9 +374,16 @@ class SearchTool extends AgentTool {
             null => t,
             0 when collections.contains(t) => '$t（0 行：这是故事集的名字，正文里不这样写）',
             0 => '$t（0 行，原文里没有这个写法）',
-            final n => '$t（${scoped ? '全库 ' : ''}$n 行）',
+            final n => switch (spreads[t] ?? const []) {
+                [] => '$t（${scoped ? '全库 ' : ''}$n 行）',
+                [(_, final only)] => '$t（${formatTermSpread(only)}）',
+                final several => '$t（${[
+                    for (final (game, spread) in several)
+                      '${game.label}：${formatTermSpread(spread)}',
+                  ].join('；')}）',
+              },
           },
-      ].join('、');
+      ];
 
   /// The words of [terms] that are exactly a collection's name (without
   /// the kind its label starts with), each with that collection.
@@ -420,6 +458,7 @@ class SearchTool extends AgentTool {
         ];
       }
     }
+    final termStories = <String, Map<String, int>>{};
     final keywords = terms.isEmpty
         ? const <StoryLineHit>[]
         : [
@@ -430,6 +469,7 @@ class SearchTool extends AgentTool {
                 storyLimit: storiesPerGame * 2 * wide,
                 linesPerStory: 3,
                 termLines: termLines,
+                termStories: termStories,
               ),
             ))
               if (keep(h.storyId)) h,
@@ -458,6 +498,7 @@ class SearchTool extends AgentTool {
       keywordOf,
       best: chunks.isEmpty ? double.negativeInfinity : chunks.first.score,
       lines: keywords.fold(0, (n, h) => n + h.hits),
+      termStories: termStories,
     );
   }
 
@@ -631,8 +672,12 @@ class _Ranked {
     this.keywordOf, {
     required this.best,
     required this.lines,
+    this.termStories = const {},
   });
   final List<String> top;
+
+  /// Each keyword's lines per story file in this game.
+  final Map<String, Map<String, int>> termStories;
   final Map<String, StoryChunkHit> firstChunk;
   final Map<String, StoryLineHit> keywordOf;
   List<RecordHit> records = const [];

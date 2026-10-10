@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
@@ -161,5 +162,73 @@ void main() {
       expect(related.map((r) => r.id), isNot(contains(id)));
       expect(related.map((r) => r.id).toSet(), hasLength(related.length));
     }
+  }, skip: enabled ? false : 'set ARKLORES_RUN_DB_CHECK=true',);
+
+  // 0.14: where a word's lines are, as `search` and `grep` write it.
+  // Printed for a look, with the time of the keyword scan that counts it
+  // (which collections come first is not asserted). The words: a few
+  // speakers of the database, from the most heard down, and those named in
+  // `ARKLORES_SPREAD_OF` (separated by `,`).
+  test('the spread of some words over the collections', () async {
+    final store = GameDataKnowledgeStore(dbPath: dbPath);
+    addTearDown(store.close);
+    final speakers = await store.readOnlySql(
+      'SELECT speaker FROM story_lines WHERE LENGTH(speaker) >= 2 '
+      'GROUP BY speaker ORDER BY COUNT(*) DESC LIMIT 400',
+    );
+    final terms = <String>{
+      for (final at in [0, 20, 100, 399])
+        if (at < speakers.rows.length) '${speakers.rows[at].first}',
+      ...(Platform.environment['ARKLORES_SPREAD_OF'] ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty),
+    }.toList();
+    expect(terms, isNotEmpty);
+    // The first use reads every story's collection.
+    final first = Stopwatch()..start();
+    await store.termSpread({'-': 1});
+    // ignore: avoid_print
+    print('story groups: ${first.elapsedMilliseconds} ms');
+    Future<void> check(List<String> words) async {
+      final termLines = <String, int>{};
+      final termStories = <String, Map<String, int>>{};
+      final watch = Stopwatch()..start();
+      await store.searchStoryLinesLike(
+        words,
+        termLines: termLines,
+        termStories: termStories,
+      );
+      final scan = watch.elapsedMilliseconds;
+      for (final word in words) {
+        final spread = await store.termSpread(termStories[word] ?? const {});
+        if (spread == null) {
+          expect(termLines[word], 0, reason: word);
+          continue;
+        }
+        // ignore: avoid_print
+        print('$word（${formatTermSpread(spread)}）');
+        expect(spread.lines, termLines[word], reason: word);
+        expect(spread.listed.length, lessThanOrEqualTo(spreadMaxListed));
+        expect(spread.dense.length, lessThanOrEqualTo(spreadMaxDense));
+        final parts = [...spread.listed, ...spread.dense];
+        expect(parts.map((p) => p.id).toSet(), hasLength(parts.length));
+        expect(
+          parts.fold<int>(0, (n, p) => n + p.lines),
+          lessThanOrEqualTo(spread.lines),
+        );
+        expect(
+          spread.listed.length + spread.dense.length + spread.restCount,
+          spread.collections,
+        );
+      }
+      // ignore: avoid_print
+      print('${words.length} 个词的检索（含逐章计数）：$scan ms');
+    }
+
+    for (final word in terms) {
+      await check([word]);
+    }
+    await check(terms.take(8).toList());
   }, skip: enabled ? false : 'set ARKLORES_RUN_DB_CHECK=true',);
 }

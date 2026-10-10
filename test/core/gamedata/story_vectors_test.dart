@@ -168,7 +168,7 @@ void main() {
       final found = first
           .firstWhere((e) => e.type == ReActEventType.toolObservation)
           .content;
-      expect(found, contains('按意思检索 + 关键词；关键词：匕首（1 行）'));
+      expect(found, contains('按意思检索 + 关键词\n关键词：\n匕首（1 行，1 个故事集：'));
       expect(found, contains('level_x_02.txt'));
       expect(
         first.any((e) => e.content.contains('问答质量可能下降')),

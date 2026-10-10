@@ -601,7 +601,7 @@ class GrepTool extends AgentTool {
   String get description =>
       '在剧情台词里找包含某些词的行（正文或说话人，子串匹配，多个词用 | 分隔表示“任一”）。'
       '给 story_ids 或 collection 时返回命中行及上下文；都不给时在全库统计每个故事的命中行数'
-      '（只给分布，不给原文；不给 game 时统计所有已安装的游戏）。';
+      '（只给分布，不给原文：先按故事集汇总，再逐章列出；不给 game 时统计所有已安装的游戏）。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -789,6 +789,13 @@ class GrepTool extends AgentTool {
         : maxStoriesListed;
     for (final MapEntry(key: game, value: list) in byGame.entries) {
       if (byGame.length > 1) buffer.writeln('## ${game.label}');
+      // 0.14: the same counts by collection first — the list below is by
+      // chapter, and long.
+      final spread = await narrowTo(store, game)
+          .termSpread({for (final id in list) id: counts[id]!});
+      if (spread != null) {
+        buffer.writeln('按故事集：${formatTermSpread(spread)}');
+      }
       var listed = 0;
       for (final id in list) {
         if (listed >= perGame) {

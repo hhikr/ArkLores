@@ -242,7 +242,7 @@ void main() {
       expect(SearchTool.termsOf('甲地的审判庭到底是做什么的呢？'), isEmpty);
       final words = await SearchTool(both, SeenLines()).run('灯塔 用途');
       expect(words.mode, SearchMode.keywordOnly);
-      expect(words.text, contains('关键词：灯塔'));
+      expect(words.text, contains('关键词：\n灯塔（'));
       expect(words.text, contains('level_act1_01_beg.txt'));
       // Without vectors a sentence finds nothing, and the result says why.
       final sentence =

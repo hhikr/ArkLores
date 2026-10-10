@@ -537,7 +537,7 @@ void main() {
       expect(request[1].content, '星灯都做了些什么事情呢？');
       expect(request[2].toolCalls, hasLength(2));
       expect(request[3].role, MessageRole.tool);
-      expect(request[3].content, contains('关键词：星灯'));
+      expect(request[3].content, contains('关键词：\n星灯（'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
     });
@@ -646,7 +646,7 @@ void main() {
         ['outline', 'search'],
       );
       expect(request[3].content, contains('乙与丙秘密会面'));
-      expect(request[4].content, contains('关键词：会面'));
+      expect(request[4].content, contains('关键词：\n会面（'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
     });
@@ -1622,7 +1622,7 @@ void main() {
       );
       expect(search.content, contains('只有关键词检索'));
       // Each word says how many lines it matched; one no line has is marked.
-      expect(search.content, matches(RegExp(r'星灯（\d+ 行）')));
+      expect(search.content, matches(RegExp(r'星灯（\d+ 行，\d+ 个故事集：')));
       expect(search.content, contains('不存在的说法（0 行，原文里没有这个写法）'));
       expect(search.content, contains('obt/main/level_main_fx-01.txt'));
     });

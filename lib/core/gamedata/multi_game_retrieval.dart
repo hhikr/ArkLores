@@ -60,6 +60,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
     int storyLimit = 8,
     int linesPerStory = 3,
     Map<String, int>? termLines,
+    Map<String, Map<String, int>>? termStories,
   }) async {
     if (scopeId != null) {
       return _of(scopeId).searchStoryLinesLike(
@@ -68,6 +69,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
         storyLimit: storyLimit,
         linesPerStory: linesPerStory,
         termLines: termLines,
+        termStories: termStories,
       );
     }
     final all = <StoryLineHit>[
@@ -77,6 +79,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
           storyLimit: storyLimit,
           linesPerStory: linesPerStory,
           termLines: termLines,
+          termStories: termStories,
         ),
     ];
     // Best first across games: lines with more of the terms, then more hits.
@@ -85,6 +88,18 @@ class MultiGameRetrieval implements GameDataRetrieval {
       return byTerms != 0 ? byTerms : b.hits.compareTo(a.hits);
     });
     return all.take(storyLimit).toList();
+  }
+
+  /// Within one game (shares are of that game's collections and corpus):
+  /// the game of the first story of [perStory].
+  @override
+  Future<TermSpread?> termSpread(Map<String, int> perStory) async {
+    if (perStory.isEmpty) return null;
+    final game = gameOfId(perStory.keys.first);
+    return only(game).termSpread({
+      for (final MapEntry(key: id, value: n) in perStory.entries)
+        if (gameOfId(id) == game) id: n,
+    });
   }
 
   @override

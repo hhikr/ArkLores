@@ -23,10 +23,12 @@ export 'story_catalog.dart'
         RelatedCollection,
         StoryCatalogEntry,
         StoryCollection,
+        TermSpread,
         collectionLabelPrefix,
         collectionReleaseKey,
         compareReleaseKeys,
         fallbackStoryLabel,
+        formatTermSpread,
         releaseMonthOf;
 export 'story_coverage_models.dart';
 export 'story_vectors.dart' show StoryChunkHit;
@@ -101,14 +103,22 @@ abstract interface class GameDataRetrieval {
   /// matching lines. [scopeId] is a canonical scope key (e.g.
   /// `activity:act21mini`). Locating hints, not evidence. [termLines], when
   /// given, receives how many lines each term matches (0.14; added to what
-  /// it holds, so one map can collect several games).
+  /// it holds, so one map can collect several games); [termStories] the
+  /// same count per story file.
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
     String? scopeId,
     int storyLimit,
     int linesPerStory,
     Map<String, int>? termLines,
+    Map<String, Map<String, int>>? termStories,
   });
+
+  /// 0.14: where the lines holding a word are, by collection: [perStory]
+  /// is the word's lines per story file ([searchStoryLinesLike]'s
+  /// `termStories`, or [storyLineHitCounts]) of one game. Null without a
+  /// database or without lines. A hint for where to look, not evidence.
+  Future<TermSpread?> termSpread(Map<String, int> perStory);
 
   /// R12: model/dims of the DB's optional story-chunk vectors, or null when
   /// the DB has none (vector recall then stays off).

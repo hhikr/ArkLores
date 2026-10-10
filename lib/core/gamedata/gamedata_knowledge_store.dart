@@ -143,6 +143,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     int storyLimit = 8,
     int linesPerStory = 3,
     Map<String, int>? termLines,
+    Map<String, Map<String, int>>? termStories,
   }) async {
     final db = await _open();
     if (db == null) return const [];
@@ -153,6 +154,21 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       storyLimit: storyLimit,
       linesPerStory: linesPerStory,
       termLines: termLines,
+      termStories: termStories,
+    );
+  }
+
+  /// 0.14: every story's collection and the line counts, read on first use
+  /// and dropped with the connection (like [_centroids]).
+  Future<StoryGroups>? _storyGroups;
+
+  @override
+  Future<TermSpread?> termSpread(Map<String, int> perStory) async {
+    final db = await _open();
+    if (db == null || perStory.values.every((n) => n <= 0)) return null;
+    return computeTermSpread(
+      perStory,
+      await (_storyGroups ??= queryStoryGroups(db)),
     );
   }
 
@@ -598,6 +614,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     _recordIndex = null;
     _nameInventory = null;
     _centroids = null;
+    _storyGroups = null;
   }
 
   /// Runs [action] on the open knowledge base (read-only); null when none is

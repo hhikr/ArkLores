@@ -699,6 +699,248 @@ Future<Map<String, ({String label, String? releaseMonth})>> queryCollectionLabel
   };
 }
 
+// 0.14: where a word's lines are — its spread over the collections. Every
+// word gets the same form; nothing decides whether a word is "worth"
+// listing (a word that is everywhere shows as such: most of it is in "the
+// rest"). The numbers below are from measurements on the real database
+// (2026-10-11: 92 words, names by frequency band plus places, groups and
+// common words); look at the real database again before changing one.
+
+/// Collections are listed, most lines first, until they hold this share of
+/// the word's lines …
+const double spreadCoverage = 0.80;
+
+/// … or this many are listed.
+const int spreadMaxListed = 6;
+
+/// Collections added after those: short ones the word fills (an operator's
+/// own record is a few dozen lines and never among the largest).
+const int spreadMaxDense = 2;
+
+/// A collection is such a one when the word has this many lines in it,
+const int spreadDenseMinLines = 10;
+
+/// is in this share of its lines,
+const double spreadDenseShare = 0.10;
+
+/// and that share is this many times the word's share of the whole corpus
+/// (without this a word that is everywhere qualifies in any talkative
+/// chapter).
+const int spreadDenseLift = 5;
+
+/// Label of the stories no collection holds.
+const String spreadOtherLabel = '其他';
+
+/// Which collection every story file is in, and how many lines each
+/// collection and the corpus have ([queryStoryGroups]).
+class StoryGroups {
+  const StoryGroups({
+    required this.groupOf,
+    required this.labels,
+    required this.groupLines,
+    required this.corpusLines,
+  });
+
+  /// Story id → collection id ('' for a story no collection holds).
+  final Map<String, String> groupOf;
+  final Map<String, String> labels;
+  final Map<String, int> groupLines;
+  final int corpusLines;
+}
+
+/// One collection of a [TermSpread].
+typedef SpreadPart = ({
+  String id,
+  String label,
+  int lines,
+  int chapters,
+
+  /// The word's lines over the collection's lines.
+  double share,
+});
+
+/// Where the lines holding a word are. A hint for where to look, not
+/// something read.
+class TermSpread {
+  const TermSpread({
+    required this.lines,
+    required this.chapters,
+    required this.collections,
+    required this.listed,
+    required this.dense,
+    required this.restCount,
+    required this.restShare,
+  });
+
+  final int lines;
+  final int chapters;
+  final int collections;
+
+  /// The collections with the most lines.
+  final List<SpreadPart> listed;
+
+  /// Collections not among [listed] that the word fills.
+  final List<SpreadPart> dense;
+
+  /// The collections in neither list, and their share of [lines].
+  final int restCount;
+  final double restShare;
+}
+
+/// The spread of a word whose lines per story file are [perStory].
+TermSpread computeTermSpread(Map<String, int> perStory, StoryGroups groups) {
+  final lines = <String, int>{};
+  final chapters = <String, int>{};
+  var total = 0;
+  for (final MapEntry(key: story, value: n) in perStory.entries) {
+    if (n <= 0) continue;
+    final group = groups.groupOf[story] ?? '';
+    lines[group] = (lines[group] ?? 0) + n;
+    chapters[group] = (chapters[group] ?? 0) + 1;
+    total += n;
+  }
+  SpreadPart part(String id) {
+    final all = groups.groupLines[id] ?? 0;
+    return (
+      id: id,
+      label: id.isEmpty ? spreadOtherLabel : groups.labels[id] ?? id,
+      lines: lines[id]!,
+      chapters: chapters[id]!,
+      share: all == 0 ? 0 : lines[id]! / all,
+    );
+  }
+
+  final ids = lines.keys.toList()
+    ..sort((a, b) {
+      final byLines = lines[b]!.compareTo(lines[a]!);
+      return byLines != 0 ? byLines : a.compareTo(b);
+    });
+  final listed = <SpreadPart>[];
+  var covered = 0;
+  for (final id in ids) {
+    if (listed.length >= spreadMaxListed || covered >= total * spreadCoverage) {
+      break;
+    }
+    listed.add(part(id));
+    covered += lines[id]!;
+  }
+  final everywhere =
+      groups.corpusLines == 0 ? 0.0 : total / groups.corpusLines;
+  final dense = [
+    for (final id in ids.skip(listed.length))
+      // The stories no collection holds are not one story.
+      if (id.isNotEmpty && lines[id]! >= spreadDenseMinLines) part(id),
+  ]
+      .where(
+        (p) =>
+            p.share >= spreadDenseShare &&
+            p.share >= everywhere * spreadDenseLift,
+      )
+      .toList()
+    ..sort((a, b) {
+      final byShare = b.share.compareTo(a.share);
+      return byShare != 0 ? byShare : a.id.compareTo(b.id);
+    });
+  final added = dense.take(spreadMaxDense).toList();
+  final shown = covered + added.fold<int>(0, (n, p) => n + p.lines);
+  return TermSpread(
+    lines: total,
+    chapters: perStory.values.where((n) => n > 0).length,
+    collections: ids.length,
+    listed: listed,
+    dense: added,
+    restCount: ids.length - listed.length - added.length,
+    restShare: total == 0 ? 0 : (total - shown) / total,
+  );
+}
+
+/// `N 行，K 个故事集：故事集 n 行 / c 章、…；占比高的：故事集 n 行（占该篇 p%）；
+/// 另 M 个共 q%` — the one form every tool writes.
+String formatTermSpread(TermSpread spread) {
+  String percent(double share) {
+    final p = (share * 100).round();
+    return p == 0 ? '不到 1%' : '$p%';
+  }
+
+  return [
+    '${spread.lines} 行，${spread.collections} 个故事集：${[
+      for (final p in spread.listed) '${p.label} ${p.lines} 行 / ${p.chapters} 章',
+    ].join('、')}',
+    if (spread.dense.isNotEmpty)
+      '占比高的：${[
+        for (final p in spread.dense)
+          '${p.label} ${p.lines} 行（占该篇 ${percent(p.share)}）',
+      ].join('、')}',
+    if (spread.restCount > 0)
+      '另 ${spread.restCount} 个共 ${percent(spread.restShare)}',
+  ].join('；');
+}
+
+/// Every story file's collection and the line counts [computeTermSpread]
+/// needs. Sources: `story_catalog.collection_id`; for a story the catalog
+/// does not have (a tutorial, a stage's own dialogue), the collection of its
+/// entry (`entries.id` = `story:<story_id>`), named by `collections.name`;
+/// `story_lines` for the counts.
+Future<StoryGroups> queryStoryGroups(DatabaseExecutor db) async {
+  Future<bool> has(String table) async => (await db.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        [table],
+      ))
+          .isNotEmpty;
+
+  final groupOf = <String, String>{};
+  final labels = <String, String>{};
+  if (await hasStoryCatalog(db)) {
+    final rows = await db.rawQuery(
+      'SELECT story_id, collection_id, collection_name, collection_type '
+      'FROM $storyCatalogTable',
+    );
+    for (final row in rows) {
+      final id = '${row['collection_id']}';
+      groupOf['${row['story_id']}'] = id;
+      labels[id] ??= StoryCatalogEntry(
+        storyId: '',
+        collectionId: id,
+        collectionName: '${row['collection_name']}',
+        collectionType: '${row['collection_type']}',
+        storySort: 0,
+      ).collectionLabel;
+    }
+  }
+  if (await has('entries') && await has('collections')) {
+    const prefix = 'story:';
+    final rows = await db.rawQuery(
+      'SELECT e.id AS id, e.collection_id AS collection_id, c.name AS name '
+      'FROM entries e JOIN collections c ON c.id = e.collection_id '
+      "WHERE e.id LIKE '$prefix%'",
+    );
+    for (final row in rows) {
+      final story = '${row['id']}'.substring(prefix.length);
+      if (groupOf.containsKey(story)) continue;
+      final id = '${row['collection_id']}';
+      final name = '${row['name'] ?? ''}'.trim();
+      groupOf[story] = id;
+      labels[id] ??= name.isEmpty ? id : name;
+    }
+  }
+  final groupLines = <String, int>{};
+  var corpus = 0;
+  for (final row in await db.rawQuery(
+    'SELECT story_id, COUNT(*) AS n FROM story_lines GROUP BY story_id',
+  )) {
+    final n = (row['n'] as num).toInt();
+    final group = groupOf['${row['story_id']}'] ?? '';
+    groupLines[group] = (groupLines[group] ?? 0) + n;
+    corpus += n;
+  }
+  return StoryGroups(
+    groupOf: groupOf,
+    labels: labels,
+    groupLines: groupLines,
+    corpusLines: corpus,
+  );
+}
+
 /// One collection's chapters in game order.
 class StoryCollection {
   const StoryCollection({
