@@ -183,32 +183,6 @@ void main() {
           StoryAnswerStatus.notCovered,);
     });
 
-    test('wiki text copied in quotes is sent back like dialogue', () async {
-      String quoted(String text) => jsonEncode({
-            'entries': [
-              {
-                'text': text,
-                'cite': [
-                  ['wiki:prts:101@7', 1, 1],
-                ],
-              },
-            ],
-            'coverage': 'full',
-          });
-      final client = _ScriptedClient([
-        _call('wiki_read', {'page': 'wiki:prts:101'}),
-        _answer(quoted('Wiki 写道“星灯与守夜人是旧识”。')),
-        _answer(quoted('据 Wiki 整理，两人早就认识。')),
-      ]);
-      await LoreAgentLoop(
-        client: client,
-        store: store,
-        wiki: fakeWikiLookup(),
-        review: false,
-      ).run(query: '星灯？').toList();
-      expect(client.requests[2].last.content, contains('照搬了原文'));
-    });
-
     test('an unreachable wiki: the tool says so and the answer goes on',
         () async {
       final prts = fakePrts()..unavailable = true;

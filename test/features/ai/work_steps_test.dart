@@ -39,8 +39,9 @@ void main() {
     expect(workCounts(steps), (calls: 3, reads: 2));
   });
 
-  test('notes, rewrites and errors are steps too; empty and failed outputs '
-      'are recognised', () {
+  // 0.14: an answer taken back is not a step.
+  test('notes and errors are steps too; empty and failed outputs are '
+      'recognised', () {
     final steps = workStepsOf([
       const ReActStep(type: ReActEventType.thought, content: '  想一想  '),
       const ReActStep(type: ReActEventType.thought, content: ' '),
@@ -55,7 +56,6 @@ void main() {
       WorkKind.note,
       WorkKind.grep,
       WorkKind.sql,
-      WorkKind.redo,
       WorkKind.error,
     ]);
     expect(steps[0].text, '想一想');

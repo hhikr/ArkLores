@@ -1004,7 +1004,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final (icon, title) = _workTitle(step);
     final color = switch (step.kind) {
       WorkKind.error => theme.danger,
-      WorkKind.redo => theme.warning,
       _ when step.failed => theme.danger,
       _ => theme.accentText,
     };
@@ -1209,13 +1208,6 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         return (Icons.public_sharp, t.aiWorkWikiSearch(clip(step.arg('query'))));
       case WorkKind.wikiRead:
         return (Icons.article_sharp, t.aiWorkWikiRead(clip(step.wikiTitle)));
-      case WorkKind.redo:
-        // 0.14: the reason as the run gave it (which citations, which
-        // quote, what the reviewer asked).
-        return (
-          Icons.replay_sharp,
-          step.text.isEmpty ? t.aiWorkRedo : clip(step.text, 120),
-        );
       case WorkKind.error:
         return (Icons.error_outline_sharp, clip(step.text, 120));
       case WorkKind.otherTool:

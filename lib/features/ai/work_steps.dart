@@ -19,7 +19,6 @@ enum WorkKind {
   wikiRead,
   otherTool,
   note,
-  redo,
   error,
 }
 
@@ -219,8 +218,6 @@ List<WorkStep> workStepsOf(List<ReActStep> steps) {
       case ReActEventType.thought:
         final text = step.content.trim();
         if (text.isNotEmpty) out.add(WorkStep(WorkKind.note, text: text));
-      case ReActEventType.finalAnswerReset:
-        out.add(WorkStep(WorkKind.redo, text: step.content.trim()));
       case ReActEventType.error:
         out.add(WorkStep(WorkKind.error, text: step.content.trim()));
       default:

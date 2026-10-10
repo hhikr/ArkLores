@@ -125,6 +125,10 @@ class LoreAgentLoop {
     AgentTransport? transport,
   }) : transport = transport ?? AgentTransport();
 
+  /// 0.14: the status line while a rejected final answer is written again
+  /// (all the player sees of it).
+  static const String redoStatus = '回答格式出错，正在重新构思回答…';
+
   /// How turns are sent (see [AgentTransport]).
   final AgentTransport transport;
 
@@ -337,6 +341,11 @@ class LoreAgentLoop {
     // until then, so the model still sees why it was refused).
     final hidden = <int>{};
     final refusedTurns = <int>{};
+    // 0.14: notes a rejected final answer was asked again with (the answer
+    // itself is never added); hidden once an answer is accepted.
+    final redoNotes = <int>[];
+    // The turn about to be sent asks again for a rejected answer.
+    var redoing = false;
 
     var citationRetried = false;
     var reviewed = false;
@@ -344,6 +353,9 @@ class LoreAgentLoop {
     // R18: the answer last sent back for a rewrite (citation recheck or
     // reader review); kept if the rewrite never comes.
     String? rewriteOf;
+    // That answer had no citation at all: a second one without any is the
+    // model's answer (nothing better to keep), not talk about the process.
+    var rewriteUncited = false;
     var hitTurnLimit = false;
     var streamRetries = 0;
     // 0.14: how this turn is being sent (see [AgentTransport]).
@@ -388,11 +400,20 @@ class LoreAgentLoop {
         _convertToTextProtocol(conversation, toolResults);
       }
       _foldOldToolResults(conversation, toolResults);
-      final statusPrefix = turn == 1 ? '正在思考' : '第 $turn 轮';
+      final statusPrefix = redoing
+          ? '重新构思回答'
+          : turn == 1
+              ? '正在思考'
+              : '第 $turn 轮';
       yield ReActEvent(
         type: ReActEventType.status,
-        content: turn == 1 ? '正在思考…' : '第 $turn 轮 · 思考中',
+        content: redoing
+            ? redoStatus
+            : turn == 1
+                ? '正在思考…'
+                : '第 $turn 轮 · 思考中',
       );
+      redoing = false;
 
       final text = StringBuffer();
       final reasoning = StringBuffer();
@@ -697,22 +718,23 @@ class LoreAgentLoop {
       // any citation only talks about the process ("核对完毕，现在输出……"):
       // ask once more, then keep the answer that was sent back.
       if (rewriteOf != null &&
+          !rewriteUncited &&
           !subtask &&
           !loreAnswerJsonStart.hasMatch(content) &&
           _citationCount(content) == 0) {
         if (!nudged && !lastTurn) {
           nudged = true;
-          if (answerOpen) {
-            yield const ReActEvent(
-              type: ReActEventType.finalAnswerReset,
-              content: '回复只描述了核对过程、没有答案，要求直接写答案',
-            );
-          }
-          conversation
-            ..add(Message.assistant(content))
-            ..add(Message.user(
-              '这不是最终答案。请直接输出完整的最终答案（按要求的格式），不要描述核对过程。',
-            ),);
+          yield const ReActEvent(
+            type: ReActEventType.recordNote,
+            content: '退回：回复只描述了核对过程、没有答案',
+          );
+          yield const ReActEvent(
+            type: ReActEventType.finalAnswerReset,
+            rollback: true,
+          );
+          redoNotes.add(conversation.length);
+          conversation.add(Message.user(loreAnswerOnlyNote));
+          redoing = true;
           continue;
         }
         content = rewriteOf;
@@ -746,62 +768,49 @@ class LoreAgentLoop {
 
       final unseen = _unseenCitations(body, seen);
       final bare = _bareStoryCitations(body);
-      // R17c: quoted passages copied from the cited lines (the answer should
-      // retell, not quote dialogue); checked once, with the citations.
-      final copied = citationRetried || lastTurn || subtask
-          ? const <String>[]
-          : quotedSourceLines(
-              body,
-              await _span('cited_text', () => _citedText(body)),
-            );
+      final citations = _citationCount(body);
       // Citations written in a shape that cannot be read are lost from the
-      // answer: either some items gave no ref, or the model read lines but
-      // not one citation came out.
-      final unreadable = parsedJson != null &&
-          (parsedJson.dropped > 0 ||
-              (!seen.isEmpty && _citationCount(body) == 0));
+      // answer: some items gave no ref, or (0.14: JSON or prose alike) the
+      // model read lines but not one citation came out.
+      final unreadable = !subtask &&
+          ((parsedJson != null && parsedJson.dropped > 0) ||
+              (!seen.isEmpty && citations == 0));
       // 0.14: a few citations of lines that were not read are dropped by
       // code (the rest of the answer stands on checked ones); the answer
       // is sent back only when many are, or for what code cannot fix.
-      final citations = _citationCount(body);
       final fewUnseen = unseen.isNotEmpty && unseen.length * 3 <= citations;
-      final sendBack = (unseen.isNotEmpty && !fewUnseen) ||
-          bare.isNotEmpty ||
-          copied.isNotEmpty ||
-          unreadable;
+      final manyUnseen = unseen.isNotEmpty && !fewUnseen;
+      final sendBack = manyUnseen || bare.isNotEmpty || unreadable;
       if (sendBack && !citationRetried && !lastTurn) {
         citationRetried = true;
         rewriteOf = keep;
+        rewriteUncited = citations == 0;
+        // 0.14: the turn is taken back. The rejected answer does not enter
+        // the conversation and nothing of it stays on screen; why is in the
+        // session record. The note it is asked again with leaves the
+        // conversation once an answer is accepted.
         yield ReActEvent(
-          type: ReActEventType.finalAnswerReset,
-          content: '退回重写：${[
-            if (unreadable) '出处的写法无法识别',
-            if (unseen.isNotEmpty && !fewUnseen)
-              '${unseen.length} 处出处不在读过的原文里（如 ${unseen.first}）',
-            if (bare.isNotEmpty) '${bare.length} 处出处缺少行号',
-            if (copied.isNotEmpty)
-              '${copied.length} 处照搬了台词（如“${_clip(copied.first, 20)}”）',
+          type: ReActEventType.recordNote,
+          content: '退回：${[
+            if (unreadable) '没有可识别的出处',
+            if (manyUnseen) '${unseen.length} 处出处不在读过的原文里（${unseen.join('、')}）',
+            if (bare.isNotEmpty) '${bare.length} 处出处缺少行号（${bare.join('、')}）',
           ].join('；')}',
         );
-        conversation
-          ..add(Message.assistant(keep))
-          ..add(Message.user([
-            if (unreadable)
-              '答案里有出处的写法无法识别。cite 必须是数组的数组，每个出处自己一对方括号，'
-                  '例如 [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]；'
-                  'story_id 与工具输出完全一致（含 .txt），行号是整数。',
-            if (unseen.isNotEmpty && !fewUnseen)
-              '下面这些出处不在你本次通过工具实际看到的行或记录里：${unseen.join('、')}。'
-                  '请先读取核实（或找到真正的出处），无法核实的内容请删掉。',
-            if (bare.isNotEmpty)
-              '下面这些出处只有文件名、没有行号：${bare.join('、')}。'
-                  '请用 read_story 或带范围的 grep 找到具体行，写明起始行和结束行。',
-            if (copied.isNotEmpty)
-              '下面这些引号里的文字照搬了原文台词：${copied.map((q) => '“$q”').join('、')}。'
-                  '请改用自己的话转述，不要用引号引用台词。',
-            '然后重新输出完整的最终答案${fromJson == null ? '' : '（同样的 JSON 格式）'}；'
-                '最终答案只写答案本身，不要提核对过程。',
-          ].join('\n'),),);
+        yield const ReActEvent(
+          type: ReActEventType.finalAnswerReset,
+          rollback: true,
+        );
+        redoNotes.add(conversation.length);
+        conversation.add(Message.user(
+          loreRedoNote(
+            unreadable: unreadable,
+            unseen: manyUnseen ? unseen : const [],
+            bare: bare,
+            json: !subtask,
+          ),
+        ),);
+        redoing = true;
         continue;
       }
 
@@ -832,6 +841,7 @@ class LoreAgentLoop {
             ].join('\n'),
           );
           rewriteOf = keep;
+          rewriteUncited = false;
           conversation
             ..add(Message.assistant(keep))
             ..add(Message.user(
@@ -849,15 +859,14 @@ class LoreAgentLoop {
       if (unseen.isNotEmpty) {
         if (fewUnseen) {
           // 0.14: dropped rather than shown as unchecked; which ones is in
-          // the work timeline (and the session record).
+          // the session record only.
           for (final c in unseen) {
             body = body.replaceAll('`$c`', '');
           }
           yield ReActEvent(
-            type: ReActEventType.thought,
+            type: ReActEventType.recordNote,
             content: '删去了没在读到的原文中核实的出处：${unseen.join('、')}',
           );
-          body = '$body\n\n> 已删去 ${unseen.length} 处没能在读到的原文中核实的出处。';
         } else {
           body = '$body\n\n> 以下出处未能在本次读到的原文中核实：'
               '${unseen.map((c) => '`$c`').join('、')}';
@@ -869,6 +878,7 @@ class LoreAgentLoop {
       final verified = _citationCount(body) - (fewUnseen ? 0 : unseen.length);
       // The model's own text (JSON) stays in the conversation, so a
       // follow-up sees the format it is asked for.
+      hidden.addAll(redoNotes);
       conversation.add(Message.assistant(fromJson == null ? body : keep));
 
       // R18: reorganise a long JSON answer into a few paragraphs; the
@@ -1351,42 +1361,6 @@ class LoreAgentLoop {
     // A rule (`---`) under the lead-in goes with it.
     if (rest.startsWith('---')) rest = rest.substring(3).trimLeft();
     return rest.isEmpty ? body : rest;
-  }
-
-  /// Text of the story lines [body] cites (R17c quote check).
-  Future<String> _citedText(String body) async {
-    final out = StringBuffer();
-    for (final m in _citation.allMatches(body)) {
-      final a = int.parse(m.group(2)!);
-      final b = int.tryParse(m.group(3) ?? '') ?? a;
-      final (lo, hi) = a <= b ? (a, b) : (b, a);
-      try {
-        final page = await store.readStoryLines(
-          storyId: m.group(1)!,
-          startLine: lo,
-          endLine: hi,
-          maxLines: (hi - lo + 1).clamp(1, 500),
-        );
-        for (final line in page.lines) {
-          out.writeln(line.content);
-        }
-      } catch (_) {
-        // A citation that cannot be read is reported by the citation check.
-      }
-    }
-    // 0.13: cited wiki paragraphs (the version the agent read is kept).
-    final wiki = this.wiki;
-    if (wiki != null) {
-      for (final m in wikiCitationPattern.allMatches(body)) {
-        final page = await wiki.snapshot(_wikiPageIdOf(m));
-        if (page == null) continue;
-        final (lo, hi) = _wikiRange(m);
-        for (final (_, block) in page.range(lo, hi)) {
-          out.writeln(block.text);
-        }
-      }
-    }
-    return out.toString();
   }
 
   static int _citationCount(String body) => {

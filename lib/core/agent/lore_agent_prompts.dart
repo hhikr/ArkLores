@@ -110,7 +110,7 @@ entries 按阅读顺序排列，每个条目是下面两种之一：
 
 正文（text）写给玩家：
 - 每条只讲一件事，一两句话。用自己的话讲清发生了什么、谁做的、为什么、结果如何；把多句对话归纳成一句叙述。
-- 不要用引号引用台词，整句、半句都不行，一律转述。
+- 称呼、名词和关键的一两句可以照原文写；不要大段照搬台词，那样玩家更难读懂。
 - 不提数据库、表、列、工具、文件名或 id、编号、说话人字段、命中行数等查找过程的内容；出处只写在 cite 里。
 - 人物用剧中的称呼，章节用玩家熟悉的说法（故事集名、章节号、关卡号、篇名，可从 story_catalog 查）。
 - 介绍人物身份时直接陈述，不描述资料来源。
@@ -193,6 +193,37 @@ String lorePreSearchNote(String result) =>
     '\n\n---\n（以下是用问题原文预先做的一次 search，只是检索结果，'
     '不是答案；其中列出的原文行已读到，可以引用）\n$result';
 
+/// 0.14: what a rejected final answer is asked again with. The answer
+/// itself is not in the conversation (and was not shown), so the note says
+/// what was wrong, not "fix the above"; it is dropped once an answer is
+/// accepted. [json]: the main agent (a sub-agent writes notes).
+String loreRedoNote({
+  bool unreadable = false,
+  List<String> unseen = const [],
+  List<String> bare = const [],
+  bool json = true,
+}) =>
+    [
+      '（系统）你刚才写的最终答案没有被采用，玩家没有看到它，它也不在对话里。原因：',
+      if (unreadable)
+        '- 答案里没有可识别的出处。${json ? '最终答案是一个 JSON 对象，每条正文都带 cite；' : ''}'
+            'cite 是数组的数组，每个出处自己一对方括号，'
+            '例如 [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]；'
+            'story_id 与工具输出完全一致（含 .txt），行号是整数。',
+      if (unseen.isNotEmpty)
+        '- 这些出处不在你本次通过工具实际看到的行或记录里：${unseen.join('、')}。'
+            '先读取核实（或找到真正的出处），无法核实的内容不要写。',
+      if (bare.isNotEmpty)
+        '- 这些出处只有文件名、没有行号：${bare.join('、')}。'
+            '用 read_story 或带范围的 grep 找到具体行，写明起始行和结束行。',
+      '请重新写出完整的最终答案${json ? '（要求的 JSON 格式）' : ''}；只写答案本身，不要提这次重写和核对过程。',
+    ].join('\n');
+
+/// 0.14: asked once more when the reply to [loreRedoNote] (or to a reader's
+/// questions) only talks about the process.
+const String loreAnswerOnlyNote =
+    '（系统）刚才的回复不是最终答案，没有被采用。请直接输出完整的最终答案（按要求的格式），不要描述核对过程。';
+
 /// R18: system prompt of the reviewer — a second model reading the main
 /// agent's answer as a reader, without the text. It only raises questions;
 /// the main agent settles them from the text.
@@ -236,7 +267,7 @@ $numberedEntries
 - 第一段直接回答玩家的问题；之后按时间或逻辑顺序排列。
 - 每段用几句话写这一阶段最重要的经过和结果，细节留在原答案里（玩家可以展开看），不要把条目原样拼接起来。
 - 每个条目编号都要归入某一段；只是回顾或罗列前文的条目归入相关的段，不单独成段。段数按内容决定，一般不超过十段左右，内容特别复杂时可以多一些。
-- 只用上面答案里的内容，不加新内容；不用引号引用台词；不提数据库、工具、查找过程。
+- 只用上面答案里的内容，不加新内容；不要大段照搬台词；不提数据库、工具、查找过程。
 - 故事中有改变前面经历性质的揭示时，在第一段说明。''';
 
 /// 0.14: system prompt of the reorganising call, which sees only the

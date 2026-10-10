@@ -18,9 +18,15 @@ enum ReActEventType {
   toolObservation,
   finalAnswerToken,
 
-  /// R16: drop the answer text streamed so far (e.g. a citation rewrite
-  /// follows); [ReActEvent.content] is a short reason for the step list.
+  /// R16: drop the answer text streamed so far (more searching follows, a
+  /// broken stream is asked again). 0.14: not a step of the work shown;
+  /// with [ReActEvent.rollback] the turn's answer was rejected and is asked
+  /// again, so the thinking of that turn goes too.
   finalAnswerReset,
+
+  /// 0.14: a note for the session record only (why an answer was sent back,
+  /// which citations code dropped); never shown.
+  recordNote,
 
   /// R16: the complete final answer, replacing what was streamed (adds the
   /// status envelope and source warnings once the text is checked).
@@ -45,7 +51,12 @@ class ReActEvent {
     this.toolName,
     this.toolArgs,
     this.subtask,
+    this.rollback = false,
   });
+
+  /// 0.14 ([ReActEventType.finalAnswerReset]): the turn is taken back as if
+  /// it had not happened.
+  final bool rollback;
 
   final ReActEventType type;
   final String content;

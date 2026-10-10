@@ -6,6 +6,7 @@ import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/answer_options.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
+import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_qa_agent.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
@@ -95,6 +96,34 @@ void main() {
       expect(turn.timeline, hasLength(4));
       expect(notifier.state.last.stats!.calls, 4);
       expect(notifier.state.last.stats!.cacheRate, 0.5);
+    });
+
+    // 0.14: an answer sent back is taken back whole — no step on screen, the
+    // reason only in the session record (with the rejected reply).
+    test('a rejected answer leaves no step; why is in the session record',
+        () async {
+      AgentLogger.setEnabled(true);
+      final mock = _RecorderLLM()..uncitedFirst = true;
+      final notifier = makeNotifier(mock);
+
+      await notifier.sendMessage('她是谁');
+
+      final shown = notifier.state.last;
+      expect(shown.content, contains('结论：博士'));
+      expect(shown.content, isNot(contains('没有出处的回答')));
+      expect(
+        shown.steps.map((s) => s.type),
+        isNot(contains(ReActEventType.finalAnswerReset)),
+      );
+      expect(
+        shown.steps.map((s) => s.type),
+        isNot(contains(ReActEventType.recordNote)),
+      );
+      final turn = (await singleSession()).turns.single;
+      final rejected = turn.iterations
+          .singleWhere((i) => i.rawResponse.contains('没有出处的回答'));
+      expect(rejected.thought, startsWith('退回：'));
+      expect(turn.answer, contains('结论：博士'));
     });
 
     test('the answer options are read per question: review off, no review',
@@ -296,6 +325,9 @@ class _RecorderLLM extends LLMClient {
   int agentCalls = 0;
   int reads = 1;
   bool verdict = false;
+
+  /// The first answer names no source; the one after it does.
+  bool uncitedFirst = false;
   bool failNext = false;
   Completer<void>? gate;
   UsageMeter? meter;
@@ -340,7 +372,9 @@ class _RecorderLLM extends LLMClient {
           completionTokens: 10,
           timing: CallTiming(startedAt: now, endedAt: now),
         );
-    final result = agentCalls <= reads
+    final result = uncitedFirst && agentCalls == reads + 1
+        ? reply('没有出处的回答：她是领袖。')
+        : agentCalls <= reads
         ? reply('', [
             ToolCall(
               id: 'call_$agentCalls',

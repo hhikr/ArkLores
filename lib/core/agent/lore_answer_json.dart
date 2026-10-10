@@ -444,31 +444,3 @@ List<String> loreCitationRefs(List<Object?> items, {void Function()? onDropped})
   return out;
 }
 
-final RegExp _quotedSpan =
-    RegExp(r'“([^”\n]{1,300})”|「([^」\n]{1,300})」|『([^』\n]{1,300})』|"([^"\n]{1,300})"');
-final RegExp _notWordChar = RegExp(r'[^\p{L}\p{N}]', unicode: true);
-
-/// R17c: quoted passages of [answer] that copy original lines — the text in
-/// quotation marks matches [sourceText] (the lines the answer cites)
-/// verbatim or nearly so. Phrases under five characters are not counted.
-List<String> quotedSourceLines(String answer, String sourceText) {
-  final source = sourceText.replaceAll(_notWordChar, '');
-  if (source.isEmpty) return const [];
-  final found = <String>[];
-  for (final m in _quotedSpan.allMatches(answer)) {
-    final span = [m.group(1), m.group(2), m.group(3), m.group(4)]
-        .firstWhere((g) => g != null)!;
-    final norm = span.replaceAll(_notWordChar, '');
-    if (norm.length < 5) continue;
-    var copied = source.contains(norm);
-    if (!copied) {
-      var hits = 0;
-      for (var i = 0; i + 1 < norm.length; i++) {
-        if (source.contains(norm.substring(i, i + 2))) hits++;
-      }
-      copied = hits / (norm.length - 1) >= 0.7;
-    }
-    if (copied && !found.contains(span)) found.add(span);
-  }
-  return found;
-}

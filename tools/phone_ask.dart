@@ -322,8 +322,6 @@ class _View {
         switch (e['kind']) {
           case 'note':
             plain('${_t()}$who${_paint('36', '思路')}：$text');
-          case 'redo':
-            plain('${_t()}$who${_paint('33', '重写')}：$text');
           case 'error':
             plain('${_t()}$who${_paint('31', '错误')}：$text');
           default:

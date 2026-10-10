@@ -263,6 +263,9 @@ class AskChatNotifier extends ChatNotifierBase {
     // once per coalescer interval.
     var answer = '';
     final reasoning = StringBuffer();
+    // Where the thinking of the turn being answered starts (after the last
+    // tool output): what a taken-back answer is cut to.
+    var reasoningMark = 0;
     final coalescer = StreamCoalescer(() {
       if (!isCurrentGeneration(generation)) return;
       updateMessage(
@@ -341,6 +344,7 @@ class AskChatNotifier extends ChatNotifierBase {
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
+            if (event.subtask == null) reasoningMark = reasoning.length;
             // A sub-agent's step is shown, not recorded as the main
             // agent's iteration.
             if (recording && event.subtask == null) {
@@ -366,10 +370,30 @@ class AskChatNotifier extends ChatNotifierBase {
             coalescer.schedule();
             break;
           case ReActEventType.finalAnswerReset:
+            // 0.14: not a step of the work shown. A rejected answer is
+            // taken back whole: its thinking goes with it.
             answer = '';
-            steps.add(ReActStep(type: event.type, content: event.content));
-            updateMessage(assistantId, steps: List.of(steps));
+            if (event.rollback) {
+              final kept = reasoning.toString().substring(0, reasoningMark);
+              reasoning
+                ..clear()
+                ..write(kept);
+            }
             coalescer.flushNow();
+            break;
+          case ReActEventType.recordNote:
+            if (recording) {
+              final record = iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              );
+              record.thought = record.thought.isEmpty
+                  ? event.content
+                  : '${record.thought}\n${event.content}';
+            }
             break;
           case ReActEventType.finalAnswerReplace:
             answer = event.content;

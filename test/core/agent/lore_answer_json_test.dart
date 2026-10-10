@@ -114,18 +114,4 @@ void main() {
     expect(loreAnswerMarkdown('星灯点亮钟楼 `$a:1`。'), isNull);
     expect(loreAnswerMarkdown('集合 {1, 2} 不是答案'), isNull);
   });
-
-  test('quoted passages copied from the cited lines are found', () {
-    const source = '星灯：我会一直守着这座城，直到最后一盏灯熄灭。\n守卫：钟楼？';
-    expect(
-      quotedSourceLines(
-        '星灯说“我会一直守着这座城”，人称“守灯人”。'
-        '他发誓「直到最后一盏灯熄灭为止」。',
-        source,
-      ),
-      ['我会一直守着这座城', '直到最后一盏灯熄灭为止'],
-    );
-    // Short phrases and text not in the lines are not counted.
-    expect(quotedSourceLines('那座“钟楼”和“完全无关的一句话呢”', source), isEmpty);
-  });
 }

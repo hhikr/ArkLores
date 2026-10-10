@@ -75,6 +75,8 @@ void main() {
         loreTextToolProtocol(''),
         loreReviewPrompt,
         loreReviewFollowUp(['<问题>'], json: true),
+        loreRedoNote(unreadable: true, unseen: ['<出处>'], bare: ['<出处>']),
+        loreAnswerOnlyNote,
         loreStagePrompt('1. <条目>'),
         for (final t in [
           ...loreTools(store, SeenLines()),
@@ -83,7 +85,7 @@ void main() {
           jsonEncode(t.toJson()),
       ].join('\n');
       expect(text, isNot(contains('库中写作')));
-      expect(text, contains('不要用引号引用台词'));
+      expect(text, contains('不要大段照搬台词'));
       // R17c: no carve-out for "allowed" quotes — naming one invites it.
       expect(text, isNot(contains('引号只用于')));
       // Path shapes use placeholders (`level_main_<章>-<关>`), never a real
@@ -339,8 +341,10 @@ void main() {
       expect(third.where((m) => m.role == MessageRole.tool), hasLength(2));
     });
 
-    test('a JSON answer streams as markdown; copied dialogue is sent back',
-        () async {
+    // 0.14: a quoted line is no longer sent back (the rewrite cost a call
+    // and only stripped the quotation marks); the prompt asks not to copy
+    // dialogue at length.
+    test('a JSON answer streams as markdown; a quoted line stands', () async {
       String json(String text) => jsonEncode({
             'entries': [
               {
@@ -355,23 +359,16 @@ void main() {
       final client = _ScriptedClient([
         _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
         _answer(json('星灯说“钟楼的灯由我来点亮”。')),
-        _answer(json('星灯主动承担了点亮钟楼的事。')),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
           .run(query: '星灯做了什么？')
           .toList();
-      final recheck = client.requests[2].last.content;
-      expect(recheck, contains('照搬了原文台词'));
-      expect(recheck, contains('钟楼的灯由我来点亮'));
-      expect(recheck, contains('JSON'));
-      // The model's JSON stays in the conversation it is sent back with.
-      expect(client.requests[2][client.requests[2].length - 2].content,
-          startsWith('{'),);
+      expect(client.requests, hasLength(2));
       final answer = finalAnswerOf(events);
       expect(parseStoryAnswerEnvelope(answer)!.status,
           StoryAnswerStatus.answered,);
       expect(answer, contains(
-          '星灯主动承担了点亮钟楼的事。 `obt/main/level_main_fx-01.txt:1`',),);
+          '星灯说“钟楼的灯由我来点亮”。 `obt/main/level_main_fx-01.txt:1`',),);
       expect(answer, isNot(contains('"entries"')));
       // Tokens streamed were markdown, not JSON.
       final streamed = events
@@ -389,18 +386,82 @@ void main() {
         _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
         _answer('星灯离开了 `obt/main/level_main_fx-01.txt:3`。'),
       ]);
+      LoreConversation? kept;
       final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯后来呢？')
+          .run(query: '星灯后来呢？', onConversation: (c) => kept = c)
           .toList();
-      expect(
-        events.where((e) => e.type == ReActEventType.finalAnswerReset),
-        hasLength(1),
-      );
+      final resets = events
+          .where((e) => e.type == ReActEventType.finalAnswerReset)
+          .toList();
+      expect(resets, hasLength(1));
+      expect(resets.single.rollback, isTrue);
       final recheck = client.requests[2].last;
       expect(recheck.role, MessageRole.user);
       expect(recheck.content, contains('level_main_fx-01.txt:3'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
+      // 0.14: the turn is taken back. The rejected answer never enters the
+      // conversation; the player sees one status line and no step; why is a
+      // note for the session record; the note the model was asked again
+      // with is gone from what a follow-up is sent.
+      for (final request in client.requests.skip(2)) {
+        expect(
+          request.where((m) => m.role == MessageRole.assistant).map(
+                (m) => m.content,
+              ),
+          isNot(contains(contains('星灯离开了'))),
+        );
+      }
+      expect(
+        events
+            .where((e) => e.type == ReActEventType.status)
+            .map((e) => e.content),
+        contains(LoreAgentLoop.redoStatus),
+      );
+      expect(
+        events
+            .singleWhere((e) => e.type == ReActEventType.recordNote)
+            .content,
+        allOf(startsWith('退回：'), contains('level_main_fx-01.txt:3')),
+      );
+      expect(
+        kept!.messages.map((m) => m.content),
+        isNot(contains(contains('没有被采用'))),
+      );
+      expect(kept!.messages.last.content, contains('星灯离开了'));
+    });
+
+    // 0.14 on the phone: after reading, a model answered in prose naming its
+    // stories in brackets — a whole answer shown as "not covered".
+    test('a prose answer without one citation is asked again', () async {
+      const story = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': story}),
+        _answer('星灯点亮了钟楼（虚构主线）。之后他离开了城市。'),
+        _answer(jsonEncode({
+          'entries': [
+            {
+              'text': '星灯点亮了钟楼。',
+              'cite': [
+                [story, 1, 1],
+              ],
+            },
+          ],
+          'coverage': 'full',
+        }),),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(client.requests, hasLength(3));
+      final note = client.requests[2].last.content;
+      expect(note, contains('没有可识别的出处'));
+      expect(note, contains('JSON'));
+      final answer = finalAnswerOf(events);
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+      expect(answer, contains('星灯点亮了钟楼。 `$story:1`'));
+      expect(answer, isNot(contains('虚构主线')));
     });
 
     test('records a query showed can be cited; bare file names are sent back',
@@ -574,7 +635,7 @@ void main() {
               .run(query: '星灯做了什么？')
               .toList();
       expect(client.requests, hasLength(4));
-      expect(client.requests.last.last.content, contains('这不是最终答案'));
+      expect(client.requests.last.last.content, contains('不是最终答案'));
       final answer = finalAnswerOf(events);
       expect(parseStoryAnswerEnvelope(answer)!.status,
           StoryAnswerStatus.answered,);
@@ -713,6 +774,8 @@ void main() {
         'downgraded', () async {
       final client = _ScriptedClient([
         _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
+        // 0.14: asked again once for citations; it still gives none.
         _answer('[FACT_CHECK_VERDICT:supported]\n确有其事。'),
       ]);
       final events = await LoreAgentLoop(client: client, store: store)
@@ -1157,7 +1220,20 @@ void main() {
       );
       final answer = finalAnswerOf(events);
       expect(answer, isNot(contains(act)));
-      expect(answer, contains('已删去 1 处'));
+      // Which one is in the session record only: not in the answer, not a
+      // step of the work shown.
+      expect(answer, isNot(contains('删去')));
+      expect(
+        events.where((e) =>
+            e.type == ReActEventType.thought && e.content.contains('出处'),),
+        isEmpty,
+      );
+      expect(
+        events
+            .singleWhere((e) => e.type == ReActEventType.recordNote)
+            .content,
+        contains('$act:1'),
+      );
       expect(parseStoryAnswerEnvelope(answer)!.status,
           StoryAnswerStatus.answered,);
     });
