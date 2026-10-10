@@ -465,7 +465,7 @@ class ArknightsImporter {
         final record = NormalizedRecord(
           category: 'operator',
           subtype: 'voice',
-          contentType: 'operator_voice',
+          contentType: operatorVoiceContentType,
           entityId: charId.isEmpty ? null : charId,
           title: title,
           section: title,
@@ -952,6 +952,11 @@ class ArknightsImporter {
 /// re-imports and (future) incremental updates. Not a security hash.
 String stableContentId(String value) =>
     sha1.convert(utf8.encode(value)).toString();
+
+/// `content_type` of an operator's voice line. The voice table gives the
+/// operator's id only; the name is filled in from the table of names
+/// (`EntryImporter.rebuildDerived`).
+const String operatorVoiceContentType = 'operator_voice';
 
 int nowSeconds() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 

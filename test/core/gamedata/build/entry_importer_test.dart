@@ -1590,6 +1590,41 @@ void main() {
       expect(text['content'], '密录关的描述。');
     });
 
+    // 0.14: the voice table gives the operator's id only; every voice line
+    // (18,237 rows) had no name, and a line read out of context was taken
+    // for another operator's.
+    test('a voice line carries the name of its operator', () async {
+      Future<Object?> name() async => (await q(
+            'SELECT entity_name FROM normalized_records '
+            "WHERE content_type = 'operator_voice'",
+          ))
+              .single['entity_name'];
+      expect(await name(), '虚构干员');
+
+      // A database built before the rule is brought up to date by the
+      // step every build path ends in; so is a name that changed.
+      await db.execute(
+        'UPDATE normalized_records SET entity_name = NULL '
+        "WHERE content_type = 'operator_voice'",
+      );
+      await importer.entryImporter.rebuildDerived();
+      expect(await name(), '虚构干员');
+      await db.execute(
+        "UPDATE entities SET name = '改名的干员' WHERE id = 'char_fx_1'",
+      );
+      await importer.entryImporter.rebuildDerived();
+      expect(await name(), '改名的干员');
+
+      // A record with a name of its own keeps it.
+      final others = await q(
+        'SELECT r.entity_name AS n, e.name AS e FROM normalized_records r '
+        'JOIN entities e ON e.id = r.entity_id '
+        "WHERE r.content_type != 'operator_voice' "
+        "AND COALESCE(r.entity_name, '') != ''",
+      );
+      expect(others, isNotEmpty);
+    });
+
     test('every link and every owner refers to a row', () async {
       final dangling = await q(
         'SELECT COUNT(*) AS n FROM entry_links l WHERE '

@@ -37,6 +37,23 @@ extension _Derived on EntryImporter {
           await txn.delete('entities', where: 'id = ?', whereArgs: [id]);
         }
       }
+      // A record that names its entity only by id gets the entity's name
+      // (0.14: an operator's voice lines carried none — 18,237 rows — and a
+      // line read out of context was taken for another operator's). By id
+      // only, from the table of names. Done here, not at import: every
+      // build path ends in this step, so a database built before the rule
+      // is brought up to date by an update, and a renamed entity renames
+      // its voice lines whichever table changed.
+      await txn.execute(
+        'UPDATE normalized_records SET entity_name = '
+        '(SELECT e.name FROM entities e '
+        'WHERE e.id = normalized_records.entity_id) '
+        "WHERE COALESCE(entity_id, '') != '' "
+        "AND (COALESCE(entity_name, '') = '' OR content_type = ?) "
+        'AND EXISTS (SELECT 1 FROM entities e '
+        'WHERE e.id = normalized_records.entity_id)',
+        [operatorVoiceContentType],
+      );
       importer.stats.collections = 0;
       final written = <String>{};
       Future<void> putCollection(
