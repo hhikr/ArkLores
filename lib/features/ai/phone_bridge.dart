@@ -8,6 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/agent/agent_provider.dart';
 import '../../core/agent/story_answer.dart';
 import '../../core/agent/turn_stats.dart';
+import '../../core/gamedata/game.dart';
+import '../../core/gamedata/gamedata_build_provider.dart';
+import '../../core/gamedata/gamedata_provider.dart';
 import '../../core/llm/llm_client.dart';
 import '../../core/llm/llm_provider.dart';
 import '../../shared/providers/handoff_provider.dart';
@@ -344,12 +347,114 @@ class _PhoneBridgeHostState extends ConsumerState<PhoneBridgeHost> {
             send({'t': 'session', 'id': chat.currentSession?.sessionId});
           }),
         );
+      case 'kb':
+        await _knowledgeBase(command, send);
       case 'cancel':
         chat.cancel();
       case 'new':
         chat.newSession();
       case 'hello':
         send(_hello());
+    }
+  }
+
+  /// The knowledge-base page's buttons, pressed from the computer:
+  /// `status`, `install` (the official file; one placed in the app's folder
+  /// is installed without the network), `check` and `update` (from the game
+  /// data, Arknights only). What the page would show comes back as `kb`
+  /// events; the last one of a command has `end: true`.
+  Future<void> _knowledgeBase(
+    Map<String, dynamic> command,
+    void Function(Map<String, Object?>) send,
+  ) async {
+    final game =
+        command['game'] == 'endfield' ? Game.endfield : Game.arknights;
+    void say(Map<String, Object?> event, {bool end = false}) =>
+        send({'t': 'kb', 'game': game.name, ...event, if (end) 'end': true});
+    Future<Map<String, Object?>> status() async {
+      ref.invalidate(installStatusOf(game));
+      final s = await ref.read(installStatusOf(game).future);
+      return {
+        'installed': s.installed,
+        'mb': (s.bytes / (1024 * 1024)).round(),
+        'local': s.builtLocally,
+        'updateAvailable': s.updateAvailable,
+        'commit': s.manifest['source_arknights_commit'],
+        'built': s.manifest['built_at'],
+        'lines': s.manifest['story_line_count'],
+        'records': s.manifest['normalized_record_count'],
+      };
+    }
+
+    try {
+      switch (command['do']) {
+        case 'install':
+          var last = '';
+          final sub = ref.listenManual(downloadOf(game), (_, next) {
+            final line = '${next.phase.name}'
+                '${next.total == null ? '' : ' ${next.received * 100 ~/ (next.total == 0 ? 1 : next.total!)}%'}';
+            if (next.downloading && line != last) say({'install': last = line});
+          });
+          try {
+            await ref.read(downloadOf(game).notifier).start(force: true);
+          } finally {
+            sub.close();
+          }
+          final done = ref.read(downloadOf(game));
+          say({
+            'result': done.result.name,
+            if (done.error != null) 'error': '${done.error}',
+            ...await status(),
+          }, end: true,);
+        case 'check' || 'update':
+          final build = ref.read(gameDataBuildProvider.notifier);
+          var last = '';
+          final sub = ref.listenManual(gameDataBuildProvider, (_, next) {
+            // One line a stage, and one for every tenth of it.
+            final tenth = next.total <= 0 ? 0 : next.done * 10 ~/ next.total;
+            final line = '${next.phase.name} ${next.stage} $tenth';
+            if (line == last) return;
+            last = line;
+            say({
+              'phase': next.phase.name,
+              'stage': next.stage,
+              'done': next.done,
+              'total': next.total,
+              if (next.error != null) 'error': next.error,
+            });
+          });
+          try {
+            if (command['do'] == 'check') {
+              await build.checkForUpdates();
+            } else {
+              await build.buildFromSource(allowFull: command['full'] == true);
+            }
+          } finally {
+            sub.close();
+          }
+          final s = ref.read(gameDataBuildProvider);
+          say({
+            'phase': s.phase.name,
+            'latest': s.latestCommit,
+            'installedCommit': s.installedCommit,
+            'changedFiles': s.changedFileCount,
+            'incremental': s.incremental,
+            'noRelevantChanges': s.noRelevantChanges,
+            'confirmFull': s.confirmFull,
+            if (s.changeSummary != null)
+              'changes': {
+                'storyAdded': s.changeSummary!.storyAdded,
+                'storyChanged': s.changeSummary!.storyChanged,
+              },
+            if (s.report != null) 'report': s.report!.describe(),
+            if (s.error != null) 'error': s.error,
+            ...await status(),
+          }, end: true,);
+        default:
+          say(await status(), end: true);
+      }
+    } catch (error) {
+      say({'error': '$error'}, end: true);
     }
   }
 

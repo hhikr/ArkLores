@@ -67,8 +67,12 @@ void main() {
     );
     expect(
       await count(
+        // A file with nothing but a title line (a stub, a camera test) is
+        // not a story and gets no entry (`rebuildDerived`).
         'SELECT COUNT(*) FROM story_lines s WHERE NOT EXISTS '
-        '(SELECT 1 FROM entries e WHERE e.id = \'story:\' || s.story_id)',
+        '(SELECT 1 FROM entries e WHERE e.id = \'story:\' || s.story_id) '
+        'AND s.story_id IN (SELECT story_id FROM story_lines '
+        "GROUP BY story_id HAVING SUM(kind <> 'title') > 0)",
       ),
       0,
       reason: 'every story has an entry',

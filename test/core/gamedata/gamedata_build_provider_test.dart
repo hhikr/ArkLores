@@ -241,6 +241,41 @@ void main() {
     expect(state().error, isNull);
   }, timeout: const Timeout(Duration(minutes: 3)),);
 
+  // Seen on a phone: cancelling while the changed files were downloading did
+  // not stop the download, and the update started again right away deleted
+  // the tables under it.
+  test('cancelled while downloading: stops, and the next update goes through',
+      () async {
+    await buildC1();
+    notifier().dismissDone();
+
+    var again = Future<void>.value();
+    var cancelledOnce = false;
+    final sub = container.listen(gameDataBuildProvider, (_, next) {
+      if (cancelledOnce || next.phase != GameDataBuildPhase.downloading) return;
+      cancelledOnce = true;
+      notifier().cancel();
+      // A tap on "update" before the cancelled run has ended is not a
+      // second run beside it.
+      again = notifier().buildFromSource();
+    });
+    await online({'c1': _c1(), 'c2': _c2()}, 'c2', () async {
+      await notifier().buildFromSource();
+      await again;
+    });
+    sub.close();
+    expect(cancelledOnce, isTrue);
+    expect(state().phase, GameDataBuildPhase.idle);
+    expect(state().error, isNull);
+    expect((await manifest())['source_arknights_commit'], 'c1');
+
+    await online({'c1': _c1(), 'c2': _c2()}, 'c2', notifier().buildFromSource);
+    expect(state().error, isNull);
+    expect(state().phase, GameDataBuildPhase.done);
+    expect(state().incremental, isTrue);
+    expect((await manifest())['source_arknights_commit'], 'c2');
+  }, timeout: const Timeout(Duration(minutes: 3)),);
+
   test('a failed download leaves an error and no database', () async {
     // The zip is not there.
     await online({}, 'c1', notifier().buildFromSource);

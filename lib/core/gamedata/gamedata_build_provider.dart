@@ -144,6 +144,15 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   GameDataBuildRunner? _runner;
   String? _outputDbPath;
 
+  /// Counts the runs; [cancel] moves it on, so a run that is still
+  /// downloading sees it is no longer the current one and stops.
+  int _run = 0;
+
+  /// True until a run has really ended. A cancelled download takes a moment
+  /// to stop; a second run started meanwhile deleted the tables the first
+  /// was about to read (seen on a phone: "Missing required GameData file").
+  bool _active = false;
+
   Future<void> checkForUpdates({String? githubToken}) async {
     if (state.busy) return;
     state = state.copyWith(
@@ -191,14 +200,26 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   Future<void> buildFromSource({String? githubToken, bool allowFull = false}) =>
       BackgroundWork.instance.run(
         BackgroundWork.text('正在构建知识库', 'Building the knowledge base'),
-        () => _buildFromSource(githubToken: githubToken, allowFull: allowFull),
+        () async {
+          if (state.busy || _active) return;
+          _active = true;
+          try {
+            await _buildFromSource(
+              githubToken: githubToken,
+              allowFull: allowFull,
+            );
+          } finally {
+            _active = false;
+          }
+        },
       );
 
   Future<void> _buildFromSource({
     String? githubToken,
     bool allowFull = false,
   }) async {
-    if (state.busy) return;
+    final run = ++_run;
+    bool cancelled() => run != _run;
     state = state.copyWith(confirmFull: false, clearError: true);
     final dirs = await _dirs();
     await dirs.sourceDir.create(recursive: true);
@@ -243,7 +264,9 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           final result = await sync.sync(
             installedSha: installed,
             latestSha: latest,
+            shouldCancel: cancelled,
             onProgress: (stage, done, total) {
+              if (cancelled()) return;
               state = state.copyWith(
                 phase: GameDataBuildPhase.downloading,
                 stage: stage == SourceSyncStage.contextTables
@@ -260,6 +283,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           // correct update.
           incrementalOk = false;
         }
+        if (cancelled()) return;
         if (incrementalOk && changes.isEmpty) {
           // Upstream moved, but nothing that concerns the knowledge base.
           state = state.copyWith(
@@ -287,9 +311,10 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         );
         final zh = Directory(p.join(dirs.sourceDir.path, 'zh_CN'));
         if (await zh.exists()) await zh.delete(recursive: true);
-        await _pullFullSource(client, latest, dirs);
+        await _pullFullSource(client, latest, dirs, cancelled);
         changes = const <SourceFileChange>[];
       }
+      if (cancelled()) return;
 
       // Background build.
       state = state.copyWith(
@@ -352,12 +377,14 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         },
         onDone: () {
           // Isolate exited without a terminal event (e.g. killed or crashed
-          // before sending a message).
+          // before sending a message). Killed by [cancel] is not an error.
           if (!completer.isCompleted) {
-            state = state.copyWith(
-              phase: GameDataBuildPhase.idle,
-              error: 'Build terminated unexpectedly',
-            );
+            if (!cancelled()) {
+              state = state.copyWith(
+                phase: GameDataBuildPhase.idle,
+                error: 'Build terminated unexpectedly',
+              );
+            }
             completer.complete();
           }
         },
@@ -374,6 +401,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
       await completer.future;
       await sub.cancel();
     } catch (error) {
+      // What a cancelled run trips over afterwards is not reported.
+      if (cancelled()) return;
       state = state.copyWith(phase: GameDataBuildPhase.idle, error: '$error');
       _cleanupTemp();
     }
@@ -386,12 +415,14 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     ArknightsSourceClient client,
     String sha,
     ({Directory sourceDir, Directory tmpDir, String installPath}) dirs,
+    bool Function() cancelled,
   ) async {
     final zipPath = p.join(dirs.tmpDir.path, 'source.zip');
     await client.downloadZip(
       sha: sha,
       outputPath: zipPath,
       onProgress: (received, total) {
+        if (cancelled()) return;
         state = state.copyWith(
           phase: GameDataBuildPhase.downloading,
           stage: 'zip',
@@ -400,6 +431,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         );
       },
     );
+    if (cancelled()) return;
     state = state.copyWith(
       phase: GameDataBuildPhase.extracting,
       stage: 'zip',
@@ -438,6 +470,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   /// Aborts a running build: kills the isolate and removes temp files. The
   /// installed database is untouched.
   void cancel() {
+    _run++;
     _runner?.kill();
     _runner = null;
     _cleanupTemp();

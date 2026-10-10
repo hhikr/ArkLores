@@ -10,6 +10,11 @@
 // A question of `/review` or `/digest` presses that button under the last
 // answer (复核 / 提要) instead of asking.
 //
+// `--kb=status|install|check|update` presses the knowledge-base page's
+// buttons instead (with `--game=endfield` for that game's file; check and
+// update are the Arknights update from the game data) and prints what the
+// page would show.
+//
 // Options: --new (a new conversation first), --wiki/--delegate/--think=on|off
 // (the answer options, saved in the app as the menu does), --full (every
 // tool output in full), --device=<serial>,
@@ -44,6 +49,9 @@ Future<void> main(List<String> args) async {
   var fresh = false;
   var full = false;
   final options = <String, bool>{};
+  String? kb;
+  var kbGame = 'arknights';
+  var kbFull = false;
   final words = <String>[];
   for (final a in args) {
     final kv = RegExp(r'^--([\w-]+)(?:=(.*))?$').firstMatch(a);
@@ -60,6 +68,12 @@ Future<void> main(List<String> args) async {
           full = true;
         case 'no-adb':
           _useAdb = false;
+        case 'kb':
+          kb = value ?? 'status';
+        case 'game':
+          kbGame = value ?? kbGame;
+        case 'allow-full':
+          kbFull = true;
         case 'port':
           port = int.parse(value!);
         case 'device':
@@ -102,6 +116,7 @@ Future<void> main(List<String> args) async {
   WebSocket? app;
   final connected = StreamController<WebSocket>.broadcast();
   final done = StreamController<Map<String, dynamic>>.broadcast();
+  final kbEnd = StreamController<Map<String, dynamic>>.broadcast();
   final sessions = StreamController<Object?>.broadcast();
   server.listen((request) async {
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
@@ -120,6 +135,10 @@ Future<void> main(List<String> args) async {
         final event = jsonDecode(data) as Map<String, dynamic>;
         view.show(event);
         if (event['t'] == 'done') done.add(event);
+        if (event['t'] == 'kb') {
+          _View.plain('kb ${jsonEncode({...event}..remove('t'))}');
+          if (event['end'] == true) kbEnd.add(event);
+        }
         if (event['t'] == 'session') sessions.add(event['id']);
         if (event['t'] == 'busy') done.add(event);
       },
@@ -198,6 +217,17 @@ Future<void> main(List<String> args) async {
     }
   }
 
+  if (kb != null) {
+    final end = kbEnd.stream.first;
+    app!.add(jsonEncode({
+      'cmd': 'kb',
+      'do': kb,
+      'game': kbGame,
+      if (kbFull) 'full': true,
+    }),);
+    await end;
+    await _finish(server);
+  }
   if (question.isEmpty && !interactive) {
     view.note('只看模式：在手机上提问，这里实时显示；Ctrl+C 退出。');
     await Completer<void>().future;
