@@ -443,6 +443,27 @@ class ReadRecordTool extends AgentTool {
   /// Characters of text per call.
   static const int pageChars = maxToolResultChars - 400;
 
+  /// Each owner's line of [_ownerSpread], kept for the question: the count
+  /// is a scan of every story line.
+  final Map<String, Future<String?>> _spreads = {};
+
+  /// 0.14: where the story text says the name of whose record this is, by
+  /// collection (the same line `search` writes for a word). The name is the
+  /// record's own (`RecordText.owner`, from the table's id), never one found
+  /// in its text; none for a name of one character or one no line has. A
+  /// hint for where to look: nothing here is read.
+  Future<String?> _ownerSpread(RecordText record) {
+    final owner = record.owner.trim();
+    if (owner.runes.length < 2) return Future.value();
+    return _spreads[owner] ??= () async {
+      final own = narrowTo(store, gameOfId(record.id));
+      final spread = await own.termSpread(await own.storyLineHitCounts([owner]));
+      return spread == null
+          ? null
+          : '“$owner”在剧情里：${formatTermSpread(spread)}';
+    }();
+  }
+
   @override
   String get name => 'read_record';
 
@@ -450,7 +471,8 @@ class ReadRecordTool extends AgentTool {
   String get description =>
       '读取一条剧情以外的资料（档案、语音、模组故事、物品与敌人的描述等）的全文：'
       'id 是检索结果或查询结果里的记录 id（record: 后面的部分）。'
-      '开头一行写它的标题、类别和所属对象（这条语音是谁的、这个模组是谁的）。'
+      '开头一行写它的标题、类别和所属对象（这条语音是谁的、这个模组是谁的）；'
+      '有所属对象时下一行写这个名字在剧情里出现在哪些故事集（只是去哪里找的线索）。'
       '很长的资料分页给出，按提示用 start 接着读。读过的资料可以作出处（record:<id>）。';
 
   @override
@@ -484,6 +506,8 @@ class ReadRecordTool extends AgentTool {
     return [
       'record:$id | $kind | ${record.title}'
           '${record.owner.isEmpty || record.owner == record.title ? '' : ' | 所属：${record.owner}'}',
+      if (start == 0)
+        if (await _ownerSpread(record) case final spread?) spread,
       text.substring(start, end),
       if (end < text.length)
         '（本页到第 $end 个字，全文 ${text.length} 个字；继续读用 start=$end）'

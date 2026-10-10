@@ -56,6 +56,16 @@ void main() {
       content: '一盏旧灯。',
       fields: {'entity_name': '旧灯', 'title': '旧灯'},
     );
+    // Whose name is one character (it is in every line about a lamp).
+    await insertRecord(
+      db,
+      'rec_fx_short',
+      contentType: 'item_description',
+      category: 'world_item',
+      subtype: 'item',
+      content: '灯的说明。',
+      fields: {'entity_name': '灯', 'title': '说明'},
+    );
     await db.insert('entity_documents', {
       'id': 'doc_fx_keeper',
       'game': 'arknights',
@@ -111,6 +121,44 @@ void main() {
     expect(await tool.execute({}), startsWith('缺少参数'));
     expect(loreTools(store, SeenLines()).map((t) => t.name),
         contains('read_record'),);
+  });
+
+  // 0.14: under the title, where the story text says the owner's name — the
+  // line `search` writes for a word. A hint, counted once a question.
+  test('read_record says in which collections the owner\'s name is', () async {
+    final seen = SeenLines();
+    final tool = ReadRecordTool(store, seen);
+    const spread = '“守灯人”在剧情里：1 行，1 个故事集：其他 1 行 / 1 章';
+
+    final voice = (await tool.execute({'id': 'rec_fx_voice'})).split('\n');
+    expect(voice[1], spread);
+    expect(voice[2], contains('舞会'));
+    // The owner is the title here: still its name.
+    final first = await tool.execute({'id': 'doc_fx_keeper'});
+    expect(first.split('\n')[1], spread);
+    // Not on a later page.
+    final next = RegExp(r'继续读用 start=(\d+)').firstMatch(first)!.group(1)!;
+    expect(
+      await tool.execute({'id': 'doc_fx_keeper', 'start': int.parse(next)}),
+      isNot(contains('在剧情里')),
+    );
+    // A name no line has; a name of one character.
+    expect(await tool.execute({'id': 'rec_fx_item'}), isNot(contains('在剧情里')));
+    expect(await tool.execute({'id': 'rec_fx_short'}), isNot(contains('在剧情里')));
+    // Nothing of it is read.
+    expect(seen.stories, isEmpty);
+
+    // The same owner again is not counted again: the lines are gone, the
+    // line stays; a tool of another question counts anew.
+    await store.withDatabase((db) => db.rawQuery('SELECT 1'));
+    final other = await databaseFactoryFfi.openDatabase(p.join(dir.path, 'kb.db'));
+    await other.delete('story_lines');
+    expect((await tool.execute({'id': 'rec_fx_voice'})).split('\n')[1], spread);
+    expect(
+      await ReadRecordTool(store, SeenLines()).execute({'id': 'rec_fx_voice'}),
+      isNot(contains('在剧情里')),
+    );
+    expect(tool.description, contains('这个名字在剧情里出现在哪些故事集'));
   });
 
   test('sql counts a record as shown whatever its text column is called',
