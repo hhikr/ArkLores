@@ -400,6 +400,13 @@ class AskChatNotifier extends ChatNotifierBase {
             coalescer.flushNow();
             break;
           case ReActEventType.reasoningToken:
+            // A new turn's thinking starts on a line of its own (on the
+            // phone two turns ran together: "…警告".Need more: …").
+            if (reasoning.isNotEmpty &&
+                reasoning.length == reasoningMark &&
+                !reasoning.toString().endsWith('\n')) {
+              reasoning.write('\n\n');
+            }
             reasoning.write(event.content);
             coalescer.schedule();
             break;
