@@ -135,10 +135,19 @@ void main() {
     await buildC1();
     notifier().dismissDone();
 
+    // Before the update the card knows nothing is installed at the latest.
+    await online({'c1': _c1(), 'c2': _c2()}, 'c2', notifier().checkForUpdates);
+    expect(state().upToDate, isFalse);
+
     await online({'c1': _c1(), 'c2': _c2()}, 'c2', notifier().buildFromSource);
     expect(state().error, isNull);
     expect(state().phase, GameDataBuildPhase.done);
     expect(state().incremental, isTrue);
+    // After it there is nothing to pull: the card's button is off, and what
+    // the check counted before the update is no longer shown.
+    expect(state().upToDate, isTrue);
+    expect(state().installedCommit, 'c2');
+    expect(state().changeSummary, isNull);
     expect(hosts(), isNot(contains('codeload.github.com')));
     expect(rawPaths(), containsAll([
       '$fixtureStoryDir/level_fixture_c5.txt',
@@ -151,6 +160,12 @@ void main() {
     expect(report.storyChanged, 1);
     expect((await manifest())['source_arknights_commit'], 'c2');
     expect(marker(), 'c2');
+    notifier().dismissDone();
+    expect(state().upToDate, isTrue);
+    // Another database put in place: the button is live again.
+    notifier().installedChanged('c1');
+    expect(state().upToDate, isFalse);
+    notifier().installedChanged('c2');
 
     final db = await databaseFactoryFfi.openDatabase(
       p.join(docs.path, 'arklores_gamedata_zh.db'),

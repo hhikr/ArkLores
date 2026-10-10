@@ -212,9 +212,13 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
               else
                 ElevatedButton.icon(
                   key: const Key('kb-build-start'),
-                  onPressed: () => ref
-                      .read(gameDataBuildProvider.notifier)
-                      .buildFromSource(githubToken: _currentGithubToken()),
+                  // Nothing to pull when the installed database is known to
+                  // be at the latest commit ("检查更新" looks again).
+                  onPressed: build.upToDate
+                      ? null
+                      : () => ref
+                          .read(gameDataBuildProvider.notifier)
+                          .buildFromSource(githubToken: _currentGithubToken()),
                   icon: const Icon(Icons.sync_sharp, size: 18),
                   label: Text(context.t.kbBuildFromSource),
                   style: ElevatedButton.styleFrom(

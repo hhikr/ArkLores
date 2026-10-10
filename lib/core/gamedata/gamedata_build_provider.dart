@@ -64,6 +64,11 @@ class GameDataBuildUiState {
   /// The last check or update found nothing that concerns the knowledge base.
   final bool noRelevantChanges;
 
+  /// The installed database is known to be at the latest upstream commit:
+  /// there is nothing to pull.
+  bool get upToDate =>
+      latestCommit != null && installedCommit == latestCommit;
+
   bool get busy =>
       phase == GameDataBuildPhase.checking ||
       phase == GameDataBuildPhase.downloading ||
@@ -87,6 +92,7 @@ class GameDataBuildUiState {
     bool? confirmFull,
     bool clearReport = false,
     bool clearError = false,
+    bool clearCheck = false,
   }) {
     return GameDataBuildUiState(
       phase: phase ?? this.phase,
@@ -95,10 +101,11 @@ class GameDataBuildUiState {
       total: total ?? this.total,
       latestCommit: latestCommit ?? this.latestCommit,
       installedCommit: installedCommit ?? this.installedCommit,
-      changedFileCount: changedFileCount ?? this.changedFileCount,
+      changedFileCount:
+          clearCheck ? null : (changedFileCount ?? this.changedFileCount),
       incremental: incremental ?? this.incremental,
       error: clearError ? null : (error ?? this.error),
-      changeSummary: changeSummary ?? this.changeSummary,
+      changeSummary: clearCheck ? null : (changeSummary ?? this.changeSummary),
       report: clearReport ? null : (report ?? this.report),
       noRelevantChanges: noRelevantChanges ?? this.noRelevantChanges,
       confirmFull: confirmFull ?? this.confirmFull,
@@ -108,9 +115,18 @@ class GameDataBuildUiState {
 
 final gameDataBuildProvider =
     StateNotifierProvider<GameDataBuildNotifier, GameDataBuildUiState>((ref) {
-  return GameDataBuildNotifier(
+  final notifier = GameDataBuildNotifier(
     onInstalled: () => ref.invalidate(gameDataInstallStatusProvider),
   );
+  // Another database put in place (the official one installed again) makes
+  // what the card says about the installed commit stale.
+  ref.listen(gameDataInstallStatusProvider, (_, next) {
+    final status = next.valueOrNull;
+    if (status != null) {
+      notifier.installedChanged(status.manifest['source_arknights_commit']);
+    }
+  });
+  return notifier;
 });
 
 /// Extracts the whitelisted source subset in a background isolate.
@@ -152,6 +168,21 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   /// to stop; a second run started meanwhile deleted the tables the first
   /// was about to read (seen on a phone: "Missing required GameData file").
   bool _active = false;
+
+  /// The installed database is now at [commit] (told by the install status).
+  /// What the last check found about another database is dropped.
+  void installedChanged(String? commit) {
+    if (state.busy || commit == null || commit == state.installedCommit) return;
+    if (state.installedCommit == null && state.latestCommit == null) return;
+    state = state.copyWith(
+      installedCommit: commit,
+      clearCheck: true,
+      noRelevantChanges: false,
+      confirmFull: false,
+      clearReport: true,
+      phase: GameDataBuildPhase.idle,
+    );
+  }
 
   Future<void> checkForUpdates({String? githubToken}) async {
     if (state.busy) return;
@@ -245,7 +276,9 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     final client = ArknightsSourceClient(githubToken: githubToken);
     var changes = const <SourceFileChange>[];
     try {
-      final latest = state.latestCommit ?? await client.fetchLatestCommit();
+      // Asked each time: the commit an earlier check or update saw may be
+      // days old by now.
+      final latest = await client.fetchLatestCommit();
       final installed = await _installedCommit();
       final installedSchema = await _installedSchema();
       final sync = SourceSync(client: client, sourceDir: dirs.sourceDir);
@@ -259,6 +292,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         if (installed == latest) {
           state = state.copyWith(
             phase: GameDataBuildPhase.idle,
+            latestCommit: latest,
+            installedCommit: installed,
             noRelevantChanges: true,
           );
           return;
@@ -352,7 +387,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
                   total: event.total,
                 );
               case GameDataBuildEventType.done:
-                await _swapInBuiltDatabase(event, dirs.installPath);
+                await _swapInBuiltDatabase(event, dirs.installPath, latest);
                 // The source directory now matches the installed database.
                 await sync.markSynced(latest);
                 if (!incrementalOk) {
@@ -462,6 +497,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   Future<void> _swapInBuiltDatabase(
     GameDataBuildEvent event,
     String installPath,
+    String commit,
   ) async {
     state = state.copyWith(phase: GameDataBuildPhase.swapping);
     await GameDataBuildService().replaceInstalledDatabase(
@@ -470,9 +506,15 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     );
     _outputDbPath = null;
     onInstalled();
+    // The installed database is the latest now: the card says so and there
+    // is nothing left to pull (the button stayed live, and a second tap ran
+    // the whole check again).
     state = state.copyWith(
       phase: GameDataBuildPhase.done,
       clearError: true,
+      clearCheck: true,
+      latestCommit: commit,
+      installedCommit: commit,
       incremental: event.incremental,
       report: event.report,
       noRelevantChanges: false,
