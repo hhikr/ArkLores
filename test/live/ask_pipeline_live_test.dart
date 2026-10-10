@@ -15,6 +15,7 @@
 //   ARKLORES_LIVE_QUERIES="问题1||问题2"      (or ARKLORES_LIVE_EVAL=<json>)
 //   ARKLORES_LIVE_CONVERSATION=true  (all queries as turns of ONE session)
 //   ARKLORES_LIVE_DEEP_THINKING=true (the "深度思考" switch on)
+//   ARKLORES_LIVE_AFTER=digest,review (press 提要 / 复核 under each answer)
 //   ARKLORES_GAMEDATA_DB=<db path>  (default build/gamedata_mobile/...)
 //   ARKLORES_ENDFIELD_DB=<db path>  (the Endfield knowledge base; without it
 //                                    only Arknights is installed, as on a
@@ -83,6 +84,12 @@ void main() {
   final deepThinking =
       env['ARKLORES_LIVE_DEEP_THINKING']?.toLowerCase() == 'true';
   var thinkingCalls = 0;
+  // ARKLORES_LIVE_AFTER=digest,review: press those buttons under each answer.
+  final after = (env['ARKLORES_LIVE_AFTER'] ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .where((s) => s == 'digest' || s == 'review')
+      .toList();
 
   late ProviderContainer container;
   final usage = UsageMeter();
@@ -184,6 +191,39 @@ void main() {
         });
         await notifier.sendMessage(liveCase.query);
         subscription.close();
+        // The buttons under the answer, pressed when the answer has them.
+        final pressed = <String, Object?>{};
+        for (final button in after) {
+          final answer = container.read(askChatProvider).last;
+          final before = {'calls': usage.calls, 'prompt': usage.promptTokens, 'completion': usage.completionTokens};
+          final clock = Stopwatch()..start();
+          if (button == 'digest') {
+            pressed['digest'] = {'offered': answer.canDigest};
+            if (!answer.canDigest) continue;
+            await notifier.digestAnswer(answer.id);
+            final now = container.read(askChatProvider).last;
+            pressed['digest'] = {
+              'offered': true,
+              'written': now.content != answer.content,
+              'ms': clock.elapsedMilliseconds,
+              'usage_before': before,
+              'answer': now.content,
+            };
+          } else if (button == 'review') {
+            pressed['review'] = {'offered': answer.canReview};
+            if (!answer.canReview) continue;
+            await notifier.reviewAnswer(answer.id, label: '复核');
+            final now = container.read(askChatProvider).last;
+            pressed['review'] = {
+              'offered': true,
+              'new_turn': now.id != answer.id,
+              'ms': clock.elapsedMilliseconds,
+              'usage_before': before,
+              'answer': now.content,
+              'error': now.isError,
+            };
+          }
+        }
         final session = notifier.currentSession;
         expect(session, isNotNull, reason: 'session recording produced no file');
         final turn = session!.turns.last;
@@ -197,6 +237,7 @@ void main() {
                     ? null
                     : firstTextMs! - writerStartMs!,
           },
+          if (pressed.isNotEmpty) 'after': pressed,
           'deep_thinking': deepThinking,
           'thinking_calls': thinkingCalls,
           // Per-call wall-clock timeline (start order): when each LLM call
