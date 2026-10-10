@@ -52,8 +52,10 @@ class RecordHit {
   /// The text around the first matched term.
   final String snippet;
 
-  /// Per term: 3 when the record is about what it names (`entity_name`), 2
-  /// when its title has it, 1 when its text does.
+  /// From [GameDataRetrieval.searchRecordsLike], per term: 3 when the
+  /// record is about what it names (`entity_name`), 2 when its title has
+  /// it, 1 when its text does. From
+  /// [GameDataRetrieval.searchRecordsByVector]: the cosine similarity.
   final double score;
 }
 
@@ -160,6 +162,14 @@ abstract interface class GameDataRetrieval {
     List<String> terms, {
     int limit,
     Map<String, double>? weights,
+  });
+
+  /// 0.14: records closest in meaning to [queryVector] (an embedding from
+  /// the model in [storyVectorInfo]), each with the part of its text that
+  /// matched; empty when the DB has no record vectors. Locating hints.
+  Future<List<RecordHit>> searchRecordsByVector(
+    List<double> queryVector, {
+    int limit,
   });
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at

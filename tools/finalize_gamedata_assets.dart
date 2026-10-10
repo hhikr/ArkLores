@@ -127,6 +127,19 @@ Future<_DbMeta> _readDbManifest(String path) async {
         'vectorCount': count,
         'optional': true,
       };
+      // 0.14: vectors of the records outside the story text.
+      final hasRecordVectors = (await db.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+        "AND name = 'record_chunk_vectors'",
+      ))
+          .isNotEmpty;
+      if (hasRecordVectors) {
+        embedding['recordVectorCount'] = (await db.rawQuery(
+          'SELECT COUNT(*) AS c FROM record_chunk_vectors',
+        ))
+            .first['c'];
+        embedding['recordChunking'] = values['record_embedding_chunking'];
+      }
     }
     // R14: optional story catalog (names, order, official synopses).
     final hasCatalog = (await db.rawQuery(

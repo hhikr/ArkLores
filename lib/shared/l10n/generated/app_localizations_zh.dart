@@ -1333,7 +1333,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbVectorDesc =>
-      '向量让“找剧情”能按意思匹配，而不只是字面相同。没有向量也能用，只是这部分剧情只做关键词检索。向量只用来定位，答案的证据仍然是原文。';
+      '向量让检索能按意思匹配剧情和资料（档案、语音、各种描述），而不只是字面相同。没有向量也能用，只是这部分内容只做关键词检索。向量只用来定位，答案的证据仍然是原文。';
+
+  @override
+  String kbVectorRecordStatus(int vectors) {
+    return '资料向量 $vectors 条';
+  }
+
+  @override
+  String kbVectorPendingRecords(int chunks) {
+    return '其中资料（档案、语音、描述等）$chunks 块';
+  }
+
+  @override
+  String kbVectorRunningRecords(int done, int total) {
+    return '正在生成资料向量：$done / $total 块';
+  }
 
   @override
   String kbVectorStatus(int vectors, int stories) {
@@ -1354,7 +1369,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get kbVectorUpToDate => '所有故事都有向量，不需要更新。';
+  String get kbVectorUpToDate => '所有故事和资料都有向量，不需要更新。';
 
   @override
   String get kbVectorFirstBuild => '这会为全部故事生成向量，费用和时间都比增量更新多得多。';

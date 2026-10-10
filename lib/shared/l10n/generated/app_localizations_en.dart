@@ -1376,7 +1376,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbVectorDesc =>
-      'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.';
+      'Vectors let search match stories and records (archives, voice lines, descriptions) by meaning, not only by exact words. Everything works without them; that text just gets keyword search only. Vectors only locate; the evidence of an answer is still the original text.';
+
+  @override
+  String kbVectorRecordStatus(int vectors) {
+    return '$vectors record vectors';
+  }
+
+  @override
+  String kbVectorPendingRecords(int chunks) {
+    return 'Of which records (archives, voice lines, descriptions): $chunks chunks';
+  }
+
+  @override
+  String kbVectorRunningRecords(int done, int total) {
+    return 'Generating record vectors: $done / $total chunks';
+  }
 
   @override
   String kbVectorStatus(int vectors, int stories) {
@@ -1397,7 +1412,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get kbVectorUpToDate => 'Every story has vectors; nothing to update.';
+  String get kbVectorUpToDate =>
+      'Every story and record has vectors; nothing to update.';
 
   @override
   String get kbVectorFirstBuild =>

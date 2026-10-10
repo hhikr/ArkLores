@@ -92,6 +92,12 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 fontSize: 13,
               ),
             ),
+            if (plan.existingRecordVectors > 0)
+              kbNote(
+                context.t.kbVectorRecordStatus(plan.existingRecordVectors),
+                theme,
+                theme.textPrimary,
+              ),
             const SizedBox(height: 4),
             if (plan.nothingToDo)
               kbNote(context.t.kbVectorUpToDate, theme, theme.accentText)
@@ -105,6 +111,12 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 theme,
                 theme.textPrimary,
               ),
+              if (plan.pendingRecordChunks > 0)
+                kbNote(
+                  context.t.kbVectorPendingRecords(plan.pendingRecordChunks),
+                  theme,
+                  theme.textPrimary,
+                ),
               if (bailian)
                 kbNote(
                   context.t.kbVectorCost(
@@ -142,19 +154,27 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
           if (vec.running) ...[
             const SizedBox(height: 10),
             kbNote(
-              context.t.kbVectorRunning(
-                vec.doneStories,
-                vec.totalStories,
-                vec.doneChunks,
-              ),
+              // The records come after the stories.
+              vec.totalRecords > 0
+                  ? context.t.kbVectorRunningRecords(
+                      vec.doneRecords,
+                      vec.totalRecords,
+                    )
+                  : context.t.kbVectorRunning(
+                      vec.doneStories,
+                      vec.totalStories,
+                      vec.doneChunks,
+                    ),
               theme,
               theme.textPrimary,
             ),
             const SizedBox(height: 6),
             LinearProgressIndicator(
-              value: vec.totalStories > 0
-                  ? (vec.doneStories / vec.totalStories).clamp(0.0, 1.0)
-                  : null,
+              value: vec.totalRecords > 0
+                  ? (vec.doneRecords / vec.totalRecords).clamp(0.0, 1.0)
+                  : vec.totalStories > 0
+                      ? (vec.doneStories / vec.totalStories).clamp(0.0, 1.0)
+                      : null,
               backgroundColor: theme.divider,
               valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
               minHeight: 6,

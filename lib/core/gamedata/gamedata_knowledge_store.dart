@@ -9,6 +9,7 @@ import 'build/gamedata_schema.dart' show storyLinesIndexName, storyLinesIndexSql
 import 'game_retrieval.dart';
 import 'name_similarity.dart';
 import 'readonly_sql.dart';
+import 'record_vectors.dart';
 import 'story_catalog.dart';
 import 'story_line_search.dart';
 import 'story_vectors.dart';
@@ -22,6 +23,18 @@ Future<StoryVectorIndex?> _loadVectorsInBackground(sqflite.Database db) async {
     return await Isolate.run(() => StoryVectorIndex.loadFile(path));
   } catch (_) {
     return StoryVectorIndex.load(db);
+  }
+}
+
+/// The record vectors of [db]'s file, read like the story vectors.
+Future<RecordVectorIndex?> _loadRecordVectorsInBackground(
+  sqflite.Database db,
+) async {
+  final path = db.path;
+  try {
+    return await Isolate.run(() => RecordVectorIndex.loadFile(path));
+  } catch (_) {
+    return RecordVectorIndex.load(db);
   }
 }
 
@@ -167,6 +180,64 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final index = await _loadVectorIndex();
     if (index == null) return const [];
     return index.search(queryVector, topK: topK, scopeId: scopeId);
+  }
+
+  /// 0.14: the record vectors of the open DB, loaded on first use and
+  /// dropped with the connection (like [_vectorIndex]).
+  Future<RecordVectorIndex?>? _recordIndex;
+
+  @override
+  Future<List<RecordHit>> searchRecordsByVector(
+    List<double> queryVector, {
+    int limit = 3,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    final index = await (_recordIndex ??= _loadRecordVectorsInBackground(db));
+    if (index == null || index.length == 0) return const [];
+    final owner = await _hasTable(db, 'entities') ? _ownerSql : "''";
+    final hits = <RecordHit>[];
+    final seen = <String>{};
+    // Several parts of one record may be near: the record once, by its
+    // nearest part.
+    for (final h in index.search(queryVector, topK: limit * 4)) {
+      if (hits.length >= limit) break;
+      if (!seen.add('${h.source}:${h.recordId}')) continue;
+      final document = h.source == recordSourceDocument;
+      final rows = await db.rawQuery(
+        document
+            ? 'SELECT entity_type AS category, document_type AS subtype, '
+                'title, content, entity_name AS owner '
+                'FROM entity_documents WHERE id = ? LIMIT 1'
+            : 'SELECT category, subtype, title, content, $owner AS owner '
+                'FROM normalized_records WHERE id = ? LIMIT 1',
+        [h.recordId],
+      );
+      // A vector whose record an update removed (until the vectors are
+      // brought up to date).
+      if (rows.isEmpty) continue;
+      final row = rows.first;
+      final text = '${row['content'] ?? ''}';
+      final a = h.charStart.clamp(0, text.length);
+      final b = h.charEnd.clamp(a, text.length);
+      final part = text.substring(a, b).replaceAll(RegExp(r'\s+'), ' ').trim();
+      hits.add(
+        RecordHit(
+          id: document && game == Game.endfield
+              ? endfieldId(h.recordId)
+              : h.recordId,
+          category: '${row['category'] ?? ''}',
+          subtype: '${row['subtype'] ?? ''}',
+          title: '${row['title'] ?? ''}',
+          owner: '${row['owner'] ?? ''}',
+          snippet: '${a > 0 ? '…' : ''}'
+              '${part.length <= 160 ? part : '${part.substring(0, 160)}…'}'
+              '${b < text.length && part.length <= 160 ? '…' : ''}',
+          score: h.score,
+        ),
+      );
+    }
+    return hits;
   }
 
   @override
@@ -466,6 +537,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     _db = null;
     _openedFileStat = null;
     _vectorIndex = null;
+    _recordIndex = null;
     _nameInventory = null;
   }
 

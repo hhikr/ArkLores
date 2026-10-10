@@ -156,6 +156,57 @@ QuantizedVector quantize(List<double> vector) {
   return QuantizedVector(scale, values);
 }
 
+/// The [topK] rows of [vectors] (int8, [dims] each, one [scales] entry per
+/// row) closest to [query] by cosine similarity, best first, as (row,
+/// score); [keep] leaves rows out. Shared by the story and the record
+/// index.
+List<(int, double)> topByCosine(
+  Int8List vectors,
+  Float32List scales,
+  int dims,
+  List<double> query, {
+  int topK = 20,
+  bool Function(int row)? keep,
+}) {
+  final length = scales.length;
+  if (query.length != dims || length == 0 || topK <= 0) return const [];
+  var norm = 0.0;
+  for (final v in query) {
+    norm += v * v;
+  }
+  norm = math.sqrt(norm);
+  if (norm == 0) return const [];
+  final q = Float32List(dims);
+  for (var i = 0; i < dims; i++) {
+    q[i] = query[i] / norm;
+  }
+
+  final scores = <(int, double)>[];
+  var floor = double.negativeInfinity;
+  for (var c = 0; c < length; c++) {
+    if (keep != null && !keep(c)) continue;
+    final base = c * dims;
+    var dot = 0.0;
+    for (var i = 0; i < dims; i++) {
+      dot += q[i] * vectors[base + i];
+    }
+    final score = dot * scales[c];
+    if (scores.length < topK) {
+      scores.add((c, score));
+      if (scores.length == topK) {
+        scores.sort((a, b) => b.$2.compareTo(a.$2));
+        floor = scores.last.$2;
+      }
+    } else if (score > floor) {
+      scores[topK - 1] = (c, score);
+      scores.sort((a, b) => b.$2.compareTo(a.$2));
+      floor = scores.last.$2;
+    }
+  }
+  scores.sort((a, b) => b.$2.compareTo(a.$2));
+  return scores;
+}
+
 /// One vector hit: a story line range and its cosine similarity.
 class StoryChunkHit {
   const StoryChunkHit({
@@ -305,41 +356,14 @@ class StoryVectorIndex {
     int topK = 20,
     String? scopeId,
   }) {
-    if (query.length != dims || length == 0) return const [];
-    var norm = 0.0;
-    for (final v in query) {
-      norm += v * v;
-    }
-    norm = math.sqrt(norm);
-    if (norm == 0) return const [];
-    final q = Float32List(dims);
-    for (var i = 0; i < dims; i++) {
-      q[i] = query[i] / norm;
-    }
-
-    final scores = <(int, double)>[];
-    var floor = double.negativeInfinity;
-    for (var c = 0; c < length; c++) {
-      if (scopeId != null && _scopeIds[c] != scopeId) continue;
-      final base = c * dims;
-      var dot = 0.0;
-      for (var i = 0; i < dims; i++) {
-        dot += q[i] * _vectors[base + i];
-      }
-      final score = dot * _scales[c];
-      if (scores.length < topK) {
-        scores.add((c, score));
-        if (scores.length == topK) {
-          scores.sort((a, b) => b.$2.compareTo(a.$2));
-          floor = scores.last.$2;
-        }
-      } else if (score > floor) {
-        scores[topK - 1] = (c, score);
-        scores.sort((a, b) => b.$2.compareTo(a.$2));
-        floor = scores.last.$2;
-      }
-    }
-    scores.sort((a, b) => b.$2.compareTo(a.$2));
+    final scores = topByCosine(
+      _vectors,
+      _scales,
+      dims,
+      query,
+      topK: topK,
+      keep: scopeId == null ? null : (c) => _scopeIds[c] == scopeId,
+    );
     return [
       for (final (c, score) in scores)
         StoryChunkHit(

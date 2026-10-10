@@ -2471,8 +2471,26 @@ abstract class AppLocalizations {
   /// No description provided for @kbVectorDesc.
   ///
   /// In en, this message translates to:
-  /// **'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.'**
+  /// **'Vectors let search match stories and records (archives, voice lines, descriptions) by meaning, not only by exact words. Everything works without them; that text just gets keyword search only. Vectors only locate; the evidence of an answer is still the original text.'**
   String get kbVectorDesc;
+
+  /// No description provided for @kbVectorRecordStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{vectors} record vectors'**
+  String kbVectorRecordStatus(int vectors);
+
+  /// No description provided for @kbVectorPendingRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Of which records (archives, voice lines, descriptions): {chunks} chunks'**
+  String kbVectorPendingRecords(int chunks);
+
+  /// No description provided for @kbVectorRunningRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating record vectors: {done} / {total} chunks'**
+  String kbVectorRunningRecords(int done, int total);
 
   /// No description provided for @kbVectorStatus.
   ///
@@ -2501,7 +2519,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbVectorUpToDate.
   ///
   /// In en, this message translates to:
-  /// **'Every story has vectors; nothing to update.'**
+  /// **'Every story and record has vectors; nothing to update.'**
   String get kbVectorUpToDate;
 
   /// No description provided for @kbVectorFirstBuild.

@@ -203,6 +203,22 @@ class MultiGameRetrieval implements GameDataRetrieval {
           .toList();
 
   @override
+  Future<List<RecordHit>> searchRecordsByVector(
+    List<double> queryVector, {
+    int limit = 3,
+  }) async {
+    final wanted = await storyVectorInfo;
+    final all = <RecordHit>[];
+    for (final store in await _installed()) {
+      // Scores of different models do not compare.
+      if (await store.storyVectorInfo != wanted) continue;
+      all.addAll(await store.searchRecordsByVector(queryVector, limit: limit));
+    }
+    all.sort((a, b) => b.score.compareTo(a.score));
+    return all.take(limit).toList();
+  }
+
+  @override
   Future<SqlQueryResult> readOnlySql(
     String sql, {
     int maxRows = 200,

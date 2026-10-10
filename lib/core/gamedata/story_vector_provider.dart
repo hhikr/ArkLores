@@ -22,6 +22,8 @@ class StoryVectorUiState {
     this.doneStories = 0,
     this.totalStories = 0,
     this.doneChunks = 0,
+    this.doneRecords = 0,
+    this.totalRecords = 0,
     this.result,
     this.error,
     this.mismatch,
@@ -33,6 +35,10 @@ class StoryVectorUiState {
   final int doneStories;
   final int totalStories;
   final int doneChunks;
+
+  /// Record chunks embedded of those to embed (after the stories).
+  final int doneRecords;
+  final int totalRecords;
 
   /// The last finished run.
   final VectorUpdateResult? result;
@@ -49,6 +55,8 @@ class StoryVectorUiState {
     int? doneStories,
     int? totalStories,
     int? doneChunks,
+    int? doneRecords,
+    int? totalRecords,
     VectorUpdateResult? result,
     String? error,
     bool clearError = false,
@@ -62,6 +70,8 @@ class StoryVectorUiState {
         doneStories: doneStories ?? this.doneStories,
         totalStories: totalStories ?? this.totalStories,
         doneChunks: doneChunks ?? this.doneChunks,
+        doneRecords: doneRecords ?? this.doneRecords,
+        totalRecords: totalRecords ?? this.totalRecords,
         result: result ?? this.result,
         error: clearError ? null : (error ?? this.error),
         mismatch: clearMismatch ? null : (mismatch ?? this.mismatch),
@@ -143,6 +153,8 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
       running: true,
       doneStories: 0,
       doneChunks: 0,
+      doneRecords: 0,
+      totalRecords: 0,
       clearError: true,
     );
     final client = OpenAICompatibleEmbeddingClient(config: config);
@@ -159,6 +171,9 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
             totalStories: total,
             doneChunks: chunks,
           );
+        },
+        onRecordProgress: (done, total) {
+          state = state.copyWith(doneRecords: done, totalRecords: total);
         },
       );
       state = state.copyWith(running: false, result: result);

@@ -1,6 +1,10 @@
-/// Keeps the optional story vectors (`story_chunk_vectors`) up to date after
-/// the knowledge base changed: plan what is missing, show what it costs, and
-/// embed only that.
+/// Keeps the optional vectors (`story_chunk_vectors`, and 0.14 the records'
+/// `record_chunk_vectors`) up to date after the knowledge base changed: plan
+/// what is missing, show what it costs, and embed only that.
+///
+/// Records (archives, voice lines, descriptions — everything outside the
+/// story text) are compared by a hash of each chunk's text: a new or
+/// changed one is embedded, the vector of one that is gone is removed.
 ///
 /// An incremental update drops the vectors of the stories it changed or
 /// removed (their line numbers moved) and adds stories without vectors. This
@@ -14,6 +18,7 @@ library;
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../llm/embedding_client.dart';
+import 'record_vectors.dart';
 import 'story_vectors.dart';
 
 /// Chinese text costs about this many tokens per character on the embedding
@@ -38,6 +43,8 @@ class VectorPlan {
     required this.pendingStories,
     required this.pendingChunks,
     required this.pendingChars,
+    this.existingRecordVectors = 0,
+    this.pendingRecordChunks = 0,
     this.model,
     this.dims,
   });
@@ -54,14 +61,20 @@ class VectorPlan {
   /// Stories that have lines but no vectors.
   final int pendingStories;
 
-  /// Estimated chunks and characters to embed (overlap included).
+  /// Estimated chunks and characters to embed (overlap included), stories
+  /// and records together.
   final int pendingChunks;
   final int pendingChars;
+
+  /// Records: vectors there are, and chunks that are new or changed
+  /// (counted in [pendingChunks] too).
+  final int existingRecordVectors;
+  final int pendingRecordChunks;
 
   /// No vectors yet: this would be the first (complete) vector build.
   bool get isFirstBuild => existingVectors == 0;
 
-  bool get nothingToDo => pendingStories == 0;
+  bool get nothingToDo => pendingStories == 0 && pendingRecordChunks == 0;
 
   int get estimatedTokens => (pendingChars * embeddingTokensPerChar).round();
 
@@ -115,6 +128,7 @@ Future<VectorPlan> planVectorUpdate(DatabaseExecutor db) async {
   );
   final r = rows.first;
   final rawChars = (r['chars'] as num?)?.toDouble() ?? 0;
+  final records = await _RecordDiff.of(db);
   return VectorPlan(
     hasTable: hasTable,
     model: manifest[manifestEmbeddingModel],
@@ -122,9 +136,56 @@ Future<VectorPlan> planVectorUpdate(DatabaseExecutor db) async {
     existingVectors: vectors,
     storiesWithVectors: withVectors,
     pendingStories: (r['stories'] as num?)?.toInt() ?? 0,
-    pendingChunks: (r['chunks'] as num?)?.toInt() ?? 0,
-    pendingChars: (rawChars * _overlapFactor).round(),
+    pendingChunks:
+        ((r['chunks'] as num?)?.toInt() ?? 0) + records.pending.length,
+    pendingChars: (rawChars * _overlapFactor).round() +
+        records.pending.fold<int>(0, (n, c) => n + c.text.length),
+    existingRecordVectors: records.existing,
+    pendingRecordChunks: records.pending.length,
   );
+}
+
+/// The records' chunks against the vectors the database has.
+class _RecordDiff {
+  _RecordDiff(this.pending, this.stale, this.existing);
+
+  /// Chunks without a vector of their current text.
+  final List<RecordChunk> pending;
+
+  /// Vectors of chunks that are gone.
+  final List<String> stale;
+  final int existing;
+
+  static Future<_RecordDiff> of(DatabaseExecutor db) async {
+    final hasTable = (await db.rawQuery(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+      [recordChunkVectorsTable],
+    ))
+        .isNotEmpty;
+    final have = <String, String>{
+      if (hasTable)
+        for (final r in await db.rawQuery(
+          'SELECT chunk_id, text_hash FROM $recordChunkVectorsTable',
+        ))
+          '${r['chunk_id']}': '${r['text_hash']}',
+    };
+    final chunks = await recordChunksOf(db);
+    final current = <String>{};
+    final pending = <RecordChunk>[];
+    for (final c in chunks) {
+      current.add(c.chunkId);
+      if (have[c.chunkId] != c.textHash) pending.add(c);
+    }
+    return _RecordDiff(
+      pending,
+      // (A chunk whose text changed is pending: its row is replaced.)
+      [
+        for (final id in have.keys)
+          if (!current.contains(id)) id,
+      ],
+      have.length,
+    );
+  }
 }
 
 /// The outcome of [updateStoryVectors].
@@ -137,6 +198,8 @@ class VectorUpdateResult {
   });
 
   final int stories;
+
+  /// Chunks embedded, stories and records together.
   final int chunks;
 
   /// Tokens the provider reported (0 when it reports none).
@@ -160,15 +223,17 @@ class VectorModelMismatch implements Exception {
       'Existing vectors were made with $have; the configured model is $want.';
 }
 
-/// Embeds every story without vectors and stores the result in [db] (a
-/// writable connection). Existing vectors stay; the table and its manifest
-/// rows are created when missing.
+/// Embeds every story without vectors, then every record chunk that is new
+/// or changed, and stores the result in [db] (a writable connection).
+/// Existing vectors stay; the tables and their manifest rows are created
+/// when missing. [onRecordProgress]: record chunks done of those to embed.
 ///
 /// Throws [VectorModelMismatch] when vectors from another model or size exist.
 Future<VectorUpdateResult> updateStoryVectors({
   required Database db,
   required EmbeddingClient client,
   void Function(int doneStories, int totalStories, int chunks)? onProgress,
+  void Function(int doneChunks, int totalChunks)? onRecordProgress,
   bool Function()? shouldCancel,
   int concurrency = 3,
 }) async {
@@ -267,6 +332,63 @@ Future<VectorUpdateResult> updateStoryVectors({
   }
 
   await Future.wait([for (var w = 0; w < concurrency; w++) worker()]);
+
+  // Records: remove what no longer matches, embed what is missing. A batch
+  // is written whole, so an interrupted run resumes where it stopped.
+  await db.execute(recordChunkVectorsDdl);
+  await db.execute(recordChunkVectorsIndexDdl);
+  final records = await _RecordDiff.of(db);
+  if (records.stale.isNotEmpty) {
+    await db.transaction((txn) async {
+      for (final id in records.stale) {
+        await txn.delete(
+          recordChunkVectorsTable,
+          where: 'chunk_id = ?',
+          whereArgs: [id],
+        );
+      }
+    });
+  }
+  const perBatch = 20;
+  var nextRecord = 0;
+  var doneRecords = 0;
+  Future<void> recordWorker() async {
+    while (true) {
+      if (cancelled || (shouldCancel != null && shouldCancel())) {
+        cancelled = true;
+        return;
+      }
+      if (nextRecord >= records.pending.length) return;
+      final from = nextRecord;
+      final to = from + perBatch > records.pending.length
+          ? records.pending.length
+          : from + perBatch;
+      nextRecord = to;
+      final batch = records.pending.sublist(from, to);
+      final vectors = await client.embed([for (final c in batch) c.text]);
+      await db.transaction((txn) async {
+        for (var i = 0; i < batch.length; i++) {
+          await txn.insert(
+            recordChunkVectorsTable,
+            recordVectorRow(batch[i], quantize(vectors[i])),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      });
+      doneRecords += batch.length;
+      doneChunks += batch.length;
+      onRecordProgress?.call(doneRecords, records.pending.length);
+    }
+  }
+
+  await Future.wait([for (var w = 0; w < concurrency; w++) recordWorker()]);
+  if (doneRecords > 0) {
+    await db.insert(
+      'gamedata_manifest',
+      {'key': manifestRecordChunking, 'value': recordChunkingSignature},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
 
   if (doneChunks > 0) {
     await db.transaction((txn) async {

@@ -84,11 +84,11 @@ class SearchTool extends AgentTool {
           '一次最多 $maxKeywordTerms 个词；结果开头列出每个词命中多少行，命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
           '要精确统计某个词出现在哪些故事里时用 grep。'
-      : '一次检索所有资料：已安装的每个游戏的剧情原文（按整个 query 的意思检索；query 里用空格分开的词还各自做关键词检索）'
-          '，以及剧情以外的资料原文（档案、干员资料、语音等）'
-          '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
+      : '一次检索所有资料：已安装的每个游戏的剧情原文和剧情以外的资料原文（档案、干员资料、语音等）'
+          '${wiki == null ? '' : '，以及游戏 Wiki'}。剧情和资料按整个 query 的意思检索，query 里用空格分开的词还各自做关键词检索。'
+          '按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
           '适合任何“发生了什么、是什么、为什么、谁”的问题：写空格分隔的几个词（原文里会出现的名字、叫法和相关说法，'
-          '每个词 2–6 个字，一次最多 $maxKeywordTerms 个），或一句描述（只按意思检索，资料和 Wiki 要靠词才查得到）。'
+          '每个词 2–6 个字，一次最多 $maxKeywordTerms 个），或一句描述（只按意思检索；Wiki 要靠词才查得到）。'
           '结果开头列出每个词命中多少行，命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
           '要精确统计某个词出现在哪些故事里时用 grep。';
@@ -204,6 +204,30 @@ class SearchTool extends AgentTool {
       );
       for (final (i, r) in ranked.indexed) {
         r.records = records[i];
+      }
+    }
+    // 0.14: the records by meaning too (their own vectors), fused with the
+    // keyword hits by rank like the stories. Only those about as close as
+    // the closest thing the game has: a vector search always returns
+    // something.
+    if (vector != null && inCollection == null) {
+      final near = await _timed(
+        'records:vectors',
+        () => Future.wait([
+          for (final g in games) _recordsNear(narrowTo(store, g), vector),
+        ]),
+      );
+      for (final (i, r) in ranked.indexed) {
+        if (near[i].isEmpty) continue;
+        // The closest thing this game has, a passage or a record.
+        final closest = math.max(r.best, near[i].first.score);
+        r.records = _fuseRecords(
+          r.records,
+          [
+            for (final h in near[i])
+              if (h.score >= closest - farther) h,
+          ],
+        );
       }
     }
     final wikiPart = await wikiSearch;
@@ -408,6 +432,37 @@ class SearchTool extends AgentTool {
       best: chunks.isEmpty ? double.negativeInfinity : chunks.first.score,
       lines: keywords.fold(0, (n, h) => n + h.hits),
     );
+  }
+
+  /// The records of one game closest to [vector] (none when its vectors
+  /// are another model's).
+  Future<List<RecordHit>> _recordsNear(
+    GameDataRetrieval store,
+    List<double> vector,
+  ) async {
+    final info = await store.storyVectorInfo;
+    if (info == null || info.model != embeddingClient?.model) return const [];
+    return store.searchRecordsByVector(vector, limit: recordsPerGame * 2);
+  }
+
+  /// Keyword and meaning hits as one list, by reciprocal rank; a record
+  /// both found keeps the excerpt around the query's words.
+  static List<RecordHit> _fuseRecords(
+    List<RecordHit> byKeyword,
+    List<RecordHit> byMeaning,
+  ) {
+    if (byMeaning.isEmpty) return byKeyword;
+    final score = <String, double>{};
+    final hit = <String, RecordHit>{};
+    for (final list in [byKeyword, byMeaning]) {
+      for (final (rank, h) in list.indexed) {
+        score[h.id] = (score[h.id] ?? 0) + 1 / (_rrfK + rank + 1);
+        hit.putIfAbsent(h.id, () => h);
+      }
+    }
+    final ids = score.keys.toList()
+      ..sort((a, b) => score[b]!.compareTo(score[a]!));
+    return [for (final id in ids.take(recordsPerGame)) hit[id]!];
   }
 
   /// Measurement only (0.14): where a search spends its time — the
