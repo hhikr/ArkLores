@@ -86,6 +86,7 @@ class GameDataBuildUiState {
     bool? noRelevantChanges,
     bool? confirmFull,
     bool clearReport = false,
+    bool clearError = false,
   }) {
     return GameDataBuildUiState(
       phase: phase ?? this.phase,
@@ -96,7 +97,7 @@ class GameDataBuildUiState {
       installedCommit: installedCommit ?? this.installedCommit,
       changedFileCount: changedFileCount ?? this.changedFileCount,
       incremental: incremental ?? this.incremental,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
       changeSummary: changeSummary ?? this.changeSummary,
       report: clearReport ? null : (report ?? this.report),
       noRelevantChanges: noRelevantChanges ?? this.noRelevantChanges,
@@ -147,7 +148,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     if (state.busy) return;
     state = state.copyWith(
       phase: GameDataBuildPhase.checking,
-      error: null,
+      clearError: true,
       confirmFull: false,
     );
     try {
@@ -198,7 +199,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     bool allowFull = false,
   }) async {
     if (state.busy) return;
-    state = state.copyWith(confirmFull: false);
+    state = state.copyWith(confirmFull: false, clearError: true);
     final dirs = await _dirs();
     await dirs.sourceDir.create(recursive: true);
     await dirs.tmpDir.create(recursive: true);
@@ -234,7 +235,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           stage: 'incremental',
           done: 0,
           total: 0,
-          error: null,
+          clearError: true,
           clearReport: true,
           noRelevantChanges: false,
         );
@@ -281,7 +282,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         state = state.copyWith(
           phase: GameDataBuildPhase.downloading,
           stage: 'zip',
-          error: null,
+          clearError: true,
           clearReport: true,
         );
         final zh = Directory(p.join(dirs.sourceDir.path, 'zh_CN'));
@@ -427,7 +428,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     onInstalled();
     state = state.copyWith(
       phase: GameDataBuildPhase.done,
-      error: null,
+      clearError: true,
       incremental: event.incremental,
       report: event.report,
       noRelevantChanges: false,
@@ -440,7 +441,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     _runner?.kill();
     _runner = null;
     _cleanupTemp();
-    state = state.copyWith(phase: GameDataBuildPhase.idle, error: null);
+    state = state.copyWith(phase: GameDataBuildPhase.idle, clearError: true);
   }
 
   void dismissDone() {

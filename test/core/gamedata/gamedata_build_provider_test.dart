@@ -256,7 +256,27 @@ void main() {
       () => fakeGitHubDown(),
     );
     expect(state().error, startsWith('check:'));
-  });
+
+    // The next run that gets through takes the old message away, from its
+    // start (it was kept through a whole successful build).
+    await online({'c1': _c1()}, 'c1', notifier().checkForUpdates);
+    expect(state().error, isNull);
+    await http.runWithClient(
+      notifier().checkForUpdates,
+      () => fakeGitHubDown(),
+    );
+    expect(state().error, isNotNull);
+    final seen = <String?>[];
+    final sub = container.listen(
+      gameDataBuildProvider,
+      (_, next) => seen.add(next.error),
+    );
+    await buildC1();
+    sub.close();
+    expect(seen, isNotEmpty);
+    expect(seen, everyElement(isNull));
+    expect(state().phase, GameDataBuildPhase.done);
+  }, timeout: const Timeout(Duration(minutes: 3)),);
 }
 
 /// A GitHub that answers every request with a server error.
