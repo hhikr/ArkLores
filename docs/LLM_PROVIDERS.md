@@ -6,6 +6,7 @@
 ## 思考档位（`ReasoningLevel` off / low / high）
 
 - 每个角色都必须显式指定档位（deepseek 不传参数时默认 high）。默认全部 `off`；“深度思考”开关让本问的 Agent 用 `low`。
+  0.14：开关在输入框的选项面板里，只在 `reasoningFieldsFor` 对当前服务商给得出参数时显示（下表以外的服务商两个档位的请求相同，开关没有意义）。
   不给剧情问答开 `high`：实测会延伸推测原文没写的内容。
 - 映射在 `OpenAICompatibleClient.reasoningFieldsFor`：
   - deepseek：`thinking` + `reasoning_effort`；

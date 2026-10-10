@@ -7,17 +7,20 @@
 ## 1. 链路
 
 ```
-用户问题 ──► AskChatNotifier.sendMessage（没有模式；Wiki/提要/复核/子助手四个可选项来自 AnswerOptions，后两个默认关）
+用户问题 ──► AskChatNotifier.sendMessage（没有模式；Wiki/子助手两个可选项来自 AnswerOptions，子助手默认关）
               │   紧接上一条回答时带上一问的对话（LoreConversation，工具结果折叠），否则带最近 3 轮问答文本
-              │   “深度思考”开关 → 本问使用 low 档思考的 client
+              │   “深度思考”（选项面板里，服务商有思考开关时才有）→ 本问使用 low 档思考的 client
               └─ StoryQaAgent ─► LoreAgentLoop
                                    第一批检索（0.14）：一次独立的小调用（loreSearchPlanPrompt）按问题写出最多三条检索词和一个 Wiki 词，
                                      代码并行执行，作为 search 调用和结果进入对话；没写出来时有向量就用问题原文按意思检索一次
                                    system：按角色组合（loreRolePrompt）：库结构 + 资料页说明 + 工作方式 + 出处 + 输出格式
                                    每轮 streamTurn(tools) → 守门（拆分粘连、按 schema 校验）→ 工具并发执行 → 结果追加
                                    最终答案（JSON）→ 出处核对（SeenLines；只读过一部分的范围裁到读过的行，少量未读由代码删去，
-                                     多了或没有出处则整轮回档重问一次：出错的回答不进对话）→ [审稿] → 按阶段整理（只发条目）
+                                     多了或没有出处则整轮回档重问一次：出错的回答不进对话）
                                    → [STORY_ANSWER: status=answered|partial|not_covered]
+              答完之后（0.14，答案下方的按钮，玩家点了才运行）：
+                “提要” digestAnswer → 只发问题和条目，段落写在答案上方
+                “复核” reviewAnswer → 审稿提问；有疑问时作为这段对话的追问重新作答，接在下面
        工具：search / read_story / grep / sql（只读）/ outline / similar_names / [delegate]
              （0.13，“Wiki 资料”开着时）wiki_search / wiki_read → WikiLookup（PRTS / Warfarin，快照）
                                    │
@@ -76,6 +79,6 @@
 | 0.11 | 资料页说明进提示词（`loreLibraryGuide`）；复核/提要可选；服务商兼容；删除角色扮演；工作过程时间线 | 条目层上线；非 GLM 服务商空回复；界面可读 |
 | 0.12 | 终末地知识库；`MultiGameRetrieval`，工具带 `game`；提示词加“两个游戏”一节；一个任务一篇剧情，提示词说明跨种类的先后不可推断 | 第二个游戏；终末地的对话种类各自编号 |
 | 0.13 | Wiki 工具（`wiki_search`/`wiki_read`）与 Wiki 出处：段落编号、版本快照、同一套出处核对；“Wiki 资料”开关 | 库里没有的整理与资料；玩家常用的 Wiki 可以引证 |
-| 0.14 | 统一检索 `search` + 预检索；工具调用守门；数据库连接独立；空回复只对一轮降级；出处少量问题由代码处理；整理只发条目；审稿/子助手默认关；工作过程可读 | 真机 10 个会话：17% 调用出错、数据库被关、一题 1.5–24 分钟、单题百万 token |
+| 0.14 | 统一检索 `search` + 预检索；工具调用守门；数据库连接独立；空回复只对一轮降级；出处少量问题由代码处理；整理只发条目；审稿/子助手默认关，随后提要与复核改为答后按钮、输入框选项改为上拉面板；工作过程可读 | 真机 10 个会话：17% 调用出错、数据库被关、一题 1.5–24 分钟、单题百万 token |
 
 R12–R16 的逐轮真机数据已删（git 历史可查，`docs/AI_ARCHITECTURE.md` 2026-10-07 之前的版本）。

@@ -38,7 +38,19 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 - **An answer that is sent back disappears**: it does not stay in the conversation, and the page shows one status line instead of a step. Quoted dialogue is no longer sent back — the rewrite only stripped the quotation marks; the prompt asks not to copy dialogue at length.
 - What counts as read is one ledger for every tool: a line or a record counts only with its text; a record of which search showed an excerpt is marked so; a folded tool result says which lines it held and that their text must be read again before use.
 - Reorganising a long answer sends only its entries, not the whole conversation.
-- The reader's review and sub-agents are off by default (both in the answer options); sub-agents are limited to two per question and their steps are shown.
+- The reader's review and sub-agents are off by default; sub-agents are limited to two per question and their steps are shown.
+
+### The question box and what comes after an answer
+
+- **One options button, and the keyboard stays.** The options open as a small panel above the question box instead of a menu over it: nothing in it takes the focus, so the keyboard no longer drops and the text being typed stays in view. It holds the wikis, the sub-agents and "深度思考" — the last only when the model service has a known switch for thinking (elsewhere the button changed nothing).
+- **"提要" and "复核" are asked for under an answer** instead of being part of every question. A long answer offers 提要: a few summary paragraphs are written above it, the answer itself folded below. The last answer offers 复核: another model reads it as a reader; with no question it says so, otherwise the agent checks the questions in the text and answers again below, the first answer left as it was. Both are there for answers given since the app was opened.
+
+### Knowledge bases: one page per game
+
+- **Each game has its own knowledge-base page** (明日方舟 / 终末地 in the top bar), with the same parts in the same order: the official knowledge base, its vectors, and how it is kept up to date. The note on what the AI uses as evidence is gone (it predated the wikis and the second game); the four number tiles are replaced by one line in the reader's words.
+- **Vectors for either game.** The vector card looked only at the Arknights file; each page now has its own. With nothing missing it is two lines; it opens into the cost and the run when vectors are missing.
+- **A knowledge base updated on the device is no longer offered the older official one as an "update"** (one tap replaced the newer data); the page says it was updated here and offers going back to the official one as its own, confirmed choice.
+- **A complete rebuild asks first when it would lose vectors**: it starts a new database without them. The GitHub token is folded away. The hint for a download that cannot connect names the right file for each game.
 
 ### The work timeline reads well
 
@@ -47,7 +59,7 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 ### For developers
 
 - The prompts are put together per role (`loreRolePrompt`: answer, helper, planner, reviewer, stager) from sections that each say one thing once; the session record keeps why an answer was sent back and which citations code cut or dropped; a search reports where its time went (embedding, each game's vector and keyword scans, records, wikis).
-- `tools/phone_ask.dart` asks a question in the app on a phone connected by USB and shows in the terminal, as it runs, what the app shows (steps, thinking, status, answer, cost); it needs a local build with the bridge (`install_local.ps1 -Build -Bridge`), which release builds do not have.
+- `tools/phone_ask.dart` asks a question in the app on a phone connected by USB and shows in the terminal, as it runs, what the app shows (steps, thinking, status, answer, cost); it needs a local build with the bridge (`install_local.ps1 -Build -Bridge`), which release builds do not have. A question of `/review` or `/digest` presses that button under the last answer.
 
 ## [0.13.0] - 2026-10-09
 

@@ -75,7 +75,16 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 ### 4.4 App 内完整构建
 
 没有安装库或变化过多时，App 下载仓库 zip，按白名单解压（含 `levels/`，建完删除），在后台 isolate 构建（`sqflite_common_ffi`），
-用与安装器相同的 `validateGameDataDatabase` 校验后原子替换。**已安装的库在替换前永不修改。** App 内不生成向量（由“故事向量”卡片另补）。
+用与安装器相同的 `validateGameDataDatabase` 校验后原子替换。**已安装的库在替换前永不修改。** App 内不生成向量（由“语义检索”卡片另补）。
+
+0.14（知识库页“用游戏数据更新”，只有明日方舟页有）：
+
+- App 里更新或构建出来的库旁边写一个 `<库>.local_build` 标记（`replaceInstalledDatabase`），安装状态的 `builtLocally` 读它。
+  这样的库不再被当成“有新版官方知识库”（官方资产比它旧，以前会一直提示“更新”，点了就把新库盖掉）；
+  页面显示“本机更新”，按钮是“换回官方版本”（先确认）。装回官方资产时标记删掉。
+- 完整重建建的是一个新库，**不带向量**。已装的库有向量（清单里有 `embedding_model`）而这次只能完整重建时
+  （库的 schema 旧，或改动超出 compare 接口能列出的范围），不直接开始：页面写明代价，点“仍然完整重建”才继续
+  （`GameDataBuildUiState.confirmFull` / `buildFromSource(allowFull: true)`）。增量更新不受影响。
 
 ## 5. 向量（剧情与资料）
 
@@ -91,14 +100,15 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
   迁移只把落在搬过来的向量范围内的行算作已覆盖（2026-10-10 前是“旧库有这一行就算”，旧库里没有向量的剧情因此一直补不上）；
   `--migrate-from` 不能指向 `--db` 同一个文件，先复制一份。
 - 资料向量（0.14，`record_vectors.dart`）：嵌入的文字是“所属对象 · 标题：正文”（所属对象是 `entity_name`，没有时取 `entity_id` 的名字），
-  所以一条语音带着它的干员名。四条路径都覆盖：全量脚本与剧情向量共用内容缓存；增量（`update_gamedata.dart --embed`、App 的“故事向量”卡片）
+  所以一条语音带着它的干员名。四条路径都覆盖：全量脚本与剧情向量共用内容缓存；增量（`update_gamedata.dart --embed`、App 的“语义检索”卡片）
   按每块文字的哈希比对，只嵌入新增或改动的块，记录已删除的块的向量一并删掉；补算之后接一次增量或全量脚本即可（文字没变的块不重算）。
   2026-10 实测：明日方舟 37,010 块（约 366 万字）、终末地 3,663 块（约 76 万字），合计约 ¥1.6。
 
 - 默认百炼 `qwen3.7-text-embedding`，512 维；key 来自 gitignored 的 `tools/embedding-apiKey.csv`。真实调用要开发者同意。
 - 迁移按行对齐（忽略省略号点数、空白、字面 `\n`），首尾都对得上的旧向量搬到新行号，其余才嵌入。
-- App 的“故事向量”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
-  模型/维度与库里不一致时拒绝混用。
+- App 的“语义检索”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
+  模型/维度与库里不一致时拒绝混用。0.14：每个游戏的知识库页各有一张（`storyVectorProvider(game)`，以前只看明日方舟库）；
+  没有缺口时只有两行（剧情/资料向量各多少条、“完整”），有缺口、模型不一致或运行中才展开成操作区。
 - 向量只是定位线索；证据是 `read_story` / `read_record` 读到的原文。
 
 ## 6. 故事目录

@@ -43,7 +43,8 @@ dart run tools/phone_ask.dart --new --wiki=off --full "问题"   # 新对话、�
 
 - 原理：`--dart-define=ARKLORES_PHONE_BRIDGE=true` 的 App 每 3 秒尝试连接手机上的 `ws://127.0.0.1:47321`；`phone_ask.dart` 运行
   `adb reverse tcp:47321 tcp:47321` 并在电脑上监听，所以连接只经 USB 到达这台电脑，手机上不开端口。代码在 `lib/features/ai/phone_bridge.dart`。
-- 问题像在输入框里输入一样提出（App 切到问答页），之后的追问沿用同一对话；`--wiki/--review/--digest/--delegate/--think=on|off` 改的是 App 里的回答选项（会保存）。
+- 问题像在输入框里输入一样提出（App 切到问答页），之后的追问沿用同一对话；`--wiki/--delegate/--think=on|off` 改的是 App 里的回答选项（会保存）。
+  问题写成 `/review` 或 `/digest` 时不提问，而是按最后一条答案下方的“复核”/“提要”按钮（0.14）。
 - 终端显示同时写入 `build/phone_sessions/<时间>.log`（文字）与 `.jsonl`（事件）；App 开着“保存 AI 对话记录”时，每题答完把会话文件
   （`conversation_<id>.json`）从手机拉到同一目录。
 - Ctrl+C 一次取消当前问题，两次退出。App 被切到后台时系统可能暂停连接，回到前台会自动重连（问答本身在前台服务里继续）。
