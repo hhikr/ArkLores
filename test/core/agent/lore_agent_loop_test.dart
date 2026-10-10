@@ -134,7 +134,10 @@ void main() {
       // 0.14: search first (with the pre-search under the question), grep
       // for exact counts; no sub-agent rules unless they are on.
       expect(prompt, contains('search 是主要的检索方式'));
-      expect(prompt, contains('替你拟定并执行的第一批检索'));
+      expect(prompt, contains('替你拟定并执行的第一批查找'));
+      // The scope of a question first; a collection's outline as a skeleton.
+      expect(prompt, contains('先确定问题的范围'));
+      expect(prompt, contains('先用 outline 看目录和相关的故事集'));
       expect(prompt, isNot(contains('delegate')));
       expect(loreSystemPrompt(delegate: true), contains('delegate'));
       expect(prompt, contains('["record", "<记录 id>"]'));
@@ -550,6 +553,102 @@ void main() {
       // Spaces are single, a repeat counts once, three at most.
       expect(plan.queries, ['甲 乙', '丙', '丁']);
       expect(plan.wiki, '甲');
+      expect(plan.outlines, isEmpty);
+      expect(plan.wikiSearches, isEmpty);
+    });
+
+    // The first step may be a collection's outline or a wiki search, not
+    // only a search.
+    test('a plan may hold outlines and wiki searches', () {
+      final only = parseSearchPlan('{"outline": "某个故事集"}')!;
+      expect(only.outlines, ['某个故事集']);
+      expect(only.queries, isEmpty);
+
+      final all = parseSearchPlan(
+        '{"search": ["甲", "乙", "丙"], "outline": ["子", "丑", "寅"], '
+        '"wiki_search": ["卯", "辰"]}',
+      )!;
+      // Two outlines at most, four steps in all: outlines first, then
+      // searches, then wiki searches.
+      expect(all.outlines, ['子', '丑']);
+      expect(all.queries, ['甲', '乙']);
+      expect(all.wikiSearches, isEmpty);
+      expect(
+        parseSearchPlan('{"search": ["甲"], "wiki_search": ["卯", "辰", "巳"]}')!
+            .wikiSearches,
+        ['卯', '辰'],
+      );
+      expect(parseSearchPlan('{"outline": [], "wiki_search": " "}'), isNull);
+    });
+
+    test('the plan prompt offers the steps whose tools are there', () {
+      final plain = loreRolePrompt(LoreRole.planner, searchDescription: '<检索说明>');
+      expect(plain, contains('<检索说明>'));
+      expect(plain, isNot(contains('outline')));
+      expect(plain, isNot(contains('wiki')));
+      final full = loreRolePrompt(
+        LoreRole.planner,
+        wiki: true,
+        searchDescription: '<检索说明>',
+        outlineDescription: '<目录说明>',
+        wikiSearchDescription: '<搜索说明>',
+      );
+      expect(full, contains('- outline（故事集目录）：<目录说明>'));
+      expect(full, contains('- wiki_search（Wiki 搜索）：<搜索说明>'));
+      expect(
+        full,
+        contains('"outline": ["<故事集名>"], "wiki_search": ["<一个词>"], "wiki": "<一个词>"}'),
+      );
+      // No free hand to add names the question does not have.
+      expect(full, contains('没有把握就不补'));
+      // The wiki search needs the wiki option.
+      expect(
+        loreRolePrompt(
+          LoreRole.planner,
+          searchDescription: 's',
+          wikiSearchDescription: '<搜索说明>',
+        ),
+        isNot(contains('wiki_search')),
+      );
+    });
+
+    test('a planned outline runs as an outline call; a step without its tool '
+        'is left out', () async {
+      const story = 'activities/act_fx/level_act_fx_02_beg.txt';
+      final client = _ScriptedClient(
+        [_answer('乙与丙会面 `$story:1`。')],
+        plans: [
+          '{"outline": ["虚构活动"], "search": ["会面 交易"], "wiki_search": ["会面"]}',
+        ],
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '虚构活动之前发生了什么？')
+          .toList();
+      final calls = [
+        for (final e in events)
+          if (e.type == ReActEventType.toolCall) '${e.toolName} ${e.toolArgs}',
+      ];
+      // No wiki here: its step is not run.
+      expect(calls, ['outline {collection: 虚构活动}', 'search {query: 会面 交易}']);
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.toolObservation) e.toolName,
+        ],
+        ['outline', 'search'],
+      );
+      // The planner was told what an outline is, from the tool itself.
+      expect(client.planRequests.single.first.content, contains('列出一个故事集'));
+      final request = client.requests.single;
+      expect(request[1].content, '虚构活动之前发生了什么？');
+      expect(
+        request[2].toolCalls!.map((c) => (c['function'] as Map)['name']),
+        ['outline', 'search'],
+      );
+      expect(request[3].content, contains('乙与丙秘密会面'));
+      expect(request[4].content, contains('关键词：会面'));
+      expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
+          StoryAnswerStatus.answered,);
     });
 
     // 0.14 on the phone: after reading, a model answered in prose naming its

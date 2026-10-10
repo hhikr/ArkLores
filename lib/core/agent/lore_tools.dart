@@ -817,7 +817,8 @@ class OutlineTool extends AgentTool {
   @override
   String get description =>
       '列出一个故事集（活动 / 主线章节 / 干员密录）的全部章节：story_id、关卡号、章名和官方梗概。'
-      '梗概只用于定位，不能当证据。';
+      '梗概只用于定位，不能当证据。'
+      '末尾列出与它相关的其他故事集（共有人物、内容相近），只是找资料的线索。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -842,6 +843,10 @@ class OutlineTool extends AgentTool {
           '${index.isEmpty ? '可以用 sql 查 story_catalog。' : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}，${c.chapters} 章）').join('、')}。'}';
     }
     final month = collection.releaseMonth;
+    // Written last, and always: the chapters give way to it.
+    final related = _related(
+      await store.relatedCollections(collection.collectionId),
+    );
     final buffer = StringBuffer()
       ..writeln('${collection.label}（${collection.collectionId}，'
           '${collection.entries.length} 章${month == null ? '' : '，上线 $month'}）');
@@ -849,12 +854,37 @@ class OutlineTool extends AgentTool {
       final synopsis = (e.synopsis ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
       buffer.writeln('${e.storyId} | ${e.chapterLabel}'
           '${synopsis.isEmpty ? '' : ' | ${_clip(synopsis, 160)}'}');
-      if (buffer.length > maxToolResultChars) {
+      if (buffer.length + related.length > maxToolResultChars) {
         buffer.writeln('……（篇幅已满）');
         break;
       }
     }
+    buffer.write(related);
     return buffer.toString().trimRight();
+  }
+
+  /// The section on related collections (empty when there are none): what
+  /// each shares with this one, so the model can tell a strong hint from a
+  /// weak one.
+  static String _related(List<RelatedCollection> related) {
+    if (related.isEmpty) return '';
+    final near = related.any((r) => r.similarity != null);
+    final buffer = StringBuffer()
+      ..writeln('相关的故事集（按共有人物${near ? '和内容相近程度' : ''}排列；'
+          '只是找资料的线索，是否承接、谁先谁后要读原文确认，上线时间不等于故事里的先后）：');
+    for (final r in related) {
+      final month = r.releaseMonth;
+      buffer.writeln([
+        '${r.label}（${r.id}${month == null ? '' : '，上线 $month'}）',
+        [
+          if (r.shared > 0)
+            '共有 ${r.shared} 人：${r.names.join('、')}'
+                '${r.shared > r.names.length ? '…' : ''}',
+          if (r.similarity case final s?) '内容相近 ${s.toStringAsFixed(2)}',
+        ].join('；'),
+      ].join(''),);
+    }
+    return buffer.toString();
   }
 }
 

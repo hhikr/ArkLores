@@ -19,6 +19,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
@@ -450,7 +451,7 @@ Future<StoryCollection?> queryStoryCollection(
   }
   // R16: the label prefixes [StoryCatalogEntry.collectionLabel] adds
   // (`主线·风暴瞭望`, `干员密录·…`) are not part of the stored name.
-  final name = q.replaceFirst(RegExp(r'^(主线|干员密录|终末地)[·・•]'), '');
+  final name = q.replaceFirst(collectionLabelPrefix, '');
   collectionId ??= await first(
     'SELECT collection_id FROM $storyCatalogTable WHERE collection_name = ? '
     'ORDER BY collection_id LIMIT 1',
@@ -516,6 +517,186 @@ Future<List<({String id, String label, int chapters})>> queryCollectionIndex(
         chapters: (row['n'] as num).toInt(),
       ),
   ];
+}
+
+/// The kind [StoryCatalogEntry.collectionLabel] writes before a
+/// collection's name (`主线·…`, `干员密录·…`): not part of the stored name.
+final RegExp collectionLabelPrefix = RegExp(r'^(主线|干员密录|生息演算|终末地)[·・•]');
+
+/// 0.14: a collection related to another one: it shares speakers with it
+/// and, when the database has vectors, reads alike. A hint for where to
+/// look, not evidence — nothing in the data says that one story continues
+/// another, or which comes first.
+class RelatedCollection {
+  const RelatedCollection({
+    required this.id,
+    required this.label,
+    required this.shared,
+    required this.names,
+    this.releaseMonth,
+    this.similarity,
+  });
+
+  final String id;
+  final String label;
+
+  /// `2024-06`, or null (main story, operator records).
+  final String? releaseMonth;
+
+  /// How many speakers the two collections share.
+  final int shared;
+
+  /// Some of them, the least common first.
+  final List<String> names;
+
+  /// Cosine of the two collections' mean vectors; null without vectors.
+  final double? similarity;
+}
+
+/// Lines a speaker has in a collection before they count as one of its
+/// speakers (a passer-by with a few lines says nothing about the story).
+const int relatedMinLines = 10;
+
+/// Related collections listed.
+const int relatedCollectionLimit = 6;
+
+/// Shared speakers named for each.
+const int relatedNamesShown = 4;
+
+/// The speakers of [collectionId] (with [relatedMinLines] lines or more),
+/// each with the collections they speak that much in — that one included.
+/// Sources: `story_lines.speaker` and the catalog's `collection_id`.
+Future<Map<String, Set<String>>> querySharedSpeakers(
+  DatabaseExecutor db,
+  String collectionId,
+) async {
+  if (!await hasStoryCatalog(db)) return const {};
+  final rows = await db.rawQuery(
+    'WITH tgt AS ('
+    'SELECT l.speaker FROM story_lines l '
+    'JOIN $storyCatalogTable c ON c.story_id = l.story_id '
+    "WHERE c.collection_id = ? AND l.speaker <> '' "
+    'GROUP BY l.speaker HAVING COUNT(*) >= ?) '
+    'SELECT l.speaker AS speaker, c.collection_id AS collection_id '
+    'FROM story_lines l JOIN $storyCatalogTable c ON c.story_id = l.story_id '
+    'WHERE l.speaker IN (SELECT speaker FROM tgt) '
+    'GROUP BY l.speaker, c.collection_id HAVING COUNT(*) >= ?',
+    [collectionId, relatedMinLines, relatedMinLines],
+  );
+  final speakers = <String, Set<String>>{};
+  for (final row in rows) {
+    speakers
+        .putIfAbsent('${row['speaker']}', () => {})
+        .add('${row['collection_id']}');
+  }
+  return speakers;
+}
+
+/// One row of [rankRelatedCollections].
+typedef RankedCollection = ({
+  String id,
+  int shared,
+  List<String> names,
+  double? similarity,
+});
+
+/// The collections most related to [target], best first. [speakers] is
+/// [querySharedSpeakers]' result; [similarity] the cosine of each other
+/// collection's mean vector with the target's (null without vectors).
+///
+/// Two rankings: by shared speakers, each weighing `1 / ln(1 + n)` for the
+/// `n` collections they speak in (someone who is everywhere says little);
+/// and by similarity. They are joined by rank (reciprocal rank fusion): a
+/// collection one ranking does not have takes its last place there. Without
+/// [similarity] only the speakers rank.
+List<RankedCollection> rankRelatedCollections(
+  String target,
+  Map<String, Set<String>> speakers,
+  Map<String, double>? similarity, {
+  int limit = relatedCollectionLimit,
+}) {
+  const k = 60;
+  final weight = <String, double>{};
+  final who = <String, List<(String, double)>>{};
+  for (final MapEntry(key: speaker, value: collections) in speakers.entries) {
+    if (!collections.contains(target)) continue;
+    // A speaker written only in marks (an unnamed voice) is nobody.
+    if (!_hasLetter.hasMatch(speaker)) continue;
+    final w = 1 / math.log(1 + collections.length);
+    for (final c in collections) {
+      if (c == target) continue;
+      weight[c] = (weight[c] ?? 0) + w;
+      who.putIfAbsent(c, () => []).add((speaker, w));
+    }
+  }
+  List<String> ordered(Map<String, double> scores) => scores.keys.toList()
+    ..sort((a, b) {
+      final byScore = scores[b]!.compareTo(scores[a]!);
+      return byScore != 0 ? byScore : a.compareTo(b);
+    });
+  Map<String, int> ranks(List<String> ids) =>
+      {for (final (i, id) in ids.indexed) id: i + 1};
+
+  final near = similarity == null
+      ? null
+      : {
+          for (final e in similarity.entries)
+            if (e.key != target) e.key: e.value,
+        };
+  final bySpeakers = ranks(ordered(weight));
+  final byNear = near == null ? null : ranks(ordered(near));
+  final score = <String, double>{
+    for (final id in {...bySpeakers.keys, ...?byNear?.keys})
+      id: 1 / (k + (bySpeakers[id] ?? bySpeakers.length + 1)) +
+          (byNear == null ? 0 : 1 / (k + (byNear[id] ?? byNear.length + 1))),
+  };
+  return [
+    for (final id in ordered(score).take(limit))
+      (
+        id: id,
+        shared: who[id]?.length ?? 0,
+        names: [
+          for (final (name, _) in [...?who[id]]
+            ..sort((a, b) {
+              final byWeight = b.$2.compareTo(a.$2);
+              return byWeight != 0 ? byWeight : a.$1.compareTo(b.$1);
+            }))
+            name,
+        ].take(relatedNamesShown).toList(),
+        similarity: near?[id],
+      ),
+  ];
+}
+
+final RegExp _hasLetter = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+/// Label and release month of each of [collectionIds].
+Future<Map<String, ({String label, String? releaseMonth})>> queryCollectionLabels(
+  DatabaseExecutor db,
+  Iterable<String> collectionIds,
+) async {
+  final ids = collectionIds.toList();
+  if (ids.isEmpty || !await hasStoryCatalog(db)) return const {};
+  final rows = await db.rawQuery(
+    'SELECT collection_id, collection_name, collection_type, '
+    'MIN(start_time) AS start_time FROM $storyCatalogTable '
+    'WHERE collection_id IN (${List.filled(ids.length, '?').join(', ')}) '
+    'GROUP BY collection_id',
+    ids,
+  );
+  return {
+    for (final row in rows)
+      '${row['collection_id']}': (
+        label: StoryCatalogEntry(
+          storyId: '',
+          collectionId: '${row['collection_id']}',
+          collectionName: '${row['collection_name']}',
+          collectionType: '${row['collection_type']}',
+          storySort: 0,
+        ).collectionLabel,
+        releaseMonth: releaseMonthOf((row['start_time'] as num?)?.toInt()),
+      ),
+  };
 }
 
 /// One collection's chapters in game order.

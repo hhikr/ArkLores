@@ -161,6 +161,11 @@ class SearchTool extends AgentTool {
     final terms = allTerms.take(maxKeywordTerms).toList();
     final unused = allTerms.skip(maxKeywordTerms).toList();
     final termLines = <String, int>{};
+    // A word that is a collection's name: the story text does not say it,
+    // the catalog does.
+    final named = collection.isNotEmpty
+        ? const <String, ({String id, String label, int chapters})>{}
+        : await _collectionsNamed(terms);
 
     // A collection narrows the stories (in its own game).
     Set<String>? inCollection;
@@ -247,8 +252,12 @@ class SearchTool extends AgentTool {
       ..writeln('检索“$query”'
           '${scopeLabel.isEmpty ? '' : '（$scopeLabel 内）'}：'
           '${mode == SearchMode.semantic ? '按意思检索 + 关键词' : '只有关键词检索（$modeNote）'}'
-          '${terms.isNotEmpty ? '；关键词：${_termCounts(terms, termLines, inCollection != null)}' : mode == SearchMode.keywordOnly ? '；query 里没有可以匹配的词：要写空格分隔的词（每个 2–12 个字），不是整句' : ''}'
+          '${terms.isNotEmpty ? '；关键词：${_termCounts(terms, termLines, inCollection != null, named.keys.toSet())}' : mode == SearchMode.keywordOnly ? '；query 里没有可以匹配的词：要写空格分隔的词（每个 2–12 个字），不是整句' : ''}'
           '${unused.isEmpty ? '' : '；一次最多 $maxKeywordTerms 个词，未使用：${unused.join('、')}'}');
+    for (final MapEntry(key: term, value: c) in named.entries) {
+      buffer.writeln('“$term”是故事集（${c.id}，${c.chapters} 章）：'
+          '用 outline 看它的目录和相关的故事集。');
+    }
     for (final (i, g) in games.indexed) {
       final r = ranked[i];
       if (r.top.isNotEmpty &&
@@ -326,15 +335,33 @@ class SearchTool extends AgentTool {
     List<String> terms,
     Map<String, int> lines,
     bool scoped,
+    Set<String> collections,
   ) =>
       [
         for (final t in terms)
           switch (lines[t]) {
             null => t,
+            0 when collections.contains(t) => '$t（0 行：这是故事集的名字，正文里不这样写）',
             0 => '$t（0 行，原文里没有这个写法）',
             final n => '$t（${scoped ? '全库 ' : ''}$n 行）',
           },
       ].join('、');
+
+  /// The words of [terms] that are exactly a collection's name (without
+  /// the kind its label starts with), each with that collection.
+  Future<Map<String, ({String id, String label, int chapters})>>
+      _collectionsNamed(List<String> terms) async {
+    final named = <String, ({String id, String label, int chapters})>{};
+    for (final term in terms) {
+      for (final c in await store.storyCollectionIndex(like: term)) {
+        if (c.label.replaceFirst(collectionLabelPrefix, '') == term) {
+          named[term] = c;
+          break;
+        }
+      }
+    }
+    return named;
+  }
 
   /// Why a search will use keywords only (no embedding service, no vectors
   /// in the knowledge base, vectors of another model), or null when it can

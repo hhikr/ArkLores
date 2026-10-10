@@ -349,6 +349,51 @@ class StoryVectorIndex {
     );
   }
 
+  /// 0.14: the mean direction of each collection's chunks (unit length), by
+  /// [collectionOf] (story id → collection id). A collection with fewer
+  /// than [minChunks] chunks has none: a few passages are not what a
+  /// collection is about.
+  Map<String, Float32List> collectionCentroids(
+    Map<String, String> collectionOf, {
+    int minChunks = 8,
+  }) {
+    final sums = <String, Float64List>{};
+    final counts = <String, int>{};
+    for (var c = 0; c < length; c++) {
+      final collection = collectionOf[_storyIds[c]];
+      if (collection == null) continue;
+      final base = c * dims;
+      var squares = 0.0;
+      for (var i = 0; i < dims; i++) {
+        final x = _vectors[base + i];
+        squares += x * x;
+      }
+      if (squares == 0) continue;
+      final norm = math.sqrt(squares);
+      final sum = sums.putIfAbsent(collection, () => Float64List(dims));
+      for (var i = 0; i < dims; i++) {
+        sum[i] += _vectors[base + i] / norm;
+      }
+      counts[collection] = (counts[collection] ?? 0) + 1;
+    }
+    final centroids = <String, Float32List>{};
+    for (final MapEntry(key: collection, value: sum) in sums.entries) {
+      if (counts[collection]! < minChunks) continue;
+      var squares = 0.0;
+      for (final x in sum) {
+        squares += x * x;
+      }
+      if (squares == 0) continue;
+      final norm = math.sqrt(squares);
+      final unit = Float32List(dims);
+      for (var i = 0; i < dims; i++) {
+        unit[i] = sum[i] / norm;
+      }
+      centroids[collection] = unit;
+    }
+    return centroids;
+  }
+
   /// Top [topK] chunks by cosine similarity to [query] (any length-[dims]
   /// vector; normalized here), optionally restricted to [scopeId].
   List<StoryChunkHit> search(

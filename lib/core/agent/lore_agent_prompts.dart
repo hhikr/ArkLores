@@ -86,10 +86,13 @@ String loreOpening(List<Game> games) =>
 /// description; here only when to use which tool.
 const String loreWorkingRules = '''
 工作方式：
-- 问题后面可能已经有一批 search 调用和结果：那是按问题替你拟定并执行的第一批检索（检索词不是你写的）。先看它们，从里面的段落和故事入手；
-  不够或方向不对时自己再检索。没有时先用 search 检索。
+- 问题后面可能已经有一批工具调用和结果（检索、故事集目录、Wiki 搜索）：那是按问题替你拟定并执行的第一批查找（不是你写的）。先看它们，从里面的段落和故事入手；
+  不够或方向不对时自己再查。没有时先用 search 检索。
 - search 是主要的检索方式（query 怎么写、它查哪些资料，见它的说明）。结果按来源分组。
   问题涉及几个方面、几个阶段或几个人物时，分别检索（在同一轮里一起发出），换说法、换角度再检索，比一次读很多更有效。
+- 先确定问题的范围：哪些故事在范围内、哪些不在。问的是某个故事之前、之后或之外的内容时，那个故事本身只用来定位，不展开讲它的情节。
+- 问题按故事集来问（它讲了什么、它之前之后有什么、几个故事怎么连起来）时，先用 outline 看目录和相关的故事集：各章的官方梗概可以用来搭答案的骨架，
+  再到相关章节里找到写这件事的那几行原文（search 加 collection，或 grep 加 collection）读了作出处；出处要是讲这件事的行，不是这一章开头的几行。
 - grep 精确统计某个名字或词出现在哪些故事、多少行（不给范围时统计所有已安装的游戏），用来确认覆盖面和时间顺序；sql 查目录、条目、绑定、档案等结构化信息。
 - 用 read_story 读上下文：从检索命中的行附近开始，读需要的范围；一个事件的起因、经过、结果可能在相邻的几章里。
 - 用 read_record 读剧情以外的资料全文（档案、语音、模组故事、各种描述）：检索结果里资料只有片段，要用它的内容先读全文。
@@ -192,11 +195,13 @@ const String loreWikiGuide = '''
 Wiki 资料
 除了本地知识库，还可以查游戏 Wiki（需要联网）：明日方舟是 PRTS（prts.wiki），终末地是 Warfarin Wiki（warfarin.wiki）。
 search 的结果里有 Wiki 一组；wiki_search 专门搜索 Wiki 页面，wiki_read 读页面正文。
-- Wiki 和本地知识库同样是检索来源：两边的结果一起看，按问题的需要去读，不必等库里查不到才看 Wiki。人物关系、设定、事件梳理、本地库之后才上线的内容、游戏外的官方资料，Wiki 常有整理好的页面。
+- Wiki 和本地知识库同样是检索来源：两边的结果一起看，按问题的需要去读，不必等库里查不到才看 Wiki。人物、组织、名词的页面常有整理，本地库之后才上线的内容和游戏外的官方资料也在 Wiki；
+  活动页多是玩法资料，剧情梗概通常不在那里。
 - 两者的性质不同：本地知识库是游戏原文；Wiki 是玩家社区编写的整理，有编者的归纳和解读，可能有错漏。答案里要分清：出自 Wiki 的说法，正文里写明是 Wiki 的整理（例如“据 Wiki 整理”），不要写成游戏原文的叙述；
   原文能印证的，同时引用原文；Wiki 与原文不一致时，两处都写明，以原文为准。
 - Wiki 的段落读过（wiki_read）才能引用，写法见下面的“出处”。
-- Wiki 不可用（网络错误、超时）时不要反复重试，只用本地知识库作答，并在 gaps 里说明。''';
+- Wiki 不可用（网络错误、超时）时不要反复重试，只用本地知识库作答，并在 gaps 里说明。
+- 同一类页面连续没有收获时回到本地知识库，不要换着词反复搜。''';
 
 /// The whole system prompt (or a sub-agent's when [subtask]); [games] are
 /// the installed knowledge bases (the two-game section only when there is
@@ -242,21 +247,29 @@ enum LoreRole {
 }
 
 /// The system prompt of [role] — the one place that says what each call is
-/// told. [searchDescription] is the `search` tool's own description (the
-/// planner writes queries for it).
+/// told. [searchDescription], [outlineDescription] and
+/// [wikiSearchDescription] are those tools' own descriptions (the planner
+/// writes steps for them; an empty one means the tool is not there).
 String loreRolePrompt(
   LoreRole role, {
   List<Game> games = const [Game.arknights],
   bool wiki = false,
   bool delegate = false,
   String searchDescription = '',
+  String outlineDescription = '',
+  String wikiSearchDescription = '',
 }) =>
     switch (role) {
       LoreRole.answer =>
         loreSystemPrompt(games: games, wiki: wiki, delegate: delegate),
       LoreRole.helper =>
         loreSystemPrompt(subtask: true, games: games, wiki: wiki),
-      LoreRole.planner => loreSearchPlanPrompt(searchDescription, wiki: wiki),
+      LoreRole.planner => loreSearchPlanPrompt(
+          searchDescription,
+          wiki: wiki,
+          outlineDescription: outlineDescription,
+          wikiSearchDescription: wikiSearchDescription,
+        ),
       LoreRole.reviewer => loreReviewPromptOf(games),
       LoreRole.stager => loreStageSystemPrompt,
     };
@@ -272,26 +285,37 @@ const String loreContinueNote = '请继续：需要查资料就调用工具，�
 
 /// The words that open [loreSearchPlanPrompt] (what tells that call from
 /// the others).
-const String loreSearchPlanRole = '你替一个剧情问答助手拟定第一批检索';
+const String loreSearchPlanRole = '你替一个剧情问答助手拟定第一批查找';
 
-/// 0.14: system prompt of the call that writes the first searches of a
+/// 0.14: system prompt of the call that writes the first steps of a
 /// question (`search_planner.dart`). It sees the question (and what came
-/// before a follow-up), not the knowledge base; [searchDescription] is the
-/// `search` tool's own description, so the two cannot drift apart.
-String loreSearchPlanPrompt(String searchDescription, {bool wiki = false}) => '''
-$loreSearchPlanRole。助手接下来会读这些检索的结果、继续查资料并回答玩家；你只写检索，不回答问题。
-检索工具 search 的说明：
-$searchDescription
-
-根据玩家的问题（以及给出的上文）写检索：
-- 每条检索是空格分隔的几个词：原文里会出现的叫法——人物、地点、组织、事件、物品的名字，它们的别称，以及相关的说法；每个词 2–6 个字，一条不超过 8 个词。不写整句，不照抄问题里的虚词和口语。
+/// before a follow-up), not the knowledge base. The descriptions are the
+/// tools' own, so the two cannot drift apart; a step whose tool has no
+/// description here is not offered ([wiki]: the wiki tools are on).
+String loreSearchPlanPrompt(
+  String searchDescription, {
+  bool wiki = false,
+  String outlineDescription = '',
+  String wikiSearchDescription = '',
+}) {
+  final outline = outlineDescription.isNotEmpty;
+  final wikiSearch = wiki && wikiSearchDescription.isNotEmpty;
+  return '''
+$loreSearchPlanRole。助手接下来会读这些查找的结果、继续查资料并回答玩家；你只写查找，不回答问题。
+可以写的查找：
+- search（检索）：$searchDescription
+${outline ? '- outline（故事集目录）：$outlineDescription\n' : ''}${wikiSearch ? '- wiki_search（Wiki 搜索）：$wikiSearchDescription\n' : ''}
+根据玩家的问题（以及给出的上文）决定第一批查找，合计不超过四项：
+- 多数问题写 search。${outline ? '问题点名了一个故事集，问的是它的结构、它之前之后或与它相关的内容时，写 outline（这个故事集的名字），这时可以不写 search。' : ''}${wikiSearch ? '玩家要求先查 Wiki，或要的是 Wiki 才有的整理时，写 wiki_search（一个页面名或名词）。' : ''}
+- 每条 search 是空格分隔的几个词：原文里会出现的叫法——人物、地点、组织、事件、物品的名字，它们的别称，以及相关的说法；每个词 2–6 个字，一条不超过 8 个词。不写整句，不照抄问题里的虚词和口语。
 - 每个词都要是故事或资料的正文里会写到的词。说明“要找哪一类资料”的词（资料的种类、体裁，或“经历”“介绍”“剧情”这样概括问题的词）不在正文里，不要写：
   按名字检索时，这个名字的各类资料会一起列出，不需要另写一条去找某一类。
-- 问题只问一件事时写一条；涉及几个方面、几个阶段或几个人物时分开写，最多三条。
+- 问题只问一件事时写一条 search；涉及几个方面、几个阶段或几个人物时分开写，最多三条。
 - 追问里的指代（他们、这件事、那里）按上文换成具体的名字；上文与这一问无关时不要带上。
-- 可以用你对作品的了解补上问题没有写出的相关名字和叫法，这只是为了找到资料。
-${wiki ? '- wiki：在游戏 Wiki 上要找的一个页面名或名词（最能代表问题主题的那一个）；没有合适的就不写这个字段。\n' : ''}只输出一个 JSON 对象，不写别的文字，不加代码块：
-{"search": ["<词> <词> <词>", "<词> <词>"]${wiki ? ', "wiki": "<一个词>"' : ''}}''';
+- 只补你确定与问题里的名字直接相关的名字和叫法，这只是为了找到资料；没有把握就不补，不要写与问题无关的名字。问题只有一个名字时一条就够。
+${wiki ? '- wiki：第一条 search 顺带在游戏 Wiki 上找的一个页面名或名词（最能代表问题主题的那一个）；没有合适的就不写这个字段。\n' : ''}只输出一个 JSON 对象，不写别的文字，不加代码块；用不到的字段不写，至少写一项查找：
+{"search": ["<词> <词> <词>", "<词> <词>"]${outline ? ', "outline": ["<故事集名>"]' : ''}${wikiSearch ? ', "wiki_search": ["<一个词>"]' : ''}${wiki ? ', "wiki": "<一个词>"' : ''}}''';
+}
 
 /// The planning call's input: the question, and for a follow-up the
 /// question before it with the gist of its answer ([earlier]).

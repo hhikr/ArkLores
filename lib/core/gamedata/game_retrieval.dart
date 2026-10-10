@@ -20,8 +20,10 @@ export 'name_similarity.dart' show SimilarName, describeSimilarNames;
 export 'readonly_sql.dart' show SqlQueryResult;
 export 'story_catalog.dart'
     show
+        RelatedCollection,
         StoryCatalogEntry,
         StoryCollection,
+        collectionLabelPrefix,
         collectionReleaseKey,
         compareReleaseKeys,
         fallbackStoryLabel,
@@ -138,6 +140,11 @@ abstract interface class GameDataRetrieval {
     String? like,
     String? type,
   });
+
+  /// 0.14: the collections most related to [collectionId] — shared
+  /// speakers and, with vectors, alike in what they tell. Locating hints,
+  /// not evidence; the data cannot say that one story continues another.
+  Future<List<RelatedCollection>> relatedCollections(String collectionId);
 
   /// R15: names in the DB that are spelled or pronounced like [term] (a
   /// name the DB does not contain), best first. String similarity only —

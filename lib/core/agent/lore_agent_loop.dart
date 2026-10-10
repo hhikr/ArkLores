@@ -303,12 +303,12 @@ class LoreAgentLoop {
     // folded result leaves.
     final shownIn = <int, String>{};
 
-    // 0.14: the first searches, written by a call of its own
-    // (`search_planner.dart`) and run here. They enter the conversation as
-    // `search` calls and results like the model's own (folded like them);
-    // the question stays as it was asked. Without a plan: with vectors the
-    // question itself is searched by meaning; without, the model searches
-    // in its first turn.
+    // 0.14: the first steps, written by a call of its own
+    // (`search_planner.dart`) and run here: searches, a collection's
+    // outline, a wiki search. They enter the conversation as calls and
+    // results like the model's own (folded like them); the question stays
+    // as it was asked. Without a plan: with vectors the question itself is
+    // searched by meaning; without, the model searches in its first turn.
     if (preSearch && !subtask && search is SearchTool) {
       yield const ReActEvent(type: ReActEventType.status, content: '正在拟定检索…');
       final plan = await _planSearches(
@@ -317,61 +317,85 @@ class LoreAgentLoop {
         history,
         search,
         (raw) => onRawLlmResponse?.call(++record, '（拟定检索）$raw'),
+        outlineDescription: tools['outline']?.description ?? '',
+        wikiSearchDescription: tools['wiki_search']?.description ?? '',
       );
-      final planned = <Map<String, dynamic>>[
-        if (plan != null)
+      // A step whose tool this question does not have is left out.
+      final planned = <({String tool, Map<String, dynamic> args})>[
+        if (plan != null) ...[
+          if (tools['outline'] != null)
+            for (final c in plan.outlines)
+              (tool: 'outline', args: {'collection': c}),
           for (final (i, q) in plan.queries.indexed)
-            {
-              'query': q,
-              if (i == 0 && wiki != null && plan.wiki != null) 'wiki': plan.wiki,
-            }
-        else if (keywordOnly == null)
-          {'query': query},
+            (
+              tool: 'search',
+              args: {
+                'query': q,
+                if (i == 0 && wiki != null && plan.wiki != null)
+                  'wiki': plan.wiki,
+              },
+            ),
+          if (tools['wiki_search'] != null)
+            for (final q in plan.wikiSearches)
+              (tool: 'wiki_search', args: {'query': q}),
+        ] else if (keywordOnly == null)
+          (tool: 'search', args: {'query': query}),
       ];
       if (planned.isNotEmpty) {
         final shown = [for (final _ in planned) SeenLines()];
         Future<(String, SearchResult?)> runOne(int k) async {
+          final step = planned[k];
           try {
+            if (step.tool != 'search') {
+              final text = await _span(
+                'tool:${step.tool}',
+                () => SeenLines.duringCall(
+                  shown[k],
+                  () => tools[step.tool]!.execute(step.args),
+                ),
+              );
+              return ('$text', null);
+            }
             final found = await _span(
               'tool:search',
               () => SeenLines.duringCall(
                 shown[k],
                 () => search.run(
-                  '${planned[k]['query']}',
-                  wikiQuery: planned[k]['wiki'] as String?,
+                  '${step.args['query']}',
+                  wikiQuery: step.args['wiki'] as String?,
                 ),
               ),
             );
             return (found.text, found);
           } catch (e) {
-            return ('错误：检索失败（$e）', null);
+            return ('错误：${step.tool == 'search' ? '检索' : '查找'}失败（$e）', null);
           }
         }
 
         final runs = [for (var k = 0; k < planned.length; k++) runOne(k)];
         final calls = [
-          for (final (k, args) in planned.indexed)
+          for (final (k, step) in planned.indexed)
             ToolCall(
               id: 'planned_${k + 1}',
-              name: 'search',
-              arguments: jsonEncode(args),
+              name: step.tool,
+              arguments: jsonEncode(step.args),
             ),
         ];
-        for (final (k, args) in planned.indexed) {
+        for (final (k, step) in planned.indexed) {
           // (The first call shares the record of the plan itself.)
           if (k > 0) {
-            onRawLlmResponse?.call(++record, '（拟定的第 ${k + 1} 条检索）');
+            onRawLlmResponse?.call(++record, '（拟定的第 ${k + 1} 步）');
           }
           yield ReActEvent(
             type: ReActEventType.toolCall,
-            content: _describeCall('search', args),
-            toolName: 'search',
-            toolArgs: args,
+            content: _describeCall(step.tool, step.args),
+            toolName: step.tool,
+            toolArgs: step.args,
           );
         }
         yield ReActEvent(
           type: ReActEventType.status,
-          content: planned.length > 1 ? '${planned.length} 条检索同时进行' : '正在检索资料…',
+          content: planned.length > 1 ? '${planned.length} 项查找同时进行' : '正在检索资料…',
         );
         conversation.add(Message.assistantToolCalls('', calls));
         String? lostVectors;
@@ -380,7 +404,7 @@ class LoreAgentLoop {
           yield ReActEvent(
             type: ReActEventType.toolObservation,
             content: text,
-            toolName: 'search',
+            toolName: planned[k].tool,
           );
           if (found?.mode == SearchMode.keywordOnly && keywordOnly == null) {
             lostVectors = found?.modeNote ?? '没有向量检索';
@@ -1226,8 +1250,10 @@ class LoreAgentLoop {
     LoreConversation? prior,
     List<Message> history,
     SearchTool search,
-    void Function(String raw) onRaw,
-  ) async {
+    void Function(String raw) onRaw, {
+    String outlineDescription = '',
+    String wikiSearchDescription = '',
+  }) async {
     try {
       final result = await (planClient ?? client).chatCompletion(
         [
@@ -1236,6 +1262,8 @@ class LoreAgentLoop {
               LoreRole.planner,
               wiki: wiki != null,
               searchDescription: search.description,
+              outlineDescription: outlineDescription,
+              wikiSearchDescription: wikiSearchDescription,
             ),
           ),
           Message.user(

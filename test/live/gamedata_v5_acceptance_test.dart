@@ -121,4 +121,45 @@ void main() {
     );
     expect(page.lines.map((l) => l.kind), contains('subtitle'));
   }, skip: enabled ? false : 'set ARKLORES_RUN_DB_CHECK=true',);
+
+  // 0.14: the related collections `outline` ends with. Printed for a look
+  // (which ones they are is not asserted: that depends on the database);
+  // `ARKLORES_RELATED_OF` names more collections to print, separated by `,`.
+  test('related collections of some collections', () async {
+    final store = GameDataKnowledgeStore(dbPath: dbPath);
+    addTearDown(store.close);
+    final recent = await store.readOnlySql(
+      "SELECT collection_id FROM story_catalog WHERE collection_type = 'ACTIVITY' "
+      'GROUP BY collection_id HAVING COUNT(*) >= 10 '
+      'ORDER BY MIN(start_time) DESC LIMIT 4',
+    );
+    final asked = (Platform.environment['ARKLORES_RELATED_OF'] ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty);
+    final ids = <String>[
+      for (final row in recent.rows) '${row.first}',
+      for (final name in asked)
+        if (await store.storyCollection(name) case final found?)
+          found.collectionId,
+    ];
+    expect(ids, isNotEmpty);
+    for (final id in ids) {
+      final watch = Stopwatch()..start();
+      final related = await store.relatedCollections(id);
+      final label = (await store.storyCollection(id))!.label;
+      // ignore: avoid_print
+      final shown = [
+        for (final r in related)
+          '${r.label}[${r.shared} 人'
+              '${r.similarity == null ? '' : ' / ${r.similarity!.toStringAsFixed(3)}'}]',
+      ].join(' ');
+      // ignore: avoid_print
+      print('$label（$id）${watch.elapsedMilliseconds} ms：$shown');
+      expect(related, isNotEmpty, reason: id);
+      expect(related.length, lessThanOrEqualTo(6));
+      expect(related.map((r) => r.id), isNot(contains(id)));
+      expect(related.map((r) => r.id).toSet(), hasLength(related.length));
+    }
+  }, skip: enabled ? false : 'set ARKLORES_RUN_DB_CHECK=true',);
 }

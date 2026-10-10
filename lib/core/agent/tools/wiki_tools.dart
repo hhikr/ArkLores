@@ -36,13 +36,14 @@ class WikiSearchTool extends AgentTool {
   @override
   String get description =>
       '在游戏 Wiki 上搜索页面（明日方舟：PRTS；终末地：Warfarin Wiki），返回页面引用、标题和摘要。'
+      'query 写一个页面名或名词；写几个词时要同时出现才算命中。'
       '摘要只是线索，正文用 wiki_read 读。需要联网；网络不可用时会说明。';
 
   @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
         'properties': {
-          'query': {'type': 'string', 'description': '要找的名字、词或短语'},
+          'query': {'type': 'string', 'description': '一个页面名或名词'},
           'game': _gameParameter('搜哪个游戏的 Wiki，默认 arknights'),
           'limit': {
             'type': 'integer',
@@ -66,7 +67,10 @@ class WikiSearchTool extends AgentTool {
     } on WikiUnavailable catch (e) {
       return '$e。请只用本地知识库作答，并在答案里说明没能查 Wiki。';
     }
-    if (hits.isEmpty) return '没有找到：${site.label} 上没有与“$query”相关的页面。';
+    if (hits.isEmpty) {
+      return '没有找到：${site.label} 上没有与“$query”相关的页面。'
+          '${query.contains(RegExp(r'\s')) ? '几个词要同时出现才算命中，可以只用其中一个词再搜。' : ''}';
+    }
     final buffer = StringBuffer()
       ..writeln('${site.label} 搜索“$query”，${hits.length} 个页面'
           '（格式：页面引用 | 标题 | 摘要；读正文用 wiki_read 的 page 参数填页面引用）：');

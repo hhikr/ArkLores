@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -273,6 +274,63 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     return queryCollectionIndex(db, like: like, type: type);
   }
 
+  /// 0.14: each collection's mean vector, worked out from [_vectorIndex] on
+  /// first use and dropped with the connection.
+  Future<Map<String, Float32List>>? _centroids;
+
+  Future<Map<String, Float32List>> _loadCentroids(
+    sqflite.Database db,
+    StoryVectorIndex index,
+  ) async {
+    final rows = await db.rawQuery(
+      'SELECT story_id, collection_id FROM $storyCatalogTable',
+    );
+    return index.collectionCentroids({
+      for (final row in rows) '${row['story_id']}': '${row['collection_id']}',
+    });
+  }
+
+  @override
+  Future<List<RelatedCollection>> relatedCollections(String collectionId) async {
+    final db = await _open();
+    if (db == null) return const [];
+    final speakers = await querySharedSpeakers(db, collectionId);
+    Map<String, double>? similarity;
+    final index = await _loadVectorIndex();
+    if (index != null && await hasStoryCatalog(db)) {
+      final centroids = await (_centroids ??= _loadCentroids(db, index));
+      final own = centroids[collectionId];
+      if (own != null) {
+        similarity = {
+          for (final MapEntry(key: id, value: other) in centroids.entries)
+            if (id != collectionId) id: _dot(own, other),
+        };
+      }
+    }
+    final ranked = rankRelatedCollections(collectionId, speakers, similarity);
+    final labels = await queryCollectionLabels(db, ranked.map((r) => r.id));
+    return [
+      for (final r in ranked)
+        if (labels[r.id] case final found?)
+          RelatedCollection(
+            id: r.id,
+            label: found.label,
+            releaseMonth: found.releaseMonth,
+            shared: r.shared,
+            names: r.names,
+            similarity: r.similarity,
+          ),
+    ];
+  }
+
+  static double _dot(Float32List a, Float32List b) {
+    var sum = 0.0;
+    for (var i = 0; i < a.length; i++) {
+      sum += a[i] * b[i];
+    }
+    return sum;
+  }
+
   /// R15: name inventory of the currently open DB, loaded on first use and
   /// dropped with the connection (like [_vectorIndex]).
   Future<List<NameOccurrence>>? _nameInventory;
@@ -539,6 +597,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     _vectorIndex = null;
     _recordIndex = null;
     _nameInventory = null;
+    _centroids = null;
   }
 
   /// Runs [action] on the open knowledge base (read-only); null when none is

@@ -145,6 +145,11 @@ class MultiGameRetrieval implements GameDataRetrieval {
     return null;
   }
 
+  /// Within the collection's own game.
+  @override
+  Future<List<RelatedCollection>> relatedCollections(String collectionId) =>
+      _of(collectionId).relatedCollections(collectionId);
+
   @override
   Future<List<StoryCatalogEntry>> storiesByCode(String code) async => [
         for (final store in await _installed())
