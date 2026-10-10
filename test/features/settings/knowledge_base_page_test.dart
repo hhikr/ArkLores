@@ -17,6 +17,9 @@ Future<void> _pump(WidgetTester tester, FakeInstaller installer) async {
       overrides: [
         gameDataInstallStatusProvider.overrideWith((ref) async => installer.status),
         gameDataInstallerProvider.overrideWithValue(installer),
+        // The other game's page is kept alive beside the shown one.
+        endfieldInstallStatusProvider
+            .overrideWith((ref) async => installStatus(installed: false)),
       ],
       child: MaterialApp(
         locale: const Locale('zh'),
@@ -104,13 +107,82 @@ void main() {
     expect(find.textContaining('.download.gz'), findsNothing);
   });
 
-  testWidgets('the build section: GitHub token, build and check for updates',
-      (tester) async {
+  testWidgets('the update from game data: check, update, and the GitHub '
+      'token folded away', (tester) async {
     await _pumpStatus(tester, installStatus(installed: false));
-    expect(find.text('GitHub Token（可选）'), findsOneWidget);
-    expect(find.text('保存'), findsOneWidget);
-    expect(find.text('从源仓库构建'), findsWidgets); // card title + button
+    expect(find.text('用游戏数据更新'), findsOneWidget);
+    expect(find.text('拉取并更新'), findsOneWidget);
     expect(find.text('检查更新'), findsOneWidget);
+    // The token is one folded row until asked for.
+    expect(find.text('GitHub Token（可选）'), findsOneWidget);
+    expect(find.text('保存'), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('kb-build-token-toggle')));
+    await tester.tap(find.byKey(const Key('kb-build-token-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('保存'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // 0.14: one page per game, the same parts in the same order; nothing on
+  // the page says what the AI uses as evidence (it was out of date).
+  testWidgets('each game has its own page, chosen in the top bar',
+      (tester) async {
+    await _pumpStatus(
+      tester,
+      installStatus(
+        installed: true,
+        installedSha: 'aa',
+        releaseSha: 'aa',
+        manifest: const {
+          'story_line_count': '1200',
+          'normalized_record_count': '340',
+          'source_arknights_commit': 'a550f5e0123',
+        },
+      ),
+    );
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byKey(const ValueKey('kb-tab-arknights')), findsOneWidget);
+    expect(find.byKey(const ValueKey('kb-tab-endfield')), findsOneWidget);
+    expect(find.text('明日方舟知识库'), findsOneWidget);
+    expect(find.textContaining('不作为 AI 的证据来源'), findsNothing);
+    // What is in it, in the reader's words (no table names).
+    expect(
+      find.textContaining('剧情 1200 行 · 资料 340 条 · 数据版本 a550f5e'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('entities'), findsNothing);
+    expect(find.text('用游戏数据更新'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('kb-tab-endfield')));
+    await tester.pumpAndSettle();
+    expect(find.text('明日方舟知识库'), findsNothing);
+    expect(find.text('用游戏数据更新'), findsNothing);
+    expect(find.textContaining('随 App 发布更新'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  // 0.14: a knowledge base updated on the device is newer than the official
+  // asset; that asset is not offered as an "update" over it.
+  testWidgets('updated on this device: no update offered, going back to '
+      'the official one asks first', (tester) async {
+    final installer = FakeInstaller(
+      installStatus(installed: true, releaseSha: 'aa', builtLocally: true),
+    );
+    await _pump(tester, installer);
+    expect(installer.status.updateAvailable, isFalse);
+    expect(find.byKey(const Key('kb-status-local')), findsOneWidget);
+    expect(find.text('本机更新'), findsOneWidget);
+    expect(find.text('更新'), findsNothing);
+    expect(find.byKey(const Key('kb-download-button')), findsNothing);
+    expect(find.textContaining('有新版官方知识库'), findsNothing);
+    expect(find.text('换回官方版本'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('kb-redownload')));
+    await tester.pumpAndSettle();
+    expect(find.text('换回官方知识库？'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(installer.downloads, 0);
     expect(tester.takeException(), isNull);
   });
 }

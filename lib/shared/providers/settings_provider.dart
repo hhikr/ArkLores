@@ -41,7 +41,7 @@ final sessionLogsEnabledProvider = StateProvider<bool>((ref) {
 final initialAnswerOptionsProvider =
     Provider<AnswerOptions>((ref) => const AnswerOptions());
 
-/// The Ask answer options (reader's review, digest), saved on change.
+/// The Ask answer options (wikis, sub-agents), saved on change.
 class AnswerOptionsNotifier extends StateNotifier<AnswerOptions> {
   AnswerOptionsNotifier(this._service, AnswerOptions initial) : super(initial);
   final SettingsService _service;

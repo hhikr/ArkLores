@@ -776,9 +776,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiDeepThinking => '深度思考';
 
   @override
-  String get aiDeepThinkingTooltip => '写答案前先思考（较慢，耗更多 token）';
-
-  @override
   String get aiScrollToBottom => '回到底部';
 
   @override
@@ -911,9 +908,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String aiWorkDelegate(String task) {
     return '派助手：$task';
   }
-
-  @override
-  String get aiWorkRedo => '重写答案';
 
   @override
   String aiWorkHits(int hits, int stories) {
@@ -1074,11 +1068,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wikiSourcesUrlRequired => '请输入有效 URL';
 
   @override
-  String get kbStructuredTitle => 'GameData 结构化知识库';
+  String get kbArknightsTitle => '明日方舟知识库';
 
   @override
-  String get kbScopeDescription =>
-      'AI 只使用中文 GameData 知识库作为证据：实体、别名、原始记录、剧情原文与检索索引，以及可选的剧情向量。Wiki 与导入资料不作为 AI 的证据来源。';
+  String kbCountLines(String count) {
+    return '剧情 $count 行';
+  }
+
+  @override
+  String kbCountRecords(String count) {
+    return '资料 $count 条';
+  }
+
+  @override
+  String kbDataVersion(String commit) {
+    return '数据版本 $commit';
+  }
+
+  @override
+  String get kbLocalBuild => '本机更新';
+
+  @override
+  String get kbLocalBuildNote => '这份知识库在本机用游戏数据更新过，比随 App 发布的官方版本新。';
+
+  @override
+  String get kbBackToOfficial => '换回官方版本';
+
+  @override
+  String get kbBackToOfficialTitle => '换回官方知识库？';
+
+  @override
+  String get kbBackToOfficialBody =>
+      '会重新下载随 App 发布的官方知识库（约 185 MB），替换本机更新过的这一份；其中较新的游戏内容会消失。';
+
+  @override
+  String get kbEndfieldSourceNote =>
+      '终末地的数据从游戏客户端解包整理，随 App 发布更新，不能在设备上用游戏数据更新。';
 
   @override
   String kbStatusError(String error) {
@@ -1109,8 +1134,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbCancelDownload => '取消';
 
   @override
-  String kbManualHint(String dir) {
-    return '网络连不上时：用别的网络下载 Release 里的 arklores_gamedata_zh.db.gz，改名为 arklores_gamedata_zh.db.download.gz，放进 $dir，再点“下载”。';
+  String kbManualHint(String file, String dir) {
+    return '网络连不上时：用别的网络下载 Release 里的 $file.gz，改名为 $file.download.gz，放进 $dir，再点“下载”。';
   }
 
   @override
@@ -1147,23 +1172,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbDownload => '下载';
 
   @override
-  String get kbStatEntities => '实体';
-
-  @override
-  String get kbStatRecords => '原始记录';
-
-  @override
-  String get kbStatChunks => '文档片段';
-
-  @override
-  String get kbStatSourceCommit => '来源提交';
-
-  @override
-  String get kbBuildSectionTitle => '从源仓库构建';
+  String get kbBuildSectionTitle => '用游戏数据更新';
 
   @override
   String get kbBuildSectionDesc =>
-      '从 Kengxxiao/ArknightsGameData 拉取最新解包数据，在设备上按项目规约构建或增量更新知识库。需要网络；首次构建约需 1.5–2 GB 空闲空间。';
+      '官方知识库随 App 发布，可能落后于游戏。这里从 Kengxxiao/ArknightsGameData 拉取最新的解包数据，在设备上把知识库更新到游戏的最新内容。需要网络。';
+
+  @override
+  String get kbBuildFullConfirm =>
+      '这次只能完整重建：要下载约 170 MB、耗时较长，需要 1.5–2 GB 空闲空间；而且新库不带向量，现有的向量会丢失，要用自己的向量服务重新生成（有费用）。';
+
+  @override
+  String get kbBuildFullConfirmButton => '仍然完整重建';
 
   @override
   String get kbBuildLatestCommit => '最新提交';
@@ -1175,7 +1195,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbBuildCheckUpdates => '检查更新';
 
   @override
-  String get kbBuildFromSource => '从源仓库构建';
+  String get kbBuildFromSource => '拉取并更新';
 
   @override
   String get kbBuildCancel => '取消';
@@ -1325,11 +1345,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String kbBuildReportVectors(int count) {
-    return '有 $count 条向量因所在剧情变化而失效，可在下面的“故事向量”里补上。';
+    return '有 $count 条向量因所在剧情变化而失效，可在上面的“语义检索”里补上。';
   }
 
   @override
-  String get kbVectorTitle => '故事向量（语义检索）';
+  String get kbVectorTitle => '语义检索（向量）';
+
+  @override
+  String kbVectorSummary(int stories, int records) {
+    return '剧情向量 $stories 条 · 资料向量 $records 条';
+  }
+
+  @override
+  String get kbVectorComplete => '完整';
 
   @override
   String get kbVectorDesc =>
@@ -1436,26 +1464,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiAnswerReview => '复核';
 
   @override
-  String get aiAnswerReviewHint => '另一个模型以读者身份提出疑问，回原文核实后再定稿（更慢）';
+  String get aiAnswerReviewHint => '另一个模型以读者身份对这份回答提出疑问，回原文核实后在下面重新作答（多几次调用）';
+
+  @override
+  String get aiReviewRequest => '复核上面的回答';
 
   @override
   String get aiAnswerDigest => '提要';
 
   @override
-  String get aiAnswerDigestHint => '长答案先给几段提要，详细经过折叠在下面（多一次调用）';
+  String get aiAnswerDigestHint => '在这份回答上方加几段提要，详细经过折叠在下面（多一次调用）';
 
   @override
   String get aiAnswerWiki => 'Wiki 资料';
 
   @override
-  String get aiAnswerWikiHint =>
-      '联网查 PRTS / Warfarin Wiki，与本地原文一起检索；出自 Wiki 的说法会写明';
+  String get aiAnswerWikiShort => '联网查 PRTS / Warfarin，出处会写明';
 
   @override
   String get aiAnswerDelegate => '子助手';
 
   @override
-  String get aiAnswerDelegateHint => '问题很宽时，允许把部分检索交给最多两个子助手并行（调用和花费明显增加）';
+  String get aiAnswerDelegateShort => '问题很宽时并行检索，花费明显增加';
+
+  @override
+  String get aiDeepThinkingShort => '写答案前先思考，更慢、更费 token';
 
   @override
   String get aiNoVectorWarning => '没有配置向量服务：只用关键词检索，问答质量可能下降。可在设置里配置向量服务。';
@@ -1585,8 +1618,4 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbEndfieldTitle => '终末地知识库';
-
-  @override
-  String get kbEndfieldDescription =>
-      '《明日方舟：终末地》的剧情与资料（从游戏客户端解包整理，独立的文件，与明日方舟知识库分开下载）。安装后资料页会出现终末地的书架，问答会按问题查一个或两个游戏的库。';
 }

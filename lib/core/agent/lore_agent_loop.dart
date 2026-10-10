@@ -17,9 +17,10 @@
 /// once before the first turn; tool calls pass a gate before they run or
 /// enter the conversation; a provider that answers a turn badly is asked
 /// again that turn only; the answer is rewritten at most once, and only when
-/// a few dropped citations would not do; the reorganising call sees the
-/// entries alone; sub-agents are off unless asked for, and their steps are
-/// shown.
+/// a few dropped citations would not do; sub-agents are off unless asked
+/// for, and their steps are shown. The digest ([digest]) and the reader's
+/// review ([review]) are not part of a question: the app runs them when the
+/// player asks for them under a finished answer.
 ///
 /// Every story question takes this same path (R13), with one prompt.
 library;
@@ -48,9 +49,17 @@ import 'tools/wiki_tools.dart';
 /// The messages and seen lines of a conversation, carried into follow-up
 /// questions so they continue with the text already read.
 class LoreConversation {
-  LoreConversation({List<Message>? messages, SeenLines? seen, this.question = ''})
-      : messages = messages ?? [],
+  LoreConversation({
+    List<Message>? messages,
+    SeenLines? seen,
+    this.question = '',
+    this.entries = const [],
+  })  : messages = messages ?? [],
         seen = seen ?? SeenLines();
+
+  /// The entries of the last answer with the citations that passed the
+  /// check (what "提要" reorganises); empty when it was not a JSON answer.
+  final List<LoreAnswerEntry> entries;
 
   /// Everything after the system prompt: questions, tool calls, tool
   /// results and answers.
@@ -118,10 +127,7 @@ class LoreAgentLoop {
     this.subtaskMaxTurns = 10,
     this.delegate = false,
     this.maxSubtasks = 2,
-    this.review = false,
-    this.digest = true,
     this.preSearch = true,
-    this.stageMinEntries = 5,
     this.streamRetryDelay = const Duration(seconds: 2),
     this.heartbeat = const Duration(seconds: 10),
     this.onSpan,
@@ -189,20 +195,8 @@ class LoreAgentLoop {
   final bool delegate;
   final int maxSubtasks;
 
-  /// R18: a second model reads the main agent's answer as a reader and
-  /// raises questions the main agent checks in the text (once per
-  /// question). 0.14: off by default.
-  final bool review;
-
-  /// R18: whether a long answer is reorganised (see [stageMinEntries]).
-  final bool digest;
-
   /// 0.14: search the question before the first turn (main agent only).
   final bool preSearch;
-
-  /// R18: a JSON answer with at least this many text entries is
-  /// reorganised into a few paragraphs, the detailed answer kept below.
-  final int stageMinEntries;
 
   /// Model turns per question; the last one must answer.
   final int maxTurns;
@@ -228,7 +222,10 @@ class LoreAgentLoop {
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int turn, String rawResponse)? onRawLlmResponse,
+    String? asQuestion,
   }) async* {
+    // [asQuestion]: what a follow-up takes as the last question when
+    // [query] is not the player's own words (the reader's review).
     final seen = prior?.seen ?? SeenLines();
     // 0.12: the prompt describes every installed game's library.
     final games = store is MultiGameRetrieval
@@ -411,10 +408,9 @@ class LoreAgentLoop {
     var redoing = false;
 
     var citationRetried = false;
-    var reviewed = false;
     var nudged = false;
-    // R18: the answer last sent back for a rewrite (citation recheck or
-    // reader review); kept if the rewrite never comes.
+    // R18: the answer last sent back for a rewrite (citation recheck);
+    // kept if the rewrite never comes.
     String? rewriteOf;
     // That answer had no citation at all: a second one without any is the
     // model's answer (nothing better to keep), not talk about the process.
@@ -529,12 +525,7 @@ class LoreAgentLoop {
                 }
                 answerOpen = true;
                 jsonAnswer = LoreAnswerStream();
-                // R18: the detailed answer streams under the marker (folded
-                // in the app); the reorganised one is written above it.
-                // 0.14: only when it will be reorganised — without that
-                // the marker folded the whole answer while it was written.
-                live = '${digest ? '$loreDetailsMarker\n\n' : ''}'
-                    '${jsonAnswer.add(text.toString().substring(start.start))}';
+                live = jsonAnswer.add(text.toString().substring(start.start));
               }
             }
             if (jsonAnswer != null) {
@@ -895,45 +886,6 @@ class LoreAgentLoop {
         continue;
       }
 
-      // R18: a reader's review. Its questions go back to the main agent,
-      // which checks them in the text and writes the answer again (with
-      // its own citation check).
-      if (review && !subtask && !reviewed && !lastTurn) {
-        reviewed = true;
-        yield const ReActEvent(
-          type: ReActEventType.status,
-          content: '审稿中',
-        );
-        final issues = await _review(
-          query,
-          body.replaceAll(_coverageLine, '').trim(),
-          games,
-          (raw) => onRawLlmResponse?.call(++record, '（审稿）$raw'),
-        );
-        if (issues.isNotEmpty) {
-          yield ReActEvent(
-            type: ReActEventType.finalAnswerReset,
-            content: '审稿提出 ${issues.length} 个问题，回原文核实后重写',
-          );
-          yield ReActEvent(
-            type: ReActEventType.thought,
-            content: [
-              '读者审稿：',
-              for (final (i, issue) in issues.indexed) '${i + 1}. $issue',
-            ].join('\n'),
-          );
-          rewriteOf = keep;
-          rewriteUncited = false;
-          conversation
-            ..add(Message.assistant(keep))
-            ..add(Message.user(
-              loreReviewFollowUp(issues, json: fromJson != null),
-            ),);
-          citationRetried = false;
-          continue;
-        }
-      }
-
       if (trims.isNotEmpty) {
         yield ReActEvent(
           type: ReActEventType.recordNote,
@@ -972,15 +924,11 @@ class LoreAgentLoop {
       hidden.addAll(redoNotes);
       conversation.add(Message.assistant(fromJson == null ? body : keep));
 
-      // R18: reorganise a long JSON answer into a few paragraphs; the
-      // detailed answer stays below the marker.
-      final entries = !digest || fromJson == null || subtask || lastTurn
-          ? null
-          : loreAnswerEntries(content);
-      if (entries != null &&
-          entries.where((e) => e.isText).length >= stageMinEntries) {
-        final checked = [
-          for (final e in entries)
+      // What "提要" would reorganise: the entries with the citations that
+      // passed the check.
+      final entries = [
+        if (fromJson != null && !subtask)
+          for (final e in loreAnswerEntries(content) ?? const <LoreAnswerEntry>[])
             LoreAnswerEntry(
               heading: e.heading,
               text: e.text,
@@ -989,19 +937,7 @@ class LoreAgentLoop {
                   if (!unseen.contains(c)) ...(trims[c] ?? [c]),
               ],
             ),
-        ];
-        String? staged;
-        await for (final event in _stage(
-          checked,
-          question: query,
-          detail: body,
-          onRaw: (raw) => onRawLlmResponse?.call(++record, '（整理）$raw'),
-          onStaged: (markdown) => staged = markdown,
-        )) {
-          yield event;
-        }
-        if (staged != null) body = '$staged\n\n$loreDetailsMarker\n\n$body';
-      }
+      ];
 
       // A claim check carries a verdict: a definite one needs cited,
       // actually-read text (checked here, not left to the model).
@@ -1021,7 +957,12 @@ class LoreAgentLoop {
       // what each showed is still known.
       _foldOldToolResults(conversation, toolResults, shownIn, all: true);
       onConversation?.call(
-        LoreConversation(messages: visible(), seen: seen, question: query),
+        LoreConversation(
+          messages: visible(),
+          seen: seen,
+          question: asQuestion ?? query,
+          entries: entries,
+        ),
       );
       yield ReActEvent(
         type: ReActEventType.finalAnswerReplace,
@@ -1061,15 +1002,19 @@ class LoreAgentLoop {
     return out.stream;
   }
 
-  /// R18: the reviewer's questions about [answer] (empty when it has none
-  /// or the call fails — a failed review never blocks the answer).
-  Future<List<String>> _review(
+  /// R18: the reviewer's questions about [answer] to [query] (empty when it
+  /// has none or the call fails). 0.14: asked for under a finished answer;
+  /// the questions go back to the main agent as a follow-up.
+  Future<List<String>> review(
     String query,
-    String answer,
-    List<Game> games,
-    void Function(String raw) onRaw,
-  ) async {
+    String answer, {
+    void Function(String raw)? onRaw,
+  }) async {
+    onRaw ??= (_) {};
     try {
+      final games = store is MultiGameRetrieval
+          ? await (store as MultiGameRetrieval).installedGames()
+          : const [Game.arknights];
       final ids = <String>{
         for (final m in _citation.allMatches(answer)) m.group(1)!,
       };
@@ -1100,6 +1045,36 @@ class LoreAgentLoop {
       onRaw('审稿失败：$e');
       return const [];
     }
+  }
+
+  /// "提要" (0.14: asked for under a finished answer): [entries] grouped
+  /// into a few paragraphs above the detailed answer [detail]. Ends with
+  /// the whole text (paragraphs, [loreDetailsMarker], [detail]) and
+  /// `complete`, or with an `error` when no paragraphs came out ([detail]
+  /// is then all there is).
+  Stream<ReActEvent> digest(
+    List<LoreAnswerEntry> entries, {
+    required String question,
+    required String detail,
+    void Function(String raw)? onRaw,
+  }) async* {
+    String? staged;
+    yield* _stage(
+      entries,
+      question: question,
+      detail: detail,
+      onRaw: onRaw ?? (_) {},
+      onStaged: (markdown) => staged = markdown,
+    );
+    if (staged == null) {
+      yield const ReActEvent(type: ReActEventType.error, content: '没有整理出提要');
+      return;
+    }
+    yield ReActEvent(
+      type: ReActEventType.finalAnswerReplace,
+      content: '$staged\n\n$loreDetailsMarker\n\n$detail',
+    );
+    yield const ReActEvent(type: ReActEventType.complete);
   }
 
   /// R18: one more call that groups [entries] into a few paragraphs.

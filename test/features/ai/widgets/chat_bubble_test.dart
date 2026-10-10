@@ -121,6 +121,34 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // 0.14: "提要" and "复核" are buttons under a finished answer that can
+    // have them; a restored or running answer shows none.
+    testWidgets('the digest and the review are offered under the answer',
+        (tester) async {
+      await _pump(tester, _answer(_answered('答案正文。证据：$_c5:0。')));
+      expect(find.byKey(const ValueKey('answer-digest')), findsNothing);
+      expect(find.byKey(const ValueKey('answer-review')), findsNothing);
+
+      await _pump(
+        tester,
+        _answer(_answered('答案正文。证据：$_c5:0。'))
+            .copyWith(canDigest: true, canReview: true),
+      );
+      expect(find.byKey(const ValueKey('answer-digest')), findsOneWidget);
+      expect(find.byKey(const ValueKey('answer-review')), findsOneWidget);
+      expect(find.text('提要'), findsOneWidget);
+      expect(find.text('复核'), findsOneWidget);
+
+      await _pump(
+        tester,
+        _answer(_answered('答案正文。'), streaming: true, liveStatus: '整理答案')
+            .copyWith(canReview: true),
+        settle: false,
+      );
+      expect(find.byKey(const ValueKey('answer-review')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     // R18: the reorganised paragraphs are shown; the detailed answer below
     // the marker is one folded row. Evidence is counted once.
     testWidgets('a staged answer folds its details', (tester) async {

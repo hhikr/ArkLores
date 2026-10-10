@@ -37,6 +37,17 @@ class TurnStats {
     );
   }
 
+  /// This and [other] together (an answer and the digest asked for later).
+  TurnStats operator +(TurnStats other) => TurnStats(
+        calls: calls + other.calls,
+        promptTokens: promptTokens + other.promptTokens,
+        cachedPromptTokens: cachedPromptTokens + other.cachedPromptTokens,
+        completionTokens: completionTokens + other.completionTokens,
+        elapsed: elapsed + other.elapsed,
+        rateLimitRetries: rateLimitRetries + other.rateLimitRetries,
+        rateLimitSleep: rateLimitSleep + other.rateLimitSleep,
+      );
+
   final int calls;
   final int promptTokens;
   final int cachedPromptTokens;

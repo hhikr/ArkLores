@@ -173,6 +173,8 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
     String? reasoning,
     String? liveStatus,
     TurnStats? stats,
+    bool? canDigest,
+    bool? canReview,
   }) {
     if (!mounted) return;
     state = [
@@ -187,6 +189,8 @@ abstract class ChatNotifierBase extends StateNotifier<List<ChatMessage>> {
             reasoning: reasoning,
             liveStatus: liveStatus,
             stats: stats,
+            canDigest: canDigest,
+            canReview: canReview,
           )
         else
           message,

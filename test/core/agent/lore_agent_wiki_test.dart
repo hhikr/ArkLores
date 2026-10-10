@@ -144,7 +144,6 @@ void main() {
         client: client,
         store: store,
         wiki: fakeWikiLookup(),
-        review: false,
       ).run(query: '星灯和谁是旧识？').toList();
       expect(client.toolNames.first, containsAll(['wiki_search', 'wiki_read']));
       expect(client.requests.first.first.content, contains('Wiki 资料'));
@@ -155,7 +154,7 @@ void main() {
       expect(answer, isNot(contains('未能在本次读到的原文中核实')));
 
       final without = _ScriptedClient([_answer('没有查到。\n[COVERAGE: gaps]')]);
-      await LoreAgentLoop(client: without, store: store, review: false)
+      await LoreAgentLoop(client: without, store: store)
           .run(query: '星灯？')
           .toList();
       expect(without.toolNames.first, isNot(contains('wiki_read')));
@@ -173,7 +172,6 @@ void main() {
         client: client,
         store: store,
         wiki: fakeWikiLookup(),
-        review: false,
       ).run(query: '星灯？').toList();
       expect(client.requests[2].last.content, contains('wiki:prts:101@7:3'));
       expect(client.requests[2].last.content, contains('实际看到的行或记录'));
@@ -195,7 +193,6 @@ void main() {
         client: client,
         store: store,
         wiki: fakeWikiLookup(prts: prts),
-        review: false,
       ).run(query: '星灯做什么？').toList();
       final observation = events
           .firstWhere((e) => e.type == ReActEventType.toolObservation)

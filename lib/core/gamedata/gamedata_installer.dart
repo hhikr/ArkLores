@@ -19,7 +19,13 @@ class GameDataInstallStatus {
     required this.manifest,
     this.installedAssetSha,
     this.releaseAssetSha,
+    this.builtLocally = false,
   });
+
+  /// The installed DB was built or updated on this device from the game
+  /// data (0.14: `<db>.local_build`), so it is not an official asset — and
+  /// usually newer than the one this app points at.
+  final bool builtLocally;
   final bool installed;
   final String dbPath;
   final int bytes;
@@ -33,9 +39,12 @@ class GameDataInstallStatus {
   final String? releaseAssetSha;
 
   /// The app was built for a different official knowledge base than the one
-  /// installed (e.g. a new data release), so "update" is worth a tap.
+  /// installed (e.g. a new data release), so "update" is worth a tap. Not
+  /// for a DB built on this device: the official asset would replace newer
+  /// data with older (the page offers going back to it as its own choice).
   bool get updateAvailable =>
       installed &&
+      !builtLocally &&
       releaseAssetSha != null &&
       releaseAssetSha!.isNotEmpty &&
       releaseAssetSha!.toLowerCase() != installedAssetSha?.toLowerCase();
@@ -141,6 +150,10 @@ class GameDataInstaller {
   /// Sidecar recording which official asset (gz SHA-256) was installed.
   static const _assetMarkerSuffix = '.asset_sha256';
 
+  /// Beside a DB built or updated on the device (written by the build's
+  /// swap, removed when a file is installed over it).
+  static const localBuildMarkerSuffix = '.local_build';
+
   /// Partial download of the compressed asset (resumed across attempts).
   static const _partialSuffix = '.download.gz';
   final Directory? installDirectory;
@@ -174,6 +187,8 @@ class GameDataInstaller {
       releaseAssetSha: releaseAssetUrl.trim().isEmpty
           ? null
           : releaseAssetSha.trim(),
+      builtLocally:
+          exists && await File('${file.path}$localBuildMarkerSuffix').exists(),
     );
   }
 
@@ -440,6 +455,8 @@ class GameDataInstaller {
     // a new one for official assets.
     final marker = File('${dbFile.path}$_assetMarkerSuffix');
     if (await marker.exists()) await marker.delete();
+    final local = File('${dbFile.path}$localBuildMarkerSuffix');
+    if (await local.exists()) await local.delete();
     await tmp.rename(dbFile.path);
   }
 

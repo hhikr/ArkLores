@@ -81,7 +81,78 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           ],
           _buildAssistantContentBox(theme),
           if (storyAnswer) _buildCitationTree(theme),
+          if (!msg.isStreaming && (msg.canDigest || msg.canReview))
+            _buildAnswerActions(theme),
           if (msg.stats != null) _buildStatsLine(theme, msg.stats!),
+        ],
+      ),
+    );
+  }
+
+  /// 0.14: what can be asked for once the answer is there — "提要" (a long
+  /// answer reorganised into a few paragraphs above it) and "复核" (a
+  /// reader's review, answered below as a turn of its own).
+  Widget _buildAnswerActions(AppThemeTokens theme) {
+    final msg = widget.message;
+    // Read when pressed: showing an answer does not need the chat itself.
+    AskChatNotifier chat() => ref.read(askChatProvider.notifier);
+    Widget action(String key, IconData icon, String label, String hint,
+            VoidCallback onTap,) =>
+        Tooltip(
+          message: hint,
+          child: PressFeedback(
+            pressedScale: 0.92,
+            child: InkWell(
+              key: ValueKey(key),
+              onTap: withHaptic(onTap),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.divider),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 15, color: theme.accentText),
+                    const SizedBox(width: 5),
+                    Text(
+                      label,
+                      style: theme.bodyFont.copyWith(
+                        fontSize: 12.5,
+                        color: theme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          if (msg.canDigest)
+            action(
+              'answer-digest',
+              Icons.short_text_sharp,
+              context.t.aiAnswerDigest,
+              context.t.aiAnswerDigestHint,
+              () => chat().digestAnswer(msg.id),
+            ),
+          if (msg.canReview)
+            action(
+              'answer-review',
+              Icons.fact_check_sharp,
+              context.t.aiAnswerReview,
+              context.t.aiAnswerReviewHint,
+              () => chat().reviewAnswer(
+                msg.id,
+                label: context.t.aiReviewRequest,
+              ),
+            ),
         ],
       ),
     );

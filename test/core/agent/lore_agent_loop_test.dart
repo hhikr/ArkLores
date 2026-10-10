@@ -356,7 +356,7 @@ void main() {
         () async {
       Future<String> systemOf(MultiGameRetrieval both) async {
         final client = _ScriptedClient([_answer('没有查到。\n[COVERAGE: gaps]')]);
-        await LoreAgentLoop(client: client, store: both, review: false)
+        await LoreAgentLoop(client: client, store: both)
             .run(query: '问题')
             .toList();
         return client.requests.first.first.content;
@@ -726,11 +726,7 @@ void main() {
         client: client,
         store: store,
         delegate: true,
-        review: true,
       ).run(query: '星灯做了什么？').toList();
-      // R18: only the main agent's answer is reviewed.
-      expect(client.reviewRequests, hasLength(1));
-      expect(client.reviewRequests.single.first.content, loreReviewPrompt);
       final child = client.requests[1];
       expect(child.first.content, contains('子助手'));
       expect(child[1].content, contains('建议阅读：obt/main/level_main_fx-01.txt'));
@@ -762,10 +758,13 @@ void main() {
       );
     });
 
-    // R18: the reviewer reads the answer (no tools, no text); its questions
-    // go back to the main agent, which checks them and answers again. One
-    // review per question; the rewrite gets its own citation check.
-    test('a reader review sends its questions back once', () async {
+    // R18, 0.14 asked for under a finished answer: the reviewer reads the
+    // answer (no tools, no text); its questions go back to the main agent
+    // as a follow-up of that conversation, which checks them and answers
+    // again with its own citation check. A question is never reviewed
+    // unasked.
+    test('a reader review of a finished answer; its questions are checked '
+        'in a follow-up', () async {
       const story = 'obt/main/level_main_fx-01.txt';
       final client = _ScriptedClient(
         [
@@ -774,64 +773,71 @@ void main() {
           _call('grep', {'pattern': '星灯'}),
           _answer('星灯点亮了钟楼 `$story:1`，后来离开 `$story:3`。'),
         ],
-        reviews: ['{"issues": ["后来离开城市的经过是否被漏掉？"]}', '{"issues": ["再问"]}'],
+        reviews: ['{"issues": ["后来离开城市的经过是否被漏掉？"]}'],
       );
-      final events =
-          await LoreAgentLoop(client: client, store: store, review: true)
-              .run(query: '星灯做了什么？')
-              .toList();
-      expect(client.reviewRequests, hasLength(1));
+      final conversations = <LoreConversation>[];
+      final first = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？', onConversation: conversations.add)
+          .toList();
+      expect(client.reviewRequests, isEmpty);
+      final loop =
+          LoreAgentLoop(client: client, store: store, preSearch: false);
+      final issues = await loop.review(
+        '星灯做了什么？',
+        finalAnswerOf(first).replaceAll(storyAnswerEnvelopePattern, ''),
+      );
+      expect(issues, ['后来离开城市的经过是否被漏掉？']);
       final review = client.reviewRequests.single;
       expect(review.first.content, loreReviewPrompt);
       expect(review[1].content, contains('星灯做了什么？'));
       expect(review[1].content, contains('星灯点亮了钟楼'));
       expect(review[1].content, contains('虚构主线'));
       expect(review[1].content, isNot(contains('.txt')));
+      final events = await loop
+          .run(
+            query: loreReviewFollowUp(issues, json: false),
+            prior: conversations.single,
+            asQuestion: '星灯做了什么？',
+            onConversation: conversations.add,
+          )
+          .toList();
       final followUp = client.requests[2].last.content;
       expect(followUp, contains('后来离开城市的经过是否被漏掉？'));
       expect(followUp, contains('只是线索'));
       expect(followUp, contains('不写读者问题里的文件名'));
       expect(loreReviewPrompt, contains('不写文件名'));
+      // The first answer is part of what the follow-up sees.
       expect(
-        events
-            .where((e) => e.type == ReActEventType.finalAnswerReset)
-            .map((e) => e.content),
-        ['审稿提出 1 个问题，回原文核实后重写'],
-      );
-      expect(
-        events.any((e) =>
-            e.type == ReActEventType.thought && e.content.contains('读者审稿'),),
-        isTrue,
+        client.requests[2].map((m) => m.content),
+        contains(contains('星灯点亮了钟楼')),
       );
       final answer = finalAnswerOf(events);
       expect(answer, contains('后来离开 `$story:3`'));
       expect(parseStoryAnswerEnvelope(answer)!.status,
           StoryAnswerStatus.answered,);
+      // A later follow-up still takes the player's question as the last.
+      expect(conversations.last.question, '星灯做了什么？');
     });
 
-    // R18: a rewrite reply that only talks about the process is asked for
-    // once more; if it still is not an answer, the earlier answer stays.
-    test('a process-only reply after a review is asked again, then the '
-        'earlier answer is kept', () async {
+    // R18: after an answer was sent back, a reply that only talks about the
+    // process is asked for once more; if it still is not an answer, the
+    // answer that was sent back stays.
+    test('a process-only reply after an answer was sent back is asked '
+        'again, then the earlier answer is kept', () async {
       const story = 'obt/main/level_main_fx-01.txt';
-      final client = _ScriptedClient(
-        [
-          _call('read_story', {'story_id': story}),
-          _answer('星灯点亮了钟楼 `$story:1`。'),
-          _answer('出处已核实，现在输出最终答案。'),
-          _answer('好的。'),
-        ],
-        reviews: ['{"issues": ["后来呢？"]}'],
-      );
-      final events =
-          await LoreAgentLoop(client: client, store: store, review: true)
-              .run(query: '星灯做了什么？')
-              .toList();
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': story}),
+        // A citation without a line number: sent back once.
+        _answer('星灯点亮了钟楼 `$story:1`，后来离开 `$story`。'),
+        _answer('出处已核实，现在输出最终答案。'),
+        _answer('好的。'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
       expect(client.requests, hasLength(4));
       expect(client.requests.last.last.content, contains('不是最终答案'));
       final answer = finalAnswerOf(events);
-      expect(parseStoryAnswerEnvelope(answer)!.status,
-          StoryAnswerStatus.answered,);
       expect(answer, contains('星灯点亮了钟楼 `$story:1`'));
     });
 
@@ -853,29 +859,52 @@ void main() {
       ('星灯离开了城市。', [[main, 3, 3]]),
     ]);
 
-    test('a long answer is reorganised; citations merge from its entries',
-        () async {
-      final client = _ScriptedClient(
-        [
-          _call('read_story', {'story_id': main}),
-          _call('read_story', {'story_id': act}),
-          _answer(fiveEntries),
-          _answer(jsonEncode({
-            'stages': [
-              {'heading': '到来', 'text': '星灯到城里并答应点亮钟楼。', 'from': [1, 2, 3]},
-              {'text': '星灯最后离开。', 'from': [5]},
-            ],
-          }),),
-        ],
-        reviews: ['{"ok": true}'],
-      );
+    // 0.14: the digest is asked for under a finished answer; the question
+    // itself ends with the answer as written.
+    test('a long answer is final as written; its digest, asked for after, '
+        'merges citations from its entries', () async {
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _call('read_story', {'story_id': act}),
+        _answer(fiveEntries),
+        _answer(jsonEncode({
+          'stages': [
+            {'heading': '到来', 'text': '星灯到城里并答应点亮钟楼。', 'from': [1, 2, 3]},
+            {'text': '星灯最后离开。', 'from': [5]},
+          ],
+        }),),
+      ]);
       final conversations = <LoreConversation>[];
-      final events = await LoreAgentLoop(client: client, store: store)
+      final loop = LoreAgentLoop(client: client, store: store);
+      final written = await loop
           .run(
             query: '星灯做了什么？',
             onConversation: conversations.add,
           )
           .toList();
+      expect(client.requests, hasLength(3));
+      expect(client.reviewRequests, isEmpty);
+      final detailed = finalAnswerOf(written);
+      expect(detailed, isNot(contains('[DETAILS]')));
+      expect(detailed, contains('星灯离开了城市。 `$main:3`'));
+      // The answer streams as the answer (nothing folds it away).
+      expect(
+        written
+            .where((e) => e.type == ReActEventType.finalAnswerToken)
+            .map((e) => e.content)
+            .join(),
+        isNot(contains('[DETAILS]')),
+      );
+      final conversation = conversations.single;
+      expect(conversation.entries.where((e) => e.isText), hasLength(5));
+      final events = await loop
+          .digest(
+            conversation.entries,
+            question: conversation.question,
+            detail: detailed.substring(detailed.indexOf('\n') + 1),
+          )
+          .toList();
+      expect(events.last.type, ReActEventType.complete);
       expect(client.requests, hasLength(4));
       final stage = client.requests.last;
       // 0.14: the reorganising call sees the question and the entries only
@@ -886,8 +915,9 @@ void main() {
       expect(stage.last.content, contains('星灯做了什么？'));
       expect(stage.last.content, contains('1. 夜里星灯到来。'));
       expect(stage.last.content, contains('"stages"'));
-      final answer = finalAnswerOf(events);
-      final body = answer.substring(answer.indexOf('\n') + 1);
+      final body = events
+          .lastWhere((e) => e.type == ReActEventType.finalAnswerReplace)
+          .content;
       expect(
         body,
         startsWith('## 到来\n\n'
@@ -896,71 +926,35 @@ void main() {
             '星灯最后离开。 `$main:3`\n\n[DETAILS]\n\n'),
       );
       expect(body, contains('星灯离开了城市。 `$main:3`'));
-      expect(parseStoryAnswerEnvelope(answer)!.status,
-          StoryAnswerStatus.answered,);
-      // The detailed answer streamed under the marker; the paragraphs were
-      // written above it.
-      final streamed = events
-          .where((e) => e.type == ReActEventType.finalAnswerToken)
-          .map((e) => e.content)
-          .join();
-      expect(streamed, startsWith('[DETAILS]\n\n'));
       // A follow-up continues after the detailed JSON answer.
-      final kept = conversations.single.messages;
-      expect(kept.last.content, startsWith('{"entries"'));
+      expect(conversation.messages.last.content, startsWith('{"entries"'));
     });
 
-    test('a failed reorganisation keeps the detailed answer only', () async {
+    test('a digest that cannot be read ends in an error: the answer stays '
+        'as it is', () async {
       final client = _ScriptedClient([
         _call('read_story', {'story_id': main}),
         _call('read_story', {'story_id': act}),
         _answer(fiveEntries),
         _answer('不是 JSON'),
       ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？')
+      final conversations = <LoreConversation>[];
+      final loop = LoreAgentLoop(client: client, store: store);
+      await loop
+          .run(query: '星灯做了什么？', onConversation: conversations.add)
           .toList();
-      final answer = finalAnswerOf(events);
-      expect(answer, isNot(contains('[DETAILS]')));
-      expect(answer, contains('夜里星灯到来。 `$main:0`'));
-    });
-
-    test('with the digest and the review off, a long answer is final as '
-        'written', () async {
-      final client = _ScriptedClient(
-        [
-          _call('read_story', {'story_id': main}),
-          _call('read_story', {'story_id': act}),
-          _answer(fiveEntries),
-        ],
-        reviews: ['{"issues": ["后来呢？"]}'],
+      final events = await loop
+          .digest(
+            conversations.single.entries,
+            question: '星灯做了什么？',
+            detail: '详细经过',
+          )
+          .toList();
+      expect(events.last.type, ReActEventType.error);
+      expect(
+        events.where((e) => e.type == ReActEventType.complete),
+        isEmpty,
       );
-      final events = await LoreAgentLoop(
-        client: client,
-        store: store,
-        review: false,
-        digest: false,
-      ).run(query: '星灯做了什么？').toList();
-      expect(client.requests, hasLength(3));
-      expect(client.reviewRequests, isEmpty);
-      final answer = finalAnswerOf(events);
-      expect(answer, isNot(contains('[DETAILS]')));
-      expect(answer, contains('星灯离开了城市。 `$main:3`'));
-    });
-
-    test('a short answer is not reorganised', () async {
-      final client = _ScriptedClient([
-        _call('read_story', {'story_id': main}),
-        _answer(detailJson([
-          ('星灯答应点亮钟楼。', [[main, 1, 1]]),
-          ('星灯离开了城市。', [[main, 3, 3]]),
-        ]),),
-      ]);
-      final events = await LoreAgentLoop(client: client, store: store)
-          .run(query: '星灯做了什么？')
-          .toList();
-      expect(client.requests, hasLength(2));
-      expect(finalAnswerOf(events), isNot(contains('[DETAILS]')));
     });
 
     test('fact check: a definite verdict without checked citations is '
@@ -1152,7 +1146,6 @@ void main() {
       final events = await LoreAgentLoop(
         client: client,
         store: store,
-        review: false,
         streamRetryDelay: Duration.zero,
       ).run(query: '钟楼？').toList();
       expect(client.attempts, 4); // two dropped, then the two real turns
@@ -1165,7 +1158,6 @@ void main() {
       final events = await LoreAgentLoop(
         client: client,
         store: store,
-        review: false,
         streamRetryDelay: Duration.zero,
       ).run(query: '钟楼？').toList();
       expect(client.attempts, 3);

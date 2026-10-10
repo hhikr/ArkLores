@@ -10,7 +10,9 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import '../../shared/providers/settings_provider.dart';
 import '../background/background_work.dart';
 import '../llm/embedding_client.dart';
+import 'game.dart';
 import 'gamedata_installer.dart';
+import 'gamedata_provider.dart';
 import 'story_vector_updater.dart';
 
 /// Where the vector update stands.
@@ -78,19 +80,31 @@ class StoryVectorUiState {
       );
 }
 
-final storyVectorProvider =
-    StateNotifierProvider<StoryVectorNotifier, StoryVectorUiState>((ref) {
-  return StoryVectorNotifier(() => ref.read(embeddingConfigProvider));
+/// 0.14: one per game. Each knowledge base has its own vectors, and the
+/// work is the same for both (`story_vector_updater.dart` reads only the
+/// database it is given).
+final storyVectorProvider = StateNotifierProvider.family<StoryVectorNotifier,
+    StoryVectorUiState, Game>((ref, game) {
+  return StoryVectorNotifier(
+    () => ref.read(embeddingConfigProvider),
+    () => ref.read(installerOf(game)).getStatus(),
+    game: game,
+  );
 });
 
 class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
-  StoryVectorNotifier(this._config) : super(const StoryVectorUiState());
+  StoryVectorNotifier(this._config, this._status, {this.game = Game.arknights})
+      : super(const StoryVectorUiState());
 
   final EmbeddingConfig Function() _config;
+  final Future<GameDataInstallStatus> Function() _status;
+
+  /// Whose knowledge base this looks at.
+  final Game game;
   bool _cancel = false;
 
   Future<String?> _dbPath() async {
-    final status = await GameDataInstaller().getStatus();
+    final status = await _status();
     return status.installed ? status.dbPath : null;
   }
 
@@ -135,7 +149,10 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
   /// Embeds the stories without vectors with the configured embedding
   /// service. Needs a valid configuration (the page checks it first).
   Future<void> start() => BackgroundWork.instance.run(
-        BackgroundWork.text('正在生成故事向量', 'Generating story vectors'),
+        BackgroundWork.text(
+          '正在生成${game.label}的向量',
+          'Generating ${game.labelEn} vectors',
+        ),
         _start,
       );
 

@@ -42,7 +42,7 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
-  AskChatNotifier makeNotifier(_RecorderLLM mock, {bool review = false}) {
+  AskChatNotifier makeNotifier(_RecorderLLM mock) {
     mock.meter = meter;
     return AskChatNotifier(
       agent: StoryQaAgent(llmClient: mock, gameDataStore: knowledge),
@@ -52,7 +52,7 @@ void main() {
         chatModel: 'test-model',
         chatBaseUrl: 'https://example.com/v1',
       ),
-      optionsReader: () => AnswerOptions(review: review),
+      optionsReader: () => const AnswerOptions(),
     );
   }
 
@@ -67,7 +67,7 @@ void main() {
         () async {
       AgentLogger.setEnabled(true);
       final mock = _RecorderLLM()..reads = 2;
-      final notifier = makeNotifier(mock, review: true);
+      final notifier = makeNotifier(mock);
 
       await notifier.sendMessage('特雷西娅的死是谁造成的');
 
@@ -78,26 +78,29 @@ void main() {
       expect(turn.model, 'test-model');
       expect(turn.baseUrl, 'https://example.com/v1');
       expect(turn.status, ChatTurnStatus.completed);
-      // Every model response is recorded untruncated: two reads, the
-      // answer, and (R18) the reader's review of it. No vectors in the
+      // Every model response is recorded untruncated: two reads and the
+      // answer (0.14: no review unless asked for). No vectors in the
       // fixture and no plan of first searches from this model (0.14): the
       // note that only keywords are searched is recorded first, then that
       // no plan came.
-      expect(turn.iterations, hasLength(6));
+      expect(turn.iterations, hasLength(5));
       expect(turn.iterations.first.thought, contains('问答质量可能下降'));
       expect(turn.iterations[1].rawResponse, startsWith('（拟定检索）'));
       expect(turn.iterations[2].rawResponse, contains('read_story'));
       expect(turn.iterations[2].tool, 'read_story');
       expect(turn.iterations[4].rawResponse, contains('结论：博士'));
-      expect(turn.iterations.last.rawResponse, startsWith('（审稿）'));
-      // What the turn cost: the four calls, their tokens, one timeline row
+      expect(
+        turn.iterations.map((i) => i.rawResponse),
+        isNot(contains(startsWith('（审稿）'))),
+      );
+      // What the turn cost: the three calls, their tokens, one timeline row
       // per call; the same totals sit under the answer on screen.
-      expect(turn.usage!.calls, 4);
-      expect(turn.usage!.promptTokens, 400);
-      expect(turn.usage!.cachedPromptTokens, 200);
-      expect(turn.usage!.completionTokens, 40);
-      expect(turn.timeline, hasLength(4));
-      expect(notifier.state.last.stats!.calls, 4);
+      expect(turn.usage!.calls, 3);
+      expect(turn.usage!.promptTokens, 300);
+      expect(turn.usage!.cachedPromptTokens, 150);
+      expect(turn.usage!.completionTokens, 30);
+      expect(turn.timeline, hasLength(3));
+      expect(notifier.state.last.stats!.calls, 3);
       expect(notifier.state.last.stats!.cacheRate, 0.5);
     });
 
@@ -145,30 +148,160 @@ void main() {
       );
     });
 
-    test('the answer options are read per question: review off, no review',
+    // 0.14: "复核" is asked for under the last answer and runs as a turn of
+    // its own; the answer it reviews stays as it is.
+    test('a review with no question says so; the answer stays and a '
+        'follow-up still continues from it', () async {
+      AgentLogger.setEnabled(true);
+      final mock = _RecorderLLM()..reviewReply = '{"ok": true}';
+      final notifier = makeNotifier(mock);
+
+      await notifier.sendMessage('她是谁');
+      final answer = notifier.state.last;
+      expect(answer.canReview, isTrue);
+      expect(answer.canDigest, isFalse); // a one-entry answer
+
+      mock.resetAgentCalls();
+      await notifier.reviewAnswer(answer.id, label: '复核上面的回答');
+      expect(notifier.state, hasLength(4));
+      expect(notifier.state[1].content, answer.content);
+      expect(notifier.state[1].canReview, isFalse);
+      expect(notifier.state[2].content, '复核上面的回答');
+      expect(notifier.state.last.content, StoryQaAgent.reviewClearNote);
+      expect(notifier.state.last.canReview, isFalse);
+      expect(notifier.state.last.isError, isFalse);
+      // One call: the reader's.
+      expect(notifier.state.last.stats!.calls, 1);
+      final turn = (await singleSession()).turns.last;
+      expect(turn.query, '复核上面的回答');
+      expect(turn.iterations.single.rawResponse, startsWith('（审稿）'));
+
+      // The next question continues the reviewed answer's conversation
+      // (what it read is still known: it is not read again).
+      mock.resetAgentCalls();
+      mock.reads = 0;
+      await notifier.sendMessage('后来呢');
+      expect(mock.requests.last.map((m) => m.content),
+          contains(contains('她是罗德岛的公开领袖')),);
+      expect(notifier.state.last.content, contains('结论：博士'));
+    });
+
+    test("a review's questions go back to the agent, which answers again "
+        'below', () async {
+      AgentLogger.setEnabled(true);
+      final mock = _RecorderLLM()..reviewReply = '{"issues": ["后来呢？"]}';
+      final notifier = makeNotifier(mock);
+
+      await notifier.sendMessage('她是谁');
+      final answer = notifier.state.last;
+      mock.resetAgentCalls();
+      await notifier.reviewAnswer(answer.id, label: '复核上面的回答');
+
+      expect(notifier.state, hasLength(4));
+      expect(notifier.state[1].content, answer.content);
+      final reviewed = notifier.state.last;
+      expect(reviewed.content, contains('结论：博士'));
+      expect(reviewed.canReview, isFalse); // not reviewed again
+      expect(reviewed.steps.first.content, contains('读者审稿'));
+      expect(reviewed.steps.first.content, contains('后来呢？'));
+      // The agent got the reader's question after its own answer.
+      final asked = mock.requests.last.map((m) => m.content).toList();
+      expect(asked, contains(contains('一位读者审读了你的答案')));
+      expect(asked, contains(contains('后来呢？')));
+      final turn = (await singleSession()).turns.last;
+      expect(turn.iterations.first.rawResponse, startsWith('（审稿）'));
+      expect(turn.answer, contains('结论：博士'));
+      // The reader read the answer without its status line and citations.
+      expect(mock.reviewRequest, contains('她是罗德岛的公开领袖'));
+      expect(mock.reviewRequest, isNot(contains('STORY_ANSWER')));
+      expect(mock.reviewRequest, isNot(contains('.txt')));
+    });
+
+    test('a review is offered under the last answer only; one that was '
+        'canceled can be asked for again', () async {
+      final mock = _RecorderLLM()..reviewReply = '{"ok": true}';
+      final notifier = makeNotifier(mock);
+      await notifier.sendMessage('第一问');
+      final first = notifier.state.last.id;
+      mock.resetAgentCalls();
+      await notifier.sendMessage('第二问');
+      expect(notifier.state[1].canReview, isFalse);
+      expect(notifier.state.last.canReview, isTrue);
+      // Asking for the earlier one does nothing.
+      await notifier.reviewAnswer(first, label: '复核');
+      expect(notifier.state, hasLength(4));
+
+      final second = notifier.state.last.id;
+      mock
+        ..resetAgentCalls()
+        ..reviewGate = Completer<void>();
+      final running = notifier.reviewAnswer(second, label: '复核');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      notifier.cancel();
+      mock.reviewGate!.complete();
+      await running;
+      expect(notifier.state[3].canReview, isTrue);
+    });
+
+    // 0.14: "提要" is asked for under a long answer; the paragraphs go
+    // above it, the answer itself stays below the marker.
+    test('a digest is written above a long answer and its cost added',
         () async {
       AgentLogger.setEnabled(true);
       final mock = _RecorderLLM()
-        ..reads = 2
-        ..meter = meter;
-      var options = const AnswerOptions(review: false);
-      final notifier = AskChatNotifier(
-        agent: StoryQaAgent(llmClient: mock, gameDataStore: knowledge),
-        usage: meter,
-        sessionStore: store,
-        configReader: () => const LLMConfig(),
-        optionsReader: () => options,
+        ..longAnswer = true
+        ..stageReply = '{"stages": [{"heading": "身份", "text": "她是领袖。", '
+            '"from": [1, 2, 3, 4, 5]}]}';
+      final notifier = makeNotifier(mock);
+      await notifier.sendMessage('她是谁');
+      final answer = notifier.state.last;
+      expect(answer.canDigest, isTrue);
+      expect(answer.content, isNot(contains('[DETAILS]')));
+      final calls = answer.stats!.calls;
+
+      await notifier.digestAnswer(answer.id);
+      final digested = notifier.state.last;
+      expect(notifier.state, hasLength(2));
+      expect(digested.isStreaming, isFalse);
+      expect(digested.canDigest, isFalse);
+      expect(digested.canReview, isTrue);
+      expect(
+        digested.content,
+        startsWith('[STORY_ANSWER: status=answered]\n## 身份\n\n她是领袖。 '
+            '`$_story:0`\n\n[DETAILS]\n\n'),
       );
-      await notifier.sendMessage('甲是谁');
-      final first = (await singleSession()).turns.single;
-      expect(first.iterations, hasLength(5));
-      expect(first.iterations.map((i) => i.rawResponse),
-          isNot(contains(startsWith('（审稿）'))),);
-      options = const AnswerOptions(review: true);
-      mock.resetAgentCalls();
-      await notifier.sendMessage('乙是谁');
-      final second = (await singleSession()).turns.last;
-      expect(second.iterations.last.rawResponse, startsWith('（审稿）'));
+      expect(digested.content, endsWith(answer.content.split('\n').last));
+      expect(digested.stats!.calls, calls + 1);
+      final turn = (await singleSession()).turns.single;
+      expect(turn.answer, digested.content);
+      expect(turn.iterations.last.rawResponse, startsWith('（整理）'));
+      expect(turn.usage!.calls, calls + 1);
+    });
+
+    test('a digest that fails or is canceled leaves the answer as it was',
+        () async {
+      final mock = _RecorderLLM()
+        ..longAnswer = true
+        ..stageReply = '不是 JSON';
+      final notifier = makeNotifier(mock);
+      await notifier.sendMessage('她是谁');
+      final answer = notifier.state.last;
+
+      await notifier.digestAnswer(answer.id);
+      expect(notifier.state.last.content, answer.content);
+      expect(notifier.state.last.canDigest, isTrue);
+      expect(notifier.state.last.isStreaming, isFalse);
+
+      mock.stageGate = Completer<void>();
+      final running = notifier.digestAnswer(answer.id);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(notifier.state.last.isStreaming, isTrue);
+      notifier.cancel();
+      mock.stageGate!.complete();
+      await running;
+      expect(notifier.state.last.content, answer.content);
+      expect(notifier.state.last.isError, isFalse);
+      expect(notifier.state.last.canDigest, isTrue);
     });
 
     test('the cost is counted per question, not accumulated', () async {
@@ -354,6 +487,20 @@ class _RecorderLLM extends LLMClient {
   Completer<void>? gate;
   UsageMeter? meter;
 
+  /// What the reader ("复核") replies, and what it was asked.
+  String reviewReply = '{"ok": true}';
+  String reviewRequest = '';
+  Completer<void>? reviewGate;
+
+  /// The answer has five entries (long enough for "提要"); what the call
+  /// that writes the digest replies.
+  bool longAnswer = false;
+  String stageReply = '';
+  Completer<void>? stageGate;
+
+  /// Every request of the agent itself.
+  final List<List<Message>> requests = [];
+
   void resetAgentCalls() {
     agentCalls = 0;
     failNext = false;
@@ -382,13 +529,35 @@ class _RecorderLLM extends LLMClient {
     if (messages.first.content.startsWith(loreSearchPlanRole)) {
       throw const LLMException('no plan');
     }
+    final now = DateTime.now();
+    ChatCompletionResult other(String content) {
+      final result = ChatCompletionResult(
+        content: content,
+        promptTokens: 100,
+        cachedPromptTokens: 50,
+        completionTokens: 10,
+        timing: CallTiming(startedAt: now, endedAt: now),
+      );
+      meter?.add(result);
+      return result;
+    }
+
+    if (messages.length == 2 && messages.last.content.startsWith('问题：')) {
+      reviewRequest = messages.last.content;
+      if (reviewGate != null) await reviewGate!.future;
+      return other(reviewReply);
+    }
+    if (messages.first.content == loreStageSystemPrompt) {
+      if (stageGate != null) await stageGate!.future;
+      return other(stageReply);
+    }
+    requests.add(List.of(messages));
     agentCalls++;
     if (gate != null) await gate!.future;
     if (failNext) {
       failNext = false;
       throw const LLMException('boom');
     }
-    final now = DateTime.now();
     ChatCompletionResult reply(String content, [List<ToolCall> calls = const []]) =>
         ChatCompletionResult(
           content: content,
@@ -412,7 +581,13 @@ class _RecorderLLM extends LLMClient {
         : reply(
             verdict
                 ? '[FACT_CHECK_VERDICT:supported]\n支持：她是罗德岛的公开领袖 `$_story:0`。'
-                : '她是罗德岛的公开领袖 `$_story:0`。结论：博士。',
+                : longAnswer
+                    ? '{"entries": [${[
+                        for (var n = 1; n <= 5; n++)
+                          '{"text": "第 $n 条：她是领袖。", '
+                              '"cite": [["$_story", 0, 0]]}',
+                      ].join(', ')}], "coverage": "full"}'
+                    : '她是罗德岛的公开领袖 `$_story:0`。结论：博士。',
           );
     meter?.add(result);
     return result;

@@ -128,6 +128,10 @@ class GameDataBuildService {
     // The database is no longer the official asset the marker describes.
     final marker = File('$installPath.asset_sha256');
     if (await marker.exists()) await marker.delete();
+    // 0.14: and it says so itself (`GameDataInstaller.localBuildMarkerSuffix`),
+    // so the official asset is not offered as an "update" over newer data.
+    await File('$installPath.local_build')
+        .writeAsString(DateTime.now().toUtc().toIso8601String(), flush: true);
   }
 
   Future<GameDataBuildResult> _fullBuild(

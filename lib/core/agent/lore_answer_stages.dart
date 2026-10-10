@@ -16,6 +16,10 @@ import 'lore_answer_json.dart';
 /// Separates the reorganised answer (above) from the detailed one (below).
 const String loreDetailsMarker = '[DETAILS]';
 
+/// An answer with at least this many text entries can be reorganised
+/// ("提要"); a shorter one already reads as a few paragraphs.
+const int loreDigestMinEntries = 5;
+
 /// One entry of a detailed JSON answer.
 class LoreAnswerEntry {
   const LoreAnswerEntry({this.heading, this.text = '', this.cites = const []});

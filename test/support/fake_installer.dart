@@ -5,14 +5,17 @@ GameDataInstallStatus installStatus({
   required bool installed,
   String? installedSha,
   String? releaseSha,
+  bool builtLocally = false,
+  Map<String, String> manifest = const {},
 }) =>
     GameDataInstallStatus(
       installed: installed,
       dbPath: installed ? 'db' : '',
       bytes: installed ? 1 : 0,
-      manifest: const {},
+      manifest: manifest,
       installedAssetSha: installedSha,
       releaseAssetSha: releaseSha,
+      builtLocally: builtLocally,
     );
 
 /// An installer that reports [status] and counts downloads, which succeed.

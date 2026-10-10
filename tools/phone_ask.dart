@@ -7,9 +7,12 @@
 //   dart run tools/phone_ask.dart                  # only watch questions asked on the phone
 //   dart run tools/phone_ask.dart --new --wiki=off --full "问题"
 //
-// Options: --new (a new conversation first), --wiki/--review/--digest/
-// --delegate/--think=on|off (the answer options, saved in the app as the
-// menu does), --full (every tool output in full), --device=<serial>,
+// A question of `/review` or `/digest` presses that button under the last
+// answer (复核 / 提要) instead of asking.
+//
+// Options: --new (a new conversation first), --wiki/--delegate/--think=on|off
+// (the answer options, saved in the app as the menu does), --full (every
+// tool output in full), --device=<serial>,
 // --port=<n> (default 47321), --no-adb (no phone: an app on this computer,
 // e.g. `flutter run -d windows --dart-define=ARKLORES_PHONE_BRIDGE=true`).
 //
@@ -61,7 +64,7 @@ Future<void> main(List<String> args) async {
           port = int.parse(value!);
         case 'device':
           _device = value;
-        case 'wiki' || 'review' || 'digest' || 'delegate' || 'think':
+        case 'wiki' || 'delegate' || 'think':
           options[name] = value == null || value == 'on' || value == 'true';
         case 'help':
           stdout.writeln(
@@ -171,12 +174,17 @@ Future<void> main(List<String> args) async {
     final answered = done.stream.first;
     final session = sessions.stream.first;
     app!.add(
-      jsonEncode({
-        'cmd': 'ask',
-        'text': text,
-        if (fresh) 'new': true,
-        if (options.isNotEmpty) 'options': options,
-      }),
+      jsonEncode(
+        // The two buttons under the last answer.
+        text == '/review' || text == '/digest'
+            ? {'cmd': text.substring(1)}
+            : {
+                'cmd': 'ask',
+                'text': text,
+                if (fresh) 'new': true,
+                if (options.isNotEmpty) 'options': options,
+              },
+      ),
     );
     final end = await answered;
     asking = false;

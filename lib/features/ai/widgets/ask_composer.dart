@@ -10,7 +10,7 @@ import '../../../shared/widgets/press_feedback.dart';
 enum AskComposerSize { collapsed, half, full }
 
 /// The Ask page's question box: one square card with the text on top and a
-/// toolbar (the "深度思考" switch, send) below. It grows with the text up to
+/// toolbar (the answer options, send) below. It grows with the text up to
 /// four lines; the expand button opens it to half of the tab, and from there
 /// to the full tab. The same [TextField] lives in every size (only the
 /// height around it animates), so focus, caret and draft survive.
@@ -37,8 +37,11 @@ class AskComposer extends StatefulWidget {
   /// Height of the whole Ask tab (the composer never grows past it).
   final double maxHeight;
 
-  /// Left end of the toolbar (the deep-thinking switch).
-  final Widget? leading;
+  /// Left end of the toolbar (the answer options). It gets the link of the
+  /// box's card while the box is at its small size, so a panel can open
+  /// above the whole box and leave the text being typed in view; null once
+  /// the box is opened up (there is no room above it then).
+  final Widget Function(LayerLink? card)? leading;
 
   @override
   State<AskComposer> createState() => _AskComposerState();
@@ -52,6 +55,7 @@ class _AskComposerState extends State<AskComposer> {
   static const _duration = Duration(milliseconds: 220);
 
   final FocusNode _focus = FocusNode();
+  final LayerLink _cardLink = LayerLink();
   AskComposerSize _size = AskComposerSize.collapsed;
 
   @override
@@ -149,7 +153,9 @@ class _AskComposerState extends State<AskComposer> {
                 .toDouble();
             final showExpand = lines >= 3 || expanded;
 
-            return AnimatedContainer(
+            return CompositedTransformTarget(
+              link: _cardLink,
+              child: AnimatedContainer(
               key: const ValueKey('ask-input-bar'),
               duration: _duration,
               curve: Curves.easeOutCubic,
@@ -246,7 +252,8 @@ class _AskComposerState extends State<AskComposer> {
                       padding: const EdgeInsets.fromLTRB(10, 0, 6, 8),
                       child: Row(
                         children: [
-                          if (widget.leading != null) widget.leading!,
+                          if (widget.leading != null)
+                            widget.leading!(expanded ? null : _cardLink),
                           const Spacer(),
                           if (expanded) ...[
                             _roundButton(
@@ -316,6 +323,7 @@ class _AskComposerState extends State<AskComposer> {
                   ),
                 ],
               ),
+            ),
             );
           },
         ),

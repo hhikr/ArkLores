@@ -36,9 +36,18 @@ class ChatMessage {
     this.reasoning = '',
     this.liveStatus = '',
     this.stats,
+    this.canDigest = false,
+    this.canReview = false,
   });
 
   final String id;
+
+  /// 0.14: what can be asked for under this answer — "提要" (a long answer
+  /// reorganised into a few paragraphs) and "复核" (a reader's review; the
+  /// last answer only). In memory only: both need the conversation that
+  /// wrote the answer.
+  final bool canDigest;
+  final bool canReview;
 
   /// What the question cost (tokens, calls, time); null for sessions saved
   /// before v0.10.7 and for messages that are not answers.
@@ -70,9 +79,13 @@ class ChatMessage {
     String? reasoning,
     String? liveStatus,
     TurnStats? stats,
+    bool? canDigest,
+    bool? canReview,
   }) {
     return ChatMessage(
       stats: stats ?? this.stats,
+      canDigest: canDigest ?? this.canDigest,
+      canReview: canReview ?? this.canReview,
       id: id ?? this.id,
       role: role ?? this.role,
       content: content ?? this.content,

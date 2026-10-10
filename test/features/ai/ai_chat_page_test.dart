@@ -51,8 +51,8 @@ void main() {
     await tester.pumpWidget(
         _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
     await tester.pumpAndSettle();
-    // The actions float over the conversation; the box (deep-thinking
-    // switch, send) sits at the bottom. No tabs, no answer modes.
+    // The actions float over the conversation; the box (answer options,
+    // send) sits at the bottom. No tabs, no answer modes.
     expect(find.byType(AppBar), findsNothing);
     expect(find.byType(TabBar), findsNothing);
     expect(find.byKey(const ValueKey('ask-floating-actions')), findsOneWidget);
@@ -62,13 +62,18 @@ void main() {
     expect(find.byTooltip('回答方式'), findsNothing);
     expect(find.textContaining('直接问任何剧情问题'), findsOneWidget);
     expect(find.byKey(const ValueKey('ask-input-field')), findsOneWidget);
-    expect(find.byKey(const ValueKey('deep-thinking-toggle')), findsOneWidget);
+    // 0.14: one options button; "深度思考" is a row of its panel.
+    expect(find.byKey(const ValueKey('deep-thinking-toggle')), findsNothing);
+    expect(find.byKey(const ValueKey('answer-options')), findsOneWidget);
     expect(find.byTooltip('发送'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the answer options turn the review on, the digest, the wikis '
-      'off and the sub-agents on, and are saved', (tester) async {
+  // 0.14: the options open upward from their button as a panel beside the
+  // box (not a route), and nothing in it takes focus: the keyboard stays.
+  testWidgets('the answer options open above the box without taking the '
+      'focus; the wikis and the sub-agents are switched there and saved',
+      (tester) async {
     FlutterSecureStorage.setMockInitialValues({});
     await tester.pumpWidget(
         _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
@@ -77,32 +82,73 @@ void main() {
       tester.element(find.byType(AiChatPage)),
     );
     expect(container.read(answerOptionsProvider), const AnswerOptions());
-    Future<void> toggle(String key) async {
-      await tester.tap(find.byKey(const ValueKey('answer-options')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(ValueKey('answer-option-$key')));
-      await tester.pumpAndSettle();
-    }
+    final box = find.descendant(
+      of: find.byKey(const ValueKey('ask-input-field')),
+      matching: find.byType(EditableText),
+    );
+    await tester.tap(box);
+    await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('answer-options')));
     await tester.pumpAndSettle();
-    for (final title in ['复核', '提要', 'Wiki 资料', '子助手']) {
+    final panel = find.byKey(const ValueKey('answer-options-panel'));
+    expect(panel, findsOneWidget);
+    expect(tester.widget<EditableText>(box).focusNode.hasFocus, isTrue);
+    // Above the whole box (the text being typed stays in view), within the
+    // screen.
+    final card = tester.getRect(find.byKey(const ValueKey('ask-input-bar')));
+    final rect = tester.getRect(panel);
+    expect(rect.bottom, lessThanOrEqualTo(card.top));
+    expect(rect.top, greaterThanOrEqualTo(0));
+    expect(rect.height, lessThan(200));
+    // The digest and the review are not options of a question any more.
+    for (final title in ['Wiki 资料', '子助手', '深度思考']) {
       expect(find.text(title), findsOneWidget);
     }
-    await tester.tapAt(Offset.zero);
+    expect(find.text('复核'), findsNothing);
+    expect(find.text('提要'), findsNothing);
+
+    // The panel stays open while its rows are switched.
+    await tester.tap(find.byKey(const ValueKey('answer-option-wiki')));
     await tester.pumpAndSettle();
-    await toggle('review');
-    await toggle('digest');
-    const reviewed = AnswerOptions(review: true, digest: false);
-    expect(container.read(answerOptionsProvider), reviewed);
-    expect(await SettingsService().loadAnswerOptions(), reviewed);
-    await toggle('wiki');
-    await toggle('delegate');
-    const changed =
-        AnswerOptions(review: true, digest: false, wiki: false, delegate: true);
+    await tester.tap(find.byKey(const ValueKey('answer-option-delegate')));
+    await tester.pumpAndSettle();
+    const changed = AnswerOptions(wiki: false, delegate: true);
     expect(container.read(answerOptionsProvider), changed);
     expect(await SettingsService().loadAnswerOptions(), changed);
+    expect(container.read(deepThinkingProvider), isFalse);
+    await tester.tap(find.byKey(const ValueKey('answer-option-think')));
+    await tester.pumpAndSettle();
+    expect(container.read(deepThinkingProvider), isTrue);
+    expect(tester.widget<EditableText>(box).focusNode.hasFocus, isTrue);
+
+    // A touch elsewhere closes it.
+    await tester.tapAt(const Offset(20, 200));
+    await tester.pumpAndSettle();
+    expect(panel, findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a model service without a known switch for thinking is not '
+      'offered "深度思考"', (tester) async {
+    await tester.pumpWidget(_app(
+      const AiChatPage(),
+      overrides: [
+        initialApiConfigProvider.overrideWithValue(
+          const LLMConfig(
+            chatApiKey: 'test-key',
+            chatBaseUrl: 'https://llm.example.com/v1',
+            chatModel: 'some-model',
+          ),
+        ),
+        llmClientProvider.overrideWith((ref, level) => ScriptedLLM(['x'])),
+      ],
+    ),);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('answer-options')));
+    await tester.pumpAndSettle();
+    expect(find.text('Wiki 资料'), findsOneWidget);
+    expect(find.text('深度思考'), findsNothing);
   });
 
   testWidgets('without an embedding service the empty page warns that '

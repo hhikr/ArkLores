@@ -77,6 +77,8 @@ class BridgeTranscriber {
     }
     _seen = messages.length;
     for (final m in messages) {
+      // A finished answer written to again (its digest) is followed again.
+      if (m.isStreaming) _finished.remove(m.id);
       if (m.role != MessageRole.assistant || _finished.contains(m.id)) {
         continue;
       }
@@ -320,6 +322,28 @@ class _PhoneBridgeHostState extends ConsumerState<PhoneBridgeHost> {
             send({'t': 'session', 'id': chat.currentSession?.sessionId});
           }),
         );
+      case 'review' || 'digest':
+        // The buttons under the last answer.
+        final answers = ref
+            .read(askChatProvider)
+            .where((m) => m.role == MessageRole.assistant);
+        final last = answers.isEmpty ? null : answers.last;
+        final review = command['cmd'] == 'review';
+        if (last == null ||
+            last.isStreaming ||
+            !(review ? last.canReview : last.canDigest)) {
+          send({'t': 'busy'});
+          return;
+        }
+        ref.read(mainTabRequestProvider.notifier).state = 1;
+        unawaited(
+          (review
+                  ? chat.reviewAnswer(last.id, label: '复核上面的回答')
+                  : chat.digestAnswer(last.id))
+              .whenComplete(() {
+            send({'t': 'session', 'id': chat.currentSession?.sessionId});
+          }),
+        );
       case 'cancel':
         chat.cancel();
       case 'new':
@@ -335,8 +359,6 @@ class _PhoneBridgeHostState extends ConsumerState<PhoneBridgeHost> {
         options[key] is bool ? options[key] as bool : null;
     final current = ref.read(answerOptionsProvider);
     final next = current.copyWith(
-      review: flag('review'),
-      digest: flag('digest'),
       wiki: flag('wiki'),
       delegate: flag('delegate'),
     );

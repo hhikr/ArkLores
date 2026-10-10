@@ -104,6 +104,9 @@ void main() {
     expect((await manifest())['source_arknights_commit'], 'c1');
     expect(installedNotices, 1);
     expect(marker(), 'c1');
+    // 0.14: the database says it was built here, so the official asset is
+    // not offered as an update over it.
+    expect((await const GameDataInstaller().getStatus()).builtLocally, isTrue);
     // The level files were read for the build, then removed (they are
     // fetched again only when they change).
     final source = p.join(docs.path, 'gamedata_source', 'zh_CN', 'gamedata');
@@ -170,6 +173,39 @@ void main() {
     expect(state().phase, GameDataBuildPhase.done);
     expect(state().incremental, isFalse);
     expect(hosts(), contains('codeload.github.com'));
+    expect((await manifest())['source_arknights_commit'], 'c2');
+  }, timeout: const Timeout(Duration(minutes: 3)),);
+
+  // 0.14: a complete rebuild starts a new database without the vectors of
+  // the installed one, so it waits for a second, explicit start.
+  test('a complete rebuild over a database with vectors asks first',
+      () async {
+    await buildC1();
+    notifier().dismissDone();
+    final db = await databaseFactoryFfi
+        .openDatabase(p.join(docs.path, 'arklores_gamedata_zh.db'));
+    await db.insert('gamedata_manifest', {
+      'key': 'embedding_model',
+      'value': 'emb',
+    });
+    await db.close();
+
+    await online({'c2': _c2()}, 'c2', notifier().buildFromSource);
+    expect(state().confirmFull, isTrue);
+    expect(state().phase, GameDataBuildPhase.idle);
+    expect(state().error, isNull);
+    expect(hosts(), isNot(contains('codeload.github.com')));
+    expect((await manifest())['source_arknights_commit'], 'c1');
+    expect(installedNotices, 1);
+
+    await online(
+      {'c2': _c2()},
+      'c2',
+      () => notifier().buildFromSource(allowFull: true),
+    );
+    expect(state().confirmFull, isFalse);
+    expect(state().phase, GameDataBuildPhase.done);
+    expect(state().incremental, isFalse);
     expect((await manifest())['source_arknights_commit'], 'c2');
   }, timeout: const Timeout(Duration(minutes: 3)),);
 

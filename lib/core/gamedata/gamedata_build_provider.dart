@@ -38,7 +38,13 @@ class GameDataBuildUiState {
     this.changeSummary,
     this.report,
     this.noRelevantChanges = false,
+    this.confirmFull = false,
   });
+
+  /// The update can only be a complete rebuild, which starts a new database
+  /// without the vectors the installed one has: it waits for a second,
+  /// explicit start (`buildFromSource(allowFull: true)`).
+  final bool confirmFull;
   final GameDataBuildPhase phase;
   final String stage;
   final int done;
@@ -78,6 +84,7 @@ class GameDataBuildUiState {
     SourceChangeSummary? changeSummary,
     UpdateReport? report,
     bool? noRelevantChanges,
+    bool? confirmFull,
     bool clearReport = false,
   }) {
     return GameDataBuildUiState(
@@ -93,6 +100,7 @@ class GameDataBuildUiState {
       changeSummary: changeSummary ?? this.changeSummary,
       report: clearReport ? null : (report ?? this.report),
       noRelevantChanges: noRelevantChanges ?? this.noRelevantChanges,
+      confirmFull: confirmFull ?? this.confirmFull,
     );
   }
 }
@@ -137,7 +145,11 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
 
   Future<void> checkForUpdates({String? githubToken}) async {
     if (state.busy) return;
-    state = state.copyWith(phase: GameDataBuildPhase.checking, error: null);
+    state = state.copyWith(
+      phase: GameDataBuildPhase.checking,
+      error: null,
+      confirmFull: false,
+    );
     try {
       final client = ArknightsSourceClient(githubToken: githubToken);
       final latest = await client.fetchLatestCommit();
@@ -171,14 +183,22 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   /// Pulls source (incremental or first-time zip) and builds/updates the
   /// knowledge base in a background isolate, then swaps the validated output
   /// over the installed database.
-  Future<void> buildFromSource({String? githubToken}) =>
+  ///
+  /// A complete rebuild over a database that has vectors is not started
+  /// unless [allowFull]: the new database would have none (see
+  /// [GameDataBuildUiState.confirmFull]).
+  Future<void> buildFromSource({String? githubToken, bool allowFull = false}) =>
       BackgroundWork.instance.run(
         BackgroundWork.text('正在构建知识库', 'Building the knowledge base'),
-        () => _buildFromSource(githubToken: githubToken),
+        () => _buildFromSource(githubToken: githubToken, allowFull: allowFull),
       );
 
-  Future<void> _buildFromSource({String? githubToken}) async {
+  Future<void> _buildFromSource({
+    String? githubToken,
+    bool allowFull = false,
+  }) async {
     if (state.busy) return;
+    state = state.copyWith(confirmFull: false);
     final dirs = await _dirs();
     await dirs.sourceDir.create(recursive: true);
     await dirs.tmpDir.create(recursive: true);
@@ -247,6 +267,13 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           );
           return;
         }
+      }
+      if (!incrementalOk && !allowFull && await _installedHasVectors()) {
+        state = state.copyWith(
+          phase: GameDataBuildPhase.idle,
+          confirmFull: true,
+        );
+        return;
       }
       if (!incrementalOk) {
         // First-time (or complete) pull: one zip download and a
@@ -436,6 +463,14 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   Future<String?> _installedCommit() async {
     final status = await GameDataInstaller().getStatus();
     return status.manifest['source_arknights_commit'];
+  }
+
+  /// Whether the installed database carries vectors (their model is in its
+  /// manifest): a complete rebuild would lose them.
+  Future<bool> _installedHasVectors() async {
+    final status = await GameDataInstaller().getStatus();
+    return status.installed &&
+        (status.manifest['embedding_model'] ?? '').isNotEmpty;
   }
 
   Future<String?> _installedSchema() async {

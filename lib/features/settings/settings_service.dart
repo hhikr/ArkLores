@@ -224,7 +224,7 @@ class SettingsService {
     await _storage.write(key: _keySessionLogsEnabled, value: '$enabled');
   }
 
-  /// The Ask answer options (default: both passes on).
+  /// The Ask answer options (default: the wikis on, sub-agents off).
   Future<AnswerOptions> loadAnswerOptions() async =>
       AnswerOptions.decode(await _storage.read(key: _keyAnswerOptions));
 
