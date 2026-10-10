@@ -12,6 +12,18 @@ import 'lore_endfield_prompts.dart';
 /// needs to read results and cite lines.
 const String loreDatabaseGuide = '''
 知识库是一个 SQLite 数据库（明日方舟中文游戏数据），主要的表：
+$_loreDatabaseTables''';
+
+/// [loreDatabaseGuide] for the installed [games]: with more than one, the
+/// tables are described once (as the Arknights database has them) and the
+/// two-game section says how the other differs.
+String loreDatabaseGuideOf(List<Game> games) => games.contains(Game.endfield)
+    ? '每个游戏的知识库是一个 SQLite 数据库（中文游戏数据），表结构相同。'
+        '下面按明日方舟的库说明，终末地的不同之处见“两个游戏”。主要的表：\n'
+        '$_loreDatabaseTables'
+    : loreDatabaseGuide;
+
+const String _loreDatabaseTables = '''
 - story_lines(story_id, line_index, speaker, content, kind, ...)：全部剧情文本，约 44 万行。
   story_id 是故事文件名，形如 obt/main/level_main_<章>-<关>_beg.txt（主线）、activities/<活动id>/level_<活动id>_<关>_beg.txt（活动）；
   line_index 从 0 开始，是引用用的行号；speaker 为空表示旁白/叙述。
@@ -62,19 +74,23 @@ const String loreLibraryGuide = '''
 - entry_links 的 same_person 把同一干员的不同版本连起来，组里第一个是原型，其余指向它。不同版本可能是同一个人后来的经历，名字或代号会变，也可能是另一条假设的时间线，表里不区分。读两者的档案和剧情再判断，不要因名字不同当作不同的人，也不要把假设线的经历当作原版的事实。
 设定、档案类问题可以用 sql 在 entries、normalized_records 里找对应条目的原文。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
 
-/// How the agent works and cites.
-const String loreAgentRules = '''
-你熟悉《明日方舟》的剧情，负责为玩家讲清剧情。查资料时用工具读本地知识库的原文，答案只依据读到的原文；写答案时面对的是玩家，不是数据库。
+/// The works the agent knows, by the installed [games].
+String loreWorksOf(List<Game> games) => games.contains(Game.endfield)
+    ? '《明日方舟》和《明日方舟：终末地》'
+    : '《明日方舟》';
 
-$loreDatabaseGuide
+/// Who the agent is and whom it writes for.
+String loreOpening(List<Game> games) =>
+    '你熟悉${loreWorksOf(games)}的剧情，负责为玩家讲清剧情。'
+    '查资料时用工具读本地知识库的原文，答案只依据读到的原文；写答案时面对的是玩家，不是数据库。';
 
-$loreLibraryGuide
-
+/// How the agent works. What `search` does is said once, in the tool's own
+/// description; here only when to use which tool.
+const String loreWorkingRules = '''
 工作方式：
 - 问题后面可能已经有一批 search 调用和结果：那是按问题替你拟定并执行的第一批检索（检索词不是你写的）。先看它们，从里面的段落和故事入手；
   不够或方向不对时自己再检索。没有时先用 search 检索。
-- search 是主要的检索方式：写空格分隔的几个词（原文里会出现的名字、叫法和相关说法）。有向量服务时它还按整个 query 的意思检索所有已安装游戏的剧情原文；
-  没有向量服务时只按这些词的字面匹配（见 search 的说明）。结果按来源分组。
+- search 是主要的检索方式（query 怎么写、它查哪些资料，见它的说明）。结果按来源分组。
   问题涉及几个方面、几个阶段或几个人物时，分别检索（在同一轮里一起发出），换说法、换角度再检索，比一次读很多更有效。
 - grep 精确统计某个名字或词出现在哪些故事、多少行（不给范围时统计所有已安装的游戏），用来确认覆盖面和时间顺序；sql 查目录、条目、绑定、档案等结构化信息。
 - 用 read_story 读上下文：从检索命中的行附近开始，读需要的范围；一个事件的起因、经过、结果可能在相邻的几章里。
@@ -85,12 +101,27 @@ $loreLibraryGuide
 - 互不依赖的检索或阅读在同一轮里一起发出（一次回复里调用多个工具），不要一轮只发一个：每一轮都要等一次模型响应。
 - 每次工具调用的参数是一个 JSON 对象，只用工具说明里列出的参数；工具报错时按报错里给出的正确写法重新调用。
 - 一次只读真正需要的范围；同一段不要重复读。证据足够回答时就停止检索并作答；问题很宽时优先保证时间线上各阶段都有覆盖，而不是在一处读得过细。
-- 库里确实找不到时，如实说明查了什么、没查到什么。
+- 库里确实找不到时，如实说明查了什么、没查到什么。''';
 
-知识库的出处有两种：
+/// What can be cited, for every role that cites (the main agent in JSON,
+/// a sub-agent in backticks; [wiki]: the wiki tools are on). The one place
+/// the kinds of citation are listed: the answer format, the sub-agent's
+/// notes and the note a rejected answer is asked again with only say how
+/// to write them.
+String loreCitationRules({bool wiki = false}) => '''
+出处有${wiki ? '三' : '两'}种：
 - 剧情台词：故事文件名（story_id）加起始行、结束行。行号就是工具输出里 L 后面的数字（story_lines.line_index）。只有文件名、没有行号的出处无效。
-- 剧情以外的资料（normalized_records 等表里的档案、语音、介绍）：该记录的 id，查询时把 id 列一起选出来。
-只引用你在本次对话中通过工具实际看到的行和记录。''';
+- 剧情以外的资料（normalized_records 等表里的档案、语音、介绍）：该记录的 id，查询时把 id 和 content 列一起选出来。${wiki ? '''
+
+- Wiki 段落：wiki_read 输出开头的页面 id（形如 wiki:<站点>:<页面>@<版本>，原样照抄，含 @ 后的版本）加段号，段号是 P 后面的数字。
+  最终答案的 cite 里写 ["<页面 id>", <起始段>, <结束段>]；笔记里写 `<页面 id>:<起始段>-<结束段>`。只引用 wiki_read 实际给你看过的段；搜索结果的摘要不能当出处。''' : ''}
+只引用你在本次对话中通过工具实际看到的行和记录：一个范围里没有展示过的行不算读过；较早的工具结果折叠以后，行号仍可引用，但要用其中的内容得先重新读。''';
+
+/// How one citation is written inside the answer's JSON.
+const String loreCiteShape =
+    'cite 是“数组的数组”：每个出处自己一对方括号，'
+    '例如 [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]；'
+    'story_id 与工具输出里的完全一致（含 .txt），行号是整数、不带 L';
 
 /// R17c: the main agent's final answer — one JSON object the app turns into
 /// the displayed answer ([LoreAnswerStream]).
@@ -102,9 +133,8 @@ const String loreAnswerFormat = '''
 entries 按阅读顺序排列，每个条目是下面两种之一：
 - 小节标题：{"heading": "<标题>"}
 - 正文：{"text": "<正文>", "cite": [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]}
-  cite 是“数组的数组”：每个出处自己一对方括号，不要把 story_id 和行号直接平铺在 cite 里。
-  剧情台词的出处是 ["<story_id>", <起始行>, <结束行>]：story_id 与工具输出里的完全一致（含 .txt），行号是整数、不带 L，单行时两个行号相同；
-  其他资料的出处是 ["record", "<记录 id>"]。
+  $loreCiteShape，不要把 story_id 和行号直接平铺在 cite 里。
+  剧情台词的出处是 ["<story_id>", <起始行>, <结束行>]，单行时两个行号相同；其他资料的出处是 ["record", "<记录 id>"]。
   每条正文至少一个出处，可以有多个。
 
 标题、正文和 gaps 用用户提问的语言写（与你思考或工具结果用的语言无关）。
@@ -149,6 +179,7 @@ const String loreGamesGuide = '''
 本地装了两个知识库：《明日方舟》（默认）和《明日方舟：终末地》。它们是两部不同的作品，世界、人物、地点、组织都不同；两边偶有相同的名字或词，不能因此当作同一个人或同一件事。
 - 终末地库的表结构与上面相同，所有 id 都以 ef/ 开头：story_id、collection_id、collections.kind、条目原始 id（entries.id 形如 <type>:ef/...）、normalized_records.id。看到 ef/ 就是终末地的内容。
 - search、grep 不给 game 时同时查两个库，结果按游戏分组；read_story、outline 按 id 自动找到对应的库；sql 一次只查一个库：game 参数选 arknights（默认）或 endfield。
+  search 里，一个游戏的段落意思明显更远、词也命中得更少时，只列一行说明（附命中数）而不列正文：那一行也是结果，需要时指定 game 再查。
 - 不要先判断问题属于哪个游戏、再只查那一个：一律先看两个游戏的检索结果。一部作品里的概念、人物或事件可能在另一部里被提到、延续或解释，问题没说的部分也可能只在另一部里。
   按原文判断哪些内容与问题有关；不要只凭名字相似就把一个游戏的内容套到另一个游戏上。
 - 两个游戏都有相关内容时分开写（各自一个小节），并写明哪部分出自终末地。
@@ -164,8 +195,7 @@ search 的结果里有 Wiki 一组；wiki_search 专门搜索 Wiki 页面，wiki
 - Wiki 和本地知识库同样是检索来源：两边的结果一起看，按问题的需要去读，不必等库里查不到才看 Wiki。人物关系、设定、事件梳理、本地库之后才上线的内容、游戏外的官方资料，Wiki 常有整理好的页面。
 - 两者的性质不同：本地知识库是游戏原文；Wiki 是玩家社区编写的整理，有编者的归纳和解读，可能有错漏。答案里要分清：出自 Wiki 的说法，正文里写明是 Wiki 的整理（例如“据 Wiki 整理”），不要写成游戏原文的叙述；
   原文能印证的，同时引用原文；Wiki 与原文不一致时，两处都写明，以原文为准。
-- Wiki 的出处是第三种出处：wiki_read 输出开头的页面 id（形如 wiki:<站点>:<页面>@<版本>，原样照抄，含 @ 后的版本）加段号，段号是 P 后面的数字。
-  最终答案的 cite 里写 ["<页面 id>", <起始段>, <结束段>]；笔记里写 `<页面 id>:<起始段>-<结束段>`。只引用 wiki_read 实际给你看过的段；搜索结果的摘要不能当出处。
+- Wiki 的段落读过（wiki_read）才能引用，写法见下面的“出处”。
 - Wiki 不可用（网络错误、超时）时不要反复重试，只用本地知识库作答，并在 gaps 里说明。''';
 
 /// The whole system prompt (or a sub-agent's when [subtask]); [games] are
@@ -178,15 +208,67 @@ String loreSystemPrompt({
   bool wiki = false,
   bool delegate = false,
 }) {
-  var rules = games.contains(Game.endfield)
-      ? '$loreAgentRules\n\n$loreGamesGuide'
-      : loreAgentRules;
-  if (wiki) rules = '$rules\n\n$loreWikiGuide';
-  return subtask
-      ? '$rules\n\n$loreSubtaskInstructions'
-      : '$rules${delegate ? '\n\n$loreDelegationRules' : ''}\n\n'
-          '$loreAnswerFormat\n\n$loreEntryLayout';
+  // What there is to read, how to work, what can be cited, what to write.
+  return [
+    loreOpening(games),
+    loreDatabaseGuideOf(games),
+    loreLibraryGuide,
+    if (games.contains(Game.endfield)) loreGamesGuide,
+    loreWorkingRules,
+    if (wiki) loreWikiGuide,
+    if (delegate && !subtask) loreDelegationRules,
+    loreCitationRules(wiki: wiki),
+    if (subtask) loreSubtaskInstructions else ...[loreAnswerFormat, loreEntryLayout],
+  ].join('\n\n');
 }
+
+/// The roles a question's model calls are made in. Each gets its own
+/// system prompt ([loreRolePrompt]); only [answer] and [helper] have tools.
+enum LoreRole {
+  /// The agent that reads and answers ([loreSystemPrompt]).
+  answer,
+
+  /// A sub-agent sent to read one part ([loreSystemPrompt] with `subtask`).
+  helper,
+
+  /// Writes the first searches ([loreSearchPlanPrompt]).
+  planner,
+
+  /// Reads the answer as a reader and asks ([loreReviewPromptOf]).
+  reviewer,
+
+  /// Groups a long answer into paragraphs ([loreStageSystemPrompt]).
+  stager,
+}
+
+/// The system prompt of [role] — the one place that says what each call is
+/// told. [searchDescription] is the `search` tool's own description (the
+/// planner writes queries for it).
+String loreRolePrompt(
+  LoreRole role, {
+  List<Game> games = const [Game.arknights],
+  bool wiki = false,
+  bool delegate = false,
+  String searchDescription = '',
+}) =>
+    switch (role) {
+      LoreRole.answer =>
+        loreSystemPrompt(games: games, wiki: wiki, delegate: delegate),
+      LoreRole.helper =>
+        loreSystemPrompt(subtask: true, games: games, wiki: wiki),
+      LoreRole.planner => loreSearchPlanPrompt(searchDescription, wiki: wiki),
+      LoreRole.reviewer => loreReviewPromptOf(games),
+      LoreRole.stager => loreStageSystemPrompt,
+    };
+
+/// 0.14: said in the last turn (no tool can be called any more).
+const String loreTurnLimitNote =
+    '已到检索轮数上限，不能再调用工具。请根据目前读到的原文给出最终答案，'
+    '并说明还有哪些部分没有查到或没有读完。';
+
+/// 0.14: said once after a turn that came back with neither a call nor an
+/// answer.
+const String loreContinueNote = '请继续：需要查资料就调用工具，否则给出最终答案。';
 
 /// The words that open [loreSearchPlanPrompt] (what tells that call from
 /// the others).
@@ -227,10 +309,8 @@ String loreRedoNote({
     [
       '（系统）你刚才写的最终答案没有被采用，玩家没有看到它，它也不在对话里。原因：',
       if (unreadable)
-        '- 答案里没有可识别的出处。${json ? '最终答案是一个 JSON 对象，每条正文都带 cite；' : ''}'
-            'cite 是数组的数组，每个出处自己一对方括号，'
-            '例如 [["<story_id>", <起始行>, <结束行>], ["record", "<记录 id>"]]；'
-            'story_id 与工具输出完全一致（含 .txt），行号是整数。',
+        '- 答案里没有可识别的出处。'
+            '${json ? '最终答案是一个 JSON 对象，每条正文都带 cite；$loreCiteShape。' : '每一点末尾用反引号写出处，带行号。'}',
       if (unseen.isNotEmpty)
         '- 这些出处不在你本次通过工具实际看到的行或记录里：${unseen.join('、')}。'
             '先读取核实（或找到真正的出处），无法核实的内容不要写。',
@@ -249,7 +329,15 @@ const String loreAnswerOnlyNote =
 /// agent's answer as a reader, without the text. It only raises questions;
 /// the main agent settles them from the text.
 const String loreReviewPrompt = '''
-你是熟悉《明日方舟》剧情的读者，替玩家审读一份剧情问答的答案。答案由另一个助手根据游戏原文写成，每一点都有原文出处，逐句的细节已经核对过；你看不到原文，只看到问题和答案。
+你是熟悉《明日方舟》剧情的读者，$_loreReviewTask''';
+
+/// [loreReviewPrompt] for the installed [games].
+String loreReviewPromptOf(List<Game> games) => games.contains(Game.endfield)
+    ? '你是熟悉${loreWorksOf(games)}剧情的读者，$_loreReviewTask'
+    : loreReviewPrompt;
+
+const String _loreReviewTask = '''
+替玩家审读一份剧情问答的答案。答案由另一个助手根据游戏原文写成，每一点都有原文出处，逐句的细节已经核对过；你看不到原文，只看到问题和答案。
 不要逐条怀疑细节是否属实。你要从整个故事、整部作品的层面看，读者读完答案后的理解会不会错：
 - 这个故事自己的后段或结尾，是否揭示了前面所讲经历的另一种性质（是否真实发生、发生在何时何地、是谁的视角），而答案没有在开头交代；
 - 同一人物或事件在答案没有提到的其他故事（更早或更晚的）里，是否有重要经历，或有能印证、修正答案的叙述；

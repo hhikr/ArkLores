@@ -80,6 +80,16 @@ void main() {
         loreAnswerOnlyNote,
         loreSearchPlanPrompt('<search 的说明>', wiki: true),
         loreSearchPlanRequest('<问题>', earlier: '<上文>'),
+        loreTurnLimitNote,
+        loreContinueNote,
+        for (final role in LoreRole.values)
+          loreRolePrompt(
+            role,
+            games: Game.values,
+            wiki: true,
+            delegate: true,
+            searchDescription: '<search 的说明>',
+          ),
         loreStagePrompt('1. <条目>'),
         for (final t in [
           ...loreTools(store, SeenLines()),
@@ -136,6 +146,65 @@ void main() {
       final sub = loreSystemPrompt(subtask: true);
       expect(sub, contains('[COVERAGE: full]'));
       expect(sub, isNot(contains('"entries"')));
+    });
+
+    // 0.14: the prompt is put together per role from sections that each
+    // say one thing once (the same rule written in several places had
+    // drifted apart: "two kinds of citation" next to a third).
+    test('each role gets its sections; a rule is said once', () {
+      int count(String text, String part) => part.allMatches(text).length;
+      final one = loreRolePrompt(LoreRole.answer);
+      expect(one, loreSystemPrompt());
+      expect(count(one, '出处有两种'), 1);
+      expect(count(one, loreCiteShape), 1);
+      expect(count(one, '只引用你在本次对话中通过工具实际看到的行和记录'), 1);
+      expect(one, startsWith('你熟悉《明日方舟》的剧情'));
+      expect(one, isNot(contains('终末地')));
+      // What search does is in the tool's description, not here too.
+      expect(one, isNot(contains('向量服务')));
+
+      final all = loreRolePrompt(
+        LoreRole.answer,
+        games: Game.values,
+        wiki: true,
+        delegate: true,
+      );
+      expect(all, startsWith('你熟悉《明日方舟》和《明日方舟：终末地》的剧情'));
+      expect(all, contains('每个游戏的知识库是一个 SQLite 数据库'));
+      expect(all, isNot(contains('出处有两种')));
+      expect(count(all, '出处有三种'), 1);
+      expect(count(all, '["<页面 id>", <起始段>, <结束段>]'), 1);
+      // The order: what there is to read, how to work, what can be cited,
+      // what to write.
+      final order = [
+        '主要的表',
+        '资料页结构',
+        '本地装了两个知识库',
+        '工作方式',
+        'Wiki 资料',
+        'delegate',
+        '出处有三种',
+        '最终答案只输出一个 JSON 对象',
+        '条目安排',
+      ].map(all.indexOf).toList();
+      expect(order, everyElement(greaterThanOrEqualTo(0)));
+      expect(order, orderedEquals(List.of(order)..sort()));
+
+      final helper = loreRolePrompt(LoreRole.helper, wiki: true, delegate: true);
+      expect(helper, contains('你是被派出的子助手'));
+      expect(helper, contains('出处有三种'));
+      expect(helper, isNot(contains('delegate')));
+      expect(helper, isNot(contains('条目安排')));
+      expect(loreRolePrompt(LoreRole.reviewer), loreReviewPrompt);
+      expect(
+        loreRolePrompt(LoreRole.reviewer, games: Game.values),
+        startsWith('你是熟悉《明日方舟》和《明日方舟：终末地》剧情的读者，替玩家审读'),
+      );
+      expect(loreRolePrompt(LoreRole.stager), loreStageSystemPrompt);
+      expect(
+        loreRolePrompt(LoreRole.planner, searchDescription: '<说明>'),
+        allOf(startsWith(loreSearchPlanRole), contains('<说明>')),
+      );
     });
 
     tearDown(() async {

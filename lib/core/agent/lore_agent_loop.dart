@@ -258,8 +258,8 @@ class LoreAgentLoop {
     final toolSpecs = [for (final t in tools.values) t.toJson()];
 
     String systemPrompt() {
-      final base = loreSystemPrompt(
-        subtask: subtask,
+      final base = loreRolePrompt(
+        subtask ? LoreRole.helper : LoreRole.answer,
         games: games,
         wiki: wiki != null,
         delegate: delegating,
@@ -454,10 +454,7 @@ class LoreAgentLoop {
       // (Once: an empty last turn may be sent again another way.)
       if (lastTurn && !hitTurnLimit) {
         hitTurnLimit = true;
-        conversation.add(Message.user(
-          '已到检索轮数上限，不能再调用工具。请根据目前读到的原文给出最终答案，'
-          '并说明还有哪些部分没有查到或没有读完。',
-        ),);
+        conversation.add(Message.user(loreTurnLimitNote));
       }
       if (transport.textProtocol) {
         _convertToTextProtocol(conversation, toolResults);
@@ -822,7 +819,7 @@ class LoreAgentLoop {
       if (body.isEmpty) {
         if (!nudged && !lastTurn) {
           nudged = true;
-          conversation.add(Message.user('请继续：需要查资料就调用工具，否则给出最终答案。'));
+          conversation.add(Message.user(loreContinueNote));
           continue;
         }
         yield ReActEvent(
@@ -900,6 +897,7 @@ class LoreAgentLoop {
         final issues = await _review(
           query,
           body.replaceAll(_coverageLine, '').trim(),
+          games,
           (raw) => onRawLlmResponse?.call(++record, '（审稿）$raw'),
         );
         if (issues.isNotEmpty) {
@@ -1058,6 +1056,7 @@ class LoreAgentLoop {
   Future<List<String>> _review(
     String query,
     String answer,
+    List<Game> games,
     void Function(String raw) onRaw,
   ) async {
     try {
@@ -1077,7 +1076,7 @@ class LoreAgentLoop {
       }.take(40).toList();
       final result = await client.chatCompletion(
         [
-          Message.system(loreReviewPrompt),
+          Message.system(loreRolePrompt(LoreRole.reviewer, games: games)),
           Message.user(
             loreReviewRequest(query, stories, withoutCitations(answer)),
           ),
@@ -1110,7 +1109,7 @@ class LoreAgentLoop {
     final count = entries.where((e) => e.isText).length;
     yield const ReActEvent(type: ReActEventType.status, content: '整理答案');
     final messages = [
-      Message.system(loreStageSystemPrompt),
+      Message.system(loreRolePrompt(LoreRole.stager)),
       Message.user(loreStagePrompt(numberedEntries(entries), question: question)),
     ];
     final text = StringBuffer();
@@ -1248,7 +1247,11 @@ class LoreAgentLoop {
       final result = await (planClient ?? client).chatCompletion(
         [
           Message.system(
-            loreSearchPlanPrompt(search.description, wiki: wiki != null),
+            loreRolePrompt(
+              LoreRole.planner,
+              wiki: wiki != null,
+              searchDescription: search.description,
+            ),
           ),
           Message.user(
             loreSearchPlanRequest(query, earlier: _earlier(prior, history)),
