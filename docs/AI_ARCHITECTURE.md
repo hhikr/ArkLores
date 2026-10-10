@@ -11,10 +11,12 @@
               │   紧接上一条回答时带上一问的对话（LoreConversation，工具结果折叠），否则带最近 3 轮问答文本
               │   “深度思考”开关 → 本问使用 low 档思考的 client
               └─ StoryQaAgent ─► LoreAgentLoop
-                                   预检索（0.14，有向量时）：问题原文先跑一次 search（两个游戏 + Wiki，按来源分组），附在问题下面
-                                   system：库结构（含资料页说明 loreLibraryGuide）+ 工作方式 + 出处格式 + 输出格式
+                                   第一批检索（0.14）：一次独立的小调用（loreSearchPlanPrompt）按问题写出最多三条检索词和一个 Wiki 词，
+                                     代码并行执行，作为 search 调用和结果进入对话；没写出来时有向量就用问题原文按意思检索一次
+                                   system：按角色组合（loreRolePrompt）：库结构 + 资料页说明 + 工作方式 + 出处 + 输出格式
                                    每轮 streamTurn(tools) → 守门（拆分粘连、按 schema 校验）→ 工具并发执行 → 结果追加
-                                   最终答案（JSON）→ 出处核对（SeenLines；少量未核实由代码删去，多了退回一次）→ [审稿] → 按阶段整理（只发条目）
+                                   最终答案（JSON）→ 出处核对（SeenLines；只读过一部分的范围裁到读过的行，少量未读由代码删去，
+                                     多了或没有出处则整轮回档重问一次：出错的回答不进对话）→ [审稿] → 按阶段整理（只发条目）
                                    → [STORY_ANSWER: status=answered|partial|not_covered]
        工具：search / read_story / grep / sql（只读）/ outline / similar_names / [delegate]
              （0.13，“Wiki 资料”开着时）wiki_search / wiki_read → WikiLookup（PRTS / Warfarin，快照）
@@ -42,8 +44,8 @@
 
 - 表与构建见 `GAMEDATA_BUILD_PIPELINE.md`。Agent 主要用：`story_lines`（逐行原文，`kind`）、`entries`/`collections`/`entry_links`（条目、归属、绑定）、
   `normalized_records`（档案等，出处 `record:<id>`）、`story_catalog`（章节名、顺序、梗概、上线时间）、`story_chunk_vectors`（可选语义召回）。
-- `search`（0.14，取代 `find`）：有向量服务时按意思检索为主，问题里出现的库中名字做关键词，RRF 融合；所有已安装游戏和 Wiki 同时查、按来源分组；
-  打印出的原文行算读过、可以引用。向量只在配置的模型/维度与 manifest 一致时启用；没有向量时退回关键词并提示“问答质量可能下降”。
+- `search`（0.14，取代 `find`）：有向量服务时按整个 query 的意思检索，query 里空格分开的词做关键词，RRF 融合；所有已安装游戏、资料和 Wiki 同时查、按来源分组；
+  打印出的原文行算读过、可以引用（资料只列片段，记为片段）。检索词由模型或“第一批检索”那次调用来写，代码不从句子里切词。向量只在配置的模型/维度与 manifest 一致时启用；没有向量时退回关键词并提示“问答质量可能下降”。
 - 覆盖层、目录、梗概、向量都只是**定位线索**，不参与事实判定。
 - 资料页的检索（`library_search.dart`）与 Agent 无关：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。
 - **两个游戏（0.12）**：每个游戏一个库文件，表结构相同；终末地的所有 id 以 `ef/` 开头（`game.dart` 的 `gameOfId`），所以出处、阅读历史、

@@ -19,12 +19,13 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 
 - **`search`** replaces `find`: one call looks at the story text of both games — by meaning when an embedding service is set up, and by the names the question mentions — and at the wikis, with the results grouped by source (Arknights, Endfield, Wiki). The lines it prints count as read and can be cited.
 - `search` also looks at the texts outside the stories — archives, operator files, voice lines, enemy and item texts — and lists the best few with a citable reference.
-- **The question is searched before the model's first turn**, so it starts from candidate passages instead of spending turns finding where a name occurs.
+- **The first searches are written by a small call of its own** and run before the model's first turn, so it starts from candidate passages instead of spending turns finding where a name occurs. The call sees the question, the search tool's own description and, for a follow-up, the question before it with the gist of its answer; it writes up to three searches and one word for the wikis. Code used to search with the question as typed and with words it cut out of it — on a phone these were fragments of clauses, a follow-up's words were the earlier question's, and two words glued together found no wiki page.
 - **Both games are searched for every question**; the prompt no longer asks the model to decide the game first. Corpus counts list each game under its own heading with its totals.
 - **The wikis are a search source like the knowledge base**, no longer a last resort; answers still say which points come from a wiki.
-- Without an embedding service, search matches the text literally and the Ask page warns that answers may be less accurate. The question is then not searched by code before the first turn: the model chooses the words (it knows how the stories name things), and each search says how many lines every word matched, so a word the text never uses is replaced. A question written as a sentence still gives keywords: the names it mentions and its own phrases.
+- Without an embedding service, search matches the text literally and the Ask page warns that answers may be less accurate. The question is then not searched by code before the first turn: the model chooses the words (it knows how the stories name things), and each search says how many lines every word matched, so a word the text never uses is replaced. The keywords of a search are the words its query separates; code no longer cuts words out of a sentence.
 - `search` also lists operator files (race, records, archives), the file of what the question names first.
-- A follow-up is searched together with the question before it, so "what about her?" finds what the conversation is about.
+- A follow-up's searches are written knowing the question before it, so "what about her?" finds what the conversation is about.
+- A question about one game no longer brings a third of its search result from the other: a game whose passages are clearly further and hold fewer of the query's words is listed as one line with its counts. Records are ranked with common words weighing less.
 - A record cited as `record:record:<id>` is read as `record:<id>`.
 - Answers are written in the language of the question (a model thinking in English wrote whole answers in English); when one reply holds several versions of the answer (a weaker model's notes quoting the format, partial drafts, then the answer), the last complete one is used.
 
@@ -32,15 +33,20 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 
 - Tool results are half as long, old tool results are folded much earlier (what they showed stays citable), and a follow-up no longer carries the previous question's tool output.
 - A few citations of lines that were not read are removed by code instead of sending the whole answer back; the answer is rewritten only for more, or for what code cannot fix.
+- A cited range of which only some lines were shown is cut to those lines instead of being dropped (search lists some lines of a passage; a sound citation over them was lost, and its paragraph was left without a source).
+- An answer written in prose without a single citation is asked again once (it was shown whole under "not covered").
+- **An answer that is sent back disappears**: it does not stay in the conversation, and the page shows one status line instead of a step. Quoted dialogue is no longer sent back — the rewrite only stripped the quotation marks; the prompt asks not to copy dialogue at length.
+- What counts as read is one ledger for every tool: a line or a record counts only with its text; a record of which search showed an excerpt is marked so; a folded tool result says which lines it held and that their text must be read again before use.
 - Reorganising a long answer sends only its entries, not the whole conversation.
 - The reader's review and sub-agents are off by default (both in the answer options); sub-agents are limited to two per question and their steps are shown.
 
 ### The work timeline reads well
 
-- Stories read are shown by name (they showed as file names); every failure is marked and says why; a sub-agent's steps are labelled; a rewrite says what was wrong.
+- Stories read are shown by name (they showed as file names); every failure is marked and says why; a sub-agent's steps are labelled.
 
 ### For developers
 
+- The prompts are put together per role (`loreRolePrompt`: answer, helper, planner, reviewer, stager) from sections that each say one thing once; the session record keeps why an answer was sent back and which citations code cut or dropped; a search reports where its time went (embedding, each game's vector and keyword scans, records, wikis).
 - `tools/phone_ask.dart` asks a question in the app on a phone connected by USB and shows in the terminal, as it runs, what the app shows (steps, thinking, status, answer, cost); it needs a local build with the bridge (`install_local.ps1 -Build -Bridge`), which release builds do not have.
 
 ## [0.13.0] - 2026-10-09
