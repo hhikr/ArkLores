@@ -985,13 +985,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiHistoryTitle => '对话记录';
 
   @override
-  String get aiHistoryEmpty => '暂无对话记录。发送消息后会自动保存在本机的 chat_sessions 目录。';
+  String get aiHistoryEmpty =>
+      '暂无对话记录。提问后对话会自动保存在本机的 chat_sessions 目录，点一条就能接着聊。';
 
   @override
-  String get aiHistoryContinue => '继续对话';
-
-  @override
-  String get aiHistoryView => '查看';
+  String get aiHistoryCurrent => '当前对话';
 
   @override
   String get aiHistoryDelete => '删除';

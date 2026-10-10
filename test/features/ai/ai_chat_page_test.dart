@@ -56,7 +56,9 @@ void main() {
     expect(find.byType(AppBar), findsNothing);
     expect(find.byType(TabBar), findsNothing);
     expect(find.byKey(const ValueKey('ask-floating-actions')), findsOneWidget);
-    expect(find.byKey(const ValueKey('ask-reading-history')), findsOneWidget);
+    // The conversations, not the reading history (that is on the library page).
+    expect(find.byKey(const ValueKey('ask-chat-history')), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_outlined), findsNothing);
     expect(find.byType(BackButton), findsNothing);
     expect(find.text('AI 问答'), findsOneWidget); // the empty-state title
     expect(find.byTooltip('回答方式'), findsNothing);

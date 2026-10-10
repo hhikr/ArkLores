@@ -1008,13 +1008,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiHistoryEmpty =>
-      'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.';
+      'No conversations yet. They are saved to the on-device chat_sessions folder as you ask; tap one to go on with it.';
 
   @override
-  String get aiHistoryContinue => 'Continue';
-
-  @override
-  String get aiHistoryView => 'View';
+  String get aiHistoryCurrent => 'Current';
 
   @override
   String get aiHistoryDelete => 'Delete';

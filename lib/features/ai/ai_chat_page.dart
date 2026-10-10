@@ -11,7 +11,6 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'chat_history_page.dart';
-import 'reading_history_page.dart';
 import 'widgets/answer_options_menu.dart';
 import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
@@ -112,7 +111,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  /// The floating actions at the top right: history, reading history, new
+  /// The floating actions at the top right: the conversations, a new
   /// conversation, and a menu with retry / clear.
   Widget _buildFloatingActions(AppThemeTokens theme) {
     final chatHistory = ref.watch(askChatProvider);
@@ -151,6 +150,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   ) {
     return [
       IconButton(
+        key: const ValueKey('ask-chat-history'),
         onPressed: isSending
             ? null
             : () => Navigator.of(context).push(
@@ -160,16 +160,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 ),
         tooltip: context.t.aiHistoryTitle,
         icon: const Icon(Icons.history_sharp),
-      ),
-      IconButton(
-        key: const ValueKey('ask-reading-history'),
-        onPressed: () => Navigator.of(context).push(
-          smoothPageRoute<void>(
-            builder: (_) => const ReadingHistoryPage(),
-          ),
-        ),
-        tooltip: context.t.readingHistoryTitle,
-        icon: const Icon(Icons.menu_book_outlined),
       ),
       IconButton(
         onPressed: isSending ? null : chatNotifier.newSession,

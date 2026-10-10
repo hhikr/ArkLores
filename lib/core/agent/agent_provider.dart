@@ -118,6 +118,10 @@ class AskChatNotifier extends ChatNotifierBase {
   final LLMConfig Function() _configReader;
   ChatSessionFile? _currentSession;
 
+  /// The write that put a new conversation into the history when its first
+  /// question was sent.
+  Future<void>? _firstSave;
+
   /// Whether session recording is active for the current conversation.
   static bool get recordingEnabled => AgentLogger.isEnabled;
 
@@ -133,15 +137,21 @@ class AskChatNotifier extends ChatNotifierBase {
     state = const [];
   }
 
-  /// Restores a persisted session into the UI. Subsequent messages continue
-  /// the same session file.
+  /// Makes a persisted session the current conversation (the one before it
+  /// is already in its own file). Subsequent messages continue the same
+  /// session file.
   void loadSession(ChatSessionFile session) {
+    if (isStreaming) cancel();
     _currentSession = session;
     _conversations.clear();
     state = chatSessionToMessages(session);
   }
 
   ChatSessionFile? get currentSession => _currentSession;
+
+  /// The id of the conversation shown, once it has a file (from its first
+  /// question on, while recording is on).
+  String? get currentSessionId => _currentSession?.sessionId;
 
   @override
   void clearChat() {
@@ -391,13 +401,19 @@ class AskChatNotifier extends ChatNotifierBase {
     var turnStatus = ChatTurnStatus.completed;
     String? turnError;
     var canceled = false;
-    if (recording) {
-      _currentSession ??= ChatSessionFile(
+    if (recording && _currentSession == null) {
+      // A conversation is in the history from its first question on, not
+      // only once that question is answered.
+      final created = ChatSessionFile(
         sessionId: newId(),
         createdAt: turnStart,
         updatedAt: turnStart,
         title: _truncateTitle(query),
       );
+      _currentSession = created;
+      // Not waited for: the question starts at once. The turn's own save
+      // waits for this one ([_firstSave]).
+      _firstSave = _sessionStore.save(created).catchError((Object _) {});
     }
     final session = _currentSession;
 
@@ -718,7 +734,13 @@ class AskChatNotifier extends ChatNotifierBase {
       title: session.title,
       turns: [...session.turns, turn],
     );
-    _currentSession = updated;
+    // Another conversation may have been opened (or a new one started)
+    // while this turn was stopping: its file is written, it is not made
+    // the current one again.
+    if (_currentSession?.sessionId == session.sessionId) {
+      _currentSession = updated;
+    }
+    await _firstSave;
     await _sessionStore.save(updated);
   }
 
@@ -788,11 +810,18 @@ class AskChatNotifier extends ChatNotifierBase {
 final chatSessionStoreProvider =
     Provider<ChatSessionStore>((ref) => const ChatSessionStore());
 
-/// Session summaries for the Chat History list (newest first).
-final chatHistoryListProvider =
-    FutureProvider<List<ChatSessionSummary>>((ref) async {
-  return ref.watch(chatSessionStoreProvider).list();
-});
+/// How many conversations are saved. Invalidate after one is deleted.
+final chatHistoryCountProvider = FutureProvider.autoDispose<int>(
+  (ref) => ref.watch(chatSessionStoreProvider).count(),
+);
+
+/// One page (0-based) of the saved conversations, last written first: only
+/// that page's files are read.
+final chatHistoryPageProvider = FutureProvider.autoDispose
+    .family<List<ChatSessionSummary>, int>(
+  (ref, page) =>
+      ref.watch(chatSessionStoreProvider).page(page, ChatSessionStore.pageSize),
+);
 
 /// Provider for the unified Ask chat state.
 final askChatProvider =

@@ -36,14 +36,17 @@ class ChatSessionSummary {
 /// Each file is one full conversation (multi-turn); writes are atomic
 /// (temp file + rename) so a killed process
 /// never leaves a half-written session. Corrupt files are surfaced in the
-/// history list instead of crashing the app.
+/// history list instead of crashing the app. Conversations are kept until
+/// the user deletes them; the history list reads them a page at a time
+/// ([count], [page]).
 class ChatSessionStore {
   const ChatSessionStore({this.filePath});
 
   /// Overrides the directory (tests / desktop CLI).
   final String? filePath;
 
-  static const int maxSessionFiles = 50;
+  /// Conversations on one page of the history list.
+  static const int pageSize = 15;
 
   Future<Directory> _directory() async {
     if (filePath != null) return Directory(filePath!);
@@ -62,15 +65,13 @@ class ChatSessionStore {
     return File(p.join(dir.path, 'conversation_$sessionId.json'));
   }
 
-  /// Atomically writes [session] (temp file + rename). Also prunes the
-  /// oldest files when the session count exceeds [maxSessionFiles].
+  /// Atomically writes [session] (temp file + rename).
   Future<void> save(ChatSessionFile session) async {
     final file = await _fileFor(session.sessionId);
     await file.parent.create(recursive: true);
     final temporary = File('${file.path}.tmp');
     await temporary.writeAsString(session.encode(), flush: true);
     await temporary.rename(file.path);
-    await _prune();
   }
 
   /// Loads one session; returns null when missing or corrupt.
@@ -87,49 +88,83 @@ class ChatSessionStore {
     }
   }
 
-  /// Lists sessions newest-first. Corrupt files are included with
-  /// [ChatSessionSummary.corrupt] = true so the user can see and delete them.
-  Future<List<ChatSessionSummary>> list() async {
+  /// The session files with the time each was last written, newest first.
+  Future<List<(File, DateTime)>> _files() async {
     final dir = await _directory();
     if (!await dir.exists()) return const [];
-    final summaries = <ChatSessionSummary>[];
+    final files = <(File, DateTime)>[];
     await for (final entity in dir.list()) {
       if (entity is! File ||
           !entity.path.endsWith('.json') ||
           entity.path.endsWith('.tmp')) {
         continue;
       }
-      final name = p.basenameWithoutExtension(entity.path);
-      final sessionId =
-          name.startsWith('conversation_') ? name.substring(13) : name;
       try {
-        final decoded = jsonDecode(await entity.readAsString());
-        if (decoded is! Map<String, dynamic>) {
-          throw const FormatException('not an object');
-        }
-        final session = ChatSessionFile.fromJson(decoded);
-        summaries.add(ChatSessionSummary(
-          sessionId: sessionId,
-          title: session.title,
-          updatedAt: session.updatedAt,
-          createdAt: session.createdAt,
-          turnCount: session.turnCount,
-          lastQuery: session.lastQuery,
-        ),);
-      } catch (_) {
-        final stat = await entity.stat();
-        summaries.add(ChatSessionSummary(
-          sessionId: sessionId,
-          title: '（损坏的会话文件）',
-          updatedAt: stat.modified,
-          createdAt: stat.modified,
-          turnCount: 0,
-          corrupt: true,
-        ),);
+        files.add((entity, (await entity.stat()).modified));
+      } on FileSystemException {
+        // Deleted meanwhile.
       }
     }
-    summaries.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    files.sort((a, b) {
+      final byTime = b.$2.compareTo(a.$2);
+      return byTime != 0 ? byTime : b.$1.path.compareTo(a.$1.path);
+    });
+    return files;
+  }
+
+  /// What the history list shows of [file] (written at [modified]). A file
+  /// that cannot be read is a summary with [ChatSessionSummary.corrupt].
+  Future<ChatSessionSummary> _summary(File file, DateTime modified) async {
+    final name = p.basenameWithoutExtension(file.path);
+    final sessionId =
+        name.startsWith('conversation_') ? name.substring(13) : name;
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('not an object');
+      }
+      final session = ChatSessionFile.fromJson(decoded);
+      return ChatSessionSummary(
+        sessionId: sessionId,
+        title: session.title,
+        updatedAt: session.updatedAt,
+        createdAt: session.createdAt,
+        turnCount: session.turnCount,
+        lastQuery: session.lastQuery,
+      );
+    } catch (_) {
+      return ChatSessionSummary(
+        sessionId: sessionId,
+        title: '（损坏的会话文件）',
+        updatedAt: modified,
+        createdAt: modified,
+        turnCount: 0,
+        corrupt: true,
+      );
+    }
+  }
+
+  /// Lists sessions newest-first. Corrupt files are included with
+  /// [ChatSessionSummary.corrupt] = true so the user can see and delete them.
+  Future<List<ChatSessionSummary>> list() async {
+    final summaries = [
+      for (final (file, modified) in await _files())
+        await _summary(file, modified),
+    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return summaries;
+  }
+
+  /// How many sessions are saved.
+  Future<int> count() async => (await _files()).length;
+
+  /// One page (0-based, [size] a page) of the sessions, last written first.
+  /// Only the files of that page are read.
+  Future<List<ChatSessionSummary>> page(int page, int size) async {
+    final files = await _files();
+    return [
+      for (final (file, modified) in files.skip(page * size).take(size))
+        await _summary(file, modified),
+    ];
   }
 
   /// Deletes one session file. Returns true when a file was removed.
@@ -199,29 +234,5 @@ class ChatSessionStore {
         ..writeln();
     }
     return buffer.toString();
-  }
-
-  /// Keeps only the [maxSessionFiles] most recent sessions.
-  Future<void> _prune() async {
-    try {
-      final dir = await _directory();
-      if (!await dir.exists()) return;
-      final files = <File>[];
-      await for (final entity in dir.list()) {
-        if (entity is File &&
-            entity.path.endsWith('.json') &&
-            !entity.path.endsWith('.tmp')) {
-          files.add(entity);
-        }
-      }
-      files.sort((a, b) =>
-          a.statSync().modified.compareTo(b.statSync().modified),);
-      final overflow = files.length - maxSessionFiles;
-      for (var i = 0; i < overflow; i++) {
-        await files[i].delete();
-      }
-    } catch (e) {
-      debugPrint('[ChatSessionStore] Failed to prune sessions: $e');
-    }
   }
 }

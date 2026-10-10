@@ -128,62 +128,127 @@ void main() {
     expect(find.textContaining('investigate'), findsNothing);
   });
 
-  testWidgets('view opens a read-only transcript', (tester) async {
+  ProviderContainer containerOf(WidgetTester tester) =>
+      ProviderScope.containerOf(tester.element(find.byType(Scaffold).first));
+
+  // A row has one action, delete: no menu, no read-only view.
+  testWidgets('a row has a delete button and no menu', (tester) async {
     await saveSampleSessions();
     await openHistory(tester);
-
-    await tester.tap(_menuOf('特蕾西娅之死'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('查看'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('特蕾西娅之死是谁造成的？'), findsOneWidget);
-    expect(find.textContaining('博士是下手者。'), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert_sharp), findsNothing);
+    expect(find.byKey(const ValueKey('chat-history-delete-s1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-history-delete-s2')), findsOneWidget);
+    // Nothing is the current conversation yet.
+    expect(find.byKey(const ValueKey('chat-history-current')), findsNothing);
   });
 
-  testWidgets('continue restores the conversation and pops back',
+  testWidgets('tapping a conversation makes it the current one and pops back',
       (tester) async {
     await saveSampleSessions();
     await openHistory(tester);
 
-    await tester.tap(_menuOf('特蕾西娅之死'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('继续对话'));
+    await tester.tap(find.text('特蕾西娅之死'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatHistoryPage), findsNothing);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(Scaffold).first),
-    );
+    final container = containerOf(tester);
     final messages = container.read(askChatProvider);
     expect(messages, hasLength(2));
     expect(messages[0].content, '特蕾西娅之死是谁造成的？');
     expect(messages[1].content, '博士是下手者。');
+    expect(container.read(askChatProvider.notifier).currentSessionId, 's1');
+
+    // Back in the list it is the marked one; the other is still there.
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    final current = find.byKey(const ValueKey('chat-history-current'));
+    expect(current, findsOneWidget);
+    expect(
+      find.descendant(of: current, matching: find.text('特蕾西娅之死')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('当前对话'), findsOneWidget);
+
+    // Opening another one switches; the first stays in its file.
+    await tester.tap(find.text('阿米娅是谁'));
+    await tester.pumpAndSettle();
+    expect(container.read(askChatProvider.notifier).currentSessionId, 's2');
+    expect(container.read(askChatProvider).first.content, '阿米娅是谁');
+    expect(store.sessions.keys, containsAll(['s1', 's2']));
   });
 
   testWidgets('delete removes the session after confirmation', (tester) async {
     await saveSampleSessions();
     await openHistory(tester);
 
-    await tester.tap(_menuOf('特蕾西娅之死'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('删除'));
+    await tester.tap(find.byKey(const ValueKey('chat-history-delete-s1')));
     await tester.pumpAndSettle();
     expect(find.textContaining('此操作不可撤销'), findsOneWidget);
-    await tester.tap(find.text('删除').last);
+    await tester.tap(find.byKey(const ValueKey('chat-history-delete-confirm')));
     await tester.pumpAndSettle();
 
     expect(find.text('特蕾西娅之死'), findsNothing);
     expect(find.text('阿米娅是谁'), findsOneWidget);
     expect(store.sessions, hasLength(1));
   });
-}
 
-/// The more-menu of the list tile whose title is [title].
-Finder _menuOf(String title) => find.descendant(
-      of: find.widgetWithText(ListTile, title),
-      matching: find.byIcon(Icons.more_vert_sharp),
-    );
+  testWidgets('deleting the current conversation clears the chat',
+      (tester) async {
+    await saveSampleSessions();
+    await openHistory(tester);
+    await tester.tap(find.text('阿米娅是谁'));
+    await tester.pumpAndSettle();
+    final container = containerOf(tester);
+    expect(container.read(askChatProvider), isNotEmpty);
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chat-history-delete-s2')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chat-history-delete-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(container.read(askChatProvider), isEmpty);
+    expect(container.read(askChatProvider.notifier).currentSessionId, isNull);
+    expect(find.byKey(const ValueKey('chat-history-current')), findsNothing);
+    expect(store.sessions.keys, ['s1']);
+  });
+
+  // No cap on the number of conversations: the list is paged like the
+  // reading history, with the same page boxes and page-number prompt.
+  testWidgets('a long history is paged and a page can be jumped to',
+      (tester) async {
+    final base = DateTime(2026, 8, 1);
+    for (var i = 1; i <= 70; i++) {
+      await store.save(ChatSessionFile(
+        sessionId: 'n$i',
+        createdAt: base.add(Duration(hours: i)),
+        updatedAt: base.add(Duration(hours: i)),
+        title: '对话 $i',
+      ),);
+    }
+    await openHistory(tester);
+
+    expect(find.byKey(const ValueKey('chat-history-pager-top')), findsOneWidget);
+    expect(find.text('对话 70'), findsOneWidget);
+    expect(find.text('对话 55'), findsNothing);
+    expect(find.textContaining('第 1 / 5 页'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('chat-history-page-box-2')).first);
+    await tester.pumpAndSettle();
+    expect(find.text('对话 55'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat-history-jump')).first);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('chat-history-jump-field')), '5',);
+    await tester.tap(find.byKey(const ValueKey('chat-history-jump-go')));
+    await tester.pumpAndSettle();
+    // The last page: the ten oldest.
+    expect(find.text('对话 10'), findsOneWidget);
+    expect(find.text('对话 11'), findsNothing);
+  });
+}
 
 /// In-memory store: widget tests run under FakeAsync where real file IO never
 /// completes, so every store method resolves immediately.
@@ -213,6 +278,13 @@ class _FakeChatSessionStore extends ChatSessionStore {
     ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return summaries;
   }
+
+  @override
+  Future<int> count() async => sessions.length;
+
+  @override
+  Future<List<ChatSessionSummary>> page(int page, int size) async =>
+      (await list()).skip(page * size).take(size).toList();
 
   @override
   Future<bool> delete(String sessionId) async {

@@ -1829,20 +1829,14 @@ abstract class AppLocalizations {
   /// No description provided for @aiHistoryEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.'**
+  /// **'No conversations yet. They are saved to the on-device chat_sessions folder as you ask; tap one to go on with it.'**
   String get aiHistoryEmpty;
 
-  /// No description provided for @aiHistoryContinue.
+  /// No description provided for @aiHistoryCurrent.
   ///
   /// In en, this message translates to:
-  /// **'Continue'**
-  String get aiHistoryContinue;
-
-  /// No description provided for @aiHistoryView.
-  ///
-  /// In en, this message translates to:
-  /// **'View'**
-  String get aiHistoryView;
+  /// **'Current'**
+  String get aiHistoryCurrent;
 
   /// No description provided for @aiHistoryDelete.
   ///

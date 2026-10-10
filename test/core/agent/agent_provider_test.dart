@@ -104,6 +104,38 @@ void main() {
       expect(notifier.state.last.stats!.cacheRate, 0.5);
     });
 
+    // The history lists a conversation from its first question on (as a
+    // chat app's list of conversations does), not only once it is answered.
+    test('a conversation is saved when its first question is sent', () async {
+      AgentLogger.setEnabled(true);
+      final spy = _SpyStore(tempDir.path);
+      store = spy;
+      final notifier = makeNotifier(_RecorderLLM()..reads = 1);
+
+      await notifier.sendMessage('第一个问题');
+      await notifier.sendMessage('第二个问题');
+
+      // Written once before the first answer, then once per turn; one file.
+      expect(spy.savedTurns, [0, 1, 2]);
+      final session = await singleSession();
+      expect(session.title, '第一个问题');
+      expect(notifier.currentSessionId, session.sessionId);
+
+      // A new conversation gets a file of its own; the first one stays.
+      notifier.newSession();
+      expect(notifier.currentSessionId, isNull);
+      await notifier.sendMessage('另一个对话');
+      expect(await store.count(), 2);
+      expect(notifier.currentSessionId, isNot(session.sessionId));
+
+      // Going back to the first one continues its file.
+      notifier.loadSession((await store.load(session.sessionId))!);
+      expect(notifier.state, hasLength(4));
+      await notifier.sendMessage('第三个问题');
+      expect((await store.load(session.sessionId))!.turns, hasLength(3));
+      expect(await store.count(), 2);
+    });
+
     // 0.14: an answer sent back is taken back whole — no step on screen, the
     // reason only in the session record (with the rejected reply).
     test('a rejected answer leaves no step; why is in the session record',
@@ -591,5 +623,18 @@ class _RecorderLLM extends LLMClient {
           );
     meter?.add(result);
     return result;
+  }
+}
+
+/// Notes how many turns each saved file had.
+class _SpyStore extends ChatSessionStore {
+  _SpyStore(String path) : super(filePath: path);
+
+  final List<int> savedTurns = [];
+
+  @override
+  Future<void> save(ChatSessionFile session) {
+    savedTurns.add(session.turns.length);
+    return super.save(session);
   }
 }
