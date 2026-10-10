@@ -101,44 +101,6 @@ Future<List<NameOccurrence>> loadNameInventory(DatabaseExecutor db) async {
   return folded;
 }
 
-/// 0.14: names of [inventory] written in [text] (a question), longest
-/// first; a name inside a longer one found is left out. Only speakers,
-/// people and story collections count: chapter titles and the surface forms
-/// matched in story text are often everyday words; one-character names and
-/// speakers seen fewer than [minSpoken] times are left out too. Used to give
-/// the keyword leg of a search the names a question mentions — Chinese has
-/// no spaces to split it on; what is not a name is found by meaning.
-List<String> namesOccurringIn(
-  String text,
-  List<NameOccurrence> inventory, {
-  int limit = 6,
-  int minSpoken = 3,
-}) {
-  final found = <String, int>{};
-  for (final n in inventory) {
-    if (n.kind == '章节' || n.kind == '剧情提及' || n.name.runes.length < 2) {
-      continue;
-    }
-    if (n.kind == '说话人' && n.occurrences > 0 && n.occurrences < minSpoken) {
-      continue;
-    }
-    if (!text.contains(n.name)) continue;
-    found[n.name] = (found[n.name] ?? 0) + n.occurrences;
-  }
-  final names = found.keys.toList()
-    ..sort((a, b) {
-      final byLength = b.runes.length.compareTo(a.runes.length);
-      return byLength != 0 ? byLength : found[b]!.compareTo(found[a]!);
-    });
-  final picked = <String>[];
-  for (final name in names) {
-    if (picked.any((p) => p.contains(name))) continue;
-    picked.add(name);
-    if (picked.length >= limit) break;
-  }
-  return picked;
-}
-
 final RegExp _edgePunctuation =
     RegExp(r'^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$', unicode: true);
 

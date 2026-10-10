@@ -187,21 +187,6 @@ class MultiGameRetrieval implements GameDataRetrieval {
           .toList();
 
   @override
-  Future<List<String>> namesInText(String text, {int limit = 6}) async {
-    final names = <String>{
-      for (final store in await _installed())
-        ...await store.namesInText(text, limit: limit),
-    }.toList()
-      ..sort((a, b) => b.runes.length.compareTo(a.runes.length));
-    final picked = <String>[];
-    for (final name in names) {
-      if (picked.any((p) => p.contains(name))) continue;
-      picked.add(name);
-    }
-    return picked.take(limit).toList();
-  }
-
-  @override
   Future<SqlQueryResult> readOnlySql(
     String sql, {
     int maxRows = 200,

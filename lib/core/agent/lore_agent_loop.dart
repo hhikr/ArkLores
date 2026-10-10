@@ -38,6 +38,7 @@ import 'lore_answer_json.dart';
 import 'lore_answer_stages.dart';
 import 'lore_tools.dart';
 import 'react_event.dart';
+import 'search_planner.dart';
 import 'story_answer.dart';
 import 'tool_call_gate.dart';
 import 'tools/agent_tool.dart';
@@ -105,6 +106,8 @@ class LoreAgentLoop {
   LoreAgentLoop({
     required this.client,
     required this.store,
+    this.planClient,
+    this.planTimeout = const Duration(seconds: 25),
     this.embeddingClient,
     this.wiki,
     this.maxTurns = 30,
@@ -128,6 +131,13 @@ class LoreAgentLoop {
   /// 0.14: the status line while a rejected final answer is written again
   /// (all the player sees of it).
   static const String redoStatus = '回答格式出错，正在重新构思回答…';
+
+  /// 0.14: the client that writes the first searches (default: [client]).
+  /// The app passes its plain client, so the "深度思考" one does not think
+  /// over a list of search words; a plan later than [planTimeout] is not
+  /// waited for.
+  final LLMClient? planClient;
+  final Duration planTimeout;
 
   /// How turns are sent (see [AgentTransport]).
   final AgentTransport transport;
@@ -260,9 +270,6 @@ class LoreAgentLoop {
     // Session-record index (one per tool call, see onRawLlmResponse).
     var record = 0;
 
-    // 0.14: the question searched once before the first turn, so the model
-    // starts from candidate passages of every source; by meaning only.
-    var question = query;
     if (keywordOnly != null && !subtask) {
       yield ReActEvent(
         type: ReActEventType.thought,
@@ -270,61 +277,13 @@ class LoreAgentLoop {
             '可以在设置里配置向量服务。',
       );
     }
-    if (preSearch && !subtask && search is SearchTool && keywordOnly == null) {
-      yield const ReActEvent(type: ReActEventType.status, content: '正在检索资料…');
-      onRawLlmResponse?.call(++record, '（预检索）');
-      final args = {'query': query};
-      yield ReActEvent(
-        type: ReActEventType.toolCall,
-        content: _describeCall('search', args),
-        toolName: 'search',
-        toolArgs: args,
-      );
-      // A follow-up is searched together with the question before it
-      // ("它们" alone finds nothing); a restored conversation has its texts.
-      final earlier = prior != null
-          ? prior.question
-          : history.lastWhere(
-              (m) => m.role == MessageRole.user,
-              orElse: () => Message.user(''),
-            ).content;
-      SearchResult? found;
-      try {
-        found = await _span(
-          'tool:search',
-          () => search.run(query, earlier: earlier.trim()),
-        );
-      } catch (e) {
-        found = null;
-        yield ReActEvent(
-          type: ReActEventType.toolObservation,
-          content: '错误：预检索失败（$e）',
-          toolName: 'search',
-        );
-      }
-      if (found != null) {
-        yield ReActEvent(
-          type: ReActEventType.toolObservation,
-          content: found.text,
-          toolName: 'search',
-        );
-        if (found.mode == SearchMode.keywordOnly) {
-          yield ReActEvent(
-            type: ReActEventType.thought,
-            content: '注意：${found.modeNote ?? '没有向量检索'}，只用关键词检索，'
-                '问答质量可能下降。可以在设置里配置向量服务。',
-          );
-        }
-        question = '$query${lorePreSearchNote(found.text)}';
-      }
-    }
 
     final conversation = <Message>[
       if (prior != null)
         ...prior.messages
       else
         ...history,
-      Message.user(question),
+      Message.user(query),
     ];
     // Indexes (in [conversation]) of tool results that may be folded.
     final toolResults = <int>{
@@ -344,6 +303,105 @@ class LoreAgentLoop {
     // 0.14: what each tool result showed (by its index), for the pointer a
     // folded result leaves.
     final shownIn = <int, String>{};
+
+    // 0.14: the first searches, written by a call of its own
+    // (`search_planner.dart`) and run here. They enter the conversation as
+    // `search` calls and results like the model's own (folded like them);
+    // the question stays as it was asked. Without a plan: with vectors the
+    // question itself is searched by meaning; without, the model searches
+    // in its first turn.
+    if (preSearch && !subtask && search is SearchTool) {
+      yield const ReActEvent(type: ReActEventType.status, content: '正在拟定检索…');
+      final plan = await _planSearches(
+        query,
+        prior,
+        history,
+        search,
+        (raw) => onRawLlmResponse?.call(++record, '（拟定检索）$raw'),
+      );
+      final planned = <Map<String, dynamic>>[
+        if (plan != null)
+          for (final (i, q) in plan.queries.indexed)
+            {
+              'query': q,
+              if (i == 0 && wiki != null && plan.wiki != null) 'wiki': plan.wiki,
+            }
+        else if (keywordOnly == null)
+          {'query': query},
+      ];
+      if (planned.isNotEmpty) {
+        final shown = [for (final _ in planned) SeenLines()];
+        Future<(String, SearchResult?)> runOne(int k) async {
+          try {
+            final found = await _span(
+              'tool:search',
+              () => SeenLines.duringCall(
+                shown[k],
+                () => search.run(
+                  '${planned[k]['query']}',
+                  wikiQuery: planned[k]['wiki'] as String?,
+                ),
+              ),
+            );
+            return (found.text, found);
+          } catch (e) {
+            return ('错误：检索失败（$e）', null);
+          }
+        }
+
+        final runs = [for (var k = 0; k < planned.length; k++) runOne(k)];
+        final calls = [
+          for (final (k, args) in planned.indexed)
+            ToolCall(
+              id: 'planned_${k + 1}',
+              name: 'search',
+              arguments: jsonEncode(args),
+            ),
+        ];
+        for (final (k, args) in planned.indexed) {
+          // (The first call shares the record of the plan itself.)
+          if (k > 0) {
+            onRawLlmResponse?.call(++record, '（拟定的第 ${k + 1} 条检索）');
+          }
+          yield ReActEvent(
+            type: ReActEventType.toolCall,
+            content: _describeCall('search', args),
+            toolName: 'search',
+            toolArgs: args,
+          );
+        }
+        yield ReActEvent(
+          type: ReActEventType.status,
+          content: planned.length > 1 ? '${planned.length} 条检索同时进行' : '正在检索资料…',
+        );
+        conversation.add(Message.assistantToolCalls('', calls));
+        String? lostVectors;
+        for (var k = 0; k < planned.length; k++) {
+          final (text, found) = await runs[k];
+          yield ReActEvent(
+            type: ReActEventType.toolObservation,
+            content: text,
+            toolName: 'search',
+          );
+          if (found?.mode == SearchMode.keywordOnly && keywordOnly == null) {
+            lostVectors = found?.modeNote ?? '没有向量检索';
+          }
+          toolResults.add(conversation.length);
+          if (!shown[k].isEmpty) {
+            shownIn[conversation.length] = shown[k].summary();
+          }
+          conversation.add(Message.toolResult(calls[k].id, text));
+        }
+        if (lostVectors != null) {
+          yield ReActEvent(
+            type: ReActEventType.thought,
+            content: '注意：$lostVectors，只用关键词检索，问答质量可能下降。'
+                '可以在设置里配置向量服务。',
+          );
+        }
+      }
+    }
+
     // 0.14: notes a rejected final answer was asked again with (the answer
     // itself is never added); hidden once an answer is accepted.
     final redoNotes = <int>[];
@@ -1171,6 +1229,66 @@ class LoreAgentLoop {
       _ => '子任务结果（出处已核对，可直接引用）',
     };
     return '$header：\n$findings';
+  }
+
+  /// 0.14: the first searches for [query], from a call of its own (see
+  /// `search_planner.dart`); null when it fails, takes too long or writes
+  /// no plan. A follow-up comes with the question before it and the gist
+  /// of its answer, so "they" can be written as a name.
+  Future<SearchPlan?> _planSearches(
+    String query,
+    LoreConversation? prior,
+    List<Message> history,
+    SearchTool search,
+    void Function(String raw) onRaw,
+  ) async {
+    try {
+      final result = await (planClient ?? client).chatCompletion(
+        [
+          Message.system(
+            loreSearchPlanPrompt(search.description, wiki: wiki != null),
+          ),
+          Message.user(
+            loreSearchPlanRequest(query, earlier: _earlier(prior, history)),
+          ),
+        ],
+        temperature: 0.2,
+        maxTokens: 512,
+      ).timeout(planTimeout);
+      onRaw(result.content);
+      return parseSearchPlan(result.content);
+    } catch (e) {
+      onRaw('没有拟定出检索词：$e');
+      return null;
+    }
+  }
+
+  /// What came before a follow-up, for [_planSearches]: the last question
+  /// and its answer's opening and headings (not its whole text).
+  static String _earlier(LoreConversation? prior, List<Message> history) {
+    final messages = prior?.messages ?? history;
+    String last(MessageRole role) => messages
+        .lastWhere(
+          (m) =>
+              m.role == role &&
+              (m.toolCalls ?? const []).isEmpty &&
+              m.content.trim().isNotEmpty,
+          orElse: () => Message.user(''),
+        )
+        .content
+        .trim();
+    final question = prior?.question ?? last(MessageRole.user);
+    if (question.isEmpty) return '';
+    final answer = last(MessageRole.assistant);
+    final entries = loreAnswerEntries(answer);
+    final gist = entries == null
+        ? _clip(withoutCitations(answer).replaceAll(RegExp(r'\s+'), ' '), 300)
+        : [
+            ...entries.where((e) => e.isText).take(1).map((e) => e.text),
+            if (entries.any((e) => e.heading != null))
+              '小节：${entries.map((e) => e.heading).nonNulls.join('、')}',
+          ].join(' ');
+    return '上一问：$question${gist.isEmpty ? '' : '\n上一答的要点：$gist'}';
   }
 
   /// Runs a call that passed the gate. Tool failures come back as text

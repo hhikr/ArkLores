@@ -71,9 +71,10 @@ $loreDatabaseGuide
 $loreLibraryGuide
 
 工作方式：
-- 问题后面如果附有用问题原文预先做的一次 search 的结果，先看它，从里面的段落和故事入手；没有附时（没有向量服务）先用 search 检索。
-- search 是主要的检索方式：有向量服务时给一句描述或几个名字，它按意思检索所有已安装游戏的剧情原文，并用名字做关键词检索；
-  没有向量服务时它只按字面匹配，要写原文里会出现的词（见 search 的说明）。结果按来源分组。
+- 问题后面可能已经有一批 search 调用和结果：那是按问题替你拟定并执行的第一批检索（检索词不是你写的）。先看它们，从里面的段落和故事入手；
+  不够或方向不对时自己再检索。没有时先用 search 检索。
+- search 是主要的检索方式：写空格分隔的几个词（原文里会出现的名字、叫法和相关说法）。有向量服务时它还按整个 query 的意思检索所有已安装游戏的剧情原文；
+  没有向量服务时只按这些词的字面匹配（见 search 的说明）。结果按来源分组。
   问题涉及几个方面、几个阶段或几个人物时，分别检索（在同一轮里一起发出），换说法、换角度再检索，比一次读很多更有效。
 - grep 精确统计某个名字或词出现在哪些故事、多少行（不给范围时统计所有已安装的游戏），用来确认覆盖面和时间顺序；sql 查目录、条目、绑定、档案等结构化信息。
 - 用 read_story 读上下文：从检索命中的行附近开始，读需要的范围；一个事件的起因、经过、结果可能在相邻的几章里。
@@ -187,11 +188,31 @@ String loreSystemPrompt({
           '$loreAnswerFormat\n\n$loreEntryLayout';
 }
 
-/// 0.14: the search run on the question before the first turn, as the
-/// text added under the question.
-String lorePreSearchNote(String result) =>
-    '\n\n---\n（以下是用问题原文预先做的一次 search，只是检索结果，'
-    '不是答案；其中列出的原文行已读到，可以引用）\n$result';
+/// The words that open [loreSearchPlanPrompt] (what tells that call from
+/// the others).
+const String loreSearchPlanRole = '你替一个剧情问答助手拟定第一批检索';
+
+/// 0.14: system prompt of the call that writes the first searches of a
+/// question (`search_planner.dart`). It sees the question (and what came
+/// before a follow-up), not the knowledge base; [searchDescription] is the
+/// `search` tool's own description, so the two cannot drift apart.
+String loreSearchPlanPrompt(String searchDescription, {bool wiki = false}) => '''
+$loreSearchPlanRole。助手接下来会读这些检索的结果、继续查资料并回答玩家；你只写检索，不回答问题。
+检索工具 search 的说明：
+$searchDescription
+
+根据玩家的问题（以及给出的上文）写检索：
+- 每条检索是空格分隔的几个词：原文里会出现的叫法——人物、地点、组织、事件、物品的名字，它们的别称，以及相关的说法；每个词 2–6 个字，一条不超过 8 个词。不写整句，不照抄问题里的虚词和口语。
+- 问题只问一件事时写一条；涉及几个方面、几个阶段或几个人物时分开写，最多三条。
+- 追问里的指代（他们、这件事、那里）按上文换成具体的名字；上文与这一问无关时不要带上。
+- 可以用你对作品的了解补上问题没有写出的相关名字和叫法，这只是为了找到资料。
+${wiki ? '- wiki：在游戏 Wiki 上要找的一个页面名或名词（最能代表问题主题的那一个）；没有合适的就不写这个字段。\n' : ''}只输出一个 JSON 对象，不写别的文字，不加代码块：
+{"search": ["<词> <词> <词>", "<词> <词>"]${wiki ? ', "wiki": "<一个词>"' : ''}}''';
+
+/// The planning call's input: the question, and for a follow-up the
+/// question before it with the gist of its answer ([earlier]).
+String loreSearchPlanRequest(String question, {String earlier = ''}) =>
+    '${earlier.isEmpty ? '' : '上文：\n$earlier\n\n'}玩家的问题：$question';
 
 /// 0.14: what a rejected final answer is asked again with. The answer
 /// itself is not in the conversation (and was not shown), so the note says

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:arklores/core/agent/lore_agent_loop.dart';
+import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/tools/search_tool.dart';
@@ -136,13 +137,17 @@ void main() {
       expect(seen.covers('activities/x/level_x_02.txt', 1, 1), isTrue);
     });
 
-    // 0.14: the search before the first turn runs only with vectors (the
-    // agent-loop tests run without them: the model searches first there).
-    test('with vectors the question is searched before the first turn; a '
-        'follow-up together with the question before it', () async {
+    // 0.14: the first searches are written by a call of its own and run by
+    // code; they enter the conversation as search calls and results.
+    test('the planned searches run before the first turn; a follow-up is '
+        'planned with the question before it', () async {
       final store = GameDataKnowledgeStore(dbPath: dbPath);
       addTearDown(store.close);
-      final llm = _Answers();
+      final llm = _Answers()
+        ..plans.addAll([
+          '好的。\n```json\n{"search": ["匕首 藏起", "夜里 安静"], "wiki": "匕首"}\n```',
+          '{"search": "匕首 后来"}',
+        ]);
       LoreConversation? saved;
       LoreAgentLoop agent() => LoreAgentLoop(
             client: llm,
@@ -152,24 +157,76 @@ void main() {
       final first = await agent()
           .run(query: '谁藏起了那把匕首呢', onConversation: (c) => saved = c)
           .toList();
-      String searchOf(List<ReActEvent> events) => events
-          .firstWhere(
-            (e) =>
-                e.type == ReActEventType.toolObservation &&
-                e.toolName == 'search',
-          )
+      List<String> searches(List<ReActEvent> events) => [
+            for (final e in events)
+              if (e.type == ReActEventType.toolCall && e.toolName == 'search')
+                '${e.toolArgs!['query']}',
+          ];
+      expect(searches(first), ['匕首 藏起', '夜里 安静']);
+      final found = first
+          .firstWhere((e) => e.type == ReActEventType.toolObservation)
           .content;
-      expect(searchOf(first), contains('按意思检索'));
-      expect(searchOf(first), contains('level_x_02.txt'));
-      expect(llm.requests.first.last.content, contains('预先做的一次 search'));
+      expect(found, contains('按意思检索 + 关键词；关键词：匕首（1 行）'));
+      expect(found, contains('level_x_02.txt'));
       expect(
         first.any((e) => e.content.contains('问答质量可能下降')),
         isFalse,
       );
-      // "那后来呢" alone finds nothing: the question before it goes along.
+      // The planning call sees the search tool's own description and the
+      // question; the answering agent gets the question as asked, then the
+      // searches as calls with their results.
+      final plan = llm.planRequests.first;
+      expect(plan.first.content, contains('一次检索所有资料'));
+      expect(plan.last.content, '玩家的问题：谁藏起了那把匕首呢');
+      final request = llm.requests.first;
+      expect(
+        request.map((m) => m.role).toList(),
+        [
+          MessageRole.system,
+          MessageRole.user,
+          MessageRole.assistant,
+          MessageRole.tool,
+          MessageRole.tool,
+        ],
+      );
+      expect(request[1].content, '谁藏起了那把匕首呢');
+      expect(request[2].toolCalls, hasLength(2));
+      expect(request[3].content, contains('level_x_02.txt'));
+      // "那后来呢" alone names nothing: the plan is written knowing the
+      // question before it.
       final second =
           await agent().run(query: '那后来呢？', prior: saved).toList();
-      expect(searchOf(second), contains('（接上一问“谁藏起了那把匕首呢”）'));
+      expect(searches(second), ['匕首 后来']);
+      expect(
+        llm.planRequests.last.last.content,
+        allOf(contains('上一问：谁藏起了那把匕首呢'), endsWith('玩家的问题：那后来呢？')),
+      );
+      // The first question's searches are folded in the follow-up.
+      final later = llm.requests.last
+          .where((m) => m.role == MessageRole.tool)
+          .map((m) => m.content.startsWith('[已折叠]'))
+          .toList();
+      expect(later, [true, true, false]);
+    });
+
+    test('without a plan the question itself is searched by meaning',
+        () async {
+      final store = GameDataKnowledgeStore(dbPath: dbPath);
+      addTearDown(store.close);
+      final llm = _Answers();
+      final events = await LoreAgentLoop(
+        client: llm,
+        store: store,
+        embeddingClient: _FakeEmbedder(),
+      ).run(query: '谁藏起了那把匕首呢').toList();
+      final call = events.singleWhere((e) => e.type == ReActEventType.toolCall);
+      expect(call.toolArgs, {'query': '谁藏起了那把匕首呢'});
+      final found = events
+          .singleWhere((e) => e.type == ReActEventType.toolObservation)
+          .content;
+      expect(found, contains('按意思检索'));
+      expect(found, isNot(contains('关键词：')));
+      expect(found, contains('level_x_02.txt'));
     });
 
     test('search falls back to keywords when the vectors are from another '
@@ -186,8 +243,12 @@ void main() {
   });
 }
 /// Answers every turn at once, without citations; records the requests.
+/// The call that plans the first searches gets [plans] in turn (none left:
+/// a reply that holds no plan).
 class _Answers extends LLMClient {
   final List<List<Message>> requests = [];
+  final List<List<Message>> planRequests = [];
+  final List<String> plans = [];
 
   @override
   Future<String> chat(
@@ -197,6 +258,12 @@ class _Answers extends LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
+    if (messages.first.content.startsWith(loreSearchPlanRole)) {
+      planRequests.add(List.of(messages));
+      return planRequests.length <= plans.length
+          ? plans[planRequests.length - 1]
+          : '没有查到。';
+    }
     requests.add(List.of(messages));
     return '没有查到。';
   }

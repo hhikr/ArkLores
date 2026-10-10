@@ -309,14 +309,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
-  Future<List<String>> namesInText(String text, {int limit = 6}) async {
-    final db = await _open();
-    if (db == null || text.trim().isEmpty) return const [];
-    final inventory = await (_nameInventory ??= loadNameInventory(db));
-    return namesOccurringIn(text, inventory, limit: limit);
-  }
-
-  @override
   Future<SqlQueryResult> readOnlySql(
     String sql, {
     int maxRows = 200,

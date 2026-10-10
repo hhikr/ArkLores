@@ -232,19 +232,23 @@ void main() {
       expect(result.text, contains('资料只列了片段'));
     });
 
-    // 0.14 live: without vectors, a question about a place found only a
-    // short speaker name inside the place's name.
-    test('without vectors the question\'s own phrases are keywords',
+    // 0.14: code cut words out of a question (a short name inside a place's
+    // name, fragments of clauses). The words are now the query's own: what
+    // its writer separated by spaces. A sentence has none.
+    test('keywords are the words the query separates; a sentence has none',
         () async {
-      expect(
-        SearchTool.phrasesOf('甲地的审判庭是做什么的？'),
-        ['甲地', '审判庭'],
-      );
-      expect(SearchTool.phrasesOf('有人说她是萨卡兹，这个说法对吗？'), ['萨卡兹']);
-      final result = await SearchTool(both, SeenLines()).run('灯塔是做什么的？');
-      expect(result.mode, SearchMode.keywordOnly);
-      expect(result.text, contains('关键词：灯塔'));
-      expect(result.text, contains('level_act1_01_beg.txt'));
+      expect(SearchTool.termsOf('甲地 审判庭|灯塔  甲地'), ['甲地', '审判庭', '灯塔']);
+      expect(SearchTool.termsOf('灯塔'), ['灯塔']);
+      expect(SearchTool.termsOf('甲地的审判庭到底是做什么的呢？'), isEmpty);
+      final words = await SearchTool(both, SeenLines()).run('灯塔 用途');
+      expect(words.mode, SearchMode.keywordOnly);
+      expect(words.text, contains('关键词：灯塔'));
+      expect(words.text, contains('level_act1_01_beg.txt'));
+      // Without vectors a sentence finds nothing, and the result says why.
+      final sentence =
+          await SearchTool(both, SeenLines()).run('灯塔到底是做什么用的呢？这个问题很长');
+      expect(sentence.text, contains('要写空格分隔的词'));
+      expect(sentence.text, isNot(contains('level_act1_01_beg.txt')));
     });
 
     // 0.14 live: an operator's race was in their file (entity_documents),

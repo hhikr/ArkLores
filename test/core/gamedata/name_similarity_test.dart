@@ -34,23 +34,4 @@ void main() {
     expect(hint, contains('谬安（干员，2 次）'));
     expect(hint, contains('只是字符串相近'));
   });
-
-  // 0.14: the names a question mentions feed the keyword part of search.
-  test('names written in a question, longest first, common words left out',
-      () {
-    const inventory = [
-      NameOccurrence('洛蕾西娅', 0, '干员'),
-      NameOccurrence('最后的', 1300, '剧情提及'),
-      NameOccurrence('蕾西', 40, '说话人'),
-      NameOccurrence('灰港', 0, '故事集'),
-      NameOccurrence('结局', 0, '章节'),
-      NameOccurrence('路人', 1, '说话人'),
-      NameOccurrence('甲', 900, '说话人'),
-    ];
-    expect(
-      namesOccurringIn('洛蕾西娅在灰港最后的结局是什么？路人甲说了什么', inventory),
-      ['洛蕾西娅', '灰港'],
-    );
-    expect(namesOccurringIn('没有名字的问题', inventory), isEmpty);
-  });
 }

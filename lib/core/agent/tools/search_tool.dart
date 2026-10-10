@@ -2,9 +2,10 @@
 /// every installed game (meaning first, by the story vectors; the names the
 /// query mentions by keyword) and the games' wikis, grouped by source.
 ///
-/// It replaces the R12 `find` and is also run once on the question itself
-/// before the first model call ([preSearch]), so the agent starts from
-/// candidate passages instead of spending turns on where a name occurs.
+/// It replaces the R12 `find`. The first searches of a question are planned
+/// by a call of its own (`search_planner.dart`) and run before the first
+/// turn, so the agent starts from candidate passages instead of spending
+/// turns on where a name occurs.
 /// The story lines it prints are recorded in [SeenLines]: they can be cited
 /// like lines of `read_story`. Every question gets the same search.
 library;
@@ -82,10 +83,12 @@ class SearchTool extends AgentTool {
           '一次最多 $maxKeywordTerms 个词；结果开头列出每个词命中多少行，命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
           '要精确统计某个词出现在哪些故事里时用 grep。'
-      : '一次检索所有资料：已安装的每个游戏的剧情原文（按意思检索，再用问题里的名字做关键词检索）'
+      : '一次检索所有资料：已安装的每个游戏的剧情原文（按整个 query 的意思检索；query 里用空格分开的词还各自做关键词检索）'
           '，以及剧情以外的资料原文（档案、干员资料、语音等）'
           '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
-          '适合任何“发生了什么、是什么、为什么、谁”的问题，用一句话或几个词描述要找的内容。'
+          '适合任何“发生了什么、是什么、为什么、谁”的问题：写空格分隔的几个词（原文里会出现的名字、叫法和相关说法，'
+          '每个词 2–6 个字，一次最多 $maxKeywordTerms 个），或一句描述（只按意思检索，资料和 Wiki 要靠词才查得到）。'
+          '结果开头列出每个词命中多少行，命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
           '要精确统计某个词出现在哪些故事里时用 grep。';
 
@@ -97,7 +100,7 @@ class SearchTool extends AgentTool {
             'type': 'string',
             'description': keywordOnly
                 ? '原文里会出现的词，空格分隔（名字、叫法、别称；不要写整句）'
-                : '要找的内容：一句描述、一个问题，或空格分隔的几个词/名字',
+                : '空格分隔的几个词（名字、叫法、相关说法），或一句描述',
           },
           'game': {
             'type': 'string',
@@ -108,6 +111,11 @@ class SearchTool extends AgentTool {
             'type': 'string',
             'description': '只在这个故事集里找（可选，故事集名字或 collection_id）',
           },
+          if (wiki != null)
+            'wiki': {
+              'type': 'string',
+              'description': '在 Wiki 上搜的一个页面名或名词（可选；默认用 query 的第一个词）',
+            },
         },
         'required': ['query'],
       };
@@ -120,28 +128,35 @@ class SearchTool extends AgentTool {
       query,
       game: Game.parse(arguments['game']),
       collection: '${arguments['collection'] ?? ''}'.trim(),
+      wikiQuery: '${arguments['wiki'] ?? ''}',
     );
     return result.text;
   }
 
-  /// Searches for [query] (also used for the search before the first turn).
-  /// [earlier] (0.14) is the question [query] follows up: both are searched
-  /// together, so a follow-up that only says "they" finds what the earlier
-  /// question was about.
+  /// Searches for [query] (also used for the searches planned before the
+  /// first turn). [wikiQuery] is what the wikis are searched for: by
+  /// default the query's first word (a wiki finds pages by a name; two
+  /// words together found none), nothing for a sentence.
   Future<SearchResult> run(
     String query, {
     Game? game,
     String collection = '',
-    String earlier = '',
+    String? wikiQuery,
   }) async {
     final games = await _games(game);
-    final text = earlier.isEmpty ? query : '$earlier\n$query';
-    final names = await store.namesInText(text);
+    final allTerms = termsOf(query);
+    final forWiki = (wikiQuery ?? '').trim().isNotEmpty
+        ? wikiQuery!.trim()
+        : allTerms.isEmpty
+            ? ''
+            : allTerms.first;
+    // The wikis answer over the network: asked while the library is read.
+    final wikiSearch = wiki == null || collection.isNotEmpty || forWiki.isEmpty
+        ? Future.value(const <String>[])
+        : _searchWiki(games, forWiki);
 
     // Meaning: one embedding of the query, used for every game.
-    final (vector, modeNote) = await _embed(text);
-    final allTerms =
-        _terms(query, names, earlier: earlier, phrases: vector == null);
+    final (vector, modeNote) = await _embed(query);
     final terms = allTerms.take(maxKeywordTerms).toList();
     final unused = allTerms.skip(maxKeywordTerms).toList();
     final termLines = <String, int>{};
@@ -166,12 +181,7 @@ class SearchTool extends AgentTool {
       for (final g in games)
         _rank(narrowTo(store, g), terms, vector, inCollection, termLines),
     ]);
-    final wikiPart = wiki == null || inCollection != null
-        ? const <String>[]
-        : await _searchWiki(
-            games,
-            terms.isEmpty ? query : terms.take(2).join(' '),
-          );
+    final wikiPart = await wikiSearch;
 
     // A game with no keyword hit whose closest passage is clearly further
     // from the query than another game's is listed as such, not printed
@@ -182,10 +192,10 @@ class SearchTool extends AgentTool {
     );
     final mode = vector == null ? SearchMode.keywordOnly : SearchMode.semantic;
     final buffer = StringBuffer()
-      ..writeln('检索“$query”${earlier.isEmpty ? '' : '（接上一问“$earlier”）'}'
+      ..writeln('检索“$query”'
           '${scopeLabel.isEmpty ? '' : '（$scopeLabel 内）'}：'
           '${mode == SearchMode.semantic ? '按意思检索 + 关键词' : '只有关键词检索（$modeNote）'}'
-          '${terms.isEmpty ? '' : '；关键词：${_termCounts(terms, termLines, inCollection != null)}'}'
+          '${terms.isNotEmpty ? '；关键词：${_termCounts(terms, termLines, inCollection != null)}' : mode == SearchMode.keywordOnly ? '；query 里没有可以匹配的词：要写空格分隔的词（每个 2–12 个字），不是整句' : ''}'
           '${unused.isEmpty ? '' : '；一次最多 $maxKeywordTerms 个词，未使用：${unused.join('、')}'}');
     for (final (i, g) in games.indexed) {
       final r = ranked[i];
@@ -236,52 +246,26 @@ class SearchTool extends AgentTool {
     return installed.contains(only) ? [only] : installed;
   }
 
-  /// Keyword terms: the words of a query written with spaces or `|`, else
-  /// the names it (or the question it follows up) mentions (Chinese
-  /// questions have no spaces). A name found in the middle of a longer word
-  /// of the question is a false hit and left out. With [phrases] (no
-  /// meaning search, 0.14), or when no name is left, the question's own
-  /// phrases count too: what is left between its function and question
-  /// words.
-  static List<String> _terms(
-    String query,
-    List<String> names, {
-    String earlier = '',
-    bool phrases = false,
-  }) {
-    // Only spaces and `|` separate words: a comma separates clauses.
-    final split = [
+  /// Keyword terms: the words of a query as its writer separated them, by
+  /// spaces or `|` (a comma separates clauses, not words). 0.14: code no
+  /// longer cuts words out of a sentence — it took fragments of clauses for
+  /// words; whoever writes the query (the model, or the call that plans
+  /// the first searches) chooses them. A sentence has no terms: it is
+  /// searched by meaning only.
+  static List<String> termsOf(String query) {
+    final words = {
       for (final t in query.split(RegExp(r'[\s|]+')))
-        if (t.trim().runes.length >= 2 && t.trim().runes.length <= 12) t.trim(),
-    ];
-    if (split.length > 1) return split;
-    final segments = {
-      for (final q in [earlier, query]) ...phrasesOf(q),
-    };
-    // A two-character name in the middle of a longer word is usually part
-    // of that word; a longer name is not (phrases are cut without a
-    // dictionary, so a phrase may hold a whole clause around a name).
-    final kept = [
-      for (final n in names)
-        if (n.runes.length > 2 ||
-            !segments.any(
-              (s) =>
-                  s.length > n.length &&
-                  s.contains(n) &&
-                  !s.startsWith(n) &&
-                  !s.endsWith(n),
-            ))
-          n,
-    ];
-    // With meaning search, phrases only when no name is left.
-    final extra = !phrases && kept.isNotEmpty
-        ? const <String>[]
-        : [
-            for (final s in segments)
-              if (!kept.any((n) => s.contains(n) || n.contains(s))) s,
-          ];
-    return [...kept, ...extra];
+        if (t.trim().runes.length >= 2 && t.trim().runes.length <= 12)
+          t.trim(),
+    }.toList();
+    // Written without a space, only a short query is a word.
+    return words.length == 1 && words.single.runes.length > loneWordChars
+        ? const []
+        : words;
   }
+
+  /// Most characters of a query that is one word (a name).
+  static const int loneWordChars = 8;
 
   /// `term（N 行）` for each of [terms]; a term no line has is marked, so
   /// the next search tries other words.
@@ -298,25 +282,6 @@ class SearchTool extends AgentTool {
             final n => '$t（${scoped ? '全库 ' : ''}$n 行）',
           },
       ].join('、');
-
-  /// The phrases of a question: what is left between its punctuation,
-  /// function words and question words, 2–8 characters long.
-  static List<String> phrasesOf(String question) => [
-        for (final s in question.split(_functionWords))
-          if (s.trim().runes.length >= 2 && s.trim().runes.length <= 8)
-            s.trim(),
-      ];
-
-  /// Grammar, not content: punctuation, particles, conjunctions and
-  /// question words, which every question has whatever it is about.
-  static final RegExp _functionWords = RegExp(
-    r'为什么|为何|什么|怎么样|怎么|怎样|如何|哪些|哪个|哪里|是不是|有没有|'
-    r'有人说|这个|那个|说法|对吗|还是|以及|之间|'
-    // Only characters that are rarely part of a name.
-    r'[的是和与跟及或在了吗呢吧啊呀么嘛哪谁]|'
-    r'[\s\p{P}]',
-    unicode: true,
-  );
 
   /// Why a search will use keywords only (no embedding service, no vectors
   /// in the knowledge base, vectors of another model), or null when it can

@@ -6,6 +6,7 @@ import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/answer_options.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/chat_session_store.dart';
+import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_qa_agent.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
@@ -79,13 +80,15 @@ void main() {
       expect(turn.status, ChatTurnStatus.completed);
       // Every model response is recorded untruncated: two reads, the
       // answer, and (R18) the reader's review of it. No vectors in the
-      // fixture (0.14): no search before the first turn; the note that
-      // only keywords are searched is recorded first.
-      expect(turn.iterations, hasLength(5));
+      // fixture and no plan of first searches from this model (0.14): the
+      // note that only keywords are searched is recorded first, then that
+      // no plan came.
+      expect(turn.iterations, hasLength(6));
       expect(turn.iterations.first.thought, contains('问答质量可能下降'));
-      expect(turn.iterations[1].rawResponse, contains('read_story'));
-      expect(turn.iterations[1].tool, 'read_story');
-      expect(turn.iterations[3].rawResponse, contains('结论：博士'));
+      expect(turn.iterations[1].rawResponse, startsWith('（拟定检索）'));
+      expect(turn.iterations[2].rawResponse, contains('read_story'));
+      expect(turn.iterations[2].tool, 'read_story');
+      expect(turn.iterations[4].rawResponse, contains('结论：博士'));
       expect(turn.iterations.last.rawResponse, startsWith('（审稿）'));
       // What the turn cost: the four calls, their tokens, one timeline row
       // per call; the same totals sit under the answer on screen.
@@ -142,7 +145,7 @@ void main() {
       );
       await notifier.sendMessage('甲是谁');
       final first = (await singleSession()).turns.single;
-      expect(first.iterations, hasLength(4));
+      expect(first.iterations, hasLength(5));
       expect(first.iterations.map((i) => i.rawResponse),
           isNot(contains(startsWith('（审稿）'))),);
       options = const AnswerOptions(review: true);
@@ -356,6 +359,10 @@ class _RecorderLLM extends LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
+    // The call that plans the first searches: no plan here.
+    if (messages.first.content.startsWith(loreSearchPlanRole)) {
+      throw const LLMException('no plan');
+    }
     agentCalls++;
     if (gate != null) await gate!.future;
     if (failNext) {

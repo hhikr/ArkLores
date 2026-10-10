@@ -6,6 +6,7 @@ import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_answer_json.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
+import 'package:arklores/core/agent/search_planner.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
@@ -77,6 +78,8 @@ void main() {
         loreReviewFollowUp(['<问题>'], json: true),
         loreRedoNote(unreadable: true, unseen: ['<出处>'], bare: ['<出处>']),
         loreAnswerOnlyNote,
+        loreSearchPlanPrompt('<search 的说明>', wiki: true),
+        loreSearchPlanRequest('<问题>', earlier: '<上文>'),
         loreStagePrompt('1. <条目>'),
         for (final t in [
           ...loreTools(store, SeenLines()),
@@ -121,7 +124,7 @@ void main() {
       // 0.14: search first (with the pre-search under the question), grep
       // for exact counts; no sub-agent rules unless they are on.
       expect(prompt, contains('search 是主要的检索方式'));
-      expect(prompt, contains('预先做的一次 search'));
+      expect(prompt, contains('替你拟定并执行的第一批检索'));
       expect(prompt, isNot(contains('delegate')));
       expect(loreSystemPrompt(delegate: true), contains('delegate'));
       expect(prompt, contains('["record", "<记录 id>"]'));
@@ -429,6 +432,55 @@ void main() {
         isNot(contains(contains('没有被采用'))),
       );
       expect(kept!.messages.last.content, contains('星灯离开了'));
+    });
+
+    // 0.14: the first searches are planned by a call of its own, with or
+    // without vectors (here without: its words are matched literally). The
+    // answering agent can answer from them at once.
+    test('the first searches are planned by a call of its own', () async {
+      const story = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient(
+        [_answer('星灯点亮了钟楼 `$story:1`。')],
+        plans: ['{"search": ["星灯 钟楼", "星灯 离开"], "more": 1}'],
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯都做了些什么事情呢？')
+          .toList();
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.toolCall) e.toolArgs,
+        ],
+        [
+          {'query': '星灯 钟楼'},
+          {'query': '星灯 离开'},
+        ],
+      );
+      final plan = client.planRequests.single;
+      // Without vectors the plan is written from the description that says
+      // the words are matched literally.
+      expect(plan.first.content, contains('只按字面（子串）匹配'));
+      expect(plan.first.content, isNot(contains('"wiki"')));
+      final request = client.requests.single;
+      expect(request[1].content, '星灯都做了些什么事情呢？');
+      expect(request[2].toolCalls, hasLength(2));
+      expect(request[3].role, MessageRole.tool);
+      expect(request[3].content, contains('关键词：星灯'));
+      expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('a reply that plans nothing is no plan', () {
+      expect(parseSearchPlan('我不确定该查什么。'), isNull);
+      expect(parseSearchPlan('{"search": []}'), isNull);
+      expect(parseSearchPlan('{"search": [1, " "]}'), isNull);
+      final plan = parseSearchPlan(
+        '```json\n{"search": ["甲  乙", "甲 乙", "丙", "丁", "戊"], '
+        '"wiki": ["甲", "乙"]}\n```',
+      )!;
+      // Spaces are single, a repeat counts once, three at most.
+      expect(plan.queries, ['甲 乙', '丙', '丁']);
+      expect(plan.wiki, '甲');
     });
 
     // 0.14 on the phone: after reading, a model answered in prose naming its
@@ -1520,7 +1572,17 @@ class _DroppingClient extends _ScriptedClient {
 
 /// Replays [turns] and records every request.
 class _ScriptedClient extends LLMClient {
-  _ScriptedClient(this.turns, {this.rejectTools = false, this.reviews = const []});
+  _ScriptedClient(
+    this.turns, {
+    this.rejectTools = false,
+    this.reviews = const [],
+    this.plans = const [],
+  });
+
+  /// 0.14: replies of the call that plans the first searches; with none
+  /// left it fails (no plan: without vectors the model searches itself).
+  final List<String> plans;
+  final List<List<Message>> planRequests = [];
 
   final List<_Turn> turns;
   final bool rejectTools;
@@ -1553,6 +1615,11 @@ class _ScriptedClient extends LLMClient {
     int maxTokens = 2048,
     List<String>? stop,
   }) async {
+    if (messages.first.content.startsWith(loreSearchPlanRole)) {
+      planRequests.add(List.of(messages));
+      if (planRequests.length > plans.length) throw UnimplementedError();
+      return ChatCompletionResult(content: plans[planRequests.length - 1]);
+    }
     reviewRequests.add(List.of(messages));
     if (reviewRequests.length > reviews.length) throw UnimplementedError();
     return ChatCompletionResult(content: reviews[reviewRequests.length - 1]);

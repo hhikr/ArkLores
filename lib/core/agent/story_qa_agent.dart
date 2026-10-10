@@ -65,6 +65,9 @@ class StoryQaAgent {
     }
     return LoreAgentLoop(
       client: client ?? _llmClient,
+      // The first searches are written by the plain client: the "深度思考"
+      // one would think over a list of search words.
+      planClient: _llmClient,
       store: store,
       embeddingClient: _embeddingClient,
       wiki: options.wiki ? _wiki : null,
