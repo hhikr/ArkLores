@@ -356,7 +356,15 @@ class _Migrator {
         'vec': v['vec'],
       });
     }
-    return _Migration(rows, map.values.toSet(), true, j == oldLines.length);
+    // Only the lines under a vector that was moved are covered: a line the
+    // older database had but never embedded still needs a vector.
+    final covered = {
+      for (final n in map.values)
+        if (rows.any((r) =>
+            (r['line_start'] as int) <= n && n <= (r['line_end'] as int),))
+          n,
+    };
+    return _Migration(rows, covered, true, j == oldLines.length);
   }
 }
 
