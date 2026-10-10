@@ -334,13 +334,16 @@ class LoreAgentLoop {
     // 0.14: a follow-up keeps the earlier questions, answers and what was
     // read (citable), not the earlier tool output itself.
     if (prior != null) {
-      _foldOldToolResults(conversation, toolResults, all: true);
+      _foldOldToolResults(conversation, toolResults, const {}, all: true);
     }
     // 0.14: messages of turns whose every call was refused by the gate are
     // left out of later requests once a call has gone through (pending
     // until then, so the model still sees why it was refused).
     final hidden = <int>{};
     final refusedTurns = <int>{};
+    // 0.14: what each tool result showed (by its index), for the pointer a
+    // folded result leaves.
+    final shownIn = <int, String>{};
     // 0.14: notes a rejected final answer was asked again with (the answer
     // itself is never added); hidden once an answer is accepted.
     final redoNotes = <int>[];
@@ -399,7 +402,7 @@ class LoreAgentLoop {
       if (transport.textProtocol) {
         _convertToTextProtocol(conversation, toolResults);
       }
-      _foldOldToolResults(conversation, toolResults);
+      _foldOldToolResults(conversation, toolResults, shownIn);
       final statusPrefix = redoing
           ? '重新构思回答'
           : turn == 1
@@ -648,10 +651,11 @@ class LoreAgentLoop {
         // and tool messages still follow the calls' order.
         final side = delegates > 0 ? StreamController<ReActEvent>() : null;
         _side = side;
+        final shown = [for (final _ in checked) SeenLines()];
         final results = [
-          for (final c in checked)
+          for (final (k, c) in checked.indexed)
             c.ok
-                ? _runTool(tools[c.call.name]!, c)
+                ? _runTool(tools[c.call.name]!, c, shown[k])
                 : Future<String>.value(c.error),
         ];
         for (final (k, c) in checked.indexed) {
@@ -693,6 +697,9 @@ class LoreAgentLoop {
             toolName: c.call.name,
           );
           toolResults.add(conversation.length);
+          if (!shown[k].isEmpty) {
+            shownIn[conversation.length] = shown[k].summary();
+          }
           conversation.add(
             transport.textProtocol
                 ? Message.user('工具结果（${c.call.name}）：\n$result')
@@ -766,6 +773,13 @@ class LoreAgentLoop {
         return;
       }
 
+      // 0.14: a range shown only in part is cut to the lines that were
+      // shown (a search lists some lines of a passage; the range over them
+      // was dropped whole, and with it a sound citation).
+      final trims = _partlySeen(body, seen);
+      for (final MapEntry(key: cite, value: runs) in trims.entries) {
+        body = body.replaceAll('`$cite`', runs.map((c) => '`$c`').join(' '));
+      }
       final unseen = _unseenCitations(body, seen);
       final bare = _bareStoryCitations(body);
       final citations = _citationCount(body);
@@ -852,6 +866,15 @@ class LoreAgentLoop {
         }
       }
 
+      if (trims.isNotEmpty) {
+        yield ReActEvent(
+          type: ReActEventType.recordNote,
+          content: '出处裁到读过的行：${[
+            for (final MapEntry(key: cite, value: runs) in trims.entries)
+              '$cite → ${runs.join(' ')}',
+          ].join('；')}',
+        );
+      }
       body = _dropProcessLeadIn(body);
       final coverageWord = _coverageLine.firstMatch(body)?.group(1);
       final coverage = coverageWord == null ? null : _coverageOf(coverageWord);
@@ -895,7 +918,7 @@ class LoreAgentLoop {
               text: e.text,
               cites: [
                 for (final c in e.cites)
-                  if (!unseen.contains(c)) c,
+                  if (!unseen.contains(c)) ...(trims[c] ?? [c]),
               ],
             ),
         ];
@@ -926,6 +949,9 @@ class LoreAgentLoop {
           : (coverage == 'gaps' || hitTurnLimit)
               ? StoryAnswerStatus.partial
               : StoryAnswerStatus.answered;
+      // What a follow-up starts from: the tool results folded now, while
+      // what each showed is still known.
+      _foldOldToolResults(conversation, toolResults, shownIn, all: true);
       onConversation?.call(
         LoreConversation(messages: visible(), seen: seen, question: query),
       );
@@ -1149,9 +1175,17 @@ class LoreAgentLoop {
 
   /// Runs a call that passed the gate. Tool failures come back as text
   /// that starts with “错误”, which the step list shows as a failed step.
-  Future<String> _runTool(AgentTool tool, CheckedCall call) async {
+  /// What the call shows is noted in [shown] (see [SeenLines.duringCall]).
+  Future<String> _runTool(
+    AgentTool tool,
+    CheckedCall call,
+    SeenLines shown,
+  ) async {
     try {
-      return '${await _span('tool:${call.call.name}', () => tool.execute(call.arguments))}';
+      return '${await _span(
+        'tool:${call.call.name}',
+        () => SeenLines.duringCall(shown, () => tool.execute(call.arguments)),
+      )}';
     } catch (e) {
       return '错误：工具 ${call.call.name} 出错（$e）。可以换个参数再试，或换一个工具。';
     }
@@ -1320,7 +1354,8 @@ class LoreAgentLoop {
   /// Lines a folded result showed stay citable ([SeenLines] keeps them).
   void _foldOldToolResults(
     List<Message> conversation,
-    Set<int> toolResults, {
+    Set<int> toolResults,
+    Map<int, String> shownIn, {
     bool all = false,
   }) {
     var size = conversation.fold<int>(0, (n, m) => n + m.content.length);
@@ -1332,9 +1367,13 @@ class LoreAgentLoop {
       final m = conversation[i];
       if (m.content.startsWith('[已折叠]')) continue;
       final firstLine = m.content.split('\n').first;
+      // 0.14: which lines it showed stays; their text does not, and an
+      // answer written from memory of it cited the wrong lines.
+      final shown = shownIn[i];
       final folded = '[已折叠] 较早的工具结果（${m.content.length} 字）：'
           '${firstLine.length > 120 ? '${firstLine.substring(0, 120)}…' : firstLine}'
-          '。其中读到的原文行仍可引用；需要原文内容时请重新读取。';
+          '。${shown == null ? '' : '展示过：$shown。'}'
+          '这些行号仍可引用，但原文已不在对话里：要用其中的内容，先重新读取再写。';
       size -= m.content.length - folded.length;
       conversation[i] = m.role == MessageRole.tool
           ? Message.toolResult(m.toolCallId ?? '', folded)
@@ -1361,6 +1400,32 @@ class LoreAgentLoop {
     // A rule (`---`) under the lead-in goes with it.
     if (rest.startsWith('---')) rest = rest.substring(3).trimLeft();
     return rest.isEmpty ? body : rest;
+  }
+
+  /// Citations of [body] whose range was shown only in part, each with the
+  /// runs inside it that were shown (as citations of their own). A range
+  /// shown whole or not at all is left to [_unseenCitations].
+  static Map<String, List<String>> _partlySeen(String body, SeenLines seen) {
+    final out = <String, List<String>>{};
+    void check(String cite, String id, int lo, int hi) {
+      if (lo == hi || seen.covers(id, lo, hi)) return;
+      final runs = seen.seenRanges(id, lo, hi);
+      if (runs.isEmpty) return;
+      out[cite] = [
+        for (final (a, b) in runs) '$id:${a == b ? '$a' : '$a-$b'}',
+      ];
+    }
+
+    for (final m in _citation.allMatches(body)) {
+      final a = int.parse(m.group(2)!);
+      final b = int.tryParse(m.group(3) ?? '') ?? a;
+      check(m.group(0)!, m.group(1)!, a <= b ? a : b, a <= b ? b : a);
+    }
+    for (final m in wikiCitationPattern.allMatches(body)) {
+      final (lo, hi) = _wikiRange(m);
+      check(m.group(0)!, _wikiPageIdOf(m), lo, hi);
+    }
+    return out;
   }
 
   static int _citationCount(String body) => {

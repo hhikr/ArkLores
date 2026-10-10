@@ -10,6 +10,7 @@
 /// citations are checked against it.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
@@ -21,22 +22,109 @@ import 'tools/search_tool.dart';
 
 /// Story lines shown to the model in this run (per story, line indexes),
 /// and ids of other records (`normalized_records` …) a query returned.
+///
+/// 0.14: the one ledger of what was shown. Every tool writes to it through
+/// [add], [addRange] and [addRecord]; a line counts only when its text was
+/// printed, a record is whole or only an excerpt ([recordIsPartial]). What
+/// one tool call showed is also noted for that call ([duringCall]), so a
+/// folded result can still say which lines it held.
 class SeenLines {
   final Map<String, Set<int>> _lines = {};
-  final Set<String> _records = {};
 
-  void addRecord(String id) => _records.add(id);
+  /// Record id → only an excerpt of it was shown.
+  final Map<String, bool> _records = {};
 
-  bool hasRecord(String id) => _records.contains(id);
+  static final Object _callKey = Object();
 
-  void add(String storyId, int line) =>
-      _lines.putIfAbsent(storyId, () => <int>{}).add(line);
+  /// Runs [body]; what it adds to any ledger is noted in [shown] too.
+  static Future<T> duringCall<T>(SeenLines shown, Future<T> Function() body) =>
+      runZoned(body, zoneValues: {_callKey: shown});
+
+  SeenLines? get _call {
+    final call = Zone.current[_callKey];
+    return call is SeenLines && !identical(call, this) ? call : null;
+  }
+
+  /// A record shown with its id; [partial]: only an excerpt of its text.
+  void addRecord(String id, {bool partial = false}) {
+    _records[id] = partial && (_records[id] ?? true);
+    _call?.addRecord(id, partial: partial);
+  }
+
+  bool hasRecord(String id) => _records.containsKey(id);
+
+  /// Only an excerpt of record [id] was shown (false when unknown).
+  bool recordIsPartial(String id) => _records[id] ?? false;
+
+  void add(String storyId, int line) {
+    _lines.putIfAbsent(storyId, () => <int>{}).add(line);
+    _call?.add(storyId, line);
+  }
 
   void addRange(String storyId, int first, int last) {
     final set = _lines.putIfAbsent(storyId, () => <int>{});
     for (var i = first; i <= last; i++) {
       set.add(i);
     }
+    _call?.addRange(storyId, first, last);
+  }
+
+  /// The runs of shown lines inside `first..last`, in order.
+  List<(int, int)> seenRanges(String storyId, int first, int last) {
+    final set = _lines[storyId];
+    if (set == null) return const [];
+    final out = <(int, int)>[];
+    int? start;
+    for (var i = first; i <= last && i - first < 1000; i++) {
+      if (set.contains(i)) {
+        start ??= i;
+      } else if (start != null) {
+        out.add((start, i - 1));
+        start = null;
+      }
+    }
+    if (start != null) {
+      out.add((start, last - first < 1000 ? last : first + 999));
+    }
+    return out;
+  }
+
+  /// What is in this ledger, as a short list for the model: each story's
+  /// line runs, then the records (`a.txt L3-10、L20；record:x`), at most
+  /// [maxChars] long.
+  String summary({int maxChars = 500}) {
+    final parts = <String>[];
+    for (final MapEntry(key: story, value: lines) in _lines.entries) {
+      final sorted = lines.toList()..sort();
+      final runs = <String>[];
+      var a = sorted.first;
+      var b = a;
+      for (final n in sorted.skip(1)) {
+        if (n == b + 1) {
+          b = n;
+          continue;
+        }
+        runs.add(a == b ? 'L$a' : 'L$a-$b');
+        a = b = n;
+      }
+      runs.add(a == b ? 'L$a' : 'L$a-$b');
+      // (Wiki pages are kept by paragraph: `P`.)
+      final text = runs.join('、');
+      parts.add('$story ${story.startsWith('wiki:') ? text.replaceAll('L', 'P') : text}');
+    }
+    for (final MapEntry(key: id, value: partial) in _records.entries) {
+      parts.add('record:$id${partial ? '（片段）' : ''}');
+    }
+    final out = StringBuffer();
+    for (final (i, part) in parts.indexed) {
+      if (out.length + part.length > maxChars && i > 0) {
+        out.write('；等 ${parts.length} 项');
+        break;
+      }
+      if (i > 0) out.write('；');
+      out.write(part);
+    }
+    return out.toString();
   }
 
   /// Whether every line of `first..last` was shown.
@@ -56,7 +144,11 @@ class SeenLines {
     for (final MapEntry(key: story, value: lines) in other._lines.entries) {
       _lines.putIfAbsent(story, () => <int>{}).addAll(lines);
     }
-    _records.addAll(other._records);
+    for (final MapEntry(key: id, value: partial) in other._records.entries) {
+      _records[id] = partial && (_records[id] ?? true);
+    }
+    final call = _call;
+    if (call != null && !identical(call, other)) call.addAll(other);
   }
 
   /// Stories with at least one shown line.
@@ -140,6 +232,10 @@ Map<String, dynamic> _gameParameter(String description) => {
       'description': description,
     };
 
+/// The tables whose `id` is a record's (`record:<id>`).
+final RegExp _recordTables =
+    RegExp(r'\b(normalized_records|entity_documents)\b', caseSensitive: false);
+
 /// `sql`: one read-only query over the whole knowledge DB.
 class SqlTool extends AgentTool {
   SqlTool(this.store, this.seen);
@@ -201,6 +297,13 @@ class SqlTool extends AgentTool {
     final storyCol = columns.indexOf('story_id');
     final lineCol = columns.indexOf('line_index');
     final idCol = columns.indexOf('id');
+    // 0.14: a line or a record counts as shown only with its text (a
+    // column of, or cut from, `content`), and an id is a record's only in
+    // a query over the tables that hold records.
+    final contentCol =
+        columns.indexWhere((c) => c.toLowerCase().contains('content'));
+    final wholeContent = contentCol >= 0 && columns[contentCol] == 'content';
+    final overRecords = _recordTables.hasMatch(query);
     final buffer = StringBuffer()..writeln(columns.join(' | '));
     var shown = 0;
     for (final row in result.rows) {
@@ -208,12 +311,17 @@ class SqlTool extends AgentTool {
       if (buffer.length + text.length > maxToolResultChars) break;
       buffer.writeln(text);
       shown++;
-      if (storyCol >= 0 && lineCol >= 0) {
+      if (storyCol >= 0 && lineCol >= 0 && contentCol >= 0) {
         final line = _int(row[lineCol]);
         if (line != null) seen.add('${row[storyCol]}', line);
       }
       // A record shown with its id can be cited as `record:<id>`.
-      if (idCol >= 0 && row[idCol] != null) seen.addRecord('${row[idCol]}');
+      if (overRecords && idCol >= 0 && contentCol >= 0 && row[idCol] != null) {
+        seen.addRecord(
+          '${row[idCol]}',
+          partial: !wholeContent || '${row[contentCol] ?? ''}'.length > 400,
+        );
+      }
     }
     if (shown < result.rows.length || result.truncated) {
       buffer.writeln(

@@ -60,6 +60,9 @@ class SearchTool extends AgentTool {
   static const int linesPerPassage = 8;
   static const int recordsPerGame = 3;
   static const int maxChars = 7000;
+
+  /// Most characters of one line printed.
+  static const int lineChars = 400;
   static const int _rrfK = 60;
 
   @override
@@ -217,8 +220,8 @@ class SearchTool extends AgentTool {
         buffer.writeln(line);
       }
     }
-    buffer.writeln('（片段里的行和列出的资料已读到，可直接引用；要上下文用 read_story 从附近的行读，'
-        '资料全文用 sql 按 id 查 normalized_records（类别是 *_profile_bundle 的在 entity_documents）'
+    buffer.writeln('（上面列出的行可以引用，没有列出的行要先读；要上下文用 read_story 从附近的行读。'
+        '资料只列了片段，可以按片段引用，全文用 sql 按 id 查 normalized_records（类别是 *_profile_bundle 的在 entity_documents）'
         '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
     return SearchResult(buffer.toString().trimRight(), mode, modeNote: modeNote);
   }
@@ -417,7 +420,8 @@ class SearchTool extends AgentTool {
   List<String> _renderRecords(_Ranked ranked) => [
         for (final r in ranked.records)
           () {
-            seen.addRecord(r.id);
+            // Only the excerpt was shown.
+            seen.addRecord(r.id, partial: true);
             return '   record:${r.id} | ${r.category}${r.subtype.isEmpty || r.subtype == r.category ? '' : '·${r.subtype}'}'
                 ' | ${r.title} | ${r.snippet}\n';
           }(),
@@ -457,7 +461,8 @@ class SearchTool extends AgentTool {
           seen.add(storyId, line.lineIndex);
         }
         if (chunk.lineEnd > end) {
-          block.writeln('   …（这一段到 L${chunk.lineEnd}）');
+          // 0.14: not "the passage goes on to L…", which read as shown.
+          block.writeln('   …（L${end + 1}-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）');
         }
       }
       for (final line in keyword?.lines ?? const <StoryLineEntry>[]) {
@@ -473,7 +478,11 @@ class SearchTool extends AgentTool {
   static String _line(StoryLineEntry line) {
     final text =
         formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind);
-    return text.length <= 140 ? text : '${text.substring(0, 140)}…';
+    // 0.14: a line is shown whole, as `read_story` shows it (it counts as
+    // read); only a very long one (a letter, a document) is cut, and says so.
+    return text.length <= lineChars
+        ? text
+        : '${text.substring(0, lineChars)}…（本行未完）';
   }
 
   /// Wiki pages for [query] on the wikis of [games], one line each.

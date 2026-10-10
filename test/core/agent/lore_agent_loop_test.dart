@@ -489,6 +489,78 @@ void main() {
       expect(answer, isNot(contains('未能在本次读到的原文中核实')));
     });
 
+    // 0.14 on the phone: a search listed L103 and L105 of a passage, the
+    // answer cited 103-105, and the whole (sound) citation was dropped.
+    test('a range shown in part is cut to the lines shown, not dropped',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('sql', {
+          'query': 'SELECT story_id, line_index, content FROM story_lines '
+              "WHERE story_id = '$id' AND line_index IN (0, 2)",
+        }),
+        _answer('星灯来了又被看见 `$id:0-2`。'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯？')
+          .toList();
+      expect(client.requests, hasLength(2));
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('`$id:0` `$id:2`'));
+      expect(answer, isNot(contains('0-2')));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.answered,);
+      expect(
+        events
+            .singleWhere((e) => e.type == ReActEventType.recordNote)
+            .content,
+        contains('$id:0-2 → $id:0 $id:2'),
+      );
+    });
+
+    // 0.14: one ledger of what was shown, the same for every tool.
+    test('the ledger: runs of shown lines, excerpts, what one call showed',
+        () async {
+      const id = 'obt/main/level_main_fx-01.txt';
+      final seen = SeenLines()
+        ..add(id, 1)
+        ..addRange(id, 3, 4)
+        ..addRecord('r1', partial: true);
+      expect(seen.seenRanges(id, 0, 5), [(1, 1), (3, 4)]);
+      expect(seen.seenRanges(id, 6, 9), isEmpty);
+      expect(seen.recordIsPartial('r1'), isTrue);
+      // Shown whole once is whole, whatever comes after.
+      seen
+        ..addRecord('r1')
+        ..addRecord('r1', partial: true);
+      expect(seen.recordIsPartial('r1'), isFalse);
+      expect(seen.summary(), '$id L1、L3-4；record:r1');
+
+      // A line or a record counts only with its text.
+      final bare = SeenLines();
+      await SqlTool(store, bare).execute({
+        'query': 'SELECT story_id, line_index FROM story_lines',
+      });
+      await SqlTool(store, bare).execute({
+        'query': 'SELECT id, title FROM normalized_records',
+      });
+      await SqlTool(store, bare).execute({
+        'query': 'SELECT id, content FROM story_lines',
+      });
+      expect(bare.isEmpty, isTrue);
+      final whole = SeenLines();
+      final call = SeenLines();
+      await SeenLines.duringCall(
+        call,
+        () => SqlTool(store, whole).execute({
+          'query': 'SELECT id, content FROM normalized_records',
+        }),
+      );
+      expect(whole.hasRecord('rec_fx_1'), isTrue);
+      expect(whole.recordIsPartial('rec_fx_1'), isFalse);
+      expect(call.summary(), contains('record:rec_fx_1'));
+    });
+
     // 0.14 live: search shows `record:<id>` and a model took the whole of it
     // for the id.
     test('a record cited with its prefix twice counts once', () async {
@@ -1140,6 +1212,14 @@ void main() {
       // citable.
       final earlier = request.where((m) => m.role == MessageRole.tool).toList();
       expect(earlier.map((m) => m.content.startsWith('[已折叠]')), [true]);
+      // It says which lines it showed, and that their text is gone.
+      expect(
+        earlier.single.content,
+        allOf(
+          contains('展示过：obt/main/level_main_fx-01.txt L0-'),
+          contains('先重新读取'),
+        ),
+      );
       expect(request.last.content, '那后来呢？');
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);

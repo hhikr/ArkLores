@@ -227,6 +227,9 @@ void main() {
         contains('record:ef/rec_lighthouse | archive·document | 灯塔档案 | 关于灯塔的记录'),
       );
       expect(seen.hasRecord('ef/rec_lighthouse'), isTrue);
+      // 0.14: only its excerpt was shown, and the result says so.
+      expect(seen.recordIsPartial('ef/rec_lighthouse'), isTrue);
+      expect(result.text, contains('资料只列了片段'));
     });
 
     // 0.14 live: without vectors, a question about a place found only a
