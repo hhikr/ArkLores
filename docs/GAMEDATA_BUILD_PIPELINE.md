@@ -29,11 +29,12 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 | `entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, raw_id, record_id, source_path)` | 每个官方条目一行，`id = <type>:<原始 id>`；`record_id` 指向承载文字的记录 |
 | `entry_links(src, relation, dst, source_path)` | 绑定：`appears_in`、`plays_in`、`attached_to`、`belongs_to`、`belongs_to_stage`、`part_of`、`summoned_by`、`same_person`、`features`、`reads_story`…；视图 `collection_enemies` |
 | `story_lines(story_id, line_index, speaker, content, kind, …)` | 剧情逐行（约 44 万行）；索引 `(story_id, line_index)`；行内换行是真换行 |
-| `normalized_records` | 非剧情文字（档案、语音、描述…），`entry_id`/`collection_id`；可作为出处 `record:<id>` |
-| `entities` / `entity_aliases` / `entity_documents` | 实体与别名（覆盖层、近似名用） |
+| `normalized_records` | 非剧情文字（档案、语音、描述…），`entry_id`/`collection_id`；可作为出处 `record:<id>`。只带 `entity_id` 的记录（干员语音）的 `entity_name` 在派生步骤里按 id 从 `entities` 填上 |
+| `entities` / `entity_aliases` / `entity_documents` | 实体与别名（覆盖层、近似名用）；`entity_documents` 是每位干员的整份档案（也可作为出处） |
 | `entity_story_mentions`、`story_chapter_profiles`、`rare_terms`、`story_lines_fts`、`lore_chunks(_fts)` | 确定性覆盖层与全文索引（定位线索） |
 | `story_catalog`（可选） | 故事集名、关卡号、章名、行动前/后、顺序、官方梗概、上线时间（`story_review_table.json` + `[uc]info`） |
 | `story_chunk_vectors`（可选） | 剧情向量，12 行一块、步长 8，int8；模型/维度/切块记在 manifest |
+| `record_chunk_vectors`（可选，0.14） | 资料向量：`normalized_records` 里不是剧情副本的每条记录与 `entity_documents` 的每份档案；一条一块，超过 800 字的在 `## ` 小节处切、再按行切；每块存文字哈希与它覆盖的字符范围；与剧情向量同一模型 |
 | `gamedata_manifest` | schema 版本、上游提交、计数、向量与目录元数据 |
 
 关系、名字、复刻合并、去重等规则见 `KNOWLEDGE_BASE_LESSONS.md` §2。
@@ -76,19 +77,27 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 没有安装库或变化过多时，App 下载仓库 zip，按白名单解压（含 `levels/`，建完删除），在后台 isolate 构建（`sqflite_common_ffi`），
 用与安装器相同的 `validateGameDataDatabase` 校验后原子替换。**已安装的库在替换前永不修改。** App 内不生成向量（由“故事向量”卡片另补）。
 
-## 5. 剧情向量
+## 5. 向量（剧情与资料）
 
 ```bash
 dart run tools/build_story_embeddings.dart --db=<库>                                # 全量/续跑（按内容哈希缓存）
 dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库> --dry-run   # 按行对齐迁移的计划
 dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
+# --stories-only：不做资料向量
 ```
+
+- **先看 `--dry-run`**：它分两行打印剧情和资料各自的 “to embed”。明日方舟库的剧情向量是按行迁移来的，内容缓存里只有一小部分，
+  不带 `--migrate-from` 直接跑会把五万多块剧情重嵌入一遍（约 ¥5）；带上 `--migrate-from=<有向量的旧库>` 后剧情应为 0。
+- 资料向量（0.14，`record_vectors.dart`）：嵌入的文字是“所属对象 · 标题：正文”（所属对象是 `entity_name`，没有时取 `entity_id` 的名字），
+  所以一条语音带着它的干员名。四条路径都覆盖：全量脚本与剧情向量共用内容缓存；增量（`update_gamedata.dart --embed`、App 的“故事向量”卡片）
+  按每块文字的哈希比对，只嵌入新增或改动的块，记录已删除的块的向量一并删掉；补算之后接一次增量或全量脚本即可（文字没变的块不重算）。
+  2026-10 实测：明日方舟 37,010 块（约 366 万字）、终末地 3,663 块（约 76 万字），合计约 ¥1.6。
 
 - 默认百炼 `qwen3.7-text-embedding`，512 维；key 来自 gitignored 的 `tools/embedding-apiKey.csv`。真实调用要开发者同意。
 - 迁移按行对齐（忽略省略号点数、空白、字面 `\n`），首尾都对得上的旧向量搬到新行号，其余才嵌入。
-- App 的“故事向量”卡片（`story_vector_updater.dart`）补缺的故事，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
+- App 的“故事向量”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
   模型/维度与库里不一致时拒绝混用。
-- 向量只是定位线索；证据是 `read_story` 读到的原文。
+- 向量只是定位线索；证据是 `read_story` / `read_record` 读到的原文。
 
 ## 6. 故事目录
 
