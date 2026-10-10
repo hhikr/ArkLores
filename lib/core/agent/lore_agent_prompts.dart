@@ -32,9 +32,7 @@ const String _loreDatabaseTables = '''
 - story_catalog(story_id, collection_id, collection_name, collection_type, story_code, story_name, avg_tag, story_sort, synopsis, start_time)：
   每个故事文件属于哪个故事集、关卡号（形如 <章>-<关>）、章名、行动前/行动后/幕间、在故事集内的顺序、官方梗概、上线时间（unix 秒，主线为空）。
   collection_type：MAINLINE 主线（collection_id 形如 main_<章>）、ACTIVITY / MINI_ACTIVITY 活动、NONE 干员密录。
-- story_chapter_profiles(story_id, title, summary, speaker_set, ...)：每章的标题、梗概和说话人列表。
 - entities(id, name, entity_type, ...) 与 entity_aliases(alias, entity_id, ...)：人物、干员、敌人、地点、活动等名字及别名。
-- entity_story_mentions(entity_id, story_id, line_start, line_end, mention_count, matched_alias)：实体在各故事中出现的行段。
 - normalized_records(id, category, subtype, content_type, title, entity_name, content, entry_id, collection_id, ...)：剧情以外的资料
   （干员档案、语音、敌人介绍、道具/勋章/皮肤描述、肉鸽藏品与事件、活动档案/新闻/来信等）的原文；每条属于一个条目（entry_id）。
 - collections(id, kind, name, parent_id, sort_key, start_time)：故事集的“归属单位”，kind 见下面的“资料页结构”；parent_id 指向所属干员条目（密录）。

@@ -1,7 +1,6 @@
 // One operator with a profile, a voice line, an entity document and a story
 // line: the database the local-lore search, the roleplay agent and the
 // installer are tested on.
-import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'gamedata_fixture.dart';
@@ -73,7 +72,6 @@ Future<void> createAmiyaDb(
       'source_record_ids': '["$amiyaId"]',
     });
     await extra?.call(db);
-    await rebuildGamedataFts(db);
   } finally {
     await db.close();
   }
@@ -89,22 +87,3 @@ Future<void> addAmbiguousAmiya(Database db) => insertEntity(
       aliases: {'Amiya': 0.7},
       sourcePath: 'zh_CN/gamedata/excel/item_table.json',
     );
-
-/// A main-story chunk about Amiya, optionally bound to her entity.
-Future<void> addAmiyaStoryChunk(Database db, {bool withEntityId = false}) =>
-    db.insert('lore_chunks', {
-      'id': 'chunk_story_amiya_chernobog',
-      'game': 'arknights',
-      'source_type': 'game_data',
-      'content_category': 'story',
-      'content_subtype': 'main',
-      'content_type': 'story_dialogue',
-      'entity_id': withEntityId ? amiyaId : null,
-      'story_id': 'main_00_01',
-      'page_title': '切尔诺伯格行动',
-      'section': '行动前',
-      'content': '切尔诺伯格行动中，阿米娅与博士会合。',
-      'source_path': 'zh_CN/gamedata/story/[uc]obt/main_00_01.txt',
-      'language': 'zh',
-      'raw_id': 'main_00_01',
-    });

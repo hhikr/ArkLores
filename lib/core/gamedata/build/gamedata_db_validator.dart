@@ -7,8 +7,9 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import 'gamedata_schema.dart';
 
-/// Validates an OPEN GameData database: required tables (incl. the schema v3
-/// coverage layer), `schema_version` and the key row counts.
+/// Validates an OPEN GameData database: the tables the app reads,
+/// `schema_version` and the key row counts. Tables of earlier builds that
+/// nothing reads (`obsoleteGamedataTables`) may or may not be there.
 ///
 /// Throws [StateError] with stable messages on any failure.
 Future<void> validateGameDataDatabase(Database db) async {
@@ -20,14 +21,6 @@ Future<void> validateGameDataDatabase(Database db) async {
     'normalized_records',
     'story_lines',
     'story_scopes',
-    'lore_chunks',
-    'entity_documents_fts',
-    'lore_chunks_fts',
-    // Schema v3 coverage layer (R1 / AI retrieval P0).
-    'entity_story_mentions',
-    'story_chapter_profiles',
-    'rare_terms',
-    'story_lines_fts',
     // Schema v5 entry layer (0.11).
     'collections',
     'entries',
@@ -70,7 +63,6 @@ Future<void> validateGameDataDatabase(Database db) async {
   for (final entry in const {
     'entity_count': 'entities',
     'normalized_record_count': 'records',
-    'lore_chunk_count': 'chunks',
     'story_line_count': 'story lines',
   }.entries) {
     final value = int.tryParse(manifest[entry.key] ?? '');

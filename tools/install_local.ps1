@@ -208,5 +208,10 @@ if ($Ef) {
 
 if ($DryRun) { Write-Host '(dry run: nothing was changed)'; return }
 if (-not $NoLaunch -and -not $KbOnly) {
-  Adb shell monkey -p $package -c android.intent.category.LAUNCHER 1 | Out-Null
+  # monkey prints its arguments to stderr, which PowerShell 5.1 turns into an
+  # error under 'Stop' although the app starts: only the exit code counts.
+  $ErrorActionPreference = 'Continue'
+  & $adb @(if ($Device) { '-s'; $Device }) shell monkey -p $package -c android.intent.category.LAUNCHER 1 2>$null | Out-Null
+  $ErrorActionPreference = 'Stop'
+  if ($LASTEXITCODE -ne 0) { Write-Warning 'installed, but the app did not start: open it on the phone.' }
 }

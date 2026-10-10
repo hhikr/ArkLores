@@ -12,9 +12,8 @@ import 'package:sqflite_common/sqlite_api.dart';
 import 'story_catalog.dart';
 
 /// Every name-like string of the DB with its occurrence count: story
-/// speakers (spoken lines), surface forms the coverage layer matched in
-/// story text (mentions), names/aliases of people-like entities (operators,
-/// enemies, speakers) and catalog collection / chapter names. Tables that
+/// speakers (spoken lines), names/aliases of people-like entities (operators,
+/// enemies) and catalog collection / chapter names. Tables that
 /// an older DB lacks are skipped.
 Future<List<NameOccurrence>> loadNameInventory(DatabaseExecutor db) async {
   Future<bool> has(String table) async => (await db.rawQuery(
@@ -33,18 +32,6 @@ Future<List<NameOccurrence>> loadNameInventory(DatabaseExecutor db) async {
         '${row['speaker']}'.trim(),
         (row['n'] as num).toInt(),
         '说话人',
-      ),);
-    }
-  }
-  if (await has('entity_story_mentions')) {
-    for (final row in await db.rawQuery(
-      'SELECT matched_alias, SUM(mention_count) AS n FROM entity_story_mentions '
-      'WHERE matched_alias IS NOT NULL GROUP BY matched_alias',
-    )) {
-      inventory.add(NameOccurrence(
-        '${row['matched_alias']}'.trim(),
-        (row['n'] as num).toInt(),
-        '剧情提及',
       ),);
     }
   }

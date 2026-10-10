@@ -17,13 +17,11 @@ import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_script.dart';
 import 'package:arklores/core/gamedata/build/text_harvest.dart' show cleanRichText;
 import 'package:arklores/core/gamedata/story_vectors.dart' show storyChunkVectorsTable;
-import 'package:arklores/core/rag/chunker.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common/sqlite_api.dart';
 
-/// Removes everything a story file wrote: its lines, scope, chunks, coverage
-/// rows and vectors. [path] is the repo-relative path
+/// Removes everything a story file wrote: its lines, scope and vectors. [path] is the repo-relative path
 /// (`zh_CN/gamedata/story/<story id>`). The entry layer is rebuilt separately
 /// (`EntryImporter.rebuildDerived`).
 Future<void> deleteStoryRows(Database db, String path) async {
@@ -31,27 +29,12 @@ Future<void> deleteStoryRows(Database db, String path) async {
   // Databases built on Windows hold the backslash spelling of the path.
   final paths = {path, path.replaceAll('/', r'\')}.toList();
   final marks = List.filled(paths.length, '?').join(',');
-  await db.delete(
-    'entity_story_mentions',
-    where: 'story_id = ?',
-    whereArgs: [storyId],
-  );
-  await db.delete(
-    'story_chapter_profiles',
-    where: 'story_id = ?',
-    whereArgs: [storyId],
-  );
   await db.delete('story_scopes', where: 'story_id = ?', whereArgs: [storyId]);
   await db.delete('story_lines', where: 'story_id = ?', whereArgs: [storyId]);
   await db.delete(
     'normalized_records',
     where: 'source_path IN ($marks) OR (parent_type = ? AND parent_id = ?)',
     whereArgs: [...paths, 'story_file', storyId],
-  );
-  await db.delete(
-    'lore_chunks',
-    where: 'source_path IN ($marks)',
-    whereArgs: paths,
   );
   // Optional vectors (R12) of a changed story point at the old line numbers;
   // drop them so semantic recall never hints at stale ranges. Other stories
@@ -91,7 +74,6 @@ class ArknightsImporter {
   /// unknown. Used by the in-app builder to drive progress UI; never invoked
   /// for per-file re-import entry points.
   final void Function(String stage, int done, int total)? onProgress;
-  final Chunker _chunker = const Chunker();
 
   Future<void> importAll() async {
     final zh = Directory(p.join(sourceDir.path, 'zh_CN'));
@@ -286,21 +268,6 @@ class ArknightsImporter {
           documentSections.add(TextSection('基础信息', basicProfile));
         }
 
-        await _insertChunk(
-          txn,
-          category: 'operator',
-          subtype: 'basic_profile',
-          contentType: 'operator_basic_profile',
-          entityId: charId,
-          pageTitle: name,
-          section: '基础信息',
-          content: basicProfile,
-          sourcePath: sourcePath,
-          rawId: charId,
-          retrievalHint: 'operator_profile',
-          entryId: 'operator:$charId',
-        );
-
         final handbook = handbookDict[charId];
         if (handbook is Map) {
           final storyTextAudio = handbook['storyTextAudio'];
@@ -315,20 +282,6 @@ class ArknightsImporter {
                 final text = '${storyRaw['storyText'] ?? ''}'.trim();
                 if (text.isEmpty) continue;
                 documentSections.add(TextSection(section, text));
-                await _insertChunk(
-                  txn,
-                  category: 'operator',
-                  subtype: 'handbook_profile',
-                  contentType: 'operator_handbook_profile',
-                  entityId: charId,
-                  pageTitle: name,
-                  section: section,
-                  content: text,
-                  sourcePath: 'zh_CN/gamedata/excel/handbook_info_table.json',
-                  rawId: charId,
-                  retrievalHint: 'operator_handbook',
-                  entryId: 'operator:$charId',
-                );
               }
             }
           }
@@ -475,16 +428,6 @@ class ArknightsImporter {
           entryId: charId.isEmpty ? null : 'operator:$charId',
         );
         await insertRecord(txn, record);
-        if (charId.isNotEmpty) {
-          await _insertRelation(
-            txn,
-            sourceEntityId: charId,
-            targetEntityId: record.id,
-            relationType: 'operator_voice',
-            sourcePath: sourcePath,
-            rawId: record.rawId,
-          );
-        }
       }
     });
   }
@@ -557,38 +500,6 @@ class ArknightsImporter {
         );
         stats.storyLines++;
       }
-
-      // Tutorial and guide popups are story lines (readable, queryable) but
-      // not retrieval text of the story.
-      final text = lines
-          .where((line) => line.kind != StoryLineKind.system)
-          .map((line) => line.speaker == null
-              ? line.content
-              : '${line.speaker}: ${line.content}',)
-          .join('\n');
-      final chunks = _chunker.chunkBySliding(text, pageTitle: storyId);
-      for (var chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-        final chunk = chunks[chunkIndex];
-        await insertRecord(
-          txn,
-          NormalizedRecord(
-            category: storyCategory(storyId),
-            subtype: storySubtype(storyId),
-            contentType: storyContentType(storyId),
-            parentId: storyId,
-            parentType: 'story_file',
-            title: storyId,
-            section: '剧情文本',
-            speaker: null,
-            content: chunk.content,
-            sourcePath: relativePath,
-            rawId: '$storyId:$chunkIndex',
-            lineStart: null,
-            lineEnd: null,
-            entryId: 'story:$storyId',
-          ),
-        );
-      }
     });
   }
 
@@ -605,79 +516,7 @@ class ArknightsImporter {
     return decoded.cast<String, dynamic>();
   }
 
-  Future<void> _insertChunk(
-    Transaction txn, {
-    required String category,
-    required String subtype,
-    required String contentType,
-    required String pageTitle,
-    required String section,
-    required String content,
-    required String sourcePath,
-    String? entityId,
-    String? storyId,
-    int? lineStart,
-    int? lineEnd,
-    String? rawId,
-    String? retrievalHint,
-    String? entryId,
-    String? collectionId,
-  }) async {
-    final clean = content.trim();
-    if (clean.isEmpty) return;
-    final sourceType = category == 'story' || contentType.endsWith('_story')
-        ? 'game_story'
-        : 'game_data';
-    final scope = storyId == null ? null : storyScope(storyId);
-    final id = stableContentId([
-      gamedataGame,
-      contentType,
-      entityId ?? '',
-      storyId ?? '',
-      rawId ?? '',
-      pageTitle,
-      section,
-      clean,
-    ].join(':'),);
-    await txn.insert(
-      'lore_chunks',
-      {
-        'id': id,
-        'game': gamedataGame,
-        'source_type': sourceType,
-        'content_category': category,
-        'content_subtype': subtype,
-        'content_type': contentType,
-        'entity_id': entityId,
-        'story_id': storyId,
-        'scope_type': scope?.$1,
-        'scope_id': scope?.$2,
-        'page_title': pageTitle,
-        'section': section,
-        'content': clean,
-        'source_path': sourcePath,
-        'line_start': lineStart,
-        'line_end': lineEnd,
-        'language': gamedataLanguage,
-        'updated_at': nowSeconds(),
-        'raw_id': rawId,
-        'retrieval_hint': retrievalHint,
-        'entry_id': entryId,
-        'collection_id': collectionId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    stats.loreChunks++;
-    if (sourceType == 'game_story') {
-      stats.storyChunks++;
-    } else if (category == 'operator') {
-      stats.profileChunks++;
-    } else {
-      stats.structuredChunks++;
-    }
-  }
-
-  /// Inserts one citable record (and its retrieval chunk).
+  /// Inserts one citable record.
   Future<void> insertRecord(Transaction txn, NormalizedRecord record) async {
     final clean = record.content.trim();
     if (clean.isEmpty) return;
@@ -711,25 +550,6 @@ class ArknightsImporter {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     stats.normalizedRecords++;
-    await _insertChunk(
-      txn,
-      category: record.category,
-      subtype: record.subtype,
-      contentType: record.contentType,
-      entityId: record.entityId,
-      pageTitle:
-          record.title ?? record.entityName ?? record.rawId ?? 'GameData',
-      section: record.section ?? record.subtype,
-      content: clean,
-      sourcePath: record.sourcePath,
-      lineStart: record.lineStart,
-      lineEnd: record.lineEnd,
-      rawId: record.rawId,
-      storyId: record.parentType == 'story_file' ? record.parentId : null,
-      retrievalHint: record.contentType,
-      entryId: record.entryId,
-      collectionId: record.collectionId,
-    );
   }
 
   /// Adds (or replaces) one entry row.
@@ -873,34 +693,6 @@ class ArknightsImporter {
     }
     aliases.remove(name);
     return aliases.toList(growable: false);
-  }
-
-  Future<void> _insertRelation(
-    Transaction txn, {
-    required String sourceEntityId,
-    required String targetEntityId,
-    required String relationType,
-    required String sourcePath,
-    String? rawId,
-  }) async {
-    await txn.insert(
-      'entity_relations',
-      {
-        'id': stableContentId([
-          sourceEntityId,
-          targetEntityId,
-          relationType,
-          rawId ?? '',
-        ].join(':'),),
-        'source_entity_id': sourceEntityId,
-        'target_entity_id': targetEntityId,
-        'relation_type': relationType,
-        'source_path': sourcePath,
-        'raw_id': rawId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    stats.entityRelations++;
   }
 
   Future<void> _insertEntityDocument(
@@ -1077,39 +869,21 @@ class BuildStats {
   int entities = 0;
   int storyLines = 0;
   int normalizedRecords = 0;
-  int entityRelations = 0;
   int entityDocuments = 0;
-  int loreChunks = 0;
-  int profileChunks = 0;
-  int storyChunks = 0;
-  int structuredChunks = 0;
 
   // Schema v5 entry layer.
   int entries = 0;
   int collections = 0;
   int entryLinks = 0;
 
-  // Schema v3 coverage layer (StoryCoverageBuilder).
-  int storyCoverageMentions = 0;
-  int storyProfiles = 0;
-  int rareTerms = 0;
-
   Map<String, int> toJson() => {
         'entities': entities,
         'storyLines': storyLines,
         'normalizedRecords': normalizedRecords,
-        'entityRelations': entityRelations,
         'entityDocuments': entityDocuments,
-        'loreChunks': loreChunks,
-        'profileChunks': profileChunks,
-        'storyChunks': storyChunks,
-        'structuredChunks': structuredChunks,
         'entries': entries,
         'collections': collections,
         'entryLinks': entryLinks,
-        'storyCoverageMentions': storyCoverageMentions,
-        'storyProfiles': storyProfiles,
-        'rareTerms': rareTerms,
       };
 
   Future<void> refreshFrom(Database db) async {
@@ -1119,38 +893,14 @@ class BuildStats {
     normalizedRecords = firstInt(
       await db.rawQuery('SELECT COUNT(*) FROM normalized_records'),
     );
-    entityRelations = firstInt(
-      await db.rawQuery('SELECT COUNT(*) FROM entity_relations'),
-    );
     entityDocuments = firstInt(
       await db.rawQuery('SELECT COUNT(*) FROM entity_documents'),
     );
-    loreChunks =
-        firstInt(await db.rawQuery('SELECT COUNT(*) FROM lore_chunks'));
-    storyChunks = firstInt(
-      await db.rawQuery(
-        "SELECT COUNT(*) FROM lore_chunks WHERE source_type = 'game_story'",
-      ),
-    );
-    profileChunks = firstInt(
-      await db.rawQuery(
-        "SELECT COUNT(*) FROM lore_chunks WHERE content_category = 'operator'",
-      ),
-    );
-    structuredChunks = loreChunks - storyChunks - profileChunks;
     entries = firstInt(await db.rawQuery('SELECT COUNT(*) FROM entries'));
     collections =
         firstInt(await db.rawQuery('SELECT COUNT(*) FROM collections'));
     entryLinks =
         firstInt(await db.rawQuery('SELECT COUNT(*) FROM entry_links'));
-    storyCoverageMentions = firstInt(
-      await db.rawQuery('SELECT COUNT(*) FROM entity_story_mentions'),
-    );
-    storyProfiles = firstInt(
-      await db.rawQuery('SELECT COUNT(*) FROM story_chapter_profiles'),
-    );
-    rareTerms =
-        firstInt(await db.rawQuery('SELECT COUNT(*) FROM rare_terms'));
   }
 }
 

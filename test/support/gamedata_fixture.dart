@@ -14,7 +14,6 @@ const Map<String, String> validManifest = {
   'language': gamedataLanguage,
   'entity_count': '1',
   'normalized_record_count': '1',
-  'lore_chunk_count': '1',
   'story_line_count': '1',
 };
 

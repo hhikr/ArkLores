@@ -2,12 +2,11 @@ part of 'entry_importer.dart';
 
 /// Roguelike.
 extension _Roguelike on EntryImporter {
-  /// Removes what an earlier import of [path] wrote (entries, their records,
-  /// chunks and its own bindings), so a re-import is exactly what the table says now:
+  /// Removes what an earlier import of [path] wrote (entries, their records
+  /// and its own bindings), so a re-import is exactly what the table says now:
   /// an entry dropped from the rules (a tip, a duplicate stage) goes away.
   Future<void> _purgeSource(Transaction txn, String path) async {
     const ids = 'SELECT id FROM entries WHERE source_path = ?';
-    await txn.rawDelete('DELETE FROM lore_chunks WHERE entry_id IN ($ids)', [path]);
     await txn.rawDelete(
       'DELETE FROM normalized_records WHERE entry_id IN ($ids)',
       [path],

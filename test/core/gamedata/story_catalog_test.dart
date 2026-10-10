@@ -76,14 +76,14 @@ void main() {
 
     tearDown(() => deleteTempDir(dir));
 
-    test('relabels chapter profiles and records the manifest count', () async {
+    test('names the chapters and records the manifest count', () async {
       final db = await databaseFactoryFfi.openDatabase(dbPath);
-      final profile = (await db.query('story_chapter_profiles',
+      final row = (await db.query(storyCatalogTable,
               where: 'story_id = ?',
               whereArgs: ['activities/act_fx/level_act_fx_02_beg.txt'],))
           .single;
-      expect(profile['title'], '虚构活动 FX-2 行动前《转折》');
-      expect(profile['summary'], '乙与丙秘密会面，达成交易。');
+      expect(StoryCatalogEntry.fromRow(row).label, '虚构活动 FX-2 行动前《转折》');
+      expect(row['synopsis'], '乙与丙秘密会面，达成交易。');
       final count = await db.query('gamedata_manifest',
           where: 'key = ?', whereArgs: [manifestStoryCatalogCount],);
       expect(count.single['value'], '4');
@@ -181,8 +181,7 @@ void main() {
   });
 }
 
-/// Two chapters of a fictional activity with chapter profiles (the catalog
-/// import relabels them).
+/// Two chapters of a fictional activity.
 Future<Database> _createStoryTables(String path) async {
   final db = await createGameDataDb(path);
   const stories = {
@@ -195,16 +194,6 @@ Future<Database> _createStoryTables(String path) async {
   };
   for (final MapEntry(key: id, value: lines) in stories.entries) {
     await insertStory(db, id, lines, scopeId: 'act_fx');
-    await db.insert('story_chapter_profiles', {
-      'story_id': id,
-      'scope_id': 'activity:act_fx',
-      'title': p.basename(id),
-      'line_start': 0,
-      'line_end': lines.length - 1,
-      'speaker_set': '[]',
-      'entity_density': '{}',
-      'summary': lines.first,
-    });
   }
   return db;
 }

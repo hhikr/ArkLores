@@ -1237,25 +1237,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbBuildStageStories => '导入剧情';
 
   @override
-  String get kbBuildStageCoverage => '构建实体覆盖层';
-
-  @override
-  String get kbBuildStageCoverageSpeakers => '正在补全说话人实体…';
-
-  @override
-  String get kbBuildStageCoverageTrie => '正在构建实体索引…';
-
-  @override
-  String get kbBuildStageCoverageScan => '正在扫描角色出场…';
-
-  @override
-  String get kbBuildStageCoverageRare => '正在统计稀有词…';
-
-  @override
-  String get kbBuildStageCoverageProfiles => '正在生成章节画像…';
-
-  @override
-  String get kbBuildStageFts => '重建全文索引';
+  String get kbBuildStageCompact => '清理不再使用的数据…';
 
   @override
   String get kbBuildIncrementalDone => '增量更新完成，知识库已替换。';

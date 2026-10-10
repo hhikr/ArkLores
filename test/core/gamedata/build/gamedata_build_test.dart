@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_isolate.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
+import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/source/arknights_source_client.dart';
 import 'package:arklores/core/gamedata/build/update_report.dart';
 import 'package:arklores/core/gamedata/gamedata_build_provider.dart';
@@ -287,7 +288,7 @@ void main() {
   });
 
   group('GameDataBuildService', () {
-    test('full build produces a valid schema v3 database', () async {
+    test('full build produces a valid database', () async {
       final sourceDir = await _writeFixtureSource(tempDir);
       final output = p.join(tempDir.path, 'built.db');
       final service = GameDataBuildService();
@@ -306,10 +307,32 @@ void main() {
         'SELECT COUNT(*) AS c FROM story_lines',
       );
       expect(storyLines.first['c'], 46);
-      final mentions = await db.rawQuery(
-        'SELECT COUNT(*) AS c FROM entity_story_mentions',
+      // 0.14: nothing nobody reads — no chunked copy of the text, no
+      // full-text index, no tables derived from the story text, no story
+      // text kept a second time as records, no entities made of speakers.
+      final tables = {
+        for (final r in await db.rawQuery('SELECT name FROM sqlite_master'))
+          '${r['name']}',
+      };
+      expect(tables.intersection(obsoleteGamedataTables.toSet()), isEmpty);
+      expect(
+        await db.query(
+          'normalized_records',
+          where: "parent_type = 'story_file'",
+        ),
+        isEmpty,
       );
-      expect((mentions.first['c'] as int), greaterThan(0));
+      expect(
+        await db.query('entities', where: "source_type = 'story_speaker'"),
+        isEmpty,
+      );
+      expect(
+        await db.query(
+          'gamedata_manifest',
+          where: "key IN ('lore_chunk_count', 'rare_term_count')",
+        ),
+        isEmpty,
+      );
       final manifest = await db.rawQuery(
         'SELECT value FROM gamedata_manifest WHERE key = \'source_arknights_commit\'',
       );
@@ -346,6 +369,41 @@ void main() {
           'vec': Uint8List(4),
         });
       }
+      // A database of an earlier build: what nothing reads is still in it.
+      await seed.execute('CREATE TABLE lore_chunks (id TEXT PRIMARY KEY, content TEXT)');
+      await seed.execute(
+        "CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(content, content='lore_chunks')",
+      );
+      await seed.execute('CREATE TABLE rare_terms (term TEXT PRIMARY KEY, doc_freq INTEGER)');
+      await seed.execute(
+        'CREATE TABLE entity_story_mentions (entity_id TEXT, story_id TEXT, line_start INTEGER)',
+      );
+      await seed.insert('lore_chunks', {'id': 'x', 'content': '旧的切块'});
+      await seed.insert('entities', {
+        'id': 'speaker:路人',
+        'name': '路人',
+        'entity_type': 'speaker',
+        'source_type': 'story_speaker',
+        'game': 'arknights',
+      });
+      await seed.insert('entity_aliases', {
+        'alias': '路人',
+        'entity_id': 'speaker:路人',
+        'alias_type': 'canonical',
+      });
+      await seed.insert('normalized_records', {
+        'id': 'old_story_chunk',
+        'game': 'arknights',
+        'category': 'story',
+        'subtype': 'activity_story',
+        'content_type': 'activity_story',
+        'parent_id': 'activities/act_fixture/level_fixture_c1.txt',
+        'parent_type': 'story_file',
+        'content': '旧的剧情切块',
+        'source_path':
+            'zh_CN/gamedata/story/activities/act_fixture/level_fixture_c1.txt',
+      });
+      await writeGamedataManifest(seed, {'lore_chunk_count': '1'});
       await seed.close();
 
       // Modify the source tree.
@@ -426,12 +484,26 @@ void main() {
         'SELECT content FROM normalized_records WHERE content LIKE \'%新描述%\'',
       );
       expect(newDesc, isNotEmpty);
-      final bMentions = await db.rawQuery(
-        'SELECT story_id FROM entity_story_mentions WHERE entity_id = \'char_b\'',
+      // What the earlier build left and nothing reads is gone, and is not
+      // counted as a change of the update.
+      final tables = {
+        for (final r in await db.rawQuery('SELECT name FROM sqlite_master'))
+          '${r['name']}',
+      };
+      expect(tables.intersection(obsoleteGamedataTables.toSet()), isEmpty);
+      expect(tables.where((t) => t.startsWith('lore_chunks')), isEmpty);
+      expect(
+        await db.query('normalized_records', where: "parent_type = 'story_file'"),
+        isEmpty,
       );
       expect(
-        bMentions.map((row) => row['story_id']),
-        contains('activities/act_fixture/level_fixture_c6.txt'),
+        await db.query('entities', where: "source_type = 'story_speaker'"),
+        isEmpty,
+      );
+      expect(await db.query('entity_aliases', where: "alias = '路人'"), isEmpty);
+      expect(
+        await db.query('gamedata_manifest', where: "key = 'lore_chunk_count'"),
+        isEmpty,
       );
       final commit = await db.rawQuery(
         'SELECT value FROM gamedata_manifest WHERE key = \'source_arknights_commit\'',

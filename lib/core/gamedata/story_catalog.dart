@@ -248,9 +248,8 @@ String synopsisPathFor(String storyInfo) {
 String normalizeSynopsis(String raw) =>
     raw.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-/// Replaces the catalog table with [entries], records the row count in the
-/// manifest and relabels `story_chapter_profiles` (title = label, summary =
-/// official synopsis where one exists). Deterministic: same input, same rows.
+/// Replaces the catalog table with [entries] and records the row count in
+/// the manifest. Deterministic: same input, same rows.
 Future<int> writeStoryCatalog(
   DatabaseExecutor db,
   List<StoryCatalogEntry> entries,
@@ -275,30 +274,7 @@ Future<int> writeStoryCatalog(
     {'key': manifestStoryCatalogCount, 'value': '${entries.length}'},
     conflictAlgorithm: ConflictAlgorithm.replace,
   );
-  await applyStoryCatalogToProfiles(db, entries);
   return entries.length;
-}
-
-/// Writes catalog labels/synopses into `story_chapter_profiles` (when the
-/// table exists), so MAP shows names and official synopses instead of file
-/// names and one extracted line.
-Future<void> applyStoryCatalogToProfiles(
-  DatabaseExecutor db,
-  List<StoryCatalogEntry> entries,
-) async {
-  if (!await _hasTable(db, 'story_chapter_profiles')) return;
-  final batch = db.batch();
-  for (final entry in entries) {
-    final values = <String, Object?>{'title': entry.label};
-    if (_present(entry.synopsis)) values['summary'] = entry.synopsis;
-    batch.update(
-      'story_chapter_profiles',
-      values,
-      where: 'story_id = ?',
-      whereArgs: [entry.storyId],
-    );
-  }
-  await batch.commit(noResult: true);
 }
 
 /// Whether the DB carries the optional catalog table.

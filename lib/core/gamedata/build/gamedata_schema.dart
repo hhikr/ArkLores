@@ -14,10 +14,10 @@ import 'package:sqflite_common/sqlite_api.dart';
 /// The app installer rejects databases whose manifest schema_version differs
 /// from this value (see `GameDataInstaller._validateDatabase`).
 ///
-/// v3 (R1, AI retrieval P0) is additive over v2: it adds the deterministic
-/// coverage layer tables (`entity_story_mentions`, `story_chapter_profiles`,
-/// `rare_terms`) and the `story_lines_fts` external-content FTS index. No
-/// existing table or column is modified.
+/// v3 added tables derived from the story text and a full-text index over
+/// story lines; 0.14 removed them again (see [obsoleteGamedataTables]) without
+/// a version change: nothing read them, so a database with or without them
+/// is the same to the app.
 ///
 /// v4 (R3 follow-up, data fix) changes no tables: the importer now skips the
 /// upstream repo's `[uc]info/` one-line story-stub tree (previously imported
@@ -139,16 +139,6 @@ Future<void> createGamedataSchema(Database db) async {
     )
   ''');
   await db.execute('''
-    CREATE TABLE entity_relations (
-      id               TEXT PRIMARY KEY,
-      source_entity_id TEXT NOT NULL,
-      target_entity_id TEXT NOT NULL,
-      relation_type    TEXT NOT NULL,
-      source_path      TEXT,
-      raw_id           TEXT
-    )
-  ''');
-  await db.execute('''
     CREATE TABLE entity_documents (
       id                TEXT PRIMARY KEY,
       game              TEXT NOT NULL,
@@ -173,103 +163,6 @@ Future<void> createGamedataSchema(Database db) async {
       source_path TEXT NOT NULL
     )
   ''');
-  await db.execute('''
-    CREATE TABLE lore_chunks (
-      id             TEXT PRIMARY KEY,
-      game           TEXT NOT NULL,
-      source_type    TEXT NOT NULL,
-      content_category TEXT,
-      content_subtype  TEXT,
-      content_type     TEXT,
-      entity_id      TEXT,
-      story_id       TEXT,
-      scope_type     TEXT,
-      scope_id       TEXT,
-      page_title     TEXT,
-      section        TEXT,
-      content        TEXT NOT NULL,
-      source_path    TEXT,
-      source_url     TEXT,
-      line_start     INTEGER,
-      line_end       INTEGER,
-      speaker        TEXT,
-      language       TEXT NOT NULL DEFAULT 'zh',
-      game_version   TEXT,
-      updated_at     INTEGER,
-      raw_id         TEXT,
-      retrieval_hint TEXT,
-      entry_id       TEXT,
-      collection_id  TEXT
-    )
-  ''');
-  await db.execute('''
-    CREATE VIRTUAL TABLE entity_documents_fts USING fts5(
-      entity_name,
-      entity_type,
-      document_type,
-      title,
-      summary,
-      content,
-      content='entity_documents',
-      content_rowid='rowid',
-      tokenize='trigram'
-    )
-  ''');
-  await db.execute('''
-    CREATE VIRTUAL TABLE lore_chunks_fts USING fts5(
-      page_title,
-      section,
-      speaker,
-      content,
-      content='lore_chunks',
-      content_rowid='rowid'
-    )
-  ''');
-  // --- Schema v3 additive coverage layer (R1 / AI retrieval P0) ---
-  await db.execute('''
-    CREATE TABLE entity_story_mentions (
-      entity_id     TEXT NOT NULL,
-      story_id      TEXT NOT NULL,
-      scope_id      TEXT NOT NULL,
-      line_start    INTEGER NOT NULL,
-      line_end      INTEGER NOT NULL,
-      mention_count INTEGER NOT NULL,
-      matched_alias TEXT,
-      PRIMARY KEY (entity_id, story_id, line_start)
-    )
-  ''');
-  await db.execute(
-    'CREATE INDEX idx_mentions_scope ON entity_story_mentions(scope_id, story_id)',
-  );
-  await db.execute('''
-    CREATE TABLE story_chapter_profiles (
-      story_id       TEXT PRIMARY KEY,
-      scope_id       TEXT NOT NULL,
-      title          TEXT,
-      line_start     INTEGER NOT NULL,
-      line_end       INTEGER NOT NULL,
-      speaker_set    TEXT,
-      entity_density TEXT,
-      summary        TEXT,
-      keyword_hits   TEXT
-    )
-  ''');
-  await db.execute(
-    'CREATE INDEX idx_profiles_scope ON story_chapter_profiles(scope_id)',
-  );
-  await db.execute('''
-    CREATE TABLE rare_terms (
-      term     TEXT PRIMARY KEY,
-      doc_freq INTEGER NOT NULL
-    )
-  ''');
-  await db.execute('''
-    CREATE VIRTUAL TABLE story_lines_fts USING fts5(
-      content,
-      content='story_lines',
-      content_rowid='rowid'
-    )
-  ''');
   await db.execute(
     'CREATE INDEX idx_entities_name ON entities(name)',
   );
@@ -278,18 +171,6 @@ Future<void> createGamedataSchema(Database db) async {
   );
   await db.execute(
     'CREATE INDEX idx_normalized_records_entity ON normalized_records(entity_id)',
-  );
-  await db.execute(
-    'CREATE INDEX idx_lore_chunks_source_type ON lore_chunks(source_type)',
-  );
-  await db.execute(
-    'CREATE INDEX idx_lore_chunks_content_type ON lore_chunks(content_type)',
-  );
-  await db.execute(
-    'CREATE INDEX idx_lore_chunks_entity_id ON lore_chunks(entity_id)',
-  );
-  await db.execute(
-    'CREATE INDEX idx_lore_chunks_scope ON lore_chunks(scope_type, scope_id)',
   );
   await db.execute(
     'CREATE INDEX idx_entity_aliases_alias ON entity_aliases(alias)',
@@ -396,19 +277,82 @@ Future<void> writeGamedataManifest(
   }
 }
 
-/// Rebuilds all FTS5 external-content indexes over their base tables.
-///
-/// The `rebuild` command is executed by the FTS5 virtual table itself; the
-/// external content tables do not store duplicate text. v3 adds the
-/// `story_lines_fts` index over `story_lines`.
-Future<void> rebuildGamedataFts(Database db) async {
-  await db.execute(
-    "INSERT INTO entity_documents_fts(entity_documents_fts) VALUES('rebuild')",
+/// Tables earlier builds wrote that nothing reads (0.14): the chunked copy
+/// of every text and its index, two more full-text indexes (the one over
+/// story lines could not match Chinese inside a sentence), a relation table
+/// that only tied an operator to its own voice lines, and the "coverage"
+/// tables derived from the story text (name mentions, rare bigrams, a
+/// profile per story). A database that has them loses them when it is
+/// updated ([dropObsoleteGamedataData]).
+const List<String> obsoleteGamedataTables = [
+  'lore_chunks_fts',
+  'entity_documents_fts',
+  'story_lines_fts',
+  'lore_chunks',
+  'entity_relations',
+  'entity_story_mentions',
+  'story_chapter_profiles',
+  'rare_terms',
+];
+
+/// Manifest keys that counted rows of [obsoleteGamedataTables].
+const List<String> obsoleteGamedataManifestKeys = [
+  'lore_chunk_count',
+  'arknights_profile_chunk_count',
+  'arknights_story_chunk_count',
+  'arknights_structured_chunk_count',
+  'story_coverage_mention_count',
+  'story_profile_count',
+  'rare_term_count',
+];
+
+/// Removes what earlier builds wrote and nothing reads: the
+/// [obsoleteGamedataTables], the story text kept a second time as records
+/// (`parent_type = 'story_file'`; the text is `story_lines`) with their
+/// vectors, and the entities made of story speakers' names. Returns whether
+/// anything was removed (the caller may then `VACUUM`; not possible inside a
+/// transaction).
+Future<bool> dropObsoleteGamedataData(Database db) async {
+  Future<bool> has(String table) async => (await db.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') "
+        'AND name = ?',
+        [table],
+      ))
+          .isNotEmpty;
+  var removed = false;
+  for (final table in obsoleteGamedataTables) {
+    if (!await has(table)) continue;
+    await db.execute('DROP TABLE $table');
+    removed = true;
+  }
+  if (await has('record_chunk_vectors')) {
+    removed |= await db.rawDelete(
+          'DELETE FROM record_chunk_vectors WHERE record_id IN '
+          "(SELECT id FROM normalized_records WHERE parent_type = 'story_file')",
+        ) >
+        0;
+  }
+  removed |= await db.delete(
+        'normalized_records',
+        where: 'parent_type = ?',
+        whereArgs: ['story_file'],
+      ) >
+      0;
+  await db.rawDelete(
+    'DELETE FROM entity_aliases WHERE entity_id IN '
+    "(SELECT id FROM entities WHERE source_type = 'story_speaker')",
   );
-  await db.execute(
-    "INSERT INTO lore_chunks_fts(lore_chunks_fts) VALUES('rebuild')",
+  removed |= await db.delete(
+        'entities',
+        where: 'source_type = ?',
+        whereArgs: ['story_speaker'],
+      ) >
+      0;
+  await db.delete(
+    'gamedata_manifest',
+    where:
+        'key IN (${List.filled(obsoleteGamedataManifestKeys.length, '?').join(',')})',
+    whereArgs: obsoleteGamedataManifestKeys,
   );
-  await db.execute(
-    "INSERT INTO story_lines_fts(story_lines_fts) VALUES('rebuild')",
-  );
+  return removed;
 }

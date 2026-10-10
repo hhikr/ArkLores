@@ -1,7 +1,6 @@
 // Re-runs the entry layer of an existing GameData database from a source
 // directory: re-imports the entry tables, then rebuilds the derived layer
-// (collections, story entries and their names, stage bindings) and the
-// search index. Use it after a change to the entry importer to bring a
+// (collections, story entries and their names, stage bindings). Use it after a change to the entry importer to bring a
 // database up to date without rebuilding the stories and vectors.
 //
 //   dart run tools/rederive_gamedata.dart \
@@ -13,7 +12,6 @@ import 'dart:io';
 import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
-import 'package:arklores/core/gamedata/build/story_coverage_builder.dart';
 import 'package:arklores/core/library/library_labels.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -53,10 +51,6 @@ Future<void> main(List<String> args) async {
     stdout.writeln('re-parse stories');
     final changed = await importer.reimportChangedStories();
     stdout.writeln('stories changed: ${changed.length}');
-    if (changed.isNotEmpty) {
-      stdout.writeln('rebuild coverage layer');
-      await StoryCoverageBuilder(db: db, stats: stats).build();
-    }
     final entries = importer.entryImporter;
     // Every table in a complete build's order, each purged first, then the
     // level files: the same result as building from scratch.
@@ -66,8 +60,11 @@ Future<void> main(List<String> args) async {
     await importer.importCharacterTables();
     stdout.writeln('rebuild derived layer');
     await entries.rebuildDerived();
-    stdout.writeln('rebuild search index');
-    await rebuildGamedataFts(db);
+    // What earlier builds wrote and nothing reads.
+    if (await dropObsoleteGamedataData(db)) {
+      stdout.writeln('removed the tables nothing reads; compacting');
+      await db.execute('VACUUM');
+    }
     // Kinds of entries the interface has no name for: they show without a
     // heading until someone looks the name up (the tables rarely give it;
     // the wiki pages of the mode do).

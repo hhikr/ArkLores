@@ -25,7 +25,7 @@
   手写的表会和真实的表分叉（列不同、FTS 分词器不同），测试过了而 App 用的库是另一个样子。
   唯一的例外是专门测“旧版本的库”（如 `gamedata_knowledge_store_test.dart` 里没有索引的旧库），注释里写明。
 - `source_fixture.dart`：一棵小的 ArknightsGameData 源码树（3 个角色、1 个物品、一个活动 5 章），
-  构建、覆盖层、更新的测试都从它开始；`fake_github.dart` 把它按提交在内存里当作 GitHub 提供
+  构建、更新的测试都从它开始；`fake_github.dart` 把它按提交在内存里当作 GitHub 提供
   （提交、git 树、raw 文件、codeload zip）。
 - `amiya_fixture.dart`、`two_activities_fixture.dart`：检索、近似名与范围外命中用的小库。
 - 终末地（0.12）的建库测试自带夹具：`core/gamedata/build/endfield/endfield_importer_test.dart` 的 `writeTables` 按客户端的形状写一小套表

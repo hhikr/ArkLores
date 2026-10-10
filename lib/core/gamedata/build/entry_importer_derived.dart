@@ -248,18 +248,6 @@ extension _Derived on EntryImporter {
         "SELECT DISTINCT collection_id, 'activity', collection_id, 999999 "
         'FROM entries WHERE collection_id IS NOT NULL',
       );
-      await txn.execute(
-        'UPDATE normalized_records SET collection_id = '
-        '(SELECT collection_id FROM entries '
-        'WHERE entries.id = normalized_records.entry_id) '
-        "WHERE parent_type = 'story_file'",
-      );
-      await txn.execute(
-        'UPDATE lore_chunks SET collection_id = '
-        '(SELECT collection_id FROM entries '
-        'WHERE entries.id = lore_chunks.entry_id) '
-        "WHERE entry_id LIKE 'story:%'",
-      );
 
       // story → stage. The game names a stage's story files after the stage
       // id (`level_<stage id>_beg.txt`); otherwise the same collection and

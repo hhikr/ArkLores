@@ -5,19 +5,16 @@
 /// The importer ([EndfieldImporter]) decides what goes in; this class only
 /// knows how a story, a text record, an entity, a collection, an entry, a
 /// binding and a catalog row are written, and how the derived layers are
-/// rebuilt at the end (coverage, FTS, manifest).
+/// rebuilt at the end (manifest).
 library;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
-import '../../../rag/chunker.dart';
 import '../../game.dart';
 import '../../story_catalog.dart';
-import '../../story_vectors.dart' show sectionLineKind;
 import '../arknights_importer.dart' show BuildStats, nowSeconds, stableContentId;
 import '../gamedata_build_service.dart' show countManifest;
 import '../gamedata_schema.dart';
-import '../story_coverage_builder.dart';
 
 /// Game id recorded on Endfield rows.
 const String endfieldGame = 'endfield';
@@ -43,7 +40,6 @@ class EndfieldWriter {
 
   final Database db;
   final BuildStats stats;
-  final Chunker _chunker = const Chunker();
 
   /// Story ids written so far (a story is written once).
   final Set<String> _stories = {};
@@ -150,31 +146,6 @@ class EndfieldWriter {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
         stats.storyLines++;
-      }
-      final text = kept
-          .where((l) => l.kind != 'system' && l.kind != sectionLineKind)
-          .map((l) => _blankToNull(l.speaker) == null
-              ? l.content.trim()
-              : '${l.speaker!.trim()}: ${l.content.trim()}',)
-          .join('\n');
-      final chunks = _chunker.chunkBySliding(text, pageTitle: name);
-      for (var c = 0; c < chunks.length; c++) {
-        await _record(
-          txn,
-          category: 'story',
-          subtype: 'dialog',
-          contentType: 'endfield_story',
-          title: name,
-          section: '剧情文本',
-          content: chunks[c].content,
-          sourcePath: sourcePath,
-          rawId: '$storyId:$c',
-          parentId: storyId,
-          parentType: 'story_file',
-          entryId: entryId,
-          collectionId: collection,
-          storyId: storyId,
-        );
       }
       await txn.insert(
         'entries',
@@ -285,8 +256,8 @@ class EndfieldWriter {
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
 
-  /// A named entity (a character, an NPC, a place) the coverage layer finds
-  /// in the stories by its name and [aliases]. Returns its id.
+  /// A named entity (a character, an NPC, a place) with its [aliases], for
+  /// the name index. Returns its id.
   Future<String> entity({
     required String rawId,
     required String name,
@@ -333,8 +304,8 @@ class EndfieldWriter {
     return id;
   }
 
-  /// An entity's summary document (`entity_documents`), for the entity
-  /// search the coverage layer and the agent's `sql` read.
+  /// An entity's summary document (`entity_documents`), which the search
+  /// and the agent's `sql` read.
   Future<void> entityDocument({
     required String entityId,
     required String name,
@@ -364,10 +335,8 @@ class EndfieldWriter {
     stats.entityDocuments++;
   }
 
-  /// Coverage layer, FTS and the count manifest (the last step).
+  /// The count manifest (the last step).
   Future<void> finish() async {
-    await StoryCoverageBuilder(db: db, stats: stats).build();
-    await rebuildGamedataFts(db);
     await stats.refreshFrom(db);
     await writeGamedataManifest(db, countManifest(stats));
   }
@@ -388,7 +357,6 @@ class EndfieldWriter {
     String? collectionId,
     String? entityId,
     String? entityName,
-    String? storyId,
     int? order,
   }) async {
     final clean = content.trim();
@@ -427,38 +395,6 @@ class EndfieldWriter {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     stats.normalizedRecords++;
-    await txn.insert(
-      'lore_chunks',
-      {
-        'id': stableContentId('endfield:chunk:$id'),
-        'game': endfieldGame,
-        'source_type': storyId != null ? 'game_story' : 'game_data',
-        'content_category': category,
-        'content_subtype': subtype,
-        'content_type': contentType,
-        'entity_id': entityId,
-        'story_id': storyId,
-        'scope_type': storyId != null ? 'mission' : null,
-        'scope_id': storyId != null ? collectionId : null,
-        'page_title': title ?? rawId ?? 'Endfield',
-        'section': section ?? subtype,
-        'content': clean,
-        'source_path': sourcePath,
-        'language': gamedataLanguage,
-        'updated_at': nowSeconds(),
-        'raw_id': rawId,
-        'retrieval_hint': contentType,
-        'entry_id': entryId,
-        'collection_id': collectionId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    stats.loreChunks++;
-    if (storyId != null) {
-      stats.storyChunks++;
-    } else {
-      stats.structuredChunks++;
-    }
     return id;
   }
 }

@@ -2288,47 +2288,11 @@ abstract class AppLocalizations {
   /// **'Importing stories'**
   String get kbBuildStageStories;
 
-  /// No description provided for @kbBuildStageCoverage.
+  /// No description provided for @kbBuildStageCompact.
   ///
   /// In en, this message translates to:
-  /// **'Building entity coverage layer'**
-  String get kbBuildStageCoverage;
-
-  /// No description provided for @kbBuildStageCoverageSpeakers.
-  ///
-  /// In en, this message translates to:
-  /// **'Expanding speaker entities…'**
-  String get kbBuildStageCoverageSpeakers;
-
-  /// No description provided for @kbBuildStageCoverageTrie.
-  ///
-  /// In en, this message translates to:
-  /// **'Building entity index…'**
-  String get kbBuildStageCoverageTrie;
-
-  /// No description provided for @kbBuildStageCoverageScan.
-  ///
-  /// In en, this message translates to:
-  /// **'Scanning character appearances…'**
-  String get kbBuildStageCoverageScan;
-
-  /// No description provided for @kbBuildStageCoverageRare.
-  ///
-  /// In en, this message translates to:
-  /// **'Counting rare terms…'**
-  String get kbBuildStageCoverageRare;
-
-  /// No description provided for @kbBuildStageCoverageProfiles.
-  ///
-  /// In en, this message translates to:
-  /// **'Writing chapter profiles…'**
-  String get kbBuildStageCoverageProfiles;
-
-  /// No description provided for @kbBuildStageFts.
-  ///
-  /// In en, this message translates to:
-  /// **'Rebuilding full-text indexes'**
-  String get kbBuildStageFts;
+  /// **'Removing data no longer used…'**
+  String get kbBuildStageCompact;
 
   /// No description provided for @kbBuildIncrementalDone.
   ///

@@ -30,7 +30,7 @@ void main() {
   /// A valid knowledge base, as raw bytes.
   Future<List<int>> validDb({String name = 'valid_gamedata.db'}) async {
     final path = '${dir.path}/$name';
-    await createAmiyaDb(path, extra: addAmiyaStoryChunk);
+    await createAmiyaDb(path);
     return File(path).readAsBytes();
   }
 
