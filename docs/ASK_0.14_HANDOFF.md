@@ -1,4 +1,4 @@
-# 0.14 问答：交接说明（2026-10-11，第三版）
+# 0.14 问答：交接说明（2026-10-11 傍晚，第四版）
 
 给接手 `feature/v0.14-ask` 的人。先读 `CLAUDE.md`（约定、硬性要求、命令），再读这份。设计、每一轮的改动和验收数据在 `docs/R17_TOOL_AGENT.md` §5，
 知识库的表与构建路径在 `docs/GAMEDATA_BUILD_PIPELINE.md`，仍开放的限制在 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §7。
@@ -55,6 +55,19 @@
 改后只重跑了三题各一次。**第 1、3、4 条修正在真实模型下没有再被触发**（第 1 条用那次的原始回复离线重放过），真机没有跑。
 
 ## 1. 现在的状态
+
+**2026-10-11 傍晚的状态（以这一段为准；下面各条里与它不一致的是之前的）：**
+
+- **提交**：都在本机，**没有 push**。10-11 这一天依次是：词的分布 / `near` / `read_record` 的分布、各给一段、手册（`guide`）、复刻活动的关卡、没有结果的查找的上限与清单、
+  `e4e7eb6`（历史问题集）、`00bddab`（据它做的修正）、`d7bbb07`（工作过程明细）、`4f2306d`（知识库的更新顺序），各带文档提交。工作区干净。
+- **测试**：全量 634 个通过（22 个按平台或开关跳过），`flutter analyze` 无问题。`test/live/scratch/wiki_ui_shot_test.dart` 失败（`!timersPending`）：
+  它是不进仓库的草稿，改动之前就失败，原因没查。
+- **本机的库**：`build/gamedata_v5/arklores_gamedata_zh.db` 是用修正后的建库代码重建的（上游 `a550f5e`，关卡 3241，剧情向量 55196、资料向量 38292），
+  gz 的 SHA-256 `ef6e177e…dae3ef`；替换前的留作 `.pre11`。终末地库没变（gz `5999d4ea…d130e`）。`build/gamedata_phone_1010/` 是 10 日从手机拉下来的（上游 `17759cc`），没有重建。
+- **手机**（开发者要求装的）：带桥的本地构建（`4f2306d` 的代码，按上面两个 gz 的 SHA 和 `a550f5e` 的提交与日期构建）+ 电脑重建的那份明日方舟库
+  （经桥安装，来源显示为官方发布，43.5 万行、3.3 万条资料）。**之前在手机上更新到 `17759cc` 的库被它替换了**，10 月 8 日上游新增的 53 篇剧情现在不在手机上；
+  “用游戏数据更新”能再拉回来（增量更新后关卡修正是否保留没有验证）。工作过程的明细、知识库页的新文案由开发者自己看，没有替他看。
+- **资产没有发布**，`tools/release_gamedata.env` 仍指向 v0.13.0（新加的两行是 v0.13.0 那份资产的提交 `a550f5e` 和它的日期）。
 
 - **分支**：`feature/v0.14-ask`。`8e134d9` 起的提交只在本机，**没有 push**，是否 push 由开发者定。
   `tools/garbage_api_info.txt` 是未跟踪的凭据文件，不提交。
@@ -119,6 +132,8 @@
     §1 里写的库大小、向量数、gz 的 SHA 是替换前的。`gamedata_manifest.json` 是建库工具写的那份（比替换前的短，发布前要按发布流程重新生成）。
     没有装到手机；从手机拉下来的那份（`17759cc`，`build/gamedata_phone_1010/`）没有重建，手机上的库要重装或在 App 里更新后才有这些关卡。
     那道查表题在新库上跑了两次：一次 4 条 `sql` 查出 25 种敌人（6 次 / 10.8 万），一次模型没用 `sql`、读 Wiki 作答（8 次 / 19.5 万）。清单在真实模型下有没有拦住重复查询仍没有看到。
+14. App 要不要自己到 GitHub 上发现新的官方知识库（现在只随新的 App 构建；`KNOWN_LIMITATIONS_AND_DEBT.md` §7）。
+15. 要不要在电脑上建一份上游 `17759cc` 加关卡修正的库（拉上游数据全量重建、迁移向量，新增条目的向量要先看 `--dry-run`）；手机现在是 `a550f5e` 那份。
 11. 英文提问用中文作答（历史问题集里唯一的英文题，两次都是）。提示词里已有“用提问的语言写”；要不要处理、怎么处理（例如把这句挪到答案格式的最后）没有定。
 12. 集成战略的结局文本要不要在阅读原则里写明“是分支结局，不当作已经发生的事”。现在有的答案区分、有的不区分。
 13. `search` 等 Wiki 的上限从 12 秒改成了 8 秒（`SearchTool.wikiWait`），依据是电脑上的计时；手机网络下合不合适没有量。PRTS 对连续请求变慢的原因没有查清。
@@ -254,7 +269,8 @@ adb 在 `C:\Users\hhikr\dev\android-sdk\platform-tools\adb.exe`。
 
 App 只认校验值与构建时写进去的一致的库，所以要连包一起装：
 
-1. 把两个 `.gz` 的 SHA-256 临时写进 `tools/release_gamedata.env`，然后 `install_local.ps1 -Build -Bridge -Kb -Ef`
+1. 把两个 `.gz` 的 SHA-256 临时写进 `tools/release_gamedata.env`（库所基于的上游提交不是文件里那个时，`GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE` 也临时改掉：
+   App 按它判断要不要提示替换本机更新过的库），然后 `install_local.ps1 -Build -Bridge -Kb -Ef`
    （`-Kb` / `-Ef` 把两个 gz 推到应用目录，文件名 `arklores_gamedata_zh.db.download.gz`、`arklores_endfield_zh.db.download.gz`）。
    **构建完立刻还原这个文件**（`git checkout -- tools/release_gamedata.env`，不提交）。
 2. 安装：`dart run tools/phone_ask.dart --kb=install`（终末地加 `--game=endfield`）——等于在知识库页按“下载 / 更新 / 重新下载 / 换回官方版本”，

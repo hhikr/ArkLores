@@ -149,7 +149,9 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 1. 压缩：`finalize_gamedata_assets.dart --output=<目录>`（没有 `.gz` 时自己压缩，Windows 不需要 gzip），写 manifest 的大小与 SHA。
 2. 验收：`flutter test`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
    改了建库结构时做一致性实验。
-3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，提交。
+3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
+   （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，
+   `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`），提交。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
 4. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
 5. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。

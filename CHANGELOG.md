@@ -43,7 +43,7 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 - A few citations of lines that were not read are removed by code instead of sending the whole answer back; the answer is rewritten only for more, or for what code cannot fix.
 - A cited range of which only some lines were shown is cut to those lines instead of being dropped (search lists some lines of a passage; a sound citation over them was lost, and its paragraph was left without a source).
 - An answer written in prose without a single citation is asked again once (it was shown whole under "not covered").
-- **An answer that is sent back disappears**: it does not stay in the conversation, and the page shows one status line instead of a step. Quoted dialogue is no longer sent back — the rewrite only stripped the quotation marks; the prompt asks not to copy dialogue at length.
+- **An answer that is sent back disappears**: it does not stay in the conversation and is not shown; why it was sent back is one line of the work timeline. Quoted dialogue is no longer sent back — the rewrite only stripped the quotation marks; the prompt asks not to copy dialogue at length.
 - What counts as read is one ledger for every tool: a line or a record counts only with its text; a record of which search showed an excerpt is marked so; a folded tool result says which lines it held and that their text must be read again before use.
 - Reorganising a long answer sends only its entries, not the whole conversation.
 - The reader's review and sub-agents are off by default; sub-agents are limited to two per question and their steps are shown.
@@ -58,15 +58,28 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 - **Each game has its own knowledge-base page** (明日方舟 / 终末地 in the top bar), with the same parts in the same order: the official knowledge base, its vectors, and how it is kept up to date. The note on what the AI uses as evidence is gone (it predated the wikis and the second game); the four number tiles are replaced by one line in the reader's words.
 - **Vectors for either game.** The vector card looked only at the Arknights file; each page now has its own. With nothing missing it is two lines; it opens into the cost and the run when vectors are missing.
 - **A knowledge base updated on the device is no longer offered the older official one as an "update"** (one tap replaced the newer data); the page says it was updated here and offers going back to the official one as its own, confirmed choice.
+- **Newer game data first; for the same game data, the official knowledge base.** The app now knows which game-data commit its official knowledge base was made from. One updated on the device is offered the official one when that is of the same commit (it has every vector) or of a commit made after the update ran, and not otherwise; when the latest game data is exactly the official one's, "pull and update" steps aside for "update". The card says where the installed knowledge base came from (official release / updated on this device) next to its data version.
 - **A complete rebuild asks first when it would lose vectors**: it starts a new database without them. The GitHub token is folded away. The hint for a download that cannot connect names the right file for each game.
 
-### The work timeline reads well
+### The work timeline shows what was done
 
-- Stories read are shown by name (they showed as file names); every failure is marked and says why; a sub-agent's steps are labelled.
+- **Each step is the call itself**: its number, the tool, the arguments as the model wrote them, how much came back, and marks for a planned first search, a repeated call, nothing found, a failure, a call not run and a wiki that did not answer. Tapping a step shows the whole arguments and the whole result in a box that scrolls (it was a sentence about the step and the first sixteen lines).
+- What code did to an answer — sent it back, cut a citation to the lines read, dropped one — is a line of the timeline too.
+
+### Where a word occurs, and what a tool does when it finds nothing
+
+- **`search` and `grep` say in which story collections each word occurs**, and `search` gives a passage from every collection it lists that its best stories did not cover: told only where to look, the model answered from the first story it read about half the time. On one question about a character's whole story, all five collections were covered in 4 runs of 4 (1 of 4 before), for two to three times the input.
+- **The tables are a manual, not part of every prompt.** Table and column names, how entries are linked and how the library pages are laid out moved out of the system prompt (about 40% shorter) into a `guide` tool, attached to a question's first `sql` result.
+- **Looking for what is not there stops.** A tool that found nothing six times in one question is not run again, turns in which nothing was found leave the conversation after one reply, and the calls already tried stay listed in brief. A question the knowledge base could not answer went from 31 calls to 13.
+- **Stages of events that were run again are back.** When an event has a re-run, the game keeps the original's stages under the re-run's zone, and the build deleted them with the re-run: 41 side stories had no stages and no enemies linked (1,843 stages before, 3,241 now).
+- **A quotation mark no longer cuts an answer short.** A model that wrote quotations in plain quotes inside the answer's JSON had every paragraph cut at its first one (one answer kept a fifth of its text and still showed as complete).
+- `grep` given both story files and their collection searches the files (it searched the whole collection); a listing cut at its limit says where the hits not listed are. `wiki_search` with several words that no page holds together searches them one by one. The same word is asked of a wiki once per question, and a search waits 8 seconds for the wikis instead of 12. An answer written as prose with its citations in brackets is read like any other.
 
 ### For developers
 
 - The prompts are put together per role (`loreRolePrompt`: answer, helper, planner, reviewer, stager) from sections that each say one thing once; the session record keeps why an answer was sent back and which citations code cut or dropped; a search reports where its time went (embedding, each game's vector and keyword scans, records, wikis).
+- `test/fixtures/history_questions_eval.json`: the 37 questions players asked in 52 exported conversations; cases with the same `session` are turns of one conversation in `ask_pipeline_live_test.dart`.
+- `tools/release_gamedata.env` also names the commit the Arknights asset was made from and that commit's date (`GAMEDATA_DB_COMMIT`, `GAMEDATA_DB_COMMIT_DATE`); change them with the URL and the SHA.
 - `tools/phone_ask.dart` asks a question in the app on a phone connected by USB and shows in the terminal, as it runs, what the app shows (steps, thinking, status, answer, cost); it needs a local build with the bridge (`install_local.ps1 -Build -Bridge`), which release builds do not have. A question of `/review` or `/digest` presses that button under the last answer.
 
 ## [0.13.0] - 2026-10-09
