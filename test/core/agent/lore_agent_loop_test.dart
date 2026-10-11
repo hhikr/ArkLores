@@ -450,7 +450,16 @@ void main() {
           .toList();
       expect(seen[0], startsWith('0 行'));
       expect(seen[0], endsWith('（这次问答里 grep 已有 1 次没有结果，上限 $maxFailedLookups 次）'));
+      expect(seen[1], contains('grep 已有 2 次没有结果，上限 $maxFailedLookups 次。此前'));
       expect(seen[maxFailedLookups - 1], contains('到上限了：之后的 grep 调用不再执行'));
+      // The turns are gone from the context; what was asked stays in brief
+      // (without it the model sent the same query again).
+      expect(seen[0], isNot(contains('此前没有结果的调用')));
+      expect(
+        seen[2],
+        contains('此前没有结果的调用（不要再发同样的）：'
+            '1. {"pattern":"没有的词1"}；2. {"pattern":"没有的词2"}）'),
+      );
       expect(seen[maxFailedLookups], startsWith(lookupLimitPrefix));
       expect(seen[maxFailedLookups + 1], startsWith(lookupLimitPrefix));
       expect(seen.last, contains('L1 '));

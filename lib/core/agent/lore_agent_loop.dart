@@ -305,6 +305,9 @@ class LoreAgentLoop {
     // with two dozen empty queries); what stays is the count, per tool,
     // and past [maxFailedLookups] the tool is not run again this question.
     final failedLookups = <String, int>{};
+    // What was asked each time, in brief: the turns themselves are gone, and
+    // without this the model sent the same query three times.
+    final triedInVain = <String, List<String>>{};
     final emptyTurns = <int>{};
     // 0.14: what each tool result showed (by its index), for the pointer a
     // folded result leaves.
@@ -782,8 +785,13 @@ class LoreAgentLoop {
             final name = c.call.name;
             final n = failedLookups[name] = (failedLookups[name] ?? 0) + 1;
             if (n <= maxFailedLookups && !result.startsWith(lookupLimitPrefix)) {
+              final before = triedInVain[name] ??= [];
               result = '$result\n（这次问答里 $name 已有 $n 次没有结果'
-                  '${n == maxFailedLookups ? '，到上限了：之后的 $name 调用不再执行。$lookupLimitAdvice' : '，上限 $maxFailedLookups 次'}）';
+                  '${n == maxFailedLookups ? '，到上限了：之后的 $name 调用不再执行。$lookupLimitAdvice' : '，上限 $maxFailedLookups 次'}'
+                  '${before.isEmpty ? '' : '。此前没有结果的调用（不要再发同样的）：${[
+                      for (final (i, t) in before.indexed) '${i + 1}. $t',
+                    ].join('；')}'}）';
+              before.add(_clip(jsonEncode(c.arguments), triedBriefChars));
             }
             if (n == maxFailedLookups) {
               yield ReActEvent(
@@ -1443,6 +1451,9 @@ class LoreAgentLoop {
       (e.message.contains('timed out') ||
           e.message.contains('Network error') ||
           e.message.contains('Connection'));
+
+  /// Characters kept of a call that found nothing, in the list of those.
+  static const int triedBriefChars = 160;
 
   static String _clip(String text, int max) =>
       text.length <= max ? text : '${text.substring(0, max)}…';
