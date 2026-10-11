@@ -19,7 +19,7 @@ $_loreDatabaseTables''';
 /// two-game section says how the other differs.
 String loreDatabaseGuideOf(List<Game> games) => games.contains(Game.endfield)
     ? '每个游戏的知识库是一个 SQLite 数据库（中文游戏数据），表结构相同。'
-        '下面按明日方舟的库说明，终末地的不同之处见“两个游戏”。主要的表：\n'
+        '两个游戏。主要的表：“两个游戏”。主要的表：\n'
         '$_loreDatabaseTables'
     : loreDatabaseGuide;
 
@@ -50,7 +50,11 @@ const String _loreDatabaseTables = '''
 /// each part is for. The knowledge base is the same structure: read it before
 /// querying to know where a thing lives. Nothing here names a character, a
 /// chapter or an activity; the kinds are named as prts.wiki names them.
-const String loreLibraryGuide = '''
+const String loreLibraryGuide = '$loreLibraryStructure\n$loreReadingPrinciples';
+
+/// The shelves, kinds of entries and bindings: reference for querying
+/// (part of the manual, [loreLibraryManual]).
+const String loreLibraryStructure = '''
 资料页结构
 书架：collections.kind
 - main 主线：每章一个集合，id 为 main_<章>。章内是各关卡的行动前、行动后剧情，关卡、敌人、物品、奖章挂在章下。主线是整部作品的主干事件。
@@ -64,13 +68,40 @@ const String loreLibraryGuide = '''
 - 档案、世界观、势力、人物是设定。敌人、物品、奖章、皮肤、模组、标志物、收藏品的描述是背景文字，常交代来历、用途、与事件的关系。邮件、活动新闻、来信是活动期间的旁证。
 - 它们的原文在 normalized_records，可以作出处。与剧情台词冲突时以剧情为准，两处出处都写明。
 - 找关系：奖章、物品 belongs_to 活动或干员；召唤物 summoned_by 干员；皮肤 belongs_to 皮肤系列和干员；装置、召唤物、敌人 appears_in 关卡；剧情 belongs_to_stage 关卡。找某个活动里的物品、奖章、敌人，按 collection_id 或绑定反查。
+设定、档案类问题先用 search 按名字找到资料，再用 read_record 读全文；要按类别或绑定成批地找时用 sql 查 entries、normalized_records（干员的整份档案在 entity_documents）。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
+
+/// What holds for reading whatever was asked: time in the story is not the
+/// release order; versions of one person. Always in the system prompt.
+const String loreReadingPrinciples = '''
 时间
 - collections.start_time、story_catalog.start_time 是上线时间，不是故事里的时间。后上线的内容可以补充、修正甚至推翻先上线的叙述，但它讲的事在故事里可能发生得更早。
 - 库里没有故事内的时间表。故事里的先后只能从原文判断：日期、几年前、人物的状态、别人的回忆与提及。不要用上线顺序推断先后。
 - 档案没有上线时间。档案与剧情冲突时分别写明，不用档案的先后下结论。
 同一人物
-- entry_links 的 same_person 把同一干员的不同版本连起来，组里第一个是原型，其余指向它。不同版本可能是同一个人后来的经历，名字或代号会变，也可能是另一条假设的时间线，表里不区分。读两者的档案和剧情再判断，不要因名字不同当作不同的人，也不要把假设线的经历当作原版的事实。
-设定、档案类问题先用 search 按名字找到资料，再用 read_record 读全文；要按类别或绑定成批地找时用 sql 查 entries、normalized_records（干员的整份档案在 entity_documents）。遇到不认识的 kind、type、group_name，读原文判断，不要猜。''';
+- entry_links 的 same_person 把同一干员的不同版本连起来，组里第一个是原型，其余指向它。不同版本可能是同一个人后来的经历，名字或代号会变，也可能是另一条假设的时间线，表里不区分。读两者的档案和剧情再判断，不要因名字不同当作不同的人，也不要把假设线的经历当作原版的事实。''';
+
+/// 0.14: what the knowledge base holds, in brief. The tables, columns,
+/// bindings and shelves are in the manual ([loreLibraryManual]), which the
+/// `guide` tool shows and the first `sql` call of a question brings along:
+/// they were over half of the system prompt and are needed only to write
+/// SQL.
+String loreSourcesBrief(List<Game> games) => '''
+知识库里有什么（${games.contains(Game.endfield) ? '每个游戏一个库，结构相同' : '明日方舟中文游戏数据'}）：
+- 剧情原文：按故事文件（story_id）和行号（从 0 开始）存放，是证据的主体。每行有性质：对白、旁白、场景字幕、剧情里出现的书信/文档、玩家选项（多个选项用“／”连接）、标题、教程提示（不属于故事）。
+- 故事目录：每个故事文件属于哪个故事集、关卡号、章名、官方梗概、上线时间。
+- 剧情以外的资料：干员档案、语音、模组与皮肤、敌人和物品的描述、活动档案与来信、集成战略的收藏品与事件等；原文可以作出处，与剧情台词冲突时以剧情为准、两处出处都写明。
+- 条目与绑定：每个官方条目（故事、干员、敌人、关卡、物品……）一行，以及它们之间谁属于谁、谁出现在哪里。
+梗概、目录、条目与绑定只用于定位，不是证据。
+设定、档案类问题先用 search 按名字找到资料，再用 read_record 读全文。要用 sql 成批地查（按类别、按绑定、统计）时，先用 guide 看知识库手册：
+各表的列、绑定的种类、资料页的书架与条目种类都在里面；遇到不认识的类别或绑定也看它，不要猜。''';
+
+/// 0.14: the manual the `guide` tool shows — the tables, the library's
+/// structure and, with Endfield installed, how its database differs.
+String loreLibraryManual(List<Game> games) => [
+      loreDatabaseGuideOf(games),
+      loreLibraryStructure,
+      if (games.contains(Game.endfield)) loreEndfieldLibraryGuide,
+    ].join('\n\n');
 
 /// The works the agent knows, by the installed [games].
 String loreWorksOf(List<Game> games) => games.contains(Game.endfield)
@@ -189,7 +220,7 @@ const String loreGamesGuide = '''
 - 不要先判断问题属于哪个游戏、再只查那一个：一律先看两个游戏的检索结果。一部作品里的概念、人物或事件可能在另一部里被提到、延续或解释，问题没说的部分也可能只在另一部里。
   按原文判断哪些内容与问题有关；不要只凭名字相似就把一个游戏的内容套到另一个游戏上。
 - 两个游戏都有相关内容时分开写（各自一个小节），并写明哪部分出自终末地。
-$loreEndfieldLibraryGuide''';
+$loreEndfieldReadingNotes''';
 
 /// 0.13: when the wiki tools are on — what the wikis are good for, how they
 /// rank against the game text, and the third kind of citation. Names the
@@ -219,8 +250,8 @@ String loreSystemPrompt({
   // What there is to read, how to work, what can be cited, what to write.
   return [
     loreOpening(games),
-    loreDatabaseGuideOf(games),
-    loreLibraryGuide,
+    loreSourcesBrief(games),
+    loreReadingPrinciples,
     if (games.contains(Game.endfield)) loreGamesGuide,
     loreWorkingRules,
     if (wiki) loreWikiGuide,

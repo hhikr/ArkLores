@@ -161,6 +161,36 @@ void main() {
     expect(tool.description, contains('这个名字在剧情里出现在哪些故事集'));
   });
 
+  // 0.14: the tables are not in the system prompt: the manual comes with a
+  // question's first query, or when asked for — once.
+  test('the manual comes with the first sql of a question, or from guide',
+      () async {
+    final tools = {for (final t in loreTools(store, SeenLines())) t.name: t};
+    const query = "SELECT title FROM normalized_records WHERE id = 'rec_fx_item'";
+    final first = await tools['sql']!.execute({'query': query}) as String;
+    expect(first, startsWith('title\n'));
+    expect(first, contains('这次问答第一次用 sql：下面是知识库手册'));
+    expect(first, contains('entry_links(src, relation, dst)'));
+    expect(first, contains('资料页结构'));
+    final second = await tools['sql']!.execute({'query': query}) as String;
+    expect(second, isNot(contains('知识库手册')));
+    expect(await tools['guide']!.execute({}), startsWith('手册在这次问答里已经给过'));
+
+    // Asked for first: the query after it comes alone. An error brings it
+    // too (it is what the next try needs).
+    final other = {for (final t in loreTools(store, SeenLines())) t.name: t};
+    expect(await other['guide']!.execute({}), contains('story_lines(story_id'));
+    expect(
+      await other['sql']!.execute({'query': query}),
+      isNot(contains('知识库手册')),
+    );
+    final failing = {for (final t in loreTools(store, SeenLines())) t.name: t};
+    expect(
+      await failing['sql']!.execute({'query': 'SELECT nope FROM story_lines'}),
+      contains('下面是知识库手册'),
+    );
+  });
+
   test('sql counts a record as shown whatever its text column is called',
       () async {
     final seen = SeenLines();

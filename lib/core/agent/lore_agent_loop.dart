@@ -1414,6 +1414,7 @@ class LoreAgentLoop {
       'search' => '检索“${_clip(arg('query'), 40)}”'
           '${arg('collection').isNotEmpty ? '（${arg('collection')}）' : ''}',
       'sql' => '查询数据库',
+      'guide' => '查看知识库手册',
       'grep' => '搜索“${arg('pattern')}”'
           '${arg('collection').isNotEmpty ? '（${arg('collection')}）' : args['story_ids'] is List ? '（${(args['story_ids'] as List).length} 个故事）' : '（全库）'}',
       'read_story' => '阅读 ${arg('story_id').split('/').last}'
@@ -1617,7 +1618,7 @@ final RegExp _processLeadIn = RegExp(
   r'核实|核对|重新输出|最终答案|完整答案|信息(已经)?足够|足够(的)?信息|已经掌握|'
   r'(下面|以下|现在)(给出|回答|输出|作答|是答案)|整理(一下)?答案|让我(先|再)?(确认|查|看)|'
   // Talk about the tools themselves (R17b).
-  r'\b(search|grep|sql|read_story|find|outline|similar_names|delegate|wiki_search|wiki_read)\b',
+  r'\b(search|grep|sql|guide|read_story|find|outline|similar_names|delegate|wiki_search|wiki_read)\b',
 );
 
 /// `record:<id>` — a non-story record (R17).

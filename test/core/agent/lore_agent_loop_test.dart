@@ -173,16 +173,25 @@ void main() {
         delegate: true,
       );
       expect(all, startsWith('你熟悉《明日方舟》和《明日方舟：终末地》的剧情'));
-      expect(all, contains('每个游戏的知识库是一个 SQLite 数据库'));
+      // 0.14: the tables and the library's structure are the manual (the
+      // `guide` tool, and with a question's first `sql`), not the prompt.
+      expect(all, contains('知识库里有什么（每个游戏一个库，结构相同）'));
+      for (final part in ['主要的表', '资料页结构', '终末地库的结构', 'collection_enemies']) {
+        expect(all, isNot(contains(part)), reason: part);
+        expect(loreLibraryManual(Game.values), contains(part), reason: part);
+      }
+      expect(loreLibraryManual(const [Game.arknights]), isNot(contains('终末地')));
+      expect(all.length, lessThan(6500));
       expect(all, isNot(contains('出处有两种')));
       expect(count(all, '出处有三种'), 1);
       expect(count(all, '["<页面 id>", <起始段>, <结束段>]'), 1);
       // The order: what there is to read, how to work, what can be cited,
       // what to write.
       final order = [
-        '主要的表',
-        '资料页结构',
+        '知识库里有什么',
+        '上线时间，不是故事里的时间',
         '本地装了两个知识库',
+        '读终末地的剧情时',
         '工作方式',
         'Wiki 资料',
         'delegate',

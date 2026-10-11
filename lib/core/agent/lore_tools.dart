@@ -17,6 +17,7 @@ import '../gamedata/game_retrieval.dart';
 import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../wiki/wiki_lookup.dart';
+import 'lore_agent_prompts.dart' show loreLibraryManual;
 import 'tools/agent_tool.dart';
 import 'tools/search_tool.dart';
 
@@ -267,10 +268,15 @@ final RegExp _contentOrAll =
 
 /// `sql`: one read-only query over the whole knowledge DB.
 class SqlTool extends AgentTool {
-  SqlTool(this.store, this.seen);
+  SqlTool(this.store, this.seen, {this.manual});
 
   final GameDataRetrieval store;
   final SeenLines seen;
+
+  /// The manual of the tables (null: none is kept, as in a test of this
+  /// tool alone). A question's first query brings it along when it was not
+  /// looked at: whoever writes SQL needs it, whether they asked or not.
+  final LibraryManual? manual;
 
   static const int maxRows = 200;
 
@@ -283,7 +289,13 @@ class SqlTool extends AgentTool {
       '适合做全局统计和定位，例如按 story_id 统计某个名字出现的行数并关联 story_catalog 排序，'
       '或在 entities / entity_aliases / story_lines.speaker 里模糊查名字。'
       '两个游戏的库表结构相同、各是一个文件，一条 SQL 只查其中一个（game 参数）。'
-      '最多返回 $maxRows 行；超过时请加条件、聚合或 LIMIT。';
+      '最多返回 $maxRows 行；超过时请加条件、聚合或 LIMIT。'
+      '主要的表：story_lines(story_id, line_index, speaker, content, kind)、'
+      'story_catalog(story_id, collection_id, collection_name, story_code, story_name, …)、'
+      'entries(id, type, name, code, collection_id, record_id, …)、entry_links(src, relation, dst)、'
+      'collections(id, kind, name, parent_id, …)、normalized_records(id, category, subtype, title, entity_name, content, …)、'
+      'entity_documents。各列的含义、绑定的种类、条目和书架的种类在知识库手册里（guide）：'
+      '先看手册再写查询；没看过时，一次问答里第一条查询的结果后面会附上它。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -297,6 +309,14 @@ class SqlTool extends AgentTool {
 
   @override
   Future<String> execute(Map<String, dynamic> arguments) async {
+    final out = await _query(arguments);
+    final manual = this.manual;
+    if (manual == null || manual.shown) return out;
+    return '$out\n\n（这次问答第一次用 sql：下面是知识库手册，之后的查询照它的表和列写。）\n'
+        '${await manual.show()}';
+  }
+
+  Future<String> _query(Map<String, dynamic> arguments) async {
     final query = '${arguments['query'] ?? ''}'.trim();
     if (query.isEmpty) return '错误：query 为空';
     // 0.14 live: a query naming an Endfield id (`'ef/…'`) without `game`
@@ -430,6 +450,54 @@ class SqlTool extends AgentTool {
     }
     return lines.isEmpty ? '' : '\n${lines.join('\n')}';
   }
+}
+
+/// 0.14: the knowledge base's manual for one question — the tables, their
+/// columns and bindings, the library's shelves ([loreLibraryManual]) — and
+/// whether the model has it yet. It used to be over half of the system
+/// prompt, sent with every call of every question; only `sql` needs it.
+class LibraryManual {
+  LibraryManual(this.store);
+
+  final GameDataRetrieval store;
+
+  /// Whether this question's conversation holds the manual already.
+  bool shown = false;
+
+  /// The manual for the installed games; marks it shown.
+  Future<String> show() async {
+    shown = true;
+    final store = this.store;
+    return loreLibraryManual(
+      store is MultiGameRetrieval
+          ? await store.installedGames()
+          : const [Game.arknights],
+    );
+  }
+}
+
+/// `guide`: the manual, when the model asks for it.
+class GuideTool extends AgentTool {
+  GuideTool(this.manual);
+
+  final LibraryManual manual;
+
+  @override
+  String get name => 'guide';
+
+  @override
+  String get description =>
+      '查看知识库手册：各表的列和含义、条目之间绑定的种类、资料页的书架和条目种类（装了两个游戏时还有两个库的不同之处）。'
+      '写 sql 之前，或遇到不认识的类别、绑定时看；一次问答看一次就够。没有参数。';
+
+  @override
+  Map<String, dynamic> get parameters =>
+      {'type': 'object', 'properties': <String, dynamic>{}};
+
+  @override
+  Future<String> execute(Map<String, dynamic> arguments) async => manual.shown
+      ? '手册在这次问答里已经给过（见前面的结果），照它写查询。'
+      : manual.show();
 }
 
 /// `read_record`: the text of one record outside the story text (an
@@ -1015,16 +1083,19 @@ List<AgentTool> loreTools(
   SeenLines seen, {
   EmbeddingClient? embeddingClient,
   WikiLookup? wiki,
-}) =>
-    [
-      SearchTool(store, seen, embeddingClient: embeddingClient, wiki: wiki),
-      ReadStoryTool(store, seen),
-      ReadRecordTool(store, seen),
-      GrepTool(store, seen),
-      SqlTool(store, seen),
-      OutlineTool(store),
-      SimilarNamesTool(store),
-    ];
+}) {
+  final manual = LibraryManual(store);
+  return [
+    SearchTool(store, seen, embeddingClient: embeddingClient, wiki: wiki),
+    ReadStoryTool(store, seen),
+    ReadRecordTool(store, seen),
+    GrepTool(store, seen),
+    SqlTool(store, seen, manual: manual),
+    GuideTool(manual),
+    OutlineTool(store),
+    SimilarNamesTool(store),
+  ];
+}
 
 /// Decodes tool-call arguments; malformed JSON becomes an empty map.
 Map<String, dynamic> decodeToolArguments(String raw) {
