@@ -58,7 +58,7 @@ flutter test        # 约 1 分钟，全部离线
 | --- | --- |
 | 出处 | `story_id:行号` 或 `record:<id>`，全部是工具给模型看过的 |
 | 负例 | 未覆盖的实体/事件说“没查到”，状态 `not_covered` |
-| 无向量 key | `ARKLORES_LIVE_NO_EMBEDDING=true` 时 `find` 退回关键词并写明原因 |
+| 无向量 key | `ARKLORES_LIVE_NO_EMBEDDING=true` 时 `search` 退回关键词并写明原因 |
 | 成本 | 记录 `usage`；缓存命中应占输入 80% 以上 |
 | 宽问题 | 跨多个故事集的人物经历：关键阶段齐全，可能派子 agent |
 | 写错的名字 | 按库中写法作答并在开头说明 |

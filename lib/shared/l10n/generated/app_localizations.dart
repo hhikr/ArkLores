@@ -419,7 +419,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbRedownloadBody.
   ///
   /// In en, this message translates to:
-  /// **'You already have the latest version. Downloading again fetches about 185 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.'**
+  /// **'You already have the latest version. Downloading again fetches about 115 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.'**
   String get kbRedownloadBody;
 
   /// No description provided for @kbRedownloadConfirm.
@@ -2015,7 +2015,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbBackToOfficialBody.
   ///
   /// In en, this message translates to:
-  /// **'The official knowledge base published with the app (about 185 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.'**
+  /// **'The official knowledge base published with the app (about 115 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.'**
   String get kbBackToOfficialBody;
 
   /// No description provided for @kbEndfieldSourceNote.

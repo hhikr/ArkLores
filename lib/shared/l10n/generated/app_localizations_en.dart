@@ -173,7 +173,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbRedownloadBody =>
-      'You already have the latest version. Downloading again fetches about 185 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.';
+      'You already have the latest version. Downloading again fetches about 115 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.';
 
   @override
   String get kbRedownloadConfirm => 'Download again';
@@ -1102,7 +1102,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbBackToOfficialBody =>
-      'The official knowledge base published with the app (about 185 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.';
+      'The official knowledge base published with the app (about 115 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.';
 
   @override
   String get kbEndfieldSourceNote =>

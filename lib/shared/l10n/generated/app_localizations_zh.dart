@@ -172,7 +172,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbRedownloadBody =>
-      '当前已是最新版本。重新下载会再下载约 185 MB 并重建数据库（需约 1 GB 空闲空间），一般没有必要。';
+      '当前已是最新版本。重新下载会再下载约 115 MB 并重建数据库（需约 1 GB 空闲空间），一般没有必要。';
 
   @override
   String get kbRedownloadConfirm => '重新下载';
@@ -1076,7 +1076,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbBackToOfficialBody =>
-      '会重新下载随 App 发布的官方知识库（约 185 MB），替换本机更新过的这一份；其中较新的游戏内容会消失。';
+      '会重新下载随 App 发布的官方知识库（约 115 MB），替换本机更新过的这一份；其中较新的游戏内容会消失。';
 
   @override
   String get kbEndfieldSourceNote =>
