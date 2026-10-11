@@ -1,0 +1,59 @@
+{
+  "format": "arklores_eval",
+  "version": 1,
+  "status": "Questions players actually asked in the app (52 exported sessions, 2026-10-07 to 2026-10-11), duplicates merged.",
+  "notes": [
+    "Evaluation fixture only (CLAUDE.md anti-fixture rule): never referenced from lib/.",
+    "No gold stories: these runs are read by a person, not scored.",
+    "session: consecutive cases with the same session are turns of one conversation, as they were asked.",
+    "Follow-ups that only corrected one particular wrong answer are reworded so they stand without that answer."
+  ],
+  "cases": [
+    {"id": "h01_andoain_journey", "type": "经过", "query": "安多恩在众生行记中经历了什么"},
+    {"id": "h02_perlica_en", "type": "双游戏", "query": "Endfield Perlica Chinese voice actor and her role at Endfield Industries?"},
+    {"id": "h03_perlica_zh", "type": "双游戏", "query": "终末地里佩丽卡的中文配音演员是谁？她在终末地工业负责什么？"},
+    {"id": "h04_souls_typo", "type": "结局", "query": "萨卡兹众魂在特雷西娅最后的引导中走向了什么结局？"},
+
+    {"id": "h05_souls_revenant", "type": "跨作", "session": "souls", "query": "萨卡兹众魂在特蕾西娅最后的引导中走向了什么结局？如果消失了，再旅者又是如何出现的？"},
+    {"id": "h06_souls_revenant_fu", "type": "追问", "session": "souls", "query": "再旅者指的是续作中，罗德岛的干员“复活”但又不完全是复活的情况"},
+
+    {"id": "h07_revenant_both", "type": "推测", "session": "revenant", "query": "根据原理，再旅者和本体可能都存活吗？"},
+    {"id": "h08_revenant_originium", "type": "追问", "session": "revenant", "query": "为什么源石中会有罗德岛干员的信息？泰拉人的信息都在源石中有吗？如果这样，那特蕾西娅解放众魂又是什么，和这个是一件事情吗"},
+    {"id": "h09_revenant_souls", "type": "追问", "session": "revenant", "query": "那既然特蕾西娅解放的众魂是吧他们从信息之海中抹除了吗？也就是说众魂中不会出现再旅者？那既然解放了已经死去的人，后来死去的萨卡兹会被禁锢吗？"},
+    {"id": "h10_revenant_wiki", "type": "追问", "session": "revenant", "query": "wiki似乎有进一步补充，请查阅"},
+
+    {"id": "h11_wuling_rift", "type": "推测", "session": "wuling", "query": "根据目前的证据，合理推测十年前武陵深大裂隙爆发的真相。"},
+    {"id": "h12_wuling_insider", "type": "追问", "session": "wuling", "query": "可能是武陵方面存在内鬼吗？根据目前的资料和档案，查找出现过的角色中可能的嫌疑人。这是推测，所以不要求完全正确，但你的推测要有证据"},
+    {"id": "h13_wuling_ten_years", "type": "追问", "session": "wuling", "query": "我问的是十年前的内鬼，不是现在时间点的叛徒，也不是明牌的反派"},
+
+    {"id": "h14_talulah_blame", "type": "评价", "session": "talulah", "query": "整合走向极端，塔露拉和黑蛇的责任该如何划分？塔露拉真的被夺舍之后就完全是黑蛇在操控她，一点实际责任没有吗？"},
+    {"id": "h15_talulah_self", "type": "追问", "session": "talulah", "query": "在被黑蛇夺舍后她完全没有自我意识吗"},
+
+    {"id": "h16_seaborn_nature", "type": "设定", "query": "海嗣的身份，作用和本质是什么，为什么会失控"},
+    {"id": "h17_islanders_term", "type": "名词", "query": "“岛民”是什么称呼"},
+
+    {"id": "h18_islanders", "type": "名词", "session": "islanders", "query": "伊比利亚那里的岛民是指什么"},
+    {"id": "h19_islanders_why", "type": "追问", "session": "islanders", "query": "为什么岛民的地位急剧恶化，大静谧又不是他们干的，而且还有很多阿戈尔人事先提醒了伊比利亚只是他们不理睬，后面又要猎巫他们？而且他们似乎还不敢反抗？"},
+    {"id": "h20_islanders_logic", "type": "追问", "session": "islanders", "query": "审判庭都知道是深海教会干的了，为什么还在清算岛民，这是什么逻辑"},
+
+    {"id": "h21_irene_all", "type": "人物", "query": "介绍艾丽妮的所有故事"},
+    {"id": "h22_irene", "type": "人物", "query": "介绍艾丽妮的经历"},
+    {"id": "h23_dance_1", "type": "找人", "query": "哪位干员说过自己不熟悉陆地上的舞蹈，所以没有答应别人的邀请？是谁邀请的？"},
+    {"id": "h24_dance_2", "type": "找人", "query": "谁因为不会跳岸上的舞而婉拒了同伴？那位同伴是谁？"},
+
+    {"id": "h25_seaborn", "type": "设定", "session": "seaborn", "query": "海嗣是什么"},
+    {"id": "h26_seaborn_hunters", "type": "追问", "session": "seaborn", "query": "它们和深海猎人是什么关系？"},
+
+    {"id": "h27_amiya_claim", "type": "核查", "query": "有人说阿米娅是卡特斯，这个说法对吗？"},
+    {"id": "h28_fictional", "type": "没有的", "query": "虚构角色泽克洛斯在剧情中做了什么"},
+    {"id": "h29_talulah_after", "type": "经过", "query": "切尔诺贝利事件之后塔露拉做了什么？"},
+    {"id": "h30_beagle_mue", "type": "关系", "query": "米格鲁和缪因之间发生了什么？"},
+    {"id": "h31_kaltsit_9_15", "type": "按章节", "query": "整理凯尔希在主线第9章到第15章里的主要行动"},
+    {"id": "h32_grandfather", "type": "找人", "query": "哪位干员的祖父去世以后，老顾客们仍旧往铺子里写信问好？"},
+    {"id": "h33_gear", "type": "找人", "query": "谁背后的装备是在拍戏的小团队里结识的一位师傅帮忙改的？"},
+    {"id": "h34_andreana", "type": "质疑", "query": "为啥安哲拉是深海猎人啊，我看的故事里面安哲拉也没跟现有的深海猎人有交集，也没有在故事里出现啊"},
+    {"id": "h35_before_collection", "type": "按故事集", "query": "昨日海之前的内容我没怎么看，能带我在看昨日海剧情之前复习这之前发生的事情吗"},
+    {"id": "h36_before_collection_wiki", "type": "按故事集", "query": "昨日海之前的内容我没怎么看，能带我在看昨日海剧情之前复习这之前发生的事情吗？你可以先查阅wiki来了解之前故事大致发展"},
+    {"id": "h37_surtr", "type": "跨作", "query": "史尔特尔在两部故事里的剧情"}
+  ]
+}

@@ -21,10 +21,14 @@ class LiveCase {
     required this.query,
     this.type,
     this.goldStories = const [],
+    this.session,
   });
   final String id;
   final String query;
   final String? type;
+
+  /// Consecutive cases with the same session are turns of one conversation.
+  final String? session;
 
   /// Story ids an answer should rest on (any one read counts toward recall).
   final List<String> goldStories;
@@ -49,6 +53,7 @@ List<LiveCase> loadLiveCases(Map<String, String> env) {
             id: '${item['id']}',
             query: '${item['query']}',
             type: item['type'] as String?,
+            session: item['session'] as String?,
             goldStories: [
               for (final g in (item['gold_stories'] as List? ?? const []))
                 g is Map ? '${g['story_id']}' : '$g',

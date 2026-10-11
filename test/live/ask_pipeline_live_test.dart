@@ -96,6 +96,7 @@ void main() {
   // Cost guard: after a provider failure (402 balance, auth, network) the
   // remaining questions are skipped instead of burning more requests.
   String? providerFailure;
+  String? previousSession;
   HttpOverrides? previousHttpOverrides;
 
   setUpAll(() {
@@ -168,9 +169,12 @@ void main() {
         // One session file per question, or (R14,
         // ARKLORES_LIVE_CONVERSATION=true) all questions as consecutive turns
         // of one conversation, the way a user asks follow-ups in the app.
-        if (!conversation || identical(liveCase, cases.first)) {
-          notifier.newSession();
-        }
+        // An eval file can also group cases itself (`session`).
+        final continues = conversation
+            ? !identical(liveCase, cases.first)
+            : liveCase.session != null && liveCase.session == previousSession;
+        if (!continues) notifier.newSession();
+        previousSession = liveCase.session;
         usage.reset();
         thinkingCalls = 0;
         // R16 streaming metrics: when the writer started and when the first
