@@ -150,6 +150,75 @@ void main() {
       expect(status.updateAvailable, isFalse);
     });
 
+    // 0.14: newer game data first; for the same game data the official
+    // asset before a knowledge base updated on the device.
+    test('an asset is offered over one updated here only for the same or '
+        'newer game data', () {
+      GameDataUpdateReason? reason({
+        required bool local,
+        String commit = 'aaa',
+        String updatedAt = '2026-01-10T00:00:00Z',
+        String? assetCommit,
+        String? assetCommitDate,
+        String? installedSha,
+      }) =>
+          GameDataInstallStatus(
+            installed: true,
+            dbPath: 'x',
+            bytes: 1,
+            manifest: {
+              'source_arknights_commit': commit,
+              'built_at': updatedAt,
+            },
+            builtLocally: local,
+            installedAssetSha: installedSha,
+            releaseAssetSha: 'f' * 64,
+            releaseAssetCommit: assetCommit,
+            releaseAssetCommitDate:
+                assetCommitDate == null ? null : DateTime.parse(assetCommitDate),
+          ).updateReason;
+
+      // Updated here, and the build's asset is of older game data (a commit
+      // made before the update ran): the one here stays.
+      expect(
+        reason(
+          local: true,
+          assetCommit: 'old',
+          assetCommitDate: '2026-01-01T00:00:00Z',
+        ),
+        isNull,
+      );
+      // ... of the same game data: the official one comes first.
+      expect(
+        reason(
+          local: true,
+          assetCommit: 'aaa',
+          assetCommitDate: '2026-01-09T00:00:00Z',
+        ),
+        GameDataUpdateReason.sameDataOfficial,
+      );
+      // ... of a commit made after the update ran: newer game data.
+      expect(
+        reason(
+          local: true,
+          assetCommit: 'new',
+          assetCommitDate: '2026-01-20T00:00:00Z',
+        ),
+        GameDataUpdateReason.newerData,
+      );
+      // A build that does not say what its asset was made from never
+      // replaces a knowledge base updated here.
+      expect(reason(local: true), isNull);
+      expect(reason(local: true, assetCommit: 'new'), isNull);
+      // Installed from an asset: another asset than the build's is offered,
+      // the same one is not.
+      expect(
+        reason(local: false, installedSha: 'e' * 64),
+        GameDataUpdateReason.newAsset,
+      );
+      expect(reason(local: false, installedSha: 'f' * 64), isNull);
+    });
+
     test('a dropped download resumes with a Range request', () async {
       final gz = gzip.encode(await validDb());
       final half = gz.length ~/ 2;

@@ -90,6 +90,10 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   # Optional second game (0.12): absent until an Endfield asset exists.
   $efUrl = [regex]::Match($envText, '(?m)^ENDFIELD_DB_URL=(\S+)').Groups[1].Value
   $efSha = [regex]::Match($envText, '(?m)^ENDFIELD_DB_SHA256=(\S+)').Groups[1].Value
+  # The game-data commit the asset was made from and that commit's date: what
+  # the app orders an official asset against one updated on the phone by.
+  $commit = [regex]::Match($envText, '(?m)^GAMEDATA_DB_COMMIT=(\S+)').Groups[1].Value
+  $commitDate = [regex]::Match($envText, '(?m)^GAMEDATA_DB_COMMIT_DATE=(\S+)').Groups[1].Value
   $version = [regex]::Match((Get-Content pubspec.yaml -Raw), '(?m)^version:\s*([^+\s]+)').Groups[1].Value
   $out = "build\local_release\ArkLores-$version-local.apk"
   Write-Host "building $out (knowledge base SHA $($sha.Substring(0, 12))...)"
@@ -105,7 +109,7 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   if (-not $DryRun) {
     # Gradle and Flutter write warnings to stderr; only the exit code counts.
     $ErrorActionPreference = 'Continue'
-    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha" "--dart-define=ARKLORES_PHONE_BRIDGE=$(if ($Bridge) { 'true' } else { 'false' })"
+    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT=$commit" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT_DATE=$commitDate" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha" "--dart-define=ARKLORES_PHONE_BRIDGE=$(if ($Bridge) { 'true' } else { 'false' })"
     if ($LASTEXITCODE -ne 0) { throw 'flutter build failed' }
     New-Item -ItemType Directory -Force build\local_release | Out-Null
     $built = 'build\app\outputs\flutter-apk\app-release.apk'

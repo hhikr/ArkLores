@@ -2126,6 +2126,36 @@ abstract class AppLocalizations {
   /// **'A newer official knowledge base is available. Tap Update to download it (keep about 1 GB of free space).'**
   String get kbUpdateAvailable;
 
+  /// No description provided for @kbOriginOfficial.
+  ///
+  /// In en, this message translates to:
+  /// **'official release'**
+  String get kbOriginOfficial;
+
+  /// No description provided for @kbOriginLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'updated on this device'**
+  String get kbOriginLocal;
+
+  /// No description provided for @kbUpdateNewerData.
+  ///
+  /// In en, this message translates to:
+  /// **'The official knowledge base ({commit}) has newer game data than the one updated on this device. Tap “Update” to download it (keep about 1 GB free).'**
+  String kbUpdateNewerData(String commit);
+
+  /// No description provided for @kbUpdateSameData.
+  ///
+  /// In en, this message translates to:
+  /// **'The official knowledge base now has the same game data. Tap “Update” to switch to it (all vectors included; keep about 1 GB free).'**
+  String get kbUpdateSameData;
+
+  /// No description provided for @kbBuildOfficialHasIt.
+  ///
+  /// In en, this message translates to:
+  /// **'The official knowledge base is already at this commit: use “Update” above.'**
+  String get kbBuildOfficialHasIt;
+
   /// No description provided for @kbDownloading.
   ///
   /// In en, this message translates to:

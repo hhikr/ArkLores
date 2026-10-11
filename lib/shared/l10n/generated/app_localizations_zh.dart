@@ -1143,6 +1143,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbUpdateAvailable => '有新版官方知识库，点“更新”下载（请预留约 1 GB 空闲空间）。';
 
   @override
+  String get kbOriginOfficial => '官方发布';
+
+  @override
+  String get kbOriginLocal => '本机更新';
+
+  @override
+  String kbUpdateNewerData(String commit) {
+    return '官方知识库的数据版本（$commit）比本机更新的这份新，点“更新”下载（请预留约 1 GB 空闲空间）。';
+  }
+
+  @override
+  String get kbUpdateSameData =>
+      '官方知识库已有同一数据版本，点“更新”换成官方的那份（向量齐全；请预留约 1 GB 空闲空间）。';
+
+  @override
+  String get kbBuildOfficialHasIt => '官方知识库已经是这个提交，请用上面的“更新”。';
+
+  @override
   String get kbDownloading => '下载中';
 
   @override

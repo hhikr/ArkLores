@@ -1177,6 +1177,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'A newer official knowledge base is available. Tap Update to download it (keep about 1 GB of free space).';
 
   @override
+  String get kbOriginOfficial => 'official release';
+
+  @override
+  String get kbOriginLocal => 'updated on this device';
+
+  @override
+  String kbUpdateNewerData(String commit) {
+    return 'The official knowledge base ($commit) has newer game data than the one updated on this device. Tap “Update” to download it (keep about 1 GB free).';
+  }
+
+  @override
+  String get kbUpdateSameData =>
+      'The official knowledge base now has the same game data. Tap “Update” to switch to it (all vectors included; keep about 1 GB free).';
+
+  @override
+  String get kbBuildOfficialHasIt =>
+      'The official knowledge base is already at this commit: use “Update” above.';
+
+  @override
   String get kbDownloading => 'Downloading';
 
   @override

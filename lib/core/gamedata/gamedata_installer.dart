@@ -19,8 +19,15 @@ class GameDataInstallStatus {
     required this.manifest,
     this.installedAssetSha,
     this.releaseAssetSha,
+    this.releaseAssetCommit,
+    this.releaseAssetCommitDate,
     this.builtLocally = false,
   });
+
+  /// The game-data commit the official asset of this app build was made
+  /// from, and when that commit was made; null when the build does not say.
+  final String? releaseAssetCommit;
+  final DateTime? releaseAssetCommitDate;
 
   /// The installed DB was built or updated on this device from the game
   /// data (0.14: `<db>.local_build`), so it is not an official asset — and
@@ -38,16 +45,40 @@ class GameDataInstallStatus {
   /// SHA-256 of the official asset this app build points at.
   final String? releaseAssetSha;
 
-  /// The app was built for a different official knowledge base than the one
-  /// installed (e.g. a new data release), so "update" is worth a tap. Not
-  /// for a DB built on this device: the official asset would replace newer
-  /// data with older (the page offers going back to it as its own choice).
-  bool get updateAvailable =>
-      installed &&
-      !builtLocally &&
-      releaseAssetSha != null &&
-      releaseAssetSha!.isNotEmpty &&
-      releaseAssetSha!.toLowerCase() != installedAssetSha?.toLowerCase();
+  /// Why the official asset of this app build is worth installing over the
+  /// knowledge base that is there, or null when it is not.
+  ///
+  /// The order (the developer's, 2026-10-11): newer game data first, and
+  /// for the same game data the official asset before one updated on the
+  /// device (it has every vector). So:
+  ///
+  /// * installed from an official asset: another asset than this build's;
+  /// * updated on this device: the build's asset is of the same commit, or
+  ///   of a commit made after the update ran. An update takes the latest
+  ///   commit of its moment, so a commit made later is newer than it and
+  ///   one made before is the same or older — no need to know when the
+  ///   installed commit itself was made. A build that does not say what its
+  ///   asset was made from never replaces a knowledge base updated here.
+  GameDataUpdateReason? get updateReason {
+    final sha = releaseAssetSha;
+    if (!installed || sha == null || sha.isEmpty) return null;
+    if (!builtLocally) {
+      return sha.toLowerCase() != installedAssetSha?.toLowerCase()
+          ? GameDataUpdateReason.newAsset
+          : null;
+    }
+    final commit = releaseAssetCommit;
+    if (commit == null || commit.isEmpty) return null;
+    if (commit == sourceCommit) return GameDataUpdateReason.sameDataOfficial;
+    final made = releaseAssetCommitDate;
+    final updated = DateTime.tryParse(builtAt ?? '');
+    return made != null && updated != null && made.isAfter(updated)
+        ? GameDataUpdateReason.newerData
+        : null;
+  }
+
+  /// "Update" is worth a tap ([updateReason]).
+  bool get updateAvailable => updateReason != null;
 
   String? get sourceCommit => manifest['source_arknights_commit'];
   String? get builtAt => manifest['built_at'];
@@ -55,6 +86,18 @@ class GameDataInstallStatus {
   String? get recordCount => manifest['normalized_record_count'];
   String? get chunkCount => manifest['lore_chunk_count'];
   String? get storyLineCount => manifest['story_line_count'];
+}
+
+/// Why the official asset is offered ([GameDataInstallStatus.updateReason]).
+enum GameDataUpdateReason {
+  /// A different official asset than the one installed.
+  newAsset,
+
+  /// Made from game data newer than the knowledge base updated on the device.
+  newerData,
+
+  /// The same game data as the knowledge base updated on the device.
+  sameDataOfficial,
 }
 
 /// Network failures worth retrying (and resuming): TLS handshakes cut by the
@@ -135,6 +178,8 @@ class GameDataInstaller {
     this.installDirectory,
     this.releaseAssetUrl = _definedUrl,
     this.releaseAssetSha = _definedSha,
+    this.releaseAssetCommit = _definedCommit,
+    this.releaseAssetCommitDate = _definedCommitDate,
     this.game = Game.arknights,
   });
 
@@ -142,7 +187,11 @@ class GameDataInstaller {
   /// points at for it.
   const GameDataInstaller.forGame(this.game, {this.installDirectory})
       : releaseAssetUrl = game == Game.endfield ? _endfieldUrl : _definedUrl,
-        releaseAssetSha = game == Game.endfield ? _endfieldSha : _definedSha;
+        releaseAssetSha = game == Game.endfield ? _endfieldSha : _definedSha,
+        // Endfield's knowledge base is not made from a repository.
+        releaseAssetCommit = game == Game.endfield ? '' : _definedCommit,
+        releaseAssetCommitDate =
+            game == Game.endfield ? '' : _definedCommitDate;
 
   /// Which game's database this installs (its own file).
   final Game game;
@@ -162,11 +211,20 @@ class GameDataInstaller {
   final String releaseAssetUrl;
   final String releaseAssetSha;
 
+  /// The game-data commit the asset was made from and that commit's date
+  /// (ISO 8601), from `tools/release_gamedata.env`; '' when not given.
+  final String releaseAssetCommit;
+  final String releaseAssetCommitDate;
+
   // Development/test path before a public release exists. Example:
   // flutter run --dart-define=ARKLORES_GAMEDATA_DB_URL=http://192.168.1.2:8000/arklores_gamedata_zh.db.gz
   static const _definedUrl = String.fromEnvironment('ARKLORES_GAMEDATA_DB_URL');
   static const _definedSha =
       String.fromEnvironment('ARKLORES_GAMEDATA_DB_SHA256');
+  static const _definedCommit =
+      String.fromEnvironment('ARKLORES_GAMEDATA_DB_COMMIT');
+  static const _definedCommitDate =
+      String.fromEnvironment('ARKLORES_GAMEDATA_DB_COMMIT_DATE');
   static const _endfieldUrl =
       String.fromEnvironment('ARKLORES_ENDFIELD_DB_URL');
   static const _endfieldSha =
@@ -187,6 +245,9 @@ class GameDataInstaller {
       releaseAssetSha: releaseAssetUrl.trim().isEmpty
           ? null
           : releaseAssetSha.trim(),
+      releaseAssetCommit:
+          releaseAssetCommit.trim().isEmpty ? null : releaseAssetCommit.trim(),
+      releaseAssetCommitDate: DateTime.tryParse(releaseAssetCommitDate.trim()),
       builtLocally:
           exists && await File('${file.path}$localBuildMarkerSuffix').exists(),
     );

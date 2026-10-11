@@ -170,6 +170,10 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
               context.t.kbCountRecords(status.recordCount!),
             if ((status.sourceCommit ?? '').isNotEmpty)
               context.t.kbDataVersion(shortCommit(status.sourceCommit)),
+            // Where it came from: an official asset, or an update run here.
+            status.builtLocally
+                ? context.t.kbOriginLocal
+                : context.t.kbOriginOfficial,
           ].join(' · ')
         : context.t.kbDevAssetHint;
     final local = status.builtLocally && !_isDownloadingGameData;
@@ -330,7 +334,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                 ),
               ),
           ],
-          if (local) ...[
+          if (local && upToDate) ...[
             const SizedBox(height: 10),
             Text(
               context.t.kbLocalBuildNote,
@@ -350,7 +354,15 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    context.t.kbUpdateAvailable,
+                    switch (status.updateReason) {
+                      GameDataUpdateReason.newerData =>
+                        context.t.kbUpdateNewerData(
+                          shortCommit(status.releaseAssetCommit),
+                        ),
+                      GameDataUpdateReason.sameDataOfficial =>
+                        context.t.kbUpdateSameData,
+                      _ => context.t.kbUpdateAvailable,
+                    },
                     style: theme.bodyFont.copyWith(
                       color: theme.accentPrimary,
                       fontSize: 12,

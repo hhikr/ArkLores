@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/build/update_report.dart' show entryTypeLabel;
 import '../../core/gamedata/gamedata_build_provider.dart';
+import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -49,6 +50,13 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
       }
     });
     final build = ref.watch(gameDataBuildProvider);
+    // The official asset of this build is that very commit and is offered
+    // above: it comes before an update run here (it has every vector).
+    final asset = ref.watch(gameDataInstallStatusProvider).valueOrNull;
+    final officialHasIt = asset != null &&
+        asset.updateAvailable &&
+        build.latestCommit != null &&
+        asset.releaseAssetCommit == build.latestCommit;
     return ThemeAwareCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,6 +118,10 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
               theme,
               theme.accentText,
             ),
+          ],
+          if (officialHasIt && !build.busy) ...[
+            const SizedBox(height: 8),
+            kbNote(context.t.kbBuildOfficialHasIt, theme, theme.accentText),
           ],
           if (build.confirmFull && !build.busy) ...[
             const SizedBox(height: 8),
@@ -214,7 +226,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                   key: const Key('kb-build-start'),
                   // Nothing to pull when the installed database is known to
                   // be at the latest commit ("检查更新" looks again).
-                  onPressed: build.upToDate
+                  onPressed: build.upToDate || officialHasIt
                       ? null
                       : () => ref
                           .read(gameDataBuildProvider.notifier)
