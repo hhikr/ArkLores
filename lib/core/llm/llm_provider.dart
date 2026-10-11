@@ -33,8 +33,18 @@ final llmClientProvider =
 });
 
 /// Whether the answer writer may think ([ReasoningLevel.low]); off by
-/// default, toggled from the Ask input row.
+/// default, toggled from the Ask options menu.
 final deepThinkingProvider = StateProvider<bool>((ref) => false);
+
+/// Whether the configured model service has a known switch for thinking.
+/// Without one the request is the same either way, so the option is not
+/// offered (and a switch left on does nothing).
+final deepThinkingAvailableProvider = Provider<bool>((ref) {
+  return OpenAICompatibleClient.reasoningFieldsFor(
+    ref.watch(apiConfigProvider),
+    ReasoningLevel.low,
+  ).isNotEmpty;
+});
 
 /// Embedding client for vector recall (R12); null when no key is set, in
 /// which case `FIND` runs keyword-only.

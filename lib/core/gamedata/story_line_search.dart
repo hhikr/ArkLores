@@ -34,6 +34,8 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   String? scopeId,
   int storyLimit = 8,
   int linesPerStory = 3,
+  Map<String, int>? termLines,
+  Map<String, Map<String, int>>? termStories,
 }) async {
   final cleaned = <String>[];
   for (final t in terms) {
@@ -50,19 +52,37 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     return [pattern, pattern];
   }
 
-  // Document frequency of every term (one scan over all lines).
-  final dfSql = StringBuffer('SELECT COUNT(*) AS n');
+  // Document frequency of every term, counted per story (one scan over all
+  // lines; 0.14: the per-story counts are the term's spread over the
+  // collections, which used to be thrown away).
+  final dfSql = StringBuffer('SELECT l.story_id AS story_id');
   final dfArgs = <Object?>[];
+  final dfAny = <String>[];
+  final dfAnyArgs = <Object?>[];
   for (var i = 0; i < cleaned.length; i++) {
     dfSql.write(', SUM(CASE WHEN ${matchExpr()} THEN 1 ELSE 0 END) AS d$i');
     dfArgs.addAll(matchArgs(cleaned[i]));
+    dfAny.add(matchExpr());
+    dfAnyArgs.addAll(matchArgs(cleaned[i]));
   }
-  dfSql.write(' FROM story_lines l');
-  final dfRow = (await db.rawQuery(dfSql.toString(), dfArgs)).first;
-  final total = (dfRow['n'] as num?)?.toInt() ?? 0;
+  dfSql.write(' FROM story_lines l WHERE ${dfAny.join(' OR ')} '
+      'GROUP BY l.story_id');
+  final dfRows = await db.rawQuery(dfSql.toString(), [...dfArgs, ...dfAnyArgs]);
+  final total = ((await db.rawQuery('SELECT COUNT(*) AS n FROM story_lines'))
+              .first['n'] as num?)
+          ?.toInt() ??
+      0;
   final present = <(String, double)>[];
   for (var i = 0; i < cleaned.length; i++) {
-    final df = (dfRow['d$i'] as num?)?.toInt() ?? 0;
+    var df = 0;
+    final perStory = termStories?.putIfAbsent(cleaned[i], () => {});
+    for (final row in dfRows) {
+      final n = (row['d$i'] as num?)?.toInt() ?? 0;
+      if (n == 0) continue;
+      df += n;
+      perStory?['${row['story_id']}'] = n;
+    }
+    termLines?.update(cleaned[i], (n) => n + df, ifAbsent: () => df);
     if (df == 0) continue;
     present.add((cleaned[i], math.log((total + 1) / (df + 1)) + 0.01));
   }
@@ -144,51 +164,3 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   return hits;
 }
 
-/// R15: for each of [terms], how many story lines (content or speaker)
-/// contain it in the whole DB and, when [scopeId] is given, inside that
-/// scope — one scan. Lets FIND say "0 here but N elsewhere" instead of
-/// letting a scoped miss read as "not covered".
-Future<Map<String, ({int all, int inScope})>> queryTermLineCounts(
-  DatabaseExecutor db,
-  List<String> terms, {
-  String? scopeId,
-}) async {
-  final cleaned = <String>[];
-  for (final t in terms) {
-    final term = t.trim();
-    if (term.isNotEmpty && !cleaned.contains(term)) cleaned.add(term);
-    if (cleaned.length >= maxKeywordTerms) break;
-  }
-  if (cleaned.isEmpty) return const {};
-  const scopeKey = "CASE WHEN s.scope_id IS NULL OR s.scope_id = '' "
-      "THEN s.scope_type ELSE s.scope_type || ':' || s.scope_id END";
-  final scope = scopeId?.trim();
-  final scoped = scope != null && scope.isNotEmpty;
-  const match = "(l.content LIKE ? ESCAPE '\\' OR l.speaker LIKE ? ESCAPE '\\')";
-  final sql = StringBuffer('SELECT 0 AS z');
-  final args = <Object?>[];
-  for (var i = 0; i < cleaned.length; i++) {
-    final pattern = '%${escapeLike(cleaned[i])}%';
-    sql.write(', SUM(CASE WHEN $match THEN 1 ELSE 0 END) AS a$i');
-    args.addAll([pattern, pattern]);
-    if (scoped) {
-      sql.write(', SUM(CASE WHEN $match AND $scopeKey = ? THEN 1 ELSE 0 END) AS s$i');
-      args.addAll([pattern, pattern, scope]);
-    }
-  }
-  sql.write(
-    scoped
-        ? ' FROM story_lines l LEFT JOIN story_scopes s ON s.story_id = l.story_id'
-        : ' FROM story_lines l',
-  );
-  final row = (await db.rawQuery(sql.toString(), args)).first;
-  return {
-    for (var i = 0; i < cleaned.length; i++)
-      cleaned[i]: (
-        all: (row['a$i'] as num?)?.toInt() ?? 0,
-        inScope: scoped
-            ? (row['s$i'] as num?)?.toInt() ?? 0
-            : (row['a$i'] as num?)?.toInt() ?? 0,
-      ),
-  };
-}

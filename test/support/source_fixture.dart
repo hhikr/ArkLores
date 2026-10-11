@@ -1,6 +1,6 @@
 // A small ArknightsGameData-shaped source tree: three characters, one item
 // and five chapters of one fictional activity. Paths are from the
-// repository root (`zh_CN/gamedata/...`). The build, coverage and update
+// repository root (`zh_CN/gamedata/...`). The build and update
 // tests all start from it.
 import 'dart:convert';
 import 'dart:io';

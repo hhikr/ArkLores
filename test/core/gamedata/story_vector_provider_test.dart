@@ -4,6 +4,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arklores/core/gamedata/game.dart';
+import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:arklores/core/gamedata/story_vector_provider.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:flutter/services.dart';
@@ -72,11 +74,40 @@ void main() {
     await db.close();
   }
 
-  StoryVectorNotifier notifier() {
-    final n = StoryVectorNotifier(() => config);
+  StoryVectorNotifier notifier([Game game = Game.arknights]) {
+    final n = StoryVectorNotifier(
+      () => config,
+      () => GameDataInstaller.forGame(game).getStatus(),
+      game: game,
+    );
     addTearDown(n.dispose);
     return n;
   }
+
+  // 0.14: each game's knowledge base has its own vectors; the card of one
+  // game never looks at (or writes to) the other's file.
+  test("Endfield's vectors are planned and written in its own database",
+      () async {
+    final db = await createGameDataDb('${docs.path}/${Game.endfield.dbFileName}');
+    await insertStory(db, 'ef/main/level_ef_01.txt', ['甲：出发吧。']);
+    await db.close();
+
+    final arknights = notifier();
+    await arknights.refresh();
+    expect(arknights.state.plan, isNull); // not installed
+
+    final endfield = notifier(Game.endfield);
+    await endfield.refresh();
+    expect(endfield.state.plan!.pendingStories, 1);
+    await http.runWithClient(endfield.start, _service);
+    expect(endfield.state.error, isNull);
+    expect(endfield.state.result!.stories, 1);
+    expect(endfield.state.plan!.nothingToDo, isTrue);
+    expect(
+      File('${docs.path}/${Game.arknights.dbFileName}').existsSync(),
+      isFalse,
+    );
+  });
 
   test('nothing installed: nothing to plan', () async {
     final n = notifier();

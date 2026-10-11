@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +10,7 @@ import 'build/gamedata_schema.dart' show storyLinesIndexName, storyLinesIndexSql
 import 'game_retrieval.dart';
 import 'name_similarity.dart';
 import 'readonly_sql.dart';
+import 'record_vectors.dart';
 import 'story_catalog.dart';
 import 'story_line_search.dart';
 import 'story_vectors.dart';
@@ -22,6 +24,18 @@ Future<StoryVectorIndex?> _loadVectorsInBackground(sqflite.Database db) async {
     return await Isolate.run(() => StoryVectorIndex.loadFile(path));
   } catch (_) {
     return StoryVectorIndex.load(db);
+  }
+}
+
+/// The record vectors of [db]'s file, read like the story vectors.
+Future<RecordVectorIndex?> _loadRecordVectorsInBackground(
+  sqflite.Database db,
+) async {
+  final path = db.path;
+  try {
+    return await Isolate.run(() => RecordVectorIndex.loadFile(path));
+  } catch (_) {
+    return RecordVectorIndex.load(db);
   }
 }
 
@@ -128,6 +142,8 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     String? scopeId,
     int storyLimit = 8,
     int linesPerStory = 3,
+    Map<String, int>? termLines,
+    Map<String, Map<String, int>>? termStories,
   }) async {
     final db = await _open();
     if (db == null) return const [];
@@ -137,6 +153,22 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       scopeId: scopeId,
       storyLimit: storyLimit,
       linesPerStory: linesPerStory,
+      termLines: termLines,
+      termStories: termStories,
+    );
+  }
+
+  /// 0.14: every story's collection and the line counts, read on first use
+  /// and dropped with the connection (like [_centroids]).
+  Future<StoryGroups>? _storyGroups;
+
+  @override
+  Future<TermSpread?> termSpread(Map<String, int> perStory) async {
+    final db = await _open();
+    if (db == null || perStory.values.every((n) => n <= 0)) return null;
+    return computeTermSpread(
+      perStory,
+      await (_storyGroups ??= queryStoryGroups(db)),
     );
   }
 
@@ -161,10 +193,102 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     List<double> queryVector, {
     String? scopeId,
     int topK = 20,
+    Set<String>? storyIds,
   }) async {
     final index = await _loadVectorIndex();
     if (index == null) return const [];
-    return index.search(queryVector, topK: topK, scopeId: scopeId);
+    return index.search(
+      queryVector,
+      topK: topK,
+      scopeId: scopeId,
+      storyIds: storyIds,
+    );
+  }
+
+  @override
+  Future<({int lineStart, int lineEnd, List<StoryChunkHit> hits})?>
+      storyChunksNear(String storyId, int line) async {
+    final db = await _open();
+    final index = await _loadVectorIndex();
+    if (db == null || index == null) return null;
+    final at = index.chunkAt(storyId, line);
+    if (at == null) return null;
+    final groups = await (_storyGroups ??= queryStoryGroups(db));
+    // A story no collection holds stands for itself.
+    String groupOf(String id) => groups.groupOf[id] ?? 'story:$id';
+    final own = groupOf(storyId);
+    final hits = <StoryChunkHit>[];
+    final taken = <String>{};
+    for (final hit in index.nearChunk(
+      storyId,
+      line,
+      topK: 200,
+      keep: (id) => groupOf(id) != own,
+    )) {
+      if (hit.score < nearMinSimilarity || hits.length >= nearMaxPassages) {
+        break;
+      }
+      if (taken.add(groupOf(hit.storyId))) hits.add(hit);
+    }
+    return (lineStart: at.lineStart, lineEnd: at.lineEnd, hits: hits);
+  }
+
+  /// 0.14: the record vectors of the open DB, loaded on first use and
+  /// dropped with the connection (like [_vectorIndex]).
+  Future<RecordVectorIndex?>? _recordIndex;
+
+  @override
+  Future<List<RecordHit>> searchRecordsByVector(
+    List<double> queryVector, {
+    int limit = 3,
+  }) async {
+    final db = await _open();
+    if (db == null) return const [];
+    final index = await (_recordIndex ??= _loadRecordVectorsInBackground(db));
+    if (index == null || index.length == 0) return const [];
+    final owner = await _hasTable(db, 'entities') ? _ownerSql : "''";
+    final hits = <RecordHit>[];
+    final seen = <String>{};
+    // Several parts of one record may be near: the record once, by its
+    // nearest part.
+    for (final h in index.search(queryVector, topK: limit * 4)) {
+      if (hits.length >= limit) break;
+      if (!seen.add('${h.source}:${h.recordId}')) continue;
+      final document = h.source == recordSourceDocument;
+      final rows = await db.rawQuery(
+        document
+            ? 'SELECT entity_type AS category, document_type AS subtype, '
+                'title, content, entity_name AS owner '
+                'FROM entity_documents WHERE id = ? LIMIT 1'
+            : 'SELECT category, subtype, title, content, $owner AS owner '
+                'FROM normalized_records WHERE id = ? LIMIT 1',
+        [h.recordId],
+      );
+      // A vector whose record an update removed (until the vectors are
+      // brought up to date).
+      if (rows.isEmpty) continue;
+      final row = rows.first;
+      final text = '${row['content'] ?? ''}';
+      final a = h.charStart.clamp(0, text.length);
+      final b = h.charEnd.clamp(a, text.length);
+      final part = text.substring(a, b).replaceAll(RegExp(r'\s+'), ' ').trim();
+      hits.add(
+        RecordHit(
+          id: document && game == Game.endfield
+              ? endfieldId(h.recordId)
+              : h.recordId,
+          category: '${row['category'] ?? ''}',
+          subtype: '${row['subtype'] ?? ''}',
+          title: '${row['title'] ?? ''}',
+          owner: '${row['owner'] ?? ''}',
+          snippet: '${a > 0 ? '…' : ''}'
+              '${part.length <= 160 ? part : '${part.substring(0, 160)}…'}'
+              '${b < text.length && part.length <= 160 ? '…' : ''}',
+          score: h.score,
+        ),
+      );
+    }
+    return hits;
   }
 
   @override
@@ -200,20 +324,61 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     return queryCollectionIndex(db, like: like, type: type);
   }
 
+  /// 0.14: each collection's mean vector, worked out from [_vectorIndex] on
+  /// first use and dropped with the connection.
+  Future<Map<String, Float32List>>? _centroids;
+
+  Future<Map<String, Float32List>> _loadCentroids(
+    sqflite.Database db,
+    StoryVectorIndex index,
+  ) async {
+    final rows = await db.rawQuery(
+      'SELECT story_id, collection_id FROM $storyCatalogTable',
+    );
+    return index.collectionCentroids({
+      for (final row in rows) '${row['story_id']}': '${row['collection_id']}',
+    });
+  }
+
   @override
-  Future<List<StoryCatalogEntry>> searchStorySynopses(
-    List<String> terms, {
-    String? collectionId,
-    int limit = 5,
-  }) async {
+  Future<List<RelatedCollection>> relatedCollections(String collectionId) async {
     final db = await _open();
     if (db == null) return const [];
-    return querySynopsisHits(
-      db,
-      terms,
-      collectionId: collectionId,
-      limit: limit,
-    );
+    final speakers = await querySharedSpeakers(db, collectionId);
+    Map<String, double>? similarity;
+    final index = await _loadVectorIndex();
+    if (index != null && await hasStoryCatalog(db)) {
+      final centroids = await (_centroids ??= _loadCentroids(db, index));
+      final own = centroids[collectionId];
+      if (own != null) {
+        similarity = {
+          for (final MapEntry(key: id, value: other) in centroids.entries)
+            if (id != collectionId) id: _dot(own, other),
+        };
+      }
+    }
+    final ranked = rankRelatedCollections(collectionId, speakers, similarity);
+    final labels = await queryCollectionLabels(db, ranked.map((r) => r.id));
+    return [
+      for (final r in ranked)
+        if (labels[r.id] case final found?)
+          RelatedCollection(
+            id: r.id,
+            label: found.label,
+            releaseMonth: found.releaseMonth,
+            shared: r.shared,
+            names: r.names,
+            similarity: r.similarity,
+          ),
+    ];
+  }
+
+  static double _dot(Float32List a, Float32List b) {
+    var sum = 0.0;
+    for (var i = 0; i < a.length; i++) {
+      sum += a[i] * b[i];
+    }
+    return sum;
   }
 
   /// R15: name inventory of the currently open DB, loaded on first use and
@@ -229,13 +394,157 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
-  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
+  Future<bool> hasName(String term) async {
+    final db = await _open();
+    final name = term.trim();
+    if (db == null || name.isEmpty) return false;
+    final inventory = await (_nameInventory ??= loadNameInventory(db));
+    return inventory.any((n) => n.name == name);
+  }
+
+  /// `entity_name`, or the name of the record's `entity_id` (a voice line
+  /// carries only the id of its operator).
+  static const String _ownerSql =
+      "COALESCE(NULLIF(entity_name, ''), "
+      '(SELECT e.name FROM entities e WHERE e.id = entity_id), '
+      "'')";
+
+  @override
+  Future<RecordText?> readRecord(String id) async {
+    final db = await _open();
+    final key = id.trim();
+    if (db == null || key.isEmpty) return null;
+    final owner = await _hasTable(db, 'entities') ? _ownerSql : "''";
+    if (await _hasTable(db, 'normalized_records')) {
+      final rows = await db.rawQuery(
+        'SELECT id, category, subtype, title, content, $owner AS owner '
+        'FROM normalized_records WHERE id = ? LIMIT 1',
+        [key],
+      );
+      if (rows.isNotEmpty) return _recordText(key, rows.first);
+    }
+    if (await _hasTable(db, 'entity_documents')) {
+      // The v0.12.0 Endfield asset's documents have ids without `ef/`.
+      final bare = key.startsWith(endfieldIdPrefix)
+          ? key.substring(endfieldIdPrefix.length)
+          : key;
+      final rows = await db.rawQuery(
+        'SELECT id, entity_type AS category, document_type AS subtype, '
+        'title, content, entity_name AS owner '
+        'FROM entity_documents WHERE id IN (?, ?) LIMIT 1',
+        [key, bare],
+      );
+      if (rows.isNotEmpty) return _recordText(key, rows.first);
+    }
+    return null;
+  }
+
+  static RecordText _recordText(String id, Map<String, Object?> row) =>
+      RecordText(
+        id: id,
+        category: '${row['category'] ?? ''}',
+        subtype: '${row['subtype'] ?? ''}',
+        title: '${row['title'] ?? ''}',
+        owner: '${row['owner'] ?? ''}',
+        content: '${row['content'] ?? ''}',
+      );
+
+  @override
+  Future<List<RecordHit>> searchRecordsLike(
     List<String> terms, {
-    String? scopeId,
+    int limit = 3,
+    Map<String, double>? weights,
   }) async {
     final db = await _open();
-    if (db == null) return const {};
-    return queryTermLineCounts(db, terms, scopeId: scopeId);
+    final cleaned = [
+      for (final t in terms.take(6))
+        if (t.trim().isNotEmpty) t.trim(),
+    ];
+    if (db == null || cleaned.isEmpty || !await _hasTable(db, 'normalized_records')) {
+      return const [];
+    }
+    // A record about the thing a term names (its entity_name is the term)
+    // first, then title matches, then text matches.
+    final score = <String>[];
+    final where = <String>[];
+    final args = <Object?>[];
+    final whereArgs = <Object?>[];
+    for (final term in cleaned) {
+      final like = '%${escapeLike(term)}%';
+      score.add('((CASE WHEN entity_name = ? THEN 3 ELSE 0 END) + '
+          "(CASE WHEN title LIKE ? ESCAPE '\\' THEN 2 ELSE 0 END) + "
+          "(CASE WHEN content LIKE ? ESCAPE '\\' THEN 1 ELSE 0 END)) * ?");
+      args.addAll([term, like, like, weights?[term] ?? 1.0]);
+      where.add("entity_name = ? OR title LIKE ? ESCAPE '\\' "
+          "OR content LIKE ? ESCAPE '\\'");
+      whereArgs.addAll([term, like, like]);
+    }
+    final scoreSql = score.join(' + ');
+    final whereSql = where.join(' OR ');
+    // Story text is searched in story_lines; its copies here are left out.
+    final owner = await _hasTable(db, 'entities') ? _ownerSql : "''";
+    final rows = await db.rawQuery(
+      'SELECT id, category, subtype, entity_name, title, content, '
+      '$owner AS owner, ($scoreSql) AS s '
+      'FROM normalized_records '
+      "WHERE category != 'story' AND COALESCE(subtype, '') != 'story' "
+      'AND ($whereSql) '
+      'ORDER BY s DESC, length(content) DESC LIMIT ?',
+      [...args, ...whereArgs, limit],
+    );
+    // 0.14 live: an operator's file (race, record, archives) is one
+    // document in entity_documents, not in normalized_records.
+    final documents = await _hasTable(db, 'entity_documents')
+        ? await db.rawQuery(
+            'SELECT id, entity_type AS category, document_type AS subtype, '
+            'entity_name, title, content, entity_name AS owner, '
+            '($scoreSql) AS s '
+            'FROM entity_documents WHERE $whereSql '
+            'ORDER BY s DESC, length(content) DESC LIMIT ?',
+            [...args, ...whereArgs, limit],
+          )
+        : const <Map<String, Object?>>[];
+    final hits = [
+      for (final (i, row) in [...rows, ...documents].indexed)
+        RecordHit(
+          // Every id of an Endfield database starts with ef/ (game.dart);
+          // the v0.12.0 asset's documents do not yet.
+          id: i >= rows.length && game == Game.endfield
+              ? endfieldId('${row['id']}')
+              : '${row['id']}',
+          category: '${row['category'] ?? ''}',
+          subtype: '${row['subtype'] ?? ''}',
+          title: '${row['title'] ?? ''}',
+          owner: '${row['owner'] ?? ''}',
+          snippet: _around(
+            '${row['content'] ?? ''}',
+            cleaned,
+            subject: '${row['entity_name'] ?? ''}',
+          ),
+          score: (row['s'] as num?)?.toDouble() ?? 0,
+        ),
+    ]..sort((a, b) => b.score.compareTo(a.score));
+    return hits.take(limit).toList();
+  }
+
+  /// About 120 characters of [text] around the first of [terms] found; a
+  /// record about [subject] is shown around the other terms when it has
+  /// them (its subject's name is everywhere in it).
+  static String _around(String text, List<String> terms, {String subject = ''}) {
+    final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    var at = -1;
+    final others = [
+      for (final t in terms)
+        if (t != subject && flat.contains(t)) t,
+    ];
+    for (final t in others.isEmpty ? terms : others) {
+      final i = flat.indexOf(t);
+      if (i >= 0 && (at < 0 || i < at)) at = i;
+    }
+    final start = at < 40 ? 0 : at - 40;
+    final end = start + 120 > flat.length ? flat.length : start + 120;
+    return '${start > 0 ? '…' : ''}${flat.substring(start, end)}'
+        '${end < flat.length ? '…' : ''}';
   }
 
   @override
@@ -336,7 +645,10 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     _db = null;
     _openedFileStat = null;
     _vectorIndex = null;
+    _recordIndex = null;
     _nameInventory = null;
+    _centroids = null;
+    _storyGroups = null;
   }
 
   /// Runs [action] on the open knowledge base (read-only); null when none is
@@ -349,7 +661,19 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     return action(db);
   }
 
-  Future<sqflite.Database?> _open() async {
+  /// The open in progress, so tools running at once (one turn's calls run
+  /// together) share it instead of each closing and reopening the handle.
+  Future<sqflite.Database?>? _opening;
+
+  Future<sqflite.Database?> _open() {
+    final pending = _opening;
+    if (pending != null) return pending;
+    final opening = _openNow();
+    _opening = opening;
+    return opening.whenComplete(() => _opening = null);
+  }
+
+  Future<sqflite.Database?> _openNow() async {
     final path = await _resolveDbPath();
     if (path == null) return null;
 
@@ -357,7 +681,11 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final stat = File(path).statSync();
     if (stat.type == FileSystemEntityType.notFound) return null;
 
+    // A handle closed behind this store's back (anything that once opened
+    // the same path with sqflite's shared instance and closed it) is opened
+    // again instead of failing every later query with database_closed.
     if (_db != null &&
+        _db!.isOpen &&
         _openedFileStat != null &&
         _sameFileStamp(_openedFileStat!, stat)) {
       return _db;
@@ -372,7 +700,12 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     await _ensureStoryLinesIndex(path);
     // Creating the index changed the file: remember the stamp it has now.
     final openedStat = File(path).statSync();
-    _db = await sqflite.openDatabase(path, readOnly: true);
+    // Its own connection: nothing else that opens this file can close it.
+    _db = await sqflite.openDatabase(
+      path,
+      readOnly: true,
+      singleInstance: false,
+    );
     _openedFileStat = openedStat;
     return _db;
   }
@@ -388,7 +721,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   Future<void> _ensureStoryLinesIndex(String path) async {
     if (!_indexChecked.add(path)) return;
     try {
-      final db = await sqflite.openDatabase(path);
+      final db = await sqflite.openDatabase(path, singleInstance: false);
       try {
         final has = await db.rawQuery(
           "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",

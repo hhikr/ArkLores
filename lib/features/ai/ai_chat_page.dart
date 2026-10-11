@@ -3,7 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
-import '../../core/llm/llm_provider.dart' show deepThinkingProvider;
+import '../../core/llm/llm_provider.dart' show embeddingClientProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -11,7 +11,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'chat_history_page.dart';
-import 'reading_history_page.dart';
+import 'widgets/answer_options_menu.dart';
 import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
 import 'wiki_ai_context.dart';
@@ -111,7 +111,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  /// The floating actions at the top right: history, reading history, new
+  /// The floating actions at the top right: the conversations, a new
   /// conversation, and a menu with retry / clear.
   Widget _buildFloatingActions(AppThemeTokens theme) {
     final chatHistory = ref.watch(askChatProvider);
@@ -150,6 +150,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   ) {
     return [
       IconButton(
+        key: const ValueKey('ask-chat-history'),
         onPressed: isSending
             ? null
             : () => Navigator.of(context).push(
@@ -159,16 +160,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 ),
         tooltip: context.t.aiHistoryTitle,
         icon: const Icon(Icons.history_sharp),
-      ),
-      IconButton(
-        key: const ValueKey('ask-reading-history'),
-        onPressed: () => Navigator.of(context).push(
-          smoothPageRoute<void>(
-            builder: (_) => const ReadingHistoryPage(),
-          ),
-        ),
-        tooltip: context.t.readingHistoryTitle,
-        icon: const Icon(Icons.menu_book_outlined),
       ),
       IconButton(
         onPressed: isSending ? null : chatNotifier.newSession,
@@ -334,14 +325,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 onSend: isSending ? chatNotifier.cancel : _handleAskSend,
                 hintText: context.t.aiAskInputPlaceholder,
                 maxHeight: constraints.maxHeight,
-                leading: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildDeepThinkingToggle(theme),
-                    const SizedBox(width: 6),
-                    _buildAnswerOptions(theme),
-                  ],
-                ),
+                leading: (card) =>
+                    AnswerOptionsMenu(theme: theme, above: card),
               ),
             ),
           ),
@@ -394,114 +379,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  /// R16: "深度思考" — lets the answer writer think (low effort) for the
-  /// next questions; off by default. Retrieval is the same either way.
-  Widget _buildDeepThinkingToggle(AppThemeTokens theme) {
-    final on = ref.watch(deepThinkingProvider);
-    return Tooltip(
-      message: context.t.aiDeepThinkingTooltip,
-      child: Semantics(
-        button: true,
-        toggled: on,
-        label: context.t.aiDeepThinking,
-        child: InkWell(
-          key: const ValueKey('deep-thinking-toggle'),
-          borderRadius: BorderRadius.zero,
-          onTap: () => ref.read(deepThinkingProvider.notifier).state = !on,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: on
-                  ? theme.accentPrimary.withValues(alpha: 0.18)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.zero,
-              border: Border.all(
-                color: on
-                    ? theme.accentText.withValues(alpha: 0.4)
-                    : theme.divider,
-                width: 0.5,
-              ),
-            ),
-            child: Icon(
-              Icons.psychology_alt_sharp,
-              size: 18,
-              color: on ? theme.accentText : theme.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// R18 passes after the draft, both optional: "复核" (a reader's review)
-  /// and "提要" (a digest of a long answer); 0.13 "Wiki 资料" (the wiki
-  /// tools). One small button with a menu, so the toolbar stays short; lit
-  /// while any of them is on.
-  Widget _buildAnswerOptions(AppThemeTokens theme) {
-    final options = ref.watch(answerOptionsProvider);
-    final on = options.review || options.digest || options.wiki;
-    PopupMenuItem<String> item(String value, bool checked, String title,
-            String hint,) =>
-        CheckedPopupMenuItem<String>(
-          key: ValueKey('answer-option-$value'),
-          value: value,
-          checked: checked,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title, style: theme.bodyFont.copyWith(fontSize: 14)),
-              const SizedBox(height: 2),
-              Text(
-                hint,
-                style: theme.bodyFont
-                    .copyWith(fontSize: 11.5, color: theme.textSecondary),
-              ),
-            ],
-          ),
-        );
-    return PopupMenuButton<String>(
-      key: const ValueKey('answer-options'),
-      tooltip: context.t.aiAnswerOptions,
-      color: theme.surfaceElevated,
-      constraints: const BoxConstraints(maxWidth: 300),
-      onSelected: (value) => ref.read(answerOptionsProvider.notifier).set(
-            switch (value) {
-              'review' => options.copyWith(review: !options.review),
-              'wiki' => options.copyWith(wiki: !options.wiki),
-              _ => options.copyWith(digest: !options.digest),
-            },
-          ),
-      itemBuilder: (context) => [
-        item('review', options.review, context.t.aiAnswerReview,
-            context.t.aiAnswerReviewHint,),
-        item('digest', options.digest, context.t.aiAnswerDigest,
-            context.t.aiAnswerDigestHint,),
-        // 0.13: the games' wikis as a secondary source (online).
-        item('wiki', options.wiki, context.t.aiAnswerWiki,
-            context.t.aiAnswerWikiHint,),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: on
-              ? theme.accentPrimary.withValues(alpha: 0.18)
-              : Colors.transparent,
-          borderRadius: BorderRadius.zero,
-          border: Border.all(
-            color: on ? theme.accentText.withValues(alpha: 0.4) : theme.divider,
-            width: 0.5,
-          ),
-        ),
-        child: Icon(
-          Icons.tune_sharp,
-          size: 18,
-          color: on ? theme.accentText : theme.textSecondary,
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmptyState(AppThemeTokens theme) {
     return Center(
       child: SingleChildScrollView(
@@ -533,6 +410,29 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   .copyWith(color: theme.textSecondary, fontSize: 11),
               textAlign: TextAlign.center,
             ),
+            // 0.14: search runs on meaning only with an embedding service.
+            if (ref.watch(embeddingClientProvider) == null) ...[
+              const SizedBox(height: 10),
+              Row(
+                key: const ValueKey('ask-no-vector-warning'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.warning_amber_sharp,
+                    size: 15,
+                    color: theme.warning,
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      context.t.aiNoVectorWarning,
+                      style: theme.bodyFont
+                          .copyWith(color: theme.warning, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
             Wrap(
               spacing: 8,

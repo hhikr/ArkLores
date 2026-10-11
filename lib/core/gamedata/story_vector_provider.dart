@@ -10,7 +10,9 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 import '../../shared/providers/settings_provider.dart';
 import '../background/background_work.dart';
 import '../llm/embedding_client.dart';
+import 'game.dart';
 import 'gamedata_installer.dart';
+import 'gamedata_provider.dart';
 import 'story_vector_updater.dart';
 
 /// Where the vector update stands.
@@ -22,6 +24,8 @@ class StoryVectorUiState {
     this.doneStories = 0,
     this.totalStories = 0,
     this.doneChunks = 0,
+    this.doneRecords = 0,
+    this.totalRecords = 0,
     this.result,
     this.error,
     this.mismatch,
@@ -33,6 +37,10 @@ class StoryVectorUiState {
   final int doneStories;
   final int totalStories;
   final int doneChunks;
+
+  /// Record chunks embedded of those to embed (after the stories).
+  final int doneRecords;
+  final int totalRecords;
 
   /// The last finished run.
   final VectorUpdateResult? result;
@@ -49,6 +57,8 @@ class StoryVectorUiState {
     int? doneStories,
     int? totalStories,
     int? doneChunks,
+    int? doneRecords,
+    int? totalRecords,
     VectorUpdateResult? result,
     String? error,
     bool clearError = false,
@@ -62,25 +72,39 @@ class StoryVectorUiState {
         doneStories: doneStories ?? this.doneStories,
         totalStories: totalStories ?? this.totalStories,
         doneChunks: doneChunks ?? this.doneChunks,
+        doneRecords: doneRecords ?? this.doneRecords,
+        totalRecords: totalRecords ?? this.totalRecords,
         result: result ?? this.result,
         error: clearError ? null : (error ?? this.error),
         mismatch: clearMismatch ? null : (mismatch ?? this.mismatch),
       );
 }
 
-final storyVectorProvider =
-    StateNotifierProvider<StoryVectorNotifier, StoryVectorUiState>((ref) {
-  return StoryVectorNotifier(() => ref.read(embeddingConfigProvider));
+/// 0.14: one per game. Each knowledge base has its own vectors, and the
+/// work is the same for both (`story_vector_updater.dart` reads only the
+/// database it is given).
+final storyVectorProvider = StateNotifierProvider.family<StoryVectorNotifier,
+    StoryVectorUiState, Game>((ref, game) {
+  return StoryVectorNotifier(
+    () => ref.read(embeddingConfigProvider),
+    () => ref.read(installerOf(game)).getStatus(),
+    game: game,
+  );
 });
 
 class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
-  StoryVectorNotifier(this._config) : super(const StoryVectorUiState());
+  StoryVectorNotifier(this._config, this._status, {this.game = Game.arknights})
+      : super(const StoryVectorUiState());
 
   final EmbeddingConfig Function() _config;
+  final Future<GameDataInstallStatus> Function() _status;
+
+  /// Whose knowledge base this looks at.
+  final Game game;
   bool _cancel = false;
 
   Future<String?> _dbPath() async {
-    final status = await GameDataInstaller().getStatus();
+    final status = await _status();
     return status.installed ? status.dbPath : null;
   }
 
@@ -94,7 +118,7 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
         state = const StoryVectorUiState();
         return;
       }
-      final db = await sqflite.openDatabase(path, readOnly: true);
+      final db = await sqflite.openDatabase(path, readOnly: true, singleInstance: false);
       try {
         final plan = await planVectorUpdate(db);
         final config = _config();
@@ -125,7 +149,10 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
   /// Embeds the stories without vectors with the configured embedding
   /// service. Needs a valid configuration (the page checks it first).
   Future<void> start() => BackgroundWork.instance.run(
-        BackgroundWork.text('正在生成故事向量', 'Generating story vectors'),
+        BackgroundWork.text(
+          '正在生成${game.label}的向量',
+          'Generating ${game.labelEn} vectors',
+        ),
         _start,
       );
 
@@ -143,12 +170,14 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
       running: true,
       doneStories: 0,
       doneChunks: 0,
+      doneRecords: 0,
+      totalRecords: 0,
       clearError: true,
     );
     final client = OpenAICompatibleEmbeddingClient(config: config);
     sqflite.Database? db;
     try {
-      db = await sqflite.openDatabase(path);
+      db = await sqflite.openDatabase(path, singleInstance: false);
       final result = await updateStoryVectors(
         db: db,
         client: client,
@@ -159,6 +188,9 @@ class StoryVectorNotifier extends StateNotifier<StoryVectorUiState> {
             totalStories: total,
             doneChunks: chunks,
           );
+        },
+        onRecordProgress: (done, total) {
+          state = state.copyWith(doneRecords: done, totalRecords: total);
         },
       );
       state = state.copyWith(running: false, result: result);

@@ -26,18 +26,6 @@ Future<void> createTwoActivitiesDb(String path) async {
     };
     for (final MapEntry(key: id, value: (collection, lines)) in stories.entries) {
       await insertStory(db, id, lines, scopeId: collection);
-      for (var i = 0; i < lines.length; i++) {
-        if (!lines[i].startsWith('凯伦：')) continue;
-        await db.insert('entity_story_mentions', {
-          'entity_id': 'char_fx_karen',
-          'story_id': id,
-          'scope_id': 'activity:$collection',
-          'line_start': i,
-          'line_end': i,
-          'mention_count': 1,
-          'matched_alias': '凯伦',
-        });
-      }
     }
     await writeStoryCatalog(
       db,

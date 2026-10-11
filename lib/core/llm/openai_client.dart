@@ -876,7 +876,7 @@ class _StreamAccumulator {
       for (final (i, raw) in toolDeltas.indexed) {
         if (raw is! Map) continue;
         final call = _calls.putIfAbsent(
-          whole ? i : _indexOf(raw, i),
+          whole ? i : _slotOf(raw, i),
           () => (id: StringBuffer(), name: StringBuffer(), args: StringBuffer()),
         );
         final id = raw['id'];
@@ -902,9 +902,38 @@ class _StreamAccumulator {
     return (text: text, reasoning: thought);
   }
 
-  /// The call a fragment belongs to: its `index`; without one (some
-  /// providers send each call whole, unnumbered) a new call when it brings
-  /// an id not seen yet, else the latest call.
+  /// Where fragments numbered with an `index` go: normally the slot of that
+  /// index; after a second call reused the index, that call's slot.
+  final Map<int, int> _slotOfIndex = {};
+
+  /// The slot (call) a fragment belongs to. Relays that send parallel calls
+  /// whole sometimes give them all the same `index`: a fragment that brings
+  /// an id other than the one already in that slot starts a new call, so two
+  /// calls never merge into one with `{…}{…}` arguments.
+  int _slotOf(Map<dynamic, dynamic> raw, int position) {
+    final index = raw['index'];
+    if (index is! num) return _indexOf(raw, position);
+    final id = raw['id'];
+    var slot = _slotOfIndex[index.toInt()] ?? index.toInt();
+    final current = _calls[slot];
+    if (id is String &&
+        id.isNotEmpty &&
+        current != null &&
+        current.id.isNotEmpty &&
+        current.id.toString() != id) {
+      final known = _calls.entries
+          .where((e) => e.value.id.toString() == id)
+          .map((e) => e.key)
+          .firstOrNull;
+      slot = known ?? _calls.keys.reduce((a, b) => a > b ? a : b) + 1;
+      _slotOfIndex[index.toInt()] = slot;
+    }
+    return slot;
+  }
+
+  /// The call a fragment without an `index` belongs to (some providers send
+  /// each call whole, unnumbered): a new call when it brings an id not seen
+  /// yet, else the latest call.
   int _indexOf(Map<dynamic, dynamic> raw, int position) {
     final index = raw['index'];
     if (index is num) return index.toInt();

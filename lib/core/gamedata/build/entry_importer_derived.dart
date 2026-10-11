@@ -37,6 +37,23 @@ extension _Derived on EntryImporter {
           await txn.delete('entities', where: 'id = ?', whereArgs: [id]);
         }
       }
+      // A record that names its entity only by id gets the entity's name
+      // (0.14: an operator's voice lines carried none — 18,237 rows — and a
+      // line read out of context was taken for another operator's). By id
+      // only, from the table of names. Done here, not at import: every
+      // build path ends in this step, so a database built before the rule
+      // is brought up to date by an update, and a renamed entity renames
+      // its voice lines whichever table changed.
+      await txn.execute(
+        'UPDATE normalized_records SET entity_name = '
+        '(SELECT e.name FROM entities e '
+        'WHERE e.id = normalized_records.entity_id) '
+        "WHERE COALESCE(entity_id, '') != '' "
+        "AND (COALESCE(entity_name, '') = '' OR content_type = ?) "
+        'AND EXISTS (SELECT 1 FROM entities e '
+        'WHERE e.id = normalized_records.entity_id)',
+        [operatorVoiceContentType],
+      );
       importer.stats.collections = 0;
       final written = <String>{};
       Future<void> putCollection(
@@ -230,18 +247,6 @@ extension _Derived on EntryImporter {
         'INSERT OR IGNORE INTO collections (id, kind, name, sort_key) '
         "SELECT DISTINCT collection_id, 'activity', collection_id, 999999 "
         'FROM entries WHERE collection_id IS NOT NULL',
-      );
-      await txn.execute(
-        'UPDATE normalized_records SET collection_id = '
-        '(SELECT collection_id FROM entries '
-        'WHERE entries.id = normalized_records.entry_id) '
-        "WHERE parent_type = 'story_file'",
-      );
-      await txn.execute(
-        'UPDATE lore_chunks SET collection_id = '
-        '(SELECT collection_id FROM entries '
-        'WHERE entries.id = lore_chunks.entry_id) '
-        "WHERE entry_id LIKE 'story:%'",
       );
 
       // story → stage. The game names a stage's story files after the stage

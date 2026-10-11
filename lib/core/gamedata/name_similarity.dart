@@ -12,9 +12,8 @@ import 'package:sqflite_common/sqlite_api.dart';
 import 'story_catalog.dart';
 
 /// Every name-like string of the DB with its occurrence count: story
-/// speakers (spoken lines), surface forms the coverage layer matched in
-/// story text (mentions), names/aliases of people-like entities (operators,
-/// enemies, speakers) and catalog collection / chapter names. Tables that
+/// speakers (spoken lines), names/aliases of people-like entities (operators,
+/// enemies) and catalog collection / chapter names. Tables that
 /// an older DB lacks are skipped.
 Future<List<NameOccurrence>> loadNameInventory(DatabaseExecutor db) async {
   Future<bool> has(String table) async => (await db.rawQuery(
@@ -33,18 +32,6 @@ Future<List<NameOccurrence>> loadNameInventory(DatabaseExecutor db) async {
         '${row['speaker']}'.trim(),
         (row['n'] as num).toInt(),
         '说话人',
-      ),);
-    }
-  }
-  if (await has('entity_story_mentions')) {
-    for (final row in await db.rawQuery(
-      'SELECT matched_alias, SUM(mention_count) AS n FROM entity_story_mentions '
-      'WHERE matched_alias IS NOT NULL GROUP BY matched_alias',
-    )) {
-      inventory.add(NameOccurrence(
-        '${row['matched_alias']}'.trim(),
-        (row['n'] as num).toInt(),
-        '剧情提及',
       ),);
     }
   }
@@ -243,14 +230,17 @@ int _kindRank(String kind) => switch (kind) {
       _ => 3,
     };
 
-/// One observation line listing [similar] for a [term] the DB lacks, or
-/// null when there is nothing to suggest.
+/// One observation line listing [similar] for a [term] that is not a name
+/// the DB has, or null when there is nothing to suggest. The caller checks
+/// that first ([rankSimilarNames] never returns the term itself, so a list
+/// of near names does not mean the term is missing); the line speaks of
+/// names only — the term may still occur in some text.
 String? describeSimilarNames(String term, List<SimilarName> similar) {
   if (similar.isEmpty) return null;
   final listed = similar.map((s) {
     final count = s.occurrences > 0 ? '，${s.occurrences} 次' : '';
     return '${s.name}（${s.kind}$count）';
   }).join('、');
-  return '库中没有“$term”这个写法；字形或读音相近的名字：$listed。'
+  return '库里的名字中没有“$term”这个写法；字形或读音相近的名字：$listed。'
       '这只是字符串相近，是否指同一对象要结合问题和原文判断。';
 }

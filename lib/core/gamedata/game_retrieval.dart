@@ -20,14 +20,68 @@ export 'name_similarity.dart' show SimilarName, describeSimilarNames;
 export 'readonly_sql.dart' show SqlQueryResult;
 export 'story_catalog.dart'
     show
+        RelatedCollection,
         StoryCatalogEntry,
         StoryCollection,
+        TermSpread,
+        collectionLabelPrefix,
         collectionReleaseKey,
         compareReleaseKeys,
         fallbackStoryLabel,
+        formatTermSpread,
         releaseMonthOf;
 export 'story_coverage_models.dart';
 export 'story_vectors.dart' show StoryChunkHit;
+
+/// 0.14: one record found by [GameDataRetrieval.searchRecordsLike].
+class RecordHit {
+  const RecordHit({
+    required this.id,
+    required this.category,
+    required this.subtype,
+    required this.title,
+    required this.snippet,
+    required this.score,
+    this.owner = '',
+  });
+  final String id;
+  final String category;
+  final String subtype;
+  final String title;
+
+  /// Whose record it is (the name of its `entity_id`: the operator of a
+  /// voice line, the owner of a module), or '' when it has none.
+  final String owner;
+
+  /// The text around the first matched term.
+  final String snippet;
+
+  /// From [GameDataRetrieval.searchRecordsLike], per term: 3 when the
+  /// record is about what it names (`entity_name`), 2 when its title has
+  /// it, 1 when its text does. From
+  /// [GameDataRetrieval.searchRecordsByVector]: the cosine similarity.
+  final double score;
+}
+
+/// 0.14: one record read whole ([GameDataRetrieval.readRecord]).
+class RecordText {
+  const RecordText({
+    required this.id,
+    required this.category,
+    required this.subtype,
+    required this.title,
+    required this.owner,
+    required this.content,
+  });
+  final String id;
+  final String category;
+  final String subtype;
+  final String title;
+
+  /// See [RecordHit.owner].
+  final String owner;
+  final String content;
+}
 
 /// The retrieval surface the investigation tools depend on.
 abstract interface class GameDataRetrieval {
@@ -47,25 +101,47 @@ abstract interface class GameDataRetrieval {
   /// [terms], ranked by their best line (IDF-weighted matched terms, so lines
   /// with every term come first), each with up to [linesPerStory] best
   /// matching lines. [scopeId] is a canonical scope key (e.g.
-  /// `activity:act21mini`). Locating hints, not evidence.
+  /// `activity:act21mini`). Locating hints, not evidence. [termLines], when
+  /// given, receives how many lines each term matches (0.14; added to what
+  /// it holds, so one map can collect several games); [termStories] the
+  /// same count per story file.
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
     String? scopeId,
     int storyLimit,
     int linesPerStory,
+    Map<String, int>? termLines,
+    Map<String, Map<String, int>>? termStories,
   });
+
+  /// 0.14: where the lines holding a word are, by collection: [perStory]
+  /// is the word's lines per story file ([searchStoryLinesLike]'s
+  /// `termStories`, or [storyLineHitCounts]) of one game. Null without a
+  /// database or without lines. A hint for where to look, not evidence.
+  Future<TermSpread?> termSpread(Map<String, int> perStory);
 
   /// R12: model/dims of the DB's optional story-chunk vectors, or null when
   /// the DB has none (vector recall then stays off).
   Future<({String model, int dims})?> get storyVectorInfo;
 
   /// R12: top story-line chunks by cosine similarity to [queryVector]
-  /// (from the model in [storyVectorInfo]). Locating hints, not evidence.
+  /// (from the model in [storyVectorInfo]), within the story files
+  /// [storyIds] when given (0.14; of one game). Locating hints, not evidence.
   Future<List<StoryChunkHit>> searchStoryChunksByVector(
     List<double> queryVector, {
     String? scopeId,
     int topK,
+    Set<String>? storyIds,
   });
+
+  /// 0.14: passages of other collections that read like the one of
+  /// [storyId] holding [line] — by the vectors the database has, nothing is
+  /// embedded. One per collection, the closest first, only those at
+  /// `nearMinSimilarity` or closer, at most `nearMaxPassages`; within the
+  /// story's own game. Null when the database has no vector for that line.
+  /// Locating hints, not evidence.
+  Future<({int lineStart, int lineEnd, List<StoryChunkHit> hits})?>
+      storyChunksNear(String storyId, int line);
 
   /// R14: catalog entries (readable names, order, official synopsis) of
   /// [storyIds]; empty when the DB has no story catalog.
@@ -86,24 +162,42 @@ abstract interface class GameDataRetrieval {
     String? type,
   });
 
-  /// R14: catalog entries whose official synopsis / chapter name contains
-  /// any of [terms], best first. Locating hints, not evidence.
-  Future<List<StoryCatalogEntry>> searchStorySynopses(
-    List<String> terms, {
-    String? collectionId,
-    int limit,
-  });
+  /// 0.14: the collections most related to [collectionId] — shared
+  /// speakers and, with vectors, alike in what they tell. Locating hints,
+  /// not evidence; the data cannot say that one story continues another.
+  Future<List<RelatedCollection>> relatedCollections(String collectionId);
 
   /// R15: names in the DB that are spelled or pronounced like [term] (a
   /// name the DB does not contain), best first. String similarity only —
   /// never a claim that they refer to the same person.
   Future<List<SimilarName>> similarNames(String term, {int limit});
 
-  /// R15: per term, story lines containing it in the whole DB and inside
-  /// [scopeId] (equal to the total without a scope).
-  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
+  /// 0.14: whether [term] is a name the DB has, written exactly so (an
+  /// operator, a speaker, a collection …). [similarNames] leaves the term
+  /// itself out, so its result alone cannot tell "not there" from "there".
+  Future<bool> hasName(String term);
+
+  /// 0.14: the record with [id] (`normalized_records`, or an operator's
+  /// file in `entity_documents`), or null.
+  Future<RecordText?> readRecord(String id);
+
+  /// 0.14: records outside the story text (`normalized_records`: archives,
+  /// profiles, voice lines, item and enemy texts) whose title or text
+  /// contains any of [terms] — title matches first, then by how many terms
+  /// they hold; each with the text around its first match.
+  /// [weights] scales what each term counts for (a common word less).
+  Future<List<RecordHit>> searchRecordsLike(
     List<String> terms, {
-    String? scopeId,
+    int limit,
+    Map<String, double>? weights,
+  });
+
+  /// 0.14: records closest in meaning to [queryVector] (an embedding from
+  /// the model in [storyVectorInfo]), each with the part of its text that
+  /// matched; empty when the DB has no record vectors. Locating hints.
+  Future<List<RecordHit>> searchRecordsByVector(
+    List<double> queryVector, {
+    int limit,
   });
 
   /// R17: one read-only `SELECT`/`WITH` query (the agent's `sql` tool), at

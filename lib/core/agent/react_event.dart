@@ -18,9 +18,16 @@ enum ReActEventType {
   toolObservation,
   finalAnswerToken,
 
-  /// R16: drop the answer text streamed so far (e.g. a citation rewrite
-  /// follows); [ReActEvent.content] is a short reason for the step list.
+  /// R16: drop the answer text streamed so far (more searching follows, a
+  /// broken stream is asked again). 0.14: not a step of the work shown;
+  /// with [ReActEvent.rollback] the turn's answer was rejected and is asked
+  /// again, so the thinking of that turn goes too.
   finalAnswerReset,
+
+  /// 0.14: what code did to the answer (why it was sent back, which
+  /// citations it cut or dropped): for the session record and the work
+  /// timeline, never part of the answer.
+  recordNote,
 
   /// R16: the complete final answer, replacing what was streamed (adds the
   /// status envelope and source warnings once the text is checked).
@@ -44,16 +51,32 @@ class ReActEvent {
     this.content = '',
     this.toolName,
     this.toolArgs,
+    this.subtask,
+    this.rollback = false,
+    this.planned = false,
   });
+
+  /// 0.14 ([ReActEventType.toolCall]): a step of the first searches, written
+  /// by the planning call and run by code, not asked for by the model.
+  final bool planned;
+
+  /// 0.14 ([ReActEventType.finalAnswerReset]): the turn is taken back as if
+  /// it had not happened.
+  final bool rollback;
 
   final ReActEventType type;
   final String content;
   final String? toolName;
   final Map<String, dynamic>? toolArgs;
 
+  /// 0.14: the step belongs to sub-agent number [subtask] (1-based) of a
+  /// `delegate` call; null for the main agent's own steps.
+  final int? subtask;
+
   @override
   String toString() =>
-      'ReActEvent(type: $type, content: $content, toolName: $toolName, toolArgs: $toolArgs)';
+      'ReActEvent(type: $type, content: $content, toolName: $toolName, toolArgs: $toolArgs'
+      '${subtask == null ? '' : ', subtask: $subtask'})';
 }
 
 /// Final answer text after [event] given the text [before] it (R16): tokens

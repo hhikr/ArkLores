@@ -25,12 +25,51 @@ String? loreAnswerMarkdown(String content) => loreAnswerParsed(content)?.markdow
 
 /// [loreAnswerMarkdown] plus how many citation items of the answer gave no
 /// usable ref (written in a shape that cannot be read).
-({String markdown, int dropped})? loreAnswerParsed(String content) {
-  final start = loreAnswerJsonStart.firstMatch(content);
-  if (start == null) return null;
-  final stream = LoreAnswerStream()..add(content.substring(start.start));
-  final markdown = stream.finish();
-  return (markdown: markdown, dropped: stream.droppedCites);
+///
+/// 0.14 live: a weaker model wrote prose quoting the format's skeleton,
+/// two partial versions and then the whole answer, all in one reply. Every
+/// start is tried and the last complete object with entries wins (else
+/// the first start, as before).
+///
+/// `cutShort`: entries were written after the object's last brace (0.14
+/// live: a bracket too many closed the object after its first entry and the
+/// rest of the answer followed). What can be read on is read on
+/// ([LoreAnswerStream]); what cannot is reported, never dropped silently.
+/// `repaired`: [content] without the brackets that closed the object early
+/// (valid JSON again, for what reads the answer as a whole), or null when
+/// nothing was read on.
+({String markdown, int dropped, bool cutShort, String? repaired})?
+    loreAnswerParsed(String content) {
+  final starts = loreAnswerJsonStart.allMatches(content).toList();
+  if (starts.isEmpty) return null;
+  ({String markdown, int dropped, bool cutShort, String? repaired}) parse(
+    int at, [
+    LoreAnswerStream? s,
+  ]) {
+    final stream = s ?? (LoreAnswerStream()..add(content.substring(at)));
+    final stray = {for (final i in stream.strayBrackets) at + i};
+    final loose = {for (final i in stream.looseQuotes) at + i};
+    return (
+      markdown: stream.finish(),
+      dropped: stream.droppedCites,
+      cutShort: stream.entriesAfterEnd,
+      repaired: stray.isEmpty && loose.isEmpty
+          ? null
+          : [
+              for (var i = 0; i < content.length; i++)
+                if (loose.contains(i))
+                  r'\"'
+                else if (!stray.contains(i))
+                  content[i],
+            ].join(),
+    );
+  }
+
+  for (final start in starts.reversed) {
+    final stream = LoreAnswerStream()..add(content.substring(start.start));
+    if (stream.complete && stream.hasEntries) return parse(start.start, stream);
+  }
+  return parse(starts.first.start);
 }
 
 enum _Role { root, entries, entry, cites, tuple, ignore }
@@ -54,10 +93,30 @@ class LoreAnswerStream {
   bool _started = false;
   bool _closed = false;
 
+  // After the last brace: 0 nothing yet, 1 a comma came, 2 not a
+  // continuation. `{"entries":[{…}]},{…},…]}` (the array and the object
+  // closed one entry early) is read on as the same array.
+  int _tail = 0;
+  bool _entriesClosedLast = false;
+  int _at = -1; // index of the character being read
+  int _entriesEnd = -1;
+  int _rootEnd = -1;
+
+  /// Indexes (from the object's first character fed to [add]) of the
+  /// brackets that closed the object early and were read past.
+  final List<int> strayBrackets = [];
+
+  /// Indexes (same origin) of the quotes inside a text that were written
+  /// without a backslash and read as part of it.
+  final List<int> looseQuotes = [];
+  final StringBuffer _rest = StringBuffer();
+
   // Lexer state.
   bool _inString = false;
   bool _stringIsKey = false;
   bool _escape = false;
+  StringBuffer? _quote; // characters after a quote not yet decided
+  int _quoteAt = -1;
   StringBuffer? _unicode;
   final StringBuffer _key = StringBuffer();
   final StringBuffer _scalar = StringBuffer();
@@ -84,6 +143,18 @@ class LoreAnswerStream {
   /// Markdown produced so far.
   String get markdown => _md.toString();
 
+  /// The object has closed (its last brace came).
+  bool get complete => _closed;
+
+  /// Entries stand after the object's last brace (they are not in the
+  /// markdown).
+  bool get entriesAfterEnd => _entryStart.hasMatch(_rest.toString());
+
+  static final RegExp _entryStart = RegExp(r'\{\s*"(?:text|heading)"\s*:');
+
+  /// At least one heading or text entry was written.
+  bool get hasEntries => _md.toString().trim().isNotEmpty;
+
   /// Feeds [chunk]; returns the markdown it added.
   String add(String chunk) {
     final before = _md.length;
@@ -95,6 +166,10 @@ class LoreAnswerStream {
 
   /// The complete answer markdown.
   String finish() {
+    if (_quote != null) {
+      _quote = null;
+      _closeValueString();
+    }
     if (_scalar.isNotEmpty) _endScalar();
     final body = _md.toString().trim();
     return [
@@ -108,10 +183,39 @@ class LoreAnswerStream {
   }
 
   void _char(String c) {
-    if (_closed) return;
+    if (_started) _at++;
+    _step(c);
+  }
+
+  void _step(String c) {
+    if (_closed) {
+      _rest.write(c);
+      if (_tail == 2 || c.trim().isEmpty) return;
+      if (_tail == 0 && c == ',' && _entriesClosedLast) {
+        _tail = 1;
+        return;
+      }
+      if (_tail != 1 || c != '{') {
+        _tail = 2;
+        return;
+      }
+      // More entries: back inside the object's `entries` array.
+      strayBrackets..add(_entriesEnd)..add(_rootEnd);
+      _closed = false;
+      _tail = 0;
+      _rest.clear();
+      _stack
+        ..add(
+          _Frame(_Role.root, isObject: true)
+            ..key = 'entries'
+            ..expectKey = false,
+        )
+        ..add(_Frame(_Role.entries, isObject: false));
+    }
     if (!_started) {
       if (c == '{') {
         _started = true;
+        _at = 0;
         _stack.add(_Frame(_Role.root, isObject: true));
       }
       return;
@@ -136,7 +240,11 @@ class LoreAnswerStream {
       case ']':
         final frame = _stack.removeLast();
         _closeFrame(frame);
-        if (_stack.isEmpty) _closed = true;
+        if (frame.role == _Role.entries) _entriesEnd = _at;
+        if (_stack.isEmpty) {
+          _closed = true;
+          _rootEnd = _at;
+        }
       case '"':
         _inString = true;
         _stringIsKey = top.isObject && top.expectKey;
@@ -182,11 +290,17 @@ class LoreAnswerStream {
       }
       return;
     }
+    if (_quote != null) return _afterQuote(c);
     if (c == '\\') {
       _escape = true;
+    } else if (c == '"' && !_stringIsKey && _stack.last.isObject) {
+      // Decided by what follows ([_afterQuote]).
+      _quote = StringBuffer();
+      _quoteAt = _at;
     } else if (c == '"') {
       _inString = false;
       if (_stringIsKey) {
+        if (_stack.last.role == _Role.root) _entriesClosedLast = false;
         _stack.last
           ..key = _key.toString()
           ..expectKey = false;
@@ -196,6 +310,40 @@ class LoreAnswerStream {
     } else {
       _decoded(c == '\n' || c == '\r' ? ' ' : c);
     }
+  }
+
+  // What may follow the quote that ends a value in an object: the object's
+  // brace, or a comma and the next key.
+  static final RegExp _quoteCloses =
+      RegExp(r'^\s*(?:\}|,\s*"[A-Za-z_]{1,16}"\s*:)');
+  static final RegExp _quoteMayClose =
+      RegExp(r'^\s*(?:,\s*(?:"[A-Za-z_]{0,16}(?:"\s*)?)?)?$');
+
+  /// A quote came inside a value of an object; [c] is a character after it.
+  /// A quote that JSON's next token does not follow is part of the text
+  /// (0.14 live: a whole answer written with plain quotes around every
+  /// quotation, each entry cut at its first one).
+  void _afterQuote(String c) {
+    final held = (_quote!..write(c)).toString();
+    if (_quoteCloses.hasMatch(held)) {
+      _quote = null;
+      _closeValueString();
+      for (var i = 0; i < held.length; i++) {
+        _step(held[i]);
+      }
+    } else if (!_quoteMayClose.hasMatch(held)) {
+      _quote = null;
+      looseQuotes.add(_quoteAt);
+      _decoded('"');
+      for (var i = 0; i < held.length; i++) {
+        _stringChar(held[i]);
+      }
+    }
+  }
+
+  void _closeValueString() {
+    _inString = false;
+    _endString();
   }
 
   void _decoded(String c) {
@@ -289,6 +437,8 @@ class LoreAnswerStream {
       _tuple.clear();
     } else if (frame.role == _Role.cites) {
       _flushFlat();
+    } else if (frame.role == _Role.entries) {
+      _entriesClosedLast = true;
     }
   }
 
@@ -347,6 +497,8 @@ final RegExp _lineRange = RegExp(
   return (a, m.group(2) == null ? a : int.parse(m.group(2)!));
 }
 
+final RegExp _recordPrefixes = RegExp(r'^(?:record:)+');
+
 /// `story_id:a-b` / `record:id` / `wiki:<page id>:a-b` (0.13: a wiki page's
 /// paragraphs, cited like a story's lines) of a citation tuple, or null.
 /// Also reads the slightly different shapes models write: lines as "L97" or
@@ -354,9 +506,16 @@ final RegExp _lineRange = RegExp(
 String? loreCitationRef(List<Object?> parts) {
   if (parts.isEmpty) return null;
   var first = '${parts.first}'.trim().replaceAll('`', '');
-  if (first == 'record' && parts.length > 1) return 'record:${parts[1]}';
+  if (first == 'record' && parts.length > 1) {
+    return 'record:${'${parts[1]}'.trim().replaceFirst(_recordPrefixes, '')}';
+  }
   if (parts.length == 1) {
-    // Written as one string ("story_id:3-5" / "record:id").
+    // Written as one string ("story_id:3-5" / "record:id"); 0.14: the
+    // prefix written twice ("record:record:id", the id being shown as
+    // `record:id`) counts once.
+    if (first.startsWith(_recordPrefixes)) {
+      return 'record:${first.replaceFirst(_recordPrefixes, '')}';
+    }
     return first.contains(':') ? first : null;
   }
   final span = _lineSpan(parts[1]);
@@ -417,31 +576,3 @@ List<String> loreCitationRefs(List<Object?> items, {void Function()? onDropped})
   return out;
 }
 
-final RegExp _quotedSpan =
-    RegExp(r'“([^”\n]{1,300})”|「([^」\n]{1,300})」|『([^』\n]{1,300})』|"([^"\n]{1,300})"');
-final RegExp _notWordChar = RegExp(r'[^\p{L}\p{N}]', unicode: true);
-
-/// R17c: quoted passages of [answer] that copy original lines — the text in
-/// quotation marks matches [sourceText] (the lines the answer cites)
-/// verbatim or nearly so. Phrases under five characters are not counted.
-List<String> quotedSourceLines(String answer, String sourceText) {
-  final source = sourceText.replaceAll(_notWordChar, '');
-  if (source.isEmpty) return const [];
-  final found = <String>[];
-  for (final m in _quotedSpan.allMatches(answer)) {
-    final span = [m.group(1), m.group(2), m.group(3), m.group(4)]
-        .firstWhere((g) => g != null)!;
-    final norm = span.replaceAll(_notWordChar, '');
-    if (norm.length < 5) continue;
-    var copied = source.contains(norm);
-    if (!copied) {
-      var hits = 0;
-      for (var i = 0; i + 1 < norm.length; i++) {
-        if (source.contains(norm.substring(i, i + 2))) hits++;
-      }
-      copied = hits / (norm.length - 1) >= 0.7;
-    }
-    if (copied && !found.contains(span)) found.add(span);
-  }
-  return found;
-}

@@ -18,6 +18,7 @@ import 'chat_message.dart';
 import 'chat_notifier_base.dart';
 import 'chat_session_models.dart';
 import 'chat_session_store.dart';
+import 'lore_answer_stages.dart' show loreDetailsMarker, loreDigestMinEntries;
 import 'react_event.dart';
 import 'story_answer.dart';
 import 'story_qa_agent.dart';
@@ -101,7 +102,7 @@ class AskChatNotifier extends ChatNotifierBase {
   /// "深度思考" is on); null keeps the agent's own client.
   final LLMClient? Function()? _clientReader;
 
-  /// The answer options for the next question (review, digest).
+  /// The answer options for the next question (wikis, sub-agents).
   final AnswerOptions Function()? _optionsReader;
 
   /// Adds up the usage of every LLM call of the running question (all
@@ -116,6 +117,10 @@ class AskChatNotifier extends ChatNotifierBase {
   final ChatSessionStore _sessionStore;
   final LLMConfig Function() _configReader;
   ChatSessionFile? _currentSession;
+
+  /// The write that put a new conversation into the history when its first
+  /// question was sent.
+  Future<void>? _firstSave;
 
   /// Whether session recording is active for the current conversation.
   static bool get recordingEnabled => AgentLogger.isEnabled;
@@ -132,15 +137,21 @@ class AskChatNotifier extends ChatNotifierBase {
     state = const [];
   }
 
-  /// Restores a persisted session into the UI. Subsequent messages continue
-  /// the same session file.
+  /// Makes a persisted session the current conversation (the one before it
+  /// is already in its own file). Subsequent messages continue the same
+  /// session file.
   void loadSession(ChatSessionFile session) {
+    if (isStreaming) cancel();
     _currentSession = session;
     _conversations.clear();
     state = chatSessionToMessages(session);
   }
 
   ChatSessionFile? get currentSession => _currentSession;
+
+  /// The id of the conversation shown, once it has a file (from its first
+  /// question on, while recording is on).
+  String? get currentSessionId => _currentSession?.sessionId;
 
   @override
   void clearChat() {
@@ -157,7 +168,179 @@ class AskChatNotifier extends ChatNotifierBase {
         () => _sendMessage(text),
       );
 
-  Future<void> _sendMessage(String text) async {
+  /// "复核" under the answer [id]: a reader's review of it, as a turn of
+  /// its own ([label] is what the turn shows as its question). The answer
+  /// stays as it is; the reviewed one, or a line saying the reader had no
+  /// question, follows.
+  Future<void> reviewAnswer(String id, {required String label}) {
+    final conversation = _conversations[id];
+    final message = state.where((m) => m.id == id).firstOrNull;
+    if (conversation == null || message == null || !message.canReview) {
+      return Future.value();
+    }
+    // What the reader gets: the detailed answer, without the status line
+    // and the verdict marker.
+    final cut = message.content.indexOf(loreDetailsMarker);
+    final answer = (cut < 0
+            ? message.content
+            : message.content.substring(cut + loreDetailsMarker.length))
+        .replaceAll(storyAnswerEnvelopePattern, '')
+        .replaceAll(RegExp(r'\[FACT_CHECK_VERDICT:[^\]]*\]\s*'), '')
+        .trim();
+    return BackgroundWork.instance.run(
+      BackgroundWork.text('正在复核回答', 'Reviewing the answer'),
+      () => _sendMessage(label, review: (id, conversation, answer)),
+    );
+  }
+
+  /// "提要" under the answer [id]: its entries reorganised into a few
+  /// paragraphs above the detailed answer (one more model call).
+  Future<void> digestAnswer(String id) => BackgroundWork.instance.run(
+        BackgroundWork.text('正在整理提要', 'Writing the digest'),
+        () => _digest(id),
+      );
+
+  /// Puts the answer being digested back as it was (set while one runs).
+  void Function()? _undoDigest;
+
+  Future<void> _digest(String id) async {
+    final conversation = _conversations[id];
+    final message = state.where((m) => m.id == id).firstOrNull;
+    if (conversation == null ||
+        message == null ||
+        !message.canDigest ||
+        isStreaming) {
+      return;
+    }
+    final generation = nextGeneration();
+    final original = message.content;
+    // The status line stays first; the paragraphs go between it and the
+    // detailed answer.
+    final envelope =
+        storyAnswerEnvelopePattern.matchAsPrefix(original)?.group(0) ?? '';
+    final detail = original.substring(envelope.length);
+    void restore() => updateMessage(
+          id,
+          content: original,
+          isStreaming: false,
+          liveStatus: '',
+          canDigest: true,
+        );
+    _undoDigest = restore;
+    final stop = Completer<void>();
+    _stopActive = () {
+      if (!stop.isCompleted) stop.complete();
+    };
+    final start = DateTime.now();
+    final usage = _usage?..reset();
+    updateMessage(id, isStreaming: true, liveStatus: '整理答案', canDigest: false);
+    var done = false;
+    var raw = '';
+    try {
+      final events = _agent.digest(
+        conversation: conversation,
+        detail: detail,
+        onRaw: (text) => raw = text,
+      );
+      await for (final event in _untilStopped(events, stop.future)) {
+        if (!isCurrentGeneration(generation)) break;
+        switch (event.type) {
+          case ReActEventType.status:
+            updateMessage(id, liveStatus: event.content);
+          case ReActEventType.finalAnswerReplace:
+            updateMessage(id, content: '$envelope${event.content}');
+          case ReActEventType.complete:
+            done = true;
+          default:
+            break;
+        }
+      }
+    } catch (_) {
+      // The answer is put back below.
+    } finally {
+      if (isCurrentGeneration(generation)) {
+        _stopActive = null;
+        _undoDigest = null;
+        if (done) {
+          final cost = usage == null
+              ? null
+              : TurnStats.of(usage, DateTime.now().difference(start));
+          updateMessage(
+            id,
+            isStreaming: false,
+            liveStatus: '',
+            stats: cost == null ? null : (message.stats ?? const TurnStats()) + cost,
+          );
+          final digested = state.where((m) => m.id == id).firstOrNull?.content;
+          if (digested != null) {
+            await _recordDigest(original, digested, raw, cost);
+          }
+        } else {
+          restore();
+        }
+      }
+    }
+  }
+
+  /// The saved turn of the answer [original] gets its digested text, the
+  /// digest's reply and its cost.
+  Future<void> _recordDigest(
+    String original,
+    String digested,
+    String raw,
+    TurnStats? cost,
+  ) async {
+    final session = _currentSession;
+    if (!recordingEnabled || session == null) return;
+    final k = session.turns.lastIndexWhere((t) => t.answer == original);
+    if (k < 0) return;
+    final turn = session.turns[k];
+    final updated = ChatSessionFile(
+      sessionId: session.sessionId,
+      createdAt: session.createdAt,
+      updatedAt: DateTime.now(),
+      title: session.title,
+      turns: [
+        for (final (i, t) in session.turns.indexed)
+          if (i != k)
+            t
+          else
+            ChatSessionTurn(
+              turn: turn.turn,
+              timestamp: turn.timestamp,
+              query: turn.query,
+              model: turn.model,
+              baseUrl: turn.baseUrl,
+              iterations: [
+                ...turn.iterations,
+                ReActIterationRecord(
+                  iteration: turn.iterations.length + 1,
+                  rawResponse: '（整理）$raw',
+                ),
+              ],
+              answer: digested,
+              verdict: turn.verdict,
+              status: turn.status,
+              error: turn.error,
+              durationMs: turn.durationMs,
+              memory: turn.memory,
+              usage: cost == null || turn.usage == null
+                  ? turn.usage
+                  : turn.usage! + cost,
+              timeline: turn.timeline,
+            ),
+      ],
+    );
+    _currentSession = updated;
+    await _sessionStore.save(updated);
+  }
+
+  /// [review]: the turn is a reader's review of the answer with that id,
+  /// conversation and text (see [reviewAnswer]).
+  Future<void> _sendMessage(
+    String text, {
+    (String, LoreConversation, String)? review,
+  }) async {
     final query = text.trim();
     if (query.isEmpty || state.any((message) => message.isStreaming)) return;
     final generation = nextGeneration();
@@ -166,10 +349,15 @@ class AskChatNotifier extends ChatNotifierBase {
     // R17: continue the last answer's conversation when it is the last
     // message (an error or a cancel in between starts from the texts).
     final lastMessage = state.isEmpty ? null : state.last;
-    final prior =
-        lastMessage == null || lastMessage.role != MessageRole.assistant
+    final prior = review != null
+        ? review.$2
+        : lastMessage == null || lastMessage.role != MessageRole.assistant
             ? null
             : _conversations[lastMessage.id];
+    // "复核" is offered under the last answer only.
+    state = [
+      for (final m in state) m.canReview ? m.copyWith(canReview: false) : m,
+    ];
 
     final assistantId = newId();
     state = [
@@ -208,16 +396,24 @@ class AskChatNotifier extends ChatNotifierBase {
     final config = _configReader();
     final iterations = <int, ReActIterationRecord>{};
     var currentIteration = 0;
+    // Recorded tool calls still waiting for their output: (record, tool).
+    final pendingCalls = <(int, String?)>[];
     var turnStatus = ChatTurnStatus.completed;
     String? turnError;
     var canceled = false;
-    if (recording) {
-      _currentSession ??= ChatSessionFile(
+    if (recording && _currentSession == null) {
+      // A conversation is in the history from its first question on, not
+      // only once that question is answered.
+      final created = ChatSessionFile(
         sessionId: newId(),
         createdAt: turnStart,
         updatedAt: turnStart,
         title: _truncateTitle(query),
       );
+      _currentSession = created;
+      // Not waited for: the question starts at once. The turn's own save
+      // waits for this one ([_firstSave]).
+      _firstSave = _sessionStore.save(created).catchError((Object _) {});
     }
     final session = _currentSession;
 
@@ -239,21 +435,41 @@ class AskChatNotifier extends ChatNotifierBase {
     void onConversation(LoreConversation conversation) =>
         _conversations[assistantId] = conversation;
     final client = _clientReader?.call();
-    final stream = _agent.run(
-      query: query,
-      history: history,
-      client: client,
-      options: _optionsReader?.call() ?? const AnswerOptions(),
-      onRawLlmResponse: onRaw,
-      prior: prior,
-      onConversation: onConversation,
-    );
+    final options = _optionsReader?.call() ?? const AnswerOptions();
+    final stream = review != null
+        ? _agent.review(
+            prior: review.$2,
+            answer: review.$3,
+            client: client,
+            options: options,
+            onRawLlmResponse: onRaw,
+            onConversation: onConversation,
+          )
+        : _agent.run(
+            query: query,
+            history: history,
+            client: client,
+            options: options,
+            onRawLlmResponse: onRaw,
+            prior: prior,
+            onConversation: onConversation,
+          );
+
+    // 0.14: cancel stops the run at once (not at its next event, which may
+    // be minutes away), so the turn is closed and its cost recorded then.
+    final stop = Completer<void>();
+    _stopActive = () {
+      if (!stop.isCompleted) stop.complete();
+    };
 
     final steps = <ReActStep>[];
     // R16: streamed answer text and live reasoning, pushed to the UI at most
     // once per coalescer interval.
     var answer = '';
     final reasoning = StringBuffer();
+    // Where the thinking of the turn being answered starts (after the last
+    // tool output): what a taken-back answer is cut to.
+    var reasoningMark = 0;
     final coalescer = StreamCoalescer(() {
       if (!isCurrentGeneration(generation)) return;
       updateMessage(
@@ -265,7 +481,7 @@ class AskChatNotifier extends ChatNotifierBase {
     });
 
     try {
-      await for (final event in stream) {
+      await for (final event in _untilStopped(stream, stop.future)) {
         if (!isCurrentGeneration(generation)) {
           canceled = true;
           break;
@@ -298,10 +514,15 @@ class AskChatNotifier extends ChatNotifierBase {
                 content: event.content,
                 toolName: event.toolName,
                 toolArgs: event.toolArgs,
+                subtask: event.subtask,
+                planned: event.planned,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
-            if (recording) {
+            if (recording && event.subtask == null) {
+              // 0.14: the calls of a turn are announced together and their
+              // outputs follow; each output goes to its own call's record.
+              pendingCalls.add((currentIteration, event.toolName));
               final record = iterations.putIfAbsent(
                 currentIteration,
                 () => ReActIterationRecord(
@@ -324,15 +545,22 @@ class AskChatNotifier extends ChatNotifierBase {
                 type: event.type,
                 content: event.content,
                 toolName: event.toolName,
+                subtask: event.subtask,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
-            if (recording) {
+            if (event.subtask == null) reasoningMark = reasoning.length;
+            // A sub-agent's step is shown, not recorded as the main
+            // agent's iteration.
+            if (recording && event.subtask == null) {
+              final k = pendingCalls.indexWhere((p) => p.$2 == event.toolName);
+              final iteration =
+                  k < 0 ? currentIteration : pendingCalls.removeAt(k).$1;
               iterations
                   .putIfAbsent(
-                    currentIteration,
+                    iteration,
                     () => ReActIterationRecord(
-                      iteration: currentIteration,
+                      iteration: iteration,
                       rawResponse: '',
                     ),
                   )
@@ -347,16 +575,47 @@ class AskChatNotifier extends ChatNotifierBase {
             coalescer.schedule();
             break;
           case ReActEventType.finalAnswerReset:
+            // 0.14: not a step of the work shown. A rejected answer is
+            // taken back whole: its thinking goes with it.
             answer = '';
+            if (event.rollback) {
+              final kept = reasoning.toString().substring(0, reasoningMark);
+              reasoning
+                ..clear()
+                ..write(kept);
+            }
+            coalescer.flushNow();
+            break;
+          case ReActEventType.recordNote:
+            // In the work shown too (it is folded by default): what code
+            // did to the answer — sent back, citations cut or dropped.
             steps.add(ReActStep(type: event.type, content: event.content));
             updateMessage(assistantId, steps: List.of(steps));
-            coalescer.flushNow();
+            if (recording) {
+              final record = iterations.putIfAbsent(
+                currentIteration,
+                () => ReActIterationRecord(
+                  iteration: currentIteration,
+                  rawResponse: '',
+                ),
+              );
+              record.thought = record.thought.isEmpty
+                  ? event.content
+                  : '${record.thought}\n${event.content}';
+            }
             break;
           case ReActEventType.finalAnswerReplace:
             answer = event.content;
             coalescer.flushNow();
             break;
           case ReActEventType.reasoningToken:
+            // A new turn's thinking starts on a line of its own (on the
+            // phone two turns ran together: "…警告".Need more: …").
+            if (reasoning.isNotEmpty &&
+                reasoning.length == reasoningMark &&
+                !reasoning.toString().endsWith('\n')) {
+              reasoning.write('\n\n');
+            }
             reasoning.write(event.content);
             coalescer.schedule();
             break;
@@ -377,6 +636,11 @@ class AskChatNotifier extends ChatNotifierBase {
             break;
           case ReActEventType.complete:
             coalescer.flushNow();
+            // What can be asked for under the answer: both need its
+            // conversation; a review is not reviewed again.
+            final conversation = _conversations[assistantId];
+            final checked = conversation != null &&
+                parseStoryAnswerEnvelope(answer) != null;
             updateMessage(
               assistantId,
               isStreaming: false,
@@ -384,6 +648,10 @@ class AskChatNotifier extends ChatNotifierBase {
               // The thinking stays (in memory only) so the panel above
               // the answer does not vanish and shift the text being read.
               liveStatus: '',
+              canDigest: checked &&
+                  conversation.entries.where((e) => e.isText).length >=
+                      loreDigestMinEntries,
+              canReview: checked && review == null,
             );
             break;
         }
@@ -401,6 +669,13 @@ class AskChatNotifier extends ChatNotifierBase {
         turnError = '$e';
       }
     } finally {
+      if (stop.isCompleted || !isCurrentGeneration(generation)) canceled = true;
+      _stopActive = null;
+      // A review that did not finish can be asked for again.
+      if (review != null &&
+          (canceled || turnStatus == ChatTurnStatus.error)) {
+        updateMessage(review.$1, canReview: true);
+      }
       coalescer.cancel();
       TurnStats? stats;
       if (usage != null) {
@@ -464,13 +739,66 @@ class AskChatNotifier extends ChatNotifierBase {
       title: session.title,
       turns: [...session.turns, turn],
     );
-    _currentSession = updated;
+    // Another conversation may have been opened (or a new one started)
+    // while this turn was stopping: its file is written, it is not made
+    // the current one again.
+    if (_currentSession?.sessionId == session.sessionId) {
+      _currentSession = updated;
+    }
+    await _firstSave;
     await _sessionStore.save(updated);
   }
 
   static String _truncateTitle(String query) => query.length <= _titleMaxChars
       ? query
       : '${query.substring(0, _titleMaxChars)}…';
+
+  /// Stops the running question (set while one runs).
+  void Function()? _stopActive;
+
+  @override
+  void cancel() {
+    _stopActive?.call();
+    // A digest being written: the answer goes back as it was (not marked
+    // as a canceled answer).
+    final undo = _undoDigest;
+    if (undo != null) {
+      _undoDigest = null;
+      _stopActive = null;
+      invalidatePending();
+      undo();
+      return;
+    }
+    super.cancel();
+  }
+
+  /// [events] until [stop] completes; the run is then left (its pending
+  /// work is dropped) instead of waited for.
+  static Stream<ReActEvent> _untilStopped(
+    Stream<ReActEvent> events,
+    Future<void> stop,
+  ) {
+    late final StreamController<ReActEvent> out;
+    StreamSubscription<ReActEvent>? sub;
+    out = StreamController<ReActEvent>(
+      onListen: () {
+        sub = events.listen(
+          out.add,
+          onError: out.addError,
+          onDone: () {
+            if (!out.isClosed) out.close();
+          },
+        );
+        stop.then((_) {
+          if (out.isClosed) return;
+          sub?.cancel();
+          out.close();
+        });
+      },
+      onCancel: () => sub?.cancel(),
+    );
+    return out.stream;
+  }
 
   @override
   String get canceledMarker => '[ASK_CANCELED]';
@@ -487,11 +815,18 @@ class AskChatNotifier extends ChatNotifierBase {
 final chatSessionStoreProvider =
     Provider<ChatSessionStore>((ref) => const ChatSessionStore());
 
-/// Session summaries for the Chat History list (newest first).
-final chatHistoryListProvider =
-    FutureProvider<List<ChatSessionSummary>>((ref) async {
-  return ref.watch(chatSessionStoreProvider).list();
-});
+/// How many conversations are saved. Invalidate after one is deleted.
+final chatHistoryCountProvider = FutureProvider.autoDispose<int>(
+  (ref) => ref.watch(chatSessionStoreProvider).count(),
+);
+
+/// One page (0-based) of the saved conversations, last written first: only
+/// that page's files are read.
+final chatHistoryPageProvider = FutureProvider.autoDispose
+    .family<List<ChatSessionSummary>, int>(
+  (ref, page) =>
+      ref.watch(chatSessionStoreProvider).page(page, ChatSessionStore.pageSize),
+);
 
 /// Provider for the unified Ask chat state.
 final askChatProvider =
@@ -503,7 +838,8 @@ final askChatProvider =
     configReader: () => ref.read(apiConfigProvider),
     // R16: read per question, so the switch never rebuilds the notifier
     // (which would drop the conversation).
-    clientReader: () => ref.read(deepThinkingProvider)
+    clientReader: () => ref.read(deepThinkingProvider) &&
+            ref.read(deepThinkingAvailableProvider)
         ? ref.read(llmClientProvider(ReasoningLevel.low))
         : null,
     optionsReader: () => ref.read(answerOptionsProvider),

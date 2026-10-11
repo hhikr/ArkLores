@@ -9,8 +9,10 @@ import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/tools/wiki_tools.dart';
+import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
+import 'package:arklores/core/wiki/wiki_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -66,6 +68,41 @@ void main() {
       final down = await WikiSearchTool(wiki).execute({'query': '星灯'});
       expect(down, contains('PRTS 暂时无法访问'));
       expect(down, contains('只用本地知识库'));
+    });
+
+    test('words no page holds together are searched one by one', () async {
+      final wiki = fakeWikiLookup();
+      final apart =
+          await WikiSearchTool(wiki).execute({'query': '星灯 别处 的事'});
+      expect(apart, startsWith('PRTS 上没有同时含“星灯 别处 的事”这几个词的页面'));
+      expect(apart, contains('“星灯”：\nwiki:prts:101 | 星灯'));
+      expect(apart, isNot(contains('“别处”')));
+      // Something was found: not a lookup that came back empty.
+      expect(lookupFoundNothing(apart), isFalse);
+      final none = await WikiSearchTool(wiki).execute({'query': '别处 的事'});
+      expect(none, startsWith('没有找到'));
+      expect(none, contains('“别处”、“的事” 单独搜也没有'));
+    });
+
+    test('the same word is asked of the wiki once, also while it runs',
+        () async {
+      final prts = fakePrts();
+      final wiki = fakeWikiLookup(prts: prts);
+      final both = await Future.wait([
+        wiki.search(Game.arknights, '星灯'),
+        wiki.search(Game.arknights, '星灯', limit: 4),
+      ]);
+      expect(both.every((hits) => hits.length == 1), isTrue);
+      await WikiSearchTool(wiki).execute({'query': '星灯'});
+      expect(prts.searches, 1);
+      // A failure is not kept.
+      prts.unavailable = true;
+      await expectLater(
+        wiki.search(Game.arknights, '守夜人'),
+        throwsA(isA<WikiUnavailable>()),
+      );
+      prts.unavailable = false;
+      expect(await wiki.search(Game.arknights, '守夜人'), hasLength(1));
     });
   });
 
@@ -144,7 +181,6 @@ void main() {
         client: client,
         store: store,
         wiki: fakeWikiLookup(),
-        review: false,
       ).run(query: '星灯和谁是旧识？').toList();
       expect(client.toolNames.first, containsAll(['wiki_search', 'wiki_read']));
       expect(client.requests.first.first.content, contains('Wiki 资料'));
@@ -155,7 +191,7 @@ void main() {
       expect(answer, isNot(contains('未能在本次读到的原文中核实')));
 
       final without = _ScriptedClient([_answer('没有查到。\n[COVERAGE: gaps]')]);
-      await LoreAgentLoop(client: without, store: store, review: false)
+      await LoreAgentLoop(client: without, store: store)
           .run(query: '星灯？')
           .toList();
       expect(without.toolNames.first, isNot(contains('wiki_read')));
@@ -173,7 +209,6 @@ void main() {
         client: client,
         store: store,
         wiki: fakeWikiLookup(),
-        review: false,
       ).run(query: '星灯？').toList();
       expect(client.requests[2].last.content, contains('wiki:prts:101@7:3'));
       expect(client.requests[2].last.content, contains('实际看到的行或记录'));
@@ -181,32 +216,6 @@ void main() {
       expect(answer, contains('未能在本次读到的原文中核实'));
       expect(parseStoryAnswerEnvelope(answer)!.status,
           StoryAnswerStatus.notCovered,);
-    });
-
-    test('wiki text copied in quotes is sent back like dialogue', () async {
-      String quoted(String text) => jsonEncode({
-            'entries': [
-              {
-                'text': text,
-                'cite': [
-                  ['wiki:prts:101@7', 1, 1],
-                ],
-              },
-            ],
-            'coverage': 'full',
-          });
-      final client = _ScriptedClient([
-        _call('wiki_read', {'page': 'wiki:prts:101'}),
-        _answer(quoted('Wiki 写道“星灯与守夜人是旧识”。')),
-        _answer(quoted('据 Wiki 整理，两人早就认识。')),
-      ]);
-      await LoreAgentLoop(
-        client: client,
-        store: store,
-        wiki: fakeWikiLookup(),
-        review: false,
-      ).run(query: '星灯？').toList();
-      expect(client.requests[2].last.content, contains('照搬了原文'));
     });
 
     test('an unreachable wiki: the tool says so and the answer goes on',
@@ -221,7 +230,6 @@ void main() {
         client: client,
         store: store,
         wiki: fakeWikiLookup(prts: prts),
-        review: false,
       ).run(query: '星灯做什么？').toList();
       final observation = events
           .firstWhere((e) => e.type == ReActEventType.toolObservation)

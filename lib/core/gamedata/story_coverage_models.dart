@@ -1,33 +1,10 @@
-/// Result models for the schema v3 story coverage queries
-/// (`search_story_coverage`, `read_story_lines`, `get_story_map` tools).
+/// Story lines as the reader, the search and the agent's tools pass them
+/// around (the file keeps the name of the queries it once served).
 library;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
-/// One appearance run of an entity inside a story (from
-/// `entity_story_mentions`).
-class StoryCoverageEntry {
-  const StoryCoverageEntry({
-    required this.entityId,
-    required this.storyId,
-    required this.scopeId,
-    required this.lineStart,
-    required this.lineEnd,
-    required this.mentionCount,
-    this.title,
-    this.matchedAlias,
-  });
-  final String entityId;
-  final String storyId;
-  final String scopeId;
-  final int lineStart;
-  final int lineEnd;
-  final int mentionCount;
-  final String? title;
-  final String? matchedAlias;
-}
-
-/// One story line returned by `read_story_lines`.
+/// One line of a story.
 class StoryLineEntry {
   const StoryLineEntry({
     required this.lineIndex,
@@ -111,26 +88,4 @@ class StoryLinesPage {
   final String? scopeId;
 
   bool get hasMore => nextPageToken != null;
-}
-
-/// One row of `story_chapter_profiles` returned by `get_story_map`.
-class StoryChapterProfile {
-  const StoryChapterProfile({
-    required this.storyId,
-    required this.scopeId,
-    required this.lineStart,
-    required this.lineEnd,
-    required this.speakerSet,
-    required this.entityDensity,
-    this.title,
-    this.summary,
-  });
-  final String storyId;
-  final String scopeId;
-  final String? title;
-  final int lineStart;
-  final int lineEnd;
-  final List<String> speakerSet;
-  final Map<String, int> entityDensity;
-  final String? summary;
 }

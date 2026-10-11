@@ -71,11 +71,16 @@ class SourceSync {
       client.compareCommits(baseSha: installedSha, headSha: latestSha);
 
   /// Downloads what an update from [installedSha] to [latestSha] needs.
+  /// Stops between two files once [shouldCancel] says so (the caller then
+  /// drops the result: the directory is partly updated and keeps its old
+  /// marker, so the next sync fetches the tables again).
   Future<SourceSyncResult> sync({
     required String installedSha,
     required String latestSha,
     void Function(SourceSyncStage stage, int done, int total)? onProgress,
+    bool Function()? shouldCancel,
   }) async {
+    bool cancelled() => shouldCancel?.call() ?? false;
     onProgress?.call(SourceSyncStage.comparing, 0, 0);
     final changes = await check(
       installedSha: installedSha,
@@ -92,7 +97,7 @@ class SourceSync {
     // A directory that does not reflect the installed commit may hold stale
     // tables (changed before the installed commit but never refreshed).
     final local = await localCommit();
-    if (local != null && local != installedSha) {
+    if (local != null && local != installedSha && !cancelled()) {
       for (final path in ArknightsSourcePaths.excelTables) {
         final file = File(p.join(sourceDir.path, path));
         if (await file.exists()) await file.delete();
@@ -114,7 +119,7 @@ class SourceSync {
     var done = 0;
     var next = 0;
     Future<void> worker() async {
-      while (next < changes.length) {
+      while (next < changes.length && !cancelled()) {
         final change = changes[next++];
         final target = File(p.join(sourceDir.path, change.path));
         final previous = change.previousPath;

@@ -156,6 +156,69 @@ QuantizedVector quantize(List<double> vector) {
   return QuantizedVector(scale, values);
 }
 
+/// The [topK] rows of [vectors] (int8, [dims] each, one [scales] entry per
+/// row) closest to [query] by cosine similarity, best first, as (row,
+/// score); [keep] leaves rows out. Shared by the story and the record
+/// index.
+List<(int, double)> topByCosine(
+  Int8List vectors,
+  Float32List scales,
+  int dims,
+  List<double> query, {
+  int topK = 20,
+  bool Function(int row)? keep,
+}) {
+  final length = scales.length;
+  if (query.length != dims || length == 0 || topK <= 0) return const [];
+  var norm = 0.0;
+  for (final v in query) {
+    norm += v * v;
+  }
+  norm = math.sqrt(norm);
+  if (norm == 0) return const [];
+  final q = Float32List(dims);
+  for (var i = 0; i < dims; i++) {
+    q[i] = query[i] / norm;
+  }
+
+  final scores = <(int, double)>[];
+  var floor = double.negativeInfinity;
+  for (var c = 0; c < length; c++) {
+    if (keep != null && !keep(c)) continue;
+    final base = c * dims;
+    var dot = 0.0;
+    for (var i = 0; i < dims; i++) {
+      dot += q[i] * vectors[base + i];
+    }
+    final score = dot * scales[c];
+    if (scores.length < topK) {
+      scores.add((c, score));
+      if (scores.length == topK) {
+        scores.sort((a, b) => b.$2.compareTo(a.$2));
+        floor = scores.last.$2;
+      }
+    } else if (score > floor) {
+      scores[topK - 1] = (c, score);
+      scores.sort((a, b) => b.$2.compareTo(a.$2));
+      floor = scores.last.$2;
+    }
+  }
+  scores.sort((a, b) => b.$2.compareTo(a.$2));
+  return scores;
+}
+
+/// 0.14: how close a passage of another collection must be to one read
+/// before it is listed as alike. Measured on the real database (2026-10-11:
+/// 500 random passages, each with the 5 closest of other collections;
+/// "related" taken as the two collections sharing a speaker who is not
+/// everywhere): about nine in ten are related from 0.70 up, six in ten
+/// between 0.65 and 0.70, a third below. Look at the real database again
+/// before changing it.
+const double nearMinSimilarity = 0.70;
+
+/// Passages listed as alike, one per collection.
+const int nearMaxPassages = 5;
+
 /// One vector hit: a story line range and its cosine similarity.
 class StoryChunkHit {
   const StoryChunkHit({
@@ -298,48 +361,123 @@ class StoryVectorIndex {
     );
   }
 
+  /// 0.14: the mean direction of each collection's chunks (unit length), by
+  /// [collectionOf] (story id → collection id). A collection with fewer
+  /// than [minChunks] chunks has none: a few passages are not what a
+  /// collection is about.
+  Map<String, Float32List> collectionCentroids(
+    Map<String, String> collectionOf, {
+    int minChunks = 8,
+  }) {
+    final sums = <String, Float64List>{};
+    final counts = <String, int>{};
+    for (var c = 0; c < length; c++) {
+      final collection = collectionOf[_storyIds[c]];
+      if (collection == null) continue;
+      final base = c * dims;
+      var squares = 0.0;
+      for (var i = 0; i < dims; i++) {
+        final x = _vectors[base + i];
+        squares += x * x;
+      }
+      if (squares == 0) continue;
+      final norm = math.sqrt(squares);
+      final sum = sums.putIfAbsent(collection, () => Float64List(dims));
+      for (var i = 0; i < dims; i++) {
+        sum[i] += _vectors[base + i] / norm;
+      }
+      counts[collection] = (counts[collection] ?? 0) + 1;
+    }
+    final centroids = <String, Float32List>{};
+    for (final MapEntry(key: collection, value: sum) in sums.entries) {
+      if (counts[collection]! < minChunks) continue;
+      var squares = 0.0;
+      for (final x in sum) {
+        squares += x * x;
+      }
+      if (squares == 0) continue;
+      final norm = math.sqrt(squares);
+      final unit = Float32List(dims);
+      for (var i = 0; i < dims; i++) {
+        unit[i] = sum[i] / norm;
+      }
+      centroids[collection] = unit;
+    }
+    return centroids;
+  }
+
+  /// 0.14: the line range of the chunk of [storyId] that holds [line] — the
+  /// first one (chunks overlap) — or null when no chunk does.
+  ({int lineStart, int lineEnd})? chunkAt(String storyId, int line) {
+    final at = _chunkAt(storyId, line);
+    return at < 0
+        ? null
+        : (lineStart: _lineStarts[at], lineEnd: _lineEnds[at]);
+  }
+
+  int _chunkAt(String storyId, int line) {
+    var found = -1;
+    for (var c = 0; c < length; c++) {
+      if (_storyIds[c] != storyId) continue;
+      if (_lineStarts[c] > line || _lineEnds[c] < line) continue;
+      if (found < 0 || _lineStarts[c] < _lineStarts[found]) found = c;
+    }
+    return found;
+  }
+
+  /// 0.14: the chunks closest to the one of [storyId] that holds [line],
+  /// among the stories [keep] lets through; the stored vector is the query,
+  /// so nothing is embedded. Empty when no chunk holds the line.
+  List<StoryChunkHit> nearChunk(
+    String storyId,
+    int line, {
+    int topK = 20,
+    bool Function(String storyId)? keep,
+  }) {
+    final at = _chunkAt(storyId, line);
+    if (at < 0) return const [];
+    final scores = topByCosine(
+      _vectors,
+      _scales,
+      dims,
+      // Cosine: the chunk's scale does not matter.
+      [for (var i = 0; i < dims; i++) _vectors[at * dims + i].toDouble()],
+      topK: topK,
+      keep: (c) => c != at && (keep == null || keep(_storyIds[c])),
+    );
+    return [
+      for (final (c, score) in scores)
+        StoryChunkHit(
+          storyId: _storyIds[c],
+          scopeId: _scopeIds[c],
+          lineStart: _lineStarts[c],
+          lineEnd: _lineEnds[c],
+          score: score,
+        ),
+    ];
+  }
+
   /// Top [topK] chunks by cosine similarity to [query] (any length-[dims]
-  /// vector; normalized here), optionally restricted to [scopeId].
+  /// vector; normalized here), optionally restricted to [scopeId] and to the
+  /// story files [storyIds].
   List<StoryChunkHit> search(
     List<double> query, {
     int topK = 20,
     String? scopeId,
+    Set<String>? storyIds,
   }) {
-    if (query.length != dims || length == 0) return const [];
-    var norm = 0.0;
-    for (final v in query) {
-      norm += v * v;
-    }
-    norm = math.sqrt(norm);
-    if (norm == 0) return const [];
-    final q = Float32List(dims);
-    for (var i = 0; i < dims; i++) {
-      q[i] = query[i] / norm;
-    }
-
-    final scores = <(int, double)>[];
-    var floor = double.negativeInfinity;
-    for (var c = 0; c < length; c++) {
-      if (scopeId != null && _scopeIds[c] != scopeId) continue;
-      final base = c * dims;
-      var dot = 0.0;
-      for (var i = 0; i < dims; i++) {
-        dot += q[i] * _vectors[base + i];
-      }
-      final score = dot * _scales[c];
-      if (scores.length < topK) {
-        scores.add((c, score));
-        if (scores.length == topK) {
-          scores.sort((a, b) => b.$2.compareTo(a.$2));
-          floor = scores.last.$2;
-        }
-      } else if (score > floor) {
-        scores[topK - 1] = (c, score);
-        scores.sort((a, b) => b.$2.compareTo(a.$2));
-        floor = scores.last.$2;
-      }
-    }
-    scores.sort((a, b) => b.$2.compareTo(a.$2));
+    final scores = topByCosine(
+      _vectors,
+      _scales,
+      dims,
+      query,
+      topK: topK,
+      keep: scopeId == null && storyIds == null
+          ? null
+          : (c) =>
+              (scopeId == null || _scopeIds[c] == scopeId) &&
+              (storyIds == null || storyIds.contains(_storyIds[c])),
+    );
     return [
       for (final (c, score) in scores)
         StoryChunkHit(

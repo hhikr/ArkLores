@@ -29,14 +29,22 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 | `entries(id, type, name, code, collection_id, group_name, sort_key, entity_id, raw_id, record_id, source_path)` | 每个官方条目一行，`id = <type>:<原始 id>`；`record_id` 指向承载文字的记录 |
 | `entry_links(src, relation, dst, source_path)` | 绑定：`appears_in`、`plays_in`、`attached_to`、`belongs_to`、`belongs_to_stage`、`part_of`、`summoned_by`、`same_person`、`features`、`reads_story`…；视图 `collection_enemies` |
 | `story_lines(story_id, line_index, speaker, content, kind, …)` | 剧情逐行（约 44 万行）；索引 `(story_id, line_index)`；行内换行是真换行 |
-| `normalized_records` | 非剧情文字（档案、语音、描述…），`entry_id`/`collection_id`；可作为出处 `record:<id>` |
-| `entities` / `entity_aliases` / `entity_documents` | 实体与别名（覆盖层、近似名用） |
-| `entity_story_mentions`、`story_chapter_profiles`、`rare_terms`、`story_lines_fts`、`lore_chunks(_fts)` | 确定性覆盖层与全文索引（定位线索） |
+| `normalized_records` | 非剧情文字（档案、语音、描述…），`entry_id`/`collection_id`；可作为出处 `record:<id>`。只带 `entity_id` 的记录（干员语音）的 `entity_name` 在派生步骤里按 id 从 `entities` 填上 |
+| `entities` / `entity_aliases` / `entity_documents` | 实体与别名（资料的所属对象、近似名用）；`entity_documents` 是每位干员的整份档案（也可作为出处） |
 | `story_catalog`（可选） | 故事集名、关卡号、章名、行动前/后、顺序、官方梗概、上线时间（`story_review_table.json` + `[uc]info`） |
 | `story_chunk_vectors`（可选） | 剧情向量，12 行一块、步长 8，int8；模型/维度/切块记在 manifest |
+| `record_chunk_vectors`（可选，0.14） | 资料向量：`normalized_records` 里不是剧情副本的每条记录与 `entity_documents` 的每份档案；一条一块，超过 800 字的在 `## ` 小节处切、再按行切；每块存文字哈希与它覆盖的字符范围；与剧情向量同一模型 |
 | `gamedata_manifest` | schema 版本、上游提交、计数、向量与目录元数据 |
 
 关系、名字、复刻合并、去重等规则见 `KNOWLEDGE_BASE_LESSONS.md` §2。
+
+**0.14 删掉的（没有任何代码读，真机与 live 的 40 份会话里模型也没查过）**：`lore_chunks` 与它的全文索引（全部文字切块后的又一份副本）、
+`story_lines_fts`（unicode61 不切中文词，匹配不到句子里的词；关键词检索一直走 LIKE）、`entity_documents_fts`、
+`entity_relations`（只有“干员 ↔ 自己的语音”一种关系）、覆盖层三张表 `entity_story_mentions` / `rare_terms` / `story_chapter_profiles`、
+`normalized_records` 里剧情的切块副本（`parent_type = 'story_file'`，正文在 `story_lines`）、由说话人名字造的实体（`source_type = 'story_speaker'`）。
+清单在 `gamedata_schema.dart` 的 `obsoleteGamedataTables` / `dropObsoleteGamedataData`。schema 版本没变（仍是 5）：有没有这些表对 App 是一样的，
+旧资产照常能装；App 内更新一个带着它们的库时先删掉再 `VACUUM`（进度“清理不再使用的数据”），命令行用 `tools/compact_gamedata.dart --db=<库>`。
+明日方舟库 701 → 292 MB（下载 220 → 112 MB），终末地 62 → 31 MB；剧情行、资料、条目与之前逐行相同，向量按行迁移。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
 
 ## 4. 四条构建路径（同一套代码）
 
@@ -59,7 +67,7 @@ dart run tools/update_gamedata.dart --db=<库> --vectors-only [--embed]
 ```
 
 流程：比较两个提交的文件树（excel/story/levels 按 blob 哈希）→ 只下载变化的文件与缺的上下文表（6 个并发）→ 复制旧库，按
-“数据表 → 关卡文件 → 剧情文件”逐个先清后导；上下文表变化时按完整构建的顺序重读全部条目表 → 重算派生层、目录、FTS → 校验后原子替换 →
+“数据表 → 关卡文件 → 剧情文件”逐个先清后导；上下文表变化时按完整构建的顺序重读全部条目表 → 重算派生层、目录 → 校验后原子替换 →
 更新报告。没有装库、旧 schema、旧提交已不在上游时自动完整重建。GitHub 匿名额度 60 次/小时，token 来自 `tools/github_pat` 或 `GITHUB_TOKEN`。
 
 ### 4.3 补算（规则改了，不重建剧情和向量）
@@ -68,27 +76,68 @@ dart run tools/update_gamedata.dart --db=<库> --vectors-only [--embed]
 dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=<新库>]   # 默认 <库>.rederived
 ```
 
-重导全部条目表、重解析与库里不同的故事（这些故事的向量会被删）、重建派生层与 FTS。末尾打印 `unnamed kind:`（要去 wiki 查名字的新类型）。
+重导全部条目表、重解析与库里不同的故事（这些故事的向量会被删）、重建派生层，并删掉旧构建留下的没人读的表。末尾打印 `unnamed kind:`（要去 wiki 查名字的新类型）。
 补算后若有故事被重解析，接 §5 的向量迁移。补算结果必须与全量新建一致（`KNOWLEDGE_BASE_LESSONS.md` §4 一致性实验）。
 
 ### 4.4 App 内完整构建
 
 没有安装库或变化过多时，App 下载仓库 zip，按白名单解压（含 `levels/`，建完删除），在后台 isolate 构建（`sqflite_common_ffi`），
-用与安装器相同的 `validateGameDataDatabase` 校验后原子替换。**已安装的库在替换前永不修改。** App 内不生成向量（由“故事向量”卡片另补）。
+用与安装器相同的 `validateGameDataDatabase` 校验后原子替换。**已安装的库在替换前永不修改。** App 内不生成向量（由“语义检索”卡片另补）。
 
-## 5. 剧情向量
+0.14（知识库页“用游戏数据更新”，只有明日方舟页有）：
+
+- App 里更新或构建出来的库旁边写一个 `<库>.local_build` 标记（`replaceInstalledDatabase`），安装状态的 `builtLocally` 读它。
+  这样的库不再被当成“有新版官方知识库”（官方资产比它旧，以前会一直提示“更新”，点了就把新库盖掉）；
+  页面显示“本机更新”，按钮是“换回官方版本”（先确认）。装回官方资产时标记删掉。
+- 取消会真正停下（`_run` 计数）：下载在两个文件之间停，上一次运行没有结束前不开始下一次（`_active`）。以前取消后下载还在后台继续，
+  紧接着再点“更新”会有两次运行同时改源目录，导入时报“Missing required GameData file”（2026-10-10 真机上遇到）。
+  每次运行开始时删掉临时目录里失败的构建留下的 `build_*.db`（每个都是整库的一份副本）。
+- 更新成功后状态里的已装提交就是最新提交（`GameDataBuildUiState.upToDate`）：“拉取并更新”不可按、更新前那次检查的计数不再显示；
+  “检查更新”查到新提交，或换了一个库（安装状态变化时 `installedChanged`），按钮恢复。每次更新都重新向上游问最新提交，
+  不沿用上一次检查看到的。
+- 真机实测（2026-10-10，PJH110，瘦身后的库）：`a550f5e` → `17759cc`，84 个变化的文件，连下载 187 秒，结果与电脑上同一次更新的报告逐项相同
+  （+52 篇剧情、16 张表、15 个关卡文件）；更新后 284 MB，状态“本机更新”。
+- 完整重建建的是一个新库，**不带向量**。已装的库有向量（清单里有 `embedding_model`）而这次只能完整重建时
+  （库的 schema 旧，或改动超出 compare 接口能列出的范围），不直接开始：页面写明代价，点“仍然完整重建”才继续
+  （`GameDataBuildUiState.confirmFull` / `buildFromSource(allowFull: true)`）。增量更新不受影响。
+
+**官方资产与本机更新的先后（2026-10-11，开发者定）**：游戏数据较新的在前；同一份游戏数据，官方资产在本机更新的之前（它的向量是全的）。
+
+- 库自己知道的：清单里的上游提交（`source_arknights_commit`）和构建时间（`built_at`）；旁边的标记说明来源——`.asset_sha256`（从哪个官方资产装的）、`.local_build`（在本机更新过）。
+- 构建 App 时除了资产的 URL 和 SHA，还写进它所基于的提交和那个提交的日期：`tools/release_gamedata.env` 的 `GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE`
+  （GitHub 上那个提交的 committer 日期；`install_local.ps1` 和发布工作流都会传）。**发新资产时四个值一起改。** 终末地库不是从仓库来的，没有这两项。
+- 官方卡什么时候提示“更新”（`GameDataInstallStatus.updateReason`）：
+  - 手机上是官方资产装的：App 指向的是另一份资产（与原来一样）。
+  - 手机上是本机更新过的：官方资产与它是同一个提交，或官方资产的提交是在那次更新**之后**才有的。本机更新拿的是当时上游的最新提交，
+    所以之后才有的提交一定比它新，之前的提交一定不比它新——不需要知道已装提交本身的日期。其余情况不提示，只留“换回官方版本”（会丢较新的内容，要确认）。
+  - 构建时没写提交的 App（旧的构建方式）不会提示替换本机更新过的库。
+- “用游戏数据更新”卡：检查到的上游最新提交就是官方资产的提交、而官方卡正提示更新时，“拉取并更新”变灰并提示用上面的“更新”。
+- App 不会自己到 GitHub 上找新的资产：只上传不发新的 App，页面不会变。
+
+## 5. 向量（剧情与资料）
 
 ```bash
 dart run tools/build_story_embeddings.dart --db=<库>                                # 全量/续跑（按内容哈希缓存）
 dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库> --dry-run   # 按行对齐迁移的计划
 dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
+# --stories-only：不做资料向量
 ```
+
+- **先看 `--dry-run`**：它分两行打印剧情和资料各自的 “to embed”。明日方舟库的剧情向量是按行迁移来的，内容缓存里只有一小部分，
+  不带 `--migrate-from` 直接跑会把五万多块剧情重嵌入一遍（约 ¥5）；带上 `--migrate-from=<有向量的旧库>` 后剧情应为 0。
+  迁移只把落在搬过来的向量范围内的行算作已覆盖（2026-10-10 前是“旧库有这一行就算”，旧库里没有向量的剧情因此一直补不上）；
+  `--migrate-from` 不能指向 `--db` 同一个文件，先复制一份。
+- 资料向量（0.14，`record_vectors.dart`）：嵌入的文字是“所属对象 · 标题：正文”（所属对象是 `entity_name`，没有时取 `entity_id` 的名字），
+  所以一条语音带着它的干员名。四条路径都覆盖：全量脚本与剧情向量共用内容缓存；增量（`update_gamedata.dart --embed`、App 的“语义检索”卡片）
+  按每块文字的哈希比对，只嵌入新增或改动的块，记录已删除的块的向量一并删掉；补算之后接一次增量或全量脚本即可（文字没变的块不重算）。
+  2026-10 实测：明日方舟 37,010 块（约 366 万字）、终末地 3,663 块（约 76 万字），合计约 ¥1.6。
 
 - 默认百炼 `qwen3.7-text-embedding`，512 维；key 来自 gitignored 的 `tools/embedding-apiKey.csv`。真实调用要开发者同意。
 - 迁移按行对齐（忽略省略号点数、空白、字面 `\n`），首尾都对得上的旧向量搬到新行号，其余才嵌入。
-- App 的“故事向量”卡片（`story_vector_updater.dart`）补缺的故事，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
-  模型/维度与库里不一致时拒绝混用。
-- 向量只是定位线索；证据是 `read_story` 读到的原文。
+- App 的“语义检索”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
+  模型/维度与库里不一致时拒绝混用。0.14：每个游戏的知识库页各有一张（`storyVectorProvider(game)`，以前只看明日方舟库）；
+  没有缺口时只有两行（剧情/资料向量各多少条、“完整”），有缺口、模型不一致或运行中才展开成操作区。
+- 向量只是定位线索；证据是 `read_story` / `read_record` 读到的原文。
 
 ## 6. 故事目录
 
@@ -99,8 +148,10 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 
 1. 压缩：`finalize_gamedata_assets.dart --output=<目录>`（没有 `.gz` 时自己压缩，Windows 不需要 gzip），写 manifest 的大小与 SHA。
 2. 验收：`flutter test`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
-   `dart run tools/check_gamedata_retrieval.dart --db=<库>`；改了建库结构时做一致性实验。
-3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，提交。
+   改了建库结构时做一致性实验。
+3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
+   （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，
+   `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`），提交。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
 4. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
 5. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。
@@ -196,6 +247,6 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   说话人名后面花括号里的内部注释（`{c13-…}`，可能是剧情里尚未揭示的身份）去掉。
 - 一个 40 秒左右的整库构建；重建后的库没有向量，加 `-Embed`（脚本在压缩前跑 `build_story_embeddings.dart`）。
   向量按内容哈希缓存在 `build/embedding_cache/`，没变的块不再收费；新块要花钱，先问开发者。
-  v0.12.0：8379 段对话、9969 块、约 115 万字，嵌入 77 秒、约 ¥0.4；两个库用同一个模型（`qwen3.7-text-embedding`@512），`find` 跨库合并分数。
+  v0.12.0：8379 段对话、9969 块、约 115 万字，嵌入 77 秒、约 ¥0.4；两个库用同一个模型（`qwen3.7-text-embedding`@512），`search` 跨库合并分数。
   只改归类或命名时先用 `build_story_embeddings.dart --migrate-from=<旧库>` 按行对齐搬旧向量，剩下的块多半在缓存里
   （0.12 归类修正：447 篇整篇对齐、其余 349 块全部命中缓存，零费用）；`--dry-run` 会报“to embed”的块数，非零才要问开发者。

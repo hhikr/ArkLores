@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +8,6 @@ import '../../../core/agent/agent_provider.dart';
 import '../../../core/agent/react_event.dart';
 import '../../../core/agent/story_answer.dart';
 import '../../../core/agent/turn_stats.dart';
-import '../../../core/gamedata/game.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
@@ -81,7 +82,78 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           ],
           _buildAssistantContentBox(theme),
           if (storyAnswer) _buildCitationTree(theme),
+          if (!msg.isStreaming && (msg.canDigest || msg.canReview))
+            _buildAnswerActions(theme),
           if (msg.stats != null) _buildStatsLine(theme, msg.stats!),
+        ],
+      ),
+    );
+  }
+
+  /// 0.14: what can be asked for once the answer is there — "提要" (a long
+  /// answer reorganised into a few paragraphs above it) and "复核" (a
+  /// reader's review, answered below as a turn of its own).
+  Widget _buildAnswerActions(AppThemeTokens theme) {
+    final msg = widget.message;
+    // Read when pressed: showing an answer does not need the chat itself.
+    AskChatNotifier chat() => ref.read(askChatProvider.notifier);
+    Widget action(String key, IconData icon, String label, String hint,
+            VoidCallback onTap,) =>
+        Tooltip(
+          message: hint,
+          child: PressFeedback(
+            pressedScale: 0.92,
+            child: InkWell(
+              key: ValueKey(key),
+              onTap: withHaptic(onTap),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  border: Border.all(color: theme.divider),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 15, color: theme.accentText),
+                    const SizedBox(width: 5),
+                    Text(
+                      label,
+                      style: theme.bodyFont.copyWith(
+                        fontSize: 12.5,
+                        color: theme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          if (msg.canDigest)
+            action(
+              'answer-digest',
+              Icons.short_text_sharp,
+              context.t.aiAnswerDigest,
+              context.t.aiAnswerDigestHint,
+              () => chat().digestAnswer(msg.id),
+            ),
+          if (msg.canReview)
+            action(
+              'answer-review',
+              Icons.fact_check_sharp,
+              context.t.aiAnswerReview,
+              context.t.aiAnswerReviewHint,
+              () => chat().reviewAnswer(
+                msg.id,
+                label: context.t.aiReviewRequest,
+              ),
+            ),
         ],
       ),
     );
@@ -971,58 +1043,86 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   /// Steps whose raw output is unfolded (by index in [workStepsOf]).
   final Set<int> _openSteps = {};
 
-  /// One row of the work timeline: what was done, in the reader's words,
-  /// and what it found; tap for the tool's raw output.
+  /// One row of the work timeline, as the session record has it: the
+  /// call's number, the tool, what it was asked (its arguments as written)
+  /// and what came back (how much, and what went wrong); tap for the whole
+  /// arguments and output.
   Widget _buildWorkRow(AppThemeTokens theme, WorkStep step, int index,
       {required bool last,}) {
     final open = _openSteps.contains(index);
     final small = theme.bodyFont.copyWith(fontSize: 11, height: 1.35);
-    if (step.kind == WorkKind.note) {
+    final mono = small.copyWith(fontFamily: 'monospace');
+    void toggle() => setState(() {
+          if (!_openSteps.remove(index)) _openSteps.add(index);
+        });
+    if (step.kind == WorkKind.note || step.kind == WorkKind.record) {
+      final record = step.kind == WorkKind.record;
       return _timelineRow(
         theme,
         last: last,
         dot: null,
         child: InkWell(
-          onTap: () => setState(() {
-            if (!_openSteps.remove(index)) _openSteps.add(index);
-          }),
+          key: record ? ValueKey('work-record-$index') : null,
+          onTap: toggle,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Text(
-              step.text,
-              maxLines: open ? null : 2,
+              record ? context.t.aiWorkRecord(step.text) : step.text,
+              maxLines: open ? null : (record ? 3 : 2),
               overflow: open ? null : TextOverflow.ellipsis,
               style: small.copyWith(
-                color: theme.textMuted,
-                fontStyle: FontStyle.italic,
+                color: record ? theme.warning : theme.textMuted,
+                fontStyle: record ? null : FontStyle.italic,
               ),
             ),
           ),
         ),
       );
     }
-    final (icon, title) = _workTitle(step);
-    final color = switch (step.kind) {
-      WorkKind.error => theme.danger,
-      WorkKind.redo => theme.warning,
-      _ when step.failed => theme.danger,
-      _ => theme.accentText,
-    };
+    if (step.kind == WorkKind.error) {
+      return _timelineRow(
+        theme,
+        last: last,
+        dot: Icon(Icons.error_outline_sharp, size: 13, color: theme.danger),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: SelectableText(
+            step.text,
+            style: theme.bodyFont.copyWith(
+              fontSize: 12.5,
+              height: 1.35,
+              color: theme.danger,
+            ),
+          ),
+        ),
+      );
+    }
+    final t = context.t;
+    final bad = step.failed || step.notRun;
     final result = _workResult(step);
-    final detail = step.kind == WorkKind.sql ? step.arg('query') : '';
-    final canOpen = step.isTool && step.done && step.text.isNotEmpty;
+    final args = step.argsJson;
+    final flags = <(String, Color)>[
+      if (step.subtask != null) (t.aiWorkHelper(step.subtask!), theme.textMuted),
+      if (step.planned) (t.aiWorkPlanned, theme.textMuted),
+      if (step.repeated) (t.aiWorkRepeated, theme.danger),
+      if (step.notRun)
+        (t.aiWorkNotRun, theme.danger)
+      else if (step.failed)
+        (t.aiWorkFailed, theme.danger)
+      else if (step.empty)
+        (t.aiWorkNone, theme.danger),
+      if (step.wikiDown && !step.failed) (t.aiWorkWikiDown, theme.danger),
+    ];
+    final canOpen = step.done && (step.text.isNotEmpty || args.isNotEmpty);
     return _timelineRow(
       theme,
       last: last,
-      dot: Icon(icon, size: 13, color: color),
+      dot: Icon(_workIcon(step.kind), size: 13,
+          color: bad ? theme.danger : theme.accentText,),
       child: InkWell(
         key: ValueKey('work-step-$index'),
         borderRadius: BorderRadius.zero,
-        onTap: canOpen
-            ? () => setState(() {
-                  if (!_openSteps.remove(index)) _openSteps.add(index);
-                })
-            : null,
+        onTap: canOpen ? toggle : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
@@ -1032,21 +1132,28 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.bodyFont.copyWith(
-                        fontSize: 12.5,
-                        height: 1.35,
-                        color: step.kind == WorkKind.error
-                            ? theme.danger
-                            : theme.textPrimary,
-                      ),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 2,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text('${step.number}',
+                            style: small.copyWith(color: theme.textMuted),),
+                        Text(
+                          step.tool ?? '',
+                          style: mono.copyWith(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textPrimary,
+                          ),
+                        ),
+                        for (final (label, color) in flags)
+                          _workFlag(theme, label, color),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (step.isTool && !step.done)
+                  if (!step.done)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
                       child: SizedBox(
@@ -1058,48 +1165,56 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                         ),
                       ),
                     )
-                  else if (result.isNotEmpty)
+                  else
                     Padding(
                       padding: const EdgeInsets.only(top: 1),
                       child: Text(
-                        result,
-                        style: small.copyWith(
-                          color: step.failed ? theme.danger : theme.textMuted,
-                        ),
+                        [
+                          if (result.isNotEmpty) result,
+                          t.aiWorkChars(step.text.length),
+                        ].join(' · '),
+                        style: small.copyWith(color: theme.textMuted),
                       ),
                     ),
                 ],
               ),
-              if (detail.isNotEmpty && !open)
+              if (args.isNotEmpty && !open)
                 Text(
-                  detail.replaceAll(RegExp(r'\s+'), ' '),
-                  maxLines: 1,
+                  args,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: small.copyWith(
-                    color: theme.textMuted,
-                    fontFamily: 'monospace',
-                  ),
+                  style: mono.copyWith(color: theme.textMuted),
+                ),
+              // Why a failed step failed, in the tool's own words.
+              if (bad && !open)
+                Text(
+                  step.text.trimLeft().split('\n').first,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: small.copyWith(color: theme.danger),
                 ),
               if (open)
                 Container(
                   key: ValueKey('work-raw-$index'),
                   width: double.infinity,
                   margin: const EdgeInsets.only(top: 6),
-                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(maxHeight: workRawHeight),
                   decoration: BoxDecoration(
                     color: theme.bgSecondary.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.zero,
                   ),
-                  child: SelectableText(
-                    [
-                      if (detail.isNotEmpty) detail,
-                      step.text.trim(),
-                    ].join('\n\n'),
-                    maxLines: 16,
-                    style: small.copyWith(
-                      color: theme.textSecondary,
-                      fontFamily: 'monospace',
-                      fontSize: 10.5,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(8),
+                    child: SelectableText(
+                      [
+                        if (args.isNotEmpty)
+                          const JsonEncoder.withIndent('  ').convert(step.args),
+                        step.text.trim(),
+                      ].join('\n\n'),
+                      style: mono.copyWith(
+                        color: theme.textSecondary,
+                        fontSize: 10.5,
+                      ),
                     ),
                   ),
                 ),
@@ -1110,6 +1225,22 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
+  /// How tall an unfolded step's arguments and output may be; the whole of
+  /// it scrolls inside.
+  static const double workRawHeight = 320;
+
+  Widget _workFlag(AppThemeTokens theme, String label, Color color) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withValues(alpha: 0.7)),
+          borderRadius: BorderRadius.zero,
+        ),
+        child: Text(
+          label,
+          style: theme.bodyFont.copyWith(fontSize: 10, height: 1.4, color: color),
+        ),
+      );
   /// A timeline row: a dot (or a short tick for notes) on a thin rail.
   Widget _timelineRow(AppThemeTokens theme,
       {required bool last, required Widget? dot, required Widget child,}) {
@@ -1161,55 +1292,23 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// The step's title, with the game when it looked in Endfield's library.
-  (IconData, String) _workTitle(WorkStep step) {
-    final (icon, title) = _workTitleOf(step);
-    return step.game == Game.endfield
-        ? (icon, '$title · ${context.t.gameEndfield}')
-        : (icon, title);
-  }
-
-  (IconData, String) _workTitleOf(WorkStep step) {
-    String clip(String s, [int n = 40]) =>
-        s.length <= n ? s : '${s.substring(0, n)}…';
-    final t = context.t;
-    switch (step.kind) {
-      case WorkKind.sql:
-        return (Icons.storage_sharp, t.aiWorkSql);
-      case WorkKind.grep:
-        final pattern = clip(step.arg('pattern').replaceAll('|', ' / '));
-        final scope = step.arg('collection');
-        return (
-          Icons.search_sharp,
-          scope.isEmpty ? t.aiWorkGrep(pattern) : t.aiWorkGrepIn(clip(scope, 20), pattern),
-        );
-      case WorkKind.read:
-        return (Icons.menu_book_sharp, t.aiWorkRead(clip(step.storyTitle)));
-      case WorkKind.outline:
-        return (
-          Icons.format_list_bulleted_sharp,
-          t.aiWorkOutline(clip(step.arg('collection'))),
-        );
-      case WorkKind.find:
-        return (Icons.travel_explore_sharp, t.aiWorkFind(clip(step.arg('query'))));
-      case WorkKind.similarNames:
-        return (Icons.spellcheck_sharp, t.aiWorkSimilar(clip(step.arg('name'))));
-      case WorkKind.delegate:
-        return (Icons.call_split_sharp, t.aiWorkDelegate(clip(step.arg('task'), 60)));
-      case WorkKind.wikiSearch:
-        return (Icons.public_sharp, t.aiWorkWikiSearch(clip(step.arg('query'))));
-      case WorkKind.wikiRead:
-        return (Icons.article_sharp, t.aiWorkWikiRead(clip(step.wikiTitle)));
-      case WorkKind.redo:
-        return (Icons.replay_sharp, t.aiWorkRedo);
-      case WorkKind.error:
-        return (Icons.error_outline_sharp, clip(step.text, 120));
-      case WorkKind.otherTool:
-      case WorkKind.note:
-        return (Icons.build_outlined, step.tool ?? '');
-    }
-  }
-
+  IconData _workIcon(WorkKind kind) => switch (kind) {
+        WorkKind.sql => Icons.storage_sharp,
+        WorkKind.grep => Icons.search_sharp,
+        WorkKind.read => Icons.menu_book_sharp,
+        WorkKind.readRecord => Icons.description_sharp,
+        WorkKind.outline => Icons.format_list_bulleted_sharp,
+        WorkKind.find => Icons.travel_explore_sharp,
+        WorkKind.similarNames => Icons.spellcheck_sharp,
+        WorkKind.delegate => Icons.call_split_sharp,
+        WorkKind.wikiSearch => Icons.public_sharp,
+        WorkKind.wikiRead => Icons.article_sharp,
+        WorkKind.error => Icons.error_outline_sharp,
+        WorkKind.otherTool ||
+        WorkKind.note ||
+        WorkKind.record =>
+          Icons.build_outlined,
+      };
   String _workResult(WorkStep step) {
     final t = context.t;
     if (!step.isTool || !step.done) return '';
@@ -1222,6 +1321,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       case WorkKind.sql:
         final rows = step.rowCount;
         return rows == null ? '' : t.aiWorkRows(rows);
+      case WorkKind.find:
+        final stories = step.searchStoryCount;
+        return stories == null ? '' : t.aiWorkStories(stories);
       case WorkKind.read:
         final range = step.lineRange;
         return range == null ? '' : t.aiWorkLines(range.$1, range.$2);

@@ -172,6 +172,23 @@ void main() {
     expect(find.text('故事a'), findsNothing);
     expect((await store.recent()), hasLength(1));
 
+    // Each row also has a button that removes it.
+    await store.recordOpen(
+      const LibraryRef.story('s/c.txt'),
+      title: '故事c',
+      lineIndex: 0,
+      snippet: '',
+    );
+    await tester.pumpWidget(app(const ReadingHistoryPage(), const []));
+    await settle(tester);
+    expect(find.text('故事c'), findsOneWidget);
+    await tester.tap(
+        find.byKey(const ValueKey('reading-history-remove-story:s/c.txt')),);
+    await settle(tester);
+    expect(find.text('故事c'), findsNothing);
+    expect(find.text('故事b'), findsOneWidget);
+    expect((await store.recent()), hasLength(1));
+
     await tester.tap(find.byKey(const ValueKey('reading-history-clear')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('reading-history-clear-confirm')));

@@ -104,6 +104,9 @@ void main() {
     expect((await manifest())['source_arknights_commit'], 'c1');
     expect(installedNotices, 1);
     expect(marker(), 'c1');
+    // 0.14: the database says it was built here, so the official asset is
+    // not offered as an update over it.
+    expect((await const GameDataInstaller().getStatus()).builtLocally, isTrue);
     // The level files were read for the build, then removed (they are
     // fetched again only when they change).
     final source = p.join(docs.path, 'gamedata_source', 'zh_CN', 'gamedata');
@@ -132,10 +135,19 @@ void main() {
     await buildC1();
     notifier().dismissDone();
 
+    // Before the update the card knows nothing is installed at the latest.
+    await online({'c1': _c1(), 'c2': _c2()}, 'c2', notifier().checkForUpdates);
+    expect(state().upToDate, isFalse);
+
     await online({'c1': _c1(), 'c2': _c2()}, 'c2', notifier().buildFromSource);
     expect(state().error, isNull);
     expect(state().phase, GameDataBuildPhase.done);
     expect(state().incremental, isTrue);
+    // After it there is nothing to pull: the card's button is off, and what
+    // the check counted before the update is no longer shown.
+    expect(state().upToDate, isTrue);
+    expect(state().installedCommit, 'c2');
+    expect(state().changeSummary, isNull);
     expect(hosts(), isNot(contains('codeload.github.com')));
     expect(rawPaths(), containsAll([
       '$fixtureStoryDir/level_fixture_c5.txt',
@@ -148,6 +160,12 @@ void main() {
     expect(report.storyChanged, 1);
     expect((await manifest())['source_arknights_commit'], 'c2');
     expect(marker(), 'c2');
+    notifier().dismissDone();
+    expect(state().upToDate, isTrue);
+    // Another database put in place: the button is live again.
+    notifier().installedChanged('c1');
+    expect(state().upToDate, isFalse);
+    notifier().installedChanged('c2');
 
     final db = await databaseFactoryFfi.openDatabase(
       p.join(docs.path, 'arklores_gamedata_zh.db'),
@@ -170,6 +188,39 @@ void main() {
     expect(state().phase, GameDataBuildPhase.done);
     expect(state().incremental, isFalse);
     expect(hosts(), contains('codeload.github.com'));
+    expect((await manifest())['source_arknights_commit'], 'c2');
+  }, timeout: const Timeout(Duration(minutes: 3)),);
+
+  // 0.14: a complete rebuild starts a new database without the vectors of
+  // the installed one, so it waits for a second, explicit start.
+  test('a complete rebuild over a database with vectors asks first',
+      () async {
+    await buildC1();
+    notifier().dismissDone();
+    final db = await databaseFactoryFfi
+        .openDatabase(p.join(docs.path, 'arklores_gamedata_zh.db'));
+    await db.insert('gamedata_manifest', {
+      'key': 'embedding_model',
+      'value': 'emb',
+    });
+    await db.close();
+
+    await online({'c2': _c2()}, 'c2', notifier().buildFromSource);
+    expect(state().confirmFull, isTrue);
+    expect(state().phase, GameDataBuildPhase.idle);
+    expect(state().error, isNull);
+    expect(hosts(), isNot(contains('codeload.github.com')));
+    expect((await manifest())['source_arknights_commit'], 'c1');
+    expect(installedNotices, 1);
+
+    await online(
+      {'c2': _c2()},
+      'c2',
+      () => notifier().buildFromSource(allowFull: true),
+    );
+    expect(state().confirmFull, isFalse);
+    expect(state().phase, GameDataBuildPhase.done);
+    expect(state().incremental, isFalse);
     expect((await manifest())['source_arknights_commit'], 'c2');
   }, timeout: const Timeout(Duration(minutes: 3)),);
 
@@ -205,6 +256,46 @@ void main() {
     expect(state().error, isNull);
   }, timeout: const Timeout(Duration(minutes: 3)),);
 
+  // Seen on a phone: cancelling while the changed files were downloading did
+  // not stop the download, and the update started again right away deleted
+  // the tables under it.
+  test('cancelled while downloading: stops, and the next update goes through',
+      () async {
+    await buildC1();
+    notifier().dismissDone();
+    // A build that failed earlier left its copy of the database behind.
+    final leftover = File(
+      p.join(docs.path, 'gamedata_build_tmp', 'build_1.db'),
+    )..writeAsStringSync('x');
+
+    var again = Future<void>.value();
+    var cancelledOnce = false;
+    final sub = container.listen(gameDataBuildProvider, (_, next) {
+      if (cancelledOnce || next.phase != GameDataBuildPhase.downloading) return;
+      cancelledOnce = true;
+      notifier().cancel();
+      // A tap on "update" before the cancelled run has ended is not a
+      // second run beside it.
+      again = notifier().buildFromSource();
+    });
+    await online({'c1': _c1(), 'c2': _c2()}, 'c2', () async {
+      await notifier().buildFromSource();
+      await again;
+    });
+    sub.close();
+    expect(cancelledOnce, isTrue);
+    expect(leftover.existsSync(), isFalse);
+    expect(state().phase, GameDataBuildPhase.idle);
+    expect(state().error, isNull);
+    expect((await manifest())['source_arknights_commit'], 'c1');
+
+    await online({'c1': _c1(), 'c2': _c2()}, 'c2', notifier().buildFromSource);
+    expect(state().error, isNull);
+    expect(state().phase, GameDataBuildPhase.done);
+    expect(state().incremental, isTrue);
+    expect((await manifest())['source_arknights_commit'], 'c2');
+  }, timeout: const Timeout(Duration(minutes: 3)),);
+
   test('a failed download leaves an error and no database', () async {
     // The zip is not there.
     await online({}, 'c1', notifier().buildFromSource);
@@ -220,7 +311,27 @@ void main() {
       () => fakeGitHubDown(),
     );
     expect(state().error, startsWith('check:'));
-  });
+
+    // The next run that gets through takes the old message away, from its
+    // start (it was kept through a whole successful build).
+    await online({'c1': _c1()}, 'c1', notifier().checkForUpdates);
+    expect(state().error, isNull);
+    await http.runWithClient(
+      notifier().checkForUpdates,
+      () => fakeGitHubDown(),
+    );
+    expect(state().error, isNotNull);
+    final seen = <String?>[];
+    final sub = container.listen(
+      gameDataBuildProvider,
+      (_, next) => seen.add(next.error),
+    );
+    await buildC1();
+    sub.close();
+    expect(seen, isNotEmpty);
+    expect(seen, everyElement(isNull));
+    expect(state().phase, GameDataBuildPhase.done);
+  }, timeout: const Timeout(Duration(minutes: 3)),);
 }
 
 /// A GitHub that answers every request with a server error.

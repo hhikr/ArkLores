@@ -38,7 +38,13 @@ class GameDataBuildUiState {
     this.changeSummary,
     this.report,
     this.noRelevantChanges = false,
+    this.confirmFull = false,
   });
+
+  /// The update can only be a complete rebuild, which starts a new database
+  /// without the vectors the installed one has: it waits for a second,
+  /// explicit start (`buildFromSource(allowFull: true)`).
+  final bool confirmFull;
   final GameDataBuildPhase phase;
   final String stage;
   final int done;
@@ -57,6 +63,11 @@ class GameDataBuildUiState {
 
   /// The last check or update found nothing that concerns the knowledge base.
   final bool noRelevantChanges;
+
+  /// The installed database is known to be at the latest upstream commit:
+  /// there is nothing to pull.
+  bool get upToDate =>
+      latestCommit != null && installedCommit == latestCommit;
 
   bool get busy =>
       phase == GameDataBuildPhase.checking ||
@@ -78,7 +89,10 @@ class GameDataBuildUiState {
     SourceChangeSummary? changeSummary,
     UpdateReport? report,
     bool? noRelevantChanges,
+    bool? confirmFull,
     bool clearReport = false,
+    bool clearError = false,
+    bool clearCheck = false,
   }) {
     return GameDataBuildUiState(
       phase: phase ?? this.phase,
@@ -87,21 +101,32 @@ class GameDataBuildUiState {
       total: total ?? this.total,
       latestCommit: latestCommit ?? this.latestCommit,
       installedCommit: installedCommit ?? this.installedCommit,
-      changedFileCount: changedFileCount ?? this.changedFileCount,
+      changedFileCount:
+          clearCheck ? null : (changedFileCount ?? this.changedFileCount),
       incremental: incremental ?? this.incremental,
-      error: error ?? this.error,
-      changeSummary: changeSummary ?? this.changeSummary,
+      error: clearError ? null : (error ?? this.error),
+      changeSummary: clearCheck ? null : (changeSummary ?? this.changeSummary),
       report: clearReport ? null : (report ?? this.report),
       noRelevantChanges: noRelevantChanges ?? this.noRelevantChanges,
+      confirmFull: confirmFull ?? this.confirmFull,
     );
   }
 }
 
 final gameDataBuildProvider =
     StateNotifierProvider<GameDataBuildNotifier, GameDataBuildUiState>((ref) {
-  return GameDataBuildNotifier(
+  final notifier = GameDataBuildNotifier(
     onInstalled: () => ref.invalidate(gameDataInstallStatusProvider),
   );
+  // Another database put in place (the official one installed again) makes
+  // what the card says about the installed commit stale.
+  ref.listen(gameDataInstallStatusProvider, (_, next) {
+    final status = next.valueOrNull;
+    if (status != null) {
+      notifier.installedChanged(status.manifest['source_arknights_commit']);
+    }
+  });
+  return notifier;
 });
 
 /// Extracts the whitelisted source subset in a background isolate.
@@ -135,9 +160,37 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   GameDataBuildRunner? _runner;
   String? _outputDbPath;
 
+  /// Counts the runs; [cancel] moves it on, so a run that is still
+  /// downloading sees it is no longer the current one and stops.
+  int _run = 0;
+
+  /// True until a run has really ended. A cancelled download takes a moment
+  /// to stop; a second run started meanwhile deleted the tables the first
+  /// was about to read (seen on a phone: "Missing required GameData file").
+  bool _active = false;
+
+  /// The installed database is now at [commit] (told by the install status).
+  /// What the last check found about another database is dropped.
+  void installedChanged(String? commit) {
+    if (state.busy || commit == null || commit == state.installedCommit) return;
+    if (state.installedCommit == null && state.latestCommit == null) return;
+    state = state.copyWith(
+      installedCommit: commit,
+      clearCheck: true,
+      noRelevantChanges: false,
+      confirmFull: false,
+      clearReport: true,
+      phase: GameDataBuildPhase.idle,
+    );
+  }
+
   Future<void> checkForUpdates({String? githubToken}) async {
     if (state.busy) return;
-    state = state.copyWith(phase: GameDataBuildPhase.checking, error: null);
+    state = state.copyWith(
+      phase: GameDataBuildPhase.checking,
+      clearError: true,
+      confirmFull: false,
+    );
     try {
       final client = ArknightsSourceClient(githubToken: githubToken);
       final latest = await client.fetchLatestCommit();
@@ -171,17 +224,49 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   /// Pulls source (incremental or first-time zip) and builds/updates the
   /// knowledge base in a background isolate, then swaps the validated output
   /// over the installed database.
-  Future<void> buildFromSource({String? githubToken}) =>
+  ///
+  /// A complete rebuild over a database that has vectors is not started
+  /// unless [allowFull]: the new database would have none (see
+  /// [GameDataBuildUiState.confirmFull]).
+  Future<void> buildFromSource({String? githubToken, bool allowFull = false}) =>
       BackgroundWork.instance.run(
         BackgroundWork.text('正在构建知识库', 'Building the knowledge base'),
-        () => _buildFromSource(githubToken: githubToken),
+        () async {
+          if (state.busy || _active) return;
+          _active = true;
+          try {
+            await _buildFromSource(
+              githubToken: githubToken,
+              allowFull: allowFull,
+            );
+          } finally {
+            _active = false;
+          }
+        },
       );
 
-  Future<void> _buildFromSource({String? githubToken}) async {
-    if (state.busy) return;
+  Future<void> _buildFromSource({
+    String? githubToken,
+    bool allowFull = false,
+  }) async {
+    final run = ++_run;
+    bool cancelled() => run != _run;
+    state = state.copyWith(confirmFull: false, clearError: true);
     final dirs = await _dirs();
     await dirs.sourceDir.create(recursive: true);
     await dirs.tmpDir.create(recursive: true);
+    // What a failed or killed build left behind (a copy of the whole
+    // database each time); no other run is using the folder.
+    await for (final entry in dirs.tmpDir.list()) {
+      final name = p.basename(entry.path);
+      if (entry is File && name.startsWith('build_') && name.contains('.db')) {
+        try {
+          await entry.delete();
+        } on FileSystemException {
+          // Best effort.
+        }
+      }
+    }
     final outputDbPath = p.join(
       dirs.tmpDir.path,
       'build_${DateTime.now().millisecondsSinceEpoch}.db',
@@ -191,7 +276,9 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     final client = ArknightsSourceClient(githubToken: githubToken);
     var changes = const <SourceFileChange>[];
     try {
-      final latest = state.latestCommit ?? await client.fetchLatestCommit();
+      // Asked each time: the commit an earlier check or update saw may be
+      // days old by now.
+      final latest = await client.fetchLatestCommit();
       final installed = await _installedCommit();
       final installedSchema = await _installedSchema();
       final sync = SourceSync(client: client, sourceDir: dirs.sourceDir);
@@ -205,6 +292,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         if (installed == latest) {
           state = state.copyWith(
             phase: GameDataBuildPhase.idle,
+            latestCommit: latest,
+            installedCommit: installed,
             noRelevantChanges: true,
           );
           return;
@@ -214,7 +303,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           stage: 'incremental',
           done: 0,
           total: 0,
-          error: null,
+          clearError: true,
           clearReport: true,
           noRelevantChanges: false,
         );
@@ -222,7 +311,9 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           final result = await sync.sync(
             installedSha: installed,
             latestSha: latest,
+            shouldCancel: cancelled,
             onProgress: (stage, done, total) {
+              if (cancelled()) return;
               state = state.copyWith(
                 phase: GameDataBuildPhase.downloading,
                 stage: stage == SourceSyncStage.contextTables
@@ -239,6 +330,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           // correct update.
           incrementalOk = false;
         }
+        if (cancelled()) return;
         if (incrementalOk && changes.isEmpty) {
           // Upstream moved, but nothing that concerns the knowledge base.
           state = state.copyWith(
@@ -248,20 +340,28 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
           return;
         }
       }
+      if (!incrementalOk && !allowFull && await _installedHasVectors()) {
+        state = state.copyWith(
+          phase: GameDataBuildPhase.idle,
+          confirmFull: true,
+        );
+        return;
+      }
       if (!incrementalOk) {
         // First-time (or complete) pull: one zip download and a
         // whitelist-filtered extraction.
         state = state.copyWith(
           phase: GameDataBuildPhase.downloading,
           stage: 'zip',
-          error: null,
+          clearError: true,
           clearReport: true,
         );
         final zh = Directory(p.join(dirs.sourceDir.path, 'zh_CN'));
         if (await zh.exists()) await zh.delete(recursive: true);
-        await _pullFullSource(client, latest, dirs);
+        await _pullFullSource(client, latest, dirs, cancelled);
         changes = const <SourceFileChange>[];
       }
+      if (cancelled()) return;
 
       // Background build.
       state = state.copyWith(
@@ -287,7 +387,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
                   total: event.total,
                 );
               case GameDataBuildEventType.done:
-                await _swapInBuiltDatabase(event, dirs.installPath);
+                await _swapInBuiltDatabase(event, dirs.installPath, latest);
                 // The source directory now matches the installed database.
                 await sync.markSynced(latest);
                 if (!incrementalOk) {
@@ -324,12 +424,14 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         },
         onDone: () {
           // Isolate exited without a terminal event (e.g. killed or crashed
-          // before sending a message).
+          // before sending a message). Killed by [cancel] is not an error.
           if (!completer.isCompleted) {
-            state = state.copyWith(
-              phase: GameDataBuildPhase.idle,
-              error: 'Build terminated unexpectedly',
-            );
+            if (!cancelled()) {
+              state = state.copyWith(
+                phase: GameDataBuildPhase.idle,
+                error: 'Build terminated unexpectedly',
+              );
+            }
             completer.complete();
           }
         },
@@ -346,6 +448,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
       await completer.future;
       await sub.cancel();
     } catch (error) {
+      // What a cancelled run trips over afterwards is not reported.
+      if (cancelled()) return;
       state = state.copyWith(phase: GameDataBuildPhase.idle, error: '$error');
       _cleanupTemp();
     }
@@ -358,12 +462,14 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     ArknightsSourceClient client,
     String sha,
     ({Directory sourceDir, Directory tmpDir, String installPath}) dirs,
+    bool Function() cancelled,
   ) async {
     final zipPath = p.join(dirs.tmpDir.path, 'source.zip');
     await client.downloadZip(
       sha: sha,
       outputPath: zipPath,
       onProgress: (received, total) {
+        if (cancelled()) return;
         state = state.copyWith(
           phase: GameDataBuildPhase.downloading,
           stage: 'zip',
@@ -372,6 +478,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         );
       },
     );
+    if (cancelled()) return;
     state = state.copyWith(
       phase: GameDataBuildPhase.extracting,
       stage: 'zip',
@@ -390,6 +497,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   Future<void> _swapInBuiltDatabase(
     GameDataBuildEvent event,
     String installPath,
+    String commit,
   ) async {
     state = state.copyWith(phase: GameDataBuildPhase.swapping);
     await GameDataBuildService().replaceInstalledDatabase(
@@ -398,9 +506,15 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     );
     _outputDbPath = null;
     onInstalled();
+    // The installed database is the latest now: the card says so and there
+    // is nothing left to pull (the button stayed live, and a second tap ran
+    // the whole check again).
     state = state.copyWith(
       phase: GameDataBuildPhase.done,
-      error: null,
+      clearError: true,
+      clearCheck: true,
+      latestCommit: commit,
+      installedCommit: commit,
       incremental: event.incremental,
       report: event.report,
       noRelevantChanges: false,
@@ -410,10 +524,11 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   /// Aborts a running build: kills the isolate and removes temp files. The
   /// installed database is untouched.
   void cancel() {
+    _run++;
     _runner?.kill();
     _runner = null;
     _cleanupTemp();
-    state = state.copyWith(phase: GameDataBuildPhase.idle, error: null);
+    state = state.copyWith(phase: GameDataBuildPhase.idle, clearError: true);
   }
 
   void dismissDone() {
@@ -436,6 +551,14 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
   Future<String?> _installedCommit() async {
     final status = await GameDataInstaller().getStatus();
     return status.manifest['source_arknights_commit'];
+  }
+
+  /// Whether the installed database carries vectors (their model is in its
+  /// manifest): a complete rebuild would lose them.
+  Future<bool> _installedHasVectors() async {
+    final status = await GameDataInstaller().getStatus();
+    return status.installed &&
+        (status.manifest['embedding_model'] ?? '').isNotEmpty;
   }
 
   Future<String?> _installedSchema() async {

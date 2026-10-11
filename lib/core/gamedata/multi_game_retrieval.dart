@@ -59,6 +59,8 @@ class MultiGameRetrieval implements GameDataRetrieval {
     String? scopeId,
     int storyLimit = 8,
     int linesPerStory = 3,
+    Map<String, int>? termLines,
+    Map<String, Map<String, int>>? termStories,
   }) async {
     if (scopeId != null) {
       return _of(scopeId).searchStoryLinesLike(
@@ -66,6 +68,8 @@ class MultiGameRetrieval implements GameDataRetrieval {
         scopeId: scopeId,
         storyLimit: storyLimit,
         linesPerStory: linesPerStory,
+        termLines: termLines,
+        termStories: termStories,
       );
     }
     final all = <StoryLineHit>[
@@ -74,6 +78,8 @@ class MultiGameRetrieval implements GameDataRetrieval {
           terms,
           storyLimit: storyLimit,
           linesPerStory: linesPerStory,
+          termLines: termLines,
+          termStories: termStories,
         ),
     ];
     // Best first across games: lines with more of the terms, then more hits.
@@ -82,6 +88,18 @@ class MultiGameRetrieval implements GameDataRetrieval {
       return byTerms != 0 ? byTerms : b.hits.compareTo(a.hits);
     });
     return all.take(storyLimit).toList();
+  }
+
+  /// Within one game (shares are of that game's collections and corpus):
+  /// the game of the first story of [perStory].
+  @override
+  Future<TermSpread?> termSpread(Map<String, int> perStory) async {
+    if (perStory.isEmpty) return null;
+    final game = gameOfId(perStory.keys.first);
+    return only(game).termSpread({
+      for (final MapEntry(key: id, value: n) in perStory.entries)
+        if (gameOfId(id) == game) id: n,
+    });
   }
 
   @override
@@ -98,10 +116,23 @@ class MultiGameRetrieval implements GameDataRetrieval {
     List<double> queryVector, {
     String? scopeId,
     int topK = 20,
+    Set<String>? storyIds,
   }) async {
     if (scopeId != null) {
-      return _of(scopeId)
-          .searchStoryChunksByVector(queryVector, scopeId: scopeId, topK: topK);
+      return _of(scopeId).searchStoryChunksByVector(
+        queryVector,
+        scopeId: scopeId,
+        topK: topK,
+        storyIds: storyIds,
+      );
+    }
+    if (storyIds != null) {
+      if (storyIds.isEmpty) return const [];
+      return _of(storyIds.first).searchStoryChunksByVector(
+        queryVector,
+        topK: topK,
+        storyIds: storyIds,
+      );
     }
     final wanted = await storyVectorInfo;
     final all = <StoryChunkHit>[];
@@ -114,6 +145,11 @@ class MultiGameRetrieval implements GameDataRetrieval {
     all.sort((a, b) => b.score.compareTo(a.score));
     return all.take(topK).toList();
   }
+
+  @override
+  Future<({int lineStart, int lineEnd, List<StoryChunkHit> hits})?>
+      storyChunksNear(String storyId, int line) =>
+          _of(storyId).storyChunksNear(storyId, line);
 
   @override
   Future<Map<String, StoryCatalogEntry>> storyCatalogEntries(
@@ -142,6 +178,11 @@ class MultiGameRetrieval implements GameDataRetrieval {
     return null;
   }
 
+  /// Within the collection's own game.
+  @override
+  Future<List<RelatedCollection>> relatedCollections(String collectionId) =>
+      _of(collectionId).relatedCollections(collectionId);
+
   @override
   Future<List<StoryCatalogEntry>> storiesByCode(String code) async => [
         for (final store in await _installed())
@@ -159,25 +200,6 @@ class MultiGameRetrieval implements GameDataRetrieval {
       ];
 
   @override
-  Future<List<StoryCatalogEntry>> searchStorySynopses(
-    List<String> terms, {
-    String? collectionId,
-    int limit = 5,
-  }) async {
-    if (collectionId != null) {
-      return _of(collectionId).searchStorySynopses(
-        terms,
-        collectionId: collectionId,
-        limit: limit,
-      );
-    }
-    return [
-      for (final store in await _installed())
-        ...await store.searchStorySynopses(terms, limit: limit),
-    ].take(limit).toList();
-  }
-
-  @override
   Future<List<SimilarName>> similarNames(String term, {int limit = 3}) async {
     final all = [
       for (final store in await _installed())
@@ -191,26 +213,47 @@ class MultiGameRetrieval implements GameDataRetrieval {
   }
 
   @override
-  Future<Map<String, ({int all, int inScope})>> storyLineTermCounts(
-    List<String> terms, {
-    String? scopeId,
-  }) async {
-    final total = <String, ({int all, int inScope})>{};
+  Future<bool> hasName(String term) async {
     for (final store in await _installed()) {
-      final inThis = scopeId != null && identical(store, _of(scopeId));
-      final counts = await store.storyLineTermCounts(
-        terms,
-        scopeId: inThis ? scopeId : null,
-      );
-      for (final MapEntry(key: term, value: c) in counts.entries) {
-        final before = total[term] ?? (all: 0, inScope: 0);
-        total[term] = (
-          all: before.all + c.all,
-          inScope: before.inScope + (scopeId == null || inThis ? c.inScope : 0),
-        );
-      }
+      if (await store.hasName(term)) return true;
     }
-    return total;
+    return false;
+  }
+
+  @override
+  Future<RecordText?> readRecord(String id) => _of(id).readRecord(id);
+
+  @override
+  Future<List<RecordHit>> searchRecordsLike(
+    List<String> terms, {
+    int limit = 3,
+    Map<String, double>? weights,
+  }) async =>
+      ([
+        for (final store in await _installed())
+          ...await store.searchRecordsLike(
+            terms,
+            limit: limit,
+            weights: weights,
+          ),
+      ]..sort((a, b) => b.score.compareTo(a.score)))
+          .take(limit)
+          .toList();
+
+  @override
+  Future<List<RecordHit>> searchRecordsByVector(
+    List<double> queryVector, {
+    int limit = 3,
+  }) async {
+    final wanted = await storyVectorInfo;
+    final all = <RecordHit>[];
+    for (final store in await _installed()) {
+      // Scores of different models do not compare.
+      if (await store.storyVectorInfo != wanted) continue;
+      all.addAll(await store.searchRecordsByVector(queryVector, limit: limit));
+    }
+    all.sort((a, b) => b.score.compareTo(a.score));
+    return all.take(limit).toList();
   }
 
   @override

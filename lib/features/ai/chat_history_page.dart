@@ -1,21 +1,19 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
-import '../../core/agent/chat_session_models.dart';
 import '../../core/agent/chat_session_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/floating_bar.dart';
-import '../../shared/widgets/press_feedback.dart';
-import '../../shared/widgets/smooth_page_route.dart';
-import 'widgets/chat_bubble.dart';
+import '../../shared/widgets/page_bar.dart';
+import '../library/library_widgets.dart';
 
-/// Chat History: lists persisted AI conversations (restored from the
-/// `chat_sessions/` JSON files) with view / continue / delete actions.
+/// The saved conversations (the `chat_sessions/` JSON files), last written
+/// first, a page at a time. It works as a chat app's list of conversations:
+/// tapping one makes it the current conversation (the one before it stays in
+/// its own file), the current one is marked, and each row can be deleted.
 class ChatHistoryPage extends ConsumerStatefulWidget {
   const ChatHistoryPage({super.key});
 
@@ -24,153 +22,168 @@ class ChatHistoryPage extends ConsumerStatefulWidget {
 }
 
 class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
+  /// 0-based page of the list; only the page shown is read from the files.
+  int _page = 0;
+
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final summaries = ref.watch(chatHistoryListProvider);
+    final count = ref.watch(chatHistoryCountProvider);
+    final total = count.valueOrNull ?? 0;
+    final pages = pageCountOf(total, ChatSessionStore.pageSize);
+    final page = _page.clamp(0, pages - 1);
+    final current = ref.read(askChatProvider.notifier).currentSessionId;
 
     return FloatingScaffold(
       title: context.t.aiHistoryTitle,
       scrollUnder: true,
-      body: summaries.when(
+      body: count.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => Center(
-          child: Text(
-            '${context.t.aiHistoryTitle}: ${context.t.aiSettingsRequired}',
-            style: theme.bodyFont.copyWith(color: theme.textSecondary),
-          ),
-        ),
-        data: (sessions) {
-          if (sessions.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.history_sharp,
-                      size: 56,
-                      color: theme.textSecondary.withValues(alpha: 0.4),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      context.t.aiHistoryEmpty,
-                      style: theme.bodyFont
-                          .copyWith(color: theme.textSecondary),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+        error: (_, __) => _empty(theme),
+        data: (_) {
+          if (total == 0) return _empty(theme);
+          final sessions = ref.watch(chatHistoryPageProvider(page));
+          return sessions.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, __) => _empty(theme),
+            data: (shown) {
+              final divider = rowDivider(theme);
+              final pager = pages > 1
+                  ? PageBar(
+                      theme: theme,
+                      keyPrefix: 'chat-history',
+                      page: page,
+                      pages: pages,
+                      onPage: _goTo,
+                    )
+                  : null;
+              return ListView(
+                key: ValueKey('chat-history-page-$page'),
+                padding: floatingPadding(
+                  context,
+                  const EdgeInsets.symmetric(vertical: 8),
                 ),
-              ),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(chatHistoryListProvider),
-            // Under the floating docks: the refresh spinner starts below them.
-            edgeOffset: floatingPadding(context, EdgeInsets.zero).top,
-            child: ListView.separated(
-              padding: floatingPadding(
-                context,
-                const EdgeInsets.symmetric(vertical: 8),
-              ),
-              itemCount: sessions.length,
-              separatorBuilder: (_, __) => Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: theme.divider,
-              ),
-              itemBuilder: (context, index) =>
-                  _buildSessionTile(theme, sessions[index]),
-            ),
+                children: [
+                  if (pager != null) ...[
+                    KeyedSubtree(
+                      key: const ValueKey('chat-history-pager-top'),
+                      child: pager,
+                    ),
+                    divider,
+                  ],
+                  for (final s in shown) ...[
+                    _tile(theme, s, isCurrent: s.sessionId == current),
+                    divider,
+                  ],
+                  if (pager != null)
+                    KeyedSubtree(
+                      key: const ValueKey('chat-history-pager-bottom'),
+                      child: pager,
+                    ),
+                ],
+              );
+            },
           );
         },
       ),
     );
   }
 
-  Widget _buildSessionTile(AppThemeTokens theme, ChatSessionSummary summary) {
+  void _goTo(int page) {
+    if (mounted) setState(() => _page = page);
+  }
+
+  Widget _empty(AppThemeTokens theme) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.history_sharp,
+                size: 56,
+                color: theme.textSecondary.withValues(alpha: 0.4),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                context.t.aiHistoryEmpty,
+                style: theme.bodyFont.copyWith(color: theme.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+
+  /// One conversation. The current one has the accent bar at its left edge
+  /// and says so in its second line.
+  Widget _tile(
+    AppThemeTokens theme,
+    ChatSessionSummary summary, {
+    required bool isCurrent,
+  }) {
     final t = context.t;
-    return PressFeedback(
-      enabled: !summary.corrupt,
-      pressedScale: 0.985,
-      child: ListTile(
+    final row = LibraryRow(
+      key: ValueKey('chat-history-tile-${summary.sessionId}'),
       leading: Icon(
-        summary.corrupt ? Icons.error_outline_sharp : Icons.chat_bubble_outline,
-        color: summary.corrupt ? theme.danger : theme.accentPrimary,
-      ),
-      title: Text(
-        summary.corrupt ? t.aiHistoryCorrupt : summary.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.titleFont.copyWith(fontSize: 15),
-      ),
-      subtitle: Text(
         summary.corrupt
-            ? _formatTime(summary.updatedAt)
-            : '${_formatTime(summary.updatedAt)} · '
-                '${t.aiHistoryTurns(summary.turnCount)}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.bodyFont.copyWith(
-          fontSize: 12,
+            ? Icons.error_outline_sharp
+            : Icons.chat_bubble_outline_sharp,
+        color: summary.corrupt ? theme.danger : theme.accentText,
+      ),
+      title: summary.corrupt ? t.aiHistoryCorrupt : summary.title,
+      subtitle: [
+        if (isCurrent) t.aiHistoryCurrent,
+        _formatTime(summary.updatedAt),
+        if (!summary.corrupt) t.aiHistoryTurns(summary.turnCount),
+      ].join(' · '),
+      subtitleLines: 1,
+      trailing: IconButton(
+        key: ValueKey('chat-history-delete-${summary.sessionId}'),
+        visualDensity: VisualDensity.compact,
+        tooltip: t.aiHistoryDelete,
+        onPressed: () => _confirmDelete(summary.sessionId),
+        icon: Icon(
+          Icons.delete_outline_sharp,
+          size: 20,
           color: theme.textSecondary,
         ),
       ),
-      onTap: summary.corrupt
-          ? null
-          : withHaptic(() => _openDetail(context, summary.sessionId)),
-      trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert_sharp, color: theme.textSecondary),
-        onSelected: (action) {
-          switch (action) {
-            case 'continue':
-              unawaited(_continueSession(context, summary.sessionId));
-            case 'view':
-              _openDetail(context, summary.sessionId);
-            case 'delete':
-              unawaited(_confirmDelete(context, summary.sessionId));
-          }
-        },
-        itemBuilder: (_) => [
-          if (!summary.corrupt)
-            PopupMenuItem(
-              value: 'continue',
-              child: Text(t.aiHistoryContinue),
-            ),
-          if (!summary.corrupt)
-            PopupMenuItem(value: 'view', child: Text(t.aiHistoryView)),
-          PopupMenuItem(value: 'delete', child: Text(t.aiHistoryDelete)),
-        ],
+      onTap: summary.corrupt ? null : () => _open(summary.sessionId),
+    );
+    if (!isCurrent) return row;
+    return DecoratedBox(
+      key: const ValueKey('chat-history-current'),
+      decoration: BoxDecoration(
+        color: theme.accentPrimary.withValues(alpha: 0.10),
+        border: Border(
+          left: BorderSide(color: theme.accentPrimary, width: 4),
+        ),
       ),
-      ),
+      child: row,
     );
   }
 
-  Future<void> _continueSession(BuildContext context, String sessionId) async {
-    final store = ref.read(chatSessionStoreProvider);
-    final session = await store.load(sessionId);
-    if (!context.mounted) return;
-    if (session == null) {
-      _showLoadFailed();
+  /// Makes the conversation the current one and goes back to it.
+  Future<void> _open(String sessionId) async {
+    final notifier = ref.read(askChatProvider.notifier);
+    if (sessionId == notifier.currentSessionId) {
+      Navigator.of(context).pop();
       return;
     }
-    ref.read(askChatProvider.notifier).loadSession(session);
-    if (context.mounted) {
-      Navigator.of(context).pop();
+    final session = await ref.read(chatSessionStoreProvider).load(sessionId);
+    if (!mounted) return;
+    if (session == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.aiHistoryCorrupt)),
+      );
+      return;
     }
+    notifier.loadSession(session);
+    Navigator.of(context).pop();
   }
 
-  void _openDetail(BuildContext context, String sessionId) {
-    Navigator.of(context).push(
-      smoothPageRoute<void>(
-        builder: (_) => ChatSessionDetailPage(sessionId: sessionId),
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, String sessionId) async {
+  Future<void> _confirmDelete(String sessionId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -182,6 +195,7 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
             child: Text(context.t.aiCancel),
           ),
           TextButton(
+            key: const ValueKey('chat-history-delete-confirm'),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(
               context.t.aiHistoryDelete,
@@ -192,84 +206,18 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    // The conversation on screen goes with its file.
+    final notifier = ref.read(askChatProvider.notifier);
+    if (sessionId == notifier.currentSessionId) notifier.newSession();
     await ref.read(chatSessionStoreProvider).delete(sessionId);
-    ref.invalidate(chatHistoryListProvider);
-  }
-
-  void _showLoadFailed() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.t.aiHistoryCorrupt)),
-    );
+    ref
+      ..invalidate(chatHistoryCountProvider)
+      ..invalidate(chatHistoryPageProvider);
   }
 
   String _formatTime(DateTime time) {
     String two(int value) => value.toString().padLeft(2, '0');
     return '${time.year}-${two(time.month)}-${two(time.day)} '
         '${two(time.hour)}:${two(time.minute)}';
-  }
-}
-
-/// Read-only renderer of one persisted conversation, reusing [ChatBubble]
-/// on the messages rebuilt from the session file.
-class ChatSessionDetailPage extends ConsumerStatefulWidget {
-  const ChatSessionDetailPage({super.key, required this.sessionId});
-  final String sessionId;
-
-  @override
-  ConsumerState<ChatSessionDetailPage> createState() =>
-      _ChatSessionDetailPageState();
-}
-
-class _ChatSessionDetailPageState extends ConsumerState<ChatSessionDetailPage> {
-  late Future<ChatSessionFile?> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = ref.read(chatSessionStoreProvider).load(widget.sessionId);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = ref.watch(themeProvider);
-    return FloatingScaffold(
-      title: context.t.aiHistoryView,
-      scrollUnder: true,
-      body: FutureBuilder<ChatSessionFile?>(
-        future: _future,
-        builder: (context, snapshot) {
-          final session = snapshot.data;
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (session == null) {
-            return Center(
-              child: Text(
-                context.t.aiHistoryCorrupt,
-                style: theme.bodyFont.copyWith(color: theme.textSecondary),
-              ),
-            );
-          }
-          final messages = chatSessionToMessages(session);
-          if (messages.isEmpty) {
-            return Center(
-              child: Text(
-                context.t.aiHistoryEmpty,
-                style: theme.bodyFont.copyWith(color: theme.textSecondary),
-              ),
-            );
-          }
-          return ListView.builder(
-            padding: floatingPadding(
-              context,
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-            itemCount: messages.length,
-            itemBuilder: (context, index) => ChatBubble(message: messages[index]),
-          );
-        },
-      ),
-    );
   }
 }

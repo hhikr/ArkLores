@@ -20,7 +20,6 @@ import 'package:arklores/core/gamedata/build/arknights_importer.dart';
 import 'package:arklores/core/gamedata/build/gamedata_build_service.dart';
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/build/story_catalog_importer.dart';
-import 'package:arklores/core/gamedata/build/story_coverage_builder.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -66,10 +65,6 @@ Future<void> main(List<String> args) async {
     );
     await importer.importAll();
 
-    // Schema v3 coverage layer: entity mention runs, chapter profiles and
-    // rare character bigrams (AI retrieval P0).
-    await StoryCoverageBuilder(db: db, stats: stats).build();
-
     // R14: story names / order / official synopses (optional table).
     final catalog =
         await importStoryCatalog(db, Directory(cfg.arknightsSource));
@@ -84,7 +79,6 @@ Future<void> main(List<String> args) async {
     // 0.11: owners, story entries and the bindings derived from them.
     await importer.entryImporter.rebuildDerived();
 
-    await rebuildGamedataFts(db);
     await stats.refreshFrom(db);
     await writeGamedataManifest(db, countManifest(stats));
   } finally {
@@ -126,10 +120,8 @@ Future<void> main(List<String> args) async {
   stdout.writeln('Entities: ${stats.entities}');
   stdout.writeln('Entity documents: ${stats.entityDocuments}');
   stdout.writeln('Story lines: ${stats.storyLines}');
-  stdout.writeln('Lore chunks: ${stats.loreChunks}');
-  stdout.writeln('Coverage mentions: ${stats.storyCoverageMentions}');
-  stdout.writeln('Chapter profiles: ${stats.storyProfiles}');
-  stdout.writeln('Rare terms: ${stats.rareTerms}');
+  stdout.writeln('Records: ${stats.normalizedRecords}');
+  stdout.writeln('Entries: ${stats.entries}');
 }
 
 Future<String> _gitCommit(String path) async {

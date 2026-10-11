@@ -173,7 +173,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbRedownloadBody =>
-      'You already have the latest version. Downloading again fetches about 185 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.';
+      'You already have the latest version. Downloading again fetches about 115 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.';
 
   @override
   String get kbRedownloadConfirm => 'Download again';
@@ -430,7 +430,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskSource =>
-      'Answers are grounded in installed GameData story text only';
+      'Searches the story text of both installed games, and the wikis when \"Wiki\" is on; every point of an answer has a source';
 
   @override
   String get aiAskEmpty =>
@@ -796,10 +796,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDeepThinking => 'Deep thinking';
 
   @override
-  String get aiDeepThinkingTooltip =>
-      'Think before writing the answer (slower, more tokens)';
-
-  @override
   String get aiScrollToBottom => 'Scroll to bottom';
 
   @override
@@ -891,47 +887,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get aiWorkSql => 'Query the knowledge base';
-
-  @override
-  String aiWorkGrep(String pattern) {
-    return 'Search for “$pattern”';
-  }
-
-  @override
-  String aiWorkGrepIn(String scope, String pattern) {
-    return 'Search “$pattern” in $scope';
-  }
-
-  @override
-  String aiWorkRead(String story) {
-    return 'Read “$story”';
-  }
-
-  @override
-  String aiWorkOutline(String collection) {
-    return 'Chapter list of $collection';
-  }
-
-  @override
-  String aiWorkFind(String query) {
-    return 'Find by meaning: “$query”';
-  }
-
-  @override
-  String aiWorkSimilar(String name) {
-    return 'Names like “$name”';
-  }
-
-  @override
-  String aiWorkDelegate(String task) {
-    return 'Helper: $task';
-  }
-
-  @override
-  String get aiWorkRedo => 'Sources did not match; rewriting';
-
-  @override
   String aiWorkHits(int hits, int stories) {
     return '$hits hits · $stories stories';
   }
@@ -951,6 +906,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiWorkFailed => 'failed';
+
+  @override
+  String get aiWorkPlanned => 'planned';
+
+  @override
+  String get aiWorkRepeated => 'repeated';
+
+  @override
+  String get aiWorkNotRun => 'not run';
+
+  @override
+  String get aiWorkWikiDown => 'wiki timed out';
+
+  @override
+  String aiWorkChars(int count) {
+    return '$count chars';
+  }
+
+  @override
+  String aiWorkRecord(String text) {
+    return 'Record: $text';
+  }
+
+  @override
+  String aiWorkHelper(int number) {
+    return 'Helper $number';
+  }
+
+  @override
+  String aiWorkStories(int count) {
+    return '$count stories';
+  }
 
   @override
   String get aiWorkRunning => 'running';
@@ -1000,13 +987,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiHistoryEmpty =>
-      'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.';
+      'No conversations yet. They are saved to the on-device chat_sessions folder as you ask; tap one to go on with it.';
 
   @override
-  String get aiHistoryContinue => 'Continue';
-
-  @override
-  String get aiHistoryView => 'View';
+  String get aiHistoryCurrent => 'Current';
 
   @override
   String get aiHistoryDelete => 'Delete';
@@ -1086,11 +1070,43 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wikiSourcesUrlRequired => 'Please enter a valid URL.';
 
   @override
-  String get kbStructuredTitle => 'GameData structured knowledge base';
+  String get kbArknightsTitle => 'Arknights knowledge base';
 
   @override
-  String get kbScopeDescription =>
-      'The AI uses only the Chinese GameData knowledge base as evidence: entities, aliases, raw records, story text and search indexes, plus optional story vectors. Wiki pages and imported materials are not used as evidence.';
+  String kbCountLines(String count) {
+    return '$count story lines';
+  }
+
+  @override
+  String kbCountRecords(String count) {
+    return '$count records';
+  }
+
+  @override
+  String kbDataVersion(String commit) {
+    return 'data version $commit';
+  }
+
+  @override
+  String get kbLocalBuild => 'Updated here';
+
+  @override
+  String get kbLocalBuildNote =>
+      'This knowledge base was updated on this device from the game data; it is newer than the official one published with the app.';
+
+  @override
+  String get kbBackToOfficial => 'Back to the official one';
+
+  @override
+  String get kbBackToOfficialTitle => 'Go back to the official knowledge base?';
+
+  @override
+  String get kbBackToOfficialBody =>
+      'The official knowledge base published with the app (about 115 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.';
+
+  @override
+  String get kbEndfieldSourceNote =>
+      'Endfield\'s data is unpacked from the game client and updated with the app\'s releases; it cannot be updated from game data on the device.';
 
   @override
   String kbStatusError(String error) {
@@ -1124,8 +1140,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbCancelDownload => 'Cancel';
 
   @override
-  String kbManualHint(String dir) {
-    return 'If the network cannot reach the server: download arklores_gamedata_zh.db.gz from the Release on another network, rename it to arklores_gamedata_zh.db.download.gz, put it in $dir, then tap Download.';
+  String kbManualHint(String file, String dir) {
+    return 'If the network cannot reach the server: download $file.gz from the Release on another network, rename it to $file.download.gz, put it in $dir, then tap Download.';
   }
 
   @override
@@ -1161,29 +1177,43 @@ class AppLocalizationsEn extends AppLocalizations {
       'A newer official knowledge base is available. Tap Update to download it (keep about 1 GB of free space).';
 
   @override
+  String get kbOriginOfficial => 'official release';
+
+  @override
+  String get kbOriginLocal => 'updated on this device';
+
+  @override
+  String kbUpdateNewerData(String commit) {
+    return 'The official knowledge base ($commit) has newer game data than the one updated on this device. Tap “Update” to download it (keep about 1 GB free).';
+  }
+
+  @override
+  String get kbUpdateSameData =>
+      'The official knowledge base now has the same game data. Tap “Update” to switch to it (all vectors included; keep about 1 GB free).';
+
+  @override
+  String get kbBuildOfficialHasIt =>
+      'The official knowledge base is already at this commit: use “Update” above.';
+
+  @override
   String get kbDownloading => 'Downloading';
 
   @override
   String get kbDownload => 'Download';
 
   @override
-  String get kbStatEntities => 'Entities';
-
-  @override
-  String get kbStatRecords => 'Raw records';
-
-  @override
-  String get kbStatChunks => 'Document chunks';
-
-  @override
-  String get kbStatSourceCommit => 'Source commit';
-
-  @override
-  String get kbBuildSectionTitle => 'Build from source repo';
+  String get kbBuildSectionTitle => 'Update from game data';
 
   @override
   String get kbBuildSectionDesc =>
-      'Pull the latest unpacked data from Kengxxiao/ArknightsGameData and build or incrementally update the knowledge base on this device. Requires network; ~1.5–2 GB free space for the first build.';
+      'The official knowledge base is published with the app and may lag behind the game. This pulls the latest unpacked data from Kengxxiao/ArknightsGameData and brings the knowledge base on this device up to the game\'s latest content. Requires network.';
+
+  @override
+  String get kbBuildFullConfirm =>
+      'This update can only be a complete rebuild: about 170 MB to download, a long build, 1.5–2 GB of free space; and the new database has no vectors — the existing ones are lost and must be generated again with your own embedding service (at a cost).';
+
+  @override
+  String get kbBuildFullConfirmButton => 'Rebuild completely anyway';
 
   @override
   String get kbBuildLatestCommit => 'Latest commit';
@@ -1195,7 +1225,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildCheckUpdates => 'Check for updates';
 
   @override
-  String get kbBuildFromSource => 'Build from source';
+  String get kbBuildFromSource => 'Pull and update';
 
   @override
   String get kbBuildCancel => 'Cancel';
@@ -1238,25 +1268,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbBuildStageStories => 'Importing stories';
 
   @override
-  String get kbBuildStageCoverage => 'Building entity coverage layer';
-
-  @override
-  String get kbBuildStageCoverageSpeakers => 'Expanding speaker entities…';
-
-  @override
-  String get kbBuildStageCoverageTrie => 'Building entity index…';
-
-  @override
-  String get kbBuildStageCoverageScan => 'Scanning character appearances…';
-
-  @override
-  String get kbBuildStageCoverageRare => 'Counting rare terms…';
-
-  @override
-  String get kbBuildStageCoverageProfiles => 'Writing chapter profiles…';
-
-  @override
-  String get kbBuildStageFts => 'Rebuilding full-text indexes';
+  String get kbBuildStageCompact => 'Removing data no longer used…';
 
   @override
   String get kbBuildIncrementalDone =>
@@ -1353,15 +1365,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String kbBuildReportVectors(int count) {
-    return '$count vectors became invalid because their story changed; you can add them below under Story vectors.';
+    return '$count vectors became invalid because their story changed; you can add them above under Semantic search.';
   }
 
   @override
-  String get kbVectorTitle => 'Story vectors (semantic search)';
+  String get kbVectorTitle => 'Semantic search (vectors)';
+
+  @override
+  String kbVectorSummary(int stories, int records) {
+    return '$stories story vectors · $records record vectors';
+  }
+
+  @override
+  String get kbVectorComplete => 'complete';
 
   @override
   String get kbVectorDesc =>
-      'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.';
+      'Vectors let search match stories and records (archives, voice lines, descriptions) by meaning, not only by exact words. Everything works without them; that text just gets keyword search only. Vectors only locate; the evidence of an answer is still the original text.';
+
+  @override
+  String kbVectorRecordStatus(int vectors) {
+    return '$vectors record vectors';
+  }
+
+  @override
+  String kbVectorPendingRecords(int chunks) {
+    return 'Of which records (archives, voice lines, descriptions): $chunks chunks';
+  }
+
+  @override
+  String kbVectorRunningRecords(int done, int total) {
+    return 'Generating record vectors: $done / $total chunks';
+  }
 
   @override
   String kbVectorStatus(int vectors, int stories) {
@@ -1382,7 +1417,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get kbVectorUpToDate => 'Every story has vectors; nothing to update.';
+  String get kbVectorUpToDate =>
+      'Every story and record has vectors; nothing to update.';
 
   @override
   String get kbVectorFirstBuild =>
@@ -1451,21 +1487,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAnswerReviewHint =>
-      'Another model reads the draft and raises questions, checked in the text before the final answer (slower)';
+      'Another model reads this answer as a reader and raises questions; they are checked in the text and answered below (a few more calls)';
+
+  @override
+  String get aiReviewRequest => 'Review the answer above';
 
   @override
   String get aiAnswerDigest => 'Digest';
 
   @override
   String get aiAnswerDigestHint =>
-      'Long answers open with a few summary paragraphs, the details folded below (one more call)';
+      'Add a few summary paragraphs above this answer, the details folded below (one more call)';
 
   @override
   String get aiAnswerWiki => 'Wiki';
 
   @override
-  String get aiAnswerWikiHint =>
-      'Look things up on PRTS / Warfarin Wiki (online) as a secondary source besides the game text';
+  String get aiAnswerWikiShort =>
+      'Search PRTS / Warfarin online; cited as wiki';
+
+  @override
+  String get aiAnswerDelegate => 'Sub-agents';
+
+  @override
+  String get aiAnswerDelegateShort =>
+      'Parallel search for wide questions; costs more';
+
+  @override
+  String get aiDeepThinkingShort =>
+      'Think before answering: slower, more tokens';
+
+  @override
+  String get aiNoVectorWarning =>
+      'No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.';
 
   @override
   String get aiCitedWiki => 'Wiki';
@@ -1500,16 +1554,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get aiWikiPageUnavailable =>
       'This version of the page is not kept on this device (the question may have been asked elsewhere); open the current version in the Wiki.';
-
-  @override
-  String aiWorkWikiSearch(String query) {
-    return 'Searching the wiki for “$query”';
-  }
-
-  @override
-  String aiWorkWikiRead(String title) {
-    return 'Reading wiki page “$title”';
-  }
 
   @override
   String aiWorkWikiPages(int count) {
@@ -1596,8 +1640,4 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbEndfieldTitle => 'Endfield knowledge base';
-
-  @override
-  String get kbEndfieldDescription =>
-      'Story and texts of Arknights: Endfield (unpacked from the game client; a separate file, downloaded apart from the Arknights one). Once installed, the library shows Endfield\'s shelves and answers look in one or both games.';
 }

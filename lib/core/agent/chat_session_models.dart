@@ -269,6 +269,8 @@ List<ChatMessage> chatTurnToMessages(ChatSessionTurn turn, String assistantId) {
             '${iteration.toolArgs ?? const <String, dynamic>{}}',
         toolName: iteration.tool,
         toolArgs: iteration.toolArgs,
+        // What the session record says of a planned step.
+        planned: iteration.rawResponse.startsWith('（拟定'),
       ),);
     }
     if (iteration.observation.isNotEmpty) {

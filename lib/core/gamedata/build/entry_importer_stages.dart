@@ -115,7 +115,11 @@ extension _Stages on EntryImporter {
         sourcePath: path,
         name: name,
         code: _s(stage['code']),
-        collectionId: ctx.collectionOfZone(_s(stage['zoneId'])),
+        // Once an activity has been re-run the game keeps its stages (same
+        // ids) in the re-run's zone: they are the activity's stages, not a
+        // re-run's content to drop with it (0.14: 1398 stages of 41 side
+        // stories were missing, and with them their enemies).
+        collectionId: ctx.home(ctx.collectionOfZone(_s(stage['zoneId']))),
         groupName: _s(stage['zoneId']),
         sections: [if (hasChinese(desc)) TextSection('', desc)],
       ),

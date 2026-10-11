@@ -123,15 +123,33 @@ void main() {
     expect(text, contains('FINAL ANSWER:'));
   });
 
-  test('prunes to maxSessionFiles keeping the newest', () async {
-    for (var i = 0; i < ChatSessionStore.maxSessionFiles + 5; i++) {
+  test('keeps every session and reads the list a page at a time', () async {
+    const total = ChatSessionStore.pageSize * 4 + 3;
+    final start = DateTime(2026, 8, 24, 12);
+    for (var i = 0; i < total; i++) {
       await store.save(makeSession(id: 's$i', turns: 1));
+      // The order of the list is the order of the last writes.
+      File('${tempDir.path}/conversation_s$i.json')
+          .setLastModifiedSync(start.add(Duration(minutes: i)));
     }
-    final summaries = await store.list();
-    expect(summaries.length, ChatSessionStore.maxSessionFiles);
-    // The five oldest (s0..s4) were pruned.
-    expect(summaries.map((s) => s.sessionId), isNot(contains('s0')));
-    expect(summaries.map((s) => s.sessionId), contains('s${ChatSessionStore.maxSessionFiles + 4}'));
+    expect(await store.count(), total);
+    expect(await store.list(), hasLength(total));
+
+    final first = await store.page(0, ChatSessionStore.pageSize);
+    expect(first, hasLength(ChatSessionStore.pageSize));
+    expect(first.first.sessionId, 's${total - 1}');
+    final last = await store.page(4, ChatSessionStore.pageSize);
+    expect(last.map((s) => s.sessionId), ['s2', 's1', 's0']);
+    expect(await store.page(5, ChatSessionStore.pageSize), isEmpty);
+  });
+
+  test('a corrupt file is on its page as corrupt', () async {
+    await store.save(makeSession(id: 'good', turns: 1));
+    File('${tempDir.path}/conversation_broken.json')
+        .writeAsStringSync('not json at all');
+    final page = await store.page(0, ChatSessionStore.pageSize);
+    expect(page, hasLength(2));
+    expect(page.where((s) => s.corrupt).single.sessionId, 'broken');
   });
 
   test('encoded json carries the format marker and version', () async {

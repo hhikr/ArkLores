@@ -680,6 +680,36 @@ void main() {
       expect(done.toolCalls.map((c) => c.arguments), ['{"q":1}', '{"p":2}']);
     });
 
+    // 0.14: a relay gave two parallel calls of one tool the same index; they
+    // were merged into one call with `{…}{…}` arguments.
+    test('calls that share an index but not an id stay apart', () async {
+      Map<String, dynamic> call(String? id, String args) => {
+            'choices': [
+              {
+                'delta': {
+                  'tool_calls': [
+                    {
+                      'index': 2,
+                      if (id != null) 'id': id,
+                      'function': {'name': 'grep', 'arguments': args},
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+      final done = (await streaming([
+        event(call('a', '{"pattern":')),
+        event(call(null, '"x"}')),
+        event(call('b', '{"pattern":"y"}')),
+      ].join(),).streamTurn([Message.user('q')], tools: tools).toList())
+          .last;
+      expect(
+        done.toolCalls.map((c) => (c.id, c.arguments)),
+        [('a', '{"pattern":"x"}'), ('b', '{"pattern":"y"}')],
+      );
+    });
+
     test('a request that did not ask for a stream answered with one',
         () async {
       final client = OpenAICompatibleClient(

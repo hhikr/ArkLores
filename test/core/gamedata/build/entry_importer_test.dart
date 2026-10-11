@@ -178,6 +178,11 @@ void main() {
             'type': 'ACTIVITY',
             'zoneNameFirst': '虚构区',
           },
+          'act_fxre_zone1': {
+            'zoneID': 'act_fxre_zone1',
+            'type': 'ACTIVITY',
+            'zoneNameFirst': '虚构区',
+          },
           'weekly_1': {
             'zoneID': 'weekly_1',
             'type': 'WEEKLY',
@@ -217,7 +222,10 @@ void main() {
             'type': 'TYPE_FX',
           },
         },
-        'zoneToActivity': {'act_fx_zone1': 'act_fx'},
+        'zoneToActivity': {
+          'act_fx_zone1': 'act_fx',
+          'act_fxre_zone1': 'act_fxre',
+        },
         'activity': {
           'TYPE_FX': {
             'act_fx': {
@@ -616,6 +624,17 @@ void main() {
             'name': '虚构活动关',
             'description': '活动关卡的描述。\\n<@rolv.rem>场地内有能阻挡敌人的<热泵通道>和<蓝色路障>。</>',
             'levelId': 'Activities/act_fx/level_fx_01',
+          },
+          // A stage of the activity that the game now keeps in its re-run's
+          // zone (same id as before the re-run).
+          'fx_02': {
+            'stageId': 'fx_02',
+            'stageType': 'ACTIVITY',
+            'zoneId': 'act_fxre_zone1',
+            'code': 'FX-2',
+            'name': '虚构活动二关',
+            'description': '活动第二关的描述。',
+            'levelId': 'Activities/act_fx/level_fx_02',
           },
           'weekly_stage': {
             'stageId': 'weekly_stage',
@@ -1439,6 +1458,8 @@ void main() {
       );
       expect(stages.map((s) => (s['id'], s['collection_id'], s['code'])), [
         ('stage:fx_01', 'act_fx', 'FX-1'),
+        // In the re-run's zone, the activity's all the same.
+        ('stage:fx_02', 'act_fx', 'FX-2'),
         ('stage:main_00-01', 'main_0', '0-1'),
       ]);
       final link = await q(
@@ -1588,6 +1609,41 @@ void main() {
       ))
           .single;
       expect(text['content'], '密录关的描述。');
+    });
+
+    // 0.14: the voice table gives the operator's id only; every voice line
+    // (18,237 rows) had no name, and a line read out of context was taken
+    // for another operator's.
+    test('a voice line carries the name of its operator', () async {
+      Future<Object?> name() async => (await q(
+            'SELECT entity_name FROM normalized_records '
+            "WHERE content_type = 'operator_voice'",
+          ))
+              .single['entity_name'];
+      expect(await name(), '虚构干员');
+
+      // A database built before the rule is brought up to date by the
+      // step every build path ends in; so is a name that changed.
+      await db.execute(
+        'UPDATE normalized_records SET entity_name = NULL '
+        "WHERE content_type = 'operator_voice'",
+      );
+      await importer.entryImporter.rebuildDerived();
+      expect(await name(), '虚构干员');
+      await db.execute(
+        "UPDATE entities SET name = '改名的干员' WHERE id = 'char_fx_1'",
+      );
+      await importer.entryImporter.rebuildDerived();
+      expect(await name(), '改名的干员');
+
+      // A record with a name of its own keeps it.
+      final others = await q(
+        'SELECT r.entity_name AS n, e.name AS e FROM normalized_records r '
+        'JOIN entities e ON e.id = r.entity_id '
+        "WHERE r.content_type != 'operator_voice' "
+        "AND COALESCE(r.entity_name, '') != ''",
+      );
+      expect(others, isNotEmpty);
     });
 
     test('every link and every owner refers to a row', () async {

@@ -10,6 +10,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import 'kb_common.dart';
 
 /// One game's official knowledge base: its state, download / update,
 /// progress, errors and the manual-install hint. 0.12: one per game.
@@ -75,12 +76,18 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
   }
 
   /// "Download again" of an already current knowledge base: asks first.
-  Future<void> _redownloadGameData() async {
+  /// [local]: the installed one was updated on this device, so this goes
+  /// back to the official asset.
+  Future<void> _redownloadGameData({bool local = false}) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
-        title: Text(context.t.kbRedownloadTitle),
-        content: Text(context.t.kbRedownloadBody),
+        title: Text(
+          local ? context.t.kbBackToOfficialTitle : context.t.kbRedownloadTitle,
+        ),
+        content: Text(
+          local ? context.t.kbBackToOfficialBody : context.t.kbRedownloadBody,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialog, false),
@@ -154,13 +161,22 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
             : status.installed
                 ? '${(status.bytes / 1024 / 1024).toStringAsFixed(1)} MB'
                 : context.t.kbNotInstalled;
+    // What is in it, in the reader's words, and which game data it is.
     final subtitle = status.installed
         ? [
-            if (status.entityCount != null) 'entities ${status.entityCount}',
-            if (status.recordCount != null) 'records ${status.recordCount}',
-            if (status.chunkCount != null) 'chunks ${status.chunkCount}',
+            if (status.storyLineCount != null)
+              context.t.kbCountLines(status.storyLineCount!),
+            if (status.recordCount != null)
+              context.t.kbCountRecords(status.recordCount!),
+            if ((status.sourceCommit ?? '').isNotEmpty)
+              context.t.kbDataVersion(shortCommit(status.sourceCommit)),
+            // Where it came from: an official asset, or an update run here.
+            status.builtLocally
+                ? context.t.kbOriginLocal
+                : context.t.kbOriginOfficial,
           ].join(' · ')
         : context.t.kbDevAssetHint;
+    final local = status.builtLocally && !_isDownloadingGameData;
 
     return ThemeAwareCard(
       child: Column(
@@ -184,7 +200,10 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
               ),
               if (upToDate && !_isDownloadingGameData)
                 Container(
-                  key: Key('kb-status-current${widget.keySuffix}'),
+                  key: Key(
+                    '${local ? 'kb-status-local' : 'kb-status-current'}'
+                    '${widget.keySuffix}',
+                  ),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -198,7 +217,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                           size: 14, color: theme.accentText,),
                       const SizedBox(width: 3),
                       Text(
-                        context.t.kbUpToDate,
+                        local ? context.t.kbLocalBuild : context.t.kbUpToDate,
                         style: theme.bodyFont.copyWith(
                           color: theme.accentText,
                           fontSize: 12,
@@ -229,10 +248,10 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
               if (upToDate && !_isDownloadingGameData)
                 OutlinedButton.icon(
                   key: Key('kb-redownload${widget.keySuffix}'),
-                  onPressed: _redownloadGameData,
+                  onPressed: () => _redownloadGameData(local: local),
                   icon: const Icon(Icons.refresh_sharp, size: 18),
                   label: Text(
-                    context.t.kbRedownload,
+                    local ? context.t.kbBackToOfficial : context.t.kbRedownload,
                     style: theme.titleFont.copyWith(fontSize: 13),
                   ),
                   style: OutlinedButton.styleFrom(
@@ -307,13 +326,24 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
             if (phase == GameDataInstallPhase.connecting &&
                 _download.attempt >= 2)
               Text(
-                context.t.kbManualHint(_installDir(status)),
+                context.t.kbManualHint(widget.game.dbFileName, _installDir(status)),
                 style: theme.bodyFont.copyWith(
                   color: theme.textSecondary,
                   fontSize: 11.5,
                   height: 1.45,
                 ),
               ),
+          ],
+          if (local && upToDate) ...[
+            const SizedBox(height: 10),
+            Text(
+              context.t.kbLocalBuildNote,
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
           ],
           if (status.updateAvailable && !_isDownloadingGameData) ...[
             const SizedBox(height: 10),
@@ -324,7 +354,15 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    context.t.kbUpdateAvailable,
+                    switch (status.updateReason) {
+                      GameDataUpdateReason.newerData =>
+                        context.t.kbUpdateNewerData(
+                          shortCommit(status.releaseAssetCommit),
+                        ),
+                      GameDataUpdateReason.sameDataOfficial =>
+                        context.t.kbUpdateSameData,
+                      _ => context.t.kbUpdateAvailable,
+                    },
                     style: theme.bodyFont.copyWith(
                       color: theme.accentPrimary,
                       fontSize: 12,
@@ -346,7 +384,7 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
             if (isTransientNetworkError(_download.error!)) ...[
               const SizedBox(height: 6),
               Text(
-                context.t.kbManualHint(_installDir(status)),
+                context.t.kbManualHint(widget.game.dbFileName, _installDir(status)),
                 style: theme.bodyFont.copyWith(
                   color: theme.textSecondary,
                   fontSize: 11.5,

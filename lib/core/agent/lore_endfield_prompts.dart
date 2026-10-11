@@ -26,3 +26,14 @@ const String loreEndfieldLibraryGuide = '''
   敌人 appears_in 关卡；邮件（mail）是角色寄来的信。
 - 文档（document）除档案库外，还有任务里、地图上读到的留言与告示，归在所在任务或地点的集合里；entries.group_name 是所在地区（按游戏的地区表）。
 - 终末地库没有关卡、活动档案、肉鸽等明日方舟特有的表；没有剧情向量时 find 只做关键词检索。''';
+
+/// 0.14: what of [loreEndfieldLibraryGuide] matters for reading an Endfield
+/// story, whatever is asked: always in the system prompt (the rest is in
+/// the manual).
+const String loreEndfieldReadingNotes = '''
+读终末地的剧情时：
+- 一个任务是一篇剧情，里面每段以一行种类名开头（对话、通讯、远程通话、闲话、短信）；一篇里先是全部对话，再是其他种类。不同种类之间谁先谁后游戏数据没有给出，不要从行号推断。
+- 玩家选项的行里用“／”隔开的是同一处的几个选项；单独一个选项的行后面紧跟的是选它之后的回应。
+- “未实装任务”是客户端留着对话、游戏里却没有的任务（旧版剧情、删掉的任务），不要当作游戏里发生过的剧情引用。
+- 主角“管理员”的台词在游戏里分男女两种写法，库里只收一种；“管理员”在原文里也是其他角色对主角的称呼。
+- 终末地库的其余结构（任务的书架、干员下挂的集合、档案库、图鉴）在 guide 的手册里。''';

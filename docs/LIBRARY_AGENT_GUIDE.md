@@ -1,7 +1,7 @@
 # 资料页结构说明
 
 资料页（图鉴）是知识库条目层（`collections` / `entries` / `entry_links`）的阅读视图。问答 Agent 在查库前先参考这份说明，
-判断要找的东西在哪一类、对剧情有什么用。**正文以 `lib/core/agent/lore_agent_prompts.dart` 的 `loreLibraryGuide` 为准**
+判断要找的东西在哪一类、对剧情有什么用。**正文以 `lib/core/agent/lore_agent_prompts.dart` 的 `loreLibraryManual` 为准**（0.14 起由 `guide` 工具给出、随第一条 `sql` 结果附上，不在系统提示词里）
 （它是系统提示词的一部分，主 agent 与子 agent 都会读到）；这里记录依据和维护办法。
 
 ## 结构概要
@@ -48,7 +48,7 @@
 
 ## 维护
 
-- 新增条目类型、书架、绑定关系时，同步改 `loreLibraryGuide`，并确认里面没有具体人物、章节、活动名（`test/core/agent/lore_agent_loop_test.dart` 守卫）。
+- 新增条目类型、书架、绑定关系时，同步改 `loreLibraryManual`（表与绑定在 `loreLibraryStructure`），并确认里面没有具体人物、章节、活动名（`test/core/agent/lore_agent_loop_test.dart` 守卫）。
 - 提示词只讲结构与用法，不放示例；库里出现不认识的 kind/type/group_name 时，Agent 读原文判断，不猜含义。
 - 界面名字的兜底顺序（`library_labels.dart`）：表或 prts 给的名字 → 所属家族的默认名（集成战略资料、生息演算资料、档案资料、活动资料）→ 类型 id；
   未知书架显示“其他”，未知绑定显示“相关”，没有名字的分组不显示标题。

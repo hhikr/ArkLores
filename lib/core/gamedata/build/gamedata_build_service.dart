@@ -1,5 +1,5 @@
 /// In-app GameData build service (R2): full rebuild and per-file incremental
-/// update, sharing the exact importer/schema/coverage code with the desktop
+/// update, sharing the exact importer and schema code with the desktop
 /// release pipeline.
 ///
 /// Design invariants:
@@ -12,23 +12,22 @@
 ///   channels.
 /// - Row ids are content-derived and stable, so re-imports are idempotent;
 ///   rows of changed source files are deleted by `source_path`/`story_id`
-///   first, then re-imported per file. FTS and coverage layers are rebuilt
-///   wholesale afterwards (deterministic, simple; per-row delta is a later
-///   optimization).
+///   first, then re-imported per file. The entry layer's derived rows are
+///   rebuilt wholesale afterwards.
+/// - What earlier builds wrote and nothing reads (`obsoleteGamedataTables`
+///   and the like) is removed from a database being updated.
 library;
 
 import 'dart:io';
 
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import '../story_catalog.dart';
 import 'arknights_importer.dart';
 import 'entry_importer.dart';
 import 'gamedata_db_validator.dart';
 import 'gamedata_schema.dart';
 import 'source/arknights_source_client.dart';
 import 'story_catalog_importer.dart';
-import 'story_coverage_builder.dart';
 import 'update_report.dart';
 
 /// Thrown when the user cancels a running build.
@@ -81,7 +80,7 @@ class GameDataBuildResult {
 class GameDataBuildService {
   /// Runs a build. Progress is reported as (stage, done, total); stages are
   /// `copy`, `profiles`, `voices`, `structured`, `stories`, `incremental`,
-  /// `coverage`, `fts`. [shouldCancel] is polled between files/stages.
+  /// `compact`. [shouldCancel] is polled between files/stages.
   Future<GameDataBuildResult> build(
     GameDataBuildOptions options, {
     void Function(String stage, int done, int total)? onProgress,
@@ -128,6 +127,10 @@ class GameDataBuildService {
     // The database is no longer the official asset the marker describes.
     final marker = File('$installPath.asset_sha256');
     if (await marker.exists()) await marker.delete();
+    // 0.14: and it says so itself (`GameDataInstaller.localBuildMarkerSuffix`),
+    // so the official asset is not offered as an "update" over newer data.
+    await File('$installPath.local_build')
+        .writeAsString(DateTime.now().toUtc().toIso8601String(), flush: true);
   }
 
   Future<GameDataBuildResult> _fullBuild(
@@ -157,17 +160,9 @@ class GameDataBuildService {
       );
       await importer.importAll();
       _checkCancel(shouldCancel);
-      await StoryCoverageBuilder(
-        db: db,
-        stats: stats,
-        onProgress: onProgress,
-      ).build();
       await _refreshStoryCatalog(db, sourceDir);
       await importer.entryImporter.rebuildDerived();
       _checkCancel(shouldCancel);
-      onProgress?.call('fts', 0, 1);
-      await rebuildGamedataFts(db);
-      onProgress?.call('fts', 1, 1);
       await stats.refreshFrom(db);
       await writeGamedataManifest(db, countManifest(stats));
     } finally {
@@ -197,6 +192,8 @@ class GameDataBuildService {
     final stats = BuildStats();
     UpdateReport? report;
     try {
+      // Before the snapshot, so the report counts only what the update did.
+      final compact = await dropObsoleteGamedataData(db);
       final before = await DbSnapshot.take(db);
       final importer = ArknightsImporter(
         sourceDir: sourceDir,
@@ -224,17 +221,9 @@ class GameDataBuildService {
         // write an id keeps it, so the order decides.
         await importer.entryImporter.importAllTables();
       }
-      await StoryCoverageBuilder(
-        db: db,
-        stats: stats,
-        onProgress: onProgress,
-      ).build();
       await _refreshStoryCatalog(db, sourceDir);
       await importer.entryImporter.rebuildDerived();
       _checkCancel(shouldCancel);
-      onProgress?.call('fts', 0, 1);
-      await rebuildGamedataFts(db);
-      onProgress?.call('fts', 1, 1);
       await stats.refreshFrom(db);
       await writeGamedataManifest(db, {
         'source_arknights_commit': options.commitSha,
@@ -246,6 +235,13 @@ class GameDataBuildService {
         after: await DbSnapshot.take(db),
         changes: changes,
       );
+      if (compact) {
+        // Give the removed tables' pages back (a third of an older file).
+        _checkCancel(shouldCancel);
+        onProgress?.call('compact', 0, 1);
+        await db.execute('VACUUM');
+        onProgress?.call('compact', 1, 1);
+      }
     } finally {
       await db.close();
     }
@@ -316,11 +312,6 @@ class GameDataBuildService {
         where: 'source_path = ?',
         whereArgs: [path],
       );
-      await db.delete(
-        'lore_chunks',
-        where: 'source_path = ?',
-        whereArgs: [path],
-      );
       // Entry layer: the entries and bindings this file produced.
       await db.delete(
         'entries',
@@ -343,19 +334,10 @@ class GameDataBuildService {
     }
   }
 
-  /// R14: rebuilds the optional story catalog from the source tree and
-  /// relabels the chapter profiles (the coverage build rewrites them with
-  /// file names). A source tree without the review table keeps the DB's
-  /// existing catalog and only re-applies its labels.
-  Future<void> _refreshStoryCatalog(Database db, Directory sourceDir) async {
-    final result = await importStoryCatalog(db, sourceDir);
-    if (result != null || !await hasStoryCatalog(db)) return;
-    final rows = await db.query(storyCatalogTable);
-    await applyStoryCatalogToProfiles(
-      db,
-      [for (final row in rows) StoryCatalogEntry.fromRow(row)],
-    );
-  }
+  /// R14: rebuilds the optional story catalog from the source tree. A source
+  /// tree without the review table keeps the DB's existing catalog.
+  Future<void> _refreshStoryCatalog(Database db, Directory sourceDir) =>
+      importStoryCatalog(db, sourceDir);
 
   Future<bool> _isSchemaV3(String dbPath) async {
     Database? db;
@@ -398,11 +380,4 @@ Map<String, String> countManifest(BuildStats stats) => {
       'story_line_count': '${stats.storyLines}',
       'normalized_record_count': '${stats.normalizedRecords}',
       'entity_document_count': '${stats.entityDocuments}',
-      'lore_chunk_count': '${stats.loreChunks}',
-      'arknights_profile_chunk_count': '${stats.profileChunks}',
-      'arknights_story_chunk_count': '${stats.storyChunks}',
-      'arknights_structured_chunk_count': '${stats.structuredChunks}',
-      'story_coverage_mention_count': '${stats.storyCoverageMentions}',
-      'story_profile_count': '${stats.storyProfiles}',
-      'rare_term_count': '${stats.rareTerms}',
     };

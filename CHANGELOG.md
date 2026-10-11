@@ -2,6 +2,87 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.14.0] - 2026-10-11
+
+Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancelled, 1.5–24 minutes and up to 1.5 million input tokens a question; one tool call in six went wrong). The one agent, its tools and the citation checks stay; what changed is around them.
+
+### A knowledge base less than half the size
+
+- **Game data up to 8 October 2026** in the Arknights knowledge base of this release (53 stories more than v0.13.0's, with their vectors), and a vector for every record of both games. The new files install only on v0.14.0 and later: update the app first, then tap "update" on the knowledge-base page.
+- **The tables nothing reads are gone.** The knowledge base still carried the raw material of earlier ways of searching: every text cut into chunks a second time with a full-text index, a full-text index over story lines that cannot match a Chinese word inside a sentence, a table of where each name occurs in each story, rare two-character words, a "profile" per story, and the story text once more as records. No part of the app read them, and in forty recorded conversations the model never queried them. The Arknights knowledge base goes from 701 MB to 292 MB (the download from 220 MB to 112 MB), Endfield from 62 MB to 31 MB, with the same stories, records and vectors.
+- **Updating from the game data no longer goes through every story.** The update used to scan all 3,600 stories again for names and rewrite a profile for each ("scanning character appearances", "writing chapter profiles"); those steps are gone. A knowledge base installed from an older file loses the unused tables the first time it is updated ("removing data no longer used").
+- **Cancelling an update really stops it.** A cancelled download went on in the background, and an update started again right away ran beside it; the two deleted each other's files and the update failed with "Missing required GameData file". Copies of the database that failed updates left in the temp folder (one whole copy each) are removed when the next one starts.
+- **After an update there is nothing left to pull**: the "pull and update" button is off and the counts of the earlier check are gone, until a check finds something new or another knowledge base is installed.
+- **An error on the update card goes away** when the next check or update starts. A failed check (the GitHub limit, for one) stayed on the card through a later successful update, until the app was restarted.
+
+### Answers that do not break
+
+- **The knowledge base no longer drops out mid-question.** Opening the knowledge-base page (or the story-vector card) opened the same file with SQLite's shared connection and closed it, which closed Ask's connection too: every later search and read failed with `database_closed` until the app was restarted. Each opener now has its own connection, and Ask's reopens if it is ever closed.
+- **Calls made together stay apart.** Some relays number two calls of the same tool alike; they were merged into one call whose arguments were two JSON objects back to back.
+- **A gate before every tool call**: calls glued together are split; arguments are checked against the tool's parameters; a call that cannot run is not run and never kept in the conversation as written (malformed arguments in the history made one provider reject the whole question). The model is told what came, what is missing and what a correct call looks like; once a later call goes through, the refused turn is left out of the requests.
+- **One empty reply no longer changes the rest of the question**: it is asked again the same way first, then another way for that turn only.
+- **Waiting is visible**: while the provider has sent nothing, the status says for how long; failed and empty calls appear in the recorded timeline. **Cancel stops at once** and records what the question cost so far.
+- A wrong SQL column comes back with the table's real columns.
+
+### Searching everything at once
+
+- **`search`** replaces `find`: one call looks at the story text of both games — by meaning when an embedding service is set up, and by the names the question mentions — and at the wikis, with the results grouped by source (Arknights, Endfield, Wiki). The lines it prints count as read and can be cited.
+- `search` also looks at the texts outside the stories — archives, operator files, voice lines, enemy and item texts — and lists the best few with a citable reference.
+- **The first searches are written by a small call of its own** and run before the model's first turn, so it starts from candidate passages instead of spending turns finding where a name occurs. The call sees the question, the search tool's own description and, for a follow-up, the question before it with the gist of its answer; it writes up to three searches and one word for the wikis. Code used to search with the question as typed and with words it cut out of it — on a phone these were fragments of clauses, a follow-up's words were the earlier question's, and two words glued together found no wiki page.
+- **Both games are searched for every question**; the prompt no longer asks the model to decide the game first. Corpus counts list each game under its own heading with its totals.
+- **The wikis are a search source like the knowledge base**, no longer a last resort; answers still say which points come from a wiki.
+- Without an embedding service, search matches the text literally and the Ask page warns that answers may be less accurate. The question is then not searched by code before the first turn: the model chooses the words (it knows how the stories name things), and each search says how many lines every word matched, so a word the text never uses is replaced. The keywords of a search are the words its query separates; code no longer cuts words out of a sentence.
+- `search` also lists operator files (race, records, archives), the file of what the question names first.
+- A follow-up's searches are written knowing the question before it, so "what about her?" finds what the conversation is about.
+- A question about one game no longer brings a third of its search result from the other: a game whose passages are clearly further and hold fewer of the query's words is listed as one line with its counts. Records are ranked with common words weighing less.
+- A record cited as `record:record:<id>` is read as `record:<id>`.
+- Answers are written in the language of the question (a model thinking in English wrote whole answers in English); when one reply holds several versions of the answer (a weaker model's notes quoting the format, partial drafts, then the answer), the last complete one is used.
+
+### Cheaper and faster
+
+- Tool results are half as long, old tool results are folded much earlier (what they showed stays citable), and a follow-up no longer carries the previous question's tool output.
+- A few citations of lines that were not read are removed by code instead of sending the whole answer back; the answer is rewritten only for more, or for what code cannot fix.
+- A cited range of which only some lines were shown is cut to those lines instead of being dropped (search lists some lines of a passage; a sound citation over them was lost, and its paragraph was left without a source).
+- An answer written in prose without a single citation is asked again once (it was shown whole under "not covered").
+- **An answer that is sent back disappears**: it does not stay in the conversation and is not shown; why it was sent back is one line of the work timeline. Quoted dialogue is no longer sent back — the rewrite only stripped the quotation marks; the prompt asks not to copy dialogue at length.
+- What counts as read is one ledger for every tool: a line or a record counts only with its text; a record of which search showed an excerpt is marked so; a folded tool result says which lines it held and that their text must be read again before use.
+- Reorganising a long answer sends only its entries, not the whole conversation.
+- The reader's review and sub-agents are off by default; sub-agents are limited to two per question and their steps are shown.
+
+### The question box and what comes after an answer
+
+- **One options button, and the keyboard stays.** The options open as a small panel above the question box instead of a menu over it: nothing in it takes the focus, so the keyboard no longer drops and the text being typed stays in view. It holds the wikis, the sub-agents and "深度思考" — the last only when the model service has a known switch for thinking (elsewhere the button changed nothing).
+- **"提要" and "复核" are asked for under an answer** instead of being part of every question. A long answer offers 提要: a few summary paragraphs are written above it, the answer itself folded below. The last answer offers 复核: another model reads it as a reader; with no question it says so, otherwise the agent checks the questions in the text and answers again below, the first answer left as it was. Both are there for answers given since the app was opened.
+
+### Knowledge bases: one page per game
+
+- **Each game has its own knowledge-base page** (明日方舟 / 终末地 in the top bar), with the same parts in the same order: the official knowledge base, its vectors, and how it is kept up to date. The note on what the AI uses as evidence is gone (it predated the wikis and the second game); the four number tiles are replaced by one line in the reader's words.
+- **Vectors for either game.** The vector card looked only at the Arknights file; each page now has its own. With nothing missing it is two lines; it opens into the cost and the run when vectors are missing.
+- **A knowledge base updated on the device is no longer offered the older official one as an "update"** (one tap replaced the newer data); the page says it was updated here and offers going back to the official one as its own, confirmed choice.
+- **Newer game data first; for the same game data, the official knowledge base.** The app now knows which game-data commit its official knowledge base was made from. One updated on the device is offered the official one when that is of the same commit (it has every vector) or of a commit made after the update ran, and not otherwise; when the latest game data is exactly the official one's, "pull and update" steps aside for "update". The card says where the installed knowledge base came from (official release / updated on this device) next to its data version.
+- **A complete rebuild asks first when it would lose vectors**: it starts a new database without them. The GitHub token is folded away. The hint for a download that cannot connect names the right file for each game.
+
+### The work timeline shows what was done
+
+- **Each step is the call itself**: its number, the tool, the arguments as the model wrote them, how much came back, and marks for a planned first search, a repeated call, nothing found, a failure, a call not run and a wiki that did not answer. Tapping a step shows the whole arguments and the whole result in a box that scrolls (it was a sentence about the step and the first sixteen lines).
+- What code did to an answer — sent it back, cut a citation to the lines read, dropped one — is a line of the timeline too.
+
+### Where a word occurs, and what a tool does when it finds nothing
+
+- **`search` and `grep` say in which story collections each word occurs**, and `search` gives a passage from every collection it lists that its best stories did not cover: told only where to look, the model answered from the first story it read about half the time. On one question about a character's whole story, all five collections were covered in 4 runs of 4 (1 of 4 before), for two to three times the input.
+- **The tables are a manual, not part of every prompt.** Table and column names, how entries are linked and how the library pages are laid out moved out of the system prompt (about 40% shorter) into a `guide` tool, attached to a question's first `sql` result.
+- **Looking for what is not there stops.** A tool that found nothing six times in one question is not run again, turns in which nothing was found leave the conversation after one reply, and the calls already tried stay listed in brief. A question the knowledge base could not answer went from 31 calls to 13.
+- **Stages of events that were run again are back.** When an event has a re-run, the game keeps the original's stages under the re-run's zone, and the build deleted them with the re-run: 41 side stories had no stages and no enemies linked (1,843 stages before, 3,241 now).
+- **A quotation mark no longer cuts an answer short.** A model that wrote quotations in plain quotes inside the answer's JSON had every paragraph cut at its first one (one answer kept a fifth of its text and still showed as complete).
+- `grep` given both story files and their collection searches the files (it searched the whole collection); a listing cut at its limit says where the hits not listed are. `wiki_search` with several words that no page holds together searches them one by one. The same word is asked of a wiki once per question, and a search waits 8 seconds for the wikis instead of 12. An answer written as prose with its citations in brackets is read like any other.
+
+### For developers
+
+- The prompts are put together per role (`loreRolePrompt`: answer, helper, planner, reviewer, stager) from sections that each say one thing once; the session record keeps why an answer was sent back and which citations code cut or dropped; a search reports where its time went (embedding, each game's vector and keyword scans, records, wikis).
+- `test/fixtures/history_questions_eval.json`: the 37 questions players asked in 52 exported conversations; cases with the same `session` are turns of one conversation in `ask_pipeline_live_test.dart`.
+- `tools/release_gamedata.env` also names the commit the Arknights asset was made from and that commit's date (`GAMEDATA_DB_COMMIT`, `GAMEDATA_DB_COMMIT_DATE`); change them with the URL and the SHA.
+- `tools/phone_ask.dart` asks a question in the app on a phone connected by USB and shows in the terminal, as it runs, what the app shows (steps, thinking, status, answer, cost); it needs a local build with the bridge (`install_local.ps1 -Build -Bridge`), which release builds do not have. A question of `/review` or `/digest` presses that button under the last answer.
+
 ## [0.13.0] - 2026-10-09
 
 The stable release of the 0.13 line (wiki search and evidence for Ask), Android build 32; it installs over v0.10.0 and later. The knowledge bases are unchanged — the same files as before (Arknights `695caa3e…`, the v0.11.0 asset; Endfield `592d64a8…`, the v0.12.0 asset), now also attached to this release, which the app downloads them from; an installed knowledge base is not downloaded again. The releases before v0.10.0 were removed (their tags remain).

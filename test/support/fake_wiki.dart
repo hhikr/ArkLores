@@ -14,9 +14,11 @@ class FakeWikiSource implements WikiSource {
   String version;
   bool unavailable = false;
   int fetches = 0;
+  int searches = 0;
 
   @override
   Future<List<WikiSearchHit>> search(String query, {int limit = 8}) async {
+    searches++;
     if (unavailable) throw WikiUnavailable(site, '网络错误：测试');
     return [
       for (final MapEntry(key: key, value: page) in pages.entries)

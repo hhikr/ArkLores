@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/gamedata_build_provider.dart';
 import '../../core/gamedata/gamedata_provider.dart';
 import '../../core/gamedata/story_vector_provider.dart';
@@ -14,39 +15,57 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
-/// Story vectors: what is missing, what it costs, how to configure it, and
-/// generating them.
+/// One game's vectors (stories and records). With nothing to do the card is
+/// two lines: what there is, and that it is complete. It opens into what is
+/// missing, what that costs, how to configure it and the run itself only
+/// when vectors are missing (after an update from the game data, or an
+/// asset without record vectors), the configured model differs, or a run is
+/// going or just ended.
 class StoryVectorCard extends ConsumerStatefulWidget {
-  const StoryVectorCard({super.key});
+  const StoryVectorCard({super.key, this.game = Game.arknights});
+
+  final Game game;
+
+  /// Keeps the Arknights card's widget keys as they were.
+  String get keySuffix => game == Game.arknights ? '' : '-${game.key}';
 
   @override
   ConsumerState<StoryVectorCard> createState() => _StoryVectorCardState();
 }
 
 class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
+  StateNotifierProvider<StoryVectorNotifier, StoryVectorUiState>
+      get _provider => storyVectorProvider(widget.game);
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() {
-      if (mounted) ref.read(storyVectorProvider.notifier).refresh();
+      if (mounted) ref.read(_provider.notifier).refresh();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    // A finished update changes which stories lack vectors.
-    ref.listen(gameDataBuildProvider, (previous, next) {
-      if (previous?.phase != GameDataBuildPhase.done &&
-          next.phase == GameDataBuildPhase.done) {
-        ref.read(storyVectorProvider.notifier).refresh();
+    // A finished update or download changes which texts lack vectors.
+    if (widget.game == Game.arknights) {
+      ref.listen(gameDataBuildProvider, (previous, next) {
+        if (previous?.phase != GameDataBuildPhase.done &&
+            next.phase == GameDataBuildPhase.done) {
+          ref.read(_provider.notifier).refresh();
+        }
+      });
+    }
+    ref.listen(installStatusOf(widget.game), (previous, next) {
+      if (previous?.valueOrNull != next.valueOrNull) {
+        ref.read(_provider.notifier).refresh();
       }
     });
     final installed =
-        ref.watch(gameDataInstallStatusProvider).valueOrNull?.installed ??
-            false;
+        ref.watch(installStatusOf(widget.game)).valueOrNull?.installed ?? false;
     if (!installed) return const SizedBox.shrink();
-    final vec = ref.watch(storyVectorProvider);
+    final vec = ref.watch(_provider);
     final config = ref.watch(embeddingConfigProvider);
     final plan = vec.plan;
     final tokensText = plan == null
@@ -60,7 +79,15 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
         !plan.nothingToDo &&
         config.isValid &&
         vec.mismatch == null;
+    // Nothing to decide here: say what there is and stop.
+    final quiet = plan != null &&
+        plan.nothingToDo &&
+        !vec.running &&
+        vec.mismatch == null &&
+        vec.error == null &&
+        (vec.result == null || vec.result!.chunks == 0);
     return ThemeAwareCard(
+      key: Key('kb-vector-card${widget.keySuffix}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -74,12 +101,36 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                   style: theme.titleFont.copyWith(fontSize: 15),
                 ),
               ),
+              if (quiet)
+                Text(
+                  context.t.kbVectorComplete,
+                  key: Key('kb-vector-complete${widget.keySuffix}'),
+                  style: theme.bodyFont.copyWith(
+                    color: theme.accentText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 6),
-          kbNote(context.t.kbVectorDesc, theme, theme.textSecondary),
-          const SizedBox(height: 10),
-          if (plan != null) ...[
+          if (quiet)
+            Padding(
+              padding: const EdgeInsets.only(left: 36),
+              child: kbNote(
+                context.t.kbVectorSummary(
+                  plan.existingVectors,
+                  plan.existingRecordVectors,
+                ),
+                theme,
+                theme.textSecondary,
+              ),
+            )
+          else ...[
+            kbNote(context.t.kbVectorDesc, theme, theme.textSecondary),
+            const SizedBox(height: 10),
+          ],
+          if (plan != null && !quiet) ...[
             Text(
               plan.existingVectors > 0
                   ? context.t.kbVectorStatus(
@@ -92,6 +143,12 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 fontSize: 13,
               ),
             ),
+            if (plan.existingRecordVectors > 0)
+              kbNote(
+                context.t.kbVectorRecordStatus(plan.existingRecordVectors),
+                theme,
+                theme.textPrimary,
+              ),
             const SizedBox(height: 4),
             if (plan.nothingToDo)
               kbNote(context.t.kbVectorUpToDate, theme, theme.accentText)
@@ -105,6 +162,12 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 theme,
                 theme.textPrimary,
               ),
+              if (plan.pendingRecordChunks > 0)
+                kbNote(
+                  context.t.kbVectorPendingRecords(plan.pendingRecordChunks),
+                  theme,
+                  theme.textPrimary,
+                ),
               if (bailian)
                 kbNote(
                   context.t.kbVectorCost(
@@ -117,6 +180,7 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                 kbNote(context.t.kbVectorFirstBuild, theme, theme.warning),
             ],
           ],
+          // Asking by meaning needs the service too, vectors or not.
           if (!config.isValid) ...[
             const SizedBox(height: 6),
             kbNote(
@@ -142,19 +206,27 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
           if (vec.running) ...[
             const SizedBox(height: 10),
             kbNote(
-              context.t.kbVectorRunning(
-                vec.doneStories,
-                vec.totalStories,
-                vec.doneChunks,
-              ),
+              // The records come after the stories.
+              vec.totalRecords > 0
+                  ? context.t.kbVectorRunningRecords(
+                      vec.doneRecords,
+                      vec.totalRecords,
+                    )
+                  : context.t.kbVectorRunning(
+                      vec.doneStories,
+                      vec.totalStories,
+                      vec.doneChunks,
+                    ),
               theme,
               theme.textPrimary,
             ),
             const SizedBox(height: 6),
             LinearProgressIndicator(
-              value: vec.totalStories > 0
-                  ? (vec.doneStories / vec.totalStories).clamp(0.0, 1.0)
-                  : null,
+              value: vec.totalRecords > 0
+                  ? (vec.doneRecords / vec.totalRecords).clamp(0.0, 1.0)
+                  : vec.totalStories > 0
+                      ? (vec.doneStories / vec.totalStories).clamp(0.0, 1.0)
+                      : null,
               backgroundColor: theme.divider,
               valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
               minHeight: 6,
@@ -174,45 +246,46 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
             const SizedBox(height: 6),
             kbNote(vec.error!, theme, theme.danger),
           ],
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: vec.running || vec.loading
-                    ? null
-                    : () => ref.read(storyVectorProvider.notifier).refresh(),
-                icon: const Icon(Icons.refresh_sharp, size: 18),
-                label: Text(context.t.kbVectorRefresh),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.accentText,
-                  side: BorderSide(color: theme.divider),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (vec.running)
+          if (!quiet) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
                 OutlinedButton.icon(
-                  onPressed: () =>
-                      ref.read(storyVectorProvider.notifier).cancel(),
-                  icon: const Icon(Icons.stop_sharp, size: 18),
-                  label: Text(context.t.kbVectorCancel),
+                  onPressed: vec.running || vec.loading
+                      ? null
+                      : () => ref.read(_provider.notifier).refresh(),
+                  icon: const Icon(Icons.refresh_sharp, size: 18),
+                  label: Text(context.t.kbVectorRefresh),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.danger,
+                    foregroundColor: theme.accentText,
                     side: BorderSide(color: theme.divider),
                   ),
-                )
-              else
-                ElevatedButton.icon(
-                  key: const Key('kb-vector-start'),
-                  onPressed: canStart ? () => _startVectors(plan) : null,
-                  icon: const Icon(Icons.auto_awesome_sharp, size: 18),
-                  label: Text(context.t.kbVectorStart),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.accentPrimary,
-                    foregroundColor: theme.onAccent,
-                  ),
                 ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                if (vec.running)
+                  OutlinedButton.icon(
+                    onPressed: () => ref.read(_provider.notifier).cancel(),
+                    icon: const Icon(Icons.stop_sharp, size: 18),
+                    label: Text(context.t.kbVectorCancel),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.danger,
+                      side: BorderSide(color: theme.divider),
+                    ),
+                  )
+                else
+                  ElevatedButton.icon(
+                    key: Key('kb-vector-start${widget.keySuffix}'),
+                    onPressed: canStart ? () => _startVectors(plan) : null,
+                    icon: const Icon(Icons.auto_awesome_sharp, size: 18),
+                    label: Text(context.t.kbVectorStart),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.accentPrimary,
+                      foregroundColor: theme.onAccent,
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -247,6 +320,6 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
       );
       if (ok != true || !mounted) return;
     }
-    unawaited(ref.read(storyVectorProvider.notifier).start());
+    unawaited(ref.read(_provider.notifier).start());
   }
 }

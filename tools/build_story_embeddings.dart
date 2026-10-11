@@ -2,6 +2,9 @@
 // GameData DB: chunks every story with the app's `chunkStory`, embeds chunks
 // with the app's `OpenAICompatibleEmbeddingClient`, quantizes with the app's
 // `quantize`, and records model/dims/chunking in `gamedata_manifest`.
+// 0.14: also `record_chunk_vectors` — every record outside the story text
+// (archives, voice lines, descriptions, operator files), chunked with the
+// app's `chunkRecord`; --stories-only leaves them out.
 //
 // Resumable and reproducible: vectors are cached by a hash of
 // (model, dims, chunk text) in a side SQLite file, so a rerun only embeds new
@@ -19,6 +22,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:arklores/core/gamedata/record_vectors.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -117,10 +121,20 @@ Future<void> main(List<String> args) async {
         '(stories fully aligned: $alignedStories, partly: $partialStories).');
     await migrator.close();
   }
+  // The records (everything outside the story text), after the stories in
+  // one list of texts: the same cache, the same embedding run.
+  final records = args.contains('--stories-only')
+      ? const <RecordChunk>[]
+      : await recordChunksOf(db);
+  final texts = [
+    for (final c in chunks) c.text,
+    for (final c in records) c.text,
+  ];
   final hashes = [
-    for (final c in chunks) _hash('${config.model}|${config.dimensions}|${c.text}'),
+    for (final t in texts) _hash('${config.model}|${config.dimensions}|$t'),
   ];
   stdout.writeln('Stories: ${selected.length}  chunks: ${chunks.length}  '
+      'record chunks: ${records.length}  '
       'model: ${config.model}@${config.dimensions}');
 
   // 2. Embed chunks missing from the cache.
@@ -128,13 +142,17 @@ Future<void> main(List<String> args) async {
     for (final r in await cache.rawQuery('SELECT hash FROM vectors')) '${r['hash']}',
   };
   final pending = <int>[
-    for (var i = 0; i < chunks.length; i++)
+    for (var i = 0; i < texts.length; i++)
       if (!cached.contains(hashes[i])) i,
   ];
-  final pendingChars =
-      pending.fold<int>(0, (sum, i) => sum + chunks[i].text.length);
-  stdout.writeln('Cached: ${chunks.length - pending.length}  to embed: '
-      '${pending.length} ($pendingChars chars)');
+  int chars(Iterable<int> of) =>
+      of.fold<int>(0, (sum, i) => sum + texts[i].length);
+  final pendingStories = pending.where((i) => i < chunks.length).toList();
+  final pendingRecords = pending.where((i) => i >= chunks.length).toList();
+  stdout.writeln('Stories — cached: ${chunks.length - pendingStories.length}  '
+      'to embed: ${pendingStories.length} (${chars(pendingStories)} chars)');
+  stdout.writeln('Records — cached: ${records.length - pendingRecords.length}  '
+      'to embed: ${pendingRecords.length} (${chars(pendingRecords)} chars)');
   if (dryRun) {
     stdout.writeln('Dry run: nothing embedded, nothing written.');
     await cache.close();
@@ -158,7 +176,7 @@ Future<void> main(List<String> args) async {
   Future<void> worker() async {
     while (next < batches.length) {
       final batch = batches[next++];
-      final vectors = await client.embed([for (final i in batch) chunks[i].text]);
+      final vectors = await client.embed([for (final i in batch) texts[i]]);
       await cache.transaction((txn) async {
         for (var k = 0; k < batch.length; k++) {
           final q = quantize(vectors[k]);
@@ -214,11 +232,31 @@ Future<void> main(List<String> args) async {
         'vec': v['vec'],
       });
     }
+    if (records.isNotEmpty) {
+      await txn.execute('DROP TABLE IF EXISTS $recordChunkVectorsTable');
+      await txn.execute(recordChunkVectorsDdl);
+      await txn.execute(recordChunkVectorsIndexDdl);
+      for (var i = 0; i < records.length; i++) {
+        final v = vectorsByHash[hashes[chunks.length + i]]!;
+        batch.insert(recordChunkVectorsTable, {
+          'chunk_id': records[i].chunkId,
+          'record_id': records[i].recordId,
+          'source': records[i].source,
+          'part': records[i].part,
+          'char_start': records[i].charStart,
+          'char_end': records[i].charEnd,
+          'text_hash': records[i].textHash,
+          'scale': v['scale'],
+          'vec': v['vec'],
+        });
+      }
+    }
     await batch.commit(noResult: true);
     for (final entry in {
       manifestEmbeddingModel: config.model,
       manifestEmbeddingDims: '${config.dimensions}',
       manifestEmbeddingChunking: chunkingSignature,
+      if (records.isNotEmpty) manifestRecordChunking: recordChunkingSignature,
     }.entries) {
       await txn.insert(
         'gamedata_manifest',
@@ -230,7 +268,8 @@ Future<void> main(List<String> args) async {
   await cache.close();
   await db.close();
   stdout.writeln('Wrote ${chunks.length + migrated.length} vectors '
-      '(${migrated.length} migrated) to $storyChunkVectorsTable '
+      '(${migrated.length} migrated) to $storyChunkVectorsTable'
+      '${records.isEmpty ? '' : ' and ${records.length} to $recordChunkVectorsTable'} '
       'in ${watch.elapsed.inSeconds}s.');
 }
 
@@ -317,7 +356,15 @@ class _Migrator {
         'vec': v['vec'],
       });
     }
-    return _Migration(rows, map.values.toSet(), true, j == oldLines.length);
+    // Only the lines under a vector that was moved are covered: a line the
+    // older database had but never embedded still needs a vector.
+    final covered = {
+      for (final n in map.values)
+        if (rows.any((r) =>
+            (r['line_start'] as int) <= n && n <= (r['line_end'] as int),))
+          n,
+    };
+    return _Migration(rows, covered, true, j == oldLines.length);
   }
 }
 

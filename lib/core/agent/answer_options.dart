@@ -1,32 +1,33 @@
-/// The optional parts of an Ask answer (R18 passes after the main agent's
-/// draft; 0.13 the wikis), chosen in the composer's options menu and saved
-/// between launches.
+/// How an Ask question is answered (0.13 the wikis; 0.14 sub-agents), chosen
+/// in the composer's options menu and saved between launches.
+///
+/// 0.14: the digest ("提要") and the reader's review ("复核") are no longer
+/// options of the question: they are asked for under a finished answer.
 class AnswerOptions {
-  const AnswerOptions({this.review = true, this.digest = true, this.wiki = true});
+  const AnswerOptions({
+    this.wiki = true,
+    this.delegate = false,
+  });
 
-  /// "复核": a second model reads the draft as a reader and raises questions
-  /// the main agent checks in the text before answering again.
-  final bool review;
-
-  /// "提要": a long answer is reorganised into a few paragraphs, the
-  /// detailed answer folded below.
-  final bool digest;
-
-  /// "Wiki": the agent may search and read the games' wikis (online) and
-  /// cite them as a secondary source.
+  /// "Wiki": the agent searches and reads the games' wikis (online) along
+  /// with the knowledge base, and cites them as wiki text.
   final bool wiki;
 
-  AnswerOptions copyWith({bool? review, bool? digest, bool? wiki}) =>
-      AnswerOptions(
-        review: review ?? this.review,
-        digest: digest ?? this.digest,
+  /// 0.14 "子助手": the agent may hand parts of a wide question to
+  /// sub-agents (at most two). Off by default.
+  final bool delegate;
+
+  AnswerOptions copyWith({bool? wiki, bool? delegate}) => AnswerOptions(
         wiki: wiki ?? this.wiki,
+        delegate: delegate ?? this.delegate,
       );
 
-  /// `review=1;digest=0;wiki=1`; unknown or missing keys keep their
-  /// defaults.
-  String encode() =>
-      'review=${review ? 1 : 0};digest=${digest ? 1 : 0};wiki=${wiki ? 1 : 0}';
+  static const int _version = 3;
+
+  /// `v=3;wiki=1;delegate=0`; unknown or missing keys keep their defaults
+  /// (the `review` and `digest` keys of earlier versions are not read).
+  String encode() => 'v=$_version;wiki=${wiki ? 1 : 0};'
+      'delegate=${delegate ? 1 : 0}';
 
   static AnswerOptions decode(String? text) {
     const defaults = AnswerOptions();
@@ -43,19 +44,17 @@ class AnswerOptions {
           _ => fallback,
         };
     return AnswerOptions(
-      review: flag('review', defaults.review),
-      digest: flag('digest', defaults.digest),
       wiki: flag('wiki', defaults.wiki),
+      delegate: flag('delegate', defaults.delegate),
     );
   }
 
   @override
   bool operator ==(Object other) =>
       other is AnswerOptions &&
-      other.review == review &&
-      other.digest == digest &&
-      other.wiki == wiki;
+      other.wiki == wiki &&
+      other.delegate == delegate;
 
   @override
-  int get hashCode => Object.hash(review, digest, wiki);
+  int get hashCode => Object.hash(wiki, delegate);
 }

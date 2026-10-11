@@ -10,33 +10,122 @@
 /// citations are checked against it.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
 import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
+import '../wiki/wiki_lookup.dart';
+import 'lore_agent_prompts.dart' show loreLibraryManual;
 import 'tools/agent_tool.dart';
-import 'tools/observation_data.dart' show dataBlockPrefix;
-import 'tools/search_story_lines.dart';
+import 'tools/search_tool.dart';
 
 /// Story lines shown to the model in this run (per story, line indexes),
 /// and ids of other records (`normalized_records` …) a query returned.
+///
+/// 0.14: the one ledger of what was shown. Every tool writes to it through
+/// [add], [addRange] and [addRecord]; a line counts only when its text was
+/// printed, a record is whole or only an excerpt ([recordIsPartial]). What
+/// one tool call showed is also noted for that call ([duringCall]), so a
+/// folded result can still say which lines it held.
 class SeenLines {
   final Map<String, Set<int>> _lines = {};
-  final Set<String> _records = {};
 
-  void addRecord(String id) => _records.add(id);
+  /// Record id → only an excerpt of it was shown.
+  final Map<String, bool> _records = {};
 
-  bool hasRecord(String id) => _records.contains(id);
+  static final Object _callKey = Object();
 
-  void add(String storyId, int line) =>
-      _lines.putIfAbsent(storyId, () => <int>{}).add(line);
+  /// Runs [body]; what it adds to any ledger is noted in [shown] too.
+  static Future<T> duringCall<T>(SeenLines shown, Future<T> Function() body) =>
+      runZoned(body, zoneValues: {_callKey: shown});
+
+  SeenLines? get _call {
+    final call = Zone.current[_callKey];
+    return call is SeenLines && !identical(call, this) ? call : null;
+  }
+
+  /// A record shown with its id; [partial]: only an excerpt of its text.
+  void addRecord(String id, {bool partial = false}) {
+    _records[id] = partial && (_records[id] ?? true);
+    _call?.addRecord(id, partial: partial);
+  }
+
+  bool hasRecord(String id) => _records.containsKey(id);
+
+  /// Only an excerpt of record [id] was shown (false when unknown).
+  bool recordIsPartial(String id) => _records[id] ?? false;
+
+  void add(String storyId, int line) {
+    _lines.putIfAbsent(storyId, () => <int>{}).add(line);
+    _call?.add(storyId, line);
+  }
 
   void addRange(String storyId, int first, int last) {
     final set = _lines.putIfAbsent(storyId, () => <int>{});
     for (var i = first; i <= last; i++) {
       set.add(i);
     }
+    _call?.addRange(storyId, first, last);
+  }
+
+  /// The runs of shown lines inside `first..last`, in order.
+  List<(int, int)> seenRanges(String storyId, int first, int last) {
+    final set = _lines[storyId];
+    if (set == null) return const [];
+    final out = <(int, int)>[];
+    int? start;
+    for (var i = first; i <= last && i - first < 1000; i++) {
+      if (set.contains(i)) {
+        start ??= i;
+      } else if (start != null) {
+        out.add((start, i - 1));
+        start = null;
+      }
+    }
+    if (start != null) {
+      out.add((start, last - first < 1000 ? last : first + 999));
+    }
+    return out;
+  }
+
+  /// What is in this ledger, as a short list for the model: each story's
+  /// line runs, then the records (`a.txt L3-10、L20；record:x`), at most
+  /// [maxChars] long.
+  String summary({int maxChars = 500}) {
+    final parts = <String>[];
+    for (final MapEntry(key: story, value: lines) in _lines.entries) {
+      final sorted = lines.toList()..sort();
+      final runs = <String>[];
+      var a = sorted.first;
+      var b = a;
+      for (final n in sorted.skip(1)) {
+        if (n == b + 1) {
+          b = n;
+          continue;
+        }
+        runs.add(a == b ? 'L$a' : 'L$a-$b');
+        a = b = n;
+      }
+      runs.add(a == b ? 'L$a' : 'L$a-$b');
+      // (Wiki pages are kept by paragraph: `P`.)
+      final text = runs.join('、');
+      parts.add('$story ${story.startsWith('wiki:') ? text.replaceAll('L', 'P') : text}');
+    }
+    for (final MapEntry(key: id, value: partial) in _records.entries) {
+      parts.add('record:$id${partial ? '（片段）' : ''}');
+    }
+    final out = StringBuffer();
+    for (final (i, part) in parts.indexed) {
+      if (out.length + part.length > maxChars && i > 0) {
+        out.write('；等 ${parts.length} 项');
+        break;
+      }
+      if (i > 0) out.write('；');
+      out.write(part);
+    }
+    return out.toString();
   }
 
   /// Whether every line of `first..last` was shown.
@@ -56,17 +145,21 @@ class SeenLines {
     for (final MapEntry(key: story, value: lines) in other._lines.entries) {
       _lines.putIfAbsent(story, () => <int>{}).addAll(lines);
     }
-    _records.addAll(other._records);
+    for (final MapEntry(key: id, value: partial) in other._records.entries) {
+      _records[id] = partial && (_records[id] ?? true);
+    }
+    final call = _call;
+    if (call != null && !identical(call, other)) call.addAll(other);
   }
 
   /// Stories with at least one shown line.
   Iterable<String> get stories => _lines.keys;
 }
 
-/// Most characters a tool result may hand back (≈ one chapter of story
-/// lines): large enough to read a chapter whole, small enough that dozens of
-/// results fit the conversation.
-const int maxToolResultChars = 16000;
+/// Most characters a tool result may hand back (≈ 200 story lines). 0.14:
+/// halved from 16000 — every result is sent again with each later turn, so
+/// its size is paid many times; a longer chapter is read in pages.
+const int maxToolResultChars = 8000;
 
 /// [text] on one line: its line breaks shown as ` / `.
 String oneLine(String text) =>
@@ -99,7 +192,9 @@ String _storyLabel(String storyId, Map<String, StoryCatalogEntry> entries) =>
     entries[storyId]?.label ?? fallbackStoryLabel(storyId);
 
 /// Names that a zero-hit search may have misspelled: near names from the DB
-/// (R15 string similarity, never an identity claim).
+/// (R15 string similarity, never an identity claim). A term the DB has as
+/// a name is not misspelled (0.14 phone: a query that found nothing for
+/// another reason was told the name it asked for "is not in the library").
 Future<String> _nearNamesHint(
   GameDataRetrieval store,
   Iterable<String> terms,
@@ -107,6 +202,7 @@ Future<String> _nearNamesHint(
   final hints = <String>[];
   for (final term in terms.toSet()) {
     if (term.runes.length < 2 || term.runes.length > 12) continue;
+    if (await store.hasName(term)) continue;
     final similar = await store.similarNames(term, limit: 5);
     final line = describeSimilarNames(term, similar);
     if (line != null) hints.add(line);
@@ -140,12 +236,47 @@ Map<String, dynamic> _gameParameter(String description) => {
       'description': description,
     };
 
+/// The tables whose `id` is a record's (`record:<id>`).
+final RegExp _recordTables =
+    RegExp(r'\b(normalized_records|entity_documents)\b', caseSensitive: false);
+
+/// What a query looks for in a name or in the text: `speaker LIKE '%x%'`,
+/// `e.name = 'x'`, `content LIKE '%x%'`. Only these may be a misspelled
+/// name (a category, a document type or a part of an id is not).
+final RegExp _comparedName = RegExp(
+  r'\b(?:speaker|name|entity_name|alias|matched_alias|title|story_name|'
+  r"collection_name|content)\s*(?:=|LIKE)\s*'%?([^'%_]+)%?'",
+  caseSensitive: false,
+);
+
+/// The select list of a query (between its first SELECT and FROM).
+final RegExp _selectList =
+    RegExp(r'\bSELECT\b(.*?)\bFROM\b', caseSensitive: false, dotAll: true);
+
+/// `id = '<id>'` in a query.
+final RegExp _idEquals =
+    RegExp(r"\bid\s*=\s*'([^']+)'", caseSensitive: false);
+
+final RegExp _recordPrefix = RegExp(r'^(?:record:)+');
+
+final RegExp _measured =
+    RegExp(r'\b(?:length|count)\s*\([^()]*\)', caseSensitive: false);
+
+/// `content` (bare or inside an expression) or `*` in a select list.
+final RegExp _contentOrAll =
+    RegExp(r'\bcontent\b|(?:^|[\s,.])\*', caseSensitive: false);
+
 /// `sql`: one read-only query over the whole knowledge DB.
 class SqlTool extends AgentTool {
-  SqlTool(this.store, this.seen);
+  SqlTool(this.store, this.seen, {this.manual});
 
   final GameDataRetrieval store;
   final SeenLines seen;
+
+  /// The manual of the tables (null: none is kept, as in a test of this
+  /// tool alone). A question's first query brings it along when it was not
+  /// looked at: whoever writes SQL needs it, whether they asked or not.
+  final LibraryManual? manual;
 
   static const int maxRows = 200;
 
@@ -158,7 +289,13 @@ class SqlTool extends AgentTool {
       '适合做全局统计和定位，例如按 story_id 统计某个名字出现的行数并关联 story_catalog 排序，'
       '或在 entities / entity_aliases / story_lines.speaker 里模糊查名字。'
       '两个游戏的库表结构相同、各是一个文件，一条 SQL 只查其中一个（game 参数）。'
-      '最多返回 $maxRows 行；超过时请加条件、聚合或 LIMIT。';
+      '最多返回 $maxRows 行；超过时请加条件、聚合或 LIMIT。'
+      '主要的表：story_lines(story_id, line_index, speaker, content, kind)、'
+      'story_catalog(story_id, collection_id, collection_name, story_code, story_name, …)、'
+      'entries(id, type, name, code, collection_id, record_id, …)、entry_links(src, relation, dst)、'
+      'collections(id, kind, name, parent_id, …)、normalized_records(id, category, subtype, title, entity_name, content, …)、'
+      'entity_documents。各列的含义、绑定的种类、条目和书架的种类在知识库手册里（guide）：'
+      '先看手册再写查询；没看过时，一次问答里第一条查询的结果后面会附上它。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -172,37 +309,96 @@ class SqlTool extends AgentTool {
 
   @override
   Future<String> execute(Map<String, dynamic> arguments) async {
+    final out = await _query(arguments);
+    final manual = this.manual;
+    if (manual == null || manual.shown) return out;
+    return '$out\n\n（这次问答第一次用 sql：$libraryManualMark，之后的查询照它的表和列写。）\n'
+        '${await manual.show()}';
+  }
+
+  Future<String> _query(Map<String, dynamic> arguments) async {
     final query = '${arguments['query'] ?? ''}'.trim();
     if (query.isEmpty) return '错误：query 为空';
-    final game = Game.parse(arguments['game']);
+    // 0.14 live: a query naming an Endfield id (`'ef/…'`) without `game`
+    // went to the Arknights database and found nothing; ids name their game.
+    final game = Game.parse(arguments['game']) ??
+        (RegExp("'(?:record:)?$endfieldIdPrefix").hasMatch(query)
+            ? Game.endfield
+            : null);
     final result = await store.readOnlySql(query, maxRows: maxRows, game: game);
-    if (result.error != null) return result.error!;
+    if (result.error != null) {
+      return '${result.error!}${await _columnsHint(query, result.error!, game)}';
+    }
+    final overRecords = _recordTables.hasMatch(query);
     if (result.rows.isEmpty) {
+      // 0.14 phone: a record's id was looked up in the table that does not
+      // hold it (an operator's file is in entity_documents), a dozen times.
+      if (overRecords) {
+        for (final m in _idEquals.allMatches(query)) {
+          final id = m.group(1)!.replaceFirst(_recordPrefix, '');
+          if (await store.readRecord(id) != null) {
+            return '0 行。这条记录在库里：用 read_record 读它的全文'
+                '（id 写 $id，不带 record: 前缀）。';
+          }
+        }
+      }
       final terms = [
-        for (final m in RegExp(r"LIKE\s+'%?([^'%_]+)%?'", caseSensitive: false)
-            .allMatches(query))
-          m.group(1)!,
+        for (final m in _comparedName.allMatches(query)) m.group(1)!,
       ];
       final hint = await _nearNamesHint(narrowTo(store, game), terms);
-      return '0 行。${hint.isEmpty ? '' : '\n$hint'}';
+      final retrieval = store;
+      final other = game == null &&
+              retrieval is MultiGameRetrieval &&
+              (await retrieval.installedGames()).contains(Game.endfield)
+          ? '\n（这条 SQL 查的是明日方舟的库；终末地的内容要加 game=endfield。）'
+          : '';
+      return '0 行。${hint.isEmpty ? '' : '\n$hint'}$other';
     }
     final columns = result.columns;
     final storyCol = columns.indexOf('story_id');
     final lineCol = columns.indexOf('line_index');
     final idCol = columns.indexOf('id');
+    // 0.14: a line or a record counts as shown only with its text (a
+    // column of, or cut from, `content`), and an id is a record's only in
+    // a query over the tables that hold records.
+    // 0.14 phone: the text is often selected under another name
+    // (`substr(content, 1, 500) c`), and a record read by `WHERE id = '…'`
+    // without its id column; neither was counted as shown.
+    final list = (_selectList.firstMatch(query)?.group(1) ?? '')
+        // Its length or a count shows none of the text.
+        .replaceAll(_measured, '');
+    final showsContent = _contentOrAll.hasMatch(list);
+    final contentCol = showsContent ? 0 : -1;
+    final wholeContent = columns.contains('content');
+    final onlyId = idCol < 0 && result.rows.length == 1
+        ? _idEquals.firstMatch(query)?.group(1)?.replaceFirst(_recordPrefix, '')
+        : null;
+    // One row is what was asked for: its cells are not cut short (the
+    // result as a whole still is). A cut cell was read 400 characters a
+    // call.
+    final cell = result.rows.length == 1
+        ? (maxToolResultChars - 400) ~/ columns.length
+        : 400;
     final buffer = StringBuffer()..writeln(columns.join(' | '));
     var shown = 0;
     for (final row in result.rows) {
-      final text = row.map((v) => _clip('${v ?? ''}', 400)).join(' | ');
+      final text = row.map((v) => _clip('${v ?? ''}', cell)).join(' | ');
       if (buffer.length + text.length > maxToolResultChars) break;
       buffer.writeln(text);
       shown++;
-      if (storyCol >= 0 && lineCol >= 0) {
+      if (storyCol >= 0 && lineCol >= 0 && contentCol >= 0) {
         final line = _int(row[lineCol]);
         if (line != null) seen.add('${row[storyCol]}', line);
       }
       // A record shown with its id can be cited as `record:<id>`.
-      if (idCol >= 0 && row[idCol] != null) seen.addRecord('${row[idCol]}');
+      final id = idCol >= 0 ? row[idCol] : onlyId;
+      if (overRecords && contentCol >= 0 && id != null) {
+        seen.addRecord(
+          '$id',
+          partial: !wholeContent ||
+              '${row[columns.indexOf('content')] ?? ''}'.length > cell,
+        );
+      }
     }
     if (shown < result.rows.length || result.truncated) {
       buffer.writeln(
@@ -214,6 +410,213 @@ class SqlTool extends AgentTool {
     }
     return buffer.toString().trimRight();
   }
+
+  /// 0.14: after a wrong column or table, the real columns of the tables
+  /// the query names, so the next try does not guess again.
+  Future<String> _columnsHint(String query, String error, Game? game) async {
+    if (!error.contains('no such column') && !error.contains('no such table')) {
+      return '';
+    }
+    final tables = <String>{
+      for (final m in RegExp(r'\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_]*)',
+              caseSensitive: false,)
+          .allMatches(query))
+        m.group(1)!,
+    };
+    final lines = <String>[];
+    for (final table in tables.take(4)) {
+      final columns = await store.readOnlySql(
+        "SELECT name FROM pragma_table_info('$table')",
+        maxRows: 60,
+        game: game,
+      );
+      if (columns.error != null) continue;
+      lines.add(
+        columns.rows.isEmpty
+            ? '没有表 $table'
+            : '$table 的列：${columns.rows.map((r) => r.first).join(', ')}',
+      );
+    }
+    if (error.contains('no such table') || lines.isEmpty) {
+      final all = await store.readOnlySql(
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') "
+        "AND name NOT LIKE '%fts%' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        maxRows: 80,
+        game: game,
+      );
+      if (all.error == null) {
+        lines.add('可用的表：${all.rows.map((r) => r.first).join(', ')}');
+      }
+    }
+    return lines.isEmpty ? '' : '\n${lines.join('\n')}';
+  }
+}
+
+/// Said when a collection is not found and no name is close (0.14 live: a
+/// main-story chapter asked for by a made-up name; an event newer than the
+/// library).
+const String collectionNotFoundHint =
+    '主线的某一章写 main_<章号>；也可能是库里还没有收录的新故事。可以用 sql 查 story_catalog 的 collection_name / collection_id。';
+
+/// 0.14: lookups of one tool that may find nothing in one question before
+/// the tool is not run again. A question the library cannot answer (the
+/// rows are not there) used to go on for two dozen queries, each a little
+/// different, none repeated.
+const int maxFailedLookups = 6;
+
+/// How a result that is the limit's refusal starts.
+const String lookupLimitPrefix = '没有执行：';
+
+/// What to do at the limit.
+const String lookupLimitAdvice =
+    '库里很可能没有这样的数据：不要再换条件重试，用已经读到的内容作答，没查到的在答案里说明；确实还要找时换别的工具。';
+
+/// The result of a call to [tool] past the limit.
+String lookupLimitNote(String tool) =>
+    '$lookupLimitPrefix$tool 在这次问答里已有 $maxFailedLookups 次没有结果。$lookupLimitAdvice';
+
+/// Whether a tool's result says it found nothing or could not run (every
+/// tool starts such a result in one of these ways).
+bool lookupFoundNothing(String result) {
+  final text = result.trimLeft();
+  return const ['0 行', 'SQL 错误', '错误', '没有', '缺少参数']
+      .any(text.startsWith);
+}
+
+/// In a result that carries the manual ([SqlTool]).
+const String libraryManualMark = '下面是知识库手册';
+
+/// 0.14: the knowledge base's manual for one question — the tables, their
+/// columns and bindings, the library's shelves ([loreLibraryManual]) — and
+/// whether the model has it yet. It used to be over half of the system
+/// prompt, sent with every call of every question; only `sql` needs it.
+class LibraryManual {
+  LibraryManual(this.store);
+
+  final GameDataRetrieval store;
+
+  /// Whether this question's conversation holds the manual already.
+  bool shown = false;
+
+  /// The manual for the installed games; marks it shown.
+  Future<String> show() async {
+    shown = true;
+    final store = this.store;
+    return loreLibraryManual(
+      store is MultiGameRetrieval
+          ? await store.installedGames()
+          : const [Game.arknights],
+    );
+  }
+}
+
+/// `guide`: the manual, when the model asks for it.
+class GuideTool extends AgentTool {
+  GuideTool(this.manual);
+
+  final LibraryManual manual;
+
+  @override
+  String get name => 'guide';
+
+  @override
+  String get description =>
+      '查看知识库手册：各表的列和含义、条目之间绑定的种类、资料页的书架和条目种类（装了两个游戏时还有两个库的不同之处）。'
+      '写 sql 之前，或遇到不认识的类别、绑定时看；一次问答看一次就够。没有参数。';
+
+  @override
+  Map<String, dynamic> get parameters =>
+      {'type': 'object', 'properties': <String, dynamic>{}};
+
+  @override
+  Future<String> execute(Map<String, dynamic> arguments) async => manual.shown
+      ? '手册在这次问答里已经给过（见前面的结果），照它写查询。'
+      : manual.show();
+}
+
+/// `read_record`: the text of one record outside the story text (an
+/// archive, a voice line, a module's story, an item's description).
+class ReadRecordTool extends AgentTool {
+  ReadRecordTool(this.store, this.seen);
+
+  final GameDataRetrieval store;
+  final SeenLines seen;
+
+  /// Characters of text per call.
+  static const int pageChars = maxToolResultChars - 400;
+
+  /// Each owner's line of [_ownerSpread], kept for the question: the count
+  /// is a scan of every story line.
+  final Map<String, Future<String?>> _spreads = {};
+
+  /// 0.14: where the story text says the name of whose record this is, by
+  /// collection (the same line `search` writes for a word). The name is the
+  /// record's own (`RecordText.owner`, from the table's id), never one found
+  /// in its text; none for a name of one character or one no line has. A
+  /// hint for where to look: nothing here is read.
+  Future<String?> _ownerSpread(RecordText record) {
+    final owner = record.owner.trim();
+    if (owner.runes.length < 2) return Future.value();
+    return _spreads[owner] ??= () async {
+      final own = narrowTo(store, gameOfId(record.id));
+      final spread = await own.termSpread(await own.storyLineHitCounts([owner]));
+      return spread == null
+          ? null
+          : '“$owner”在剧情里：${formatTermSpread(spread)}';
+    }();
+  }
+
+  @override
+  String get name => 'read_record';
+
+  @override
+  String get description =>
+      '读取一条剧情以外的资料（档案、语音、模组故事、物品与敌人的描述等）的全文：'
+      'id 是检索结果或查询结果里的记录 id（record: 后面的部分）。'
+      '开头一行写它的标题、类别和所属对象（这条语音是谁的、这个模组是谁的）；'
+      '有所属对象时下一行写这个名字在剧情里出现在哪些故事集（只是去哪里找的线索）。'
+      '很长的资料分页给出，按提示用 start 接着读。读过的资料可以作出处（record:<id>）。';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'id': {'type': 'string', 'description': '记录 id'},
+          'start': {'type': 'integer', 'description': '从第几个字开始，默认 0'},
+        },
+        'required': ['id'],
+      };
+
+  @override
+  Future<String> execute(Map<String, dynamic> arguments) async {
+    final id =
+        '${arguments['id'] ?? ''}'.trim().replaceFirst(_recordPrefix, '');
+    if (id.isEmpty) return '缺少参数 id：写检索结果里 record: 后面的记录 id。';
+    final record = await store.readRecord(id);
+    if (record == null) {
+      return '没有 id 为 $id 的资料。id 要与检索或查询结果里的完全一致；'
+          '按名字找资料用 search，按条件找用 sql 查 normalized_records / entity_documents。';
+    }
+    final text = record.content;
+    final start = (_int(arguments['start']) ?? 0).clamp(0, text.length);
+    final end = start + pageChars > text.length ? text.length : start + pageChars;
+    final kind = record.subtype.isEmpty || record.subtype == record.category
+        ? record.category
+        : '${record.category}·${record.subtype}';
+    // Whole only when every character was shown in this call.
+    seen.addRecord(id, partial: start > 0 || end < text.length);
+    return [
+      'record:$id | $kind | ${record.title}'
+          '${record.owner.isEmpty || record.owner == record.title ? '' : ' | 所属：${record.owner}'}',
+      if (start == 0)
+        if (await _ownerSpread(record) case final spread?) spread,
+      text.substring(start, end),
+      if (end < text.length)
+        '（本页到第 $end 个字，全文 ${text.length} 个字；继续读用 start=$end）'
+      else if (start > 0)
+        '（到全文末尾，共 ${text.length} 个字）',
+    ].join('\n');
+  }
 }
 
 /// `read_story`: consecutive lines of one chapter.
@@ -223,8 +626,8 @@ class ReadStoryTool extends AgentTool {
   final GameDataRetrieval store;
   final SeenLines seen;
 
-  static const int defaultCount = 400;
-  static const int maxCount = 500;
+  static const int defaultCount = 200;
+  static const int maxCount = 300;
 
   @override
   String get name => 'read_story';
@@ -324,7 +727,7 @@ class GrepTool extends AgentTool {
   String get description =>
       '在剧情台词里找包含某些词的行（正文或说话人，子串匹配，多个词用 | 分隔表示“任一”）。'
       '给 story_ids 或 collection 时返回命中行及上下文；都不给时在全库统计每个故事的命中行数'
-      '（只给分布，不给原文；不给 game 时统计所有已安装的游戏）。';
+      '（只给分布，不给原文：先按故事集汇总，再逐章列出；不给 game 时统计所有已安装的游戏）。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -337,7 +740,8 @@ class GrepTool extends AgentTool {
           'story_ids': {
             'type': 'array',
             'items': {'type': 'string'},
-            'description': '只在这些故事文件里找（完整的 story_id；不存在的文件会报 0 行）',
+            'description':
+                '只在这些故事文件里找（完整的 story_id；不存在的文件会报 0 行；同时给了 collection 时以这里为准）',
           },
           'collection': {
             'type': 'string',
@@ -379,13 +783,15 @@ class GrepTool extends AgentTool {
       if (collection == null || collection.entries.isEmpty) {
         final index = await store.storyCollectionIndex(like: collectionQuery);
         return '没有找到故事集“$collectionQuery”。'
-            '${index.isEmpty ? '可以用 sql 查 story_catalog 的 collection_name / collection_id。' : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}）').join('、')}。'}';
+            '${index.isEmpty ? collectionNotFoundHint : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}）').join('、')}。'}';
       }
-      scopeLabel = collection.label;
-      storyIds = [
-        ...storyIds,
-        for (final e in collection.entries) e.storyId,
-      ];
+      // With both given the files are the scope (0.14 live: the model named
+      // three chapters and their collection, and got the whole collection
+      // from its first chapter each time).
+      if (storyIds.isEmpty) {
+        scopeLabel = collection.label;
+        storyIds = [for (final e in collection.entries) e.storyId];
+      }
     }
     if (storyIds.isEmpty) return _corpusCounts(store, terms);
     final context = (_int(arguments['context']) ?? 2).clamp(0, 8);
@@ -407,6 +813,8 @@ class GrepTool extends AgentTool {
     final entries = await store.storyCatalogEntries(byStory.keys);
     final buffer = StringBuffer();
     var printedStories = 0;
+    final printed = <String, int>{};
+    var full = false;
     for (final MapEntry(key: storyId, value: lines) in byStory.entries) {
       final hitSet = lines.toSet();
       // Merge each hit's context window with its neighbours.
@@ -442,16 +850,34 @@ class GrepTool extends AgentTool {
       if (buffer.length + block.length > maxToolResultChars &&
           printedStories > 0) {
         buffer.writeln('（篇幅已满，后面的故事没有列出；请缩小范围或调小 context）');
+        full = true;
         break;
       }
       buffer.write(block);
       printedStories++;
+      printed[storyId] = lines.length;
     }
     buffer.writeln(
-      '（* 为命中行${truncated ? '；命中超过 $limit 行，只列出前 $limit 行，可加 max_hits 或缩小范围' : ''}）',
+      '（* 为命中行${truncated ? '；命中超过 $limit 行，只列出前 $limit 行' : ''}）',
     );
-    return _clip(buffer.toString().trimRight(), maxToolResultChars + 200);
+    final text = _clip(buffer.toString().trimRight(), maxToolResultChars + 200);
+    if (!truncated && !full) return text;
+    // Where the hits not listed are (0.14 live: with "only the first N"
+    // and no way on, the same call was sent again twice).
+    final counts = await store.storyLineHitCounts(terms, storyIds: storyIds);
+    final rest = [
+      for (final id in storyIds.toSet())
+        if ((counts[id] ?? 0) > (printed[id] ?? 0))
+          '$id ${counts[id]! - (printed[id] ?? 0)} 处',
+    ];
+    if (rest.isEmpty) return text;
+    return '$text\n没有列出的命中：${rest.take(restListed).join('、')}'
+        '${rest.length > restListed ? ' 等 ${rest.length} 个故事' : ''}。'
+        '要看它们，用 story_ids 指定这些故事再 grep，或用 read_story 读。';
   }
+
+  /// How many stories the note on hits not listed names.
+  static const int restListed = 12;
 
   /// Hit counts per story over the whole corpus, main story first, then by
   /// release.
@@ -494,18 +920,41 @@ class GrepTool extends AgentTool {
         return a.$4.compareTo(b.$4);
       });
     final total = counts.values.fold<int>(0, (n, c) => n + c);
+    // 0.14: one part per game, each with its own totals first, so a game
+    // with few hits is not lost at the end of a long list.
+    final byGame = <Game, List<String>>{};
+    for (final id in ids) {
+      byGame.putIfAbsent(gameOfId(id), () => []).add(id);
+    }
     final buffer = StringBuffer()
       ..writeln('全库共 $total 行命中，分布在 ${ids.length} 个故事'
+          '${byGame.length > 1 ? '（${[
+              for (final MapEntry(key: g, value: list) in byGame.entries)
+                '${g.label} ${list.fold<int>(0, (n, id) => n + counts[id]!)} 行 / ${list.length} 个故事',
+            ].join('；')}）' : ''}'
           '（主线在前，其余按上线时间；格式：story_id | 章节 | 命中行数）：');
-    var listed = 0;
-    for (final id in ids) {
-      if (listed >= maxStoriesListed) {
-        buffer.writeln('……还有 ${ids.length - listed} 个故事未列出；'
-            '可用 sql 按需要的条件统计。');
-        break;
+    final perGame = byGame.length > 1
+        ? (maxStoriesListed / byGame.length).floor()
+        : maxStoriesListed;
+    for (final MapEntry(key: game, value: list) in byGame.entries) {
+      if (byGame.length > 1) buffer.writeln('## ${game.label}');
+      // 0.14: the same counts by collection first — the list below is by
+      // chapter, and long.
+      final spread = await narrowTo(store, game)
+          .termSpread({for (final id in list) id: counts[id]!});
+      if (spread != null) {
+        buffer.writeln('按故事集：${formatTermSpread(spread)}');
       }
-      buffer.writeln('$id | ${_storyLabel(id, entries)} | ${counts[id]}');
-      listed++;
+      var listed = 0;
+      for (final id in list) {
+        if (listed >= perGame) {
+          buffer.writeln('……还有 ${list.length - listed} 个故事未列出；'
+              '可用 sql 按需要的条件统计。');
+          break;
+        }
+        buffer.writeln('$id | ${_storyLabel(id, entries)} | ${counts[id]}');
+        listed++;
+      }
     }
     buffer.writeln('（这里只是分布；读原文用 read_story，或带 story_ids 再 grep）');
     return buffer.toString().trimRight();
@@ -524,7 +973,8 @@ class OutlineTool extends AgentTool {
   @override
   String get description =>
       '列出一个故事集（活动 / 主线章节 / 干员密录）的全部章节：story_id、关卡号、章名和官方梗概。'
-      '梗概只用于定位，不能当证据。';
+      '梗概只用于定位，不能当证据。'
+      '末尾列出与它相关的其他故事集（共有人物、内容相近），只是找资料的线索。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -546,9 +996,13 @@ class OutlineTool extends AgentTool {
     if (collection == null || collection.entries.isEmpty) {
       final index = await store.storyCollectionIndex(like: query);
       return '没有找到故事集“$query”。'
-          '${index.isEmpty ? '可以用 sql 查 story_catalog。' : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}，${c.chapters} 章）').join('、')}。'}';
+          '${index.isEmpty ? collectionNotFoundHint : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}，${c.chapters} 章）').join('、')}。'}';
     }
     final month = collection.releaseMonth;
+    // Written last, and always: the chapters give way to it.
+    final related = _related(
+      await store.relatedCollections(collection.collectionId),
+    );
     final buffer = StringBuffer()
       ..writeln('${collection.label}（${collection.collectionId}，'
           '${collection.entries.length} 章${month == null ? '' : '，上线 $month'}）');
@@ -556,70 +1010,37 @@ class OutlineTool extends AgentTool {
       final synopsis = (e.synopsis ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
       buffer.writeln('${e.storyId} | ${e.chapterLabel}'
           '${synopsis.isEmpty ? '' : ' | ${_clip(synopsis, 160)}'}');
-      if (buffer.length > maxToolResultChars) {
+      if (buffer.length + related.length > maxToolResultChars) {
         buffer.writeln('……（篇幅已满）');
         break;
       }
     }
+    buffer.write(related);
     return buffer.toString().trimRight();
   }
-}
 
-/// `find`: ranked search for a phrase or a described scene — FTS keywords
-/// fused with the optional story vectors (R12). For text that grep's exact
-/// substrings would miss.
-class FindTool extends AgentTool {
-  FindTool(this._store, this._embeddingClient);
-
-  final GameDataRetrieval _store;
-  final EmbeddingClient? _embeddingClient;
-
-  @override
-  String get name => 'find';
-
-  @override
-  String get description =>
-      '按意思找剧情：给一句描述、台词或几个词，返回最相关的故事和其中最相关的几行（关键词检索，'
-      '配置了向量模型时再加语义检索）。适合不知道确切用词的场景、事件；知道确切名字时用 grep 更准。'
-      '结果只是定位线索，要用 read_story 读原文。';
-
-  @override
-  Map<String, dynamic> get parameters => {
-        'type': 'object',
-        'properties': {
-          'query': {'type': 'string', 'description': '描述、台词或空格分隔的词'},
-          'collection': {'type': 'string', 'description': '只在这个故事集里找（可选）'},
-          'game': _gameParameter('只在这个游戏里找（可选，默认所有已安装的游戏）'),
-        },
-        'required': ['query'],
-      };
-
-  @override
-  Future<String> execute(Map<String, dynamic> arguments) async {
-    final store = narrowTo(_store, Game.parse(arguments['game']));
-    // The search takes collection ids; resolve a collection name first.
-    final collection = '${arguments['collection'] ?? ''}'.trim();
-    final scope = collection.isEmpty
-        ? null
-        : (await store.storyCollection(collection))?.collectionId ?? collection;
-    final search = SearchStoryLinesTool(
-      gameDataStore: store,
-      embeddingClient: _embeddingClient,
-    );
-    final result = await search.execute({
-      'query': arguments['query'],
-      if (scope != null) 'scope_id': scope,
-    });
-    final text = result is ToolExecutionResult ? result.observation : '$result';
-    return [
-      for (final line in text.split('\n'))
-        if (!line.startsWith(dataBlockPrefix))
-          // The search speaks the R16 planner's commands.
-          line
-              .replaceAll('READ', 'read_story')
-              .replaceAll('COVER', 'grep')
-              .replaceAll('FIND', 'find'),
-    ].join('\n').trim();
+  /// The section on related collections (empty when there are none): what
+  /// each shares with this one, so the model can tell a strong hint from a
+  /// weak one.
+  static String _related(List<RelatedCollection> related) {
+    if (related.isEmpty) return '';
+    final near = related.any((r) => r.similarity != null);
+    final buffer = StringBuffer()
+      ..writeln('相关的故事集（按共有人物${near ? '和内容相近程度' : ''}排列；'
+          '只是找资料的线索，是否承接、谁先谁后要读原文确认，上线时间不等于故事里的先后）：');
+    for (final r in related) {
+      final month = r.releaseMonth;
+      buffer.writeln([
+        '${r.label}（${r.id}${month == null ? '' : '，上线 $month'}）',
+        [
+          if (r.shared > 0)
+            '共有 ${r.shared} 人：${r.names.join('、')}'
+                '${r.shared > r.names.length ? '…' : ''}',
+          if (r.similarity case final s?) '内容相近 ${s.toStringAsFixed(2)}',
+        ].join('；'),
+      ].join(''),);
+    }
+    return buffer.toString();
   }
 }
 
@@ -711,20 +1132,27 @@ String delegateTaskText(Map<String, dynamic> arguments) {
   ].join('\n');
 }
 
-/// The story agent's tools, sharing one [SeenLines] log.
+/// The story agent's tools, sharing one [SeenLines] log. 0.14: `search`
+/// (story text of every game by meaning and names, and the wikis when
+/// [wiki] is given) comes first and replaces `find`.
 List<AgentTool> loreTools(
   GameDataRetrieval store,
   SeenLines seen, {
   EmbeddingClient? embeddingClient,
-}) =>
-    [
-      SqlTool(store, seen),
-      GrepTool(store, seen),
-      ReadStoryTool(store, seen),
-      FindTool(store, embeddingClient),
-      OutlineTool(store),
-      SimilarNamesTool(store),
-    ];
+  WikiLookup? wiki,
+}) {
+  final manual = LibraryManual(store);
+  return [
+    SearchTool(store, seen, embeddingClient: embeddingClient, wiki: wiki),
+    ReadStoryTool(store, seen),
+    ReadRecordTool(store, seen),
+    GrepTool(store, seen),
+    SqlTool(store, seen, manual: manual),
+    GuideTool(manual),
+    OutlineTool(store),
+    SimilarNamesTool(store),
+  ];
+}
 
 /// Decodes tool-call arguments; malformed JSON becomes an empty map.
 Map<String, dynamic> decodeToolArguments(String raw) {

@@ -59,7 +59,10 @@ Future<void> main(List<String> args) async {
     final updated = await _updateData(
       dbFile: dbFile,
       sourceDir: Directory(sourcePath).absolute,
-      outputPath: _arg(args, '--output') ?? '${dbFile.path}.updated',
+      // Absolute: sqflite FFI resolves a relative path under .dart_tool.
+      outputPath: File(_arg(args, '--output') ?? '${dbFile.path}.updated')
+          .absolute
+          .path,
     );
     if (updated == null) {
       stdout.writeln('The database is up to date.');

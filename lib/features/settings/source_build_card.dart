@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/build/update_report.dart' show entryTypeLabel;
 import '../../core/gamedata/gamedata_build_provider.dart';
+import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -12,9 +13,13 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
-/// Building or updating the knowledge base from the upstream GameData
-/// repository: check for updates, build, the progress and the report, and
-/// the optional GitHub token.
+/// Updating the Arknights knowledge base from the upstream GameData
+/// repository (the official asset comes with the app's releases and lags
+/// behind the game): check for updates, update, the progress and the
+/// report, and — folded — the optional GitHub token.
+///
+/// 0.14: an update that can only be a complete rebuild over a database with
+/// vectors asks first (the new database has none).
 class SourceBuildCard extends ConsumerStatefulWidget {
   const SourceBuildCard({super.key});
 
@@ -25,6 +30,7 @@ class SourceBuildCard extends ConsumerStatefulWidget {
 class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
   final TextEditingController _tokenController = TextEditingController();
   bool _tokenLoaded = false;
+  bool _showToken = false;
 
   @override
   void dispose() {
@@ -44,6 +50,13 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
       }
     });
     final build = ref.watch(gameDataBuildProvider);
+    // The official asset of this build is that very commit and is offered
+    // above: it comes before an update run here (it has every vector).
+    final asset = ref.watch(gameDataInstallStatusProvider).valueOrNull;
+    final officialHasIt = asset != null &&
+        asset.updateAvailable &&
+        build.latestCommit != null &&
+        asset.releaseAssetCommit == build.latestCommit;
     return ThemeAwareCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,6 +117,28 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
               ),
               theme,
               theme.accentText,
+            ),
+          ],
+          if (officialHasIt && !build.busy) ...[
+            const SizedBox(height: 8),
+            kbNote(context.t.kbBuildOfficialHasIt, theme, theme.accentText),
+          ],
+          if (build.confirmFull && !build.busy) ...[
+            const SizedBox(height: 8),
+            kbNote(context.t.kbBuildFullConfirm, theme, theme.warning),
+            const SizedBox(height: 6),
+            OutlinedButton(
+              key: const Key('kb-build-full-confirm'),
+              onPressed: () =>
+                  ref.read(gameDataBuildProvider.notifier).buildFromSource(
+                        githubToken: _currentGithubToken(),
+                        allowFull: true,
+                      ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.danger,
+                side: BorderSide(color: theme.divider),
+              ),
+              child: Text(context.t.kbBuildFullConfirmButton),
             ),
           ],
           if (build.phase == GameDataBuildPhase.done) ...[
@@ -170,7 +205,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                 icon: const Icon(Icons.manage_search_sharp, size: 18),
                 label: Text(context.t.kbBuildCheckUpdates),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.accentPrimary,
+                  foregroundColor: theme.accentText,
                   side: BorderSide(color: theme.divider),
                 ),
               ),
@@ -188,19 +223,24 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                 )
               else
                 ElevatedButton.icon(
-                  onPressed: () => ref
-                      .read(gameDataBuildProvider.notifier)
-                      .buildFromSource(githubToken: _currentGithubToken()),
-                  icon: const Icon(Icons.build_sharp, size: 18),
+                  key: const Key('kb-build-start'),
+                  // Nothing to pull when the installed database is known to
+                  // be at the latest commit ("检查更新" looks again).
+                  onPressed: build.upToDate || officialHasIt
+                      ? null
+                      : () => ref
+                          .read(gameDataBuildProvider.notifier)
+                          .buildFromSource(githubToken: _currentGithubToken()),
+                  icon: const Icon(Icons.sync_sharp, size: 18),
                   label: Text(context.t.kbBuildFromSource),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.accentPrimary,
-                    foregroundColor: theme.bgPrimary,
+                    foregroundColor: theme.onAccent,
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           _buildGithubTokenSection(context, theme),
         ],
       ),
@@ -266,16 +306,44 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
     AppThemeTokens theme,
   ) {
     final tokenAsync = ref.watch(githubTokenProvider);
+    final hasToken = tokenAsync.valueOrNull?.isNotEmpty ?? false;
+    // Folded: most updates need no token.
+    final header = InkWell(
+      key: const Key('kb-build-token-toggle'),
+      onTap: () => setState(() => _showToken = !_showToken),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              _showToken ? Icons.expand_more_sharp : Icons.chevron_right_sharp,
+              size: 18,
+              color: theme.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                context.t.kbBuildTokenTitle,
+                style: theme.titleFont.copyWith(fontSize: 13),
+              ),
+            ),
+            if (hasToken)
+              Icon(Icons.check_sharp, size: 16, color: theme.accentText),
+          ],
+        ),
+      ),
+    );
+    if (!_showToken) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [Divider(color: theme.divider, height: 1), header],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Divider(color: theme.divider, height: 1),
-        const SizedBox(height: 12),
-        Text(
-          context.t.kbBuildTokenTitle,
-          style: theme.titleFont.copyWith(fontSize: 13),
-        ),
-        const SizedBox(height: 2),
+        header,
         Text(
           context.t.kbBuildTokenDesc,
           style: theme.bodyFont.copyWith(
@@ -403,20 +471,8 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
             return context.t.kbBuildStageStructured;
           case 'stories':
             return context.t.kbBuildStageStories;
-          case 'coverage':
-            return context.t.kbBuildStageCoverage;
-          case 'coverage_speakers':
-            return context.t.kbBuildStageCoverageSpeakers;
-          case 'coverage_trie':
-            return context.t.kbBuildStageCoverageTrie;
-          case 'coverage_scan':
-            return context.t.kbBuildStageCoverageScan;
-          case 'coverage_rare':
-            return context.t.kbBuildStageCoverageRare;
-          case 'coverage_profiles':
-            return context.t.kbBuildStageCoverageProfiles;
-          case 'fts':
-            return context.t.kbBuildStageFts;
+          case 'compact':
+            return context.t.kbBuildStageCompact;
           case 'start':
             return context.t.kbBuildStageStart;
           default:

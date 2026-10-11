@@ -121,6 +121,34 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // 0.14: "提要" and "复核" are buttons under a finished answer that can
+    // have them; a restored or running answer shows none.
+    testWidgets('the digest and the review are offered under the answer',
+        (tester) async {
+      await _pump(tester, _answer(_answered('答案正文。证据：$_c5:0。')));
+      expect(find.byKey(const ValueKey('answer-digest')), findsNothing);
+      expect(find.byKey(const ValueKey('answer-review')), findsNothing);
+
+      await _pump(
+        tester,
+        _answer(_answered('答案正文。证据：$_c5:0。'))
+            .copyWith(canDigest: true, canReview: true),
+      );
+      expect(find.byKey(const ValueKey('answer-digest')), findsOneWidget);
+      expect(find.byKey(const ValueKey('answer-review')), findsOneWidget);
+      expect(find.text('提要'), findsOneWidget);
+      expect(find.text('复核'), findsOneWidget);
+
+      await _pump(
+        tester,
+        _answer(_answered('答案正文。'), streaming: true, liveStatus: '整理答案')
+            .copyWith(canReview: true),
+        settle: false,
+      );
+      expect(find.byKey(const ValueKey('answer-review')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     // R18: the reorganised paragraphs are shown; the detailed answer below
     // the marker is one folded row. Evidence is counted once.
     testWidgets('a staged answer folds its details', (tester) async {
@@ -447,8 +475,8 @@ void main() {
   });
 
   group('work timeline', () {
-    testWidgets('the steps read as what was searched and read, with what '
-        'they found; raw output on tap', (tester) async {
+    testWidgets('each step shows its tool, its arguments as written and '
+        'what came back; the whole output on tap', (tester) async {
       final message = ChatMessage(
         id: 'a',
         role: MessageRole.assistant,
@@ -461,6 +489,7 @@ void main() {
             content: 'Executing tool "grep"',
             toolName: 'grep',
             toolArgs: {'pattern': '甲|乙', 'collection': 'act_fixture'},
+            planned: true,
           ),
           ReActStep(
             type: ReActEventType.toolObservation,
@@ -479,18 +508,47 @@ void main() {
             content: '【第一章】 $_c5\nL0 [甲] 一\nL1 [乙] 二\nL40 [甲] 三',
             toolName: 'read_story',
           ),
+          // The same call again, and nothing found this time.
+          ReActStep(
+            type: ReActEventType.toolCall,
+            content: 'Executing tool "grep"',
+            toolName: 'grep',
+            toolArgs: {'pattern': '甲|乙', 'collection': 'act_fixture'},
+          ),
+          ReActStep(
+            type: ReActEventType.toolObservation,
+            content: '0 行：act_fixture 里没有 甲 / 乙。',
+            toolName: 'grep',
+          ),
+          ReActStep(
+            type: ReActEventType.recordNote,
+            content: '出处裁到读过的行：a:1-9 → a:1-3',
+          ),
         ],
       );
       await _pump(tester, message);
-      expect(find.text('已作答 · 查阅 2 次 · 读了 1 篇原文'), findsOneWidget);
+      // Two stories: the grep showed lines of both (0.14: every tool that
+      // prints story lines counts, not read_story alone).
+      expect(find.text('已作答 · 查阅 3 次 · 读了 2 篇原文'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('answer-header')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('work-timeline')), findsOneWidget);
       expect(find.text('先找故事集。'), findsOneWidget);
-      expect(find.text('在「act_fixture」中搜索「甲 / 乙」'), findsOneWidget);
-      expect(find.text('5 处 · 2 篇'), findsOneWidget);
-      expect(find.text('阅读《第一章》'), findsOneWidget);
-      expect(find.text('第 0–40 行'), findsOneWidget);
+      // The tool and its arguments as the model wrote them, not a sentence
+      // about them.
+      expect(find.text('grep'), findsNWidgets(2));
+      expect(find.text('read_story'), findsOneWidget);
+      expect(
+        find.text('{"pattern":"甲|乙","collection":"act_fixture"}'),
+        findsNWidgets(2),
+      );
+      expect(find.textContaining('5 处 · 2 篇 · '), findsOneWidget);
+      expect(find.textContaining('第 0–40 行 · '), findsOneWidget);
+      expect(find.textContaining(' 字'), findsNWidgets(3));
+      expect(find.text('拟定'), findsOneWidget);
+      expect(find.text('重复'), findsOneWidget);
+      expect(find.text('没有结果'), findsOneWidget);
+      expect(find.text('记录：出处裁到读过的行：a:1-9 → a:1-3'), findsOneWidget);
       expect(find.textContaining('Observation'), findsNothing);
       expect(find.textContaining('Executing tool'), findsNothing);
 

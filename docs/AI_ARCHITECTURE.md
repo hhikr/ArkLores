@@ -1,21 +1,28 @@
 # AI 架构（Ask 问答 + GameData 检索）
 
-> 当前：v0.13.0。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
+> 当前：v0.14.0（问答的细节见 `R17_TOOL_AGENT.md`）。剧情问答由**工具型 Agent** `LoreAgentLoop` 完成：一个模型、通用工具、对话只追加、代码核对出处。
 > 0.12 起有两个知识库（明日方舟、终末地），Agent 看到的是合并的检索面（§3）。
 > 结构、工具、提示词约定与验收数据见 **`R17_TOOL_AGENT.md`**；服务商差异见 `LLM_PROVIDERS.md`；知识库表见 `GAMEDATA_BUILD_PIPELINE.md`。
 
 ## 1. 链路
 
 ```
-用户问题 ──► AskChatNotifier.sendMessage（没有模式；复核/提要两个可选项来自 AnswerOptions）
-              │   紧接上一条回答时带上一问的完整对话（LoreConversation），否则带最近 3 轮问答文本
-              │   “深度思考”开关 → 本问使用 low 档思考的 client
+用户问题 ──► AskChatNotifier.sendMessage（没有模式；Wiki/子助手两个可选项来自 AnswerOptions，子助手默认关）
+              │   紧接上一条回答时带上一问的对话（LoreConversation，工具结果折叠），否则带最近 3 轮问答文本
+              │   “深度思考”（选项面板里，服务商有思考开关时才有）→ 本问使用 low 档思考的 client
               └─ StoryQaAgent ─► LoreAgentLoop
-                                   system：库结构（含资料页说明 loreLibraryGuide）+ 工作方式 + 出处格式 + 输出格式
-                                   每轮 streamTurn(tools) → 工具并发执行（delegate = 并行子 agent）→ 结果原样追加
-                                   最终答案（JSON）→ 出处核对（SeenLines，最多退回一次）→ 审稿 → 按阶段整理
+                                   第一批查找（0.14）：一次独立的小调用（loreSearchPlanPrompt）按问题拟定 search / outline / wiki_search（合计不超过四步），
+                                     代码并行执行，作为普通的调用和结果进入对话；没写出来时有向量就用问题原文按意思检索一次
+                                   system：按角色组合（loreRolePrompt）：资料来源概览 + 工作方式 + 阅读原则 + 出处 + 输出格式
+                                     （表与绑定、资料页结构在手册里：guide 工具，随第一条 sql 结果附上）
+                                   每轮 streamTurn(tools) → 守门（拆分粘连、按 schema 校验）→ 工具并发执行 → 结果追加
+                                   最终答案（JSON）→ 出处核对（SeenLines；只读过一部分的范围裁到读过的行，少量未读由代码删去，
+                                     多了或没有出处则整轮回档重问一次：出错的回答不进对话）
                                    → [STORY_ANSWER: status=answered|partial|not_covered]
-       工具：sql（只读）/ grep / read_story / find / outline / similar_names / delegate
+              答完之后（0.14，答案下方的按钮，玩家点了才运行）：
+                “提要” digestAnswer → 只发问题和条目，段落写在答案上方
+                “复核” reviewAnswer → 审稿提问；有疑问时作为这段对话的追问重新作答，接在下面
+       工具：search / read_story / read_record / grep / sql（只读）/ guide / outline / similar_names / [delegate]
              （0.13，“Wiki 资料”开着时）wiki_search / wiki_read → WikiLookup（PRTS / Warfarin，快照）
                                    │
               GameDataKnowledgeStore（共享只读连接；sql 另开只读 FFI 连接，超时 sqlite3_interrupt）
@@ -25,7 +32,7 @@
 
 - **主要知识源是 GameData**。0.13 起 Agent 还可以查 PRTS / Warfarin Wiki 作为**二手**证据（第三种出处 `wiki:…`，同一套核对；
   原文优先，只有 Wiki 支持的说法要写明），见 `WIKI_EVIDENCE.md`。用户资料和 Wiki 页里选中的文字只作上下文（“用它提问”放进提问框草稿），不是证据。
-- 界面把工具调用与输出配对成时间线（`features/ai/work_steps.dart`），不显示 Thought/Action/Observation 原文。
+- 界面把工具调用与输出配对成时间线（`features/ai/work_steps.dart`）：每步是工具名、参数原文、结果的计数和字数与标记，点开看完整结果（0.14）。
 - 事件类型在 `react_event.dart`（名字沿用 ReAct，内容是原生工具调用）。角色扮演及其文本式 ReAct 已在 0.11 删除。
 
 ## 2. 设计原则
@@ -33,7 +40,8 @@
 - **读原文的模型就是写答案的模型**：信息每多一次交接就丢一部分（R8–R16 分步流程的根本问题）。
 - **工具要有表达力**：只读 SQL 一次看全语料；grep / read_story 整章读、章内搜；0 命中如实报告并附近名。
 - **对话只追加**：前缀缓存命中 85–90%；超过上下文预算才把最早的工具结果折叠成指引。
-- **不写进度规则**（预算提示、重读阶梯、阅读计划）：R13–R16 证明它们只对样例有效。
+- **不写进度规则**（预算提示、重读阶梯、阅读计划）：R13–R16 证明它们只对样例有效。唯一的例外是没有结果的查找每个工具每问最多 6 次。
+- **指路不如直接给**：只告诉模型“还有哪里可以看”，它有一半的时候不去；能确定地取到的原文由工具直接放进结果。
 - **代码只做确定性的事**：出处是否被工具展示过、状态信封、核查结论降级、只读 SQL 边界。
 - **没有问题类型分支**：同一流程、同一份提示词；提示词与工具说明里不放具体人物/章节/活动/剧情手法（守卫测试）。
 
@@ -41,11 +49,12 @@
 
 - 表与构建见 `GAMEDATA_BUILD_PIPELINE.md`。Agent 主要用：`story_lines`（逐行原文，`kind`）、`entries`/`collections`/`entry_links`（条目、归属、绑定）、
   `normalized_records`（档案等，出处 `record:<id>`）、`story_catalog`（章节名、顺序、梗概、上线时间）、`story_chunk_vectors`（可选语义召回）。
-- `find`：关键词 OR 排序 + 可选向量（RRF 融合）；向量只在配置的模型/维度与 manifest 一致时启用，向量命中必须 `read_story` 读到原文才算证据。
-- 覆盖层、目录、梗概、向量都只是**定位线索**，不参与事实判定。
+- `search`（0.14，取代 `find`）：有向量服务时按整个 query 的意思检索，query 里空格分开的词做关键词，RRF 融合；所有已安装游戏、资料和 Wiki 同时查、按来源分组；
+  打印出的原文行算读过、可以引用（资料只列片段，记为片段）。检索词由模型或“第一批检索”那次调用来写，代码不从句子里切词。向量只在配置的模型/维度与 manifest 一致时启用；没有向量时退回关键词并提示“问答质量可能下降”。
+- 目录、梗概、向量都只是**定位线索**，不参与事实判定。
 - 资料页的检索（`library_search.dart`）与 Agent 无关：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。
 - **两个游戏（0.12）**：每个游戏一个库文件，表结构相同；终末地的所有 id 以 `ef/` 开头（`game.dart` 的 `gameOfId`），所以出处、阅读历史、
-  资料页路由拿到 id 就知道去哪个库。`MultiGameRetrieval` 把两个库合成一个检索面：按 id 的调用去对应的库，`grep`/`find` 默认两个库都查并合并
+  资料页路由拿到 id 就知道去哪个库。`MultiGameRetrieval` 把两个库合成一个检索面：按 id 的调用去对应的库，`search`/`grep` 默认两个库都查、按游戏分组
   （同一个嵌入模型，分数可比），`sql` 用 `game` 参数选库。出处标签带“终末地·”前缀。工具参数见 `R17_TOOL_AGENT.md`。
 
 ## 4. 测试与成本
@@ -59,7 +68,7 @@
 | 轮次 | 做了什么 | 为什么 |
 | --- | --- | --- |
 | R0–R2 | 构建代码进 `lib/`；store 换库自动重开；App 内构建/增量更新 | 桌面与 App 一套构建；不依赖发版节奏 |
-| R1 | schema 3 确定性覆盖层 | “某角色在哪出场”不再依赖措辞 |
+| R1 | schema 3 确定性覆盖层（0.14 已删：工具换代后没有代码读它） | “某角色在哪出场”不再依赖措辞 |
 | R5–R7 | 会话 JSON 持久化与回放；分层记忆 | 真机问题可复现；截断导致重读 |
 | R8–R11 | PlannerLoop 三角色、自动消歧 | 上下文膨胀；同名实体死循环（这些补丁后来都删了） |
 | R12 | 证据笔记、引用校验、可选向量召回、同链路 live 测试 | 提取器未接线、writer 看不到原文 |
@@ -72,5 +81,6 @@
 | 0.11 | 资料页说明进提示词（`loreLibraryGuide`）；复核/提要可选；服务商兼容；删除角色扮演；工作过程时间线 | 条目层上线；非 GLM 服务商空回复；界面可读 |
 | 0.12 | 终末地知识库；`MultiGameRetrieval`，工具带 `game`；提示词加“两个游戏”一节；一个任务一篇剧情，提示词说明跨种类的先后不可推断 | 第二个游戏；终末地的对话种类各自编号 |
 | 0.13 | Wiki 工具（`wiki_search`/`wiki_read`）与 Wiki 出处：段落编号、版本快照、同一套出处核对；“Wiki 资料”开关 | 库里没有的整理与资料；玩家常用的 Wiki 可以引证 |
+| 0.14 | 统一检索 `search` + 拟定的第一批查找；工具调用守门；数据库连接独立；空回复只对一轮降级；出处少量问题由代码处理；`read_record`、资料向量；词的分布与“各给一段”；表结构收进手册（`guide`）；没有结果的查找有上限；提要与复核改为答后按钮；工作过程写成明细；知识库瘦身、按游戏数据新旧定更新顺序 | 真机 10 个会话：17% 调用出错、数据库被关、一题 1.5–24 分钟、单题百万 token；之后几轮真机会话和 37 问的历史问题集 |
 
 R12–R16 的逐轮真机数据已删（git 历史可查，`docs/AI_ARCHITECTURE.md` 2026-10-07 之前的版本）。

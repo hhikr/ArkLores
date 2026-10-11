@@ -19,6 +19,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:sqflite_common/sqlite_api.dart';
 
@@ -248,9 +249,8 @@ String synopsisPathFor(String storyInfo) {
 String normalizeSynopsis(String raw) =>
     raw.replaceAll(RegExp(r'\s+'), ' ').trim();
 
-/// Replaces the catalog table with [entries], records the row count in the
-/// manifest and relabels `story_chapter_profiles` (title = label, summary =
-/// official synopsis where one exists). Deterministic: same input, same rows.
+/// Replaces the catalog table with [entries] and records the row count in
+/// the manifest. Deterministic: same input, same rows.
 Future<int> writeStoryCatalog(
   DatabaseExecutor db,
   List<StoryCatalogEntry> entries,
@@ -275,30 +275,7 @@ Future<int> writeStoryCatalog(
     {'key': manifestStoryCatalogCount, 'value': '${entries.length}'},
     conflictAlgorithm: ConflictAlgorithm.replace,
   );
-  await applyStoryCatalogToProfiles(db, entries);
   return entries.length;
-}
-
-/// Writes catalog labels/synopses into `story_chapter_profiles` (when the
-/// table exists), so MAP shows names and official synopses instead of file
-/// names and one extracted line.
-Future<void> applyStoryCatalogToProfiles(
-  DatabaseExecutor db,
-  List<StoryCatalogEntry> entries,
-) async {
-  if (!await _hasTable(db, 'story_chapter_profiles')) return;
-  final batch = db.batch();
-  for (final entry in entries) {
-    final values = <String, Object?>{'title': entry.label};
-    if (_present(entry.synopsis)) values['summary'] = entry.synopsis;
-    batch.update(
-      'story_chapter_profiles',
-      values,
-      where: 'story_id = ?',
-      whereArgs: [entry.storyId],
-    );
-  }
-  await batch.commit(noResult: true);
 }
 
 /// Whether the DB carries the optional catalog table.
@@ -474,7 +451,7 @@ Future<StoryCollection?> queryStoryCollection(
   }
   // R16: the label prefixes [StoryCatalogEntry.collectionLabel] adds
   // (`主线·风暴瞭望`, `干员密录·…`) are not part of the stored name.
-  final name = q.replaceFirst(RegExp(r'^(主线|干员密录|终末地)[·・•]'), '');
+  final name = q.replaceFirst(collectionLabelPrefix, '');
   collectionId ??= await first(
     'SELECT collection_id FROM $storyCatalogTable WHERE collection_name = ? '
     'ORDER BY collection_id LIMIT 1',
@@ -497,40 +474,6 @@ Future<StoryCollection?> queryStoryCollection(
     entries: [for (final row in rows) StoryCatalogEntry.fromRow(row)],
     focusStoryId: rows.any((r) => r['story_id'] == storyId) ? storyId : null,
   );
-}
-
-/// Catalog entries whose synopsis, chapter name or collection name contains
-/// any of [terms], ranked by the number of distinct terms matched.
-Future<List<StoryCatalogEntry>> querySynopsisHits(
-  DatabaseExecutor db,
-  List<String> terms, {
-  String? collectionId,
-  int limit = 5,
-}) async {
-  final cleaned = {
-    for (final t in terms)
-      if (t.trim().isNotEmpty) t.trim(),
-  }.toList();
-  if (cleaned.isEmpty || !await hasStoryCatalog(db)) return const [];
-  final score = StringBuffer();
-  final args = <Object?>[];
-  for (final term in cleaned) {
-    if (score.isNotEmpty) score.write(' + ');
-    score.write(
-      "(COALESCE(synopsis, '') || ' ' || COALESCE(story_name, '') || ' ' || "
-      "collection_name LIKE ? ESCAPE '\\')",
-    );
-    args.add('%${escapeLike(term)}%');
-  }
-  var sql = 'SELECT *, ($score) AS matched FROM $storyCatalogTable WHERE matched > 0';
-  if (collectionId != null && collectionId.isNotEmpty) {
-    sql += ' AND collection_id = ?';
-    args.add(collectionId);
-  }
-  sql += ' ORDER BY matched DESC, collection_id, story_sort LIMIT ?';
-  args.add(limit);
-  final rows = await db.rawQuery(sql, args);
-  return [for (final row in rows) StoryCatalogEntry.fromRow(row)];
 }
 
 /// Collections (id, label, chapter count) whose name contains [like] and/or
@@ -574,6 +517,432 @@ Future<List<({String id, String label, int chapters})>> queryCollectionIndex(
         chapters: (row['n'] as num).toInt(),
       ),
   ];
+}
+
+/// The kind [StoryCatalogEntry.collectionLabel] writes before a
+/// collection's name (`主线·…`, `干员密录·…`): not part of the stored name.
+final RegExp collectionLabelPrefix = RegExp(r'^(主线|干员密录|生息演算|终末地)[·・•]');
+
+/// 0.14: a collection related to another one: it shares speakers with it
+/// and, when the database has vectors, reads alike. A hint for where to
+/// look, not evidence — nothing in the data says that one story continues
+/// another, or which comes first.
+class RelatedCollection {
+  const RelatedCollection({
+    required this.id,
+    required this.label,
+    required this.shared,
+    required this.names,
+    this.releaseMonth,
+    this.similarity,
+  });
+
+  final String id;
+  final String label;
+
+  /// `2024-06`, or null (main story, operator records).
+  final String? releaseMonth;
+
+  /// How many speakers the two collections share.
+  final int shared;
+
+  /// Some of them, the least common first.
+  final List<String> names;
+
+  /// Cosine of the two collections' mean vectors; null without vectors.
+  final double? similarity;
+}
+
+/// Lines a speaker has in a collection before they count as one of its
+/// speakers (a passer-by with a few lines says nothing about the story).
+const int relatedMinLines = 10;
+
+/// Related collections listed.
+const int relatedCollectionLimit = 6;
+
+/// Shared speakers named for each.
+const int relatedNamesShown = 4;
+
+/// The speakers of [collectionId] (with [relatedMinLines] lines or more),
+/// each with the collections they speak that much in — that one included.
+/// Sources: `story_lines.speaker` and the catalog's `collection_id`.
+Future<Map<String, Set<String>>> querySharedSpeakers(
+  DatabaseExecutor db,
+  String collectionId,
+) async {
+  if (!await hasStoryCatalog(db)) return const {};
+  final rows = await db.rawQuery(
+    'WITH tgt AS ('
+    'SELECT l.speaker FROM story_lines l '
+    'JOIN $storyCatalogTable c ON c.story_id = l.story_id '
+    "WHERE c.collection_id = ? AND l.speaker <> '' "
+    'GROUP BY l.speaker HAVING COUNT(*) >= ?) '
+    'SELECT l.speaker AS speaker, c.collection_id AS collection_id '
+    'FROM story_lines l JOIN $storyCatalogTable c ON c.story_id = l.story_id '
+    'WHERE l.speaker IN (SELECT speaker FROM tgt) '
+    'GROUP BY l.speaker, c.collection_id HAVING COUNT(*) >= ?',
+    [collectionId, relatedMinLines, relatedMinLines],
+  );
+  final speakers = <String, Set<String>>{};
+  for (final row in rows) {
+    speakers
+        .putIfAbsent('${row['speaker']}', () => {})
+        .add('${row['collection_id']}');
+  }
+  return speakers;
+}
+
+/// One row of [rankRelatedCollections].
+typedef RankedCollection = ({
+  String id,
+  int shared,
+  List<String> names,
+  double? similarity,
+});
+
+/// The collections most related to [target], best first. [speakers] is
+/// [querySharedSpeakers]' result; [similarity] the cosine of each other
+/// collection's mean vector with the target's (null without vectors).
+///
+/// Two rankings: by shared speakers, each weighing `1 / ln(1 + n)` for the
+/// `n` collections they speak in (someone who is everywhere says little);
+/// and by similarity. They are joined by rank (reciprocal rank fusion): a
+/// collection one ranking does not have takes its last place there. Without
+/// [similarity] only the speakers rank.
+List<RankedCollection> rankRelatedCollections(
+  String target,
+  Map<String, Set<String>> speakers,
+  Map<String, double>? similarity, {
+  int limit = relatedCollectionLimit,
+}) {
+  const k = 60;
+  final weight = <String, double>{};
+  final who = <String, List<(String, double)>>{};
+  for (final MapEntry(key: speaker, value: collections) in speakers.entries) {
+    if (!collections.contains(target)) continue;
+    // A speaker written only in marks (an unnamed voice) is nobody.
+    if (!_hasLetter.hasMatch(speaker)) continue;
+    final w = 1 / math.log(1 + collections.length);
+    for (final c in collections) {
+      if (c == target) continue;
+      weight[c] = (weight[c] ?? 0) + w;
+      who.putIfAbsent(c, () => []).add((speaker, w));
+    }
+  }
+  List<String> ordered(Map<String, double> scores) => scores.keys.toList()
+    ..sort((a, b) {
+      final byScore = scores[b]!.compareTo(scores[a]!);
+      return byScore != 0 ? byScore : a.compareTo(b);
+    });
+  Map<String, int> ranks(List<String> ids) =>
+      {for (final (i, id) in ids.indexed) id: i + 1};
+
+  final near = similarity == null
+      ? null
+      : {
+          for (final e in similarity.entries)
+            if (e.key != target) e.key: e.value,
+        };
+  final bySpeakers = ranks(ordered(weight));
+  final byNear = near == null ? null : ranks(ordered(near));
+  final score = <String, double>{
+    for (final id in {...bySpeakers.keys, ...?byNear?.keys})
+      id: 1 / (k + (bySpeakers[id] ?? bySpeakers.length + 1)) +
+          (byNear == null ? 0 : 1 / (k + (byNear[id] ?? byNear.length + 1))),
+  };
+  return [
+    for (final id in ordered(score).take(limit))
+      (
+        id: id,
+        shared: who[id]?.length ?? 0,
+        names: [
+          for (final (name, _) in [...?who[id]]
+            ..sort((a, b) {
+              final byWeight = b.$2.compareTo(a.$2);
+              return byWeight != 0 ? byWeight : a.$1.compareTo(b.$1);
+            }))
+            name,
+        ].take(relatedNamesShown).toList(),
+        similarity: near?[id],
+      ),
+  ];
+}
+
+final RegExp _hasLetter = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+/// Label and release month of each of [collectionIds].
+Future<Map<String, ({String label, String? releaseMonth})>> queryCollectionLabels(
+  DatabaseExecutor db,
+  Iterable<String> collectionIds,
+) async {
+  final ids = collectionIds.toList();
+  if (ids.isEmpty || !await hasStoryCatalog(db)) return const {};
+  final rows = await db.rawQuery(
+    'SELECT collection_id, collection_name, collection_type, '
+    'MIN(start_time) AS start_time FROM $storyCatalogTable '
+    'WHERE collection_id IN (${List.filled(ids.length, '?').join(', ')}) '
+    'GROUP BY collection_id',
+    ids,
+  );
+  return {
+    for (final row in rows)
+      '${row['collection_id']}': (
+        label: StoryCatalogEntry(
+          storyId: '',
+          collectionId: '${row['collection_id']}',
+          collectionName: '${row['collection_name']}',
+          collectionType: '${row['collection_type']}',
+          storySort: 0,
+        ).collectionLabel,
+        releaseMonth: releaseMonthOf((row['start_time'] as num?)?.toInt()),
+      ),
+  };
+}
+
+// 0.14: where a word's lines are — its spread over the collections. Every
+// word gets the same form; nothing decides whether a word is "worth"
+// listing (a word that is everywhere shows as such: most of it is in "the
+// rest"). The numbers below are from measurements on the real database
+// (2026-10-11: 92 words, names by frequency band plus places, groups and
+// common words); look at the real database again before changing one.
+
+/// Collections are listed, most lines first, until they hold this share of
+/// the word's lines …
+const double spreadCoverage = 0.80;
+
+/// … or this many are listed.
+const int spreadMaxListed = 6;
+
+/// Collections added after those: short ones the word fills (an operator's
+/// own record is a few dozen lines and never among the largest).
+const int spreadMaxDense = 2;
+
+/// A collection is such a one when the word has this many lines in it,
+const int spreadDenseMinLines = 10;
+
+/// is in this share of its lines,
+const double spreadDenseShare = 0.10;
+
+/// and that share is this many times the word's share of the whole corpus
+/// (without this a word that is everywhere qualifies in any talkative
+/// chapter).
+const int spreadDenseLift = 5;
+
+/// Label of the stories no collection holds.
+const String spreadOtherLabel = '其他';
+
+/// Which collection every story file is in, and how many lines each
+/// collection and the corpus have ([queryStoryGroups]).
+class StoryGroups {
+  const StoryGroups({
+    required this.groupOf,
+    required this.labels,
+    required this.groupLines,
+    required this.corpusLines,
+  });
+
+  /// Story id → collection id ('' for a story no collection holds).
+  final Map<String, String> groupOf;
+  final Map<String, String> labels;
+  final Map<String, int> groupLines;
+  final int corpusLines;
+}
+
+/// One collection of a [TermSpread].
+typedef SpreadPart = ({
+  String id,
+  String label,
+  int lines,
+  int chapters,
+
+  /// The word's lines over the collection's lines.
+  double share,
+
+  /// The word's lines in each story file of the collection.
+  Map<String, int> stories,
+});
+
+/// Where the lines holding a word are. A hint for where to look, not
+/// something read.
+class TermSpread {
+  const TermSpread({
+    required this.lines,
+    required this.chapters,
+    required this.collections,
+    required this.listed,
+    required this.dense,
+    required this.restCount,
+    required this.restShare,
+  });
+
+  final int lines;
+  final int chapters;
+  final int collections;
+
+  /// The collections with the most lines.
+  final List<SpreadPart> listed;
+
+  /// Collections not among [listed] that the word fills.
+  final List<SpreadPart> dense;
+
+  /// The collections in neither list, and their share of [lines].
+  final int restCount;
+  final double restShare;
+}
+
+/// The spread of a word whose lines per story file are [perStory].
+TermSpread computeTermSpread(Map<String, int> perStory, StoryGroups groups) {
+  final lines = <String, int>{};
+  final stories = <String, Map<String, int>>{};
+  var total = 0;
+  for (final MapEntry(key: story, value: n) in perStory.entries) {
+    if (n <= 0) continue;
+    final group = groups.groupOf[story] ?? '';
+    lines[group] = (lines[group] ?? 0) + n;
+    (stories[group] ??= {})[story] = n;
+    total += n;
+  }
+  SpreadPart part(String id) {
+    final all = groups.groupLines[id] ?? 0;
+    return (
+      id: id,
+      label: id.isEmpty ? spreadOtherLabel : groups.labels[id] ?? id,
+      lines: lines[id]!,
+      chapters: stories[id]!.length,
+      share: all == 0 ? 0 : lines[id]! / all,
+      stories: stories[id]!,
+    );
+  }
+
+  final ids = lines.keys.toList()
+    ..sort((a, b) {
+      final byLines = lines[b]!.compareTo(lines[a]!);
+      return byLines != 0 ? byLines : a.compareTo(b);
+    });
+  final listed = <SpreadPart>[];
+  var covered = 0;
+  for (final id in ids) {
+    if (listed.length >= spreadMaxListed || covered >= total * spreadCoverage) {
+      break;
+    }
+    listed.add(part(id));
+    covered += lines[id]!;
+  }
+  final everywhere =
+      groups.corpusLines == 0 ? 0.0 : total / groups.corpusLines;
+  final dense = [
+    for (final id in ids.skip(listed.length))
+      // The stories no collection holds are not one story.
+      if (id.isNotEmpty && lines[id]! >= spreadDenseMinLines) part(id),
+  ]
+      .where(
+        (p) =>
+            p.share >= spreadDenseShare &&
+            p.share >= everywhere * spreadDenseLift,
+      )
+      .toList()
+    ..sort((a, b) {
+      final byShare = b.share.compareTo(a.share);
+      return byShare != 0 ? byShare : a.id.compareTo(b.id);
+    });
+  final added = dense.take(spreadMaxDense).toList();
+  final shown = covered + added.fold<int>(0, (n, p) => n + p.lines);
+  return TermSpread(
+    lines: total,
+    chapters: perStory.values.where((n) => n > 0).length,
+    collections: ids.length,
+    listed: listed,
+    dense: added,
+    restCount: ids.length - listed.length - added.length,
+    restShare: total == 0 ? 0 : (total - shown) / total,
+  );
+}
+
+/// `N 行，K 个故事集：故事集 n 行 / c 章、…；占比高的：故事集 n 行（占该篇 p%）；
+/// 另 M 个共 q%` — the one form every tool writes.
+String formatTermSpread(TermSpread spread) {
+  String percent(double share) {
+    final p = (share * 100).round();
+    return p == 0 ? '不到 1%' : '$p%';
+  }
+
+  return [
+    '${spread.lines} 行，${spread.collections} 个故事集：${[
+      for (final p in spread.listed) '${p.label} ${p.lines} 行 / ${p.chapters} 章',
+    ].join('、')}',
+    if (spread.dense.isNotEmpty)
+      '占比高的：${[
+        for (final p in spread.dense)
+          '${p.label} ${p.lines} 行（占该篇 ${percent(p.share)}）',
+      ].join('、')}',
+    if (spread.restCount > 0)
+      '另 ${spread.restCount} 个共 ${percent(spread.restShare)}',
+  ].join('；');
+}
+
+/// Every story file's collection and the line counts [computeTermSpread]
+/// needs. Sources: `story_catalog.collection_id`; for a story the catalog
+/// does not have (a tutorial, a stage's own dialogue), the collection of its
+/// entry (`entries.id` = `story:<story_id>`), named by `collections.name`;
+/// `story_lines` for the counts.
+Future<StoryGroups> queryStoryGroups(DatabaseExecutor db) async {
+  Future<bool> has(String table) async => (await db.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        [table],
+      ))
+          .isNotEmpty;
+
+  final groupOf = <String, String>{};
+  final labels = <String, String>{};
+  if (await hasStoryCatalog(db)) {
+    final rows = await db.rawQuery(
+      'SELECT story_id, collection_id, collection_name, collection_type '
+      'FROM $storyCatalogTable',
+    );
+    for (final row in rows) {
+      final id = '${row['collection_id']}';
+      groupOf['${row['story_id']}'] = id;
+      labels[id] ??= StoryCatalogEntry(
+        storyId: '',
+        collectionId: id,
+        collectionName: '${row['collection_name']}',
+        collectionType: '${row['collection_type']}',
+        storySort: 0,
+      ).collectionLabel;
+    }
+  }
+  if (await has('entries') && await has('collections')) {
+    const prefix = 'story:';
+    final rows = await db.rawQuery(
+      'SELECT e.id AS id, e.collection_id AS collection_id, c.name AS name '
+      'FROM entries e JOIN collections c ON c.id = e.collection_id '
+      "WHERE e.id LIKE '$prefix%'",
+    );
+    for (final row in rows) {
+      final story = '${row['id']}'.substring(prefix.length);
+      if (groupOf.containsKey(story)) continue;
+      final id = '${row['collection_id']}';
+      final name = '${row['name'] ?? ''}'.trim();
+      groupOf[story] = id;
+      labels[id] ??= name.isEmpty ? id : name;
+    }
+  }
+  final groupLines = <String, int>{};
+  var corpus = 0;
+  for (final row in await db.rawQuery(
+    'SELECT story_id, COUNT(*) AS n FROM story_lines GROUP BY story_id',
+  )) {
+    final n = (row['n'] as num).toInt();
+    final group = groupOf['${row['story_id']}'] ?? '';
+    groupLines[group] = (groupLines[group] ?? 0) + n;
+    corpus += n;
+  }
+  return StoryGroups(
+    groupOf: groupOf,
+    labels: labels,
+    groupLines: groupLines,
+    corpusLines: corpus,
+  );
 }
 
 /// One collection's chapters in game order.

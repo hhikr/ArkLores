@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
+import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart';
 import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry;
 import '../../core/library/library_provider.dart'
@@ -169,11 +170,24 @@ final citedRecordProvider =
   // citation pattern), so the literal is safe to inline.
   if (!RegExp(r'^[\w\-/]+$').hasMatch(id)) return null;
   try {
-    final result = await storeOfId(ref, id).readOnlySql(
-          'SELECT title, category, subtype, entity_name, content '
-          "FROM normalized_records WHERE id = '$id'",
-          maxRows: 1,
-        );
+    final store = storeOfId(ref, id);
+    var result = await store.readOnlySql(
+      'SELECT title, category, subtype, entity_name, content '
+      "FROM normalized_records WHERE id = '$id'",
+      maxRows: 1,
+    );
+    if (result.rows.isEmpty) {
+      // 0.14: an operator's file (entity_documents), which search lists too;
+      // the v0.12.0 Endfield asset keeps these ids without ef/.
+      final raw = id.startsWith(endfieldIdPrefix)
+          ? id.substring(endfieldIdPrefix.length)
+          : id;
+      result = await store.readOnlySql(
+        'SELECT title, entity_name, content FROM entity_documents '
+        "WHERE id IN ('$id', '$raw')",
+        maxRows: 1,
+      );
+    }
     if (result.rows.isEmpty) return null;
     final row = {
       for (final (i, c) in result.columns.indexed) c: result.rows.first[i],

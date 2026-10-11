@@ -419,7 +419,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbRedownloadBody.
   ///
   /// In en, this message translates to:
-  /// **'You already have the latest version. Downloading again fetches about 185 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.'**
+  /// **'You already have the latest version. Downloading again fetches about 115 MB and rebuilds the database (about 1 GB of free space needed). It is rarely necessary.'**
   String get kbRedownloadBody;
 
   /// No description provided for @kbRedownloadConfirm.
@@ -857,7 +857,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiAskSource.
   ///
   /// In en, this message translates to:
-  /// **'Answers are grounded in installed GameData story text only'**
+  /// **'Searches the story text of both installed games, and the wikis when \"Wiki\" is on; every point of an answer has a source'**
   String get aiAskSource;
 
   /// No description provided for @aiAskEmpty.
@@ -1484,12 +1484,6 @@ abstract class AppLocalizations {
   /// **'Deep thinking'**
   String get aiDeepThinking;
 
-  /// No description provided for @aiDeepThinkingTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Think before writing the answer (slower, more tokens)'**
-  String get aiDeepThinkingTooltip;
-
   /// No description provided for @aiScrollToBottom.
   ///
   /// In en, this message translates to:
@@ -1652,60 +1646,6 @@ abstract class AppLocalizations {
   /// **'{calls} lookups · {reads} stories read'**
   String aiWorkSummary(int calls, int reads);
 
-  /// No description provided for @aiWorkSql.
-  ///
-  /// In en, this message translates to:
-  /// **'Query the knowledge base'**
-  String get aiWorkSql;
-
-  /// No description provided for @aiWorkGrep.
-  ///
-  /// In en, this message translates to:
-  /// **'Search for “{pattern}”'**
-  String aiWorkGrep(String pattern);
-
-  /// No description provided for @aiWorkGrepIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Search “{pattern}” in {scope}'**
-  String aiWorkGrepIn(String scope, String pattern);
-
-  /// No description provided for @aiWorkRead.
-  ///
-  /// In en, this message translates to:
-  /// **'Read “{story}”'**
-  String aiWorkRead(String story);
-
-  /// No description provided for @aiWorkOutline.
-  ///
-  /// In en, this message translates to:
-  /// **'Chapter list of {collection}'**
-  String aiWorkOutline(String collection);
-
-  /// No description provided for @aiWorkFind.
-  ///
-  /// In en, this message translates to:
-  /// **'Find by meaning: “{query}”'**
-  String aiWorkFind(String query);
-
-  /// No description provided for @aiWorkSimilar.
-  ///
-  /// In en, this message translates to:
-  /// **'Names like “{name}”'**
-  String aiWorkSimilar(String name);
-
-  /// No description provided for @aiWorkDelegate.
-  ///
-  /// In en, this message translates to:
-  /// **'Helper: {task}'**
-  String aiWorkDelegate(String task);
-
-  /// No description provided for @aiWorkRedo.
-  ///
-  /// In en, this message translates to:
-  /// **'Sources did not match; rewriting'**
-  String get aiWorkRedo;
-
   /// No description provided for @aiWorkHits.
   ///
   /// In en, this message translates to:
@@ -1735,6 +1675,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'failed'**
   String get aiWorkFailed;
+
+  /// No description provided for @aiWorkPlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'planned'**
+  String get aiWorkPlanned;
+
+  /// No description provided for @aiWorkRepeated.
+  ///
+  /// In en, this message translates to:
+  /// **'repeated'**
+  String get aiWorkRepeated;
+
+  /// No description provided for @aiWorkNotRun.
+  ///
+  /// In en, this message translates to:
+  /// **'not run'**
+  String get aiWorkNotRun;
+
+  /// No description provided for @aiWorkWikiDown.
+  ///
+  /// In en, this message translates to:
+  /// **'wiki timed out'**
+  String get aiWorkWikiDown;
+
+  /// No description provided for @aiWorkChars.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chars'**
+  String aiWorkChars(int count);
+
+  /// No description provided for @aiWorkRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Record: {text}'**
+  String aiWorkRecord(String text);
+
+  /// No description provided for @aiWorkHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Helper {number}'**
+  String aiWorkHelper(int number);
+
+  /// No description provided for @aiWorkStories.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} stories'**
+  String aiWorkStories(int count);
 
   /// No description provided for @aiWorkRunning.
   ///
@@ -1823,20 +1811,14 @@ abstract class AppLocalizations {
   /// No description provided for @aiHistoryEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No conversations yet. Messages are saved to the on-device chat_sessions folder automatically.'**
+  /// **'No conversations yet. They are saved to the on-device chat_sessions folder as you ask; tap one to go on with it.'**
   String get aiHistoryEmpty;
 
-  /// No description provided for @aiHistoryContinue.
+  /// No description provided for @aiHistoryCurrent.
   ///
   /// In en, this message translates to:
-  /// **'Continue'**
-  String get aiHistoryContinue;
-
-  /// No description provided for @aiHistoryView.
-  ///
-  /// In en, this message translates to:
-  /// **'View'**
-  String get aiHistoryView;
+  /// **'Current'**
+  String get aiHistoryCurrent;
 
   /// No description provided for @aiHistoryDelete.
   ///
@@ -1982,17 +1964,65 @@ abstract class AppLocalizations {
   /// **'Please enter a valid URL.'**
   String get wikiSourcesUrlRequired;
 
-  /// No description provided for @kbStructuredTitle.
+  /// No description provided for @kbArknightsTitle.
   ///
   /// In en, this message translates to:
-  /// **'GameData structured knowledge base'**
-  String get kbStructuredTitle;
+  /// **'Arknights knowledge base'**
+  String get kbArknightsTitle;
 
-  /// No description provided for @kbScopeDescription.
+  /// No description provided for @kbCountLines.
   ///
   /// In en, this message translates to:
-  /// **'The AI uses only the Chinese GameData knowledge base as evidence: entities, aliases, raw records, story text and search indexes, plus optional story vectors. Wiki pages and imported materials are not used as evidence.'**
-  String get kbScopeDescription;
+  /// **'{count} story lines'**
+  String kbCountLines(String count);
+
+  /// No description provided for @kbCountRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} records'**
+  String kbCountRecords(String count);
+
+  /// No description provided for @kbDataVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'data version {commit}'**
+  String kbDataVersion(String commit);
+
+  /// No description provided for @kbLocalBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated here'**
+  String get kbLocalBuild;
+
+  /// No description provided for @kbLocalBuildNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This knowledge base was updated on this device from the game data; it is newer than the official one published with the app.'**
+  String get kbLocalBuildNote;
+
+  /// No description provided for @kbBackToOfficial.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the official one'**
+  String get kbBackToOfficial;
+
+  /// No description provided for @kbBackToOfficialTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Go back to the official knowledge base?'**
+  String get kbBackToOfficialTitle;
+
+  /// No description provided for @kbBackToOfficialBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The official knowledge base published with the app (about 115 MB) is downloaded again and replaces the one updated on this device; the newer game content in it is lost.'**
+  String get kbBackToOfficialBody;
+
+  /// No description provided for @kbEndfieldSourceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield\'s data is unpacked from the game client and updated with the app\'s releases; it cannot be updated from game data on the device.'**
+  String get kbEndfieldSourceNote;
 
   /// No description provided for @kbStatusError.
   ///
@@ -2045,8 +2075,8 @@ abstract class AppLocalizations {
   /// No description provided for @kbManualHint.
   ///
   /// In en, this message translates to:
-  /// **'If the network cannot reach the server: download arklores_gamedata_zh.db.gz from the Release on another network, rename it to arklores_gamedata_zh.db.download.gz, put it in {dir}, then tap Download.'**
-  String kbManualHint(String dir);
+  /// **'If the network cannot reach the server: download {file}.gz from the Release on another network, rename it to {file}.download.gz, put it in {dir}, then tap Download.'**
+  String kbManualHint(String file, String dir);
 
   /// No description provided for @kbErrorTimeout.
   ///
@@ -2096,6 +2126,36 @@ abstract class AppLocalizations {
   /// **'A newer official knowledge base is available. Tap Update to download it (keep about 1 GB of free space).'**
   String get kbUpdateAvailable;
 
+  /// No description provided for @kbOriginOfficial.
+  ///
+  /// In en, this message translates to:
+  /// **'official release'**
+  String get kbOriginOfficial;
+
+  /// No description provided for @kbOriginLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'updated on this device'**
+  String get kbOriginLocal;
+
+  /// No description provided for @kbUpdateNewerData.
+  ///
+  /// In en, this message translates to:
+  /// **'The official knowledge base ({commit}) has newer game data than the one updated on this device. Tap “Update” to download it (keep about 1 GB free).'**
+  String kbUpdateNewerData(String commit);
+
+  /// No description provided for @kbUpdateSameData.
+  ///
+  /// In en, this message translates to:
+  /// **'The official knowledge base now has the same game data. Tap “Update” to switch to it (all vectors included; keep about 1 GB free).'**
+  String get kbUpdateSameData;
+
+  /// No description provided for @kbBuildOfficialHasIt.
+  ///
+  /// In en, this message translates to:
+  /// **'The official knowledge base is already at this commit: use “Update” above.'**
+  String get kbBuildOfficialHasIt;
+
   /// No description provided for @kbDownloading.
   ///
   /// In en, this message translates to:
@@ -2108,41 +2168,29 @@ abstract class AppLocalizations {
   /// **'Download'**
   String get kbDownload;
 
-  /// No description provided for @kbStatEntities.
-  ///
-  /// In en, this message translates to:
-  /// **'Entities'**
-  String get kbStatEntities;
-
-  /// No description provided for @kbStatRecords.
-  ///
-  /// In en, this message translates to:
-  /// **'Raw records'**
-  String get kbStatRecords;
-
-  /// No description provided for @kbStatChunks.
-  ///
-  /// In en, this message translates to:
-  /// **'Document chunks'**
-  String get kbStatChunks;
-
-  /// No description provided for @kbStatSourceCommit.
-  ///
-  /// In en, this message translates to:
-  /// **'Source commit'**
-  String get kbStatSourceCommit;
-
   /// No description provided for @kbBuildSectionTitle.
   ///
   /// In en, this message translates to:
-  /// **'Build from source repo'**
+  /// **'Update from game data'**
   String get kbBuildSectionTitle;
 
   /// No description provided for @kbBuildSectionDesc.
   ///
   /// In en, this message translates to:
-  /// **'Pull the latest unpacked data from Kengxxiao/ArknightsGameData and build or incrementally update the knowledge base on this device. Requires network; ~1.5–2 GB free space for the first build.'**
+  /// **'The official knowledge base is published with the app and may lag behind the game. This pulls the latest unpacked data from Kengxxiao/ArknightsGameData and brings the knowledge base on this device up to the game\'s latest content. Requires network.'**
   String get kbBuildSectionDesc;
+
+  /// No description provided for @kbBuildFullConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This update can only be a complete rebuild: about 170 MB to download, a long build, 1.5–2 GB of free space; and the new database has no vectors — the existing ones are lost and must be generated again with your own embedding service (at a cost).'**
+  String get kbBuildFullConfirm;
+
+  /// No description provided for @kbBuildFullConfirmButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild completely anyway'**
+  String get kbBuildFullConfirmButton;
 
   /// No description provided for @kbBuildLatestCommit.
   ///
@@ -2165,7 +2213,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbBuildFromSource.
   ///
   /// In en, this message translates to:
-  /// **'Build from source'**
+  /// **'Pull and update'**
   String get kbBuildFromSource;
 
   /// No description provided for @kbBuildCancel.
@@ -2246,47 +2294,11 @@ abstract class AppLocalizations {
   /// **'Importing stories'**
   String get kbBuildStageStories;
 
-  /// No description provided for @kbBuildStageCoverage.
+  /// No description provided for @kbBuildStageCompact.
   ///
   /// In en, this message translates to:
-  /// **'Building entity coverage layer'**
-  String get kbBuildStageCoverage;
-
-  /// No description provided for @kbBuildStageCoverageSpeakers.
-  ///
-  /// In en, this message translates to:
-  /// **'Expanding speaker entities…'**
-  String get kbBuildStageCoverageSpeakers;
-
-  /// No description provided for @kbBuildStageCoverageTrie.
-  ///
-  /// In en, this message translates to:
-  /// **'Building entity index…'**
-  String get kbBuildStageCoverageTrie;
-
-  /// No description provided for @kbBuildStageCoverageScan.
-  ///
-  /// In en, this message translates to:
-  /// **'Scanning character appearances…'**
-  String get kbBuildStageCoverageScan;
-
-  /// No description provided for @kbBuildStageCoverageRare.
-  ///
-  /// In en, this message translates to:
-  /// **'Counting rare terms…'**
-  String get kbBuildStageCoverageRare;
-
-  /// No description provided for @kbBuildStageCoverageProfiles.
-  ///
-  /// In en, this message translates to:
-  /// **'Writing chapter profiles…'**
-  String get kbBuildStageCoverageProfiles;
-
-  /// No description provided for @kbBuildStageFts.
-  ///
-  /// In en, this message translates to:
-  /// **'Rebuilding full-text indexes'**
-  String get kbBuildStageFts;
+  /// **'Removing data no longer used…'**
+  String get kbBuildStageCompact;
 
   /// No description provided for @kbBuildIncrementalDone.
   ///
@@ -2441,20 +2453,50 @@ abstract class AppLocalizations {
   /// No description provided for @kbBuildReportVectors.
   ///
   /// In en, this message translates to:
-  /// **'{count} vectors became invalid because their story changed; you can add them below under Story vectors.'**
+  /// **'{count} vectors became invalid because their story changed; you can add them above under Semantic search.'**
   String kbBuildReportVectors(int count);
 
   /// No description provided for @kbVectorTitle.
   ///
   /// In en, this message translates to:
-  /// **'Story vectors (semantic search)'**
+  /// **'Semantic search (vectors)'**
   String get kbVectorTitle;
+
+  /// No description provided for @kbVectorSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{stories} story vectors · {records} record vectors'**
+  String kbVectorSummary(int stories, int records);
+
+  /// No description provided for @kbVectorComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'complete'**
+  String get kbVectorComplete;
 
   /// No description provided for @kbVectorDesc.
   ///
   /// In en, this message translates to:
-  /// **'Vectors let story search match by meaning, not only by exact words. Everything works without them; those stories just get keyword search only. Vectors only locate; the evidence of an answer is still the original text.'**
+  /// **'Vectors let search match stories and records (archives, voice lines, descriptions) by meaning, not only by exact words. Everything works without them; that text just gets keyword search only. Vectors only locate; the evidence of an answer is still the original text.'**
   String get kbVectorDesc;
+
+  /// No description provided for @kbVectorRecordStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'{vectors} record vectors'**
+  String kbVectorRecordStatus(int vectors);
+
+  /// No description provided for @kbVectorPendingRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Of which records (archives, voice lines, descriptions): {chunks} chunks'**
+  String kbVectorPendingRecords(int chunks);
+
+  /// No description provided for @kbVectorRunningRecords.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating record vectors: {done} / {total} chunks'**
+  String kbVectorRunningRecords(int done, int total);
 
   /// No description provided for @kbVectorStatus.
   ///
@@ -2483,7 +2525,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbVectorUpToDate.
   ///
   /// In en, this message translates to:
-  /// **'Every story has vectors; nothing to update.'**
+  /// **'Every story and record has vectors; nothing to update.'**
   String get kbVectorUpToDate;
 
   /// No description provided for @kbVectorFirstBuild.
@@ -2597,8 +2639,14 @@ abstract class AppLocalizations {
   /// No description provided for @aiAnswerReviewHint.
   ///
   /// In en, this message translates to:
-  /// **'Another model reads the draft and raises questions, checked in the text before the final answer (slower)'**
+  /// **'Another model reads this answer as a reader and raises questions; they are checked in the text and answered below (a few more calls)'**
   String get aiAnswerReviewHint;
+
+  /// No description provided for @aiReviewRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the answer above'**
+  String get aiReviewRequest;
 
   /// No description provided for @aiAnswerDigest.
   ///
@@ -2609,7 +2657,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiAnswerDigestHint.
   ///
   /// In en, this message translates to:
-  /// **'Long answers open with a few summary paragraphs, the details folded below (one more call)'**
+  /// **'Add a few summary paragraphs above this answer, the details folded below (one more call)'**
   String get aiAnswerDigestHint;
 
   /// No description provided for @aiAnswerWiki.
@@ -2618,11 +2666,35 @@ abstract class AppLocalizations {
   /// **'Wiki'**
   String get aiAnswerWiki;
 
-  /// No description provided for @aiAnswerWikiHint.
+  /// No description provided for @aiAnswerWikiShort.
   ///
   /// In en, this message translates to:
-  /// **'Look things up on PRTS / Warfarin Wiki (online) as a secondary source besides the game text'**
-  String get aiAnswerWikiHint;
+  /// **'Search PRTS / Warfarin online; cited as wiki'**
+  String get aiAnswerWikiShort;
+
+  /// No description provided for @aiAnswerDelegate.
+  ///
+  /// In en, this message translates to:
+  /// **'Sub-agents'**
+  String get aiAnswerDelegate;
+
+  /// No description provided for @aiAnswerDelegateShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Parallel search for wide questions; costs more'**
+  String get aiAnswerDelegateShort;
+
+  /// No description provided for @aiDeepThinkingShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Think before answering: slower, more tokens'**
+  String get aiDeepThinkingShort;
+
+  /// No description provided for @aiNoVectorWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.'**
+  String get aiNoVectorWarning;
 
   /// No description provided for @aiCitedWiki.
   ///
@@ -2671,18 +2743,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This version of the page is not kept on this device (the question may have been asked elsewhere); open the current version in the Wiki.'**
   String get aiWikiPageUnavailable;
-
-  /// No description provided for @aiWorkWikiSearch.
-  ///
-  /// In en, this message translates to:
-  /// **'Searching the wiki for “{query}”'**
-  String aiWorkWikiSearch(String query);
-
-  /// No description provided for @aiWorkWikiRead.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading wiki page “{title}”'**
-  String aiWorkWikiRead(String title);
 
   /// No description provided for @aiWorkWikiPages.
   ///
@@ -2815,12 +2875,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Endfield knowledge base'**
   String get kbEndfieldTitle;
-
-  /// No description provided for @kbEndfieldDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Story and texts of Arknights: Endfield (unpacked from the game client; a separate file, downloaded apart from the Arknights one). Once installed, the library shows Endfield\'s shelves and answers look in one or both games.'**
-  String get kbEndfieldDescription;
 }
 
 class _AppLocalizationsDelegate

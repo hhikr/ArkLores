@@ -1,15 +1,3 @@
-/// Result returned by a tool when it needs to separate LLM-visible output from
-/// developer diagnostics.
-class ToolExecutionResult {
-
-  const ToolExecutionResult({
-    required this.observation,
-    this.debugLog,
-  });
-  final String observation;
-  final String? debugLog;
-}
-
 /// Abstract class representing a tool that can be used by AI agents.
 abstract class AgentTool {
   /// Unique identifier for the tool.
@@ -20,6 +8,11 @@ abstract class AgentTool {
 
   /// Parameter definition in JSON Schema format.
   Map<String, dynamic> get parameters;
+
+  /// Parameters of which a call must give at least one (none by default).
+  /// Checked before the call runs, like `required`; not part of the schema
+  /// sent to the model (providers differ in what they accept there).
+  List<String> get requireOneOf => const [];
 
   /// Executes the tool logic with the provided arguments.
   Future<dynamic> execute(Map<String, dynamic> arguments);

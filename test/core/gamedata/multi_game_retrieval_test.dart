@@ -5,12 +5,14 @@ import 'dart:io';
 
 import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
+import 'package:arklores/core/agent/tools/search_tool.dart';
 import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart';
 import 'package:arklores/core/library/library_queries.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
 
 import '../../support/gamedata_fixture.dart';
 import '../../support/sqlite.dart';
@@ -136,6 +138,17 @@ void main() {
       expect(ak, contains('level_act1'));
       // Lines a query showed can be cited, in either game.
       expect(seen.covers('ef/dlg_test_1.txt', 0, 1), isTrue);
+      // 0.14: an Endfield id in the query picks Endfield without `game`;
+      // zero rows in the default game says how to ask the other.
+      final byId = await sql.execute({
+        'query': 'SELECT story_id, line_index FROM story_lines '
+            "WHERE story_id = 'ef/dlg_test_1.txt'",
+      });
+      expect(byId, contains('（共 2 行）'));
+      final none = await sql.execute({
+        'query': "SELECT story_id FROM story_lines WHERE content LIKE '%丙%'",
+      });
+      expect(none, contains('终末地的内容要加 game=endfield'));
     });
 
     test('with only Endfield installed, sql without a game reads Endfield', () async {
@@ -158,6 +171,191 @@ void main() {
       final all = await grep.execute({'pattern': '灯塔', 'game': 'nonsense'});
       expect(all, contains('ef/dlg_test_1.txt'));
       expect(all, contains('level_act1_01_beg.txt'));
+    });
+
+    // 0.14: a game with few hits used to sit at the end of one long list.
+    test('grep counts list each game under its own heading with its totals',
+        () async {
+      final all = await GrepTool(both, SeenLines()).execute({'pattern': '灯塔'});
+      expect(all, contains('明日方舟 1 行 / 1 个故事'));
+      expect(all, contains('终末地 1 行 / 1 个故事'));
+      expect(all.indexOf('## 明日方舟'), lessThan(all.indexOf('## 终末地')));
+    });
+
+    test('search looks in both games at once, grouped, and its lines can be '
+        'cited', () async {
+      final seen = SeenLines();
+      final search = SearchTool(both, seen);
+      final result = await search.run('灯塔');
+      expect(result.mode, SearchMode.keywordOnly);
+      expect(result.text, contains('只有关键词检索（没有配置向量服务）'));
+      final ak = result.text.indexOf('## 明日方舟剧情');
+      final ef = result.text.indexOf('## 终末地剧情');
+      expect(ak, greaterThanOrEqualTo(0));
+      expect(ef, greaterThan(ak));
+      expect(result.text.substring(ak, ef), contains('level_act1_01_beg.txt'));
+      expect(result.text.substring(ef), contains('ef/dlg_test_1.txt'));
+      expect(seen.covers('ef/dlg_test_1.txt', 0, 0), isTrue);
+      expect(seen.covers('activities/act1/level_act1_01_beg.txt', 0, 0), isTrue);
+      // One game when asked.
+      final only = await search.execute({'query': '灯塔', 'game': 'endfield'});
+      expect(only, isNot(contains('## 明日方舟')));
+    });
+
+    // 0.14 live: an archive held the answer, but search looked at story
+    // text only and the model went to the wiki for it.
+    test('search lists matching records (not story text) and they can be '
+        'cited', () async {
+      final ef = both.stores[Game.endfield]! as GameDataKnowledgeStore;
+      final db = await sqflite.openDatabase(ef.dbPath!, singleInstance: false);
+      await insertRecord(
+        db,
+        'ef/rec_lighthouse',
+        contentType: 'archive_document',
+        category: 'archive',
+        subtype: 'document',
+        content: '关于灯塔的记录：灯塔在第一次战争后熄灭。',
+        fields: {'title': '灯塔档案'},
+      );
+      await db.close();
+      final seen = SeenLines();
+      final result = await SearchTool(both, seen).run('灯塔');
+      final records = result.text.indexOf('## 终末地资料');
+      expect(records, greaterThan(0));
+      expect(
+        result.text.substring(records),
+        contains('record:ef/rec_lighthouse | archive·document | 灯塔档案 | 关于灯塔的记录'),
+      );
+      expect(seen.hasRecord('ef/rec_lighthouse'), isTrue);
+      // 0.14: only its excerpt was shown, and the result says so.
+      expect(seen.recordIsPartial('ef/rec_lighthouse'), isTrue);
+      expect(result.text, contains('资料只列了片段'));
+    });
+
+    // 0.14: code cut words out of a question (a short name inside a place's
+    // name, fragments of clauses). The words are now the query's own: what
+    // its writer separated by spaces. A sentence has none.
+    test('keywords are the words the query separates; a sentence has none',
+        () async {
+      expect(SearchTool.termsOf('甲地 审判庭|灯塔  甲地'), ['甲地', '审判庭', '灯塔']);
+      expect(SearchTool.termsOf('灯塔'), ['灯塔']);
+      expect(SearchTool.termsOf('甲地的审判庭到底是做什么的呢？'), isEmpty);
+      final words = await SearchTool(both, SeenLines()).run('灯塔 用途');
+      expect(words.mode, SearchMode.keywordOnly);
+      expect(words.text, contains('关键词：\n灯塔（'));
+      expect(words.text, contains('level_act1_01_beg.txt'));
+      // Without vectors a sentence finds nothing, and the result says why.
+      final sentence =
+          await SearchTool(both, SeenLines()).run('灯塔到底是做什么用的呢？这个问题很长');
+      expect(sentence.text, contains('要写空格分隔的词'));
+      expect(sentence.text, isNot(contains('level_act1_01_beg.txt')));
+    });
+
+    // 0.14 live: an operator's race was in their file (entity_documents),
+    // which search did not look at; letters that mention the name came
+    // instead.
+    test('search lists the file of what a term names first, shown around '
+        'the other terms', () async {
+      final ef = both.stores[Game.endfield]! as GameDataKnowledgeStore;
+      final db = await sqflite.openDatabase(ef.dbPath!, singleInstance: false);
+      await insertRecord(
+        db,
+        'ef/rec_letter',
+        contentType: 'mail',
+        category: 'world',
+        subtype: 'mail',
+        content: '来自守灯人的信：今天也在擦灯。守灯人',
+        fields: {'title': '守灯人的信'},
+      );
+      await db.insert('entity_documents', {
+        // The v0.12.0 asset keeps these ids without ef/.
+        'id': 'doc_keeper',
+        'game': 'endfield',
+        'language': 'zh',
+        'entity_id': 'chr_keeper',
+        'entity_name': '守灯人',
+        'entity_type': 'operator',
+        'document_type': 'operator_profile_bundle',
+        'title': '守灯人',
+        'summary': '守灯人看守灯塔。',
+        'content': '## 基础档案\n守灯人看守灯塔。\n【种族】黎博利',
+        'source_paths': '[]',
+        'source_record_ids': '[]',
+      });
+      await db.close();
+      final seen = SeenLines();
+      final result = await SearchTool(both, seen).run('守灯人 种族');
+      final records = result.text.indexOf('## 终末地资料');
+      expect(records, greaterThan(0));
+      final lines = result.text
+          .substring(records)
+          .split('\n')
+          .where((l) => l.contains('record:'))
+          .toList();
+      expect(lines.first, contains('record:ef/doc_keeper | operator·operator_profile_bundle | 守灯人'));
+      expect(lines.first, contains('【种族】黎博利'));
+      expect(seen.hasRecord('ef/doc_keeper'), isTrue);
+    });
+
+    // 0.14 on the phone: a common word of the query ("称呼") brought records
+    // that had nothing to do with the question; ties went to the longest.
+    test('records: a word that is everywhere weighs less', () async {
+      final ef = both.stores[Game.endfield]! as GameDataKnowledgeStore;
+      final db = await sqflite.openDatabase(ef.dbPath!, singleInstance: false);
+      await insertRecord(
+        db,
+        'ef/rec_common',
+        contentType: 'mail',
+        category: 'world',
+        content: '大家都这么称呼他。${'无关的长文字。' * 30}',
+        fields: {'title': '一封长信'},
+      );
+      await insertRecord(
+        db,
+        'ef/rec_rare',
+        contentType: 'archive_document',
+        category: 'archive',
+        content: '守塔人是灯塔下的住民。',
+        fields: {'title': '档案'},
+      );
+      await db.close();
+      Future<List<String>> ids(Map<String, double>? weights) async => [
+            for (final r in await ef.searchRecordsLike(
+              ['守塔人', '称呼'],
+              limit: 2,
+              weights: weights,
+            ))
+              r.id,
+          ];
+      expect(await ids(null), ['ef/rec_common', 'ef/rec_rare']);
+      expect(
+        await ids({'守塔人': 1.0, '称呼': 0.1}),
+        ['ef/rec_rare', 'ef/rec_common'],
+      );
+    });
+
+    test('a wrong column comes back with the real columns', () async {
+      final result = await SqlTool(both, SeenLines())
+          .execute({'query': 'SELECT name FROM story_lines'});
+      expect(result, contains('no such column'));
+      expect(result, contains('story_lines 的列：'));
+      expect(result, contains('content'));
+    });
+
+    test('another open of the same file closing does not close the store',
+        () async {
+      final ak = both.stores[Game.arknights]! as GameDataKnowledgeStore;
+      const id = 'activities/act1/level_act1_01_beg.txt';
+      expect((await ak.readStoryLines(storyId: id)).storyFound, isTrue);
+      // What the knowledge-base page does to read the manifest.
+      final other = await sqflite.openDatabase(ak.dbPath!, readOnly: true);
+      await other.close();
+      expect((await ak.readStoryLines(storyId: id)).storyFound, isTrue);
+      // Tools of one turn open the store at the same time.
+      final pages = await Future.wait([
+        for (var i = 0; i < 4; i++) ak.readStoryLines(storyId: id),
+      ]);
+      expect(pages.every((p) => p.storyFound), isTrue);
     });
 
     test('a missing database answers empty; the other still works', () async {
