@@ -16,7 +16,7 @@
 | `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用悬浮栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 图标/回弹曲线（`square_shapes_test`） |
 | `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md） |
 | `support/` | 共用的夹具与替身 |
-| `fixtures/` | 数据文件（live 评测题） |
+| `fixtures/` | 数据文件（live 评测题：`investigation_eval.json` 带金标；`history_questions_eval.json` 是玩家实际问过的 37 问，同一个 `session` 的题是一次对话的连续几轮） |
 
 ## 共用夹具（`support/`）
 
