@@ -312,7 +312,7 @@ class SqlTool extends AgentTool {
     final out = await _query(arguments);
     final manual = this.manual;
     if (manual == null || manual.shown) return out;
-    return '$out\n\n（这次问答第一次用 sql：下面是知识库手册，之后的查询照它的表和列写。）\n'
+    return '$out\n\n（这次问答第一次用 sql：$libraryManualMark，之后的查询照它的表和列写。）\n'
         '${await manual.show()}';
   }
 
@@ -451,6 +451,34 @@ class SqlTool extends AgentTool {
     return lines.isEmpty ? '' : '\n${lines.join('\n')}';
   }
 }
+
+/// 0.14: lookups of one tool that may find nothing in one question before
+/// the tool is not run again. A question the library cannot answer (the
+/// rows are not there) used to go on for two dozen queries, each a little
+/// different, none repeated.
+const int maxFailedLookups = 6;
+
+/// How a result that is the limit's refusal starts.
+const String lookupLimitPrefix = '没有执行：';
+
+/// What to do at the limit.
+const String lookupLimitAdvice =
+    '库里很可能没有这样的数据：不要再换条件重试，用已经读到的内容作答，没查到的在答案里说明；确实还要找时换别的工具。';
+
+/// The result of a call to [tool] past the limit.
+String lookupLimitNote(String tool) =>
+    '$lookupLimitPrefix$tool 在这次问答里已有 $maxFailedLookups 次没有结果。$lookupLimitAdvice';
+
+/// Whether a tool's result says it found nothing or could not run (every
+/// tool starts such a result in one of these ways).
+bool lookupFoundNothing(String result) {
+  final text = result.trimLeft();
+  return const ['0 行', 'SQL 错误', '错误', '没有', '缺少参数']
+      .any(text.startsWith);
+}
+
+/// In a result that carries the manual ([SqlTool]).
+const String libraryManualMark = '下面是知识库手册';
 
 /// 0.14: the knowledge base's manual for one question — the tables, their
 /// columns and bindings, the library's shelves ([loreLibraryManual]) — and

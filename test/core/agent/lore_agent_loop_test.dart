@@ -425,6 +425,60 @@ void main() {
       expect(third.where((m) => m.role == MessageRole.tool), hasLength(2));
     });
 
+    // 0.14: a question the library cannot answer went on for two dozen
+    // queries, none repeated, all kept in the context. A turn that found
+    // nothing leaves the conversation once the model has replied to it;
+    // the count stays, and past the limit the tool is not run.
+    test('lookups that find nothing: out of the context after one reply, '
+        'and no more of that tool at the limit', () async {
+      final client = _ScriptedClient([
+        for (var i = 1; i <= maxFailedLookups + 1; i++)
+          _call('grep', {'pattern': '没有的词$i'}),
+        // Would find something: not run any more.
+        _call('grep', {'pattern': '星灯'}),
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        _answer('星灯在钟楼点亮 `obt/main/level_main_fx-01.txt:1`。'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
+          StoryAnswerStatus.answered,);
+      final seen = events
+          .where((e) => e.type == ReActEventType.toolObservation)
+          .map((e) => e.content)
+          .toList();
+      expect(seen[0], startsWith('0 行'));
+      expect(seen[0], endsWith('（这次问答里 grep 已有 1 次没有结果，上限 $maxFailedLookups 次）'));
+      expect(seen[maxFailedLookups - 1], contains('到上限了：之后的 grep 调用不再执行'));
+      expect(seen[maxFailedLookups], startsWith(lookupLimitPrefix));
+      expect(seen[maxFailedLookups + 1], startsWith(lookupLimitPrefix));
+      expect(seen.last, contains('L1 '));
+      expect(
+        events
+            .where((e) => e.type == ReActEventType.recordNote)
+            .map((e) => e.content),
+        ['grep 已有 $maxFailedLookups 次没有结果，之后不再执行'],
+      );
+      // The model sees an empty lookup once: each request holds the one it
+      // has not replied to yet, none of the earlier ones.
+      Iterable<Message> results(List<Message> request) =>
+          request.where((m) => m.role == MessageRole.tool);
+      for (var i = 1; i <= maxFailedLookups + 2; i++) {
+        expect(results(client.requests[i]), hasLength(1), reason: 'request $i');
+        expect(
+          client.requests[i].where((m) => m.role == MessageRole.assistant),
+          hasLength(1),
+          reason: 'request $i',
+        );
+      }
+      expect(results(client.requests[3]).single.content, contains('没有的词3'));
+      // What was found stays.
+      final last = client.requests.last;
+      expect(results(last).single.content, contains('L1 '));
+      expect(last.map((m) => m.content).join(), isNot(contains('没有的词')));
+    });
+
     // 0.14: a quoted line is no longer sent back (the rewrite cost a call
     // and only stripped the quotation marks); the prompt asks not to copy
     // dialogue at length.

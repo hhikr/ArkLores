@@ -299,6 +299,13 @@ class LoreAgentLoop {
     // until then, so the model still sees why it was refused).
     final hidden = <int>{};
     final refusedTurns = <int>{};
+    // 0.14: lookups that found nothing. A turn of nothing but those leaves
+    // the conversation once the model has answered it (it saw the result
+    // once; a question that the library cannot answer filled the context
+    // with two dozen empty queries); what stays is the count, per tool,
+    // and past [maxFailedLookups] the tool is not run again this question.
+    final failedLookups = <String, int>{};
+    final emptyTurns = <int>{};
     // 0.14: what each tool result showed (by its index), for the pointer a
     // folded result leaves.
     final shownIn = <int, String>{};
@@ -707,6 +714,9 @@ class LoreAgentLoop {
           for (final c in splitGluedCalls(calls))
             checkToolCall(c, tools[c.name], tools.keys),
         ];
+        // The model has answered the last turn's empty lookups: they go.
+        hidden.addAll(emptyTurns);
+        emptyTurns.clear();
         final turnStart = conversation.length;
         if (transport.textProtocol) {
           conversation.add(Message.assistant(text.toString()));
@@ -728,10 +738,13 @@ class LoreAgentLoop {
         final shown = [for (final _ in checked) SeenLines()];
         final results = [
           for (final (k, c) in checked.indexed)
-            c.ok
-                ? _runTool(tools[c.call.name]!, c, shown[k])
-                : Future<String>.value(c.error),
+            !c.ok
+                ? Future<String>.value(c.error)
+                : (failedLookups[c.call.name] ?? 0) >= maxFailedLookups
+                    ? Future<String>.value(lookupLimitNote(c.call.name))
+                    : _runTool(tools[c.call.name]!, c, shown[k]),
         ];
+        var found = 0;
         for (final (k, c) in checked.indexed) {
           onRawLlmResponse?.call(
             ++record,
@@ -765,6 +778,22 @@ class LoreAgentLoop {
         for (final (k, c) in checked.indexed) {
           var result = await results[k];
           if (c.ok && c.note != null) result = '$result\n${c.note}';
+          if (lookupFoundNothing(result)) {
+            final name = c.call.name;
+            final n = failedLookups[name] = (failedLookups[name] ?? 0) + 1;
+            if (n <= maxFailedLookups && !result.startsWith(lookupLimitPrefix)) {
+              result = '$result\n（这次问答里 $name 已有 $n 次没有结果'
+                  '${n == maxFailedLookups ? '，到上限了：之后的 $name 调用不再执行。$lookupLimitAdvice' : '，上限 $maxFailedLookups 次'}）';
+            }
+            if (n == maxFailedLookups) {
+              yield ReActEvent(
+                type: ReActEventType.recordNote,
+                content: '$name 已有 $n 次没有结果，之后不再执行',
+              );
+            }
+          } else {
+            found++;
+          }
           yield ReActEvent(
             type: ReActEventType.toolObservation,
             content: result,
@@ -787,6 +816,18 @@ class LoreAgentLoop {
         } else if (refusedTurns.isNotEmpty) {
           hidden.addAll(refusedTurns);
           refusedTurns.clear();
+        }
+        // Nothing found by any call of the turn: it stays for one reply.
+        if (found == 0 && checked.any((c) => c.ok)) {
+          emptyTurns.addAll([
+            for (var i = turnStart; i < conversation.length; i++)
+              // What came with it for later use (the manual) stays.
+              if (!conversation[i].content.contains(libraryManualMark)) i,
+          ]);
+          // A call whose result stays keeps its call too.
+          if (emptyTurns.length < conversation.length - turnStart) {
+            emptyTurns.removeWhere((i) => i >= turnStart);
+          }
         }
         continue;
       }
@@ -946,6 +987,7 @@ class LoreAgentLoop {
       // The model's own text (JSON) stays in the conversation, so a
       // follow-up sees the format it is asked for.
       hidden.addAll(redoNotes);
+      hidden.addAll(emptyTurns);
       conversation.add(Message.assistant(fromJson == null ? body : keep));
 
       // What "提要" would reorganise: the entries with the citations that
