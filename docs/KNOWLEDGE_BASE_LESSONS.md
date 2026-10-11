@@ -47,6 +47,9 @@
 - 绑定只来自表或关卡文件：`appears_in`（敌人/装置/召唤物 → 关卡，来自 `enemyDbRefs`、`SPAWN`、`predefines`）、`plays_in`（剧情 → 关卡，来自关卡的 `STORY` 动作）、
   `belongs_to`、`part_of`（结局书页面、月度小队故事）、`summoned_by`、`same_person`（`char_meta_table.spCharGroups`）、`features`、`reads_story`。
 - **复刻不是独立内容**：复刻活动的文本、奖章、掉落并入原活动（`ctx.alias` / `ctx.home`），复刻的关卡不单独出条目。
+  **但活动复刻过之后，游戏把原活动的关卡（id 不变）放在复刻的区域下**：关卡的归属也要过 `ctx.home`，否则它们会被当成复刻的内容删掉
+  （0.14 发现：41 个 SideStory 的 1398 个关卡连同敌人绑定一直不在库里，只有还没复刻过的活动有关卡；`_stageEntry`）。
+  判断“库里有没有某类东西”要按活动抽查老的和新的，不能只看总数。
 - **派生关系在最后一步统一算**（`rebuildDerived`）：故事命名、关卡内对话挂到宿主剧情（`attached_to`）、同名去重（`item_twin`）、分组名替换。
   把它们放在导入过程中算，会依赖表的导入顺序。
 
