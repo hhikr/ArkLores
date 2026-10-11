@@ -11,7 +11,11 @@ class ReActStep {
     this.toolName,
     this.toolArgs,
     this.subtask,
+    this.planned = false,
   });
+
+  /// A tool call of the planned first searches (see [ReActEvent.planned]).
+  final bool planned;
 
   final ReActEventType type;
   final String content;

@@ -1646,66 +1646,6 @@ abstract class AppLocalizations {
   /// **'{calls} lookups · {reads} stories read'**
   String aiWorkSummary(int calls, int reads);
 
-  /// No description provided for @aiWorkSql.
-  ///
-  /// In en, this message translates to:
-  /// **'Query the knowledge base'**
-  String get aiWorkSql;
-
-  /// No description provided for @aiWorkGrep.
-  ///
-  /// In en, this message translates to:
-  /// **'Search for “{pattern}”'**
-  String aiWorkGrep(String pattern);
-
-  /// No description provided for @aiWorkGrepIn.
-  ///
-  /// In en, this message translates to:
-  /// **'Search “{pattern}” in {scope}'**
-  String aiWorkGrepIn(String scope, String pattern);
-
-  /// No description provided for @aiWorkRead.
-  ///
-  /// In en, this message translates to:
-  /// **'Read “{story}”'**
-  String aiWorkRead(String story);
-
-  /// No description provided for @aiWorkReadRecord.
-  ///
-  /// In en, this message translates to:
-  /// **'Read record “{title}”'**
-  String aiWorkReadRecord(String title);
-
-  /// No description provided for @aiWorkOutline.
-  ///
-  /// In en, this message translates to:
-  /// **'Chapter list of {collection}'**
-  String aiWorkOutline(String collection);
-
-  /// No description provided for @aiWorkFind.
-  ///
-  /// In en, this message translates to:
-  /// **'Search: “{query}”'**
-  String aiWorkFind(String query);
-
-  /// No description provided for @aiWorkNear.
-  ///
-  /// In en, this message translates to:
-  /// **'Passages like one already read'**
-  String get aiWorkNear;
-
-  /// No description provided for @aiWorkSimilar.
-  ///
-  /// In en, this message translates to:
-  /// **'Names like “{name}”'**
-  String aiWorkSimilar(String name);
-
-  /// No description provided for @aiWorkDelegate.
-  ///
-  /// In en, this message translates to:
-  /// **'Helper: {task}'**
-  String aiWorkDelegate(String task);
-
   /// No description provided for @aiWorkHits.
   ///
   /// In en, this message translates to:
@@ -1736,17 +1676,53 @@ abstract class AppLocalizations {
   /// **'failed'**
   String get aiWorkFailed;
 
+  /// No description provided for @aiWorkPlanned.
+  ///
+  /// In en, this message translates to:
+  /// **'planned'**
+  String get aiWorkPlanned;
+
+  /// No description provided for @aiWorkRepeated.
+  ///
+  /// In en, this message translates to:
+  /// **'repeated'**
+  String get aiWorkRepeated;
+
+  /// No description provided for @aiWorkNotRun.
+  ///
+  /// In en, this message translates to:
+  /// **'not run'**
+  String get aiWorkNotRun;
+
+  /// No description provided for @aiWorkWikiDown.
+  ///
+  /// In en, this message translates to:
+  /// **'wiki timed out'**
+  String get aiWorkWikiDown;
+
+  /// No description provided for @aiWorkChars.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chars'**
+  String aiWorkChars(int count);
+
+  /// No description provided for @aiWorkRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Record: {text}'**
+  String aiWorkRecord(String text);
+
+  /// No description provided for @aiWorkHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Helper {number}'**
+  String aiWorkHelper(int number);
+
   /// No description provided for @aiWorkStories.
   ///
   /// In en, this message translates to:
   /// **'{count} stories'**
   String aiWorkStories(int count);
-
-  /// No description provided for @aiWorkSubtask.
-  ///
-  /// In en, this message translates to:
-  /// **'Helper {number} · {title}'**
-  String aiWorkSubtask(int number, String title);
 
   /// No description provided for @aiWorkRunning.
   ///
@@ -2737,18 +2713,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This version of the page is not kept on this device (the question may have been asked elsewhere); open the current version in the Wiki.'**
   String get aiWikiPageUnavailable;
-
-  /// No description provided for @aiWorkWikiSearch.
-  ///
-  /// In en, this message translates to:
-  /// **'Searching the wiki for “{query}”'**
-  String aiWorkWikiSearch(String query);
-
-  /// No description provided for @aiWorkWikiRead.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading wiki page “{title}”'**
-  String aiWorkWikiRead(String title);
 
   /// No description provided for @aiWorkWikiPages.
   ///

@@ -401,6 +401,7 @@ class LoreAgentLoop {
             content: _describeCall(step.tool, step.args),
             toolName: step.tool,
             toolArgs: step.args,
+            planned: true,
           );
         }
         yield ReActEvent(

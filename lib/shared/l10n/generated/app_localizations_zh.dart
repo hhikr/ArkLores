@@ -867,52 +867,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get aiWorkSql => '查询资料库';
-
-  @override
-  String aiWorkGrep(String pattern) {
-    return '搜索「$pattern」';
-  }
-
-  @override
-  String aiWorkGrepIn(String scope, String pattern) {
-    return '在「$scope」中搜索「$pattern」';
-  }
-
-  @override
-  String aiWorkRead(String story) {
-    return '阅读《$story》';
-  }
-
-  @override
-  String aiWorkReadRecord(String title) {
-    return '查阅资料「$title」';
-  }
-
-  @override
-  String aiWorkOutline(String collection) {
-    return '查看「$collection」的章节目录';
-  }
-
-  @override
-  String aiWorkFind(String query) {
-    return '检索「$query」';
-  }
-
-  @override
-  String get aiWorkNear => '找与读过的一段相近的段落';
-
-  @override
-  String aiWorkSimilar(String name) {
-    return '找与「$name」相近的名字';
-  }
-
-  @override
-  String aiWorkDelegate(String task) {
-    return '派助手：$task';
-  }
-
-  @override
   String aiWorkHits(int hits, int stories) {
     return '$hits 处 · $stories 篇';
   }
@@ -934,13 +888,35 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiWorkFailed => '出错';
 
   @override
-  String aiWorkStories(int count) {
-    return '$count 篇';
+  String get aiWorkPlanned => '拟定';
+
+  @override
+  String get aiWorkRepeated => '重复';
+
+  @override
+  String get aiWorkNotRun => '未执行';
+
+  @override
+  String get aiWorkWikiDown => 'Wiki 超时';
+
+  @override
+  String aiWorkChars(int count) {
+    return '$count 字';
   }
 
   @override
-  String aiWorkSubtask(int number, String title) {
-    return '助手 $number · $title';
+  String aiWorkRecord(String text) {
+    return '记录：$text';
+  }
+
+  @override
+  String aiWorkHelper(int number) {
+    return '助手 $number';
+  }
+
+  @override
+  String aiWorkStories(int count) {
+    return '$count 篇';
   }
 
   @override
@@ -1508,16 +1484,6 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get aiWikiPageUnavailable =>
       '这个页面版本没有保存在本机（可能是在别的设备上问的），可以在 Wiki 中打开当前版本。';
-
-  @override
-  String aiWorkWikiSearch(String query) {
-    return '在 Wiki 上搜「$query」';
-  }
-
-  @override
-  String aiWorkWikiRead(String title) {
-    return '读 Wiki《$title》';
-  }
 
   @override
   String aiWorkWikiPages(int count) {

@@ -138,8 +138,8 @@ void main() {
 
     // 0.14: an answer sent back is taken back whole — no step on screen, the
     // reason only in the session record (with the rejected reply).
-    test('a rejected answer leaves no step; why is in the session record',
-        () async {
+    test('a rejected answer is not shown; why is a line of the work '
+        'timeline and of the session record', () async {
       AgentLogger.setEnabled(true);
       final mock = _RecorderLLM()..uncitedFirst = true;
       final notifier = makeNotifier(mock);
@@ -153,10 +153,13 @@ void main() {
         shown.steps.map((s) => s.type),
         isNot(contains(ReActEventType.finalAnswerReset)),
       );
-      expect(
-        shown.steps.map((s) => s.type),
-        isNot(contains(ReActEventType.recordNote)),
-      );
+      // 0.14 (the developer asked for the timeline to carry what the
+      // session record does): the reason, never the rejected text.
+      final notes = shown.steps
+          .where((s) => s.type == ReActEventType.recordNote)
+          .toList();
+      expect(notes.single.content, startsWith('退回：'));
+      expect(notes.single.content, isNot(contains('没有出处的回答')));
       final turn = (await singleSession()).turns.single;
       final rejected = turn.iterations
           .singleWhere((i) => i.rawResponse.contains('没有出处的回答'));

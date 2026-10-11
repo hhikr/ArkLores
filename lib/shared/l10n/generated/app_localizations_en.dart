@@ -887,52 +887,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get aiWorkSql => 'Query the knowledge base';
-
-  @override
-  String aiWorkGrep(String pattern) {
-    return 'Search for “$pattern”';
-  }
-
-  @override
-  String aiWorkGrepIn(String scope, String pattern) {
-    return 'Search “$pattern” in $scope';
-  }
-
-  @override
-  String aiWorkRead(String story) {
-    return 'Read “$story”';
-  }
-
-  @override
-  String aiWorkReadRecord(String title) {
-    return 'Read record “$title”';
-  }
-
-  @override
-  String aiWorkOutline(String collection) {
-    return 'Chapter list of $collection';
-  }
-
-  @override
-  String aiWorkFind(String query) {
-    return 'Search: “$query”';
-  }
-
-  @override
-  String get aiWorkNear => 'Passages like one already read';
-
-  @override
-  String aiWorkSimilar(String name) {
-    return 'Names like “$name”';
-  }
-
-  @override
-  String aiWorkDelegate(String task) {
-    return 'Helper: $task';
-  }
-
-  @override
   String aiWorkHits(int hits, int stories) {
     return '$hits hits · $stories stories';
   }
@@ -954,13 +908,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiWorkFailed => 'failed';
 
   @override
-  String aiWorkStories(int count) {
-    return '$count stories';
+  String get aiWorkPlanned => 'planned';
+
+  @override
+  String get aiWorkRepeated => 'repeated';
+
+  @override
+  String get aiWorkNotRun => 'not run';
+
+  @override
+  String get aiWorkWikiDown => 'wiki timed out';
+
+  @override
+  String aiWorkChars(int count) {
+    return '$count chars';
   }
 
   @override
-  String aiWorkSubtask(int number, String title) {
-    return 'Helper $number · $title';
+  String aiWorkRecord(String text) {
+    return 'Record: $text';
+  }
+
+  @override
+  String aiWorkHelper(int number) {
+    return 'Helper $number';
+  }
+
+  @override
+  String aiWorkStories(int count) {
+    return '$count stories';
   }
 
   @override
@@ -1559,16 +1535,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get aiWikiPageUnavailable =>
       'This version of the page is not kept on this device (the question may have been asked elsewhere); open the current version in the Wiki.';
-
-  @override
-  String aiWorkWikiSearch(String query) {
-    return 'Searching the wiki for “$query”';
-  }
-
-  @override
-  String aiWorkWikiRead(String title) {
-    return 'Reading wiki page “$title”';
-  }
 
   @override
   String aiWorkWikiPages(int count) {

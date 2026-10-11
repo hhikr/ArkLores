@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import '../../core/agent/chat_message.dart';
+import '../../core/agent/lore_tools.dart' show lookupLimitPrefix;
 import '../../core/agent/react_event.dart';
 import '../../core/gamedata/game.dart';
 import '../../core/wiki/wiki_page.dart';
@@ -20,6 +23,9 @@ enum WorkKind {
   wikiRead,
   otherTool,
   note,
+
+  /// What code did to the answer (sent back, citations cut or dropped).
+  record,
   error,
 }
 
@@ -30,7 +36,28 @@ class WorkStep {
     this.args = const {},
     this.text = '',
     this.subtask,
+    this.planned = false,
+    this.number = 0,
+    this.repeated = false,
   });
+
+  /// One of the first searches, written by the planning call.
+  final bool planned;
+
+  /// The tool call's number among the calls of this answer (from 1).
+  final int number;
+
+  /// The same tool with the same arguments was called earlier.
+  final bool repeated;
+
+  /// The arguments as the model wrote them (one line of JSON).
+  String get argsJson => args.isEmpty ? '' : jsonEncode(args);
+
+  /// The call was not run: the tool had found nothing too many times.
+  bool get notRun => done && text.trimLeft().startsWith(lookupLimitPrefix);
+
+  /// A wiki did not answer (also when the rest of a search did).
+  bool get wikiDown => done && text.contains('暂时无法访问');
 
   final WorkKind kind;
   final String? tool;
@@ -251,15 +278,21 @@ WorkKind _kindOf(String tool) => switch (tool) {
 List<WorkStep> workStepsOf(List<ReActStep> steps) {
   final out = <WorkStep>[];
   final waiting = <WorkStep>[];
+  final asked = <String>{};
+  var number = 0;
   for (final step in steps) {
     switch (step.type) {
       case ReActEventType.toolCall:
         final tool = step.toolName ?? '';
+        final args = step.toolArgs ?? const <String, dynamic>{};
         final work = WorkStep(
           _kindOf(tool),
           tool: tool,
-          args: step.toolArgs ?? const {},
+          args: args,
           subtask: step.subtask,
+          planned: step.planned,
+          number: ++number,
+          repeated: !asked.add('${step.subtask}|$tool|${jsonEncode(args)}'),
         );
         out.add(work);
         waiting.add(work);
@@ -276,6 +309,8 @@ List<WorkStep> workStepsOf(List<ReActStep> steps) {
       case ReActEventType.thought:
         final text = step.content.trim();
         if (text.isNotEmpty) out.add(WorkStep(WorkKind.note, text: text));
+      case ReActEventType.recordNote:
+        out.add(WorkStep(WorkKind.record, text: step.content.trim()));
       case ReActEventType.error:
         out.add(WorkStep(WorkKind.error, text: step.content.trim()));
       default:

@@ -515,6 +515,7 @@ class AskChatNotifier extends ChatNotifierBase {
                 toolName: event.toolName,
                 toolArgs: event.toolArgs,
                 subtask: event.subtask,
+                planned: event.planned,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
@@ -586,6 +587,10 @@ class AskChatNotifier extends ChatNotifierBase {
             coalescer.flushNow();
             break;
           case ReActEventType.recordNote:
+            // In the work shown too (it is folded by default): what code
+            // did to the answer — sent back, citations cut or dropped.
+            steps.add(ReActStep(type: event.type, content: event.content));
+            updateMessage(assistantId, steps: List.of(steps));
             if (recording) {
               final record = iterations.putIfAbsent(
                 currentIteration,

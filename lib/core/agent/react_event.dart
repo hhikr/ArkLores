@@ -24,8 +24,9 @@ enum ReActEventType {
   /// again, so the thinking of that turn goes too.
   finalAnswerReset,
 
-  /// 0.14: a note for the session record only (why an answer was sent back,
-  /// which citations code dropped); never shown.
+  /// 0.14: what code did to the answer (why it was sent back, which
+  /// citations it cut or dropped): for the session record and the work
+  /// timeline, never part of the answer.
   recordNote,
 
   /// R16: the complete final answer, replacing what was streamed (adds the
@@ -52,7 +53,12 @@ class ReActEvent {
     this.toolArgs,
     this.subtask,
     this.rollback = false,
+    this.planned = false,
   });
+
+  /// 0.14 ([ReActEventType.toolCall]): a step of the first searches, written
+  /// by the planning call and run by code, not asked for by the model.
+  final bool planned;
 
   /// 0.14 ([ReActEventType.finalAnswerReset]): the turn is taken back as if
   /// it had not happened.

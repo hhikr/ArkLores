@@ -475,8 +475,8 @@ void main() {
   });
 
   group('work timeline', () {
-    testWidgets('the steps read as what was searched and read, with what '
-        'they found; raw output on tap', (tester) async {
+    testWidgets('each step shows its tool, its arguments as written and '
+        'what came back; the whole output on tap', (tester) async {
       final message = ChatMessage(
         id: 'a',
         role: MessageRole.assistant,
@@ -489,6 +489,7 @@ void main() {
             content: 'Executing tool "grep"',
             toolName: 'grep',
             toolArgs: {'pattern': '甲|乙', 'collection': 'act_fixture'},
+            planned: true,
           ),
           ReActStep(
             type: ReActEventType.toolObservation,
@@ -507,20 +508,47 @@ void main() {
             content: '【第一章】 $_c5\nL0 [甲] 一\nL1 [乙] 二\nL40 [甲] 三',
             toolName: 'read_story',
           ),
+          // The same call again, and nothing found this time.
+          ReActStep(
+            type: ReActEventType.toolCall,
+            content: 'Executing tool "grep"',
+            toolName: 'grep',
+            toolArgs: {'pattern': '甲|乙', 'collection': 'act_fixture'},
+          ),
+          ReActStep(
+            type: ReActEventType.toolObservation,
+            content: '0 行：act_fixture 里没有 甲 / 乙。',
+            toolName: 'grep',
+          ),
+          ReActStep(
+            type: ReActEventType.recordNote,
+            content: '出处裁到读过的行：a:1-9 → a:1-3',
+          ),
         ],
       );
       await _pump(tester, message);
       // Two stories: the grep showed lines of both (0.14: every tool that
       // prints story lines counts, not read_story alone).
-      expect(find.text('已作答 · 查阅 2 次 · 读了 2 篇原文'), findsOneWidget);
+      expect(find.text('已作答 · 查阅 3 次 · 读了 2 篇原文'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('answer-header')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('work-timeline')), findsOneWidget);
       expect(find.text('先找故事集。'), findsOneWidget);
-      expect(find.text('在「act_fixture」中搜索「甲 / 乙」'), findsOneWidget);
-      expect(find.text('5 处 · 2 篇'), findsOneWidget);
-      expect(find.text('阅读《第一章》'), findsOneWidget);
-      expect(find.text('第 0–40 行'), findsOneWidget);
+      // The tool and its arguments as the model wrote them, not a sentence
+      // about them.
+      expect(find.text('grep'), findsNWidgets(2));
+      expect(find.text('read_story'), findsOneWidget);
+      expect(
+        find.text('{"pattern":"甲|乙","collection":"act_fixture"}'),
+        findsNWidgets(2),
+      );
+      expect(find.textContaining('5 处 · 2 篇 · '), findsOneWidget);
+      expect(find.textContaining('第 0–40 行 · '), findsOneWidget);
+      expect(find.textContaining(' 字'), findsNWidgets(3));
+      expect(find.text('拟定'), findsOneWidget);
+      expect(find.text('重复'), findsOneWidget);
+      expect(find.text('没有结果'), findsOneWidget);
+      expect(find.text('记录：出处裁到读过的行：a:1-9 → a:1-3'), findsOneWidget);
       expect(find.textContaining('Observation'), findsNothing);
       expect(find.textContaining('Executing tool'), findsNothing);
 
