@@ -101,6 +101,19 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
   （库的 schema 旧，或改动超出 compare 接口能列出的范围），不直接开始：页面写明代价，点“仍然完整重建”才继续
   （`GameDataBuildUiState.confirmFull` / `buildFromSource(allowFull: true)`）。增量更新不受影响。
 
+**官方资产与本机更新的先后（2026-10-11，开发者定）**：游戏数据较新的在前；同一份游戏数据，官方资产在本机更新的之前（它的向量是全的）。
+
+- 库自己知道的：清单里的上游提交（`source_arknights_commit`）和构建时间（`built_at`）；旁边的标记说明来源——`.asset_sha256`（从哪个官方资产装的）、`.local_build`（在本机更新过）。
+- 构建 App 时除了资产的 URL 和 SHA，还写进它所基于的提交和那个提交的日期：`tools/release_gamedata.env` 的 `GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE`
+  （GitHub 上那个提交的 committer 日期；`install_local.ps1` 和发布工作流都会传）。**发新资产时四个值一起改。** 终末地库不是从仓库来的，没有这两项。
+- 官方卡什么时候提示“更新”（`GameDataInstallStatus.updateReason`）：
+  - 手机上是官方资产装的：App 指向的是另一份资产（与原来一样）。
+  - 手机上是本机更新过的：官方资产与它是同一个提交，或官方资产的提交是在那次更新**之后**才有的。本机更新拿的是当时上游的最新提交，
+    所以之后才有的提交一定比它新，之前的提交一定不比它新——不需要知道已装提交本身的日期。其余情况不提示，只留“换回官方版本”（会丢较新的内容，要确认）。
+  - 构建时没写提交的 App（旧的构建方式）不会提示替换本机更新过的库。
+- “用游戏数据更新”卡：检查到的上游最新提交就是官方资产的提交、而官方卡正提示更新时，“拉取并更新”变灰并提示用上面的“更新”。
+- App 不会自己到 GitHub 上找新的资产：只上传不发新的 App，页面不会变。
+
 ## 5. 向量（剧情与资料）
 
 ```bash
