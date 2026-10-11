@@ -757,6 +757,9 @@ typedef SpreadPart = ({
 
   /// The word's lines over the collection's lines.
   double share,
+
+  /// The word's lines in each story file of the collection.
+  Map<String, int> stories,
 });
 
 /// Where the lines holding a word are. A hint for where to look, not
@@ -790,13 +793,13 @@ class TermSpread {
 /// The spread of a word whose lines per story file are [perStory].
 TermSpread computeTermSpread(Map<String, int> perStory, StoryGroups groups) {
   final lines = <String, int>{};
-  final chapters = <String, int>{};
+  final stories = <String, Map<String, int>>{};
   var total = 0;
   for (final MapEntry(key: story, value: n) in perStory.entries) {
     if (n <= 0) continue;
     final group = groups.groupOf[story] ?? '';
     lines[group] = (lines[group] ?? 0) + n;
-    chapters[group] = (chapters[group] ?? 0) + 1;
+    (stories[group] ??= {})[story] = n;
     total += n;
   }
   SpreadPart part(String id) {
@@ -805,8 +808,9 @@ TermSpread computeTermSpread(Map<String, int> perStory, StoryGroups groups) {
       id: id,
       label: id.isEmpty ? spreadOtherLabel : groups.labels[id] ?? id,
       lines: lines[id]!,
-      chapters: chapters[id]!,
+      chapters: stories[id]!.length,
       share: all == 0 ? 0 : lines[id]! / all,
+      stories: stories[id]!,
     );
   }
 

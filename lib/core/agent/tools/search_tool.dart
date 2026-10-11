@@ -78,13 +78,17 @@ class SearchTool extends AgentTool {
   bool keywordOnly = false;
 
   /// The other use, said after either description.
+  /// What the spread at the top is and what follows from it.
+  static const String _spreadNote =
+      '分布里列出的故事集，除了最相关的几篇之外各给一段原文；要在其中一部里细找，用 collection 参数（故事集的名字不是检索词）。';
+
   static const String _nearNote =
       '另一种用法：near 写一段读过的剧情的位置（<story_id>:<行号>）时不按 query，'
       '而是找别的故事集里与那一段意思相近的段落——想知道一件事在别处有没有呼应时用；'
       '只列足够相近的，常常一段也没有。';
 
   @override
-  String get description => '$_queryDescription$_nearNote';
+  String get description => '$_queryDescription$_spreadNote$_nearNote';
 
   String get _queryDescription => keywordOnly
       ? '一次检索所有资料：已安装的每个游戏的剧情原文、剧情以外的资料原文（档案、干员资料、语音等）'
@@ -296,6 +300,10 @@ class SearchTool extends AgentTool {
         named.keys.toSet(),
         spreads,
       ).forEach(buffer.writeln);
+      if (spreads.isNotEmpty) {
+        buffer.writeln('（分布里的是故事集的名字：要到某一部里找，用 search 或 grep 的 collection 参数，'
+            '或用 outline 看它的目录；名字本身不是检索词）');
+      }
     }
     for (final MapEntry(key: term, value: c) in named.entries) {
       buffer.writeln('“$term”是故事集（${c.id}，${c.chapters} 章）：'
@@ -326,6 +334,31 @@ class SearchTool extends AgentTool {
         }
         buffer.write(block);
         passageChars += block.length;
+      }
+      // 0.14: the collections the words' spreads list and no passage above
+      // is from, a passage each — where a word is must not depend on the
+      // model going to look.
+      final elsewhere = inCollection != null
+          ? null
+          : await _timed(
+              'elsewhere:${g.key}',
+              () => _elsewhere(g, narrowTo(store, g), r, terms, spreads, vector),
+            );
+      if (elsewhere != null) {
+        buffer.writeln('### 关键词还出现在这些故事集（上面的分布里列出、还没有段落的，各一段）');
+        var chars = 0;
+        for (final block in await _render(
+          narrowTo(store, g),
+          elsewhere,
+          from: part.length,
+        )) {
+          if (chars + block.length > elsewhereChars) {
+            buffer.writeln('……（篇幅已满，其余的故事集用 search 加 collection 再查）');
+            break;
+          }
+          buffer.write(block);
+          chars += block.length;
+        }
       }
       final records = _renderRecords(r);
       if (records.isNotEmpty) {
@@ -575,6 +608,7 @@ class SearchTool extends AgentTool {
       best: chunks.isEmpty ? double.negativeInfinity : chunks.first.score,
       lines: keywords.fold(0, (n, h) => n + h.hits),
       termStories: termStories,
+      byMeaning: chunks.isNotEmpty,
     );
   }
 
@@ -643,8 +677,106 @@ class SearchTool extends AgentTool {
           }(),
       ];
 
-  /// [ranked] as printed blocks; the lines printed become citable.
-  Future<List<String>> _render(GameDataRetrieval store, _Ranked ranked) async {
+  /// Collections given a passage because a word's spread lists them, per
+  /// game, and the characters those passages may take.
+  static const int elsewherePerGame = 6;
+  static const int elsewhereChars = 3500;
+
+  /// One passage from each collection [spreads] lists for [game] that
+  /// [ranked]'s stories are not from: the one closest to the query among
+  /// the stories the word is in (without vectors, the lines of the story it
+  /// is in most). The rarer word's collections first — a word that is
+  /// everywhere says least about where to look — and no more than
+  /// [elsewherePerGame]. Null when there is none.
+  Future<_Ranked?> _elsewhere(
+    Game game,
+    GameDataRetrieval store,
+    _Ranked ranked,
+    List<String> terms,
+    Map<String, List<(Game, TermSpread)>> spreads,
+    List<double>? vector,
+  ) async {
+    TermSpread? spreadOf(String term) {
+      for (final (g, spread) in spreads[term] ?? const <(Game, TermSpread)>[]) {
+        if (g == game) return spread;
+      }
+      return null;
+    }
+
+    final byRarity = [
+      for (final t in terms)
+        if (spreadOf(t) != null) t,
+    ]..sort((a, b) => spreadOf(a)!.lines.compareTo(spreadOf(b)!.lines));
+    final shown = ranked.top.toSet();
+    final taken = <String>{};
+    final stories = <String>[];
+    final chunks = <String, StoryChunkHit>{};
+    final keywords = <String, StoryLineHit>{};
+    for (final term in byRarity) {
+      final spread = spreadOf(term)!;
+      for (final part in [...spread.listed, ...spread.dense]) {
+        if (stories.length >= elsewherePerGame) break;
+        // The stories no collection holds are not one place to look.
+        if (part.id.isEmpty || !taken.add(part.id)) continue;
+        if (part.stories.keys.any(shown.contains)) continue;
+        StoryChunkHit? chunk;
+        if (vector != null && ranked.byMeaning) {
+          final near = await store.searchStoryChunksByVector(
+            vector,
+            topK: 1,
+            storyIds: part.stories.keys.toSet(),
+          );
+          if (near.isNotEmpty) chunk = near.first;
+        }
+        final storyId = chunk?.storyId ??
+            (part.stories.entries.toList()
+                  ..sort((a, b) {
+                    final byLines = b.value.compareTo(a.value);
+                    return byLines != 0 ? byLines : a.key.compareTo(b.key);
+                  }))
+                .first
+                .key;
+        if (!shown.add(storyId)) continue;
+        stories.add(storyId);
+        if (chunk != null) chunks[storyId] = chunk;
+        keywords[storyId] = StoryLineHit(
+          storyId: storyId,
+          hits: part.stories[storyId] ?? 0,
+          lines: chunk != null
+              ? const []
+              : [
+                  for (final row in await store.grepStoryLines(
+                    [term],
+                    storyIds: [storyId],
+                    limit: 3,
+                  ))
+                    StoryLineEntry(
+                      lineIndex: row.lineIndex,
+                      speaker: row.speaker,
+                      content: row.content,
+                    ),
+                ],
+        );
+      }
+    }
+    return stories.isEmpty
+        ? null
+        : _Ranked(
+            stories,
+            chunks,
+            keywords,
+            best: double.negativeInfinity,
+            lines: 0,
+          );
+  }
+
+  /// [ranked] as printed blocks, numbered after [from]; the lines printed
+  /// become citable.
+  Future<List<String>> _render(
+    GameDataRetrieval store,
+    _Ranked ranked, {
+    int from = 0,
+  }) async {
     final top = ranked.top;
     if (top.isEmpty) return const [];
     final labels = await store.storyCatalogEntries(top);
@@ -655,10 +787,10 @@ class SearchTool extends AgentTool {
       final keyword = ranked.keywordOf[storyId];
       final block = StringBuffer()
         ..writeln(
-            '${i + 1}. 《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》 $storyId'
+            '${from + i + 1}. 《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》 $storyId'
             '（${[
           if (chunk != null) '意思相近 ${chunk.score.toStringAsFixed(2)}',
-          if (keyword != null) '关键词 ${keyword.hits} 行',
+          if (keyword != null && keyword.hits > 0) '关键词 ${keyword.hits} 行',
         ].join('；')}）');
       final shown = <int>{};
       if (chunk != null) {
@@ -749,7 +881,11 @@ class _Ranked {
     required this.best,
     required this.lines,
     this.termStories = const {},
+    this.byMeaning = false,
   });
+
+  /// Whether this game's vectors were searched and found something.
+  final bool byMeaning;
   final List<String> top;
 
   /// Each keyword's lines per story file in this game.

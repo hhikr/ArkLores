@@ -193,10 +193,16 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     List<double> queryVector, {
     String? scopeId,
     int topK = 20,
+    Set<String>? storyIds,
   }) async {
     final index = await _loadVectorIndex();
     if (index == null) return const [];
-    return index.search(queryVector, topK: topK, scopeId: scopeId);
+    return index.search(
+      queryVector,
+      topK: topK,
+      scopeId: scopeId,
+      storyIds: storyIds,
+    );
   }
 
   @override

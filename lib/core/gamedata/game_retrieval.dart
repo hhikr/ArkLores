@@ -125,11 +125,13 @@ abstract interface class GameDataRetrieval {
   Future<({String model, int dims})?> get storyVectorInfo;
 
   /// R12: top story-line chunks by cosine similarity to [queryVector]
-  /// (from the model in [storyVectorInfo]). Locating hints, not evidence.
+  /// (from the model in [storyVectorInfo]), within the story files
+  /// [storyIds] when given (0.14; of one game). Locating hints, not evidence.
   Future<List<StoryChunkHit>> searchStoryChunksByVector(
     List<double> queryVector, {
     String? scopeId,
     int topK,
+    Set<String>? storyIds,
   });
 
   /// 0.14: passages of other collections that read like the one of

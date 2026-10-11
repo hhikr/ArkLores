@@ -274,6 +274,82 @@ void main() {
       expect(out, contains('activities/act_b/level_act_b_01.txt | '));
     });
   });
+
+  // A collection the spread lists and no passage is from gets one: where a
+  // word is does not depend on the model going to look.
+  test('search: a passage from each listed collection the best stories are '
+      'not from', () async {
+    useSqfliteFfi();
+    final dir = await Directory.systemTemp.createTemp('arklores_elsewhere');
+    final path = p.join(dir.path, 'elsewhere.db');
+    final db = await createGameDataDb(path, catalog: true);
+    Future<void> chapter(String id, String collection, String name, int lines) async {
+      await insertStory(
+        db,
+        id,
+        [for (var i = 0; i < lines; i++) '乙丙：$name的第 $i 句。'],
+        scopeId: collection,
+      );
+      await db.insert('story_catalog', {
+        'story_id': id,
+        'collection_id': collection,
+        'collection_name': name,
+        'collection_type': 'ACTIVITY',
+        'story_code': 'X-1',
+        'story_name': '一',
+        'avg_tag': '行动前',
+        'story_sort': 1,
+        'synopsis': '梗概。',
+        'start_time': 1700000000,
+      });
+    }
+
+    // Five collections with more lines fill the five places (and the four
+    // fifths).
+    for (var i = 1; i <= 5; i++) {
+      await chapter('activities/x$i/level_x_01.txt', 'act_x$i', '长篇$i', 12);
+    }
+    // Not among them, but the word is in every line of it: listed as one
+    // the word fills, no chapter shown.
+    const y = 'activities/y/level_y_01.txt';
+    await chapter(y, 'act_y', '短篇', 10);
+    // The rest of the corpus, without the word.
+    await insertStory(
+      db,
+      'activities/w/level_w_01.txt',
+      [for (var i = 0; i < 400; i++) '旁人：别的第 $i 句。'],
+    );
+    // Not listed: nothing is said of it but its share.
+    const z = 'activities/z/level_z_01.txt';
+    await chapter(z, 'act_z', '零星', 2);
+    await db.close();
+    final store = GameDataKnowledgeStore(dbPath: path);
+    addTearDown(() async {
+      await store.close();
+      await deleteTempDir(dir);
+    });
+
+    final seen = SeenLines();
+    final out = (await SearchTool(store, seen).run('乙丙')).text;
+    expect(out, contains('乙丙（72 行，7 个故事集：长篇1 12 行 / 1 章、'));
+    expect(out, contains('；占比高的：短篇 10 行（占该篇 100%）；另 1 个共 3%）'));
+    expect(out, contains('（分布里的是故事集的名字：'));
+    final at = out.indexOf('### 关键词还出现在这些故事集（上面的分布里列出、还没有段落的，各一段）');
+    expect(at, greaterThan(0));
+    final elsewhere = out.substring(at);
+    expect(elsewhere, contains('6. 《短篇 X-1 行动前《一》》 $y（关键词 10 行）'));
+    expect(elsewhere, contains('L0 [乙丙] 短篇的第 0 句。'));
+    expect(elsewhere, isNot(contains('长篇')));
+    expect(out, isNot(contains(z)));
+    // Its lines are read like the others'.
+    expect(seen.covers(y, 0, 0), isTrue);
+
+    // Within a collection there is no spread, so nothing is added.
+    final scoped =
+        (await SearchTool(store, SeenLines()).run('乙丙', collection: '长篇1')).text;
+    expect(scoped, isNot(contains('关键词还出现在')));
+    expect(scoped, isNot(contains('分布里的是故事集的名字')));
+  });
 }
 
 /// "act_a" (a catalog chapter and a training file that is only an entry),

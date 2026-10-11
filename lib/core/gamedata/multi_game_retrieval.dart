@@ -116,10 +116,23 @@ class MultiGameRetrieval implements GameDataRetrieval {
     List<double> queryVector, {
     String? scopeId,
     int topK = 20,
+    Set<String>? storyIds,
   }) async {
     if (scopeId != null) {
-      return _of(scopeId)
-          .searchStoryChunksByVector(queryVector, scopeId: scopeId, topK: topK);
+      return _of(scopeId).searchStoryChunksByVector(
+        queryVector,
+        scopeId: scopeId,
+        topK: topK,
+        storyIds: storyIds,
+      );
+    }
+    if (storyIds != null) {
+      if (storyIds.isEmpty) return const [];
+      return _of(storyIds.first).searchStoryChunksByVector(
+        queryVector,
+        topK: topK,
+        storyIds: storyIds,
+      );
     }
     final wanted = await storyVectorInfo;
     final all = <StoryChunkHit>[];

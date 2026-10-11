@@ -458,11 +458,13 @@ class StoryVectorIndex {
   }
 
   /// Top [topK] chunks by cosine similarity to [query] (any length-[dims]
-  /// vector; normalized here), optionally restricted to [scopeId].
+  /// vector; normalized here), optionally restricted to [scopeId] and to the
+  /// story files [storyIds].
   List<StoryChunkHit> search(
     List<double> query, {
     int topK = 20,
     String? scopeId,
+    Set<String>? storyIds,
   }) {
     final scores = topByCosine(
       _vectors,
@@ -470,7 +472,11 @@ class StoryVectorIndex {
       dims,
       query,
       topK: topK,
-      keep: scopeId == null ? null : (c) => _scopeIds[c] == scopeId,
+      keep: scopeId == null && storyIds == null
+          ? null
+          : (c) =>
+              (scopeId == null || _scopeIds[c] == scopeId) &&
+              (storyIds == null || storyIds.contains(_storyIds[c])),
     );
     return [
       for (final (c, score) in scores)
