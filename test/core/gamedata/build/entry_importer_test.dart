@@ -178,6 +178,11 @@ void main() {
             'type': 'ACTIVITY',
             'zoneNameFirst': '虚构区',
           },
+          'act_fxre_zone1': {
+            'zoneID': 'act_fxre_zone1',
+            'type': 'ACTIVITY',
+            'zoneNameFirst': '虚构区',
+          },
           'weekly_1': {
             'zoneID': 'weekly_1',
             'type': 'WEEKLY',
@@ -217,7 +222,10 @@ void main() {
             'type': 'TYPE_FX',
           },
         },
-        'zoneToActivity': {'act_fx_zone1': 'act_fx'},
+        'zoneToActivity': {
+          'act_fx_zone1': 'act_fx',
+          'act_fxre_zone1': 'act_fxre',
+        },
         'activity': {
           'TYPE_FX': {
             'act_fx': {
@@ -616,6 +624,17 @@ void main() {
             'name': '虚构活动关',
             'description': '活动关卡的描述。\\n<@rolv.rem>场地内有能阻挡敌人的<热泵通道>和<蓝色路障>。</>',
             'levelId': 'Activities/act_fx/level_fx_01',
+          },
+          // A stage of the activity that the game now keeps in its re-run's
+          // zone (same id as before the re-run).
+          'fx_02': {
+            'stageId': 'fx_02',
+            'stageType': 'ACTIVITY',
+            'zoneId': 'act_fxre_zone1',
+            'code': 'FX-2',
+            'name': '虚构活动二关',
+            'description': '活动第二关的描述。',
+            'levelId': 'Activities/act_fx/level_fx_02',
           },
           'weekly_stage': {
             'stageId': 'weekly_stage',
@@ -1439,6 +1458,8 @@ void main() {
       );
       expect(stages.map((s) => (s['id'], s['collection_id'], s['code'])), [
         ('stage:fx_01', 'act_fx', 'FX-1'),
+        // In the re-run's zone, the activity's all the same.
+        ('stage:fx_02', 'act_fx', 'FX-2'),
         ('stage:main_00-01', 'main_0', '0-1'),
       ]);
       final link = await q(
