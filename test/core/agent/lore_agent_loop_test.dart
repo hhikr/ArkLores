@@ -318,6 +318,28 @@ void main() {
       });
       expect(missing, startsWith('0 行'));
       expect(missing, contains('星灯'));
+      // Files and their collection together: the files are the scope.
+      final narrowed = await GrepTool(store, SeenLines()).execute({
+        'pattern': '星灯',
+        'collection': '虚构活动',
+        'story_ids': ['activities/act_fx/level_act_fx_02_beg.txt'],
+      });
+      expect(narrowed, isNot(contains('level_act_fx_01_beg')));
+      // More hits than listed: where the rest are.
+      final all = await store.storyLineHitCounts(['星灯']);
+      final cut = await GrepTool(store, SeenLines()).execute({
+        'pattern': '星灯',
+        'story_ids': all.keys.toList(),
+        'max_hits': 1,
+        'context': 0,
+      });
+      expect(cut, contains('只列出前 1 行'));
+      final total = all.values.fold(0, (a, b) => a + b);
+      final rest = RegExp(r'(\d+) 处')
+          .allMatches(cut.substring(cut.indexOf('没有列出的命中：')))
+          .fold(0, (n, m) => n + int.parse(m.group(1)!));
+      expect(rest, total - 1);
+      expect(cut, contains('用 story_ids 指定这些故事再 grep'));
     });
 
     test('read_story pages a chapter and suggests real ids', () async {
@@ -878,6 +900,29 @@ void main() {
         'record:rec_fx_1',
       );
       expect(loreCitationRef(['record', 'record:rec_fx_1']), 'record:rec_fx_1');
+    });
+
+    test('an answer in prose with citations in brackets reads as one in '
+        'backticks', () async {
+      // 0.14 live: one answer in 37 came as prose, its citations in
+      // brackets (file names in the text the player reads) and a plain
+      // "coverage:" line at the end.
+      const story = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': story}),
+        _answer('**结论**：星灯点亮了钟楼（$story:1, 2-3），他是一盏灯'
+            '（record:rec_fx_1）（见下文）。\n\ncoverage: full'),
+      ]);
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+      ).run(query: '星灯做了什么？').toList();
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('钟楼 `$story:1` `$story:2-3`，'));
+      expect(answer, contains('（见下文）'));
+      expect(answer, isNot(contains('coverage')));
+      expect(answer, contains('status=answered'));
     });
 
     test('a delegated sub-agent reads; its checked citations count as seen',

@@ -48,15 +48,19 @@ String? loreAnswerMarkdown(String content) => loreAnswerParsed(content)?.markdow
   ]) {
     final stream = s ?? (LoreAnswerStream()..add(content.substring(at)));
     final stray = {for (final i in stream.strayBrackets) at + i};
+    final loose = {for (final i in stream.looseQuotes) at + i};
     return (
       markdown: stream.finish(),
       dropped: stream.droppedCites,
       cutShort: stream.entriesAfterEnd,
-      repaired: stray.isEmpty
+      repaired: stray.isEmpty && loose.isEmpty
           ? null
           : [
               for (var i = 0; i < content.length; i++)
-                if (!stray.contains(i)) content[i],
+                if (loose.contains(i))
+                  r'\"'
+                else if (!stray.contains(i))
+                  content[i],
             ].join(),
     );
   }
@@ -101,12 +105,18 @@ class LoreAnswerStream {
   /// Indexes (from the object's first character fed to [add]) of the
   /// brackets that closed the object early and were read past.
   final List<int> strayBrackets = [];
+
+  /// Indexes (same origin) of the quotes inside a text that were written
+  /// without a backslash and read as part of it.
+  final List<int> looseQuotes = [];
   final StringBuffer _rest = StringBuffer();
 
   // Lexer state.
   bool _inString = false;
   bool _stringIsKey = false;
   bool _escape = false;
+  StringBuffer? _quote; // characters after a quote not yet decided
+  int _quoteAt = -1;
   StringBuffer? _unicode;
   final StringBuffer _key = StringBuffer();
   final StringBuffer _scalar = StringBuffer();
@@ -156,6 +166,10 @@ class LoreAnswerStream {
 
   /// The complete answer markdown.
   String finish() {
+    if (_quote != null) {
+      _quote = null;
+      _closeValueString();
+    }
     if (_scalar.isNotEmpty) _endScalar();
     final body = _md.toString().trim();
     return [
@@ -170,6 +184,10 @@ class LoreAnswerStream {
 
   void _char(String c) {
     if (_started) _at++;
+    _step(c);
+  }
+
+  void _step(String c) {
     if (_closed) {
       _rest.write(c);
       if (_tail == 2 || c.trim().isEmpty) return;
@@ -272,8 +290,13 @@ class LoreAnswerStream {
       }
       return;
     }
+    if (_quote != null) return _afterQuote(c);
     if (c == '\\') {
       _escape = true;
+    } else if (c == '"' && !_stringIsKey && _stack.last.isObject) {
+      // Decided by what follows ([_afterQuote]).
+      _quote = StringBuffer();
+      _quoteAt = _at;
     } else if (c == '"') {
       _inString = false;
       if (_stringIsKey) {
@@ -287,6 +310,40 @@ class LoreAnswerStream {
     } else {
       _decoded(c == '\n' || c == '\r' ? ' ' : c);
     }
+  }
+
+  // What may follow the quote that ends a value in an object: the object's
+  // brace, or a comma and the next key.
+  static final RegExp _quoteCloses =
+      RegExp(r'^\s*(?:\}|,\s*"[A-Za-z_]{1,16}"\s*:)');
+  static final RegExp _quoteMayClose =
+      RegExp(r'^\s*(?:,\s*(?:"[A-Za-z_]{0,16}(?:"\s*)?)?)?$');
+
+  /// A quote came inside a value of an object; [c] is a character after it.
+  /// A quote that JSON's next token does not follow is part of the text
+  /// (0.14 live: a whole answer written with plain quotes around every
+  /// quotation, each entry cut at its first one).
+  void _afterQuote(String c) {
+    final held = (_quote!..write(c)).toString();
+    if (_quoteCloses.hasMatch(held)) {
+      _quote = null;
+      _closeValueString();
+      for (var i = 0; i < held.length; i++) {
+        _step(held[i]);
+      }
+    } else if (!_quoteMayClose.hasMatch(held)) {
+      _quote = null;
+      looseQuotes.add(_quoteAt);
+      _decoded('"');
+      for (var i = 0; i < held.length; i++) {
+        _stringChar(held[i]);
+      }
+    }
+  }
+
+  void _closeValueString() {
+    _inString = false;
+    _endString();
   }
 
   void _decoded(String c) {

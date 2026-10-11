@@ -833,6 +833,12 @@ class SearchTool extends AgentTool {
         : '${text.substring(0, lineChars)}…（本行未完）';
   }
 
+  /// How long a search waits for the wikis: the library's part is ready in
+  /// a few seconds and the whole result is held until this comes. 0.14
+  /// live: a wiki search answers in 1–4 s; the ones that took longer did
+  /// not come within 12 s either (a third of the first step's time).
+  static const Duration wikiWait = Duration(seconds: 8);
+
   /// Wiki pages for [query] on the wikis of [games], one line each.
   Future<List<String>> _searchWiki(List<Game> games, String query) async {
     final wiki = this.wiki;
@@ -842,9 +848,10 @@ class SearchTool extends AgentTool {
         () async {
           final site = WikiSite.of(g);
           try {
+            // The limit `wiki_search` asks with: the two share one request.
             final hits = await wiki
-                .search(g, query, limit: 6)
-                .timeout(const Duration(seconds: 12));
+                .search(g, query, limit: WikiLookup.defaultSearchLimit)
+                .timeout(wikiWait);
             // Subpages (`<page>/<part>`) only when nothing else came.
             final pages = hits.where((h) => !h.title.contains('/')).toList();
             final shown = (pages.isEmpty ? hits : pages).take(4);

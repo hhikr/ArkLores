@@ -27,7 +27,7 @@ class WikiSearchTool extends AgentTool {
 
   final WikiLookup wiki;
 
-  static const int defaultLimit = 8;
+  static const int defaultLimit = WikiLookup.defaultSearchLimit;
   static const int maxLimit = 15;
 
   @override
@@ -67,22 +67,60 @@ class WikiSearchTool extends AgentTool {
     } on WikiUnavailable catch (e) {
       return '$e。请只用本地知识库作答，并在答案里说明没能查 Wiki。';
     }
+    const format = '（格式：页面引用 | 标题 | 摘要；读正文用 wiki_read 的 page 参数填页面引用）';
     if (hits.isEmpty) {
-      return '没有找到：${site.label} 上没有与“$query”相关的页面。'
-          '${query.contains(RegExp(r'\s')) ? '几个词要同时出现才算命中，可以只用其中一个词再搜。' : ''}';
+      // 0.14 live: several words at once found nothing time after time
+      // (told to try one word, the model sent other word groups, up to the
+      // limit on lookups that find nothing). The words are searched one by
+      // one here instead.
+      final words = query
+          .split(RegExp(r'\s+'))
+          .where((w) => w.isNotEmpty)
+          .toSet()
+          .take(wordsTriedAlone)
+          .toList();
+      if (words.length < 2) {
+        return '没有找到：${site.label} 上没有与“$query”相关的页面。';
+      }
+      final buffer = StringBuffer();
+      for (final word in words) {
+        final List<WikiSearchHit> found;
+        try {
+          found = await wiki.search(game, word, limit: limit);
+        } on WikiUnavailable {
+          break;
+        }
+        if (found.isEmpty) continue;
+        buffer.writeln('“$word”：');
+        for (final h in found.take(pagesPerWord)) {
+          buffer.writeln(_hitLine(h));
+        }
+      }
+      if (buffer.isEmpty) {
+        return '没有找到：${site.label} 上没有与“$query”相关的页面'
+            '（${words.map((w) => '“$w”').join('、')} 单独搜也没有）。';
+      }
+      return '${site.label} 上没有同时含“$query”这几个词的页面；按单个词搜到$format：\n'
+          '${buffer.toString().trimRight()}';
     }
     final buffer = StringBuffer()
-      ..writeln('${site.label} 搜索“$query”，${hits.length} 个页面'
-          '（格式：页面引用 | 标题 | 摘要；读正文用 wiki_read 的 page 参数填页面引用）：');
+      ..writeln('${site.label} 搜索“$query”，${hits.length} 个页面$format：');
     for (final h in hits) {
-      buffer.writeln([
-        h.ref,
-        h.category.isEmpty ? h.title : '${h.title}（${h.category}）',
-        if (h.snippet.isNotEmpty) _clip(h.snippet, 160),
-      ].join(' | '),);
+      buffer.writeln(_hitLine(h));
     }
     return buffer.toString().trimRight();
   }
+
+  /// A query of several words that found nothing: how many of its words
+  /// are searched alone, and how many pages each lists.
+  static const int wordsTriedAlone = 3;
+  static const int pagesPerWord = 4;
+
+  static String _hitLine(WikiSearchHit h) => [
+        h.ref,
+        h.category.isEmpty ? h.title : '${h.title}（${h.category}）',
+        if (h.snippet.isNotEmpty) _clip(h.snippet, 160),
+      ].join(' | ');
 }
 
 /// `wiki_read`: paragraphs of one wiki page.

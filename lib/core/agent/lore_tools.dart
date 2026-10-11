@@ -452,6 +452,12 @@ class SqlTool extends AgentTool {
   }
 }
 
+/// Said when a collection is not found and no name is close (0.14 live: a
+/// main-story chapter asked for by a made-up name; an event newer than the
+/// library).
+const String collectionNotFoundHint =
+    '主线的某一章写 main_<章号>；也可能是库里还没有收录的新故事。可以用 sql 查 story_catalog 的 collection_name / collection_id。';
+
 /// 0.14: lookups of one tool that may find nothing in one question before
 /// the tool is not run again. A question the library cannot answer (the
 /// rows are not there) used to go on for two dozen queries, each a little
@@ -734,7 +740,8 @@ class GrepTool extends AgentTool {
           'story_ids': {
             'type': 'array',
             'items': {'type': 'string'},
-            'description': '只在这些故事文件里找（完整的 story_id；不存在的文件会报 0 行）',
+            'description':
+                '只在这些故事文件里找（完整的 story_id；不存在的文件会报 0 行；同时给了 collection 时以这里为准）',
           },
           'collection': {
             'type': 'string',
@@ -776,13 +783,15 @@ class GrepTool extends AgentTool {
       if (collection == null || collection.entries.isEmpty) {
         final index = await store.storyCollectionIndex(like: collectionQuery);
         return '没有找到故事集“$collectionQuery”。'
-            '${index.isEmpty ? '可以用 sql 查 story_catalog 的 collection_name / collection_id。' : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}）').join('、')}。'}';
+            '${index.isEmpty ? collectionNotFoundHint : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}）').join('、')}。'}';
       }
-      scopeLabel = collection.label;
-      storyIds = [
-        ...storyIds,
-        for (final e in collection.entries) e.storyId,
-      ];
+      // With both given the files are the scope (0.14 live: the model named
+      // three chapters and their collection, and got the whole collection
+      // from its first chapter each time).
+      if (storyIds.isEmpty) {
+        scopeLabel = collection.label;
+        storyIds = [for (final e in collection.entries) e.storyId];
+      }
     }
     if (storyIds.isEmpty) return _corpusCounts(store, terms);
     final context = (_int(arguments['context']) ?? 2).clamp(0, 8);
@@ -804,6 +813,8 @@ class GrepTool extends AgentTool {
     final entries = await store.storyCatalogEntries(byStory.keys);
     final buffer = StringBuffer();
     var printedStories = 0;
+    final printed = <String, int>{};
+    var full = false;
     for (final MapEntry(key: storyId, value: lines) in byStory.entries) {
       final hitSet = lines.toSet();
       // Merge each hit's context window with its neighbours.
@@ -839,16 +850,34 @@ class GrepTool extends AgentTool {
       if (buffer.length + block.length > maxToolResultChars &&
           printedStories > 0) {
         buffer.writeln('（篇幅已满，后面的故事没有列出；请缩小范围或调小 context）');
+        full = true;
         break;
       }
       buffer.write(block);
       printedStories++;
+      printed[storyId] = lines.length;
     }
     buffer.writeln(
-      '（* 为命中行${truncated ? '；命中超过 $limit 行，只列出前 $limit 行，可加 max_hits 或缩小范围' : ''}）',
+      '（* 为命中行${truncated ? '；命中超过 $limit 行，只列出前 $limit 行' : ''}）',
     );
-    return _clip(buffer.toString().trimRight(), maxToolResultChars + 200);
+    final text = _clip(buffer.toString().trimRight(), maxToolResultChars + 200);
+    if (!truncated && !full) return text;
+    // Where the hits not listed are (0.14 live: with "only the first N"
+    // and no way on, the same call was sent again twice).
+    final counts = await store.storyLineHitCounts(terms, storyIds: storyIds);
+    final rest = [
+      for (final id in storyIds.toSet())
+        if ((counts[id] ?? 0) > (printed[id] ?? 0))
+          '$id ${counts[id]! - (printed[id] ?? 0)} 处',
+    ];
+    if (rest.isEmpty) return text;
+    return '$text\n没有列出的命中：${rest.take(restListed).join('、')}'
+        '${rest.length > restListed ? ' 等 ${rest.length} 个故事' : ''}。'
+        '要看它们，用 story_ids 指定这些故事再 grep，或用 read_story 读。';
   }
+
+  /// How many stories the note on hits not listed names.
+  static const int restListed = 12;
 
   /// Hit counts per story over the whole corpus, main story first, then by
   /// release.
@@ -967,7 +996,7 @@ class OutlineTool extends AgentTool {
     if (collection == null || collection.entries.isEmpty) {
       final index = await store.storyCollectionIndex(like: query);
       return '没有找到故事集“$query”。'
-          '${index.isEmpty ? '可以用 sql 查 story_catalog。' : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}，${c.chapters} 章）').join('、')}。'}';
+          '${index.isEmpty ? collectionNotFoundHint : '名字相近的故事集：${index.take(10).map((c) => '${c.label}（${c.id}，${c.chapters} 章）').join('、')}。'}';
     }
     final month = collection.releaseMonth;
     // Written last, and always: the chapters give way to it.

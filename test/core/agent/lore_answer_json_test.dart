@@ -168,6 +168,39 @@ void main() {
     );
   });
 
+  test('quotes written without a backslash stay in the text', () {
+    // 0.14 live: every quotation in the answer in plain quotes; each entry
+    // was cut at its first one and the rest of its text lost.
+    const reply = '{"entries":[{"text":"甲说"先走",乙说"再等等"，于是分开。",'
+        '"cite":[["a/b.txt",1,2]]},'
+        '{"heading":"所谓"约定""},'
+        '{"text":"He said "go", then left." , "cite":[["a/b.txt",3,4]]}],'
+        '"coverage":"gaps","gaps":"“约定”的"内容"没有读到。"}';
+    final parsed = loreAnswerParsed(reply)!;
+    expect(
+      parsed.markdown,
+      '甲说"先走",乙说"再等等"，于是分开。 `a/b.txt:1-2`\n\n'
+      '## 所谓"约定"\n\n'
+      '- He said "go", then left. `a/b.txt:3-4`\n\n'
+      '“约定”的"内容"没有读到。\n\n'
+      '[COVERAGE: gaps]',
+    );
+    expect(parsed.cutShort, isFalse);
+    // What reads the answer as a whole gets valid JSON.
+    final decoded = jsonDecode(parsed.repaired!) as Map<String, dynamic>;
+    final entries = (decoded['entries'] as List).cast<Map<String, dynamic>>();
+    expect(entries, hasLength(3));
+    expect(entries.first['text'], '甲说"先走",乙说"再等等"，于是分开。');
+    // The same text chunk by chunk.
+    final stream = LoreAnswerStream();
+    for (var i = 0; i < reply.length; i += 3) {
+      stream.add(reply.substring(i, (i + 3).clamp(0, reply.length)));
+    }
+    expect(stream.finish(), parsed.markdown);
+    // A well-formed answer is not touched.
+    expect(loreAnswerParsed(answer)!.repaired, isNull);
+  });
+
   test('markdown answers are not JSON answers', () {
     expect(loreAnswerMarkdown('星灯点亮钟楼 `$a:1`。'), isNull);
     expect(loreAnswerMarkdown('集合 {1, 2} 不是答案'), isNull);

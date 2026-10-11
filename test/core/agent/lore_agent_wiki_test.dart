@@ -9,8 +9,10 @@ import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/agent/tools/wiki_tools.dart';
+import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
+import 'package:arklores/core/wiki/wiki_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -66,6 +68,41 @@ void main() {
       final down = await WikiSearchTool(wiki).execute({'query': '星灯'});
       expect(down, contains('PRTS 暂时无法访问'));
       expect(down, contains('只用本地知识库'));
+    });
+
+    test('words no page holds together are searched one by one', () async {
+      final wiki = fakeWikiLookup();
+      final apart =
+          await WikiSearchTool(wiki).execute({'query': '星灯 别处 的事'});
+      expect(apart, startsWith('PRTS 上没有同时含“星灯 别处 的事”这几个词的页面'));
+      expect(apart, contains('“星灯”：\nwiki:prts:101 | 星灯'));
+      expect(apart, isNot(contains('“别处”')));
+      // Something was found: not a lookup that came back empty.
+      expect(lookupFoundNothing(apart), isFalse);
+      final none = await WikiSearchTool(wiki).execute({'query': '别处 的事'});
+      expect(none, startsWith('没有找到'));
+      expect(none, contains('“别处”、“的事” 单独搜也没有'));
+    });
+
+    test('the same word is asked of the wiki once, also while it runs',
+        () async {
+      final prts = fakePrts();
+      final wiki = fakeWikiLookup(prts: prts);
+      final both = await Future.wait([
+        wiki.search(Game.arknights, '星灯'),
+        wiki.search(Game.arknights, '星灯', limit: 4),
+      ]);
+      expect(both.every((hits) => hits.length == 1), isTrue);
+      await WikiSearchTool(wiki).execute({'query': '星灯'});
+      expect(prts.searches, 1);
+      // A failure is not kept.
+      prts.unavailable = true;
+      await expectLater(
+        wiki.search(Game.arknights, '守夜人'),
+        throwsA(isA<WikiUnavailable>()),
+      );
+      prts.unavailable = false;
+      expect(await wiki.search(Game.arknights, '守夜人'), hasLength(1));
     });
   });
 

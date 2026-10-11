@@ -885,6 +885,7 @@ class LoreAgentLoop {
           // 0.14: a record id is shown as `record:<id>`; its prefix written
           // twice counts once.
           .replaceAll(_doubledRecordPrefix, 'record:');
+      if (fromJson == null) body = _plainAnswerCites(body);
       if (body.isEmpty) {
         if (!nudged && !lastTurn) {
           nudged = true;
@@ -1592,6 +1593,48 @@ class LoreAgentLoop {
     // A rule (`---`) under the lead-in goes with it.
     if (rest.startsWith('---')) rest = rest.substring(3).trimLeft();
     return rest.isEmpty ? body : rest;
+  }
+
+  static final RegExp _bracketed = RegExp(r'[（(]([^（）()`]+)[)）]');
+  static final RegExp _citeSeparator = RegExp(r'[,，、;；\s]+');
+  static final RegExp _bareRange = RegExp(r'^L?\d+(?:\s*[-–~]\s*L?\d+)?$');
+  static final RegExp _plainCoverage = RegExp(
+    r'^\s*coverage\s*[:：]\s*([A-Za-z_]+)\s*$',
+    caseSensitive: false,
+    multiLine: true,
+  );
+
+  /// An answer written as prose instead of the JSON object (0.14 live):
+  /// citations in brackets — `（<story>:1-5, 9-12）`, `(record:<id>)` — become
+  /// the backticked form the rest of the app reads, and a plain
+  /// `coverage: …` line the coverage mark. Brackets holding anything else
+  /// are left as they are.
+  static String _plainAnswerCites(String body) {
+    bool whole(RegExp pattern, String s) {
+      final m = pattern.matchAsPrefix(s);
+      return m != null && m.end == s.length;
+    }
+
+    return body.replaceAllMapped(_bracketed, (m) {
+      final refs = <String>[];
+      String? story;
+      for (final token in m.group(1)!.trim().split(_citeSeparator)) {
+        if (token.isEmpty) continue;
+        final cite = _citation.matchAsPrefix(token);
+        if (cite != null && cite.end == token.length) {
+          story = cite.group(1);
+          refs.add(token);
+        } else if (whole(_recordCitation, token) ||
+            whole(wikiCitationPattern, token)) {
+          refs.add(token);
+        } else if (story != null && _bareRange.hasMatch(token)) {
+          refs.add('$story:$token'); // more lines of the story before it
+        } else {
+          return m.group(0)!;
+        }
+      }
+      return refs.isEmpty ? m.group(0)! : ' ${refs.map((r) => '`$r`').join(' ')}';
+    }).replaceAllMapped(_plainCoverage, (m) => '[COVERAGE: ${m.group(1)}]');
   }
 
   /// Citations of [body] whose range was shown only in part, each with the

@@ -185,13 +185,14 @@ void main() {
   test('wiki_search says that several words must all match', () async {
     final tool = WikiSearchTool(_EmptyWiki());
     expect(tool.description, contains('写几个词时要同时出现才算命中'));
+    // Words that found nothing together are tried alone by the tool.
     expect(
       await tool.execute({'query': '甲 乙'}),
-      contains('可以只用其中一个词再搜'),
+      contains('“甲”、“乙” 单独搜也没有'),
     );
     expect(
       await tool.execute({'query': '甲'}),
-      isNot(contains('可以只用其中一个词再搜')),
+      isNot(contains('单独搜')),
     );
   });
 }

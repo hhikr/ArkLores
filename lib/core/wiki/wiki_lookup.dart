@@ -113,12 +113,39 @@ class WikiLookup {
   Future<List<WikiSearchHit>> search(
     Game game,
     String query, {
-    int limit = 8,
+    int limit = defaultSearchLimit,
   }) async {
-    final source = _sources[WikiSite.of(game)];
+    final site = WikiSite.of(game);
+    final source = _sources[site];
     if (source == null) return const [];
-    return source.search(query, limit: limit);
+    // 0.14 live: the searches of one question ask for the same word again
+    // and again (three planned searches sharing their first word, then
+    // `wiki_search` for it), at once; the wiki answered the burst slowly and
+    // some of them timed out. One request per word, shared while it runs.
+    final key = '${site.key}:$query';
+    final kept = _searches[key];
+    if (kept != null &&
+        kept.limit >= limit &&
+        _now().difference(kept.at) < cacheTtl) {
+      return (await kept.hits).take(limit).toList();
+    }
+    final hits = source.search(query, limit: limit);
+    final entry = (hits: hits, limit: limit, at: _now());
+    _searches[key] = entry;
+    try {
+      return await hits;
+    } catch (_) {
+      if (identical(_searches[key], entry)) _searches.remove(key);
+      rethrow;
+    }
   }
+
+  /// How many pages a search asks for unless told otherwise.
+  static const int defaultSearchLimit = 8;
+
+  /// Searches asked recently, by `<site>:<query>` (running ones included).
+  final Map<String, ({Future<List<WikiSearchHit>> hits, int limit, DateTime at})>
+      _searches = {};
 
   /// The page [page] names: a page id with a version (that version, from
   /// the snapshots when it is there), a page id without one or a `wiki:`
