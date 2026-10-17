@@ -1,16 +1,15 @@
 # Wiki Site Adaptation
 
-ArkLores 的 Wiki 浏览器使用 WebView 展示远程站点。站点适配分为三层：
+ArkLores 的 Wiki 浏览器使用 WebView 展示远程站点。站点适配分为两层：
 
 1. **站点识别**：根据当前 URL 的 hostname 选择适配策略。
 2. **主题桥接**：只修改站点已经定义的主题状态；不对第三方页面做全量反色。
-3. **阅读器正文定位**：为每个站点选择正文根节点，再应用 LXGW、字号、间距和阅读器控件。
 
 ## 当前内置来源
 
 | ID | 来源 | 前端结构 | 主题机制 |
 | --- | --- | --- | --- |
-| `prts` | PRTS Wiki | MediaWiki | MediaWiki 原生主题 class（2026-10-12 真机反馈：PRTS 新版站点自带黑夜模式，本 App 的 DOM 适配仍是硬改，待改为只跟随站点，见 `KNOWN_LIMITATIONS_AND_DEBT.md` §8） |
+| `prts` | PRTS Wiki | MediaWiki | 站点自带的黑夜模式：MediaWiki 的 `skin-theme-clientpref-night/day` class |
 | `endfield` | Endfield Wiki | 用户在设置中选择 fz 或 Warfarin | 按当前 URL 自动选择站点策略 |
 
 Endfield Wiki 只占用一个标签页。设置页编辑该来源或添加自定义来源时，URL
@@ -19,6 +18,12 @@ Endfield Wiki 只占用一个标签页。设置页编辑该来源或添加自定
 保留列表中第一个已配置的终末地地址。
 
 ## 主题策略
+
+### prts.wiki
+
+PRTS 新版站点自带黑夜模式（MediaWiki 的客户端偏好 class）。ArkLores 只在 `html` 与 `body` 上切换
+`skin-theme-clientpref-night` / `skin-theme-clientpref-day`（去掉 `-os`），document-start 时先切 `html` 防白闪；
+不注入任何样式（2026-10-17 起，之前是一套覆盖颜色的 CSS）。站点改了切换方式时这里要跟着改；真机未复查。
 
 ### fz.wiki
 
@@ -35,42 +40,11 @@ Warfarin 的 CSS 使用 `.dark` 选择器切换一组语义变量。ArkLores 只
 主题桥接脚本会在 WebView 的 document-start 阶段运行，并把当前模式短暂保存
 在 sessionStorage，降低站点导航和 WebView 重新加载时的白色闪屏。
 
-## 阅读器策略
-
-> 2026-10-17：阅读器模式（本节与 `wiki_reader_scripts.dart`）已列为待删：资料页已经是阅读的主要途径，PRTS 新版站点也自带黑夜模式。
-> 删除前本节描述的是现状，见 `KNOWN_LIMITATIONS_AND_DEBT.md` §8。
-
-阅读器仍然使用内置 LXGW WenKai 字体，但正文根不再固定假设
-`#mw-content-text`：
-
-- PRTS 使用 MediaWiki 正文根。
-- fz 优先使用文章布局第一列，再回退到 `data-page-content`、`data-content`
-  和 `article`。
-- Warfarin 优先使用主内容列，再回退到其页面主容器。
-
-导航栏、侧栏和页脚继续由阅读器隐藏；正文内部的图片、表格、按钮、输入框、
-音频和其他交互组件保留原生行为。复杂组件仍需要按页面类型单独增加适配，
-不能用一套通用 CSS 覆盖所有 Wiki。
-
-### fz 阅读器布局保护
-
-fz 的条目正文由卡片组件组成，图片可能通过卡片容器的
-`background-image`、`mask-image`、`-webkit-mask-image` 或 CSS 视觉层加载，
-而不是直接使用 `<img>`。阅读器对 fz 页面会保留这些视觉容器的图像、着色和
-尺寸，同时把正文列改为流式宽度；对懒加载 `<img>` 会在进入阅读器时主动触发
-加载。
-
-干员页还包含固定宽度、`min-width`、`aspect-ratio`、flex/grid 和
-`overflow-hidden` 的多层组合。阅读器会在正文挂载完成后检查超出正文列的
-容器，添加移动端约束，并监听异步 DOM 更新重新发现正文根、重新标记媒体节点；
-窗口尺寸变化也会触发重新计算。退出阅读器时会移除观察器和临时 class，避免影响
-普通模式。
-
 ## 悬浮栏与网页留白（0.11）
 
 App 的顶部站点栏（`wiki-site-bar`）和底部导航都是悬浮的，网页铺满整个屏幕（顶到状态栏下、底到屏幕底）。网页不能从外部留白，
 所以由 `_applyDockInsets` 注入样式：给 `html` 上下加悬浮栏高度的 padding，并把网站自己 `fixed`/`sticky` 在顶部/底部的栏同样下移/上移；
-每次 build 用 `_syncDockInsets` 同步高度。阅读模式两栏都隐藏、留白为 0。新增站点时要真机确认它的固定栏没有被悬浮栏盖住。
+每次 build 用 `_syncDockInsets` 同步高度。新增站点时要真机确认它的固定栏没有被悬浮栏盖住。
 
 ## 从问答打开页面（0.13）
 
@@ -91,9 +65,9 @@ flutter test test/features/wiki/bookmark_service_test.dart
 
 - fz：亮色、暗色、页面内跳转和 WebView 重新加载；
 - Warfarin：亮色、暗色、语言路由和干员详情页；
-- 两站阅读器：字号调节、图片、表格、按钮和返回普通模式；
+- PRTS：亮色、暗色（站点自己的黑夜模式）与页面内跳转；
 - Android 与 iOS 的 document-start 主题是否都没有白闪。
 
-当前适配只负责主题和阅读器基础正文定位，不承诺把两个站点的所有业务组件
-转换为统一的电子书排版。剧情模拟器、图鉴交互和动态数据表应继续保留为站点
+当前适配只负责主题，不改站点的排版。阅读器模式与“转交给 AI”已于 2026-10-17 删除：
+长文在资料页里读，问答自己会查 Wiki（`wiki_search` / `wiki_read`）。剧情模拟器、图鉴交互和动态数据表应继续保留为站点
 原生组件，并在出现具体布局问题时建立页面级适配。

@@ -16,6 +16,11 @@ All notable changes to ArkLores will be documented in this file.
 
 - **A cited record opens its library page**, as a cited story opens the reader: an operator's file reads in its folding parts instead of showing raw `## ` headings in a sheet. The quotes in the evidence list are rendered the same way.
 
+### Wiki
+
+- **PRTS dark mode is the site's own.** The app no longer restyles PRTS pages with its own colours; it switches the night theme the site already has.
+- **Reader mode and "send to AI" are gone.** Long texts read in the library, and Ask searches and reads the wikis itself.
+
 ### Development
 
 - The Endfield build writes operator-file ids under `ef/` like every other Endfield id (takes effect with the next Endfield knowledge base); CI runs on pushes to `main` only (the `dev` branch is gone).

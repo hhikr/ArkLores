@@ -329,27 +329,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get wikiTabEndfield => '终末地 Wiki';
 
   @override
-  String get wikiSendToAi => '转交给 AI';
-
-  @override
-  String get wikiSendToAiDesc => '选中的 Wiki 文本只作为阅读上下文；事实声明仍会用 GameData 单独核验。';
-
-  @override
-  String get wikiSendToSummaryDesc => '根据页面和选中文字生成梗概';
-
-  @override
-  String get wikiSendToFactCheckDesc => '把选中文字作为待核查主张';
-
-  @override
-  String get wikiReaderMode => '阅读模式';
-
-  @override
-  String get wikiReaderFontSmaller => '缩小文字';
-
-  @override
-  String get wikiReaderFontLarger => '放大文字';
-
-  @override
   String get bookmarksTitle => '书签';
 
   @override
@@ -463,12 +442,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiAskCanceled => '已取消本次回答。';
-
-  @override
-  String get aiTabFactCheck => '事实核查';
-
-  @override
-  String get aiTabSummary => '剧情梗概';
 
   @override
   String get aiAnswerStatus => '回答状态';
