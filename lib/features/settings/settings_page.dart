@@ -74,6 +74,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  /// Switch for how the parts of an operator's file open: all unfolded
+  /// (on) or all folded.
+  Widget _buildProfileSectionsSwitch(AppThemeTokens theme) {
+    final open = ref.watch(profileSectionsOpenProvider);
+    return Switch(
+      value: open,
+      activeThumbColor: theme.accentPrimary,
+      onChanged: (value) async {
+        ref.read(profileSectionsOpenProvider.notifier).state = value;
+        await ref.read(settingsServiceProvider).saveProfileSectionsOpen(value);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
@@ -294,6 +308,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               context,
                               '/knowledge-base',
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _CompactSettingWidth(
+                          child: _PreferenceRow(
+                            theme: theme,
+                            icon: Icons.unfold_more_sharp,
+                            title: context.t.settingsProfileSectionsOpen,
+                            subtitle: context.t.settingsProfileSectionsOpenDesc,
+                            control: _buildProfileSectionsSwitch(theme),
                           ),
                         ),
                         const SizedBox(height: 18),

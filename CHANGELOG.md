@@ -2,6 +2,19 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [Unreleased]
+
+### Library and reader
+
+- **Arknights operators show their voice lines again.** An operator's page read only its profile file and stopped there, so the 18,000 voice lines kept beside it never appeared. They now follow the file as one more part, "语音记录".
+- **Endfield voice lines are readable.** The part showed as one grey box: when the first line's title ended in a number (行动准备1), the check for numbered titles looked at a line before the first one and failed, and a release build paints a failed part grey.
+- **A setting for how operator files open**: every part unfolded (as before) or every part folded, under Settings → Knowledge base. Story synopses still start folded.
+- **Opening a synopsis no longer pushes the title up the screen** when the story was opened at a cited, searched or resumed line.
+
+### Development
+
+- The Endfield build writes operator-file ids under `ef/` like every other Endfield id (takes effect with the next Endfield knowledge base); CI runs on pushes to `main` only (the `dev` branch is gone).
+
 ## [0.14.0] - 2026-10-11
 
 Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancelled, 1.5–24 minutes and up to 1.5 million input tokens a question; one tool call in six went wrong). The one agent, its tools and the citation checks stay; what changed is around them.

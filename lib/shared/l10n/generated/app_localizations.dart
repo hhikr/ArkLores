@@ -248,6 +248,18 @@ abstract class AppLocalizations {
   /// **'Configure the chat provider'**
   String get settingsApiSettingsDesc;
 
+  /// No description provided for @settingsProfileSectionsOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open file sections in the library'**
+  String get settingsProfileSectionsOpen;
+
+  /// No description provided for @settingsProfileSectionsOpenDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.'**
+  String get settingsProfileSectionsOpenDesc;
+
   /// No description provided for @settingsSessionLogs.
   ///
   /// In en, this message translates to:

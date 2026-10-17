@@ -85,6 +85,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsApiSettingsDesc => '配置对话服务提供商';
 
   @override
+  String get settingsProfileSectionsOpen => '资料页的档案默认展开';
+
+  @override
+  String get settingsProfileSectionsOpenDesc =>
+      '打开干员等资料页时，档案的各段全部展开；关掉后全部收起，点标题再展开。剧情开头的梗概始终默认收起。';
+
+  @override
   String get settingsSessionLogs => '保存 AI 对话记录';
 
   @override

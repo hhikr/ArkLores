@@ -31,6 +31,15 @@ final nicknameProvider = StateProvider<String>((ref) {
   return ref.watch(initialNicknameProvider);
 });
 
+/// Whether the parts of an operator's file open unfolded, loaded at startup.
+final initialProfileSectionsOpenProvider = Provider<bool>((ref) => true);
+
+/// Whether the parts of an operator's file in the library ([ProfileText])
+/// open unfolded (on) or all folded; set in Settings.
+final profileSectionsOpenProvider = StateProvider<bool>((ref) {
+  return ref.watch(initialProfileSectionsOpenProvider);
+});
+
 /// Whether the user enabled per-session AI logs (default off; applied to
 /// [AgentLogger] at startup and on toggle in Settings).
 final sessionLogsEnabledProvider = StateProvider<bool>((ref) {

@@ -261,6 +261,36 @@ void main() {
     expect(await entryTexts(db, (await entryById(db, 'skin:nodoc'))!), isEmpty);
   });
 
+  test("an operator's voice lines follow its document as one more part",
+      () async {
+    for (final (i, (title, line)) in [
+      ('任命助理', '第一句。'),
+      ('交谈1', '第二句。'),
+    ].indexed) {
+      await insertRecord(
+        db,
+        'voice_$i',
+        contentType: 'operator_voice',
+        content: line,
+        category: 'operator',
+        subtype: 'voice',
+        fields: {
+          'title': title,
+          'section': title,
+          'entry_id': 'operator:char_x',
+          'line_start': 0,
+        },
+      );
+    }
+    final op = (await entryById(db, 'operator:char_x'))!;
+    final doc = (await entryTexts(db, op)).single.content;
+    expect(doc, startsWith('## 基础信息'));
+    expect(
+      doc,
+      endsWith('## $operatorVoiceSection\n任命助理：第一句。\n交谈1：第二句。'),
+    );
+  });
+
   test('bindings are listed from both sides', () async {
     final enemy = await entryBindings(db, 'enemy:e1');
     expect(enemy.single.relation, 'appears_in');

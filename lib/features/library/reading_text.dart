@@ -149,11 +149,15 @@ class FoldSection extends ConsumerStatefulWidget {
     this.initiallyOpen = true,
     this.trailing,
     this.plain = false,
+    this.onToggle,
   });
 
   final String title;
   final Widget child;
   final bool initiallyOpen;
+
+  /// Called with the new state just before the part opens or folds.
+  final ValueChanged<bool>? onToggle;
 
   /// A short note after the title (a count).
   final String? trailing;
@@ -174,7 +178,10 @@ class _FoldSectionState extends ConsumerState<FoldSection> {
     final head = PressFeedback(
       child: InkWell(
         key: ValueKey('fold-${widget.title}'),
-        onTap: withHaptic(() => setState(() => _open = !_open)),
+        onTap: withHaptic(() {
+          widget.onToggle?.call(!_open);
+          setState(() => _open = !_open);
+        }),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: widget.plain ? 0 : 14,
@@ -253,9 +260,10 @@ class _FoldSectionState extends ConsumerState<FoldSection> {
   }
 }
 
-/// A profile document (`## ` headings): each part a [FoldSection], open;
-/// the voice lines as [VoiceLines]; a list of facts as fields.
-class ProfileText extends StatelessWidget {
+/// A profile document (`## ` headings): each part a [FoldSection], open or
+/// folded as Settings say ([profileSectionsOpenProvider]); the voice lines
+/// as [VoiceLines]; a list of facts as fields.
+class ProfileText extends ConsumerWidget {
   const ProfileText(this.text, {super.key});
 
   final String text;
@@ -282,7 +290,8 @@ class ProfileText extends StatelessWidget {
   static bool isVoice(String? title) => title != null && title.contains('语音');
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final open = ref.watch(profileSectionsOpenProvider);
     final parts = sections(text);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -295,6 +304,7 @@ class ProfileText extends StatelessWidget {
             FoldSection(
               key: ValueKey('profile-section-${s.title}-$i'),
               title: s.title!,
+              initiallyOpen: open,
               trailing: isVoice(s.title)
                   ? '${VoiceLines.parse(s.body).length}'
                   : null,
@@ -336,7 +346,9 @@ class VoiceLines extends ConsumerWidget {
       final base = number?.group(1) ?? v.title;
       final numbered = number != null &&
           base.isNotEmpty &&
-          [lines.elementAtOrNull(i - 1), lines.elementAtOrNull(i + 1)].any(
+          // (elementAtOrNull throws on -1: the first line has no neighbour
+          // before it.)
+          [if (i > 0) lines[i - 1], lines.elementAtOrNull(i + 1)].any(
             (o) => o != null && o.title != v.title && o.title.startsWith(base) &&
                 RegExp(r'^\d+$').hasMatch(o.title.substring(base.length)),
           );

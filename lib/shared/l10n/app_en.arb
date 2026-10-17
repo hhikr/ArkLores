@@ -28,6 +28,8 @@
   "settingsAiSectionCode": "AI SERVICE",
   "settingsApiSettings": "API Settings",
   "settingsApiSettingsDesc": "Configure the chat provider",
+  "settingsProfileSectionsOpen": "Open file sections in the library",
+  "settingsProfileSectionsOpenDesc": "Show every section of an operator's file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.",
   "settingsSessionLogs": "Save AI conversations",
   "settingsSessionLogsDesc": "Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.",
   "settingsKnowledgeBase": "Knowledge Base Management",

@@ -13,6 +13,7 @@ import 'package:arklores/features/library/my_materials.dart';
 import 'package:arklores/features/materials/materials_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/handoff_provider.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -330,7 +331,11 @@ void main() {
 
   setUp(() => store = MemoryUserStore());
 
-  Future<void> pumpApp(WidgetTester tester, Widget home) async {
+  Future<void> pumpApp(
+    WidgetTester tester,
+    Widget home, {
+    List<Override> extra = const [],
+  }) async {
     tester.view.physicalSize = const Size(1080, 2160);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.resetPhysicalSize);
@@ -338,7 +343,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         key: UniqueKey(),
-        overrides: overrides(store),
+        overrides: [...overrides(store), ...extra],
         child: MaterialApp(
           locale: const Locale('zh'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -591,6 +596,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('opened at a line, the synopsis opens downward', (tester) async {
+    // Tall enough that the header above the cited line is on screen.
+    await tester.binding.setSurfaceSize(const Size(800, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => [
+              for (var i = 0; i < 6; i++)
+                StoryLineEntry(lineIndex: i, speaker: '甲', content: '第${i + 1}句。'),
+            ],
+          ),
+          storyCatalogEntryProvider.overrideWith(
+            (ref, id) async => const StoryCatalogEntry(
+              storyId: 'a/s.txt',
+              collectionId: 'act_a',
+              collectionName: '活动甲',
+              collectionType: 'ACTIVITY',
+              storySort: 0,
+              storyName: '一篇',
+              synopsis: '梗概第一行。\n梗概第二行。\n梗概第三行。',
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          // Opened at a cited line: the header is above the anchor.
+          home: const StoryReaderPage(
+            storyId: 'a/s.txt',
+            highlightStart: 3,
+            highlightEnd: 3,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final fold = find.byKey(const ValueKey('fold-官方梗概'));
+    expect(fold, findsOneWidget);
+    final before = tester.getTopLeft(fold).dy;
+    await tester.tap(fold);
+    await tester.pumpAndSettle();
+    expect(find.text('梗概第三行。'), findsOneWidget);
+    // The title of the fold stays where it was; the synopsis opens below it.
+    expect(tester.getTopLeft(fold).dy, moreOrLessEquals(before, epsilon: 1));
+    expect(
+      tester.getTopLeft(find.text('梗概第一行。')).dy,
+      greaterThan(before),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Endfield not installed: its page has a note instead of shelves', (tester) async {
     await pumpApp(tester, const MaterialsPage());
     expect(find.byKey(const ValueKey('library-missing-endfield')), findsNothing);
@@ -770,6 +831,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('确认为非感染者。'), findsNothing);
     expect(find.text('某工业'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('voice lines that open with a numbered title are shown', (tester) async {
+    // An Endfield operator's voice record opens with `行动准备1`: the first
+    // line has no line before it to compare with (once an error box).
+    await pumpApp(
+      tester,
+      const Scaffold(
+        body: VoiceLines('行动准备1：第一句。\n行动准备2：第二句。\n待命：第三句。'),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('行动准备'), findsOneWidget);
+    expect(find.text('第一句。'), findsOneWidget);
+    expect(find.text('第三句。'), findsOneWidget);
+  });
+
+  testWidgets('with the setting off, every part of a file opens folded', (tester) async {
+    await pumpApp(
+      tester,
+      Scaffold(
+        body: ListView(
+          children: const [
+            ProfileText('## 基础档案\n【代号】甲\n## 语音记录\n问候：你好。'),
+          ],
+        ),
+      ),
+      extra: [profileSectionsOpenProvider.overrideWith((ref) => false)],
+    );
+    expect(find.byKey(const ValueKey('fold-基础档案')), findsOneWidget);
+    expect(find.text('你好。'), findsNothing);
+    expect(find.text('代号'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('fold-语音记录')));
+    await tester.pumpAndSettle();
+    expect(find.text('你好。'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

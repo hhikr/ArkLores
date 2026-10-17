@@ -63,7 +63,7 @@
 - `docs/WIKI_EVIDENCE.md`：问答的 Wiki 检索与证据（站点、段落、快照、出处）。
 - `docs/LIBRARY_AGENT_GUIDE.md`：资料页结构说明（问答 Agent 查库前参考；正文在 `loreLibraryManual`，由 `guide` 工具给出）。
 - `docs/RETRIEVAL_QA.md`：按改动范围的验收清单。`test/README.md`：测试目录、夹具与约定。
-- `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：仍开放的问题。`docs/KNOWN_ISSUES_INVESTIGATION_2026-10-12.md`：2026-10-12 真机反馈的调查细节（会话对照、代码位置、证据）。
+- `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：仍开放的问题。
 - `docs/ANDROID_SETUP_GUIDE.md`：本机构建、试装、发布；`docs/CLOUD_DEV.md`：云端会话；`docs/WIKI_SITE_ADAPTATION.md`：Wiki 站点适配。
 
 ## Do
@@ -82,7 +82,7 @@
 - 输入框旁的面板、菜单用浮层且不取焦点（`canRequestFocus: false`），不要用会推路由的 `PopupMenuButton` / 底部弹窗（会把键盘收起来）。
 - 资料页不做只有一行的中间页：集合从列表打开走 `openCollectionOf`（一篇剧情直接进阅读器、一类条目直接进列表）；短列表在集合页里就地列出；
   分组的长列表用组标题 + 选择条，不先列一页分组。
-- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠、默认展开），语音用 `VoiceLines`；
+- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠，默认展开还是收起按设置“资料页的档案默认展开”），语音用 `VoiceLines`；
   剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 颜色：信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 - 问答列表不随流式内容自动滚动（只在发新问题时滚到底一次）；思考窗口固定高度；阅读位置上方的内容在流式中不变高。不要加“贴底跟随”。

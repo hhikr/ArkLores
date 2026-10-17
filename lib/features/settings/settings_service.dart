@@ -99,6 +99,7 @@ class SettingsService {
   // ── Agent session log keys ──────────────────────────────
   static const _keySessionLogsEnabled = 'session_logs_enabled';
   static const _keyAnswerOptions = 'ask_answer_options';
+  static const _keyProfileSectionsOpen = 'library_profile_sections_open';
 
   // ── Profile keys ─────────────────────────────────────────
   static const _keyNickname = 'profile_nickname';
@@ -223,6 +224,14 @@ class SettingsService {
   Future<void> saveSessionLogsEnabled(bool enabled) async {
     await _storage.write(key: _keySessionLogsEnabled, value: '$enabled');
   }
+
+  /// Whether the parts of an operator's file in the library open unfolded
+  /// (default) or all folded.
+  Future<bool> loadProfileSectionsOpen() async =>
+      await _storage.read(key: _keyProfileSectionsOpen) != 'false';
+
+  Future<void> saveProfileSectionsOpen(bool open) =>
+      _storage.write(key: _keyProfileSectionsOpen, value: '$open');
 
   /// The Ask answer options (default: the wikis on, sub-agents off).
   Future<AnswerOptions> loadAnswerOptions() async =>

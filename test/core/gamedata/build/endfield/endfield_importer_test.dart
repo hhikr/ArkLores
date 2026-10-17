@@ -401,6 +401,8 @@ void main() {
       ('collections', 'id'),
       ('collections', 'kind'),
       ('normalized_records', 'id'),
+      // A cited record:<id> goes to the library its id names.
+      ('entity_documents', 'id'),
       ('entries', 'raw_id'),
     ]) {
       final rows = await q('SELECT $column AS v FROM $table');

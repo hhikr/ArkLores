@@ -139,6 +139,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     with SingleTickerProviderStateMixin {
   final GlobalKey _targetKey = GlobalKey();
   final GlobalKey _scrollKey = GlobalKey();
+  /// The header (titles, description, synopsis), measured to re-anchor on it.
+  final GlobalKey _headerKey = GlobalKey();
   final Map<int, GlobalKey> _lineKeys = {};
   bool _scrolled = false;
   bool _recorded = false;
@@ -358,6 +360,25 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _centerAt = _cited ? 0.25 : 0.08;
   }
 
+  /// Anchors the list on the header where it stands on screen, so that what
+  /// changes height in it (the synopsis opening) grows downward. Opened at a
+  /// cited or resumed line the header is in the list built upward from the
+  /// anchor, where an item that grows pushes its top up the screen.
+  void _anchorOnHeader() {
+    if (_center == 0) return;
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final header = _headerKey.currentContext?.findRenderObject();
+    if (view is! RenderBox || header is! RenderBox || !header.attached) return;
+    final top = header.localToGlobal(Offset.zero, ancestor: view).dy;
+    final height = view.size.height;
+    if (height <= 0) return;
+    if (_scroll.hasClients) _scroll.jumpTo(top < 0 ? -top : 0);
+    setState(() {
+      _center = 0;
+      _centerAt = top < 0 ? 0 : (top / height).clamp(0.0, 1.0);
+    });
+  }
+
   /// Back to the cited block or the line the reader was at, from wherever
   /// they have scrolled to.
   void _jumpToTarget() {
@@ -561,6 +582,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     String? synopsis,
   ) =>
       Padding(
+        key: _headerKey,
         padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,6 +637,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 key: const ValueKey('story-reader-synopsis'),
                 title: context.t.storyReaderSynopsis,
                 initiallyOpen: false,
+                onToggle: (_) => _anchorOnHeader(),
                 child: ReadingText(synopsis.trim(), size: 14.5),
               ),
             ],

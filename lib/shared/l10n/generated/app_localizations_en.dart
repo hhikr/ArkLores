@@ -85,6 +85,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsApiSettingsDesc => 'Configure the chat provider';
 
   @override
+  String get settingsProfileSectionsOpen => 'Open file sections in the library';
+
+  @override
+  String get settingsProfileSectionsOpenDesc =>
+      'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.';
+
+  @override
   String get settingsSessionLogs => 'Save AI conversations';
 
   @override
