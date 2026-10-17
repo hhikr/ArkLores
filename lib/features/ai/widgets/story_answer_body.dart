@@ -2,16 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/agent/agent_provider.dart' show gameStoreProvider;
 import '../../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
+import '../../../core/gamedata/build/text_harvest.dart' show cleanRichText;
+import '../../../core/gamedata/game.dart' show gameOfId;
 import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
+import '../../../core/library/library_queries.dart' show entryIdOfRecord;
+import '../../../core/library/placeholders.dart';
 import '../../../core/wiki/wiki_page.dart';
 import '../../../core/wiki/wiki_provider.dart';
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/handoff_provider.dart';
+import '../../../shared/providers/settings_provider.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/press_feedback.dart';
 import '../../../shared/widgets/smooth_page_route.dart';
+import '../../library/entry_page.dart';
+import '../../library/reading_text.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
 import '../story_reader_page.dart';
@@ -27,9 +35,29 @@ void openStoryReader(BuildContext context, String storyId, CitedRange range) {
   ),);
 }
 
-/// Shows a cited non-story record in a bottom sheet (R17b).
-void showCitedRecord(BuildContext context, String id) {
-  showModalBottomSheet<void>(
+/// Opens a cited non-story record where the library shows it: the page of
+/// the entry it is part of, rendered as the library renders it. A record
+/// with no entry (an older knowledge base) opens in a bottom sheet.
+Future<void> showCitedRecord(
+  BuildContext context,
+  WidgetRef ref,
+  String id,
+) async {
+  String? entryId;
+  try {
+    entryId = await ref
+        .read(gameStoreProvider(gameOfId(id)))
+        .withDatabase<String?>((db) => entryIdOfRecord(db, id));
+  } catch (_) {}
+  if (!context.mounted) return;
+  if (entryId != null) {
+    final target = entryId;
+    await Navigator.of(context).push(smoothPageRoute<void>(
+      builder: (_) => EntryPage(entryId: target),
+    ),);
+    return;
+  }
+  await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
@@ -473,7 +501,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                     '${widget.recordNumbers.indexOf(id) + 1}'
                     '${_title(id).isEmpty ? '' : ' · ${_title(id)}'}',
                 tooltip: 'record:$id',
-                onTap: () => showCitedRecord(context, id),
+                onTap: () => showCitedRecord(context, ref, id),
               ),
           ],
         ),
@@ -602,18 +630,31 @@ class _RecordSheet extends ConsumerWidget {
                     if (r.title.isNotEmpty)
                       Text(r.title, style: theme.titleFont.copyWith(fontSize: 16)),
                     const SizedBox(height: 8),
-                    SelectableText(
-                      r.content,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textPrimary,
-                        height: 1.55,
-                      ),
-                    ),
+                    CitedRecordText(r.content),
                   ],
                 ),
         ),
       ),
     );
+  }
+}
+
+/// A cited record's text as the library shows it: a profile file (`## `
+/// parts) in its parts, anything else as reading text.
+class CitedRecordText extends ConsumerWidget {
+  const CitedRecordText(this.content, {super.key, this.size = 15.5});
+
+  final String content;
+  final double size;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final text = cleanRichText(
+      withPlaceholders(content, ref.watch(nicknameProvider)),
+    ).trim();
+    return text.contains('## ')
+        ? ProfileText(text)
+        : ReadingText(text, fields: isFieldList(text), size: size);
   }
 }
 

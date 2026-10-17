@@ -10,6 +10,11 @@ All notable changes to ArkLores will be documented in this file.
 - **Endfield voice lines are readable.** The part showed as one grey box: when the first line's title ended in a number (行动准备1), the check for numbered titles looked at a line before the first one and failed, and a release build paints a failed part grey.
 - **A setting for how operator files open**: every part unfolded (as before) or every part folded, under Settings → Knowledge base. Story synopses still start folded.
 - **Opening a synopsis no longer pushes the title up the screen** when the story was opened at a cited, searched or resumed line.
+- **The reader shows how far in you are**: a line along the title fills as you read, with the line number and the total beside the buttons.
+
+### Ask
+
+- **A cited record opens its library page**, as a cited story opens the reader: an operator's file reads in its folding parts instead of showing raw `## ` headings in a sheet. The quotes in the evidence list are rendered the same way.
 
 ### Development
 

@@ -822,6 +822,28 @@ Future<List<EntryTextBlock>> entryTexts(
   ];
 }
 
+/// The entry a cited record (`record:<id>`) is part of: a record's own entry,
+/// or for an operator's file (`entity_documents`) the entry of its entity.
+/// An Endfield file of the v0.14.0 asset has its id without `ef/`, so both
+/// spellings are tried.
+Future<String?> entryIdOfRecord(DatabaseExecutor db, String recordId) async {
+  final own = await db.rawQuery(
+    'SELECT entry_id FROM normalized_records WHERE id = ? LIMIT 1',
+    [recordId],
+  );
+  final direct = own.isEmpty ? null : _text(own.first['entry_id']);
+  if (direct != null) return direct;
+  final raw = recordId.startsWith(endfieldIdPrefix)
+      ? recordId.substring(endfieldIdPrefix.length)
+      : recordId;
+  final file = await db.rawQuery(
+    'SELECT e.id FROM entity_documents d JOIN entries e '
+    'ON e.entity_id = d.entity_id WHERE d.id IN (?, ?) LIMIT 1',
+    [recordId, raw],
+  );
+  return file.isEmpty ? null : _text(file.first['id']);
+}
+
 /// The bindings of an entry (both directions), at most [limit] per direction.
 Future<List<EntryBinding>> entryBindings(
   DatabaseExecutor db,

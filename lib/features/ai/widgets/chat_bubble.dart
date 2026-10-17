@@ -661,14 +661,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
         data: (r) => r == null
             ? Text(context.t.aiCitedLinesUnavailable, style: muted)
-            : SelectableText(
-                r.content,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textPrimary,
-                  fontSize: 12,
-                  height: 1.5,
-                ),
-              ),
+            : CitedRecordText(r.content, size: 13),
       ),);
     }
 

@@ -596,6 +596,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the reader shows how far in it is', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => [
+              for (var i = 0; i < 200; i++)
+                StoryLineEntry(lineIndex: i, speaker: '甲', content: '第${i + 1}句。'),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const StoryReaderPage(storyId: 'a/long.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('1 / 200'), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-reader-progress-bar')), findsOneWidget);
+    await tester.drag(
+      find.byKey(const ValueKey('story-reader-scroll')),
+      const Offset(0, -3000),
+    );
+    await tester.pumpAndSettle();
+    final shown = tester
+        .widget<Text>(find.byKey(const ValueKey('story-reader-progress')))
+        .data!;
+    expect(int.parse(shown.split(' / ').first), greaterThan(20));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('opened at a line, the synopsis opens downward', (tester) async {
     // Tall enough that the header above the cited line is on screen.
     await tester.binding.setSurfaceSize(const Size(800, 2400));

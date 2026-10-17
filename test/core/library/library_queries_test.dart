@@ -291,6 +291,15 @@ void main() {
     );
   });
 
+  test('a cited record opens the entry it is part of', () async {
+    expect(await entryIdOfRecord(db, 'r_e1'), 'enemy:e1');
+    // An operator's file: the entry of its entity.
+    expect(await entryIdOfRecord(db, 'd1'), 'operator:char_x');
+    // Under ef/ while the file's own id has no prefix (the v0.14.0 asset).
+    expect(await entryIdOfRecord(db, 'ef/d1'), 'operator:char_x');
+    expect(await entryIdOfRecord(db, 'nothing'), isNull);
+  });
+
   test('bindings are listed from both sides', () async {
     final enemy = await entryBindings(db, 'enemy:e1');
     expect(enemy.single.relation, 'appears_in');
