@@ -98,6 +98,7 @@ class GameDataBuildRunner {
         'outputDbPath': options.outputDbPath,
         'existingDbPath': options.existingDbPath,
         'commitSha': options.commitSha,
+        'commitDate': options.commitDate,
         'changes': [
           for (final change in options.changedFiles)
             [
@@ -156,6 +157,7 @@ void gameDataBuildIsolateMain(Map<String, Object?> params) async {
       sourceDir: '${params['sourceDir']}',
       outputDbPath: '${params['outputDbPath']}',
       commitSha: '${params['commitSha']}',
+      commitDate: params['commitDate'] as String?,
       existingDbPath: params['existingDbPath'] as String?,
       changedFiles: changes,
     );

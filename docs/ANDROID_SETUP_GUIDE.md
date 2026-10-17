@@ -82,6 +82,8 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 4. `.\tools\release_app.ps1 -Version <v> -NotesFile <说明.md> [-Stable]`（Linux/云端：`tools/release_app.sh`，`STABLE=1`）：
    推 `release/v<v>` → `android-release.yml` 构建签名并校验证书指纹 `b1b09ebf…e364` → 下载 APK → 建 Release 并上传 APK。
 5. 上传两个知识库的 gz 与 manifest 到同一个 Release（知识库没变也照传，一个 Release 带齐 APK、两个知识库和源码）；用公开地址 HEAD 一次确认 200。
+   然后 `dart run tools/write_gamedata_channel.dart`，用生成的 `build/gamedata_channel.json` 替换 `gamedata-channel` Release 上的同名资产（`GAMEDATA_BUILD_PIPELINE.md` §7）。
+   只更新知识库、不发 App 时，传完库后只换这份文件即可。
 6. 开 PR 把功能分支合回 `main`（开发者合并）；合并后删掉功能分支；撤下被正式版取代的预发布（Release 与 tag）；删掉 `release/v<v>` 分支（tag 指向同一提交）。
 
 建 Release 的请求失败（v0.11.0 遇到 GitHub 500）时：APK 已在 `%TEMP%\arklores_release_<v>`，用 REST 补建 Release 并上传，不要重推 release 分支

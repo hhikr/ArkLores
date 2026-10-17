@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/game.dart';
+import '../../core/gamedata/gamedata_channel.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/widgets/floating_bar.dart';
@@ -27,6 +28,16 @@ class KnowledgeBasePage extends ConsumerStatefulWidget {
 class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
   /// Index into [Game.values].
   int _tab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // A knowledge base uploaded since the app started (or since it last
+    // looked) is found when the page opens.
+    Future.microtask(() {
+      if (mounted) ref.invalidate(gameDataChannelProvider);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

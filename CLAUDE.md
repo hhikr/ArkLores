@@ -107,7 +107,8 @@
 
 - APK 由 GitHub Actions 构建签名：推 `release/<版本>` 触发 `android-release.yml`（证书 SHA-256 `b1b09ebf…e364`）。
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
-- 知识库资产的 URL/SHA 在 `tools/release_gamedata.env`，**先指向将要创建的 Release** 再构建 APK；资产 gz 与 manifest 另行上传。详见 `docs/ANDROID_SETUP_GUIDE.md`。
+- 知识库资产的 URL/SHA 在 `tools/release_gamedata.env`，**先指向将要创建的 Release** 再构建 APK；资产 gz 与 manifest 另行上传。
+  上传后用 `tools/write_gamedata_channel.dart` 写渠道文件，替换 `gamedata-channel` Release 上的那份（App 由它发现只上传、没随版本发的新库）。详见 `docs/ANDROID_SETUP_GUIDE.md`。
 - `release/<版本>` 分支只放构建 APK 的那一个提交：再推会重新构建，APK 哈希会变。
 - 本地 `flutter build apk --release` 没有签名文件时退回 debug key，不能发布。本机试装用 `tools/install_local.ps1 -Build -Kb`。
 

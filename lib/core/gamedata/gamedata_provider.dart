@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../background/background_work.dart';
 import 'game.dart';
+import 'gamedata_channel.dart';
 import 'gamedata_installer.dart';
 
 final gameDataInstallerProvider = Provider<GameDataInstaller>((ref) {
@@ -10,7 +11,7 @@ final gameDataInstallerProvider = Provider<GameDataInstaller>((ref) {
 
 final gameDataInstallStatusProvider =
     FutureProvider<GameDataInstallStatus>((ref) async {
-  return ref.read(gameDataInstallerProvider).getStatus();
+  return channelInstaller(ref, Game.arknights, watch: true).getStatus();
 });
 
 /// 0.12: the Endfield knowledge base's installer (its own file and asset).
@@ -20,8 +21,19 @@ final endfieldInstallerProvider = Provider<GameDataInstaller>((ref) {
 
 final endfieldInstallStatusProvider =
     FutureProvider<GameDataInstallStatus>((ref) async {
-  return ref.read(endfieldInstallerProvider).getStatus();
+  return channelInstaller(ref, Game.endfield, watch: true).getStatus();
 });
+
+/// [game]'s installer, pointed at the official asset of the channel file
+/// when it has a newer one than this build ([withChannel]). The status
+/// [watch]es the channel, so it is worked out again when the file arrives;
+/// until then (and without one) it is the asset baked into the build.
+GameDataInstaller channelInstaller(Ref ref, Game game, {bool watch = false}) {
+  final channel = watch
+      ? ref.watch(gameDataChannelProvider)
+      : ref.read(gameDataChannelProvider);
+  return withChannel(ref.read(installerOf(game)), channel.valueOrNull);
+}
 
 /// [game]'s installer.
 ProviderListenable<GameDataInstaller> installerOf(Game game) =>
@@ -94,7 +106,7 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
     if (state.downloading) return;
     if (!force) {
       try {
-        final status = await _ref.read(installerOf(game)).getStatus();
+        final status = await channelInstaller(_ref, game).getStatus();
         if (status.installed && !status.updateAvailable) return;
       } catch (_) {
         // Cannot tell: download as before.
@@ -118,7 +130,7 @@ class GameDataDownloadNotifier extends StateNotifier<GameDataDownloadState> {
     var lastReported = 0;
     try {
       final installed =
-          await _ref.read(installerOf(game)).installFromReleaseAsset(
+          await channelInstaller(_ref, game).installFromReleaseAsset(
         overwrite: true,
         cancelToken: _token,
         onPhase: (phase, attempt) {

@@ -16,6 +16,11 @@ All notable changes to ArkLores will be documented in this file.
 
 - **A cited record opens its library page**, as a cited story opens the reader: an operator's file reads in its folding parts instead of showing raw `## ` headings in a sheet. The quotes in the evidence list are rendered the same way.
 
+### Knowledge base
+
+- **A knowledge base uploaded after the app was built is found.** The knowledge-base page reads a small channel file from the `gamedata-channel` release when it opens and offers a newer official knowledge base there, if this app can install it; without the file it uses the one the app was built with, as before.
+- **The official knowledge base is ordered against one updated on the phone by the dates of their game-data commits**, which an update now records, not by when the update ran by the phone's clock.
+
 ### Wiki
 
 - **PRTS dark mode is the site's own.** The app no longer restyles PRTS pages with its own colours; it switches the night theme the site already has.
@@ -23,7 +28,7 @@ All notable changes to ArkLores will be documented in this file.
 
 ### Development
 
-- The Endfield build writes operator-file ids under `ef/` like every other Endfield id (takes effect with the next Endfield knowledge base); CI runs on pushes to `main` only (the `dev` branch is gone).
+- The Endfield build writes operator-file ids under `ef/` like every other Endfield id (takes effect with the next Endfield knowledge base); CI runs on pushes to `main` only (the `dev` branch is gone). `tools/write_gamedata_channel.dart` writes the channel file from `tools/release_gamedata.env`.
 
 ## [0.14.0] - 2026-10-11
 

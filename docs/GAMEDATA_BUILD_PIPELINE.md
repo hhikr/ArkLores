@@ -103,16 +103,22 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 
 **官方资产与本机更新的先后（2026-10-11，开发者定）**：游戏数据较新的在前；同一份游戏数据，官方资产在本机更新的之前（它的向量是全的）。
 
-- 库自己知道的：清单里的上游提交（`source_arknights_commit`）和构建时间（`built_at`）；旁边的标记说明来源——`.asset_sha256`（从哪个官方资产装的）、`.local_build`（在本机更新过）。
+- 库自己知道的：清单里的上游提交（`source_arknights_commit`）、那个提交的日期（`source_commit_date`，2026-10-17 起本机更新时写，取 GitHub 的 committer 日期）
+  和构建时间（`built_at`）；旁边的标记说明来源——`.asset_sha256`（从哪个官方资产装的）、`.local_build`（在本机更新过）。
 - 构建 App 时除了资产的 URL 和 SHA，还写进它所基于的提交和那个提交的日期：`tools/release_gamedata.env` 的 `GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE`
   （GitHub 上那个提交的 committer 日期；`install_local.ps1` 和发布工作流都会传）。**发新资产时四个值一起改。** 终末地库不是从仓库来的，没有这两项。
 - 官方卡什么时候提示“更新”（`GameDataInstallStatus.updateReason`）：
   - 手机上是官方资产装的：App 指向的是另一份资产（与原来一样）。
-  - 手机上是本机更新过的：官方资产与它是同一个提交，或官方资产的提交是在那次更新**之后**才有的。本机更新拿的是当时上游的最新提交，
-    所以之后才有的提交一定比它新，之前的提交一定不比它新——不需要知道已装提交本身的日期。其余情况不提示，只留“换回官方版本”（会丢较新的内容，要确认）。
+  - 手机上是本机更新过的：官方资产与它是同一个提交，或官方资产的提交比已装的提交**晚**。比的是两边提交的日期（`source_commit_date`），与手机时钟无关；
+    清单里没有这个日期的旧库退回比“那次更新是什么时候做的”（`built_at`：本机更新拿的是当时上游的最新提交，之后才有的提交一定比它新）。
+    其余情况不提示，只留“换回官方版本”（会丢较新的内容，要确认）。
   - 构建时没写提交的 App（旧的构建方式）不会提示替换本机更新过的库。
 - “用游戏数据更新”卡：检查到的上游最新提交就是官方资产的提交、而官方卡正提示更新时，“拉取并更新”变灰并提示用上面的“更新”。
-- App 不会自己到 GitHub 上找新的资产：只上传不发新的 App，页面不会变。
+- **渠道文件**（2026-10-17）：只上传新库、不发新 App 时，App 从渠道文件知道有新库。文件是 `gamedata_channel.json`，放在固定 tag `gamedata-channel` 的 Release 上
+  （地址是 env 的 `GAMEDATA_CHANNEL_URL`，构建时烘进包里），每个游戏一项：`url`、`sha256`、`commit`、`commit_date`（明日方舟）、`schema_version`、`min_app_build`。
+  App 启动后和每次打开知识库页时读一次（`gameDataChannelProvider`），读不到就照旧用包里的资产。渠道里的资产只在 schema 与本版相同、本版 build 号不小于 `min_app_build`、
+  而且不比包里的资产旧（两边都有提交日期时比日期）时才替换包里的（`withChannel`）；之后“更新”的判断照上面不变。
+  从第一个带渠道的版本起生效：v0.14.0 及更早的 App 不读它。
 
 ## 5. 向量（剧情与资料）
 
@@ -152,10 +158,14 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
    （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，
    `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`），提交。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
-4. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
-5. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
+4. 渠道文件：`dart run tools/write_gamedata_channel.dart`（从 env 写 `build/gamedata_channel.json`；`GAMEDATA_MIN_APP_BUILD` 是能装这两个库的最早 build 号，
+   库的结构或校验要求变了就改成这次的 build 号），在两个库上传之后，替换 `gamedata-channel` Release 上的同名资产（Release 第一次要手动建，tag 名 `gamedata-channel`，
+   不要标成 latest）。**只发库、不发 App 时做 1–3、6、7，最后做这一步**；每次发 App 也要更新渠道文件，否则渠道指着旧库，新 App 会被它带回旧库
+   （没有提交日期的终末地库不比新旧）。
+5. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
+6. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。
-6. 终末地库：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
+7. 终末地库：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
    形如 `{game, database: {fileName}, manifest: {...}}`）上传到同一个 Release，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256` 指向它。
    从 v0.13.0 起每个 Release 都带齐两个库（没变的库原样再传一份，SHA 不变，已装好的不会重新下载），env 的两个 URL 都指向这次的 Release；
    v0.12.0 时两个库曾分在两个 Release 上。上传后用公开地址 HEAD 一次确认 200。
@@ -166,7 +176,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 ## 8. App 端的安装与兼容
 
 - 安装器只接受 schema 5；校验必需表、版本、计数与 SHA；失败保留旧库。断点续传、阶段显示、取消、手动放置 `arklores_gamedata_zh.db.download.gz`。
-- 知识库页在已安装的官方资产与 APK 指向的不同（`.asset_sha256` 标记）时提示更新。
+- 知识库页在已安装的官方资产与 APK（或渠道文件，§4.4）指向的不同（`.asset_sha256` 标记）时提示更新。
 - 首次打开旧库时补建缺的索引（`story_lines(story_id, line_index)`）。
 
 ## 9. 终末地知识库（0.12）
