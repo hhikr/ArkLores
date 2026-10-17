@@ -50,8 +50,8 @@ fz.wiki 没有找到公开接口，且 2026-10-09 在开发机上连不上（命
 | 提示词 | `loreWikiGuide`（`lore_agent_prompts.dart`，只在开启时并入） |
 | 出处核对、引语检查、审稿标签 | `lore_agent_loop.dart`（`wikiCitationPattern`） |
 | 开关 | `AnswerOptions.wiki`（输入框“回答选项”菜单的“Wiki 资料”，默认开） |
-| 答案里的出处 | `investigation_ui.dart`（`AnswerBlock.wikis`）、`story_answer_body.dart`（证据卡的 Wiki 行、`WikiCitationSheet`）、`chat_bubble.dart`（出处树、工作过程） |
-| 在 Wiki 标签打开 | `wikiOpenRequestProvider`（`handoff_provider.dart`），`WikiBrowserPage` 监听 |
+| 答案里的出处 | `lib/features/ai/investigation_ui.dart`（`AnswerBlock.wikis`）、`lib/features/ai/widgets/story_answer_body.dart`（证据卡的 Wiki 行、`WikiCitationSheet`）、`lib/features/ai/widgets/chat_bubble.dart`（出处树、工作过程） |
+| 在 Wiki 标签打开 | `wikiOpenRequestProvider`（`lib/shared/providers/handoff_provider.dart`），`WikiBrowserPage` 监听 |
 
 ## 6. 失败与离线
 

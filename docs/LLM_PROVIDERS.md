@@ -45,7 +45,7 @@
 
 ## 向量服务
 
-- 默认百炼 `https://dashscope.aliyuncs.com/compatible-mode/v1`，`qwen3.7-text-embedding`，512 维。实测 0.706 token/字。
+- 默认百炼 `https://dashscope.aliyuncs.com/compatible-mode/v1`，`qwen3.7-text-embedding`，512 维。实测约 0.706 token/字；代码里的估算系数取 0.7（`embeddingTokensPerChar`，见 `GAMEDATA_BUILD_PIPELINE.md` §5）。
 - 并发 ≥5 不被限流。
 
 ## 测试

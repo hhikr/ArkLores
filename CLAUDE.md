@@ -47,8 +47,8 @@
     答案被退回时整轮回档；“已读”是一本账（`SeenLines`），出处裁到读过的行；数据库连接独立、空回复只对一轮降级、取消立即生效。
   - 界面：输入框只有一个选项按钮（面板不取焦点）；工作过程写成明细（工具名、参数原文、字数、标记，点开看完整结果）；对话记录是对话列表；
     知识库页每个游戏一页。
-  - 知识库：没人读的表全部删掉（明日方舟库 701 → 约 285 MB），**不要把这些表或“覆盖层”加回来**，加表前先写清谁读它；
-    资料向量（`record_chunk_vectors`）；复刻活动的关卡不再被当成复刻删掉（`docs/KNOWLEDGE_BASE_LESSONS.md` §“复刻不是独立内容”）；
+  - 知识库：没人读的表全部删掉（明日方舟库未压缩 679 → 299 MB），**不要把这些表或“覆盖层”加回来**，加表前先写清谁读它；
+    资料向量（`record_chunk_vectors`）；复刻活动的关卡不再被当成复刻删掉（`docs/KNOWLEDGE_BASE_LESSONS.md` §2.2 的“复刻不是独立内容”）；
     “用游戏数据更新”能真正取消、不留失败的副本、更新后按钮变灰；官方资产与本机更新按游戏数据新旧定先后（`docs/GAMEDATA_BUILD_PIPELINE.md` §4.4）。
     v0.14.0 的明日方舟库基于上游 `17759cc`（2026-10-08）。旧版 App 装不了 0.14 的库（v0.13.0 的校验要求已删掉的表），所以新库只随新版本发布。
   - 真机测试工具：`tools/phone_ask.dart` + `install_local.ps1 -Bridge`（`lib/features/ai/phone_bridge.dart`，只在本地构建里），见 `docs/ANDROID_SETUP_GUIDE.md`。
@@ -63,8 +63,9 @@
 - `docs/WIKI_EVIDENCE.md`：问答的 Wiki 检索与证据（站点、段落、快照、出处）。
 - `docs/LIBRARY_AGENT_GUIDE.md`：资料页结构说明（问答 Agent 查库前参考；正文在 `loreLibraryManual`，由 `guide` 工具给出）。
 - `docs/RETRIEVAL_QA.md`：按改动范围的验收清单。`test/README.md`：测试目录、夹具与约定。
-- `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：仍开放的问题。
+- `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：仍开放的问题。`docs/KNOWN_ISSUES_INVESTIGATION_2026-10-12.md`：2026-10-12 真机反馈的调查细节（会话对照、代码位置、证据）。
 - `docs/ANDROID_SETUP_GUIDE.md`：本机构建、试装、发布；`docs/CLOUD_DEV.md`：云端会话；`docs/WIKI_SITE_ADAPTATION.md`：Wiki 站点适配。
+- `docs/KNOWN_ISSUES_INVESTIGATION_2026-10-12.md`：2026-10-12 真机反馈与问答会话的调查细节（`KNOWN_LIMITATIONS_AND_DEBT.md` §8 的参考）。
 
 ## Do
 

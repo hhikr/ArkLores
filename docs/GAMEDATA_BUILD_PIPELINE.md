@@ -1,7 +1,7 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。明日方舟库（§1–8）与
-> 终末地库（§9，只能在本机从游戏客户端构建）都是 v0.13.0 Release 的资产（文件与 v0.11.0、v0.12.0 发布的相同）。
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。两者都是 v0.14.0 Release 的资产：明日方舟库基于上游 `17759cc`（2026-10-08，瘦身后的库），
+> 终末地库是瘦身后带资料向量的那份（只能在本机从游戏客户端构建，§9）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `AI_ARCHITECTURE.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 
@@ -44,7 +44,7 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 `normalized_records` 里剧情的切块副本（`parent_type = 'story_file'`，正文在 `story_lines`）、由说话人名字造的实体（`source_type = 'story_speaker'`）。
 清单在 `gamedata_schema.dart` 的 `obsoleteGamedataTables` / `dropObsoleteGamedataData`。schema 版本没变（仍是 5）：有没有这些表对 App 是一样的，
 旧资产照常能装；App 内更新一个带着它们的库时先删掉再 `VACUUM`（进度“清理不再使用的数据”），命令行用 `tools/compact_gamedata.dart --db=<库>`。
-明日方舟库 701 → 292 MB（下载 220 → 112 MB），终末地 62 → 31 MB；剧情行、资料、条目与之前逐行相同，向量按行迁移。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
+明日方舟库未压缩 679 → 299 MB（679,129,088 → 299,241,472 字节），下载 210 → 119 MB（209,900,351 → 119,420,657 字节，两版的 manifest），终末地 62 → 31 MB；剧情行、资料、条目与之前逐行相同，向量按行迁移。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
 
 ## 4. 四条构建路径（同一套代码）
 
@@ -66,7 +66,7 @@ dart run tools/update_gamedata.dart --db=<库> --vectors-only [--embed]
 # --output=<新库>（默认 <库>.updated）  --replace（替换，旧库留作 .previous）
 ```
 
-流程：比较两个提交的文件树（excel/story/levels 按 blob 哈希）→ 只下载变化的文件与缺的上下文表（6 个并发）→ 复制旧库，按
+流程：比较两个提交的文件树（excel/story/levels 按 blob 哈希）→ 只下载变化的文件与缺的上下文表（并发下载）→ 复制旧库，按
 “数据表 → 关卡文件 → 剧情文件”逐个先清后导；上下文表变化时按完整构建的顺序重读全部条目表 → 重算派生层、目录 → 校验后原子替换 →
 更新报告。没有装库、旧 schema、旧提交已不在上游时自动完整重建。GitHub 匿名额度 60 次/小时，token 来自 `tools/github_pat` 或 `GITHUB_TOKEN`。
 
@@ -134,7 +134,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 
 - 默认百炼 `qwen3.7-text-embedding`，512 维；key 来自 gitignored 的 `tools/embedding-apiKey.csv`。真实调用要开发者同意。
 - 迁移按行对齐（忽略省略号点数、空白、字面 `\n`），首尾都对得上的旧向量搬到新行号，其余才嵌入。
-- App 的“语义检索”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
+- App 的“语义检索”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.7 token/字，`embeddingTokensPerChar`；¥0.0005/千 token，`bailianYuanPer1kTokens`；估算）；
   模型/维度与库里不一致时拒绝混用。0.14：每个游戏的知识库页各有一张（`storyVectorProvider(game)`，以前只看明日方舟库）；
   没有缺口时只有两行（剧情/资料向量各多少条、“完整”），有缺口、模型不一致或运行中才展开成操作区。
 - 向量只是定位线索；证据是 `read_story` / `read_record` 读到的原文。
@@ -196,7 +196,7 @@ URL 仍指向已发布的资产，带着新 SHA 构建的 APK 会拒收它。
   任务面板的章节同理：`--types MonoBehaviour --names ^(main_e\d+|chr_\d+_[a-z]+_e\d+)$ --export_type JSON`（`ChapterInfo` 对象，由 `ChapterTable` 列出；
   2026-10 客户端在 StreamingAssets 有 21 个，Persistent 没有覆盖）。不知道类名时先按名字导出 `MonoScript` 找类（`ChapterTable`、`ChapterInfo`），再导实例。
 - **不要加 `--packed-game-store`**：kit 的完整流程会把 Json/LipSync 写进一个 SQLite，这一步在本机卡死（上千个线程、无 CPU 无 IO），而它只存口型数据。
-- 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（`tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
+- 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（本机在 `C:\Users\hhikr\endfield\kit\tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
   （`C:\Users\hhikr\endfield\python312`，`._pth` 里加 kit 目录）。工作目录要在 NTFS 上（exFAT 上 git 拒绝、不能建硬链接）。
   Claude Code 的 shell 设了 `NoDefaultCurrentDirectoryInExePath`，批处理要用完整路径调用。
 - 任务面板的分类名在 Lua UI 脚本里（`-b lua` 导出的是明文 Lua）：`MissionCtrl.lua` 用 `GEnums.MissionViewType` 的 Main/Discovery/Side/Activity/Other，

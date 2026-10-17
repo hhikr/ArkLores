@@ -10,7 +10,7 @@ ArkLores 的 Wiki 浏览器使用 WebView 展示远程站点。站点适配分�
 
 | ID | 来源 | 前端结构 | 主题机制 |
 | --- | --- | --- | --- |
-| `prts` | PRTS Wiki | MediaWiki | MediaWiki 原生主题 class |
+| `prts` | PRTS Wiki | MediaWiki | MediaWiki 原生主题 class（2026-10-12 真机反馈：PRTS 新版站点自带黑夜模式，本 App 的 DOM 适配仍是硬改，待改为只跟随站点，见 `KNOWN_LIMITATIONS_AND_DEBT.md` §8） |
 | `endfield` | Endfield Wiki | 用户在设置中选择 fz 或 Warfarin | 按当前 URL 自动选择站点策略 |
 
 Endfield Wiki 只占用一个标签页。设置页编辑该来源或添加自定义来源时，URL
@@ -36,6 +36,9 @@ Warfarin 的 CSS 使用 `.dark` 选择器切换一组语义变量。ArkLores 只
 在 sessionStorage，降低站点导航和 WebView 重新加载时的白色闪屏。
 
 ## 阅读器策略
+
+> 2026-10-17：阅读器模式（本节与 `wiki_reader_scripts.dart`）已列为待删：资料页已经是阅读的主要途径，PRTS 新版站点也自带黑夜模式。
+> 删除前本节描述的是现状，见 `KNOWN_LIMITATIONS_AND_DEBT.md` §8。
 
 阅读器仍然使用内置 LXGW WenKai 字体，但正文根不再固定假设
 `#mw-content-text`：

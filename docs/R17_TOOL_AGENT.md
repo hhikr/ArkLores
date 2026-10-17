@@ -32,7 +32,7 @@ v0.10 之前的问答是分步流程（决策器看压缩后的状态 → 原文
 | 文件 | 作用 |
 |---|---|
 | `lib/core/agent/lore_agent_loop.dart` | 循环、文本协议回退、上下文折叠、出处核对、状态 |
-| `lib/core/agent/lore_tools.dart`、`tools/search_tool.dart`、`tools/wiki_tools.dart` | 工具；`SeenLines` 是唯一的“已读”账本 |
+| `lib/core/agent/lore_tools.dart`、`lib/core/agent/tools/search_tool.dart`、`lib/core/agent/tools/wiki_tools.dart` | 工具；`SeenLines` 是唯一的“已读”账本 |
 | `lib/core/agent/tool_call_gate.dart` | 工具调用守门 |
 | `lib/core/agent/search_planner.dart` | 拟定第一批查找 |
 | `lib/core/agent/lore_agent_prompts.dart`、`lore_endfield_prompts.dart` | 提示词，按角色组合（`loreRolePrompt`：作答 / 子助手 / 拟定 / 审稿 / 整理） |

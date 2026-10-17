@@ -46,7 +46,7 @@ flutter test        # 约 1 分钟，全部离线
 离线（mock LLM）：
 
 - `test/core/agent/lore_agent_loop_test.dart`：只读 SQL 边界与超时中止、各工具输出、只追加的请求、出处核对与退回、子 agent、文本协议回退、上下文折叠、追问。
-- `test/core/agent/tools/search_story_lines_test.dart`、`test/core/gamedata/*`：关键词/向量/RRF、近似名、目录。
+- `test/core/agent/lore_tools_test.dart`、`test/core/gamedata/*`：检索工具（关键词/向量/RRF、分布、近似名、目录）、知识库检索面。
 - `test/core/llm/openai_client_test.dart`：各服务商的怪癖（`LLM_PROVIDERS.md`）。
 - `test/features/ai/*`：答案气泡、工作过程时间线、出处、输入框。
 - Wiki（0.13）：`test/core/wiki/*`、`test/core/agent/lore_agent_wiki_test.dart`、`test/features/ai/wiki_citations_test.dart`；
