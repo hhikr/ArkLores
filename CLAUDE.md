@@ -65,7 +65,6 @@
 - `docs/RETRIEVAL_QA.md`：按改动范围的验收清单。`test/README.md`：测试目录、夹具与约定。
 - `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：仍开放的问题。`docs/KNOWN_ISSUES_INVESTIGATION_2026-10-12.md`：2026-10-12 真机反馈的调查细节（会话对照、代码位置、证据）。
 - `docs/ANDROID_SETUP_GUIDE.md`：本机构建、试装、发布；`docs/CLOUD_DEV.md`：云端会话；`docs/WIKI_SITE_ADAPTATION.md`：Wiki 站点适配。
-- `docs/KNOWN_ISSUES_INVESTIGATION_2026-10-12.md`：2026-10-12 真机反馈与问答会话的调查细节（`KNOWN_LIMITATIONS_AND_DEBT.md` §8 的参考）。
 
 ## Do
 

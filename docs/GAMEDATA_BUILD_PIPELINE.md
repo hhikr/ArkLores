@@ -66,7 +66,7 @@ dart run tools/update_gamedata.dart --db=<库> --vectors-only [--embed]
 # --output=<新库>（默认 <库>.updated）  --replace（替换，旧库留作 .previous）
 ```
 
-流程：比较两个提交的文件树（excel/story/levels 按 blob 哈希）→ 只下载变化的文件与缺的上下文表（并发下载）→ 复制旧库，按
+流程：比较两个提交的文件树（excel/story/levels 按 blob 哈希）→ 只下载变化的文件与缺的上下文表（6 个并发）→ 复制旧库，按
 “数据表 → 关卡文件 → 剧情文件”逐个先清后导；上下文表变化时按完整构建的顺序重读全部条目表 → 重算派生层、目录 → 校验后原子替换 →
 更新报告。没有装库、旧 schema、旧提交已不在上游时自动完整重建。GitHub 匿名额度 60 次/小时，token 来自 `tools/github_pat` 或 `GITHUB_TOKEN`。
 
