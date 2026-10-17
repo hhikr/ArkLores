@@ -5,7 +5,7 @@
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Android 应用（Flutter）。它把游戏解包文本整理成本地知识库（每个游戏一个），
 在上面提供可以阅读的资料页和带原文出处的剧情问答，并内置 PRTS 与终末地 Wiki 的浏览。
 
-最新版本：[v0.14.0](https://github.com/hhikr/ArkLores/releases/tag/v0.14.0)
+最新版本：[v0.14.5](https://github.com/hhikr/ArkLores/releases/tag/v0.14.5)
 
 ## 功能
 
@@ -19,12 +19,14 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
   支持任意 OpenAI 兼容的模型服务（默认智谱 `glm-5.3-flash`），可选配置向量服务做语义检索（没有时退回关键词并提示）。
 - **终末地**（0.12）：第二个知识库——干员档案、语音记录与干员情报，情报档案库，敌人、武器、物品描述，以及全部剧情对话（一个任务一篇，按游戏的播放顺序）；
   主线按章、进程排列，干员的角色纪事、Baker 话题、帝江号互动在干员页上。问答每次两个游戏都查。
-- **Wiki**：PRTS 与终末地 Wiki（fz.wiki / Warfarin）双站浏览、阅读模式、书签。
+- **Wiki**：PRTS 与终末地 Wiki（fz.wiki / Warfarin）双站浏览、书签；深色模式用站点自己的主题。
 - **知识库更新**：从 Release 下载整包；明日方舟库还可以在 App 内检查上游变化、只下载变化的文件做增量更新。两者按游戏数据的新旧排先后：数据较新的在前，同一份数据时官方库在前。
 
 ## 发布资产
 
-- [v0.14.0](https://github.com/hhikr/ArkLores/releases/tag/v0.14.0)：`ArkLores-0.14.0.apk`（项目签名，可覆盖安装 v0.10.0 及之后的版本；从 v0.9 及更早版本升级需先卸载一次）；
+- [v0.14.5](https://github.com/hhikr/ArkLores/releases/tag/v0.14.5)：`ArkLores-0.14.5.apk`（项目签名，可覆盖安装 v0.10.0 及之后的版本；从 v0.9 及更早版本升级需先卸载一次）。
+  知识库仍是 v0.14.0 Release 上的两份；之后只上传新库时，App 会从 `gamedata-channel` Release 上的渠道文件发现它。
+- [v0.14.0](https://github.com/hhikr/ArkLores/releases/tag/v0.14.0)：
   `arklores_gamedata_zh.db.gz`：明日方舟知识库（schema 5，游戏数据截至 2026-10-08，含剧情与资料向量、故事目录，约 119 MB），SHA-256
   `52b756f018fd2a901372213acf2b5959bd486eaed5cfff3954161dd44c5c2a76`；`gamedata_manifest.json`：来源提交、计数、大小与哈希；
   `arklores_endfield_zh.db.gz`：终末地知识库（schema 5，含剧情与资料向量，约 14 MB），SHA-256

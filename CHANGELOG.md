@@ -2,7 +2,9 @@
 
 All notable changes to ArkLores will be documented in this file.
 
-## [Unreleased]
+## [0.14.5] - 2026-10-17
+
+Fixes from the 2026-10-17 device review, and the knowledge-base channel. The knowledge bases are still the ones of v0.14.0.
 
 ### Library and reader
 

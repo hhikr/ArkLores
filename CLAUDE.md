@@ -3,7 +3,7 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.14.0（正式版，2026-10-11，Android build 33）。两个知识库附在 v0.14.0 Release 上（明日方舟库基于上游 `17759cc`，终末地库是瘦身后带资料向量的那份），
+- **已发布**：v0.14.5（正式版，2026-10-17，Android build 34；只有 App，知识库仍是 v0.14.0 的）。两个知识库附在 v0.14.0 Release 上（明日方舟库基于上游 `17759cc`，终末地库是瘦身后带资料向量的那份），
   `tools/release_gamedata.env` 指向 v0.14.0。v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
   下一轮开发从 `main` 新开分支。
 - 未经开发者明确同意不发版、不跑花钱的真实 API 测试；Android build 号每次发版递增。
@@ -54,6 +54,9 @@
   - 真机测试工具：`tools/phone_ask.dart` + `install_local.ps1 -Bridge`（`lib/features/ai/phone_bridge.dart`，只在本地构建里），见 `docs/ANDROID_SETUP_GUIDE.md`。
     **手机上的验证由开发者自己做**：把包和库装好、说明要看哪里即可，不要替他解锁、点按或跑更新。
   - 没有在真机屏幕上看过的界面改动、没有被真实模型再触发的修正，列在 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §7。
+- **0.14.5（2026-10-17）**：真机反馈的修正——干员语音（两个游戏）、档案默认展开/收起的设置、梗概向下展开、阅读进度、引用的资料打开资料页、
+  PRTS 用站点自带的黑夜模式、删掉 Wiki 阅读模式与“转交给 AI”；知识库渠道文件（`gamedata_channel.json`，`gamedata-channel` Release）与按提交日期比新旧；
+  终末地档案 id 带 `ef/`（要重建终末地库才生效）。悬浮栏自动隐藏留到 UI 重构。
 ## 文档索引
 
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
