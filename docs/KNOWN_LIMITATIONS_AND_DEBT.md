@@ -23,6 +23,10 @@
 | 中 | PRTS 黑夜模式与阅读器模式是硬改 DOM 的适配，阅读器模式在资料页存在后已过时；Wiki 的“转交给 AI”过时 | §8 |
 | 中 | 长文阅读器没有进度显示（看不到读到第几行） | §8 |
 | 中 | 悬浮 UI 没有自动隐藏、唤起手势未定 | §8 |
+| 高 | 干员语音在明日方舟的资料页里不显示：语音行挂在干员条目下，但资料页对有实体 id 的干员只读 `entity_documents`，提前返回 | §10 |
+| 高 | 终末地干员语音在资料页里显示“一片黑”（具体形态未确认，需要截图） | §10 |
+| 中 | 干员页的各个折叠段默认展开，没有配置项决定哪些默认折叠 | §10 |
+| 中 | 阅读页里梗概展开时，标题和上边界向上弹开：梗概在反向列表里，增高时向上生长 | §10 |
 | 低 | 长文件未拆（`lore_agent_loop.dart` 等）；iOS 未验证；签名 keystore 只有一份备份 | §3、§4 |
 
 “设计如此”的项（人物身份只在问答时确认、审稿不加针对某类剧情的检查项、不写玩法数值）不列入改正清单。
@@ -164,6 +168,22 @@
 | Wiki“转交给 AI”过时 | `wiki_browser_page.dart` 的 `WikiAiTarget` 底部弹窗；问答 Agent 已有 `wiki_search` / `wiki_read` | 删除，或改为把当前页作为问答上下文（待定） |
 | 悬浮 UI 不会自动隐藏 | `FloatingBar` / `FloatingScaffold` 常驻；PRTS 的 dock 为避开 App 的 UI 下移（`_syncDockInsets`）。想要翻页或静止后收起、单点唤起，但担心频繁唤起 | 待定方案：A 单击唤起、翻页或静止约 3 秒收回（误唤起与选字冲突）；B 上下滑收起、停止后展开（少误触、发现性差）；C 只在顶部或底部边缘热区唤起（误触最少）。WebView 收起时要同步改网页内边距，防止抖动 |
 
-## 9. 范围
+## 9. 资料页复核（2026-10-17）
+
+只记录与评估，没有改代码。范围：`lib/features/library/entry_page.dart`、`reading_text.dart`（`FoldSection`、`ProfileText`、`VoiceLines`）、`lib/core/library/library_queries.dart`（`entryTexts`）、`lib/features/ai/story_reader_page.dart`（梗概与列表锚点）。
+
+| 问题 | 根因 | 评估与方向 |
+| --- | --- | --- |
+| 明日方舟干员语音不显示 | `entryTexts` 对 `documentEntryTypes`（干员）且有 `entityId` 的条目只返回 `entity_documents`（`operator_profile_bundle`，843 条，其中只有 52 条含“语音”段），随即返回。语音行在 `normalized_records`（`category='operator', subtype='voice'`，共 18237 行，挂在干员条目 `operator:char_*` 下，如阿米娅 110 行），因此被跳过 | 修复方向：合并两个来源，或由语音行生成语音段。注意 AK 的语音没有 `## 语音` 标题，要按 `subtype` 而不是标题识别；`VoiceLines` 的 `标题：台词` 解析要对 AK 的 `交谈1` 等标题验证。影响范围：所有 AK 干员的语音 |
+| 终末地干员语音“一片黑” | 终末地语音来自 `entity_documents`（`profile`，33 条）的 `## 语音记录` 段，`ProfileText.isVoice` 命中后走 `VoiceLines`。代码里 `VoiceLines` 的标题与台词都用 `theme.textPrimary` / `textSecondary`，浅色主题下不应为黑；容器背景用 `bgPrimary` 半透明。未找到会让文字变黑的分支 | 需要截图确认是“文字不可见”“色块”还是“整段区域”；下一步在真机或截图上看 `VoiceLines` 的渲染，再决定。不要在没复现前改颜色 |
+| 干员页折叠段默认展开，没有配置 | `ProfileText` 对每段 `FoldSection(initiallyOpen 默认 true)`；`FoldSection` 的开合状态只在 `_FoldSectionState` 里，不持久化。干员页没有设置项 | 方向：新增“资料页折叠”设置，按段（简介、档案、语音、综合检测等）记录默认开合，由 `ProfileText` 读取；`FoldSection` 的 `initiallyOpen` 参数已存在。与 CLAUDE.md“档案类文档每段可折叠、默认展开”的约定要一并改 |
+| 梗概展开时标题向上弹开 | 阅读页的 `CustomScrollView` 用 `center` 分两段：`_center` 之前的反向 `SliverList` 从锚点向上构建。梗概在 `_item(0)`（标题区）里，只在打开位置不在开头时（`_center = r + 1`，即从历史、引用或续读进入）才位于反向段。反向段里的项增高时向上生长，它的上边界与“官方梗概”四个字随之上移；从头打开时（`_center = 0`）梗概在正向段，向下展开，正常 | 根因是列表结构，不是 `AnimatedSize`（它用 `topCenter` 对齐，本身正确）。方向：把梗概放到不随锚点变化的位置（例如锚点之上单独一段，或固定在列表顶部的非锚点区），或展开时补偿滚动偏移。注意这与“不做贴底跟随、阅读位置上方内容不变高”的约定相关 |
+
+### 对开发者的问题
+
+1. 第二条“一片黑”的截图：是文字看不见、整块变黑，还是别的？
+2. 第一条的语音，是否要在干员页里与档案段同样可折叠、与“折叠设置”一起处理？
+
+## 10. 范围
 
 - 明日方舟与终末地是两个独立的库；跨游戏只在检索面合并（`MultiGameRetrieval`），不建跨游戏的关系。
