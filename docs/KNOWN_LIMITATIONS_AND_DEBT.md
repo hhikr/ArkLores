@@ -175,14 +175,14 @@
 | 问题 | 根因 | 评估与方向 |
 | --- | --- | --- |
 | 明日方舟干员语音不显示 | `entryTexts` 对 `documentEntryTypes`（干员）且有 `entityId` 的条目只返回 `entity_documents`（`operator_profile_bundle`，843 条，其中只有 52 条含“语音”段），随即返回。语音行在 `normalized_records`（`category='operator', subtype='voice'`，共 18237 行，挂在干员条目 `operator:char_*` 下，如阿米娅 110 行），因此被跳过 | 修复方向：合并两个来源，或由语音行生成语音段。注意 AK 的语音没有 `## 语音` 标题，要按 `subtype` 而不是标题识别；`VoiceLines` 的 `标题：台词` 解析要对 AK 的 `交谈1` 等标题验证。影响范围：所有 AK 干员的语音 |
-| 终末地干员语音“一片黑” | 终末地语音来自 `entity_documents`（`profile`，33 条）的 `## 语音记录` 段，`ProfileText.isVoice` 命中后走 `VoiceLines`。代码里 `VoiceLines` 的标题与台词都用 `theme.textPrimary` / `textSecondary`，浅色主题下不应为黑；容器背景用 `bgPrimary` 半透明。未找到会让文字变黑的分支 | 需要截图确认是“文字不可见”“色块”还是“整段区域”；下一步在真机或截图上看 `VoiceLines` 的渲染，再决定。不要在没复现前改颜色 |
-| 干员页折叠段默认展开，没有配置 | `ProfileText` 对每段 `FoldSection(initiallyOpen 默认 true)`；`FoldSection` 的开合状态只在 `_FoldSectionState` 里，不持久化。干员页没有设置项 | 方向：新增“资料页折叠”设置，按段（简介、档案、语音、综合检测等）记录默认开合，由 `ProfileText` 读取；`FoldSection` 的 `initiallyOpen` 参数已存在。与 CLAUDE.md“档案类文档每段可折叠、默认展开”的约定要一并改 |
+| 终末地干员语音显示为一整块灰色、看不见文字（截图：别礼的“语音记录 · 82”展开后） | 终末地语音来自 `entity_documents`（`profile`，33 条）的 `## 语音记录` 段，`ProfileText.isVoice` 命中后走 `VoiceLines`。`VoiceLines` 的容器是 `bgPrimary` 半透明（`VoiceLines` 约 368 行），文字是 `textPrimary` / `textSecondary`。终末地的颜色 token 只有浅色一套（`endfield_theme_tokens.dart`，`isDark = false`），但截图里卡片是深色的，两者对不上，代码里还没找到解释。灰块是 token 错配还是别的渲染问题，需要在带主题的截图（`ARKLORES_SHOT_DIR`）里复现后才能定 | 下一步：用终末地主题渲染 `VoiceLines` 并截图，对比 `bgPrimary` / `textPrimary` 的实际值；不要在没复现前改颜色 |
+| 干员页折叠段默认展开，没有配置 | `ProfileText` 对每段 `FoldSection(initiallyOpen 默认 true)`；`FoldSection` 的开合状态只在 `_FoldSectionState` 里，不持久化。干员页没有设置项 | 方向（已定）：新增“资料页折叠”设置，两档——全部默认展开 / 全部默认关闭，由 `ProfileText` 读取后传给各段的 `FoldSection(initiallyOpen)`；`FoldSection` 的参数已存在。与 CLAUDE.md“档案类文档每段可折叠、默认展开”的约定要一并改（该约定现在依赖设置） |
 | 梗概展开时标题向上弹开 | 阅读页的 `CustomScrollView` 用 `center` 分两段：`_center` 之前的反向 `SliverList` 从锚点向上构建。梗概在 `_item(0)`（标题区）里，只在打开位置不在开头时（`_center = r + 1`，即从历史、引用或续读进入）才位于反向段。反向段里的项增高时向上生长，它的上边界与“官方梗概”四个字随之上移；从头打开时（`_center = 0`）梗概在正向段，向下展开，正常 | 根因是列表结构，不是 `AnimatedSize`（它用 `topCenter` 对齐，本身正确）。方向：把梗概放到不随锚点变化的位置（例如锚点之上单独一段，或固定在列表顶部的非锚点区），或展开时补偿滚动偏移。注意这与“不做贴底跟随、阅读位置上方内容不变高”的约定相关 |
 
-### 对开发者的问题
+### 开发者的决定（2026-10-17）
 
-1. 第二条“一片黑”的截图：是文字看不见、整块变黑，还是别的？
-2. 第一条的语音，是否要在干员页里与档案段同样可折叠、与“折叠设置”一起处理？
+- 折叠设置是两档：**全部默认展开** / **全部默认关闭**，不按段配置。范围是干员页的各折叠段（`ProfileText` 里的 `FoldSection`）；任务梗概的“永远默认折叠”不受影响。
+- 第二条的截图已看：语音区域是一整块灰色，文字不可见。原先描述的“一片黑”就是这个。
 
 ## 10. 范围
 
