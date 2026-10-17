@@ -118,23 +118,9 @@ void main() {
     });
   });
 
-  group('Wiki reader', () {
-    test('reader mode, font scale (clamped) and dark mode (unset = follow)',
+  group('Wiki browser', () {
+    test('dark mode (unset = follow)',
         () async {
-      expect(await service.loadWikiReaderMode(), isFalse);
-      await service.saveWikiReaderMode(true);
-      expect(await service.loadWikiReaderMode(), isTrue);
-
-      expect(await service.loadWikiReaderFontScale(), 1.0);
-      await service.saveWikiReaderFontScale(1.2);
-      expect(await service.loadWikiReaderFontScale(), 1.2);
-      await service.saveWikiReaderFontScale(5);
-      expect(await service.loadWikiReaderFontScale(), 1.38);
-      expect(
-        await withStored({'wiki_reader_font_scale': '9'}).loadWikiReaderFontScale(),
-        1.0,
-      );
-
       expect(await service.loadWikiDarkMode(), isNull);
       await service.saveWikiDarkMode(false);
       expect(await service.loadWikiDarkMode(), isFalse);

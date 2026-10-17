@@ -261,6 +261,45 @@ void main() {
     expect(await entryTexts(db, (await entryById(db, 'skin:nodoc'))!), isEmpty);
   });
 
+  test("an operator's voice lines follow its document as one more part",
+      () async {
+    for (final (i, (title, line)) in [
+      ('任命助理', '第一句。'),
+      ('交谈1', '第二句。'),
+    ].indexed) {
+      await insertRecord(
+        db,
+        'voice_$i',
+        contentType: 'operator_voice',
+        content: line,
+        category: 'operator',
+        subtype: 'voice',
+        fields: {
+          'title': title,
+          'section': title,
+          'entry_id': 'operator:char_x',
+          'line_start': 0,
+        },
+      );
+    }
+    final op = (await entryById(db, 'operator:char_x'))!;
+    final doc = (await entryTexts(db, op)).single.content;
+    expect(doc, startsWith('## 基础信息'));
+    expect(
+      doc,
+      endsWith('## $operatorVoiceSection\n任命助理：第一句。\n交谈1：第二句。'),
+    );
+  });
+
+  test('a cited record opens the entry it is part of', () async {
+    expect(await entryIdOfRecord(db, 'r_e1'), 'enemy:e1');
+    // An operator's file: the entry of its entity.
+    expect(await entryIdOfRecord(db, 'd1'), 'operator:char_x');
+    // Under ef/ while the file's own id has no prefix (the v0.14.0 asset).
+    expect(await entryIdOfRecord(db, 'ef/d1'), 'operator:char_x');
+    expect(await entryIdOfRecord(db, 'nothing'), isNull);
+  });
+
   test('bindings are listed from both sides', () async {
     final enemy = await entryBindings(db, 'enemy:e1');
     expect(enemy.single.relation, 'appears_in');

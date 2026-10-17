@@ -10,12 +10,13 @@ import 'package:http/testing.dart';
 import 'git_tree_mock.dart';
 
 /// Serves [commits] (commit → path → content, paths from the repository
-/// root) with [latest] as the branch head. Every request URL is added to
+/// root) with [latest] (made at [latestDate]) as the branch head. Every request URL is added to
 /// [requests]. A data table missing from a commit is served as `{}` (the
 /// update downloads every context table it does not have).
 MockClient fakeGitHub(
   Map<String, Map<String, String>> commits, {
   required String latest,
+  String? latestDate,
   List<Uri>? requests,
 }) {
   String blob(String content) => sha1.convert(utf8.encode(content)).toString();
@@ -32,7 +33,16 @@ MockClient fakeGitHub(
       case 'api.github.com' when segments.contains('trees'):
         return trees(request);
       case 'api.github.com' when segments.contains('commits'):
-        return http.Response(jsonEncode({'sha': latest}), 200);
+        return http.Response(
+          jsonEncode({
+            'sha': latest,
+            if (latestDate != null)
+              'commit': {
+                'committer': {'date': latestDate},
+              },
+          }),
+          200,
+        );
       case 'raw.githubusercontent.com':
         // /<owner>/<repo>/<sha>/<path…>
         final files = commits[segments[2]];

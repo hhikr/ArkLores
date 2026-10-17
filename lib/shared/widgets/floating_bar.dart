@@ -24,12 +24,17 @@ class FloatingBar extends StatelessWidget {
     required this.child,
     this.height,
     this.padding = EdgeInsets.zero,
+    this.footer,
   });
 
   final AppThemeTokens theme;
   final Widget child;
   final double? height;
   final EdgeInsetsGeometry padding;
+
+  /// Laid along the plate's bottom edge, over its full width (outside
+  /// [padding]).
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +48,14 @@ class FloatingBar extends StatelessWidget {
         foregroundPainter: CornerTickPainter(theme.accentPrimary),
         child: SizedBox(
           height: height,
-          child: Padding(padding: padding, child: child),
+          child: footer == null
+              ? Padding(padding: padding, child: child)
+              : Stack(
+                  children: [
+                    Padding(padding: padding, child: child),
+                    Positioned(left: 0, right: 0, bottom: 0, child: footer!),
+                  ],
+                ),
         ),
       ),
     );
@@ -268,9 +280,14 @@ class FloatingScaffold extends ConsumerWidget {
     this.scrollUnder = false,
     this.floatingActionButton,
     this.backgroundColor,
+    this.titleFooter,
   });
 
   final String title;
+
+  /// A thin strip along the bottom edge of the title plate (the reader's
+  /// progress), over the plate's full width.
+  final Widget? titleFooter;
   final Widget body;
   final List<Widget> actions;
   final bool scrollUnder;
@@ -338,6 +355,7 @@ class FloatingScaffold extends ConsumerWidget {
                               height: floatingBarHeight,
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
+                              footer: titleFooter,
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 widthFactor: 1,

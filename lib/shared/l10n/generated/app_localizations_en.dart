@@ -85,6 +85,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsApiSettingsDesc => 'Configure the chat provider';
 
   @override
+  String get settingsProfileSectionsOpen => 'Open file sections in the library';
+
+  @override
+  String get settingsProfileSectionsOpenDesc =>
+      'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.';
+
+  @override
   String get settingsSessionLogs => 'Save AI conversations';
 
   @override
@@ -325,30 +332,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get wikiTabEndfield => 'Endfield Wiki';
 
   @override
-  String get wikiSendToAi => 'Send to AI';
-
-  @override
-  String get wikiSendToAiDesc =>
-      'Selected Wiki text is reading context only; factual claims are verified separately with GameData.';
-
-  @override
-  String get wikiSendToSummaryDesc =>
-      'Summarize from the page and selected text';
-
-  @override
-  String get wikiSendToFactCheckDesc =>
-      'Use the selected text as the claim to check';
-
-  @override
-  String get wikiReaderMode => 'Reader mode';
-
-  @override
-  String get wikiReaderFontSmaller => 'Smaller text';
-
-  @override
-  String get wikiReaderFontLarger => 'Larger text';
-
-  @override
   String get bookmarksTitle => 'Bookmarks';
 
   @override
@@ -466,12 +449,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskCanceled => 'Answer canceled.';
-
-  @override
-  String get aiTabFactCheck => 'Fact Check';
-
-  @override
-  String get aiTabSummary => 'Summary';
 
   @override
   String get aiAnswerStatus => 'Answer status';

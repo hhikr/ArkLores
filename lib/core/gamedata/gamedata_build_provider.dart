@@ -278,7 +278,8 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
     try {
       // Asked each time: the commit an earlier check or update saw may be
       // days old by now.
-      final latest = await client.fetchLatestCommit();
+      final head = await client.fetchLatestCommitInfo();
+      final latest = head.sha;
       final installed = await _installedCommit();
       final installedSchema = await _installedSchema();
       final sync = SourceSync(client: client, sourceDir: dirs.sourceDir);
@@ -441,6 +442,7 @@ class GameDataBuildNotifier extends StateNotifier<GameDataBuildUiState> {
         sourceDir: dirs.sourceDir.path,
         outputDbPath: outputDbPath,
         commitSha: latest,
+        commitDate: head.date?.toUtc().toIso8601String(),
         existingDbPath: installed != null ? dirs.installPath : null,
         changedFiles: changes,
       );

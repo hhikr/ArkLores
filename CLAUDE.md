@@ -3,7 +3,7 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.14.0（正式版，2026-10-11，Android build 33）。两个知识库附在 v0.14.0 Release 上（明日方舟库基于上游 `17759cc`，终末地库是瘦身后带资料向量的那份），
+- **已发布**：v0.14.5（正式版，2026-10-17，Android build 34；只有 App，知识库仍是 v0.14.0 的）。两个知识库附在 v0.14.0 Release 上（明日方舟库基于上游 `17759cc`，终末地库是瘦身后带资料向量的那份），
   `tools/release_gamedata.env` 指向 v0.14.0。v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
   下一轮开发从 `main` 新开分支。
 - 未经开发者明确同意不发版、不跑花钱的真实 API 测试；Android build 号每次发版递增。
@@ -47,13 +47,16 @@
     答案被退回时整轮回档；“已读”是一本账（`SeenLines`），出处裁到读过的行；数据库连接独立、空回复只对一轮降级、取消立即生效。
   - 界面：输入框只有一个选项按钮（面板不取焦点）；工作过程写成明细（工具名、参数原文、字数、标记，点开看完整结果）；对话记录是对话列表；
     知识库页每个游戏一页。
-  - 知识库：没人读的表全部删掉（明日方舟库 701 → 约 285 MB），**不要把这些表或“覆盖层”加回来**，加表前先写清谁读它；
-    资料向量（`record_chunk_vectors`）；复刻活动的关卡不再被当成复刻删掉（`docs/KNOWLEDGE_BASE_LESSONS.md` §“复刻不是独立内容”）；
+  - 知识库：没人读的表全部删掉（明日方舟库未压缩 679 → 299 MB），**不要把这些表或“覆盖层”加回来**，加表前先写清谁读它；
+    资料向量（`record_chunk_vectors`）；复刻活动的关卡不再被当成复刻删掉（`docs/KNOWLEDGE_BASE_LESSONS.md` §2.2 的“复刻不是独立内容”）；
     “用游戏数据更新”能真正取消、不留失败的副本、更新后按钮变灰；官方资产与本机更新按游戏数据新旧定先后（`docs/GAMEDATA_BUILD_PIPELINE.md` §4.4）。
     v0.14.0 的明日方舟库基于上游 `17759cc`（2026-10-08）。旧版 App 装不了 0.14 的库（v0.13.0 的校验要求已删掉的表），所以新库只随新版本发布。
   - 真机测试工具：`tools/phone_ask.dart` + `install_local.ps1 -Bridge`（`lib/features/ai/phone_bridge.dart`，只在本地构建里），见 `docs/ANDROID_SETUP_GUIDE.md`。
     **手机上的验证由开发者自己做**：把包和库装好、说明要看哪里即可，不要替他解锁、点按或跑更新。
   - 没有在真机屏幕上看过的界面改动、没有被真实模型再触发的修正，列在 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §7。
+- **0.14.5（2026-10-17）**：真机反馈的修正——干员语音（两个游戏）、档案默认展开/收起的设置、梗概向下展开、阅读进度、引用的资料打开资料页、
+  PRTS 用站点自带的黑夜模式、删掉 Wiki 阅读模式与“转交给 AI”；知识库渠道文件（`gamedata_channel.json`，`gamedata-channel` Release）与按提交日期比新旧；
+  终末地档案 id 带 `ef/`（要重建终末地库才生效）。悬浮栏自动隐藏留到 UI 重构。
 ## 文档索引
 
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
@@ -82,7 +85,7 @@
 - 输入框旁的面板、菜单用浮层且不取焦点（`canRequestFocus: false`），不要用会推路由的 `PopupMenuButton` / 底部弹窗（会把键盘收起来）。
 - 资料页不做只有一行的中间页：集合从列表打开走 `openCollectionOf`（一篇剧情直接进阅读器、一类条目直接进列表）；短列表在集合页里就地列出；
   分组的长列表用组标题 + 选择条，不先列一页分组。
-- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠、默认展开），语音用 `VoiceLines`；
+- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠，默认展开还是收起按设置“资料页的档案默认展开”），语音用 `VoiceLines`；
   剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 颜色：信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 - 问答列表不随流式内容自动滚动（只在发新问题时滚到底一次）；思考窗口固定高度；阅读位置上方的内容在流式中不变高。不要加“贴底跟随”。
@@ -100,6 +103,7 @@
 ## 提交规范（贡献者只有 hhikr）
 
 - author / committer 只能是 hhikr；提交信息**禁止** `Co-Authored-By` 或任何 AI 署名尾注（2026-10 已改写历史移除，`.claude/settings.json` 的 `attribution` 已关闭，不要改回）。
+- PR 标题不出现 Claude；Claude 不作为作者或协作者出现在任何提交信息里（开发者 2026-10-17 再次明确）。
 - 凭据（`tools/api_info`、`tools/*apiKey*`、`tools/github_pat`、`tools/api.txt`、keystore 与签名配置）不得提交、打印、写入 git 配置或 remote URL。
   PAT 只在单条命令内用 `git -c "http.extraHeader=Authorization: Basic <base64(x-access-token:PAT)>" ...` 或 REST 请求头。
 
@@ -107,7 +111,8 @@
 
 - APK 由 GitHub Actions 构建签名：推 `release/<版本>` 触发 `android-release.yml`（证书 SHA-256 `b1b09ebf…e364`）。
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
-- 知识库资产的 URL/SHA 在 `tools/release_gamedata.env`，**先指向将要创建的 Release** 再构建 APK；资产 gz 与 manifest 另行上传。详见 `docs/ANDROID_SETUP_GUIDE.md`。
+- 知识库资产的 URL/SHA 在 `tools/release_gamedata.env`，**先指向将要创建的 Release** 再构建 APK；资产 gz 与 manifest 另行上传。
+  上传后用 `tools/write_gamedata_channel.dart` 写渠道文件，替换 `gamedata-channel` Release 上的那份（App 由它发现只上传、没随版本发的新库）。详见 `docs/ANDROID_SETUP_GUIDE.md`。
 - `release/<版本>` 分支只放构建 APK 的那一个提交：再推会重新构建，APK 哈希会变。
 - 本地 `flutter build apk --release` 没有签名文件时退回 debug key，不能发布。本机试装用 `tools/install_local.ps1 -Build -Kb`。
 

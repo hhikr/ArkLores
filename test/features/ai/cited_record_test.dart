@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
+import 'package:arklores/features/ai/widgets/story_answer_body.dart';
+import 'package:arklores/features/library/reading_text.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -41,5 +44,24 @@ void main() {
       await container.read(citedRecordProvider('no_such_record').future),
       isNull,
     );
+  });
+
+  testWidgets('a cited file shows in its parts, not as raw markdown', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: CitedRecordText('## 基础档案\n【代号】甲\n## 档案资料一\n一段档案。'),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(ProfileText), findsOneWidget);
+    expect(find.byKey(const ValueKey('fold-档案资料一')), findsOneWidget);
+    expect(find.textContaining('## '), findsNothing);
+    expect(find.text('一段档案。'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

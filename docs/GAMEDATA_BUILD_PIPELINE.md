@@ -1,7 +1,7 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。明日方舟库（§1–8）与
-> 终末地库（§9，只能在本机从游戏客户端构建）都是 v0.13.0 Release 的资产（文件与 v0.11.0、v0.12.0 发布的相同）。
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。两者都是 v0.14.0 Release 的资产：明日方舟库基于上游 `17759cc`（2026-10-08，瘦身后的库），
+> 终末地库是瘦身后带资料向量的那份（只能在本机从游戏客户端构建，§9）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `AI_ARCHITECTURE.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 
@@ -44,7 +44,7 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 `normalized_records` 里剧情的切块副本（`parent_type = 'story_file'`，正文在 `story_lines`）、由说话人名字造的实体（`source_type = 'story_speaker'`）。
 清单在 `gamedata_schema.dart` 的 `obsoleteGamedataTables` / `dropObsoleteGamedataData`。schema 版本没变（仍是 5）：有没有这些表对 App 是一样的，
 旧资产照常能装；App 内更新一个带着它们的库时先删掉再 `VACUUM`（进度“清理不再使用的数据”），命令行用 `tools/compact_gamedata.dart --db=<库>`。
-明日方舟库 701 → 292 MB（下载 220 → 112 MB），终末地 62 → 31 MB；剧情行、资料、条目与之前逐行相同，向量按行迁移。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
+明日方舟库未压缩 679 → 299 MB（679,129,088 → 299,241,472 字节），下载 210 → 119 MB（209,900,351 → 119,420,657 字节，两版的 manifest），终末地 62 → 31 MB；剧情行、资料、条目与之前逐行相同，向量按行迁移。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
 
 ## 4. 四条构建路径（同一套代码）
 
@@ -103,16 +103,22 @@ dart run tools/rederive_gamedata.dart --db=<库> --source=<源目录> [--output=
 
 **官方资产与本机更新的先后（2026-10-11，开发者定）**：游戏数据较新的在前；同一份游戏数据，官方资产在本机更新的之前（它的向量是全的）。
 
-- 库自己知道的：清单里的上游提交（`source_arknights_commit`）和构建时间（`built_at`）；旁边的标记说明来源——`.asset_sha256`（从哪个官方资产装的）、`.local_build`（在本机更新过）。
+- 库自己知道的：清单里的上游提交（`source_arknights_commit`）、那个提交的日期（`source_commit_date`，2026-10-17 起本机更新时写，取 GitHub 的 committer 日期）
+  和构建时间（`built_at`）；旁边的标记说明来源——`.asset_sha256`（从哪个官方资产装的）、`.local_build`（在本机更新过）。
 - 构建 App 时除了资产的 URL 和 SHA，还写进它所基于的提交和那个提交的日期：`tools/release_gamedata.env` 的 `GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE`
   （GitHub 上那个提交的 committer 日期；`install_local.ps1` 和发布工作流都会传）。**发新资产时四个值一起改。** 终末地库不是从仓库来的，没有这两项。
 - 官方卡什么时候提示“更新”（`GameDataInstallStatus.updateReason`）：
   - 手机上是官方资产装的：App 指向的是另一份资产（与原来一样）。
-  - 手机上是本机更新过的：官方资产与它是同一个提交，或官方资产的提交是在那次更新**之后**才有的。本机更新拿的是当时上游的最新提交，
-    所以之后才有的提交一定比它新，之前的提交一定不比它新——不需要知道已装提交本身的日期。其余情况不提示，只留“换回官方版本”（会丢较新的内容，要确认）。
+  - 手机上是本机更新过的：官方资产与它是同一个提交，或官方资产的提交比已装的提交**晚**。比的是两边提交的日期（`source_commit_date`），与手机时钟无关；
+    清单里没有这个日期的旧库退回比“那次更新是什么时候做的”（`built_at`：本机更新拿的是当时上游的最新提交，之后才有的提交一定比它新）。
+    其余情况不提示，只留“换回官方版本”（会丢较新的内容，要确认）。
   - 构建时没写提交的 App（旧的构建方式）不会提示替换本机更新过的库。
 - “用游戏数据更新”卡：检查到的上游最新提交就是官方资产的提交、而官方卡正提示更新时，“拉取并更新”变灰并提示用上面的“更新”。
-- App 不会自己到 GitHub 上找新的资产：只上传不发新的 App，页面不会变。
+- **渠道文件**（2026-10-17）：只上传新库、不发新 App 时，App 从渠道文件知道有新库。文件是 `gamedata_channel.json`，放在固定 tag `gamedata-channel` 的 Release 上
+  （地址是 env 的 `GAMEDATA_CHANNEL_URL`，构建时烘进包里），每个游戏一项：`url`、`sha256`、`commit`、`commit_date`（明日方舟）、`schema_version`、`min_app_build`。
+  App 启动后和每次打开知识库页时读一次（`gameDataChannelProvider`），读不到就照旧用包里的资产。渠道里的资产只在 schema 与本版相同、本版 build 号不小于 `min_app_build`、
+  而且不比包里的资产旧（两边都有提交日期时比日期）时才替换包里的（`withChannel`）；之后“更新”的判断照上面不变。
+  从第一个带渠道的版本起生效：v0.14.0 及更早的 App 不读它。
 
 ## 5. 向量（剧情与资料）
 
@@ -134,7 +140,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 
 - 默认百炼 `qwen3.7-text-embedding`，512 维；key 来自 gitignored 的 `tools/embedding-apiKey.csv`。真实调用要开发者同意。
 - 迁移按行对齐（忽略省略号点数、空白、字面 `\n`），首尾都对得上的旧向量搬到新行号，其余才嵌入。
-- App 的“语义检索”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.706 token/字，¥0.0005/千 token，估算）；
+- App 的“语义检索”卡片（`story_vector_updater.dart`）补缺的故事和资料，显示块数、token 与估算费用（0.7 token/字，`embeddingTokensPerChar`；¥0.0005/千 token，`bailianYuanPer1kTokens`；估算）；
   模型/维度与库里不一致时拒绝混用。0.14：每个游戏的知识库页各有一张（`storyVectorProvider(game)`，以前只看明日方舟库）；
   没有缺口时只有两行（剧情/资料向量各多少条、“完整”），有缺口、模型不一致或运行中才展开成操作区。
 - 向量只是定位线索；证据是 `read_story` / `read_record` 读到的原文。
@@ -152,10 +158,14 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
    （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，
    `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`），提交。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
-4. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
-5. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
+4. 渠道文件：`dart run tools/write_gamedata_channel.dart`（从 env 写 `build/gamedata_channel.json`；`GAMEDATA_MIN_APP_BUILD` 是能装这两个库的最早 build 号，
+   库的结构或校验要求变了就改成这次的 build 号），在两个库上传之后，替换 `gamedata-channel` Release 上的同名资产（Release 第一次要手动建，tag 名 `gamedata-channel`，
+   不要标成 latest）。**只发库、不发 App 时做 1–3、6、7，最后做这一步**；每次发 App 也要更新渠道文件，否则渠道指着旧库，新 App 会被它带回旧库
+   （没有提交日期的终末地库不比新旧）。
+5. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
+6. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。
-6. 终末地库：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
+7. 终末地库：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
    形如 `{game, database: {fileName}, manifest: {...}}`）上传到同一个 Release，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256` 指向它。
    从 v0.13.0 起每个 Release 都带齐两个库（没变的库原样再传一份，SHA 不变，已装好的不会重新下载），env 的两个 URL 都指向这次的 Release；
    v0.12.0 时两个库曾分在两个 Release 上。上传后用公开地址 HEAD 一次确认 200。
@@ -166,7 +176,7 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 ## 8. App 端的安装与兼容
 
 - 安装器只接受 schema 5；校验必需表、版本、计数与 SHA；失败保留旧库。断点续传、阶段显示、取消、手动放置 `arklores_gamedata_zh.db.download.gz`。
-- 知识库页在已安装的官方资产与 APK 指向的不同（`.asset_sha256` 标记）时提示更新。
+- 知识库页在已安装的官方资产与 APK（或渠道文件，§4.4）指向的不同（`.asset_sha256` 标记）时提示更新。
 - 首次打开旧库时补建缺的索引（`story_lines(story_id, line_index)`）。
 
 ## 9. 终末地知识库（0.12）
@@ -196,7 +206,7 @@ URL 仍指向已发布的资产，带着新 SHA 构建的 APK 会拒收它。
   任务面板的章节同理：`--types MonoBehaviour --names ^(main_e\d+|chr_\d+_[a-z]+_e\d+)$ --export_type JSON`（`ChapterInfo` 对象，由 `ChapterTable` 列出；
   2026-10 客户端在 StreamingAssets 有 21 个，Persistent 没有覆盖）。不知道类名时先按名字导出 `MonoScript` 找类（`ChapterTable`、`ChapterInfo`），再导实例。
 - **不要加 `--packed-game-store`**：kit 的完整流程会把 Json/LipSync 写进一个 SQLite，这一步在本机卡死（上千个线程、无 CPU 无 IO），而它只存口型数据。
-- 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（`tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
+- 本机环境：AnimeStudio 运行时 `DOTNET_ROOT` 指向 kit 下载的 .NET 9（本机在 `C:\Users\hhikr\endfield\kit\tools\AnimeStudio\.dotnet`）；kit 的 Python 脚本用 embeddable Python
   （`C:\Users\hhikr\endfield\python312`，`._pth` 里加 kit 目录）。工作目录要在 NTFS 上（exFAT 上 git 拒绝、不能建硬链接）。
   Claude Code 的 shell 设了 `NoDefaultCurrentDirectoryInExePath`，批处理要用完整路径调用。
 - 任务面板的分类名在 Lua UI 脚本里（`-b lua` 导出的是明文 Lua）：`MissionCtrl.lua` 用 `GEnums.MissionViewType` 的 Main/Discovery/Side/Activity/Other，

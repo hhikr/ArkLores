@@ -139,6 +139,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     with SingleTickerProviderStateMixin {
   final GlobalKey _targetKey = GlobalKey();
   final GlobalKey _scrollKey = GlobalKey();
+  /// Where the reader is: the first line on screen and the number of lines
+  /// (shown by the title); null until the list is laid out.
+  final ValueNotifier<(int, int)?> _progress = ValueNotifier(null);
+  Timer? _progressTimer;
+  /// The header (titles, description, synopsis), measured to re-anchor on it.
+  final GlobalKey _headerKey = GlobalKey();
   final Map<int, GlobalKey> _lineKeys = {};
   bool _scrolled = false;
   bool _recorded = false;
@@ -195,6 +201,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   void dispose() {
     _saveTimer?.cancel();
     _endTimer?.cancel();
+    _progressTimer?.cancel();
+    _progress.dispose();
     unawaited(_saveProgress());
     _flash.dispose();
     _scroll.dispose();
@@ -330,6 +338,16 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     } catch (_) {}
   }
 
+  /// Shows where the reader is, at most every 120 ms while scrolling.
+  void _showProgressSoon() {
+    if (_progressTimer?.isActive ?? false) return;
+    _progressTimer = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted) return;
+      final range = _visibleRange();
+      if (range != null) _progress.value = (range.$1, _lines.length);
+    });
+  }
+
   void _saveSoon() {
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 400), () async {
@@ -358,6 +376,25 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _centerAt = _cited ? 0.25 : 0.08;
   }
 
+  /// Anchors the list on the header where it stands on screen, so that what
+  /// changes height in it (the synopsis opening) grows downward. Opened at a
+  /// cited or resumed line the header is in the list built upward from the
+  /// anchor, where an item that grows pushes its top up the screen.
+  void _anchorOnHeader() {
+    if (_center == 0) return;
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final header = _headerKey.currentContext?.findRenderObject();
+    if (view is! RenderBox || header is! RenderBox || !header.attached) return;
+    final top = header.localToGlobal(Offset.zero, ancestor: view).dy;
+    final height = view.size.height;
+    if (height <= 0) return;
+    if (_scroll.hasClients) _scroll.jumpTo(top < 0 ? -top : 0);
+    setState(() {
+      _center = 0;
+      _centerAt = top < 0 ? 0 : (top / height).clamp(0.0, 1.0);
+    });
+  }
+
   /// Back to the cited block or the line the reader was at, from wherever
   /// they have scrolled to.
   void _jumpToTarget() {
@@ -374,6 +411,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       if (_cited && mounted) _flash.forward(from: 0);
       // Short stories fit the screen: no scroll will report them.
       if (mounted) _saveSoon();
+      if (mounted) _showProgressSoon();
     });
   }
 
@@ -423,7 +461,41 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return FloatingScaffold(
       backgroundColor: theme.bgPrimary,
       title: chapter.isNotEmpty ? chapter : collection,
+      // How far in: a line along the title plate and the line number.
+      titleFooter: ValueListenableBuilder<(int, int)?>(
+        valueListenable: _progress,
+        builder: (context, p, _) => p == null || p.$2 == 0
+            ? const SizedBox.shrink()
+            : FractionallySizedBox(
+                key: const ValueKey('story-reader-progress-bar'),
+                alignment: Alignment.centerLeft,
+                widthFactor: ((p.$1 + 1) / p.$2).clamp(0.0, 1.0),
+                child: SizedBox(
+                  height: 2,
+                  child: ColoredBox(color: theme.accentPrimary),
+                ),
+              ),
+      ),
       actions: [
+          ValueListenableBuilder<(int, int)?>(
+            valueListenable: _progress,
+            builder: (context, p, _) => p == null
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Center(
+                      child: Text(
+                        '${p.$1 + 1} / ${p.$2}',
+                        key: const ValueKey('story-reader-progress'),
+                        style: theme.bodyFont.copyWith(
+                          color: theme.textMuted,
+                          fontSize: 12,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
           if (widget.text.isNotEmpty)
             IconButton(
               key: const ValueKey('story-reader-find'),
@@ -455,9 +527,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                       _start! - widget.shift + 1,
                       _stop! - widget.shift + 1,
                     );
-          return NotificationListener<ScrollEndNotification>(
-            onNotification: (_) {
-              _saveSoon();
+          return NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              if (n is ScrollUpdateNotification) _showProgressSoon();
+              if (n is ScrollEndNotification) {
+                _saveSoon();
+                _showProgressSoon();
+              }
               return false;
             },
             child: Align(
@@ -561,6 +637,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     String? synopsis,
   ) =>
       Padding(
+        key: _headerKey,
         padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,6 +692,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 key: const ValueKey('story-reader-synopsis'),
                 title: context.t.storyReaderSynopsis,
                 initiallyOpen: false,
+                onToggle: (_) => _anchorOnHeader(),
                 child: ReadingText(synopsis.trim(), size: 14.5),
               ),
             ],

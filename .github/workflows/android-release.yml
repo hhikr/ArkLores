@@ -69,7 +69,8 @@ jobs:
             --dart-define=ARKLORES_GAMEDATA_DB_COMMIT="${GAMEDATA_DB_COMMIT:-}" \
             --dart-define=ARKLORES_GAMEDATA_DB_COMMIT_DATE="${GAMEDATA_DB_COMMIT_DATE:-}" \
             --dart-define=ARKLORES_ENDFIELD_DB_URL="${ENDFIELD_DB_URL:-}" \
-            --dart-define=ARKLORES_ENDFIELD_DB_SHA256="${ENDFIELD_DB_SHA256:-}"
+            --dart-define=ARKLORES_ENDFIELD_DB_SHA256="${ENDFIELD_DB_SHA256:-}" \
+            --dart-define=ARKLORES_GAMEDATA_CHANNEL_URL="${GAMEDATA_CHANNEL_URL:-}"
 
       - name: Verify signature and name the APK
         run: |

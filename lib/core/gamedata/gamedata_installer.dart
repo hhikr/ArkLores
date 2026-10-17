@@ -54,11 +54,13 @@ class GameDataInstallStatus {
   ///
   /// * installed from an official asset: another asset than this build's;
   /// * updated on this device: the build's asset is of the same commit, or
-  ///   of a commit made after the update ran. An update takes the latest
-  ///   commit of its moment, so a commit made later is newer than it and
-  ///   one made before is the same or older — no need to know when the
-  ///   installed commit itself was made. A build that does not say what its
-  ///   asset was made from never replaces a knowledge base updated here.
+  ///   of a commit made after the installed one. An update records when the
+  ///   commit it took was made (`source_commit_date`), so the two commit
+  ///   dates are compared and the phone's clock does not matter. A database
+  ///   updated before that was recorded falls back to when the update ran:
+  ///   it took the latest commit of its moment, so a commit made later is
+  ///   newer. A build that does not say what its asset was made from never
+  ///   replaces a knowledge base updated here.
   GameDataUpdateReason? get updateReason {
     final sha = releaseAssetSha;
     if (!installed || sha == null || sha.isEmpty) return null;
@@ -71,7 +73,7 @@ class GameDataInstallStatus {
     if (commit == null || commit.isEmpty) return null;
     if (commit == sourceCommit) return GameDataUpdateReason.sameDataOfficial;
     final made = releaseAssetCommitDate;
-    final updated = DateTime.tryParse(builtAt ?? '');
+    final updated = sourceCommitDate ?? DateTime.tryParse(builtAt ?? '');
     return made != null && updated != null && made.isAfter(updated)
         ? GameDataUpdateReason.newerData
         : null;
@@ -82,6 +84,11 @@ class GameDataInstallStatus {
 
   String? get sourceCommit => manifest['source_arknights_commit'];
   String? get builtAt => manifest['built_at'];
+
+  /// When the game-data commit of the installed database was made, when an
+  /// update on this device recorded it.
+  DateTime? get sourceCommitDate =>
+      DateTime.tryParse(manifest['source_commit_date'] ?? '');
   String? get entityCount => manifest['entity_count'];
   String? get recordCount => manifest['normalized_record_count'];
   String? get chunkCount => manifest['lore_chunk_count'];

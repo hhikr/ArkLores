@@ -48,6 +48,21 @@ void main() {
       expect(await client.fetchLatestCommit(), 'abc123def456');
     });
 
+    test('the latest commit comes with the date it was made', () async {
+      final client = ArknightsSourceClient(
+        client: MockClient(
+          (request) async => http.Response(
+            '{"sha":"abc","commit":{"committer":'
+            '{"date":"2026-10-08T23:46:48Z"}}}',
+            200,
+          ),
+        ),
+      );
+      final head = await client.fetchLatestCommitInfo();
+      expect(head.sha, 'abc');
+      expect(head.date, DateTime.utc(2026, 10, 8, 23, 46, 48));
+    });
+
     test('fetchLatestCommit surfaces HTTP errors', () async {
       final client = ArknightsSourceClient(
         client: MockClient((request) async => http.Response('oops', 500)),
@@ -68,7 +83,8 @@ void main() {
           return http.Response(
             '<?xml version="1.0"?>'
             '<feed><entry><id>tag:github.com,2008:Grit::Commit/'
-            'abcdef0123456789abcdef0123456789abcdef01</id></entry>'
+            'abcdef0123456789abcdef0123456789abcdef01</id>'
+            '<updated>2026-10-08T23:46:48Z</updated></entry>'
             '<entry><id>tag:github.com,2008:Grit::Commit/'
             '0000000000000000000000000000000000000000</id></entry>'
             '</feed>',
@@ -76,10 +92,9 @@ void main() {
           );
         }),
       );
-      expect(
-        await client.fetchLatestCommit(),
-        'abcdef0123456789abcdef0123456789abcdef01',
-      );
+      final head = await client.fetchLatestCommitInfo();
+      expect(head.sha, 'abcdef0123456789abcdef0123456789abcdef01');
+      expect(head.date, DateTime.utc(2026, 10, 8, 23, 46, 48));
     });
 
     test('compareCommits throws a rate-limit exception on 403', () async {

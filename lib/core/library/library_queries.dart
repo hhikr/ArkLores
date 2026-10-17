@@ -310,6 +310,10 @@ class StoryPlace {
 /// that share the table.
 const Set<String> documentEntryTypes = {'operator', 'token', 'trap'};
 
+/// The heading of an operator's voice lines in the library, the name both
+/// games' operator file gives the part (Endfield's `ui_char_profile_voice`).
+const String operatorVoiceSection = '语音记录';
+
 /// A readable entry has text of its own: a story file, a record, a profile
 /// document.
 const String _readable = "(e.type = 'story' OR e.record_id IS NOT NULL OR "
@@ -757,10 +761,36 @@ Future<List<EntryTextBlock>> entryTexts(
       'ORDER BY document_type',
       [entry.entityId],
     );
+    // An Arknights operator's voice lines are records of the entry, not
+    // part of its profile document: they follow it as one more part, in
+    // the `标题：台词` lines [ProfileText] shows as voice lines.
+    final voices = await db.rawQuery(
+      'SELECT section, title, content FROM normalized_records '
+      "WHERE entry_id = ? AND subtype = 'voice' ORDER BY line_start, id",
+      [entry.id],
+    );
+    final voiceText = [
+      for (final v in voices)
+        if ('${v['content'] ?? ''}'.trim().isNotEmpty)
+          '${_text(v['section']) ?? _text(v['title']) ?? ''}：'
+              '${'${v['content']}'.trim().replaceAll('\n', ' ')}',
+    ].join('\n');
     return [
-      for (final r in rows)
+      for (final (i, r) in rows.indexed)
         EntryTextBlock(
-            title: '${r['title'] ?? ''}', content: '${r['content'] ?? ''}',),
+          title: '${r['title'] ?? ''}',
+          content: [
+            '${r['content'] ?? ''}',
+            // The part's name as both games' operator file calls it.
+            if (i == rows.length - 1 && voiceText.isNotEmpty)
+              '## $operatorVoiceSection\n$voiceText',
+          ].join('\n\n'),
+        ),
+      if (rows.isEmpty && voiceText.isNotEmpty)
+        EntryTextBlock(
+          title: entry.name,
+          content: '## $operatorVoiceSection\n$voiceText',
+        ),
     ];
   }
   final rows = await db.rawQuery(
@@ -790,6 +820,28 @@ Future<List<EntryTextBlock>> entryTexts(
         content: '${r['content'] ?? ''}',
       ),
   ];
+}
+
+/// The entry a cited record (`record:<id>`) is part of: a record's own entry,
+/// or for an operator's file (`entity_documents`) the entry of its entity.
+/// An Endfield file of the v0.14.0 asset has its id without `ef/`, so both
+/// spellings are tried.
+Future<String?> entryIdOfRecord(DatabaseExecutor db, String recordId) async {
+  final own = await db.rawQuery(
+    'SELECT entry_id FROM normalized_records WHERE id = ? LIMIT 1',
+    [recordId],
+  );
+  final direct = own.isEmpty ? null : _text(own.first['entry_id']);
+  if (direct != null) return direct;
+  final raw = recordId.startsWith(endfieldIdPrefix)
+      ? recordId.substring(endfieldIdPrefix.length)
+      : recordId;
+  final file = await db.rawQuery(
+    'SELECT e.id FROM entity_documents d JOIN entries e '
+    'ON e.entity_id = d.entity_id WHERE d.id IN (?, ?) LIMIT 1',
+    [recordId, raw],
+  );
+  return file.isEmpty ? null : _text(file.first['id']);
 }
 
 /// The bindings of an entry (both directions), at most [limit] per direction.

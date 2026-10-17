@@ -41,6 +41,7 @@ class GameDataBuildOptions {
     required this.sourceDir,
     required this.outputDbPath,
     required this.commitSha,
+    this.commitDate,
     this.existingDbPath,
     this.changedFiles = const [],
   });
@@ -51,6 +52,10 @@ class GameDataBuildOptions {
 
   /// Source commit being built (recorded in the manifest).
   final String commitSha;
+
+  /// When [commitSha] was made (ISO 8601), recorded as `source_commit_date`;
+  /// '' when the source did not say (an older date is then cleared).
+  final String? commitDate;
 
   /// Installed database path; when present with schema v3 and
   /// [changedFiles] non-empty, an incremental update is attempted.
@@ -149,6 +154,7 @@ class GameDataBuildService {
         'source_arknights_repo': arknightsSourceRepoUrl,
         'source_arknights_branch': 'master',
         'source_arknights_commit': options.commitSha,
+        'source_commit_date': options.commitDate ?? '',
         'built_at': DateTime.now().toUtc().toIso8601String(),
       });
       final importer = ArknightsImporter(
@@ -227,6 +233,7 @@ class GameDataBuildService {
       await stats.refreshFrom(db);
       await writeGamedataManifest(db, {
         'source_arknights_commit': options.commitSha,
+        'source_commit_date': options.commitDate ?? '',
         'built_at': DateTime.now().toUtc().toIso8601String(),
         ...countManifest(stats),
       });

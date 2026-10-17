@@ -47,7 +47,6 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final wikiReaderFullscreen = ref.watch(wikiReaderFullscreenProvider);
     // Another page asked for a tab (the library's "ask about it").
     ref.listen<int?>(mainTabRequestProvider, (_, tab) {
       if (tab == null) return;
@@ -85,8 +84,7 @@ class _MainShellState extends ConsumerState<MainShell> {
           curve: Curves.easeInOutCubic,
           // Hidden while the keyboard is up: the question box then sits on
           // the keyboard, not on the navigation.
-          child: (wikiReaderFullscreen && _currentIndex == 0) ||
-                  MediaQuery.viewInsetsOf(context).bottom > 0
+          child: MediaQuery.viewInsetsOf(context).bottom > 0
               ? const SizedBox.shrink()
               : _IndustrialNavigation(
                   theme: theme,
@@ -210,6 +208,7 @@ class _IndustrialNavigation extends StatelessWidget {
     );
   }
 }
+
 class _NavigationItem extends StatefulWidget {
   const _NavigationItem({
     required this.theme,

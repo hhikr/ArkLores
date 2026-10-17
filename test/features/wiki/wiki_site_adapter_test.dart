@@ -39,19 +39,14 @@ void main() {
       expect(script, contains('data-arklores-warfarin-theme'));
     });
 
-    test('reader roots do not use MediaWiki selectors for Endfield sites', () {
-      expect(
-        WikiSiteAdapter.readerRootSelector(WikiSiteKind.fz),
-        contains('main > div.grid > div:first-child'),
-      );
-      expect(
-        WikiSiteAdapter.readerRootSelector(WikiSiteKind.warfarin),
-        contains('main > div > div.flex-1'),
-      );
-      expect(
-        WikiSiteAdapter.readerRootSelector(WikiSiteKind.prts),
-        contains('#mw-content-text'),
-      );
+    test("PRTS switches the site's own night theme", () {
+      for (final script in [
+        WikiSiteAdapter.documentStartThemeScript(dark: true),
+        WikiSiteAdapter.applyThemeScript(dark: true),
+      ]) {
+        expect(script, contains('prts.wiki'));
+        expect(script, contains('skin-theme-clientpref-night'));
+      }
     });
   });
 }

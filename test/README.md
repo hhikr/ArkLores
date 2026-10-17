@@ -1,6 +1,6 @@
 # 测试
 
-`flutter test` 跑全部离线测试（约 40 秒，不联网、不花钱）。
+`flutter test` 跑全部离线测试（正常约 1 分钟，机器忙时更久；不联网、不花钱）。
 
 ## 目录
 
@@ -57,7 +57,7 @@ flutter analyze
 
 ## 没有自动测试的部分
 
-- Wiki 浏览器（`features/wiki/wiki_browser_*`、`wiki_reader_*`、`wiki_toolbar.dart`）：内容在 WebView 里，
+- Wiki 浏览器（`features/wiki/wiki_browser_*`、`wiki_toolbar.dart`）：内容在 WebView 里，
   页面脚本与站点适配靠真机检查；Widget 测试只覆盖它在 App 外壳里能建出来。
 - `app_icon_service.dart`（Android 启动图标切换）、`background_work.dart` 的 Android 前台服务部分：平台代码，真机检查。
 - `live/` 下的测试：真实模型与完整知识库，按需手动跑。
