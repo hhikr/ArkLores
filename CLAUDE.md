@@ -100,6 +100,7 @@
 ## 提交规范（贡献者只有 hhikr）
 
 - author / committer 只能是 hhikr；提交信息**禁止** `Co-Authored-By` 或任何 AI 署名尾注（2026-10 已改写历史移除，`.claude/settings.json` 的 `attribution` 已关闭，不要改回）。
+- PR 标题不出现 Claude；Claude 不作为作者或协作者出现在任何提交信息里（开发者 2026-10-17 再次明确）。
 - 凭据（`tools/api_info`、`tools/*apiKey*`、`tools/github_pat`、`tools/api.txt`、keystore 与签名配置）不得提交、打印、写入 git 配置或 remote URL。
   PAT 只在单条命令内用 `git -c "http.extraHeader=Authorization: Basic <base64(x-access-token:PAT)>" ...` 或 REST 请求头。
 
