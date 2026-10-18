@@ -2,6 +2,14 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [Unreleased]
+
+### Library and reader
+
+- **Operator pages open without stalling.** A profile was built and laid out in one piece, every archive part and every voice line at once, so with parts unfolded the page hung on opening. It is now a lazy list: only the paragraphs and voice lines on screen are built.
+- **Voice lines are in the game's order**, one part per voice set. They were sorted by record ids, which are content hashes, and an operator's dialect, foreign-language and skin voice sets were mixed into one list. Now the operator's own set comes first ("语音记录"), then a dialect or language set ("语音记录·中文-方言"), then each skin's ("语音记录·<skin>"), each in the game's order.
+- **Voice lines read as a list**: each title over its line with a hairline between, as the wikis' voice tables have them, instead of a box per line and numbered titles split under a heading.
+
 ## [0.14.5] - 2026-10-17
 
 Fixes from the 2026-10-17 device review, and the knowledge-base channel. The knowledge bases are still the ones of v0.14.0.

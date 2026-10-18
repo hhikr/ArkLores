@@ -785,7 +785,7 @@ void main() {
     expect(find.text('干员甲'), findsWidgets);
     expect(find.text('干员密录'), findsWidgets);
     expect(find.byKey(const ValueKey('operator-record-story_x_set_1')), findsOneWidget);
-    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('operator-owned-module:m1')), findsOneWidget);
     expect(find.byKey(const ValueKey('operator-owned-skin:s1')), findsOneWidget);
@@ -798,7 +798,7 @@ void main() {
     expect(find.textContaining('模组甲'), findsOneWidget);
     expect(find.text('EX'), findsNothing);
     expect(find.text('X-A'), findsNothing);
-    await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
+    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, 2000));
     await tester.pumpAndSettle();
     final profileAt = tester.getTopLeft(find.text('干员档案').first).dy;
     final recordsAt = tester.getTopLeft(find.text('干员密录').last).dy;
@@ -833,8 +833,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a profile reads in parts that fold, open; voice lines are quotes, '
-      'numbered ones under one heading', (tester) async {
+  testWidgets('a profile reads in parts that fold, open; voice lines are a '
+      'list of titled lines', (tester) async {
     await pumpApp(
       tester,
       Scaffold(
@@ -855,13 +855,16 @@ void main() {
     expect(find.text('阵营'), findsOneWidget);
     expect(find.text('代号'), findsOneWidget);
     expect(find.text('确认为非感染者。'), findsOneWidget);
-    // Voice lines: the title over the line; numbered titles of one kind
-    // under one heading, each by its number.
+    // Voice lines: each title over its line, in the order given, as the
+    // wikis' voice tables have them.
     expect(find.text('问候'), findsOneWidget);
     expect(find.text('你好，管理员。'), findsOneWidget);
-    expect(find.text('信赖对话'), findsOneWidget);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('信赖对话1'), findsOneWidget);
     expect(find.text('第二次。'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('信赖对话1')).dy,
+      lessThan(tester.getTopLeft(find.text('信赖对话2')).dy),
+    );
     // A part folds when its head is tapped.
     await tester.tap(find.byKey(const ValueKey('fold-基础档案')));
     await tester.pumpAndSettle();
@@ -880,9 +883,41 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
-    expect(find.text('行动准备'), findsOneWidget);
+    expect(find.text('行动准备1'), findsOneWidget);
     expect(find.text('第一句。'), findsOneWidget);
     expect(find.text('第三句。'), findsOneWidget);
+  });
+
+  testWidgets('a long file on a page is built only as far as it is on screen',
+      (tester) async {
+    final voices = [for (var i = 1; i <= 400; i++) '交谈$i：第$i句。'].join('\n');
+    await pumpApp(
+      tester,
+      Scaffold(
+        body: CustomScrollView(
+          slivers: [
+            ProfileSliver('## 基础档案\n【代号】甲\n## 语音记录\n$voices'),
+          ],
+        ),
+      ),
+    );
+    await shoot(tester, 'library_profile_lazy');
+    expect(find.text('代号'), findsOneWidget);
+    expect(find.text('交谈1'), findsOneWidget);
+    expect(find.text('400'), findsOneWidget); // the count on the head
+    // The lines far below are not built.
+    expect(find.text('第400句。'), findsNothing);
+    expect(find.byType(VoiceLine).evaluate().length, lessThan(60));
+    // A part folds from its head, and its lines are gone.
+    await tester.tap(find.byKey(const ValueKey('fold-语音记录')));
+    await tester.pumpAndSettle();
+    expect(find.byType(VoiceLine), findsNothing);
+    expect(find.text('代号'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('fold-语音记录')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('第400句。'), 2000);
+    expect(find.text('交谈400'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('with the setting off, every part of a file opens folded', (tester) async {
