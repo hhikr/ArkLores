@@ -640,6 +640,29 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     };
   }
 
+  @override
+  Future<List<AnchorLine>> anchorLines(String name, {int limit = 5000}) async {
+    final db = await _open();
+    final term = name.trim();
+    if (db == null || term.isEmpty) return const [];
+    final asText = term.runes.length > 1;
+    final rows = await db.rawQuery(
+      'SELECT story_id, line_index, speaker = ? AS spoken FROM story_lines '
+      'WHERE speaker = ?'
+      '${asText ? " OR content LIKE ? ESCAPE '\\'" : ''} '
+      'ORDER BY story_id, line_index LIMIT ?',
+      [term, term, if (asText) '%${escapeLike(term)}%', limit],
+    );
+    return [
+      for (final row in rows)
+        AnchorLine(
+          '${row['story_id']}',
+          (row['line_index'] as num).toInt(),
+          spoken: (row['spoken'] as num? ?? 0) != 0,
+        ),
+    ];
+  }
+
   Future<void> close() async {
     await _db?.close();
     _db = null;

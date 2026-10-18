@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arklores/core/agent/coverage.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/tools/search_tool.dart';
 import 'package:arklores/core/gamedata/game.dart';
@@ -37,6 +38,12 @@ void main() {
   final vectorsPath = Platform.environment['ARKLORES_RECALL_VECTORS'] ??
       (embed ? 'build/recall_eval/query_vectors.json' : '');
   final only = (Platform.environment['ARKLORES_RECALL_IDS'] ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toSet();
+
+  final variants = (Platform.environment['ARKLORES_RECALL_VARIANTS'] ?? '')
       .split(',')
       .map((s) => s.trim())
       .where((s) => s.isNotEmpty)
@@ -135,6 +142,7 @@ void main() {
       for (final c in cases) {
         if (only.isNotEmpty && !only.contains(c.id)) continue;
         for (final variant in c.variants) {
+          if (variants.isNotEmpty && !variants.contains(variant.name)) continue;
           final seen = SeenLines();
           final search = SearchTool(store, seen, embeddingClient: embedder);
           final outline = OutlineTool(store);
@@ -146,6 +154,15 @@ void main() {
           }
           for (final o in variant.outlines) {
             chars += (await outline.execute({'collection': o})).length;
+          }
+          if (variant.budget > 0) {
+            final coverage = await CoverageBuilder(store).build(
+              variant.anchors,
+              budgetChars: variant.budget,
+              hinted: seen.stories.toSet(),
+            );
+            coverage.register(seen);
+            chars += coverage.render().length;
           }
           watch.stop();
           final hits = [
@@ -255,11 +272,34 @@ class _Gold {
 }
 
 class _Variant {
-  const _Variant(this.name, this.searches, this.outlines);
+  const _Variant(
+    this.name,
+    this.searches,
+    this.outlines, {
+    this.anchors = const [],
+    this.budget = 0,
+  });
   final String name;
   final List<String> searches;
   final List<String> outlines;
+
+  /// Material gathered by [CoverageBuilder] for these anchors (none when
+  /// [budget] is 0), after the searches.
+  final List<String> anchors;
+  final int budget;
 }
+
+/// The coverage variants of a case: the anchors alone at three budgets,
+/// and after the planner's searches.
+List<_Variant> _coverageVariants(List<String> anchors, _Variant? planner) => [
+      if (anchors.isNotEmpty)
+        for (final k in [15, 30, 60])
+          _Variant('coverage$k', const [], const [],
+              anchors: anchors, budget: k * 1000,),
+      if (anchors.isNotEmpty && planner != null)
+        _Variant('planner+coverage30', planner.searches, planner.outlines,
+            anchors: anchors, budget: 30000,),
+    ];
 
 class _Case {
   _Case({
@@ -315,15 +355,21 @@ List<_Case> _loadCases() {
         collections: _strings(c['gold_collections']),
         minCollections: c['min_collections'] as int?,
         games: _strings(c['gold_games']),
-        variants: [
-          if (planner != null)
-            _Variant(
-              'planner',
-              _strings(planner['search']),
-              _strings(planner['outline']),
-            ),
-          if (anchors.isNotEmpty) _Variant('anchors', [anchors.join(' ')], []),
-        ],
+        variants: () {
+          final plan = planner == null
+              ? null
+              : _Variant(
+                  'planner',
+                  _strings(planner['search']),
+                  _strings(planner['outline']),
+                );
+          return [
+            if (plan != null) plan,
+            if (anchors.isNotEmpty)
+              _Variant('anchors', [anchors.join(' ')], []),
+            ..._coverageVariants(anchors, plan),
+          ];
+        }(),
       ),
     );
   }
@@ -363,6 +409,7 @@ List<_Case> _loadCases() {
         games: const [],
         variants: [
           if (anchors.isNotEmpty) _Variant('anchors', [anchors.join(' ')], []),
+          ..._coverageVariants(anchors, null),
         ],
       ),
     );
@@ -391,7 +438,7 @@ String _report(List<Map<String, Object?>> results, String mode) {
   }
 
   for (final source in ['recall', 'investigation']) {
-    for (final variant in ['planner', 'anchors']) {
+    for (final variant in _variantNames) {
       final rs = [
         for (final r in results)
           if (r['source'] == source && r['variant'] == variant) r,
@@ -413,7 +460,7 @@ String _report(List<Map<String, Object?>> results, String mode) {
       final ms = [for (final r in rs) r['ms'] as int];
       b
         ..writeln('## ${source == 'recall' ? '日志题' : '旧调查题'} · '
-            '${variant == 'planner' ? '拟定的检索（真实会话记录）' : '锚点合成一次检索'}')
+            '${_variantLabels[variant]}')
         ..writeln()
         ..writeln('- 题数 ${rs.length}；有行级金标 ${scored.length} 题')
         ..writeln('- 金标命中 ${sum(scored, 'gold_hit')}/${sum(scored, 'gold')}'
@@ -453,6 +500,24 @@ String _report(List<Map<String, Object?>> results, String mode) {
   }
   return b.toString();
 }
+
+const _variantNames = [
+  'planner',
+  'anchors',
+  'coverage15',
+  'coverage30',
+  'coverage60',
+  'planner+coverage30',
+];
+
+const _variantLabels = {
+  'planner': '拟定的检索（真实会话记录）',
+  'anchors': '锚点合成一次检索',
+  'coverage15': '按锚点取材，1.5 万字',
+  'coverage30': '按锚点取材，3 万字',
+  'coverage60': '按锚点取材，6 万字',
+  'planner+coverage30': '拟定的检索 + 按锚点取材 3 万字',
+};
 
 String _pct(int a, int b) =>
     b == 0 ? '-' : '${(100 * a / b).toStringAsFixed(0)}%';
