@@ -636,6 +636,51 @@ void main() {
           StoryAnswerStatus.answered,);
     });
 
+    // Phase 1 (2026-10-18): the plan names the question's anchors, and the
+    // lines around them are gathered after the searches, as one more call
+    // of the first turn; what it showed is citable.
+    test('planned anchors are gathered after the searches', () async {
+      const story = 'activities/act_fx/level_act_fx_01_beg.txt';
+      final client = _ScriptedClient(
+        [_answer('甲在城门等星灯 `$story:1`。')],
+        plans: ['{"search": ["城门"], "anchors": ["甲", "星灯"]}'],
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '甲在等谁？')
+          .toList();
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.toolCall) '${e.toolName} ${e.toolArgs}',
+        ],
+        ['search {query: 城门}', 'gather {names: [甲, 星灯]}'],
+      );
+      expect(client.planRequests.single.first.content,
+          contains('"anchors": ["<名字>", "<名字>"]'),);
+      final request = client.requests.single;
+      expect(
+        request[2].toolCalls!.map((c) => (c['function'] as Map)['name']),
+        ['search', 'gather'],
+      );
+      final gathered = request[4].content;
+      expect(gathered, startsWith('按名字取材：给了'));
+      // The scene where both names are comes first, in release order.
+      expect(gathered, contains(story));
+      expect(gathered, contains('我会等星灯'));
+      expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('a plan reads anchors, names only', () {
+      final plan = parseSearchPlan(
+        '{"anchors": ["甲", " 乙 ", "甲", "${'很长' * 11}", "丙", "丁", "戊", "己", "庚"]}',
+      )!;
+      // A plan of anchors alone is a plan; a repeat counts once, a long
+      // phrase is not a name, six at most.
+      expect(plan.queries, isEmpty);
+      expect(plan.anchors, ['甲', '乙', '丙', '丁', '戊', '己']);
+    });
+
     test('a reply that plans nothing is no plan', () {
       expect(parseSearchPlan('我不确定该查什么。'), isNull);
       expect(parseSearchPlan('{"search": []}'), isNull);

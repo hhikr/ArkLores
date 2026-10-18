@@ -117,7 +117,7 @@ String loreOpening(List<Game> games) =>
 /// description; here only when to use which tool.
 const String loreWorkingRules = '''
 工作方式：
-- 问题后面可能已经有一批工具调用和结果（检索、故事集目录、Wiki 搜索）：那是按问题替你拟定并执行的第一批查找（不是你写的）。先看它们，从里面的段落和故事入手；
+- 问题后面可能已经有一批工具调用和结果（检索、按名字取材、故事集目录、Wiki 搜索）：那是按问题替你拟定并执行的第一批查找（不是你写的）。先看它们，从里面的段落和故事入手；
   不够或方向不对时自己再查。没有时先用 search 检索。
 - search 是主要的检索方式（query 怎么写、它查哪些资料，见它的说明）。结果按来源分组。
   问题涉及几个方面、几个阶段或几个人物时，分别检索（在同一轮里一起发出），换说法、换角度再检索，比一次读很多更有效。
@@ -292,6 +292,7 @@ String loreRolePrompt(
   String searchDescription = '',
   String outlineDescription = '',
   String wikiSearchDescription = '',
+  String gatherDescription = '',
 }) =>
     switch (role) {
       LoreRole.answer =>
@@ -303,6 +304,7 @@ String loreRolePrompt(
           wiki: wiki,
           outlineDescription: outlineDescription,
           wikiSearchDescription: wikiSearchDescription,
+          gatherDescription: gatherDescription,
         ),
       LoreRole.reviewer => loreReviewPromptOf(games),
       LoreRole.stager => loreStageSystemPrompt,
@@ -331,15 +333,17 @@ String loreSearchPlanPrompt(
   bool wiki = false,
   String outlineDescription = '',
   String wikiSearchDescription = '',
+  String gatherDescription = '',
 }) {
   final outline = outlineDescription.isNotEmpty;
+  final gather = gatherDescription.isNotEmpty;
   final wikiSearch = wiki && wikiSearchDescription.isNotEmpty;
   return '''
 $loreSearchPlanRole。助手接下来会读这些查找的结果、继续查资料并回答玩家；你只写查找，不回答问题。
 可以写的查找：
 - search（检索）：$searchDescription
-${outline ? '- outline（故事集目录）：$outlineDescription\n' : ''}${wikiSearch ? '- wiki_search（Wiki 搜索）：$wikiSearchDescription\n' : ''}
-根据玩家的问题（以及给出的上文）决定第一批查找，合计不超过四项：
+${outline ? '- outline（故事集目录）：$outlineDescription\n' : ''}${wikiSearch ? '- wiki_search（Wiki 搜索）：$wikiSearchDescription\n' : ''}${gather ? '- anchors（取材的名字）：$gatherDescription\n' : ''}
+根据玩家的问题（以及给出的上文）决定第一批查找，合计不超过四项${gather ? '（anchors 不算在内）' : ''}：
 - 多数问题写 search。${outline ? '问题点名了一个故事集，问的是它的结构、它之前之后或与它相关的内容时，写 outline（这个故事集的名字），这时可以不写 search。' : ''}${wikiSearch ? '玩家要求先查 Wiki，或要的是 Wiki 才有的整理时，写 wiki_search（一个页面名或名词）。' : ''}
 - 每条 search 是空格分隔的几个词：原文里会出现的叫法——人物、地点、组织、事件、物品的名字，它们的别称，以及相关的说法；每个词 2–6 个字，一条不超过 8 个词。不写整句，不照抄问题里的虚词和口语。
 - 每个词都要是故事或资料的正文里会写到的词。说明“要找哪一类资料”的词（资料的种类、体裁，或“经历”“介绍”“剧情”这样概括问题的词）不在正文里，不要写：
@@ -347,8 +351,8 @@ ${outline ? '- outline（故事集目录）：$outlineDescription\n' : ''}${wiki
 - 问题只问一件事时写一条 search；涉及几个方面、几个阶段或几个人物时分开写，最多三条。
 - 追问里的指代（他们、这件事、那里）按上文换成具体的名字；上文与这一问无关时不要带上。
 - 只补你确定与问题里的名字直接相关的名字和叫法，这只是为了找到资料；没有把握就不补，不要写与问题无关的名字。问题只有一个名字时一条就够。
-${wiki ? '- wiki：第一条 search 顺带在游戏 Wiki 上找的一个页面名或名词（最能代表问题主题的那一个）；没有合适的就不写这个字段。\n' : ''}只输出一个 JSON 对象，不写别的文字，不加代码块；用不到的字段不写，至少写一项查找：
-{"search": ["<词> <词> <词>", "<词> <词>"]${outline ? ', "outline": ["<故事集名>"]' : ''}${wikiSearch ? ', "wiki_search": ["<一个词>"]' : ''}${wiki ? ', "wiki": "<一个词>"' : ''}}''';
+${gather ? '- anchors：问题所涉及的人物、地点、组织、事件、物品在原文里的名字，最多六个，每个是名字本身（不写说法、不写整句）。追问里的指代换成具体的名字；问题没有提人名、只问一个地方或一群人时，写这个地方、群体的名字，再补上你确定与它直接相关的人物。\n' : ''}${wiki ? '- wiki：第一条 search 顺带在游戏 Wiki 上找的一个页面名或名词（最能代表问题主题的那一个）；没有合适的就不写这个字段。\n' : ''}只输出一个 JSON 对象，不写别的文字，不加代码块；用不到的字段不写，至少写一项查找：
+{"search": ["<词> <词> <词>", "<词> <词>"]${gather ? ', "anchors": ["<名字>", "<名字>"]' : ''}${outline ? ', "outline": ["<故事集名>"]' : ''}${wikiSearch ? ', "wiki_search": ["<一个词>"]' : ''}${wiki ? ', "wiki": "<一个词>"' : ''}}''';
 }
 
 /// The planning call's input: the question, and for a follow-up the

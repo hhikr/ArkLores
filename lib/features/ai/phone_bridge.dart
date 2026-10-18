@@ -194,6 +194,9 @@ String stepSummary(WorkStep s) {
     case WorkKind.find:
       final n = s.searchStoryCount;
       return n == null ? _firstLine(s.text) : '$n 篇剧情';
+    case WorkKind.gather:
+      final n = s.gatherStoryCount;
+      return n == null ? _firstLine(s.text) : '$n 篇剧情';
     case WorkKind.sql:
       final n = s.rowCount;
       return n == null ? _firstLine(s.text) : '$n 行';

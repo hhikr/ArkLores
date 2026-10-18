@@ -19,6 +19,7 @@ import 'dart:math' as math;
 
 import '../gamedata/game_retrieval.dart';
 import 'lore_tools.dart';
+import 'tools/agent_tool.dart';
 
 /// One run of lines of a story given as material.
 class CoveragePassage {
@@ -87,6 +88,14 @@ class Coverage {
   /// The material as the model reads it.
   String render() {
     final b = StringBuffer();
+    if (passages.isEmpty && records.isEmpty) {
+      b.writeln('没有在剧情和资料里找到这些名字。');
+    } else {
+      b.writeln('按名字取材：给了 ${stories.length} 篇剧情的原文（$chars 字）'
+          '${records.isEmpty ? '' : '和 ${records.length} 条资料的片段'}。'
+          '每篇只取这些名字出现、说话的行及前后各两行，按上线顺序排列；'
+          '行号可以直接引用，要看前后更多内容用 read_story。');
+    }
     if (footprints.isNotEmpty) {
       b.writeln('锚点在剧情里的位置：${[
         for (final f in footprints)
@@ -356,5 +365,58 @@ class CoverageBuilder {
       out.add(CoveragePassage(s, run.first.lineIndex, run.last.lineIndex, run));
     }
     return out;
+  }
+}
+
+/// `gather`: [CoverageBuilder] as a tool. The first turn runs it with the
+/// names the planning call wrote (`search_planner.dart`); the model may run
+/// it again with other names (people it found, say).
+class GatherTool extends AgentTool {
+  GatherTool(this.store, this.seen);
+
+  final GameDataRetrieval store;
+  final SeenLines seen;
+
+  /// Characters of story text one call gives.
+  static const int budgetChars = 30000;
+
+  @override
+  String get name => 'gather';
+
+  @override
+  String get description =>
+      '按名字取材：给出几个名字（人物、地点、组织、事件、物品在原文里的叫法），'
+      '代码在剧情里找到它们出现和说话的行，优先给几个名字同时出现的场景，每个故事集先给几篇，'
+      '取每处前后各两行原文（共约 ${budgetChars ~/ 10000} 万字），按上线顺序排列，'
+      '末尾列出定位到但没有给原文的篇目和相关资料的片段。名字越少见越能定位；结果很长，不要用它查单个细节。';
+
+  @override
+  Map<String, dynamic> get parameters => {
+        'type': 'object',
+        'properties': {
+          'names': {
+            'type': 'array',
+            'items': {'type': 'string'},
+            'description': '名字，最多 ${CoverageBuilder.maxAnchors} 个',
+          },
+        },
+        'required': ['names'],
+      };
+
+  @override
+  Future<String> execute(Map<String, dynamic> arguments) async {
+    final raw = arguments['names'];
+    final names = [
+      for (final n in raw is List ? raw : [raw])
+        if (n is String && n.trim().isNotEmpty) n.trim(),
+    ];
+    if (names.isEmpty) return '错误：names 为空';
+    final coverage = await CoverageBuilder(store).build(
+      names,
+      budgetChars: budgetChars,
+      hinted: seen.stories.toSet(),
+    );
+    coverage.register(seen);
+    return coverage.render();
   }
 }

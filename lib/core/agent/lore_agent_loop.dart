@@ -329,6 +329,7 @@ class LoreAgentLoop {
         (raw) => onRawLlmResponse?.call(++record, '（拟定检索）$raw'),
         outlineDescription: tools['outline']?.description ?? '',
         wikiSearchDescription: tools['wiki_search']?.description ?? '',
+        gatherDescription: tools['gather']?.description ?? '',
       );
       // A step whose tool this question does not have is left out.
       final planned = <({String tool, Map<String, dynamic> args})>[
@@ -348,6 +349,10 @@ class LoreAgentLoop {
           if (tools['wiki_search'] != null)
             for (final q in plan.wikiSearches)
               (tool: 'wiki_search', args: {'query': q}),
+          // Phase 1 (2026-10-18): the lines around the question's names,
+          // after the searches (the stories they found count a little more).
+          if (tools['gather'] != null && plan.anchors.isNotEmpty)
+            (tool: 'gather', args: {'names': plan.anchors}),
         ] else if (keywordOnly == null)
           (tool: 'search', args: {'query': query}),
       ];
@@ -382,7 +387,14 @@ class LoreAgentLoop {
           }
         }
 
-        final runs = [for (var k = 0; k < planned.length; k++) runOne(k)];
+        final runs = <Future<(String, SearchResult?)>>[];
+        for (var k = 0; k < planned.length; k++) {
+          runs.add(
+            planned[k].tool == 'gather'
+                ? Future.wait([...runs]).then((_) => runOne(k))
+                : runOne(k),
+          );
+        }
         final calls = [
           for (final (k, step) in planned.indexed)
             ToolCall(
@@ -1305,6 +1317,7 @@ class LoreAgentLoop {
     void Function(String raw) onRaw, {
     String outlineDescription = '',
     String wikiSearchDescription = '',
+    String gatherDescription = '',
   }) async {
     try {
       final result = await (planClient ?? client).chatCompletion(
@@ -1316,6 +1329,7 @@ class LoreAgentLoop {
               searchDescription: search.description,
               outlineDescription: outlineDescription,
               wikiSearchDescription: wikiSearchDescription,
+              gatherDescription: gatherDescription,
             ),
           ),
           Message.user(
@@ -1476,6 +1490,7 @@ class LoreAgentLoop {
           '${arg('start').isEmpty ? '' : ' L${arg('start')} 起'}',
       'outline' => '查看故事集 ${arg('collection')}',
       'similar_names' => '查找与“${arg('name')}”相近的名字',
+      'gather' => '按名字取材：${args['names'] is List ? (args['names'] as List).join('、') : arg('names')}',
       'wiki_search' => '在 Wiki 上搜索“${arg('query')}”',
       'wiki_read' => '阅读 Wiki 页面 ${arg('page')}',
       'delegate' => '子任务：${_clip(arg('task'), 40)}',

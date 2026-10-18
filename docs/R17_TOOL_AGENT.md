@@ -21,7 +21,8 @@ v0.10 之前的问答是分步流程（决策器看压缩后的状态 → 原文
 
 ```
 用户问题 ─► AskChatNotifier ─► StoryQaAgent.run ─► LoreAgentLoop
-   第一批查找：一次独立的小调用按问题拟定（search / outline / wiki_search），代码执行，作为普通的调用和结果进入对话
+   第一批查找：一次独立的小调用按问题拟定（search / outline / wiki_search，另写锚点），代码执行，
+              检索之后按锚点取材（gather），都作为普通的调用和结果进入对话
    system: loreSystemPrompt()（资料来源概览 + 工作方式 + 阅读原则 + 出处格式 + 答案格式）
    messages: [上一问的对话，工具结果已折叠（追问时）] + 用户问题 + 每轮 assistant/tool 消息（只追加）
    每轮：client.streamTurn(messages, tools) ─► 文本增量 / tool_calls
@@ -35,6 +36,7 @@ v0.10 之前的问答是分步流程（决策器看压缩后的状态 → 原文
 | `lib/core/agent/lore_tools.dart`、`lib/core/agent/tools/search_tool.dart`、`lib/core/agent/tools/wiki_tools.dart` | 工具；`SeenLines` 是唯一的“已读”账本 |
 | `lib/core/agent/tool_call_gate.dart` | 工具调用守门 |
 | `lib/core/agent/search_planner.dart` | 拟定第一批查找 |
+| `lib/core/agent/coverage.dart` | 按名字取材（`CoverageBuilder`、`gather`） |
 | `lib/core/agent/lore_agent_prompts.dart`、`lore_endfield_prompts.dart` | 提示词，按角色组合（`loreRolePrompt`：作答 / 子助手 / 拟定 / 审稿 / 整理） |
 | `lib/core/agent/lore_answer_json.dart`、`lore_answer_stages.dart` | 答案 JSON → markdown；按阶段整理 |
 | `lib/core/gamedata/readonly_sql.dart` | 只读 SQL：语句检查，后台 isolate，超时用 `sqlite3_interrupt` 中止 |
@@ -54,6 +56,7 @@ v0.10 之前的问答是分步流程（决策器看压缩后的状态 → 原文
 | `guide()` | 知识库手册：表与列、绑定、资料页结构、终末地库的结构 |
 | `outline(collection)` | 故事集的章节、关卡号、官方梗概；末尾是相关的故事集 |
 | `similar_names(name)` | 读音或字形相近的名字 |
+| `gather(names)` | 按名字取材：名字出现和说话的行前后各两行，约 3 万字，按上线顺序排列（结果不受 8k 上限）。第一轮由代码按拟定的锚点调用一次 |
 | `wiki_search(query, game?, limit?)`、`wiki_read(page, game?, start, count, section?)` | 开着“Wiki 资料”时才有（`WIKI_EVIDENCE.md`） |
 | `delegate(task, story_ids?, collection?)` | 开着“子助手”时主 agent 才有：把一部分阅读交给子 agent |
 
@@ -82,6 +85,16 @@ v0.10 之前的问答是分步流程（决策器看压缩后的状态 → 原文
 写出最多三条检索词、最多两个要看目录的故事集、最多两个 Wiki 搜索词（合计不超过四步）和一个附在第一条检索上的 Wiki 词。代码照着执行。
 没拟定出来时：有向量就用问题原文按意思检索一次；没有向量就由主模型自己检索。**代码不从问题里切词、找名字**（切出来的是句子碎片）。
 
+**按名字取材**（统一重构第 1 期，开发者 2026-10-18 定下）：同一次小调用另写最多六个锚点（`anchors`，问题涉及的人物、地点、组织、事件、物品的名字），
+检索跑完后代码调用一次 `gather`（`coverage.dart`）：
+- 定位：每个锚点在剧情里说话（说话人相等）或被写到（正文含它）的行；单字的名字只按说话人找。
+- 打分：锚点越少见权重越大（1/log2(2+篇数)），两个锚点相距 6 行以内算同场，同场加权最多；拟定的检索找到过的篇略加分。
+- 选篇：每个故事集先最多三篇，再不限；每篇最多 3000 字，共约 3 万字；每处取前后各两行，优先同场的中心。
+- 排列：按上线顺序（`storyReleaseKey`：活动的开始时间，否则剧情回顾的 `startShowTime`，主线按章号），没给原文的篇列成清单，另附最多 4 条资料片段。
+给出的行都登记为已读。依据是离线召回测试（`test/live/recall_eval_test.dart`，65 题手标金标行）：日志题第一步的金标行命中，
+现状（拟定的检索）37%，只取材 56%，检索加取材 74%（第一轮中位 5.1 万字）。它和 §9 的“固定的阅读步骤”不同：
+取材由代码做一次、结果只给一次，模型不执行清单、也不被要求按顺序读；之后照常自己检索。改动锚点、打分或预算之前先重跑召回测试。
+
 ### 守门
 
 进入对话的调用参数必须是合法 JSON：粘连的参数拆成几个调用，按工具的 schema 校验（必填、未知参数、数字与数组的读法、`requireOneOf`）。
@@ -90,7 +103,7 @@ v0.10 之前的问答是分步流程（决策器看压缩后的状态 → 原文
 
 ### 没有结果的查找
 
-唯一一条手写的进度规则（开发者 2026-10-11 要的）：一个工具在一次问答里没有结果满 6 次（`maxFailedLookups`；结果以“0 行”“没有”“错误”等开头），之后不再执行。
+手写的进度规则只有这一条（开发者 2026-10-11 要的；第一轮的取材见上一节）：一个工具在一次问答里没有结果满 6 次（`maxFailedLookups`；结果以“0 行”“没有”“错误”等开头），之后不再执行。
 全是空结果的一轮在模型回复过一次之后不留在上下文里（`emptyTurns`），次数旁边留下试过的调用的简短清单。对所有工具、所有问题一样。
 其余仍不加：预算提示、重读拒绝、阅读计划。
 
@@ -213,5 +226,5 @@ flutter test test/live/ask_pipeline_live_test.dart
 - 由代码从问题里切词、找名字做第一批检索：切出来的是句子碎片，追问时拿到的是上一问的词。
 - 由代码检查“照搬台词”并退回：模型只是把引号去掉。
 - 作答时按覆盖面退回、预算提示、重读拒绝、阅读计划：手写的进度规则只对样例有效。
-- 固定的阅读步骤（“写作前先读梗概和最后几章”）、针对某类剧情的检查项、围绕某类问题设计的特征或输出字段（`CLAUDE.md` “禁止特判”）。
+- 由模型执行的固定阅读步骤（“写作前先读梗概和最后几章”、R15/R16 每步重发的阅读清单）、针对某类剧情的检查项、围绕某类问题设计的特征或输出字段（`CLAUDE.md` “禁止特判”）。
 - 把没人读的表、别名表、“前作/续作”表加进知识库来帮模型：身份和先后由模型读原文确认。

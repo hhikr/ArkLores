@@ -4,6 +4,10 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [Unreleased]
 
+### Questions and answers
+
+- **The first turn brings the story lines around the question's names.** Besides the first searches, the call that plans them now names what the question is about (people, places, groups, events), and code gathers the lines where those names speak or appear, two lines either side. Scenes where several names meet come first, each collection gives a few stories before any gives more, and the stories are in the order players could read them. In an offline test over 65 past questions with hand-marked lines, the first step now shows 74% of the lines an answer needs instead of 37%. The model can gather again for other names with the new `gather` tool.
+
 ### Library and reader
 
 - **Operator pages open without stalling.** A profile was built and laid out in one piece, every archive part and every voice line at once, so with parts unfolded the page hung on opening. It is now a lazy list: only the paragraphs and voice lines on screen are built.

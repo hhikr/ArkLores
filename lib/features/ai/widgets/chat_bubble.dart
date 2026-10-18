@@ -1296,6 +1296,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         WorkKind.delegate => Icons.call_split_sharp,
         WorkKind.wikiSearch => Icons.public_sharp,
         WorkKind.wikiRead => Icons.article_sharp,
+        WorkKind.gather => Icons.library_books_sharp,
         WorkKind.error => Icons.error_outline_sharp,
         WorkKind.otherTool ||
         WorkKind.note ||
@@ -1316,6 +1317,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         return rows == null ? '' : t.aiWorkRows(rows);
       case WorkKind.find:
         final stories = step.searchStoryCount;
+        return stories == null ? '' : t.aiWorkStories(stories);
+      case WorkKind.gather:
+        final stories = step.gatherStoryCount;
         return stories == null ? '' : t.aiWorkStories(stories);
       case WorkKind.read:
         final range = step.lineRange;
