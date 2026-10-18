@@ -16,7 +16,7 @@
 | `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用悬浮栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 图标/回弹曲线（`square_shapes_test`） |
 | `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md） |
 | `support/` | 共用的夹具与替身 |
-| `fixtures/` | 数据文件（live 评测题：`investigation_eval.json` 带金标；`history_questions_eval.json` 是玩家实际问过的 37 问，同一个 `session` 的题是一次对话的连续几轮） |
+| `fixtures/` | 数据文件（live 评测题：`investigation_eval.json` 带金标；`history_questions_eval.json` 是玩家实际问过的 37 问，同一个 `session` 的题是一次对话的连续几轮；`recall_eval.json` 是第一步召回的行级金标） |
 
 ## 共用夹具（`support/`）
 
@@ -34,6 +34,7 @@
   `core/gamedata/multi_game_retrieval_test.dart` 测两个库合成的检索面。真实终末地库的验收在 `live/endfield_acceptance_test.dart`（opt-in）。
 - `fake_wiki.dart`（0.13）：内存里的 Wiki（`FakeWikiSource`，可设为“不可用”、记录取页次数）和一个虚构页面的 `fakeWikiLookup()`；
   站点的真实请求格式在 `core/wiki/wiki_sources_test.dart` 里用 `MockClient` 测，联网检查在 `live/wiki_live_test.dart`（免费，opt-in）。
+  第一步召回（问题开头的检索展示了哪些金标行、多少字）在 `live/recall_eval_test.dart`：不调模型、免费，opt-in（`ARKLORES_RUN_RECALL_EVAL`），报告写到 `build/recall_eval/`。
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
   `plain_theme.dart`（主题的 Google 字体在测试里会联网下载并失败，Widget 测试用 `plainThemeOverride()`）、

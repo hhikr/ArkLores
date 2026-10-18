@@ -1,0 +1,1296 @@
+{
+ "format": "arklores_eval",
+ "version": 1,
+ "status": "Recall set for the first step of a question (unified refactor, phase 0). Gold lines checked against build/gamedata_mobile (17759cc) and build/endfield on 2026-10-18.",
+ "notes": [
+  "Evaluation fixture only (CLAUDE.md anti-fixture rule): never referenced from lib/.",
+  "Scored without any model call by test/live/recall_eval_test.dart: what the first step showed (SeenLines) against the gold.",
+  "gold: {story_id, lines:[first,last]} is hit when any of those lines was shown; {record_any:[ids]} when any of the records was shown.",
+  "gold_collections: a collection counts when any line of its stories was shown; min_collections is how many make the case complete.",
+  "planner: the plan the 0.14 planner (glm) wrote for this question in real sessions (exported from the developer PC, 2026-10-18); absent when none was recorded or it was not valid JSON.",
+  "anchors: names and nouns the question is about, written by hand; input of the anchor-based locator of later phases. Without a planner record the baseline searches the anchors as one query.",
+  "investigation_anchors: anchors for the cases of investigation_eval.json, scored by their gold_stories (the L number of each anchor is the gold line)."
+ ],
+ "cases": [
+  {
+   "id": "slum_fate",
+   "type": "结局",
+   "query": "龙门贫民区居民在切尔诺贝利事件中的结局是什么",
+   "anchors": [
+    "龙门",
+    "贫民区",
+    "感染者"
+   ],
+   "planner": {
+    "search": [
+     "龙门 贫民区",
+     "切尔诺伯格 事件",
+     "整合运动 天灾"
+    ],
+    "wiki": "切尔诺伯格事件"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_08-06.txt",
+     "lines": [
+      281,
+      284
+     ],
+     "note": "鼠王：影卫没有照魏彦吾的命令处理感染者"
+    }
+   ]
+  },
+  {
+   "id": "slum_ch8",
+   "type": "追问",
+   "query": "第八章难道没有提到吗",
+   "prior": "龙门贫民区居民在切尔诺贝利事件中的结局是什么",
+   "anchors": [
+    "龙门",
+    "贫民区",
+    "感染者",
+    "魏彦吾"
+   ],
+   "planner": {
+    "search": [
+     "贫民区 居民 撤离 第八章 怒号",
+     "魏彦吾 陈 决裂 近卫局",
+     "龙门 遗弃 感染者 清城"
+    ],
+    "outline": [
+     "怒号光明"
+    ],
+    "wiki": "明日方舟 第八章"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_08-06.txt",
+     "lines": [
+      281,
+      284
+     ],
+     "note": "鼠王：影卫没有照魏彦吾的命令处理感染者"
+    }
+   ]
+  },
+  {
+   "id": "slum_massacre",
+   "type": "核查",
+   "query": "龙门贫民窟的感染者真的被屠杀了吗？",
+   "anchors": [
+    "龙门",
+    "贫民区",
+    "感染者",
+    "魏彦吾"
+   ],
+   "planner": {
+    "search": [
+     "龙门贫民窟 感染者 屠杀 整合运动 陈 近卫局 清理"
+    ],
+    "wiki": "龙门"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_08-06.txt",
+     "lines": [
+      281,
+      284
+     ],
+     "note": "鼠王：影卫没有照魏彦吾的命令处理感染者"
+    }
+   ]
+  },
+  {
+   "id": "slum_foreshadow",
+   "type": "讲述/伏笔",
+   "query": "6-8章，关于贫民区感染者，8章结尾对话暗示了鼠王保下了魏下令肃清的感染者，这在前文有伏笔暗示吗，还是只是生硬地给个好结局？",
+   "anchors": [
+    "鼠王",
+    "魏彦吾",
+    "贫民区",
+    "感染者"
+   ],
+   "planner": {
+    "search": [
+     "鼠王",
+     "贫民窟 感染者",
+     "肃清 魏彦吾",
+     "陈 卫戍",
+     "林雨霞 灰色",
+     "龙门 近卫局"
+    ],
+    "wiki": "鼠王"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_08-06.txt",
+     "lines": [
+      281,
+      284
+     ],
+     "note": "鼠王：影卫没有照魏彦吾的命令处理感染者"
+    }
+   ]
+  },
+  {
+   "id": "wei_brother_earliest",
+   "type": "讲述/最早出处",
+   "query": "魏的出身特殊、以至于和皇帝关系密切，最早出自哪里能得知",
+   "anchors": [
+    "魏彦吾",
+    "胞弟",
+    "皇帝"
+   ],
+   "planner": {
+    "search": [
+     "魏彦吾 皇室 血脉",
+     "魏彦吾 皇帝 亲戚",
+     "龙门 执政 出身"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_main_07-01_end.txt",
+     "lines": [
+      76,
+      76
+     ],
+     "note": "“胞弟”最早出现"
+    },
+    {
+     "story_id": "obt/main/level_st_07-02.txt",
+     "lines": [
+      70,
+      70
+     ]
+    },
+    {
+     "story_id": "obt/main/level_st_08-06.txt",
+     "lines": [
+      320,
+      322
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wei_brother_when",
+   "type": "讲述/玩家何时知道",
+   "query": "玩家什么时候才能看出魏是炎国皇帝的兄弟？光靠第七章能锁定吗",
+   "anchors": [
+    "魏彦吾",
+    "胞弟",
+    "皇帝"
+   ],
+   "planner": {
+    "search": [
+     "魏彦吾 皇帝 兄弟",
+     "炎国 皇帝 龙门 魏彦吾",
+     "第七章 魏彦吾 真实身份"
+    ],
+    "wiki_search": [
+     "魏彦吾"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_main_07-01_end.txt",
+     "lines": [
+      76,
+      76
+     ],
+     "note": "“胞弟”最早出现"
+    },
+    {
+     "story_id": "obt/main/level_st_07-02.txt",
+     "lines": [
+      70,
+      70
+     ]
+    },
+    {
+     "story_id": "obt/main/level_st_08-06.txt",
+     "lines": [
+      320,
+      322
+     ]
+    },
+    {
+     "story_id": "activities/act40side/level_act40side_st02.txt",
+     "lines": [
+      53,
+      64
+     ]
+    },
+    {
+     "story_id": "activities/act49side/level_act49side_11_end.txt",
+     "lines": [
+      182,
+      182
+     ],
+     "note": "真龙与兄长魏彦吾"
+    }
+   ]
+  },
+  {
+   "id": "zhenlong",
+   "type": "人物",
+   "query": "真龙为什么不直接杀了魏？真龙是个什么样的人？前朝皇帝是个什么样的人？",
+   "anchors": [
+    "真龙",
+    "魏彦吾",
+    "先帝"
+   ],
+   "planner": {
+    "search": [
+     "真龙 魏彦吾 胞弟 皇帝",
+     "前朝 皇帝 炎国 年轻",
+     "文月 魏彦吾 兄弟 变故"
+    ],
+    "wiki": "炎国皇帝"
+   },
+   "gold": [
+    {
+     "story_id": "activities/act49side/level_act49side_09_beg.txt",
+     "lines": [
+      41,
+      41
+     ]
+    },
+    {
+     "story_id": "activities/act40side/level_act40side_st02.txt",
+     "lines": [
+      53,
+      64
+     ]
+    },
+    {
+     "story_id": "activities/act49side/level_act49side_11_end.txt",
+     "lines": [
+      182,
+      182
+     ],
+     "note": "真龙与兄长魏彦吾"
+    },
+    {
+     "story_id": "activities/act49side/level_act49side_st01.txt",
+     "lines": [
+      46,
+      47
+     ]
+    }
+   ]
+  },
+  {
+   "id": "yan_infected",
+   "type": "为什么/多视角",
+   "query": "炎国人对感染者的态度是什么",
+   "anchors": [
+    "大炎",
+    "感染者"
+   ],
+   "planner": {
+    "search": [
+     "炎国 感染者 态度 大炎"
+    ],
+    "wiki": "感染者"
+   },
+   "gold": [
+    {
+     "story_id": "activities/act15side/level_act15side_02_beg.txt",
+     "lines": [
+      161,
+      190
+     ],
+     "note": "尚蜀城内对感染者的盘查"
+    },
+    {
+     "story_id": "activities/act15side/level_act15side_04_beg.txt",
+     "lines": [
+      176,
+      183
+     ]
+    },
+    {
+     "story_id": "activities/act15side/level_act15side_04_end.txt",
+     "lines": [
+      106,
+      106
+     ]
+    },
+    {
+     "story_id": "activities/act40side/level_act40side_01_beg.txt",
+     "lines": [
+      137,
+      137
+     ],
+     "note": "绝对不要暴露自己是感染者"
+    },
+    {
+     "story_id": "activities/act40side/level_act40side_08_beg.txt",
+     "lines": [
+      184,
+      184
+     ]
+    },
+    {
+     "story_id": "activities/act49side/level_act49side_01_end.txt",
+     "lines": [
+      83,
+      83
+     ]
+    }
+   ],
+   "min_collections": 3,
+   "note": "金标分属将进酒、相见欢、辞岁行三部；至少覆盖其中三部的原文才算全"
+  },
+  {
+   "id": "yan_infected_wei",
+   "type": "为什么/前提",
+   "query": "既然炎国对感染者态度很好，为什么魏在这里会下决定杀那么多人？",
+   "anchors": [
+    "魏彦吾",
+    "感染者",
+    "大炎"
+   ],
+   "planner": {
+    "search": [
+     "魏彦吾 感染者 龙门 处置 决定",
+     "鼠王 感染者 保护 龙门",
+     "贫民区 感染者 政策 炎国"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_08-06.txt",
+     "lines": [
+      281,
+      284
+     ],
+     "note": "鼠王：影卫没有照魏彦吾的命令处理感染者"
+    },
+    {
+     "story_id": "obt/main/level_main_07-02_end.txt",
+     "lines": [
+      159,
+      159
+     ]
+    },
+    {
+     "story_id": "activities/act15side/level_act15side_02_beg.txt",
+     "lines": [
+      161,
+      190
+     ],
+     "note": "尚蜀城内对感染者的盘查"
+    },
+    {
+     "story_id": "activities/act15side/level_act15side_04_beg.txt",
+     "lines": [
+      176,
+      183
+     ]
+    }
+   ]
+  },
+  {
+   "id": "longmen_yan",
+   "type": "关系/制度",
+   "query": "魏彦吾治下的龙门和炎国的关系是什么",
+   "anchors": [
+    "龙门",
+    "大炎",
+    "魏彦吾"
+   ],
+   "planner": {
+    "search": [
+     "魏彦吾 龙门 炎国 关系",
+     "龙门 炎国 独立 城邦"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_main_07-02_end.txt",
+     "lines": [
+      159,
+      159
+     ]
+    },
+    {
+     "story_id": "obt/main/level_st_08-02.txt",
+     "lines": [
+      97,
+      97
+     ]
+    },
+    {
+     "story_id": "activities/act15d5/level_act15d5_st04.txt",
+     "lines": [
+      121,
+      122
+     ]
+    }
+   ]
+  },
+  {
+   "id": "irene_all",
+   "type": "经过/全部",
+   "query": "介绍艾丽妮的所有故事",
+   "anchors": [
+    "艾丽妮"
+   ],
+   "planner": {
+    "search": [
+     "艾丽妮",
+     "审判庭 海嗣",
+     "斯卡蒂 艾丽妮"
+    ],
+    "wiki": "艾丽妮"
+   },
+   "gold_collections": [
+    "愚人号",
+    "生路",
+    "昨日海",
+    "灯火微明",
+    "盐漠上的海风"
+   ],
+   "min_collections": 5
+  },
+  {
+   "id": "irene_journey",
+   "type": "经过/全部",
+   "query": "介绍艾丽妮的经历",
+   "anchors": [
+    "艾丽妮"
+   ],
+   "planner": {
+    "search": [
+     "艾丽妮"
+    ]
+   },
+   "gold_collections": [
+    "愚人号",
+    "生路",
+    "昨日海",
+    "灯火微明",
+    "盐漠上的海风"
+   ],
+   "min_collections": 5
+  },
+  {
+   "id": "beagle_muelsyse",
+   "type": "关系/写错的名字",
+   "query": "米格鲁和缪因之间发生了什么？",
+   "anchors": [
+    "米格鲁",
+    "谬因",
+    "洛伦茨"
+   ],
+   "planner": {
+    "search": [
+     "米格鲁 缪因",
+     "缪因 米格鲁 剧情"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "obt/rogue/rogue_6/endbook/endbook_rogue_6_1_1.txt",
+     "lines": [
+      14,
+      14
+     ],
+     "note": "干员谬因就是洛伦茨（问题写成了“缪因”）"
+    },
+    {
+     "story_id": "activities/act21mini/level_act21mini_st07.txt",
+     "lines": [
+      71,
+      109
+     ],
+     "note": "洛伦茨唤回米格鲁的意识"
+    }
+   ]
+  },
+  {
+   "id": "dance_land",
+   "type": "单点事实",
+   "query": "哪位干员说过自己不熟悉陆地上的舞蹈，所以没有答应别人的邀请？是谁邀请的？",
+   "anchors": [
+    "舞会",
+    "陆地"
+   ],
+   "planner": {
+    "search": [
+     "舞蹈 邀请",
+     "陆地 舞 不熟悉",
+     "舞会"
+    ],
+    "wiki": "舞蹈"
+   },
+   "gold": [
+    {
+     "record_any": [
+      "18923086a9c23b004e1e4c519020d31e4d6b9114"
+     ],
+     "note": "深巡语音：艾丽妮邀请"
+    }
+   ]
+  },
+  {
+   "id": "dance_shore",
+   "type": "单点事实",
+   "query": "谁因为不会跳岸上的舞而婉拒了同伴？那位同伴是谁？",
+   "anchors": [
+    "舞会",
+    "陆地"
+   ],
+   "planner": {
+    "search": [
+     "跳舞 岸上 婉拒",
+     "不会跳舞 同伴"
+    ],
+    "wiki": "跳舞"
+   },
+   "gold": [
+    {
+     "record_any": [
+      "18923086a9c23b004e1e4c519020d31e4d6b9114"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grandpa_letters",
+   "type": "单点事实",
+   "query": "哪位干员的祖父去世以后，老顾客们仍旧往铺子里写信问好？",
+   "anchors": [
+    "爷爷",
+    "老主顾"
+   ],
+   "planner": {
+    "search": [
+     "祖父 去世 铺子 写信 老顾客"
+    ]
+   },
+   "gold": [
+    {
+     "record_any": [
+      "dab0428806fb04464b1d1efba48afc7845e363f3",
+      "ae84b93a389f5e875b5fd082bddb349f2e514262"
+     ],
+     "note": "裁度语音（原文写“爷爷”“老主顾”）"
+    }
+   ]
+  },
+  {
+   "id": "filming_mentor",
+   "type": "单点事实",
+   "query": "谁背后的装备是在拍戏的小团队里结识的一位师傅帮忙改的？",
+   "anchors": [
+    "剧组",
+    "师父"
+   ],
+   "planner": {
+    "search": [
+     "拍戏 团队 师傅 装备 改装",
+     "摄影 剧组 师傅 改造 装备",
+     "演员 师傅 改装"
+    ]
+   },
+   "gold": [
+    {
+     "record_any": [
+      "c2ba89cf2a116af7e959b5e40b928614bc7b91bf"
+     ],
+     "note": "蒂比语音（原文写“师父”“小剧组”）"
+    }
+   ]
+  },
+  {
+   "id": "amiya_cautus",
+   "type": "核查",
+   "query": "有人说阿米娅是卡特斯，这个说法对吗？",
+   "anchors": [
+    "阿米娅",
+    "卡特斯"
+   ],
+   "planner": {
+    "search": [
+     "阿米娅 卡特斯 兔",
+     "阿米娅 种族 档案"
+    ],
+    "wiki": "阿米娅"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_main_10-15_beg.txt",
+     "lines": [
+      102,
+      102
+     ]
+    },
+    {
+     "story_id": "activities/act22side/level_act22side_01_end.txt",
+     "lines": [
+      5,
+      5
+     ]
+    }
+   ]
+  },
+  {
+   "id": "surtr_two_games",
+   "type": "跨游戏",
+   "query": "史尔特尔在两部故事里的剧情",
+   "anchors": [
+    "史尔特尔"
+   ],
+   "planner": {
+    "search": [
+     "史尔特尔 苏尔朵 剧情后果"
+    ],
+    "wiki_search": [
+     "史尔特尔"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "ef/c16m2.txt",
+     "lines": [
+      71,
+      82
+     ],
+     "note": "终末地：佩丽卡讲史尔特尔与莱万汀"
+    },
+    {
+     "story_id": "obt/rogue/rogue_3/monthrecord/month_record_rogue_3_5_1.txt",
+     "lines": [
+      10,
+      20
+     ],
+     "note": "明日方舟：史尔特尔的记忆"
+    }
+   ],
+   "gold_games": [
+    "arknights",
+    "endfield"
+   ]
+  },
+  {
+   "id": "revenant_origin",
+   "type": "跨游戏",
+   "query": "萨卡兹众魂在特蕾西娅最后的引导中走向了什么结局？如果消失了，再旅者又是如何出现的？",
+   "anchors": [
+    "众魂",
+    "特蕾西娅",
+    "再旅者"
+   ],
+   "planner": {
+    "search": [
+     "众魂 特蕾西娅 萨卡兹 引导 结局",
+     "再旅者 萨卡兹 起源"
+    ],
+    "wiki": "再旅者"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_15-01.txt",
+     "lines": [
+      138,
+      138
+     ]
+    },
+    {
+     "story_id": "obt/main/level_st_15-02.txt",
+     "lines": [
+      49,
+      49
+     ]
+    },
+    {
+     "story_id": "ef/c16m2.txt",
+     "lines": [
+      80,
+      80
+     ]
+    },
+    {
+     "story_id": "ef/c16m3.txt",
+     "lines": [
+      107,
+      107
+     ]
+    }
+   ],
+   "gold_games": [
+    "arknights",
+    "endfield"
+   ]
+  },
+  {
+   "id": "revenant_def",
+   "type": "跨游戏/追问",
+   "query": "再旅者指的是续作中，罗德岛的干员“复活”但又不完全是复活的情况",
+   "prior": "萨卡兹众魂在特蕾西娅最后的引导中走向了什么结局？如果消失了，再旅者又是如何出现的？",
+   "anchors": [
+    "再旅者"
+   ],
+   "planner": {
+    "search": [
+     "再旅者",
+     "罗德岛",
+     "复活",
+     "继承",
+     "记忆"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "ef/c16m2.txt",
+     "lines": [
+      80,
+      80
+     ]
+    },
+    {
+     "story_id": "ef/c16m3.txt",
+     "lines": [
+      107,
+      107
+     ]
+    }
+   ]
+  },
+  {
+   "id": "souls_end",
+   "type": "结局",
+   "query": "萨卡兹众魂在特雷西娅最后的引导中走向了什么结局？",
+   "anchors": [
+    "众魂",
+    "特蕾西娅"
+   ],
+   "planner": {
+    "search": [
+     "萨卡兹众魂 特雷西娅 引导",
+     "众魂 特雷西娅 结局 归宿"
+    ],
+    "wiki": "特雷西娅"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_15-01.txt",
+     "lines": [
+      138,
+      138
+     ]
+    },
+    {
+     "story_id": "obt/main/level_st_15-02.txt",
+     "lines": [
+      49,
+      49
+     ]
+    },
+    {
+     "story_id": "obt/main/level_main_15-01_end.txt",
+     "lines": [
+      21,
+      24
+     ]
+    }
+   ],
+   "note": "问题把“特蕾西娅”写成了“特雷西娅”"
+  },
+  {
+   "id": "talulah_self",
+   "type": "谜团",
+   "query": "在被黑蛇夺舍后她完全没有自我意识吗",
+   "prior": "整合走向极端，塔露拉和黑蛇的责任该如何划分？",
+   "anchors": [
+    "塔露拉",
+    "科西切"
+   ],
+   "planner": {
+    "search": [
+     "黑蛇 塔露拉 夺舍 自我意识 科西切 融为一体",
+     "塔露拉 内心 挣扎 意志 科西切"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_main_08-16_beg.txt",
+     "lines": [
+      113,
+      135
+     ]
+    },
+    {
+     "story_id": "obt/main/level_main_08-17_beg.txt",
+     "lines": [
+      3,
+      3
+     ]
+    },
+    {
+     "story_id": "obt/main/level_main_07-02_end.txt",
+     "lines": [
+      132,
+      132
+     ]
+    }
+   ]
+  },
+  {
+   "id": "talulah_after",
+   "type": "经过",
+   "query": "切尔诺贝利事件之后塔露拉做了什么？",
+   "anchors": [
+    "塔露拉"
+   ],
+   "planner": {
+    "search": [
+     "塔露拉 切尔诺贝利 整合运动",
+     "塔露拉 乌萨斯 游击队",
+     "塔露拉 感染者 目标"
+    ],
+    "wiki": "塔露拉"
+   },
+   "gold": [
+    {
+     "story_id": "obt/main/level_st_09-04.txt",
+     "lines": [
+      264,
+      264
+     ]
+    },
+    {
+     "story_id": "activities/act18mini/level_act18mini_st02.txt",
+     "lines": [
+      355,
+      355
+     ]
+    },
+    {
+     "story_id": "obt/main/level_spst_16-01.txt",
+     "lines": [
+      77,
+      77
+     ]
+    },
+    {
+     "story_id": "obt/main/level_main_17-16_end.txt",
+     "lines": [
+      21,
+      21
+     ]
+    }
+   ],
+   "note": "金标是历史文档里列过的四项（与 investigation_eval 的 talulah_after_chernobog 相同）"
+  },
+  {
+   "id": "perlica_admin",
+   "type": "人物",
+   "query": "终末地里佩丽卡是谁，她和管理员是什么关系",
+   "anchors": [
+    "佩丽卡",
+    "管理员"
+   ],
+   "planner": {
+    "search": [
+     "佩丽卡 管理员 监督 终末地工业",
+     "佩丽卡 管理员"
+    ],
+    "wiki": "佩丽卡"
+   },
+   "gold": [
+    {
+     "record_any": [
+      "ef/46c74b628379529f453635225adb1cde9379b8fd"
+     ],
+     "note": "档案：监督的职责"
+    },
+    {
+     "record_any": [
+      "ef/9f4d926de7215e48d6e679067a2b8d4ad57e169a"
+     ],
+     "note": "档案：被管理员和终末地工业庇护"
+    },
+    {
+     "story_id": "ef/f1m9d1.txt",
+     "lines": [
+      39,
+      39
+     ]
+    }
+   ]
+  },
+  {
+   "id": "perlica_role",
+   "type": "单点事实",
+   "query": "终末地里佩丽卡的中文配音演员是谁？她在终末地工业负责什么？",
+   "anchors": [
+    "佩丽卡"
+   ],
+   "planner": {
+    "search": [
+     "佩丽卡 终末地工业 配音",
+     "佩丽卡 职务 职责"
+    ],
+    "wiki": "佩丽卡"
+   },
+   "gold": [
+    {
+     "record_any": [
+      "ef/46c74b628379529f453635225adb1cde9379b8fd"
+     ]
+    }
+   ],
+   "note": "配音演员库里没有（只有 Wiki）"
+  },
+  {
+   "id": "perlica_founder",
+   "type": "跨游戏/推测",
+   "query": "终末地里佩丽卡在“零号委托”的档案里见到的创始人可能是谁？多参考明日方舟",
+   "anchors": [
+    "佩丽卡",
+    "创始人",
+    "M3",
+    "凯尔希",
+    "Mon3tr"
+   ],
+   "gold": [
+    {
+     "record_any": [
+      "ef/f7a0153ebb2ad8899ea981be03cf39bea3d2cd05"
+     ],
+     "note": "零号委托：你的样子——／我们的时间不多了"
+    },
+    {
+     "story_id": "obt/main/level_main_15-05_end.txt",
+     "lines": [
+      76,
+      77
+     ],
+     "note": "Mon3tr 与凯尔希"
+    },
+    {
+     "story_id": "obt/main/level_main_15-16_beg.txt",
+     "lines": [
+      3,
+      3
+     ]
+    }
+   ],
+   "gold_games": [
+    "arknights",
+    "endfield"
+   ],
+   "note": "2026-10-12 真机六个会话的题（KNOWN_ISSUES_INVESTIGATION §一），措辞是重写的；没有拟定记录"
+  },
+  {
+   "id": "island_purge",
+   "type": "为什么",
+   "query": "审判庭都知道是深海教会干的了，为什么还在清算岛民，这是什么逻辑",
+   "anchors": [
+    "岛民",
+    "审判庭",
+    "大静谧"
+   ],
+   "planner": {
+    "search": [
+     "审判庭 岛民 清算 替罪羊 猎巫",
+     "深海教会 大静谧 责任",
+     "艾丽妮 误解 岛民",
+     "审判庭 高压 信仰 异端"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "activities/act52side/level_act52side_01_beg.txt",
+     "lines": [
+      4,
+      4
+     ]
+    },
+    {
+     "story_id": "activities/act52side/level_act52side_04_beg.txt",
+     "lines": [
+      66,
+      66
+     ]
+    },
+    {
+     "story_id": "obt/memory/story_thorns_1_1.txt",
+     "lines": [
+      160,
+      160
+     ]
+    },
+    {
+     "story_id": "activities/act52side/level_act52side_03_beg.txt",
+     "lines": [
+      55,
+      55
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kaltsit_9_15",
+   "type": "经过/范围",
+   "query": "整理凯尔希在主线第9章到第15章里的主要行动",
+   "anchors": [
+    "凯尔希"
+   ],
+   "planner": {
+    "search": [
+     "凯尔希 主线 行动",
+     "凯尔希 萨米",
+     "凯尔希 叙拉古",
+     "凯尔希 炎国"
+    ],
+    "wiki": "凯尔希"
+   },
+   "gold_collections": [
+    "风暴瞭望",
+    "破碎日冕",
+    "淬火尘霾",
+    "惊霆无声",
+    "恶兆湍流",
+    "慈悲灯塔",
+    "离解复合"
+   ],
+   "min_collections": 7
+  },
+  {
+   "id": "andoain_journey",
+   "type": "经过/范围",
+   "query": "安多恩在众生行记中经历了什么",
+   "anchors": [
+    "安多恩"
+   ],
+   "planner": {
+    "search": [
+     "安多恩 众生行记 经历"
+    ],
+    "outline": [
+     "众生行记"
+    ],
+    "wiki": "安多恩"
+   },
+   "gold_collections": [
+    "众生行记"
+   ],
+   "min_collections": 1
+  },
+  {
+   "id": "wuling_rift",
+   "type": "推测",
+   "query": "根据目前的证据，合理推测十年前武陵深大裂隙爆发的真相。",
+   "anchors": [
+    "武陵",
+    "甚大裂隙",
+    "十年前"
+   ],
+   "planner": {
+    "search": [
+     "武陵 大裂隙 爆发 起源",
+     "裂隙 源石 灾变 武陵",
+     "深池 遗迹 观测队 武陵"
+    ],
+    "wiki_search": [
+     "大裂隙"
+    ]
+   },
+   "gold": [
+    {
+     "story_id": "ef/topic_map02_lv007_14001.txt",
+     "lines": [
+      25,
+      25
+     ]
+    },
+    {
+     "story_id": "ef/level_map02_lv002.txt",
+     "lines": [
+      97,
+      97
+     ]
+    },
+    {
+     "story_id": "ef/e7m3.txt",
+     "lines": [
+      314,
+      314
+     ]
+    },
+    {
+     "story_id": "ef/e11m5.txt",
+     "lines": [
+      220,
+      220
+     ]
+    },
+    {
+     "story_id": "ef/e11m4.txt",
+     "lines": [
+      4,
+      4
+     ]
+    }
+   ]
+  },
+  {
+   "id": "neg_fictional",
+   "type": "负例",
+   "query": "虚构角色泽克洛斯在剧情中做了什么",
+   "anchors": [
+    "泽克洛斯"
+   ],
+   "planner": {
+    "search": [
+     "泽克洛斯 剧情",
+     "泽克洛斯"
+    ],
+    "wiki": "泽克洛斯"
+   }
+  }
+ ],
+ "investigation_anchors": {
+  "amiya_crown": [
+   "阿米娅",
+   "王冠"
+  ],
+  "chernobog_crash": [
+   "切尔诺伯格",
+   "龙门",
+   "相撞"
+  ],
+  "chernobog_incident": [
+   "切尔诺伯格",
+   "罗德岛"
+  ],
+  "talulah_after_chernobog": [
+   "塔露拉",
+   "切尔诺伯格"
+  ],
+  "talulah_kaschey": [
+   "塔露拉",
+   "科西切"
+  ],
+  "kaschey_control": [
+   "塔露拉",
+   "科西切",
+   "继承"
+  ],
+  "kaschey_duke": [
+   "科西切",
+   "公爵"
+  ],
+  "frostnova_end": [
+   "霜星"
+  ],
+  "frostnova_origin": [
+   "霜星",
+   "父亲"
+  ],
+  "patriot_motive": [
+   "爱国者",
+   "博卓卡斯替",
+   "整合运动"
+  ],
+  "w_motive": [
+   "W",
+   "博士",
+   "特蕾西娅"
+  ],
+  "theresa_death": [
+   "特蕾西娅",
+   "死"
+  ],
+  "chen_talulah": [
+   "陈",
+   "塔露拉"
+  ],
+  "wei_chen": [
+   "魏彦吾",
+   "陈"
+  ],
+  "wei_infected": [
+   "魏彦吾",
+   "感染者"
+  ],
+  "theresis_londinium": [
+   "特雷西斯",
+   "伦蒂尼姆"
+  ],
+  "ascalon_who": [
+   "阿斯卡纶",
+   "特雷西斯"
+  ],
+  "kaltsit_babel": [
+   "凯尔希",
+   "博士",
+   "巴别塔"
+  ],
+  "sarkaz_court": [
+   "萨卡兹",
+   "王庭",
+   "卡兹戴尔"
+  ],
+  "skadi_hunter": [
+   "斯卡蒂",
+   "深海猎人"
+  ],
+  "mon3tr_cocoon": [
+   "Mon3tr",
+   "茧"
+  ],
+  "mephisto_faust": [
+   "梅菲斯特",
+   "浮士德"
+  ],
+  "crownslayer_ch3": [
+   "碎骨",
+   "龙门"
+  ],
+  "maria_nearl": [
+   "玛莉娅",
+   "骑士竞赛"
+  ],
+  "saria_injury": [
+   "塞雷娅",
+   "赫默"
+  ],
+  "mostima_lateran": [
+   "莫斯提马",
+   "拉特兰",
+   "信使"
+  ],
+  "priestess_who": [
+   "普瑞赛斯"
+  ],
+  "doctor_amnesia": [
+   "博士",
+   "失忆"
+  ],
+  "reunion_founder": [
+   "整合运动",
+   "建立者"
+  ],
+  "neg_fictional": [
+   "泽克洛斯"
+  ],
+  "r18_overview_framing": [
+   "安多恩",
+   "众生行迹"
+  ],
+  "r18_name_branches": [
+   "缪因"
+  ],
+  "neg_future": [
+   "罗德岛",
+   "庆典"
+  ]
+ }
+}
