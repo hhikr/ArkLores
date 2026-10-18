@@ -23,14 +23,19 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 ///
 /// Keywords only, unless `ARKLORES_RECALL_VECTORS` names a file of query
 /// vectors (`{"model", "dims", "vectors": {query: [..]}}`): those stand in
-/// for the embedding service, so a run never pays for one. The queries a
+/// for the embedding service, so a run never pays for one.
+/// `ARKLORES_RECALL_EMBED=true` first embeds the queries that file lacks
+/// (default `build/recall_eval/query_vectors.json`) with the real service:
+/// that costs money, ask the developer first. The queries a
 /// vector run needs are written to `build/recall_eval/queries.txt`.
 /// The report goes to `build/recall_eval/` (`report.md`, `report.json`).
 void main() {
   final enabled = Platform.environment['ARKLORES_RUN_RECALL_EVAL'] == 'true';
   final akPath = Platform.environment['ARKLORES_GAMEDATA_DB'] ?? '';
   final efPath = Platform.environment['ARKLORES_ENDFIELD_DB'] ?? '';
-  final vectorsPath = Platform.environment['ARKLORES_RECALL_VECTORS'] ?? '';
+  final embed = Platform.environment['ARKLORES_RECALL_EMBED'] == 'true';
+  final vectorsPath = Platform.environment['ARKLORES_RECALL_VECTORS'] ??
+      (embed ? 'build/recall_eval/query_vectors.json' : '');
   final only = (Platform.environment['ARKLORES_RECALL_IDS'] ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -68,6 +73,16 @@ void main() {
           Game.endfield:
               GameDataKnowledgeStore(dbPath: efPath, game: Game.endfield),
       });
+      if (embed) {
+        await _embedMissing(
+          vectorsPath,
+          {
+            for (final c in cases)
+              if (only.isEmpty || only.contains(c.id))
+                for (final v in c.variants) ...v.searches,
+          },
+        );
+      }
       final embedder =
           vectorsPath.isEmpty ? null : _CachedEmbedder.load(vectorsPath);
 
@@ -441,6 +456,59 @@ String _report(List<Map<String, Object?>> results, String mode) {
 
 String _pct(int a, int b) =>
     b == 0 ? '-' : '${(100 * a / b).toStringAsFixed(0)}%';
+
+/// Embeds the [queries] the file at [path] has no vector for (the real
+/// service, configured by the gitignored `tools/embedding-apiKey.csv`; this
+/// costs money) and writes them into it.
+Future<void> _embedMissing(String path, Set<String> queries) async {
+  final values = <String, String>{};
+  final csv = File('tools/embedding-apiKey.csv');
+  if (csv.existsSync()) {
+    for (final line in csv.readAsLinesSync()) {
+      final i = line.indexOf(',');
+      if (i > 0) {
+        values[line.substring(0, i).trim()] = line.substring(i + 1).trim();
+      }
+    }
+  }
+  final config = defaultEmbeddingConfig.copyWith(
+    baseUrl: values['openAiCompatible'],
+    apiKey: values['apiKey'],
+  );
+  expect(config.isValid, isTrue, reason: 'tools/embedding-apiKey.csv');
+  final file = File(path);
+  final json = file.existsSync()
+      ? jsonDecode(file.readAsStringSync()) as Map<String, dynamic>
+      : <String, dynamic>{};
+  if (json['model'] != null &&
+      (json['model'] != config.model || json['dims'] != config.dimensions)) {
+    fail('$path holds ${json['model']} vectors, not ${config.model}');
+  }
+  final vectors = (json['vectors'] as Map<String, dynamic>?) ?? {};
+  final missing = [
+    for (final q in queries)
+      if (!vectors.containsKey(q)) q,
+  ];
+  final client = OpenAICompatibleEmbeddingClient(config: config);
+  for (var i = 0; i < missing.length; i += 10) {
+    final batch = missing.skip(i).take(10).toList();
+    final got = await client.embed(batch);
+    for (final (k, q) in batch.indexed) {
+      vectors[q] = got[k];
+    }
+  }
+  file.parent.createSync(recursive: true);
+  file.writeAsStringSync(
+    jsonEncode({
+      'model': config.model,
+      'dims': config.dimensions,
+      'vectors': vectors,
+    }),
+  );
+  // ignore: avoid_print
+  print('embedded ${missing.length} queries '
+      '(${client.tokensUsed} tokens billed), ${vectors.length} in $path');
+}
 
 /// Query vectors from a file instead of the embedding service.
 class _CachedEmbedder implements EmbeddingClient {
