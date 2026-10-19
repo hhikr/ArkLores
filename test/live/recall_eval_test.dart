@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../support/scene_cards.dart';
 import 'live_support.dart' show readApiInfo;
 
 /// Opt-in, offline recall check of a question's first step (unified
@@ -51,6 +52,11 @@ void main() {
   // line picker calls the real model of tools/api_info (costs money; the
   // tokens are reported).
   final pick = Platform.environment['ARKLORES_RECALL_PICK'] == 'true';
+  // Phase 3 (S2): `ARKLORES_RECALL_CARDS` names the scene cards directory
+  // (`build/scene_cards`, from `scene_cards_test.dart`); the question is
+  // matched against the cards by meaning and the lines the best cards
+  // point at are shown. Adds the `+cards*` variants.
+  final cardsDir = Platform.environment['ARKLORES_RECALL_CARDS'] ?? '';
   final variants = (Platform.environment['ARKLORES_RECALL_VARIANTS'] ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -93,11 +99,14 @@ void main() {
           vectorsPath,
           {
             for (final c in cases)
-              if (only.isEmpty || only.contains(c.id))
+              if (only.isEmpty || only.contains(c.id)) ...[
                 for (final v in c.variants) ...v.searches,
+                if (cardsDir.isNotEmpty) c.query,
+              ],
           },
         );
       }
+      final cards = cardsDir.isEmpty ? null : _Cards.load(cardsDir);
       final embedder =
           vectorsPath.isEmpty ? null : _CachedEmbedder.load(vectorsPath);
       var pickPrompt = 0;
@@ -179,6 +188,24 @@ void main() {
                   budget: v.budget,
                   picked: true,
                 ),
+          if (cards != null) ...[
+            for (final k in [3, 5]) _Variant('cards$k', const [], const [],
+                cards: k,),
+            for (final v in c.variants)
+              if (v.name == 'planner+coverage30' ||
+                  (v.name == 'coverage30' &&
+                      !c.variants.any((w) => w.name == 'planner')))
+                for (final k in [3, 5])
+                  _Variant(
+                    '${v.name == 'coverage30' ? '' : 'planner+'}'
+                    'coverage30+cards$k',
+                    v.searches,
+                    v.outlines,
+                    anchors: v.anchors,
+                    budget: v.budget,
+                    cards: k,
+                  ),
+          ],
         ]) {
           if (variants.isNotEmpty && !variants.contains(variant.name)) continue;
           final seen = SeenLines();
@@ -207,6 +234,30 @@ void main() {
             );
             coverage.register(seen);
             chars += coverage.render().length;
+          }
+          if (variant.cards > 0 && cards != null && embedder != null) {
+            final q = (await embedder.embed([c.query])).single;
+            for (final card in cards.best(q, variant.cards)) {
+              final db = dbs[gameOfId(card.storyId)];
+              if (db == null) continue;
+              for (final (a, b) in card.ranges) {
+                final rows = await db.rawQuery(
+                  'SELECT line_index, speaker, content FROM story_lines '
+                  'WHERE story_id = ? AND line_index BETWEEN ? AND ?',
+                  [card.storyId, a - 2, b + 2],
+                );
+                for (final r in rows) {
+                  if (seen.seenRanges(card.storyId, r['line_index'] as int,
+                      r['line_index'] as int,).isNotEmpty) {
+                    continue;
+                  }
+                  seen.add(card.storyId, r['line_index'] as int);
+                  chars += '${r['speaker'] ?? ''}${r['content'] ?? ''}'
+                          .length +
+                      8;
+                }
+              }
+            }
           }
           watch.stop();
           final hits = [
@@ -336,8 +387,12 @@ class _Variant {
     this.context = CoverageBuilder.defaultContext,
     this.perStoryChars = CoverageBuilder.defaultPerStoryChars,
     this.picked = false,
+    this.cards = 0,
   });
   final String name;
+
+  /// Scene cards matched to the question (phase 3), after the rest.
+  final int cards;
   final List<String> searches;
   final List<String> outlines;
 
@@ -612,6 +667,12 @@ const _variantNames = [
   'planner+c4-30',
   'planner+c4-45',
   'planner+c8-45',
+  'cards3',
+  'cards5',
+  'coverage30+cards3',
+  'coverage30+cards5',
+  'planner+coverage30+cards3',
+  'planner+coverage30+cards5',
 ];
 
 const _variantLabels = {
@@ -632,6 +693,12 @@ const _variantLabels = {
   'planner+c4-30': '拟定的检索 + 取材（前后 4 行）3 万字',
   'planner+c4-45': '拟定的检索 + 取材（前后 4 行）4.5 万字',
   'planner+c8-45': '拟定的检索 + 取材（前后 8 行）4.5 万字',
+  'cards3': '只用场景卡：问题按意思匹配前 3 张卡，给卡片指向的行',
+  'cards5': '只用场景卡：前 5 张',
+  'coverage30+cards3': '按锚点取材 3 万字 + 场景卡前 3 张（只有没有拟定记录的题）',
+  'coverage30+cards5': '按锚点取材 3 万字 + 场景卡前 5 张（只有没有拟定记录的题）',
+  'planner+coverage30+cards3': '拟定的检索 + 取材 3 万字 + 场景卡前 3 张',
+  'planner+coverage30+cards5': '拟定的检索 + 取材 3 万字 + 场景卡前 5 张',
 };
 
 String _pct(int a, int b) =>
@@ -688,6 +755,44 @@ Future<void> _embedMissing(String path, Set<String> queries) async {
   // ignore: avoid_print
   print('embedded ${missing.length} queries '
       '(${client.tokensUsed} tokens billed), ${vectors.length} in $path');
+}
+
+/// Scene cards with their vectors (`scene_cards_test.dart`'s output).
+class _Cards {
+  _Cards(this.cards, this.vectors);
+
+  factory _Cards.load(String dir) {
+    final json = jsonDecode(File('$dir/vectors.json').readAsStringSync())
+        as Map<String, dynamic>;
+    final cards = [
+      for (final f in Directory('$dir/cards').listSync().whereType<File>())
+        if (f.path.endsWith('.json'))
+          SceneCard.fromJson(
+            jsonDecode(f.readAsStringSync()) as Map<String, dynamic>,
+          ),
+    ];
+    return _Cards(
+      cards,
+      {
+        for (final MapEntry(:key, :value)
+            in (json['vectors'] as Map<String, dynamic>).entries)
+          key: [for (final x in value as List) (x as num).toDouble()],
+      },
+    );
+  }
+
+  final List<SceneCard> cards;
+  final Map<String, List<double>> vectors;
+
+  /// The [k] cards closest to [query] by meaning.
+  List<SceneCard> best(List<double> query, int k) {
+    final scored = [
+      for (final c in cards)
+        if (vectors[c.storyId] != null)
+          (c, cosineSimilarity(query, vectors[c.storyId]!)),
+    ]..sort((a, b) => b.$2.compareTo(a.$2));
+    return [for (final (c, _) in scored.take(k)) c];
+  }
 }
 
 /// Query vectors from a file instead of the embedding service.
