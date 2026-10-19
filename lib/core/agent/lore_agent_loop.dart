@@ -1472,8 +1472,14 @@ class LoreAgentLoop {
           m.content.trim().isNotEmpty,
       orElse: () => Message.assistant(''),
     );
+    // The conversation keeps the answer as the model wrote it: JSON, whose
+    // `cite` arrays the pattern below does not match.
+    final entries = loreAnswerEntries(answer.content);
+    final cited = entries == null
+        ? answer.content
+        : [for (final e in entries) ...e.cites].join(' ');
     final ranges = <String, List<(int, int)>>{};
-    for (final m in _citation.allMatches(answer.content)) {
+    for (final m in _citation.allMatches(cited)) {
       final story = m.group(1)!;
       final a = int.parse(m.group(2)!);
       final b = int.tryParse(m.group(3) ?? '') ?? a;

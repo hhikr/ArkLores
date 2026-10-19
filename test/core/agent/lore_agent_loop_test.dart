@@ -1792,6 +1792,22 @@ void main() {
         ).map((r) => r.storyId),
         ['a.txt'],
       );
+      // The answer as the conversation keeps it: JSON with nested cites.
+      expect(
+        [
+          for (final r in LoreAgentLoop.followUpReads(
+            [
+              Message.assistant(
+                '{"entries": [{"text": "一", "cite": [["b.txt", 1, 2]]}, '
+                '{"text": "二", "cite": [["a.txt", 10, 12], ["c.txt", 5, 5]]}]}',
+              ),
+            ],
+            seen,
+          ))
+            '${r.storyId} ${r.start} ${r.count}',
+        ],
+        ['b.txt 0 5', 'a.txt 8 7'],
+      );
     });
 
     // 0.14: the tool-call gate.

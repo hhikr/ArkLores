@@ -621,8 +621,9 @@ const _variantLabels = {
   'coverage30': '按锚点取材，3 万字',
   'coverage60': '按锚点取材，6 万字',
   'planner+coverage30': '拟定的检索 + 按锚点取材 3 万字',
-  'wide60': '宽取材（前后 8 行，每篇 1.2 万字），6 万字',
-  'wide120': '宽取材，12 万字',
+  // Only the cases without a planner record (the others are `planner+wide*`).
+  'wide60': '宽取材（前后 8 行，每篇 1.2 万字），6 万字（只有没有拟定记录的题）',
+  'wide120': '宽取材，12 万字（只有没有拟定记录的题）',
   'planner+wide60': '拟定的检索 + 宽取材 6 万字',
   'planner+wide120': '拟定的检索 + 宽取材 12 万字',
   'picked': '宽取材 12 万字后挑行（真实模型），给 3 万字',
