@@ -3,6 +3,7 @@
 # GitHub.
 #
 #   .\tools\install_local.ps1 -Build          # build the APK from this tree, then install
+#   .\tools\install_local.ps1 -BuildOnly      # only build it (no phone needed)
 #   .\tools\install_local.ps1                 # install the newest local APK
 #   .\tools\install_local.ps1 -Kb             # ... and copy the knowledge base
 #   .\tools\install_local.ps1 -Kb -KbOnly     # only the knowledge base
@@ -30,6 +31,8 @@ param(
   [string]$KbFile,
   [string]$Device,
   [switch]$Build,
+  # Build the APK as -Build does and stop: no phone, nothing installed.
+  [switch]$BuildOnly,
   [switch]$Kb,
   [switch]$KbOnly,
   # Also copy the Endfield knowledge base (build\endfield\arklores_endfield_zh.db.gz).
@@ -52,7 +55,7 @@ $adb = (Get-Command adb -ErrorAction SilentlyContinue).Source
 if (-not $adb) {
   $adb = 'C:\Users\hhikr\dev\android-sdk\platform-tools\adb.exe'
 }
-if (-not (Test-Path $adb)) { throw 'adb not found (install platform-tools or add adb to PATH)' }
+if (-not $BuildOnly -and -not (Test-Path $adb)) { throw 'adb not found (install platform-tools or add adb to PATH)' }
 
 function Adb {
   $all = @()
@@ -62,7 +65,10 @@ function Adb {
   if ($LASTEXITCODE -ne 0) { throw "adb $($args -join ' ') failed ($LASTEXITCODE)" }
 }
 
-# A phone must be connected and authorised.
+if ($BuildOnly) { $Build = $true; $KbOnly = $false; $Kb = $false; $Ef = $false }
+
+# A phone must be connected and authorised (not to build only).
+if (-not $BuildOnly) {
 $lines = & $adb devices | Select-Object -Skip 1 | Where-Object { $_.Trim() }
 $ready = @($lines | Where-Object { $_ -match '\sdevice$' })
 if ($Device) {
@@ -79,6 +85,7 @@ if ($Device) {
   }
   $Device = ($phones[0] -split '\s+')[0]
   Write-Host "several devices; using the only non-emulator one: $Device"
+}
 }
 
 # --- Build ---
@@ -143,6 +150,11 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
     $ErrorActionPreference = 'Stop'
     $Apk = (Resolve-Path $out).Path
   }
+}
+
+if ($BuildOnly) {
+  if ($Apk) { Write-Host "built: $Apk" }
+  return
 }
 
 # --- App ---

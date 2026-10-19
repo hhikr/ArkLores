@@ -17,6 +17,7 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 
 ```powershell
 .\tools\install_local.ps1 -Build -Kb     # 构建 release APK（release key 签名、烘入 tools/release_gamedata.env 的 URL/SHA）、安装、拷知识库
+.\tools\install_local.ps1 -BuildOnly     # 只构建（同上的签名与 URL/SHA），不需要连手机；直接 flutter build apk 的包没有知识库地址，下载会报“未配置 GameData release asset URL”
 .\tools\install_local.ps1                # 只安装最新的本地 APK
 .\tools\install_local.ps1 -Kb -KbOnly    # 只拷知识库
 .\tools\install_local.ps1 -DryRun
