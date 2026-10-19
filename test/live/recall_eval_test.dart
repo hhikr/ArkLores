@@ -160,6 +160,8 @@ void main() {
               variant.anchors,
               budgetChars: variant.budget,
               hinted: seen.stories.toSet(),
+              context: variant.context,
+              perStoryChars: variant.perStoryChars,
             );
             coverage.register(seen);
             chars += coverage.render().length;
@@ -278,6 +280,8 @@ class _Variant {
     this.outlines, {
     this.anchors = const [],
     this.budget = 0,
+    this.context = CoverageBuilder.defaultContext,
+    this.perStoryChars = CoverageBuilder.defaultPerStoryChars,
   });
   final String name;
   final List<String> searches;
@@ -287,6 +291,8 @@ class _Variant {
   /// [budget] is 0), after the searches.
   final List<String> anchors;
   final int budget;
+  final int context;
+  final int perStoryChars;
 }
 
 /// The coverage variants of a case: the anchors alone at three budgets,
@@ -299,6 +305,19 @@ List<_Variant> _coverageVariants(List<String> anchors, _Variant? planner) => [
       if (anchors.isNotEmpty && planner != null)
         _Variant('planner+coverage30', planner.searches, planner.outlines,
             anchors: anchors, budget: 30000,),
+      // Phase 2: the wider pool a line picker would read (each anchor line
+      // with eight lines either side, up to 12k characters a story).
+      if (anchors.isNotEmpty)
+        for (final k in [60, 120])
+          _Variant(
+            '${planner != null ? 'planner+' : ''}wide$k',
+            planner?.searches ?? const [],
+            planner?.outlines ?? const [],
+            anchors: anchors,
+            budget: k * 1000,
+            context: 8,
+            perStoryChars: 12000,
+          ),
     ];
 
 class _Case {
@@ -508,6 +527,10 @@ const _variantNames = [
   'coverage30',
   'coverage60',
   'planner+coverage30',
+  'wide60',
+  'wide120',
+  'planner+wide60',
+  'planner+wide120',
 ];
 
 const _variantLabels = {
@@ -517,6 +540,10 @@ const _variantLabels = {
   'coverage30': '按锚点取材，3 万字',
   'coverage60': '按锚点取材，6 万字',
   'planner+coverage30': '拟定的检索 + 按锚点取材 3 万字',
+  'wide60': '宽取材（前后 8 行，每篇 1.2 万字），6 万字',
+  'wide120': '宽取材，12 万字',
+  'planner+wide60': '拟定的检索 + 宽取材 6 万字',
+  'planner+wide120': '拟定的检索 + 宽取材 12 万字',
 };
 
 String _pct(int a, int b) =>

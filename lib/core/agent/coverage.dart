@@ -145,7 +145,7 @@ class CoverageBuilder {
   final GameDataRetrieval store;
 
   /// Lines either side of an anchor's line.
-  static const int context = 2;
+  static const int defaultContext = 2;
 
   /// Two anchors at most this many lines apart are one scene.
   static const int sceneLines = 6;
@@ -154,7 +154,7 @@ class CoverageBuilder {
   static const int perCollection = 3;
 
   /// Characters one story may give.
-  static const int perStoryChars = 3000;
+  static const int defaultPerStoryChars = 3000;
 
   static const int maxAnchors = 6;
 
@@ -162,10 +162,14 @@ class CoverageBuilder {
 
   /// Gathers material for [anchors] up to [budgetChars] characters.
   /// [hinted]: stories a search already found, which count a little more.
+  /// [context] lines either side of each anchor line, at most
+  /// [perStoryChars] characters a story.
   Future<Coverage> build(
     List<String> anchors, {
     int budgetChars = 30000,
     Set<String> hinted = const {},
+    int context = defaultContext,
+    int perStoryChars = defaultPerStoryChars,
   }) async {
     final names = <String>{
       for (final a in anchors)
@@ -255,7 +259,7 @@ class CoverageBuilder {
           ..._rarestFirst(s, names, at, weight),
         ];
         final room = math.min(perStoryChars, budgetChars - chars);
-        final cut = await _cut(s, centers, room);
+        final cut = await _cut(s, centers, room, context);
         if (cut.isEmpty) continue;
         given.add(s);
         perCollectionGiven[collection] =
@@ -319,6 +323,7 @@ class CoverageBuilder {
     String s,
     List<int> centers,
     int room,
+    int context,
   ) async {
     final wanted = <int>{};
     final texts = <int, StoryLineEntry>{};
