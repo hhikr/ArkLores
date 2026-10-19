@@ -375,6 +375,20 @@ List<_Variant> _coverageVariants(List<String> anchors, _Variant? planner) => [
             context: 8,
             perStoryChars: 12000,
           ),
+      // Phase 2 (after picking lost lines, 2026-10-19): what the answering
+      // model could be given directly — more lines around each place, a
+      // little more room.
+      if (anchors.isNotEmpty && planner != null)
+        for (final (ctx, k) in [(2, 45), (4, 30), (4, 45), (8, 45)])
+          _Variant(
+            'planner+c$ctx-$k',
+            planner.searches,
+            planner.outlines,
+            anchors: anchors,
+            budget: k * 1000,
+            context: ctx,
+            perStoryChars: 1500 * (ctx + 1),
+          ),
     ];
 
 class _Case {
@@ -594,6 +608,10 @@ const _variantNames = [
   'planner+wide120',
   'picked',
   'planner+picked',
+  'planner+c2-45',
+  'planner+c4-30',
+  'planner+c4-45',
+  'planner+c8-45',
 ];
 
 const _variantLabels = {
@@ -609,6 +627,10 @@ const _variantLabels = {
   'planner+wide120': '拟定的检索 + 宽取材 12 万字',
   'picked': '宽取材 12 万字后挑行（真实模型），给 3 万字',
   'planner+picked': '拟定的检索 + 宽取材后挑行（真实模型），给 3 万字',
+  'planner+c2-45': '拟定的检索 + 取材（前后 2 行）4.5 万字',
+  'planner+c4-30': '拟定的检索 + 取材（前后 4 行）3 万字',
+  'planner+c4-45': '拟定的检索 + 取材（前后 4 行）4.5 万字',
+  'planner+c8-45': '拟定的检索 + 取材（前后 8 行）4.5 万字',
 };
 
 String _pct(int a, int b) =>
