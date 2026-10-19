@@ -18,6 +18,7 @@ library;
 import 'dart:math' as math;
 
 import '../gamedata/game_retrieval.dart';
+import 'line_picker.dart';
 import 'lore_tools.dart';
 import 'tools/agent_tool.dart';
 
@@ -53,9 +54,32 @@ class Coverage {
     required this.located,
     required this.records,
     required this.labels,
+    this.pickedFrom,
   });
 
   final List<AnchorFootprint> footprints;
+
+  /// Set when [passages] were picked ([LinePicker]) from a wider
+  /// gathering: its story count and characters.
+  final ({int stories, int chars})? pickedFrom;
+
+  /// This gathering with [picked] lines in place of its passages; the
+  /// stories left without a line join [located].
+  Coverage withPicked(List<CoveragePassage> picked) {
+    final kept = {for (final p in picked) p.storyId};
+    return Coverage(
+      footprints: footprints,
+      passages: picked,
+      located: <String>{
+        for (final p in passages)
+          if (!kept.contains(p.storyId)) p.storyId,
+        ...located,
+      }.toList(),
+      records: records,
+      labels: labels,
+      pickedFrom: (stories: stories.length, chars: chars),
+    );
+  }
 
   /// In reading order: stories by [storyReleaseKey], lines in order.
   final List<CoveragePassage> passages;
@@ -91,10 +115,11 @@ class Coverage {
     if (passages.isEmpty && records.isEmpty) {
       b.writeln('没有在剧情和资料里找到这些名字。');
     } else {
+      final picked = pickedFrom;
       b.writeln('按名字取材：给了 ${stories.length} 篇剧情的原文（$chars 字）'
           '${records.isEmpty ? '' : '和 ${records.length} 条资料的片段'}。'
-          '每篇只取这些名字出现、说话的行及前后各两行，按上线顺序排列；'
-          '行号可以直接引用，要看前后更多内容用 read_story。');
+          '${picked == null ? '每篇只取这些名字出现、说话的行及前后各两行' : '从这些名字出现的 ${picked.stories} 篇剧情（每处前后八行，共 ${picked.chars} 字）里挑出了与问题相关的行'}，'
+          '按上线顺序排列；行号可以直接引用，要看前后更多内容用 read_story。');
     }
     if (footprints.isNotEmpty) {
       b.writeln('锚点在剧情里的位置：${[
@@ -105,20 +130,7 @@ class Coverage {
                   '${f.spoken == 0 ? '' : '，其中说话 ${f.spoken} 行'}）',
       ].join('；')}');
     }
-    String? story;
-    for (final p in passages) {
-      if (p.storyId != story) {
-        story = p.storyId;
-        b.writeln(
-            '## 《${labels[story]?.label ?? fallbackStoryLabel(story)}》 $story',);
-      } else {
-        b.writeln('…');
-      }
-      for (final l in p.lines) {
-        b.writeln(
-            formatStoryLine(l.lineIndex, l.speaker, l.content, kind: l.kind),);
-      }
-    }
+    if (passages.isNotEmpty) b.writeln(renderPassages(passages, labels));
     if (records.isNotEmpty) {
       b.writeln('## 资料（片段）');
       for (final r in records) {
@@ -137,6 +149,30 @@ class Coverage {
   }
 
   static const int maxLocatedListed = 20;
+}
+
+/// [passages] as the model reads them: a heading per story, `…` between
+/// runs of one story.
+String renderPassages(
+  List<CoveragePassage> passages,
+  Map<String, StoryCatalogEntry> labels,
+) {
+  final b = StringBuffer();
+  String? story;
+  for (final p in passages) {
+    if (p.storyId != story) {
+      story = p.storyId;
+      b.writeln(
+          '## 《${labels[story]?.label ?? fallbackStoryLabel(story)}》 $story',);
+    } else {
+      b.writeln('…');
+    }
+    for (final l in p.lines) {
+      b.writeln(
+          formatStoryLine(l.lineIndex, l.speaker, l.content, kind: l.kind),);
+    }
+  }
+  return b.toString().trimRight();
 }
 
 class CoverageBuilder {
@@ -377,13 +413,26 @@ class CoverageBuilder {
 /// names the planning call wrote (`search_planner.dart`); the model may run
 /// it again with other names (people it found, say).
 class GatherTool extends AgentTool {
-  GatherTool(this.store, this.seen);
+  GatherTool(this.store, this.seen, {this.picker});
 
   final GameDataRetrieval store;
   final SeenLines seen;
 
+  /// Phase 2: when set, the material is gathered wide and the lines that
+  /// bear on [question] are picked from it.
+  final LinePicker? picker;
+
+  /// The question being answered (for [picker]).
+  String question = '';
+
   /// Characters of story text one call gives.
   static const int budgetChars = 30000;
+
+  /// Characters of the wide gathering [picker] reads, its lines either
+  /// side of an anchor line and characters a story.
+  static const int wideChars = 120000;
+  static const int wideContext = 8;
+  static const int widePerStoryChars = 12000;
 
   @override
   String get name => 'gather';
@@ -416,11 +465,38 @@ class GatherTool extends AgentTool {
         if (n is String && n.trim().isNotEmpty) n.trim(),
     ];
     if (names.isEmpty) return '错误：names 为空';
-    final coverage = await CoverageBuilder(store).build(
+    final builder = CoverageBuilder(store);
+    final hinted = seen.stories.toSet();
+    var coverage = await builder.build(
       names,
       budgetChars: budgetChars,
-      hinted: seen.stories.toSet(),
+      hinted: hinted,
     );
+    final picker = this.picker;
+    if (picker != null && question.isNotEmpty) {
+      final wide = await builder.build(
+        names,
+        budgetChars: wideChars,
+        hinted: hinted,
+        context: wideContext,
+        perStoryChars: widePerStoryChars,
+      );
+      // Small enough to give whole: nothing to pick.
+      if (wide.chars <= budgetChars) {
+        coverage = wide;
+      } else {
+        final picked = await picker.pick(
+          question,
+          wide,
+          names: names,
+          fallback: coverage.passages,
+          budgetChars: budgetChars,
+        );
+        if (picked.failed < picked.segments) {
+          coverage = wide.withPicked(picked.passages);
+        }
+      }
+    }
     coverage.register(seen);
     return coverage.render();
   }

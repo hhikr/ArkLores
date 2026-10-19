@@ -34,6 +34,8 @@ import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import '../wiki/wiki_lookup.dart';
 import '../wiki/wiki_page.dart';
+import 'coverage.dart';
+import 'line_picker.dart';
 import 'lore_agent_prompts.dart';
 import 'lore_answer_json.dart';
 import 'lore_answer_stages.dart';
@@ -128,6 +130,7 @@ class LoreAgentLoop {
     this.delegate = false,
     this.maxSubtasks = 2,
     this.preSearch = true,
+    this.pickLines = false,
     this.streamRetryDelay = const Duration(seconds: 2),
     this.heartbeat = const Duration(seconds: 10),
     this.onSpan,
@@ -198,6 +201,10 @@ class LoreAgentLoop {
   /// 0.14: search the question before the first turn (main agent only).
   final bool preSearch;
 
+  /// Phase 2 (S5): `gather` reads wide and picks the lines that bear on
+  /// the question, a call per segment with [planClient] ([LinePicker]).
+  final bool pickLines;
+
   /// Model turns per question; the last one must answer.
   final int maxTurns;
 
@@ -234,7 +241,15 @@ class LoreAgentLoop {
     final delegating = delegate && !subtask;
     final tools = {
       for (final t in [
-        ...loreTools(store, seen, embeddingClient: embeddingClient, wiki: wiki),
+        ...loreTools(
+          store,
+          seen,
+          embeddingClient: embeddingClient,
+          wiki: wiki,
+          picker: pickLines && !subtask
+              ? LinePicker(planClient ?? client)
+              : null,
+        ),
         if (wiki != null) ...wikiTools(wiki!, seen),
         if (delegating) DelegateTool((args) => _runSubtask(args, seen)),
       ])
@@ -253,6 +268,8 @@ class LoreAgentLoop {
         ..onSpan = onSpan;
     }
     final toolSpecs = [for (final t in tools.values) t.toJson()];
+    final gather = tools['gather'];
+    if (gather is GatherTool) gather.question = asQuestion ?? query;
 
     String systemPrompt() {
       final base = loreRolePrompt(

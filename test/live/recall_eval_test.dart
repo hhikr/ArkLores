@@ -2,15 +2,19 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:arklores/core/agent/coverage.dart';
+import 'package:arklores/core/agent/line_picker.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/tools/search_tool.dart';
 import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
+import 'package:arklores/core/llm/openai_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'live_support.dart' show readApiInfo;
 
 /// Opt-in, offline recall check of a question's first step (unified
 /// refactor, phase 0): what the searches before the first turn show,
@@ -43,6 +47,10 @@ void main() {
       .where((s) => s.isNotEmpty)
       .toSet();
 
+  // Phase 2: `ARKLORES_RECALL_PICK=true` adds the picked variants, whose
+  // line picker calls the real model of tools/api_info (costs money; the
+  // tokens are reported).
+  final pick = Platform.environment['ARKLORES_RECALL_PICK'] == 'true';
   final variants = (Platform.environment['ARKLORES_RECALL_VARIANTS'] ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -92,6 +100,21 @@ void main() {
       }
       final embedder =
           vectorsPath.isEmpty ? null : _CachedEmbedder.load(vectorsPath);
+      var pickPrompt = 0;
+      var pickCompletion = 0;
+      var pickCalls = 0;
+      final picker = !pick
+          ? null
+          : LinePicker(
+              OpenAICompatibleClient(
+                config: readApiInfo(File('tools/api_info')),
+                onCompletion: (r) {
+                  pickCalls++;
+                  pickPrompt += r.promptTokens ?? 0;
+                  pickCompletion += r.completionTokens ?? 0;
+                },
+              ),
+            );
 
       // The gold must be in the libraries, or the score means nothing.
       for (final c in cases) {
@@ -141,7 +164,22 @@ void main() {
       final results = <Map<String, Object?>>[];
       for (final c in cases) {
         if (only.isNotEmpty && !only.contains(c.id)) continue;
-        for (final variant in c.variants) {
+        for (final variant in [
+          ...c.variants,
+          if (picker != null)
+            for (final v in c.variants)
+              if (v.name == 'planner+coverage30' ||
+                  (v.name == 'coverage30' &&
+                      !c.variants.any((w) => w.name == 'planner')))
+                _Variant(
+                  v.name == 'coverage30' ? 'picked' : 'planner+picked',
+                  v.searches,
+                  v.outlines,
+                  anchors: v.anchors,
+                  budget: v.budget,
+                  picked: true,
+                ),
+        ]) {
           if (variants.isNotEmpty && !variants.contains(variant.name)) continue;
           final seen = SeenLines();
           final search = SearchTool(store, seen, embeddingClient: embedder);
@@ -155,7 +193,11 @@ void main() {
           for (final o in variant.outlines) {
             chars += (await outline.execute({'collection': o})).length;
           }
-          if (variant.budget > 0) {
+          if (variant.picked) {
+            final tool = GatherTool(store, seen, picker: picker)
+              ..question = c.query;
+            chars += (await tool.execute({'names': variant.anchors})).length;
+          } else if (variant.budget > 0) {
             final coverage = await CoverageBuilder(store).build(
               variant.anchors,
               budgetChars: variant.budget,
@@ -221,6 +263,12 @@ void main() {
       File('${out.path}/report.json').writeAsStringSync(
         const JsonEncoder.withIndent(' ').convert({
           'mode': embedder == null ? 'keywords' : 'vectors',
+          if (picker != null)
+            'pick_usage': {
+              'calls': pickCalls,
+              'prompt_tokens': pickPrompt,
+              'completion_tokens': pickCompletion,
+            },
           'vector_misses': embedder?.misses.toList(),
           'arknights_db': akPath,
           'endfield_db': efPath,
@@ -232,6 +280,11 @@ void main() {
       );
       // ignore: avoid_print
       print(File('${out.path}/report.md').readAsStringSync());
+      if (picker != null) {
+        // ignore: avoid_print
+        print('挑行用量：$pickCalls 次调用，prompt $pickPrompt，'
+            'completion $pickCompletion');
+      }
       expect(results, isNotEmpty);
     },
     skip: !enabled || akPath.isEmpty
@@ -282,6 +335,7 @@ class _Variant {
     this.budget = 0,
     this.context = CoverageBuilder.defaultContext,
     this.perStoryChars = CoverageBuilder.defaultPerStoryChars,
+    this.picked = false,
   });
   final String name;
   final List<String> searches;
@@ -293,6 +347,9 @@ class _Variant {
   final int budget;
   final int context;
   final int perStoryChars;
+
+  /// Gathered through `gather` with a [LinePicker] (phase 2).
+  final bool picked;
 }
 
 /// The coverage variants of a case: the anchors alone at three budgets,
@@ -323,6 +380,7 @@ List<_Variant> _coverageVariants(List<String> anchors, _Variant? planner) => [
 class _Case {
   _Case({
     required this.id,
+    required this.query,
     required this.source,
     required this.type,
     required this.gold,
@@ -333,6 +391,7 @@ class _Case {
   });
 
   final String id;
+  final String query;
   final String source;
   final String type;
   final List<_Gold> gold;
@@ -356,6 +415,7 @@ List<_Case> _loadCases() {
     cases.add(
       _Case(
         id: '${c['id']}',
+        query: '${c['query']}',
         source: 'recall',
         type: '${c['type']}',
         gold: [
@@ -420,6 +480,7 @@ List<_Case> _loadCases() {
     cases.add(
       _Case(
         id: '${c['id']}',
+        query: '${c['query']}',
         source: 'investigation',
         type: '${c['type']}',
         gold: gold,
@@ -531,6 +592,8 @@ const _variantNames = [
   'wide120',
   'planner+wide60',
   'planner+wide120',
+  'picked',
+  'planner+picked',
 ];
 
 const _variantLabels = {
@@ -544,6 +607,8 @@ const _variantLabels = {
   'wide120': '宽取材，12 万字',
   'planner+wide60': '拟定的检索 + 宽取材 6 万字',
   'planner+wide120': '拟定的检索 + 宽取材 12 万字',
+  'picked': '宽取材 12 万字后挑行（真实模型），给 3 万字',
+  'planner+picked': '拟定的检索 + 宽取材后挑行（真实模型），给 3 万字',
 };
 
 String _pct(int a, int b) =>

@@ -311,6 +311,32 @@ String loreRolePrompt(
     };
 
 /// 0.14: said in the last turn (no tool can be called any more).
+/// Phase 2 (S5): the call that picks, from one segment of the gathered
+/// material, the lines the answer needs. It has no tools and writes line
+/// ranges only; code copies the text of those lines to the answering model.
+const String loreLinePickPrompt =
+    '你在帮另一个助手准备回答玩家问题的原文。下面是按上线顺序排列的剧情片段，'
+    '每篇以“## 《篇名》 story_id”开头，每行形如 “L行号 [说话人] 内容”。'
+    '挑出回答问题用得上的行：直接回答问题的，交代前因后果、结局、身份、态度变化的，'
+    '以及读懂这些行所必需的上下文。人物的经历要看每一篇里发生了什么，不要只挑名字出现的那一行。'
+    '只看问题本身，不要自己作答，也不要补充片段里没有的内容。\n'
+    '只输出一个 JSON 对象：{"keep": ["<story_id>:<起始行>-<结束行>", "<story_id>:<行号>"]}，'
+    '按重要性从高到低排列。只写片段里出现过的行号；没有用得上的行就写 {"keep": []}。'
+    '挑出的行合计不要超过片段的三分之一。';
+
+/// The user message of [loreLinePickPrompt]: the question, the names the
+/// material was gathered for, and the segment ([index] of [count]).
+String loreLinePickRequest(
+  String question,
+  String segment, {
+  List<String> names = const [],
+  int index = 1,
+  int count = 1,
+}) =>
+    '玩家的问题：$question\n'
+    '${names.isEmpty ? '' : '取材用的名字：${names.join('、')}\n'}'
+    '${count > 1 ? '片段（第 $index 段，共 $count 段）：' : '片段：'}\n$segment';
+
 const String loreTurnLimitNote =
     '已到检索轮数上限，不能再调用工具。请根据目前读到的原文给出最终答案，'
     '并说明还有哪些部分没有查到或没有读完。';

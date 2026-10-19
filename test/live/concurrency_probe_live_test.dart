@@ -13,7 +13,7 @@ import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/openai_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'ask_pipeline_live_test.dart' show readApiInfo;
+import 'live_support.dart' show readApiInfo;
 
 void main() {
   final env = Platform.environment;

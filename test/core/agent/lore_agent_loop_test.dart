@@ -80,6 +80,8 @@ void main() {
         loreAnswerOnlyNote,
         loreSearchPlanPrompt('<search 的说明>', wiki: true),
         loreSearchPlanRequest('<问题>', earlier: '<上文>'),
+        loreLinePickPrompt,
+        loreLinePickRequest('<问题>', '<片段>', names: ['<名字>'], count: 2),
         loreTurnLimitNote,
         loreContinueNote,
         for (final role in LoreRole.values)
