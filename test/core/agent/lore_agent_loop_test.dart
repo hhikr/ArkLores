@@ -655,8 +655,11 @@ void main() {
         ],
         ['search {query: 城门}', 'gather {names: [甲, 星灯]}'],
       );
-      expect(client.planRequests.single.first.content,
-          contains('"anchors": ["<名字>", "<名字>"]'),);
+      // The skeleton opens with the anchors, which are always to be written
+      // (0.15 live: a planner left the optional field out).
+      final planPrompt = client.planRequests.single.first.content;
+      expect(planPrompt, contains('{"anchors": ["<名字>", "<名字>"], "search"'));
+      expect(planPrompt, contains('anchors 一定要写'));
       final request = client.requests.single;
       expect(
         request[2].toolCalls!.map((c) => (c['function'] as Map)['name']),
