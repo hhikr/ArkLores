@@ -10,6 +10,11 @@ All notable changes to ArkLores will be documented in this file.
 - **"Not found" is checked before it is said.** When an answer says something was not found or the story does not tell, it names who or what that is about, and code looks for those names once more in the stories it had not read. If it finds them, the answer is written again with that text; if not, the work log notes that it was checked.
 - **A citation written with the file name only is kept** when exactly one story read for the question has that name; it was dropped as unread before. The work log shows how far the names reached: how many stories they appear in, and how many were given.
 - **A follow-up starts from the lines the last answer cited.** Earlier tool results are folded to a pointer before a follow-up, so the model knew which lines it had read but not what they said. Now the cited passages, with a little around them, are read again before the follow-up's first turn.
+- **A planning call that takes too long is stopped, not left running.** It used to be abandoned after 25 seconds while the request (and its retries after "too many requests") went on beside the answer's first call; a provider that allows one request at a time then refused that call.
+
+### Knowledge base
+
+- **Both knowledge bases are rebuilt with the current build code**, from the same game data as v0.14.0 (vectors carried over, nothing re-embedded). The Arknights catalog records when each story opened in the game's story review, the only time the main story has, so the main story is ordered among the events when material is gathered for an answer. Endfield operator files have ids under `ef/` like everything else in that knowledge base. Not uploaded yet.
 
 ### Library and reader
 

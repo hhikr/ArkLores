@@ -1,8 +1,10 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。两者都是 v0.14.0 Release 的资产：明日方舟库基于上游 `17759cc`（2026-10-08，瘦身后的库），
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**已发布**的是 v0.14.0 Release 的资产：明日方舟库基于上游 `17759cc`（2026-10-08，瘦身后的库），
 > 终末地库是瘦身后带资料向量的那份（只能在本机从游戏客户端构建，§9）。
-> 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `AI_ARCHITECTURE.md`。
+> **2026-10-19 在本机按现在的建库代码重建了两个库**（同一份游戏数据，向量全部迁移、新算 0 块），还没发布：明日方舟 `build/gamedata_rebuild/`（`story_catalog` 多一列 `show_time`），
+> 终末地 `build/endfield/`（档案 id 带 `ef/`）。差别与检查见 `KNOWN_ISSUES.md` §1.1。
+> 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `ASK_AGENT.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 
 ## 1. 数据源
@@ -31,7 +33,7 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 | `story_lines(story_id, line_index, speaker, content, kind, …)` | 剧情逐行（约 44 万行）；索引 `(story_id, line_index)`；行内换行是真换行 |
 | `normalized_records` | 非剧情文字（档案、语音、描述…），`entry_id`/`collection_id`；可作为出处 `record:<id>`。只带 `entity_id` 的记录（干员语音）的 `entity_name` 在派生步骤里按 id 从 `entities` 填上 |
 | `entities` / `entity_aliases` / `entity_documents` | 实体与别名（资料的所属对象、近似名用）；`entity_documents` 是每位干员的整份档案（也可作为出处） |
-| `story_catalog`（可选） | 故事集名、关卡号、章名、行动前/后、顺序、官方梗概、上线时间（`story_review_table.json` + `[uc]info`） |
+| `story_catalog`（可选） | 故事集名、关卡号、章名、行动前/后、顺序、官方梗概、上线时间 `start_time`、剧情回顾的开放时间 `show_time`（`story_review_table.json` 的 `startShowTime`；主线只有这个时间；2026-10-18 加，问答取材按它排上线顺序）（`story_review_table.json` + `[uc]info`） |
 | `story_chunk_vectors`（可选） | 剧情向量，12 行一块、步长 8，int8；模型/维度/切块记在 manifest |
 | `record_chunk_vectors`（可选，0.14） | 资料向量：`normalized_records` 里不是剧情副本的每条记录与 `entity_documents` 的每份档案；一条一块，超过 800 字的在 `## ` 小节处切、再按行切；每块存文字哈希与它覆盖的字符范围；与剧情向量同一模型 |
 | `gamedata_manifest` | schema 版本、上游提交、计数、向量与目录元数据 |
@@ -56,6 +58,11 @@ dart run tools/build_gamedata_database.dart --arknights-source=<源目录> --out
 ```
 
 Windows 本机约 7 分钟。有 `levels/` 才生成关卡绑定。全量构建自带故事目录。
+
+**只因建库代码改了而重建、游戏数据不变**（2026-10-19 的做法）：源目录（`notes/src`，`.source_commit` 记着它对应的提交）要先同步到已发布库的那个提交，
+而不是上游最新——`update_gamedata.dart` 只会同步到最新。用 `SourceSync.sync(installedSha: <源目录的提交>, latestSha: <库的提交>)` 只下载两者之间变化的文件
+（那次写了个不提交的小脚本调用它；`a550f5e` → `17759cc` 是 84 个文件），再全量构建（`--source-commit=<库的提交>`），然后 §5 的 `--migrate-from=<旧库>` 迁移向量，
+最后与旧库逐表对比，只允许预期的差别和 `updated_at`。
 
 ### 4.2 增量更新（App 知识库页 “检查更新 / 构建”，或命令行）
 

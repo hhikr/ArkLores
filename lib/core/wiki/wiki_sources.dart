@@ -7,7 +7,7 @@
 ///   page's type and slug).
 ///   fz.wiki, the other Endfield wiki the app browses, has no public API and
 ///   could not be reached from the development machine (2026-10-09), so the
-///   agent reads Warfarin; see `docs/WIKI_EVIDENCE.md`.
+///   agent reads Warfarin; see `docs/WIKI.md`.
 library;
 
 import 'dart:async';

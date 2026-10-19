@@ -25,6 +25,9 @@
 - `api.z.ai` 与 `open.bigmodel.cn` 同一个 key 都能用。一道题约 4–6 分钟（带工具的调用有 4.5–6 s 底噪）。
 - v0.10.6 教训：GLM 把 `cite` 写成平铺的 `["<id>.txt", 97, 127]`，解析器静默丢掉。提示词里凡是代码要解析的格式都给完整骨架，解析器对常见变体容错，
   丢弃的出处要计数并退回一次。
+- 2026-10-19 的实测：glm-5.3-flash 一题约 1–2.5 分钟（第一轮带 3 万字取材）；内容审核偶尔拦下某篇剧情的原文（HTTP 400 “sensitive content”，场景卡与前缀试验里同一篇两次）。
+- **glm-4.7-flash（免费档）测不了**：并发数 1，服务端常过载。两个请求重叠时必然 429（曾因拟定那次超时后请求仍在跑而重叠，已改为超时即中断，`abortTrigger`）；
+  请求不重叠时仍在顺序调用上收到 429（“The service may be temporarily overloaded”）、一次流 300 秒没有内容。测试一律用 glm-5.3-flash（`tools/api_info` 的 `MODEL=`）。
 
 ## 通用兼容（`_StreamAccumulator`，2026-10-07）
 
@@ -35,6 +38,8 @@
   报错写出结束原因（`length` 提示输出上限，`content_filter`/`safety` 提示内容审核）和回复开头 160 字。
 - 回复是网页（`<` 开头，多半是 Base URL 少了 `/v1`）时不重试，直接提示检查 Base URL。
 - 429 按 `Retry-After` 或 2/5/10 秒重试三次；连接中断（无 HTTP 状态）的一轮重发最多 2 次。
+- `chatCompletion(abortTrigger:)`：触发后中断在途的请求（`http.AbortableRequest`）且不再按 429 重试。调用方放弃等待时要触发它，否则请求在后台跑完、与下一个请求并发。
+  现在只有拟定那次用；流式请求与用户取消还没接上（`KNOWN_ISSUES.md` §2.3）。
 
 ## 中转站（开发者用的灵算 `https://lingsuan.top/v1`，2026-10-07 实测）
 

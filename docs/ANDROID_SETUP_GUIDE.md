@@ -23,7 +23,8 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 .\tools\install_local.ps1 -DryRun
 ```
 
-知识库 `build\gamedata_v5\arklores_gamedata_zh.db.gz` 被拷成应用目录里的 `arklores_gamedata_zh.db.download.gz`；打开 设置 → 知识库，
+知识库默认是 `build\gamedata_v5\arklores_gamedata_zh.db.gz`（`-KbFile <gz>` 指定别的，例如 2026-10-19 重建的 `build\gamedata_rebuild\arklores_gamedata_zh.db.gz`；终末地固定是 `build\endfield\arklores_endfield_zh.db.gz`），
+被拷成应用目录里的 `arklores_gamedata_zh.db.download.gz`；打开 设置 → 知识库，
 点“下载”即离线校验 SHA 并安装。**APK 必须是用这个 gz 的 SHA 构建的**（改了知识库就先改 `release_gamedata.env` 再 `-Build`；库所基于的上游提交变了，`GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE` 也要改，见 `GAMEDATA_BUILD_PIPELINE.md` §7）。
 
 签名：`tools/arklores-release.jks` + `tools/android_signing.properties`（gitignored，绝不提交、绝不打印）。没有它们时本地

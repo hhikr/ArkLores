@@ -60,7 +60,6 @@ lib/
     library/    资料页的查询与标签
     userdata/   用户库（阅读历史、我的资料）
     llm/        Chat / Embedding 客户端
-    rag/        文字切块
     wiki/       PRTS / Warfarin 的请求、页面段落、缓存与快照
     background/ 长时操作的前台服务保活
   features/     ai、library（资料页与阅读器）、materials、settings、wiki
@@ -71,11 +70,12 @@ docs/           文档（索引见 CLAUDE.md）
 
 ## 文档
 
-- [`docs/AI_ARCHITECTURE.md`](docs/AI_ARCHITECTURE.md)、[`docs/R17_TOOL_AGENT.md`](docs/R17_TOOL_AGENT.md)：问答 Agent；
-  [`docs/WIKI_EVIDENCE.md`](docs/WIKI_EVIDENCE.md)：问答的 Wiki 检索与证据。
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：项目结构与各模块的实现方式。
+- [`docs/ASK_AGENT.md`](docs/ASK_AGENT.md)：问答 Agent 现在怎么工作；[`docs/ASK_EXPERIMENTS.md`](docs/ASK_EXPERIMENTS.md)：问答试过的办法、实测表现与评估；
+  [`docs/WIKI.md`](docs/WIKI.md)：Wiki 浏览与问答取证。
 - [`docs/GAMEDATA_BUILD_PIPELINE.md`](docs/GAMEDATA_BUILD_PIPELINE.md)：两个知识库的构建、更新、发布；
   [`docs/KNOWLEDGE_BASE_LESSONS.md`](docs/KNOWLEDGE_BASE_LESSONS.md)：建库经验与教训。
-- [`docs/KNOWN_LIMITATIONS_AND_DEBT.md`](docs/KNOWN_LIMITATIONS_AND_DEBT.md)：已知限制。
+- [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md)：已知问题。
 - [`CHANGELOG.md`](CHANGELOG.md)：各版本的变化。
 
 明日方舟的数据来自社区解包仓库 [Kengxxiao/ArknightsGameData](https://github.com/Kengxxiao/ArknightsGameData)；终末地的数据从本机安装的游戏客户端解包
