@@ -239,3 +239,6 @@ flutter test test/live/ask_pipeline_live_test.dart
   改成卡片里每句单独匹配（2710 句的向量约 17 万 token）：拟定 + 取材 3 万字加前 20 句 79%（字数中位 6.2 万，取材 4.5 万字是 76%、6.6 万），
   7 道题救回 2 条。只有 315 张卡片作候选，全库约 4100 张时只会更差，生成全库的卡片估计 700 万 token 以上，所以没有推全量。
   代码与卡片留在 `test/support/scene_cards.dart`、`test/live/scene_cards_test.dart`、`build/scene_cards/`。
+- 给剧情检索块加模型写的前缀（“《篇名》地点，谁与谁在谈什么”）再算向量（重构第 5 期 P6，2026-10-19）：在 7 道概念题金标所在的 195 篇、4814 块上试，约 261 万 token。
+  同一批块里比金标块的排名：24 处变差 15、变好 6，前 20 名内 10 → 6；整条流程只用拟定的检索 25/68 → 20/68，加取材 50 → 49，7 道题不变。
+  前缀把向量拉向“场景描述”，块里关键的一两句台词反而被稀释，而这类题的金标正是零散的台词。代码在 `test/support/chunk_prefix.dart`、`test/live/chunk_prefix_test.dart`。
