@@ -942,6 +942,16 @@ class LoreAgentLoop {
       // 0.14: a range shown only in part is cut to the lines that were
       // shown (a search lists some lines of a passage; the range over them
       // was dropped whole, and with it a sound citation).
+      // Phase 2 (S7): a story id written short (its file name only) is
+      // written out when one story read in this question has that name.
+      final expanded = expandShortStoryIds(body, seen.stories);
+      if (expanded.$2.isNotEmpty) {
+        body = expanded.$1;
+        yield ReActEvent(
+          type: ReActEventType.recordNote,
+          content: '补全了出处的路径：${expanded.$2.join('；')}',
+        );
+      }
       final trims = _partlySeen(body, seen);
       for (final MapEntry(key: cite, value: runs) in trims.entries) {
         body = body.replaceAll('`$cite`', runs.map((c) => '`$c`').join(' '));
@@ -1805,6 +1815,30 @@ class LoreAgentLoop {
   /// Citations of [body] whose range was shown only in part, each with the
   /// runs inside it that were shown (as citations of their own). A range
   /// shown whole or not at all is left to [_unseenCitations].
+  /// [body] with each cited story id that is not one of [read] but is the
+  /// file name of exactly one of them written out in full, and what was
+  /// written out (`short → full`).
+  static (String, List<String>) expandShortStoryIds(
+    String body,
+    Iterable<String> read,
+  ) {
+    final known = read.toSet();
+    final done = <String>[];
+    final out = body.replaceAllMapped(_citation, (m) {
+      final id = m.group(1)!;
+      if (known.contains(id)) return m.group(0)!;
+      final full = [
+        for (final s in known)
+          if (s.endsWith('/$id')) s,
+      ];
+      if (full.length != 1) return m.group(0)!;
+      final note = '$id → ${full.single}';
+      if (!done.contains(note)) done.add(note);
+      return '${full.single}${m.group(0)!.substring(id.length)}';
+    });
+    return (out, done);
+  }
+
   static Map<String, List<String>> _partlySeen(String body, SeenLines seen) {
     final out = <String, List<String>>{};
     void check(String cite, String id, int lo, int hi) {

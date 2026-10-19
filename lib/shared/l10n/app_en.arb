@@ -310,6 +310,8 @@
   "@aiWorkHelper": {"placeholders": {"number": {"type": "int"}}},
   "aiWorkStories": "{count} stories",
   "@aiWorkStories": {"placeholders": {"count": {"type": "int"}}},
+  "aiWorkGathered": "{given} of {located} stories",
+  "@aiWorkGathered": {"placeholders": {"given": {"type": "int"}, "located": {"type": "int"}}},
   "aiWorkRunning": "running",
   "aiWorkRaw": "Raw output",
   "aiStepsStatus": "{status} ({count} steps)",

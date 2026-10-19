@@ -116,7 +116,8 @@ class Coverage {
       b.writeln('没有在剧情和资料里找到这些名字。');
     } else {
       final picked = pickedFrom;
-      b.writeln('按名字取材：给了 ${stories.length} 篇剧情的原文（$chars 字）'
+      b.writeln('按名字取材：这些名字出现在 ${stories.length + located.length} 篇剧情里，'
+          '给了 ${stories.length} 篇剧情的原文（$chars 字）'
           '${records.isEmpty ? '' : '和 ${records.length} 条资料的片段'}。'
           '${picked == null ? '每篇只取这些名字出现、说话的行及前后各两行' : '从这些名字出现的 ${picked.stories} 篇剧情（每处前后八行，共 ${picked.chars} 字）里挑出了与问题相关的行'}，'
           '按上线顺序排列；行号可以直接引用，要看前后更多内容用 read_story。');

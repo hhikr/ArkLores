@@ -146,6 +146,16 @@ void main() {
     expect(search.kind, WorkKind.find);
     expect(search.failed, isFalse);
     expect(search.searchStoryCount, 3);
+    // Gathering says how many stories hold the names and how many it gave.
+    final gather = workStepsOf([
+      _call('gather', {
+        'names': ['甲'],
+      }),
+      _out('gather', '按名字取材：这些名字出现在 12 篇剧情里，给了 5 篇剧情的原文（30000 字）。'),
+    ]).single;
+    expect(gather.kind, WorkKind.gather);
+    expect(gather.gatherStoryCount, 5);
+    expect(gather.gatherLocatedCount, 12);
   });
 
   test("a helper's outputs go to the helper's own calls", () {

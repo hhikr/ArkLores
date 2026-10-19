@@ -917,6 +917,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String aiWorkGathered(int given, int located) {
+    return '$given of $located stories';
+  }
+
+  @override
   String get aiWorkRunning => 'running';
 
   @override

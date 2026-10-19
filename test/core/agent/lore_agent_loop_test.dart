@@ -668,7 +668,8 @@ void main() {
         ['search', 'gather'],
       );
       final gathered = request[4].content;
-      expect(gathered, startsWith('按名字取材：给了'));
+      expect(gathered, startsWith('按名字取材：这些名字出现在'));
+      expect(gathered, contains('篇剧情里，给了'));
       // The scene where both names are comes first, in release order.
       expect(gathered, contains(story));
       expect(gathered, contains('我会等星灯'));
@@ -1745,6 +1746,20 @@ void main() {
         ['已查证“没有查到”：无人知晓的下落（无人知晓在没读过的剧情里没有找到）'],
       );
       expect(finalAnswerOf(events), contains('星灯点亮了钟楼'));
+    });
+
+    test('a story id written as its file name only is written out when one '
+        'story read has that name', () {
+      final (body, notes) = LoreAgentLoop.expandShortStoryIds(
+        '甲 `level_a.txt:3-4` 乙 `level_b.txt:1` 丙 `x/level_a.txt:5`',
+        ['x/level_a.txt', 'y/level_b.txt', 'z/level_b.txt'],
+      );
+      // Two stories are named level_b.txt: which one is not guessed.
+      expect(
+        body,
+        '甲 `x/level_a.txt:3-4` 乙 `level_b.txt:1` 丙 `x/level_a.txt:5`',
+      );
+      expect(notes, ['level_a.txt → x/level_a.txt']);
     });
 
     test('a follow-up reads again what the last answer cited, near ranges '

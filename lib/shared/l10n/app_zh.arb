@@ -308,6 +308,8 @@
   "@aiWorkHelper": {"placeholders": {"number": {"type": "int"}}},
   "aiWorkStories": "{count} 篇",
   "@aiWorkStories": {"placeholders": {"count": {"type": "int"}}},
+  "aiWorkGathered": "给了 {given} 篇（定位到 {located} 篇）",
+  "@aiWorkGathered": {"placeholders": {"given": {"type": "int"}, "located": {"type": "int"}}},
   "aiWorkRunning": "进行中",
   "aiWorkRaw": "原始输出",
   "aiStepsStatus": "{status}（{count} 步）",

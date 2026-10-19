@@ -196,7 +196,10 @@ String stepSummary(WorkStep s) {
       return n == null ? _firstLine(s.text) : '$n 篇剧情';
     case WorkKind.gather:
       final n = s.gatherStoryCount;
-      return n == null ? _firstLine(s.text) : '$n 篇剧情';
+      final located = s.gatherLocatedCount;
+      return n == null
+          ? _firstLine(s.text)
+          : '$n 篇剧情${located == null ? '' : '（定位到 $located 篇）'}';
     case WorkKind.sql:
       final n = s.rowCount;
       return n == null ? _firstLine(s.text) : '$n 行';

@@ -1682,6 +1682,12 @@ abstract class AppLocalizations {
   /// **'{count} stories'**
   String aiWorkStories(int count);
 
+  /// No description provided for @aiWorkGathered.
+  ///
+  /// In en, this message translates to:
+  /// **'{given} of {located} stories'**
+  String aiWorkGathered(int given, int located);
+
   /// No description provided for @aiWorkRunning.
   ///
   /// In en, this message translates to:

@@ -900,6 +900,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String aiWorkGathered(int given, int located) {
+    return '给了 $given 篇（定位到 $located 篇）';
+  }
+
+  @override
   String get aiWorkRunning => '进行中';
 
   @override

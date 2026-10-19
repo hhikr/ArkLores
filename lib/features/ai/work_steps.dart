@@ -239,6 +239,12 @@ class WorkStep {
     return m == null ? null : int.parse(m.group(1)!);
   }
 
+  /// [WorkKind.gather]: stories that hold one of the names.
+  int? get gatherLocatedCount {
+    final m = RegExp(r'出现在 (\d+) 篇剧情').firstMatch(text);
+    return m == null ? null : int.parse(m.group(1)!);
+  }
+
   /// The tool refused the call or could not run it.
   bool get failed {
     if (!done) return false;

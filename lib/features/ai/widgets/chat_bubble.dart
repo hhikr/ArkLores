@@ -1320,7 +1320,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         return stories == null ? '' : t.aiWorkStories(stories);
       case WorkKind.gather:
         final stories = step.gatherStoryCount;
-        return stories == null ? '' : t.aiWorkStories(stories);
+        final located = step.gatherLocatedCount;
+        return stories == null
+            ? ''
+            : located == null
+                ? t.aiWorkStories(stories)
+                : t.aiWorkGathered(stories, located);
       case WorkKind.read:
         final range = step.lineRange;
         return range == null ? '' : t.aiWorkLines(range.$1, range.$2);
