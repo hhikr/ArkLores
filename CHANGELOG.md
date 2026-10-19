@@ -7,6 +7,7 @@ All notable changes to ArkLores will be documented in this file.
 ### Questions and answers
 
 - **The first turn brings the story lines around the question's names.** Besides the first searches, the call that plans them now names what the question is about (people, places, groups, events), and code gathers the lines where those names speak or appear, two lines either side. Scenes where several names meet come first, each collection gives a few stories before any gives more, and the stories are in the order players could read them. In an offline test over 65 past questions with hand-marked lines, the first step now shows 74% of the lines an answer needs instead of 37%. The model can gather again for other names with the new `gather` tool.
+- **"Not found" is checked before it is said.** When an answer says something was not found or the story does not tell, it names who or what that is about, and code looks for those names once more in the stories it had not read. If it finds them, the answer is written again with that text; if not, the work log notes that it was checked.
 - **A follow-up starts from the lines the last answer cited.** Earlier tool results are folded to a pointer before a follow-up, so the model knew which lines it had read but not what they said. Now the cited passages, with a little around them, are read again before the follow-up's first turn.
 
 ### Library and reader

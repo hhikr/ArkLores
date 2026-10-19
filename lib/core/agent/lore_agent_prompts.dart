@@ -164,7 +164,7 @@ const String loreCiteShape =
 /// the displayed answer ([LoreAnswerStream]).
 const String loreAnswerFormat = '''
 最终答案只输出一个 JSON 对象，不写 JSON 以外的任何文字，不加代码块：
-{"entries": [条目, ...], "coverage": "full 或 gaps", "gaps": "..."}
+{"entries": [条目, ...], "coverage": "full 或 gaps", "gaps": "...", "missing": [...]}
 （事实核查时 JSON 的第一个字段是 "verdict"，见条目安排。）
 
 entries 按阅读顺序排列，每个条目是下面两种之一：
@@ -184,7 +184,10 @@ entries 按阅读顺序排列，每个条目是下面两种之一：
 - 介绍人物身份时直接陈述，不描述资料来源。
 - 用户写的名字与原文不同时，第一次提到它时在括号里注明用户的写法，如 X（你写的是 Y）；用户写法没有错时不要注明。
 
-coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里用一两句话告诉玩家哪方面可能有遗漏（用章节名，不列查找过程）；full 时省略 gaps。''';
+coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里用一两句话告诉玩家哪方面可能有遗漏（用章节名，不列查找过程）；full 时省略 gaps。
+
+missing：正文或 gaps 里说某件事没有查到、原文没有交代或没有读到时，每件事写一项 {"point": "<这件事>", "words": ["<名字>", "<名字>"]}，
+words 是与它相关的人物、地点、组织、物品在原文里的名字，最多三个；代码会用这些名字在你没读过的剧情里再找一次，找到了就交给你重写。没有这种内容时省略 missing。''';
 
 /// How the entries are arranged (one arrangement for every question; the
 /// model adapts it to what was asked).
@@ -323,6 +326,13 @@ const String loreLinePickPrompt =
     '只输出一个 JSON 对象：{"keep": ["<story_id>:<起始行>-<结束行>", "<story_id>:<行号>"]}，'
     '按重要性从高到低排列。只写片段里出现过的行号；没有用得上的行就写 {"keep": []}。'
     '挑出的行合计不要超过片段的三分之一。';
+
+/// Phase 2 (3.2): what an answer that said something was not found is
+/// asked again with: the text code found for the names it gave.
+String loreMissingFoundNote(List<String> points, String found) =>
+    '（系统）你的答案里写了没有查到：${points.join('；')}。'
+    '代码用你给的名字在你没读过的剧情里又找了一次，找到了下面这些原文（行号可以直接引用）。'
+    '读过后重写最终答案，格式不变；这些原文与那几件事无关时，把原来的答案原样再输出一次。\n$found';
 
 /// The user message of [loreLinePickPrompt]: the question, the names the
 /// material was gathered for, and the segment ([index] of [count]).

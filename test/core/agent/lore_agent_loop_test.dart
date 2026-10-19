@@ -1659,6 +1659,94 @@ void main() {
           StoryAnswerStatus.answered,);
     });
 
+    // Phase 2 (3.2): what an answer says it did not find is looked for once
+    // more by code, with the names it gave, in what it has not read.
+    test('a "not found" is looked for again; text found goes back for a '
+        'rewrite, once', () async {
+      String json(String text, String story, int line,
+              {List<String>? missing,}) =>
+          jsonEncode({
+            'entries': [
+              {
+                'text': text,
+                'cite': [
+                  [story, line, line],
+                ],
+              },
+            ],
+            'coverage': missing == null ? 'full' : 'gaps',
+            if (missing != null)
+              'missing': [
+                {'point': '乙后来怎样', 'words': missing},
+              ],
+          });
+      const main = 'obt/main/level_main_fx-01.txt';
+      const act = 'activities/act_fx/level_act_fx_02_beg.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _answer(json('星灯点亮了钟楼。', main, 1, missing: ['乙'])),
+        _answer(json('乙秘密会面。', act, 1, missing: ['乙'])),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯和乙做了什么？')
+          .toList();
+      expect(client.requests, hasLength(3));
+      final note = client.requests.last.last.content;
+      expect(note, contains('没有查到：乙后来怎样'));
+      expect(note, contains('L1 [乙] 今晚的会面不能让人知道。'));
+      // The first answer is in the request it is rewritten from.
+      expect(client.requests.last[client.requests.last.length - 2].content,
+          contains('星灯点亮了钟楼'),);
+      final notes = [
+        for (final e in events)
+          if (e.type == ReActEventType.recordNote) e.content,
+      ];
+      expect(notes.single, contains('找到 1 篇，交回重写'));
+      // Once: the rewrite's own "missing" is not looked for again.
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('`$act:1`'));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.partial,);
+    });
+
+    test('a "not found" that stays not found is noted and the answer stands',
+        () async {
+      const main = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _answer(jsonEncode({
+          'entries': [
+            {
+              'text': '星灯点亮了钟楼。',
+              'cite': [
+                [main, 1, 1],
+              ],
+            },
+          ],
+          'coverage': 'gaps',
+          'gaps': '没有查到无人知晓的下落。',
+          'missing': [
+            {
+              'point': '无人知晓的下落',
+              'words': ['无人知晓'],
+            },
+          ],
+        }),),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(client.requests, hasLength(2));
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.recordNote) e.content,
+        ],
+        ['已查证“没有查到”：无人知晓的下落（无人知晓在没读过的剧情里没有找到）'],
+      );
+      expect(finalAnswerOf(events), contains('星灯点亮了钟楼'));
+    });
+
     test('a follow-up reads again what the last answer cited, near ranges '
         'as one', () {
       final seen = SeenLines()

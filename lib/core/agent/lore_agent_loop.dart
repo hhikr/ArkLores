@@ -480,6 +480,7 @@ class LoreAgentLoop {
     var redoing = false;
 
     var citationRetried = false;
+    var missingChecked = false;
     var nudged = false;
     // R18: the answer last sent back for a rewrite (citation recheck);
     // kept if the rewrite never comes.
@@ -998,6 +999,48 @@ class LoreAgentLoop {
         continue;
       }
 
+      // Phase 2 (3.2): what the answer says was not found is looked for
+      // once more by code, with the names it gave, in stories it has not
+      // read; text found goes back with the answer for a rewrite (once).
+      if (!subtask && !missingChecked && !lastTurn && fromJson != null) {
+        final missing = loreAnswerMissing(content);
+        if (missing.isNotEmpty) {
+          missingChecked = true;
+          final found = await _lookForMissing(missing, seen);
+          final points = [
+            for (final m in missing)
+              m.point.isEmpty ? m.words.join('、') : m.point,
+          ];
+          if (found == null) {
+            yield ReActEvent(
+              type: ReActEventType.recordNote,
+              content: '已查证“没有查到”：${points.join('；')}'
+                  '（${missing.expand((m) => m.words).join('、')}在没读过的剧情里没有找到）',
+            );
+          } else {
+            yield ReActEvent(
+              type: ReActEventType.recordNote,
+              content: '查证“没有查到”：${points.join('；')}，'
+                  '在没读过的剧情里找到 ${found.stories} 篇，交回重写',
+            );
+            yield const ReActEvent(
+              type: ReActEventType.finalAnswerReset,
+              rollback: true,
+            );
+            rewriteOf = keep;
+            rewriteUncited = citations == 0;
+            redoNotes.add(conversation.length);
+            conversation.add(Message.assistant(keep));
+            redoNotes.add(conversation.length);
+            conversation.add(
+              Message.user(loreMissingFoundNote(points, found.text)),
+            );
+            redoing = true;
+            continue;
+          }
+        }
+      }
+
       if (trims.isNotEmpty) {
         yield ReActEvent(
           type: ReActEventType.recordNote,
@@ -1371,6 +1414,36 @@ class LoreAgentLoop {
       return null;
     }
   }
+
+  /// Story text for [missing]'s names that the conversation has not shown
+  /// (registered in [seen]), or null when there is none.
+  Future<({String text, int stories})?> _lookForMissing(
+    List<({String point, List<String> words})> missing,
+    SeenLines seen,
+  ) async {
+    final words = <String>{for (final m in missing) ...m.words}.toList();
+    final coverage = await CoverageBuilder(store).build(
+      words,
+      budgetChars: missingLookupChars,
+    );
+    final unread = [
+      for (final p in coverage.passages)
+        if (seen.seenRanges(p.storyId, p.first, p.last).isEmpty) p,
+    ];
+    if (unread.isEmpty) return null;
+    for (final p in unread) {
+      for (final l in p.lines) {
+        seen.add(p.storyId, l.lineIndex);
+      }
+    }
+    return (
+      text: renderPassages(unread, coverage.labels),
+      stories: {for (final p in unread) p.storyId}.length,
+    );
+  }
+
+  /// Characters of story text the lookup for an answer's `missing` gives.
+  static const int missingLookupChars = 12000;
 
   /// Lines read again before a follow-up: the story ranges the last answer
   /// cited (and were read), each with two lines around it; ranges less than

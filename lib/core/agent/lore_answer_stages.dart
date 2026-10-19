@@ -57,6 +57,25 @@ List<LoreAnswerEntry>? loreAnswerEntries(String content) {
   return out;
 }
 
+/// Phase 2 (3.2): what the JSON answer in [content] says was not found
+/// (`missing`), each point with the names to look for; empty when it says
+/// nothing of the kind.
+List<({String point, List<String> words})> loreAnswerMissing(String content) {
+  final missing = _decodeObject(content, loreAnswerJsonStart)?['missing'];
+  if (missing is! List) return const [];
+  return [
+    for (final m in missing)
+      if (m is Map && m['words'] is List)
+        (
+          point: '${m['point'] ?? ''}'.trim(),
+          words: [
+            for (final w in m['words'] as List)
+              if (w is String && w.trim().isNotEmpty) w.trim(),
+          ],
+        ),
+  ].where((m) => m.words.isNotEmpty).toList();
+}
+
 /// [content] with every `cite` of its JSON answer rewritten in the nested
 /// form the prompt asks for (`[["<story_id>", a, b], ["record", "<id>"]]`),
 /// so a flat or odd citation shape is not replayed to the model in later
