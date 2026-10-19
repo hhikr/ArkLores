@@ -1628,19 +1628,65 @@ void main() {
       final request = client.requests.single;
       // 0.14: the earlier tool output is folded; what it showed stays
       // citable.
-      final earlier = request.where((m) => m.role == MessageRole.tool).toList();
-      expect(earlier.map((m) => m.content.startsWith('[已折叠]')), [true]);
+      final tools = request.where((m) => m.role == MessageRole.tool).toList();
+      expect(tools.map((m) => m.content.startsWith('[已折叠]')), [true, false]);
       // It says which lines it showed, and that their text is gone.
       expect(
-        earlier.single.content,
+        tools.first.content,
         allOf(
           contains('展示过：obt/main/level_main_fx-01.txt L0-'),
           contains('先重新读取'),
         ),
       );
-      expect(request.last.content, '那后来呢？');
+      // S0 (phase 1): the lines the last answer cited are read again, with
+      // two lines around them, before the follow-up's first turn.
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.toolCall) '${e.toolName} ${e.toolArgs}',
+        ],
+        [
+          'read_story {story_id: obt/main/level_main_fx-01.txt, start: 0, '
+              'count: 4}',
+        ],
+      );
+      final question = request.lastIndexWhere((m) => m.role == MessageRole.user);
+      expect(request[question].content, '那后来呢？');
+      expect(request.last.content, contains('L1'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
+    });
+
+    test('a follow-up reads again what the last answer cited, near ranges '
+        'as one', () {
+      final seen = SeenLines()
+        ..addRange('a.txt', 10, 12)
+        ..addRange('a.txt', 20, 30)
+        ..addRange('a.txt', 200, 205)
+        ..addRange('b.txt', 0, 3);
+      final reads = LoreAgentLoop.followUpReads(
+        [
+          Message.user('问'),
+          Message.assistant(
+            '一 `b.txt:1-2` 二 `a.txt:10-12` `a.txt:25-40` 三 `a.txt:200`'
+            ' 没读过的 `c.txt:5`',
+          ),
+        ],
+        seen,
+      );
+      expect(
+        [for (final r in reads) '${r.storyId} ${r.start} ${r.count}'],
+        // Unread lines (a.txt 31-40, c.txt) are not read.
+        ['b.txt 0 5', 'a.txt 8 25', 'a.txt 198 5'],
+      );
+      expect(
+        LoreAgentLoop.followUpReads(
+          [Message.assistant('`a.txt:10-12` `b.txt:1-2`')],
+          seen,
+          maxLines: 8,
+        ).map((r) => r.storyId),
+        ['a.txt'],
+      );
     });
 
     // 0.14: the tool-call gate.

@@ -333,6 +333,14 @@ class LoreAgentLoop {
       );
       // A step whose tool this question does not have is left out.
       final planned = <({String tool, Map<String, dynamic> args})>[
+        // S0 (refactor phase 1): a follow-up gets the text the last answer
+        // cited again (its tool results are folded to pointers by now).
+        if (prior != null && tools['read_story'] != null)
+          for (final r in followUpReads(prior.messages, prior.seen))
+            (
+              tool: 'read_story',
+              args: {'story_id': r.storyId, 'start': r.start, 'count': r.count},
+            ),
         if (plan != null) ...[
           if (tools['outline'] != null)
             for (final c in plan.outlines)
@@ -1345,6 +1353,57 @@ class LoreAgentLoop {
       onRaw('没有拟定出检索词：$e');
       return null;
     }
+  }
+
+  /// Lines read again before a follow-up: the story ranges the last answer
+  /// cited (and were read), each with two lines around it; ranges less than
+  /// [joinGap] lines apart are read as one. In the order the answer cites
+  /// them, up to [maxLines] lines in all.
+  static List<({String storyId, int start, int count})> followUpReads(
+    List<Message> messages,
+    SeenLines seen, {
+    int joinGap = 20,
+    int maxLines = 400,
+  }) {
+    final answer = messages.lastWhere(
+      (m) =>
+          m.role == MessageRole.assistant &&
+          (m.toolCalls ?? const []).isEmpty &&
+          m.content.trim().isNotEmpty,
+      orElse: () => Message.assistant(''),
+    );
+    final ranges = <String, List<(int, int)>>{};
+    for (final m in _citation.allMatches(answer.content)) {
+      final story = m.group(1)!;
+      final a = int.parse(m.group(2)!);
+      final b = int.tryParse(m.group(3) ?? '') ?? a;
+      for (final r in seen.seenRanges(story, a < b ? a : b, a < b ? b : a)) {
+        (ranges[story] ??= []).add(r);
+      }
+    }
+    final reads = <({String storyId, int start, int count})>[];
+    var total = 0;
+    for (final MapEntry(key: story, value: list) in ranges.entries) {
+      list.sort((x, y) => x.$1.compareTo(y.$1));
+      final joined = <(int, int)>[];
+      for (final r in list) {
+        if (joined.isNotEmpty && r.$1 - joined.last.$2 <= joinGap) {
+          final last = joined.removeLast();
+          joined.add((last.$1, r.$2 > last.$2 ? r.$2 : last.$2));
+        } else {
+          joined.add(r);
+        }
+      }
+      for (final (a, b) in joined) {
+        final start = a - 2 < 0 ? 0 : a - 2;
+        var count = b + 2 - start + 1;
+        if (count > ReadStoryTool.maxCount) count = ReadStoryTool.maxCount;
+        if (total + count > maxLines) return reads;
+        total += count;
+        reads.add((storyId: story, start: start, count: count));
+      }
+    }
+    return reads;
   }
 
   /// What came before a follow-up, for [_planSearches]: the last question
