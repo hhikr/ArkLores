@@ -2023,6 +2023,7 @@ class _LossyClient extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) async {
     final turn = _turn(false, tools);
     return ChatCompletionResult(
@@ -2147,6 +2148,7 @@ class _ScriptedClient extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) async {
     if (messages.first.content.startsWith(loreSearchPlanRole)) {
       planRequests.add(List.of(messages));

@@ -283,6 +283,7 @@ class _NoLLM extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) =>
       throw UnimplementedError();
 }

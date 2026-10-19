@@ -1397,6 +1397,9 @@ class LoreAgentLoop {
     String wikiSearchDescription = '',
     String gatherDescription = '',
   }) async {
+    // Fired when the plan takes too long: the request (perhaps waiting out
+    // a 429) must not run on beside the main model's first call.
+    final abort = Completer<void>();
     try {
       final result = await (planClient ?? client).chatCompletion(
         [
@@ -1416,10 +1419,12 @@ class LoreAgentLoop {
         ],
         temperature: 0.2,
         maxTokens: 512,
+        abortTrigger: abort.future,
       ).timeout(planTimeout);
       onRaw(result.content);
       return parseSearchPlan(result.content);
     } catch (e) {
+      if (!abort.isCompleted) abort.complete();
       onRaw('没有拟定出检索词：$e');
       return null;
     }
