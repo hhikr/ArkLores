@@ -107,6 +107,9 @@ void main() {
         );
       }
       final cards = cardsDir.isEmpty ? null : _Cards.load(cardsDir);
+      if (embed && cards != null) {
+        await cards.embedSentences(_realEmbedder());
+      }
       final embedder =
           vectorsPath.isEmpty ? null : _CachedEmbedder.load(vectorsPath);
       var pickPrompt = 0;
@@ -205,6 +208,23 @@ void main() {
                     budget: v.budget,
                     cards: k,
                   ),
+            // Each sentence of a card matched on its own.
+            for (final k in [10, 20]) _Variant('sent$k', const [], const [],
+                sentences: k,),
+            for (final v in c.variants)
+              if (v.name == 'planner+coverage30' ||
+                  (v.name == 'coverage30' &&
+                      !c.variants.any((w) => w.name == 'planner')))
+                for (final k in [10, 20])
+                  _Variant(
+                    '${v.name == 'coverage30' ? '' : 'planner+'}'
+                    'coverage30+sent$k',
+                    v.searches,
+                    v.outlines,
+                    anchors: v.anchors,
+                    budget: v.budget,
+                    sentences: k,
+                  ),
           ],
         ]) {
           if (variants.isNotEmpty && !variants.contains(variant.name)) continue;
@@ -235,28 +255,38 @@ void main() {
             coverage.register(seen);
             chars += coverage.render().length;
           }
+          // The lines a..b with two either side, those not shown yet.
+          Future<int> show(String storyId, int a, int b) async {
+            final db = dbs[gameOfId(storyId)];
+            if (db == null) return 0;
+            final rows = await db.rawQuery(
+              'SELECT line_index, speaker, content FROM story_lines '
+              'WHERE story_id = ? AND line_index BETWEEN ? AND ?',
+              [storyId, a - 2, b + 2],
+            );
+            var n = 0;
+            for (final r in rows) {
+              final i = r['line_index'] as int;
+              if (seen.seenRanges(storyId, i, i).isNotEmpty) continue;
+              seen.add(storyId, i);
+              n += '${r['speaker'] ?? ''}${r['content'] ?? ''}'.length + 8;
+            }
+            return n;
+          }
+
           if (variant.cards > 0 && cards != null && embedder != null) {
             final q = (await embedder.embed([c.query])).single;
             for (final card in cards.best(q, variant.cards)) {
-              final db = dbs[gameOfId(card.storyId)];
-              if (db == null) continue;
               for (final (a, b) in card.ranges) {
-                final rows = await db.rawQuery(
-                  'SELECT line_index, speaker, content FROM story_lines '
-                  'WHERE story_id = ? AND line_index BETWEEN ? AND ?',
-                  [card.storyId, a - 2, b + 2],
-                );
-                for (final r in rows) {
-                  if (seen.seenRanges(card.storyId, r['line_index'] as int,
-                      r['line_index'] as int,).isNotEmpty) {
-                    continue;
-                  }
-                  seen.add(card.storyId, r['line_index'] as int);
-                  chars += '${r['speaker'] ?? ''}${r['content'] ?? ''}'
-                          .length +
-                      8;
-                }
+                chars += await show(card.storyId, a, b);
               }
+            }
+          }
+          if (variant.sentences > 0 && cards != null && embedder != null) {
+            final q = (await embedder.embed([c.query])).single;
+            for (final (storyId, claim)
+                in cards.bestClaims(q, variant.sentences)) {
+              chars += await show(storyId, claim.first, claim.last);
             }
           }
           watch.stop();
@@ -388,11 +418,15 @@ class _Variant {
     this.perStoryChars = CoverageBuilder.defaultPerStoryChars,
     this.picked = false,
     this.cards = 0,
+    this.sentences = 0,
   });
   final String name;
 
   /// Scene cards matched to the question (phase 3), after the rest.
   final int cards;
+
+  /// Sentences of scene cards matched to the question one by one.
+  final int sentences;
   final List<String> searches;
   final List<String> outlines;
 
@@ -673,6 +707,12 @@ const _variantNames = [
   'coverage30+cards5',
   'planner+coverage30+cards3',
   'planner+coverage30+cards5',
+  'sent10',
+  'sent20',
+  'coverage30+sent10',
+  'coverage30+sent20',
+  'planner+coverage30+sent10',
+  'planner+coverage30+sent20',
 ];
 
 const _variantLabels = {
@@ -699,6 +739,12 @@ const _variantLabels = {
   'coverage30+cards5': '按锚点取材 3 万字 + 场景卡前 5 张（只有没有拟定记录的题）',
   'planner+coverage30+cards3': '拟定的检索 + 取材 3 万字 + 场景卡前 3 张',
   'planner+coverage30+cards5': '拟定的检索 + 取材 3 万字 + 场景卡前 5 张',
+  'sent10': '只用场景卡的句子：问题按意思匹配前 10 句，给每句指向的行',
+  'sent20': '只用场景卡的句子：前 20 句',
+  'coverage30+sent10': '按锚点取材 3 万字 + 卡片句子前 10 句（只有没有拟定记录的题）',
+  'coverage30+sent20': '按锚点取材 3 万字 + 卡片句子前 20 句（只有没有拟定记录的题）',
+  'planner+coverage30+sent10': '拟定的检索 + 取材 3 万字 + 卡片句子前 10 句',
+  'planner+coverage30+sent20': '拟定的检索 + 取材 3 万字 + 卡片句子前 20 句',
 };
 
 String _pct(int a, int b) =>
@@ -708,21 +754,8 @@ String _pct(int a, int b) =>
 /// service, configured by the gitignored `tools/embedding-apiKey.csv`; this
 /// costs money) and writes them into it.
 Future<void> _embedMissing(String path, Set<String> queries) async {
-  final values = <String, String>{};
-  final csv = File('tools/embedding-apiKey.csv');
-  if (csv.existsSync()) {
-    for (final line in csv.readAsLinesSync()) {
-      final i = line.indexOf(',');
-      if (i > 0) {
-        values[line.substring(0, i).trim()] = line.substring(i + 1).trim();
-      }
-    }
-  }
-  final config = defaultEmbeddingConfig.copyWith(
-    baseUrl: values['openAiCompatible'],
-    apiKey: values['apiKey'],
-  );
-  expect(config.isValid, isTrue, reason: 'tools/embedding-apiKey.csv');
+  final client = _realEmbedder();
+  final config = client.config;
   final file = File(path);
   final json = file.existsSync()
       ? jsonDecode(file.readAsStringSync()) as Map<String, dynamic>
@@ -736,7 +769,6 @@ Future<void> _embedMissing(String path, Set<String> queries) async {
     for (final q in queries)
       if (!vectors.containsKey(q)) q,
   ];
-  final client = OpenAICompatibleEmbeddingClient(config: config);
   for (var i = 0; i < missing.length; i += 10) {
     final batch = missing.skip(i).take(10).toList();
     final got = await client.embed(batch);
@@ -757,9 +789,40 @@ Future<void> _embedMissing(String path, Set<String> queries) async {
       '(${client.tokensUsed} tokens billed), ${vectors.length} in $path');
 }
 
+/// The real embedding service (`tools/embedding-apiKey.csv`; costs money).
+OpenAICompatibleEmbeddingClient _realEmbedder() {
+  final values = <String, String>{};
+  final csv = File('tools/embedding-apiKey.csv');
+  if (csv.existsSync()) {
+    for (final line in csv.readAsLinesSync()) {
+      final i = line.indexOf(',');
+      if (i > 0) {
+        values[line.substring(0, i).trim()] = line.substring(i + 1).trim();
+      }
+    }
+  }
+  final config = defaultEmbeddingConfig.copyWith(
+    baseUrl: values['openAiCompatible'],
+    apiKey: values['apiKey'],
+  );
+  expect(config.isValid, isTrue, reason: 'tools/embedding-apiKey.csv');
+  return OpenAICompatibleEmbeddingClient(config: config);
+}
+
 /// Scene cards with their vectors (`scene_cards_test.dart`'s output).
 class _Cards {
-  _Cards(this.cards, this.vectors);
+  _Cards(this.dir, this.cards, this.vectors) {
+    final file = File('$dir/sentence_vectors.json');
+    if (file.existsSync()) {
+      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      for (final MapEntry(:key, :value)
+          in (json['vectors'] as Map<String, dynamic>).entries) {
+        sentenceVectors[key] = [
+          for (final x in value as List) (x as num).toDouble(),
+        ];
+      }
+    }
+  }
 
   factory _Cards.load(String dir) {
     final json = jsonDecode(File('$dir/vectors.json').readAsStringSync())
@@ -772,6 +835,7 @@ class _Cards {
           ),
     ];
     return _Cards(
+      dir,
       cards,
       {
         for (final MapEntry(:key, :value)
@@ -781,8 +845,49 @@ class _Cards {
     );
   }
 
+  final String dir;
   final List<SceneCard> cards;
   final Map<String, List<double>> vectors;
+
+  /// One vector a sentence (event or change), keyed by [_sentenceText].
+  final Map<String, List<double>> sentenceVectors = {};
+
+  static String _sentenceText(SceneCard card, SceneClaim claim) =>
+      '${card.title}：${claim.text}';
+
+  /// Embeds the sentences that have no vector yet (costs money) and keeps
+  /// them in `sentence_vectors.json`.
+  Future<void> embedSentences(EmbeddingClient client) async {
+    final missing = <String>{
+      for (final card in cards)
+        for (final claim in [...card.events, ...card.changes])
+          if (!sentenceVectors.containsKey(_sentenceText(card, claim)))
+            _sentenceText(card, claim),
+    }.toList();
+    for (var i = 0; i < missing.length; i += 10) {
+      final batch = missing.skip(i).take(10).toList();
+      final got = await client.embed(batch);
+      for (final (k, t) in batch.indexed) {
+        sentenceVectors[t] = got[k];
+      }
+    }
+    File('$dir/sentence_vectors.json')
+        .writeAsStringSync(jsonEncode({'vectors': sentenceVectors}));
+    // ignore: avoid_print
+    print('句子向量：新算 ${missing.length} 句（${client.tokensUsed} token），'
+        '共 ${sentenceVectors.length} 句');
+  }
+
+  /// The [k] sentences closest to [query] by meaning, with their stories.
+  List<(String, SceneClaim)> bestClaims(List<double> query, int k) {
+    final scored = [
+      for (final card in cards)
+        for (final claim in [...card.events, ...card.changes])
+          if (sentenceVectors[_sentenceText(card, claim)] case final v?)
+            (card.storyId, claim, cosineSimilarity(query, v)),
+    ]..sort((a, b) => b.$3.compareTo(a.$3));
+    return [for (final (s, c, _) in scored.take(k)) (s, c)];
+  }
 
   /// The [k] cards closest to [query] by meaning.
   List<SceneCard> best(List<double> query, int k) {
