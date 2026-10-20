@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/gamedata/build/story_naming.dart'
-    show endingStoryKind;
+import '../../core/gamedata/build/story_naming.dart' show endingStoryKind;
 import '../../core/gamedata/build/text_harvest.dart' show cleanRichText;
 import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry;
 import '../../core/library/library_labels.dart';
@@ -46,8 +45,8 @@ class EntryPage extends ConsumerWidget {
     final texts = ref.watch(entryTextsProvider(e));
     final bindings = ref.watch(entryBindingsProvider(e.id));
     final blocks = texts.valueOrNull ?? const <EntryTextBlock>[];
-    final parts =
-        ref.watch(entryPartsProvider(e.id)).valueOrNull ?? const <LibraryEntry>[];
+    final parts = ref.watch(entryPartsProvider(e.id)).valueOrNull ??
+        const <LibraryEntry>[];
     final progress = ref.watch(readingProgressProvider).valueOrNull ?? const {};
     final attached = ref.watch(attachedStoriesProvider(e.id)).valueOrNull ??
         const <LibraryEntry>[];
@@ -72,7 +71,10 @@ class EntryPage extends ConsumerWidget {
           ];
     final unlocked = e.type == 'sandbox_act'
         ? const <LibraryEntry>[]
-        : [for (final s in parts) if (s.name != e.name) s];
+        : [
+            for (final s in parts)
+              if (s.name != e.name) s,
+          ];
     Widget storyRow(LibraryEntry s) => Column(
           key: ValueKey('part-story-${s.id}'),
           children: [
@@ -98,84 +100,110 @@ class EntryPage extends ConsumerWidget {
           label: e.collectionName,
         ),
       ],
-      body: ListView(
-        padding: floatingPadding(
-          context,
-          const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        ),
-        children: [
-          _header(context, theme, e),
-          const SizedBox(height: 16),
-          if (blocks.isEmpty && !texts.isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                context.t.libraryNoText,
-                style: theme.bodyFont.copyWith(color: theme.textSecondary),
+      // One selection over the page: a profile's rows are separate items of
+      // a lazy list.
+      body: SelectionArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: floatingPadding(
+                context,
+                const EdgeInsets.fromLTRB(16, 12, 16, 32),
               ),
-            ),
-          for (final b in blocks) textBlock(theme, e, b, ref.watch(nicknameProvider)),
-          for (final s in own) storyRow(s),
-          // Dialogue played in the battle of a stage, read here (a stage with
-          // a story of its own has it at the end of that story).
-          if (attached.isNotEmpty) ...[
-            IndustrialSectionHeader(
-              theme: theme,
-              title: context.t.storyReaderBattleDialogue,
-              code: 'battle',
-            ),
-            for (final s in attached)
-              _AttachedDialogue(key: ValueKey('attached-${s.id}'), story: s),
-            const SizedBox(height: 8),
-          ],
-          if (protagonists.isNotEmpty) ...[
-            IndustrialSectionHeader(
-              theme: theme,
-              title: bindingName(
-                'features',
-                outgoing: true,
-                ownerType: e.type,
-              ),
-              code: 'protagonist',
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final b in protagonists)
-                  ActionChip(
-                    key: ValueKey('binding-${b.entry.id}'),
-                    label: Text(entryHeadline(b.entry)),
-                    labelStyle: theme.bodyFont.copyWith(fontSize: 12.5),
-                    backgroundColor: theme.cardSurface,
-                    side: BorderSide(color: theme.cardBorder),
-                    onPressed: () => openEntry(context, b.entry),
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  SliverList.list(
+                    children: [
+                      _header(context, theme, e),
+                      const SizedBox(height: 16),
+                      if (blocks.isEmpty && !texts.isLoading)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            context.t.libraryNoText,
+                            style: theme.bodyFont
+                                .copyWith(color: theme.textSecondary),
+                          ),
+                        ),
+                    ],
                   ),
-              ],
+                  for (final b in blocks)
+                    textSliver(theme, e, b, ref.watch(nicknameProvider)),
+                  SliverList.list(
+                    children: [
+                      for (final s in own) storyRow(s),
+                      // Dialogue played in the battle of a stage, read here (a stage with
+                      // a story of its own has it at the end of that story).
+                      if (attached.isNotEmpty) ...[
+                        IndustrialSectionHeader(
+                          theme: theme,
+                          title: context.t.storyReaderBattleDialogue,
+                          code: 'battle',
+                        ),
+                        for (final s in attached)
+                          _AttachedDialogue(
+                            key: ValueKey('attached-${s.id}'),
+                            story: s,
+                          ),
+                        const SizedBox(height: 8),
+                      ],
+                      if (protagonists.isNotEmpty) ...[
+                        IndustrialSectionHeader(
+                          theme: theme,
+                          title: bindingName(
+                            'features',
+                            outgoing: true,
+                            ownerType: e.type,
+                          ),
+                          code: 'protagonist',
+                        ),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final b in protagonists)
+                              ActionChip(
+                                key: ValueKey('binding-${b.entry.id}'),
+                                label: Text(entryHeadline(b.entry)),
+                                labelStyle:
+                                    theme.bodyFont.copyWith(fontSize: 12.5),
+                                backgroundColor: theme.cardSurface,
+                                side: BorderSide(color: theme.cardBorder),
+                                onPressed: () => openEntry(context, b.entry),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      // What the entry unlocks (an ending's pages, a month squad's three
+                      // stories), in reading order.
+                      if (unlocked.isNotEmpty) ...[
+                        IndustrialSectionHeader(
+                          theme: theme,
+                          title: context.t.libraryParts,
+                          code: 'parts',
+                        ),
+                        for (final s in unlocked) storyRow(s),
+                        const SizedBox(height: 8),
+                      ],
+                      ..._bindingSections(
+                        context,
+                        theme,
+                        [
+                          for (final b in all)
+                            if (b.relation != 'part_of' &&
+                                !protagonists.contains(b))
+                              b,
+                        ],
+                        e.type,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
           ],
-          // What the entry unlocks (an ending's pages, a month squad's three
-          // stories), in reading order.
-          if (unlocked.isNotEmpty) ...[
-            IndustrialSectionHeader(
-              theme: theme,
-              title: context.t.libraryParts,
-              code: 'parts',
-            ),
-            for (final s in unlocked) storyRow(s),
-            const SizedBox(height: 8),
-          ],
-          ..._bindingSections(
-            context,
-            theme,
-            [
-              for (final b in all)
-                if (b.relation != 'part_of' && !protagonists.contains(b)) b,
-            ],
-            e.type,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -232,6 +260,37 @@ class EntryPage extends ConsumerWidget {
         ],
       );
 
+  /// Whether [text] (cleaned) of [e] is a profile document (`## ` parts).
+  static bool _isProfile(LibraryEntry e, String text) =>
+      markdownEntryTypes.contains(e.type) &&
+      !eventEntryTypes.contains(e.type) &&
+      text.contains('## ');
+
+  /// [textBlock] as a sliver of a page: a profile document as the rows of a
+  /// lazy list ([ProfileSliver]: a long file is laid out only as far as it
+  /// is on screen), any other text as one box. [padding] is the room left
+  /// and right.
+  static Widget textSliver(
+    AppThemeTokens theme,
+    LibraryEntry e,
+    EntryTextBlock b,
+    String nickname, {
+    EdgeInsets padding = EdgeInsets.zero,
+  }) {
+    final text = cleanRichText(withPlaceholders(b.content, nickname)).trim();
+    if (_isProfile(e, text)) {
+      return ProfileSliver(
+        text,
+        key: ValueKey('profile-${e.id}-${b.title}'),
+        padding: padding.copyWith(bottom: 14),
+      );
+    }
+    return SliverPadding(
+      padding: padding,
+      sliver: SliverToBoxAdapter(child: textBlock(theme, e, b, nickname)),
+    );
+  }
+
   static Widget textBlock(
     AppThemeTokens theme,
     LibraryEntry e,
@@ -241,9 +300,7 @@ class EntryPage extends ConsumerWidget {
     final text = cleanRichText(withPlaceholders(b.content, nickname)).trim();
     if (text.isEmpty) return const SizedBox.shrink();
     // A profile document: its parts fold, each open.
-    if (markdownEntryTypes.contains(e.type) &&
-        !eventEntryTypes.contains(e.type) &&
-        text.contains('## ')) {
+    if (_isProfile(e, text)) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 14),
         child: ProfileText(text),
@@ -253,9 +310,7 @@ class EntryPage extends ConsumerWidget {
     // else its title, when that is neither the entry's name again nor the
     // name of its kind (`敌人`, `集成战略收藏品`).
     final kind = entryTypeName(e.type);
-    final heading = [b.section, b.title]
-        .map((t) => t?.trim() ?? '')
-        .firstWhere(
+    final heading = [b.section, b.title].map((t) => t?.trim() ?? '').firstWhere(
           (t) =>
               t.isNotEmpty &&
               t != e.name &&
@@ -279,7 +334,8 @@ class EntryPage extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       heading,
-                      style: theme.titleFont.copyWith(fontSize: 14, height: 1.3),
+                      style:
+                          theme.titleFont.copyWith(fontSize: 14, height: 1.3),
                     ),
                   ),
                 ],
@@ -311,7 +367,8 @@ class EntryPage extends ConsumerWidget {
     if (bindings.isEmpty) return const [];
     final groups = <String, List<EntryBinding>>{};
     for (final b in bindings) {
-      final key = '${bindingName(b.relation, outgoing: b.outgoing, ownerType: ownerType)}'
+      final key =
+          '${bindingName(b.relation, outgoing: b.outgoing, ownerType: ownerType)}'
           '\u0000${entryTypeName(b.entry.type)}';
       (groups[key] ??= []).add(b);
     }
@@ -373,8 +430,9 @@ class _AttachedDialogue extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final nickname = ref.watch(nicknameProvider);
-    final lines = ref.watch(storyFullLinesProvider(story.rawId ?? '')).valueOrNull ??
-        const <StoryLineEntry>[];
+    final lines =
+        ref.watch(storyFullLinesProvider(story.rawId ?? '')).valueOrNull ??
+            const <StoryLineEntry>[];
     final shown = [
       for (final l in lines)
         if (l.kind != 'title' && l.content.trim().isNotEmpty) l,

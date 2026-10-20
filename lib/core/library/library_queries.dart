@@ -269,8 +269,11 @@ String? _text(Object? value) {
 
 /// One block of an entry's text.
 class EntryTextBlock {
-  const EntryTextBlock(
-      {required this.title, required this.content, this.section,});
+  const EntryTextBlock({
+    required this.title,
+    required this.content,
+    this.section,
+  });
 
   final String title;
   final String? section;
@@ -310,6 +313,98 @@ class StoryPlace {
 /// that share the table.
 const Set<String> documentEntryTypes = {'operator', 'token', 'trap'};
 
+/// The heading of an operator's voice lines in the library, the name both
+/// games' operator file gives the part (Endfield's `ui_char_profile_voice`).
+const String operatorVoiceSection = '语音记录';
+
+/// The names of the voice languages whose lines are text of their own (a
+/// dialect, a language of the operator's home), as the game names them
+/// (`charword_table.json` `voiceLangTypeDict`); a set's key ends in one.
+const Map<String, String> voiceLanguageNames = {
+  'CN_TOPOLECT': '中文-方言',
+  'ITA': '意大利语',
+  'GER': '德文',
+  'RUS': '俄文',
+  'FRE': '法语',
+  'SPA': '西班牙语',
+  'JP': '日文',
+  'EN': '英文',
+  'KR': '韩文',
+};
+
+/// A voice line's id (`charWordId`): its set's key (`wordKey`) and its
+/// number in the set (`voiceId` `CN_<n>`, the game's order).
+final RegExp _voiceLineId = RegExp(r'^(.+)_CN_(\d+)$');
+
+/// An operator's voice lines by set, each in the game's order: the
+/// operator's own set first, then the sets in another language
+/// (`<owner>_<language>`), then the sets of its skins (`<owner>_<skin>`,
+/// [skin] the skin's id) and any other set (another form's), by key. Lines
+/// whose id says nothing go to the first set, in the order given.
+List<
+    ({
+      String key,
+      String? language,
+      String? skin,
+      List<({String title, String line})> lines,
+    })> voiceSets(
+  List<({String rawId, String title, String line})> lines, {
+  required String owner,
+}) {
+  final byKey = <String, List<({int n, int at, String title, String line})>>{};
+  for (final (at, l) in lines.indexed) {
+    final m = _voiceLineId.firstMatch(l.rawId);
+    final key = m?.group(1) ?? owner;
+    (byKey[key] ??= []).add(
+      (
+        n: int.tryParse(m?.group(2) ?? '') ?? 1 << 30,
+        at: at,
+        title: l.title,
+        line: l.line
+      ),
+    );
+  }
+  String? language(String key) => key.startsWith('${owner}_')
+      ? voiceLanguageNames.containsKey(key.substring(owner.length + 1))
+          ? key.substring(owner.length + 1)
+          : null
+      : null;
+  int rank(String key) => key == owner
+      ? 0
+      : language(key) != null
+          ? 1
+          : key.startsWith('${owner}_')
+              ? 2
+              : 3;
+  final keys = byKey.keys.toList()
+    ..sort((a, b) {
+      final r = rank(a).compareTo(rank(b));
+      if (r != 0) return r;
+      final la = language(a), lb = language(b);
+      if (la != null && lb != null) {
+        final names = voiceLanguageNames.keys.toList();
+        return names.indexOf(la).compareTo(names.indexOf(lb));
+      }
+      return a.compareTo(b);
+    });
+  return [
+    for (final key in keys)
+      (
+        key: key,
+        language: language(key),
+        skin:
+            rank(key) == 2 ? '$owner@${key.substring(owner.length + 1)}' : null,
+        lines: [
+          for (final l in byKey[key]!
+            ..sort(
+              (a, b) => a.n != b.n ? a.n.compareTo(b.n) : a.at.compareTo(b.at),
+            ))
+            (title: l.title, line: l.line),
+        ],
+      ),
+  ];
+}
+
 /// A readable entry has text of its own: a story file, a record, a profile
 /// document.
 const String _readable = "(e.type = 'story' OR e.record_id IS NOT NULL OR "
@@ -345,7 +440,9 @@ Future<List<ShelfSummary>> shelfSummaries(DatabaseExecutor db) async {
     for (final kind in endfieldShelfOrder) '$endfieldIdPrefix$kind',
   ];
   bool owned(String kind) => ownedCollectionKinds.contains(
-        kind.startsWith(endfieldIdPrefix) ? kind.substring(endfieldIdPrefix.length) : kind,
+        kind.startsWith(endfieldIdPrefix)
+            ? kind.substring(endfieldIdPrefix.length)
+            : kind,
       );
   return [
     for (final kind in known)
@@ -484,7 +581,9 @@ Future<List<LibraryEntry>> samePersonOf(
 
 /// One collection with its release time, or null.
 Future<LibraryCollection?> collectionById(
-    DatabaseExecutor db, String id,) async {
+  DatabaseExecutor db,
+  String id,
+) async {
   final rows = await db.rawQuery(
     'SELECT $_collectionColumns '
     'FROM collections c LEFT JOIN entries e ON e.collection_id = c.id '
@@ -558,7 +657,9 @@ Future<List<LibraryEntry>> storiesOf(
 
 /// The introduction of a collection: the text of its `roguelike_topic` entry.
 Future<String?> collectionIntro(
-    DatabaseExecutor db, String collectionId,) async {
+  DatabaseExecutor db,
+  String collectionId,
+) async {
   final rows = await db.rawQuery(
     'SELECT r.content AS content FROM entries e '
     'JOIN normalized_records r ON r.entry_id = e.id '
@@ -757,10 +858,66 @@ Future<List<EntryTextBlock>> entryTexts(
       'ORDER BY document_type',
       [entry.entityId],
     );
+    // An Arknights operator's voice lines are records of the entry, not
+    // part of its profile document: they follow it as more parts (one per
+    // voice set), in the `标题：台词` lines [ProfileText] shows as voice
+    // lines.
+    final voices = await db.rawQuery(
+      'SELECT section, title, content, raw_id FROM normalized_records '
+      "WHERE entry_id = ? AND subtype = 'voice' ORDER BY line_start, id",
+      [entry.id],
+    );
+    final sets = voiceSets(
+      [
+        for (final v in voices)
+          if ('${v['content'] ?? ''}'.trim().isNotEmpty)
+            (
+              rawId: '${v['raw_id'] ?? ''}',
+              title: _text(v['section']) ?? _text(v['title']) ?? '',
+              line: '${v['content']}'.trim().replaceAll('\n', ' '),
+            ),
+      ],
+      owner: entry.entityId ?? entry.rawId ?? '',
+    );
+    // A skin's voice set is named by the skin (the set's key is the skin's
+    // id with `_` for `@`, the skin table's `voiceId`).
+    final skinIds = {
+      for (final s in sets)
+        if (s.skin != null) 'skin:${s.skin}',
+    };
+    final skinNames = skinIds.isEmpty
+        ? const <String, String>{}
+        : {
+            for (final r in await db.rawQuery(
+              'SELECT id, name FROM entries WHERE id IN '
+              '(${List.filled(skinIds.length, '?').join(',')})',
+              skinIds.toList(),
+            ))
+              '${r['id']}'.substring(5): '${r['name'] ?? ''}',
+          };
+    // The operator's own set is "语音记录"; another by its language or skin,
+    // else by its number.
+    var unnamed = 1;
+    final voiceText = [
+      for (final (i, s) in sets.indexed)
+        '## ${s.language != null ? '$operatorVoiceSection·${voiceLanguageNames[s.language]}' : (skinNames[s.skin] ?? '').isNotEmpty ? '$operatorVoiceSection·${skinNames[s.skin]}' : i == 0 ? operatorVoiceSection : '$operatorVoiceSection ${++unnamed}'}\n'
+            '${s.lines.map((l) => '${l.title}：${l.line}').join('\n')}',
+    ].join('\n\n');
     return [
-      for (final r in rows)
+      for (final (i, r) in rows.indexed)
         EntryTextBlock(
-            title: '${r['title'] ?? ''}', content: '${r['content'] ?? ''}',),
+          title: '${r['title'] ?? ''}',
+          content: [
+            '${r['content'] ?? ''}',
+            // The voice sets close the last document.
+            if (i == rows.length - 1 && voiceText.isNotEmpty) voiceText,
+          ].join('\n\n'),
+        ),
+      if (rows.isEmpty && voiceText.isNotEmpty)
+        EntryTextBlock(
+          title: entry.name,
+          content: voiceText,
+        ),
     ];
   }
   final rows = await db.rawQuery(
@@ -790,6 +947,28 @@ Future<List<EntryTextBlock>> entryTexts(
         content: '${r['content'] ?? ''}',
       ),
   ];
+}
+
+/// The entry a cited record (`record:<id>`) is part of: a record's own entry,
+/// or for an operator's file (`entity_documents`) the entry of its entity.
+/// An Endfield file of the v0.14.0 asset has its id without `ef/`, so both
+/// spellings are tried.
+Future<String?> entryIdOfRecord(DatabaseExecutor db, String recordId) async {
+  final own = await db.rawQuery(
+    'SELECT entry_id FROM normalized_records WHERE id = ? LIMIT 1',
+    [recordId],
+  );
+  final direct = own.isEmpty ? null : _text(own.first['entry_id']);
+  if (direct != null) return direct;
+  final raw = recordId.startsWith(endfieldIdPrefix)
+      ? recordId.substring(endfieldIdPrefix.length)
+      : recordId;
+  final file = await db.rawQuery(
+    'SELECT e.id FROM entity_documents d JOIN entries e '
+    'ON e.entity_id = d.entity_id WHERE d.id IN (?, ?) LIMIT 1',
+    [recordId, raw],
+  );
+  return file.isEmpty ? null : _text(file.first['id']);
 }
 
 /// The bindings of an entry (both directions), at most [limit] per direction.

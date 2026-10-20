@@ -559,6 +559,7 @@ class _RecorderLLM extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) async {
     // The call that plans the first searches: no plan here.
     if (messages.first.content.startsWith(loreSearchPlanRole)) {

@@ -2,6 +2,59 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.15.0] - 2026-10-20
+
+The first part of a rework of how Ask finds the story text, operator pages that open without stalling, and both knowledge bases rebuilt (same game data as v0.14.0). Android build 35.
+The Ask changes help on questions about named people and places; questions about a general idea that the story only touches in passing are still often answered from too little, and the order of events across the main story and events can still come out wrong (see `docs/KNOWN_ISSUES.md`).
+
+### Questions and answers
+
+- **The first turn brings the story lines around the question's names.** Besides the first searches, the call that plans them now names what the question is about (people, places, groups, events), and code gathers the lines where those names speak or appear, two lines either side. Scenes where several names meet come first, each collection gives a few stories before any gives more, and the stories are in the order players could read them. In an offline test over 65 past questions with hand-marked lines, the first step now shows 74% of the lines an answer needs instead of 37%. The model can gather again for other names with the new `gather` tool.
+- **"Not found" is checked before it is said.** When an answer says something was not found or the story does not tell, it names who or what that is about, and code looks for those names once more in the stories it had not read. If it finds them, the answer is written again with that text; if not, the work log notes that it was checked.
+- **A citation written with the file name only is kept** when exactly one story read for the question has that name; it was dropped as unread before. The work log shows how far the names reached: how many stories they appear in, and how many were given.
+- **A follow-up starts from the lines the last answer cited.** Earlier tool results are folded to a pointer before a follow-up, so the model knew which lines it had read but not what they said. Now the cited passages, with a little around them, are read again before the follow-up's first turn.
+- **A planning call that takes too long is stopped, not left running.** It used to be abandoned after 25 seconds while the request (and its retries after "too many requests") went on beside the answer's first call; a provider that allows one request at a time then refused that call.
+
+### Knowledge base
+
+- **Both knowledge bases are rebuilt with the current build code**, from the same game data as v0.14.0 (vectors carried over, nothing re-embedded). The Arknights catalog records when each story opened in the game's story review, the only time the main story has, so the main story is ordered among the events when material is gathered for an answer. Endfield operator files have ids under `ef/` like everything else in that knowledge base. First published on 2026-10-20 as the knowledge-base release `gamedata-20261020` (v0.14.5 finds them through the channel file), and attached to this release as well.
+
+### Library and reader
+
+- **Operator pages open without stalling.** A profile was built and laid out in one piece, every archive part and every voice line at once, so with parts unfolded the page hung on opening. It is now a lazy list: only the paragraphs and voice lines on screen are built.
+- **Voice lines are in the game's order**, one part per voice set. They were sorted by record ids, which are content hashes, and an operator's dialect, foreign-language and skin voice sets were mixed into one list. Now the operator's own set comes first ("语音记录"), then a dialect or language set ("语音记录·中文-方言"), then each skin's ("语音记录·<skin>"), each in the game's order.
+- **Voice lines read as a list**: each title over its line with a hairline between, as the wikis' voice tables have them, instead of a box per line and numbered titles split under a heading.
+
+## [0.14.5] - 2026-10-17
+
+Fixes from the 2026-10-17 device review, and the knowledge-base channel. The knowledge bases are still the ones of v0.14.0.
+
+### Library and reader
+
+- **Arknights operators show their voice lines again.** An operator's page read only its profile file and stopped there, so the 18,000 voice lines kept beside it never appeared. They now follow the file as one more part, "语音记录".
+- **Endfield voice lines are readable.** The part showed as one grey box: when the first line's title ended in a number (行动准备1), the check for numbered titles looked at a line before the first one and failed, and a release build paints a failed part grey.
+- **A setting for how operator files open**: every part unfolded (as before) or every part folded, under Settings → Knowledge base. Story synopses still start folded.
+- **Opening a synopsis no longer pushes the title up the screen** when the story was opened at a cited, searched or resumed line.
+- **The reader shows how far in you are**: a line along the title fills as you read, with the line number and the total beside the buttons.
+
+### Ask
+
+- **A cited record opens its library page**, as a cited story opens the reader: an operator's file reads in its folding parts instead of showing raw `## ` headings in a sheet. The quotes in the evidence list are rendered the same way.
+
+### Knowledge base
+
+- **A knowledge base uploaded after the app was built is found.** The knowledge-base page reads a small channel file from the `gamedata-channel` release when it opens and offers a newer official knowledge base there, if this app can install it; without the file it uses the one the app was built with, as before.
+- **The official knowledge base is ordered against one updated on the phone by the dates of their game-data commits**, which an update now records, not by when the update ran by the phone's clock.
+
+### Wiki
+
+- **PRTS dark mode is the site's own.** The app no longer restyles PRTS pages with its own colours; it switches the night theme the site already has.
+- **Reader mode and "send to AI" are gone.** Long texts read in the library, and Ask searches and reads the wikis itself.
+
+### Development
+
+- The Endfield build writes operator-file ids under `ef/` like every other Endfield id (takes effect with the next Endfield knowledge base); CI runs on pushes to `main` only (the `dev` branch is gone). `tools/write_gamedata_channel.dart` writes the channel file from `tools/release_gamedata.env`.
+
 ## [0.14.0] - 2026-10-11
 
 Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancelled, 1.5–24 minutes and up to 1.5 million input tokens a question; one tool call in six went wrong). The one agent, its tools and the citation checks stay; what changed is around them.
@@ -9,7 +62,7 @@ Ask, reworked after ten real conversations on v0.13.0 (three failed, four cancel
 ### A knowledge base less than half the size
 
 - **Game data up to 8 October 2026** in the Arknights knowledge base of this release (53 stories more than v0.13.0's, with their vectors), and a vector for every record of both games. The new files install only on v0.14.0 and later: update the app first, then tap "update" on the knowledge-base page.
-- **The tables nothing reads are gone.** The knowledge base still carried the raw material of earlier ways of searching: every text cut into chunks a second time with a full-text index, a full-text index over story lines that cannot match a Chinese word inside a sentence, a table of where each name occurs in each story, rare two-character words, a "profile" per story, and the story text once more as records. No part of the app read them, and in forty recorded conversations the model never queried them. The Arknights knowledge base goes from 701 MB to 292 MB (the download from 220 MB to 112 MB), Endfield from 62 MB to 31 MB, with the same stories, records and vectors.
+- **The tables nothing reads are gone.** The knowledge base still carried the raw material of earlier ways of searching: every text cut into chunks a second time with a full-text index, a full-text index over story lines that cannot match a Chinese word inside a sentence, a table of where each name occurs in each story, rare two-character words, a "profile" per story, and the story text once more as records. No part of the app read them, and in forty recorded conversations the model never queried them. The Arknights knowledge base goes from 679 MB to 299 MB uncompressed (the download from 210 MB to 119 MB, by the two releases' manifests), Endfield from 62 MB to 31 MB, with the same stories, records and vectors.
 - **Updating from the game data no longer goes through every story.** The update used to scan all 3,600 stories again for names and rewrite a profile for each ("scanning character appearances", "writing chapter profiles"); those steps are gone. A knowledge base installed from an older file loses the unused tables the first time it is updated ("removing data no longer used").
 - **Cancelling an update really stops it.** A cancelled download went on in the background, and an update started again right away ran beside it; the two deleted each other's files and the update failed with "Missing required GameData file". Copies of the database that failed updates left in the temp folder (one whole copy each) are removed when the next one starts.
 - **After an update there is nothing left to pull**: the "pull and update" button is off and the counts of the earlier check are gone, until a check finds something new or another knowledge base is installed.

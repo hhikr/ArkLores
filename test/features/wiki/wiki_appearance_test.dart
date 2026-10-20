@@ -10,7 +10,8 @@ void main() {
     expect(css, contains('--arklores-page-bg'));
     expect(css, contains('color-scheme: dark'));
     expect(css, contains('color-scheme: light'));
-    expect(css, contains('arklores-prts-site'));
+    // PRTS has its own night theme: none of these rules is for it.
+    expect(css, isNot(contains('arklores-prts-site')));
     expect(css, contains('arklores-generic-site'));
     expect(css, isNot(contains('html[data-arklores-appearance] body {')));
   });

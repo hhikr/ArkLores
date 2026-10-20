@@ -80,6 +80,8 @@ void main() {
         loreAnswerOnlyNote,
         loreSearchPlanPrompt('<search 的说明>', wiki: true),
         loreSearchPlanRequest('<问题>', earlier: '<上文>'),
+        loreLinePickPrompt,
+        loreLinePickRequest('<问题>', '<片段>', names: ['<名字>'], count: 2),
         loreTurnLimitNote,
         loreContinueNote,
         for (final role in LoreRole.values)
@@ -634,6 +636,55 @@ void main() {
       expect(request[3].content, contains('关键词：\n星灯（'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
+    });
+
+    // Phase 1 (2026-10-18): the plan names the question's anchors, and the
+    // lines around them are gathered after the searches, as one more call
+    // of the first turn; what it showed is citable.
+    test('planned anchors are gathered after the searches', () async {
+      const story = 'activities/act_fx/level_act_fx_01_beg.txt';
+      final client = _ScriptedClient(
+        [_answer('甲在城门等星灯 `$story:1`。')],
+        plans: ['{"search": ["城门"], "anchors": ["甲", "星灯"]}'],
+      );
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '甲在等谁？')
+          .toList();
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.toolCall) '${e.toolName} ${e.toolArgs}',
+        ],
+        ['search {query: 城门}', 'gather {names: [甲, 星灯]}'],
+      );
+      // The skeleton opens with the anchors, which are always to be written
+      // (0.15 live: a planner left the optional field out).
+      final planPrompt = client.planRequests.single.first.content;
+      expect(planPrompt, contains('{"anchors": ["<名字>", "<名字>"], "search"'));
+      expect(planPrompt, contains('anchors 一定要写'));
+      final request = client.requests.single;
+      expect(
+        request[2].toolCalls!.map((c) => (c['function'] as Map)['name']),
+        ['search', 'gather'],
+      );
+      final gathered = request[4].content;
+      expect(gathered, startsWith('按名字取材：这些名字出现在'));
+      expect(gathered, contains('篇剧情里，给了'));
+      // The scene where both names are comes first, in release order.
+      expect(gathered, contains(story));
+      expect(gathered, contains('我会等星灯'));
+      expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
+          StoryAnswerStatus.answered,);
+    });
+
+    test('a plan reads anchors, names only', () {
+      final plan = parseSearchPlan(
+        '{"anchors": ["甲", " 乙 ", "甲", "${'很长' * 11}", "丙", "丁", "戊", "己", "庚"]}',
+      )!;
+      // A plan of anchors alone is a plan; a repeat counts once, a long
+      // phrase is not a name, six at most.
+      expect(plan.queries, isEmpty);
+      expect(plan.anchors, ['甲', '乙', '丙', '丁', '戊', '己']);
     });
 
     test('a reply that plans nothing is no plan', () {
@@ -1580,19 +1631,183 @@ void main() {
       final request = client.requests.single;
       // 0.14: the earlier tool output is folded; what it showed stays
       // citable.
-      final earlier = request.where((m) => m.role == MessageRole.tool).toList();
-      expect(earlier.map((m) => m.content.startsWith('[已折叠]')), [true]);
+      final tools = request.where((m) => m.role == MessageRole.tool).toList();
+      expect(tools.map((m) => m.content.startsWith('[已折叠]')), [true, false]);
       // It says which lines it showed, and that their text is gone.
       expect(
-        earlier.single.content,
+        tools.first.content,
         allOf(
           contains('展示过：obt/main/level_main_fx-01.txt L0-'),
           contains('先重新读取'),
         ),
       );
-      expect(request.last.content, '那后来呢？');
+      // S0 (phase 1): the lines the last answer cited are read again, with
+      // two lines around them, before the follow-up's first turn.
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.toolCall) '${e.toolName} ${e.toolArgs}',
+        ],
+        [
+          'read_story {story_id: obt/main/level_main_fx-01.txt, start: 0, '
+              'count: 4}',
+        ],
+      );
+      final question = request.lastIndexWhere((m) => m.role == MessageRole.user);
+      expect(request[question].content, '那后来呢？');
+      expect(request.last.content, contains('L1'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
+    });
+
+    // Phase 2 (3.2): what an answer says it did not find is looked for once
+    // more by code, with the names it gave, in what it has not read.
+    test('a "not found" is looked for again; text found goes back for a '
+        'rewrite, once', () async {
+      String json(String text, String story, int line,
+              {List<String>? missing,}) =>
+          jsonEncode({
+            'entries': [
+              {
+                'text': text,
+                'cite': [
+                  [story, line, line],
+                ],
+              },
+            ],
+            'coverage': missing == null ? 'full' : 'gaps',
+            if (missing != null)
+              'missing': [
+                {'point': '乙后来怎样', 'words': missing},
+              ],
+          });
+      const main = 'obt/main/level_main_fx-01.txt';
+      const act = 'activities/act_fx/level_act_fx_02_beg.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _answer(json('星灯点亮了钟楼。', main, 1, missing: ['乙'])),
+        _answer(json('乙秘密会面。', act, 1, missing: ['乙'])),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯和乙做了什么？')
+          .toList();
+      expect(client.requests, hasLength(3));
+      final note = client.requests.last.last.content;
+      expect(note, contains('没有查到：乙后来怎样'));
+      expect(note, contains('L1 [乙] 今晚的会面不能让人知道。'));
+      // The first answer is in the request it is rewritten from.
+      expect(client.requests.last[client.requests.last.length - 2].content,
+          contains('星灯点亮了钟楼'),);
+      final notes = [
+        for (final e in events)
+          if (e.type == ReActEventType.recordNote) e.content,
+      ];
+      expect(notes.single, contains('找到 1 篇，交回重写'));
+      // Once: the rewrite's own "missing" is not looked for again.
+      final answer = finalAnswerOf(events);
+      expect(answer, contains('`$act:1`'));
+      expect(parseStoryAnswerEnvelope(answer)!.status,
+          StoryAnswerStatus.partial,);
+    });
+
+    test('a "not found" that stays not found is noted and the answer stands',
+        () async {
+      const main = 'obt/main/level_main_fx-01.txt';
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _answer(jsonEncode({
+          'entries': [
+            {
+              'text': '星灯点亮了钟楼。',
+              'cite': [
+                [main, 1, 1],
+              ],
+            },
+          ],
+          'coverage': 'gaps',
+          'gaps': '没有查到无人知晓的下落。',
+          'missing': [
+            {
+              'point': '无人知晓的下落',
+              'words': ['无人知晓'],
+            },
+          ],
+        }),),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯做了什么？')
+          .toList();
+      expect(client.requests, hasLength(2));
+      expect(
+        [
+          for (final e in events)
+            if (e.type == ReActEventType.recordNote) e.content,
+        ],
+        ['已查证“没有查到”：无人知晓的下落（无人知晓在没读过的剧情里没有找到）'],
+      );
+      expect(finalAnswerOf(events), contains('星灯点亮了钟楼'));
+    });
+
+    test('a story id written as its file name only is written out when one '
+        'story read has that name', () {
+      final (body, notes) = LoreAgentLoop.expandShortStoryIds(
+        '甲 `level_a.txt:3-4` 乙 `level_b.txt:1` 丙 `x/level_a.txt:5`',
+        ['x/level_a.txt', 'y/level_b.txt', 'z/level_b.txt'],
+      );
+      // Two stories are named level_b.txt: which one is not guessed.
+      expect(
+        body,
+        '甲 `x/level_a.txt:3-4` 乙 `level_b.txt:1` 丙 `x/level_a.txt:5`',
+      );
+      expect(notes, ['level_a.txt → x/level_a.txt']);
+    });
+
+    test('a follow-up reads again what the last answer cited, near ranges '
+        'as one', () {
+      final seen = SeenLines()
+        ..addRange('a.txt', 10, 12)
+        ..addRange('a.txt', 20, 30)
+        ..addRange('a.txt', 200, 205)
+        ..addRange('b.txt', 0, 3);
+      final reads = LoreAgentLoop.followUpReads(
+        [
+          Message.user('问'),
+          Message.assistant(
+            '一 `b.txt:1-2` 二 `a.txt:10-12` `a.txt:25-40` 三 `a.txt:200`'
+            ' 没读过的 `c.txt:5`',
+          ),
+        ],
+        seen,
+      );
+      expect(
+        [for (final r in reads) '${r.storyId} ${r.start} ${r.count}'],
+        // Unread lines (a.txt 31-40, c.txt) are not read.
+        ['b.txt 0 5', 'a.txt 8 25', 'a.txt 198 5'],
+      );
+      expect(
+        LoreAgentLoop.followUpReads(
+          [Message.assistant('`a.txt:10-12` `b.txt:1-2`')],
+          seen,
+          maxLines: 8,
+        ).map((r) => r.storyId),
+        ['a.txt'],
+      );
+      // The answer as the conversation keeps it: JSON with nested cites.
+      expect(
+        [
+          for (final r in LoreAgentLoop.followUpReads(
+            [
+              Message.assistant(
+                '{"entries": [{"text": "一", "cite": [["b.txt", 1, 2]]}, '
+                '{"text": "二", "cite": [["a.txt", 10, 12], ["c.txt", 5, 5]]}]}',
+              ),
+            ],
+            seen,
+          ))
+            '${r.storyId} ${r.start} ${r.count}',
+        ],
+        ['b.txt 0 5', 'a.txt 8 7'],
+      );
     });
 
     // 0.14: the tool-call gate.
@@ -1808,6 +2023,7 @@ class _LossyClient extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) async {
     final turn = _turn(false, tools);
     return ChatCompletionResult(
@@ -1932,6 +2148,7 @@ class _ScriptedClient extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) async {
     if (messages.first.content.startsWith(loreSearchPlanRole)) {
       planRequests.add(List.of(messages));

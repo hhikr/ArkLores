@@ -17,6 +17,8 @@ import '../gamedata/game_retrieval.dart';
 import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../wiki/wiki_lookup.dart';
+import 'coverage.dart';
+import 'line_picker.dart';
 import 'lore_agent_prompts.dart' show loreLibraryManual;
 import 'tools/agent_tool.dart';
 import 'tools/search_tool.dart';
@@ -1140,6 +1142,7 @@ List<AgentTool> loreTools(
   SeenLines seen, {
   EmbeddingClient? embeddingClient,
   WikiLookup? wiki,
+  LinePicker? picker,
 }) {
   final manual = LibraryManual(store);
   return [
@@ -1151,6 +1154,7 @@ List<AgentTool> loreTools(
     GuideTool(manual),
     OutlineTool(store),
     SimilarNamesTool(store),
+    GatherTool(store, seen, picker: picker),
   ];
 }
 

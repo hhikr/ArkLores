@@ -246,6 +246,7 @@ class OpenAICompatibleClient extends LLMClient {
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) async {
     _requireChatConfig();
     final body = _requestBody(
@@ -255,7 +256,11 @@ class OpenAICompatibleClient extends LLMClient {
       maxTokens: maxTokens,
       stop: stop,
     );
-    return _complete(body);
+    var aborted = false;
+    if (abortTrigger != null) {
+      unawaited(abortTrigger.then((_) => aborted = true));
+    }
+    return _complete(body, abortTrigger, () => aborted);
   }
 
   /// R17: deepseek wants the reasoning of an earlier tool-call turn back in
@@ -316,10 +321,33 @@ class OpenAICompatibleClient extends LLMClient {
         if (!_reasoningFieldsRejected) ...reasoningFields,
       };
 
-  Future<ChatCompletionResult> _complete(Map<String, dynamic> body) async {
+  Future<ChatCompletionResult> _complete(
+    Map<String, dynamic> body, [
+    Future<void>? abortTrigger,
+    bool Function()? aborted,
+  ]) async {
     final startedAt = DateTime.now();
     var rateSleep = Duration.zero;
     var rateRetries = 0;
+    void stopIfAborted() {
+      if (aborted?.call() ?? false) {
+        throw const LLMException('Request aborted');
+      }
+    }
+
+    Future<http.Response> post() async {
+      final uri = Uri.parse(config.chatEndpoint);
+      final headers = _headers(config.chatApiKey, label: 'Chat API Key');
+      if (abortTrigger == null) {
+        return _httpClient.post(uri, headers: headers, body: jsonEncode(body));
+      }
+      final request =
+          http.AbortableRequest('POST', uri, abortTrigger: abortTrigger)
+            ..headers.addAll(headers)
+            ..body = jsonEncode(body);
+      return http.Response.fromStream(await _httpClient.send(request));
+    }
+
     try {
       // R8 M-E: transient network errors (backgrounding closes the socket)
       // are retried once before surfacing.
@@ -328,15 +356,12 @@ class OpenAICompatibleClient extends LLMClient {
         Object? lastError;
         response = null;
         for (var attempt = 0; attempt < 2; attempt++) {
+          stopIfAborted();
           try {
-            response = await _httpClient
-                .post(
-                  Uri.parse(config.chatEndpoint),
-                  headers: _headers(config.chatApiKey, label: 'Chat API Key'),
-                  body: jsonEncode(body),
-                )
-                .timeout(_timeout);
+            response = await post().timeout(_timeout);
             break;
+          } on http.RequestAbortedException {
+            throw const LLMException('Request aborted');
           } on SocketException catch (e) {
             lastError = e;
           } on http.ClientException catch (e) {
@@ -360,6 +385,7 @@ class OpenAICompatibleClient extends LLMClient {
           rateRetries++;
           rateSleep += wait;
           await Future<void>.delayed(wait);
+          stopIfAborted();
           continue;
         }
         break;
@@ -372,16 +398,26 @@ class OpenAICompatibleClient extends LLMClient {
           utf8.decode(response.bodyBytes, allowMalformed: true);
       if (response.statusCode == 400 || response.statusCode == 422) {
         final adapted = _adaptToRejection(body, responseBody);
-        if (adapted != null) return await _complete(adapted);
+        if (adapted != null) {
+          return await _complete(adapted, abortTrigger, aborted);
+        }
       }
       if ((response.statusCode == 400 || response.statusCode == 422) &&
           _rejectsReasoningFields(body, responseBody)) {
-        return await _complete(_withoutReasoningFields(body));
+        return await _complete(
+          _withoutReasoningFields(body),
+          abortTrigger,
+          aborted,
+        );
       }
       if ((response.statusCode == 400 || response.statusCode == 422) &&
           !_nullToolCallContent &&
           _hasEmptyToolCallContent(body)) {
-        return await _complete(_withNullToolCallContent(body));
+        return await _complete(
+          _withNullToolCallContent(body),
+          abortTrigger,
+          aborted,
+        );
       }
       if (response.statusCode != 200) {
         throw LLMException(

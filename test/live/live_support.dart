@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:arklores/core/agent/chat_session_models.dart';
 import 'package:arklores/core/agent/story_answer.dart';
+import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/usage_meter.dart';
 import 'package:arklores/features/ai/investigation_ui.dart';
 
@@ -170,4 +171,20 @@ Map<String, Object?> summarizeTurn(
     if (usage != null) 'usage': usage.toJson(),
     'answer': turn.answer,
   };
+}
+
+/// [LLMConfig] from tools/api_info, as the app would load it from settings.
+LLMConfig readApiInfo(File file) {
+  if (!file.existsSync()) return const LLMConfig(chatApiKey: '');
+  final values = <String, String>{};
+  for (final line in file.readAsLinesSync()) {
+    final i = line.indexOf('=');
+    if (i > 0) values[line.substring(0, i).trim()] = line.substring(i + 1).trim();
+  }
+  return LLMConfig(
+    chatBaseUrl: values['URL'] ?? '',
+    // `API=` in some of the developer's files.
+    chatApiKey: values['API_KEY'] ?? values['API'] ?? '',
+    chatModel: values['MODEL'] ?? '',
+  );
 }

@@ -117,7 +117,7 @@ String loreOpening(List<Game> games) =>
 /// description; here only when to use which tool.
 const String loreWorkingRules = '''
 工作方式：
-- 问题后面可能已经有一批工具调用和结果（检索、故事集目录、Wiki 搜索）：那是按问题替你拟定并执行的第一批查找（不是你写的）。先看它们，从里面的段落和故事入手；
+- 问题后面可能已经有一批工具调用和结果（检索、按名字取材、故事集目录、Wiki 搜索）：那是按问题替你拟定并执行的第一批查找（不是你写的）。先看它们，从里面的段落和故事入手；
   不够或方向不对时自己再查。没有时先用 search 检索。
 - search 是主要的检索方式（query 怎么写、它查哪些资料，见它的说明）。结果按来源分组。
   问题涉及几个方面、几个阶段或几个人物时，分别检索（在同一轮里一起发出），换说法、换角度再检索，比一次读很多更有效。
@@ -164,7 +164,7 @@ const String loreCiteShape =
 /// the displayed answer ([LoreAnswerStream]).
 const String loreAnswerFormat = '''
 最终答案只输出一个 JSON 对象，不写 JSON 以外的任何文字，不加代码块：
-{"entries": [条目, ...], "coverage": "full 或 gaps", "gaps": "..."}
+{"entries": [条目, ...], "coverage": "full 或 gaps", "gaps": "...", "missing": [...]}
 （事实核查时 JSON 的第一个字段是 "verdict"，见条目安排。）
 
 entries 按阅读顺序排列，每个条目是下面两种之一：
@@ -184,7 +184,10 @@ entries 按阅读顺序排列，每个条目是下面两种之一：
 - 介绍人物身份时直接陈述，不描述资料来源。
 - 用户写的名字与原文不同时，第一次提到它时在括号里注明用户的写法，如 X（你写的是 Y）；用户写法没有错时不要注明。
 
-coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里用一两句话告诉玩家哪方面可能有遗漏（用章节名，不列查找过程）；full 时省略 gaps。''';
+coverage：问题涉及的内容都查到并读过原文时写 "full"；有明显没查到或没读完的部分时写 "gaps"，并在 gaps 里用一两句话告诉玩家哪方面可能有遗漏（用章节名，不列查找过程）；full 时省略 gaps。
+
+missing：正文或 gaps 里说某件事没有查到、原文没有交代或没有读到时，每件事写一项 {"point": "<这件事>", "words": ["<名字>", "<名字>"]}，
+words 是与它相关的人物、地点、组织、物品在原文里的名字，最多三个；代码会用这些名字在你没读过的剧情里再找一次，找到了就交给你重写。没有这种内容时省略 missing。''';
 
 /// How the entries are arranged (one arrangement for every question; the
 /// model adapts it to what was asked).
@@ -292,6 +295,7 @@ String loreRolePrompt(
   String searchDescription = '',
   String outlineDescription = '',
   String wikiSearchDescription = '',
+  String gatherDescription = '',
 }) =>
     switch (role) {
       LoreRole.answer =>
@@ -303,12 +307,46 @@ String loreRolePrompt(
           wiki: wiki,
           outlineDescription: outlineDescription,
           wikiSearchDescription: wikiSearchDescription,
+          gatherDescription: gatherDescription,
         ),
       LoreRole.reviewer => loreReviewPromptOf(games),
       LoreRole.stager => loreStageSystemPrompt,
     };
 
 /// 0.14: said in the last turn (no tool can be called any more).
+/// Phase 2 (S5): the call that picks, from one segment of the gathered
+/// material, the lines the answer needs. It has no tools and writes line
+/// ranges only; code copies the text of those lines to the answering model.
+const String loreLinePickPrompt =
+    '你在帮另一个助手准备回答玩家问题的原文。下面是按上线顺序排列的剧情片段，'
+    '每篇以“## 《篇名》 story_id”开头，每行形如 “L行号 [说话人] 内容”。'
+    '挑出回答问题用得上的行：直接回答问题的，交代前因后果、结局、身份、态度变化的，'
+    '以及读懂这些行所必需的上下文。人物的经历要看每一篇里发生了什么，不要只挑名字出现的那一行。'
+    '只看问题本身，不要自己作答，也不要补充片段里没有的内容。\n'
+    '只输出一个 JSON 对象：{"keep": ["<story_id>:<起始行>-<结束行>", "<story_id>:<行号>"]}，'
+    '按重要性从高到低排列。只写片段里出现过的行号；没有用得上的行就写 {"keep": []}。'
+    '挑出的行合计不要超过片段的三分之一。';
+
+/// Phase 2 (3.2): what an answer that said something was not found is
+/// asked again with: the text code found for the names it gave.
+String loreMissingFoundNote(List<String> points, String found) =>
+    '（系统）你的答案里写了没有查到：${points.join('；')}。'
+    '代码用你给的名字在你没读过的剧情里又找了一次，找到了下面这些原文（行号可以直接引用）。'
+    '读过后重写最终答案，格式不变；这些原文与那几件事无关时，把原来的答案原样再输出一次。\n$found';
+
+/// The user message of [loreLinePickPrompt]: the question, the names the
+/// material was gathered for, and the segment ([index] of [count]).
+String loreLinePickRequest(
+  String question,
+  String segment, {
+  List<String> names = const [],
+  int index = 1,
+  int count = 1,
+}) =>
+    '玩家的问题：$question\n'
+    '${names.isEmpty ? '' : '取材用的名字：${names.join('、')}\n'}'
+    '${count > 1 ? '片段（第 $index 段，共 $count 段）：' : '片段：'}\n$segment';
+
 const String loreTurnLimitNote =
     '已到检索轮数上限，不能再调用工具。请根据目前读到的原文给出最终答案，'
     '并说明还有哪些部分没有查到或没有读完。';
@@ -331,15 +369,17 @@ String loreSearchPlanPrompt(
   bool wiki = false,
   String outlineDescription = '',
   String wikiSearchDescription = '',
+  String gatherDescription = '',
 }) {
   final outline = outlineDescription.isNotEmpty;
+  final gather = gatherDescription.isNotEmpty;
   final wikiSearch = wiki && wikiSearchDescription.isNotEmpty;
   return '''
 $loreSearchPlanRole。助手接下来会读这些查找的结果、继续查资料并回答玩家；你只写查找，不回答问题。
 可以写的查找：
 - search（检索）：$searchDescription
-${outline ? '- outline（故事集目录）：$outlineDescription\n' : ''}${wikiSearch ? '- wiki_search（Wiki 搜索）：$wikiSearchDescription\n' : ''}
-根据玩家的问题（以及给出的上文）决定第一批查找，合计不超过四项：
+${outline ? '- outline（故事集目录）：$outlineDescription\n' : ''}${wikiSearch ? '- wiki_search（Wiki 搜索）：$wikiSearchDescription\n' : ''}${gather ? '- anchors（取材的名字）：$gatherDescription\n' : ''}
+根据玩家的问题（以及给出的上文）决定第一批查找，合计不超过四项${gather ? '（anchors 不算在内）' : ''}：
 - 多数问题写 search。${outline ? '问题点名了一个故事集，问的是它的结构、它之前之后或与它相关的内容时，写 outline（这个故事集的名字），这时可以不写 search。' : ''}${wikiSearch ? '玩家要求先查 Wiki，或要的是 Wiki 才有的整理时，写 wiki_search（一个页面名或名词）。' : ''}
 - 每条 search 是空格分隔的几个词：原文里会出现的叫法——人物、地点、组织、事件、物品的名字，它们的别称，以及相关的说法；每个词 2–6 个字，一条不超过 8 个词。不写整句，不照抄问题里的虚词和口语。
 - 每个词都要是故事或资料的正文里会写到的词。说明“要找哪一类资料”的词（资料的种类、体裁，或“经历”“介绍”“剧情”这样概括问题的词）不在正文里，不要写：
@@ -347,8 +387,8 @@ ${outline ? '- outline（故事集目录）：$outlineDescription\n' : ''}${wiki
 - 问题只问一件事时写一条 search；涉及几个方面、几个阶段或几个人物时分开写，最多三条。
 - 追问里的指代（他们、这件事、那里）按上文换成具体的名字；上文与这一问无关时不要带上。
 - 只补你确定与问题里的名字直接相关的名字和叫法，这只是为了找到资料；没有把握就不补，不要写与问题无关的名字。问题只有一个名字时一条就够。
-${wiki ? '- wiki：第一条 search 顺带在游戏 Wiki 上找的一个页面名或名词（最能代表问题主题的那一个）；没有合适的就不写这个字段。\n' : ''}只输出一个 JSON 对象，不写别的文字，不加代码块；用不到的字段不写，至少写一项查找：
-{"search": ["<词> <词> <词>", "<词> <词>"]${outline ? ', "outline": ["<故事集名>"]' : ''}${wikiSearch ? ', "wiki_search": ["<一个词>"]' : ''}${wiki ? ', "wiki": "<一个词>"' : ''}}''';
+${gather ? '- anchors（每次都要写）：问题所涉及的人物、地点、组织、事件、物品在原文里的名字，最多六个，每个是名字本身（不写说法、不写整句）。追问里的指代换成具体的名字；问题没有提人名、只问一个地方或一群人时，写这个地方、群体的名字，再补上你确定与它直接相关的人物。\n' : ''}${wiki ? '- wiki：第一条 search 顺带在游戏 Wiki 上找的一个页面名或名词（最能代表问题主题的那一个）；没有合适的就不写这个字段。\n' : ''}只输出一个 JSON 对象，不写别的文字，不加代码块；${gather ? 'anchors 一定要写，其余' : ''}用不到的字段不写，至少写一项查找：
+{${gather ? '"anchors": ["<名字>", "<名字>"], ' : ''}"search": ["<词> <词> <词>", "<词> <词>"]${outline ? ', "outline": ["<故事集名>"]' : ''}${wikiSearch ? ', "wiki_search": ["<一个词>"]' : ''}${wiki ? ', "wiki": "<一个词>"' : ''}}''';
 }
 
 /// The planning call's input: the question, and for a follow-up the

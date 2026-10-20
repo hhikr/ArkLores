@@ -78,7 +78,12 @@ void main() {
     requests.clear();
     return http.runWithClient(
       action,
-      () => fakeGitHub(commits, latest: latest, requests: requests),
+      () => fakeGitHub(
+        commits,
+        latest: latest,
+        latestDate: '2026-10-08T23:46:48Z',
+        requests: requests,
+      ),
     );
   }
 
@@ -102,6 +107,12 @@ void main() {
     expect(hosts(), contains('codeload.github.com'));
     expect(hosts(), isNot(contains('raw.githubusercontent.com')));
     expect((await manifest())['source_arknights_commit'], 'c1');
+    // When that commit was made (the official asset is ordered against it,
+    // not against the phone's clock).
+    expect(
+      (await manifest())['source_commit_date'],
+      '2026-10-08T23:46:48.000Z',
+    );
     expect(installedNotices, 1);
     expect(marker(), 'c1');
     // 0.14: the database says it was built here, so the official asset is
@@ -211,6 +222,12 @@ void main() {
     expect(state().error, isNull);
     expect(hosts(), isNot(contains('codeload.github.com')));
     expect((await manifest())['source_arknights_commit'], 'c1');
+    // When that commit was made (the official asset is ordered against it,
+    // not against the phone's clock).
+    expect(
+      (await manifest())['source_commit_date'],
+      '2026-10-08T23:46:48.000Z',
+    );
     expect(installedNotices, 1);
 
     await online(

@@ -14,14 +14,12 @@ import 'chat_history_page.dart';
 import 'widgets/answer_options_menu.dart';
 import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
-import 'wiki_ai_context.dart';
 
 /// The Ask page: the conversation fills the page, the conversation actions
 /// float at its top right, the question box sits at the bottom.
 class AiChatPage extends ConsumerStatefulWidget {
 
-  const AiChatPage({super.key, this.initialWikiContext});
-  final WikiAiContext? initialWikiContext;
+  const AiChatPage({super.key});
 
   @override
   ConsumerState<AiChatPage> createState() => _AiChatPageState();
@@ -30,7 +28,6 @@ class AiChatPage extends ConsumerStatefulWidget {
 class _AiChatPageState extends ConsumerState<AiChatPage> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _handledInitialWikiContext = false;
 
   /// The conversation area takes the focus when it is touched (reading,
   /// opening a source, the floating buttons). A page opened from there
@@ -86,7 +83,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final isConfigured = ref.watch(apiConfigProvider).isValid;
-    _dispatchInitialWikiContext(isConfigured);
     // The library's "ask about it": the text goes into the question box for
     // the user to finish; nothing is sent.
     ref.listen<String?>(askDraftProvider, (_, draft) {
@@ -469,21 +465,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
     _inputController.clear();
     ref.read(askChatProvider.notifier).sendMessage(text);
-  }
-
-  void _dispatchInitialWikiContext(bool isConfigured) {
-    final wikiContext = widget.initialWikiContext;
-    if (_handledInitialWikiContext || wikiContext == null || !isConfigured) {
-      return;
-    }
-    _handledInitialWikiContext = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      // The prompt itself says whether to summarize or to check a claim.
-      ref.read(askChatProvider.notifier).sendMessage(
-            buildWikiAiPrompt(wikiContext),
-          );
-    });
   }
 
   void _confirmClearHistory(BuildContext context, AskChatNotifier notifier) {

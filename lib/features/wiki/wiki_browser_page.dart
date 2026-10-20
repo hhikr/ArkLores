@@ -14,14 +14,11 @@ import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/floating_bar.dart';
 import '../../shared/widgets/smooth_page_route.dart';
-import '../ai/ai_chat_page.dart';
-import '../ai/wiki_ai_context.dart';
 import '../settings/settings_service.dart';
 import 'bookmark_page.dart';
 import 'bookmark_service.dart' show Bookmark;
 import 'wiki_appearance.dart';
 import 'wiki_browser_controls.dart';
-import 'wiki_reader_mode.dart';
 import 'wiki_site_adapter.dart';
 
 /// Wiki Browser tab — hosts dual-site WebView with custom toolbar.
@@ -58,14 +55,10 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   /// Dark mode toggle state for Wiki WebView pages.
   bool _isDarkMode = false;
-  bool _isReaderMode = false;
-  double _readerFontScale = 1.0;
   double _pageScale = 1.0;
   bool _trayExpanded = false;
-  bool _readerControlsVisible = true;
   bool _restoredState = false;
   bool _hasStoredDarkMode = false;
-  Timer? _readerControlsTimer;
   late final SettingsService _settings;
 
   @override
@@ -92,7 +85,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   @override
   void dispose() {
-    _readerControlsTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _persistBrowsingState();
     // Intentionally NOT writing providers here: the Wiki page lives in the
@@ -142,8 +134,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   Future<void> _restoreBrowsingState() async {
     var tabIndex = 0;
-    var readerMode = false;
-    var readerFontScale = 1.0;
     bool? storedDarkMode;
     var sites = SettingsService.defaultWikiSites;
     var urls = <String>[];
@@ -153,8 +143,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       sites = await service.loadWikiSites();
       final loadedSites = sites;
       // Each read is a secure-storage platform call: run them together.
-      (urls, appliedUrls, tabIndex, readerMode, readerFontScale, storedDarkMode) =
-          await (
+      (urls, appliedUrls, tabIndex, storedDarkMode) = await (
         Future.wait([
           for (var i = 0; i < loadedSites.length; i++)
             service.loadWikiUrl(i).then((url) => url ?? loadedSites[i].url),
@@ -166,8 +155,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                 .then((url) => url ?? loadedSites[i].url),
         ]),
         service.loadWikiTabIndex(),
-        service.loadWikiReaderMode(),
-        service.loadWikiReaderFontScale(),
         service.loadWikiDarkMode(),
       ).wait;
     } catch (e) {
@@ -189,15 +176,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       _tabController = TabController(length: _wikiSites.length, vsync: this);
       _tabController.addListener(_onTabChanged);
       _tabController.index = tabIndex.clamp(0, _wikiSites.length - 1).toInt();
-      _isReaderMode = readerMode;
-      _readerFontScale = readerFontScale;
       if (storedDarkMode != null) {
         _isDarkMode = storedDarkMode;
         _hasStoredDarkMode = true;
       }
       _restoredState = true;
     });
-    ref.read(wikiReaderFullscreenProvider.notifier).state = readerMode;
     final pending = _pendingOpen;
     if (pending != null) {
       _pendingOpen = null;
@@ -207,21 +191,17 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
-  /// Saves the tabs, URLs and reader settings. Called from [dispose] too,
+  /// Saves the tabs, URLs and the appearance. Called from [dispose] too,
   /// where `ref` can no longer be used: the service was taken in
   /// [initState] and the state is copied before the first await.
   Future<void> _persistBrowsingState() async {
     final service = _settings;
     final tabIndex = _tabController.index;
-    final readerMode = _isReaderMode;
-    final fontScale = _readerFontScale;
     final darkMode = _hasStoredDarkMode ? _isDarkMode : null;
     final urls = List.of(_currentUrls);
     final appliedUrls = List.of(_appliedSourceUrls);
     try {
       await service.saveWikiTabIndex(tabIndex);
-      await service.saveWikiReaderMode(readerMode);
-      await service.saveWikiReaderFontScale(fontScale);
       if (darkMode != null) {
         await service.saveWikiDarkMode(darkMode);
       }
@@ -256,10 +236,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   // ─── Toolbar action callbacks ────────────────────────────────────
 
   Future<bool> _handleSystemBack() async {
-    if (_isReaderMode) {
-      _setReaderMode(false);
-      return true;
-    }
     final controller = _controllers[_tabController.index];
     if (controller == null) return true;
     if (await controller.canGoBack()) {
@@ -290,7 +266,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   }
 
   Future<void> _applyPageScale(InAppWebViewController controller) async {
-    final scale = _isReaderMode ? 1.0 : _pageScale;
+    final scale = _pageScale;
     final js = '''
 (function() {
   var html = document.documentElement;
@@ -362,79 +338,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         );
   }
 
-  void _toggleReaderMode() {
-    final enabled = !_isReaderMode;
-    _setReaderMode(enabled);
-  }
-
-  void _setReaderMode(bool enabled) {
-    _readerControlsTimer?.cancel();
-    setState(() {
-      _isReaderMode = enabled;
-      if (enabled) {
-        _trayExpanded = false;
-        _readerControlsVisible = true;
-      }
-    });
-    ref.read(wikiReaderFullscreenProvider.notifier).state = enabled;
-    ref.read(settingsServiceProvider).saveWikiReaderMode(enabled).catchError(
-          (Object error) => debugPrint(
-            '[WikiBrowser] Error saving reader mode: $error',
-          ),
-        );
-    if (enabled) _scheduleReaderControlsHide();
-  }
-
-  void _toggleReaderControls() {
-    if (!_isReaderMode) return;
-    if (_readerControlsVisible) {
-      _readerControlsTimer?.cancel();
-      setState(() => _readerControlsVisible = false);
-      return;
-    }
-    setState(() => _readerControlsVisible = true);
-    _scheduleReaderControlsHide();
-  }
-
-  void _scheduleReaderControlsHide() {
-    _readerControlsTimer?.cancel();
-    if (!_isReaderMode || !_readerControlsVisible) return;
-    _readerControlsTimer = Timer(const Duration(seconds: 15), () {
-      if (!mounted || !_isReaderMode) return;
-      setState(() => _readerControlsVisible = false);
-    });
-  }
-
-  void _runReaderToolbarAction(VoidCallback action) {
-    _scheduleReaderControlsHide();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_isReaderMode) return;
-      action();
-    });
-  }
-
-  void _decreaseReaderFont() {
-    _setReaderFontScale(_readerFontScale - 0.1);
-  }
-
-  void _increaseReaderFont() {
-    _setReaderFontScale(_readerFontScale + 0.1);
-  }
-
-  void _setReaderFontScale(double value) {
-    final next = value.clamp(0.62, 1.38).toDouble();
-    if (next == _readerFontScale) return;
-    setState(() => _readerFontScale = next);
-    ref.read(settingsServiceProvider).saveWikiReaderFontScale(next).catchError(
-          (Object error) => debugPrint(
-            '[WikiBrowser] Error saving reader font scale: $error',
-          ),
-        );
-  }
-
   /// Room the floating docks take over the web page (logical px = CSS px):
   /// the site plate at the top, the navigation at the bottom. Set in
-  /// [build]; 0 in reader mode, where both docks are hidden.
+  /// [build].
   double _dockTop = 0;
   double _dockBottom = 0;
 
@@ -774,49 +680,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
-  Future<void> _sendSelectionToAi() async {
-    final idx = _tabController.index;
-    final controller = _controllers[idx];
-    if (controller == null) return;
-    final selectedText = await _readSelectedText(controller);
-    if (!mounted) return;
-
-    final target = await showModalBottomSheet<WikiAiTarget>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => WikiAiTargetSheet(theme: ref.read(themeProvider)),
-    );
-    if (target == null || !mounted) return;
-
-    final contextPayload = WikiAiContext(
-      selectedText: selectedText,
-      pageTitle:
-          _titles[idx].trim().isNotEmpty ? _titles[idx] : _wikiSites[idx].label,
-      pageUrl: _currentUrls[idx].trim().isNotEmpty
-          ? _currentUrls[idx]
-          : _wikiSites[idx].url,
-      siteLabel: _wikiSites[idx].label,
-      target: target,
-    );
-
-    await Navigator.of(context).push<void>(
-      smoothPageRoute<void>(
-        builder: (_) => AiChatPage(initialWikiContext: contextPayload),
-      ),
-    );
-  }
-
-  Future<String> _readSelectedText(InAppWebViewController controller) async {
-    try {
-      final value = await controller.evaluateJavascript(
-        source: 'window.getSelection ? window.getSelection().toString() : ""',
-      );
-      return value?.toString().trim() ?? '';
-    } catch (_) {
-      return '';
-    }
-  }
-
   // ─── WebView tab state callbacks ─────────────────────────────────
 
   void _onControllerCreated(int index, InAppWebViewController controller) {
@@ -884,6 +747,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       ),
     );
   }
+
   Widget _siteSegment(AppThemeTokens theme, int index) => FloatingSegment(
         key: ValueKey('wiki-site-$index'),
         theme: theme,
@@ -952,87 +816,55 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         ) ??
         false;
 
-    _syncDockInsets(
-      _isReaderMode ? 0 : floatingTopInset,
-      _isReaderMode ? 0 : MediaQuery.paddingOf(context).bottom,
-    );
+    _syncDockInsets(floatingTopInset, MediaQuery.paddingOf(context).bottom);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
-        top: !_isReaderMode,
         bottom: false,
         child: Stack(
           children: [
             // ── The web page fills the page; the docks float over it and
             // the page is padded to match (_applyDockInsets). IndexedStack:
             // no horizontal swipes between sites. ──
-                Positioned.fill(
-                  child: IndexedStack(
-                    index: _tabController.index,
-                    children: List.generate(_wikiSites.length, (i) {
-                      return _WikiTabView(
-                        key: ValueKey(_wikiSites[i].id),
-                        index: i,
-                        initialUrl: _currentUrls[i].trim().isNotEmpty
-                            ? _currentUrls[i]
-                            : _wikiSites[i].url,
-                        theme: theme,
-                        isDarkMode: _isDarkMode,
-                        isReaderMode: _isReaderMode,
-                        readerDark: _isDarkMode,
-                        readerFontScale: _readerFontScale,
-                        siteKind: WikiSiteAdapter.kindForUrl(_currentUrls[i]),
-                        onReaderTapped: _toggleReaderControls,
-                        onNormalAppearance: _applyNormalWebViewEnhancements,
-                        onControllerCreated: _onControllerCreated,
-                        onTitleChanged: _onTitleChanged,
-                        onUrlChanged: _onUrlChanged,
-                        onHistoryChanged: _onHistoryChanged,
-                      );
-                    }),
-                  ),
-                ),
-            if (!_isReaderMode)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _buildSiteBar(theme),
+            Positioned.fill(
+              child: IndexedStack(
+                index: _tabController.index,
+                children: List.generate(_wikiSites.length, (i) {
+                  return _WikiTabView(
+                    key: ValueKey(_wikiSites[i].id),
+                    index: i,
+                    initialUrl: _currentUrls[i].trim().isNotEmpty
+                        ? _currentUrls[i]
+                        : _wikiSites[i].url,
+                    theme: theme,
+                    isDarkMode: _isDarkMode,
+                    onNormalAppearance: _applyNormalWebViewEnhancements,
+                    onControllerCreated: _onControllerCreated,
+                    onTitleChanged: _onTitleChanged,
+                    onUrlChanged: _onUrlChanged,
+                    onHistoryChanged: _onHistoryChanged,
+                  );
+                }),
               ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _buildSiteBar(theme),
+            ),
 
-            if (_isReaderMode)
-              ReaderToolbar(
-                visible: _readerControlsVisible,
-                isDarkMode: _isDarkMode,
-                onToggleDarkMode: () =>
-                    _runReaderToolbarAction(_toggleDarkMode),
-                onDecreaseReaderFont: () =>
-                    _runReaderToolbarAction(_decreaseReaderFont),
-                onIncreaseReaderFont: () =>
-                    _runReaderToolbarAction(_increaseReaderFont),
-                onHide: () {
-                  _readerControlsTimer?.cancel();
-                  setState(() => _readerControlsVisible = false);
-                },
-                onExitReader: () => _setReaderMode(false),
-              )
-            else
-              ExpandableTray(
-                expanded: _trayExpanded,
-                onToggle: () => setState(() => _trayExpanded = !_trayExpanded),
-                isDarkMode: _isDarkMode,
-                isReaderMode: _isReaderMode,
-                isBookmarked: isBookmarked,
-                onZoomOut: _zoomOut,
-                onZoomIn: _zoomIn,
-                onRefresh: _reload,
-                onToggleDarkMode: _toggleDarkMode,
-                onToggleReaderMode: _toggleReaderMode,
-                onDecreaseReaderFont: _decreaseReaderFont,
-                onIncreaseReaderFont: _increaseReaderFont,
-                onToggleBookmark: _toggleBookmark,
-                onSendToAi: _sendSelectionToAi,
-              ),
+            ExpandableTray(
+              expanded: _trayExpanded,
+              onToggle: () => setState(() => _trayExpanded = !_trayExpanded),
+              isDarkMode: _isDarkMode,
+              isBookmarked: isBookmarked,
+              onZoomOut: _zoomOut,
+              onZoomIn: _zoomIn,
+              onRefresh: _reload,
+              onToggleDarkMode: _toggleDarkMode,
+              onToggleBookmark: _toggleBookmark,
+            ),
           ],
         ),
       ),
@@ -1043,18 +875,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 /// A single wiki tab whose WebView is kept alive by [IndexedStack] in the
 /// parent, so browsing state is preserved across tab switches.
 class _WikiTabView extends StatefulWidget {
-
   const _WikiTabView({
     super.key,
     required this.index,
     required this.initialUrl,
     required this.theme,
     required this.isDarkMode,
-    required this.isReaderMode,
-    required this.readerDark,
-    required this.readerFontScale,
-    required this.siteKind,
-    required this.onReaderTapped,
     required this.onNormalAppearance,
     required this.onControllerCreated,
     required this.onTitleChanged,
@@ -1065,11 +891,6 @@ class _WikiTabView extends StatefulWidget {
   final String initialUrl;
   final AppThemeTokens theme;
   final bool isDarkMode;
-  final bool isReaderMode;
-  final bool readerDark;
-  final double readerFontScale;
-  final WikiSiteKind siteKind;
-  final VoidCallback onReaderTapped;
   final Future<void> Function(InAppWebViewController) onNormalAppearance;
   final void Function(int, InAppWebViewController) onControllerCreated;
   final void Function(int, String?) onTitleChanged;
@@ -1092,10 +913,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
   void didUpdateWidget(covariant _WikiTabView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_controller == null) return;
-    if (oldWidget.isReaderMode != widget.isReaderMode ||
-        oldWidget.readerDark != widget.readerDark ||
-        oldWidget.readerFontScale != widget.readerFontScale ||
-        oldWidget.isDarkMode != widget.isDarkMode) {
+    if (oldWidget.isDarkMode != widget.isDarkMode) {
       if (_hasLoadedPage) {
         _prepareWebViewAppearance();
       }
@@ -1136,41 +954,11 @@ class _WikiTabViewState extends State<_WikiTabView> {
     final controller = _controller;
     if (controller == null) return;
 
-    if (widget.isReaderMode) {
-      await WikiAppearance.remove(controller);
-      await _resetPageScale(controller);
-      await WikiReaderMode.inject(
-        controller,
-        dark: widget.readerDark,
-        fontScale: widget.readerFontScale,
-        siteKind: widget.siteKind,
-      );
-      return;
-    }
-
-    await WikiReaderMode.remove(controller);
     await WikiAppearance.inject(
       controller,
       dark: widget.isDarkMode,
     );
     await widget.onNormalAppearance(controller);
-  }
-
-  Future<void> _resetPageScale(InAppWebViewController controller) async {
-    try {
-      await controller.evaluateJavascript(
-        source: '''
-(function() {
-  var html = document.documentElement;
-  if (!html) return;
-  html.style.removeProperty('zoom');
-  html.style.removeProperty('transform-origin');
-})();
-''',
-      );
-    } catch (_) {
-      // Reader mode always uses the document's natural scale.
-    }
   }
 
   @override
@@ -1204,13 +992,6 @@ class _WikiTabViewState extends State<_WikiTabView> {
           ]),
           onWebViewCreated: (controller) {
             _controller = controller;
-            controller.addJavaScriptHandler(
-              handlerName: 'arkloresReaderTap',
-              callback: (_) {
-                if (widget.isReaderMode) widget.onReaderTapped();
-                return null;
-              },
-            );
             widget.onControllerCreated(widget.index, controller);
           },
           onLoadStart: (controller, url) {
@@ -1243,7 +1024,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
             _appearanceRequest++;
           },
         ),
-        if (!widget.isReaderMode) _buildEdgeGestureLayer(),
+        _buildEdgeGestureLayer(),
         if (_isPreparingWebView) _buildLoadingOverlay(),
         if (_loadError != null) _buildErrorOverlay(context),
       ],
@@ -1253,11 +1034,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
   Widget _buildLoadingOverlay() {
     return AbsorbPointer(
       child: ColoredBox(
-        color: widget.isReaderMode
-            ? (widget.readerDark
-                ? const Color(0xFF0B0F14)
-                : const Color(0xFFF6F3EA))
-            : widget.theme.bgPrimary,
+        color: widget.theme.bgPrimary,
         child: Center(
           child: SizedBox(
             height: 28,

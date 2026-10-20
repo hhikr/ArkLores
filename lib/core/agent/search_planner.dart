@@ -9,6 +9,11 @@
 /// model knows how the stories name things; code only runs what it writes.
 /// Only the searches and their results enter the conversation of the agent
 /// that answers.
+///
+/// Phase 1 of the unified refactor (2026-10-18, the developer's call): the
+/// plan also names the question's anchors, and code gathers the story lines
+/// around them (`gather`, `coverage.dart`) as one more step of the first
+/// turn.
 library;
 
 import 'dart:convert';
@@ -20,6 +25,7 @@ class SearchPlan {
     this.wiki,
     this.outlines = const [],
     this.wikiSearches = const [],
+    this.anchors = const [],
   });
 
   /// `search` queries (space-separated words), at most [maxPlannedSearches].
@@ -34,11 +40,16 @@ class SearchPlan {
 
   /// `wiki_search` queries, at most [maxPlannedWikiSearches].
   final List<String> wikiSearches;
+
+  /// Names to `gather` around, at most [maxPlannedAnchors]. Not counted in
+  /// [maxPlannedSteps].
+  final List<String> anchors;
 }
 
 const int maxPlannedSearches = 3;
 const int maxPlannedOutlines = 2;
 const int maxPlannedWikiSearches = 2;
+const int maxPlannedAnchors = 6;
 
 /// Steps of all kinds together; beyond it outlines are kept first, then
 /// searches, then wiki searches.
@@ -75,12 +86,22 @@ SearchPlan? parseSearchPlan(String raw) {
   final wikiSearches = steps('wiki_search', maxPlannedWikiSearches)
       .take(maxPlannedSteps - outlines.length - queries.length)
       .toList();
-  if (queries.isEmpty && outlines.isEmpty && wikiSearches.isEmpty) return null;
+  final anchors = <String>{
+    for (final a in texts(plan['anchors']))
+      if (a.runes.length <= 20) a,
+  }.take(maxPlannedAnchors).toList();
+  if (queries.isEmpty &&
+      outlines.isEmpty &&
+      wikiSearches.isEmpty &&
+      anchors.isEmpty) {
+    return null;
+  }
   final wiki = texts(plan['wiki']);
   return SearchPlan(
     queries,
     wiki: wiki.isEmpty ? null : wiki.first,
     outlines: outlines,
     wikiSearches: wikiSearches,
+    anchors: anchors,
   );
 }

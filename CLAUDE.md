@@ -3,10 +3,11 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.14.0（正式版，2026-10-11，Android build 33）。两个知识库附在 v0.14.0 Release 上（明日方舟库基于上游 `17759cc`，终末地库是瘦身后带资料向量的那份），
-  `tools/release_gamedata.env` 指向 v0.14.0。v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
-  下一轮开发从 `main` 新开分支。
-- 未经开发者明确同意不发版、不跑花钱的真实 API 测试；Android build 号每次发版递增。
+- **已发布**：v0.15.0（正式版，2026-10-20，Android build 35）：APK + 两个知识库 + 源码。知识库按现在的建库代码重建、游戏数据仍是上游 `17759cc`，
+  同一份文件先以只发知识库的 Release `gamedata-20261020` 发过（给 v0.14.5 用）；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件指向 v0.15.0。
+  v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
+  0.15.0 从分支 `ask-recall-eval` 发出（问答统一重构第 0–5 期，见下方“当前进度”最后一条），合回 `main` 的 PR 等开发者合并；下一轮从合并后的 `main` 新开分支。
+- 未经开发者明确同意不发版。真实 API 测试（模型与向量）：测试模型用 glm-5.3-flash；预计一轮总消耗 ≤150 万 token 直接跑，超过先问（开发者 2026-10-19）。Android build 号每次发版递增。
 - **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、普查数据放本地 `notes/`（gitignored），不提交、不写进 PR。
 - 用中文和开发者交流。
 
@@ -16,7 +17,7 @@
   资料页与阅读器、悬浮式界面与点击反馈、工作过程时间线、非 GLM 服务商兼容、删除角色扮演（开发者 2026-10-07 决定，不要恢复）。
   建库/更新/补算的经验与全部错误见 `docs/KNOWLEDGE_BASE_LESSONS.md`。
 - **0.12（已发布，v0.12.0）**：终末地知识库与双游戏资料页/问答。设计见 `docs/KNOWLEDGE_BASE_LESSONS.md` §9–10，构建见 `docs/GAMEDATA_BUILD_PIPELINE.md` §9，
-  已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §5。
+  已知限制见 `docs/KNOWN_ISSUES.md` §5。
   - 架构：每个游戏一个库文件；终末地 id 一律 `ef/`（`game.dart`）；Agent 用 `MultiGameRetrieval`（`sql` 按 `game` 选库，`grep`/`search` 默认两个库），
     装了终末地时提示词加“两个游戏”一节（`loreGamesGuide` + `lore_endfield_prompts.dart`）；资料页每个游戏一页（明日方舟 / 终末地 / 我的资料）、页面按 id 路由；知识库页每个游戏一张下载卡。
   - 终末地建库：`tools/unpack_endfield.ps1`（AnimeStudio 导出客户端两层的表与 JSON 数据，Persistent 覆盖 StreamingAssets，不用 kit 的完整流程）→
@@ -31,15 +32,15 @@
   - 终末地资产带剧情向量（与明日方舟同一模型；切块在 `section` 处断开）。重建后先 `build_story_embeddings.dart --migrate-from=<旧库>` 按行对齐搬旧向量，
     剩下的块多半在 `build/embedding_cache/` 里（`--dry-run` 看 “to embed”，非零才花钱，要先问）；`unpack_endfield.ps1 -Embed` 是直接补全。
   - 本机工具（不提交）：`C:\Users\hhikr\endfield\`（kit、embeddable Python、导出数据；`python312\python.exe` 带 sqlite3，可直接查库）。
-- **0.13（已发布，v0.13.0）**：问答 Agent 的 Wiki 检索与证据，设计见 `docs/WIKI_EVIDENCE.md`，已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §6。
+- **0.13（已发布，v0.13.0）**：问答 Agent 的 Wiki 检索与证据，设计见 `docs/WIKI.md`，已知限制见 `docs/KNOWN_ISSUES.md` §6。
   - 工具 `wiki_search` / `wiki_read`（明日方舟 PRTS 的 MediaWiki API；终末地 Warfarin 的搜索 API + 服务端渲染页；fz.wiki 无公开接口且开发机连不上，没选）；
     页面按段编号，出处 `wiki:<站点>:<页面>@<版本>:<段>`，与剧情出处同一套核对（只能引用展示过的段）；读过的版本存快照（`wiki_snapshots/`）。
   - Wiki 是二手资料：剧情事实以库里原文为准，只有 Wiki 支持的说法要写明（`loreWikiGuide`）。输入框“回答选项”里的“Wiki 资料”开关，默认开。
   - 界面：证据卡与出处树里的 Wiki 行、引用段落弹窗（快照、在 Wiki 标签打开）、工作过程里的 Wiki 步骤。
-  - 真实模型已各游戏验收（2026-10-09，`docs/WIKI_EVIDENCE.md` §7）：先查库、Wiki 只补库里没有的并写明。真机只看到安装与“回答选项”里的 Wiki 开关；
+  - 真实模型已各游戏验收（2026-10-09，`docs/WIKI.md` §9）：先查库、Wiki 只补库里没有的并写明。真机只看到安装与“回答选项”里的 Wiki 开关；
     带 Wiki 出处的答案（出处卡、弹窗、“在 Wiki 中打开”）只用真实页面快照渲染截图检查过，下次真机检查时补看。
 - **0.14（已发布，v0.14.0，2026-10-11）**：问答工作流重构与知识库瘦身。依据是 v0.13.0 真机 10 个会话、之后几轮真机会话和 37 问的历史问题集；
-  设计与验收数据见 `docs/R17_TOOL_AGENT.md`，已知限制见 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §7。
+  设计见 `docs/ASK_AGENT.md`，验收数据见 `docs/ASK_EXPERIMENTS.md` §4，已知限制见 `docs/KNOWN_ISSUES.md`。
   - 开发者定下的方向（不要改回）：Wiki 与本地库**检索同级**，答案仍区分来源；以向量（语义）检索为主，没有向量服务时退回关键词并提示“问答质量可能下降”；
     审稿与子助手默认关闭；**提要与复核是答案下方的按钮**，不是提问的选项；两个库的所有资料都要有向量；知识库里没人读的东西要删。
   - 问答：统一检索 `search`（剧情、资料、Wiki 一起查，按来源分组）；第一批查找由独立的小调用拟定；工具调用守门；`read_record`；
@@ -47,24 +48,39 @@
     答案被退回时整轮回档；“已读”是一本账（`SeenLines`），出处裁到读过的行；数据库连接独立、空回复只对一轮降级、取消立即生效。
   - 界面：输入框只有一个选项按钮（面板不取焦点）；工作过程写成明细（工具名、参数原文、字数、标记，点开看完整结果）；对话记录是对话列表；
     知识库页每个游戏一页。
-  - 知识库：没人读的表全部删掉（明日方舟库 701 → 约 285 MB），**不要把这些表或“覆盖层”加回来**，加表前先写清谁读它；
-    资料向量（`record_chunk_vectors`）；复刻活动的关卡不再被当成复刻删掉（`docs/KNOWLEDGE_BASE_LESSONS.md` §“复刻不是独立内容”）；
+  - 知识库：没人读的表全部删掉（明日方舟库未压缩 679 → 299 MB），**不要把这些表或“覆盖层”加回来**，加表前先写清谁读它；
+    资料向量（`record_chunk_vectors`）；复刻活动的关卡不再被当成复刻删掉（`docs/KNOWLEDGE_BASE_LESSONS.md` §2.2 的“复刻不是独立内容”）；
     “用游戏数据更新”能真正取消、不留失败的副本、更新后按钮变灰；官方资产与本机更新按游戏数据新旧定先后（`docs/GAMEDATA_BUILD_PIPELINE.md` §4.4）。
     v0.14.0 的明日方舟库基于上游 `17759cc`（2026-10-08）。旧版 App 装不了 0.14 的库（v0.13.0 的校验要求已删掉的表），所以新库只随新版本发布。
   - 真机测试工具：`tools/phone_ask.dart` + `install_local.ps1 -Bridge`（`lib/features/ai/phone_bridge.dart`，只在本地构建里），见 `docs/ANDROID_SETUP_GUIDE.md`。
     **手机上的验证由开发者自己做**：把包和库装好、说明要看哪里即可，不要替他解锁、点按或跑更新。
-  - 没有在真机屏幕上看过的界面改动、没有被真实模型再触发的修正，列在 `docs/KNOWN_LIMITATIONS_AND_DEBT.md` §7。
+  - 没有在真机屏幕上看过的界面改动、没有被真实模型再触发的修正，列在 `docs/KNOWN_ISSUES.md` §3。
+- **0.14.5（2026-10-17）**：真机反馈的修正——干员语音（两个游戏）、档案默认展开/收起的设置、梗概向下展开、阅读进度、引用的资料打开资料页、
+  PRTS 用站点自带的黑夜模式、删掉 Wiki 阅读模式与“转交给 AI”；知识库渠道文件（`gamedata_channel.json`，`gamedata-channel` Release）与按提交日期比新旧；
+  终末地档案 id 带 `ef/`（要重建终末地库才生效）。悬浮栏自动隐藏留到 UI 重构。
+- **0.15.0（2026-10-20，问答统一重构，分支 `ask-recall-eval`）**：方向是“找原文由代码一次找全、给齐；模型只读和写；卡片、梗概只做定位”。
+  每一种做法、数据与结论见 `docs/ASK_EXPERIMENTS.md` §5，现在的流程见 `docs/ASK_AGENT.md`。
+  - 留下的：离线召回测试（`test/live/recall_eval_test.dart`，日志题第一步金标行 37% → 74%）、按名字取材（`gather`）、追问重读上一答引用的行、查证“没有查到”（`missing`）、
+    出处的短路径补全、拟定超时即中断请求（`abortTrigger`）。
+  - 试过、没采用的（不要再试）：按段挑行（64% 对 74%，代码在、默认关）、加大取材的前后行数、场景卡（整张或按句，代码只在 `test/support/`）、检索块加前缀（排名变差）。
+  - **问答质量没有解决**：概念题找不到原文、取材后“够了就答”、答案先后顺序（`docs/KNOWN_ISSUES.md` §2.1）。开发者 2026-10-19 说先停下想方向。
+  - 知识库（2026-10-19）：按现在的建库代码在本机重建了两个库（同一份游戏数据，向量全部迁移、新算 0 块，逐表对比与验收通过）：明日方舟 `build/gamedata_rebuild/`
+    （`story_catalog` 多 `show_time`，主线因此有时间）、终末地 `build/endfield/`（档案 id 带 `ef/`；旧库备份 `build/endfield_v0140/`）。
+    2026-10-20 先发布到 `gamedata-20261020`，同日随 v0.15.0 再发一份（同样的文件），渠道文件指向 v0.15.0，见 `docs/KNOWN_ISSUES.md` §1.1。
+    本机测试用 `build/gamedata_rebuild`，不要用更旧的 `build/gamedata_v5`（没有 act52side，召回测试的金标检查会失败）。
+  - 开发者的项目目标里还有：终末地风格的 UI 重构、《大地巡旅》作为用户资料并定可信度档位。都没开始。
 ## 文档索引
 
+- `docs/ARCHITECTURE.md`：项目结构与各模块的实现方式（从这里开始）。
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
 - `docs/GAMEDATA_BUILD_PIPELINE.md`：表、四条构建路径（全量/增量/补算/App 内）、向量、目录、发布命令。
-- `docs/AI_ARCHITECTURE.md`：问答链路与设计原则；`docs/R17_TOOL_AGENT.md`：Agent 的结构、工具、出处核对、答案格式、验收数据与试过不要再试的做法。
+- `docs/ASK_AGENT.md`：问答 Agent 现在怎么工作（流程、工具、出处、答案格式、追问与查证）。
+- `docs/ASK_EXPERIMENTS.md`：问答试过的所有办法、实测表现与评估、不要再试的、没试过的方向——**改问答之前必读**。
 - `docs/LLM_PROVIDERS.md`：各模型服务的思考参数与兼容怪癖。
-- `docs/WIKI_EVIDENCE.md`：问答的 Wiki 检索与证据（站点、段落、快照、出处）。
-- `docs/LIBRARY_AGENT_GUIDE.md`：资料页结构说明（问答 Agent 查库前参考；正文在 `loreLibraryManual`，由 `guide` 工具给出）。
-- `docs/RETRIEVAL_QA.md`：按改动范围的验收清单。`test/README.md`：测试目录、夹具与约定。
-- `docs/KNOWN_LIMITATIONS_AND_DEBT.md`：仍开放的问题。
-- `docs/ANDROID_SETUP_GUIDE.md`：本机构建、试装、发布；`docs/CLOUD_DEV.md`：云端会话；`docs/WIKI_SITE_ADAPTATION.md`：Wiki 站点适配。
+- `docs/WIKI.md`：Wiki 浏览（站点主题适配）与问答取证（站点接口、段落、快照、出处）。
+- `docs/QA_CHECKLIST.md`：按改动范围的验收清单（含离线召回测试与真实模型测试的命令）。`test/README.md`：测试目录、夹具与约定。
+- `docs/KNOWN_ISSUES.md`：仍开放的问题。
+- `docs/ANDROID_SETUP_GUIDE.md`：本机构建、试装、发布；`docs/CLOUD_DEV.md`：云端会话。
 
 ## Do
 
@@ -82,7 +98,7 @@
 - 输入框旁的面板、菜单用浮层且不取焦点（`canRequestFocus: false`），不要用会推路由的 `PopupMenuButton` / 底部弹窗（会把键盘收起来）。
 - 资料页不做只有一行的中间页：集合从列表打开走 `openCollectionOf`（一篇剧情直接进阅读器、一类条目直接进列表）；短列表在集合页里就地列出；
   分组的长列表用组标题 + 选择条，不先列一页分组。
-- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠、默认展开），语音用 `VoiceLines`；
+- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠，默认展开还是收起按设置“资料页的档案默认展开”），语音用 `VoiceLines`；
   剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 颜色：信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 - 问答列表不随流式内容自动滚动（只在发新问题时滚到底一次）；思考窗口固定高度；阅读位置上方的内容在流式中不变高。不要加“贴底跟随”。
@@ -100,6 +116,7 @@
 ## 提交规范（贡献者只有 hhikr）
 
 - author / committer 只能是 hhikr；提交信息**禁止** `Co-Authored-By` 或任何 AI 署名尾注（2026-10 已改写历史移除，`.claude/settings.json` 的 `attribution` 已关闭，不要改回）。
+- PR 标题不出现 Claude；Claude 不作为作者或协作者出现在任何提交信息里（开发者 2026-10-17 再次明确）。
 - 凭据（`tools/api_info`、`tools/*apiKey*`、`tools/github_pat`、`tools/api.txt`、keystore 与签名配置）不得提交、打印、写入 git 配置或 remote URL。
   PAT 只在单条命令内用 `git -c "http.extraHeader=Authorization: Basic <base64(x-access-token:PAT)>" ...` 或 REST 请求头。
 
@@ -107,7 +124,8 @@
 
 - APK 由 GitHub Actions 构建签名：推 `release/<版本>` 触发 `android-release.yml`（证书 SHA-256 `b1b09ebf…e364`）。
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
-- 知识库资产的 URL/SHA 在 `tools/release_gamedata.env`，**先指向将要创建的 Release** 再构建 APK；资产 gz 与 manifest 另行上传。详见 `docs/ANDROID_SETUP_GUIDE.md`。
+- 知识库资产的 URL/SHA 在 `tools/release_gamedata.env`，**先指向将要创建的 Release** 再构建 APK；资产 gz 与 manifest 另行上传。
+  上传后用 `tools/write_gamedata_channel.dart` 写渠道文件，替换 `gamedata-channel` Release 上的那份（App 由它发现只上传、没随版本发的新库）。详见 `docs/ANDROID_SETUP_GUIDE.md`。
 - `release/<版本>` 分支只放构建 APK 的那一个提交：再推会重新构建，APK 哈希会变。
 - 本地 `flutter build apk --release` 没有签名文件时退回 debug key，不能发布。本机试装用 `tools/install_local.ps1 -Build -Kb`。
 
@@ -136,9 +154,9 @@
 3. 测试 fixture 可以有具体实体，但不得复制进 `lib/` 的判定；断言只验证通用行为。
 4. 自查：`grep -rn "特蕾西娅\|enemy_1554\|enemy_3006\|trap_762" lib/` 结果只应是注释/文案。
 
-## 问答 Agent 的约定（详见 `docs/R17_TOOL_AGENT.md`）
+## 问答 Agent 的约定（详见 `docs/ASK_AGENT.md`，试过的做法与数据见 `docs/ASK_EXPERIMENTS.md`）
 
-- 一个模型 + 通用工具（`search`（也可以用 `near` 找与一段读过的剧情相近的段落）、`read_story`、`read_record`、`grep`、只读 `sql`、`guide`（知识库手册：表、绑定、资料页结构）、`outline`（章节目录，末尾是相关的故事集）、`similar_names`，开着“Wiki 资料”时 `search` 含 Wiki 并加 `wiki_search`、`wiki_read`，
+- 一个模型 + 通用工具（`search`（也可以用 `near` 找与一段读过的剧情相近的段落）、`read_story`、`read_record`、`grep`、只读 `sql`、`guide`（知识库手册：表、绑定、资料页结构）、`outline`（章节目录，末尾是相关的故事集）、`similar_names`、`gather`（按名字取材），开着“Wiki 资料”时 `search` 含 Wiki 并加 `wiki_search`、`wiki_read`，
   开着“子助手”时主 agent 另有 `delegate`），messages 只追加。
 - 读有专门的工具：剧情用 `read_story`，剧情以外的资料（档案、语音、描述）用 `read_record`（按 id，两张表都找，分页，开头写所属对象）；
   `sql` 用来统计和按条件找，不用来翻页读长文。工具结果里凡是“属于谁”的信息都按表里的 id 给出，不让模型按内容猜。
@@ -150,10 +168,15 @@
 - 第一批查找由一次独立的小调用拟定（`search_planner.dart` + `loreSearchPlanPrompt`，2026-10-10；10-11 起可以选种类）：它只看问题（追问时加上一问和上一答的要点）
   和各工具自己的说明，输出最多三条检索词、最多两个要看目录的故事集、最多两个 Wiki 搜索词（合计不超过四步）和一个附在第一条检索上的 Wiki 词，
   代码照着执行，以普通的 `search` / `outline` / `wiki_search` 调用和结果进入对话（可折叠），用户消息只有问题本身。
+  **按名字取材**（重构第 1 期，开发者 2026-10-18 定下）：同一次小调用另写最多六个锚点（问题涉及的名字，`anchors`，不算在四步里），
+  检索跑完后代码以一次 `gather` 调用取材（`coverage.dart`：锚点在剧情里出现和说话的行，按锚点稀有度与同场打分，每个故事集先给三篇，
+  每处前后两行，约 3 万字，按上线顺序 `storyReleaseKey` 排列），登记为已读。依据是离线召回测试（`test/live/recall_eval_test.dart`）：
+  检索加取材把日志题的金标行命中从 37% 提到 74%。这是固定的取材步骤，不是给模型的阅读计划；改它之前先重跑召回测试。
+  追问时（S0）代码先用 `read_story` 把上一答引用过、读过的行段重读一遍（前后各两行，相距 20 行以内的合成一段，共最多 400 行，`followUpReads`），因为上一问的工具结果已经折叠。
   没拟定出来时：有向量就用问题原文按意思检索一次，没有向量就由主模型自己检索。**代码不从问题里切词、找名字**（切出来的是句子碎片；`search` 的关键词只是 query 里空格分开的词）。
 - 工具调用先过守门（`tool_call_gate.dart`）：进入对话的调用参数必须是合法 JSON，非法调用不执行、报错写明正确写法；不要把模型的原始参数原样存进历史。
   不要加手写的进度规则（预算提示、重读拒绝、阅读计划）；改进方向是工具表达力、工具输出的信息量和通用工作方式。
-  唯一的例外是开发者 2026-10-11 要的：**没有结果的查找**每个工具每次问答最多 6 次（`maxFailedLookups`），到了就不再执行那个工具；
+  例外有三条，都是开发者定的：第一轮由代码取材一次（上一条，2026-10-18）；答案 JSON 的 `missing`（说没查到的事和相关的名字）由代码用这些名字在没读过的剧情里再找一次，找到原文就连同答案交回重写一次（重构第 2 期 3.2，`_lookForMissing`，2026-10-19）；以及 2026-10-11 要的：**没有结果的查找**每个工具每次问答最多 6 次（`maxFailedLookups`），到了就不再执行那个工具；
   全是空结果的一轮在模型回复过一次之后不留在上下文里（`emptyTurns`），只留次数。对所有工具、所有问题一样，不要按问题种类调这个数。
 - 指路的信息光写出来不够（八次路径：模型读完最相关的一篇就倾向于作答）：能确定地取到的原文由工具直接给（`search` 的“各给一段”），不靠模型去要；
   这不是进度规则，不要改成作答时按覆盖面退回。
@@ -177,7 +200,7 @@
 - 工作过程（`work_steps.dart` + `chat_bubble.dart`）照会话记录的样子写：每一步是序号、工具名、模型写的参数原文、结果的字数和计数，
   加标记（拟定 / 重复 / 没有结果 / 出错 / 未执行 / Wiki 超时 / 助手 n）；点开是完整的参数和结果（限高、可滚动、可选中）。不要改回“在某处搜索某词”那样的概括句。
 - 答案的状态：not_covered 由代码按核实过的出处数定；answered / partial 取决于模型自己报的 `coverage`（有没有声明遗漏），代码不核对。
-  partial 不等于答得差：比较两版代码时看答案里有出处的故事集，不看 answered 的比例（`docs/R17_TOOL_AGENT.md` §“状态信封”）。
+  partial 不等于答得差：比较两版代码时看答案里有出处的故事集，不看 answered 的比例（`docs/ASK_AGENT.md` §5.3）。
 - 思考档位每个角色显式指定，默认全部 off，“深度思考”= low；不给剧情问答开 high。各家参数见 `docs/LLM_PROVIDERS.md`。
 - 提示词留在 Dart 里（与解析器同版本、有守卫测试），不进 ARB。
 - 系统提示词只放每次都要用的（工作方式、阅读原则、出处、答案格式）；只有某个工具用得上的参考内容放进手册（`loreLibraryManual`），
@@ -185,7 +208,8 @@
 
 ## 真实 API 测试的成本约束（开发者要求）
 
-- 先离线（mock LLM）复现，确认后才动用真实 API；开发者同意后才跑。
+- 先离线（mock LLM）复现，确认后才动用真实 API。测试模型用 glm-5.3-flash（`tools/api_info` 的 `MODEL=`；免费的 glm-4.7-flash 并发 1、常过载，测不了）。
+  **预计这一轮测试总消耗（模型 + 向量）≤150 万 token 直接跑；超过先说明估算、等开发者同意**（开发者 2026-10-19）。跑之前先用小样本量出每单位的实际用量再估。
 - 每个方面最多 2 个最有代表性的用例（`ARKLORES_LIVE_IDS` 过滤），逐题串行，每题看完结果再跑下一题；不整批跑评测、不并行。
 - 新机制带来的调用/token 增加只要不是数量级差异就先不处理，优先答案质量；验收表照常记录 usage。
 - 向量嵌入同样花钱：优先按行对齐迁移（`build_story_embeddings.dart --migrate-from`）。
@@ -204,15 +228,18 @@
 ```powershell
 flutter test
 flutter analyze
-# 真实同链路问答（花钱，先问开发者）
+# 真实同链路问答（花钱；预计超过 150 万 token 先问开发者）
 $env:ARKLORES_RUN_LIVE_ASK='true'; $env:ARKLORES_LIVE_QUERIES='问题一||问题二'
-$env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_v5\arklores_gamedata_zh.db"
+$env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_rebuild\arklores_gamedata_zh.db"
 $env:ARKLORES_ENDFIELD_DB="$PWD\build\endfield\arklores_endfield_zh.db"   # 可选：装上终末地库（双游戏问题）
 flutter test test/live/ask_pipeline_live_test.dart
 # 真机问答：带桥安装后在电脑上提问、实时看 App 的输出（docs/ANDROID_SETUP_GUIDE.md）
 .\tools\install_local.ps1 -Build -Bridge; dart run tools/phone_ask.dart "问题"
 # Wiki 接口联网检查（免费）
 $env:ARKLORES_RUN_WIKI_CHECK='true'; flutter test test/live/wiki_live_test.dart
+# 离线召回测试（免费，改问答的检索与取材时必做；完整写法见 docs/QA_CHECKLIST.md §3）
+$env:ARKLORES_RUN_RECALL_EVAL='true'; $env:ARKLORES_RECALL_VECTORS="$PWD\build\recall_eval\query_vectors.json"
+flutter test test/live/recall_eval_test.dart
 ```
 
 - live 测试驱动 App 的 `askChatProvider`（只替换启动注入的 provider 与平台路径），输出 `build/live_sessions/` 下的会话 JSON 与 `*.summary.json`

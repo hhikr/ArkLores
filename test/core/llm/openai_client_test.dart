@@ -335,6 +335,34 @@ void main() {
       expect(stubborn, hasLength(2));
     });
 
+    test('an aborted request is not retried after a 429', () async {
+      final calls = <int>[];
+      final client = OpenAICompatibleClient(
+        config: const LLMConfig(chatApiKey: 'test-key'),
+        httpClient: rateLimited(99, calls),
+        rateLimitBackoff: const [
+          Duration(milliseconds: 200),
+          Duration(milliseconds: 200),
+        ],
+      );
+      final abort = Completer<void>();
+      final answer = client.chatCompletion(
+        [Message.user('q')],
+        abortTrigger: abort.future,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      abort.complete();
+      await expectLater(
+        answer,
+        throwsA(
+          isA<LLMException>()
+              .having((e) => e.message, 'message', contains('aborted')),
+        ),
+      );
+      // Only the first request went out: the wait was not followed by more.
+      expect(calls, hasLength(1));
+    });
+
     test('a rate-limited stream is retried too', () async {
       final calls = <int>[];
       final client = OpenAICompatibleClient(

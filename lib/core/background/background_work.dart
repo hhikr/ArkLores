@@ -3,8 +3,8 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/services.dart';
 
-/// Keeps the app's long operations (an Ask answer, a role-play reply, a
-/// knowledge-base download or build) running while the app is in the
+/// Keeps the app's long operations (an Ask answer, a knowledge-base
+/// download, build or vector update) running while the app is in the
 /// background.
 ///
 /// On Android the process of a backgrounded app is frozen, and its sockets

@@ -248,6 +248,18 @@ abstract class AppLocalizations {
   /// **'Configure the chat provider'**
   String get settingsApiSettingsDesc;
 
+  /// No description provided for @settingsProfileSectionsOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open file sections in the library'**
+  String get settingsProfileSectionsOpen;
+
+  /// No description provided for @settingsProfileSectionsOpenDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.'**
+  String get settingsProfileSectionsOpenDesc;
+
   /// No description provided for @settingsSessionLogs.
   ///
   /// In en, this message translates to:
@@ -668,48 +680,6 @@ abstract class AppLocalizations {
   /// **'Endfield Wiki'**
   String get wikiTabEndfield;
 
-  /// No description provided for @wikiSendToAi.
-  ///
-  /// In en, this message translates to:
-  /// **'Send to AI'**
-  String get wikiSendToAi;
-
-  /// No description provided for @wikiSendToAiDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Selected Wiki text is reading context only; factual claims are verified separately with GameData.'**
-  String get wikiSendToAiDesc;
-
-  /// No description provided for @wikiSendToSummaryDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Summarize from the page and selected text'**
-  String get wikiSendToSummaryDesc;
-
-  /// No description provided for @wikiSendToFactCheckDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Use the selected text as the claim to check'**
-  String get wikiSendToFactCheckDesc;
-
-  /// No description provided for @wikiReaderMode.
-  ///
-  /// In en, this message translates to:
-  /// **'Reader mode'**
-  String get wikiReaderMode;
-
-  /// No description provided for @wikiReaderFontSmaller.
-  ///
-  /// In en, this message translates to:
-  /// **'Smaller text'**
-  String get wikiReaderFontSmaller;
-
-  /// No description provided for @wikiReaderFontLarger.
-  ///
-  /// In en, this message translates to:
-  /// **'Larger text'**
-  String get wikiReaderFontLarger;
-
   /// No description provided for @bookmarksTitle.
   ///
   /// In en, this message translates to:
@@ -925,18 +895,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Answer canceled.'**
   String get aiAskCanceled;
-
-  /// No description provided for @aiTabFactCheck.
-  ///
-  /// In en, this message translates to:
-  /// **'Fact Check'**
-  String get aiTabFactCheck;
-
-  /// No description provided for @aiTabSummary.
-  ///
-  /// In en, this message translates to:
-  /// **'Summary'**
-  String get aiTabSummary;
 
   /// No description provided for @aiAnswerStatus.
   ///
@@ -1723,6 +1681,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} stories'**
   String aiWorkStories(int count);
+
+  /// No description provided for @aiWorkGathered.
+  ///
+  /// In en, this message translates to:
+  /// **'{given} of {located} stories'**
+  String aiWorkGathered(int given, int located);
 
   /// No description provided for @aiWorkRunning.
   ///

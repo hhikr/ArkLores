@@ -161,6 +161,7 @@ void main() {
         String? assetCommit,
         String? assetCommitDate,
         String? installedSha,
+        String? commitDate,
       }) =>
           GameDataInstallStatus(
             installed: true,
@@ -169,6 +170,7 @@ void main() {
             manifest: {
               'source_arknights_commit': commit,
               'built_at': updatedAt,
+              if (commitDate != null) 'source_commit_date': commitDate,
             },
             builtLocally: local,
             installedAssetSha: installedSha,
@@ -205,6 +207,28 @@ void main() {
           assetCommitDate: '2026-01-20T00:00:00Z',
         ),
         GameDataUpdateReason.newerData,
+      );
+      // When the update recorded its commit's date, the two commit dates
+      // are compared, whatever the phone's clock said when it ran.
+      expect(
+        reason(
+          local: true,
+          updatedAt: '2027-06-01T00:00:00Z',
+          commitDate: '2026-01-05T00:00:00Z',
+          assetCommit: 'new',
+          assetCommitDate: '2026-01-20T00:00:00Z',
+        ),
+        GameDataUpdateReason.newerData,
+      );
+      expect(
+        reason(
+          local: true,
+          updatedAt: '2025-01-01T00:00:00Z',
+          commitDate: '2026-01-25T00:00:00Z',
+          assetCommit: 'old',
+          assetCommitDate: '2026-01-20T00:00:00Z',
+        ),
+        isNull,
       );
       // A build that does not say what its asset was made from never
       // replaces a knowledge base updated here.

@@ -42,7 +42,7 @@ void main() async {
     appTheme,
     appLocale,
     sessionLogsEnabled,
-    (nickname, answerOptions),
+    (nickname, answerOptions, profileSectionsOpen),
     _,
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
@@ -58,6 +58,8 @@ void main() async {
       load('nickname', settingsService.loadNickname, ''),
       load('answer options', settingsService.loadAnswerOptions,
           const AnswerOptions(),),
+      load('profile fold setting', settingsService.loadProfileSectionsOpen,
+          true,),
     ).wait,
     load(
       'launcher icon',
@@ -81,6 +83,8 @@ void main() async {
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
         initialNicknameProvider.overrideWithValue(nickname),
         initialAnswerOptionsProvider.overrideWithValue(answerOptions),
+        initialProfileSectionsOpenProvider
+            .overrideWithValue(profileSectionsOpen),
       ],
       // Only in local test builds (`install_local.ps1 -Bridge`).
       child: phoneBridgeEnabled

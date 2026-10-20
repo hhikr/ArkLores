@@ -27,9 +27,11 @@ export 'story_catalog.dart'
         collectionLabelPrefix,
         collectionReleaseKey,
         compareReleaseKeys,
+        compareStoryReleaseKeys,
         fallbackStoryLabel,
         formatTermSpread,
-        releaseMonthOf;
+        releaseMonthOf,
+        storyReleaseKey;
 export 'story_coverage_models.dart';
 export 'story_vectors.dart' show StoryChunkHit;
 
@@ -221,6 +223,23 @@ abstract interface class GameDataRetrieval {
     List<String> terms, {
     Iterable<String>? storyIds,
   });
+
+  /// Where [name] is in the story text: every line it speaks (speaker equal
+  /// to it) or that contains it, by story then line; at most [limit] rows.
+  /// A one-character name is matched as a speaker only (as text it is part
+  /// of too many words). Locating hints, not evidence.
+  Future<List<AnchorLine>> anchorLines(String name, {int limit});
+}
+
+/// One line where a name is: spoken by it, or holding it.
+class AnchorLine {
+  const AnchorLine(this.storyId, this.lineIndex, {required this.spoken});
+
+  final String storyId;
+  final int lineIndex;
+
+  /// The name is the line's speaker.
+  final bool spoken;
 }
 
 /// R17: one line found by [GameDataRetrieval.grepStoryLines].

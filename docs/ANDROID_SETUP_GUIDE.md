@@ -17,12 +17,14 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 
 ```powershell
 .\tools\install_local.ps1 -Build -Kb     # 构建 release APK（release key 签名、烘入 tools/release_gamedata.env 的 URL/SHA）、安装、拷知识库
+.\tools\install_local.ps1 -BuildOnly     # 只构建（同上的签名与 URL/SHA），不需要连手机；直接 flutter build apk 的包没有知识库地址，下载会报“未配置 GameData release asset URL”
 .\tools\install_local.ps1                # 只安装最新的本地 APK
 .\tools\install_local.ps1 -Kb -KbOnly    # 只拷知识库
 .\tools\install_local.ps1 -DryRun
 ```
 
-知识库 `build\gamedata_v5\arklores_gamedata_zh.db.gz` 被拷成应用目录里的 `arklores_gamedata_zh.db.download.gz`；打开 设置 → 知识库，
+知识库默认是 `build\gamedata_rebuild\arklores_gamedata_zh.db.gz`（现行官方资产 `gamedata-20261020` 的那份；`-KbFile <gz>` 指定别的；终末地固定是 `build\endfield\arklores_endfield_zh.db.gz`），
+被拷成应用目录里的 `arklores_gamedata_zh.db.download.gz`；打开 设置 → 知识库，
 点“下载”即离线校验 SHA 并安装。**APK 必须是用这个 gz 的 SHA 构建的**（改了知识库就先改 `release_gamedata.env` 再 `-Build`；库所基于的上游提交变了，`GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE` 也要改，见 `GAMEDATA_BUILD_PIPELINE.md` §7）。
 
 签名：`tools/arklores-release.jks` + `tools/android_signing.properties`（gitignored，绝不提交、绝不打印）。没有它们时本地
@@ -76,12 +78,14 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 
 ## 发布（开发者明确同意后）
 
-1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.14.0 正式版是 33）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
+1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.15.0 是 35）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
 2. 知识库有变化：按 `GAMEDATA_BUILD_PIPELINE.md` §7 准备资产，`tools/release_gamedata.env` 指向将要创建的 Release。
 3. 工作区干净（`coverage/` 已 gitignore），提交并推送功能分支。
 4. `.\tools\release_app.ps1 -Version <v> -NotesFile <说明.md> [-Stable]`（Linux/云端：`tools/release_app.sh`，`STABLE=1`）：
    推 `release/v<v>` → `android-release.yml` 构建签名并校验证书指纹 `b1b09ebf…e364` → 下载 APK → 建 Release 并上传 APK。
 5. 上传两个知识库的 gz 与 manifest 到同一个 Release（知识库没变也照传，一个 Release 带齐 APK、两个知识库和源码）；用公开地址 HEAD 一次确认 200。
+   然后 `dart run tools/write_gamedata_channel.dart`，用生成的 `build/gamedata_channel.json` 替换 `gamedata-channel` Release 上的同名资产（`GAMEDATA_BUILD_PIPELINE.md` §7）。
+   只更新知识库、不发 App 时，传完库后只换这份文件即可。
 6. 开 PR 把功能分支合回 `main`（开发者合并）；合并后删掉功能分支；撤下被正式版取代的预发布（Release 与 tag）；删掉 `release/v<v>` 分支（tag 指向同一提交）。
 
 建 Release 的请求失败（v0.11.0 遇到 GitHub 500）时：APK 已在 `%TEMP%\arklores_release_<v>`，用 REST 补建 Release 并上传，不要重推 release 分支

@@ -290,12 +290,18 @@ abstract class LLMClient {
   /// Existing clients can keep implementing [chat]; this default adapter
   /// preserves compatibility while newer clients expose provider finish
   /// reasons such as `length`.
+  ///
+  /// When [abortTrigger] completes, a client that can abort the request
+  /// does so (and stops retrying it); others ignore it. A caller that gives
+  /// up waiting fires it so the request does not run on beside the next
+  /// one (providers with a concurrency limit of one answer that with 429).
   Future<ChatCompletionResult> chatCompletion(
     List<Message> messages, {
     List<Map<String, dynamic>>? tools,
     double temperature = 0.7,
     int maxTokens = 2048,
     List<String>? stop,
+    Future<void>? abortTrigger,
   }) async {
     final content = await chat(
       messages,

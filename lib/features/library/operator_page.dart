@@ -57,12 +57,16 @@ class OperatorPage extends ConsumerWidget {
       final kind = _bareKind(c.kind);
       // Missions of any shelf are one group (an operator's mission may be on
       // the main story shelf too).
-      (kinds[ownedCollectionKinds.contains(kind) ? kind : 'memory'] ??= []).add(c);
+      (kinds[ownedCollectionKinds.contains(kind) ? kind : 'memory'] ??= [])
+          .add(c);
     }
     final kindOrder = ['memory', ...ownedCollectionKinds];
     final sortedKinds = Map.fromEntries(
       kinds.entries.toList()
-        ..sort((a, b) => kindOrder.indexOf(a.key).compareTo(kindOrder.indexOf(b.key))),
+        ..sort(
+          (a, b) =>
+              kindOrder.indexOf(a.key).compareTo(kindOrder.indexOf(b.key)),
+        ),
     );
     kinds
       ..clear()
@@ -76,7 +80,8 @@ class OperatorPage extends ConsumerWidget {
 
     Widget header(String title, String code) => Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: IndustrialSectionHeader(theme: theme, title: title, code: code),
+          child:
+              IndustrialSectionHeader(theme: theme, title: title, code: code),
         );
 
     return LibraryScaffold(
@@ -88,77 +93,116 @@ class OperatorPage extends ConsumerWidget {
           label: e.name.isEmpty ? e.id : e.name,
         ),
       ],
-      body: ListView(
-        padding: floatingPadding(context, const EdgeInsets.only(bottom: 32)),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: _headerCard(context, theme, e, records, byType),
-          ),
-          // The profile (archive) leads: it is what the page is about. Each
-          // of its parts folds (all open).
-          if (blocks.isNotEmpty) ...[
-            header(context.t.libraryOperatorProfile, 'profile'),
-            const SizedBox(height: 4),
-            for (final b in blocks)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: EntryPage.textBlock(theme, e, b, ref.watch(nicknameProvider)),
+      // One selection over the page: the profile's rows are separate items
+      // of a lazy list.
+      body: SelectionArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding:
+                  floatingPadding(context, const EdgeInsets.only(bottom: 32)),
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  SliverList.list(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                        child: _headerCard(context, theme, e, records, byType),
+                      ),
+                      // The profile (archive) leads: it is what the page is about. Each
+                      // of its parts folds (open or not as Settings say); it is built
+                      // only as far as it is on screen.
+                      if (blocks.isNotEmpty) ...[
+                        header(context.t.libraryOperatorProfile, 'profile'),
+                        const SizedBox(height: 4),
+                      ],
+                    ],
+                  ),
+                  for (final b in blocks)
+                    EntryPage.textSliver(
+                      theme,
+                      e,
+                      b,
+                      ref.watch(nicknameProvider),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                  SliverList.list(
+                    children: [
+                      if (samePerson.isNotEmpty) ...[
+                        header(
+                          bindingName('same_person', outgoing: true),
+                          'same_person',
+                        ),
+                        for (final o in samePerson) ...[
+                          LibraryRow(
+                            key: ValueKey('operator-same-${o.id}'),
+                            title: o.name.isEmpty ? o.id : o.name,
+                            subtitle: codeCaption(o),
+                            subtitleLines: 1,
+                            trailing: Icon(
+                              Icons.chevron_right_sharp,
+                              color: theme.textMuted,
+                            ),
+                            onTap: () => openEntry(context, o),
+                          ),
+                          rowDivider(theme),
+                        ],
+                      ],
+                      // What hangs below the operator, by kind: Arknights' record sets
+                      // (密录); Endfield's operator missions (under the name of their
+                      // series), Baker topics and Dijiang interactions. A row with one
+                      // story opens it.
+                      for (final kind in kinds.entries) ...[
+                        header(
+                          _kindLabel(context, kind.key),
+                          'records-${kind.key}',
+                        ),
+                        for (final (i, c) in kind.value.indexed) ...[
+                          if (c.group != null &&
+                              (i == 0 || kind.value[i - 1].group != c.group))
+                            GroupHeading(
+                              key: ValueKey('operator-series-${c.group}'),
+                              title: c.group!,
+                            ),
+                          LibraryRow(
+                            key: ValueKey('operator-record-${c.id}'),
+                            title: c.name,
+                            subtitle: c.intro ??
+                                context.t.libraryCountStories(c.stories),
+                            subtitleLines: c.intro == null ? 1 : 2,
+                            trailing: Icon(
+                              Icons.chevron_right_sharp,
+                              color: theme.textMuted,
+                            ),
+                            onTap: () => openCollectionOf(context, c),
+                          ),
+                          rowDivider(theme),
+                        ],
+                      ],
+                      for (final group in byType.entries) ...[
+                        header(entryTypeName(group.key), group.key),
+                        for (final o in group.value) ...[
+                          LibraryRow(
+                            key: ValueKey('operator-owned-${o.id}'),
+                            title: o.name.isEmpty ? o.id : o.name,
+                            subtitle: _ownedCaption(o),
+                            subtitleLines: 1,
+                            trailing: Icon(
+                              Icons.chevron_right_sharp,
+                              color: theme.textMuted,
+                            ),
+                            onTap: () => openEntry(context, o),
+                          ),
+                          rowDivider(theme),
+                        ],
+                      ],
+                    ],
+                  ),
+                ],
               ),
+            ),
           ],
-          if (samePerson.isNotEmpty) ...[
-            header(bindingName('same_person', outgoing: true), 'same_person'),
-            for (final o in samePerson) ...[
-              LibraryRow(
-                key: ValueKey('operator-same-${o.id}'),
-                title: o.name.isEmpty ? o.id : o.name,
-                subtitle: codeCaption(o),
-                subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
-                onTap: () => openEntry(context, o),
-              ),
-              rowDivider(theme),
-            ],
-          ],
-          // What hangs below the operator, by kind: Arknights' record sets
-          // (密录); Endfield's operator missions (under the name of their
-          // series), Baker topics and Dijiang interactions. A row with one
-          // story opens it.
-          for (final kind in kinds.entries) ...[
-            header(_kindLabel(context, kind.key), 'records-${kind.key}'),
-            for (final (i, c) in kind.value.indexed) ...[
-              if (c.group != null &&
-                  (i == 0 || kind.value[i - 1].group != c.group))
-                GroupHeading(
-                  key: ValueKey('operator-series-${c.group}'),
-                  title: c.group!,
-                ),
-              LibraryRow(
-                key: ValueKey('operator-record-${c.id}'),
-                title: c.name,
-                subtitle: c.intro ?? context.t.libraryCountStories(c.stories),
-                subtitleLines: c.intro == null ? 1 : 2,
-                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
-                onTap: () => openCollectionOf(context, c),
-              ),
-              rowDivider(theme),
-            ],
-          ],
-          for (final group in byType.entries) ...[
-            header(entryTypeName(group.key), group.key),
-            for (final o in group.value) ...[
-              LibraryRow(
-                key: ValueKey('operator-owned-${o.id}'),
-                title: o.name.isEmpty ? o.id : o.name,
-                subtitle: _ownedCaption(o),
-                subtitleLines: 1,
-                trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
-                onTap: () => openEntry(context, o),
-              ),
-              rowDivider(theme),
-            ],
-          ],
-        ],
+        ),
       ),
     );
   }

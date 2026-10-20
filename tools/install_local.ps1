@@ -3,6 +3,7 @@
 # GitHub.
 #
 #   .\tools\install_local.ps1 -Build          # build the APK from this tree, then install
+#   .\tools\install_local.ps1 -BuildOnly      # only build it (no phone needed)
 #   .\tools\install_local.ps1                 # install the newest local APK
 #   .\tools\install_local.ps1 -Kb             # ... and copy the knowledge base
 #   .\tools\install_local.ps1 -Kb -KbOnly     # only the knowledge base
@@ -18,7 +19,7 @@
 # it with the release key (tools/arklores-release.jks +
 # tools/android_signing.properties, never printed), so it updates an app
 # installed from a release without uninstalling. The knowledge base is
-# build\gamedata_v5\arklores_gamedata_zh.db.gz.
+# build\gamedata_rebuild\arklores_gamedata_zh.db.gz.
 #
 # The knowledge base is copied as `arklores_gamedata_zh.db.download.gz` into
 # the app's own folder on the phone. Open the app, Settings > Knowledge base,
@@ -30,6 +31,8 @@ param(
   [string]$KbFile,
   [string]$Device,
   [switch]$Build,
+  # Build the APK as -Build does and stop: no phone, nothing installed.
+  [switch]$BuildOnly,
   [switch]$Kb,
   [switch]$KbOnly,
   # Also copy the Endfield knowledge base (build\endfield\arklores_endfield_zh.db.gz).
@@ -52,7 +55,7 @@ $adb = (Get-Command adb -ErrorAction SilentlyContinue).Source
 if (-not $adb) {
   $adb = 'C:\Users\hhikr\dev\android-sdk\platform-tools\adb.exe'
 }
-if (-not (Test-Path $adb)) { throw 'adb not found (install platform-tools or add adb to PATH)' }
+if (-not $BuildOnly -and -not (Test-Path $adb)) { throw 'adb not found (install platform-tools or add adb to PATH)' }
 
 function Adb {
   $all = @()
@@ -62,7 +65,10 @@ function Adb {
   if ($LASTEXITCODE -ne 0) { throw "adb $($args -join ' ') failed ($LASTEXITCODE)" }
 }
 
-# A phone must be connected and authorised.
+if ($BuildOnly) { $Build = $true; $KbOnly = $false; $Kb = $false; $Ef = $false }
+
+# A phone must be connected and authorised (not to build only).
+if (-not $BuildOnly) {
 $lines = & $adb devices | Select-Object -Skip 1 | Where-Object { $_.Trim() }
 $ready = @($lines | Where-Object { $_ -match '\sdevice$' })
 if ($Device) {
@@ -80,6 +86,7 @@ if ($Device) {
   $Device = ($phones[0] -split '\s+')[0]
   Write-Host "several devices; using the only non-emulator one: $Device"
 }
+}
 
 # --- Build ---
 if ($Build -and -not $KbOnly -and -not $Apk) {
@@ -94,6 +101,8 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   # the app orders an official asset against one updated on the phone by.
   $commit = [regex]::Match($envText, '(?m)^GAMEDATA_DB_COMMIT=(\S+)').Groups[1].Value
   $commitDate = [regex]::Match($envText, '(?m)^GAMEDATA_DB_COMMIT_DATE=(\S+)').Groups[1].Value
+  # Where the app looks for knowledge bases uploaded after it was built.
+  $channel = [regex]::Match($envText, '(?m)^GAMEDATA_CHANNEL_URL=(\S+)').Groups[1].Value
   $version = [regex]::Match((Get-Content pubspec.yaml -Raw), '(?m)^version:\s*([^+\s]+)').Groups[1].Value
   $out = "build\local_release\ArkLores-$version-local.apk"
   Write-Host "building $out (knowledge base SHA $($sha.Substring(0, 12))...)"
@@ -109,7 +118,7 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   if (-not $DryRun) {
     # Gradle and Flutter write warnings to stderr; only the exit code counts.
     $ErrorActionPreference = 'Continue'
-    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT=$commit" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT_DATE=$commitDate" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha" "--dart-define=ARKLORES_PHONE_BRIDGE=$(if ($Bridge) { 'true' } else { 'false' })"
+    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT=$commit" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT_DATE=$commitDate" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha" "--dart-define=ARKLORES_GAMEDATA_CHANNEL_URL=$channel" "--dart-define=ARKLORES_PHONE_BRIDGE=$(if ($Bridge) { 'true' } else { 'false' })"
     if ($LASTEXITCODE -ne 0) { throw 'flutter build failed' }
     New-Item -ItemType Directory -Force build\local_release | Out-Null
     $built = 'build\app\outputs\flutter-apk\app-release.apk'
@@ -143,6 +152,11 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   }
 }
 
+if ($BuildOnly) {
+  if ($Apk) { Write-Host "built: $Apk" }
+  return
+}
+
 # --- App ---
 if (-not $KbOnly) {
   if (-not $Apk) {
@@ -173,7 +187,7 @@ if (-not $KbOnly) {
 
 # --- Knowledge base ---
 if ($Kb -or $KbOnly) {
-  if (-not $KbFile) { $KbFile = 'build\gamedata_v5\arklores_gamedata_zh.db.gz' }
+  if (-not $KbFile) { $KbFile = 'build\gamedata_rebuild\arklores_gamedata_zh.db.gz' }
   if (-not (Test-Path $KbFile)) { throw "knowledge base not found: $KbFile" }
   $kbItem = Get-Item $KbFile
   $sha = (Get-FileHash $kbItem.FullName -Algorithm SHA256).Hash.ToLower()

@@ -43,7 +43,8 @@ const String storyCatalogDdl = '''
     story_sort      INTEGER NOT NULL,
     synopsis        TEXT,
     synopsis_path   TEXT,
-    start_time      INTEGER
+    start_time      INTEGER,
+    show_time       INTEGER
   )
 ''';
 
@@ -61,6 +62,7 @@ class StoryCatalogEntry {
     this.synopsis,
     this.synopsisPath,
     this.startTime,
+    this.showTime,
   });
 
   // `start_time` is absent from R14 catalogs (R15 column); fromRow then
@@ -78,6 +80,7 @@ class StoryCatalogEntry {
         synopsis: row['synopsis'] as String?,
         synopsisPath: row['synopsis_path'] as String?,
         startTime: (row['start_time'] as num?)?.toInt(),
+        showTime: (row['show_time'] as num?)?.toInt(),
       );
 
   /// Story file id as in `story_lines.story_id` (e.g.
@@ -101,6 +104,13 @@ class StoryCatalogEntry {
   /// records) and for R14 catalogs.
   final int? startTime;
 
+  /// The time the collection became readable in the game's story review
+  /// (`startShowTime`, unix seconds): the only time the main story has
+  /// (chapters 0–7 share the date the review opened). Null for older
+  /// catalogs and collections without one. Orders stories across
+  /// collections ([storyReleaseKey]); not shown as a release date.
+  final int? showTime;
+
   /// `2024-06` (China time) of [startTime], or null.
   String? get releaseMonth => releaseMonthOf(startTime);
 
@@ -116,6 +126,7 @@ class StoryCatalogEntry {
         'synopsis': synopsis,
         'synopsis_path': synopsisPath,
         'start_time': startTime,
+        'show_time': showTime,
       };
 
   /// Readable collection name with its kind, e.g. `巴别塔`, `主线·慈悲灯塔`,
@@ -180,6 +191,42 @@ String? releaseMonthOf(int? startTime) {
   return (2, 0, collectionId);
 }
 
+/// Sort key of a story in the order players could read it: the
+/// collection's [StoryCatalogEntry.startTime], else its
+/// [StoryCatalogEntry.showTime], then main chapters by number, then the
+/// story's place in its collection. Undated collections (operator records)
+/// come last.
+(int, int, int, String, int) storyReleaseKey(StoryCatalogEntry e) {
+  final time = (e.startTime ?? 0) > 0
+      ? e.startTime!
+      : (e.showTime ?? 0) > 0
+          ? e.showTime!
+          : null;
+  final number = e.collectionType == 'MAINLINE'
+      ? int.tryParse(
+            RegExp(r'(\d+)').firstMatch(e.collectionId)?.group(1) ?? '',
+          ) ??
+          0
+      : 0;
+  return switch (time) {
+    final t? => (0, t, number, e.collectionId, e.storySort),
+    null when e.collectionType == 'MAINLINE' =>
+      (1, number, 0, e.collectionId, e.storySort),
+    null => (2, 0, 0, e.collectionId, e.storySort),
+  };
+}
+
+int compareStoryReleaseKeys(
+  (int, int, int, String, int) a,
+  (int, int, int, String, int) b,
+) {
+  if (a.$1 != b.$1) return a.$1.compareTo(b.$1);
+  if (a.$2 != b.$2) return a.$2.compareTo(b.$2);
+  if (a.$3 != b.$3) return a.$3.compareTo(b.$3);
+  final c = a.$4.compareTo(b.$4);
+  return c != 0 ? c : a.$5.compareTo(b.$5);
+}
+
 int compareReleaseKeys((int, int, String) a, (int, int, String) b) {
   if (a.$1 != b.$1) return a.$1.compareTo(b.$1);
   if (a.$2 != b.$2) return a.$2.compareTo(b.$2);
@@ -202,6 +249,7 @@ List<StoryCatalogEntry> parseStoryReviewTable(
     final name = '${value['name'] ?? ''}'.trim();
     final type = '${value['entryType'] ?? ''}'.trim();
     final start = (value['startTime'] as num?)?.toInt();
+    final show = (value['startShowTime'] as num?)?.toInt();
     final stories = value['infoUnlockDatas'];
     if (name.isEmpty || stories is! List) continue;
     for (final story in stories) {
@@ -224,6 +272,7 @@ List<StoryCatalogEntry> parseStoryReviewTable(
         synopsis: synopsis == null ? null : normalizeSynopsis(synopsis),
         synopsisPath: info.isEmpty ? null : synopsisPathFor(info),
         startTime: start != null && start > 0 ? start : null,
+        showTime: show != null && show > 0 ? show : null,
       ),);
     }
   }

@@ -8,7 +8,6 @@ import 'package:arklores/core/agent/answer_options.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
-import 'package:arklores/features/ai/wiki_ai_context.dart';
 import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
@@ -247,29 +246,6 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byType(AiChatPage), findsNothing);
-  });
-
-  testWidgets('a Wiki selection arrives as context, not evidence',
-      (tester) async {
-    await tester.pumpWidget(_app(
-      const AiChatPage(
-        initialWikiContext: WikiAiContext(
-          selectedText: '阿米娅是罗德岛的公开领袖。',
-          pageTitle: '阿米娅 - PRTS',
-          pageUrl: 'https://prts.wiki/w/阿米娅',
-          siteLabel: 'PRTS Wiki',
-          target: WikiAiTarget.summary,
-        ),
-      ),
-      overrides: _withModel(ScriptedLLM(['Final Answer: 收到。'])),
-    ),);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.textContaining('Wiki reading context'), findsOneWidget);
-    expect(find.textContaining('not GameData evidence'), findsOneWidget);
-    expect(find.textContaining('阿米娅是罗德岛的公开领袖。'), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 
   group('Ask list scrolling', () {

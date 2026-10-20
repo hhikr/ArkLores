@@ -6,11 +6,11 @@ enum WikiSiteKind {
   generic,
 }
 
-/// Small site-specific bridge for non-MediaWiki Wiki implementations.
+/// Small site-specific bridge to each Wiki's own light/dark switch.
 ///
 /// The WebView still owns page navigation and interaction. This adapter only
-/// changes the host's documented theme state and exposes stable content roots
-/// for reader mode.
+/// changes the host's own theme state: PRTS's MediaWiki night theme
+/// (`skin-theme-clientpref-night`), fz's `data-theme`, Warfarin's `.dark`.
 class WikiSiteAdapter {
   WikiSiteAdapter._();
 
@@ -44,6 +44,15 @@ class WikiSiteAdapter {
   var host = String(location.hostname || '').toLowerCase();
   var root = document.documentElement;
   if (!root) return;
+
+  if (host === 'prts.wiki' || host.endsWith('.prts.wiki')) {
+    // The site's own night theme (MediaWiki client preference classes).
+    var night = mode === 'dark';
+    root.classList.remove('skin-theme-clientpref-os');
+    root.classList.toggle('skin-theme-clientpref-night', night);
+    root.classList.toggle('skin-theme-clientpref-day', !night);
+    return;
+  }
 
   if (host === 'fz.wiki' || host === 'www.fz.wiki' ||
       host.endsWith('.fz.wiki')) {
@@ -81,6 +90,19 @@ class WikiSiteAdapter {
       (document.head || root).appendChild(meta);
     }
     meta.setAttribute('content', value);
+  }
+
+  if (host === 'prts.wiki' || host.endsWith('.prts.wiki')) {
+    // The site's own night theme (MediaWiki client preference classes),
+    // on the root and the body as the skin sets them; nothing restyled.
+    var night = mode === 'dark';
+    [root, document.body].forEach(function(el) {
+      if (!el) return;
+      el.classList.remove('skin-theme-clientpref-os');
+      el.classList.toggle('skin-theme-clientpref-night', night);
+      el.classList.toggle('skin-theme-clientpref-day', !night);
+    });
+    return;
   }
 
   if (host === 'fz.wiki' || host === 'www.fz.wiki' ||
@@ -128,30 +150,4 @@ class WikiSiteAdapter {
   }
 })();
 ''';
-
-  static const fzReaderRoots = <String>[
-    'main > div.grid > div:first-child',
-    '[data-page-content]',
-    '[data-content]',
-    'article',
-  ];
-
-  static const warfarinReaderRoots = <String>[
-    'main > div.max-w-\\\\[1536px\\\\] > div.flex-1',
-    'main > div > div.flex-1',
-    'main',
-  ];
-
-  static String readerRootSelector(WikiSiteKind kind) {
-    switch (kind) {
-      case WikiSiteKind.fz:
-        return fzReaderRoots.join(', ');
-      case WikiSiteKind.warfarin:
-        return warfarinReaderRoots.join(', ');
-      case WikiSiteKind.prts:
-        return '#mw-content-text, .mw-parser-output, main, article';
-      case WikiSiteKind.generic:
-        return 'article, main, [role="main"], .content, .page-content';
-    }
-  }
 }

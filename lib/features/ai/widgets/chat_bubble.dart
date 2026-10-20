@@ -661,14 +661,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
         data: (r) => r == null
             ? Text(context.t.aiCitedLinesUnavailable, style: muted)
-            : SelectableText(
-                r.content,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textPrimary,
-                  fontSize: 12,
-                  height: 1.5,
-                ),
-              ),
+            : CitedRecordText(r.content, size: 13),
       ),);
     }
 
@@ -1303,6 +1296,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         WorkKind.delegate => Icons.call_split_sharp,
         WorkKind.wikiSearch => Icons.public_sharp,
         WorkKind.wikiRead => Icons.article_sharp,
+        WorkKind.gather => Icons.library_books_sharp,
         WorkKind.error => Icons.error_outline_sharp,
         WorkKind.otherTool ||
         WorkKind.note ||
@@ -1324,6 +1318,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       case WorkKind.find:
         final stories = step.searchStoryCount;
         return stories == null ? '' : t.aiWorkStories(stories);
+      case WorkKind.gather:
+        final stories = step.gatherStoryCount;
+        final located = step.gatherLocatedCount;
+        return stories == null
+            ? ''
+            : located == null
+                ? t.aiWorkStories(stories)
+                : t.aiWorkGathered(stories, located);
       case WorkKind.read:
         final range = step.lineRange;
         return range == null ? '' : t.aiWorkLines(range.$1, range.$2);

@@ -28,7 +28,7 @@ flutter test
 git diff --check
 ```
 
-改了建库、Agent 或界面时，按 `docs/RETRIEVAL_QA.md` 补做对应的验收。真实 API 测试会产生费用，默认跳过，按 CLAUDE.md 的成本约束运行。
+改了建库、Agent 或界面时，按 `docs/QA_CHECKLIST.md` 补做对应的验收。真实 API 测试会产生费用，默认跳过，按 CLAUDE.md 的成本约束运行。
 
 ## PR Checklist
 

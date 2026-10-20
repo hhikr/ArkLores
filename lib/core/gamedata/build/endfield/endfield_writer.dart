@@ -317,7 +317,7 @@ class EndfieldWriter {
     await db.insert(
       'entity_documents',
       {
-        'id': stableContentId('endfield:doc:$entityId'),
+        'id': endfieldId(stableContentId('endfield:doc:$entityId')),
         'game': endfieldGame,
         'language': gamedataLanguage,
         'entity_id': entityId,

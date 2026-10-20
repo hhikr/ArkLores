@@ -313,6 +313,13 @@ class MultiGameRetrieval implements GameDataRetrieval {
         ...await only(game).storyLineHitCounts(terms, storyIds: ids),
     };
   }
+
+  @override
+  Future<List<AnchorLine>> anchorLines(String name, {int limit = 5000}) async =>
+      [
+        for (final store in await _installed())
+          ...await store.anchorLines(name, limit: limit),
+      ];
 }
 
 /// [store] narrowed to [game] when it spans several games and [game] is set.

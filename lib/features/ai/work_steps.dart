@@ -21,6 +21,9 @@ enum WorkKind {
   delegate,
   wikiSearch,
   wikiRead,
+
+  /// `gather`: the lines around a few names.
+  gather,
   otherTool,
   note,
 
@@ -230,6 +233,18 @@ class WorkStep {
     return counts.isEmpty ? null : counts.fold<int>(0, (n, c) => n + c);
   }
 
+  /// [WorkKind.gather]: stories whose lines were given.
+  int? get gatherStoryCount {
+    final m = RegExp(r'给了 (\d+) 篇剧情').firstMatch(text);
+    return m == null ? null : int.parse(m.group(1)!);
+  }
+
+  /// [WorkKind.gather]: stories that hold one of the names.
+  int? get gatherLocatedCount {
+    final m = RegExp(r'出现在 (\d+) 篇剧情').firstMatch(text);
+    return m == null ? null : int.parse(m.group(1)!);
+  }
+
   /// The tool refused the call or could not run it.
   bool get failed {
     if (!done) return false;
@@ -269,6 +284,7 @@ WorkKind _kindOf(String tool) => switch (tool) {
       'delegate' => WorkKind.delegate,
       'wiki_search' => WorkKind.wikiSearch,
       'wiki_read' => WorkKind.wikiRead,
+      'gather' => WorkKind.gather,
       _ => WorkKind.otherTool,
     };
 

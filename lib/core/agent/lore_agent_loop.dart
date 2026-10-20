@@ -34,6 +34,8 @@ import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import '../wiki/wiki_lookup.dart';
 import '../wiki/wiki_page.dart';
+import 'coverage.dart';
+import 'line_picker.dart';
 import 'lore_agent_prompts.dart';
 import 'lore_answer_json.dart';
 import 'lore_answer_stages.dart';
@@ -128,6 +130,7 @@ class LoreAgentLoop {
     this.delegate = false,
     this.maxSubtasks = 2,
     this.preSearch = true,
+    this.pickLines = false,
     this.streamRetryDelay = const Duration(seconds: 2),
     this.heartbeat = const Duration(seconds: 10),
     this.onSpan,
@@ -198,6 +201,10 @@ class LoreAgentLoop {
   /// 0.14: search the question before the first turn (main agent only).
   final bool preSearch;
 
+  /// Phase 2 (S5): `gather` reads wide and picks the lines that bear on
+  /// the question, a call per segment with [planClient] ([LinePicker]).
+  final bool pickLines;
+
   /// Model turns per question; the last one must answer.
   final int maxTurns;
 
@@ -234,7 +241,15 @@ class LoreAgentLoop {
     final delegating = delegate && !subtask;
     final tools = {
       for (final t in [
-        ...loreTools(store, seen, embeddingClient: embeddingClient, wiki: wiki),
+        ...loreTools(
+          store,
+          seen,
+          embeddingClient: embeddingClient,
+          wiki: wiki,
+          picker: pickLines && !subtask
+              ? LinePicker(planClient ?? client)
+              : null,
+        ),
         if (wiki != null) ...wikiTools(wiki!, seen),
         if (delegating) DelegateTool((args) => _runSubtask(args, seen)),
       ])
@@ -253,6 +268,8 @@ class LoreAgentLoop {
         ..onSpan = onSpan;
     }
     final toolSpecs = [for (final t in tools.values) t.toJson()];
+    final gather = tools['gather'];
+    if (gather is GatherTool) gather.question = asQuestion ?? query;
 
     String systemPrompt() {
       final base = loreRolePrompt(
@@ -329,9 +346,18 @@ class LoreAgentLoop {
         (raw) => onRawLlmResponse?.call(++record, '（拟定检索）$raw'),
         outlineDescription: tools['outline']?.description ?? '',
         wikiSearchDescription: tools['wiki_search']?.description ?? '',
+        gatherDescription: tools['gather']?.description ?? '',
       );
       // A step whose tool this question does not have is left out.
       final planned = <({String tool, Map<String, dynamic> args})>[
+        // S0 (refactor phase 1): a follow-up gets the text the last answer
+        // cited again (its tool results are folded to pointers by now).
+        if (prior != null && tools['read_story'] != null)
+          for (final r in followUpReads(prior.messages, prior.seen))
+            (
+              tool: 'read_story',
+              args: {'story_id': r.storyId, 'start': r.start, 'count': r.count},
+            ),
         if (plan != null) ...[
           if (tools['outline'] != null)
             for (final c in plan.outlines)
@@ -348,6 +374,10 @@ class LoreAgentLoop {
           if (tools['wiki_search'] != null)
             for (final q in plan.wikiSearches)
               (tool: 'wiki_search', args: {'query': q}),
+          // Phase 1 (2026-10-18): the lines around the question's names,
+          // after the searches (the stories they found count a little more).
+          if (tools['gather'] != null && plan.anchors.isNotEmpty)
+            (tool: 'gather', args: {'names': plan.anchors}),
         ] else if (keywordOnly == null)
           (tool: 'search', args: {'query': query}),
       ];
@@ -382,7 +412,14 @@ class LoreAgentLoop {
           }
         }
 
-        final runs = [for (var k = 0; k < planned.length; k++) runOne(k)];
+        final runs = <Future<(String, SearchResult?)>>[];
+        for (var k = 0; k < planned.length; k++) {
+          runs.add(
+            planned[k].tool == 'gather'
+                ? Future.wait([...runs]).then((_) => runOne(k))
+                : runOne(k),
+          );
+        }
         final calls = [
           for (final (k, step) in planned.indexed)
             ToolCall(
@@ -443,6 +480,7 @@ class LoreAgentLoop {
     var redoing = false;
 
     var citationRetried = false;
+    var missingChecked = false;
     var nudged = false;
     // R18: the answer last sent back for a rewrite (citation recheck);
     // kept if the rewrite never comes.
@@ -904,6 +942,16 @@ class LoreAgentLoop {
       // 0.14: a range shown only in part is cut to the lines that were
       // shown (a search lists some lines of a passage; the range over them
       // was dropped whole, and with it a sound citation).
+      // Phase 2 (S7): a story id written short (its file name only) is
+      // written out when one story read in this question has that name.
+      final expanded = expandShortStoryIds(body, seen.stories);
+      if (expanded.$2.isNotEmpty) {
+        body = expanded.$1;
+        yield ReActEvent(
+          type: ReActEventType.recordNote,
+          content: '补全了出处的路径：${expanded.$2.join('；')}',
+        );
+      }
       final trims = _partlySeen(body, seen);
       for (final MapEntry(key: cite, value: runs) in trims.entries) {
         body = body.replaceAll('`$cite`', runs.map((c) => '`$c`').join(' '));
@@ -959,6 +1007,48 @@ class LoreAgentLoop {
         ),);
         redoing = true;
         continue;
+      }
+
+      // Phase 2 (3.2): what the answer says was not found is looked for
+      // once more by code, with the names it gave, in stories it has not
+      // read; text found goes back with the answer for a rewrite (once).
+      if (!subtask && !missingChecked && !lastTurn && fromJson != null) {
+        final missing = loreAnswerMissing(content);
+        if (missing.isNotEmpty) {
+          missingChecked = true;
+          final found = await _lookForMissing(missing, seen);
+          final points = [
+            for (final m in missing)
+              m.point.isEmpty ? m.words.join('、') : m.point,
+          ];
+          if (found == null) {
+            yield ReActEvent(
+              type: ReActEventType.recordNote,
+              content: '已查证“没有查到”：${points.join('；')}'
+                  '（${missing.expand((m) => m.words).join('、')}在没读过的剧情里没有找到）',
+            );
+          } else {
+            yield ReActEvent(
+              type: ReActEventType.recordNote,
+              content: '查证“没有查到”：${points.join('；')}，'
+                  '在没读过的剧情里找到 ${found.stories} 篇，交回重写',
+            );
+            yield const ReActEvent(
+              type: ReActEventType.finalAnswerReset,
+              rollback: true,
+            );
+            rewriteOf = keep;
+            rewriteUncited = citations == 0;
+            redoNotes.add(conversation.length);
+            conversation.add(Message.assistant(keep));
+            redoNotes.add(conversation.length);
+            conversation.add(
+              Message.user(loreMissingFoundNote(points, found.text)),
+            );
+            redoing = true;
+            continue;
+          }
+        }
       }
 
       if (trims.isNotEmpty) {
@@ -1305,7 +1395,11 @@ class LoreAgentLoop {
     void Function(String raw) onRaw, {
     String outlineDescription = '',
     String wikiSearchDescription = '',
+    String gatherDescription = '',
   }) async {
+    // Fired when the plan takes too long: the request (perhaps waiting out
+    // a 429) must not run on beside the main model's first call.
+    final abort = Completer<void>();
     try {
       final result = await (planClient ?? client).chatCompletion(
         [
@@ -1316,6 +1410,7 @@ class LoreAgentLoop {
               searchDescription: search.description,
               outlineDescription: outlineDescription,
               wikiSearchDescription: wikiSearchDescription,
+              gatherDescription: gatherDescription,
             ),
           ),
           Message.user(
@@ -1324,13 +1419,102 @@ class LoreAgentLoop {
         ],
         temperature: 0.2,
         maxTokens: 512,
+        abortTrigger: abort.future,
       ).timeout(planTimeout);
       onRaw(result.content);
       return parseSearchPlan(result.content);
     } catch (e) {
+      if (!abort.isCompleted) abort.complete();
       onRaw('没有拟定出检索词：$e');
       return null;
     }
+  }
+
+  /// Story text for [missing]'s names that the conversation has not shown
+  /// (registered in [seen]), or null when there is none.
+  Future<({String text, int stories})?> _lookForMissing(
+    List<({String point, List<String> words})> missing,
+    SeenLines seen,
+  ) async {
+    final words = <String>{for (final m in missing) ...m.words}.toList();
+    final coverage = await CoverageBuilder(store).build(
+      words,
+      budgetChars: missingLookupChars,
+    );
+    final unread = [
+      for (final p in coverage.passages)
+        if (seen.seenRanges(p.storyId, p.first, p.last).isEmpty) p,
+    ];
+    if (unread.isEmpty) return null;
+    for (final p in unread) {
+      for (final l in p.lines) {
+        seen.add(p.storyId, l.lineIndex);
+      }
+    }
+    return (
+      text: renderPassages(unread, coverage.labels),
+      stories: {for (final p in unread) p.storyId}.length,
+    );
+  }
+
+  /// Characters of story text the lookup for an answer's `missing` gives.
+  static const int missingLookupChars = 12000;
+
+  /// Lines read again before a follow-up: the story ranges the last answer
+  /// cited (and were read), each with two lines around it; ranges less than
+  /// [joinGap] lines apart are read as one. In the order the answer cites
+  /// them, up to [maxLines] lines in all.
+  static List<({String storyId, int start, int count})> followUpReads(
+    List<Message> messages,
+    SeenLines seen, {
+    int joinGap = 20,
+    int maxLines = 400,
+  }) {
+    final answer = messages.lastWhere(
+      (m) =>
+          m.role == MessageRole.assistant &&
+          (m.toolCalls ?? const []).isEmpty &&
+          m.content.trim().isNotEmpty,
+      orElse: () => Message.assistant(''),
+    );
+    // The conversation keeps the answer as the model wrote it: JSON, whose
+    // `cite` arrays the pattern below does not match.
+    final entries = loreAnswerEntries(answer.content);
+    final cited = entries == null
+        ? answer.content
+        : [for (final e in entries) ...e.cites].join(' ');
+    final ranges = <String, List<(int, int)>>{};
+    for (final m in _citation.allMatches(cited)) {
+      final story = m.group(1)!;
+      final a = int.parse(m.group(2)!);
+      final b = int.tryParse(m.group(3) ?? '') ?? a;
+      for (final r in seen.seenRanges(story, a < b ? a : b, a < b ? b : a)) {
+        (ranges[story] ??= []).add(r);
+      }
+    }
+    final reads = <({String storyId, int start, int count})>[];
+    var total = 0;
+    for (final MapEntry(key: story, value: list) in ranges.entries) {
+      list.sort((x, y) => x.$1.compareTo(y.$1));
+      final joined = <(int, int)>[];
+      for (final r in list) {
+        if (joined.isNotEmpty && r.$1 - joined.last.$2 <= joinGap) {
+          final last = joined.removeLast();
+          joined.add((last.$1, r.$2 > last.$2 ? r.$2 : last.$2));
+        } else {
+          joined.add(r);
+        }
+      }
+      for (final (a, b) in joined) {
+        final start = a - 2 < 0 ? 0 : a - 2;
+        var count = b + 2 - start + 1;
+        if (count > ReadStoryTool.maxCount) count = ReadStoryTool.maxCount;
+        if (total + count > maxLines) return reads;
+        total += count;
+        reads.add((storyId: story, start: start, count: count));
+      }
+    }
+    return reads;
   }
 
   /// What came before a follow-up, for [_planSearches]: the last question
@@ -1476,6 +1660,7 @@ class LoreAgentLoop {
           '${arg('start').isEmpty ? '' : ' L${arg('start')} 起'}',
       'outline' => '查看故事集 ${arg('collection')}',
       'similar_names' => '查找与“${arg('name')}”相近的名字',
+      'gather' => '按名字取材：${args['names'] is List ? (args['names'] as List).join('、') : arg('names')}',
       'wiki_search' => '在 Wiki 上搜索“${arg('query')}”',
       'wiki_read' => '阅读 Wiki 页面 ${arg('page')}',
       'delegate' => '子任务：${_clip(arg('task'), 40)}',
@@ -1641,6 +1826,30 @@ class LoreAgentLoop {
   /// Citations of [body] whose range was shown only in part, each with the
   /// runs inside it that were shown (as citations of their own). A range
   /// shown whole or not at all is left to [_unseenCitations].
+  /// [body] with each cited story id that is not one of [read] but is the
+  /// file name of exactly one of them written out in full, and what was
+  /// written out (`short → full`).
+  static (String, List<String>) expandShortStoryIds(
+    String body,
+    Iterable<String> read,
+  ) {
+    final known = read.toSet();
+    final done = <String>[];
+    final out = body.replaceAllMapped(_citation, (m) {
+      final id = m.group(1)!;
+      if (known.contains(id)) return m.group(0)!;
+      final full = [
+        for (final s in known)
+          if (s.endsWith('/$id')) s,
+      ];
+      if (full.length != 1) return m.group(0)!;
+      final note = '$id → ${full.single}';
+      if (!done.contains(note)) done.add(note);
+      return '${full.single}${m.group(0)!.substring(id.length)}';
+    });
+    return (out, done);
+  }
+
   static Map<String, List<String>> _partlySeen(String body, SeenLines seen) {
     final out = <String, List<String>>{};
     void check(String cite, String id, int lo, int hi) {

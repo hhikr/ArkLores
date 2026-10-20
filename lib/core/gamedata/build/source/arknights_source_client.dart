@@ -225,7 +225,14 @@ class ArknightsSourceClient {
   /// egress but is not quota-limited), so the builder keeps working even when
   /// the API quota is exhausted. An invalid token surfaces as HTTP 401 with
   /// an explicit diagnostic instead of a silent fallback.
-  Future<String> fetchLatestCommit() async {
+  Future<String> fetchLatestCommit() async =>
+      (await fetchLatestCommitInfo()).sha;
+
+  /// [fetchLatestCommit] with the date the commit was made (GitHub's
+  /// committer date), or null when the answer does not say. An update writes
+  /// it into the manifest, so the official asset is compared with the game
+  /// data the knowledge base was made from, not with the phone's clock.
+  Future<({String sha, DateTime? date})> fetchLatestCommitInfo() async {
     final response = await _client
         .get(
           _api('/commits/${ArknightsSourcePaths.branch}'),
@@ -235,15 +242,23 @@ class ArknightsSourceClient {
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
       final sha = decoded is Map ? decoded['sha'] : null;
-      if (sha is String && sha.isNotEmpty) return sha;
+      final commit = decoded is Map ? decoded['commit'] : null;
+      final committer = commit is Map ? commit['committer'] : null;
+      final date = committer is Map ? committer['date'] : null;
+      if (sha is String && sha.isNotEmpty) {
+        return (
+          sha: sha,
+          date: date is String ? DateTime.tryParse(date)?.toUtc() : null,
+        );
+      }
     } else if (response.statusCode == 401) {
       throw StateError(
         'GitHub Token is invalid (HTTP 401). Check the token you entered in '
         'the knowledge base settings. ${_shortBody(response.body)}',
       );
     } else if (response.statusCode == 403 || response.statusCode == 429) {
-      final atomSha = await _latestShaFromAtomFeed();
-      if (atomSha != null) return atomSha;
+      final atom = await _latestFromAtomFeed();
+      if (atom != null) return atom;
       throw StateError(
         'Failed to fetch latest GameData commit: HTTP '
         '${response.statusCode} (GitHub API rate limit or blocked egress; '
@@ -256,8 +271,9 @@ class ArknightsSourceClient {
     );
   }
 
-  /// Parses the newest commit SHA from `commits/<branch>.atom` (non-API).
-  Future<String?> _latestShaFromAtomFeed() async {
+  /// Parses the newest commit SHA (and its `<updated>` date) from
+  /// `commits/<branch>.atom` (non-API).
+  Future<({String sha, DateTime? date})?> _latestFromAtomFeed() async {
     final uri = Uri.https(
       'github.com',
       '/${ArknightsSourcePaths.repo}/commits/${ArknightsSourcePaths.branch}.atom',
@@ -268,7 +284,15 @@ class ArknightsSourceClient {
       final match = RegExp(r'Grit::Commit/([0-9a-f]{40})').firstMatch(
         response.body,
       );
-      return match?.group(1);
+      if (match == null) return null;
+      final entry = response.body.substring(match.end);
+      final updated = RegExp(r'<updated>([^<]+)</updated>').firstMatch(
+        entry.split('</entry>').first,
+      );
+      return (
+        sha: match.group(1)!,
+        date: DateTime.tryParse(updated?.group(1) ?? '')?.toUtc(),
+      );
     } catch (_) {
       return null;
     }

@@ -261,6 +261,92 @@ void main() {
     expect(await entryTexts(db, (await entryById(db, 'skin:nodoc'))!), isEmpty);
   });
 
+  test("an operator's voice lines follow its document as one more part",
+      () async {
+    for (final (i, (title, line)) in [
+      ('任命助理', '第一句。'),
+      ('交谈1', '第二句。'),
+    ].indexed) {
+      await insertRecord(
+        db,
+        'voice_$i',
+        contentType: 'operator_voice',
+        content: line,
+        category: 'operator',
+        subtype: 'voice',
+        fields: {
+          'title': title,
+          'section': title,
+          'entry_id': 'operator:char_x',
+          'line_start': 0,
+        },
+      );
+    }
+    final op = (await entryById(db, 'operator:char_x'))!;
+    final doc = (await entryTexts(db, op)).single.content;
+    expect(doc, startsWith('## 基础信息'));
+    expect(
+      doc,
+      endsWith('## $operatorVoiceSection\n任命助理：第一句。\n交谈1：第二句。'),
+    );
+  });
+
+  test("voice lines read in the game's order, one part per voice set",
+      () async {
+    // Record ids are content hashes: their order says nothing. The line's
+    // own id (`charWordId`) carries its set and its number.
+    await db.insert('entries', {
+      'id': 'skin:char_x@ski#1',
+      'type': 'skin',
+      'name': '皮肤乙',
+      'raw_id': 'char_x@ski#1',
+    });
+    for (final (id, raw, title, line) in [
+      ('z1', 'char_x_CN_010', '闲置', '十。'),
+      ('a2', 'char_x_ski#1_CN_002', '交谈1', '皮肤二。'),
+      ('m3', 'char_x_CN_002', '交谈1', '二。'),
+      ('b4', 'char_x_CN_TOPOLECT_CN_001', '任命助理', '方言一。'),
+      ('k5', 'char_x_CN_001', '任命助理', '一。'),
+      ('c6', 'char_x_ski#1_CN_001', '任命助理', '皮肤一。'),
+      ('d7', 'char_x2_CN_001', '任命助理', '另一形态。'),
+    ]) {
+      await insertRecord(
+        db,
+        id,
+        contentType: 'operator_voice',
+        content: line,
+        category: 'operator',
+        subtype: 'voice',
+        fields: {
+          'title': title,
+          'section': title,
+          'raw_id': raw,
+          'entry_id': 'operator:char_x',
+        },
+      );
+    }
+    final op = (await entryById(db, 'operator:char_x'))!;
+    final doc = (await entryTexts(db, op)).single.content;
+    expect(
+      doc,
+      endsWith(
+        '## $operatorVoiceSection\n任命助理：一。\n交谈1：二。\n闲置：十。\n\n'
+        '## $operatorVoiceSection·中文-方言\n任命助理：方言一。\n\n'
+        '## $operatorVoiceSection·皮肤乙\n任命助理：皮肤一。\n交谈1：皮肤二。\n\n'
+        '## $operatorVoiceSection 2\n任命助理：另一形态。',
+      ),
+    );
+  });
+
+  test('a cited record opens the entry it is part of', () async {
+    expect(await entryIdOfRecord(db, 'r_e1'), 'enemy:e1');
+    // An operator's file: the entry of its entity.
+    expect(await entryIdOfRecord(db, 'd1'), 'operator:char_x');
+    // Under ef/ while the file's own id has no prefix (the v0.14.0 asset).
+    expect(await entryIdOfRecord(db, 'ef/d1'), 'operator:char_x');
+    expect(await entryIdOfRecord(db, 'nothing'), isNull);
+  });
+
   test('bindings are listed from both sides', () async {
     final enemy = await entryBindings(db, 'enemy:e1');
     expect(enemy.single.relation, 'appears_in');
