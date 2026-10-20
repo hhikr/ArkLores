@@ -67,6 +67,8 @@
   - 知识库（2026-10-19）：按现在的建库代码在本机重建了两个库（同一份游戏数据，向量全部迁移、新算 0 块，逐表对比与验收通过）：明日方舟 `build/gamedata_rebuild/`
     （`story_catalog` 多 `show_time`，主线因此有时间）、终末地 `build/endfield/`（档案 id 带 `ef/`；旧库备份 `build/endfield_v0140/`）。
     2026-10-20 先发布到 `gamedata-20261020`，同日随 v0.15.0 再发一份（同样的文件），渠道文件指向 v0.15.0，见 `docs/KNOWN_ISSUES.md` §1.1。
+    同日晚终末地库按 2026-10-18 的客户端重建（AnimeStudio 要换成支持 VFS v5 的提交，`docs/GAMEDATA_BUILD_PIPELINE.md` §9.1），
+    开发者同意后直接覆盖了 v0.15.0 上的终末地资产并改了渠道文件（旧库备份 `build/endfield_v0150/`）。
     本机测试用 `build/gamedata_rebuild`，不要用更旧的 `build/gamedata_v5`（没有 act52side，召回测试的金标检查会失败）。
   - 开发者的项目目标里还有：终末地风格的 UI 重构、《大地巡旅》作为用户资料并定可信度档位。都没开始。
 ## 文档索引

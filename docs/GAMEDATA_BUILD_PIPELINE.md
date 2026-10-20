@@ -2,6 +2,7 @@
 
 > 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**现行的官方资产在 v0.15.0 Release**（2026-10-20；同样的文件先以只发知识库的 `gamedata-20261020` 发过）：
 > 按现在的建库代码重建，游戏数据仍是上游 `17759cc`（2026-10-08），向量全部从 v0.14.0 的库迁移；明日方舟 `story_catalog` 多一列 `show_time`，终末地档案 id 带 `ef/`。
+> 终末地库之后（2026-10-20）换成了 2026-10-18 的客户端重建的版本，覆盖了 v0.15.0 上的同名资产（见 `KNOWN_ISSUES.md` §1.1）。
 > 本地文件是 `build/gamedata_rebuild/`、`build/endfield/`。v0.14.0 Release 上的旧库保留。差别与检查见 `KNOWN_ISSUES.md` §1.1。终末地只能在本机从游戏客户端构建（§9）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `ASK_AGENT.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
@@ -199,6 +200,10 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 
 工具：[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 里的 AnimeStudio 终末地分支（自定义 VFS 解密、表与 JSON 数据导出）。
 只第一次需要跑 kit 的 `setup.bat` 构建 AnimeStudio CLI；之后直接用 CLI 导出，不走 kit 的完整导出流程（它要一两个小时，且在本机卡死过）。
+客户端改了资源格式时 CLI 会失败（2026-10-18 的客户端：`invalid block data: unsupported code version 5`）：到 `kit\tools\AnimeStudio` 里 `git fetch`，
+切到上游支持新格式的提交（这次是分支 `codex/endfield-vfs-v5` 的 `aafe0d3`），在 kit 目录用 embeddable Python 重编：
+`python312\python.exe -m scripts.game_data.extraction.animestudio.rebuild --target CLI --configuration Release`（几秒钟）。
+客户端没有明文版本号（`config.ini` 是加密的），`-Version` 写 Persistent 层的更新日期。
 
 ```powershell
 .\tools\unpack_endfield.ps1 -Version <客户端版本>   # 导出两层 → 合并 → 建库（约 4 分钟）
