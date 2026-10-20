@@ -1,9 +1,8 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**已发布**的是 v0.14.0 Release 的资产：明日方舟库基于上游 `17759cc`（2026-10-08，瘦身后的库），
-> 终末地库是瘦身后带资料向量的那份（只能在本机从游戏客户端构建，§9）。
-> **2026-10-19 在本机按现在的建库代码重建了两个库**（同一份游戏数据，向量全部迁移、新算 0 块），还没发布：明日方舟 `build/gamedata_rebuild/`（`story_catalog` 多一列 `show_time`），
-> 终末地 `build/endfield/`（档案 id 带 `ef/`）。差别与检查见 `KNOWN_ISSUES.md` §1.1。
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**现行的官方资产在 `gamedata-20261020` Release**（2026-10-20，只发知识库）：
+> 按现在的建库代码重建，游戏数据仍是上游 `17759cc`（2026-10-08），向量全部从 v0.14.0 的库迁移；明日方舟 `story_catalog` 多一列 `show_time`，终末地档案 id 带 `ef/`。
+> 本地文件是 `build/gamedata_rebuild/`、`build/endfield/`。v0.14.0 Release 上的旧库保留。差别与检查见 `KNOWN_ISSUES.md` §1.1。终末地只能在本机从游戏客户端构建（§9）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `ASK_AGENT.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 
@@ -176,6 +175,11 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
    形如 `{game, database: {fileName}, manifest: {...}}`）上传到同一个 Release，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256` 指向它。
    从 v0.13.0 起每个 Release 都带齐两个库（没变的库原样再传一份，SHA 不变，已装好的不会重新下载），env 的两个 URL 都指向这次的 Release；
    v0.12.0 时两个库曾分在两个 Release 上。上传后用公开地址 HEAD 一次确认 200。
+
+**只发知识库、不发 App**（第一次是 2026-10-20 的 `gamedata-20261020`）：tag 叫 `gamedata-<年月日>`，指向构建这两个库的代码所在的提交，**不标 latest**（`make_latest: false`，
+最新的 App 版本仍是 latest），两个库都带上；说明里写清和上一份库的差别、哪些 App 会被提示。做法：1–3 → 用 REST 建 Release 并上传四个文件
+（PAT 只放在单条命令的请求头里）→ 用公开地址下载两个 gz、核对 SHA → 第 4 步替换渠道文件（删掉旧资产再上传，取回核对）→ 提交 env 的改动。
+渠道里的资产与包里的同一提交、同一日期时也算“不比包里的旧”，用着包里那份官方库的手机会被提示更新、重新下载。
 
 未发布时在手机上试：`tools/install_local.ps1 -Build -Kb`（用 release key 签名、烘入 env 的 SHA，并把本地 gz 放进应用目录，
 在知识库页点“下载”即离线校验安装）。

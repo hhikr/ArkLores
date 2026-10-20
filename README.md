@@ -25,8 +25,12 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
 ## 发布资产
 
 - [v0.14.5](https://github.com/hhikr/ArkLores/releases/tag/v0.14.5)：`ArkLores-0.14.5.apk`（项目签名，可覆盖安装 v0.10.0 及之后的版本；从 v0.9 及更早版本升级需先卸载一次）。
-  知识库仍是 v0.14.0 Release 上的两份；之后只上传新库时，App 会从 `gamedata-channel` Release 上的渠道文件发现它。
-- [v0.14.0](https://github.com/hhikr/ArkLores/releases/tag/v0.14.0)：
+  知识库见下一项；App 从 `gamedata-channel` Release 上的渠道文件发现只上传、没随版本发的新库。
+- [gamedata-20261020](https://github.com/hhikr/ArkLores/releases/tag/gamedata-20261020)（只发知识库，2026-10-20）：两个库按现在的建库代码重建，游戏数据与 v0.14.0 相同。
+  `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 119 MB，故事目录多了剧情回顾的开放时间），SHA-256 `1b9e3505cf10eb6b852fcbacfa412fd312a31e85986333d2e6d1cbcf7be8d004`；
+  `arklores_endfield_zh.db.gz`：终末地知识库（约 14 MB，干员档案的 id 带 `ef/`），SHA-256 `77b69d3a47f16ebdcda5286d6ee870d7c61871574f85c1befacf43c8d4c553e6`；
+  `gamedata_manifest.json`、`endfield_manifest.json`。v0.14.5 会在 设置 → 知识库 里提示更新。
+- [v0.14.0](https://github.com/hhikr/ArkLores/releases/tag/v0.14.0)（上一份知识库）：
   `arklores_gamedata_zh.db.gz`：明日方舟知识库（schema 5，游戏数据截至 2026-10-08，含剧情与资料向量、故事目录，约 119 MB），SHA-256
   `52b756f018fd2a901372213acf2b5959bd486eaed5cfff3954161dd44c5c2a76`；`gamedata_manifest.json`：来源提交、计数、大小与哈希；
   `arklores_endfield_zh.db.gz`：终末地知识库（schema 5，含剧情与资料向量，约 14 MB），SHA-256

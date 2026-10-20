@@ -14,7 +14,7 @@ All notable changes to ArkLores will be documented in this file.
 
 ### Knowledge base
 
-- **Both knowledge bases are rebuilt with the current build code**, from the same game data as v0.14.0 (vectors carried over, nothing re-embedded). The Arknights catalog records when each story opened in the game's story review, the only time the main story has, so the main story is ordered among the events when material is gathered for an answer. Endfield operator files have ids under `ef/` like everything else in that knowledge base. Not uploaded yet.
+- **Both knowledge bases are rebuilt with the current build code**, from the same game data as v0.14.0 (vectors carried over, nothing re-embedded). The Arknights catalog records when each story opened in the game's story review, the only time the main story has, so the main story is ordered among the events when material is gathered for an answer. Endfield operator files have ids under `ef/` like everything else in that knowledge base. Published on 2026-10-20 as the knowledge-base release `gamedata-20261020`; v0.14.5 finds them through the channel file.
 
 ### Library and reader
 

@@ -3,9 +3,10 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.14.5（正式版，2026-10-17，Android build 34；只有 App，知识库仍是 v0.14.0 的）。两个知识库附在 v0.14.0 Release 上（明日方舟库基于上游 `17759cc`，终末地库是瘦身后带资料向量的那份），
-  `tools/release_gamedata.env` 指向 v0.14.0。v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
-  下一轮开发从 `main` 新开分支。**进行中**：分支 `ask-recall-eval`（问答统一重构第 0–5 期 + 本机重建的两个知识库，未发布，见下方“当前进度”最后一条）。
+- **已发布**：App v0.14.5（正式版，2026-10-17，Android build 34）。知识库在只发知识库的 Release `gamedata-20261020`（2026-10-20，不标 latest）：
+  按现在的建库代码重建、游戏数据仍是上游 `17759cc`；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件都指向它（v0.14.5 的 App 由渠道文件发现）。
+  v0.14.0 Release 上的两个旧库保留。v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
+  下一轮开发从 `main` 新开分支。**进行中**：分支 `ask-recall-eval`（问答统一重构第 0–5 期，未合并，见下方“当前进度”最后一条）。
 - 未经开发者明确同意不发版。真实 API 测试（模型与向量）：测试模型用 glm-5.3-flash；预计一轮总消耗 ≤150 万 token 直接跑，超过先问（开发者 2026-10-19）。Android build 号每次发版递增。
 - **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、普查数据放本地 `notes/`（gitignored），不提交、不写进 PR。
 - 用中文和开发者交流。
@@ -64,7 +65,8 @@
   - 试过、没采用的（不要再试）：按段挑行（64% 对 74%，代码在、默认关）、加大取材的前后行数、场景卡（整张或按句，代码只在 `test/support/`）、检索块加前缀（排名变差）。
   - **问答质量没有解决**：概念题找不到原文、取材后“够了就答”、答案先后顺序（`docs/KNOWN_ISSUES.md` §2.1）。开发者 2026-10-19 说先停下想方向。
   - 知识库（2026-10-19）：按现在的建库代码在本机重建了两个库（同一份游戏数据，向量全部迁移、新算 0 块，逐表对比与验收通过）：明日方舟 `build/gamedata_rebuild/`
-    （`story_catalog` 多 `show_time`，主线因此有时间）、终末地 `build/endfield/`（档案 id 带 `ef/`；旧库备份 `build/endfield_v0140/`）。**未发布**，见 `docs/KNOWN_ISSUES.md` §1.1。
+    （`story_catalog` 多 `show_time`，主线因此有时间）、终末地 `build/endfield/`（档案 id 带 `ef/`；旧库备份 `build/endfield_v0140/`）。
+    2026-10-20 发布到 `gamedata-20261020` 并更新了渠道文件，见 `docs/KNOWN_ISSUES.md` §1.1。
     本机测试用 `build/gamedata_rebuild`，不要用更旧的 `build/gamedata_v5`（没有 act52side，召回测试的金标检查会失败）。
   - 开发者的项目目标里还有：终末地风格的 UI 重构、《大地巡旅》作为用户资料并定可信度档位。都没开始。
 ## 文档索引

@@ -19,7 +19,7 @@
 # it with the release key (tools/arklores-release.jks +
 # tools/android_signing.properties, never printed), so it updates an app
 # installed from a release without uninstalling. The knowledge base is
-# build\gamedata_v5\arklores_gamedata_zh.db.gz.
+# build\gamedata_rebuild\arklores_gamedata_zh.db.gz.
 #
 # The knowledge base is copied as `arklores_gamedata_zh.db.download.gz` into
 # the app's own folder on the phone. Open the app, Settings > Knowledge base,
@@ -187,7 +187,7 @@ if (-not $KbOnly) {
 
 # --- Knowledge base ---
 if ($Kb -or $KbOnly) {
-  if (-not $KbFile) { $KbFile = 'build\gamedata_v5\arklores_gamedata_zh.db.gz' }
+  if (-not $KbFile) { $KbFile = 'build\gamedata_rebuild\arklores_gamedata_zh.db.gz' }
   if (-not (Test-Path $KbFile)) { throw "knowledge base not found: $KbFile" }
   $kbItem = Get-Item $KbFile
   $sha = (Get-FileHash $kbItem.FullName -Algorithm SHA256).Hash.ToLower()
