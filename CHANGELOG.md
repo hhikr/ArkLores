@@ -2,7 +2,10 @@
 
 All notable changes to ArkLores will be documented in this file.
 
-## [Unreleased]
+## [0.15.0] - 2026-10-20
+
+The first part of a rework of how Ask finds the story text, operator pages that open without stalling, and both knowledge bases rebuilt (same game data as v0.14.0). Android build 35.
+The Ask changes help on questions about named people and places; questions about a general idea that the story only touches in passing are still often answered from too little, and the order of events across the main story and events can still come out wrong (see `docs/KNOWN_ISSUES.md`).
 
 ### Questions and answers
 
@@ -14,7 +17,7 @@ All notable changes to ArkLores will be documented in this file.
 
 ### Knowledge base
 
-- **Both knowledge bases are rebuilt with the current build code**, from the same game data as v0.14.0 (vectors carried over, nothing re-embedded). The Arknights catalog records when each story opened in the game's story review, the only time the main story has, so the main story is ordered among the events when material is gathered for an answer. Endfield operator files have ids under `ef/` like everything else in that knowledge base. Published on 2026-10-20 as the knowledge-base release `gamedata-20261020`; v0.14.5 finds them through the channel file.
+- **Both knowledge bases are rebuilt with the current build code**, from the same game data as v0.14.0 (vectors carried over, nothing re-embedded). The Arknights catalog records when each story opened in the game's story review, the only time the main story has, so the main story is ordered among the events when material is gathered for an answer. Endfield operator files have ids under `ef/` like everything else in that knowledge base. First published on 2026-10-20 as the knowledge-base release `gamedata-20261020` (v0.14.5 finds them through the channel file), and attached to this release as well.
 
 ### Library and reader
 

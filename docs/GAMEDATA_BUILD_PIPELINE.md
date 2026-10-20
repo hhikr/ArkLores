@@ -1,6 +1,6 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**现行的官方资产在 `gamedata-20261020` Release**（2026-10-20，只发知识库）：
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**现行的官方资产在 v0.15.0 Release**（2026-10-20；同样的文件先以只发知识库的 `gamedata-20261020` 发过）：
 > 按现在的建库代码重建，游戏数据仍是上游 `17759cc`（2026-10-08），向量全部从 v0.14.0 的库迁移；明日方舟 `story_catalog` 多一列 `show_time`，终末地档案 id 带 `ef/`。
 > 本地文件是 `build/gamedata_rebuild/`、`build/endfield/`。v0.14.0 Release 上的旧库保留。差别与检查见 `KNOWN_ISSUES.md` §1.1。终末地只能在本机从游戏客户端构建（§9）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `ASK_AGENT.md`。
