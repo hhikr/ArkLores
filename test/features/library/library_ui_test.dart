@@ -184,7 +184,12 @@ List<Override> overrides(MemoryUserStore store) => [
         (ref, id) async =>
             id.startsWith('roguelike_') || id.startsWith('sandbox_act')
                 ? _stories
-                : const [],
+                : id.startsWith('investigation:')
+                    ? const [
+                        LibraryEntry(id: 'document:ef/paper_1', type: 'document', name: '一张纸条', rawId: 'ef/paper_1'),
+                        LibraryEntry(id: 'document:ef/report_1', type: 'document', name: '调查结论', rawId: 'ef/report_1'),
+                      ]
+                    : const [],
       ),
       entryProvider.overrideWith(
         (ref, id) async => switch (id) {
@@ -200,6 +205,11 @@ List<Override> overrides(MemoryUserStore store) => [
             ),
           'enemy:e1' => _enemy,
           'stage:fx' => const LibraryEntry(id: 'stage:fx', type: 'stage', name: '某关'),
+          'investigation:ef/research_1' => const LibraryEntry(
+              id: 'investigation:ef/research_1',
+              type: 'investigation',
+              name: '某调查',
+            ),
           'sandbox_act:s/1' => const LibraryEntry(
               id: 'sandbox_act:s/1',
               type: 'sandbox_act',
@@ -1028,6 +1038,16 @@ void main() {
     expect(find.textContaining('第0句。'), findsWidgets);
     // Not a row to open: the dialogue is on the page.
     expect(find.byKey(const ValueKey('part-story-story:t/battle.txt')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets("an investigation's documents and report open their pages, not the reader",
+      (tester) async {
+    await pumpApp(tester, const EntryPage(entryId: 'investigation:ef/research_1'));
+    await tester.pumpAndSettle();
+    expect(find.text('包含'), findsWidgets);
+    expect(find.text('解锁的故事'), findsNothing);
+    expect(find.byKey(const ValueKey('entry-row-document:ef/report_1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-row-document:ef/report_1')), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets('an act of a sandbox plot holds its stories in order, with no '

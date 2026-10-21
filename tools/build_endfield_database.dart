@@ -98,6 +98,9 @@ Future<void> main(List<String> args) async {
       dialogTrees: trees,
       timelineLines: timelines,
       chapters: chapters,
+      playedBy: missionsDir == null
+          ? const {}
+          : EndfieldStoryImporter.loadPlayedConversations(Directory(missionsDir)),
     );
     await stories.importDialogTables();
     log('derived layers');

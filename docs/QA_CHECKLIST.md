@@ -39,7 +39,8 @@ flutter test        # 约 1–3 分钟，全部离线
 | --- | --- |
 | 单元测试 | `flutter test test/core/gamedata/build/endfield test/core/gamedata/multi_game_retrieval_test.dart` |
 | 重建 | `.\tools\unpack_endfield.ps1 -SkipUnpack`（客户端更新后去掉 `-SkipUnpack`）；它会改 `ENDFIELD_DB_SHA256`，不发布时还原 `tools/release_gamedata.env` |
-| 真实库验收 | `$env:ARKLORES_RUN_EF_CHECK='true'; $env:ARKLORES_ENDFIELD_DB='<库>'; flutter test test/live/endfield_acceptance_test.dart`（安装器校验、`ef/` id、每篇有条目/集合/目录、无标记与男女双写、一个任务一篇、章节分组、向量覆盖） |
+| 真实库验收 | `$env:ARKLORES_RUN_EF_CHECK='true'; $env:ARKLORES_ENDFIELD_DB='<库>'; flutter test test/live/endfield_acceptance_test.dart`（安装器校验、`ef/` id、每篇有条目/集合/目录、无标记与男女双写、没有原样输出的 `{id:` 文字对象、图鉴里没有零散文档、每项调查带报告、一个任务一篇、章节分组、向量覆盖） |
+| 换了客户端 | 和上一份库逐表、逐集合比：新增与删除的集合和故事、行数变少的故事（看是不是选项或内容真的变了）、未实装书架的增减（新进未实装的要确认没有任务定义播放它的对话） |
 | 确定性 | 建两次逐表比对 |
 | 读起来对不对 | 挑两三个任务对照 warfarin.wiki / fz.wiki 的同一任务页 |
 | 向量 | 重建后先 `build_story_embeddings.dart --migrate-from=<旧库> --dry-run` |

@@ -102,6 +102,42 @@ void main() {
       await count("SELECT COUNT(*) FROM story_lines WHERE speaker LIKE '%{%'"),
       0,
     );
+    // A text field printed raw (`{id: …, text: }`): a field that a new
+    // client turned from a string into localized text.
+    for (final column in ['name', 'code', 'group_name']) {
+      expect(
+        await count("SELECT COUNT(*) FROM entries WHERE $column LIKE '%{id:%'"),
+        0,
+        reason: 'entries.$column',
+      );
+    }
+    for (final column in ['title', 'section', 'content']) {
+      expect(
+        await count("SELECT COUNT(*) FROM normalized_records WHERE $column LIKE '%{id:%'"),
+        0,
+        reason: 'normalized_records.$column',
+      );
+    }
+  }, skip: !run,);
+
+  test('nothing is loose in the codex that the game reads in a mission or the archive', () async {
+    // Documents are in the archive, a mission, a place or an investigation;
+    // reports are read in their investigation, not in a list of their own.
+    expect(
+      await count("SELECT COUNT(*) FROM entries WHERE type = 'document' AND collection_id IS NULL"),
+      0,
+    );
+    // (Some `report_…` pages are documents an investigation gathers, listed
+    // in the archive like the others; only the reports it unlocks move.)
+    expect(await count("SELECT COUNT(*) FROM collections WHERE id = 'ef/prts_report'"), 0);
+    expect(
+      await count(
+        "SELECT COUNT(*) FROM entries i WHERE i.type = 'investigation' AND NOT EXISTS "
+        "(SELECT 1 FROM entries d WHERE d.collection_id = i.collection_id AND d.type = 'document')",
+      ),
+      0,
+      reason: 'every investigation holds the report it unlocks',
+    );
   }, skip: !run,);
 
   test('names read as names: no collection or story named by a raw id', () async {

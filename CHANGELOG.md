@@ -2,6 +2,22 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.15.1] - 2026-10-21
+
+The Endfield knowledge base from the 2026-10-18 game client, and fixes from the device review of its library pages. Android build 36. The Arknights knowledge base is the same file as in v0.15.0.
+
+### Knowledge base (Endfield)
+
+- **Content of the 2026-10-18 client**: chapter two, process VIII "离渊" (five missions); the operator 祀 with her missions, Baker topics and Dijiang interactions; new side, exploration and event missions in Wuling; two investigations. Story lines 49,121 → 53,088, archive and profile texts 3,251 → 3,611; nothing was dropped. Vectors were carried over line by line and only the new text was embedded. The new client's asset format needs a newer AnimeStudio build (see `docs/GAMEDATA_BUILD_PIPELINE.md` §9.1).
+- **Weapons show their English name** instead of `{id: …, text: }`: the field is a localized text like the others, and was printed raw.
+- **Each investigation holds its final report.** The reports were listed together under a category of their own, "调查报告"; that category is gone, and each report is in its investigation's list, after the investigation.
+- **Texts read in the world find their mission** when the mission is named inside the text's id (`text_collection_<mission>_1`) or by the id of the popup that shows it. Four such texts were loose in the codex as "档案"; they are now in their missions.
+- **A mission whose lines a defined mission plays is not "未实装".** A mission without a definition of its own was taken to be gone from the game, but some are played by hidden steps (`<mission>d<n>`) that the definitions name; one such mission ("蚀像寻遗") was on the 未实装 shelf. The rest of that shelf are old versions and cut missions whose lines no mission plays.
+
+### Library
+
+- **An investigation's documents and report open their own pages.** They were listed as stories, so tapping one opened the reader on a document id ("原文暂不可用"). Their heading is "包含" rather than "解锁的故事".
+
 ## [0.15.0] - 2026-10-20
 
 The first part of a rework of how Ask finds the story text, operator pages that open without stalling, and both knowledge bases rebuilt (same game data as v0.14.0). Android build 35.
