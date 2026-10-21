@@ -75,14 +75,19 @@ class EntryPage extends ConsumerWidget {
             for (final s in parts)
               if (s.name != e.name) s,
           ];
+    // A part that is not a story (an investigation's documents and report)
+    // opens its own page, not the reader.
     Widget storyRow(LibraryEntry s) => Column(
           key: ValueKey('part-story-${s.id}'),
           children: [
-            StoryRow(
-              story: s,
-              showGroup: false,
-              read: progress[LibraryRef.story(s.rawId ?? '').toString()],
-            ),
+            if (s.type == 'story')
+              StoryRow(
+                story: s,
+                showGroup: false,
+                read: progress[LibraryRef.story(s.rawId ?? '').toString()],
+              )
+            else
+              EntryRow(entry: s, onTap: () => openEntry(context, s)),
             rowDivider(theme),
           ],
         );

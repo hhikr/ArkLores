@@ -66,6 +66,8 @@ void writeTables(Directory dir) {
         'decoDesc': tx(i18n, 30 + n.codeUnitAt(0), '记录着“图纸$n”生产工艺的档案文件。'),
         'type': 47,
       },
+    // A weapon's name; the weapon is listed by the weapon table, not here.
+    'wpn_a': {'id': 'wpn_a', 'name': tx(i18n, 1210, '某剑'), 'type': 8},
     // Mechanics: dropped.
     'item_e': {
       'id': 'item_e',
@@ -73,6 +75,10 @@ void writeTables(Directory dir) {
       'decoDesc': tx(i18n, 41, '使用后恢复50%生命值。'),
       'type': 52,
     },
+  });
+  // The English name is a text field too.
+  table('WeaponBasicTable', {
+    'wpn_a': {'weaponId': 'wpn_a', 'engName': tx(i18n, 1211, 'Some Blade'), 'weaponDesc': tx(i18n, 1212, '一把旧剑。')},
   });
   table('CharacterTagTable', {
     'chr_0001_a': {
@@ -250,12 +256,33 @@ void writeTables(Directory dir) {
         {'content': tx(i18n, 501, '我先走了。')},
       ],
     },
+    // Ids that name their mission only as a part, or not at all (the popup
+    // that shows the text does).
+    'text_collection_e1m1_1': {
+      'title': tx(i18n, 1213, '一张照片'),
+      'contentList': [
+        {'content': tx(i18n, 1214, '照片背面写着日期。')},
+      ],
+    },
+    'text_map01_research9_1': {
+      'title': tx(i18n, 1215, '一则告示'),
+      'contentList': [
+        {'content': tx(i18n, 1216, '此路不通。')},
+      ],
+    },
     'text_1': {
       'title': tx(i18n, 63, '一封信'),
       'contentList': [
         {'content': tx(i18n, 64, 'Reading/x_photo\n亲爱的朋友：')},
         {'content': tx(i18n, 65, '谷地的春天来了。')},
       ],
+    },
+  });
+  table('ReadingPopUpTable', {
+    'rp_text_prts_map01_e1m1_research9_1': {
+      'id': 'rp_text_prts_map01_e1m1_research9_1',
+      'contentId': 'text_map01_research9_1',
+      'title': {'id': 0, 'text': ''},
     },
   });
   table('DialogTextTable', {
@@ -332,6 +359,12 @@ void writeTables(Directory dir) {
         {'index': 1, 'actorName': '受困者', 'radioText': '有人能听到吗……'},
       ],
     },
+    // A mission without a definition whose lines a defined step plays.
+    'radio_gm8m2_1': {
+      'radioSingleDataList': [
+        {'index': 1, 'actorName': '乙', 'radioText': '洞里有回声。'},
+      ],
+    },
     'radio_sm1m2_1': {
       'radioSingleDataList': [
         {'index': 2, 'actorName': '乙', 'radioText': '收到。'},
@@ -371,6 +404,7 @@ void main() {
       'c1m1': mission('甲的事', 1, charId: 'chr_0001_a'),
       'f1m4d1': mission('据点建设·难民处·其一', 2, level: 'map01_lv001'),
       'f1m4d2': mission('据点建设·难民处·其二', 2, level: 'map01_lv001'),
+      'gm8m2d1': mission('洞穴调查·其一', 2, level: 'map01_lv001'),
     };
     final importer = EndfieldImporter(tables, writer, missions: missions);
     await importer.importTables();
@@ -382,6 +416,7 @@ void main() {
       chapters: const [
         (id: 'main_e1', type: 0, headingKeys: ['chapter1_num', 'ep_num1', 'ep1_name'], missions: ['e1m1', 'e1m1d5']),
       ],
+      playedBy: const {'radio_gm8m2_1': 'gm8m2d1'},
     ).importDialogTables();
     await writer.finish();
   });
@@ -590,6 +625,16 @@ void main() {
     );
     expect(rows.single['name'], '留言');
     expect(rows.single['collection_id'], 'ef/mission_e1m1');
+    // A mission named as a part of the id, or by the popup showing the text.
+    for (final id in ['text_collection_e1m1_1', 'text_map01_research9_1']) {
+      final doc = await q('SELECT collection_id FROM entries WHERE raw_id = ?', ['ef/$id']);
+      expect(doc.single['collection_id'], 'ef/mission_e1m1', reason: id);
+    }
+  });
+
+  test("a weapon's English name is read as text", () async {
+    final weapon = await q("SELECT name, code FROM entries WHERE type = 'weapon'");
+    expect(weapon.single, {'name': '某剑', 'code': 'Some Blade'});
   });
 
   test('dungeons bind their enemies; character mails are kept, system ones not', () async {
@@ -639,6 +684,8 @@ void main() {
     expect((await collection('zz1m1'))['name'], '无名任务（zz1m1）');
     final numbered = await q("SELECT name FROM collections WHERE name GLOB '*任务 [0-9]*'");
     expect(numbered, isEmpty);
+    // Its lines played by a defined mission: in the game, on that one's shelf.
+    expect((await collection('gm8m2'))['kind'], 'ef/discovery');
   });
 
   test("an operator's missions are listed under its series; its Baker topics and "
@@ -672,8 +719,9 @@ void main() {
     final section = {for (final c in shelf) c.name: c.group};
     expect(section['纸张'], '见闻辑录');
     expect(section['多媒体'], '音像存档');
-    // Reports are unlocked by investigations: on the investigations' page.
-    expect(section['调查报告'], '情报采集');
+    // Reports are read in the investigation they conclude: their category
+    // (only reports) is no list of its own.
+    expect(section.containsKey('调查报告'), isFalse);
     expect(section['谷地旧事'], '情报采集');
     // A category of one kind of entry opens its list right away.
     final paper = shelf.singleWhere((c) => c.name == '纸张');
@@ -695,6 +743,10 @@ void main() {
       "SELECT dst FROM entry_links WHERE src = 'document:ef/report_1' AND relation = 'part_of'",
     );
     expect(report.single['dst'], 'investigation:ef/research_1');
+    final inInvestigation = await q(
+      "SELECT collection_id FROM entries WHERE id = 'document:ef/report_1'",
+    );
+    expect(inInvestigation.single['collection_id'], 'ef/investigate_research_1');
   });
 
   test("the build's shelf list is the library's", () {

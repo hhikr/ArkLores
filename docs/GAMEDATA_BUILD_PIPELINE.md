@@ -240,10 +240,10 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
 - 先读任务定义（`--missions`），再导表：文字的地区可能要从它 id 里的任务的关卡推出。
 - 表 → 干员（干员情报：阵营/种族/专长/爱好，及每项专长、爱好在这位干员身上的描述 `CharacterTagDesTable`；干员档案；语音记录——段名取游戏的界面文字 `ui_char_profile_*`）、
   情报档案库（PRTS：分页 `PrtsPage` → 分类 → 文档 → 页面 → `RichContentTable` 正文，音像存档的页面是 `RadioTable` 的录音；
-  分类按它页面的类型归到中枢档案/见闻辑录/音像存档，调查报告归情报采集；每个分类集合带一条无正文的 `archive_section` 条目，`group_name` 是分页名；
+  分类按它页面的类型归到中枢档案/见闻辑录/音像存档；调查解锁的报告放在那项调查的集合里（游戏里在调查内部读），只装报告的分类（“调查报告”）不建集合；每个分类集合带一条无正文的 `archive_section` 条目，`group_name` 是分页名；
   事件调查 `PrtsInvestigate` 带地区 `domainId`、它收集的页面和它解锁的报告 `unlockPrts`）、
   敌人/武器/物品的描述（敌人带分布地点；物品只收 `decoDesc`，去掉多件物品共用的模板句和机制句）、副本（`DungeonTable`：名字、简介、地区，敌人 `appears_in`）、
-  角色来信（`MailTemplateTable`，系统邮件不收）、势力名；档案库不列的留言与告示（`RichContentTable`）归到所在任务或地点。
+  角色来信（`MailTemplateTable`，系统邮件不收）、势力名；档案库不列的留言与告示（`RichContentTable`）归到所在任务或地点：先看 id（`text_<任务>_<n>`），再看关卡，再看 id 各段里已知的任务（`text_collection_<任务>_1`），最后看显示它的阅读弹窗的 id（`ReadingPopUpTable`：`rp_text_prts_<地图>_<任务>_…`）。
   文档的地区只看 id（`regionOfIds`）：调查收集或解锁的页面取调查的地区；否则看文档、页面、正文的 id 里的地图号（`map01…`），
   再看 id 里的任务（`paper_sm1l1m4_2` → 任务 `sm1l1m4` → 它的关卡 → 地区）。中枢档案是通用设定，没有地区。
 - 剧情：`DialogTextTable`、`RadioTable`、`RemoteCommonTable`、`EnvTalkTable`（只收属于已知任务或地点的）、`SNSDialogTable`。
@@ -255,7 +255,7 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   绑定的选项接在那句后面）。两者都没覆盖的行与选项组按行号补在后面，选项组填在行号的空位上（2026-10 客户端：约 11% 的台词行）。
   任务 = 对话 id 去掉前缀与末尾编号（`dlg_a1m2_1` → `a1m2`），再经 `canonicalMission`：子任务 `<任务>d<n>` 与基础任务同名、没有名字、
   或基础任务有定义而它自己没有时，并进基础任务；有自己名字的隐藏步骤（`e1m9d5`“准备工作”）是单独的任务，放在基础任务的书架上（以前落在委派任务里）。
-  **没有 `MissionRuntimeAsset` 的任务不在游戏里**（客户端留下的旧版剧情、删掉的任务；warfarin/fz 都没有它们的页面），放在 `unused` 书架（“未实装任务”）。
+  **没有 `MissionRuntimeAsset` 的任务不在游戏里**（客户端留下的旧版剧情、删掉的任务；warfarin/fz 都没有它们的页面），放在 `unused` 书架（“未实装任务”）——除非有一个有定义的任务播放它的对话（任务定义里写着对话 id，`loadPlayedConversations`；例：`db01m2` 的通讯由隐藏步骤 `db01m2d1…` 播放），那它就在游戏里，书架、关卡跟播放它的任务。同名基础任务的子任务有定义、但播放的是自己的对话（`f1m4d1` 播 `dlg_f1m4d1_*`）时，基础任务那批对话是改写前的旧版，仍是未实装。
   任务名依次取：任务定义 → `TextTable` 的 `<任务>_name` / `<任务>_desc_001` → 子任务共同的名字；都没有就叫“无名任务（<任务 id>）”（只出现在未实装书架上）。
   同一书架上重名的任务按游戏顺序加“·一阶段”“·二阶段”（与 fz.wiki 一致）。没有名字、不是别的任务的步骤的隐藏任务归到它关卡所在的地点（`ef/world`）。
   **章节**：任务面板的章节是资源包里的 `ChapterInfo` 对象（`main_e<n>`、`chr_<编号>_<名>_e<n>`，`unpack_endfield.ps1` 导出到 `chapters_*`，

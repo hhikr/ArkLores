@@ -458,12 +458,14 @@ class EndfieldImporter {
       final text = _clean(row['weaponDesc']);
       final item = items[id];
       final title = item is Map ? _clean(item['name']) : '';
+      // A text field like the others (`{id, text}`), not a string.
+      final english = _clean(row['engName']);
       if (text.isEmpty) continue;
       await writer.entry(
         type: 'weapon',
         rawId: id,
-        name: title.isEmpty ? '${row['engName'] ?? id}' : title,
-        code: '${row['engName'] ?? ''}'.trim().isEmpty ? null : '${row['engName']}',
+        name: title.isEmpty ? (english.isEmpty ? id : english) : title,
+        code: english.isEmpty ? null : english,
         sourcePath: source,
         category: 'world_item',
         texts: [(section: '描述', text: text)],
@@ -584,8 +586,19 @@ class EndfieldImporter {
           category: 'archive',
         );
 
+    // A category made only of investigation reports (调查报告) is not a list
+    // of its own: each report is read in its investigation (as in the game).
+    final hasReport = <String>{}, hasOther = <String>{};
+    for (final row in firstLv.values) {
+      if (row is! Map<String, dynamic>) continue;
+      final items = listOfStrings(row['itemIds']);
+      final category = '${row['categoryId'] ?? ''}';
+      (items.isNotEmpty && items.every(reportOf.containsKey) ? hasReport : hasOther).add(category);
+    }
+    final reportsOnly = hasReport.difference(hasOther);
     for (final MapEntry(key: id, value: row) in categories.entries) {
       if (row is! Map<String, dynamic>) continue;
+      if (reportsOnly.contains(id)) continue;
       final section = sectionOf[id];
       await writer.collection(
         id: 'prts_$id',
@@ -643,17 +656,28 @@ class EndfieldImporter {
       }
       if (blocks.isEmpty || title.isEmpty) continue;
       final itemIds = listOfStrings(row['itemIds']);
+      // A report is in the collection of the investigation it concludes.
+      final investigation = [
+        for (final p in itemIds)
+          if (reportOf[p] != null) reportOf[p]!,
+      ].firstOrNull;
       final entryId = await writer.entry(
         type: 'document',
         rawId: id,
         name: title,
-        collectionId: category.isEmpty ? null : 'prts_$category',
+        collectionId: investigation != null
+            ? 'investigate_$investigation'
+            : category.isEmpty
+                ? null
+                : 'prts_$category',
         group: [
           for (final p in itemIds)
             if (investigationRegion[p] != null) investigationRegion[p]!,
         ].firstOrNull ??
             regionOfIds([id, ...itemIds, ...contentIds]),
-        sortKey: (row['order'] as num?)?.toInt(),
+        // After the investigation, and after the documents it gathers on its
+        // page (theirs are their archive order).
+        sortKey: investigation != null ? 1 << 20 : (row['order'] as num?)?.toInt(),
         sourcePath: sourcePath,
         category: 'archive',
         texts: blocks,

@@ -158,6 +158,7 @@ class EndfieldStoryImporter {
     this.dialogTrees = const {},
     this.timelineLines = const {},
     this.chapters = const [],
+    this.playedBy = const {},
   }) {
     // Each chapter's missions: under the chapter's heading, in its order.
     for (final (c, chapter) in chapters.indexed) {
@@ -228,6 +229,37 @@ class EndfieldStoryImporter {
 
   /// The game's mission definitions by id (empty: the id rules decide).
   final Map<String, EndfieldMission> missions;
+
+  /// The defined mission that plays each conversation its definition names
+  /// ([loadPlayedConversations]): a conversation id → mission id.
+  final Map<String, String> playedBy;
+
+  /// A mission without a definition whose conversations a defined mission
+  /// plays (a base mission's lines played by its steps `<base>d<n>`) is in
+  /// the game: mission → the defined mission that plays its lines.
+  late final Map<String, String> _playedIn = {
+    for (final MapEntry(:key, :value) in playedBy.entries)
+      if (missions.containsKey(value) && !missions.containsKey(missionOfConversation(key)))
+        missionOfConversation(key): value,
+  };
+
+  /// Reads which conversations each mission definition plays: the
+  /// conversation ids (`dlg_…`, `radio_…`, `remotecomm_…`) its
+  /// `MissionRuntimeAsset` file names.
+  static Map<String, String> loadPlayedConversations(Directory dir) {
+    final out = <String, String>{};
+    if (!dir.existsSync()) return out;
+    final ids = RegExp(r'"((?:dlg|radio|remotecomm)_[A-Za-z0-9_]+)"');
+    for (final file in dir.listSync(recursive: true).whereType<File>()) {
+      final name = file.uri.pathSegments.last;
+      if (!name.endsWith('.json') || name.endsWith('_meta.json')) continue;
+      final mission = name.substring(0, name.length - '.json'.length);
+      for (final m in ids.allMatches(file.readAsStringSync())) {
+        out.putIfAbsent(m.group(1)!, () => mission);
+      }
+    }
+    return out;
+  }
 
   /// The conversations' dialog trees by conversation id (empty: the lines
   /// keep the table's numbering).
@@ -364,10 +396,15 @@ class EndfieldStoryImporter {
   /// its base mission's shelf, else by its id's letters. A mission without a
   /// definition is not in the game the client runs (its conversations are
   /// left in the tables: an older version of a story, a cut mission; the
-  /// wikis have no page for any of them): it is on [unusedMissionShelf].
+  /// wikis have no page for any of them): it is on [unusedMissionShelf] —
+  /// unless a defined mission plays its conversations ([_playedIn]): then
+  /// it is on that mission's shelf.
   String _shelfFor(String id) {
     final defined = missions[id];
-    if (defined == null) return unusedMissionShelf;
+    if (defined == null) {
+      final host = _playedIn[id];
+      return host == null ? unusedMissionShelf : _shelfFor(host);
+    }
     if (_visible(defined.type)) {
       // An operator's mission the panel lists as main story stays there
       // (it is still on its operator's page); the others are the
@@ -473,7 +510,9 @@ class EndfieldStoryImporter {
     String? owner,
   }) async {
     if (_missions.containsKey(id)) return;
-    final defined = missions[id];
+    // A mission without a definition of its own that a defined one plays
+    // has that one's level and operator.
+    final defined = missions[id] ?? missions[_playedIn[id]];
     final shelf = kind ?? _shelfFor(id);
     // An operator's mission hangs below it; a mission the game does not
     // have (see [_shelfFor]) belongs to nobody.
@@ -508,7 +547,7 @@ class EndfieldStoryImporter {
     // the rest under the region it is played in (the game's region of its
     // level). The shelf lists a mission with both.
     if (kind != null) return;
-    final description = defined?.description ?? _keyText('${id}_desc_001');
+    final description = missions[id]?.description ?? _keyText('${id}_desc_001');
     final level = defined?.levelId;
     final group = _chapterOf[id]?.heading ??
         (owner != null
@@ -523,7 +562,7 @@ class EndfieldStoryImporter {
       name: entry.name,
       collectionId: 'mission_$id',
       group: group,
-      sourcePath: defined != null ? 'MissionRuntimeAsset/$id.json' : 'TextTable/${id}_desc_001',
+      sourcePath: missions.containsKey(id) ? 'MissionRuntimeAsset/$id.json' : 'TextTable/${id}_desc_001',
       category: 'story',
       texts: [
         if (description != null) (section: '任务简介', text: description),
@@ -1014,6 +1053,23 @@ class EndfieldStoryImporter {
       for (final p in tables.table('ReadingPopUpTable').values)
         if (p is Map) '${p['contentId']}': endfieldText(tables.text(p['title'])),
     };
+    // The popup that shows a text: its id may name the mission the text is
+    // read in (`rp_text_prts_map02_<mission>_…`) when the text's own id
+    // does not.
+    final popupId = <String, String>{
+      for (final MapEntry(:key, :value) in tables.table('ReadingPopUpTable').entries)
+        if (value is Map) '${value['contentId']}': '${value['id'] ?? key}',
+    };
+    bool known(String mission) => missions.containsKey(mission) || _missions.containsKey(mission);
+    // A mission an id names as one of its parts (`text_collection_<mission>_1`).
+    String? missionIn(String? id) {
+      if (id == null) return null;
+      for (final part in id.split('_')) {
+        final mission = canonicalMission(part);
+        if (known(mission)) return mission;
+      }
+      return null;
+    }
     final source = tables.sourcePath('RichContentTable');
     var count = 0;
     final ids = rich.keys.where((k) => !inArchive.contains(k)).toList()..sort(_naturalCompare);
@@ -1028,12 +1084,14 @@ class EndfieldStoryImporter {
       if (title.isEmpty) continue;
       final bare = id.replaceFirst(RegExp(r'^text_'), '');
       final cut = bare.lastIndexOf('_');
-      final mission = canonicalMission(cut > 0 ? bare.substring(0, cut) : bare);
+      final named = canonicalMission(cut > 0 ? bare.substring(0, cut) : bare);
       final level = RegExp(r'^(map\d+_lv\d+)').firstMatch(bare)?.group(1);
+      final atLevel = level != null && _levelName(level) != null;
+      final mission = known(named) || atLevel ? named : missionIn(bare) ?? missionIn(popupId[id]) ?? named;
       String? collection;
-      if (missions.containsKey(mission) || _missions.containsKey(mission)) {
+      if (known(mission)) {
         collection = 'mission_${await _missionHome(mission) ?? mission}';
-      } else if (level != null && _levelName(level) != null) {
+      } else if (atLevel) {
         // The same collection as the level's interactions (see [_home]).
         final key = 'level_$level';
         final place = _levelName(level)!;
