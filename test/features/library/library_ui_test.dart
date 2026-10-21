@@ -606,6 +606,54 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('each part opens with its own summary, folded; the synopsis is not repeated on top',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => const [
+              StoryLineEntry(lineIndex: 0, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 1, content: '甲与乙在谷地相遇。', kind: 'summary'),
+              StoryLineEntry(lineIndex: 2, speaker: '甲', content: '第一段。'),
+              StoryLineEntry(lineIndex: 3, content: '过场动画', kind: 'section'),
+              StoryLineEntry(lineIndex: 4, content: '过场里的一句。', kind: 'subtitle'),
+            ],
+          ),
+          storyCatalogEntryProvider.overrideWith(
+            (ref, id) async => const StoryCatalogEntry(
+              storyId: 'ef/m1.txt',
+              collectionId: 'ef/mission_m1',
+              collectionName: '任务1',
+              collectionType: 'EF_MAIN',
+              storySort: 0,
+              storyName: '任务1',
+              synopsis: '甲与乙在谷地相遇。',
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const StoryReaderPage(storyId: 'ef/m1.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('story-reader-synopsis')), findsNothing);
+    expect(find.byKey(const ValueKey('story-reader-summary-1')), findsOneWidget);
+    expect(find.text('甲与乙在谷地相遇。'), findsNothing);
+    expect(find.text('过场动画'), findsOneWidget);
+    expect(find.text('过场里的一句。'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('fold-官方梗概')));
+    await tester.pumpAndSettle();
+    expect(find.text('甲与乙在谷地相遇。'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the reader shows how far in it is', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

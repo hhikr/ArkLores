@@ -63,6 +63,18 @@ class ChunkLine {
 /// `story_lines.kind` of the line that separates two parts of one story.
 const String sectionLineKind = 'section';
 
+/// `story_lines.kind` of the game's own summary of the part it opens (an
+/// Endfield conversation's, right after its section line): a locating hint
+/// shown to the reader, not story text.
+const String summaryLineKind = 'summary';
+
+/// Line kinds never embedded: tutorial and guide text (not part of any
+/// story) and the summaries (the catalog synopsis has them already).
+const Set<String> unembeddedLineKinds = {'system', summaryLineKind};
+
+/// [unembeddedLineKinds] as an SQL list: `kind NOT IN $unembeddedKindsSql`.
+final String unembeddedKindsSql = "(${unembeddedLineKinds.map((k) => "'$k'").join(', ')})";
+
 /// One embedding unit: a window of consecutive story lines.
 class StoryChunk {
   const StoryChunk({

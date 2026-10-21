@@ -2,6 +2,13 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [Unreleased]
+
+### Knowledge base (Endfield)
+
+- **Cutscene lines.** What is said in cutscenes (videos and in-engine scenes) is in the knowledge base: 81 cutscenes in 44 missions, read as "过场动画" parts after the mission's dialogue. The game keeps these lines with no speaker. A version of a cutscene whose lines another version already has is left out. The main-story mission "未熄火种", which has only cutscenes, is now in the library.
+- **Each conversation opens with its own summary.** The game's summary of a conversation comes right after its heading, folded like the synopsis; the synopsis of the whole mission is no longer shown on top when the parts have summaries. Ask sees these lines as `[梗概]`, a locating hint, not story text.
+
 ## [0.15.1] - 2026-10-21
 
 The Endfield knowledge base from the 2026-10-18 game client, and fixes from the device review of its library pages. Android build 36. The Arknights knowledge base is the same file as in v0.15.0.

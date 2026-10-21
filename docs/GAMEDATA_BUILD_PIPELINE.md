@@ -248,7 +248,7 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   再看 id 里的任务（`paper_sm1l1m4_2` → 任务 `sm1l1m4` → 它的关卡 → 地区）。中枢档案是通用设定，没有地区。
 - 剧情：`DialogTextTable`、`RadioTable`、`RemoteCommonTable`、`EnvTalkTable`（只收属于已知任务或地点的）、`SNSDialogTable`。
   **一个任务是一篇剧情**（`ef/<任务>.txt`；地点、敌人、短信话题、礼物对话同样各一篇），每段对话前一行 `kind = 'section'`，内容是这段的种类
-  （对话/通讯/远程通话/闲话/短信）。一篇里按种类分块（对话 → 通讯 → 远程通话 → 闲话 → 短信），块内按游戏编号（`0d5` = 0.5）：
+  （对话/过场动画/通讯/远程通话/闲话/短信）。一篇里按种类分块（对话 → 过场动画 → 通讯 → 远程通话 → 闲话 → 短信），块内按游戏编号（`0d5` = 0.5）：
   各表的编号互相独立，跨种类的先后游戏数据只给了一部分（见 `KNOWLEDGE_BASE_LESSONS.md` §10），所以不交错。
   一段对话内部的顺序按它的**对话树**（`dlg_…` TextAsset，`readDialogTree`）：台词节点的 `_trunkId` 是文本行，选项节点的出边依次是各选项的回应，分支在汇合处接上；
   分叉的选项写成“选项 → 它的回应”，不分叉的写成一行“甲／乙”；`Ex…` 节点是设置，不走。过场节点处放这段对话的时间线台词（按片段的 `startTime`，
@@ -268,7 +268,12 @@ dart run tools/build_endfield_database.dart --tables=<表目录> --missions=<Mis
   （`sim_talk/gift/rest/work_<干员>`：闲谈按信赖等级、送礼、休息、工作，一位干员一篇，kind `ef/ship`）；`ef/baker`、`ef/ship` 不是书架。
   地图上的交互按地点（`LevelDescTable`；`map01lv005_…` 也是关卡 `map01_lv005`）、敌人遭遇的通讯按敌人归组
   （kind `ef/world`，书架显示为“其他”）；对话之间的插话、工业教学、测试对话不收。
-  `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要（进 `story_catalog.synopsis`）。
+  `DialogSummaryMapTable`/`DialogSummaryTable` 给每段对话的官方摘要：一份进 `story_catalog.synopsis`（全任务连起来），
+  一份作为这段的第二行（`kind = 'summary'`，紧跟 `section` 行；阅读器折叠显示，有它时不再在开头显示整篇梗概；不嵌入向量，`unembeddedLineKinds`）。
+  **过场动画的台词**（预渲染视频和引擎内过场的字幕）在 `TextTable` 里：键 `cutscene_<任务>_<n>_<行>` / `cs_video_<任务>_<n>_<行>`，按 id 查 `I18nTextTable_CN`，
+  没有说话人（`kind = 'subtitle'`）；`…_m` 是男性主角的写法，不收。一段过场一个块，种类“过场动画”（游戏界面文字里的词），归到 id 里的任务（第一段），
+  块内按行号、块间按过场号（任务后面那个数）。它在任务里哪段对话前后播放只写在关卡脚本里，所以单独成块。
+  客户端留着同一段过场的几个版本（视频与引擎版、旧编号）：一段过场的每一行（去掉标点和空格）同一任务里另一段都有，就不收（2026-10-18 客户端：93 段收 81 段）。
 - 文字规范化（`endfieldText`）：去标记与资源路径；主角台词的 `{F}…{M}…` 只留女性版本（kit 的默认）；`{player}` 写作“管理员”；
   说话人名后面花括号里的内部注释（`{c13-…}`，可能是剧情里尚未揭示的身份）去掉。
 - 一个 40 秒左右的整库构建；重建后的库没有向量，加 `-Embed`（脚本在压缩前跑 `build_story_embeddings.dart`）。

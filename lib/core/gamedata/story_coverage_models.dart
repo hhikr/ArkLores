@@ -45,6 +45,8 @@ String? storyKindLabel(String? kind) => switch (kind) {
       // Where one conversation of a merged story ends and the next begins;
       // the content names the kind of the part that follows.
       'section' => '分段',
+      // The game's summary of the part it opens (a locating hint).
+      'summary' => '梗概',
       _ => null,
     };
 

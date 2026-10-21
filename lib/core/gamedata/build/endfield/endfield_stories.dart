@@ -13,7 +13,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../story_catalog.dart' show endfieldCollectionTypePrefix;
-import '../../story_vectors.dart' show sectionLineKind;
+import '../../story_vectors.dart' show sectionLineKind, summaryLineKind;
 import 'endfield_dialog_tree.dart';
 import 'endfield_importer.dart';
 import 'endfield_tables.dart';
@@ -23,7 +23,10 @@ import 'endfield_writer.dart';
 /// prefix (`dlg_`, `radio_`, `sns_`) and its trailing conversation number
 /// (`dlg_a1m2_1` → `a1m2`).
 String missionOfConversation(String id) {
-  final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk)_'), '');
+  final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk|cutscene|cs_video)_'), '');
+  // A cutscene is numbered after its mission, at times in two parts
+  // (`cutscene_e0m2_3_1`): the mission is the first part.
+  if (_isCutscene(id)) return bare.split('_').first;
   final cut = bare.lastIndexOf('_');
   return cut > 0 ? bare.substring(0, cut) : bare;
 }
@@ -32,6 +35,8 @@ String missionOfConversation(String id) {
 /// prefix (the table it comes from): dialogue, radio, a remote call, talk
 /// around the player, messages.
 String conversationKind(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
+      // The game's own word (`LUA_MAP_TELEPORT_FORBID_REASON_CINEMATIC`).
+      'cutscene' || 'cs' => '过场动画',
       'radio' => '通讯',
       'remotecomm' => '远程通话',
       'envTalk' => '闲话',
@@ -49,7 +54,11 @@ String conversationKind(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(i
 /// timelines); so a mission reads kind by kind ([conversationKindRank]),
 /// each kind in its own numbering.
 int? conversationOrder(String id) {
-  final m = RegExp(r'_(\d+)(?:d(\d+))?$').firstMatch(id);
+  // A cutscene's number is the one after its mission (`cutscene_e0m2_3_1`
+  // is cutscene 3 of e0m2).
+  final m = _isCutscene(id)
+      ? RegExp(r'^(?:cutscene|cs_video)_[^_]+_(\d+)(?:d(\d+))?').firstMatch(id)
+      : RegExp(r'_(\d+)(?:d(\d+))?$').firstMatch(id);
   if (m == null) return null;
   final whole = int.parse(m.group(1)!);
   final part = m.group(2) == null ? 0 : int.parse(m.group(2)!.padRight(2, '0').substring(0, 2));
@@ -57,16 +66,21 @@ int? conversationOrder(String id) {
 }
 
 /// The kinds of a mission in reading order: the dialogue that carries the
-/// story, then what is said over the radio and in remote calls on the way,
-/// then talk around the player, then messages.
+/// story and the cutscenes, then what is said over the radio and in remote
+/// calls on the way, then talk around the player, then messages.
 int conversationKindRank(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
       'dlg' => 0,
-      'radio' => 1,
-      'remotecomm' => 2,
-      'envTalk' => 3,
-      'sns' => 4,
-      _ => 5,
+      'cutscene' || 'cs' => 1,
+      'radio' => 2,
+      'remotecomm' => 3,
+      'envTalk' => 4,
+      'sns' => 5,
+      _ => 6,
     };
+
+/// Whether [id] names a cutscene: one played in the engine (`cutscene_…`)
+/// or a video (`cs_video_…`).
+bool _isCutscene(String id) => id.startsWith('cutscene_') || id.startsWith('cs_video_');
 
 /// A mission's place on its shelf: the numbers of its id in order, each
 /// given three digits (`e1m2d5` → 001 002 005), so `e1m2` comes before
@@ -578,7 +592,7 @@ class EndfieldStoryImporter {
   /// interactions, an enemy's encounter; null for filler the game plays
   /// between lines, factory tutorials and tests (not story).
   Future<String?> _home(String id) async {
-    final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk)_'), '');
+    final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk|cutscene|cs_video)_'), '');
     if (RegExp(r'^(continue|blackbox|timeline_blackbox|sr|test)').hasMatch(bare)) {
       return null;
     }
@@ -764,7 +778,8 @@ class EndfieldStoryImporter {
 
   /// Each mission's conversations as one story, kind by kind, each kind in
   /// the game's numbering (ties by id; see [conversationOrder]): a `section`
-  /// line naming the kind before each conversation. The catalog synopsis is
+  /// line naming the kind before each conversation, then its summary if the
+  /// game has one (a `summary` line). The catalog synopsis is
   /// the official summaries of its conversations, in the same order (a
   /// locating hint, not evidence).
   Future<void> _writeStories() async {
@@ -789,6 +804,9 @@ class EndfieldStoryImporter {
         lines: [
           for (final p in parts) ...[
             EndfieldLine(p.kind, kind: sectionLineKind),
+            // The game's summary of the conversation opens it (what the game
+            // shows when it is skipped).
+            if (p.summary != null) EndfieldLine(p.summary!, kind: summaryLineKind),
             ...p.lines,
           ],
         ],
@@ -933,9 +951,71 @@ class EndfieldStoryImporter {
     await _importRemoteCalls();
     await _importEnvTalk();
     await _importSns();
+    await _importCutscenes();
     await _writeStories();
     await _importReadings();
     await _numberRepeatedNames();
+  }
+
+  /// The subtitles of the cutscenes, one conversation per cutscene: the
+  /// text table keeps them as `<cutscene>_<line>` (`cutscene_e1m1_2_01`,
+  /// `cs_video_e1m1_1_01`; `…_m` is the male Endministrator's form, left out
+  /// like the other forms of the female one), with no speaker. Which line of
+  /// a mission a cutscene plays after is only in the level scripts, so they
+  /// read as a kind of their own ([conversationKindRank]).
+  ///
+  /// The client keeps more than one version of some cutscenes (a video and
+  /// the engine's, an older numbering): a cutscene whose every line another
+  /// cutscene of the same mission also has (punctuation and spaces aside) is
+  /// left out, so the text reads once.
+  Future<void> _importCutscenes() async {
+    final key = RegExp(r'^((?:cutscene|cs_video)_.+)_(\d+(?:d\d+)?)$');
+    final byCutscene = <String, List<(String, String)>>{};
+    for (final k in tables.table('TextTable').keys) {
+      final m = key.firstMatch(k);
+      if (m == null) continue;
+      final text = _clean(tables.table('TextTable')[k]);
+      if (text.isEmpty) continue;
+      byCutscene.putIfAbsent(m.group(1)!, () => []).add((m.group(2)!, text));
+    }
+    String plain(String text) => text.replaceAll(RegExp(r'[\s\p{P}\p{S}]', unicode: true), '');
+    final ids = byCutscene.keys.toList()..sort(_naturalCompare);
+    final linesOf = {
+      for (final id in ids) id: (byCutscene[id]!..sort((a, b) => _naturalCompare(a.$1, b.$1))).map((l) => l.$2).toList(),
+    };
+    final plainOf = {
+      for (final id in ids) id: {for (final l in linesOf[id]!) plain(l)}..remove(''),
+    };
+    bool repeats(String id) {
+      final mine = plainOf[id]!;
+      if (mine.isEmpty) return false;
+      final mission = missionOfConversation(id);
+      for (final other in ids) {
+        if (other == id || missionOfConversation(other) != mission) continue;
+        final theirs = plainOf[other]!;
+        if (!theirs.containsAll(mine)) continue;
+        // Of two with the same lines the first is kept.
+        if (theirs.length > mine.length || ids.indexOf(other) < ids.indexOf(id)) return true;
+      }
+      return false;
+    }
+
+    final source = tables.sourcePath('TextTable');
+    var count = 0, repeated = 0;
+    for (final (i, id) in ids.indexed) {
+      if (repeats(id)) {
+        repeated++;
+        continue;
+      }
+      await _story(
+        id: id,
+        source: source,
+        sort: 200000 + i,
+        lines: [for (final text in linesOf[id]!) EndfieldLine(text, kind: 'subtitle')],
+      );
+      count++;
+    }
+    log?.call('cutscenes with subtitles: $count ($repeated left out as repeats)');
   }
 
   /// Missions of one shelf that share a name (the game reuses a name for

@@ -8,7 +8,7 @@ import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../core/gamedata/story_coverage_models.dart'
     show StoryLineEntry, storyKindLabel;
-import '../../core/gamedata/story_vectors.dart' show sectionLineKind;
+import '../../core/gamedata/story_vectors.dart' show sectionLineKind, summaryLineKind;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart' show LibraryEntry;
@@ -174,6 +174,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   Set<int> _quietSections = const {};
   List<StoryLineEntry>? _preparedFor;
   bool _spoken = false;
+
+  /// The text opens each part with the game's summary of it: the
+  /// catalog's synopsis (the same summaries together) is not shown on top.
+  bool _summarized = false;
+
+  /// Positions of the part summaries the reader opened (the list is lazy:
+  /// a summary scrolled away and back keeps its state).
+  final Set<int> _openSummaries = {};
   String _nickname = '';
 
   /// The description of the Endfield mission this story is (or null).
@@ -238,6 +246,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     // Narration is set in italics only between spoken lines; a text that is
     // all narration (a month squad's story, a document) is plain.
     _spoken = lines.any((l) => (l.speaker ?? '').trim().isNotEmpty);
+    _summarized = lines.any((l) => l.kind == summaryLineKind);
     // A section names its kind where the kind changes; the next parts of
     // the same kind are set off by the rule alone.
     _quietSections = {};
@@ -686,7 +695,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             ],
             // The official synopsis tells the whole story (it is what the
             // game shows when a story is skipped): folded until asked for.
-            if (synopsis != null && synopsis.trim().isNotEmpty) ...[
+            if (synopsis != null && synopsis.trim().isNotEmpty && !_summarized) ...[
               const SizedBox(height: 12),
               FoldSection(
                 key: const ValueKey('story-reader-synopsis'),
@@ -752,6 +761,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           ),
         );
       }
+      if (line.kind == summaryLineKind) {
+        return Padding(
+          key: _keyOf(row.first),
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+          child: _summary(row.first),
+        );
+      }
       final isResume = !_cited && line.lineIndex == _resume;
       final child = Container(
         key: _keyOf(row.first),
@@ -791,6 +807,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         );
         continue;
       }
+      if (_lines[p].kind == summaryLineKind) {
+        inside.add(Container(key: _keyOf(p), child: _summary(p)));
+        continue;
+      }
       inside.add(
         KeyedSubtree(
           key: ValueKey('story-line-target-${_lines[p].lineIndex}'),
@@ -813,6 +833,17 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       child: _citedBlock(theme, inside),
     );
   }
+
+  /// The game's summary of the part it opens: folded like the official
+  /// synopsis (it tells what the part is about before it is read).
+  Widget _summary(int p) => FoldSection(
+        key: ValueKey('story-reader-summary-${_lines[p].lineIndex}'),
+        title: context.t.storyReaderSynopsis,
+        plain: true,
+        initiallyOpen: _openSummaries.contains(p),
+        onToggle: (open) => open ? _openSummaries.add(p) : _openSummaries.remove(p),
+        child: ReadingText(_lines[p].content.trim(), size: 14.5),
+      );
 
   /// The heading of dialogue played in the battle, attached to the story
   /// (`n/total` is the part's place among the parts).

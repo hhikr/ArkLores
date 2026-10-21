@@ -39,7 +39,7 @@
 | 明日方舟 | PRTS（prts.wiki，MediaWiki） | `api.php`：`list=search`（主命名空间）；`action=parse&prop=text\|revid` 取页面 HTML 与修订号 |
 | 终末地 | Warfarin（warfarin.wiki） | `api.warfarin.wiki/v1/cn/search?q=` 全文搜索（JSON，带 type/slug）；页面 `warfarin.wiki/cn/<type>/<slug>` 服务端渲染，读 `<main>` |
 
-- 终末地选 Warfarin：有公开 JSON 搜索接口、服务端渲染、简体中文，覆盖干员、任务剧情、Baker、情报档案。fz.wiki 没找到公开接口，2026-10-09 开发机上连不上。要加 fz.wiki 时实现一个 `WikiSource`。
+- 终末地选 Warfarin：有公开 JSON 搜索接口、服务端渲染、简体中文，覆盖干员、任务剧情、Baker、情报档案。fz.wiki 当时没找到公开接口、开发机上连不上；2026-10-21 已能连上，并有 JSON 接口（见 `KNOWN_ISSUES.md` §6）。要加 fz.wiki 时实现一个 `WikiSource`。
 - 请求带可识别的 User-Agent（`wikiRequestHeaders`）：PRTS 的 API 对匿名与浏览器式 UA 返回 403，带项目 UA 正常。
 
 ## 6. 取证：页面 → 段落、id、快照
