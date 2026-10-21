@@ -13,9 +13,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../story_catalog.dart' show endfieldCollectionTypePrefix;
-import '../../story_vectors.dart' show sectionLineKind, summaryLineKind;
+import '../../story_vectors.dart' show sectionLineKind, stageLineKind, stepLineKind, summaryLineKind, unplacedLineKind;
 import 'endfield_dialog_tree.dart';
 import 'endfield_importer.dart';
+import 'endfield_level_data.dart';
+import 'endfield_story_order.dart';
 import 'endfield_tables.dart';
 import 'endfield_writer.dart';
 
@@ -173,6 +175,11 @@ class EndfieldStoryImporter {
     this.timelineLines = const {},
     this.chapters = const [],
     this.playedBy = const {},
+    this.levelData,
+    this.missionDefinitions = const {},
+    this.stepOrder = const {},
+    this.onlyMissions,
+    this.orderReport,
   }) {
     // Each chapter's missions: under the chapter's heading, in its order.
     for (final (c, chapter) in chapters.indexed) {
@@ -271,6 +278,40 @@ class EndfieldStoryImporter {
       for (final m in ids.allMatches(file.readAsStringSync())) {
         out.putIfAbsent(m.group(1)!, () => mission);
       }
+    }
+    return out;
+  }
+
+  /// The client's level data (null: no story is laid out by its steps).
+  final EndfieldLevelData? levelData;
+
+  /// The mission definitions as the client has them (`MissionRuntimeAsset`
+  /// JSON by mission id), for the steps.
+  final Map<String, Map<String, dynamic>> missionDefinitions;
+
+  /// The missions whose story is laid out along their steps
+  /// ([EndfieldStoryOrder]); `all` for every mission with steps. The others
+  /// read kind by kind.
+  final Set<String> stepOrder;
+
+  /// When given, only these missions' stories are written (a build to look
+  /// at the step order of a few).
+  final Set<String>? onlyMissions;
+
+  /// Receives, for the stories laid out by steps, where each conversation
+  /// went and why (Markdown), for review.
+  final StringSink? orderReport;
+
+  /// Reads the mission definitions as JSON maps by mission id.
+  static Map<String, Map<String, dynamic>> loadMissionDefinitions(Directory dir) {
+    final out = <String, Map<String, dynamic>>{};
+    if (!dir.existsSync()) return out;
+    for (final file in dir.listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.json') || file.path.endsWith('_meta.json')) continue;
+      try {
+        final json = jsonDecode(file.readAsStringSync());
+        if (json is Map<String, dynamic> && json['missionId'] != null) out['${json['missionId']}'] = json;
+      } catch (_) {}
     }
     return out;
   }
@@ -784,15 +825,68 @@ class EndfieldStoryImporter {
   /// locating hint, not evidence).
   Future<void> _writeStories() async {
     var count = 0;
+    final (:orders, :nestedIn) = _stepOrders();
     for (final MapEntry(key: mission, value: parts) in _parts.entries) {
+      // A mission played inside another's step reads in that story.
+      if (nestedIn.containsKey(mission)) continue;
+      if (onlyMissions != null && !onlyMissions!.contains(mission)) continue;
       final m = _missions[mission]!;
       parts.sort((a, b) {
         final byKind = conversationKindRank(a.id).compareTo(conversationKindRank(b.id));
         if (byKind != 0) return byKind;
         return a.order != b.order ? a.order.compareTo(b.order) : _naturalCompare(a.id, b.id);
       });
+      List<_Part> inOrder = parts;
+      final lines = <EndfieldLine>[];
+      void part(_Part p) => lines.addAll([
+            EndfieldLine(p.kind, kind: sectionLineKind),
+            // The game's summary of the conversation opens it (what the game
+            // shows when it is skipped).
+            if (p.summary != null) EndfieldLine(p.summary!, kind: summaryLineKind),
+            ...p.lines,
+          ]);
+      if (orders[mission] case final items?) {
+        final byId = {
+          for (final p in [...parts, for (final n in nestedIn.entries) if (n.value == mission) ...?_parts[n.key]]) p.id: p,
+        };
+        inOrder = [];
+        // A step's goal is written when a conversation follows it: steps
+        // with nothing to read are left out, a step with no goal text reads
+        // under the goal before it, and a goal written last is not repeated.
+        StepItem? pending;
+        String? written;
+        void emit(List<OrderItem> items) {
+          for (final it in items) {
+            switch (it) {
+              case StepItem():
+                if (it.text != null) pending = it;
+              case NestItem():
+                pending = null;
+                written = null;
+                lines.add(EndfieldLine(_missions[it.mission]?.name ?? missions[it.mission]?.name ?? it.mission,
+                    kind: stageLineKind,),);
+                emit(it.items);
+              case ConversationItem():
+                final p = byId[it.id];
+                if (p == null) continue;
+                if (pending case final s? when s.text != written || s.tail) {
+                  lines.add(EndfieldLine(s.text!, kind: s.unplaced ? unplacedLineKind : stepLineKind));
+                  written = s.text;
+                }
+                pending = null;
+                part(p);
+                inOrder.add(p);
+            }
+          }
+        }
+
+        emit(items);
+        _report(mission, m.name, items);
+      } else {
+        parts.forEach(part);
+      }
       final summaries = [
-        for (final p in parts)
+        for (final p in inOrder)
           if (p.summary != null) p.summary!,
       ];
       // A story kept in another's collection (a place's Baker topic) comes
@@ -801,26 +895,104 @@ class EndfieldStoryImporter {
       final written = await writer.story(
         rawId: mission,
         name: m.name,
-        lines: [
-          for (final p in parts) ...[
-            EndfieldLine(p.kind, kind: sectionLineKind),
-            // The game's summary of the conversation opens it (what the game
-            // shows when it is skipped).
-            if (p.summary != null) EndfieldLine(p.summary!, kind: summaryLineKind),
-            ...p.lines,
-          ],
-        ],
+        lines: lines,
         collectionId: 'mission_${host ?? mission}',
         collectionName: host == null ? m.name : _missions[host]!.name,
         collectionType: '$endfieldCollectionTypePrefix${m.kind.toUpperCase()}',
         synopsis: summaries.isEmpty ? null : summaries.join('\n'),
         sortKey: host == null ? 0 : 1 + m.sort,
-        sourcePath: {for (final p in parts) p.source}.join(';'),
+        sourcePath: {for (final p in inOrder) p.source}.join(';'),
       );
       if (written != null) count++;
     }
     _parts.clear();
-    log?.call('stories (one per mission, place, enemy, topic): $count');
+    log?.call('stories (one per mission, place, enemy, topic): $count'
+        '${orders.isEmpty ? '' : '; laid out by steps: ${orders.length}'}');
+  }
+
+  /// The stories laid out along their missions' steps ([stepOrder]): the
+  /// order of each, and the missions played inside another's steps (their
+  /// conversations read in that story) → that mission.
+  ({Map<String, List<OrderItem>> orders, Map<String, String> nestedIn}) _stepOrders() {
+    final orders = <String, List<OrderItem>>{};
+    final nestedIn = <String, String>{};
+    final data = levelData;
+    if (data == null || stepOrder.isEmpty) return (orders: orders, nestedIn: nestedIn);
+    final conversationMission = {
+      for (final MapEntry(key: mission, value: parts) in _parts.entries)
+        for (final p in parts) p.id: mission,
+    };
+    final order = EndfieldStoryOrder(
+      data,
+      mission: (id) => missionDefinitions[id],
+      conversationMission: conversationMission,
+      stepName: (step) {
+        for (final o in (step['objectiveList'] as List?) ?? const []) {
+          final key = ((o as Map)['description'] as Map?)?['key'];
+          if (key != null) return _keyText('$key');
+        }
+        return null;
+      },
+    );
+    bool hasSteps(String id) => ((missionDefinitions[id]?['questDic'] as Map?) ?? const {}).isNotEmpty;
+    final chosen = [
+      for (final mission in _parts.keys)
+        if ((stepOrder.contains('all') || stepOrder.contains(mission)) && hasSteps(mission)) mission,
+    ];
+    for (final mission in chosen) {
+      // The conversations of the story that play in a nested mission: those
+      // played or said in that mission's level and not in this one's; and
+      // the nested mission's own story.
+      final ids = {for (final p in _parts[mission]!) p.id};
+      final stageIds = <String, Set<String>>{};
+      void nest(String parent, Set<String> pool) {
+        final parentLevel = missionDefinitions[parent]?['levelId'] as String?;
+        for (final child in order.nestedMissions(parent)) {
+          // (a mission with a story of its own is read there: one played
+          // after this one's last step is its sequel, not a part of it)
+          if (!hasSteps(child) || stageIds.containsKey(child) || child == mission || _parts.containsKey(child)) continue;
+          final level = missionDefinitions[child]?['levelId'] as String?;
+          final mine = <String>{
+            if (level != null)
+              for (final c in pool)
+                if (order.levelsOf(c).contains(level) && (parentLevel == null || !order.levelsOf(c).contains(parentLevel))) c,
+            for (final p in _parts[child] ?? const <_Part>[]) p.id,
+          };
+          pool.removeAll(mine);
+          stageIds[child] = mine;
+          nestedIn[child] = mission;
+          nest(child, mine);
+        }
+      }
+
+      nest(mission, ids);
+      orders[mission] = order.build(mission, ids, stageIds);
+    }
+    return (orders: orders, nestedIn: nestedIn);
+  }
+
+  /// Where each conversation of a story laid out by steps went and why.
+  void _report(String mission, String name, List<OrderItem> items) {
+    final out = orderReport;
+    if (out == null) return;
+    out.writeln('# $name（$mission）\n');
+    void emit(List<OrderItem> items, String pad) {
+      for (final it in items) {
+        switch (it) {
+          case StepItem():
+            out.writeln('$pad## ${it.tail ? '' : '步骤 ${it.quest}：'}${it.text ?? '（没有目标文字）'}');
+          case NestItem():
+            out.writeln('$pad>>>> 嵌套 ${it.mission} ${_missions[it.mission]?.name ?? missions[it.mission]?.name ?? ''}');
+            emit(it.items, '$pad  ');
+            out.writeln('$pad<<<< 嵌套结束');
+          case ConversationItem():
+            out.writeln('$pad- `${it.id}`（${conversationKind(it.id)}）[${it.level}] ${it.note}');
+        }
+      }
+    }
+
+    emit(items, '');
+    out.writeln();
   }
 
   /// Conversations from the dialog tables, ordered by row id.

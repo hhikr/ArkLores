@@ -654,6 +654,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the conversations no data places stay folded under their heading until tapped',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => const [
+              StoryLineEntry(lineIndex: 0, content: '与甲交谈', kind: 'step'),
+              StoryLineEntry(lineIndex: 1, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 2, speaker: '甲', content: '第一段。'),
+              StoryLineEntry(lineIndex: 3, content: '未定位的对话', kind: 'unplaced'),
+              StoryLineEntry(lineIndex: 4, content: '对话', kind: 'section'),
+              StoryLineEntry(lineIndex: 5, speaker: '乙', content: '没有位置的一段。'),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const StoryReaderPage(storyId: 'ef/m1.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('第一段。'), findsOneWidget);
+    expect(find.text('未定位的对话（1）'), findsOneWidget);
+    expect(find.text('没有位置的一段。'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('story-reader-unplaced-3')));
+    await tester.pumpAndSettle();
+    expect(find.text('没有位置的一段。'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the reader shows how far in it is', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

@@ -12,6 +12,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 import '../gamedata/game.dart';
 import '../gamedata/name_similarity.dart' show homophoneCost, nameDistance;
 import '../gamedata/story_catalog.dart' show escapeLike;
+import '../gamedata/story_coverage_models.dart' show searchableLinesFilter;
 
 part 'library_search.dart';
 

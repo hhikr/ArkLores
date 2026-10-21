@@ -178,9 +178,10 @@ void main() {
       ),
       0,
     );
+    // (or with a heading, laid out along its mission's steps)
     expect(
       await count(
-        "SELECT COUNT(*) FROM story_lines WHERE line_index = 0 AND kind <> 'section'",
+        "SELECT COUNT(*) FROM story_lines WHERE line_index = 0 AND kind NOT IN ('section', 'step', 'stage', 'unplaced')",
       ),
       0,
     );
@@ -200,6 +201,37 @@ void main() {
         "WHERE c.kind = 'ef/main' AND e.type = 'mission_intro' AND e.group_name IS NOT NULL",
       ),
       greaterThanOrEqualTo(50),
+    );
+  }, skip: !run,);
+
+  test('a story laid out by steps: a heading is followed by what it heads, every mission keeps its story', () async {
+    // A step heading always has a conversation (or a stage) under it.
+    expect(
+      await count(
+        'SELECT COUNT(*) FROM story_lines h WHERE h.kind IN (\'step\', \'unplaced\') AND NOT EXISTS '
+        '(SELECT 1 FROM story_lines n WHERE n.story_id = h.story_id AND n.line_index = h.line_index + 1 '
+        "AND n.kind = 'section')",
+      ),
+      0,
+    );
+    expect(await count("SELECT COUNT(*) FROM story_lines WHERE kind = 'step' AND content LIKE '（%）'"), 0);
+    // The unplaced group is the last of a story.
+    expect(
+      await count(
+        "SELECT COUNT(*) FROM story_lines u WHERE u.kind = 'unplaced' AND EXISTS "
+        '(SELECT 1 FROM story_lines n WHERE n.story_id = u.story_id AND n.line_index > u.line_index '
+        "AND n.kind IN ('step', 'stage', 'unplaced'))",
+      ),
+      0,
+    );
+    // A mission with a story of its own is never folded into another's: no
+    // collection of a played mission is left without its story.
+    expect(
+      await count(
+        "SELECT COUNT(*) FROM collections c WHERE c.id GLOB 'ef/mission_*' AND c.kind <> 'ef/unused' "
+        "AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.collection_id = c.id AND e.type = 'story')",
+      ),
+      0,
     );
   }, skip: !run,);
 

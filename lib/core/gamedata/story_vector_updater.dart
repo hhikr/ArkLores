@@ -298,7 +298,7 @@ Future<VectorUpdateResult> updateStoryVectors({
             (l['line_index'] as num).toInt(),
             l['speaker'] as String?,
             '${l['content'] ?? ''}',
-            isBreak: l['kind'] == sectionLineKind,
+            isBreak: breakLineKinds.contains(l['kind']),
           ),
       ]);
       if (chunks.isNotEmpty) {

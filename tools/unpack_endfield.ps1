@@ -92,7 +92,10 @@ if (-not $SkipUnpack) {
   "tables: $((Get-ChildItem $tables -File).Count), missions: $((Get-ChildItem $missions -File).Count)"
 }
 
-& dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--trees=$($treeDirs -join ';')" "--clips=$($clipDirs -join ';')" "--chapters=$($chapterDirs -join ';')" "--version=$Version" --output=build/endfield --force
+# The hot-update layer's JsonData holds the whole set of level data: every
+# mission's story is laid out along its steps (docs/ENDFIELD_STORY_ORDER.md).
+$levelData = Join-Path $Work 'persistent\Data\Json'
+& dart run tools/build_endfield_database.dart "--tables=$tables" "--missions=$missions" "--trees=$($treeDirs -join ';')" "--clips=$($clipDirs -join ';')" "--chapters=$($chapterDirs -join ';')" "--data=$levelData" --step-order=all "--version=$Version" --output=build/endfield --force
 if ($LASTEXITCODE -ne 0) { throw 'build failed' }
 # A rebuild has no vectors; the embedding cache (build/embedding_cache) makes
 # unchanged chunks free, only new or changed text is paid for.

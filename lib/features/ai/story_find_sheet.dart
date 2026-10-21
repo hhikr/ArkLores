@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry;
+import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry, unsearchedLineKinds;
 import '../../core/library/library_queries.dart' show snippetAround;
 import '../../core/library/placeholders.dart';
 import '../../shared/l10n/l10n.dart';
@@ -18,6 +18,7 @@ List<int> findStoryLines(List<StoryLineEntry> lines, String query) {
     for (final (i, line) in lines.indexed)
       if (line.kind != 'divider' &&
           line.kind != 'section' &&
+          !unsearchedLineKinds.contains(line.kind) &&
           words.every((w) =>
               line.content.toLowerCase().contains(w) ||
               (line.speaker ?? '').toLowerCase().contains(w),))
