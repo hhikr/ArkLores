@@ -2,9 +2,9 @@
 
 All notable changes to ArkLores will be documented in this file.
 
-## [Unreleased] - 0.17.0
+## [0.17.0] - 2026-10-22
 
-A new look for the whole app, and a pass over every screen for things that were hard to see, hard to hit or behaved unlike the platform. The design and its rules are in `docs/DESIGN.md`.
+A new look for the whole app, and a pass over every screen for things that were hard to see, hard to hit or behaved unlike the platform. The design and its rules are in `docs/DESIGN.md`. Android build 38. Both knowledge bases are the same files as in v0.16.0.
 
 ### Look
 
