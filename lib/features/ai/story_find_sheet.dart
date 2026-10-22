@@ -5,6 +5,7 @@ import '../../core/library/library_queries.dart' show snippetAround;
 import '../../core/library/placeholders.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/ef_widgets.dart';
 
 /// Positions in [lines] whose text or speaker has every word of [query]
 /// (ignoring case), in reading order.
@@ -27,18 +28,19 @@ List<int> findStoryLines(List<StoryLineEntry> lines, String query) {
 }
 
 /// Find in the story being read: a sheet with a search box and the matching
-/// lines. Returns the lineIndex of the line picked, or null.
+/// lines (their line numbers in front). Returns the lineIndex of the line
+/// picked, or null.
 Future<int?> showStoryFind(
   BuildContext context, {
   required List<StoryLineEntry> lines,
   required AppThemeTokens theme,
   String nickname = '',
 }) =>
-    showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: theme.bgSecondary,
-      builder: (_) => _StoryFind(lines: lines, theme: theme, nickname: nickname),
+    showAppSheet<int>(
+      context,
+      (_) => PlainSheet(
+        child: _StoryFind(lines: lines, theme: theme, nickname: nickname),
+      ),
     );
 
 class _StoryFind extends StatefulWidget {
@@ -71,20 +73,20 @@ class _StoryFindState extends State<_StoryFind> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: TextField(
                 key: const ValueKey('story-find-field'),
                 autofocus: true,
                 onChanged: (v) => setState(() => _query = v),
                 textInputAction: TextInputAction.search,
-                style: theme.bodyFont.copyWith(fontSize: 14),
+                style: theme.text(15),
                 decoration: InputDecoration(
-                  isDense: true,
                   hintText: context.t.storyReaderFindHint,
-                  prefixIcon: Icon(Icons.search_sharp, color: theme.textMuted),
+                  prefixIcon: Icon(Icons.search_sharp, color: theme.textSecondary),
                   suffixText: _query.trim().isEmpty
                       ? null
                       : context.t.librarySearchMatchCount(found.length),
+                  suffixStyle: theme.field(),
                 ),
               ),
             ),
@@ -93,12 +95,14 @@ class _StoryFindState extends State<_StoryFind> {
                   ? Center(
                       child: Text(
                         context.t.libraryNoResults,
-                        style: theme.bodyFont
-                            .copyWith(color: theme.textSecondary),
+                        style: theme.text(14, color: theme.textSecondary),
                       ),
                     )
-                  : ListView.builder(
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: found.length,
+                      separatorBuilder: (_, __) =>
+                          Divider(height: 1, color: theme.divider),
                       itemBuilder: (context, i) {
                         final at = found[i];
                         final line = widget.lines[at];
@@ -107,23 +111,38 @@ class _StoryFindState extends State<_StoryFind> {
                           snippetAround(line.content, words, width: 80),
                           widget.nickname,
                         );
-                        return ListTile(
+                        return PressRow(
                           key: ValueKey('story-find-$at'),
-                          dense: true,
-                          leading: Text(
-                            '${(line.shownIndex ?? line.lineIndex) + 1}',
-                            style: theme.bodyFont.copyWith(
-                              color: theme.textMuted,
-                              fontSize: 12,
+                          onTap: () => Navigator.of(context).pop(line.lineIndex),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(8, 10, 4, 10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    width: 44,
+                                    child: Text(
+                                      '${(line.shownIndex ?? line.lineIndex) + 1}',
+                                      style: theme.field(
+                                        color: theme.textMuted,
+                                        size: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      speaker.isEmpty ? text : '$speaker：$text',
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.text(14.5, height: 1.5),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          title: Text(
-                            speaker.isEmpty ? text : '$speaker：$text',
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.bodyFont.copyWith(fontSize: 13.5),
-                          ),
-                          onTap: () => Navigator.of(context).pop(line.lineIndex),
                         );
                       },
                     ),

@@ -101,7 +101,7 @@ void main() {
     final rect = tester.getRect(panel);
     expect(rect.bottom, lessThanOrEqualTo(card.top));
     expect(rect.top, greaterThanOrEqualTo(0));
-    expect(rect.height, lessThan(200));
+    expect(rect.height, lessThan(260));
     // The digest and the review are not options of a question any more.
     for (final title in ['Wiki 资料', '子助手', '深度思考']) {
       expect(find.text(title), findsOneWidget);
@@ -242,8 +242,8 @@ void main() {
     ),);
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    expect(find.byType(BackButton), findsOneWidget);
-    await tester.tap(find.byType(BackButton));
+    expect(find.byIcon(Icons.arrow_back_sharp), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_back_sharp));
     await tester.pumpAndSettle();
     expect(find.byType(AiChatPage), findsNothing);
   });

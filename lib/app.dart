@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'features/ai/ai_chat_page.dart';
@@ -9,15 +8,12 @@ import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
 import 'shared/providers/handoff_provider.dart';
 import 'shared/providers/settings_provider.dart';
-import 'shared/providers/theme_provider.dart';
 import 'shared/providers/wiki_navigation_provider.dart';
-import 'shared/theme/app_theme.dart';
-import 'shared/widgets/floating_bar.dart';
+import 'shared/widgets/page_frame.dart';
 
 /// Main shell that wraps the app with bottom navigation and four tabs.
 ///
-/// When the theme switches, the body area fades through a 300ms
-/// cross-fade transition driven by [AnimatedSwitcher].
+/// The tabs switch at once; the accent block in the tab bar moves.
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
@@ -27,9 +23,6 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
-  bool _pageTransitioning = false;
-  bool _pageRevealActive = false;
-  int _pageRevealToken = 0;
 
   final List<Widget> _pages = const [
     WikiBrowserPage(),
@@ -46,7 +39,6 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ref.watch(themeProvider);
     // Another page asked for a tab (the library's "ask about it").
     ref.listen<int?>(mainTabRequestProvider, (_, tab) {
       if (tab == null) return;
@@ -66,235 +58,40 @@ class _MainShellState extends ConsumerState<MainShell> {
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        // The navigation floats over the pages; they get its height as
-        // bottom padding (MediaQuery) and scroll underneath it.
+        // The pages run under the tab bar; they get its height as bottom
+        // padding (MediaQuery).
         extendBody: true,
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            IndexedStack(
-              index: _currentIndex,
-              children: _pages,
-            ),
-            _buildPageTransitionOverlay(theme),
-          ],
+        // Tabs switch at once: the accent block in the tab bar is what
+        // moves.
+        body: IndexedStack(
+          index: _currentIndex,
+          children: _pages,
         ),
-        bottomNavigationBar: AnimatedSize(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeInOutCubic,
-          // Hidden while the keyboard is up: the question box then sits on
-          // the keyboard, not on the navigation.
-          child: MediaQuery.viewInsetsOf(context).bottom > 0
-              ? const SizedBox.shrink()
-              : _IndustrialNavigation(
-                  theme: theme,
-                  currentIndex: _currentIndex,
-                  onSelected: _selectTab,
-                  items: [
-                    (Icons.language_sharp, context.t.navWiki),
-                    (Icons.psychology_alt_sharp, context.t.navAI),
-                    (Icons.menu_book_sharp, context.t.navMaterials),
-                    (Icons.settings_sharp, context.t.navSettings),
-                  ],
-                ),
-        ),
+        // Hidden while the keyboard is up: the question box then sits on
+        // the keyboard, not on the tab bar.
+        bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
+            ? const SizedBox.shrink()
+            : AppTabBar(
+                current: _currentIndex,
+                onSelected: _selectTab,
+                items: [
+                  ('WIKI', context.t.navWiki),
+                  ('ASK', context.t.navAI),
+                  ('LIBRARY', context.t.navMaterials),
+                  ('SETTINGS', context.t.navSettings),
+                ],
+              ),
       ),
     );
   }
 
   void _selectTab(int index) {
     if (index == _currentIndex) return;
-    setState(() {
-      _currentIndex = index;
-      _pageTransitioning = true;
-      _pageRevealActive = false;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _pageTransitioning = false;
-        _pageRevealActive = true;
-        _pageRevealToken++;
-      });
-    });
+    setState(() => _currentIndex = index);
     ref.read(settingsServiceProvider).saveMainTabIndex(index).catchError(
           (Object error) => debugPrint(
             '[MainShell] Error saving selected tab: $error',
           ),
         );
-  }
-
-  Widget _buildPageTransitionOverlay(AppThemeTokens theme) {
-    if (_pageTransitioning) {
-      return Positioned.fill(
-        child: IgnorePointer(
-          child: ColoredBox(color: theme.bgPrimary),
-        ),
-      );
-    }
-    if (!_pageRevealActive) return const SizedBox.shrink();
-
-    final token = _pageRevealToken;
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: TweenAnimationBuilder<double>(
-          key: ValueKey(token),
-          tween: Tween(begin: 1, end: 0),
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-          onEnd: () {
-            if (!mounted || token != _pageRevealToken) return;
-            setState(() => _pageRevealActive = false);
-          },
-          builder: (context, opacity, child) {
-            return Opacity(opacity: opacity, child: child);
-          },
-          child: ColoredBox(color: theme.bgPrimary),
-        ),
-      ),
-    );
-  }
-}
-
-/// The bottom navigation: a short floating plate (52 high), centred, the
-/// tabs close together (64 wide each), the selected tab on a faint tint
-/// with a bar wiping in along its top edge.
-class _IndustrialNavigation extends StatelessWidget {
-  const _IndustrialNavigation({
-    required this.theme,
-    required this.currentIndex,
-    required this.onSelected,
-    required this.items,
-  });
-
-  final AppThemeTokens theme;
-  final int currentIndex;
-  final ValueChanged<int> onSelected;
-  final List<(IconData, String)> items;
-
-  static const double height = 52;
-  static const double itemWidth = 64;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 10),
-      child: Center(
-        heightFactor: 1,
-        child: FloatingBar(
-          key: const ValueKey('main-navigation'),
-          theme: theme,
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var index = 0; index < items.length; index++)
-                SizedBox(
-                  width: itemWidth,
-                  child: _NavigationItem(
-                    theme: theme,
-                    icon: items[index].$1,
-                    label: items[index].$2,
-                    selected: index == currentIndex,
-                    onTap: () => onSelected(index),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavigationItem extends StatefulWidget {
-  const _NavigationItem({
-    required this.theme,
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final AppThemeTokens theme;
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_NavigationItem> createState() => _NavigationItemState();
-}
-
-class _NavigationItemState extends State<_NavigationItem> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (mounted && _pressed != value) setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = widget.theme;
-    final color = widget.selected
-        ? (theme.isEndfield ? theme.textPrimary : theme.navSelectedItem)
-        : theme.navUnselectedItem;
-    return Semantics(
-      button: true,
-      selected: widget.selected,
-      label: widget.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => _setPressed(true),
-        onTapCancel: () => _setPressed(false),
-        onTapUp: (_) => _setPressed(false),
-        onTap: () {
-          if (!widget.selected) HapticFeedback.selectionClick();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) widget.onTap();
-          });
-        },
-        child: AnimatedContainer(
-          duration: selectionDuration,
-          curve: Curves.easeOutCubic,
-          color: _pressed
-              ? theme.textPrimary.withValues(alpha: 0.07)
-              : widget.selected
-                  ? theme.accentPrimary.withValues(alpha: 0.14)
-                  : Colors.transparent,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(widget.icon, color: color, size: 20),
-                  const SizedBox(height: 3),
-                  Text(
-                    widget.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.bodyFont.copyWith(
-                      color: color,
-                      fontSize: 10.5,
-                      fontWeight:
-                          widget.selected ? FontWeight.w700 : FontWeight.w500,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ),
-              SelectionBar(
-                selected: widget.selected,
-                color: theme.accentPrimary,
-                top: true,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

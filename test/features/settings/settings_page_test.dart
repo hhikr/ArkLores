@@ -3,7 +3,6 @@ import 'package:arklores/main.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
-import 'package:arklores/shared/widgets/theme_aware_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,17 +19,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('设置'), findsOneWidget);
+    // A section heading and its row.
     expect(find.text('知识库管理'), findsNWidgets(2));
     expect(find.text('夜间'), findsOneWidget);
+    expect(find.text('跟随系统'), findsOneWidget);
     expect(tester.getSize(find.text('知识库管理').first).height, lessThan(32));
-    final cardWidths = List.generate(
-      4,
-      (index) => tester.getSize(find.byType(ThemeAwareCard).at(index)).width,
-    );
-    expect(cardWidths.first, closeTo(301, 1));
-    for (final width in cardWidths.skip(1)) {
-      expect(width, closeTo(cardWidths.first, 0.1));
-    }
+    // The rows take the page's width (16 on each side).
+    final list = tester.getRect(find.byKey(const ValueKey('settings-list')));
+    final theme = tester.getRect(find.byKey(const ValueKey('settings-theme')));
+    expect(theme.left, list.left + 16);
+    expect(theme.right, list.right - 16);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('日间'));

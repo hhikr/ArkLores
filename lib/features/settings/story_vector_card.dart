@@ -12,6 +12,8 @@ import '../../core/llm/embedding_client.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
@@ -91,32 +93,25 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.hub_sharp, color: theme.accentPrimary, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  context.t.kbVectorTitle,
-                  style: theme.titleFont.copyWith(fontSize: 15),
-                ),
-              ),
-              if (quiet)
-                Text(
-                  context.t.kbVectorComplete,
-                  key: Key('kb-vector-complete${widget.keySuffix}'),
-                  style: theme.bodyFont.copyWith(
-                    color: theme.accentText,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-            ],
+          KbCardHeader(
+            icon: Icons.hub_sharp,
+            title: context.t.kbVectorTitle,
+            stamp: quiet
+                ? StateStamp(
+                    context.t.kbVectorComplete,
+                    key: Key('kb-vector-complete${widget.keySuffix}'),
+                  )
+                : vec.running
+                    ? StateStamp(
+                        context.t.kbVectorStart,
+                        kind: StampKind.pending,
+                      )
+                    : null,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           if (quiet)
             Padding(
-              padding: const EdgeInsets.only(left: 36),
+              padding: const EdgeInsets.only(left: 32),
               child: kbNote(
                 context.t.kbVectorSummary(
                   plan.existingVectors,
@@ -138,10 +133,7 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                       plan.storiesWithVectors,
                     )
                   : context.t.kbVectorNone,
-              style: theme.bodyFont.copyWith(
-                color: theme.textPrimary,
-                fontSize: 13,
-              ),
+              style: theme.text(14, height: 1.5),
             ),
             if (plan.existingRecordVectors > 0)
               kbNote(
@@ -177,31 +169,25 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                   theme.textSecondary,
                 ),
               if (plan.isFirstBuild)
-                kbNote(context.t.kbVectorFirstBuild, theme, theme.warning),
+                kbFlag(context.t.kbVectorFirstBuild, theme),
             ],
           ],
           // Asking by meaning needs the service too, vectors or not.
           if (!config.isValid) ...[
             const SizedBox(height: 6),
-            kbNote(
+            kbFlag(
               context.t.kbVectorConfigure(
                 defaultEmbeddingConfig.model,
                 defaultEmbeddingConfig.dimensions,
-              ),
-              theme,
-              theme.warning,
-            ),
+              ), theme,),
           ],
           if (vec.mismatch != null) ...[
             const SizedBox(height: 6),
-            kbNote(
+            kbFlag(
               context.t.kbVectorMismatch(
                 vec.mismatch!.have,
                 vec.mismatch!.want,
-              ),
-              theme,
-              theme.danger,
-            ),
+              ), theme,),
           ],
           if (vec.running) ...[
             const SizedBox(height: 10),
@@ -221,16 +207,11 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
               theme.textPrimary,
             ),
             const SizedBox(height: 6),
-            LinearProgressIndicator(
-              value: vec.totalRecords > 0
+            SegmentProgress(value: vec.totalRecords > 0
                   ? (vec.doneRecords / vec.totalRecords).clamp(0.0, 1.0)
                   : vec.totalStories > 0
                       ? (vec.doneStories / vec.totalStories).clamp(0.0, 1.0)
-                      : null,
-              backgroundColor: theme.divider,
-              valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-              minHeight: 6,
-            ),
+                      : null,),
           ] else if (vec.result != null && vec.result!.chunks > 0) ...[
             const SizedBox(height: 6),
             kbNote(
@@ -244,11 +225,13 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
           ],
           if (vec.error != null) ...[
             const SizedBox(height: 6),
-            kbNote(vec.error!, theme, theme.danger),
+            kbFlag(vec.error!, theme),
           ],
           if (!quiet) ...[
             const SizedBox(height: 10),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 OutlinedButton.icon(
                   onPressed: vec.running || vec.loading
@@ -256,21 +239,12 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                       : () => ref.read(_provider.notifier).refresh(),
                   icon: const Icon(Icons.refresh_sharp, size: 18),
                   label: Text(context.t.kbVectorRefresh),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.accentText,
-                    side: BorderSide(color: theme.divider),
-                  ),
                 ),
-                const SizedBox(width: 8),
                 if (vec.running)
                   OutlinedButton.icon(
                     onPressed: () => ref.read(_provider.notifier).cancel(),
                     icon: const Icon(Icons.stop_sharp, size: 18),
                     label: Text(context.t.kbVectorCancel),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: theme.danger,
-                      side: BorderSide(color: theme.divider),
-                    ),
                   )
                 else
                   ElevatedButton.icon(
@@ -278,10 +252,6 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
                     onPressed: canStart ? () => _startVectors(plan) : null,
                     icon: const Icon(Icons.auto_awesome_sharp, size: 18),
                     label: Text(context.t.kbVectorStart),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.accentPrimary,
-                      foregroundColor: theme.onAccent,
-                    ),
                   ),
               ],
             ),
@@ -295,30 +265,17 @@ class _StoryVectorCardState extends ConsumerState<StoryVectorCard> {
   /// far more than an incremental update).
   Future<void> _startVectors(VectorPlan plan) async {
     if (plan.isFirstBuild) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dialog) => AlertDialog(
-          title: Text(context.t.kbVectorConfirmTitle),
-          content: Text(
-            context.t.kbVectorConfirmBody(
-              plan.pendingStories,
-              plan.pendingChunks,
-              (plan.estimatedTokens / 10000).toStringAsFixed(1),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialog, false),
-              child: Text(context.t.kbCancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialog, true),
-              child: Text(context.t.kbVectorConfirm),
-            ),
-          ],
+      final ok = await confirmAction(
+        context,
+        title: context.t.kbVectorConfirmTitle,
+        message: context.t.kbVectorConfirmBody(
+          plan.pendingStories,
+          plan.pendingChunks,
+          (plan.estimatedTokens / 10000).toStringAsFixed(1),
         ),
+        confirm: context.t.kbVectorConfirm,
       );
-      if (ok != true || !mounted) return;
+      if (!ok || !mounted) return;
     }
     unawaited(ref.read(_provider.notifier).start());
   }

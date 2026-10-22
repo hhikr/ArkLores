@@ -47,8 +47,15 @@ void main() {
     final keyField = tester
         .widgetList<TextField>(find.byType(TextField))
         .firstWhere((field) => field.decoration?.hintText == 'sk-...');
-    expect(keyField.obscureText, isFalse);
+    // Hidden until the eye is tapped; never learned by the keyboard.
+    expect(keyField.obscureText, isTrue);
     expect(keyField.enableSuggestions, isFalse);
     expect(keyField.autocorrect, isFalse);
+    await tester.tap(find.byIcon(Icons.visibility_sharp));
+    await tester.pump();
+    final shown = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .firstWhere((field) => field.decoration?.hintText == 'sk-...');
+    expect(shown.obscureText, isFalse);
   });
 }

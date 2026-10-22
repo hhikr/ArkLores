@@ -46,8 +46,8 @@ void main() {
   Finder field(int i) => find.byType(TextField).at(i);
 
   Future<void> save(WidgetTester tester) async {
-    await tester.ensureVisible(find.byType(ElevatedButton));
-    await tester.tap(find.byType(ElevatedButton));
+    await tester.ensureVisible(find.byKey(const ValueKey('api-settings-save')));
+    await tester.tap(find.byKey(const ValueKey('api-settings-save')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
   }
@@ -86,7 +86,9 @@ void main() {
     final container = await pump(tester);
     await tester.enterText(field(1), '截图中的完整报错具体内容为：下载失败');
     await save(tester);
-    expect(find.byType(SnackBar), findsOneWidget);
+    // Said under the key field itself.
+    final decoration = tester.widget<TextField>(field(1)).decoration!;
+    expect(decoration.errorText, isNotNull);
     expect(container.read(apiConfigProvider).chatApiKey, 'old-key');
     expect((await SettingsService().loadApiConfig()).chatApiKey, isEmpty);
   });

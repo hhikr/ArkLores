@@ -1,137 +1,108 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/theme_provider.dart';
-import 'press_feedback.dart';
+import '../theme/cut_border.dart';
+import '../theme/motion.dart';
 
-/// A card widget that automatically adapts its visual style to the current
-/// theme (ArkTheme or EndfieldTheme).
-///
-/// All colors, borders, and shadows are read from [AppThemeTokens] — no
-/// hardcoded values.
-class ThemeAwareCard extends ConsumerWidget {
+/// A panel: white (the theme's panel colour), a hairline frame and a short
+/// ink tab on its top edge. With [onTap] it can be pressed, and says so by
+/// its cut bottom-right corner; pressing wipes the accent in along its
+/// bottom edge and drops a trace line on its left. Without [onTap] it is a
+/// plain rectangle.
+class ThemeAwareCard extends ConsumerStatefulWidget {
   const ThemeAwareCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.margin,
     this.onTap,
+    this.semanticLabel,
   });
 
-  /// The content placed inside the card.
   final Widget child;
-
-  /// Padding around the child inside the card.
   final EdgeInsetsGeometry padding;
-
-  /// Margin around the card (optional).
   final EdgeInsetsGeometry? margin;
-
-  /// Optional tap callback. When provided, the card acts like an inkwell.
   final VoidCallback? onTap;
+  final String? semanticLabel;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ThemeAwareCard> createState() => _ThemeAwareCardState();
+}
+
+class _ThemeAwareCardState extends ConsumerState<ThemeAwareCard> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (mounted && _down != v) setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-
-    final card = ClipPath(
-      clipper: _CutCornerClipper(theme.cornerCut),
-      child: Material(
-        color: theme.cardSurface,
-        child: InkWell(
-          onTap: withHaptic(onTap),
-          child: Padding(padding: padding, child: child),
+    final tappable = widget.onTap != null;
+    final cut = tappable ? 14.0 : 0.0;
+    Widget card = Stack(
+      children: [
+        DecoratedBox(
+          decoration: ShapeDecoration(
+            color: theme.cardSurface,
+            shape: CutBorder(
+              bottomRight: cut,
+              side: BorderSide(
+                color: _down ? theme.trace : theme.divider,
+              ),
+            ),
+          ),
+          child: Padding(padding: widget.padding, child: widget.child),
         ),
-      ),
-    );
-
-    final framed = Container(
-      margin: margin,
-      decoration: BoxDecoration(boxShadow: theme.cardShadow),
-      child: CustomPaint(
-        foregroundPainter: _IndustrialBorderPainter(
-          border: theme.cardBorder,
-          accent: theme.accentPrimary,
-          cut: theme.cornerCut,
-          endfield: theme.isEndfield,
+        Positioned(
+          left: 0,
+          top: 0,
+          width: 40,
+          height: 4,
+          child: ColoredBox(color: theme.textPrimary),
         ),
-        child: card,
-      ),
+        if (tappable)
+          Positioned(
+            left: 0,
+            right: cut,
+            bottom: 0,
+            height: 4,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: AnimatedFractionallySizedBox(
+                duration:
+                    Motion.of(context, _down ? Motion.press : Motion.wipe),
+                curve: Motion.mech,
+                widthFactor: _down ? 1 : 0,
+                heightFactor: 1,
+                child: ColoredBox(color: theme.accentPrimary),
+              ),
+            ),
+          ),
+      ],
     );
-    // A tappable card sinks a little under the finger.
-    return onTap == null ? framed : PressFeedback(child: framed);
-  }
-}
-
-class _CutCornerClipper extends CustomClipper<Path> {
-  const _CutCornerClipper(this.cut);
-
-  final double cut;
-
-  @override
-  Path getClip(Size size) => Path()
-    ..moveTo(cut, 0)
-    ..lineTo(size.width, 0)
-    ..lineTo(size.width, size.height - cut)
-    ..lineTo(size.width - cut, size.height)
-    ..lineTo(0, size.height)
-    ..lineTo(0, cut)
-    ..close();
-
-  @override
-  bool shouldReclip(covariant _CutCornerClipper oldClipper) =>
-      cut != oldClipper.cut;
-}
-
-class _IndustrialBorderPainter extends CustomPainter {
-  const _IndustrialBorderPainter({
-    required this.border,
-    required this.accent,
-    required this.cut,
-    required this.endfield,
-  });
-
-  final Color border;
-  final Color accent;
-  final double cut;
-  final bool endfield;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final borderPaint = Paint()
-      ..color = border
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    final path = Path()
-      ..moveTo(cut, 0.5)
-      ..lineTo(size.width - 0.5, 0.5)
-      ..lineTo(size.width - 0.5, size.height - cut)
-      ..lineTo(size.width - cut, size.height - 0.5)
-      ..lineTo(0.5, size.height - 0.5)
-      ..lineTo(0.5, cut)
-      ..close();
-    canvas.drawPath(path, borderPaint);
-
-    final accentPaint = Paint()
-      ..color = accent
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = endfield ? 2 : 1.5;
-    canvas.drawLine(Offset(cut, 0.5), Offset(cut + 28, 0.5), accentPaint);
-    if (endfield) {
-      canvas.drawLine(
-        Offset(size.width - 18, size.height - 0.5),
-        Offset(size.width - cut, size.height - 0.5),
-        accentPaint,
+    if (tappable) {
+      card = Semantics(
+        button: true,
+        label: widget.semanticLabel,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _set(true),
+          onTapCancel: () => _set(false),
+          onTapUp: (_) => _set(false),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            widget.onTap!();
+          },
+          child: card,
+        ),
       );
-    } else {
-      canvas.drawLine(Offset(0.5, cut), Offset(0.5, cut + 18), accentPaint);
     }
+    return widget.margin == null
+        ? card
+        : Padding(padding: widget.margin!, child: card);
   }
-
-  @override
-  bool shouldRepaint(covariant _IndustrialBorderPainter oldDelegate) =>
-      border != oldDelegate.border ||
-      accent != oldDelegate.accent ||
-      cut != oldDelegate.cut ||
-      endfield != oldDelegate.endfield;
 }

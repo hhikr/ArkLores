@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +17,9 @@ import '../../../shared/providers/handoff_provider.dart';
 import '../../../shared/providers/settings_provider.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/theme/cut_border.dart';
+import '../../../shared/theme/motion.dart';
+import '../../../shared/widgets/ef_widgets.dart';
 import '../../../shared/widgets/press_feedback.dart';
 import '../../../shared/widgets/smooth_page_route.dart';
 import '../../library/entry_page.dart';
@@ -57,22 +61,15 @@ Future<void> showCitedRecord(
     ),);
     return;
   }
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => _RecordSheet(id: id),
-  );
+  await showAppSheet<void>(context, (_) => PlainSheet(child: _RecordSheet(id: id)));
 }
 
 /// 0.13: shows the cited paragraphs of a wiki page (the version the agent
 /// read) in a bottom sheet, with a way to open the page in the Wiki tab.
 void showCitedWiki(BuildContext context, String pageId, CitedRange range) {
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => WikiCitationSheet(pageId: pageId, range: range),
+  showAppSheet<void>(
+    context,
+    (_) => PlainSheet(child: WikiCitationSheet(pageId: pageId, range: range)),
   );
 }
 
@@ -158,12 +155,11 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
           _blocks(top, recordNumbers, theme, streaming: writingTop),
           const SizedBox(height: 8),
         ],
-        InkWell(
+        PressRow(
           key: const ValueKey('answer-details-toggle'),
           onTap: () => setState(() => _detailsOpen = !_detailsOpen),
-          borderRadius: BorderRadius.zero,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -171,17 +167,13 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
                   _detailsOpen
                       ? Icons.expand_less_sharp
                       : Icons.expand_more_sharp,
-                  size: 18,
-                  color: theme.accentText,
+                  size: 20,
+                  color: theme.textPrimary,
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 Text(
                   context.t.aiAnswerDetails(count),
-                  style: theme.bodyFont.copyWith(
-                    color: theme.accentText,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: theme.ui(15, weight: 700),
                 ),
               ],
             ),
@@ -292,10 +284,10 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _toggle(count, collections.join(' · ')),
+        _toggle(count, collections.join(' / ')),
         AnimatedSize(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
+          duration: Motion.of(context, Motion.wipe),
+          curve: Motion.mech,
           alignment: Alignment.topLeft,
           child: _open
               ? Padding(
@@ -308,65 +300,73 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
     );
   }
 
-  Widget _toggle(int count, String collections) => InkWell(
-        key: const ValueKey('evidence-toggle'),
-        onTap: () => setState(() => _open = !_open),
-        borderRadius: BorderRadius.zero,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(8, 3, 4, 3),
-          decoration: BoxDecoration(
-            color: _open
-                ? theme.accentPrimary.withValues(alpha: 0.16)
-                : theme.bgSecondary,
-            borderRadius: BorderRadius.zero,
-            border: Border.all(
-              color: _open
-                  ? theme.accentText.withValues(alpha: 0.45)
-                  : theme.divider,
-              width: 0.6,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.menu_book_sharp, size: 13, color: theme.accentText),
-              const SizedBox(width: 5),
-              Text(
-                context.t.aiCitationSources(count),
-                style: theme.bodyFont.copyWith(
-                  color: theme.accentText,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
+  Widget _toggle(int count, String collections) => Semantics(
+        button: true,
+        expanded: _open,
+        child: GestureDetector(
+          key: const ValueKey('evidence-toggle'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            setState(() => _open = !_open);
+          },
+          child: Padding(
+            // 44 to the finger.
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 36),
+              padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+              decoration: ShapeDecoration(
+                color: _open ? theme.accentPrimary : theme.surfaceElevated,
+                shape: const CutBorder.br(6),
               ),
-              if (collections.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    collections,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textSecondary,
-                      fontSize: 11.5,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.menu_book_sharp,
+                    size: 16,
+                    color: _open ? theme.onAccent : theme.textPrimary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.t.aiCitationSources(count),
+                    style: theme.ui(
+                      13,
+                      weight: 700,
+                      color: _open ? theme.onAccent : theme.textPrimary,
                     ),
                   ),
-                ),
-              ],
-              AnimatedRotation(
-                turns: _open ? 0.5 : 0,
-                duration: const Duration(milliseconds: 180),
-                child: Icon(
-                  Icons.expand_more_sharp,
-                  size: 16,
-                  color: theme.textSecondary,
-                ),
+                  if (collections.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        collections,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.text(
+                          13,
+                          color: _open ? theme.onAccent : theme.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                  AnimatedRotation(
+                    turns: _open ? 0.5 : 0,
+                    duration: Motion.of(context, Motion.wipe),
+                    curve: Motion.mech,
+                    child: Icon(
+                      Icons.expand_more_sharp,
+                      size: 18,
+                      color: _open ? theme.onAccent : theme.textSecondary,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       );
-
   /// The block's stories grouped by collection (first-cited order), the
   /// chapters of one collection in story order.
   List<_SourceGroup> _groups() {
@@ -411,18 +411,8 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
             ),
         ];
 
-    final collectionStyle = theme.bodyFont.copyWith(
-      fontSize: 12,
-      height: 1.3,
-      fontWeight: FontWeight.w600,
-      color: theme.textSecondary,
-    );
-    final chapterStyle = theme.bodyFont.copyWith(
-      fontSize: 12,
-      height: 1.3,
-      fontWeight: FontWeight.w500,
-      color: theme.textPrimary,
-    );
+    final collectionStyle = theme.ui(13, weight: 700, color: theme.textSecondary);
+    final chapterStyle = theme.text(13.5, weight: FontWeight.w500, height: 1.4);
 
     Widget groupWidget(_SourceGroup group) {
       // One chapter: "collection · chapter" and its chips on one line.
@@ -439,7 +429,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                   TextSpan(text: group.collection, style: collectionStyle),
                   if (chapter.label.isNotEmpty) ...[
                     TextSpan(
-                      text: ' · ',
+                      text: ' / ',
                       style: collectionStyle.copyWith(color: theme.divider),
                     ),
                     TextSpan(text: chapter.label, style: chapterStyle),
@@ -499,7 +489,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                 key: 'chain:record:$id',
                 text: '${context.t.aiCitedRecord} '
                     '${widget.recordNumbers.indexOf(id) + 1}'
-                    '${_title(id).isEmpty ? '' : ' · ${_title(id)}'}',
+                    '${_title(id).isEmpty ? '' : ' / ${_title(id)}'}',
                 tooltip: 'record:$id',
                 onTap: () => showCitedRecord(context, ref, id),
               ),
@@ -531,9 +521,13 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        borderRadius: BorderRadius.zero,
-        border: Border.all(color: theme.divider, width: 0.5),
+        color: theme.cardSurface,
+        border: Border(
+          left: BorderSide(color: theme.trace, width: 3),
+          top: BorderSide(color: theme.divider),
+          right: BorderSide(color: theme.divider),
+          bottom: BorderSide(color: theme.divider),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,7 +536,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
             if (i > 0)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Divider(height: 1, thickness: 0.5, color: theme.divider),
+                child: Divider(height: 1, thickness: 1, color: theme.divider),
               ),
             row,
           ],
@@ -562,48 +556,47 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
       Tooltip(
         message: tooltip,
         triggerMode: TooltipTriggerMode.longPress,
-        // The chip's fill hides the ripple: it sinks under the finger instead.
-        child: PressFeedback(
-          pressedScale: 0.9,
-          child: InkWell(
-          key: ValueKey(key),
-          onTap: withHaptic(onTap),
-          borderRadius: BorderRadius.zero,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: theme.accentPrimary.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.zero,
-              border: Border.all(
-                color: theme.accentText.withValues(alpha: 0.45),
-                width: 0.5,
+        child: Semantics(
+          button: true,
+          child: GestureDetector(
+            key: ValueKey(key),
+            behavior: HitTestBehavior.opaque,
+            onTap: withHaptic(onTap),
+            child: Padding(
+              // 44 to the finger.
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 36),
+                padding: const EdgeInsets.fromLTRB(9, 6, 10, 6),
+                decoration: ShapeDecoration(
+                  color: theme.surfaceElevated,
+                  shape: const CutBorder.br(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      text,
+                      style: theme.field(
+                        color: theme.textPrimary,
+                        size: 13,
+                        weight: 600,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right_sharp,
+                      size: 16,
+                      color: theme.textPrimary,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  text,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.accentText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 1),
-                Icon(
-                  Icons.chevron_right_sharp,
-                  size: 12,
-                  color: theme.accentText,
-                ),
-              ],
             ),
           ),
         ),
-        ),
       );
 }
-
 class _RecordSheet extends ConsumerWidget {
   const _RecordSheet({required this.id});
   final String id;
@@ -612,7 +605,7 @@ class _RecordSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final record = ref.watch(citedRecordProvider(id));
-    final muted = theme.bodyFont.copyWith(color: theme.textSecondary);
+    final muted = theme.text(14, color: theme.textSecondary);
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.7,
@@ -620,7 +613,7 @@ class _RecordSheet extends ConsumerWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         child: record.when(
-          loading: () => const LinearProgressIndicator(minHeight: 2),
+          loading: () => const BusyMark(width: 80, cells: 8),
           error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
           data: (r) => r == null
               ? Text(context.t.aiCitedLinesUnavailable, style: muted)
@@ -628,7 +621,7 @@ class _RecordSheet extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (r.title.isNotEmpty)
-                      Text(r.title, style: theme.titleFont.copyWith(fontSize: 16)),
+                      Text(r.title, style: theme.heading(18)),
                     const SizedBox(height: 8),
                     CitedRecordText(r.content),
                   ],
@@ -672,15 +665,8 @@ class WikiCitationSheet extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
     final id = WikiPageId.parse(pageId);
     final page = ref.watch(citedWikiPageProvider(pageId));
-    final muted = theme.bodyFont.copyWith(
-      color: theme.textSecondary,
-      fontSize: 12,
-      height: 1.45,
-    );
-    final body = theme.bodyFont.copyWith(
-      color: theme.textPrimary,
-      height: 1.6,
-    );
+    final muted = theme.text(13, color: theme.textSecondary, height: 1.5);
+    final body = readingStyle(theme, size: 15.5);
 
     Widget content(WikiPage? p) {
       if (p == null) return Text(context.t.aiWikiPageUnavailable, style: muted);
@@ -693,7 +679,7 @@ class WikiCitationSheet extends ConsumerWidget {
         children: [
           Text(
             '${p.site.label}《${p.title}》',
-            style: theme.titleFont.copyWith(fontSize: 16),
+            style: theme.heading(18),
           ),
           const SizedBox(height: 4),
           Text(context.t.aiWikiVersion(p.site.label, date), style: muted),
@@ -704,11 +690,7 @@ class WikiCitationSheet extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 6, bottom: 4),
                 child: Text(
                   section = block.section,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: theme.ui(13, weight: 700, color: theme.textSecondary),
                 ),
               ),
             _paragraph(
@@ -733,7 +715,7 @@ class WikiCitationSheet extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             page.when(
-              loading: () => const LinearProgressIndicator(minHeight: 2),
+              loading: () => const BusyMark(width: 80, cells: 8),
               error: (_, __) => content(null),
               data: content,
             ),
@@ -741,21 +723,16 @@ class WikiCitationSheet extends ConsumerWidget {
             Text(context.t.aiWikiSecondary, style: muted),
             if (id != null) ...[
               const SizedBox(height: 10),
-              OutlinedButton.icon(
+              AppButton(
+                context.t.aiWikiOpen,
                 key: const ValueKey('wiki-citation-open'),
-                style: OutlinedButton.styleFrom(
-                  shape: const RoundedRectangleBorder(),
-                  foregroundColor: theme.accentText,
-                  side: BorderSide(color: theme.accentText.withValues(alpha: 0.5)),
+                icon: Icons.language_sharp,
+                onPressed: () => openInWikiTab(
+                  context,
+                  ref,
+                  id.site,
+                  page.valueOrNull?.url ?? id.url,
                 ),
-                onPressed: withHaptic(() => openInWikiTab(
-                      context,
-                      ref,
-                      id.site,
-                      page.valueOrNull?.url ?? id.url,
-                    ),),
-                icon: const Icon(Icons.language_sharp, size: 18),
-                label: Text(context.t.aiWikiOpen),
               ),
             ],
           ],
@@ -778,11 +755,11 @@ class WikiCitationSheet extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
         decoration: BoxDecoration(
-          color: cited ? theme.accentPrimary.withValues(alpha: 0.08) : null,
+          color: cited ? theme.accentPrimary.withValues(alpha: theme.isDark ? 0.14 : 0.22) : null,
           border: Border(
             left: BorderSide(
-              color: cited ? theme.accentPrimary : theme.divider,
-              width: cited ? 2 : 1,
+              color: cited ? theme.trace : theme.divider,
+              width: cited ? 3 : 1,
             ),
           ),
         ),

@@ -10,6 +10,7 @@ import '../../core/library/library_queries.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -103,7 +104,7 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
         [
           if (widget.collectionName != null) widget.collectionName!,
           entryTypeNameIn(widget.type, game),
-        ].join(' · ');
+        ].join(' / ');
     final flat = widget.flat || widget.groups != null;
     // A long list of grouped entries is shown by group: chips on top pick
     // one group in place, and the whole list carries the group headings.
@@ -125,7 +126,7 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
     if (!flat && groupData!.isLoading) {
       return LibraryScaffold(
         title: title,
-        body: const Center(child: CircularProgressIndicator()),
+        body: const LoadingView(),
       );
     }
     final chosen = menu?.where((g) => g.label == _group).firstOrNull;
@@ -173,7 +174,7 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
           if (menu != null) _groupChips(theme, menu),
           Expanded(
             child: entries.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const LoadingView(),
               error: (_, __) => LibraryMessage(
                 icon: Icons.folder_off_sharp,
                 title: context.t.libraryEmpty,
@@ -193,8 +194,17 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
                   );
                 }
                 final items = rows(list);
+                final counts = <String, int>{
+                  for (final g in menu ?? const <({String label, List<String?> raws, int count})>[])
+                    g.label: g.count,
+                };
                 return ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 24),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    24 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   itemCount: items.length,
                   itemBuilder: (context, i) {
                     final item = items[i];
@@ -202,6 +212,7 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
                       return GroupHeading(
                         key: ValueKey('group-heading-$item'),
                         title: item,
+                        count: counts[item],
                       );
                     }
                     final e = item as LibraryEntry;
@@ -227,33 +238,20 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
     List<({String label, List<String?> raws, int count})> menu,
   ) {
     final total = menu.fold<int>(0, (n, g) => n + g.count);
-    Widget chip(String? label, String text, int count) {
-      final on = _group == label;
-      return Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: ChoiceChip(
+    Widget chip(String? label, String text, int count) => FilterBlock(
           key: ValueKey('group-${label ?? 'all'}'),
-          label: Text('$text  $count'),
-          selected: on,
-          showCheckmark: false,
-          labelStyle: theme.bodyFont.copyWith(
-            fontSize: 12.5,
-            color: on ? theme.onAccent : theme.textPrimary,
-            fontWeight: on ? FontWeight.w700 : FontWeight.w500,
-          ),
-          selectedColor: theme.accentPrimary,
-          backgroundColor: theme.cardSurface,
-          side: BorderSide(color: on ? theme.accentPrimary : theme.cardBorder),
-          onSelected: (_) => setState(() => _group = label),
-        ),
-      );
-    }
+          label: text,
+          count: count,
+          selected: _group == label,
+          onTap: () => setState(() => _group = label),
+        );
 
-    // A handful of chips: all built, scrolled sideways when they overflow.
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-      child: Row(
+    // The groups wrap onto more lines rather than scrolling sideways, so
+    // every one is in sight.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Wrap(
+        spacing: 8,
         children: [
           chip(null, context.t.libraryAllEntries, total),
           for (final g in menu) chip(g.label, g.label, g.count),

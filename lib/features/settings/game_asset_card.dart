@@ -9,6 +9,7 @@ import '../../core/gamedata/gamedata_provider.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
@@ -54,20 +55,12 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
         GameDataDownloadResult.noAssetUrl => context.t.kbNoAssetUrl,
         _ => null,
       };
-      if (message != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
-      }
+      if (message != null) showToast(context, message);
     });
     return ref.watch(installStatusOf(widget.game)).when(
           data: (status) => _buildGameDataCard(context, status, theme),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => ThemeAwareCard(
-            child: Text(
-              context.t.kbStatusError(err.toString()),
-              style: theme.bodyFont.copyWith(color: theme.danger, fontSize: 13),
-            ),
-          ),
+          loading: () => const LoadingView(),
+          error: (err, _) => NoticeBox(context.t.kbStatusError(err.toString())),
         );
   }
 
@@ -79,29 +72,15 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
   /// [local]: the installed one was updated on this device, so this goes
   /// back to the official asset.
   Future<void> _redownloadGameData({bool local = false}) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: Text(
-          local ? context.t.kbBackToOfficialTitle : context.t.kbRedownloadTitle,
-        ),
-        content: Text(
-          local ? context.t.kbBackToOfficialBody : context.t.kbRedownloadBody,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: Text(context.t.kbCancel),
-          ),
-          TextButton(
-            key: Key('kb-redownload-confirm${widget.keySuffix}'),
-            onPressed: () => Navigator.pop(dialog, true),
-            child: Text(context.t.kbRedownloadConfirm),
-          ),
-        ],
-      ),
+    final ok = await confirmAction(
+      context,
+      title: local ? context.t.kbBackToOfficialTitle : context.t.kbRedownloadTitle,
+      message: local ? context.t.kbBackToOfficialBody : context.t.kbRedownloadBody,
+      confirm: context.t.kbRedownloadConfirm,
+      cancel: context.t.kbCancel,
+      confirmKey: Key('kb-redownload-confirm${widget.keySuffix}'),
     );
-    if (ok == true && mounted) {
+    if (ok && mounted) {
       unawaited(ref.read(downloadOf(widget.game).notifier).start(force: true));
     }
   }
@@ -174,240 +153,142 @@ class _GameAssetCardState extends ConsumerState<GameAssetCard> {
             status.builtLocally
                 ? context.t.kbOriginLocal
                 : context.t.kbOriginOfficial,
-          ].join(' · ')
-        : context.t.kbDevAssetHint;
+          ]
+        : [context.t.kbDevAssetHint];
     final local = status.builtLocally && !_isDownloadingGameData;
 
     return ThemeAwareCard(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                status.installed
-                    ? Icons.verified_sharp
-                    : Icons.dataset_linked_sharp,
-                color: status.installed ? theme.accentPrimary : theme.warning,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  widget.title,
-                  style: theme.titleFont.copyWith(fontSize: 15),
-                ),
-              ),
-              if (upToDate && !_isDownloadingGameData)
-                Container(
-                  key: Key(
-                    '${local ? 'kb-status-local' : 'kb-status-current'}'
-                    '${widget.keySuffix}',
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: theme.accentPrimary.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_sharp,
-                          size: 14, color: theme.accentText,),
-                      const SizedBox(width: 3),
-                      Text(
+          KbCardHeader(
+            icon: status.installed
+                ? Icons.verified_sharp
+                : Icons.dataset_linked_sharp,
+            title: widget.title,
+            // In effect (current, or updated here): a solid stamp. A missing
+            // one is flagged. The rest (a download, an update to take) is
+            // said by the button and the line below.
+            stamp: _isDownloadingGameData
+                ? null
+                : upToDate
+                    ? StateStamp(
                         local ? context.t.kbLocalBuild : context.t.kbUpToDate,
-                        style: theme.bodyFont.copyWith(
-                          color: theme.accentText,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        key: Key(
+                          '${local ? 'kb-status-local' : 'kb-status-current'}'
+                          '${widget.keySuffix}',
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+                      )
+                    : !status.installed
+                        ? StateStamp(
+                            context.t.kbNotInstalled,
+                            kind: StampKind.alert,
+                          )
+                        : null,
           ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.only(left: 36),
-            child: Text(
-              subtitle.isEmpty ? progressText : '$progressText · $subtitle',
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-                height: 1.4,
-              ),
+          const SizedBox(height: 10),
+          FactsRow([
+            if (status.installed || _isDownloadingGameData) progressText,
+            for (final s in subtitle)
+              // The stamp already says it was updated here.
+              if (!(upToDate && local && s == context.t.kbOriginLocal)) s,
+          ]),
+          if (status.updateAvailable && !_isDownloadingGameData) ...[
+            const SizedBox(height: 10),
+            kbFlag(
+              switch (status.updateReason) {
+                GameDataUpdateReason.newerData => context.t.kbUpdateNewerData(
+                    shortCommit(status.releaseAssetCommit),
+                  ),
+                GameDataUpdateReason.sameDataOfficial =>
+                  context.t.kbUpdateSameData,
+                _ => context.t.kbUpdateAvailable,
+              },
+              theme,
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (upToDate && !_isDownloadingGameData)
-                OutlinedButton.icon(
-                  key: Key('kb-redownload${widget.keySuffix}'),
-                  onPressed: () => _redownloadGameData(local: local),
-                  icon: const Icon(Icons.refresh_sharp, size: 18),
-                  label: Text(
-                    local ? context.t.kbBackToOfficial : context.t.kbRedownload,
-                    style: theme.titleFont.copyWith(fontSize: 13),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.textPrimary,
-                    side: BorderSide(color: theme.cardBorder),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                )
-              else
-                ElevatedButton.icon(
-                  key: Key('kb-download-button${widget.keySuffix}'),
-                  onPressed: _isDownloadingGameData ? null : _downloadGameData,
-                  icon: Icon(
-                    _isDownloadingGameData
-                        ? Icons.downloading_sharp
-                        : Icons.download_sharp,
-                    size: 18,
-                  ),
-                  label: Text(
-                    _isDownloadingGameData
-                        ? context.t.kbDownloading
-                        : status.installed
-                            ? context.t.kbUpdate
-                            : context.t.kbDownload,
-                    style: theme.titleFont.copyWith(fontSize: 13),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.accentPrimary,
-                    foregroundColor: theme.onAccent,
-                    disabledBackgroundColor: theme.divider,
-                    disabledForegroundColor: theme.textSecondary,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          if (_isDownloadingGameData) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.zero,
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: theme.divider,
-                valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-                minHeight: 6,
-              ),
-            ),
-            if (phase == GameDataInstallPhase.connecting ||
-                phase == GameDataInstallPhase.downloading)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  key: Key('kb-cancel-download${widget.keySuffix}'),
-                  onPressed: ref.read(downloadOf(widget.game).notifier).cancel,
-                  child: Text(
-                    context.t.kbCancelDownload,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            if (phase == GameDataInstallPhase.connecting &&
-                _download.attempt >= 2)
-              Text(
-                context.t.kbManualHint(widget.game.dbFileName, _installDir(status)),
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 11.5,
-                  height: 1.45,
-                ),
-              ),
           ],
           if (local && upToDate) ...[
             const SizedBox(height: 10),
-            Text(
-              context.t.kbLocalBuildNote,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
+            kbNote(context.t.kbLocalBuildNote, theme, theme.textSecondary),
           ],
-          if (status.updateAvailable && !_isDownloadingGameData) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.new_releases_sharp,
-                    size: 16, color: theme.accentPrimary,),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    switch (status.updateReason) {
-                      GameDataUpdateReason.newerData =>
-                        context.t.kbUpdateNewerData(
-                          shortCommit(status.releaseAssetCommit),
-                        ),
-                      GameDataUpdateReason.sameDataOfficial =>
-                        context.t.kbUpdateSameData,
-                      _ => context.t.kbUpdateAvailable,
-                    },
-                    style: theme.bodyFont.copyWith(
-                      color: theme.accentPrimary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (_gameDataDownloadError != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              _gameDataDownloadError!,
-              style: theme.bodyFont.copyWith(
-                color: theme.danger,
-                fontSize: 12,
-              ),
-            ),
-            if (isTransientNetworkError(_download.error!)) ...[
-              const SizedBox(height: 6),
-              Text(
+          if (_isDownloadingGameData) ...[
+            const SizedBox(height: 14),
+            SegmentProgress(value: progress),
+            if (phase == GameDataInstallPhase.connecting &&
+                _download.attempt >= 2) ...[
+              const SizedBox(height: 8),
+              kbNote(
                 context.t.kbManualHint(widget.game.dbFileName, _installDir(status)),
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 11.5,
-                  height: 1.45,
-                ),
+                theme,
+                theme.textSecondary,
               ),
             ],
           ],
+          if (_gameDataDownloadError != null) ...[
+            const SizedBox(height: 12),
+            NoticeBox(
+              _gameDataDownloadError!,
+              action: isTransientNetworkError(_download.error!)
+                  ? kbNote(
+                      context.t.kbManualHint(
+                        widget.game.dbFileName,
+                        _installDir(status),
+                      ),
+                      theme,
+                      theme.textSecondary,
+                    )
+                  : null,
+            ),
+          ],
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: [
+              if (_isDownloadingGameData &&
+                  (phase == GameDataInstallPhase.connecting ||
+                      phase == GameDataInstallPhase.downloading))
+                AppButton(
+                  context.t.kbCancelDownload,
+                  key: Key('kb-cancel-download${widget.keySuffix}'),
+                  icon: Icons.close_sharp,
+                  onPressed: ref.read(downloadOf(widget.game).notifier).cancel,
+                ),
+              if (upToDate && !_isDownloadingGameData)
+                AppButton(
+                  local ? context.t.kbBackToOfficial : context.t.kbRedownload,
+                  key: Key('kb-redownload${widget.keySuffix}'),
+                  icon: Icons.refresh_sharp,
+                  onPressed: () => _redownloadGameData(local: local),
+                )
+              else
+                AppButton(
+                  _isDownloadingGameData
+                      ? context.t.kbDownloading
+                      : status.installed
+                          ? context.t.kbUpdate
+                          : context.t.kbDownload,
+                  key: Key('kb-download-button${widget.keySuffix}'),
+                  kind: ButtonKind.go,
+                  icon: Icons.download_sharp,
+                  busy: _isDownloadingGameData,
+                  onPressed: _downloadGameData,
+                ),
+            ],
+          ),
           if (status.installed && status.dbPath.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               status.dbPath,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary.withValues(alpha: 0.7),
-                fontSize: 11,
-              ),
+              style: theme.field(size: 12),
             ),
           ],
         ],
       ),
     );
   }
-
 }

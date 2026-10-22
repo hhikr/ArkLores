@@ -2,6 +2,33 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [Unreleased] - 0.17.0
+
+A new look for the whole app, and a pass over every screen for things that were hard to see, hard to hit or behaved unlike the platform. The design and its rules are in `docs/DESIGN.md`.
+
+### Look
+
+- **Paper and ink, one accent per theme.** The light theme keeps its signal yellow, the dark theme its Arknights blue; everything else is new: off-white paper (near-black in the dark theme), ink text, hairlines between parts instead of shadowed cards. The accent marks only where you are, what you can act on and what needs a look, and only as a fill; red is kept for deleting.
+- **A cut corner means "you can press this".** Buttons, tags, chips and tappable panels have their bottom-right corner cut; containers that cannot be pressed are plain rectangles.
+- **Saira for the interface** (bundled, SIL OFL): wide upper-case English labels over bold Chinese headings (`// SHELVES` / 书架), dates, counts and numbers in a wide face. A three-colour strip opens each main screen and sits under the title of a story, a collection or an entry.
+- **Top bars and a tab bar instead of floating pills.** Each main tab has a solid top bar (its tabs or its name, one action); a pushed page has a back button, its title and its actions in one bar. The bottom tab bar spans the screen; the current tab is an accent block with its name in English and Chinese.
+- **The library's first page** shows what the game's knowledge base holds in three numbers (stories, collections, codex entries); shelves are numbered rows, groups in long lists say how many they hold.
+- **Motion is short and mechanical**: pages come in behind a slanted shutter, presses wipe the accent in, panels and sheets slide without bouncing. Nothing loops for show, and with the system's "reduce motion" on, nothing moves.
+- **Work in progress is a bar of cells**, not a spinner.
+
+### Interaction fixes
+
+- Every tappable thing is at least 48 × 48 to the finger (page numbers, row buttons, the question box's buttons, chips under answers, fold heads); every icon-only button has a name that is shown on long press and read by screen readers.
+- No interface text below 12 pt; secondary text and control borders have enough contrast in both themes.
+- **Theme can follow the system** (new installs do); **the reading font is a setting** (sans by default, LXGW WenKai as before on request).
+- Errors are said where they happen: an API key in the wrong format under that key's field, a failed download in the card, never in red.
+- Deleting asks first (a conversation, the reading history, a material, a wiki site, resetting the wiki sites); a removed bookmark can be undone; bookmarks and history rows have a visible delete button besides the swipe.
+- API keys are hidden by default, with a button to show them.
+- The wiki's page tools say what each one does; swiping in from the left edge goes back and from the right edge goes forward (it was the other way round).
+- In onboarding, Back returns to the step before; the main button of each step is at the bottom; the top row no longer overflows on narrow screens.
+- A missing knowledge base in the library offers a way to the knowledge-base page.
+- Fact-check verdicts no longer rely on green and red: held is an ink frame, not held an accent block, each with its word and icon.
+
 ## [0.16.0] - 2026-10-22
 
 Endfield missions read in the order they are played: each conversation under the mission step where the game plays it. Also the lines said in cutscenes and each conversation's own summary. Android build 37. The Arknights knowledge base is the same file as in v0.15.0 and v0.15.1.

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/answer_options.dart';
@@ -7,22 +8,23 @@ import '../../../core/llm/llm_provider.dart'
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/settings_provider.dart';
 import '../../../shared/theme/app_theme.dart';
-import '../../../shared/widgets/press_feedback.dart';
+import '../../../shared/theme/motion.dart';
+import 'ask_composer.dart' show ComposerButton;
 
 /// The question box's one options button: a small panel that opens upward
 /// (above the whole box, so the text being typed stays in view) with how
-/// the next questions are answered — the wikis, the
-/// sub-agents, and "深度思考" where the model service has a switch for it.
+/// the next questions are answered — the wikis, the sub-agents, and "深度思考"
+/// where the model service has a switch for it.
 ///
 /// The panel is an overlay beside the box, not a route, and nothing in it
-/// takes focus: the keyboard stays where it was. The button is lit while a
-/// costlier way of answering (sub-agents, thinking) is on.
+/// takes focus: the keyboard stays where it was. The button is filled with
+/// the accent while a costlier way of answering (sub-agents, thinking) is on.
 class AnswerOptionsMenu extends ConsumerStatefulWidget {
   const AnswerOptionsMenu({super.key, required this.theme, this.above});
 
   final AppThemeTokens theme;
 
-  /// What the panel opens above (the question box's card, so the text
+  /// What the panel opens above (the question box's panel, so the text
   /// being typed stays in view); the button itself when null.
   final LayerLink? above;
 
@@ -62,45 +64,20 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
               showWhenUnlinked: false,
               targetAnchor: Alignment.topLeft,
               followerAnchor: Alignment.bottomLeft,
-              offset: Offset(widget.above == null ? -4 : 0, -6),
+              offset: Offset(widget.above == null ? 0 : 0, -6),
               child: TapRegion(
                 groupId: _link,
                 child: _panel(theme, options, thinkingAvailable, thinking),
               ),
             ),
           ),
-          child: Tooltip(
-            message: context.t.aiAnswerOptions,
-            child: PressFeedback(
-              pressedScale: 0.88,
-              child: InkResponse(
-                key: const ValueKey('answer-options'),
-                canRequestFocus: false,
-                containedInkWell: true,
-                highlightShape: BoxShape.rectangle,
-                onTap: withHaptic(_toggle),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: lit
-                        ? theme.accentPrimary.withValues(alpha: 0.18)
-                        : Colors.transparent,
-                    border: Border.all(
-                      color: lit
-                          ? theme.accentText.withValues(alpha: 0.4)
-                          : theme.divider,
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.tune_sharp,
-                    size: 18,
-                    color: lit ? theme.accentText : theme.textSecondary,
-                  ),
-                ),
-              ),
-            ),
+          child: ComposerButton(
+            key: const ValueKey('answer-options'),
+            theme: theme,
+            tooltip: context.t.aiAnswerOptions,
+            icon: Icons.tune_sharp,
+            selected: lit,
+            onPressed: _toggle,
           ),
         ),
       ),
@@ -116,46 +93,60 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
     final notifier = ref.read(answerOptionsProvider.notifier);
     return Material(
       key: const ValueKey('answer-options-panel'),
-      color: theme.surfaceElevated,
-      elevation: 6,
-      shadowColor: Colors.black.withValues(alpha: 0.3),
-      shape: Border.all(color: theme.divider, width: 0.5),
+      color: theme.cardSurface,
+      shape: Border.all(color: theme.divider),
       child: SizedBox(
-        width: 248,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        width: 264,
+        child: Stack(
           children: [
-            _row(
-              theme,
-              'wiki',
-              options.wiki,
-              context.t.aiAnswerWiki,
-              context.t.aiAnswerWikiShort,
-              () => notifier.set(options.copyWith(wiki: !options.wiki)),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 3),
+                _row(
+                  theme,
+                  'wiki',
+                  options.wiki,
+                  context.t.aiAnswerWiki,
+                  context.t.aiAnswerWikiShort,
+                  () => notifier.set(options.copyWith(wiki: !options.wiki)),
+                ),
+                _row(
+                  theme,
+                  'delegate',
+                  options.delegate,
+                  context.t.aiAnswerDelegate,
+                  context.t.aiAnswerDelegateShort,
+                  () => notifier
+                      .set(options.copyWith(delegate: !options.delegate)),
+                ),
+                if (thinkingAvailable)
+                  _row(
+                    theme,
+                    'think',
+                    thinking,
+                    context.t.aiDeepThinking,
+                    context.t.aiDeepThinkingShort,
+                    () => ref.read(deepThinkingProvider.notifier).state =
+                        !thinking,
+                  ),
+              ],
             ),
-            _row(
-              theme,
-              'delegate',
-              options.delegate,
-              context.t.aiAnswerDelegate,
-              context.t.aiAnswerDelegateShort,
-              () => notifier.set(options.copyWith(delegate: !options.delegate)),
+            Positioned(
+              left: 0,
+              top: 0,
+              width: 32,
+              height: 3,
+              child: ColoredBox(color: theme.textPrimary),
             ),
-            if (thinkingAvailable)
-              _row(
-                theme,
-                'think',
-                thinking,
-                context.t.aiDeepThinking,
-                context.t.aiDeepThinkingShort,
-                () => ref.read(deepThinkingProvider.notifier).state = !thinking,
-              ),
           ],
         ),
       ),
     );
   }
 
+  /// One option: a square check (accent block when on), what it is, a short
+  /// note; at least 52 high.
   Widget _row(
     AppThemeTokens theme,
     String value,
@@ -168,21 +159,38 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
         button: true,
         toggled: checked,
         label: title,
-        child: InkWell(
+        excludeSemantics: true,
+        child: GestureDetector(
           key: ValueKey('answer-option-$value'),
-          canRequestFocus: false,
-          onTap: withHaptic(onTap),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 52),
+            padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: theme.divider)),
+            ),
             child: Row(
               children: [
-                SizedBox(
-                  width: 22,
+                AnimatedContainer(
+                  duration: Motion.of(context, Motion.press),
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: checked ? theme.accentPrimary : Colors.transparent,
+                    border: Border.all(
+                      color: checked ? theme.accentPrimary : theme.cardBorder,
+                      width: 1.5,
+                    ),
+                  ),
                   child: checked
-                      ? Icon(Icons.check_sharp, size: 17, color: theme.accentText)
+                      ? Icon(Icons.check_sharp, size: 16, color: theme.onAccent)
                       : null,
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,19 +198,13 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
                     children: [
                       Text(
                         title,
-                        style: theme.bodyFont.copyWith(
-                          fontSize: 13.5,
-                          color: theme.textPrimary,
-                        ),
+                        style: theme.ui(15, weight: checked ? 700 : 500),
                       ),
                       Text(
                         hint,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.bodyFont.copyWith(
-                          fontSize: 11,
-                          color: theme.textSecondary,
-                        ),
+                        style: theme.text(12.5, color: theme.textSecondary, height: 1.4),
                       ),
                     ],
                   ),

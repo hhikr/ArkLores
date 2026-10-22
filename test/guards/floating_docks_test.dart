@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Guard for the floating docks (2026-10): every page's top bar is a
-/// floating pill (`FloatingScaffold` / `FloatingTopBar`), so a plain
-/// Material `AppBar` anywhere under lib/ is a page that was missed.
+/// Guard for the app's top bars (0.17): every page's top bar is the app's
+/// own (`PageScaffold` for a pushed page, `MainTopBar` for a main tab), so a
+/// plain Material `AppBar` anywhere under lib/ is a page that was missed.
 void main() {
   test('lib/ builds no AppBar', () {
     final pattern = RegExp(r'\b(Sliver)?AppBar\(');

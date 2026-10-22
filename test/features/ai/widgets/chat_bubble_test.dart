@@ -98,7 +98,8 @@ void main() {
           _answer(_answered('答案正文。证据：$_c5:0。', confidence: '0.8')),
           scroll: false,);
       // R15: status and confidence share one line; no avatars.
-      expect(find.text('已作答 · 置信度 0.8'), findsOneWidget);
+      expect(find.text('已作答'), findsOneWidget);
+    expect(find.text('置信度 0.8'), findsOneWidget);
       expect(find.byIcon(Icons.psychology_sharp), findsNothing);
       expect(find.byIcon(Icons.person_sharp), findsNothing);
       // R18b: the sources under the point are one pill (count + collection,
@@ -110,10 +111,10 @@ void main() {
       expect(find.textContaining('level_fixture_c5'), findsOneWidget);
       expect(find.text('第 1 行'), findsOneWidget);
       // R15: the summary tree is one folded line until tapped.
-      await tester.tap(find.text('证据 1 处 · 来自 1 个故事'));
+      await tester.tap(find.text('证据 1 处 / 来自 1 个故事'));
       await tester.pumpAndSettle();
-      expect(find.text('活动 act_fixture · 1 处'), findsOneWidget);
-      expect(find.text('level_fixture_c5 · 1 处'), findsOneWidget);
+      expect(find.text('活动 act_fixture / 1 处'), findsOneWidget);
+      expect(find.text('level_fixture_c5 / 1 处'), findsOneWidget);
       expect(find.text('第 1 行'), findsNWidgets(2));
       // R14: readable names and 1-based lines; no paths, no envelope.
       expect(find.textContaining(_c5), findsNothing);
@@ -163,11 +164,11 @@ void main() {
       await _openSources(tester);
       expect(find.text('第 1–2 行'), findsOneWidget);
       expect(find.text('第 4 行'), findsOneWidget);
-      expect(find.text('详细经过 · 2 条'), findsOneWidget);
+      expect(find.text('详细经过 / 2 条'), findsOneWidget);
       expect(find.text('细节甲。'), findsNothing);
       expect(find.textContaining('DETAILS'), findsNothing);
-      expect(find.text('证据 2 处 · 来自 1 个故事'), findsOneWidget);
-      await tester.tap(find.text('详细经过 · 2 条'));
+      expect(find.text('证据 2 处 / 来自 1 个故事'), findsOneWidget);
+      await tester.tap(find.text('详细经过 / 2 条'));
       await tester.pumpAndSettle();
       expect(find.text('细节甲。'), findsOneWidget);
       expect(find.text('细节乙。'), findsOneWidget);
@@ -247,23 +248,24 @@ void main() {
       final chip1 = find.byKey(const ValueKey('chain:$_c5:0-1'));
       final chip2 = find.byKey(const ValueKey('chain:$_c5:9'));
       expect(tester.getCenter(chip1).dy, tester.getCenter(chip2).dy);
-      expect(tester.getCenter(chip1).dy - tester.getCenter(c5).dy, lessThan(30));
-      // The second chapter follows close below (a compact card).
+      expect(tester.getCenter(chip1).dy - tester.getCenter(c5).dy, lessThan(40));
+      // The second chapter follows close below (a compact card; each chip is
+      // 44 to the finger).
       final gap =
           tester.getCenter(find.byKey(const ValueKey('chain:$_c6:3'))).dy -
               tester.getCenter(chip1).dy;
-      expect(gap, inInclusiveRange(18, 60));
+      expect(gap, inInclusiveRange(18, 96));
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a single chapter is one line: collection · chapter and chips',
+    testWidgets('a single chapter is one line: collection / chapter and chips',
         (tester) async {
       await _pump(tester, _answer(_answered('一件事。 `$_c5:0-1`')));
       await _openSources(tester);
       final chip = find.byKey(const ValueKey('chain:$_c5:0-1'));
       final label = find.textContaining('level_fixture_c5');
       expect(label, findsOneWidget);
-      expect(tester.getCenter(chip).dy - tester.getCenter(label).dy, lessThan(40));
+      expect(tester.getCenter(chip).dy - tester.getCenter(label).dy, lessThan(52));
     });
 
     testWidgets('different collections each get their own header',
@@ -387,13 +389,13 @@ void main() {
           elapsed: Duration(seconds: 262),
         ),
       );
-      expect(find.text('in 382k · out 11.7k · cache 87% · 14 calls · 4m22s'),
+      expect(find.text('in 382k / out 11.7k / cache 87% / 14 calls / 4m22s'),
           findsOneWidget,);
     });
 
     testWidgets('a provider without usage shows what it has', (tester) async {
       await show(tester, const TurnStats(calls: 3, elapsed: Duration(seconds: 9)));
-      expect(find.text('3 calls · 9s'), findsOneWidget);
+      expect(find.text('3 calls / 9s'), findsOneWidget);
     });
 
     testWidgets('in English', (tester) async {
@@ -407,7 +409,7 @@ void main() {
         ),
         locale: const Locale('en'),
       );
-      expect(find.text('in 1.2k · out 300 · 2 calls · 1m05s'), findsOneWidget);
+      expect(find.text('in 1.2k / out 300 / 2 calls / 1m05s'), findsOneWidget);
     });
 
     testWidgets('no stats, no line', (tester) async {
@@ -429,7 +431,7 @@ void main() {
         scroll: false,
       );
       expect(find.textContaining('部分作答'), findsOneWidget);
-      expect(find.textContaining('精读=1'), findsOneWidget);
+      expect(find.textContaining('精读 1'), findsOneWidget);
       expect(find.textContaining('INVESTIGATION_VERDICT'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -529,7 +531,8 @@ void main() {
       await _pump(tester, message);
       // Two stories: the grep showed lines of both (0.14: every tool that
       // prints story lines counts, not read_story alone).
-      expect(find.text('已作答 · 查阅 3 次 · 读了 2 篇原文'), findsOneWidget);
+      expect(find.text('已作答'), findsOneWidget);
+    expect(find.text('查阅 3 次 / 读了 2 篇原文'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('answer-header')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('work-timeline')), findsOneWidget);
@@ -542,8 +545,8 @@ void main() {
         find.text('{"pattern":"甲|乙","collection":"act_fixture"}'),
         findsNWidgets(2),
       );
-      expect(find.textContaining('5 处 · 2 篇 · '), findsOneWidget);
-      expect(find.textContaining('第 0–40 行 · '), findsOneWidget);
+      expect(find.textContaining('5 处 / 2 篇 / '), findsOneWidget);
+      expect(find.textContaining('第 0–40 行 / '), findsOneWidget);
       expect(find.textContaining(' 字'), findsNWidgets(3));
       expect(find.text('拟定'), findsOneWidget);
       expect(find.text('重复'), findsOneWidget);

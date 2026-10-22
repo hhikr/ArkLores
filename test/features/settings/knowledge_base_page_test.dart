@@ -5,6 +5,7 @@ import 'package:arklores/core/gamedata/gamedata_installer.dart';
 import 'package:arklores/core/gamedata/gamedata_provider.dart';
 import 'package:arklores/features/settings/knowledge_base_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -13,6 +14,11 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/fake_installer.dart';
 
 Future<void> _pump(WidgetTester tester, FakeInstaller installer) async {
+  // A tall phone: every card of the page is laid out.
+  tester.view.physicalSize = const Size(800, 3200);
+  tester.view.devicePixelRatio = 2;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -67,7 +73,7 @@ void main() {
       );
       expect(find.text('更新'), findsOneWidget);
       final button = tester
-          .widget<ElevatedButton>(find.byKey(const Key('kb-download-button')));
+          .widget<AppButton>(find.byKey(const Key('kb-download-button')));
       expect(button.onPressed, isNotNull);
       expect(find.byKey(const Key('kb-redownload')), findsNothing);
     });
@@ -191,10 +197,9 @@ void main() {
     expect(find.text('明日方舟知识库'), findsOneWidget);
     expect(find.textContaining('不作为 AI 的证据来源'), findsNothing);
     // What is in it, in the reader's words (no table names).
-    expect(
-      find.textContaining('剧情 1200 行 · 资料 340 条 · 数据版本 a550f5e'),
-      findsOneWidget,
-    );
+    for (final fact in ['剧情 1200 行', '资料 340 条', '数据版本 a550f5e']) {
+      expect(find.text(fact), findsOneWidget, reason: fact);
+    }
     expect(find.textContaining('entities'), findsNothing);
     expect(find.text('用游戏数据更新'), findsOneWidget);
 

@@ -59,9 +59,8 @@ void main() {
         (tester) async {
       await pumpComposer(tester);
       final one = barHeight(tester);
-      expect(find.byKey(const ValueKey('ask-input-expand-toggle')), findsOneWidget);
-      // The expand button is hidden (transparent, not hit-testable) for a
-      // short text.
+      // The expand button is not there for a short text.
+      expect(find.byKey(const ValueKey('ask-input-expand-toggle')), findsNothing);
       controller.text = '一\n二';
       await tester.pumpAndSettle();
       final two = barHeight(tester);

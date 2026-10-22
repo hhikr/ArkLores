@@ -5,7 +5,7 @@ import '../../core/gamedata/game.dart';
 import '../../core/gamedata/gamedata_channel.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../library/library_pages.dart' show gameLabel;
 import '../materials/materials_page.dart' show SwitchedPages;
 import 'game_asset_card.dart';
@@ -41,15 +41,13 @@ class _KnowledgeBasePageState extends ConsumerState<KnowledgeBasePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ref.watch(themeProvider);
-    return FloatingScaffold(
+    return PageScaffold(
       title: context.t.kbTitle,
       scrollUnder: true,
       actions: [
         for (final (i, game) in Game.values.indexed)
-          FloatingSegment(
+          TopTab(
             key: ValueKey('kb-tab-${game.key}'),
-            theme: theme,
             label: gameLabel(context, game),
             selected: _tab == i,
             onTap: () => setState(() => _tab = i),
@@ -75,7 +73,7 @@ class _GamePage extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
     return ListView(
       key: ValueKey('kb-game-${game.key}'),
-      padding: floatingPadding(context, const EdgeInsets.fromLTRB(16, 12, 16, 32)),
+      padding: pagePadding(context, const EdgeInsets.fromLTRB(16, 16, 16, 32)),
       children: [
         GameAssetCard(
           game: game,

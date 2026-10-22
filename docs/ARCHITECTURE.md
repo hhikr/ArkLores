@@ -30,7 +30,7 @@
 ```
 lib/
   main.dart            启动：并行读出保存的设置（安全存储），注入 ProviderScope，进入 App
-  app.dart             MainShell：四个标签（IndexedStack），悬浮的底部导航，标签间的跳转请求
+  app.dart             MainShell：四个标签（IndexedStack），底部标签栏（`AppTabBar`），标签间的跳转请求
   core/
     agent/             问答：AskChatNotifier、LoreAgentLoop、工具（tools/）、提示词、答案解析、会话记录
     gamedata/          知识库：安装、渠道、检索（单库 / 两库合并）、向量、目录、只读 SQL
@@ -106,7 +106,7 @@ docs/                  文档（索引见 CLAUDE.md）
 
 - 阅读器（`features/ai/story_reader_page.dart`）：惰性列表从锚点双向建（任意长的故事打开不卡），记住位置与读过的次数，标题板下有进度条；从问答出处打开时高亮所引的行。
   终末地的篇里有种类分段线、折叠的段首梗概、步骤标题，“未定位的对话”默认收起（点标题展开）。
-- 排版：长文用阅读字体（`reading_text.dart`，霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。
+- 排版：长文用阅读字体（`reading_text.dart`，设置里选：默认黑体，可选霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 搜索（`library_search.dart`）：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。与问答无关。
 - 用户库（`core/userdata/`）：阅读历史、阅读进度、我的资料存在独立的库，只存引用字符串（`story:<id>` 等）加原文片段，知识库更新后按片段重新定位。**所以知识库的 id 必须稳定。**
 
@@ -130,14 +130,14 @@ docs/                  文档（索引见 CLAUDE.md）
 
 细节：`WIKI.md`。
 
-- 浏览：`features/wiki/wiki_browser_page.dart`（`flutter_inappwebview`），PRTS 与终末地 Wiki（fz.wiki 或 Warfarin）两个标签、书签；深色模式只切站点自己的主题状态，不做反色；网页铺满屏幕，注入上下留白避开悬浮栏。
+- 浏览：`features/wiki/wiki_browser_page.dart`（`flutter_inappwebview`），PRTS 与终末地 Wiki（fz.wiki 或 Warfarin）两个标签、书签；深色模式只切站点自己的主题状态，不做反色；网页铺满屏幕，注入上下留白避开顶栏与底栏。
 - 问答取证：`core/wiki/`（`wiki_sources.dart` 两个站点的接口、`wiki_html_text.dart` 页面 → 编号段落、`wiki_lookup.dart` 缓存与版本快照），工具 `wiki_search` / `wiki_read`。Wiki 是二手资料，答案里写明来源。
 
 ## 9. 界面体系
 
 - 两套主题 token：明日方舟（`ark_theme_tokens.dart`）与终末地（`endfield_theme_tokens.dart`，黑白工业风 + 信号黄）。信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
-- 形状与动效照两款游戏：方角（卡片用切角 `ThemeAwareCard`）、`Icons.*_sharp`、选中的标签用擦入的横条（`SelectionBar`）、动效短而无回弹（`easeOutCubic` / `easeOutExpo`）。守卫测试禁止圆角、圆形、`_rounded` 图标和回弹曲线。
-- 全 App 不用 `AppBar`：推入的页面用 `FloatingScaffold`，标题板与导航悬浮在内容上（`floating_bar.dart`，有守卫测试）；可点的块用 `PressFeedback` + `withHaptic`。
+- 界面设计（0.17）见 `docs/DESIGN.md`：两套主题 token（`shared/theme/`）、部件（`shared/widgets/ef_widgets.dart`）、页面框架（`page_frame.dart`）、动效（`motion.dart`）与人机交互约定；守卫测试禁止圆角、`_rounded` 图标、回弹曲线、转圈、投影、红绿色和小于 12 的字。
+- 全 App 不用 `AppBar`：推入的页面用 `PageScaffold`，主标签页用 `MainTopBar`（`page_frame.dart`，有守卫测试）。
 - 输入框旁的面板、菜单用浮层且不取焦点（不把键盘收起来）。
 - 界面文字进中英 ARB（`shared/l10n/`，`flutter gen-l10n`）；提示词留在 Dart 里。
 

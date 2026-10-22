@@ -14,6 +14,7 @@ import 'package:arklores/features/materials/materials_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/handoff_provider.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -346,7 +347,7 @@ void main() {
     Widget home, {
     List<Override> extra = const [],
   }) async {
-    tester.view.physicalSize = const Size(1080, 2160);
+    tester.view.physicalSize = const Size(1080, 3240);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -395,7 +396,8 @@ void main() {
     for (final k in ['main', 'activity', 'memory', 'roguelike', 'sandbox', 'codex']) {
       expect(find.byKey(ValueKey('shelf-$k')), findsOneWidget, reason: k);
     }
-    expect(find.text('18 项 · 463 个故事'), findsOneWidget);
+    expect(find.text('18 项'), findsWidgets);
+    expect(find.text('463 个故事'), findsOneWidget);
     expect(find.text('1747 条'), findsOneWidget);
     await tester.drag(find.byType(ListView).first, const Offset(0, -1500));
     await tester.pump(const Duration(milliseconds: 300));
@@ -1199,7 +1201,10 @@ void main() {
       ),),
       isTrue,
     );
-    await tester.tap(find.byIcon(Icons.close_sharp));
+    await tester.tap(find.descendant(
+      of: find.byKey(const ValueKey('search-scope')),
+      matching: find.byIcon(Icons.close_sharp),
+    ),);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('search-scope')), findsNothing);
     expect(
@@ -1224,7 +1229,7 @@ void main() {
     // Nothing to save yet.
     expect(
       tester
-          .widget<TextButton>(find.byKey(const ValueKey('material-save')))
+          .widget<AppButton>(find.byKey(const ValueKey('material-save')))
           .onPressed,
       isNull,
     );

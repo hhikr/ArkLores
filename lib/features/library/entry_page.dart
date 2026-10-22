@@ -13,8 +13,9 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/industrial_ui.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import '../ai/story_labels_provider.dart' show storyFullLinesProvider;
 import 'library_pages.dart';
@@ -35,7 +36,7 @@ class EntryPage extends ConsumerWidget {
       return LibraryScaffold(
         title: '',
         body: entry.isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const LoadingView()
             : LibraryMessage(
                 icon: Icons.folder_off_sharp,
                 title: context.t.libraryEmpty,
@@ -111,7 +112,7 @@ class EntryPage extends ConsumerWidget {
         child: CustomScrollView(
           slivers: [
             SliverPadding(
-              padding: floatingPadding(
+              padding: pagePadding(
                 context,
                 const EdgeInsets.fromLTRB(16, 12, 16, 32),
               ),
@@ -126,8 +127,7 @@ class EntryPage extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Text(
                             context.t.libraryNoText,
-                            style: theme.bodyFont
-                                .copyWith(color: theme.textSecondary),
+                            style: theme.text(15, color: theme.textSecondary),
                           ),
                         ),
                     ],
@@ -170,10 +170,7 @@ class EntryPage extends ConsumerWidget {
                               ActionChip(
                                 key: ValueKey('binding-${b.entry.id}'),
                                 label: Text(entryHeadline(b.entry)),
-                                labelStyle:
-                                    theme.bodyFont.copyWith(fontSize: 12.5),
-                                backgroundColor: theme.cardSurface,
-                                side: BorderSide(color: theme.cardBorder),
+                                labelStyle: theme.text(14),
                                 onPressed: () => openEntry(context, b.entry),
                               ),
                           ],
@@ -223,47 +220,57 @@ class EntryPage extends ConsumerWidget {
         children: [
           // The collection the entry belongs to opens its page.
           if (e.collectionName != null)
-            InkWell(
-              key: const ValueKey('entry-collection'),
-              onTap: e.collectionId == null
-                  ? null
-                  : () => openCollection(context, e.collectionId!),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text.rich(
-                  TextSpan(
+            Semantics(
+              link: e.collectionId != null,
+              child: PressRow(
+                key: const ValueKey('entry-collection'),
+                onTap: e.collectionId == null
+                    ? null
+                    : () => openCollection(context, e.collectionId!),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 40),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextSpan(text: e.collectionName!),
+                      Flexible(
+                        child: Text(
+                          e.collectionName!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.ui(
+                            14,
+                            weight: 700,
+                            color: theme.textSecondary,
+                          ),
+                        ),
+                      ),
                       if (e.collectionId != null)
-                        const WidgetSpan(
-                          alignment: PlaceholderAlignment.middle,
-                          child: Icon(Icons.chevron_right_sharp, size: 16),
+                        Icon(
+                          Icons.chevron_right_sharp,
+                          size: 20,
+                          color: theme.textSecondary,
                         ),
                     ],
-                  ),
-                  style: theme.bodyFont.copyWith(
-                    color: theme.accentText,
-                    fontSize: 12,
-                    letterSpacing: 0.5,
                   ),
                 ),
               ),
             ),
           const SizedBox(height: 2),
-          Text(
-            e.name.isEmpty ? e.id : e.name,
-            style: theme.titleFont.copyWith(fontSize: 22, height: 1.25),
-          ),
+          Text(e.name.isEmpty ? e.id : e.name, style: theme.heading(24)),
+          const SizedBox(height: 10),
+          const TriStrip(),
           const SizedBox(height: 10),
           Wrap(
-            spacing: 6,
+            spacing: 8,
             runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               AccentPill(entryTypeName(e.type)),
-              if (codeCaption(e) != null)
-                AccentPill(codeCaption(e)!, muted: true),
-              if (groupLabel(e.type, e.group) != null)
-                AccentPill(groupLabel(e.type, e.group)!, muted: true),
+              FactsRow([
+                if (codeCaption(e) != null) codeCaption(e)!,
+                if (groupLabel(e.type, e.group) != null)
+                  groupLabel(e.type, e.group)!,
+              ]),
             ],
           ),
         ],
@@ -338,13 +345,12 @@ class EntryPage extends ConsumerWidget {
             if (heading.isNotEmpty) ...[
               Row(
                 children: [
-                  Container(width: 3, height: 14, color: theme.accentPrimary),
+                  Container(width: 4, height: 18, color: theme.trace),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       heading,
-                      style:
-                          theme.titleFont.copyWith(fontSize: 14, height: 1.3),
+                      style: theme.heading(16),
                     ),
                   ),
                 ],
@@ -391,17 +397,9 @@ class EntryPage extends ConsumerWidget {
         ),
       ),
       for (final g in groups.entries) ...[
-        Padding(
-          padding: const EdgeInsets.only(top: 6, bottom: 8),
-          child: Text(
-            '${g.key.split('\u0000').first} · ${g.key.split('\u0000').last}'
-            '  ${g.value.length}',
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        GroupHeading(
+          title: '${g.key.split('\u0000').first} / ${g.key.split('\u0000').last}',
+          count: g.value.length,
         ),
         Wrap(
           spacing: 8,
@@ -411,15 +409,13 @@ class EntryPage extends ConsumerWidget {
               ActionChip(
                 key: ValueKey('binding-${b.entry.id}'),
                 label: Text(entryHeadline(b.entry)),
-                labelStyle: theme.bodyFont.copyWith(fontSize: 12.5),
-                backgroundColor: theme.cardSurface,
-                side: BorderSide(color: theme.cardBorder),
+                labelStyle: theme.text(14),
                 onPressed: () => openEntry(context, b.entry),
               ),
             if (g.value.length > 40)
               Text(
                 '+${g.value.length - 40}',
-                style: theme.bodyFont.copyWith(color: theme.textMuted),
+                style: theme.field(),
               ),
           ],
         ),
@@ -459,15 +455,11 @@ class _AttachedDialogue extends ConsumerWidget {
               if ((l.speaker ?? '').trim().isNotEmpty)
                 Text(
                   l.speaker!.trim(),
-                  style: theme.bodyFont.copyWith(
-                    color: theme.accentText,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: theme.ui(13, weight: 700, color: theme.textSecondary),
                 ),
               Text(
                 withPlaceholders(l.content, nickname),
-                style: readingStyle(theme, size: 15),
+                style: readingStyle(theme, size: 15.5),
               ),
             ],
           ],

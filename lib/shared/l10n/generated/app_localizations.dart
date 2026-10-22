@@ -941,13 +941,13 @@ abstract class AppLocalizations {
   /// No description provided for @aiAnswerDetails.
   ///
   /// In en, this message translates to:
-  /// **'Details · {count} points'**
+  /// **'Details / {count} points'**
   String aiAnswerDetails(int count);
 
   /// No description provided for @aiEvidenceSummary.
   ///
   /// In en, this message translates to:
-  /// **'{count} citations · {stories} stories'**
+  /// **'{count} citations / {stories} stories'**
   String aiEvidenceSummary(int count, int stories);
 
   /// No description provided for @aiChapterCount.
@@ -1283,7 +1283,7 @@ abstract class AppLocalizations {
   /// No description provided for @storyReaderResumed.
   ///
   /// In en, this message translates to:
-  /// **'Continue · line {line}'**
+  /// **'Continue / line {line}'**
   String storyReaderResumed(int line);
 
   /// No description provided for @storyReaderSynopsis.
@@ -1601,13 +1601,13 @@ abstract class AppLocalizations {
   /// No description provided for @aiWorkSummary.
   ///
   /// In en, this message translates to:
-  /// **'{calls} lookups · {reads} stories read'**
+  /// **'{calls} lookups / {reads} stories read'**
   String aiWorkSummary(int calls, int reads);
 
   /// No description provided for @aiWorkHits.
   ///
   /// In en, this message translates to:
-  /// **'{hits} hits · {stories} stories'**
+  /// **'{hits} hits / {stories} stories'**
   String aiWorkHits(int hits, int stories);
 
   /// No description provided for @aiWorkRows.
@@ -2429,7 +2429,7 @@ abstract class AppLocalizations {
   /// No description provided for @kbVectorSummary.
   ///
   /// In en, this message translates to:
-  /// **'{stories} story vectors · {records} record vectors'**
+  /// **'{stories} story vectors / {records} record vectors'**
   String kbVectorSummary(int stories, int records);
 
   /// No description provided for @kbVectorComplete.
@@ -2693,7 +2693,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiWikiVersion.
   ///
   /// In en, this message translates to:
-  /// **'{site} · version read on {date}'**
+  /// **'{site} / version read on {date}'**
   String aiWikiVersion(String site, String date);
 
   /// No description provided for @aiWikiSecondary.
@@ -2839,6 +2839,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Endfield knowledge base'**
   String get kbEndfieldTitle;
+
+  /// No description provided for @libraryFigureStories.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories'**
+  String get libraryFigureStories;
+
+  /// No description provided for @libraryFigureCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'Collections'**
+  String get libraryFigureCollections;
+
+  /// No description provided for @libraryFigureEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'Codex entries'**
+  String get libraryFigureEntries;
+
+  /// No description provided for @libraryOpenKnowledgeBase.
+  ///
+  /// In en, this message translates to:
+  /// **'Open knowledge base'**
+  String get libraryOpenKnowledgeBase;
+
+  /// No description provided for @wikiTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Page tools'**
+  String get wikiTools;
+
+  /// No description provided for @wikiToolsClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close page tools'**
+  String get wikiToolsClose;
+
+  /// No description provided for @wikiZoomOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Smaller text'**
+  String get wikiZoomOut;
+
+  /// No description provided for @wikiZoomIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Larger text'**
+  String get wikiZoomIn;
+
+  /// No description provided for @wikiRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get wikiRefresh;
+
+  /// No description provided for @wikiDarkPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark page'**
+  String get wikiDarkPage;
+
+  /// No description provided for @wikiBookmarkAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add bookmark'**
+  String get wikiBookmarkAdd;
+
+  /// No description provided for @wikiBookmarkRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove bookmark'**
+  String get wikiBookmarkRemove;
+
+  /// No description provided for @bookmarksRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark removed'**
+  String get bookmarksRemoved;
+
+  /// No description provided for @commonUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get commonUndo;
+
+  /// No description provided for @bookmarksDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get bookmarksDelete;
+
+  /// No description provided for @settingsAppearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
+  /// No description provided for @settingsThemeSystemShort.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get settingsThemeSystemShort;
+
+  /// No description provided for @settingsThemeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Light or dark, as the system is'**
+  String get settingsThemeSystem;
+
+  /// No description provided for @settingsReadingFont.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading font'**
+  String get settingsReadingFont;
+
+  /// No description provided for @settingsReadingFontDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The font of stories, files and answers'**
+  String get settingsReadingFontDesc;
+
+  /// No description provided for @settingsReadingFontSans.
+  ///
+  /// In en, this message translates to:
+  /// **'Sans'**
+  String get settingsReadingFontSans;
+
+  /// No description provided for @settingsReadingFontKai.
+  ///
+  /// In en, this message translates to:
+  /// **'LXGW WenKai'**
+  String get settingsReadingFontKai;
+
+  /// No description provided for @apiSettingsShowKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Show key'**
+  String get apiSettingsShowKey;
+
+  /// No description provided for @apiSettingsHideKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide key'**
+  String get apiSettingsHideKey;
+
+  /// No description provided for @wikiSourcesResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'The sites go back to the built-in list; added sites are removed.'**
+  String get wikiSourcesResetConfirm;
+
+  /// No description provided for @aiConfigRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up the chat service first'**
+  String get aiConfigRequiredTitle;
+
+  /// No description provided for @aiAskTry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try asking'**
+  String get aiAskTry;
 }
 
 class _AppLocalizationsDelegate
