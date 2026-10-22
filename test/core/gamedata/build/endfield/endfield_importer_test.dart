@@ -210,6 +210,13 @@ void writeTables(Directory dir) {
     'chapter1_num': tx(i18n, 1201, '第一章'),
     'ep_num1': tx(i18n, 1202, '进程Ⅰ'),
     'ep1_name': tx(i18n, 1203, '某进程'),
+    // Cutscene subtitles: `<cutscene>_<line>`, the male form `_m` aside.
+    'cutscene_e1m1_2_02': tx(i18n, 1220, '跟紧我'),
+    'cutscene_e1m1_2_01': tx(i18n, 1221, '小心！'),
+    'cutscene_e1m1_2_02_m': tx(i18n, 1222, '跟紧我（另一种）'),
+    // Another version of the same cutscene: its lines are all above.
+    'cutscene_e1m1_2d1_01': tx(i18n, 1223, '跟紧 我'),
+    'cs_video_e1m1_3_01': tx(i18n, 1224, '远处有光。'),
   });
   table('MissionTypeInfoTable', {
     '0': {'isVisible': true, 'missionViewType': 0},
@@ -459,16 +466,26 @@ void main() {
     expect(
       lines.map((l) => l['content']),
       [
-        '对话', '她来了。', '欢迎，管理员。', '跟上去／留下来', '风停了。',
+        // The game's summary of a conversation opens it.
+        '对话', '甲与乙在谷地相遇。', '她来了。', '欢迎，管理员。', '跟上去／留下来', '风停了。',
         // The nameless hidden step e1m1d7 is read in its mission.
         '对话', '准备好了。',
+        // The cutscenes' subtitles after the dialogue, a repeated version
+        // of one left out.
+        '过场动画', '小心！', '跟紧我',
+        '过场动画', '远处有光。',
         '远程通话', '听得到吗？',
         '闲话', '今天风好大。',
       ],
     );
     expect(
       [for (final l in lines) if (l['kind'] == 'section') l['content']],
-      ['对话', '对话', '远程通话', '闲话'],
+      ['对话', '对话', '过场动画', '过场动画', '远程通话', '闲话'],
+    );
+    expect(lines[1]['kind'], 'summary');
+    expect(
+      [for (final l in lines) if (l['kind'] == 'subtitle') l['speaker']],
+      [null, null, null],
     );
     expect(
       await q("SELECT id FROM collections WHERE id = 'ef/mission_e1m1d7'"),
@@ -482,8 +499,8 @@ void main() {
     expect(steps.map((s) => '${s['kind']} ${s['name']}'), ['ef/main 准备工作·一阶段', 'ef/main 准备工作·二阶段']);
     final stepStory = await q("SELECT name FROM entries WHERE raw_id = 'ef/e1m1d5.txt'");
     expect(stepStory.single['name'], '准备工作·一阶段');
-    expect(lines[3]['kind'], 'choice');
-    expect(lines[4]['kind'], 'narration');
+    expect(lines[4]['kind'], 'choice');
+    expect(lines[5]['kind'], 'narration');
     final catalog = await q(
       "SELECT story_name, collection_name, collection_type, synopsis FROM story_catalog WHERE story_id = 'ef/e1m1.txt'",
     );
@@ -599,15 +616,19 @@ void main() {
 
     final ids = [
       'sns_e1m1_2', 'dlg_e1m1_10', 'radio_e1m1_0d5', 'dlg_e1m1_2', 'radio_e1m1_1d5',
-      'remotecomm_e1m1_1', 'dlg_e1m1_2d5',
+      'remotecomm_e1m1_1', 'dlg_e1m1_2d5', 'cutscene_e1m1_3_1', 'cs_video_e1m1_2',
     ]..sort(compare);
     expect(ids, [
       'dlg_e1m1_2', 'dlg_e1m1_2d5', 'dlg_e1m1_10',
+      // A cutscene's number follows its mission, at times in two parts.
+      'cs_video_e1m1_2', 'cutscene_e1m1_3_1',
       'radio_e1m1_0d5', 'radio_e1m1_1d5',
       'remotecomm_e1m1_1',
       'sns_e1m1_2',
     ]);
     expect(conversationOrder('dlg_x'), isNull);
+    expect(missionOfConversation('cutscene_e0m2_3_1'), 'e0m2');
+    expect(missionOfConversation('cs_video_e1m1d5_1'), 'e1m1d5');
   });
 
   test('enemies say where they are found; documents and places carry their region', () async {

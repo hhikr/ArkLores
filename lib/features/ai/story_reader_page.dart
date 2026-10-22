@@ -8,7 +8,7 @@ import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../core/gamedata/story_coverage_models.dart'
     show StoryLineEntry, storyKindLabel;
-import '../../core/gamedata/story_vectors.dart' show sectionLineKind;
+import '../../core/gamedata/story_vectors.dart' show headingLineKinds, sectionLineKind, stageLineKind, summaryLineKind, unplacedLineKind;
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart' show LibraryEntry;
@@ -22,6 +22,7 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../library/reading_text.dart' show FoldSection, ReadingText;
 import 'story_find_sheet.dart';
@@ -174,6 +175,18 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   Set<int> _quietSections = const {};
   List<StoryLineEntry>? _preparedFor;
   bool _spoken = false;
+
+  /// The text opens each part with the game's summary of it: the
+  /// catalog's synopsis (the same summaries together) is not shown on top.
+  bool _summarized = false;
+
+  /// Positions of the part summaries the reader opened (the list is lazy:
+  /// a summary scrolled away and back keeps its state).
+  final Set<int> _openSummaries = {};
+
+  /// Positions of the opened headings of conversations no data places
+  /// (`unplaced`): what follows one is left out of the list until opened.
+  final Set<int> _openUnplaced = {};
   String _nickname = '';
 
   /// The description of the Endfield mission this story is (or null).
@@ -238,14 +251,24 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     // Narration is set in italics only between spoken lines; a text that is
     // all narration (a month squad's story, a document) is plain.
     _spoken = lines.any((l) => (l.speaker ?? '').trim().isNotEmpty);
+    _summarized = lines.any((l) => l.kind == summaryLineKind);
     // A section names its kind where the kind changes; the next parts of
     // the same kind are set off by the rule alone.
     _quietSections = {};
     String? kind;
     for (final (i, l) in lines.indexed) {
+      // (under a new step the first part names its kind again)
+      if (headingLineKinds.contains(l.kind)) kind = null;
       if (l.kind != sectionLineKind) continue;
       if (l.content == kind) _quietSections.add(i);
       kind = l.content;
+    }
+    // A folded group opens when the line to show is in it.
+    final at = _cited ? _start : _resume;
+    final p = at == null ? -1 : lines.indexWhere((l) => l.lineIndex == at);
+    if (p >= 0) {
+      final h = _unplacedOver(lines, p);
+      if (h != null) _openUnplaced.add(h);
     }
     _rows = _makeRows(lines);
     // Open anchored on the cited block or the line to resume at.
@@ -686,7 +709,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             ],
             // The official synopsis tells the whole story (it is what the
             // game shows when a story is skipped): folded until asked for.
-            if (synopsis != null && synopsis.trim().isNotEmpty) ...[
+            if (synopsis != null && synopsis.trim().isNotEmpty && !_summarized) ...[
               const SizedBox(height: 12),
               FoldSection(
                 key: const ValueKey('story-reader-synopsis'),
@@ -708,6 +731,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final rows = <_Row>[];
     var i = 0;
     while (i < lines.length) {
+      // (a folded group: its heading only)
+      if (lines[i].kind == unplacedLineKind && !_openUnplaced.contains(i)) {
+        rows.add(_Row(i, i));
+        i++;
+        while (i < lines.length && !headingLineKinds.contains(lines[i].kind)) {
+          i++;
+        }
+        continue;
+      }
       if (_isTarget(lines[i].lineIndex)) {
         var j = i;
         while (j + 1 < lines.length && _isTarget(lines[j + 1].lineIndex)) {
@@ -752,6 +784,22 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           ),
         );
       }
+      if (line.kind == summaryLineKind) {
+        return Padding(
+          key: _keyOf(row.first),
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+          child: _summary(row.first),
+        );
+      }
+      // A story laid out along its mission's steps: a step's goal, or the
+      // name of a mission played inside a step.
+      if (headingLineKinds.contains(line.kind)) {
+        return Padding(
+          key: _keyOf(row.first),
+          padding: EdgeInsets.fromLTRB(10, first ? 4 : 30, 10, 0),
+          child: line.kind == unplacedLineKind ? _unplaced(theme, row.first) : _heading(theme, line),
+        );
+      }
       final isResume = !_cited && line.lineIndex == _resume;
       final child = Container(
         key: _keyOf(row.first),
@@ -791,6 +839,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         );
         continue;
       }
+      if (_lines[p].kind == summaryLineKind) {
+        inside.add(Container(key: _keyOf(p), child: _summary(p)));
+        continue;
+      }
+      if (headingLineKinds.contains(_lines[p].kind)) {
+        inside.add(Container(key: _keyOf(p), child: _heading(theme, _lines[p])));
+        continue;
+      }
       inside.add(
         KeyedSubtree(
           key: ValueKey('story-line-target-${_lines[p].lineIndex}'),
@@ -811,6 +867,97 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return Padding(
       padding: EdgeInsets.only(top: first ? 0 : 8, bottom: 8),
       child: _citedBlock(theme, inside),
+    );
+  }
+
+  /// The game's summary of the part it opens: folded like the official
+  /// synopsis (it tells what the part is about before it is read).
+  Widget _summary(int p) => FoldSection(
+        key: ValueKey('story-reader-summary-${_lines[p].lineIndex}'),
+        title: context.t.storyReaderSynopsis,
+        plain: true,
+        initiallyOpen: _openSummaries.contains(p),
+        onToggle: (open) => open ? _openSummaries.add(p) : _openSummaries.remove(p),
+        child: ReadingText(_lines[p].content.trim(), size: 14.5),
+      );
+
+  /// The heading of a folded group over [p] (the nearest heading above it,
+  /// when that one is `unplaced`), or null.
+  int? _unplacedOver(List<StoryLineEntry> lines, int p) {
+    for (var i = p; i >= 0; i--) {
+      if (headingLineKinds.contains(lines[i].kind)) return lines[i].kind == unplacedLineKind ? i : null;
+    }
+    return null;
+  }
+
+  /// The heading of the conversations no data places: tapped, the group
+  /// opens or folds (anchored on the heading, so it stays where it is).
+  Widget _unplaced(AppThemeTokens theme, int p) {
+    final open = _openUnplaced.contains(p);
+    final count = _lines.skip(p + 1).takeWhile((l) => !headingLineKinds.contains(l.kind)).where((l) => l.kind == sectionLineKind).length;
+    return PressFeedback(
+      child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: withHaptic(() {
+        final view = _scrollKey.currentContext?.findRenderObject();
+        final box = _keyOf(p).currentContext?.findRenderObject();
+        var at = 0.1;
+        if (view is RenderBox && box is RenderBox && box.attached && view.size.height > 0) {
+          at = (box.localToGlobal(Offset.zero, ancestor: view).dy / view.size.height).clamp(0.0, 1.0);
+        }
+        if (_scroll.hasClients) _scroll.jumpTo(0);
+        setState(() {
+          open ? _openUnplaced.remove(p) : _openUnplaced.add(p);
+          _rows = _makeRows(_lines);
+          _center = _rows.indexWhere((r) => r.first == p) + 1;
+          _centerAt = at;
+        });
+      }),
+      child: Row(
+        key: ValueKey('story-reader-unplaced-${_lines[p].lineIndex}'),
+        children: [
+          Container(width: 3, height: 14, color: theme.accentPrimary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${_lines[p].content}（$count）',
+              style: theme.bodyFont.copyWith(
+                color: theme.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+          Icon(open ? Icons.expand_less_sharp : Icons.expand_more_sharp, size: 18, color: theme.accentText),
+        ],
+      ),
+      ),
+    );
+  }
+
+  /// A step's goal (a bar and the text), or the name of a mission played
+  /// inside a step (larger, a longer bar).
+  Widget _heading(AppThemeTokens theme, StoryLineEntry line) {
+    final stage = line.kind == stageLineKind;
+    return Row(
+      key: ValueKey('story-reader-${line.kind}-${line.lineIndex}'),
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(width: 3, height: stage ? 20 : 14, color: theme.accentPrimary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            line.content,
+            style: theme.bodyFont.copyWith(
+              color: stage ? theme.textPrimary : theme.textSecondary,
+              fontSize: stage ? 15.5 : 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

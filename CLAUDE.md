@@ -3,11 +3,10 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.15.1（正式版，2026-10-21，Android build 36）：APK + 两个知识库 + 源码。明日方舟库与 v0.15.0 同一份（上游 `17759cc`）；
-  终末地库按 2026-10-18 的客户端重建，并修了真机发现的资料页问题；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件指向 v0.15.1
-  （v0.15.0 Release 上的终末地资产也已换成同一份）。v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
-  0.15.x 从分支 `ask-recall-eval` 发出（问答统一重构第 0–5 期，见下方“当前进度”最后一条）。0.15.0 经 PR #17 合回 `main`（2026-10-20）；之后的 0.15.1 提交在 PR #18，等开发者合并；
-  下一轮从合并后的 `main` 新开分支（PR 合并后不要再往旧分支上推）。
+- **已发布**：v0.16.0（正式版，2026-10-22，Android build 37）：APK + 两个知识库 + 源码。明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
+  终末地库（2026-10-18 客户端）按任务步骤排列、加了过场台词与段首梗概；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件指向 v0.16.0。
+  v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
+  0.16.0 从分支 `endfield-cutscenes` 发出，经 PR #19 合回 `main`；下一轮从合并后的 `main` 开新分支（推之前先确认 PR 没有合并）。
 - 未经开发者明确同意不发版。真实 API 测试（模型与向量）：测试模型用 glm-5.3-flash；预计一轮总消耗 ≤150 万 token 直接跑，超过先问（开发者 2026-10-19）。Android build 号每次发版递增。
 - **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、普查数据放本地 `notes/`（gitignored），不提交、不写进 PR。
 - 用中文和开发者交流。
@@ -78,11 +77,20 @@
   被隐藏步骤播放的任务被当成未实装（规则改为“没有任何定义播放它的对话”才算未实装）、调查页把文档当剧情开阅读器。
   经验写进 `docs/KNOWLEDGE_BASE_LESSONS.md` §10，真实库验收加了对应检查。留给开发者定的：`db01m2` 落在“支线”（`docs/KNOWN_ISSUES.md` §5）。
   开发者真机看过后，这一轮结束；下一轮从合并 PR #18 后的 `main` 开始。
+- **0.16.0（2026-10-22，分支 `endfield-cutscenes`，Android build 37）**：终末地剧情按任务步骤排列，加上过场动画台词与段首梗概。
+  - 过场动画台词（`TextTable` 的 `cutscene_`/`cs_video_` 键）、段首梗概（`kind = 'summary'`，不嵌入向量）。
+  - 按任务步骤排列（数据、规则、审核与验证见 `docs/ENDFIELD_STORY_ORDER.md`）：建库自己解码关卡数据（`endfield_level_data.dart`）、排列（`endfield_story_order.dart`），
+    `unpack_endfield.ps1` 带 `--data --step-order=all`，294 个任务按步骤排；规则来自伊冯的角色纪事（开发者 2026-10-22 审核过），其余任务没人读过。
+    标题行 `step`/`stage`/`unplaced` 不嵌入、不检索（开发者 2026-10-21；检索一律用 `searchableLinesFilter`），Agent 的工具标成 [步骤]/[任务]/[未定位]。
+    数据给不出位置的段放在“未定位的对话”下，阅读器默认收起（开发者 2026-10-22，不写“可能已删减”）。有自己剧情的任务不嵌套；没有对话的步骤不写标题。
+  - 终末地库在本机 `build/endfield/`（v0.15.1 的备份 `build/endfield_v0151/`），向量迁移、新算 3 块；渠道文件 `min_app_build` = 37（旧 App 不认识标题行）。
+    明日方舟库与 v0.15.x 同一份。
 ## 文档索引
 
 - `docs/ARCHITECTURE.md`：项目结构与各模块的实现方式（从这里开始）。
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
 - `docs/GAMEDATA_BUILD_PIPELINE.md`：表、四条构建路径（全量/增量/补算/App 内）、向量、目录、发布命令。
+- `docs/ENDFIELD_STORY_ORDER.md`：终末地剧情怎么按任务步骤排列（关卡数据的格式、规则、库里的样子、审核与验证）——**改排列规则前必读**。
 - `docs/ASK_AGENT.md`：问答 Agent 现在怎么工作（流程、工具、出处、答案格式、追问与查证）。
 - `docs/ASK_EXPERIMENTS.md`：问答试过的所有办法、实测表现与评估、不要再试的、没试过的方向——**改问答之前必读**。
 - `docs/LLM_PROVIDERS.md`：各模型服务的思考参数与兼容怪癖。

@@ -65,7 +65,8 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     dfAny.add(matchExpr());
     dfAnyArgs.addAll(matchArgs(cleaned[i]));
   }
-  dfSql.write(' FROM story_lines l WHERE ${dfAny.join(' OR ')} '
+  final searchable = await searchableLinesFilter(db, alias: 'l.');
+  dfSql.write(' FROM story_lines l WHERE (${dfAny.join(' OR ')})$searchable '
       'GROUP BY l.story_id');
   final dfRows = await db.rawQuery(dfSql.toString(), [...dfArgs, ...dfAnyArgs]);
   final total = ((await db.rawQuery('SELECT COUNT(*) AS n FROM story_lines'))
@@ -122,7 +123,7 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     'SELECT l.story_id AS story_id, $scopeKey AS scope_key, '
     '($score) AS score, ($count) AS matched '
     'FROM story_lines l LEFT JOIN story_scopes s ON s.story_id = l.story_id '
-    'WHERE ($any)${scoped ? ' AND $scopeKey = ?' : ''}'
+    'WHERE ($any)$searchable${scoped ? ' AND $scopeKey = ?' : ''}'
     ') GROUP BY story_id ORDER BY best DESC, total DESC, story_id LIMIT ?',
     [
       ...scoreArgs,
@@ -139,7 +140,7 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     final storyId = '${row['story_id']}';
     final lines = await db.rawQuery(
       'SELECT l.line_index, l.speaker, l.content, $kindColumn($score) AS score '
-      'FROM story_lines l WHERE l.story_id = ? AND ($any) '
+      'FROM story_lines l WHERE l.story_id = ? AND ($any)$searchable '
       'ORDER BY score DESC, l.line_index LIMIT ?',
       [...scoreArgs, storyId, ...anyArgs, linesPerStory],
     );

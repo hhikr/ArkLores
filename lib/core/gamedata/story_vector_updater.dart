@@ -123,7 +123,7 @@ Future<VectorPlan> planVectorUpdate(DatabaseExecutor db) async {
     'SELECT l.story_id, COUNT(*) AS n, '
     'SUM(LENGTH(l.content) + LENGTH(IFNULL(l.speaker, \'\')) + 1) AS chars '
     'FROM story_lines l '
-    "WHERE ${hasKind ? "l.kind <> 'system'" : '1 = 1'} $withoutVectors "
+    "WHERE ${hasKind ? 'l.kind NOT IN $unembeddedKindsSql' : '1 = 1'} $withoutVectors "
     'GROUP BY l.story_id)',
   );
   final r = rows.first;
@@ -269,7 +269,7 @@ Future<VectorUpdateResult> updateStoryVectors({
     'FROM story_scopes s WHERE s.story_id NOT IN '
     '(SELECT story_id FROM $storyChunkVectorsTable) '
     // A story of tutorial text only has nothing to embed.
-    "${hasKind ? "AND s.story_id IN (SELECT story_id FROM story_lines WHERE kind <> 'system') " : ''}"
+    "${hasKind ? 'AND s.story_id IN (SELECT story_id FROM story_lines WHERE kind NOT IN $unembeddedKindsSql) ' : ''}"
     'ORDER BY s.story_id',
   );
   var doneStories = 0, doneChunks = 0;
@@ -288,7 +288,7 @@ Future<VectorUpdateResult> updateStoryVectors({
       final storyId = '${story['story_id']}';
       final lines = await db.rawQuery(
         "SELECT line_index, speaker, content${hasKind ? ', kind' : ''} FROM story_lines "
-        "WHERE story_id = ? ${hasKind ? "AND kind <> 'system'" : ''} "
+        "WHERE story_id = ? ${hasKind ? 'AND kind NOT IN $unembeddedKindsSql' : ''} "
         'ORDER BY line_index',
         [storyId],
       );
@@ -298,7 +298,7 @@ Future<VectorUpdateResult> updateStoryVectors({
             (l['line_index'] as num).toInt(),
             l['speaker'] as String?,
             '${l['content'] ?? ''}',
-            isBreak: l['kind'] == sectionLineKind,
+            isBreak: breakLineKinds.contains(l['kind']),
           ),
       ]);
       if (chunks.isNotEmpty) {

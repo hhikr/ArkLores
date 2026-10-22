@@ -2,6 +2,23 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.16.0] - 2026-10-22
+
+Endfield missions read in the order they are played: each conversation under the mission step where the game plays it. Also the lines said in cutscenes and each conversation's own summary. Android build 37. The Arknights knowledge base is the same file as in v0.15.0 and v0.15.1.
+
+### Knowledge base (Endfield)
+
+- **Missions are laid out along their steps.** A mission's dialogue, cutscenes, radio, calls, talk around the player and messages used to come kind by kind, each kind by its number, so a mission read as "all the dialogue, then all the radio". The build now decodes the client's level data (level scripts, the levels' mission data, NPCs, trigger areas, mission areas) and puts each conversation in the step that plays it, in the order it plays there. Every step that has something to read is headed by its goal; a mission played inside a step is headed by its name. Conversations no data places are gathered at the end under "未定位的对话", folded in the reader. 294 missions are laid out this way. The rules were found by reading one operator's missions conversation by conversation; the other missions follow the same rules but have not been read through (see `docs/ENDFIELD_STORY_ORDER.md` and `docs/KNOWN_ISSUES.md`). Places, enemies and topics, which have no steps, read kind by kind as before.
+- **Step headings are not story text.** They are not embedded, no search finds them (Ask's searches, the library's search, find in the reader), and Ask's tools show them as `[步骤]`, `[任务]`, `[未定位]` headings.
+- **Cutscene lines.** What is said in cutscenes (videos and in-engine scenes) is in the knowledge base: 81 cutscenes in 44 missions, read as "过场动画" parts after the mission's dialogue. The game keeps these lines with no speaker. A version of a cutscene whose lines another version already has is left out. The main-story mission "未熄火种", which has only cutscenes, is now in the library.
+- **Each conversation opens with its own summary.** The game's summary of a conversation comes right after its heading, folded like the synopsis; the synopsis of the whole mission is no longer shown on top when the parts have summaries. Ask sees these lines as `[梗概]`, a locating hint, not story text.
+- **Older apps keep the knowledge base they shipped with.** The channel file now asks for build 37: an older reader would show the step headings as narration.
+
+### Library and reader
+
+- **Step headings in the reader**: a bar and the step's goal; a mission played inside a step has a larger heading. Under a new step, the first part names its kind again.
+- **"未定位的对话" opens on a tap.** It shows how many conversations it holds and stays folded until tapped; a cited, searched or resumed line inside it opens it.
+
 ## [0.15.1] - 2026-10-21
 
 The Endfield knowledge base from the 2026-10-18 game client, and fixes from the device review of its library pages. Android build 36. The Arknights knowledge base is the same file as in v0.15.0.

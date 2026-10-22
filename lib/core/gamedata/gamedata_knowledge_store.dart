@@ -596,9 +596,10 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final scope = ids == null
         ? ''
         : ' AND story_id IN (${List.filled(ids.length, '?').join(',')})';
+    final searchable = await searchableLinesFilter(db);
     final rows = await db.rawQuery(
       'SELECT story_id, line_index, speaker, content FROM story_lines '
-      'WHERE $clause$scope ORDER BY story_id, line_index LIMIT ?',
+      'WHERE $clause$scope$searchable ORDER BY story_id, line_index LIMIT ?',
       [...args, ...?ids, limit],
     );
     return [
@@ -629,9 +630,10 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final scope = ids == null
         ? ''
         : ' AND story_id IN (${List.filled(ids.length, '?').join(',')})';
+    final searchable = await searchableLinesFilter(db);
     final rows = await db.rawQuery(
       'SELECT story_id, COUNT(*) AS n FROM story_lines '
-      'WHERE $clause$scope GROUP BY story_id',
+      'WHERE $clause$scope$searchable GROUP BY story_id',
       [...args, ...?ids],
     );
     return {
@@ -646,10 +648,11 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     final term = name.trim();
     if (db == null || term.isEmpty) return const [];
     final asText = term.runes.length > 1;
+    final searchable = await searchableLinesFilter(db);
     final rows = await db.rawQuery(
       'SELECT story_id, line_index, speaker = ? AS spoken FROM story_lines '
-      'WHERE speaker = ?'
-      '${asText ? " OR content LIKE ? ESCAPE '\\'" : ''} '
+      'WHERE (speaker = ?'
+      '${asText ? " OR content LIKE ? ESCAPE '\\'" : ''})$searchable '
       'ORDER BY story_id, line_index LIMIT ?',
       [term, term, if (asText) '%${escapeLike(term)}%', limit],
     );

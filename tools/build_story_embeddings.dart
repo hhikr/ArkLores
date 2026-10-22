@@ -103,16 +103,17 @@ Future<void> main(List<String> args) async {
         result.fullyAligned ? alignedStories++ : partialStories++;
       }
     }
-    // Tutorial and guide text is not part of any story: never embedded.
+    // Tutorial and guide text is not part of any story, a summary is in the
+    // catalog already: never embedded.
     chunks.addAll(chunkStory(storyId, scopeKey, [
       for (final l in lines)
         if (!covered.contains((l['line_index'] as num).toInt()) &&
-            l['kind'] != 'system')
+            !unembeddedLineKinds.contains(l['kind']))
           ChunkLine(
             (l['line_index'] as num).toInt(),
             l['speaker'] as String?,
             '${l['content'] ?? ''}',
-            isBreak: l['kind'] == sectionLineKind,
+            isBreak: breakLineKinds.contains(l['kind']),
           ),
     ]),);
   }

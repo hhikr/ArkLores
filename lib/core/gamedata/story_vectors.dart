@@ -63,6 +63,39 @@ class ChunkLine {
 /// `story_lines.kind` of the line that separates two parts of one story.
 const String sectionLineKind = 'section';
 
+/// `story_lines.kind` of the game's own summary of the part it opens (an
+/// Endfield conversation's, right after its section line): a locating hint
+/// shown to the reader, not story text.
+const String summaryLineKind = 'summary';
+
+/// `story_lines.kind` of a step's goal in a story laid out along its
+/// mission's steps (an Endfield mission), or of a heading of the groups
+/// after them: a heading, not story text.
+const String stepLineKind = 'step';
+
+/// `story_lines.kind` of the name of a mission played inside a step of the
+/// story's mission (its conversations follow, under its own steps).
+const String stageLineKind = 'stage';
+
+/// `story_lines.kind` of the heading of the conversations no data places
+/// (after the steps): the reader folds what follows it.
+const String unplacedLineKind = 'unplaced';
+
+/// Headings of a story laid out along its mission's steps.
+const Set<String> headingLineKinds = {stepLineKind, stageLineKind, unplacedLineKind};
+
+/// Line kinds that end one part of a story and start the next: no window
+/// spans them.
+const Set<String> breakLineKinds = {sectionLineKind, ...headingLineKinds};
+
+/// Line kinds never embedded: tutorial and guide text (not part of any
+/// story), the summaries (the catalog synopsis has them already) and the
+/// step headings.
+const Set<String> unembeddedLineKinds = {'system', summaryLineKind, ...headingLineKinds};
+
+/// [unembeddedLineKinds] as an SQL list: `kind NOT IN $unembeddedKindsSql`.
+final String unembeddedKindsSql = "(${unembeddedLineKinds.map((k) => "'$k'").join(', ')})";
+
 /// One embedding unit: a window of consecutive story lines.
 class StoryChunk {
   const StoryChunk({

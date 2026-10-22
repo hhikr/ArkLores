@@ -1,6 +1,6 @@
 # 项目结构与模块实现
 
-> ArkLores：《明日方舟》与《明日方舟：终末地》的剧情阅读与问答 App（Flutter，Android）。截至 2026-10-19。
+> ArkLores：《明日方舟》与《明日方舟：终末地》的剧情阅读与问答 App（Flutter，Android）。截至 2026-10-22（v0.16.0）。
 > 每个模块写“做什么、怎么做、代码在哪、细节看哪份文档”。
 
 ## 1. 总览
@@ -75,7 +75,8 @@ docs/                  文档（索引见 CLAUDE.md）
 
 - 明日方舟：上游 `Kengxxiao/ArknightsGameData`。`build/arknights_importer.dart` 导入剧情脚本（`story_script.dart`，读所有带文字的命令）和表（`entry_importer*.dart`，按条目建模；`text_harvest.dart` 用通用规则收长尾文字），最后统一算派生层（命名、去重、挂靠）。
   四条路径同一套代码：桌面全量（`tools/build_gamedata_database.dart`）、增量更新（`SourceSync` 比两个提交的文件树、只下载变化的文件）、补算（`tools/rederive_gamedata.dart`）、App 内完整构建（后台 isolate）。
-- 终末地：`tools/unpack_endfield.ps1` 用 AnimeStudio 从本机客户端导出表、任务定义、对话树、时间线片段、章节，`build/endfield/` 建库：一个任务一篇剧情、段前一行写种类，段内按对话树和时间线排。
+- 终末地：`tools/unpack_endfield.ps1` 用 AnimeStudio 从本机客户端导出表、任务定义、关卡数据、对话树、时间线片段、章节，`build/endfield/` 建库：一个任务一篇剧情、段前一行写种类，段内按对话树和时间线排；
+  有步骤的任务由 `endfield_level_data.dart` 解码关卡脚本与子数据、`endfield_story_order.dart` 把各段排到它播放的那一步（`ENDFIELD_STORY_ORDER.md`），步骤目标是不嵌入、不检索的标题行。
 - 校验（`gamedata_db_validator.dart`）：安装器与构建共用，检查 schema、必需表、计数。
 
 ### 4.3 安装与更新（App）
@@ -104,6 +105,7 @@ docs/                  文档（索引见 CLAUDE.md）
 | `main` 主线（每章一个集合）、`sidestory` / `ministory` / `branchline`、`activity`、`memory`（干员：档案、密录、模组、皮肤、信物、召唤物）、`roguelike` 集成战略、`sandbox` 生息演算；图鉴（敌人、物品、奖章…） | `ef/main` 主线任务（按章、进程分组）、`ef/discovery` / `ef/side` / `ef/activity` / `ef/other`（任务面板的分类，按地区分组）、`ef/world` 其他（地点交互、敌人通讯）、`ef/unused` 未实装任务、`ef/archive` 情报档案库、`ef/memory` 干员（档案、语音、角色纪事、Baker 话题、帝江号互动）、`ef/codex` 百科 |
 
 - 阅读器（`features/ai/story_reader_page.dart`）：惰性列表从锚点双向建（任意长的故事打开不卡），记住位置与读过的次数，标题板下有进度条；从问答出处打开时高亮所引的行。
+  终末地的篇里有种类分段线、折叠的段首梗概、步骤标题，“未定位的对话”默认收起（点标题展开）。
 - 排版：长文用阅读字体（`reading_text.dart`，霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 搜索（`library_search.dart`）：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。与问答无关。
 - 用户库（`core/userdata/`）：阅读历史、阅读进度、我的资料存在独立的库，只存引用字符串（`story:<id>` 等）加原文片段，知识库更新后按片段重新定位。**所以知识库的 id 必须稳定。**

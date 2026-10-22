@@ -393,6 +393,7 @@ Future<List<LibraryTextHit>> textHits(
   final hits = <LibraryTextHit>[];
   final stories = scope.type == null || scope.type == 'story';
   final others = scope.type != 'story';
+  final searchable = stories ? await searchableLinesFilter(db, alias: 'sl.') : '';
 
   // Stories. SQLite gives the bare columns of the row MIN() picked.
   final lines = !stories
@@ -400,7 +401,7 @@ Future<List<LibraryTextHit>> textHits(
       : await db.rawQuery(
           'SELECT sl.story_id AS story_id, COUNT(*) AS n, '
           'MIN(sl.line_index) AS first, sl.content AS content FROM story_lines sl '
-          'WHERE ${all('sl.content')} '
+          'WHERE ${all('sl.content')}$searchable '
           "${scoped ? "AND sl.story_id IN (SELECT e.raw_id FROM entries e WHERE e.type = 'story' AND ${eScope.sql}) " : ''}"
           'GROUP BY sl.story_id ORDER BY n DESC LIMIT ?',
           [...likes, if (scoped) ...eScope.args, limit],

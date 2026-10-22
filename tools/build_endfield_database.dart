@@ -7,6 +7,8 @@
 //     [--trees=<TextAsset dir>[;<TextAsset dir> …]] \
 //     [--clips=<MonoBehaviour dir>[;<MonoBehaviour dir> …]] \
 //     [--chapters=<MonoBehaviour dir>[;<MonoBehaviour dir> …]] \
+//     [--data=<a JsonData dump's Data/Json> --step-order=<mission,…|all>] \
+//     [--only-missions=<mission,…>] \
 //     [--version=<client version>] \
 //     --output=build/endfield [--force]
 //
@@ -16,7 +18,12 @@
 // trees (`dlg_…` TextAssets; StreamingAssets first, then Persistent) give
 // the order of each conversation's lines and choices, and the cutscene clips
 // (`DialogTrunkPlayableAsset`/`DialogOptionPlayableAsset` MonoBehaviours)
-// the order of the lines a cutscene shows. Use
+// the order of the lines a cutscene shows. With `--data` (the hot-update
+// layer's dump, which holds the whole set) the stories of the missions in
+// `--step-order` are laid out along their steps from the level scripts and
+// the levels' mission sub-data; where each conversation went and why is
+// written to `story_order_report.md` next to the database. `--only-missions`
+// writes those missions' stories and no others (to review a few). Use
 // tools/unpack_endfield.ps1 to unpack and build in one go.
 // See docs/GAMEDATA_BUILD_PIPELINE.md (Endfield) and
 // docs/KNOWLEDGE_BASE_LESSONS.md.
@@ -25,6 +32,7 @@ import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/endfield/endfield_dialog_tree.dart';
 import 'package:arklores/core/gamedata/build/endfield/endfield_importer.dart';
+import 'package:arklores/core/gamedata/build/endfield/endfield_level_data.dart';
 import 'package:arklores/core/gamedata/build/endfield/endfield_stories.dart';
 import 'package:arklores/core/gamedata/build/endfield/endfield_tables.dart';
 import 'package:arklores/core/gamedata/build/endfield/endfield_writer.dart';
@@ -89,6 +97,27 @@ Future<void> main(List<String> args) async {
         if (d.trim().isNotEmpty) Directory(d.trim()),
     ]);
     log('chapters: ${chapters.length}');
+    Set<String> list(String? value) => {
+          for (final x in (value ?? '').split(',')) if (x.trim().isNotEmpty) x.trim(),
+        };
+    final stepOrder = list(arg('step-order'));
+    final only = arg('only-missions') == null ? null : list(arg('only-missions'));
+    final definitions = missionsDir == null
+        ? const <String, Map<String, dynamic>>{}
+        : EndfieldStoryImporter.loadMissionDefinitions(Directory(missionsDir));
+    EndfieldLevelData? levelData;
+    if (arg('data') case final data? when stepOrder.isNotEmpty) {
+      levelData = EndfieldLevelData.read(
+        Directory(data),
+        questIds: {
+          for (final d in definitions.values) ...((d['questDic'] as Map?) ?? const {}).keys.map((k) => '$k'),
+        },
+        missionIds: definitions.keys.toSet(),
+      );
+      log('level scripts: ${levelData.scripts.length}, segments switched: ${levelData.segments.length}, '
+          'sub-data conversations: ${levelData.subData.length}');
+    }
+    final report = StringBuffer();
     final stories = EndfieldStoryImporter(
       tables,
       writer,
@@ -101,8 +130,16 @@ Future<void> main(List<String> args) async {
       playedBy: missionsDir == null
           ? const {}
           : EndfieldStoryImporter.loadPlayedConversations(Directory(missionsDir)),
+      levelData: levelData,
+      missionDefinitions: definitions,
+      stepOrder: stepOrder,
+      onlyMissions: only,
+      orderReport: report,
     );
     await stories.importDialogTables();
+    if (report.isNotEmpty) {
+      await File(p.join(out.path, 'story_order_report.md')).writeAsString(report.toString());
+    }
     log('derived layers');
     await writer.finish();
     await validateGameDataDatabase(db);

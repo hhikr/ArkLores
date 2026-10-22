@@ -5,7 +5,7 @@
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Android 应用（Flutter）。它把游戏解包文本整理成本地知识库（每个游戏一个），
 在上面提供可以阅读的资料页和带原文出处的剧情问答，并内置 PRTS 与终末地 Wiki 的浏览。
 
-最新版本：[v0.15.0](https://github.com/hhikr/ArkLores/releases/tag/v0.15.0)
+最新版本：[v0.16.0](https://github.com/hhikr/ArkLores/releases/tag/v0.16.0)
 
 ## 功能
 
@@ -17,27 +17,19 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
   一次检索同时查两个游戏的剧情、档案等资料和 PRTS / Warfarin Wiki（游戏原文优先，只有 Wiki 支持的说法会写明；可在输入框的选项里关闭）。
   答完之后可以点“提要”把长答案整理成几段，或点“复核”让另一次调用以读者身份提问。工作过程逐步列出每次查找的工具、参数和结果。
   支持任意 OpenAI 兼容的模型服务（默认智谱 `glm-5.3-flash`），可选配置向量服务做语义检索（没有时退回关键词并提示）。
-- **终末地**（0.12）：第二个知识库——干员档案、语音记录与干员情报，情报档案库，敌人、武器、物品描述，以及全部剧情对话（一个任务一篇，按游戏的播放顺序）；
+- **终末地**（0.12）：第二个知识库——干员档案、语音记录与干员情报，情报档案库，敌人、武器、物品描述，以及全部剧情对话与过场台词
+  （一个任务一篇，按任务步骤排列：每段放在游戏播放它的那一步，步骤目标作标题）；
   主线按章、进程排列，干员的角色纪事、Baker 话题、帝江号互动在干员页上。问答每次两个游戏都查。
 - **Wiki**：PRTS 与终末地 Wiki（fz.wiki / Warfarin）双站浏览、书签；深色模式用站点自己的主题。
 - **知识库更新**：从 Release 下载整包；明日方舟库还可以在 App 内检查上游变化、只下载变化的文件做增量更新。两者按游戏数据的新旧排先后：数据较新的在前，同一份数据时官方库在前。
 
 ## 发布资产
 
-- [v0.15.0](https://github.com/hhikr/ArkLores/releases/tag/v0.15.0)：`ArkLores-0.15.0.apk`（项目签名，可覆盖安装 v0.10.0 及之后的版本；从 v0.9 及更早版本升级需先卸载一次）；
-  两个知识库（按现在的建库代码重建，游戏数据与 v0.14.0 相同）：
-  `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 119 MB，故事目录多了剧情回顾的开放时间），SHA-256 `1b9e3505cf10eb6b852fcbacfa412fd312a31e85986333d2e6d1cbcf7be8d004`；
-  `arklores_endfield_zh.db.gz`：终末地知识库（约 14 MB，干员档案的 id 带 `ef/`），SHA-256 `77b69d3a47f16ebdcda5286d6ee870d7c61871574f85c1befacf43c8d4c553e6`；
-  `gamedata_manifest.json`、`endfield_manifest.json`。App 不会提示新版本，要自己来 Release 页下载 APK；知识库在 设置 → 知识库 里更新。
-- [gamedata-20261020](https://github.com/hhikr/ArkLores/releases/tag/gamedata-20261020)（只发知识库，2026-10-20）：与 v0.15.0 相同的两个库，先给 v0.14.5 用（它从 `gamedata-channel` 的渠道文件发现新库）。
-- [v0.14.0](https://github.com/hhikr/ArkLores/releases/tag/v0.14.0)（上一份知识库）：
-  `arklores_gamedata_zh.db.gz`：明日方舟知识库（schema 5，游戏数据截至 2026-10-08，含剧情与资料向量、故事目录，约 119 MB），SHA-256
-  `52b756f018fd2a901372213acf2b5959bd486eaed5cfff3954161dd44c5c2a76`；`gamedata_manifest.json`：来源提交、计数、大小与哈希；
-  `arklores_endfield_zh.db.gz`：终末地知识库（schema 5，含剧情与资料向量，约 14 MB），SHA-256
-  `5999d4eaf5079d7122105b5daa06cc5ee6bd1973c1126d78b464ec0531bd130e`；`endfield_manifest.json`：计数与向量模型。
-  明日方舟知识库的下载包从 v0.13.0 的 209.9 MB 降到 119.4 MB（删掉了没有用到的表）；两个知识库只有 v0.14.0 及之后的 App 能装；升级 App 后在知识库页点“更新”。
-- 两个知识库都在 App 的 设置 → 知识库 中各自下载。
-
+- [v0.16.0](https://github.com/hhikr/ArkLores/releases/tag/v0.16.0)：`ArkLores-0.16.0.apk`（项目签名，可覆盖安装 v0.10.0 及之后的版本；从 v0.9 及更早版本升级需先卸载一次）；
+  `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 119 MB，与 v0.15.x 同一份），SHA-256 `1b9e3505cf10eb6b852fcbacfa412fd312a31e85986333d2e6d1cbcf7be8d004`；
+  `arklores_endfield_zh.db.gz`：终末地知识库（约 16 MB，2026-10-18 客户端，按任务步骤排列，含过场台词与段首梗概），SHA-256 `fc34c31aaa531555e09c19f700ca7dc6a987a470af634cecaa8f9e32fdefb965`；
+  `gamedata_manifest.json`、`endfield_manifest.json`。新的终末地库要 v0.16.0 的 App。App 不会提示新版本，要自己来 Release 页下载 APK；知识库在 设置 → 知识库 里更新。
+- 更早的版本与知识库见 [Releases](https://github.com/hhikr/ArkLores/releases) 与 [`CHANGELOG.md`](CHANGELOG.md)。
 ## 开发
 
 ```bash
@@ -78,7 +70,8 @@ docs/           文档（索引见 CLAUDE.md）
 - [`docs/ASK_AGENT.md`](docs/ASK_AGENT.md)：问答 Agent 现在怎么工作；[`docs/ASK_EXPERIMENTS.md`](docs/ASK_EXPERIMENTS.md)：问答试过的办法、实测表现与评估；
   [`docs/WIKI.md`](docs/WIKI.md)：Wiki 浏览与问答取证。
 - [`docs/GAMEDATA_BUILD_PIPELINE.md`](docs/GAMEDATA_BUILD_PIPELINE.md)：两个知识库的构建、更新、发布；
-  [`docs/KNOWLEDGE_BASE_LESSONS.md`](docs/KNOWLEDGE_BASE_LESSONS.md)：建库经验与教训。
+  [`docs/KNOWLEDGE_BASE_LESSONS.md`](docs/KNOWLEDGE_BASE_LESSONS.md)：建库经验与教训；
+  [`docs/ENDFIELD_STORY_ORDER.md`](docs/ENDFIELD_STORY_ORDER.md)：终末地剧情怎么按任务步骤排列。
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md)：已知问题。
 - [`CHANGELOG.md`](CHANGELOG.md)：各版本的变化。
 

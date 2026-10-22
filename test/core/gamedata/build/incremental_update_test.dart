@@ -194,6 +194,8 @@ void main() {
       await addStory('s/a.txt', [for (var i = 0; i < 30; i++) ('dialogue', '')]);
       await addStory('s/b.txt', [for (var i = 0; i < 5; i++) ('narration', '')]);
       await addStory('s/tutorial.txt', [for (var i = 0; i < 5; i++) ('system', '')]);
+      // Summaries are not embedded either (the catalog has them).
+      await addStory('s/summaries.txt', [for (var i = 0; i < 3; i++) ('summary', '')]);
     });
 
     tearDown(() => db.close());
@@ -202,7 +204,7 @@ void main() {
       final plan = await planVectorUpdate(db);
       expect(plan.hasTable, isFalse);
       expect(plan.isFirstBuild, isTrue);
-      // Tutorial text is not embedded.
+      // Tutorial text and summaries are not embedded.
       expect(plan.pendingStories, 2);
       // 30 lines -> 4 chunks of 12 (step 8), 5 lines -> 1.
       expect(plan.pendingChunks, 5);

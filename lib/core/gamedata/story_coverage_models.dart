@@ -34,6 +34,20 @@ Future<bool> storyLinesHaveKind(DatabaseExecutor db) async {
   return columns.any((c) => c['name'] == 'kind');
 }
 
+/// Line kinds no search finds (keyword search, `grep`, taking material by
+/// name, the library's text search): the step headings of a story laid out
+/// along its mission's steps (`headingLineKinds` in story_vectors.dart).
+/// They are the game's goals for the player, kept only to read by (developer
+/// 2026-10-21); the reader still shows them.
+const Set<String> unsearchedLineKinds = {'step', 'stage', 'unplaced'};
+
+/// ` AND <alias>kind NOT IN (…)` leaving [unsearchedLineKinds] out of a query
+/// over `story_lines`; empty for a database without the kind column.
+Future<String> searchableLinesFilter(DatabaseExecutor db, {String alias = ''}) async =>
+    await storyLinesHaveKind(db)
+        ? " AND ${alias}kind NOT IN (${unsearchedLineKinds.map((k) => "'$k'").join(', ')})"
+        : '';
+
 /// Label shown in front of a line that is neither dialogue nor narration
 /// (`[字幕]`, `[文档]` …); null for dialogue, narration and unknown kinds.
 String? storyKindLabel(String? kind) => switch (kind) {
@@ -45,6 +59,14 @@ String? storyKindLabel(String? kind) => switch (kind) {
       // Where one conversation of a merged story ends and the next begins;
       // the content names the kind of the part that follows.
       'section' => '分段',
+      // The game's summary of the part it opens (a locating hint).
+      'summary' => '梗概',
+      // Headings of a story laid out along its mission's steps: a step's
+      // goal, a mission played inside a step, the conversations no data
+      // places.
+      'step' => '步骤',
+      'stage' => '任务',
+      'unplaced' => '未定位',
       _ => null,
     };
 

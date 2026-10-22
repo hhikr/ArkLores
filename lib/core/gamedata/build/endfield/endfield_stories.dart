@@ -13,9 +13,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../story_catalog.dart' show endfieldCollectionTypePrefix;
-import '../../story_vectors.dart' show sectionLineKind;
+import '../../story_vectors.dart' show sectionLineKind, stageLineKind, stepLineKind, summaryLineKind, unplacedLineKind;
 import 'endfield_dialog_tree.dart';
 import 'endfield_importer.dart';
+import 'endfield_level_data.dart';
+import 'endfield_story_order.dart';
 import 'endfield_tables.dart';
 import 'endfield_writer.dart';
 
@@ -23,7 +25,10 @@ import 'endfield_writer.dart';
 /// prefix (`dlg_`, `radio_`, `sns_`) and its trailing conversation number
 /// (`dlg_a1m2_1` → `a1m2`).
 String missionOfConversation(String id) {
-  final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk)_'), '');
+  final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk|cutscene|cs_video)_'), '');
+  // A cutscene is numbered after its mission, at times in two parts
+  // (`cutscene_e0m2_3_1`): the mission is the first part.
+  if (_isCutscene(id)) return bare.split('_').first;
   final cut = bare.lastIndexOf('_');
   return cut > 0 ? bare.substring(0, cut) : bare;
 }
@@ -32,6 +37,8 @@ String missionOfConversation(String id) {
 /// prefix (the table it comes from): dialogue, radio, a remote call, talk
 /// around the player, messages.
 String conversationKind(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
+      // The game's own word (`LUA_MAP_TELEPORT_FORBID_REASON_CINEMATIC`).
+      'cutscene' || 'cs' => '过场动画',
       'radio' => '通讯',
       'remotecomm' => '远程通话',
       'envTalk' => '闲话',
@@ -49,7 +56,11 @@ String conversationKind(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(i
 /// timelines); so a mission reads kind by kind ([conversationKindRank]),
 /// each kind in its own numbering.
 int? conversationOrder(String id) {
-  final m = RegExp(r'_(\d+)(?:d(\d+))?$').firstMatch(id);
+  // A cutscene's number is the one after its mission (`cutscene_e0m2_3_1`
+  // is cutscene 3 of e0m2).
+  final m = _isCutscene(id)
+      ? RegExp(r'^(?:cutscene|cs_video)_[^_]+_(\d+)(?:d(\d+))?').firstMatch(id)
+      : RegExp(r'_(\d+)(?:d(\d+))?$').firstMatch(id);
   if (m == null) return null;
   final whole = int.parse(m.group(1)!);
   final part = m.group(2) == null ? 0 : int.parse(m.group(2)!.padRight(2, '0').substring(0, 2));
@@ -57,16 +68,21 @@ int? conversationOrder(String id) {
 }
 
 /// The kinds of a mission in reading order: the dialogue that carries the
-/// story, then what is said over the radio and in remote calls on the way,
-/// then talk around the player, then messages.
+/// story and the cutscenes, then what is said over the radio and in remote
+/// calls on the way, then talk around the player, then messages.
 int conversationKindRank(String id) => switch (RegExp(r'^[a-zA-Z]+').firstMatch(id)?.group(0)) {
       'dlg' => 0,
-      'radio' => 1,
-      'remotecomm' => 2,
-      'envTalk' => 3,
-      'sns' => 4,
-      _ => 5,
+      'cutscene' || 'cs' => 1,
+      'radio' => 2,
+      'remotecomm' => 3,
+      'envTalk' => 4,
+      'sns' => 5,
+      _ => 6,
     };
+
+/// Whether [id] names a cutscene: one played in the engine (`cutscene_…`)
+/// or a video (`cs_video_…`).
+bool _isCutscene(String id) => id.startsWith('cutscene_') || id.startsWith('cs_video_');
 
 /// A mission's place on its shelf: the numbers of its id in order, each
 /// given three digits (`e1m2d5` → 001 002 005), so `e1m2` comes before
@@ -159,6 +175,11 @@ class EndfieldStoryImporter {
     this.timelineLines = const {},
     this.chapters = const [],
     this.playedBy = const {},
+    this.levelData,
+    this.missionDefinitions = const {},
+    this.stepOrder = const {},
+    this.onlyMissions,
+    this.orderReport,
   }) {
     // Each chapter's missions: under the chapter's heading, in its order.
     for (final (c, chapter) in chapters.indexed) {
@@ -257,6 +278,40 @@ class EndfieldStoryImporter {
       for (final m in ids.allMatches(file.readAsStringSync())) {
         out.putIfAbsent(m.group(1)!, () => mission);
       }
+    }
+    return out;
+  }
+
+  /// The client's level data (null: no story is laid out by its steps).
+  final EndfieldLevelData? levelData;
+
+  /// The mission definitions as the client has them (`MissionRuntimeAsset`
+  /// JSON by mission id), for the steps.
+  final Map<String, Map<String, dynamic>> missionDefinitions;
+
+  /// The missions whose story is laid out along their steps
+  /// ([EndfieldStoryOrder]); `all` for every mission with steps. The others
+  /// read kind by kind.
+  final Set<String> stepOrder;
+
+  /// When given, only these missions' stories are written (a build to look
+  /// at the step order of a few).
+  final Set<String>? onlyMissions;
+
+  /// Receives, for the stories laid out by steps, where each conversation
+  /// went and why (Markdown), for review.
+  final StringSink? orderReport;
+
+  /// Reads the mission definitions as JSON maps by mission id.
+  static Map<String, Map<String, dynamic>> loadMissionDefinitions(Directory dir) {
+    final out = <String, Map<String, dynamic>>{};
+    if (!dir.existsSync()) return out;
+    for (final file in dir.listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.json') || file.path.endsWith('_meta.json')) continue;
+      try {
+        final json = jsonDecode(file.readAsStringSync());
+        if (json is Map<String, dynamic> && json['missionId'] != null) out['${json['missionId']}'] = json;
+      } catch (_) {}
     }
     return out;
   }
@@ -578,7 +633,7 @@ class EndfieldStoryImporter {
   /// interactions, an enemy's encounter; null for filler the game plays
   /// between lines, factory tutorials and tests (not story).
   Future<String?> _home(String id) async {
-    final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk)_'), '');
+    final bare = id.replaceFirst(RegExp(r'^(dlg|radio|sns|remotecomm|envTalk|cutscene|cs_video)_'), '');
     if (RegExp(r'^(continue|blackbox|timeline_blackbox|sr|test)').hasMatch(bare)) {
       return null;
     }
@@ -764,20 +819,74 @@ class EndfieldStoryImporter {
 
   /// Each mission's conversations as one story, kind by kind, each kind in
   /// the game's numbering (ties by id; see [conversationOrder]): a `section`
-  /// line naming the kind before each conversation. The catalog synopsis is
+  /// line naming the kind before each conversation, then its summary if the
+  /// game has one (a `summary` line). The catalog synopsis is
   /// the official summaries of its conversations, in the same order (a
   /// locating hint, not evidence).
   Future<void> _writeStories() async {
     var count = 0;
+    final (:orders, :nestedIn) = _stepOrders();
     for (final MapEntry(key: mission, value: parts) in _parts.entries) {
+      // A mission played inside another's step reads in that story.
+      if (nestedIn.containsKey(mission)) continue;
+      if (onlyMissions != null && !onlyMissions!.contains(mission)) continue;
       final m = _missions[mission]!;
       parts.sort((a, b) {
         final byKind = conversationKindRank(a.id).compareTo(conversationKindRank(b.id));
         if (byKind != 0) return byKind;
         return a.order != b.order ? a.order.compareTo(b.order) : _naturalCompare(a.id, b.id);
       });
+      List<_Part> inOrder = parts;
+      final lines = <EndfieldLine>[];
+      void part(_Part p) => lines.addAll([
+            EndfieldLine(p.kind, kind: sectionLineKind),
+            // The game's summary of the conversation opens it (what the game
+            // shows when it is skipped).
+            if (p.summary != null) EndfieldLine(p.summary!, kind: summaryLineKind),
+            ...p.lines,
+          ]);
+      if (orders[mission] case final items?) {
+        final byId = {
+          for (final p in [...parts, for (final n in nestedIn.entries) if (n.value == mission) ...?_parts[n.key]]) p.id: p,
+        };
+        inOrder = [];
+        // A step's goal is written when a conversation follows it: steps
+        // with nothing to read are left out, a step with no goal text reads
+        // under the goal before it, and a goal written last is not repeated.
+        StepItem? pending;
+        String? written;
+        void emit(List<OrderItem> items) {
+          for (final it in items) {
+            switch (it) {
+              case StepItem():
+                if (it.text != null) pending = it;
+              case NestItem():
+                pending = null;
+                written = null;
+                lines.add(EndfieldLine(_missions[it.mission]?.name ?? missions[it.mission]?.name ?? it.mission,
+                    kind: stageLineKind,),);
+                emit(it.items);
+              case ConversationItem():
+                final p = byId[it.id];
+                if (p == null) continue;
+                if (pending case final s? when s.text != written || s.tail) {
+                  lines.add(EndfieldLine(s.text!, kind: s.unplaced ? unplacedLineKind : stepLineKind));
+                  written = s.text;
+                }
+                pending = null;
+                part(p);
+                inOrder.add(p);
+            }
+          }
+        }
+
+        emit(items);
+        _report(mission, m.name, items);
+      } else {
+        parts.forEach(part);
+      }
       final summaries = [
-        for (final p in parts)
+        for (final p in inOrder)
           if (p.summary != null) p.summary!,
       ];
       // A story kept in another's collection (a place's Baker topic) comes
@@ -786,23 +895,104 @@ class EndfieldStoryImporter {
       final written = await writer.story(
         rawId: mission,
         name: m.name,
-        lines: [
-          for (final p in parts) ...[
-            EndfieldLine(p.kind, kind: sectionLineKind),
-            ...p.lines,
-          ],
-        ],
+        lines: lines,
         collectionId: 'mission_${host ?? mission}',
         collectionName: host == null ? m.name : _missions[host]!.name,
         collectionType: '$endfieldCollectionTypePrefix${m.kind.toUpperCase()}',
         synopsis: summaries.isEmpty ? null : summaries.join('\n'),
         sortKey: host == null ? 0 : 1 + m.sort,
-        sourcePath: {for (final p in parts) p.source}.join(';'),
+        sourcePath: {for (final p in inOrder) p.source}.join(';'),
       );
       if (written != null) count++;
     }
     _parts.clear();
-    log?.call('stories (one per mission, place, enemy, topic): $count');
+    log?.call('stories (one per mission, place, enemy, topic): $count'
+        '${orders.isEmpty ? '' : '; laid out by steps: ${orders.length}'}');
+  }
+
+  /// The stories laid out along their missions' steps ([stepOrder]): the
+  /// order of each, and the missions played inside another's steps (their
+  /// conversations read in that story) → that mission.
+  ({Map<String, List<OrderItem>> orders, Map<String, String> nestedIn}) _stepOrders() {
+    final orders = <String, List<OrderItem>>{};
+    final nestedIn = <String, String>{};
+    final data = levelData;
+    if (data == null || stepOrder.isEmpty) return (orders: orders, nestedIn: nestedIn);
+    final conversationMission = {
+      for (final MapEntry(key: mission, value: parts) in _parts.entries)
+        for (final p in parts) p.id: mission,
+    };
+    final order = EndfieldStoryOrder(
+      data,
+      mission: (id) => missionDefinitions[id],
+      conversationMission: conversationMission,
+      stepName: (step) {
+        for (final o in (step['objectiveList'] as List?) ?? const []) {
+          final key = ((o as Map)['description'] as Map?)?['key'];
+          if (key != null) return _keyText('$key');
+        }
+        return null;
+      },
+    );
+    bool hasSteps(String id) => ((missionDefinitions[id]?['questDic'] as Map?) ?? const {}).isNotEmpty;
+    final chosen = [
+      for (final mission in _parts.keys)
+        if ((stepOrder.contains('all') || stepOrder.contains(mission)) && hasSteps(mission)) mission,
+    ];
+    for (final mission in chosen) {
+      // The conversations of the story that play in a nested mission: those
+      // played or said in that mission's level and not in this one's; and
+      // the nested mission's own story.
+      final ids = {for (final p in _parts[mission]!) p.id};
+      final stageIds = <String, Set<String>>{};
+      void nest(String parent, Set<String> pool) {
+        final parentLevel = missionDefinitions[parent]?['levelId'] as String?;
+        for (final child in order.nestedMissions(parent)) {
+          // (a mission with a story of its own is read there: one played
+          // after this one's last step is its sequel, not a part of it)
+          if (!hasSteps(child) || stageIds.containsKey(child) || child == mission || _parts.containsKey(child)) continue;
+          final level = missionDefinitions[child]?['levelId'] as String?;
+          final mine = <String>{
+            if (level != null)
+              for (final c in pool)
+                if (order.levelsOf(c).contains(level) && (parentLevel == null || !order.levelsOf(c).contains(parentLevel))) c,
+            for (final p in _parts[child] ?? const <_Part>[]) p.id,
+          };
+          pool.removeAll(mine);
+          stageIds[child] = mine;
+          nestedIn[child] = mission;
+          nest(child, mine);
+        }
+      }
+
+      nest(mission, ids);
+      orders[mission] = order.build(mission, ids, stageIds);
+    }
+    return (orders: orders, nestedIn: nestedIn);
+  }
+
+  /// Where each conversation of a story laid out by steps went and why.
+  void _report(String mission, String name, List<OrderItem> items) {
+    final out = orderReport;
+    if (out == null) return;
+    out.writeln('# $name（$mission）\n');
+    void emit(List<OrderItem> items, String pad) {
+      for (final it in items) {
+        switch (it) {
+          case StepItem():
+            out.writeln('$pad## ${it.tail ? '' : '步骤 ${it.quest}：'}${it.text ?? '（没有目标文字）'}');
+          case NestItem():
+            out.writeln('$pad>>>> 嵌套 ${it.mission} ${_missions[it.mission]?.name ?? missions[it.mission]?.name ?? ''}');
+            emit(it.items, '$pad  ');
+            out.writeln('$pad<<<< 嵌套结束');
+          case ConversationItem():
+            out.writeln('$pad- `${it.id}`（${conversationKind(it.id)}）[${it.level}] ${it.note}');
+        }
+      }
+    }
+
+    emit(items, '');
+    out.writeln();
   }
 
   /// Conversations from the dialog tables, ordered by row id.
@@ -933,9 +1123,71 @@ class EndfieldStoryImporter {
     await _importRemoteCalls();
     await _importEnvTalk();
     await _importSns();
+    await _importCutscenes();
     await _writeStories();
     await _importReadings();
     await _numberRepeatedNames();
+  }
+
+  /// The subtitles of the cutscenes, one conversation per cutscene: the
+  /// text table keeps them as `<cutscene>_<line>` (`cutscene_e1m1_2_01`,
+  /// `cs_video_e1m1_1_01`; `…_m` is the male Endministrator's form, left out
+  /// like the other forms of the female one), with no speaker. Which line of
+  /// a mission a cutscene plays after is only in the level scripts, so they
+  /// read as a kind of their own ([conversationKindRank]).
+  ///
+  /// The client keeps more than one version of some cutscenes (a video and
+  /// the engine's, an older numbering): a cutscene whose every line another
+  /// cutscene of the same mission also has (punctuation and spaces aside) is
+  /// left out, so the text reads once.
+  Future<void> _importCutscenes() async {
+    final key = RegExp(r'^((?:cutscene|cs_video)_.+)_(\d+(?:d\d+)?)$');
+    final byCutscene = <String, List<(String, String)>>{};
+    for (final k in tables.table('TextTable').keys) {
+      final m = key.firstMatch(k);
+      if (m == null) continue;
+      final text = _clean(tables.table('TextTable')[k]);
+      if (text.isEmpty) continue;
+      byCutscene.putIfAbsent(m.group(1)!, () => []).add((m.group(2)!, text));
+    }
+    String plain(String text) => text.replaceAll(RegExp(r'[\s\p{P}\p{S}]', unicode: true), '');
+    final ids = byCutscene.keys.toList()..sort(_naturalCompare);
+    final linesOf = {
+      for (final id in ids) id: (byCutscene[id]!..sort((a, b) => _naturalCompare(a.$1, b.$1))).map((l) => l.$2).toList(),
+    };
+    final plainOf = {
+      for (final id in ids) id: {for (final l in linesOf[id]!) plain(l)}..remove(''),
+    };
+    bool repeats(String id) {
+      final mine = plainOf[id]!;
+      if (mine.isEmpty) return false;
+      final mission = missionOfConversation(id);
+      for (final other in ids) {
+        if (other == id || missionOfConversation(other) != mission) continue;
+        final theirs = plainOf[other]!;
+        if (!theirs.containsAll(mine)) continue;
+        // Of two with the same lines the first is kept.
+        if (theirs.length > mine.length || ids.indexOf(other) < ids.indexOf(id)) return true;
+      }
+      return false;
+    }
+
+    final source = tables.sourcePath('TextTable');
+    var count = 0, repeated = 0;
+    for (final (i, id) in ids.indexed) {
+      if (repeats(id)) {
+        repeated++;
+        continue;
+      }
+      await _story(
+        id: id,
+        source: source,
+        sort: 200000 + i,
+        lines: [for (final text in linesOf[id]!) EndfieldLine(text, kind: 'subtitle')],
+      );
+      count++;
+    }
+    log?.call('cutscenes with subtitles: $count ($repeated left out as repeats)');
   }
 
   /// Missions of one shelf that share a name (the game reuses a name for
