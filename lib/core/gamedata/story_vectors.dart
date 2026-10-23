@@ -50,7 +50,8 @@ const String storyChunkVectorsIndexDdl =
 
 /// One story line as input to chunking.
 class ChunkLine {
-  const ChunkLine(this.index, this.speaker, this.content, {this.isBreak = false});
+  const ChunkLine(this.index, this.speaker, this.content,
+      {this.isBreak = false,});
   final int index;
   final String? speaker;
   final String content;
@@ -82,7 +83,11 @@ const String stageLineKind = 'stage';
 const String unplacedLineKind = 'unplaced';
 
 /// Headings of a story laid out along its mission's steps.
-const Set<String> headingLineKinds = {stepLineKind, stageLineKind, unplacedLineKind};
+const Set<String> headingLineKinds = {
+  stepLineKind,
+  stageLineKind,
+  unplacedLineKind,
+};
 
 /// Line kinds that end one part of a story and start the next: no window
 /// spans them.
@@ -91,10 +96,15 @@ const Set<String> breakLineKinds = {sectionLineKind, ...headingLineKinds};
 /// Line kinds never embedded: tutorial and guide text (not part of any
 /// story), the summaries (the catalog synopsis has them already) and the
 /// step headings.
-const Set<String> unembeddedLineKinds = {'system', summaryLineKind, ...headingLineKinds};
+const Set<String> unembeddedLineKinds = {
+  'system',
+  summaryLineKind,
+  ...headingLineKinds,
+};
 
 /// [unembeddedLineKinds] as an SQL list: `kind NOT IN $unembeddedKindsSql`.
-final String unembeddedKindsSql = "(${unembeddedLineKinds.map((k) => "'$k'").join(', ')})";
+final String unembeddedKindsSql =
+    "(${unembeddedLineKinds.map((k) => "'$k'").join(', ')})";
 
 /// One embedding unit: a window of consecutive story lines.
 class StoryChunk {
@@ -143,18 +153,22 @@ List<StoryChunk> chunkStory(
     final window = lines.sublist(start, end);
     final text = window
         .where((l) => l.content.trim().isNotEmpty)
-        .map((l) => l.speaker == null || l.speaker!.trim().isEmpty
-            ? l.content.trim()
-            : '${l.speaker!.trim()}：${l.content.trim()}',)
+        .map(
+          (l) => l.speaker == null || l.speaker!.trim().isEmpty
+              ? l.content.trim()
+              : '${l.speaker!.trim()}：${l.content.trim()}',
+        )
         .join('\n');
     if (text.isNotEmpty) {
-      chunks.add(StoryChunk(
-        storyId: storyId,
-        scopeId: scopeId,
-        lineStart: window.first.index,
-        lineEnd: window.last.index,
-        text: text,
-      ),);
+      chunks.add(
+        StoryChunk(
+          storyId: storyId,
+          scopeId: scopeId,
+          lineStart: window.first.index,
+          lineEnd: window.last.index,
+          text: text,
+        ),
+      );
     }
     if (end == lines.length) break;
   }
@@ -184,7 +198,8 @@ QuantizedVector quantize(List<double> vector) {
   final scale = maxAbs == 0 ? 0.0 : maxAbs / 127.0;
   final values = Int8List(vector.length);
   for (var i = 0; i < vector.length; i++) {
-    values[i] = scale == 0 ? 0 : ((vector[i] / norm) / scale).round().clamp(-127, 127);
+    values[i] =
+        scale == 0 ? 0 : ((vector[i] / norm) / scale).round().clamp(-127, 127);
   }
   return QuantizedVector(scale, values);
 }
@@ -308,7 +323,11 @@ class StoryVectorIndex {
     final manifest = {
       for (final row in await db.rawQuery(
         'SELECT key, value FROM gamedata_manifest WHERE key IN (?, ?, ?)',
-        [manifestEmbeddingModel, manifestEmbeddingDims, manifestEmbeddingChunking],
+        [
+          manifestEmbeddingModel,
+          manifestEmbeddingDims,
+          manifestEmbeddingChunking,
+        ],
       ))
         '${row['key']}': '${row['value']}',
     };
@@ -337,7 +356,11 @@ class StoryVectorIndex {
       final manifest = {
         for (final row in db.select(
           'SELECT key, value FROM gamedata_manifest WHERE key IN (?, ?, ?)',
-          [manifestEmbeddingModel, manifestEmbeddingDims, manifestEmbeddingChunking],
+          [
+            manifestEmbeddingModel,
+            manifestEmbeddingDims,
+            manifestEmbeddingChunking,
+          ],
         ))
           '${row['key']}': '${row['value']}',
       };
@@ -443,9 +466,7 @@ class StoryVectorIndex {
   /// first one (chunks overlap) — or null when no chunk does.
   ({int lineStart, int lineEnd})? chunkAt(String storyId, int line) {
     final at = _chunkAt(storyId, line);
-    return at < 0
-        ? null
-        : (lineStart: _lineStarts[at], lineEnd: _lineEnds[at]);
+    return at < 0 ? null : (lineStart: _lineStarts[at], lineEnd: _lineEnds[at]);
   }
 
   int _chunkAt(String storyId, int line) {
@@ -456,6 +477,15 @@ class StoryVectorIndex {
       if (found < 0 || _lineStarts[c] < _lineStarts[found]) found = c;
     }
     return found;
+  }
+
+  List<double>? passageVector(String storyId, int line) {
+    final at = _chunkAt(storyId, line);
+    return at < 0
+        ? null
+        : [
+            for (var i = 0; i < dims; i++) _vectors[at * dims + i] * _scales[at],
+          ];
   }
 
   /// 0.14: the chunks closest to the one of [storyId] that holds [line],

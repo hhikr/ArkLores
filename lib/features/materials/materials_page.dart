@@ -53,7 +53,7 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage> {
             index: _tab,
             children: [
               for (final game in Game.values) GameLibraryView(game: game),
-              const MyMaterialsView(),
+              TickerMode(enabled: _mine, child: const MyMaterialsView()),
             ],
           ),
           MainTopBar(
@@ -183,8 +183,8 @@ class GameLibraryView extends ConsumerWidget {
   Widget _page(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final recent = [
-      for (final e
-          in ref.watch(recentReadingProvider).valueOrNull ?? const <ReadingEntry>[])
+      for (final e in ref.watch(recentReadingProvider).valueOrNull ??
+          const <ReadingEntry>[])
         if (_gameOf(e) == game) e,
     ];
 

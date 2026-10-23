@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/library/library_provider.dart';
+import '../../core/materials/material_provider.dart';
 import '../../core/userdata/user_data_provider.dart';
-import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
-import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
@@ -14,19 +12,7 @@ import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'library_widgets.dart';
-
-/// Longest piece of a material put in the question box by "ask about it".
-const int askDraftLimit = 1500;
-
-/// The question-box draft for [material]: the text (cut when long), then an
-/// empty line for the question. The text is the user's own, not evidence.
-String askDraftFor(UserMaterial material) {
-  final body = material.body.trim();
-  final text = body.length <= askDraftLimit
-      ? body
-      : '${body.substring(0, askDraftLimit)}…';
-  return '「$text」\n\n';
-}
+import 'material_pages.dart';
 
 void _open(BuildContext context, WidgetBuilder builder) =>
     Navigator.of(context).push(smoothPageRoute<void>(builder: builder));
@@ -42,93 +28,10 @@ String materialDate(DateTime t) {
 }
 
 /// The "My texts" tab: the user's own materials.
-class MyMaterialsView extends ConsumerWidget {
+class MyMaterialsView extends StatelessWidget {
   const MyMaterialsView({super.key});
-
-  Future<void> _paste(BuildContext context) async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim() ?? '';
-    if (!context.mounted) return;
-    if (text.isEmpty) {
-      showToast(context, context.t.materialsClipboardEmpty);
-      return;
-    }
-    newMaterial(context, body: text);
-  }
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
-    final materials = ref.watch(materialsProvider);
-    return materials.when(
-      loading: () => const LoadingView(),
-      error: (_, __) => LibraryMessage(
-        icon: Icons.sd_storage_sharp,
-        title: context.t.libraryEmpty,
-      ),
-      data: (list) => ListView(
-        // Under the library tab's top bar.
-        padding:
-            pagePadding(context, const EdgeInsets.fromLTRB(16, 16, 16, 32)),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: AppButton(
-                  context.t.materialsNew,
-                  key: const ValueKey('materials-new'),
-                  kind: ButtonKind.go,
-                  icon: Icons.add_sharp,
-                  expand: true,
-                  onPressed: () => newMaterial(context),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: AppButton(
-                  context.t.materialsPaste,
-                  key: const ValueKey('materials-paste'),
-                  icon: Icons.content_paste_sharp,
-                  expand: true,
-                  onPressed: () => _paste(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (list.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: EmptyState(
-                title: context.t.materialsEmptyTitle,
-                text: context.t.materialsEmptyDesc,
-              ),
-            )
-          else ...[
-            SectionTitle(
-              title: context.t.libraryTabMine,
-              code: 'my texts',
-              trailing: Text('${list.length}', style: theme.field()),
-            ),
-            for (final m in list) ...[
-              rowDivider(theme),
-              LibraryRow(
-                key: ValueKey('material-${m.id}'),
-                title: m.title.isEmpty ? '—' : m.title,
-                subtitle: m.body.trim().replaceAll(RegExp(r'\s+'), ' '),
-                trailing: Text(
-                  context.t.materialsChars(m.body.length),
-                  style: theme.field(),
-                ),
-                onTap: () => _open(context, (_) => MyMaterialPage(id: m.id)),
-              ),
-            ],
-            rowDivider(theme),
-          ],
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SupplementalMaterialsView();
 }
 
 /// One material, read.
@@ -147,18 +50,13 @@ class MyMaterialPage extends ConsumerWidget {
     );
     if (!ok || !context.mounted) return;
     final store = await ref.read(userDataStoreProvider.future);
+    await ref.read(materialLibraryProvider.notifier).remove(id);
     await store.deleteMaterial(id);
     ref
       ..invalidate(materialsProvider)
       ..invalidate(materialProvider(id));
     invalidateReading(ref);
     if (context.mounted) Navigator.of(context).pop();
-  }
-
-  void _ask(BuildContext context, WidgetRef ref, UserMaterial m) {
-    ref.read(askDraftProvider.notifier).state = askDraftFor(m);
-    ref.read(mainTabRequestProvider.notifier).state = 1;
-    Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   @override
@@ -217,15 +115,6 @@ class MyMaterialPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // The one main action of the page.
-                AppButton(
-                  context.t.materialsAskAbout,
-                  key: const ValueKey('material-ask'),
-                  kind: ButtonKind.go,
-                  icon: Icons.psychology_alt_sharp,
-                  expand: true,
-                  onPressed: () => _ask(context, ref, m),
-                ),
               ],
             ),
     );
@@ -234,15 +123,16 @@ class MyMaterialPage extends ConsumerWidget {
 
 /// Create or edit a material.
 class MaterialEditorPage extends ConsumerStatefulWidget {
-  const MaterialEditorPage({super.key, this.materialId, this.initialBody});
+  const MaterialEditorPage(
+      {super.key, this.materialId, this.initialBody, this.initialTitle,});
 
   /// The material to edit; null creates a new one.
   final String? materialId;
   final String? initialBody;
+  final String? initialTitle;
 
   @override
-  ConsumerState<MaterialEditorPage> createState() =>
-      _MaterialEditorPageState();
+  ConsumerState<MaterialEditorPage> createState() => _MaterialEditorPageState();
 }
 
 class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
@@ -252,6 +142,8 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
   String _savedBody = '';
   bool _loaded = false;
   bool _saving = false;
+  String? _savedId;
+  String? _error;
 
   @override
   void initState() {
@@ -259,6 +151,7 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
     final id = widget.materialId;
     if (id == null) {
       _body.text = widget.initialBody ?? '';
+      _title.text = widget.initialTitle ?? '';
       _loaded = true;
     } else {
       _load(id);
@@ -294,17 +187,15 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
   Future<void> _save() async {
     if (!_canSave || _saving) return;
     setState(() => _saving = true);
-    final store = await ref.read(userDataStoreProvider.future);
-    await store.saveMaterial(
-      id: widget.materialId,
-      title: _title.text,
-      body: _body.text,
-    );
-    ref.invalidate(materialsProvider);
-    if (widget.materialId != null) {
-      ref.invalidate(materialProvider(widget.materialId!));
-    }
-    if (mounted) Navigator.of(context).pop();
+    try {
+      final store = await ref.read(userDataStoreProvider.future);
+      final note = await store.saveMaterial(id:_savedId??widget.materialId,title:_title.text,body:_body.text);
+      _savedId=note.id;
+      await ref.read(materialLibraryProvider.notifier).saveNote(note);
+      ref.invalidate(materialsProvider);
+      ref.invalidate(materialProvider(note.id));
+      if(mounted)Navigator.of(context).pop();
+    }catch(_){if(mounted)setState((){_saving=false;_error='暂时无法完成保存，请重试。';});}
   }
 
   Future<bool> _confirmDiscard() async {
@@ -366,6 +257,7 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(
                   children: [
+                    if(_error!=null)NoticeBox(_error!),
                     TextField(
                       key: const ValueKey('material-title'),
                       controller: _title,
@@ -390,7 +282,8 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
                         decoration: InputDecoration(
                           labelText: context.t.materialsBodyHint,
                           alignLabelWithHint: true,
-                          helperText: context.t.materialsChars(_body.text.length),
+                          helperText:
+                              context.t.materialsChars(_body.text.length),
                         ),
                       ),
                     ),

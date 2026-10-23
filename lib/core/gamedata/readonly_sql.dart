@@ -103,6 +103,7 @@ Future<SqlQueryResult> runReadOnlySql(
   String sql, {
   int maxRows = 200,
   Duration timeout = const Duration(seconds: 8),
+  Map<String, Map<String, List<Object?>>>? snapshotTables,
 }) async {
   final String query;
   try {
@@ -117,7 +118,7 @@ Future<SqlQueryResult> runReadOnlySql(
   try {
     isolate = await Isolate.spawn(
       _sqlIsolateMain,
-      [port.sendPort, dbPath, query, maxRows],
+      [port.sendPort, dbPath, query, maxRows, snapshotTables],
       // An uncaught isolate error arrives as `[error, stack]`.
       onError: port.sendPort,
     );
@@ -190,9 +191,8 @@ String _isolateError(Object? message) =>
 void _interrupt(int handle) {
   try {
     sqfliteFfiInit(); // the platform's SQLite library, as the worker uses
-    final interrupt = open
-        .openSqlite()
-        .lookupFunction<Void Function(Pointer<Void>), void Function(Pointer<Void>)>(
+    final interrupt = open.openSqlite().lookupFunction<
+            Void Function(Pointer<Void>), void Function(Pointer<Void>)>(
           'sqlite3_interrupt',
         );
     interrupt(Pointer<Void>.fromAddress(handle));
@@ -210,7 +210,31 @@ Future<void> _sqlIsolateMain(List<Object?> args) async {
   final commands = ReceivePort();
   sqlite.Database? db;
   try {
-    db = sqlite.sqlite3.open(path, mode: sqlite.OpenMode.readOnly);
+    final tables = args.length > 4 ? args[4] as Map? : null;
+    if (tables == null) {
+      db = sqlite.sqlite3.open(path, mode: sqlite.OpenMode.readOnly);
+    } else {
+      db = sqlite.sqlite3.openInMemory();
+      for (final entry in tables.entries) {
+        final name = entry.key as String;
+        final columns =
+            List<String>.from((entry.value as Map)['columns'] as List);
+        if (![name, ...columns].every((s) => RegExp(r'^\w+$').hasMatch(s))) {
+          throw const FormatException('无效的快照表结构');
+        }
+        db.execute('CREATE TABLE $name (${columns.join(',')})');
+        final insert = db.prepare(
+            'INSERT INTO $name VALUES (${List.filled(columns.length, '?').join(',')})',);
+        try {
+          for (final row in (entry.value as Map)['rows'] as List) {
+            insert.execute(List<Object?>.from(row as List));
+          }
+        } finally {
+          insert.dispose();
+        }
+      }
+      db.execute('PRAGMA query_only=ON');
+    }
     reply.send({'commands': commands.sendPort, 'handle': db.handle.address});
     final result = db.select('SELECT * FROM ($query) LIMIT ${maxRows + 1}');
     final rows = result.rows;

@@ -2,6 +2,16 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.18.0] - 2026-10-23
+
+补充资料参与统一问答。Android build 40，两个游戏知识库沿用 v0.17.0 的发布资产。
+
+- 资料页增加预置《大地巡旅》完整正文与语义向量，默认参与问答；个人笔记支持逐篇选择、导入 Markdown／文本、自动建立与增量更新向量。
+- 游戏库、补充资料和 Wiki 共用问答工具链，支持统一搜索、查词、取材及跨来源相似段落查找。补充资料可以分页读取并引用具体版本和段落。
+- 资料页可自定义内容种类和来源说明，区分书内叙述、认识范围和已确认的批注身份。无法确认的类别或作者不自动猜定。
+- 资料选择从下一问生效；编辑或删除个人资料后，旧答案仍可查看已引用版本。没有匹配向量时显示待更新或降级状态。
+- 删除“就此提问”及前 1500 字符草稿交接，参考资料统一在资料页选择。Ask、设置和 Wiki 页面不增加范围控件。
+
 ## [0.17.1] - 2026-10-23
 
 Fixes after looking at 0.17.0 on a phone. Android build 39. Both knowledge bases are the same files as in v0.16.0 and v0.17.0 (the app still downloads them from the v0.17.0 release).
