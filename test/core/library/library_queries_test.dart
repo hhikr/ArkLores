@@ -477,4 +477,32 @@ void main() {
     expect(await storyPlace(old, 'x.txt'), isNull);
     await old.close();
   });
+
+  test('stages: in code order, the challenge-mode copies after the normal ones',
+      () {
+    LibraryEntry stage(String raw, String code) =>
+        LibraryEntry(id: 'stage:$raw', type: 'stage', name: '名', code: code, rawId: raw);
+    // As SQL gave them: by name.
+    final sorted = sortStages([
+      stage('x_ex02#f#', 'X-EX-2'),
+      stage('x_10', 'X-10'),
+      stage('x_ex02', 'X-EX-2'),
+      stage('x_02#f#', 'X-2'),
+      stage('x_st01', 'X-ST-1'),
+      stage('x_02', 'X-2'),
+      stage('x_tr01', 'X-TR-1'),
+      stage('x_ex01', 'X-EX-1'),
+    ]);
+    expect(sorted.map((e) => e.rawId), [
+      'x_02', 'x_10', 'x_ex01', 'x_ex02', 'x_st01', 'x_tr01',
+      'x_02#f#', 'x_ex02#f#',
+    ]);
+    expect(sorted.where((e) => e.isChallengeStage).length, 2);
+    expect(compareCodes('1-9', '1-10'), lessThan(0));
+    expect(compareCodes('A', null), lessThan(0));
+    expect(
+      const LibraryEntry(id: 'story:a#f#', type: 'story', name: 'a').isChallengeStage,
+      isFalse,
+    );
+  });
 }

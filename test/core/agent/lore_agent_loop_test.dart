@@ -1942,7 +1942,7 @@ void main() {
       expect(
         events.any((e) =>
             e.type == ReActEventType.thought &&
-            e.content.contains('问答质量可能下降'),),
+            e.content.contains('问答质量会显著下降'),),
         isTrue,
       );
       final spec = client.toolSpecs.first.firstWhere(

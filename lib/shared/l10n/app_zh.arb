@@ -498,7 +498,7 @@
   "aiAnswerDelegate": "子助手",
   "aiAnswerDelegateShort": "问题很宽时并行检索，花费明显增加",
   "aiDeepThinkingShort": "写答案前先思考，更慢、更费 token",
-  "aiNoVectorWarning": "没有配置向量服务：只用关键词检索，问答质量可能下降。可在设置里配置向量服务。",
+  "aiNoVectorWarning": "没有配置向量服务：只用关键词检索，问答质量会显著下降。可在设置里配置向量服务。",
   "aiCitedWiki": "Wiki",
   "aiCitedWikiPages": "Wiki 资料 {count} 页",
   "@aiCitedWikiPages": {"placeholders": {"count": {"type": "int"}}},

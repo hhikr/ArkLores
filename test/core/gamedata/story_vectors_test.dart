@@ -171,7 +171,7 @@ void main() {
       expect(found, contains('按意思检索 + 关键词\n关键词：\n匕首（1 行，1 个故事集：'));
       expect(found, contains('level_x_02.txt'));
       expect(
-        first.any((e) => e.content.contains('问答质量可能下降')),
+        first.any((e) => e.content.contains('问答质量会显著下降')),
         isFalse,
       );
       // The planning call sees the search tool's own description and the

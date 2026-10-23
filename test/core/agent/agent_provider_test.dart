@@ -84,7 +84,7 @@ void main() {
       // note that only keywords are searched is recorded first, then that
       // no plan came.
       expect(turn.iterations, hasLength(5));
-      expect(turn.iterations.first.thought, contains('问答质量可能下降'));
+      expect(turn.iterations.first.thought, contains('问答质量会显著下降'));
       expect(turn.iterations[1].rawResponse, startsWith('（拟定检索）'));
       expect(turn.iterations[2].rawResponse, contains('read_story'));
       expect(turn.iterations[2].tool, 'read_story');

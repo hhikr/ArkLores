@@ -261,6 +261,56 @@ class LibraryEntry {
   final String? synopsis;
 
   bool get isStory => type == 'story';
+
+  /// A stage's challenge-mode copy (突袭): the stage table gives it the id
+  /// of the normal stage with `#f#` appended.
+  bool get isChallengeStage =>
+      type == 'stage' && (rawId ?? id).endsWith('#f#');
+}
+
+/// Compares two codes as people read them: runs of digits by their value
+/// (`YW-2` before `YW-10`), a number before letters at the same place
+/// (`YW-8` before `YW-EX-1`). Missing codes go last.
+int compareCodes(String? a, String? b) {
+  if (a == b) return 0;
+  if (a == null || a.isEmpty) return 1;
+  if (b == null || b.isEmpty) return -1;
+  final pa = _codeParts.allMatches(a).map((m) => m[0]!).toList();
+  final pb = _codeParts.allMatches(b).map((m) => m[0]!).toList();
+  for (var i = 0; i < pa.length && i < pb.length; i++) {
+    final x = pa[i], y = pb[i];
+    final nx = int.tryParse(x), ny = int.tryParse(y);
+    final int c;
+    if (nx != null && ny != null) {
+      c = nx != ny ? nx.compareTo(ny) : x.length.compareTo(y.length);
+    } else if (nx != null) {
+      c = -1;
+    } else if (ny != null) {
+      c = 1;
+    } else {
+      c = x.compareTo(y);
+    }
+    if (c != 0) return c;
+  }
+  return pa.length.compareTo(pb.length);
+}
+
+final _codeParts = RegExp(r'\d+|\D+');
+
+/// Stages in the order of their codes, every normal stage before the
+/// challenge-mode copies (the knowledge base gives stages no order of
+/// their own).
+List<LibraryEntry> sortStages(List<LibraryEntry> stages) {
+  final indexed = stages.indexed.toList()
+    ..sort((a, b) {
+      final x = a.$2, y = b.$2;
+      if (x.isChallengeStage != y.isChallengeStage) {
+        return x.isChallengeStage ? 1 : -1;
+      }
+      final c = compareCodes(x.code, y.code);
+      return c != 0 ? c : a.$1.compareTo(b.$1);
+    });
+  return [for (final (_, e) in indexed) e];
 }
 
 String? _text(Object? value) {
@@ -791,7 +841,8 @@ Future<List<LibraryEntry>> entriesOfType(
     'ORDER BY e.sort_key, e.name, e.id LIMIT ?',
     [...head, ...args, limit],
   );
-  return [for (final r in rows) LibraryEntry.fromRow(r)];
+  final entries = [for (final r in rows) LibraryEntry.fromRow(r)];
+  return type == 'stage' ? sortStages(entries) : entries;
 }
 
 /// `AND (e.group_name IN (…) [OR e.group_name IS NULL])` for [groups] (a null

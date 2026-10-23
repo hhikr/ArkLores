@@ -577,6 +577,7 @@ class EntryRow extends ConsumerWidget {
     final numbered = numberedTypes.contains(entry.type);
     final context2 = [
       entryTypeName(entry.type),
+      if (entry.isChallengeStage) challengeStageLabel,
       if (numbered && codeCaption(entry) != null) codeCaption(entry)!,
       if (entry.collectionName != null) entry.collectionName!,
     ].join(' / ');

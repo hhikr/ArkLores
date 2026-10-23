@@ -500,7 +500,7 @@
   "aiAnswerDelegate": "Sub-agents",
   "aiAnswerDelegateShort": "Parallel search for wide questions; costs more",
   "aiDeepThinkingShort": "Think before answering: slower, more tokens",
-  "aiNoVectorWarning": "No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.",
+  "aiNoVectorWarning": "No embedding service configured: keyword search only, answers will be markedly worse. Set one up in Settings.",
   "aiCitedWiki": "Wiki",
   "aiCitedWikiPages": "{count} wiki pages",
   "@aiCitedWikiPages": {"placeholders": {"count": {"type": "int"}}},

@@ -289,7 +289,7 @@ class LoreAgentLoop {
     if (keywordOnly != null && !subtask) {
       yield ReActEvent(
         type: ReActEventType.thought,
-        content: '注意：$keywordOnly，只用关键词检索，问答质量可能下降。'
+        content: '注意：$keywordOnly，只用关键词检索，问答质量会显著下降。'
             '可以在设置里配置向量服务。',
       );
     }
@@ -466,7 +466,7 @@ class LoreAgentLoop {
         if (lostVectors != null) {
           yield ReActEvent(
             type: ReActEventType.thought,
-            content: '注意：$lostVectors，只用关键词检索，问答质量可能下降。'
+            content: '注意：$lostVectors，只用关键词检索，问答质量会显著下降。'
                 '可以在设置里配置向量服务。',
           );
         }

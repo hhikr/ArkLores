@@ -341,20 +341,18 @@ class SettingsService {
       }
     }
 
-    final migrated = <WikiSiteConfig>[];
-    for (var i = 0; i < defaultWikiSites.length; i++) {
-      final site = defaultWikiSites[i];
-      migrated.add(
+    // Never saved: the built-in sites at their own addresses. (The tabs'
+    // last-visited pages are browsing state, not the sites' addresses.)
+    return [
+      for (final site in defaultWikiSites)
         WikiSiteConfig(
           id: site.id,
           label: site.label,
-          url: await loadWikiUrl(i) ?? site.url,
+          url: site.url,
           iconUrl: site.iconUrl,
           builtIn: true,
         ),
-      );
-    }
-    return migrated;
+    ];
   }
 
   static WikiSiteConfig _migrateWikiSite(WikiSiteConfig site) {

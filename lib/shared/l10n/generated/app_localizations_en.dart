@@ -1501,7 +1501,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiNoVectorWarning =>
-      'No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.';
+      'No embedding service configured: keyword search only, answers will be markedly worse. Set one up in Settings.';
 
   @override
   String get aiCitedWiki => 'Wiki';

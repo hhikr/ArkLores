@@ -2,6 +2,16 @@
 
 All notable changes to ArkLores will be documented in this file.
 
+## [0.17.1] - 2026-10-23
+
+Fixes after looking at 0.17.0 on a phone. Android build 39. Both knowledge bases are the same files as in v0.16.0 and v0.17.0 (the app still downloads them from the v0.17.0 release).
+
+- **Opening a page looks like opening a page.** The new page now slides in whole from the right, with a thin line on its leading edge, while the page below moves a little to the left and dims; going back runs the same move the other way. The slanted shutter of 0.17.0 read as a diagonal refresh of the same screen.
+- **The wiki's site tabs are as wide as their names.** Every top tab used to stretch to its full maximum width, so on the Wiki tab the first site took half the bar and the second was cut off next to the bookmarks button. Tabs on the wiki are also a little smaller.
+- **A wiki site's address stays what it is.** Until the wiki sites had been edited once, the settings showed each site at the last page visited in its tab (and saving the dialog kept that page as the site's address). The built-in sites now show their own addresses; a site saved with a visited page as its address can be put back with "重置" on the Wiki sources page.
+- **Stages are in order, and challenge mode is told apart.** An event's or chapter's stage list was sorted by stage name, with each stage's challenge-mode copy (突袭) indistinguishable next to it. Stages now come in the order of their codes (`X-2` before `X-10`, the numbered stages before `EX`, `ST`, `TR`), every challenge-mode stage after the normal ones and marked "突袭" in the list and on its page.
+- Without an embedding service the Ask screen now says the answers will be markedly worse (it said "may").
+
 ## [0.17.0] - 2026-10-22
 
 A new look for the whole app, and a pass over every screen for things that were hard to see, hard to hit or behaved unlike the platform. The design and its rules are in `docs/DESIGN.md`. Android build 38. Both knowledge bases are the same files as in v0.16.0.

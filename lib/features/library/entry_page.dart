@@ -268,6 +268,7 @@ class EntryPage extends ConsumerWidget {
               AccentPill(entryTypeName(e.type)),
               FactsRow([
                 if (codeCaption(e) != null) codeCaption(e)!,
+                if (e.isChallengeStage) challengeStageLabel,
                 if (groupLabel(e.type, e.group) != null)
                   groupLabel(e.type, e.group)!,
               ]),
