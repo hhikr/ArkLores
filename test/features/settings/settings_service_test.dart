@@ -140,11 +140,12 @@ void main() {
   });
 
   group('Wiki sites', () {
-    test('the two built-in sites by default, with a saved tab URL', () async {
+    test('the two built-in sites by default; a tab\'s last page is not the '
+        'site\'s address', () async {
       final sites = await withStored({'wiki_url_0': 'https://prts.wiki/w/y'})
           .loadWikiSites();
       expect(sites.map((s) => s.id), ['prts', 'endfield']);
-      expect(sites.first.url, 'https://prts.wiki/w/y');
+      expect(sites.first.url, 'https://prts.wiki');
       expect(sites.every((s) => s.builtIn), isTrue);
     });
 
@@ -175,8 +176,6 @@ void main() {
 
     test('saving drops invalid sites and the tab URL of a changed site',
         () async {
-      // Without a saved list a tab URL is taken as the site's URL (the
-      // pre-list layout), so start from a saved list.
       await service.saveWikiSites(SettingsService.defaultWikiSites);
       await service.saveWikiUrl(0, 'https://prts.wiki/w/old');
       await service.saveWikiUrl(1, 'https://warfarin.wiki/cn/kept');

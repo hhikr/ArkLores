@@ -158,7 +158,7 @@ void main() {
         _app(const AiChatPage(), overrides: _withModel(ScriptedLLM(['x']))),);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('ask-no-vector-warning')), findsOneWidget);
-    expect(find.textContaining('问答质量可能下降'), findsOneWidget);
+    expect(find.textContaining('问答质量会显著下降'), findsOneWidget);
   });
   testWidgets('a question can be cancelled, then retried from the menu',
       (tester) async {

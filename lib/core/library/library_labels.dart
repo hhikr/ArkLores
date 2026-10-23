@@ -88,6 +88,10 @@ String _familyName(String type) {
   return type;
 }
 
+/// What marks a stage's challenge-mode copy ([LibraryEntry.isChallengeStage])
+/// in lists and on its page: the game's own name for the mode.
+const String challengeStageLabel = '突袭';
+
 /// Types whose `code` is the game's own serial number of the character
 /// (`RCX7`), not a stage code: it is said as "编号", after the name.
 const Set<String> numberedTypes = {'operator', 'token', 'trap', 'npc'};

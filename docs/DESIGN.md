@@ -27,7 +27,7 @@
 | `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
 | `shared/widgets/page_frame.dart` | `PageScaffold`（推入页的顶栏）、`MainTopBar` + `TopTab` + `TopBarTitle`（四个主标签页的顶栏）、`AppTabBar`（底部标签栏）、`DockPanel`（盖在内容上的控件板）、`pagePadding` |
 | `shared/widgets/theme_aware_card.dart` | 面板：可点时右下切角、按下时底边擦入强调色 |
-| `shared/widgets/smooth_page_route.dart` | 换页：斜切快门从右推入（360 ms，返回 240 ms） |
+| `shared/widgets/smooth_page_route.dart` | 换页：新页面整页从右推入（前缘一条 2px `trace` 线），下面的页面左移三分之一并变暗（360 ms，返回 240 ms） |
 | `main.dart` `buildAppTheme` | Material 自带部件的主题（按钮、输入框、对话框、菜单、开关……都改成这套样式） |
 
 字体：界面字是 **Saira**（`assets/fonts/Saira.ttf`，SIL OFL，许可证同目录），可变字体，字重和宽度一律通过 `sairaStyle` 设轴；中文落到系统黑体。

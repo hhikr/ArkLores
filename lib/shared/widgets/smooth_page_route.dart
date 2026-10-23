@@ -5,12 +5,12 @@ import '../providers/theme_provider.dart';
 import '../theme/motion.dart';
 import 'industrial_ui.dart';
 
-/// The app's page change, a shutter: the new page (on its own ground, so
-/// the page below never shows through) comes in from the right behind a
-/// slanted edge (360 ms, slow start and hard stop); the page below stays
-/// where it is and is covered. Going back opens the shutter the other way
-/// (240 ms). No fade, zoom or bounce. With reduced motion the page just
-/// appears.
+/// The app's page change, a push: the new page (on its own ground, so the
+/// page below never shows through) slides in whole from the right with a
+/// 2px trace line on its leading edge (360 ms, slow start and hard stop);
+/// the page below moves a third of the way left and dims under it. Going
+/// back runs the same move the other way (240 ms). No fade, zoom or
+/// bounce. With reduced motion the page just appears.
 Widget smoothPageTransition(
   BuildContext context,
   Animation<double> animation,
@@ -30,37 +30,71 @@ Widget smoothPageTransition(
     curve: Motion.mech,
     reverseCurve: Motion.mech.flipped,
   );
-  return AnimatedBuilder(
-    animation: t,
+  final below = CurvedAnimation(
+    parent: secondaryAnimation,
+    curve: Motion.mech,
+    reverseCurve: Motion.mech.flipped,
+  );
+  return Consumer(
     child: page,
-    builder: (context, child) => t.value >= 1
-        ? child!
-        : ClipPath(clipper: _ShutterClipper(t.value), child: child),
+    builder: (context, ref, page) {
+      final tokens = ref.watch(themeProvider);
+      return AnimatedBuilder(
+        animation: Listenable.merge([t, below]),
+        child: page,
+        builder: (context, page) {
+          var out = page!;
+          // Covered by the page above: pushed left and dimmed.
+          if (below.value > 0) {
+            out = FractionalTranslation(
+              translation: Offset(-_belowShift * below.value, 0),
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  out,
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: ColoredBox(
+                        color: Colors.black
+                            .withValues(alpha: _belowDim * below.value),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          // Coming in (or going out): slid in from the right.
+          if (t.value < 1) {
+            out = FractionalTranslation(
+              translation: Offset(1 - t.value, 0),
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  out,
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    child: ColoredBox(color: tokens.trace),
+                  ),
+                ],
+              ),
+            );
+          }
+          return out;
+        },
+      );
+    },
   );
 }
 
-/// The visible part of a page coming in: everything right of a slanted
-/// edge that sweeps from the right edge (0) past the left one (1).
-class _ShutterClipper extends CustomClipper<Path> {
-  const _ShutterClipper(this.t);
+/// How far the page below moves left, as a share of its width.
+const _belowShift = 0.3;
 
-  final double t;
-
-  @override
-  Path getClip(Size size) {
-    final slant = size.width * 0.35;
-    final x = size.width - t * (size.width + slant);
-    return Path()
-      ..moveTo(x + slant, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height)
-      ..lineTo(x, size.height)
-      ..close();
-  }
-
-  @override
-  bool shouldReclip(_ShutterClipper old) => old.t != t;
-}
+/// How dark the page below gets when it is fully covered.
+const _belowDim = 0.35;
 
 /// [smoothPageTransition] for every route (`MaterialPageRoute`, named
 /// routes, the home route), set in the theme's `pageTransitionsTheme`.
@@ -84,16 +118,11 @@ class SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
       smoothPageTransition(context, animation, secondaryAnimation, child);
 }
 
+/// A pushed page. A [MaterialPageRoute], so the theme's
+/// [SmoothPageTransitionsBuilder] moves it in and the page below moves with
+/// it (Flutter animates the covered page only for material routes).
 PageRoute<T> smoothPageRoute<T>({
   required WidgetBuilder builder,
   RouteSettings? settings,
-}) {
-  return PageRouteBuilder<T>(
-    settings: settings,
-    opaque: true,
-    transitionDuration: Motion.shutter,
-    reverseTransitionDuration: Motion.shutterOut,
-    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
-    transitionsBuilder: smoothPageTransition,
-  );
-}
+}) =>
+    MaterialPageRoute<T>(settings: settings, builder: builder);

@@ -212,11 +212,16 @@ class TopTab extends ConsumerWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+
+  /// A narrower tab (smaller face, tighter padding) for bars that hold
+  /// several named tabs and an action, such as the wiki's sites.
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -239,22 +244,28 @@ class TopTab extends ConsumerWidget {
             child: AnimatedContainer(
               duration: Motion.of(context, Motion.wipe),
               curve: Motion.mech,
-              constraints: const BoxConstraints(maxWidth: 180),
-              height: 36,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.fromLTRB(12, 0, 16, 0),
+              constraints: BoxConstraints(maxWidth: compact ? 160 : 180),
+              height: compact ? 32 : 36,
+              padding: compact
+                  ? const EdgeInsets.fromLTRB(10, 0, 12, 0)
+                  : const EdgeInsets.fromLTRB(12, 0, 16, 0),
               decoration: ShapeDecoration(
                 color: selected ? theme.accentPrimary : Colors.transparent,
                 shape: const CutBorder.br(7),
               ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.ui(
-                  15,
-                  weight: selected ? 700 : 500,
-                  color: selected ? theme.onAccent : theme.textSecondary,
+              // As wide as the label (an aligned container would fill
+              // its whole maxWidth).
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.ui(
+                    compact ? 14 : 15,
+                    weight: selected ? 700 : 500,
+                    color: selected ? theme.onAccent : theme.textSecondary,
+                  ),
                 ),
               ),
             ),

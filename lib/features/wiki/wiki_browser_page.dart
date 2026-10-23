@@ -745,6 +745,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         label: _wikiSites[index].label,
         selected: _tabController.index == index,
         onTap: () => _tabController.index = index,
+        compact: true,
       );
   // ─── Build ───────────────────────────────────────────────────────
 

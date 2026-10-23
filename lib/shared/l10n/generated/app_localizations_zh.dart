@@ -1453,7 +1453,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiDeepThinkingShort => '写答案前先思考，更慢、更费 token';
 
   @override
-  String get aiNoVectorWarning => '没有配置向量服务：只用关键词检索，问答质量可能下降。可在设置里配置向量服务。';
+  String get aiNoVectorWarning => '没有配置向量服务：只用关键词检索，问答质量会显著下降。可在设置里配置向量服务。';
 
   @override
   String get aiCitedWiki => 'Wiki';
