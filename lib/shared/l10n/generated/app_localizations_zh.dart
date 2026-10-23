@@ -517,7 +517,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryTabRead => '阅读';
 
   @override
-  String get libraryTabMine => '我的资料';
+  String get libraryTabMine => '补充资料';
 
   @override
   String get librarySearchTitle => '搜索';

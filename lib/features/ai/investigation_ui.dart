@@ -5,6 +5,7 @@ import '../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../core/agent/story_answer.dart';
 import '../../core/gamedata/story_catalog.dart'
     show StoryCatalogEntry, fallbackStoryLabel;
+import '../../core/materials/material_document.dart';
 import '../../core/wiki/wiki_page.dart';
 
 /// Pre-R13 summary answers ended with
@@ -100,7 +101,8 @@ class CitedRange {
 
 /// R15: the cited ranges of one chapter.
 class CitedChapter {
-  CitedChapter({required this.storyId, required this.label, required this.order});
+  CitedChapter(
+      {required this.storyId, required this.label, required this.order,});
   final String storyId;
 
   /// Chapter part of the label (`BB-9 行动前《尘埃落定》`), or the file part
@@ -116,8 +118,7 @@ class CitedCollection {
   final String label;
   final List<CitedChapter> chapters = [];
 
-  int get citationCount =>
-      chapters.fold<int>(0, (n, c) => n + c.ranges.length);
+  int get citationCount => chapters.fold<int>(0, (n, c) => n + c.ranges.length);
 }
 
 /// R15: groups the citations of [content] by collection, then chapter
@@ -203,6 +204,7 @@ class AnswerBlock {
     required this.stories,
     required this.records,
     this.wikis = const [],
+    this.materials = const [],
   });
 
   /// The block without citations; list items are dedented (the UI indents
@@ -220,9 +222,13 @@ class AnswerBlock {
 
   /// 0.13: cited wiki pages in order of first citation.
   final List<CitedWikiPage> wikis;
+  final List<CitedWikiPage> materials;
 
   bool get hasCitations =>
-      stories.isNotEmpty || records.isNotEmpty || wikis.isNotEmpty;
+      stories.isNotEmpty ||
+      records.isNotEmpty ||
+      wikis.isNotEmpty ||
+      materials.isNotEmpty;
 }
 
 final RegExp _listItemStart = RegExp(r'^(\s*)(?:[-*+]|\d+[.)])\s+');
@@ -244,14 +250,17 @@ List<AnswerBlock> splitAnswerBlocks(String content) {
     if (current != null && current!.any((l) => l.trim().isNotEmpty)) {
       final first = current!.first;
       final item = _listItemStart.firstMatch(first);
-      final width = item == null ? 0 : item.group(1)!.replaceAll('\t', '    ').length;
-      raw.add((
-        lines: [
-          for (final l in current!) _dedent(l, width),
-        ],
-        indent: width ~/ 2,
-        table: currentTable,
-      ),);
+      final width =
+          item == null ? 0 : item.group(1)!.replaceAll('\t', '    ').length;
+      raw.add(
+        (
+          lines: [
+            for (final l in current!) _dedent(l, width),
+          ],
+          indent: width ~/ 2,
+          table: currentTable,
+        ),
+      );
     }
     current = null;
     currentTable = false;
@@ -293,7 +302,8 @@ List<AnswerBlock> splitAnswerBlocks(String content) {
   flush();
 
   return [
-    for (final block in raw) _toAnswerBlock(block.lines.join('\n'), block.indent),
+    for (final block in raw)
+      _toAnswerBlock(block.lines.join('\n'), block.indent),
   ];
 }
 
@@ -321,32 +331,38 @@ AnswerBlock _toAnswerBlock(String text, int indent) {
   final stories = <String, BlockStoryCitation>{};
   final records = <String>[];
   final wikis = <String, CitedWikiPage>{};
+  final materials = <String, CitedWikiPage>{};
   final marked = text
+      .replaceAllMapped(RegExp('`?${materialCitationPattern.pattern}`?'), (m) {
+    final id = 'material:${m[1]}@${m[2]}';
+    final a = int.parse(m[3]!), b = int.tryParse(m[4] ?? '') ?? a;
+    _addRangeTo(materials.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
+        CitedRange(a <= b ? a : b, a <= b ? b : a),);
+    return _citeMark;
+  })
       // Wiki refs first: a page key never ends in .txt, but its paragraph
       // numbers must not be read as anything else.
       .replaceAllMapped(_wikiCitationInText, (m) {
-        final id = '$wikiIdPrefix${m.group(1)}:${m.group(2)}@${m.group(3)}';
-        final a = int.parse(m.group(4)!);
-        final b = m.group(5) == null ? a : int.parse(m.group(5)!);
-        _addRangeTo(
-          wikis.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
-          CitedRange(a <= b ? a : b, a <= b ? b : a),
-        );
-        return _citeMark;
-      })
-      .replaceAllMapped(_citationPattern, (m) {
-        final a = int.parse(m.group(2)!);
-        final b = m.group(3) == null ? a : int.parse(m.group(3)!);
-        _addRange(
-          stories.putIfAbsent(m.group(1)!, () => BlockStoryCitation(m.group(1)!)),
-          CitedRange(a <= b ? a : b, a <= b ? b : a),
-        );
-        return _citeMark;
-      })
-      .replaceAllMapped(_recordCitationPattern, (m) {
-        if (!records.contains(m.group(1)!)) records.add(m.group(1)!);
-        return _citeMark;
-      });
+    final id = '$wikiIdPrefix${m.group(1)}:${m.group(2)}@${m.group(3)}';
+    final a = int.parse(m.group(4)!);
+    final b = m.group(5) == null ? a : int.parse(m.group(5)!);
+    _addRangeTo(
+      wikis.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
+      CitedRange(a <= b ? a : b, a <= b ? b : a),
+    );
+    return _citeMark;
+  }).replaceAllMapped(_citationPattern, (m) {
+    final a = int.parse(m.group(2)!);
+    final b = m.group(3) == null ? a : int.parse(m.group(3)!);
+    _addRange(
+      stories.putIfAbsent(m.group(1)!, () => BlockStoryCitation(m.group(1)!)),
+      CitedRange(a <= b ? a : b, a <= b ? b : a),
+    );
+    return _citeMark;
+  }).replaceAllMapped(_recordCitationPattern, (m) {
+    if (!records.contains(m.group(1)!)) records.add(m.group(1)!);
+    return _citeMark;
+  });
   final cleaned = marked
       .replaceAll(_framedCitations, '')
       .replaceAll(_bareCitations, '')
@@ -358,12 +374,12 @@ AnswerBlock _toAnswerBlock(String text, int indent) {
     stories: stories.values.toList(growable: false),
     records: records,
     wikis: wikis.values.toList(growable: false),
+    materials: materials.values.toList(growable: false),
   );
 }
 
 /// A wiki citation, optionally backticked.
-final RegExp _wikiCitationInText =
-    RegExp('`?${wikiCitationPattern.pattern}`?');
+final RegExp _wikiCitationInText = RegExp('`?${wikiCitationPattern.pattern}`?');
 
 /// Adds [range] to [story], merging overlapping or adjacent ranges.
 void _addRange(BlockStoryCitation story, CitedRange range) =>
@@ -414,8 +430,9 @@ String stripStoryAnswerMarkers(String content) {
 /// R16: the writer's `[COVERAGE: …]` line, also while it is still being
 /// streamed (`[COVER…` at the end of the text).
 final RegExp _writerCoverage = RegExp(
-    r'\[COVERAGE:[^\]\n]*\]?|\[C?O?V?E?R?A?G?E?:?$',
-    caseSensitive: false,);
+  r'\[COVERAGE:[^\]\n]*\]?|\[C?O?V?E?R?A?G?E?:?$',
+  caseSensitive: false,
+);
 
 /// Removes the writer's coverage line from displayed text.
 String stripWriterCoverage(String content) =>

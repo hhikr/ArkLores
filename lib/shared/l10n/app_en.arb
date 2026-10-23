@@ -173,7 +173,7 @@
   "@aiStoryReaderCited": {"placeholders": {"range": {"type": "String"}}},
   "aiStoryReaderEnd": "End of chapter",
   "libraryTabRead": "Read",
-  "libraryTabMine": "My texts",
+  "libraryTabMine": "References",
   "librarySearchTitle": "Search",
   "librarySearchHint": "Search chapters, entries, stage codes",
   "libraryContinue": "Continue reading",

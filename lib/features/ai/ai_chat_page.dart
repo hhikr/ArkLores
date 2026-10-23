@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/agent/agent_provider.dart';
 import '../../core/llm/llm_provider.dart' show embeddingClientProvider;
 import '../../shared/l10n/l10n.dart';
-import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -87,17 +86,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final isConfigured = ref.watch(apiConfigProvider).isValid;
-    // The library's "ask about it": the text goes into the question box for
-    // the user to finish; nothing is sent.
-    ref.listen<String?>(askDraftProvider, (_, draft) {
-      if (draft == null) return;
-      ref.read(askDraftProvider.notifier).state = null;
-      _inputController.value = TextEditingValue(
-        text: draft,
-        selection: TextSelection.collapsed(offset: draft.length),
-      );
-    });
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: isConfigured
@@ -181,7 +169,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 height: 48,
                 child: Row(
                   children: [
-                    Icon(Icons.delete_sweep_sharp, size: 20, color: theme.danger),
+                    Icon(Icons.delete_sweep_sharp,
+                        size: 20, color: theme.danger,),
                     const SizedBox(width: 12),
                     Text(
                       context.t.aiClearHistory,
@@ -267,8 +256,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 onSend: isSending ? chatNotifier.cancel : _handleAskSend,
                 hintText: context.t.aiAskInputPlaceholder,
                 maxHeight: constraints.maxHeight,
-                leading: (card) =>
-                    AnswerOptionsMenu(theme: theme, above: card),
+                leading: (card) => AnswerOptionsMenu(theme: theme, above: card),
               ),
             ),
           ),
@@ -285,8 +273,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         NotificationListener<ScrollMetricsNotification>(
           onNotification: (n) => n.depth == 0 && _onScrollMetrics(n.metrics),
           child: NotificationListener<ScrollUpdateNotification>(
-            onNotification: (n) =>
-                n.depth == 0 && _onScrollMetrics(n.metrics),
+            onNotification: (n) => n.depth == 0 && _onScrollMetrics(n.metrics),
             child: ListView.builder(
               key: const ValueKey('ask-chat-list'),
               controller: _scrollController,
@@ -362,7 +349,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 const SizedBox(height: 8),
                 Text(
                   context.t.aiAskSource,
-                  style: theme.text(14, color: theme.textSecondary, height: 1.55),
+                  style:
+                      theme.text(14, color: theme.textSecondary, height: 1.55),
                 ),
                 // 0.14: search runs on meaning only with an embedding service.
                 if (ref.watch(embeddingClientProvider) == null) ...[
@@ -407,7 +395,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                               Expanded(
                                 child: Text(
                                   s,
-                                  style: theme.text(15.5, weight: FontWeight.w500),
+                                  style:
+                                      theme.text(15.5, weight: FontWeight.w500),
                                 ),
                               ),
                               Icon(

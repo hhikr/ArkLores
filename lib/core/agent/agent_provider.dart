@@ -11,6 +11,7 @@ import '../gamedata/multi_game_retrieval.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_provider.dart';
 import '../llm/usage_meter.dart';
+import '../materials/material_provider.dart';
 import '../wiki/wiki_provider.dart';
 import 'agent_logger.dart';
 import 'answer_options.dart';
@@ -68,6 +69,8 @@ final storyQaAgentProvider = Provider<StoryQaAgent>((ref) {
     embeddingClient: ref.watch(embeddingClientProvider),
     wiki: ref.watch(wikiLookupProvider),
     usage: ref.watch(usageMeterProvider),
+    materialSnapshot: () async =>
+        snapshotMaterials(await ref.read(materialStoreProvider.future)),
   );
 });
 
@@ -269,7 +272,9 @@ class AskChatNotifier extends ChatNotifierBase {
             id,
             isStreaming: false,
             liveStatus: '',
-            stats: cost == null ? null : (message.stats ?? const TurnStats()) + cost,
+            stats: cost == null
+                ? null
+                : (message.stats ?? const TurnStats()) + cost,
           );
           final digested = state.where((m) => m.id == id).firstOrNull?.content;
           if (digested != null) {
@@ -672,8 +677,7 @@ class AskChatNotifier extends ChatNotifierBase {
       if (stop.isCompleted || !isCurrentGeneration(generation)) canceled = true;
       _stopActive = null;
       // A review that did not finish can be asked for again.
-      if (review != null &&
-          (canceled || turnStatus == ChatTurnStatus.error)) {
+      if (review != null && (canceled || turnStatus == ChatTurnStatus.error)) {
         updateMessage(review.$1, canReview: true);
       }
       coalescer.cancel();
@@ -822,8 +826,8 @@ final chatHistoryCountProvider = FutureProvider.autoDispose<int>(
 
 /// One page (0-based) of the saved conversations, last written first: only
 /// that page's files are read.
-final chatHistoryPageProvider = FutureProvider.autoDispose
-    .family<List<ChatSessionSummary>, int>(
+final chatHistoryPageProvider =
+    FutureProvider.autoDispose.family<List<ChatSessionSummary>, int>(
   (ref, page) =>
       ref.watch(chatSessionStoreProvider).page(page, ChatSessionStore.pageSize),
 );

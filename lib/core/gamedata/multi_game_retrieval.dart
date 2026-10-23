@@ -9,8 +9,16 @@ library;
 
 import 'game_retrieval.dart';
 
-class MultiGameRetrieval implements GameDataRetrieval {
+class MultiGameRetrieval implements GameDataRetrieval, GamePassageVectors {
   MultiGameRetrieval(this.stores);
+  @override
+  Future<({List<double> vector, String model, int dims})?> passageVector(
+      String storyId, int line,) {
+    final own = _of(storyId);
+    return own is GamePassageVectors
+        ? (own as GamePassageVectors).passageVector(storyId, line)
+        : Future.value(null);
+  }
 
   /// The database of each game (installed or not; a missing one answers
   /// empty).
@@ -140,7 +148,8 @@ class MultiGameRetrieval implements GameDataRetrieval {
       final info = await store.storyVectorInfo;
       // Scores of different models do not compare.
       if (info == null || info != wanted) continue;
-      all.addAll(await store.searchStoryChunksByVector(queryVector, topK: topK));
+      all.addAll(
+          await store.searchStoryChunksByVector(queryVector, topK: topK),);
     }
     all.sort((a, b) => b.score.compareTo(a.score));
     return all.take(topK).toList();

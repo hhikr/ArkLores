@@ -1013,7 +1013,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryTabMine.
   ///
   /// In en, this message translates to:
-  /// **'My texts'**
+  /// **'References'**
   String get libraryTabMine;
 
   /// No description provided for @librarySearchTitle.
@@ -2657,7 +2657,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiNoVectorWarning.
   ///
   /// In en, this message translates to:
-  /// **'No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.'**
+  /// **'No embedding service configured: keyword search only, answers will be markedly worse. Set one up in Settings.'**
   String get aiNoVectorWarning;
 
   /// No description provided for @aiCitedWiki.

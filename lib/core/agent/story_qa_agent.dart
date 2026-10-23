@@ -4,6 +4,7 @@ import '../gamedata/game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
 import '../llm/usage_meter.dart';
+import '../materials/material_snapshot.dart';
 import '../wiki/wiki_lookup.dart';
 import 'answer_options.dart';
 import 'lore_agent_loop.dart';
@@ -23,6 +24,7 @@ class StoryQaAgent {
     EmbeddingClient? embeddingClient,
     WikiLookup? wiki,
     UsageMeter? usage,
+    this.materialSnapshot,
   })  : _llmClient = llmClient,
         _store = gameDataStore,
         _embeddingClient = embeddingClient,
@@ -34,6 +36,7 @@ class StoryQaAgent {
 
   /// Where tool runs and local checks report their wall-clock spans.
   final UsageMeter? _usage;
+  final Future<MaterialSnapshot> Function()? materialSnapshot;
   final LLMClient _llmClient;
   final GameDataRetrieval? _store;
   final EmbeddingClient? _embeddingClient;
@@ -50,12 +53,12 @@ class StoryQaAgent {
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
-  }) {
+  }) async* {
     final store = _store;
     if (store == null) {
       // Nothing to search: say so without spending a model call.
       const note = '本地知识库不可用，请先在“知识库”页安装中文 GameData 知识库。';
-      return Stream.fromIterable([
+      yield* Stream.fromIterable([
         ReActEvent(
           type: ReActEventType.finalAnswerReplace,
           content: '${formatStoryAnswerEnvelope(StoryAnswerStatus.notCovered)}'
@@ -63,8 +66,17 @@ class StoryQaAgent {
         ),
         const ReActEvent(type: ReActEventType.complete),
       ]);
+      return;
     }
-    return _loop(store, client, options).run(
+    MaterialSnapshot? materials;
+    try {
+      materials = await materialSnapshot?.call();
+    } catch (_) {
+      yield const ReActEvent(
+          type: ReActEventType.thought,
+          content: '补充资料暂时不可用，本问继续检索游戏知识库与已开启的 Wiki。',);
+    }
+    yield* _loop(store, client, options, materials: materials).run(
       query: query,
       history: history,
       prior: prior,
@@ -78,6 +90,7 @@ class StoryQaAgent {
     LLMClient? client,
     AnswerOptions options, {
     bool preSearch = true,
+    MaterialSnapshot? materials,
   }) =>
       LoreAgentLoop(
         client: client ?? _llmClient,
@@ -85,6 +98,7 @@ class StoryQaAgent {
         // one would think over a list of search words.
         planClient: _llmClient,
         store: store,
+        materials: materials,
         embeddingClient: _embeddingClient,
         wiki: options.wiki ? _wiki : null,
         delegate: options.delegate,
@@ -120,7 +134,8 @@ class StoryQaAgent {
       shifted = (iteration, raw) => onRawLlmResponse(iteration + 1, raw);
     }
     // No searches written ahead: the reader's questions say what to look up.
-    final loop = _loop(store, client, options, preSearch: false);
+    final loop = _loop(store, client, options,
+        preSearch: false, materials: await materialSnapshot?.call(),);
     yield const ReActEvent(type: ReActEventType.status, content: '审稿中');
     final issues = await loop.review(
       prior.question,
