@@ -103,10 +103,10 @@ void main() {
 
     test('theme, locale and launcher icon fall back on unknown values',
         () async {
-      expect(await service.loadTheme(), AppTheme.ark);
+      expect(await service.loadTheme(), AppTheme.system);
       await service.saveTheme(AppTheme.endfield);
       expect(await service.loadTheme(), AppTheme.endfield);
-      expect(await withStored({'theme': 'neon'}).loadTheme(), AppTheme.ark);
+      expect(await withStored({'theme': 'neon'}).loadTheme(), AppTheme.system);
 
       expect(await service.loadLocale(), SupportedLocale.zh);
       await service.saveLocale(SupportedLocale.en);

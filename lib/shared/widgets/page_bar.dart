@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
+import '../theme/cut_border.dart';
+import 'ef_widgets.dart';
 
 /// How many pages [total] items make at [pageSize] a page (at least one).
 int pageCountOf(int total, int pageSize) =>
@@ -10,7 +12,8 @@ int pageCountOf(int total, int pageSize) =>
 
 /// Page boxes of a paged list: first / previous / numbers around the current
 /// page / next / last, and the "page x / y" label, which opens a page-number
-/// prompt. [keyPrefix] names the list in the keys of its parts.
+/// prompt. Every box is 44 to the finger; the current page is an accent
+/// block. [keyPrefix] names the list in the keys of its parts.
 class PageBar extends StatelessWidget {
   const PageBar({
     super.key,
@@ -46,46 +49,60 @@ class PageBar extends StatelessWidget {
 
   /// Asks for a page number and goes there.
   Future<void> _jump(BuildContext context) async {
-    final target = await showDialog<int>(
-      context: context,
-      builder: (_) => _JumpDialog(keyPrefix: keyPrefix, pages: pages),
+    final target = await showAppDialog<int>(
+      context,
+      (_) => _JumpDialog(keyPrefix: keyPrefix, pages: pages, theme: theme),
     );
     if (target != null) onPage(target);
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget step(String name, IconData icon, int? to) => IconButton(
+    final m = MaterialLocalizations.of(context);
+    Widget step(String name, IconData icon, String tooltip, int? to) =>
+        SquareIconButton(
           key: ValueKey('$keyPrefix-$name'),
-          visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
-          padding: EdgeInsets.zero,
+          tooltip: tooltip,
+          icon: icon,
           onPressed: to == null ? null : () => onPage(to),
-          icon: Icon(icon, size: 22),
         );
     Widget box(int i) {
       final here = i == page;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: InkWell(
+      return Semantics(
+        button: !here,
+        selected: here,
+        label: context.t.readingHistoryPage(i + 1, pages),
+        excludeSemantics: true,
+        child: GestureDetector(
           key: ValueKey('$keyPrefix-page-box-${i + 1}'),
-          borderRadius: BorderRadius.zero,
-          onTap: here ? null : () => onPage(i),
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: here ? theme.accentPrimary : null,
-              border: Border.all(color: here ? theme.accentPrimary : theme.divider),
-              borderRadius: BorderRadius.zero,
-            ),
-            child: Text(
-              '${i + 1}',
-              style: theme.bodyFont.copyWith(
-                fontSize: 14,
-                fontWeight: here ? FontWeight.w700 : FontWeight.w400,
-                color: here ? theme.onAccent : theme.textPrimary,
+          behavior: HitTestBehavior.opaque,
+          onTap: here
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  onPage(i);
+                },
+          child: SizedBox(
+            height: 48,
+            child: Center(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                alignment: Alignment.center,
+                decoration: ShapeDecoration(
+                  color: here ? theme.accentPrimary : theme.surfaceElevated,
+                  shape: here
+                      ? const RoundedRectangleBorder()
+                      : const CutBorder.br(6),
+                ),
+                child: Text(
+                  '${i + 1}',
+                  style: theme.field(
+                    size: 15,
+                    weight: here ? 700 : 500,
+                    color: here ? theme.onAccent : theme.textPrimary,
+                  ),
+                ),
               ),
             ),
           ),
@@ -94,7 +111,7 @@ class PageBar extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         children: [
           FittedBox(
@@ -102,43 +119,50 @@ class PageBar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                step('first', Icons.first_page_sharp, page == 0 ? null : 0),
+                step(
+                  'first',
+                  Icons.first_page_sharp,
+                  m.firstPageTooltip,
+                  page == 0 ? null : 0,
+                ),
                 step(
                   'previous',
                   Icons.chevron_left_sharp,
+                  m.previousPageTooltip,
                   page == 0 ? null : page - 1,
                 ),
                 for (final i in _slots)
                   i == null
                       ? Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            '…',
-                            style: theme.bodyFont
-                                .copyWith(color: theme.textSecondary),
-                          ),
+                          child: Text('…', style: theme.field()),
                         )
-                      : box(i),
+                      : Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: box(i),
+                        ),
                 step(
                   'next',
                   Icons.chevron_right_sharp,
+                  m.nextPageTooltip,
                   page >= pages - 1 ? null : page + 1,
                 ),
                 step(
                   'last',
                   Icons.last_page_sharp,
+                  m.lastPageTooltip,
                   page >= pages - 1 ? null : pages - 1,
                 ),
               ],
             ),
           ),
-          TextButton(
+          AppButton(
+            context.t.readingHistoryPage(page + 1, pages),
             key: ValueKey('$keyPrefix-jump'),
+            small: true,
+            kind: ButtonKind.quiet,
+            icon: Icons.unfold_more_sharp,
             onPressed: () => _jump(context),
-            child: Text(
-              context.t.readingHistoryPage(page + 1, pages),
-              style: theme.bodyFont.copyWith(color: theme.textSecondary),
-            ),
           ),
         ],
       ),
@@ -149,10 +173,15 @@ class PageBar extends StatelessWidget {
 /// The page-number prompt; owns its text controller so that it outlives the
 /// closing animation.
 class _JumpDialog extends StatefulWidget {
-  const _JumpDialog({required this.keyPrefix, required this.pages});
+  const _JumpDialog({
+    required this.keyPrefix,
+    required this.pages,
+    required this.theme,
+  });
 
   final String keyPrefix;
   final int pages;
+  final AppThemeTokens theme;
 
   @override
   State<_JumpDialog> createState() => _JumpDialogState();
@@ -173,28 +202,33 @@ class _JumpDialogState extends State<_JumpDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: Text(context.t.readingHistoryJumpTitle),
+  Widget build(BuildContext context) => AppDialog(
+        title: context.t.readingHistoryJumpTitle,
         content: TextField(
           key: ValueKey('${widget.keyPrefix}-jump-field'),
           controller: _controller,
           autofocus: true,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: widget.theme.field(color: widget.theme.textPrimary, size: 16),
           decoration: InputDecoration(
             hintText: context.t.readingHistoryJumpHint(widget.pages),
           ),
           onSubmitted: (_) => _submit(),
         ),
         actions: [
-          TextButton(
+          AppButton(
+            MaterialLocalizations.of(context).cancelButtonLabel,
+            small: true,
+            kind: ButtonKind.quiet,
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
           ),
-          TextButton(
+          AppButton(
+            context.t.readingHistoryJumpGo,
             key: ValueKey('${widget.keyPrefix}-jump-go'),
+            small: true,
+            kind: ButtonKind.go,
             onPressed: _submit,
-            child: Text(context.t.readingHistoryJumpGo),
           ),
         ],
       );

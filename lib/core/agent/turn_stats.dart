@@ -102,4 +102,4 @@ String formatUsageLine(TurnStats s) => [
       ],
       if (s.calls > 0) '${s.calls} calls',
       formatElapsed(s.elapsed),
-    ].join(' · ');
+    ].join(' / ');

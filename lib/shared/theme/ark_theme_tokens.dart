@@ -1,96 +1,100 @@
 import 'dart:ui' show Color;
 
 import 'package:flutter/painting.dart'
-    show TextStyle, FontWeight, BorderRadius, BoxShadow, Offset;
-import 'package:google_fonts/google_fonts.dart';
+    show TextStyle, FontWeight, BorderRadius, BoxShadow;
 
 import 'app_theme.dart';
 
-/// Theme A: Arknights Tactical Archive
-///
-/// Cyberpunk tactical/industrial aesthetic with cold blue-gray palette,
-/// chamfer-corner cards, and geometric decoration lines.
+/// The dark theme: a complete second theme, not the light one inverted.
+/// Near-black paper, light ink, and the Arknights blue as its one accent,
+/// which on this ground also works as a line ([trace]) and as text.
 class ArkThemeTokens implements AppThemeTokens {
+  ArkThemeTokens({this.readingFontFamily});
+
+  @override
+  final String? readingFontFamily;
+
   @override
   final String themeName = 'ArkTheme';
 
   @override
   final bool isDark = true;
 
-  // ─── Backgrounds ───────────────────────────────────────────────
+  // ─── Ground ────────────────────────────────────────────────────
   @override
-  final Color bgPrimary = const Color(0xFF090A0B);
+  final Color bgPrimary = const Color(0xFF191919);
   @override
-  final Color bgSecondary = const Color(0xFF151617);
+  final Color bgSecondary = const Color(0xFF1E1E1E);
 
-  // ─── Cards & Surfaces ──────────────────────────────────────────
+  // ─── Surfaces ──────────────────────────────────────────────────
   @override
-  final Color cardSurface = const Color(0xFF202224);
+  final Color cardSurface = const Color(0xFF222222);
   @override
-  final Color cardBorder = const Color(0xFF505457);
+  final Color cardBorder = const Color(0xFF6E6E6E);
   @override
-  final Color surfaceElevated = const Color(0xFF292C2E);
+  final Color surfaceElevated = const Color(0xFF2E2E2E);
   @override
-  final Color surfaceOverlay = const Color(0xC20E0F10);
+  final Color surfaceOverlay = const Color(0xF5222222);
 
-  // ─── Accents ───────────────────────────────────────────────────
+  // ─── Accent ────────────────────────────────────────────────────
   @override
   final Color accentPrimary = const Color(0xFF0BA0D0);
   @override
-  final Color accentSecondary = const Color(0xFFCFD6DA);
-  /// The blue is already readable on the dark surfaces.
+  final Color accentSecondary = const Color(0xFF2E2E2E);
   @override
   final Color accentText = const Color(0xFF0BA0D0);
   @override
-  final Color onAccent = const Color(0xFF000000);
+  final Color onAccent = const Color(0xFF0D0D0D);
+  @override
+  final Color trace = const Color(0xFF0BA0D0);
 
-  // ─── Semantic colors ───────────────────────────────────────────
+  // ─── Semantic colours ──────────────────────────────────────────
   @override
-  final Color warning = const Color(0xFFD4A843); // Amber-gold
+  final Color warning = const Color(0xFF0BA0D0);
   @override
-  final Color danger = const Color(0xFFC0392B); // Deep red
+  final Color danger = const Color(0xFFFF8A7A);
 
   // ─── Text ──────────────────────────────────────────────────────
   @override
-  final Color textPrimary = const Color(0xFFF1F3F4);
+  final Color textPrimary = const Color(0xFFEDEDED);
   @override
-  final Color textSecondary = const Color(0xFFA7AAAC);
+  final Color textSecondary = const Color(0xFFA3A3A3);
   @override
-  final Color textMuted = const Color(0xFF6F7274);
+  final Color textMuted = const Color(0xFF8F8F8F);
 
-  // ─── Borders / Dividers ────────────────────────────────────────
+  // ─── Lines ─────────────────────────────────────────────────────
   @override
-  final Color divider = const Color(0xFF383B3D);
+  final Color divider = const Color(0xFF353535);
 
-  // ─── Dynamic / Glow effects ────────────────────────────────────
+  @override
+  final Color tagBackground = const Color(0xFF3A3A3A);
+  @override
+  final Color tagForeground = const Color(0xFFEDEDED);
+  @override
+  final Color scrim = const Color(0xA0000000);
+
   @override
   final Color glow = const Color(0xFF0BA0D0);
 
-  // ─── Source badge colors for citation cards ────────────────────
   @override
-  final Color wikiBadgeColor = const Color(0xFF4A90D9); // Accent blue
+  final Color wikiBadgeColor = const Color(0xFF0BA0D0);
   @override
-  final Color bookBadgeColor = const Color(0xFFD4A843); // Amber-gold
+  final Color bookBadgeColor = const Color(0xFFA3A3A3);
 
-  // ─── Bottom navigation ─────────────────────────────────────────
   @override
-  final Color navSelectedItem = const Color(0xFF0BA0D0);
+  final Color navSelectedItem = const Color(0xFF0D0D0D);
   @override
-  final Color navUnselectedItem = const Color(0xFF8C979D);
+  final Color navUnselectedItem = const Color(0xFFA3A3A3);
 
   // ─── Typography ────────────────────────────────────────────────
   @override
-  late final TextStyle titleFont = GoogleFonts.getFont(
-    'Noto Sans SC',
-    fontWeight: FontWeight.w700,
-    fontSize: 18,
-    color: textPrimary,
-  );
+  late final TextStyle titleFont =
+      sairaStyle(size: 18, weight: 700, color: textPrimary);
 
   @override
-  late final TextStyle bodyFont = GoogleFonts.getFont(
-    'Noto Sans SC',
-    fontWeight: FontWeight.normal,
+  late final TextStyle bodyFont = TextStyle(
+    fontFamilyFallback: cjkSansFallback,
+    fontWeight: FontWeight.w400,
     fontSize: 14,
     color: textPrimary,
     height: 1.5,
@@ -101,17 +105,11 @@ class ArkThemeTokens implements AppThemeTokens {
   final BorderRadius cardRadius = BorderRadius.zero;
 
   @override
-  final List<BoxShadow> cardShadow = [
-    BoxShadow(
-      color: const Color(0xFF000000).withValues(alpha: 0.3),
-      offset: const Offset(0, 2),
-      blurRadius: 6,
-    ),
-  ];
+  final List<BoxShadow> cardShadow = const [];
 
   @override
   final bool isEndfield = false;
 
   @override
-  final double cornerCut = 10;
+  final double cornerCut = 8;
 }

@@ -9,9 +9,9 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/industrial_ui.dart';
-import '../../shared/widgets/theme_aware_card.dart';
+import '../../shared/widgets/page_frame.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -34,7 +34,7 @@ class OperatorPage extends ConsumerWidget {
       return LibraryScaffold(
         title: '',
         body: entry.isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const LoadingView()
             : LibraryMessage(
                 icon: Icons.folder_off_sharp,
                 title: context.t.libraryEmpty,
@@ -78,11 +78,8 @@ class OperatorPage extends ConsumerWidget {
       (byType[o.type] ??= []).add(o);
     }
 
-    Widget header(String title, String code) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child:
-              IndustrialSectionHeader(theme: theme, title: title, code: code),
-        );
+    Widget header(String title, String code) =>
+        IndustrialSectionHeader(theme: theme, title: title, code: code);
 
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
@@ -100,13 +97,13 @@ class OperatorPage extends ConsumerWidget {
           slivers: [
             SliverPadding(
               padding:
-                  floatingPadding(context, const EdgeInsets.only(bottom: 32)),
+                  pagePadding(context, const EdgeInsets.fromLTRB(16, 0, 16, 32)),
               sliver: SliverMainAxisGroup(
                 slivers: [
                   SliverList.list(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                        padding: const EdgeInsets.fromLTRB(0, 16, 0, 4),
                         child: _headerCard(context, theme, e, records, byType),
                       ),
                       // The profile (archive) leads: it is what the page is about. Each
@@ -124,7 +121,7 @@ class OperatorPage extends ConsumerWidget {
                       e,
                       b,
                       ref.watch(nicknameProvider),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.zero,
                     ),
                   SliverList.list(
                     children: [
@@ -236,46 +233,34 @@ class OperatorPage extends ConsumerWidget {
     Map<String, List<LibraryEntry>> byType,
   ) {
     final stories = records.fold<int>(0, (n, c) => n + c.stories);
-    return ThemeAwareCard(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(shelfIcon(operatorShelf), color: theme.accentText, size: 28),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  e.name.isEmpty ? e.id : e.name,
-                  style: theme.titleFont.copyWith(fontSize: 18, height: 1.25),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    AccentPill(context.t.shelfMemory),
-                    if (codeCaption(e) != null)
-                      AccentPill(codeCaption(e)!, muted: true),
-                    if (stories > 0)
-                      AccentPill(
-                        context.t.libraryCountStories(stories),
-                        muted: true,
-                      ),
-                    for (final g in byType.entries)
-                      AccentPill(
-                        '${entryTypeName(g.key)} ${g.value.length}',
-                        muted: true,
-                      ),
-                  ],
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(shelfIcon(operatorShelf), color: theme.textSecondary, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              context.t.shelfMemory,
+              style: theme.ui(13, weight: 700, color: theme.textSecondary),
             ),
-          ),
-        ],
-      ),
+            if (codeCaption(e) != null) ...[
+              const SizedBox(width: 8),
+              IndexTag(codeCaption(e)!),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(e.name.isEmpty ? e.id : e.name, style: theme.heading(26)),
+        const SizedBox(height: 10),
+        const TriStrip(),
+        const SizedBox(height: 10),
+        FactsRow([
+          if (stories > 0) context.t.libraryCountStories(stories),
+          for (final g in byType.entries)
+            '${entryTypeName(g.key)} ${g.value.length}',
+        ]),
+      ],
     );
   }
 }

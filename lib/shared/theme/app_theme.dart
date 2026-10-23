@@ -1,54 +1,81 @@
-import 'dart:ui' show Color;
+import 'dart:ui' show Color, FontFeature, FontVariation;
 
-import 'package:flutter/painting.dart' show TextStyle, BorderRadius, BoxShadow;
+import 'package:flutter/painting.dart'
+    show TextStyle, FontWeight, BorderRadius, BoxShadow;
 
-/// Abstract definition of all theme tokens used across the app.
+/// The colours, type and shapes of the app (0.17). Two complete themes:
+/// [EndfieldThemeTokens] (light: paper and ink, signal yellow) and
+/// [ArkThemeTokens] (dark: near-black paper, the Arknights blue). Each
+/// theme has ONE accent, used only for "you are here", "you can act on
+/// this" and "look at this", and only as a fill (and, on dark, as a line).
 ///
-/// Two concrete implementations exist:
-/// - [ArkThemeTokens] — Tactical Archive (Arknights industrial aesthetic)
-/// - [EndfieldThemeTokens] — Industrial Signal (Endfield black/white/yellow)
-///
-/// Every UI component MUST read tokens via [ref.watch(themeProvider)]
-/// and MUST NOT hardcode any color, font, or spacing value.
+/// Every UI component reads tokens via `ref.watch(themeProvider)` and never
+/// hardcodes a colour, font or spacing value.
 abstract class AppThemeTokens {
-  // ─── Backgrounds ───────────────────────────────────────────────
+  // ─── Ground ────────────────────────────────────────────────────
+  /// The page ground ("paper").
   Color get bgPrimary;
+
+  /// A quieter ground: bars and wells that sit on the paper.
   Color get bgSecondary;
 
-  // ─── Cards & Surfaces ──────────────────────────────────────────
+  // ─── Surfaces ──────────────────────────────────────────────────
+  /// Panels, sheets, inputs, bars ("panel").
   Color get cardSurface;
+
+  /// The frame of a control (an input, a button outline): ≥ 3:1 on paper.
   Color get cardBorder;
+
+  /// Quiet fills: idle buttons, chips, tracks ("chip").
   Color get surfaceElevated;
   Color get surfaceOverlay;
 
-  // ─── Accents ───────────────────────────────────────────────────
+  // ─── Accent ────────────────────────────────────────────────────
+  /// The one accent, as a fill. Light: signal yellow; dark: Arknights blue.
   Color get accentPrimary;
+
+  /// A quiet companion fill (= chip).
   Color get accentSecondary;
 
-  /// The accent as text, icons and thin borders on [bgPrimary] / [cardSurface]
-  /// (contrast ≥ 4.5). [accentPrimary] itself is for fills and thick lines:
-  /// the Endfield signal yellow is unreadable as text on its light surfaces.
+  /// "Here" as text, an icon or a thin line on paper / panel (contrast
+  /// ≥ 4.5): ink on light, where yellow lines vanish; the accent on dark.
   Color get accentText;
 
   /// Text and icons drawn on an [accentPrimary] fill.
   Color get onAccent;
 
-  // ─── Semantic colors ───────────────────────────────────────────
+  /// A line that marks where you are (reading progress, a pressed row, a
+  /// focused field): ink on light, the accent on dark (= [accentText]).
+  Color get trace;
+
+  // ─── Semantic colours ──────────────────────────────────────────
+  /// Look at this: drawn as an accent block with ink, never red.
   Color get warning;
+
+  /// Deleting, and nothing else.
   Color get danger;
 
   // ─── Text ──────────────────────────────────────────────────────
   Color get textPrimary;
   Color get textSecondary;
+
+  /// The faintest text still readable (≥ 4.5:1 on paper).
   Color get textMuted;
 
-  // ─── Borders / Dividers ────────────────────────────────────────
+  // ─── Lines ─────────────────────────────────────────────────────
+  /// 1px hairlines between parts.
   Color get divider;
 
-  // ─── Dynamic / Glow effects ────────────────────────────────────
+  // ─── Index tags (No.024, stage codes) ──────────────────────────
+  Color get tagBackground;
+  Color get tagForeground;
+
+  /// Behind sheets and dialogs.
+  Color get scrim;
+
   Color get glow;
 
-  // ─── Source badge colors for citation cards ────────────────────
+  // ─── Source badge colours for citation cards ───────────────────
   Color get wikiBadgeColor;
   Color get bookBadgeColor;
 
@@ -57,8 +84,14 @@ abstract class AppThemeTokens {
   Color get navUnselectedItem;
 
   // ─── Typography ────────────────────────────────────────────────
+  /// Headings and labels: Saira (wide geometric Latin) over the Chinese sans.
   TextStyle get titleFont;
+
+  /// Running text and list titles: the Chinese sans, regular.
   TextStyle get bodyFont;
+
+  /// The font of long reading text (Settings): null for the Chinese sans.
+  String? get readingFontFamily;
 
   // ─── Geometry ──────────────────────────────────────────────────
   BorderRadius get cardRadius;
@@ -66,9 +99,113 @@ abstract class AppThemeTokens {
 
   // ─── Visual language ───────────────────────────────────────────
   bool get isEndfield;
+
+  /// The small cut corner of a pressable thing.
   double get cornerCut;
 
   // ─── Theme metadata ────────────────────────────────────────────
   String get themeName;
   bool get isDark;
+}
+
+/// The Chinese sans the interface falls back to after Saira: the system's
+/// CJK sans on each platform (Noto Sans CJK on Android, PingFang on iOS).
+const List<String> cjkSansFallback = [
+  'Noto Sans SC',
+  'Noto Sans CJK SC',
+  'Source Han Sans SC',
+  'PingFang SC',
+  'Microsoft YaHei',
+  'sans-serif',
+];
+
+/// The interface face: Saira, a variable font whose weight and width are
+/// set through its axes (a plain `fontWeight` does not change its glyphs).
+TextStyle sairaStyle({
+  double size = 14,
+  double weight = 400,
+  double width = 100,
+  Color? color,
+  double? height,
+  double spacing = 0,
+  bool tabular = false,
+}) =>
+    TextStyle(
+      fontFamily: 'Saira',
+      fontFamilyFallback: cjkSansFallback,
+      fontSize: size,
+      fontWeight: _weightOf(weight),
+      fontVariations: [
+        FontVariation('wght', weight),
+        FontVariation('wdth', width),
+      ],
+      fontFeatures: tabular ? const [FontFeature.tabularFigures()] : null,
+      color: color,
+      height: height,
+      letterSpacing: spacing == 0 ? null : spacing * size,
+    );
+
+FontWeight _weightOf(double w) =>
+    FontWeight.values[((w / 100).round() - 1).clamp(0, 8)];
+
+/// Type roles, read off the theme so the colours follow it.
+extension AppType on AppThemeTokens {
+  /// Interface text in Saira (buttons, labels, headings).
+  TextStyle ui(
+    double size, {
+    double weight = 600,
+    double width = 100,
+    Color? color,
+    double? height,
+  }) =>
+      sairaStyle(
+        size: size,
+        weight: weight,
+        width: width,
+        color: color ?? textPrimary,
+        height: height,
+      );
+
+  /// The small wide upper-case label over a heading (`// RECORDS`).
+  TextStyle eyebrow({Color? color, double size = 12}) => sairaStyle(
+        size: size,
+        weight: 600,
+        width: 125,
+        color: color ?? textSecondary,
+        spacing: 0.12,
+        height: 1.2,
+      );
+
+  /// Numbers, dates, counts: wide, tabular.
+  TextStyle field({Color? color, double size = 13, double weight = 500}) =>
+      sairaStyle(
+        size: size,
+        weight: weight,
+        width: 112,
+        color: color ?? textSecondary,
+        tabular: true,
+        height: 1.4,
+      );
+
+  /// A heading in bold Chinese.
+  TextStyle heading(double size, {Color? color}) => sairaStyle(
+        size: size,
+        weight: 700,
+        color: color ?? textPrimary,
+        height: 1.3,
+      );
+
+  /// Running text.
+  TextStyle text(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color? color,
+    double height = 1.6,
+  }) =>
+      bodyFont.copyWith(
+        fontSize: size,
+        fontWeight: weight,
+        color: color ?? textPrimary,
+        height: height,
+      );
 }

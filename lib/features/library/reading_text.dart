@@ -1,7 +1,7 @@
-/// Long text as it is read in the library: in the reading font of the story
-/// reader, one paragraph per line of the source with room between them,
-/// `【标签】` fields set off from their values, and the parts of a profile
-/// (its `##` headings) as sections that fold.
+/// Long text as it is read in the library: in the reading font (Settings),
+/// one paragraph per line of the source with room between them, `【标签】`
+/// fields set off from their values, and the parts of a profile (its `##`
+/// headings) as sections that fold.
 library;
 
 import 'package:flutter/material.dart';
@@ -12,22 +12,22 @@ import '../../core/library/placeholders.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart' show selectionDuration;
-import '../../shared/widgets/press_feedback.dart';
-import '../ai/story_reader_page.dart' show readingFontFamily;
+import '../../shared/theme/motion.dart';
+import '../../shared/widgets/ef_widgets.dart';
 
-/// The style of long text: the reader's font, a generous line height.
+/// The style of long text: the reading font chosen in Settings (the Chinese
+/// sans by default), a generous line height.
 TextStyle readingStyle(
   AppThemeTokens theme, {
-  double size = 15.5,
+  double size = 16,
   Color? color,
 }) =>
     theme.bodyFont.copyWith(
-      fontFamily: readingFontFamily,
+      fontFamily: theme.readingFontFamily,
       color: color ?? theme.textPrimary,
       fontSize: size,
       height: 1.85,
-      letterSpacing: 0.2,
+      letterSpacing: theme.readingFontFamily == null ? 0 : 0.2,
     );
 
 /// A `【标签】值` line, or a `标签：值` line of a field list.
@@ -98,7 +98,7 @@ class ReadingParagraphView extends StatelessWidget {
     this.paragraph, {
     super.key,
     required this.theme,
-    this.size = 15.5,
+    this.size = 16,
   });
 
   final ReadingParagraph paragraph;
@@ -112,15 +112,7 @@ class ReadingParagraphView extends StatelessWidget {
     if (p.label == null) {
       child = Text(p.text, style: readingStyle(theme, size: size));
     } else if (p.text.isEmpty) {
-      child = Text(
-        p.label!,
-        style: theme.bodyFont.copyWith(
-          color: theme.accentText,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.6,
-        ),
-      );
+      child = Text(p.label!, style: theme.heading(15));
     } else {
       child = Row(
         crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -132,12 +124,7 @@ class ReadingParagraphView extends StatelessWidget {
               padding: const EdgeInsets.only(right: 12),
               child: Text(
                 p.label!,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
-                ),
+                style: theme.ui(13, weight: 600, color: theme.textSecondary),
               ),
             ),
           ),
@@ -157,7 +144,7 @@ class ReadingText extends ConsumerWidget {
     this.text, {
     super.key,
     this.fields = false,
-    this.size = 15.5,
+    this.size = 16,
   });
 
   final String text;
@@ -181,8 +168,9 @@ class ReadingText extends ConsumerWidget {
   }
 }
 
-/// The head of a part that folds: an accent mark, the title, a short note
-/// (a count) and a chevron; tapping it calls [onTap].
+/// The head of a part that folds: a trace bar (the part is open) or a
+/// hairline-grey one (folded), the title, a short note (a count) and a
+/// chevron; tapping it calls [onTap]. At least 48 high.
 class FoldHead extends ConsumerWidget {
   const FoldHead({
     super.key,
@@ -202,51 +190,50 @@ class FoldHead extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    return PressFeedback(
-      child: InkWell(
+    final d = Motion.of(context, Motion.wipe);
+    return Semantics(
+      button: true,
+      expanded: open,
+      child: PressRow(
         key: ValueKey('fold-$title'),
-        onTap: withHaptic(onTap),
-        child: Padding(
-          padding:
-              EdgeInsets.symmetric(horizontal: plain ? 0 : 14, vertical: 12),
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: selectionDuration,
-                curve: Curves.easeOutExpo,
-                width: 3,
-                height: 16,
-                color: open ? theme.accentPrimary : theme.textMuted,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: theme.titleFont.copyWith(fontSize: 15, height: 1.3),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: plain ? 0 : 14,
+              vertical: 10,
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: d,
+                  curve: Motion.mech,
+                  width: 4,
+                  height: 18,
+                  color: open ? theme.trace : theme.cardBorder,
                 ),
-              ),
-              if (trailing != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: Text(
-                    trailing!,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textMuted,
-                      fontSize: 12,
-                    ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(title, style: theme.heading(16)),
+                ),
+                if (trailing != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Text(trailing!, style: theme.field()),
+                  ),
+                AnimatedRotation(
+                  turns: open ? 0 : -0.25,
+                  duration: d,
+                  curve: Motion.mech,
+                  child: Icon(
+                    Icons.expand_more_sharp,
+                    color: open ? theme.textPrimary : theme.textSecondary,
+                    size: 22,
                   ),
                 ),
-              AnimatedRotation(
-                turns: open ? 0 : -0.25,
-                duration: selectionDuration,
-                curve: Curves.easeOutCubic,
-                child: Icon(
-                  Icons.expand_more_sharp,
-                  color: open ? theme.accentText : theme.textMuted,
-                  size: 22,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -254,8 +241,8 @@ class FoldHead extends ConsumerWidget {
   }
 }
 
-/// A part of a page under a heading that folds: a square plate with an
-/// accent mark, the title and what it holds; tapping the head folds or
+/// A part of a page under a heading that folds: a panel with a hairline
+/// frame, the head ([FoldHead]) and what it holds; tapping the head folds or
 /// unfolds the body in a short, straight motion.
 class FoldSection extends ConsumerStatefulWidget {
   const FoldSection({
@@ -278,7 +265,7 @@ class FoldSection extends ConsumerStatefulWidget {
   /// A short note after the title (a count).
   final String? trailing;
 
-  /// Without the card around it (inside another card).
+  /// Without the panel around it (inside another panel).
   final bool plain;
 
   @override
@@ -302,8 +289,8 @@ class _FoldSectionState extends ConsumerState<FoldSection> {
       },
     );
     final body = AnimatedSize(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+      duration: Motion.of(context, Motion.wipe),
+      curve: Motion.mech,
       alignment: Alignment.topCenter,
       child: _open
           ? Padding(
@@ -325,7 +312,7 @@ class _FoldSectionState extends ConsumerState<FoldSection> {
     return Container(
       decoration: BoxDecoration(
         color: theme.cardSurface,
-        border: Border.all(color: theme.cardBorder),
+        border: Border.all(color: theme.divider),
       ),
       child: column,
     );
@@ -401,7 +388,7 @@ class ProfileText extends ConsumerWidget {
 /// archives and its voice sets, thousands of lines) opens as fast as a
 /// short one. Each paragraph and each voice line is a row; a part's head
 /// folds it ([profileSectionsOpenProvider] says how they start); the rows of
-/// a part draw its card between them. Put it in a [CustomScrollView] (in a
+/// a part draw its panel between them. Put it in a [CustomScrollView] (in a
 /// [SelectionArea] for the text to be selectable).
 class ProfileSliver extends ConsumerStatefulWidget {
   const ProfileSliver(this.text, {super.key, this.padding = EdgeInsets.zero});
@@ -416,7 +403,7 @@ class ProfileSliver extends ConsumerStatefulWidget {
   ConsumerState<ProfileSliver> createState() => _ProfileSliverState();
 }
 
-/// A part of a [ProfileSliver]: its heading (null: no card, no fold) and its
+/// A part of a [ProfileSliver]: its heading (null: no panel, no fold) and its
 /// rows, paragraphs or voice lines.
 typedef _ProfilePart = ({
   String? title,
@@ -484,7 +471,7 @@ class _ProfileSliverState extends ConsumerState<ProfileSliver> {
     );
   }
 
-  /// Row [r] of part [i] (-1: its head); [last] closes the part's card.
+  /// Row [r] of part [i] (-1: its head); [last] closes the part's panel.
   Widget _row(
     AppThemeTokens theme,
     bool openByDefault,
@@ -499,7 +486,7 @@ class _ProfileSliverState extends ConsumerState<ProfileSliver> {
       final para = p.paragraphs[r];
       return ReadingParagraphView(para, theme: theme);
     }
-    final side = BorderSide(color: theme.cardBorder);
+    final side = BorderSide(color: theme.divider);
     final Widget child;
     if (r < 0) {
       child = FoldHead(
@@ -572,8 +559,8 @@ class VoiceLines extends ConsumerWidget {
       );
 }
 
-/// One voice line: its title (`交谈1`) in small accent letters over the
-/// line; a hairline above it unless it is the [first].
+/// One voice line: its title (`交谈1`) in the interface face over the line;
+/// a hairline above it unless it is the [first].
 class VoiceLine extends ConsumerWidget {
   const VoiceLine(this.voice, {super.key, this.first = false});
 
@@ -589,9 +576,7 @@ class VoiceLine extends ConsumerWidget {
       decoration: first
           ? null
           : BoxDecoration(
-              border: Border(
-                top: BorderSide(color: theme.cardBorder.withValues(alpha: 0.7)),
-              ),
+              border: Border(top: BorderSide(color: theme.divider)),
             ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -601,47 +586,12 @@ class VoiceLine extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 3),
               child: Text(
                 voice.title,
-                style: theme.bodyFont.copyWith(
-                  color: theme.accentText,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
-                ),
+                style: theme.ui(13, weight: 700, color: theme.textSecondary),
               ),
             ),
           Text(
             cleanRichText(withPlaceholders(voice.line, nickname)),
-            style: readingStyle(theme, size: 15),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The heading of a group in a list (a region, a kind): a small muted line.
-class GroupHeading extends ConsumerWidget {
-  const GroupHeading({super.key, required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
-      child: Row(
-        children: [
-          Container(width: 3, height: 12, color: theme.accentPrimary),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
+            style: readingStyle(theme, size: 15.5),
           ),
         ],
       ),

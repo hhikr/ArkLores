@@ -9,8 +9,11 @@ import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/theme/app_theme.dart';
+import '../../shared/theme/motion.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/industrial_ui.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import '../ai/reading_history_page.dart';
@@ -21,7 +24,7 @@ import '../library/my_materials.dart';
 /// The library tab: one page per game (its shelves, what was read in it)
 /// and the user's own texts, chosen in the top bar. The pages are not
 /// swiped between (a sideways drag on a shelf is not a request to change
-/// game); the chosen one fades and slides in a short way.
+/// game); the chosen one slides in a short way.
 class MaterialsPage extends ConsumerStatefulWidget {
   const MaterialsPage({super.key});
 
@@ -37,12 +40,11 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = ref.watch(themeProvider);
     final labels = [
       for (final game in Game.values) gameLabel(context, game),
       context.t.libraryTabMine,
     ];
-    // The tabs float over the lists, which scroll underneath them.
+    // The lists scroll under the top bar.
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -54,18 +56,17 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage> {
               const MyMaterialsView(),
             ],
           ),
-          // Tabs on the left, the action on the right: two plates.
-          FloatingTopBar(
-            theme: theme,
+          MainTopBar(
+            // Every tab stays in sight; a long label is shortened rather
+            // than pushed off the edge.
             leading: Row(
               key: const ValueKey('library-tabs'),
               mainAxisSize: MainAxisSize.min,
               children: [
                 for (final (i, label) in labels.indexed)
                   Flexible(
-                    child: FloatingSegment(
+                    child: TopTab(
                       key: ValueKey('library-tab-$i'),
-                      theme: theme,
                       label: label,
                       selected: _tab == i,
                       onTap: () => setState(() => _tab = i),
@@ -74,18 +75,17 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage> {
               ],
             ),
             trailing: !_mine
-                ? IconButton(
+                ? SquareIconButton(
                     key: const ValueKey('library-search'),
                     tooltip: context.t.librarySearchHint,
-                    color: theme.textPrimary,
-                    icon: const Icon(Icons.search_sharp, size: 22),
+                    icon: Icons.search_sharp,
                     onPressed: () => openSearch(context),
                   )
-                : IconButton(
+                : SquareIconButton(
                     key: const ValueKey('library-new-material'),
                     tooltip: context.t.materialsNew,
-                    color: theme.textPrimary,
-                    icon: const Icon(Icons.add_sharp, size: 22),
+                    icon: Icons.add_sharp,
+                    filled: true,
                     onPressed: () => newMaterial(context),
                   ),
           ),
@@ -97,7 +97,7 @@ class _MaterialsPageState extends ConsumerState<MaterialsPage> {
 
 /// Pages of which one shows at a time, each keeping its state (scroll
 /// position) while hidden; changing [index] brings the new page in with a
-/// short fade and a slide from the side it lies on. Not swipeable.
+/// short slide from the side it lies on. Not swipeable.
 class SwitchedPages extends StatefulWidget {
   const SwitchedPages({super.key, required this.index, required this.children});
 
@@ -112,17 +112,17 @@ class _SwitchedPagesState extends State<SwitchedPages>
     with SingleTickerProviderStateMixin {
   late final AnimationController _enter = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 260),
+    duration: Motion.wipe,
     value: 1,
   );
   late final Animation<double> _t =
-      CurvedAnimation(parent: _enter, curve: Curves.easeOutExpo);
+      CurvedAnimation(parent: _enter, curve: Motion.snap);
   double _from = 0;
 
   @override
   void didUpdateWidget(covariant SwitchedPages old) {
     super.didUpdateWidget(old);
-    if (old.index != widget.index) {
+    if (old.index != widget.index && !Motion.reduced(context)) {
       _from = widget.index > old.index ? 24 : -24;
       _enter.forward(from: 0);
     }
@@ -138,20 +138,18 @@ class _SwitchedPagesState extends State<SwitchedPages>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _t,
-      builder: (context, child) => Opacity(
-        opacity: _t.value,
-        child: Transform.translate(
-          offset: Offset(_from * (1 - _t.value), 0),
-          child: child,
-        ),
+      builder: (context, child) => Transform.translate(
+        offset: Offset(_from * (1 - _t.value), 0),
+        child: child,
       ),
       child: IndexedStack(index: widget.index, children: widget.children),
     );
   }
 }
 
-/// One game's page: continue reading (in that game), its shelves, what was
-/// read in it lately; a note when its knowledge base is missing.
+/// One game's page: its numbers, continue reading (in that game), its
+/// shelves, what was read in it lately; a note when its knowledge base is
+/// missing.
 class GameLibraryView extends ConsumerWidget {
   const GameLibraryView({super.key, required this.game});
 
@@ -160,9 +158,7 @@ class GameLibraryView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(gameLibraryStatusProvider(game));
-    if (status.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (status.isLoading) return const LoadingView();
     return switch (status.valueOrNull) {
       LibraryStatus.ready => _page(context, ref),
       LibraryStatus.oldSchema => LibraryMessage(
@@ -175,6 +171,11 @@ class GameLibraryView extends ConsumerWidget {
           icon: Icons.download_for_offline_sharp,
           title: context.t.libraryGameMissing(gameLabel(context, game)),
           description: context.t.libraryNotInstalledDesc,
+          action: AppButton(
+            context.t.libraryOpenKnowledgeBase,
+            kind: ButtonKind.go,
+            onPressed: () => Navigator.of(context).pushNamed('/knowledge-base'),
+          ),
         ),
     };
   }
@@ -188,6 +189,9 @@ class GameLibraryView extends ConsumerWidget {
     ];
 
     return RefreshIndicator(
+      color: theme.trace,
+      backgroundColor: theme.cardSurface,
+      edgeOffset: MediaQuery.paddingOf(context).top + topBarInset,
       onRefresh: () async {
         ref
           ..invalidate(libraryStatusProvider)
@@ -199,10 +203,11 @@ class GameLibraryView extends ConsumerWidget {
       child: ListView(
         key: ValueKey('library-game-${game.key}'),
         padding:
-            floatingPadding(context, const EdgeInsets.fromLTRB(16, 4, 16, 32)),
+            pagePadding(context, const EdgeInsets.fromLTRB(16, 16, 16, 32)),
         children: [
+          _GameFigures(game: game),
           if (recent.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             _ContinueCard(entry: recent.first),
           ],
           _GameShelves(game: game),
@@ -211,26 +216,24 @@ class GameLibraryView extends ConsumerWidget {
               theme: theme,
               title: context.t.readingHistoryTitle,
               code: 'recent',
-            ),
-            for (final e in recent.skip(1).take(4)) ...[
-              _RecentRow(entry: e),
-              rowDivider(theme),
-            ],
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
+              trailing: AppButton(
+                context.t.libraryViewAll,
                 key: const ValueKey('library-all-recent'),
+                small: true,
+                kind: ButtonKind.quiet,
+                icon: Icons.chevron_right_sharp,
                 onPressed: () => Navigator.of(context).push(
                   smoothPageRoute<void>(
                     builder: (_) => const ReadingHistoryPage(),
                   ),
                 ),
-                child: Text(
-                  context.t.libraryViewAll,
-                  style: TextStyle(color: theme.accentText),
-                ),
               ),
             ),
+            for (final e in recent.skip(1).take(4)) ...[
+              rowDivider(theme),
+              _RecentRow(entry: e),
+            ],
+            rowDivider(theme),
           ],
         ],
       ),
@@ -244,7 +247,78 @@ Game? _gameOf(ReadingEntry entry) {
   return item == null ? null : gameOfId(item.id);
 }
 
-/// One game's shelves: a heading and the shelf cards, its codex last.
+/// What the game's knowledge base holds, in three real numbers.
+class _GameFigures extends ConsumerWidget {
+  const _GameFigures({required this.game});
+
+  final Game game;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summaries =
+        ref.watch(shelfSummariesProvider(game)).valueOrNull ?? const [];
+    final codex = ref.watch(codexTypesProvider(game)).valueOrNull ?? const [];
+    if (summaries.isEmpty) return const SizedBox.shrink();
+    final stories = summaries.fold<int>(0, (n, s) => n + s.stories);
+    final collections = summaries.fold<int>(0, (n, s) => n + s.collections);
+    final entries = codex.fold<int>(0, (n, t) => n + t.count);
+    return InkPanel(
+      key: ValueKey('library-figures-${game.key}'),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Eyebrow(game == Game.arknights ? 'arknights' : 'endfield'),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Figure(
+                    groupDigits(stories),
+                    context.t.libraryFigureStories,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Figure(
+                    groupDigits(collections),
+                    context.t.libraryFigureCollections,
+                  ),
+                ),
+              ),
+              if (entries > 0)
+                Expanded(
+                  child: Figure(
+                    groupDigits(entries),
+                    context.t.libraryFigureEntries,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 12345 as "12,345".
+String groupDigits(int n) {
+  final s = n.abs().toString();
+  final out = StringBuffer(n < 0 ? '-' : '');
+  for (var i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) out.write(',');
+    out.write(s[i]);
+  }
+  return out.toString();
+}
+
+/// One game's shelves: a heading and one numbered row per shelf, its codex
+/// last.
 class _GameShelves extends ConsumerWidget {
   const _GameShelves({required this.game});
 
@@ -257,20 +331,17 @@ class _GameShelves extends ConsumerWidget {
         ref.watch(shelfSummariesProvider(game)).valueOrNull ?? const [];
     final codex = ref.watch(codexTypesProvider(game)).valueOrNull ?? const [];
     final codexCount = codex.fold<int>(0, (n, t) => n + t.count);
-    final cards = <Widget>[
+    final rows = <(String, List<String>)>[
       for (final s in summaries)
-        _ShelfCard(
-          kind: s.kind,
-          subtitle: [
+        (
+          s.kind,
+          [
             context.t.libraryCountCollections(s.collections),
             if (s.stories > 0) context.t.libraryCountStories(s.stories),
-          ].join(' · '),
+          ],
         ),
       if (codexCount > 0)
-        _ShelfCard(
-          kind: codexShelfOf(game),
-          subtitle: context.t.libraryCountEntries(codexCount),
-        ),
+        (codexShelfOf(game), [context.t.libraryCountEntries(codexCount)]),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -278,65 +349,78 @@ class _GameShelves extends ConsumerWidget {
         IndustrialSectionHeader(
           theme: theme,
           title: context.t.libraryShelves,
-          code: game == Game.arknights ? 'arknights' : 'endfield',
+          code: 'shelves',
         ),
-        GridView.count(
-          // Inside the padded list: without its own padding the grid would
-          // add the status bar and the floating bar's room again.
-          padding: EdgeInsets.zero,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.55,
-          children: cards,
-        ),
+        for (final (i, (kind, facts)) in rows.indexed) ...[
+          rowDivider(theme),
+          _ShelfRow(index: i + 1, kind: kind, facts: facts),
+        ],
+        rowDivider(theme),
       ],
     );
   }
 }
 
-class _ShelfCard extends ConsumerWidget {
-  const _ShelfCard({required this.kind, required this.subtitle});
+class _ShelfRow extends ConsumerWidget {
+  const _ShelfRow({
+    required this.index,
+    required this.kind,
+    required this.facts,
+  });
 
+  final int index;
   final String kind;
-  final String subtitle;
+  final List<String> facts;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    return ThemeAwareCard(
-      key: ValueKey('shelf-$kind'),
-      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-      onTap: () => openShelf(context, kind),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(shelfIcon(kind), color: theme.accentText, size: 26),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                shelfLabel(context, kind),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.titleFont.copyWith(fontSize: 16),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 11.5,
+    return Semantics(
+      button: true,
+      child: PressRow(
+        key: ValueKey('shelf-$kind'),
+        onTap: () => openShelf(context, kind),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 4, 10),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 36,
+                  child: Text(
+                    index.toString().padLeft(2, '0'),
+                    style: theme.field(color: theme.textMuted, size: 14),
+                  ),
                 ),
-              ),
-            ],
+                Icon(shelfIcon(kind), size: 22, color: theme.textSecondary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shelfLabel(context, kind),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.heading(16),
+                      ),
+                      const SizedBox(height: 2),
+                      FactsRow(facts),
+                    ],
+                  ),
+                ),
+                ExcludeSemantics(
+                  child: Icon(
+                    Icons.chevron_right_sharp,
+                    color: theme.textMuted,
+                    size: 22,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -355,7 +439,7 @@ class _ContinueCard extends ConsumerWidget {
     final progress = entry.progress;
     return ThemeAwareCard(
       key: const ValueKey('library-continue'),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 18, 20, 16),
       onTap: ref0 == null || ref0.kind != LibraryRefKind.story
           ? null
           : () => openStory(context, ref0.id, resume: entry),
@@ -364,36 +448,27 @@ class _ContinueCard extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.play_circle_fill_sharp,
-                color: theme.accentText,
-                size: 18,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                context.t.libraryContinue,
-                style: theme.bodyFont.copyWith(
-                  color: theme.accentText,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
+              Expanded(
+                child: Text(
+                  context.t.libraryContinue,
+                  style: theme.ui(13, weight: 700, color: theme.textSecondary),
                 ),
               ),
-              const Spacer(),
               if (progress != null)
-                AccentPill(
+                Text(
                   entry.finished
                       ? context.t.libraryFinished
-                      : context.t.libraryProgress((progress * 100).round()),
+                      : '${(progress * 100).round().toString().padLeft(3, '0')}%',
+                  style: theme.field(color: theme.textPrimary, weight: 600),
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             readingTitle(ref, entry),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: theme.titleFont.copyWith(fontSize: 17, height: 1.3),
+            style: theme.heading(18),
           ),
           if (entry.snippet.isNotEmpty) ...[
             const SizedBox(height: 6),
@@ -401,11 +476,7 @@ class _ContinueCard extends ConsumerWidget {
               entry.snippet,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12.5,
-                height: 1.5,
-              ),
+              style: theme.text(14, color: theme.textSecondary, height: 1.55),
             ),
           ],
           if (progress != null) ...[

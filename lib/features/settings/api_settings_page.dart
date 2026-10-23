@@ -7,10 +7,12 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
-import '../../shared/widgets/theme_aware_card.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 
-/// Dedicated sub-page for configuring the Chat API provider.
+/// Dedicated sub-page for configuring the chat and embedding services: two
+/// sections of labelled fields; a key's format error is said under that
+/// key; one save button at the bottom.
 class ApiSettingsPage extends ConsumerStatefulWidget {
   const ApiSettingsPage({super.key});
 
@@ -26,8 +28,10 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
   late TextEditingController _embedApiKeyCtrl;
   late TextEditingController _embedModelCtrl;
 
-  bool _saved = false;
+  bool _saving = false;
   bool _synced = false;
+  String? _chatKeyError;
+  String? _embedKeyError;
 
   @override
   void initState() {
@@ -73,27 +77,23 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
 
   Future<void> _saveConfig() async {
     final chatApiKey = _chatApiKeyCtrl.text.trim();
+    final embedApiKey = _embedApiKeyCtrl.text.trim();
     final chatKeyError =
         LLMConfig.apiKeyFormatError(chatApiKey, label: 'Chat API Key');
-    if (chatKeyError != null) {
-      _showConfigError(chatKeyError);
-      return;
-    }
+    final embedKeyError =
+        LLMConfig.apiKeyFormatError(embedApiKey, label: 'Embedding API Key');
+    setState(() {
+      _chatKeyError = chatKeyError;
+      _embedKeyError = embedKeyError;
+    });
+    if (chatKeyError != null || embedKeyError != null) return;
 
+    setState(() => _saving = true);
     final config = LLMConfig(
       chatBaseUrl: _chatBaseUrlCtrl.text.trim(),
       chatApiKey: chatApiKey,
       chatModel: _chatModelCtrl.text.trim(),
     );
-
-    final embedApiKey = _embedApiKeyCtrl.text.trim();
-    final embedKeyError =
-        LLMConfig.apiKeyFormatError(embedApiKey, label: 'Embedding API Key');
-    if (embedKeyError != null) {
-      _showConfigError(embedKeyError);
-      return;
-    }
-
     await ref.read(apiConfigProvider.notifier).save(config);
     await ref.read(embeddingConfigProvider.notifier).save(
           ref.read(embeddingConfigProvider).copyWith(
@@ -104,16 +104,8 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
         );
 
     if (!mounted) return;
-    setState(() => _saved = true);
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _saved = false);
-    });
-  }
-
-  void _showConfigError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    setState(() => _saving = false);
+    showToast(context, context.t.apiSettingsSaved);
   }
 
   @override
@@ -121,187 +113,153 @@ class _ApiSettingsPageState extends ConsumerState<ApiSettingsPage> {
     final theme = ref.watch(themeProvider);
     ref.watch(apiConfigProvider);
 
-    return FloatingScaffold(
+    return PageScaffold(
       title: context.t.apiSettingsTitle,
       scrollUnder: true,
       body: ListView(
-        padding: floatingPadding(context, const EdgeInsets.all(16)),
+        padding: pagePadding(context, const EdgeInsets.fromLTRB(16, 4, 16, 40)),
         children: [
-          Center(
-            child: Icon(
-              Icons.api_sharp,
-              size: 48,
-              color: theme.accentPrimary.withValues(alpha: 0.4),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _sectionHeader(
-            theme,
-            Icons.chat_sharp,
-            context.t.apiSettingsChatSection,
-          ),
-          const SizedBox(height: 4),
+          SectionTitle(title: context.t.apiSettingsChatSection, code: 'chat'),
           Text(
             context.t.apiSettingsChatDesc,
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 12,
-            ),
+            style: theme.text(14, color: theme.textSecondary),
           ),
-          const SizedBox(height: 12),
-          ThemeAwareCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _inputLabel(theme, context.t.apiSettingsLabelBaseUrl),
-                _inputField(
-                  theme: theme,
-                  controller: _chatBaseUrlCtrl,
-                  hint: 'https://api.z.ai/api/paas/v4',
-                ),
-                const SizedBox(height: 14),
-                _inputLabel(theme, context.t.apiSettingsLabelApiKey),
-                _inputField(
-                  theme: theme,
-                  controller: _chatApiKeyCtrl,
-                  hint: 'sk-...',
-                  secret: true,
-                ),
-                const SizedBox(height: 14),
-                _inputLabel(theme, context.t.apiSettingsLabelModel),
-                _inputField(
-                  theme: theme,
-                  controller: _chatModelCtrl,
-                  hint: 'glm-5.3-flash',
-                ),
-              ],
-            ),
+          const SizedBox(height: 16),
+          _field(
+            controller: _chatBaseUrlCtrl,
+            label: context.t.apiSettingsLabelBaseUrl,
+            hint: 'https://api.z.ai/api/paas/v4',
+            url: true,
           ),
-          const SizedBox(height: 24),
-          _sectionHeader(
-            theme,
-            Icons.hub_sharp,
-            context.t.apiSettingsEmbeddingSection,
+          _SecretField(
+            controller: _chatApiKeyCtrl,
+            label: context.t.apiSettingsLabelApiKey,
+            error: _chatKeyError,
+            onChanged: () {
+              if (_chatKeyError != null) setState(() => _chatKeyError = null);
+            },
           ),
-          const SizedBox(height: 4),
+          _field(
+            controller: _chatModelCtrl,
+            label: context.t.apiSettingsLabelModel,
+            hint: 'glm-5.3-flash',
+          ),
+          const SizedBox(height: 8),
+          Divider(height: 1, color: theme.divider),
+          SectionTitle(
+            title: context.t.apiSettingsEmbeddingSection,
+            code: 'embedding',
+          ),
           Text(
             context.t.apiSettingsEmbeddingDesc,
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 12,
-            ),
+            style: theme.text(14, color: theme.textSecondary),
           ),
-          const SizedBox(height: 12),
-          ThemeAwareCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _inputLabel(theme, context.t.apiSettingsLabelBaseUrl),
-                _inputField(
-                  theme: theme,
-                  controller: _embedBaseUrlCtrl,
-                  hint: defaultEmbeddingConfig.baseUrl,
-                ),
-                const SizedBox(height: 14),
-                _inputLabel(theme, context.t.apiSettingsLabelApiKey),
-                _inputField(
-                  theme: theme,
-                  controller: _embedApiKeyCtrl,
-                  hint: 'sk-...',
-                  secret: true,
-                ),
-                const SizedBox(height: 14),
-                _inputLabel(theme, context.t.apiSettingsLabelModel),
-                _inputField(
-                  theme: theme,
-                  controller: _embedModelCtrl,
-                  hint: defaultEmbeddingConfig.model,
-                ),
-              ],
-            ),
+          const SizedBox(height: 16),
+          _field(
+            controller: _embedBaseUrlCtrl,
+            label: context.t.apiSettingsLabelBaseUrl,
+            hint: defaultEmbeddingConfig.baseUrl,
+            url: true,
           ),
-          const SizedBox(height: 28),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _saveConfig,
-              icon: Icon(
-                _saved ? Icons.check_sharp : Icons.save_sharp,
-                size: 20,
-              ),
-              label: Text(
-                _saved ? context.t.apiSettingsSaved : context.t.apiSettingsSave,
-                style: theme.titleFont.copyWith(fontSize: 15),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.accentPrimary,
-                foregroundColor: theme.bgPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
-            ),
+          _SecretField(
+            controller: _embedApiKeyCtrl,
+            label: context.t.apiSettingsLabelApiKey,
+            error: _embedKeyError,
+            onChanged: () {
+              if (_embedKeyError != null) setState(() => _embedKeyError = null);
+            },
           ),
-          const SizedBox(height: 32),
+          _field(
+            controller: _embedModelCtrl,
+            label: context.t.apiSettingsLabelModel,
+            hint: defaultEmbeddingConfig.model,
+          ),
+          const SizedBox(height: 16),
+          AppButton(
+            context.t.apiSettingsSave,
+            key: const ValueKey('api-settings-save'),
+            kind: ButtonKind.go,
+            icon: Icons.save_sharp,
+            expand: true,
+            busy: _saving,
+            onPressed: _saveConfig,
+          ),
         ],
       ),
     );
   }
 
-  Widget _sectionHeader(AppThemeTokens theme, IconData icon, String title) {
-    return Row(
-      children: [
-        Icon(icon, color: theme.accentPrimary, size: 22),
-        const SizedBox(width: 8),
-        Text(title, style: theme.titleFont.copyWith(fontSize: 18)),
-      ],
-    );
-  }
-
-  Widget _inputLabel(AppThemeTokens theme, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        label,
-        style: theme.bodyFont.copyWith(
-          color: theme.textSecondary,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
-
-  Widget _inputField({
-    required AppThemeTokens theme,
+  Widget _field({
     required TextEditingController controller,
+    required String label,
     required String hint,
-    bool secret = false,
+    bool url = false,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        borderRadius: BorderRadius.zero,
-        border: Border.all(color: theme.divider, width: 1),
-      ),
+    final theme = ref.read(themeProvider);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: controller,
-        // Keys stay visible, but the keyboard must not learn, suggest or
-        // autocorrect them.
-        keyboardType: secret ? TextInputType.visiblePassword : null,
-        autocorrect: !secret,
-        enableSuggestions: !secret,
-        style: theme.bodyFont.copyWith(
-          color: theme.textPrimary,
-          fontSize: 14,
-        ),
+        keyboardType: url ? TextInputType.url : TextInputType.text,
+        autocorrect: false,
+        style: theme.field(color: theme.textPrimary, size: 15),
+        decoration: InputDecoration(labelText: label, hintText: hint),
+      ),
+    );
+  }
+}
+
+/// A key field: hidden by default, an eye to show it; its format error is
+/// said right under it.
+class _SecretField extends ConsumerStatefulWidget {
+  const _SecretField({
+    required this.controller,
+    required this.label,
+    required this.onChanged,
+    this.error,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? error;
+  final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_SecretField> createState() => _SecretFieldState();
+}
+
+class _SecretFieldState extends ConsumerState<_SecretField> {
+  bool _shown = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextField(
+        controller: widget.controller,
+        obscureText: !_shown,
+        // The keyboard must not learn, suggest or autocorrect a key.
+        keyboardType: TextInputType.visiblePassword,
+        autocorrect: false,
+        enableSuggestions: false,
+        onChanged: (_) => widget.onChanged(),
+        style: theme.field(color: theme.textPrimary, size: 15),
         decoration: InputDecoration(
-          hintText: hint,
-          hintStyle:
-              TextStyle(color: theme.textSecondary.withValues(alpha: 0.5)),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          labelText: widget.label,
+          hintText: 'sk-...',
+          errorText: widget.error,
+          errorMaxLines: 3,
+          suffixIcon: IconButton(
+            tooltip: _shown
+                ? context.t.apiSettingsHideKey
+                : context.t.apiSettingsShowKey,
+            icon: Icon(
+              _shown ? Icons.visibility_off_sharp : Icons.visibility_sharp,
+              size: 20,
+            ),
+            onPressed: () => setState(() => _shown = !_shown),
+          ),
         ),
       ),
     );

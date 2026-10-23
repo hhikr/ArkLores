@@ -10,6 +10,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
 
@@ -61,46 +62,26 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.sync_sharp, color: theme.accentPrimary, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t.kbBuildSectionTitle,
-                      style: theme.titleFont.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      context.t.kbBuildSectionDesc,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          KbCardHeader(
+            icon: Icons.sync_sharp,
+            title: context.t.kbBuildSectionTitle,
+            stamp: build.busy
+                ? StateStamp(context.t.kbBuildFromSource, kind: StampKind.pending)
+                : null,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          kbNote(context.t.kbBuildSectionDesc, theme, theme.textSecondary),
+          const SizedBox(height: 10),
           if (build.latestCommit != null)
-            Text(
-              '${context.t.kbBuildLatestCommit}: ${shortCommit(build.latestCommit)}'
-              '${build.installedCommit != null ? ' (${context.t.kbBuildInstalledCommit}: ${shortCommit(build.installedCommit)})' : ''}',
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-              ),
-            ),
+            FactsRow([
+              '${context.t.kbBuildLatestCommit} ${shortCommit(build.latestCommit)}',
+              if (build.installedCommit != null)
+                '${context.t.kbBuildInstalledCommit} ${shortCommit(build.installedCommit)}',
+            ]),
           if (build.phase == GameDataBuildPhase.idle &&
               build.changedFileCount == -1) ...[
             const SizedBox(height: 8),
-            kbNote(context.t.kbBuildTooManyChanges, theme, theme.warning),
+            kbFlag(context.t.kbBuildTooManyChanges, theme),
           ] else if (build.phase == GameDataBuildPhase.idle &&
               build.noRelevantChanges) ...[
             const SizedBox(height: 8),
@@ -125,20 +106,17 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
           ],
           if (build.confirmFull && !build.busy) ...[
             const SizedBox(height: 8),
-            kbNote(context.t.kbBuildFullConfirm, theme, theme.warning),
+            kbFlag(context.t.kbBuildFullConfirm, theme),
             const SizedBox(height: 6),
-            OutlinedButton(
+            AppButton(
+              context.t.kbBuildFullConfirmButton,
               key: const Key('kb-build-full-confirm'),
+              kind: ButtonKind.danger,
               onPressed: () =>
                   ref.read(gameDataBuildProvider.notifier).buildFromSource(
                         githubToken: _currentGithubToken(),
                         allowFull: true,
                       ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.danger,
-                side: BorderSide(color: theme.divider),
-              ),
-              child: Text(context.t.kbBuildFullConfirmButton),
             ),
           ],
           if (build.phase == GameDataBuildPhase.done) ...[
@@ -147,54 +125,31 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
               build.incremental
                   ? context.t.kbBuildIncrementalDone
                   : context.t.kbBuildFullDone,
-              style: theme.bodyFont.copyWith(
-                color: theme.accentPrimary,
-                fontSize: 12,
-              ),
+              style: theme.heading(14),
             ),
             if (build.report != null) ..._buildReport(context, build, theme),
           ],
           if (build.error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              '${context.t.kbBuildError}: ${build.error}',
-              style: theme.bodyFont.copyWith(
-                color: theme.danger,
-                fontSize: 12,
-              ),
-            ),
+            const SizedBox(height: 10),
+            NoticeBox('${context.t.kbBuildError}: ${build.error}'),
           ],
           if (build.busy) ...[
-            const SizedBox(height: 12),
-            Text(
-              _buildStageLabel(context, build),
-              style: theme.bodyFont.copyWith(
-                color: theme.textPrimary,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            LinearProgressIndicator(
+            const SizedBox(height: 14),
+            SegmentProgress(
+              label: _buildStageLabel(context, build),
               value: build.total > 0
                   ? (build.done / build.total).clamp(0.0, 1.0)
                   : null,
-              backgroundColor: theme.divider,
-              valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-              minHeight: 6,
             ),
             if (build.total > 0) ...[
               const SizedBox(height: 4),
-              Text(
-                '${build.done} / ${build.total}',
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
+              Text('${build.done} / ${build.total}', style: theme.field()),
             ],
           ],
-          const SizedBox(height: 12),
-          Row(
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               OutlinedButton.icon(
                 onPressed: build.busy
@@ -204,22 +159,13 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                         .checkForUpdates(githubToken: _currentGithubToken()),
                 icon: const Icon(Icons.manage_search_sharp, size: 18),
                 label: Text(context.t.kbBuildCheckUpdates),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.accentText,
-                  side: BorderSide(color: theme.divider),
-                ),
               ),
-              const SizedBox(width: 8),
               if (build.busy)
                 OutlinedButton.icon(
                   onPressed: () =>
                       ref.read(gameDataBuildProvider.notifier).cancel(),
                   icon: const Icon(Icons.close_sharp, size: 18),
                   label: Text(context.t.kbBuildCancel),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.danger,
-                    side: BorderSide(color: theme.divider),
-                  ),
                 )
               else
                 ElevatedButton.icon(
@@ -233,10 +179,6 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                           .buildFromSource(githubToken: _currentGithubToken()),
                   icon: const Icon(Icons.sync_sharp, size: 18),
                   label: Text(context.t.kbBuildFromSource),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.accentPrimary,
-                    foregroundColor: theme.onAccent,
-                  ),
                 ),
             ],
           ),
@@ -263,10 +205,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
         .join('，');
     return [
       const SizedBox(height: 10),
-      Text(
-        context.t.kbBuildReportTitle,
-        style: theme.titleFont.copyWith(fontSize: 13),
-      ),
+      Text(context.t.kbBuildReportTitle, style: theme.heading(14)),
       const SizedBox(height: 4),
       kbNote(
         context.t.kbBuildReportStories(
@@ -308,11 +247,11 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
     final tokenAsync = ref.watch(githubTokenProvider);
     final hasToken = tokenAsync.valueOrNull?.isNotEmpty ?? false;
     // Folded: most updates need no token.
-    final header = InkWell(
+    final header = PressRow(
       key: const Key('kb-build-token-toggle'),
       onTap: () => setState(() => _showToken = !_showToken),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 13),
         child: Row(
           children: [
             Icon(
@@ -322,13 +261,10 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
             ),
             const SizedBox(width: 4),
             Expanded(
-              child: Text(
-                context.t.kbBuildTokenTitle,
-                style: theme.titleFont.copyWith(fontSize: 13),
-              ),
+              child: Text(context.t.kbBuildTokenTitle, style: theme.heading(15)),
             ),
             if (hasToken)
-              Icon(Icons.check_sharp, size: 16, color: theme.accentText),
+              StateStamp(context.t.kbBuildTokenSetHint),
           ],
         ),
       ),
@@ -344,14 +280,7 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
       children: [
         Divider(color: theme.divider, height: 1),
         header,
-        Text(
-          context.t.kbBuildTokenDesc,
-          style: theme.bodyFont.copyWith(
-            color: theme.textSecondary,
-            fontSize: 11,
-            height: 1.4,
-          ),
-        ),
+        kbNote(context.t.kbBuildTokenDesc, theme, theme.textSecondary),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -362,57 +291,22 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
                 keyboardType: TextInputType.visiblePassword,
                 autocorrect: false,
                 enableSuggestions: false,
-                style: theme.bodyFont.copyWith(color: theme.textPrimary),
+                style: theme.field(color: theme.textPrimary, size: 14),
                 decoration: InputDecoration(
-                  isDense: true,
+                  labelText: context.t.kbBuildTokenTitle,
                   hintText: context.t.kbBuildTokenPlaceholder,
-                  hintStyle: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 12,
-                  ),
-                  filled: true,
-                  fillColor: theme.bgPrimary,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
-                    borderSide: BorderSide(color: theme.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
-                    borderSide: BorderSide(color: theme.divider),
-                  ),
                 ),
               ),
             ),
             const SizedBox(width: 6),
-            FilledButton(
+            AppButton(
+              context.t.kbBuildTokenSave,
+              kind: ButtonKind.go,
               onPressed: _saveGithubToken,
-              style: FilledButton.styleFrom(
-                backgroundColor: theme.accentPrimary,
-                foregroundColor: theme.bgPrimary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              child: Text(
-                context.t.kbBuildTokenSave,
-                style: theme.titleFont.copyWith(fontSize: 12),
-              ),
             ),
           ],
         ),
-        if (tokenAsync.valueOrNull?.isNotEmpty ?? false) ...[
-          const SizedBox(height: 4),
-          Text(
-            context.t.kbBuildTokenSetHint,
-            style: theme.bodyFont.copyWith(
-              color: theme.accentPrimary,
-              fontSize: 11,
-            ),
-          ),
-        ],
+        
       ],
     );
   }
@@ -429,14 +323,11 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
     ref.invalidate(githubTokenProvider);
     _tokenLoaded = false;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          token.isEmpty
+    showToast(
+      context,
+      token.isEmpty
               ? context.t.kbBuildTokenCleared
               : context.t.kbBuildTokenSaved,
-        ),
-      ),
     );
   }
 

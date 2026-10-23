@@ -7,13 +7,15 @@ import '../../core/userdata/user_data_store.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_bar.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../library/library_widgets.dart';
 
 /// "Recently read": the stories the user opened, newest first. Tapping one
 /// reopens it at the line it was left at (found again by its text if the
-/// story changed since).
+/// story changed since). A row is removed with its button or a swipe to the
+/// left; clearing all asks first.
 class ReadingHistoryPage extends ConsumerStatefulWidget {
   const ReadingHistoryPage({super.key});
 
@@ -37,39 +39,34 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
     final pages = total == 0 ? 1 : (total + historyPageSize - 1) ~/ historyPageSize;
     final page = _page.clamp(0, pages - 1);
 
-    return FloatingScaffold(
+    return PageScaffold(
       title: context.t.readingHistoryTitle,
       scrollUnder: true,
       actions: [
-          if (total > 0)
-            TextButton(
-              key: const ValueKey('reading-history-clear'),
-              onPressed: _confirmClear,
-              // Not the theme's primary (the signal yellow, faint as text).
-              style: TextButton.styleFrom(foregroundColor: theme.textPrimary),
-              child: Text(context.t.readingHistoryClear),
-            ),
-        ],
+        if (total > 0)
+          AppButton(
+            context.t.readingHistoryClear,
+            key: const ValueKey('reading-history-clear'),
+            small: true,
+            kind: ButtonKind.quiet,
+            onPressed: _confirmClear,
+          ),
+      ],
       body: count.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (_, __) => _empty(context, theme),
         data: (_) {
           if (total == 0) return _empty(context, theme);
           final entries = ref.watch(readingPageProvider(page));
           return entries.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const LoadingView(),
             error: (_, __) => _empty(context, theme),
             data: (all) {
               final shown = [
                 for (final e in all)
                   if (!_removed.contains(e.ref)) e,
               ];
-              final divider = Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: theme.divider,
-              );
+              final divider = rowDivider(theme);
               final pager = pages > 1
                   ? PageBar(
                       theme: theme,
@@ -81,22 +78,26 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
                   : null;
               return ListView(
                 key: ValueKey('reading-history-page-$page'),
-                padding: floatingPadding(
+                padding: pagePadding(
                   context,
-                  const EdgeInsets.symmetric(vertical: 8),
+                  const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 ),
                 children: [
-                  if (pager != null) ...[
+                  if (pager != null)
                     KeyedSubtree(
                       key: const ValueKey('reading-history-pager-top'),
                       child: pager,
                     ),
-                    divider,
-                  ],
+                  SectionTitle(
+                    title: context.t.readingHistoryTitle,
+                    code: 'recent',
+                    trailing: Text('$total', style: theme.field()),
+                  ),
                   for (final e in shown) ...[
-                    _tile(context, theme, e),
                     divider,
+                    _tile(context, theme, e),
                   ],
+                  divider,
                   if (pager != null)
                     KeyedSubtree(
                       key: const ValueKey('reading-history-pager-bottom'),
@@ -128,23 +129,8 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
 
   Widget _empty(BuildContext context, AppThemeTokens theme) => Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.menu_book_sharp,
-                size: 56,
-                color: theme.textSecondary.withValues(alpha: 0.4),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                context.t.readingHistoryEmpty,
-                style: theme.bodyFont.copyWith(color: theme.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.all(24),
+          child: EmptyState(text: context.t.readingHistoryEmpty),
         ),
       );
 
@@ -158,20 +144,25 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
       key: ValueKey('reading-${entry.ref}'),
       direction: DismissDirection.endToStart,
       background: Container(
-        color: theme.danger.withValues(alpha: 0.15),
+        color: theme.danger,
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: Icon(Icons.delete_outline_sharp, color: theme.danger),
+        child: Text(
+          context.t.readingHistoryRemove,
+          style: theme.ui(15, weight: 700, color: theme.cardSurface),
+        ),
       ),
       onDismissed: (_) => _remove(entry),
       child: LibraryRow(
         key: ValueKey('reading-tile-${entry.ref}'),
-        leading: Icon(Icons.menu_book_sharp, color: theme.accentText),
         title: readingTitle(ref, entry),
         subtitle: [
-          '${_time(entry.openedAt)} · '
-              '${context.t.readingHistoryLine(entry.lineIndex + 1)}'
-              '${entry.hasCompleted ? ' · ${context.t.libraryReadTimes(entry.completedCount)}' : ''}',
+          [
+            _time(entry.openedAt),
+            context.t.readingHistoryLine(entry.lineIndex + 1),
+            if (entry.hasCompleted)
+              context.t.libraryReadTimes(entry.completedCount),
+          ].join(' / '),
           if (entry.snippet.isNotEmpty) entry.snippet,
         ].join('\n'),
         progress: entry.progress != null && !entry.finished
@@ -181,16 +172,12 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (entry.progress != null) readMark(context, theme, entry),
-            IconButton(
+            SquareIconButton(
               key: ValueKey('reading-history-remove-${entry.ref}'),
-              visualDensity: VisualDensity.compact,
               tooltip: context.t.readingHistoryRemove,
               onPressed: () => _remove(entry),
-              icon: Icon(
-                Icons.delete_outline_sharp,
-                size: 20,
-                color: theme.textSecondary,
-              ),
+              icon: Icons.delete_outline_sharp,
+              color: theme.danger,
             ),
           ],
         ),
@@ -210,24 +197,14 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
   }
 
   Future<void> _confirmClear() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(ctx.t.readingHistoryClearConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
-          ),
-          TextButton(
-            key: const ValueKey('reading-history-clear-confirm'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(ctx.t.readingHistoryClear),
-          ),
-        ],
-      ),
+    final ok = await confirmAction(
+      context,
+      title: context.t.readingHistoryClearConfirm,
+      confirm: context.t.readingHistoryClear,
+      danger: true,
+      confirmKey: const ValueKey('reading-history-clear-confirm'),
     );
-    if (ok != true) return;
+    if (!ok) return;
     setState(_removed.clear);
     final store = await ref.read(userDataStoreProvider.future);
     await store.clearHistory();
@@ -237,6 +214,6 @@ class _ReadingHistoryPageState extends ConsumerState<ReadingHistoryPage> {
 
   static String _time(DateTime t) {
     String two(int n) => n.toString().padLeft(2, '0');
-    return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
+    return '${t.year}.${two(t.month)}.${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
   }
 }

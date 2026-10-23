@@ -100,6 +100,7 @@ class SettingsService {
   static const _keySessionLogsEnabled = 'session_logs_enabled';
   static const _keyAnswerOptions = 'ask_answer_options';
   static const _keyProfileSectionsOpen = 'library_profile_sections_open';
+  static const _keyReadingFont = 'reading_font';
 
   // ── Profile keys ─────────────────────────────────────────
   static const _keyNickname = 'profile_nickname';
@@ -230,6 +231,18 @@ class SettingsService {
 
   Future<void> saveProfileSectionsOpen(bool open) =>
       _storage.write(key: _keyProfileSectionsOpen, value: '$open');
+
+  /// The font of long reading text (default: the interface's Chinese sans).
+  Future<ReadingFont> loadReadingFont() async {
+    final value = await _storage.read(key: _keyReadingFont);
+    return ReadingFont.values.firstWhere(
+      (font) => font.name == value,
+      orElse: () => ReadingFont.sans,
+    );
+  }
+
+  Future<void> saveReadingFont(ReadingFont font) =>
+      _storage.write(key: _keyReadingFont, value: font.name);
 
   /// The Ask answer options (default: the wikis on, sub-agents off).
   Future<AnswerOptions> loadAnswerOptions() async =>
@@ -421,7 +434,8 @@ class SettingsService {
     final value = await _storage.read(key: _keyTheme);
     return AppTheme.values.firstWhere(
       (theme) => theme.name == value,
-      orElse: () => AppTheme.ark,
+      // Nothing saved yet (a new install): follow the system.
+      orElse: () => AppTheme.system,
     );
   }
 

@@ -13,7 +13,10 @@ import '../../../core/llm/llm_client.dart';
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/theme/cut_border.dart';
+import '../../../shared/widgets/ef_widgets.dart';
 import '../../../shared/widgets/press_feedback.dart';
+import '../../library/reading_text.dart' show readingStyle;
 import '../evidence_observation.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
@@ -99,41 +102,19 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     AskChatNotifier chat() => ref.read(askChatProvider.notifier);
     Widget action(String key, IconData icon, String label, String hint,
             VoidCallback onTap,) =>
-        Tooltip(
-          message: hint,
-          child: PressFeedback(
-            pressedScale: 0.92,
-            child: InkWell(
-              key: ValueKey(key),
-              onTap: withHaptic(onTap),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  border: Border.all(color: theme.divider),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: 15, color: theme.accentText),
-                    const SizedBox(width: 5),
-                    Text(
-                      label,
-                      style: theme.bodyFont.copyWith(
-                        fontSize: 12.5,
-                        color: theme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        AppButton(
+          label,
+          key: ValueKey(key),
+          icon: icon,
+          small: true,
+          tooltip: hint,
+          onPressed: onTap,
         );
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Wrap(
         spacing: 8,
-        runSpacing: 6,
+        runSpacing: 0,
         children: [
           if (msg.canDigest)
             action(
@@ -166,29 +147,24 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       child: SelectableText(
         formatUsageLine(stats),
         key: const ValueKey('usage-line'),
-        style: theme.bodyFont.copyWith(
-          fontSize: 11,
-          height: 1.3,
-          color: theme.textSecondary.withValues(alpha: 0.7),
-        ),
+        style: theme.field(size: 12),
       ),
     );
   }
+
+  /// The question: a chip-grey block on the right with an ink bar on its
+  /// right edge (the asker's side).
   Widget _buildUserContentBox(AppThemeTokens theme) {
     return Container(
       key: const ValueKey('user-bubble'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
-        color: theme.accentPrimary.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.zero,
-        border: Border.all(
-          color: theme.accentText.withValues(alpha: 0.35),
-          width: 1,
-        ),
+        color: theme.surfaceElevated,
+        border: Border(right: BorderSide(color: theme.trace, width: 3)),
       ),
       child: SelectableText(
         widget.message.content,
-        style: theme.bodyFont.copyWith(color: theme.textPrimary),
+        style: theme.text(16, height: 1.6),
       ),
     );
   }
@@ -229,24 +205,30 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           formattedContent.replaceAll('[$uuid]', '[^${uuidToIdx[uuid]}]');
     }
 
+    // An answer is read like the stories: the reading font, generous lines.
+    final body = readingStyle(theme, size: 16).copyWith(height: 1.75);
     final styleSheet =
         MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-      p: theme.bodyFont.copyWith(color: theme.textPrimary, height: 1.5),
-      h1: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 18),
-      h2: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 16),
-      h3: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 14),
-      a: theme.bodyFont.copyWith(color: theme.accentText),
-      listBullet: theme.bodyFont.copyWith(color: theme.textPrimary),
-      code: theme.bodyFont.copyWith(
-        color: theme.accentSecondary,
-        backgroundColor: theme.bgPrimary,
+      p: body,
+      h1: theme.heading(20),
+      h2: theme.heading(18),
+      h3: theme.heading(16),
+      a: body.copyWith(
+        decoration: TextDecoration.underline,
+        decorationColor: theme.trace,
       ),
-      blockquote: theme.bodyFont.copyWith(color: theme.textSecondary),
+      listBullet: body,
+      strong: body.copyWith(fontWeight: FontWeight.w700),
+      code: theme.field(color: theme.textPrimary, size: 14).copyWith(
+            backgroundColor: theme.surfaceElevated,
+          ),
+      blockquote: body.copyWith(color: theme.textSecondary),
       blockquoteDecoration: BoxDecoration(
-        color: theme.bgPrimary,
-        border: Border(
-          left: BorderSide(color: theme.accentPrimary, width: 3),
-        ),
+        color: theme.surfaceElevated,
+        border: Border(left: BorderSide(color: theme.trace, width: 3)),
+      ),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(top: BorderSide(color: theme.divider)),
       ),
     );
 
@@ -292,47 +274,50 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       ];
 
   Widget _buildVerdictBanner(AppThemeTokens theme, FactCheckVerdict verdict) {
-    final config = switch (verdict) {
+    // Not green and red (red is for deleting; the two are hard to tell
+    // apart for many): held = a solid ink frame, not held = an accent block
+    // (look at this), uncertain or unknown = chip grey; an icon and the word
+    // say which.
+    final (icon, label) = switch (verdict) {
       FactCheckVerdict.supported => (
-          Icons.check_circle_sharp,
-          Colors.green,
+          Icons.check_sharp,
           context.t.aiVerdictSupported
         ),
       FactCheckVerdict.refuted => (
-          Icons.cancel_sharp,
-          theme.danger,
+          Icons.close_sharp,
           context.t.aiVerdictRefuted
         ),
       FactCheckVerdict.uncertain => (
-          Icons.help_sharp,
-          Colors.amber.shade800,
+          Icons.question_mark_sharp,
           context.t.aiVerdictUncertain
         ),
       FactCheckVerdict.unavailable => (
-          Icons.remove_circle_outline_sharp,
-          theme.textSecondary,
+          Icons.remove_sharp,
           context.t.aiVerdictUnavailable
         ),
     };
+    final refuted = verdict == FactCheckVerdict.refuted;
+    final supported = verdict == FactCheckVerdict.supported;
+    final fg = refuted ? theme.onAccent : theme.textPrimary;
     return Semantics(
-      label: context.t.aiVerdictSemantics(config.$3),
+      label: context.t.aiVerdictSemantics(label),
+      excludeSemantics: true,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
         decoration: BoxDecoration(
-          color: config.$2.withValues(alpha: 0.12),
-          border: Border(left: BorderSide(color: config.$2, width: 3)),
+          color: refuted
+              ? theme.accentPrimary
+              : supported
+                  ? Colors.transparent
+                  : theme.surfaceElevated,
+          border: supported ? Border.all(color: theme.textPrimary, width: 1.5) : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(config.$1, size: 18, color: config.$2),
-            const SizedBox(width: 6),
-            Text(config.$3,
-                style: theme.titleFont.copyWith(
-                  color: config.$2,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),),
+            Icon(icon, size: 18, color: fg),
+            const SizedBox(width: 8),
+            Text(label, style: theme.ui(15, weight: 700, color: fg)),
           ],
         ),
       ),
@@ -347,73 +332,75 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final envelope = parseStoryAnswerEnvelope(msg.content);
     final coverage = parseCoverageReportLine(msg.content);
     final status = envelope?.status;
-    final accent = status == StoryAnswerStatus.answered
-        ? theme.accentText
-        : theme.warning;
+    final answered = status == StoryAnswerStatus.answered;
     final statusLabel = switch (status) {
       StoryAnswerStatus.answered => context.t.aiAnswerStatusAnswered,
       StoryAnswerStatus.partial => context.t.aiAnswerStatusPartial,
       StoryAnswerStatus.notCovered => context.t.aiAnswerStatusNotCovered,
       null => '-',
     };
-    final parts = [
-      statusLabel,
+    final facts = [
       if (envelope?.confidence != null)
         '${context.t.aiInvestigationConfidence} ${envelope!.confidence}',
       if (msg.steps.isNotEmpty) _workSummary(),
     ];
-    final icon = status == StoryAnswerStatus.answered
-        ? Icons.check_circle_outline_sharp
-        : Icons.error_outline_sharp;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          key: const ValueKey('answer-header'),
-          onTap: msg.steps.isEmpty
-              ? null
-              : () => setState(() => _showSteps = !_showSteps),
-          borderRadius: BorderRadius.zero,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Icon(icon, size: 15, color: accent),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    parts.join(' · '),
-                    style: theme.bodyFont.copyWith(
-                      color: accent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+        Semantics(
+          button: msg.steps.isNotEmpty,
+          expanded: msg.steps.isEmpty ? null : _showSteps,
+          child: PressRow(
+            key: const ValueKey('answer-header'),
+            onTap: msg.steps.isEmpty
+                ? null
+                : () => setState(() => _showSteps = !_showSteps),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Row(
+                children: [
+                  // Answered: an ink frame; partly or not at all: an accent
+                  // block (look at this).
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: answered ? null : theme.accentPrimary,
+                      border: answered
+                          ? Border.all(color: theme.textPrimary)
+                          : null,
+                    ),
+                    child: Text(
+                      statusLabel,
+                      style: theme.ui(
+                        13,
+                        weight: 700,
+                        color: answered ? theme.textPrimary : theme.onAccent,
+                      ),
                     ),
                   ),
-                ),
-                if (msg.steps.isNotEmpty)
-                  Icon(
-                    _showSteps
-                        ? Icons.expand_less_sharp
-                        : Icons.chevron_right_sharp,
-                    size: 16,
-                    color: theme.textSecondary,
-                  ),
-              ],
+                  const SizedBox(width: 10),
+                  Flexible(child: FactsRow(facts)),
+                  if (msg.steps.isNotEmpty)
+                    Icon(
+                      _showSteps
+                          ? Icons.expand_less_sharp
+                          : Icons.expand_more_sharp,
+                      size: 20,
+                      color: theme.textSecondary,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
         if (_showSteps) _buildStepsList(theme),
         if (coverage != null)
-          Text(
-            '${context.t.aiInvestigationCoverage}: '
-            '${context.t.aiInvestigationRead}=${coverage.read} · '
-            '${context.t.aiInvestigationMapped}=${coverage.mapped} · '
-            '${context.t.aiInvestigationSkipped}=${coverage.skipped}',
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 11,
-            ),
-          ),
+          FactsRow([
+            context.t.aiInvestigationCoverage,
+            '${context.t.aiInvestigationRead} ${coverage.read}',
+            '${context.t.aiInvestigationMapped} ${coverage.mapped}',
+            '${context.t.aiInvestigationSkipped} ${coverage.skipped}',
+          ]),
       ],
     );
   }
@@ -425,46 +412,38 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          key: const ValueKey('live-header'),
-          onTap: msg.steps.isEmpty
-              ? null
-              : () => setState(() => _showSteps = !_showSteps),
-          borderRadius: BorderRadius.zero,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    msg.liveStatus,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+        Semantics(
+          button: msg.steps.isNotEmpty,
+          liveRegion: true,
+          child: PressRow(
+            key: const ValueKey('live-header'),
+            onTap: msg.steps.isEmpty
+                ? null
+                : () => setState(() => _showSteps = !_showSteps),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Row(
+                children: [
+                  const BusyMark(width: 36, cells: 5),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      msg.liveStatus,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.ui(14, weight: 600, color: theme.textSecondary),
                     ),
                   ),
-                ),
-                if (msg.steps.isNotEmpty)
-                  Icon(
-                    _showSteps
-                        ? Icons.expand_less_sharp
-                        : Icons.chevron_right_sharp,
-                    size: 16,
-                    color: theme.textSecondary,
-                  ),
-              ],
+                  if (msg.steps.isNotEmpty)
+                    Icon(
+                      _showSteps
+                          ? Icons.expand_less_sharp
+                          : Icons.expand_more_sharp,
+                      size: 20,
+                      color: theme.textSecondary,
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -492,31 +471,34 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   /// the answer below it never shifts.
   Widget _buildReasoningPanel(AppThemeTokens theme) {
     final text = widget.message.reasoning;
-    final muted = theme.bodyFont.copyWith(
-      color: theme.textSecondary,
-      fontSize: 12,
-      height: 1.5,
-    );
+    final muted = theme.text(13, color: theme.textSecondary, height: 1.55);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          key: const ValueKey('reasoning-header'),
-          onTap: () => setState(() => _showReasoning = !_showReasoning),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(context.t.aiThinkingProcess, style: muted),
-                Icon(
-                  _showReasoning
-                      ? Icons.expand_less_sharp
-                      : Icons.chevron_right_sharp,
-                  size: 16,
-                  color: theme.textSecondary,
-                ),
-              ],
+        Semantics(
+          button: true,
+          expanded: _showReasoning,
+          child: PressRow(
+            key: const ValueKey('reasoning-header'),
+            onTap: () => setState(() => _showReasoning = !_showReasoning),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.t.aiThinkingProcess,
+                    style: theme.ui(14, weight: 600, color: theme.textSecondary),
+                  ),
+                  Icon(
+                    _showReasoning
+                        ? Icons.expand_less_sharp
+                        : Icons.expand_more_sharp,
+                    size: 20,
+                    color: theme.textSecondary,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -526,9 +508,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             width: double.infinity,
             height: reasoningWindowHeight,
             decoration: BoxDecoration(
-              color: theme.bgSecondary.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.zero,
-              border: Border.all(color: theme.divider, width: 0.5),
+              color: theme.surfaceElevated,
+              border: Border(left: BorderSide(color: theme.cardBorder, width: 3)),
             ),
             child: Scrollbar(
               controller: _reasoningScroll,
@@ -585,71 +566,75 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         records.length +
         wikis.fold<int>(0, (n, w) => n + w.ranges.length);
     final open = _isOpen('*');
-    final muted = theme.bodyFont.copyWith(
-      color: theme.textSecondary,
-      fontSize: 12,
-    );
+    final muted = theme.text(13.5, color: theme.textSecondary, height: 1.45);
 
     Widget row(String key, String text, {required bool isOpen, double indent = 0, TextStyle? style}) =>
-        InkWell(
-          key: ValueKey('cite:$key'),
-          onTap: () => _toggle(key),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(indent, 5, 0, 5),
-            child: Row(
-              children: [
-                Icon(
-                  isOpen ? Icons.expand_more_sharp : Icons.chevron_right_sharp,
-                  size: 16,
-                  color: theme.textSecondary,
+        Semantics(
+          button: true,
+          expanded: isOpen,
+          child: PressRow(
+            key: ValueKey('cite:$key'),
+            onTap: () => _toggle(key),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(indent, 6, 0, 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      isOpen ? Icons.expand_more_sharp : Icons.chevron_right_sharp,
+                      size: 20,
+                      color: theme.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(text, style: style ?? muted)),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Expanded(child: Text(text, style: style ?? muted)),
-              ],
+              ),
             ),
           ),
         );
 
+    // A cited place: a pressable tag with a cut corner (it opens the lines).
     Widget chip(String key, String text,
             {required bool selected, VoidCallback? onTap,}) =>
-        PressFeedback(
-          pressedScale: 0.9,
-          child: InkWell(
-          key: ValueKey('cite:$key'),
-          onTap: withHaptic(onTap ?? () => _toggle(key)),
-          borderRadius: BorderRadius.zero,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: selected
-                  ? theme.accentPrimary.withValues(alpha: 0.15)
-                  : theme.bgSecondary,
-              borderRadius: BorderRadius.zero,
-              border: Border.all(
-                color: selected ? theme.accentText : theme.divider,
-                width: 0.5,
+        Semantics(
+          button: true,
+          selected: selected,
+          child: GestureDetector(
+            key: ValueKey('cite:$key'),
+            behavior: HitTestBehavior.opaque,
+            onTap: withHaptic(onTap ?? () => _toggle(key)),
+            child: Padding(
+              // 44 to the finger.
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 36),
+                padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
+                decoration: ShapeDecoration(
+                  color: selected ? theme.accentPrimary : theme.surfaceElevated,
+                  shape: const CutBorder.br(6),
+                ),
+                child: Text(
+                  text,
+                  style: theme.field(
+                    color: selected ? theme.onAccent : theme.textPrimary,
+                    size: 13,
+                    weight: 600,
+                  ),
+                ),
               ),
             ),
-            child: Text(
-              text,
-              style: theme.bodyFont.copyWith(
-                color: theme.textPrimary,
-                fontSize: 11,
-              ),
-            ),
-          ),
           ),
         );
 
     Widget quote(Widget child) => Container(
           width: double.infinity,
           margin: const EdgeInsets.only(top: 6),
-          padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+          padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
           decoration: BoxDecoration(
-            color: theme.bgPrimary,
-            border: Border(
-              left: BorderSide(color: theme.accentPrimary, width: 2),
-            ),
+            color: theme.surfaceElevated,
+            border: Border(left: BorderSide(color: theme.trace, width: 3)),
           ),
           child: child,
         );
@@ -657,7 +642,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     Widget citedRecord(String id) {
       final record = ref.watch(citedRecordProvider(id));
       return quote(record.when(
-        loading: () => const LinearProgressIndicator(minHeight: 2),
+        loading: () => const BusyMark(width: 60, cells: 6),
         error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
         data: (r) => r == null
             ? Text(context.t.aiCitedLinesUnavailable, style: muted)
@@ -680,7 +665,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             for (final group in groups) ...[
               row(
                 'c:${group.label}',
-                '${group.label} · ${context.t.aiChapterCount(group.citationCount)}',
+                '${group.label} / ${context.t.aiChapterCount(group.citationCount)}',
                 isOpen: _isOpen('c:${group.label}', byDefault: true),
                 indent: 14,
                 style: muted.copyWith(color: theme.textPrimary),
@@ -690,7 +675,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   row(
                     's:${chapter.storyId}',
                     '${chapter.label.isEmpty ? chapter.storyId.split('/').last : chapter.label}'
-                        ' · ${context.t.aiChapterCount(chapter.ranges.length)}',
+                        ' / ${context.t.aiChapterCount(chapter.ranges.length)}',
                     isOpen: _isOpen(
                       's:${chapter.storyId}',
                       byDefault: group.chapters.length == 1,
@@ -742,7 +727,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                     child: chip(
                       'r:$id',
                       '${context.t.aiCitedRecord} ${i + 1}'
-                          '${_recordTitle(id).isEmpty ? '' : ' · ${_recordTitle(id)}'}',
+                          '${_recordTitle(id).isEmpty ? '' : ' / ${_recordTitle(id)}'}',
                       selected: _isOpen('r:$id'),
                     ),
                   ),
@@ -814,10 +799,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         onExpansionChanged: (value) => setState(() => _showEvidence = value),
         tilePadding: const EdgeInsets.symmetric(horizontal: 10),
         childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        leading: Icon(Icons.source_sharp, color: theme.accentText),
+        leading: Icon(Icons.source_sharp, color: theme.textSecondary),
         title: Text(
           context.t.aiEvidenceTitle(_evidenceRecords.length),
-          style: theme.titleFont.copyWith(fontSize: 13),
+          style: theme.heading(15),
         ),
         children: [
           for (final record in _evidenceRecords)
@@ -828,24 +813,19 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   }
 
   Widget _buildTypingIndicator(AppThemeTokens theme) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          context.t.aiThinking,
-          style:
-              theme.bodyFont.copyWith(color: theme.textSecondary, fontSize: 13),
-        ),
-        const SizedBox(width: 4),
-        const SizedBox(
-          width: 12,
-          height: 12,
-          child: CircularProgressIndicator(
-            strokeWidth: 1.5,
-            valueColor: AlwaysStoppedAnimation(Colors.grey),
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const BusyMark(width: 36, cells: 5),
+          const SizedBox(width: 10),
+          Text(
+            context.t.aiThinking,
+            style: theme.ui(14, weight: 600, color: theme.textSecondary),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -873,53 +853,48 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.bgSecondary,
-        borderRadius: BorderRadius.zero,
-        border: Border.all(color: theme.divider, width: 0.5),
+        border: Border(
+          top: BorderSide(color: theme.divider),
+          bottom: BorderSide(color: theme.divider),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: () => setState(() => _showSteps = !_showSteps),
-            borderRadius: BorderRadius.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(
-                children: [
-                  Icon(
-                    _showSteps
-                        ? Icons.visibility_sharp
-                        : Icons.visibility_off_sharp,
-                    size: 14,
-                    color: theme.accentText,
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      isThinking
-                          ? context.t.aiStepsStatus(statusText, stepsCount)
-                          : _workSummary(),
-                      softWrap: true,
-                      style: theme.bodyFont.copyWith(
+          Semantics(
+            button: true,
+            expanded: _showSteps,
+            child: PressRow(
+              onTap: () => setState(() => _showSteps = !_showSteps),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  child: Row(
+                    children: [
+                      if (isThinking) ...[
+                        const BusyMark(width: 36, cells: 5),
+                        const SizedBox(width: 10),
+                      ],
+                      Flexible(
+                        child: Text(
+                          isThinking
+                              ? context.t.aiStepsStatus(statusText, stepsCount)
+                              : _workSummary(),
+                          softWrap: true,
+                          style: theme.ui(14, weight: 600, color: theme.textSecondary),
+                        ),
+                      ),
+                      Icon(
+                        _showSteps
+                            ? Icons.expand_less_sharp
+                            : Icons.expand_more_sharp,
+                        size: 20,
                         color: theme.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
                       ),
-                    ),
+                    ],
                   ),
-                  if (isThinking) ...[
-                    const SizedBox(width: 6),
-                    SizedBox(
-                      width: 10,
-                      height: 10,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1,
-                        valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
           ),
@@ -978,10 +953,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(record.title,
-                    style: theme.titleFont.copyWith(
-                        color: theme.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,),),
+                    style: theme.heading(15),),
                 _evidenceBadge(theme, coverage),
               ],
             ),
@@ -1003,8 +975,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             if (record.excerpt.isNotEmpty) ...[
               const SizedBox(height: 6),
               SelectableText(record.excerpt,
-                  style: theme.bodyFont.copyWith(
-                      color: theme.textPrimary, fontSize: 12, height: 1.4,),),
+                  style: theme.text(14, height: 1.6),),
             ],
           ],
         ),
@@ -1015,22 +986,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   Widget _metadata(String label, String value, AppThemeTokens theme) => Padding(
         padding: const EdgeInsets.only(top: 4),
         child: SelectableText('$label: $value',
-            style: theme.bodyFont.copyWith(
-                color: theme.textSecondary, fontSize: 11, height: 1.35,),),
+            style: theme.text(12.5, color: theme.textSecondary, height: 1.45),),
       );
 
   Widget _evidenceBadge(AppThemeTokens theme, String label) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          color: theme.accentPrimary.withValues(alpha: 0.12),
-          border: Border.all(color: theme.accentText.withValues(alpha: 0.4)),
-          borderRadius: BorderRadius.zero,
-        ),
-        child: Text(label,
-            style: theme.bodyFont.copyWith(
-                color: theme.accentText,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,),),
+        decoration: BoxDecoration(border: Border.all(color: theme.textPrimary)),
+        child: Text(label, style: theme.ui(12, weight: 700)),
       );
 
   /// Steps whose raw output is unfolded (by index in [workStepsOf]).
@@ -1043,8 +1005,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   Widget _buildWorkRow(AppThemeTokens theme, WorkStep step, int index,
       {required bool last,}) {
     final open = _openSteps.contains(index);
-    final small = theme.bodyFont.copyWith(fontSize: 11, height: 1.35);
-    final mono = small.copyWith(fontFamily: 'monospace');
+    final small = theme.text(12.5, height: 1.45);
+    final mono = small.copyWith(fontFamily: 'monospace', height: 1.4);
     void toggle() => setState(() {
           if (!_openSteps.remove(index)) _openSteps.add(index);
         });
@@ -1064,7 +1026,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               maxLines: open ? null : (record ? 3 : 2),
               overflow: open ? null : TextOverflow.ellipsis,
               style: small.copyWith(
-                color: record ? theme.warning : theme.textMuted,
+                color: record ? theme.textPrimary : theme.textSecondary,
                 fontStyle: record ? null : FontStyle.italic,
               ),
             ),
@@ -1076,16 +1038,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       return _timelineRow(
         theme,
         last: last,
-        dot: Icon(Icons.error_outline_sharp, size: 13, color: theme.danger),
+        dot: Icon(Icons.priority_high_sharp, size: 14, color: theme.onAccent),
+        dotFill: theme.accentPrimary,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: SelectableText(
             step.text,
-            style: theme.bodyFont.copyWith(
-              fontSize: 12.5,
-              height: 1.35,
-              color: theme.danger,
-            ),
+            style: theme.text(13.5, height: 1.45),
           ),
         ),
       );
@@ -1110,8 +1069,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     return _timelineRow(
       theme,
       last: last,
-      dot: Icon(_workIcon(step.kind), size: 13,
-          color: bad ? theme.danger : theme.accentText,),
+      dot: Icon(_workIcon(step.kind), size: 14, color: theme.textPrimary),
       child: InkWell(
         key: ValueKey('work-step-$index'),
         borderRadius: BorderRadius.zero,
@@ -1149,14 +1107,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   if (!step.done)
                     Padding(
                       padding: const EdgeInsets.only(top: 3),
-                      child: SizedBox(
-                        width: 10,
-                        height: 10,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.2,
-                          valueColor: AlwaysStoppedAnimation(theme.accentText),
-                        ),
-                      ),
+                      child: const BusyMark(width: 28, cells: 4),
                     )
                   else
                     Padding(
@@ -1165,7 +1116,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                         [
                           if (result.isNotEmpty) result,
                           t.aiWorkChars(step.text.length),
-                        ].join(' · '),
+                        ].join(' / '),
                         style: small.copyWith(color: theme.textMuted),
                       ),
                     ),
@@ -1184,7 +1135,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   step.text.trimLeft().split('\n').first,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: small.copyWith(color: theme.danger),
+                  style: small.copyWith(color: theme.textPrimary),
                 ),
               if (open)
                 Container(
@@ -1206,7 +1157,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                       ].join('\n\n'),
                       style: mono.copyWith(
                         color: theme.textSecondary,
-                        fontSize: 10.5,
+                        fontSize: 12,
                       ),
                     ),
                   ),
@@ -1222,21 +1173,29 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   /// it scrolls inside.
   static const double workRawHeight = 320;
 
-  Widget _workFlag(AppThemeTokens theme, String label, Color color) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        decoration: BoxDecoration(
-          border: Border.all(color: color.withValues(alpha: 0.7)),
-          borderRadius: BorderRadius.zero,
+  /// A mark on a step: something to look at (it failed, found nothing, ran
+  /// twice) is an accent block; a plain fact is a hairline frame.
+  Widget _workFlag(AppThemeTokens theme, String label, Color color) {
+    final look = color == theme.danger;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: look ? theme.accentPrimary : null,
+        border: look ? null : Border.all(color: theme.cardBorder),
+      ),
+      child: Text(
+        label,
+        style: theme.ui(
+          12,
+          weight: 600,
+          color: look ? theme.onAccent : theme.textSecondary,
         ),
-        child: Text(
-          label,
-          style: theme.bodyFont.copyWith(fontSize: 10, height: 1.4, color: color),
-        ),
-      );
+      ),
+    );
+  }
   /// A timeline row: a dot (or a short tick for notes) on a thin rail.
   Widget _timelineRow(AppThemeTokens theme,
-      {required bool last, required Widget? dot, required Widget child,}) {
+      {required bool last, required Widget? dot, required Widget child, Color? dotFill,}) {
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1269,8 +1228,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                           width: 20,
                           height: 20,
                           decoration: BoxDecoration(
-                            color: theme.cardSurface,
-                            border: Border.all(color: theme.divider),
+                            color: dotFill ?? theme.cardSurface,
+                            border: Border.all(color: dotFill ?? theme.divider),
                           ),
                           child: dot,
                         ),

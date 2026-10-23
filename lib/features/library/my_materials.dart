@@ -9,7 +9,8 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'library_widgets.dart';
@@ -34,6 +35,12 @@ void _open(BuildContext context, WidgetBuilder builder) =>
 void newMaterial(BuildContext context, {String? body}) =>
     _open(context, (_) => MaterialEditorPage(initialBody: body));
 
+/// A material's time as the app writes dates (2026.10.22 14:05).
+String materialDate(DateTime t) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${t.year}.${two(t.month)}.${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
+}
+
 /// The "My texts" tab: the user's own materials.
 class MyMaterialsView extends ConsumerWidget {
   const MyMaterialsView({super.key});
@@ -43,9 +50,7 @@ class MyMaterialsView extends ConsumerWidget {
     final text = data?.text?.trim() ?? '';
     if (!context.mounted) return;
     if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t.materialsClipboardEmpty)),
-      );
+      showToast(context, context.t.materialsClipboardEmpty);
       return;
     }
     newMaterial(context, body: text);
@@ -56,84 +61,70 @@ class MyMaterialsView extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
     final materials = ref.watch(materialsProvider);
     return materials.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const LoadingView(),
       error: (_, __) => LibraryMessage(
         icon: Icons.sd_storage_sharp,
         title: context.t.libraryEmpty,
       ),
       data: (list) => ListView(
-        // Under the library tab's floating bars.
-        padding: floatingPadding(context, const EdgeInsets.only(bottom: 32)),
+        // Under the library tab's top bar.
+        padding:
+            pagePadding(context, const EdgeInsets.fromLTRB(16, 16, 16, 32)),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    key: const ValueKey('materials-new'),
-                    onPressed: () => newMaterial(context),
-                    icon: const Icon(Icons.add_sharp, size: 20),
-                    label: Text(
-                      context.t.materialsNew,
-                      style: theme.titleFont.copyWith(fontSize: 13),
-                    ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: theme.accentPrimary,
-                      foregroundColor: theme.onAccent,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
-                      ),
-                    ),
-                  ),
+          Row(
+            children: [
+              Expanded(
+                child: AppButton(
+                  context.t.materialsNew,
+                  key: const ValueKey('materials-new'),
+                  kind: ButtonKind.go,
+                  icon: Icons.add_sharp,
+                  expand: true,
+                  onPressed: () => newMaterial(context),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('materials-paste'),
-                    onPressed: () => _paste(context),
-                    icon: const Icon(Icons.content_paste_sharp, size: 18),
-                    label: Text(
-                      context.t.materialsPaste,
-                      style: theme.titleFont.copyWith(fontSize: 13),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: theme.accentText,
-                      side: BorderSide(color: theme.cardBorder),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
-                      ),
-                    ),
-                  ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: AppButton(
+                  context.t.materialsPaste,
+                  key: const ValueKey('materials-paste'),
+                  icon: Icons.content_paste_sharp,
+                  expand: true,
+                  onPressed: () => _paste(context),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          const SizedBox(height: 8),
           if (list.isEmpty)
-            SizedBox(
-              height: 320,
-              child: LibraryMessage(
-                icon: Icons.edit_note_sharp,
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: EmptyState(
                 title: context.t.materialsEmptyTitle,
-                description: context.t.materialsEmptyDesc,
+                text: context.t.materialsEmptyDesc,
               ),
             )
-          else
+          else ...[
+            SectionTitle(
+              title: context.t.libraryTabMine,
+              code: 'my texts',
+              trailing: Text('${list.length}', style: theme.field()),
+            ),
             for (final m in list) ...[
+              rowDivider(theme),
               LibraryRow(
                 key: ValueKey('material-${m.id}'),
-                leading: Icon(Icons.notes_sharp, color: theme.accentText),
                 title: m.title.isEmpty ? '—' : m.title,
                 subtitle: m.body.trim().replaceAll(RegExp(r'\s+'), ' '),
-                trailing: AccentPill(
+                trailing: Text(
                   context.t.materialsChars(m.body.length),
-                  muted: true,
+                  style: theme.field(),
                 ),
                 onTap: () => _open(context, (_) => MyMaterialPage(id: m.id)),
               ),
-              rowDivider(theme),
             ],
+            rowDivider(theme),
+          ],
         ],
       ),
     );
@@ -147,24 +138,14 @@ class MyMaterialPage extends ConsumerWidget {
   final String id;
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(ctx.t.materialsDeleteConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(ctx.t.materialsCancel),
-          ),
-          TextButton(
-            key: const ValueKey('material-delete-confirm'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(ctx.t.materialsDelete),
-          ),
-        ],
-      ),
+    final ok = await confirmAction(
+      context,
+      title: context.t.materialsDeleteConfirm,
+      confirm: context.t.materialsDelete,
+      danger: true,
+      confirmKey: const ValueKey('material-delete-confirm'),
     );
-    if (ok != true || !context.mounted) return;
+    if (!ok || !context.mounted) return;
     final store = await ref.read(userDataStoreProvider.future);
     await store.deleteMaterial(id);
     ref
@@ -190,73 +171,64 @@ class MyMaterialPage extends ConsumerWidget {
       scrollUnder: true,
       actions: [
         if (m != null) ...[
-          IconButton(
-            key: const ValueKey('material-ask'),
-            tooltip: context.t.materialsAskAbout,
-            icon: Icon(Icons.psychology_alt_sharp, color: theme.accentText),
-            onPressed: () => _ask(context, ref, m),
-          ),
-          IconButton(
+          SquareIconButton(
             key: const ValueKey('material-edit'),
             tooltip: context.t.materialsEdit,
-            icon: const Icon(Icons.edit_outlined),
+            icon: Icons.edit_sharp,
             onPressed: () =>
                 _open(context, (_) => MaterialEditorPage(materialId: id)),
           ),
-          IconButton(
+          SquareIconButton(
             key: const ValueKey('material-delete'),
             tooltip: context.t.materialsDelete,
-            icon: Icon(Icons.delete_outline_sharp, color: theme.danger),
+            icon: Icons.delete_outline_sharp,
+            color: theme.danger,
             onPressed: () => _delete(context, ref),
           ),
         ],
       ],
       body: m == null
           ? (material.isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const LoadingView()
               : LibraryMessage(
                   icon: Icons.folder_off_sharp,
                   title: context.t.libraryEmpty,
                 ))
           : ListView(
-              padding: floatingPadding(
+              padding: pagePadding(
                 context,
-                const EdgeInsets.fromLTRB(16, 12, 16, 40),
+                const EdgeInsets.fromLTRB(16, 16, 16, 40),
               ),
               children: [
-                Text(
-                  m.title,
-                  style: theme.titleFont.copyWith(fontSize: 22, height: 1.25),
-                ),
+                Text(m.title, style: theme.heading(24)),
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    AccentPill(context.t.materialsChars(m.body.length)),
-                    AccentPill(_date(m.updatedAt), muted: true),
-                  ],
-                ),
+                const TriStrip(),
+                const SizedBox(height: 10),
+                FactsRow([
+                  materialDate(m.updatedAt),
+                  context.t.materialsChars(m.body.length),
+                ]),
                 const SizedBox(height: 16),
                 ThemeAwareCard(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
                   child: SelectableText(
                     m.body,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textPrimary,
-                      fontSize: 15,
-                      height: 1.75,
-                    ),
+                    style: theme.text(16, height: 1.8),
                   ),
+                ),
+                const SizedBox(height: 16),
+                // The one main action of the page.
+                AppButton(
+                  context.t.materialsAskAbout,
+                  key: const ValueKey('material-ask'),
+                  kind: ButtonKind.go,
+                  icon: Icons.psychology_alt_sharp,
+                  expand: true,
+                  onPressed: () => _ask(context, ref, m),
                 ),
               ],
             ),
     );
-  }
-
-  static String _date(DateTime t) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
   }
 }
 
@@ -336,19 +308,23 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
   }
 
   Future<bool> _confirmDiscard() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        content: Text(ctx.t.materialsDiscard),
+    final ok = await showAppDialog<bool>(
+      context,
+      (ctx) => AppDialog(
+        title: ctx.t.materialsDiscard,
         actions: [
-          TextButton(
+          AppButton(
+            ctx.t.materialsCancel,
+            small: true,
+            kind: ButtonKind.quiet,
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(ctx.t.materialsCancel),
           ),
-          TextButton(
+          AppButton(
+            ctx.t.materialsDiscardAction,
             key: const ValueKey('material-discard-confirm'),
+            small: true,
+            kind: ButtonKind.danger,
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(ctx.t.materialsDiscardAction),
           ),
         ],
       ),
@@ -373,24 +349,21 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
             : context.t.materialsEdit,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextButton(
+            padding: const EdgeInsets.only(right: 4),
+            child: AppButton(
+              context.t.materialsSave,
               key: const ValueKey('material-save'),
-              onPressed: _canSave && !_saving ? _save : null,
-              child: Text(
-                context.t.materialsSave,
-                style: TextStyle(
-                  color: _canSave ? theme.accentText : theme.textMuted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              small: true,
+              kind: ButtonKind.go,
+              busy: _saving,
+              onPressed: _canSave ? _save : null,
             ),
           ),
         ],
         body: !_loaded
-            ? const Center(child: CircularProgressIndicator())
+            ? const LoadingView()
             : Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(
                   children: [
                     TextField(
@@ -398,10 +371,12 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
                       controller: _title,
                       onChanged: (_) => setState(() {}),
                       textInputAction: TextInputAction.next,
-                      style: theme.titleFont.copyWith(fontSize: 18),
-                      decoration: _decoration(theme, context.t.materialsTitleHint),
+                      style: theme.heading(18),
+                      decoration: InputDecoration(
+                        labelText: context.t.materialsTitleHint,
+                      ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     Expanded(
                       child: TextField(
                         key: const ValueKey('material-body'),
@@ -411,30 +386,18 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
                         expands: true,
                         textAlignVertical: TextAlignVertical.top,
                         keyboardType: TextInputType.multiline,
-                        style: theme.bodyFont.copyWith(fontSize: 15, height: 1.6),
-                        decoration: _decoration(theme, context.t.materialsBodyHint),
+                        style: theme.text(16, height: 1.7),
+                        decoration: InputDecoration(
+                          labelText: context.t.materialsBodyHint,
+                          alignLabelWithHint: true,
+                          helperText: context.t.materialsChars(_body.text.length),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
       ),
-    );
-  }
-
-  InputDecoration _decoration(AppThemeTokens theme, String hint) {
-    OutlineInputBorder border(Color c) => OutlineInputBorder(
-          borderRadius: BorderRadius.zero,
-          borderSide: BorderSide(color: c),
-        );
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: theme.bodyFont.copyWith(color: theme.textMuted),
-      filled: true,
-      fillColor: theme.cardSurface,
-      border: border(theme.cardBorder),
-      enabledBorder: border(theme.cardBorder),
-      focusedBorder: border(theme.accentText),
     );
   }
 }

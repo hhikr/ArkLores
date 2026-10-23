@@ -13,9 +13,9 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/industrial_ui.dart';
-import '../../shared/widgets/theme_aware_card.dart';
+import '../../shared/widgets/page_frame.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -157,36 +157,36 @@ class CollectionPage extends ConsumerWidget {
         ),
       ],
       body: collection.isLoading && c == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingView()
           : c == null
               ? LibraryMessage(
                   icon: Icons.folder_off_sharp,
                   title: context.t.libraryEmpty,
                 )
               : ListView(
-                  padding: floatingPadding(
+                  padding: pagePadding(
                     context,
-                    const EdgeInsets.only(bottom: 32),
+                    const EdgeInsets.fromLTRB(16, 0, 16, 32),
                   ),
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      padding: const EdgeInsets.fromLTRB(0, 16, 0, 4),
                       child: _headerCard(context, theme, c, read),
                     ),
                     if (intro != null)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                        padding: const EdgeInsets.fromLTRB(0, 12, 0, 6),
                         child: ReadingText(
                           intro,
                           key: const ValueKey('collection-intro'),
-                          size: 14.5,
+                          size: 15.5,
                         ),
                       ),
                     ..._ownParts(context, theme, inline,
                         notes: true, nickname: nickname,),
                     if (opening.isNotEmpty) ...[
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: EdgeInsets.zero,
                         child: IndustrialSectionHeader(
                           theme: theme,
                           title: openingStoryKind,
@@ -208,7 +208,7 @@ class CollectionPage extends ConsumerWidget {
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: EdgeInsets.zero,
                           child: IndustrialSectionHeader(
                             theme: theme,
                             title: context.t.libraryStories,
@@ -234,19 +234,11 @@ class CollectionPage extends ConsumerWidget {
                               shape: const Border(),
                               collapsedShape: const Border(),
                               tilePadding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              iconColor: theme.accentText,
-                              collapsedIconColor: theme.textMuted,
-                              title: Text(
-                                g.key,
-                                style: theme.titleFont.copyWith(fontSize: 15),
-                              ),
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              title: Text(g.key, style: theme.heading(16)),
                               subtitle: Text(
                                 context.t.libraryCountStories(g.value.length),
-                                style: theme.bodyFont.copyWith(
-                                  color: theme.textSecondary,
-                                  fontSize: 12,
-                                ),
+                                style: theme.field(),
                               ),
                               children: [
                                 for (final s in g.value) ...[
@@ -268,7 +260,7 @@ class CollectionPage extends ConsumerWidget {
                     if (typeList.isNotEmpty) ...[
                       // Zones to medals: one heading for all of them.
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: EdgeInsets.zero,
                         child: IndustrialSectionHeader(
                           theme: theme,
                           title: context.t.libraryOtherSections,
@@ -360,19 +352,14 @@ class CollectionPage extends ConsumerWidget {
             key: const ValueKey('notes-group'),
             shape: const Border(),
             collapsedShape: const Border(),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-            iconColor: theme.accentText,
-            collapsedIconColor: theme.textMuted,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
             title: Text(
               entryTypeName('roguelike_tip'),
-              style: theme.titleFont.copyWith(fontSize: 15),
+              style: theme.heading(16),
             ),
             subtitle: Text(
               context.t.libraryCountEntries(list.length),
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-              ),
+              style: theme.field(),
             ),
             children: [
               for (final e in list) ...[
@@ -398,7 +385,7 @@ class CollectionPage extends ConsumerWidget {
     return [
       for (final type in order) ...[
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.zero,
           child: IndustrialSectionHeader(
             theme: theme,
             title: entryTypeName(type),
@@ -448,50 +435,32 @@ class CollectionPage extends ConsumerWidget {
     int read,
   ) {
     final month = releaseMonthOf(c.startTime);
-    return ThemeAwareCard(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(shelfIcon(c.kind), color: theme.accentText, size: 28),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  c.name,
-                  style: theme.titleFont.copyWith(fontSize: 18, height: 1.25),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    AccentPill(
-                      c.kind == operatorShelf
-                          ? context.t.libraryOperatorRecords
-                          : shelfLabel(context, c.kind),
-                    ),
-                    if (month != null)
-                      AccentPill(context.t.libraryRelease(month), muted: true),
-                    if (c.stories > 0)
-                      AccentPill(
-                        context.t.libraryCountStories(c.stories),
-                        muted: true,
-                      ),
-                    if (read > 0)
-                      AccentPill(
-                        '${context.t.libraryFinished} $read/${c.stories}',
-                        muted: true,
-                      ),
-                  ],
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(shelfIcon(c.kind), color: theme.textSecondary, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              c.kind == operatorShelf
+                  ? context.t.libraryOperatorRecords
+                  : shelfLabel(context, c.kind),
+              style: theme.ui(13, weight: 700, color: theme.textSecondary),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(c.name, style: theme.heading(24)),
+        const SizedBox(height: 10),
+        const TriStrip(),
+        const SizedBox(height: 10),
+        FactsRow([
+          if (month != null) monthLabel(month),
+          if (c.stories > 0) context.t.libraryCountStories(c.stories),
+          if (read > 0) '${context.t.libraryFinished} $read / ${c.stories}',
+        ]),
+      ],
     );
   }
 }

@@ -12,7 +12,8 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../settings/settings_service.dart';
 import 'bookmark_page.dart';
@@ -720,37 +721,27 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// they need), bookmarks in a square plate on the right. The web page starts
   /// below them (a page cannot be told to leave room under a dock).
   Widget _buildSiteBar(AppThemeTokens theme) {
-    return Padding(
-      key: const ValueKey('wiki-site-bar'),
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-      child: FloatingSplitBar(
-        theme: theme,
-        leading: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < _wikiSites.length; i++)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: _siteSegment(theme, i),
-                ),
-            ],
-          ),
+    return MainTopBar(
+      leading: SingleChildScrollView(
+        key: const ValueKey('wiki-site-bar'),
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < _wikiSites.length; i++) _siteSegment(theme, i),
+          ],
         ),
-        trailing: IconButton(
-          icon: const Icon(Icons.bookmarks_outlined, size: 20),
-          color: theme.textPrimary,
-          tooltip: context.t.bookmarksTitle,
-          onPressed: _openBookmarks,
-        ),
+      ),
+      trailing: SquareIconButton(
+        icon: Icons.bookmarks_sharp,
+        tooltip: context.t.bookmarksTitle,
+        onPressed: _openBookmarks,
       ),
     );
   }
 
-  Widget _siteSegment(AppThemeTokens theme, int index) => FloatingSegment(
+  Widget _siteSegment(AppThemeTokens theme, int index) => TopTab(
         key: ValueKey('wiki-site-$index'),
-        theme: theme,
         label: _wikiSites[index].label,
         selected: _tabController.index == index,
         onTap: () => _tabController.index = index,
@@ -801,9 +792,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       return Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
-          child: Center(
-            child: CircularProgressIndicator(color: theme.accentPrimary),
-          ),
+          child: const LoadingView(),
         ),
       );
     }
@@ -816,7 +805,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         ) ??
         false;
 
-    _syncDockInsets(floatingTopInset, MediaQuery.paddingOf(context).bottom);
+    _syncDockInsets(topBarInset, MediaQuery.paddingOf(context).bottom);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
@@ -847,12 +836,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                 }),
               ),
             ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _buildSiteBar(theme),
-            ),
+            _buildSiteBar(theme),
 
             ExpandableTray(
               expanded: _trayExpanded,
@@ -1035,16 +1019,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
     return AbsorbPointer(
       child: ColoredBox(
         color: widget.theme.bgPrimary,
-        child: Center(
-          child: SizedBox(
-            height: 28,
-            width: 28,
-            child: CircularProgressIndicator(
-              color: widget.theme.accentPrimary,
-              strokeWidth: 2.5,
-            ),
-          ),
-        ),
+        child: const Center(child: BusyMark()),
       ),
     );
   }
@@ -1071,8 +1046,8 @@ class _WikiTabViewState extends State<_WikiTabView> {
                     onHorizontalDragEnd: (details) async {
                       final velocity = details.primaryVelocity ?? 0;
                       if (velocity > 320 || (_edgeDragStartX ?? 0) < 12) {
-                        if (await _controller?.canGoForward() ?? false) {
-                          await _controller?.goForward();
+                        if (await _controller?.canGoBack() ?? false) {
+                          await _controller?.goBack();
                         }
                       }
                       _edgeDragStartX = null;
@@ -1089,8 +1064,8 @@ class _WikiTabViewState extends State<_WikiTabView> {
                     onHorizontalDragEnd: (details) async {
                       final velocity = details.primaryVelocity ?? 0;
                       if (velocity < -320) {
-                        if (await _controller?.canGoBack() ?? false) {
-                          await _controller?.goBack();
+                        if (await _controller?.canGoForward() ?? false) {
+                          await _controller?.goForward();
                         }
                       }
                     },
@@ -1113,57 +1088,17 @@ class _WikiTabViewState extends State<_WikiTabView> {
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 360),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.cardSurface,
-                borderRadius: theme.cardRadius,
-                border: Border.all(color: theme.divider),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.wifi_off_sharp, color: theme.danger, size: 28),
-                    const SizedBox(height: 12),
-                    Text(
-                      context.t.wikiLoadFailed,
-                      style: theme.titleFont.copyWith(fontSize: 18),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _loadError!,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          setState(() => _loadError = null);
-                          _controller?.reload();
-                        },
-                        icon: const Icon(Icons.refresh_sharp, size: 18),
-                        label: Text(
-                          context.t.wikiRetry,
-                          style: theme.titleFont.copyWith(fontSize: 13),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.accentPrimary,
-                          foregroundColor: theme.bgPrimary,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.zero,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            child: NoticeBox(
+              _loadError!,
+              title: context.t.wikiLoadFailed,
+              action: AppButton(
+                context.t.wikiRetry,
+                kind: ButtonKind.go,
+                icon: Icons.refresh_sharp,
+                onPressed: () {
+                  setState(() => _loadError = null);
+                  _controller?.reload();
+                },
               ),
             ),
           ),
@@ -1171,7 +1106,6 @@ class _WikiTabViewState extends State<_WikiTabView> {
       ),
     );
   }
-
   String _friendlyWebViewError(String description) {
     final lower = description.toLowerCase();
     if (lower.contains('host') || lower.contains('dns')) {

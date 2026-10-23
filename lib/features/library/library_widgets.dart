@@ -12,8 +12,8 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
-import '../../shared/widgets/press_feedback.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../ai/story_labels_provider.dart';
 import '../ai/story_reader_page.dart';
@@ -58,8 +58,8 @@ String readingTitle(WidgetRef ref, ReadingEntry entry) {
 }
 
 /// A pushed library page: floating docks over the backdrop (back, title,
-/// actions; [FloatingScaffold]). [scrollUnder] when the body is one list
-/// that pads itself with `floatingPadding`.
+/// actions; [PageScaffold]). [scrollUnder] when the body is one list
+/// that pads itself with `pagePadding`.
 class LibraryScaffold extends StatelessWidget {
   const LibraryScaffold({
     super.key,
@@ -75,7 +75,7 @@ class LibraryScaffold extends StatelessWidget {
   final bool scrollUnder;
 
   @override
-  Widget build(BuildContext context) => FloatingScaffold(
+  Widget build(BuildContext context) => PageScaffold(
         title: title,
         actions: actions,
         scrollUnder: scrollUnder,
@@ -101,81 +101,55 @@ class LibraryMessage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
+    
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 52,
-              color: theme.textSecondary.withValues(alpha: 0.4),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: theme.titleFont.copyWith(fontSize: 17),
-            ),
-            if (description != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                description!,
-                textAlign: TextAlign.center,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 13,
-                  height: 1.5,
-                ),
-              ),
-            ],
-            if (action != null) ...[
-              const SizedBox(height: 12),
-              action!,
-            ],
-          ],
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: EmptyState(
+            title: title,
+            text: description ?? '',
+            action: action,
+          ),
         ),
       ),
     );
   }
 }
 
-/// A small square tag in the accent colour (type, group, count).
+/// A small tag for a fact about a row (a group, a type, a count): an ink
+/// block, or a quiet chip-grey one when [muted]. Not pressable, so square.
 class AccentPill extends ConsumerWidget {
   const AccentPill(this.text, {super.key, this.muted = false});
 
   final String text;
 
-  /// Neutral instead of accent: for secondary facts.
+  /// Chip-grey instead of ink: for secondary facts.
   final bool muted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: muted
-            ? theme.textSecondary.withValues(alpha: 0.12)
-            : theme.accentPrimary.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.zero,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      color: muted ? theme.surfaceElevated : theme.tagBackground,
       child: Text(
         text,
-        style: theme.bodyFont.copyWith(
-          color: muted ? theme.textSecondary : theme.accentText,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          height: 1.3,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.field(
+          color: muted ? theme.textPrimary : theme.tagForeground,
+          size: 12,
+          weight: 600,
         ),
       ),
     );
   }
 }
 
-/// A thin reading-progress line.
+/// A thin reading-progress line: how far is a position, so it is drawn in
+/// the trace colour (ink on light, the accent on dark) on a chip track.
 class ProgressLine extends ConsumerWidget {
   const ProgressLine(this.value, {super.key});
 
@@ -184,13 +158,22 @@ class ProgressLine extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    return ClipRRect(
-      borderRadius: BorderRadius.zero,
-      child: LinearProgressIndicator(
-        value: value.clamp(0.0, 1.0),
-        minHeight: 3,
-        backgroundColor: theme.divider,
-        valueColor: AlwaysStoppedAnimation(theme.accentPrimary),
+    final v = value.clamp(0.0, 1.0);
+    return Semantics(
+      value: '${(v * 100).round()}%',
+      child: SizedBox(
+        height: 3,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(color: theme.surfaceElevated),
+            FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: v,
+              child: ColoredBox(color: theme.trace),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -227,70 +210,75 @@ class LibraryRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    return PressFeedback(
-      enabled: onTap != null,
-      pressedScale: 0.985,
-      child: InkWell(
-      onTap: withHaptic(onTap),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (leading != null) ...[leading!, const SizedBox(width: 14)],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        if (titlePrefix != null)
-                          TextSpan(
-                            text: '$titlePrefix  ',
-                            style: TextStyle(
-                              color: theme.accentText,
-                              fontWeight: FontWeight.w700,
+    final titleText = Text(
+      title,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: theme.text(16, weight: FontWeight.w500, height: 1.4),
+    );
+    return Semantics(
+      button: onTap != null,
+      child: PressRow(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (leading != null) ...[leading!, const SizedBox(width: 14)],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (titlePrefix != null && titlePrefix!.isNotEmpty)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: IndexTag(titlePrefix!),
                             ),
+                            const SizedBox(width: 8),
+                            Expanded(child: titleText),
+                          ],
+                        )
+                      else
+                        titleText,
+                      if (subtitle != null && subtitle!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle!,
+                          maxLines: subtitleLines,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.text(
+                            13,
+                            color: theme.textSecondary,
+                            height: 1.5,
                           ),
-                        TextSpan(text: title),
+                        ),
                       ],
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.titleFont.copyWith(fontSize: 15, height: 1.3),
+                      if (progress != null) ...[
+                        const SizedBox(height: 8),
+                        ProgressLine(progress!),
+                      ],
+                    ],
                   ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle!,
-                      maxLines: subtitleLines,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                  if (progress != null) ...[
-                    const SizedBox(height: 8),
-                    ProgressLine(progress!),
-                  ],
-                ],
-              ),
+                ),
+                if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+              ],
             ),
-            if (trailing != null) ...[const SizedBox(width: 10), trailing!],
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
 }
 
+/// The hairline between rows.
 Widget rowDivider(AppThemeTokens theme) =>
-    Divider(height: 1, indent: 16, endIndent: 16, color: theme.divider);
+    Divider(height: 1, thickness: 1, color: theme.divider);
 
 /// How the count of read-throughs is written in a small badge: exact up to
 /// 999, "999+" beyond, so it never outgrows its place.
@@ -315,16 +303,12 @@ class ReadTimesBadge extends ConsumerWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.check_circle_sharp, color: theme.accentText, size: 20),
+              Icon(Icons.check_sharp, color: theme.textPrimary, size: 20),
               if (times > 1) ...[
                 const SizedBox(width: 2),
                 Text(
                   '×${readTimesText(times)}',
-                  style: theme.bodyFont.copyWith(
-                    color: theme.accentText,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: theme.field(color: theme.textPrimary, weight: 700),
                 ),
               ],
             ],
@@ -347,7 +331,12 @@ Widget readMark(
   final progress = read?.progress;
   final reading =
       read != null && !read.finished && progress != null && progress > 0;
-  final pill = reading ? AccentPill('${(progress * 100).round()}%') : null;
+  final pill = reading
+      ? Text(
+          '${(progress * 100).round()}%',
+          style: theme.field(color: theme.textPrimary, weight: 600),
+        )
+      : null;
   final badge = times > 0 ? ReadTimesBadge(times) : null;
   if (pill != null && badge != null) {
     return Row(
@@ -387,7 +376,7 @@ class StoryRow extends ConsumerWidget {
         if (showGroup &&
             story.group != null &&
             !story.name.contains(story.group!))
-          '· ${story.group}',
+          '/ ${story.group}',
       ]
           .where((s) => s.isNotEmpty)
           .join(' '),
@@ -422,15 +411,11 @@ class MarkdownText extends ConsumerWidget {
       data: cleaned,
       selectable: true,
       styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-        p: readingStyle(theme, size: 15),
-        h1: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 18),
-        h2: theme.titleFont.copyWith(
-          color: theme.accentText,
-          fontSize: 15,
-          height: 2,
-        ),
-        h3: theme.titleFont.copyWith(color: theme.textPrimary, fontSize: 14),
-        strong: theme.bodyFont.copyWith(
+        p: readingStyle(theme, size: 16),
+        h1: theme.heading(19),
+        h2: theme.heading(16).copyWith(height: 2.2),
+        h3: theme.heading(15),
+        strong: readingStyle(theme, size: 16).copyWith(
           color: theme.textPrimary,
           fontWeight: FontWeight.w700,
         ),
@@ -474,11 +459,7 @@ class EventText extends ConsumerWidget {
               padding: const EdgeInsets.only(top: 6, bottom: 2),
               child: Text(
                 optionsHeading,
-                style: theme.titleFont.copyWith(
-                  color: theme.accentText,
-                  fontSize: 15,
-                  height: 2,
-                ),
+                style: theme.heading(16).copyWith(height: 2.2),
               ),
             ),
             for (final n in parseEventOptions(s.lines))
@@ -541,14 +522,11 @@ class _OptionNode extends StatelessWidget {
     final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: theme.titleFont.copyWith(fontSize: 14)),
+        Text(title, style: theme.heading(15)),
         if (said != null && said.isNotEmpty)
           Text(
             said,
-            style: theme.bodyFont.copyWith(
-              color: theme.textSecondary,
-              fontSize: 12,
-            ),
+            style: theme.text(13, color: theme.textSecondary, height: 1.5),
           ),
       ],
     );
@@ -567,8 +545,8 @@ class _OptionNode extends StatelessWidget {
         tilePadding: const EdgeInsets.symmetric(horizontal: 16),
         childrenPadding: const EdgeInsets.only(left: 14),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        iconColor: theme.accentText,
-        collapsedIconColor: theme.textMuted,
+        iconColor: theme.textPrimary,
+        collapsedIconColor: theme.textSecondary,
         title: heading,
         children: [
           if (node.body.isNotEmpty)
@@ -576,7 +554,7 @@ class _OptionNode extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: SelectableText(
                 node.body.join('\n'),
-                style: readingStyle(theme, size: 14.5),
+                style: readingStyle(theme, size: 15),
               ),
             ),
           for (final c in node.children) _OptionNode(c, theme: theme),
@@ -601,7 +579,7 @@ class EntryRow extends ConsumerWidget {
       entryTypeName(entry.type),
       if (numbered && codeCaption(entry) != null) codeCaption(entry)!,
       if (entry.collectionName != null) entry.collectionName!,
-    ].join(' · ');
+    ].join(' / ');
     return LibraryRow(
       key: ValueKey('entry-row-${entry.id}'),
       titlePrefix: numbered ? null : entry.code,
@@ -639,32 +617,72 @@ class FilterField extends ConsumerWidget {
         autofocus: autofocus,
         onChanged: onChanged,
         textInputAction: TextInputAction.search,
-        style: theme.bodyFont.copyWith(fontSize: 14),
+        style: theme.text(15),
         decoration: InputDecoration(
-          isDense: true,
           hintText: hint,
-          hintStyle: theme.bodyFont.copyWith(
-            color: theme.textMuted,
-            fontSize: 14,
-          ),
-          prefixIcon: Icon(Icons.search_sharp, color: theme.textMuted),
-          filled: true,
-          fillColor: theme.cardSurface,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.zero,
-            borderSide: BorderSide(color: theme.cardBorder),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.zero,
-            borderSide: BorderSide(color: theme.cardBorder),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.zero,
-            borderSide: BorderSide(color: theme.accentText),
-          ),
+          hintStyle: theme.text(15, color: theme.textMuted),
+          prefixIcon: Icon(Icons.search_sharp, color: theme.textSecondary),
+          suffixIcon: controller == null
+              ? null
+              : ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller!,
+                  builder: (context, value, _) => value.text.isEmpty
+                      ? const SizedBox.shrink()
+                      : IconButton(
+                          tooltip: MaterialLocalizations.of(context)
+                              .deleteButtonTooltip,
+                          icon: const Icon(Icons.close_sharp, size: 20),
+                          onPressed: () {
+                            controller!.clear();
+                            onChanged('');
+                          },
+                        ),
+                ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
     );
   }
 }
+
+/// The heading of a group inside a long list (a year, a region): `// LABEL`
+/// in the wide face, with the number of rows under it on the right.
+class GroupHeading extends ConsumerWidget {
+  const GroupHeading({super.key, required this.title, this.count});
+
+  final String title;
+  final int? count;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    return Semantics(
+      header: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 22, 12, 8),
+        child: Row(
+          children: [
+            ExcludeSemantics(
+              child: Text(
+                '// ',
+                style: theme.ui(14, weight: 700, color: theme.textMuted),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.ui(14, weight: 700, width: 112),
+              ),
+            ),
+            if (count != null) Text('$count', style: theme.field()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A release month ("2024-03") as the app writes dates ("2024.03").
+String monthLabel(String month) => month.replaceAll('-', '.');

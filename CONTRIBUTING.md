@@ -15,7 +15,7 @@
 ## 代码
 
 - Riverpod 管状态；主题颜色、字体通过 theme 读取；用户可见字符串进中英文 ARB（`flutter gen-l10n`）。
-- 新的推入页面用 `FloatingScaffold`；新的可点块用 `PressFeedback` + `withHaptic`。
+- 界面照 `docs/DESIGN.md`：推入页面用 `PageScaffold`，部件从 `shared/widgets/ef_widgets.dart` 取。
 - 测试目录与 `lib/` 一一对应（`test/README.md`）；测试知识库一律用生产 schema。
 - 不写针对某类问题或剧情桥段的特判，不把验收样例的名字写进 `lib/`（见 CLAUDE.md）。
 - 知识库只收与剧情有关的文字；归属与绑定只来自表里的 id（见 `docs/KNOWLEDGE_BASE_LESSONS.md`）。

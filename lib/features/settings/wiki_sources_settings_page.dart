@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
-import '../../shared/widgets/floating_bar.dart';
-import '../../shared/widgets/theme_aware_card.dart';
+import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import 'settings_service.dart';
 
-/// The Wiki sites shown on the Wiki tab: add, edit, delete, reset.
+/// The Wiki sites shown on the Wiki tab: add, edit, delete, reset. Deleting
+/// and resetting ask first.
 class WikiSourcesSettingsPage extends ConsumerStatefulWidget {
   const WikiSourcesSettingsPage({super.key});
 
@@ -45,15 +47,24 @@ class _WikiSourcesSettingsPageState
   }
 
   Future<void> _resetSites() async {
+    final ok = await confirmAction(
+      context,
+      title: context.t.wikiSourcesReset,
+      message: context.t.wikiSourcesResetConfirm,
+      confirm: context.t.wikiSourcesReset,
+      cancel: context.t.wikiSourcesCancel,
+      danger: true,
+    );
+    if (!ok) return;
     await ref.read(settingsServiceProvider).resetWikiSites();
     ref.read(wikiSourcesRevisionProvider.notifier).state++;
     await _loadSites();
   }
 
   Future<void> _editSite({WikiSiteConfig? site, int? index}) async {
-    final result = await showDialog<WikiSiteConfig>(
-      context: context,
-      builder: (context) => _WikiSourceDialog(site: site),
+    final result = await showAppDialog<WikiSiteConfig>(
+      context,
+      (context) => _WikiSourceDialog(site: site),
     );
     if (result == null) return;
 
@@ -69,6 +80,14 @@ class _WikiSourcesSettingsPageState
   Future<void> _deleteSite(int index) async {
     final site = _sites[index];
     if (site.builtIn) return;
+    final ok = await confirmAction(
+      context,
+      title: '${context.t.wikiSourcesDelete} ${site.label}',
+      confirm: context.t.wikiSourcesDelete,
+      cancel: context.t.wikiSourcesCancel,
+      danger: true,
+    );
+    if (!ok) return;
     final next = [..._sites]..removeAt(index);
     await _saveSites(next);
   }
@@ -76,94 +95,94 @@ class _WikiSourcesSettingsPageState
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    return FloatingScaffold(
+    return PageScaffold(
       title: context.t.settingsWikiSources,
       scrollUnder: true,
       actions: [
-        IconButton(
+        SquareIconButton(
           tooltip: context.t.wikiSourcesReset,
-          icon: const Icon(Icons.restore_sharp),
+          icon: Icons.restore_sharp,
           onPressed: _resetSites,
         ),
       ],
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: theme.accentPrimary,
-        foregroundColor: theme.bgPrimary,
-        onPressed: () => _editSite(),
-        child: const Icon(Icons.add_sharp),
-      ),
       body: _loading
-          ? Center(
-              child: CircularProgressIndicator(color: theme.accentPrimary),
-            )
-          : ListView.separated(
-              padding: floatingPadding(
+          ? const LoadingView()
+          : ListView(
+              padding: pagePadding(
                 context,
-                const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                const EdgeInsets.fromLTRB(16, 16, 16, 32),
               ),
-              itemBuilder: (context, index) {
-                final site = _sites[index];
-                return ThemeAwareCard(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: theme.surfaceElevated,
-                          border: Border.all(color: theme.divider),
+              children: [
+                for (final (index, site) in _sites.indexed) ...[
+                  Divider(height: 1, color: theme.divider),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 36,
+                          child: Text(
+                            (index + 1).toString().padLeft(2, '0'),
+                            style: theme.field(color: theme.textMuted, size: 14),
+                          ),
                         ),
-                        child: Icon(
-                          site.builtIn
-                              ? Icons.public_sharp
-                              : Icons.travel_explore_sharp,
-                          color: theme.accentPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              site.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.titleFont.copyWith(fontSize: 16),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              site.url,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.bodyFont.copyWith(
-                                color: theme.textSecondary,
-                                fontSize: 12,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      site.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.heading(16),
+                                    ),
+                                  ),
+                                  if (site.builtIn) ...[
+                                    const SizedBox(width: 8),
+                                    const Icon(Icons.lock_outline_sharp, size: 16),
+                                  ],
+                                ],
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                site.url,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.field(),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: context.t.wikiSourcesEdit,
-                        icon: const Icon(Icons.edit_sharp),
-                        color: theme.textSecondary,
-                        onPressed: () => _editSite(site: site, index: index),
-                      ),
-                      if (!site.builtIn)
-                        IconButton(
-                          tooltip: context.t.wikiSourcesDelete,
-                          icon: const Icon(Icons.delete_outline_sharp),
-                          color: theme.danger,
-                          onPressed: () => _deleteSite(index),
+                        SquareIconButton(
+                          tooltip: context.t.wikiSourcesEdit,
+                          icon: Icons.edit_sharp,
+                          onPressed: () => _editSite(site: site, index: index),
                         ),
-                    ],
+                        if (!site.builtIn)
+                          SquareIconButton(
+                            tooltip: context.t.wikiSourcesDelete,
+                            icon: Icons.delete_outline_sharp,
+                            color: theme.danger,
+                            onPressed: () => _deleteSite(index),
+                          ),
+                      ],
+                    ),
                   ),
-                );
-              },
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemCount: _sites.length,
+                ],
+                Divider(height: 1, color: theme.divider),
+                const SizedBox(height: 20),
+                AppButton(
+                  context.t.wikiSourcesAddTitle,
+                  key: const ValueKey('wiki-sources-add'),
+                  kind: ButtonKind.go,
+                  icon: Icons.add_sharp,
+                  expand: true,
+                  onPressed: () => _editSite(),
+                ),
+              ],
             ),
     );
   }
@@ -182,7 +201,8 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
   late final TextEditingController _labelController;
   late final TextEditingController _urlController;
   late final TextEditingController _iconController;
-  String? _error;
+  String? _nameError;
+  String? _urlError;
 
   bool get _isBuiltInEndfield => widget.site?.id == 'endfield';
 
@@ -208,14 +228,13 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
     final url = _urlController.text.trim();
     final iconUrl = _iconController.text.trim();
     final uri = Uri.tryParse(url);
-    if (label.isEmpty) {
-      setState(() => _error = context.t.wikiSourcesNameRequired);
-      return;
-    }
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-      setState(() => _error = context.t.wikiSourcesUrlRequired);
-      return;
-    }
+    setState(() {
+      _nameError = label.isEmpty ? context.t.wikiSourcesNameRequired : null;
+      _urlError = uri == null || !uri.hasScheme || uri.host.isEmpty
+          ? context.t.wikiSourcesUrlRequired
+          : null;
+    });
+    if (_nameError != null || _urlError != null) return;
     Navigator.of(context).pop(
       WikiSiteConfig(
         id: widget.site?.id ??
@@ -237,99 +256,95 @@ class _WikiSourceDialogState extends State<_WikiSourceDialog> {
     }
     _urlController.text = url;
     _iconController.text = iconUrl;
-    setState(() => _error = null);
+    setState(() {
+      _nameError = null;
+      _urlError = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      title: Text(widget.site == null
-          ? context.t.wikiSourcesAddTitle
-          : context.t.wikiSourcesEditTitle,),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _labelController,
-              decoration: InputDecoration(labelText: context.t.wikiSourcesNameLabel),
-              textInputAction: TextInputAction.next,
-            ),
-            TextField(
-              controller: _urlController,
-              decoration: const InputDecoration(labelText: 'URL'),
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.next,
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                context.t.wikiSourcesEndfieldPreset,
-                style: Theme.of(context).textTheme.labelMedium,
+    return Consumer(
+      builder: (context, ref, _) {
+        final theme = ref.watch(themeProvider);
+        return AppDialog(
+          title: widget.site == null
+              ? context.t.wikiSourcesAddTitle
+              : context.t.wikiSourcesEditTitle,
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _labelController,
+                decoration: InputDecoration(
+                  labelText: context.t.wikiSourcesNameLabel,
+                  errorText: _nameError,
+                ),
+                textInputAction: TextInputAction.next,
               ),
-            ),
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
+              const SizedBox(height: 14),
+              TextField(
+                controller: _urlController,
+                decoration: InputDecoration(
+                  labelText: 'URL',
+                  errorText: _urlError,
+                ),
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                context.t.wikiSourcesEndfieldPreset,
+                style: theme.ui(13, weight: 600, color: theme.textSecondary),
+              ),
+              Wrap(
                 spacing: 8,
-                runSpacing: 8,
                 children: [
-                  ActionChip(
-                    avatar: const Icon(Icons.public_sharp, size: 16),
-                    label: const Text('Warfarin'),
-                    onPressed: () => _selectEndfieldPreset(
+                  FilterBlock(
+                    label: 'Warfarin',
+                    selected: _urlController.text == 'https://warfarin.wiki/cn',
+                    onTap: () => _selectEndfieldPreset(
                       url: 'https://warfarin.wiki/cn',
                       iconUrl: 'https://warfarin.wiki/icon.png',
                     ),
                   ),
-                  ActionChip(
-                    avatar: const Icon(Icons.public_sharp, size: 16),
-                    label: const Text('fz.wiki'),
-                    onPressed: () => _selectEndfieldPreset(
+                  FilterBlock(
+                    label: 'fz.wiki',
+                    selected: _urlController.text == 'https://fz.wiki',
+                    onTap: () => _selectEndfieldPreset(
                       url: 'https://fz.wiki',
                       iconUrl: 'https://fz.wiki/icon.svg',
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _iconController,
-              decoration: InputDecoration(
-                labelText: context.t.wikiSourcesIconUrlLabel,
-              ),
-              keyboardType: TextInputType.url,
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _error!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
-                  ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _iconController,
+                decoration: InputDecoration(
+                  labelText: context.t.wikiSourcesIconUrlLabel,
                 ),
+                keyboardType: TextInputType.url,
               ),
             ],
+          ),
+          actions: [
+            AppButton(
+              context.t.wikiSourcesCancel,
+              small: true,
+              kind: ButtonKind.quiet,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            AppButton(
+              context.t.wikiSourcesSave,
+              small: true,
+              kind: ButtonKind.go,
+              onPressed: _submit,
+            ),
           ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.t.wikiSourcesCancel),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(context.t.wikiSourcesSave),
-        ),
-      ],
+        );
+      },
     );
   }
 }

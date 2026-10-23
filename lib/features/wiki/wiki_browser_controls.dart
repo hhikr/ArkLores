@@ -1,21 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/motion.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import 'wiki_toolbar.dart';
 
-// ─── Sizing constants for the expandable tray ───────────────────
-const double _traySize = 52;
-const double _trayMargin = 16;
-const double _trayBottomOffset = 64;
-const double _trayHeightFactor = 0.45;
+const double _trayMargin = 12;
+const double _trayWidth = 200;
 
-/// Floating tray anchored at bottom-right that morphs between a FAB and a
-/// tall vertical toolbar.
-///
-/// Collapsed: a small square button.
-/// Expanded: the same-width container "stretches" upward into a floating
-/// vertical toolbar with [WikiToolbar] inside and a close toggle at bottom.
+/// The wiki's page tools, anchored at the bottom right: a square button with
+/// a cut corner; tapped, a panel with the labelled tools opens above it
+/// (pushed up from the button, mechanically) and the button closes it.
 class ExpandableTray extends ConsumerWidget {
   const ExpandableTray({
     super.key,
@@ -45,66 +43,58 @@ class ExpandableTray extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-
     return Positioned(
       right: _trayMargin,
-      // Above the floating navigation (the page reaches under it).
-      bottom: _trayBottomOffset + MediaQuery.paddingOf(context).bottom,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOutCubic,
-        width: _traySize,
-        height: expanded
-            ? (MediaQuery.of(context).size.height * _trayHeightFactor)
-            : _traySize,
-        decoration: BoxDecoration(
-          color: theme.cardSurface,
-          borderRadius: BorderRadius.zero,
-          boxShadow: theme.cardShadow,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── Toolbar buttons (only when expanded) ──────────────
-            if (expanded)
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: WikiToolbar(
-                    isDarkMode: isDarkMode,
-                    isBookmarked: isBookmarked,
-                    onZoomOut: onZoomOut,
-                    onZoomIn: onZoomIn,
-                    onRefresh: onRefresh,
-                    onToggleDarkMode: onToggleDarkMode,
-                    onToggleBookmark: onToggleBookmark,
-                  ),
-                ),
-              ),
-
-            // ── Toggle button (always visible at the bottom) ──────
-            SizedBox(
-              height: _traySize,
-              child: IconButton(
-                icon: Icon(
-                  expanded ? Icons.close_sharp : Icons.tune_sharp,
-                  size: 22,
-                ),
-                color: theme.textPrimary,
-                onPressed: onToggle,
-                padding: EdgeInsets.zero,
-                tooltip: expanded ? 'Close' : 'Tools',
-                style: IconButton.styleFrom(
-                  splashFactory: NoSplash.splashFactory,
-                  overlayColor: theme.accentPrimary.withValues(alpha: 0.12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
-                  ),
-                ),
-              ),
+      // Above the tab bar (the page reaches under it).
+      bottom: _trayMargin + MediaQuery.paddingOf(context).bottom,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          AnimatedSize(
+            duration: Motion.of(
+              context,
+              expanded ? Motion.sheetIn : Motion.sheetOut,
             ),
-          ],
-        ),
+            curve: Motion.mech,
+            alignment: Alignment.bottomRight,
+            child: expanded
+                ? Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SizedBox(
+                      width: _trayWidth,
+                      child: DockPanel(
+                        key: const ValueKey('wiki-tools'),
+                        theme: theme,
+                        padding: const EdgeInsets.only(top: 3),
+                        child: WikiToolbar(
+                          isDarkMode: isDarkMode,
+                          isBookmarked: isBookmarked,
+                          onZoomOut: onZoomOut,
+                          onZoomIn: onZoomIn,
+                          onRefresh: onRefresh,
+                          onToggleDarkMode: onToggleDarkMode,
+                          onToggleBookmark: onToggleBookmark,
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox(width: 0, height: 0),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.cardSurface,
+              border: Border.all(color: theme.divider),
+            ),
+            child: SquareIconButton(
+              key: const ValueKey('wiki-tools-toggle'),
+              icon: expanded ? Icons.close_sharp : Icons.tune_sharp,
+              tooltip: expanded ? context.t.wikiToolsClose : context.t.wikiTools,
+              selected: expanded,
+              onPressed: onToggle,
+            ),
+          ),
+        ],
       ),
     );
   }

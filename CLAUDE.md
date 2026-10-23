@@ -3,8 +3,8 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.16.0（正式版，2026-10-22，Android build 37）：APK + 两个知识库 + 源码。明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
-  终末地库（2026-10-18 客户端）按任务步骤排列、加了过场台词与段首梗概；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件指向 v0.16.0。
+- **已发布**：v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
+  终末地库（2026-10-18 客户端）按任务步骤排列、加了过场台词与段首梗概（渠道 `min_app_build` 仍是 37）；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件指向 v0.17.0。
   v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
   0.16.0 从分支 `endfield-cutscenes` 发出，经 PR #19 合回 `main`；下一轮从合并后的 `main` 开新分支（推之前先确认 PR 没有合并）。
 - 未经开发者明确同意不发版。真实 API 测试（模型与向量）：测试模型用 glm-5.3-flash；预计一轮总消耗 ≤150 万 token 直接跑，超过先问（开发者 2026-10-19）。Android build 号每次发版递增。
@@ -57,7 +57,7 @@
   - 没有在真机屏幕上看过的界面改动、没有被真实模型再触发的修正，列在 `docs/KNOWN_ISSUES.md` §3。
 - **0.14.5（2026-10-17）**：真机反馈的修正——干员语音（两个游戏）、档案默认展开/收起的设置、梗概向下展开、阅读进度、引用的资料打开资料页、
   PRTS 用站点自带的黑夜模式、删掉 Wiki 阅读模式与“转交给 AI”；知识库渠道文件（`gamedata_channel.json`，`gamedata-channel` Release）与按提交日期比新旧；
-  终末地档案 id 带 `ef/`（要重建终末地库才生效）。悬浮栏自动隐藏留到 UI 重构。
+  终末地档案 id 带 `ef/`（要重建终末地库才生效）。悬浮栏自动隐藏留到 UI 重构（0.17 起顶栏、底栏改成实心，不再悬浮；阅读时自动隐藏仍未做）。
 - **0.15.0（2026-10-20，问答统一重构，分支 `ask-recall-eval`）**：方向是“找原文由代码一次找全、给齐；模型只读和写；卡片、梗概只做定位”。
   每一种做法、数据与结论见 `docs/ASK_EXPERIMENTS.md` §5，现在的流程见 `docs/ASK_AGENT.md`。
   - 留下的：离线召回测试（`test/live/recall_eval_test.dart`，日志题第一步金标行 37% → 74%）、按名字取材（`gather`）、追问重读上一答引用的行、查证“没有查到”（`missing`）、
@@ -85,9 +85,15 @@
     数据给不出位置的段放在“未定位的对话”下，阅读器默认收起（开发者 2026-10-22，不写“可能已删减”）。有自己剧情的任务不嵌套；没有对话的步骤不写标题。
   - 终末地库在本机 `build/endfield/`（v0.15.1 的备份 `build/endfield_v0151/`），向量迁移、新算 3 块；渠道文件 `min_app_build` = 37（旧 App 不认识标题行）。
     明日方舟库与 v0.15.x 同一份。
+- **0.17.0（2026-10-22 发布，分支 `ui-0.17`，Android build 38，从合并 PR #19 后的 `main` 开出；同日删除了全部已合并的分支）**：全 App 界面重构与人机交互修正，
+  用开发者的 skill `endfield-ui`（`~/.claude/skills/endfield-ui`，来自 github.com/hhikr/endfield-ui-skill）。设计、代码位置与规则见 `docs/DESIGN.md`。
+  - 开发者的要求：保留浅色/深色两个主题的强调色（黄 / 蓝），其余自由发挥。
+  - 新增：主题“跟随系统”（新装默认）、设置“阅读字体”（默认黑体，可换回霞鹜文楷）、Saira 界面字体（`assets/fonts/`，OFL）。
+  - 只在测试里截图看过（真实字体、浅深两套），**没有上真机**；真机检查由开发者做（见 `docs/KNOWN_ISSUES.md` §3）。
 ## 文档索引
 
 - `docs/ARCHITECTURE.md`：项目结构与各模块的实现方式（从这里开始）。
+- `docs/DESIGN.md`：界面设计（颜色、字体、部件、动效）与人机交互约定——**改界面前必读**。
 - `docs/KNOWLEDGE_BASE_LESSONS.md`：建库、更新、修改知识库的经验、注意点、错误与终末地清单——**改建库代码前必读**。
 - `docs/GAMEDATA_BUILD_PIPELINE.md`：表、四条构建路径（全量/增量/补算/App 内）、向量、目录、发布命令。
 - `docs/ENDFIELD_STORY_ORDER.md`：终末地剧情怎么按任务步骤排列（关卡数据的格式、规则、库里的样子、审核与验证）——**改排列规则前必读**。
@@ -105,19 +111,22 @@
 - 保留 source path、raw id、content type、entity id。
 - 剧情问答 Agent 查本地 GameData 库（`lore_tools.dart`），0.13 起可选查 PRTS / Warfarin Wiki（`wiki_tools.dart`，二手资料，出处同样核对）；
   用户文本和 Wiki 页里选中的文字只作上下文，不是证据。
-- 新的推入页面用 `FloatingScaffold`（`shared/widgets/floating_bar.dart`，全 App 不用 `AppBar`，有守卫测试）；主页面里的列表用 `floatingPadding`；
-  新的可点块用 `PressFeedback` + `withHaptic`。
+- 界面照 `docs/DESIGN.md`（0.17 的设计与人机交互约定，**改界面前必读**）：推入页面用 `PageScaffold`、主标签页用 `MainTopBar`（`shared/widgets/page_frame.dart`，
+  全 App 不用 `AppBar`）；列表用 `pagePadding`；部件从 `shared/widgets/ef_widgets.dart` 取（`AppButton`、`SquareIconButton`、`PressRow`、`NoticeBox`、`EmptyState`、
+  `LoadingView`、`confirmAction`、`showAppSheet`/`showAppDialog`、`showToast`……），没有的按 DESIGN.md §3 从规则推，不另起样式。
 - 长时操作（问答、知识库下载/构建、向量）包在 `BackgroundWork.instance.run(...)` 里（Android 前台服务保活）。
-- 形状与动效照两款游戏：方角（卡片用切角 `ThemeAwareCard`），图标用 `Icons.*_sharp`，选中的标签用 `SelectionBar` 擦入的横条，
-  悬浮板用 `FloatingBar`（角标）；动效短、直线、无回弹（`easeOutCubic`/`easeOutExpo`）。圆角、圆形、`_rounded` 图标、回弹曲线有守卫测试（`test/guards/square_shapes_test.dart`）。
+- 形状与动效：方角，**能点的才切一个角**（`CutBorder`）；图标用 `Icons.*_sharp`；动效走 `Motion`（`snap`/`mech` 曲线，`Motion.of` 在减少动效时为 0），不回弹、不缩放弹出、不做循环装饰。
+  守卫测试：圆角/圆形/`_rounded`/回弹（`square_shapes_test`）、转圈/投影/红绿色/原生开关与底部弹出/小于 12 的字（`design_rules_test`）。
+- 触控区至少 48×48，纯图标按钮必须有 `tooltip`；删除先问（`confirmAction(danger: true)`）；出错写在出错的地方（输入框 `errorText`、`NoticeBox`），不用红字。
 - 资料页每个游戏一页（顶部标签切换，`SwitchedPages`），不能左右滑动换页。知识库页同样每个游戏一页，两页的组成和顺序相同；
   给一个游戏加的东西（状态、向量、提示）先想另一个游戏是否也要有。
 - 输入框旁的面板、菜单用浮层且不取焦点（`canRequestFocus: false`），不要用会推路由的 `PopupMenuButton` / 底部弹窗（会把键盘收起来）。
 - 资料页不做只有一行的中间页：集合从列表打开走 `openCollectionOf`（一篇剧情直接进阅读器、一类条目直接进列表）；短列表在集合页里就地列出；
   分组的长列表用组标题 + 选择条，不先列一页分组。
-- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`），档案类文档用 `ProfileText`（每段可折叠，默认展开还是收起按设置“资料页的档案默认展开”），语音用 `VoiceLines`；
+- 长文用阅读字体（`reading_text.dart`：`ReadingText`/`readingStyle`，字体由设置“阅读字体”定，默认黑体、可选霞鹜文楷），档案类文档用 `ProfileText`（每段可折叠，默认展开还是收起按设置“资料页的档案默认展开”），语音用 `VoiceLines`；
   剧情开头的官方梗概默认折叠（`FoldSection`）。
-- 颜色：信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
+- 颜色：每个主题一种强调色（浅色信号黄、深色方舟蓝，开发者 2026-10-22 定下保留），`accentPrimary` 只做填充，表示当前位置、可以操作、需要注意；
+  标出当前位置的线和字用 `trace`/`accentText`（浅色为墨，深色为蓝），强调色上的前景用 `onAccent`；**红色（`danger`）只给删除**，警告、出错用强调色小旗。
 - 问答列表不随流式内容自动滚动（只在发新问题时滚到底一次）；思考窗口固定高度；阅读位置上方的内容在流式中不变高。不要加“贴底跟随”。
 - 提交前 `git checkout -- android/gradle.properties`（Flutter 迁移器会往里加两行）。
 

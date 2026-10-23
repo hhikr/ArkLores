@@ -470,12 +470,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aiAnswerDetails(int count) {
-    return '详细经过 · $count 条';
+    return '详细经过 / $count 条';
   }
 
   @override
   String aiEvidenceSummary(int count, int stories) {
-    return '证据 $count 处 · 来自 $stories 个故事';
+    return '证据 $count 处 / 来自 $stories 个故事';
   }
 
   @override
@@ -507,7 +507,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aiStoryReaderCited(String range) {
-    return '引用 · $range';
+    return '引用 / $range';
   }
 
   @override
@@ -666,7 +666,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String storyReaderResumed(int line) {
-    return '继续阅读 · 第 $line 行';
+    return '继续阅读 / 第 $line 行';
   }
 
   @override
@@ -843,12 +843,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aiWorkSummary(int calls, int reads) {
-    return '查阅 $calls 次 · 读了 $reads 篇原文';
+    return '查阅 $calls 次 / 读了 $reads 篇原文';
   }
 
   @override
   String aiWorkHits(int hits, int stories) {
-    return '$hits 处 · $stories 篇';
+    return '$hits 处 / $stories 篇';
   }
 
   @override
@@ -1315,7 +1315,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String kbVectorSummary(int stories, int records) {
-    return '剧情向量 $stories 条 · 资料向量 $records 条';
+    return '剧情向量 $stories 条 / 资料向量 $records 条';
   }
 
   @override
@@ -1478,7 +1478,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String aiWikiVersion(String site, String date) {
-    return '$site · $date 读取的版本';
+    return '$site / $date 读取的版本';
   }
 
   @override
@@ -1570,4 +1570,85 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbEndfieldTitle => '终末地知识库';
+
+  @override
+  String get libraryFigureStories => '剧情';
+
+  @override
+  String get libraryFigureCollections => '故事集';
+
+  @override
+  String get libraryFigureEntries => '图鉴条目';
+
+  @override
+  String get libraryOpenKnowledgeBase => '前往知识库';
+
+  @override
+  String get wikiTools => '页面工具';
+
+  @override
+  String get wikiToolsClose => '收起页面工具';
+
+  @override
+  String get wikiZoomOut => '缩小文字';
+
+  @override
+  String get wikiZoomIn => '放大文字';
+
+  @override
+  String get wikiRefresh => '刷新页面';
+
+  @override
+  String get wikiDarkPage => '页面深色';
+
+  @override
+  String get wikiBookmarkAdd => '加入书签';
+
+  @override
+  String get wikiBookmarkRemove => '移除书签';
+
+  @override
+  String get bookmarksRemoved => '已移除书签';
+
+  @override
+  String get commonUndo => '撤销';
+
+  @override
+  String get bookmarksDelete => '移除';
+
+  @override
+  String get settingsAppearance => '外观';
+
+  @override
+  String get settingsThemeSystemShort => '跟随系统';
+
+  @override
+  String get settingsThemeSystem => '随手机的深浅模式切换';
+
+  @override
+  String get settingsReadingFont => '阅读字体';
+
+  @override
+  String get settingsReadingFontDesc => '剧情、档案和回答正文用的字体';
+
+  @override
+  String get settingsReadingFontSans => '黑体';
+
+  @override
+  String get settingsReadingFontKai => '霞鹜文楷';
+
+  @override
+  String get apiSettingsShowKey => '显示密钥';
+
+  @override
+  String get apiSettingsHideKey => '隐藏密钥';
+
+  @override
+  String get wikiSourcesResetConfirm => '站点恢复为内置的列表，自己添加的站点会被删除。';
+
+  @override
+  String get aiConfigRequiredTitle => '先配置对话服务';
+
+  @override
+  String get aiAskTry => '可以这样问';
 }

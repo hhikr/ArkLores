@@ -5,51 +5,79 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
-import '../../shared/widgets/theme_aware_card.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import 'bookmark_service.dart';
 
-/// Bookmark management page.
+/// Bookmark management page: a row per bookmark (tap opens it); removing
+/// one (its button, or a swipe to the left) can be undone.
 class BookmarkPage extends ConsumerWidget {
   const BookmarkPage({super.key});
 
   static const routeName = '/bookmarks';
+
+  void _remove(BuildContext context, WidgetRef ref, Bookmark bookmark) {
+    final notifier = ref.read(bookmarkProvider.notifier);
+    notifier.remove(bookmark.id);
+    showToast(
+      context,
+      context.t.bookmarksRemoved,
+      action: SnackBarAction(
+        label: context.t.commonUndo,
+        onPressed: () => notifier.toggle(
+          title: bookmark.title,
+          url: bookmark.url,
+          site: bookmark.site,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final bookmarkAsync = ref.watch(bookmarkProvider);
 
-    return FloatingScaffold(
+    return PageScaffold(
       title: context.t.bookmarksTitle,
       scrollUnder: true,
       body: bookmarkAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const LoadingView(),
         error: (err, stack) => Center(
-          child: Text(
-            context.t.bookmarksLoadFailed(err.toString()),
-            style: theme.bodyFont.copyWith(color: theme.danger),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: NoticeBox(context.t.bookmarksLoadFailed(err.toString())),
           ),
         ),
         data: (bookmarks) {
           if (bookmarks.isEmpty) {
-            return _EmptyState(theme: theme);
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: EmptyState(
+                  title: context.t.bookmarksEmpty,
+                  text: context.t.bookmarksEmptyDesc,
+                ),
+              ),
+            );
           }
           return ListView.builder(
-            padding: floatingPadding(
+            padding: pagePadding(
               context,
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              const EdgeInsets.fromLTRB(16, 12, 16, 24),
             ),
-            itemCount: bookmarks.length,
+            itemCount: bookmarks.length + 1,
             itemBuilder: (context, index) {
+              if (index == bookmarks.length) {
+                return Divider(height: 1, color: theme.divider);
+              }
               final bookmark = bookmarks[index];
               return _BookmarkListItem(
+                index: index,
                 bookmark: bookmark,
                 theme: theme,
                 onTap: () => Navigator.of(context).pop(bookmark),
-                onDelete: () {
-                  ref.read(bookmarkProvider.notifier).remove(bookmark.id);
-                },
+                onDelete: () => _remove(context, ref, bookmark),
               );
             },
           );
@@ -59,44 +87,16 @@ class BookmarkPage extends ConsumerWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-
-  const _EmptyState({required this.theme});
-  final AppThemeTokens theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.bookmark_border_sharp,
-                size: 64, color: theme.accentPrimary.withValues(alpha: 0.3),),
-            const SizedBox(height: 16),
-            Text(context.t.bookmarksEmpty,
-                style: theme.titleFont.copyWith(fontSize: 20),),
-            const SizedBox(height: 8),
-            Text(context.t.bookmarksEmptyDesc,
-                textAlign: TextAlign.center,
-                style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary, fontSize: 14, height: 1.4,),),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _BookmarkListItem extends StatelessWidget {
-
   const _BookmarkListItem({
+    required this.index,
     required this.bookmark,
     required this.theme,
     required this.onTap,
     required this.onDelete,
   });
+
+  final int index;
   final Bookmark bookmark;
   final AppThemeTokens theme;
   final VoidCallback onTap;
@@ -109,39 +109,59 @@ class _BookmarkListItem extends StatelessWidget {
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 24),
-        decoration: BoxDecoration(
-          color: theme.danger,
-          borderRadius: BorderRadius.zero,
+        padding: const EdgeInsets.only(right: 20),
+        color: theme.danger,
+        child: Text(
+          context.t.bookmarksDelete,
+          style: theme.ui(15, weight: 700, color: theme.cardSurface),
         ),
-        child: Icon(Icons.delete_sharp, color: Colors.white, size: 28),
       ),
       onDismissed: (_) => onDelete(),
-      child: ThemeAwareCard(
-        onTap: onTap,
-        child: Row(
-          children: [
-            Icon(Icons.bookmark_sharp, color: theme.wikiBadgeColor, size: 22),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(bookmark.title,
-                      style: theme.titleFont.copyWith(fontSize: 15),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,),
-                  const SizedBox(height: 2),
-                  Text(bookmark.siteLabel,
-                      style: theme.bodyFont
-                          .copyWith(color: theme.textSecondary, fontSize: 12),),
-                ],
+      child: Column(
+        children: [
+          Divider(height: 1, color: theme.divider),
+          PressRow(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 60),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 0, 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 36,
+                      child: Text(
+                        (index + 1).toString().padLeft(2, '0'),
+                        style: theme.field(color: theme.textMuted, size: 14),
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            bookmark.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.text(16, weight: FontWeight.w500, height: 1.4),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(bookmark.siteLabel, style: theme.field()),
+                        ],
+                      ),
+                    ),
+                    SquareIconButton(
+                      icon: Icons.delete_outline_sharp,
+                      tooltip: context.t.bookmarksDelete,
+                      color: theme.danger,
+                      onPressed: onDelete,
+                    ),
+                  ],
+                ),
               ),
             ),
-            Icon(Icons.chevron_right_sharp,
-                color: theme.textSecondary, size: 20,),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

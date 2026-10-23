@@ -17,6 +17,7 @@ import 'shared/l10n/locale_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/theme/app_theme.dart';
+import 'shared/theme/cut_border.dart';
 import 'shared/widgets/industrial_ui.dart';
 import 'shared/widgets/smooth_page_route.dart';
 
@@ -42,7 +43,7 @@ void main() async {
     appTheme,
     appLocale,
     sessionLogsEnabled,
-    (nickname, answerOptions, profileSectionsOpen),
+    (nickname, answerOptions, profileSectionsOpen, readingFont),
     _,
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
@@ -50,7 +51,7 @@ void main() async {
     load('embedding config', settingsService.loadEmbeddingConfig,
         defaultEmbeddingConfig,),
     load('main tab index', settingsService.loadMainTabIndex, 0),
-    load('theme', settingsService.loadTheme, AppTheme.ark),
+    load('theme', settingsService.loadTheme, AppTheme.system),
     load('locale', settingsService.loadLocale, SupportedLocale.zh),
     load('session log toggle', settingsService.loadSessionLogsEnabled, false),
     // A record's .wait takes at most nine futures.
@@ -60,6 +61,7 @@ void main() async {
           const AnswerOptions(),),
       load('profile fold setting', settingsService.loadProfileSectionsOpen,
           true,),
+      load('reading font', settingsService.loadReadingFont, ReadingFont.sans),
     ).wait,
     load(
       'launcher icon',
@@ -79,6 +81,7 @@ void main() async {
         initialEmbeddingConfigProvider.overrideWithValue(embeddingConfig),
         initialMainTabIndexProvider.overrideWithValue(mainTabIndex),
         initialThemeProvider.overrideWithValue(appTheme),
+        initialReadingFontProvider.overrideWithValue(readingFont),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
         initialNicknameProvider.overrideWithValue(nickname),
@@ -110,6 +113,9 @@ class ArkLoresApp extends ConsumerWidget {
       title: 'ArkLores',
       debugShowCheckedModeBanner: false,
       themeMode: theme.isDark ? ThemeMode.dark : ThemeMode.light,
+      // Theme changes switch at once: the app's tokens change in one frame,
+      // so Material's 200 ms colour fade would only lag behind them.
+      themeAnimationDuration: Duration.zero,
       darkTheme: appTheme,
       theme: appTheme,
       locale: locale.flutterLocale,
@@ -147,35 +153,58 @@ class ArkLoresApp extends ConsumerWidget {
 }
 
 ThemeData buildAppTheme(AppThemeTokens tokens) {
-  final scheme = ColorScheme.fromSeed(
+  // Primary is ink (dark: the accent blue), not the yellow: stock Material
+  // parts draw lines and text in primary (cursors, focus lines, progress,
+  // checkboxes), and yellow lines vanish on the light paper. The accent as
+  // a fill is applied by hand.
+  final scheme = ColorScheme(
     brightness: tokens.isDark ? Brightness.dark : Brightness.light,
-    seedColor: tokens.accentPrimary,
-    primary: tokens.accentPrimary,
-    secondary: tokens.accentSecondary,
-    surface: tokens.cardSurface,
+    primary: tokens.trace,
+    onPrimary: tokens.isDark ? tokens.onAccent : tokens.bgPrimary,
+    secondary: tokens.accentPrimary,
+    onSecondary: tokens.onAccent,
+    tertiary: tokens.accentPrimary,
+    onTertiary: tokens.onAccent,
     error: tokens.danger,
-    onPrimary: tokens.isDark ? tokens.bgPrimary : tokens.textPrimary,
+    onError: tokens.cardSurface,
+    surface: tokens.cardSurface,
     onSurface: tokens.textPrimary,
+    onSurfaceVariant: tokens.textSecondary,
+    surfaceContainerHighest: tokens.surfaceElevated,
+    surfaceContainerHigh: tokens.surfaceElevated,
+    surfaceContainer: tokens.cardSurface,
+    surfaceContainerLow: tokens.cardSurface,
+    surfaceContainerLowest: tokens.cardSurface,
+    outline: tokens.cardBorder,
+    outlineVariant: tokens.divider,
+    surfaceTint: Colors.transparent,
   );
-  // Both games draw square panels: no Material control keeps its rounded
-  // or stadium default.
+  // Square everywhere; a cut corner only on what can be pressed.
   final outline = RoundedRectangleBorder(
     side: BorderSide(color: tokens.cardBorder),
   );
   const square = RoundedRectangleBorder();
+  const cut = CutBorder.br(8);
+  final buttonText = sairaStyle(size: 15, weight: 700);
 
   return ThemeData(
     useMaterial3: true,
     brightness: tokens.isDark ? Brightness.dark : Brightness.light,
     colorScheme: scheme,
     scaffoldBackgroundColor: Colors.transparent,
-    canvasColor: tokens.bgSecondary,
+    canvasColor: tokens.cardSurface,
     dividerColor: tokens.divider,
-    // Touch feedback that can be seen: the signal yellow at 5–8 % vanished
-    // on the light grounds. A neutral wash of the text colour reads on both
-    // themes; the press scale and haptics come from `PressFeedback`.
-    splashColor: tokens.textPrimary.withValues(alpha: 0.12),
-    highlightColor: tokens.textPrimary.withValues(alpha: 0.07),
+    dividerTheme: DividerThemeData(color: tokens.divider, thickness: 1, space: 1),
+    // No ink ripples: pressing answers with a short, hard tint (and in the
+    // app's own parts with a wipe of the accent).
+    splashFactory: NoSplash.splashFactory,
+    splashColor: Colors.transparent,
+    highlightColor: tokens.textPrimary.withValues(alpha: 0.08),
+    hoverColor: tokens.textPrimary.withValues(alpha: 0.04),
+    focusColor: tokens.accentPrimary.withValues(alpha: 0.35),
+    materialTapTargetSize: MaterialTapTargetSize.padded,
+    visualDensity: VisualDensity.standard,
+    iconTheme: IconThemeData(color: tokens.textPrimary, size: 22),
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
         TargetPlatform.android: SmoothPageTransitionsBuilder(),
@@ -186,33 +215,24 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
       },
     ),
     textSelectionTheme: TextSelectionThemeData(
-      cursorColor: tokens.accentPrimary,
-      selectionColor: tokens.accentPrimary.withValues(alpha: 0.24),
+      cursorColor: tokens.trace,
+      selectionColor: tokens.accentPrimary.withValues(alpha: tokens.isDark ? 0.35 : 0.55),
+      selectionHandleColor: tokens.trace,
     ),
-    appBarTheme: AppBarTheme(
-      backgroundColor: tokens.bgSecondary,
-      foregroundColor: tokens.textPrimary,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      centerTitle: false,
-      // Slim: 48 high, a hairline below, a title the size of a heading
-      // rather than a banner.
-      toolbarHeight: 48,
-      titleSpacing: 4,
-      shape: Border(bottom: BorderSide(color: tokens.divider, width: 0.5)),
-      iconTheme: IconThemeData(color: tokens.textPrimary, size: 22),
-      actionsIconTheme: IconThemeData(color: tokens.textSecondary, size: 22),
-      titleTextStyle: tokens.titleFont.copyWith(
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
-        color: tokens.textPrimary,
-      ),
-    ),
+    // Inputs: a panel with a frame, the label above in the interface face,
+    // help below; focused, the bottom edge becomes a 2px trace line.
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: tokens.surfaceElevated,
-      labelStyle: tokens.bodyFont.copyWith(color: tokens.textSecondary),
+      fillColor: tokens.cardSurface,
+      floatingLabelBehavior: FloatingLabelBehavior.always,
+      labelStyle: sairaStyle(size: 14, weight: 600, color: tokens.textSecondary),
+      floatingLabelStyle:
+          sairaStyle(size: 14, weight: 600, color: tokens.textPrimary),
       hintStyle: tokens.bodyFont.copyWith(color: tokens.textMuted),
+      helperStyle: tokens.bodyFont.copyWith(color: tokens.textSecondary, fontSize: 12.5),
+      helperMaxLines: 3,
+      errorStyle: tokens.bodyFont.copyWith(color: tokens.textPrimary, fontSize: 12.5),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.zero,
         borderSide: BorderSide(color: tokens.cardBorder),
@@ -223,60 +243,156 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: tokens.accentPrimary, width: 1.5),
+        borderSide: BorderSide(color: tokens.trace, width: 2),
+      ),
+      // An error is not red (red is for deleting): a thick accent frame and
+      // the message in ink below.
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: BorderSide(color: tokens.accentPrimary, width: 2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: BorderSide(color: tokens.trace, width: 2),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.zero,
+        borderSide: BorderSide(color: tokens.divider),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(shape: square),
+      style: FilledButton.styleFrom(
+        backgroundColor: tokens.accentPrimary,
+        foregroundColor: tokens.onAccent,
+        disabledBackgroundColor: tokens.surfaceElevated,
+        disabledForegroundColor: tokens.textMuted,
+        minimumSize: const Size(64, 48),
+        padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
+        shape: cut,
+        textStyle: buttonText,
+      ),
     ),
     iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(shape: square),
+      style: IconButton.styleFrom(
+        shape: square,
+        minimumSize: const Size(48, 48),
+        foregroundColor: tokens.textPrimary,
+        disabledForegroundColor: tokens.textMuted,
+      ),
     ),
-    floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      shape: square,
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      shape: cut,
+      elevation: 0,
+      focusElevation: 0,
+      hoverElevation: 0,
+      highlightElevation: 0,
+      backgroundColor: tokens.accentPrimary,
+      foregroundColor: tokens.onAccent,
     ),
     chipTheme: ChipThemeData(
-      shape: outline.copyWith(side: BorderSide(color: tokens.divider)),
+      shape: const CutBorder.br(7),
+      side: BorderSide.none,
+      backgroundColor: tokens.surfaceElevated,
+      selectedColor: tokens.accentPrimary,
+      checkmarkColor: tokens.onAccent,
+      labelStyle: sairaStyle(size: 14, weight: 500, color: tokens.textPrimary),
+      secondaryLabelStyle:
+          sairaStyle(size: 14, weight: 700, color: tokens.onAccent),
+      padding: const EdgeInsets.fromLTRB(6, 6, 10, 6),
     ),
-    cardTheme: const CardThemeData(shape: square),
+    cardTheme: const CardThemeData(shape: square, elevation: 0),
     dialogTheme: DialogThemeData(
-      shape: outline,
+      shape: CutBorder(bottomRight: 20, side: BorderSide(color: tokens.divider)),
       backgroundColor: tokens.cardSurface,
+      elevation: 0,
+      titleTextStyle: sairaStyle(size: 19, weight: 700, color: tokens.textPrimary),
+      contentTextStyle: tokens.bodyFont.copyWith(
+        fontSize: 15,
+        color: tokens.textSecondary,
+        height: 1.6,
+      ),
     ),
     bottomSheetTheme: BottomSheetThemeData(
-      shape: Border(top: BorderSide(color: tokens.accentPrimary, width: 2)),
+      shape: const CutBorder(topLeft: 24),
       backgroundColor: tokens.cardSurface,
+      modalBackgroundColor: tokens.cardSurface,
+      elevation: 0,
+      modalElevation: 0,
       showDragHandle: false,
     ),
-    popupMenuTheme: PopupMenuThemeData(shape: outline),
-    menuTheme: const MenuThemeData(
-      style: MenuStyle(shape: WidgetStatePropertyAll(square)),
+    popupMenuTheme: PopupMenuThemeData(
+      shape: outline.copyWith(side: BorderSide(color: tokens.divider)),
+      color: tokens.cardSurface,
+      elevation: 0,
+      textStyle: sairaStyle(size: 15, weight: 500, color: tokens.textPrimary),
+    ),
+    menuTheme: MenuThemeData(
+      style: MenuStyle(
+        shape: WidgetStatePropertyAll(
+          outline.copyWith(side: BorderSide(color: tokens.divider)),
+        ),
+        elevation: const WidgetStatePropertyAll(0),
+        backgroundColor: WidgetStatePropertyAll(tokens.cardSurface),
+      ),
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(color: tokens.textPrimary),
-      textStyle: tokens.bodyFont.copyWith(color: tokens.bgPrimary, fontSize: 12),
+      decoration: const BoxDecoration(color: Color(0xFF161616)),
+      textStyle: sairaStyle(size: 13, weight: 600, color: const Color(0xFFEDEDED)),
+      waitDuration: const Duration(milliseconds: 400),
     ),
-    listTileTheme: const ListTileThemeData(shape: square),
+    listTileTheme: ListTileThemeData(
+      shape: square,
+      minVerticalPadding: 10,
+      iconColor: tokens.textSecondary,
+      textColor: tokens.textPrimary,
+      titleTextStyle: sairaStyle(size: 16, weight: 600, color: tokens.textPrimary),
+      subtitleTextStyle: tokens.bodyFont.copyWith(
+        fontSize: 13,
+        color: tokens.textSecondary,
+      ),
+    ),
+    expansionTileTheme: ExpansionTileThemeData(
+      shape: const Border(),
+      collapsedShape: const Border(),
+      iconColor: tokens.textPrimary,
+      collapsedIconColor: tokens.textSecondary,
+      textColor: tokens.textPrimary,
+      collapsedTextColor: tokens.textPrimary,
+    ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         elevation: 0,
         backgroundColor: tokens.accentPrimary,
-        foregroundColor: tokens.isDark ? tokens.bgPrimary : tokens.textPrimary,
-        shape: outline.copyWith(side: BorderSide.none),
-        textStyle: tokens.titleFont.copyWith(fontSize: 14),
+        foregroundColor: tokens.onAccent,
+        disabledBackgroundColor: tokens.surfaceElevated,
+        disabledForegroundColor: tokens.textMuted,
+        minimumSize: const Size(64, 48),
+        padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
+        shape: cut,
+        textStyle: buttonText,
       ),
     ),
-    // Text buttons would take the primary colour (the signal yellow), which
-    // is too faint as text; text uses accentText.
+    // Text buttons: ink text (the yellow is unreadable as text), at least
+    // 48 high to the finger.
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(foregroundColor: tokens.accentText),
+      style: TextButton.styleFrom(
+        foregroundColor: tokens.textPrimary,
+        disabledForegroundColor: tokens.textMuted,
+        minimumSize: const Size(48, 48),
+        shape: cut,
+        textStyle: sairaStyle(size: 15, weight: 700),
+      ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: tokens.textPrimary,
-        shape: outline,
-        side: BorderSide(color: tokens.cardBorder),
-        textStyle: tokens.titleFont.copyWith(fontSize: 14),
+        backgroundColor: tokens.surfaceElevated,
+        disabledForegroundColor: tokens.textMuted,
+        minimumSize: const Size(64, 48),
+        padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
+        shape: cut,
+        side: BorderSide.none,
+        textStyle: buttonText,
       ),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
@@ -284,31 +400,75 @@ ThemeData buildAppTheme(AppThemeTokens tokens) {
         foregroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? tokens.bgPrimary
-              : tokens.textSecondary,
+              : tokens.textPrimary,
         ),
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? tokens.accentPrimary
-              : tokens.surfaceElevated,
+              ? tokens.textPrimary
+              : Colors.transparent,
         ),
-        side: WidgetStatePropertyAll(BorderSide(color: tokens.cardBorder)),
-        shape: WidgetStatePropertyAll(outline),
+        side: WidgetStatePropertyAll(BorderSide(color: tokens.textPrimary)),
+        shape: const WidgetStatePropertyAll(square),
+        minimumSize: const WidgetStatePropertyAll(Size(48, 44)),
+        textStyle: WidgetStatePropertyAll(sairaStyle(size: 14, weight: 600)),
       ),
     ),
     tabBarTheme: TabBarThemeData(
       dividerColor: tokens.divider,
-      indicatorColor: tokens.accentPrimary,
-      labelColor: tokens.accentPrimary,
+      indicatorColor: tokens.trace,
+      labelColor: tokens.textPrimary,
       unselectedLabelColor: tokens.textSecondary,
     ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? tokens.onAccent
+            : tokens.cardSurface,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? tokens.accentPrimary
+            : tokens.surfaceElevated,
+      ),
+      trackOutlineColor: WidgetStatePropertyAll(tokens.cardBorder),
+    ),
+    checkboxTheme: CheckboxThemeData(
+      shape: square,
+      fillColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? tokens.accentPrimary
+            : Colors.transparent,
+      ),
+      checkColor: WidgetStatePropertyAll(tokens.onAccent),
+      side: BorderSide(color: tokens.cardBorder, width: 1.5),
+    ),
+    radioTheme: RadioThemeData(
+      fillColor: WidgetStateProperty.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? tokens.textPrimary
+            : tokens.cardBorder,
+      ),
+    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
-      color: tokens.accentPrimary,
-      linearTrackColor: tokens.divider,
+      color: tokens.trace,
+      linearTrackColor: tokens.surfaceElevated,
+      linearMinHeight: 4,
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: tokens.surfaceElevated,
-      contentTextStyle: tokens.bodyFont,
-      shape: Border(top: BorderSide(color: tokens.accentPrimary)),
+      backgroundColor: const Color(0xFF161616),
+      contentTextStyle:
+          sairaStyle(size: 14, weight: 600, color: const Color(0xFFEDEDED)),
+      actionTextColor: tokens.accentPrimary,
+      behavior: SnackBarBehavior.floating,
+      elevation: 0,
+      shape: const RoundedRectangleBorder(),
+    ),
+    scrollbarTheme: ScrollbarThemeData(
+      thumbColor: WidgetStatePropertyAll(
+        tokens.textPrimary.withValues(alpha: 0.35),
+      ),
+      radius: Radius.zero,
+      thickness: const WidgetStatePropertyAll(4),
     ),
   );
 }

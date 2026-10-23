@@ -16,7 +16,7 @@ import 'package:arklores/features/wiki/wiki_browser_page.dart';
 import 'package:arklores/main.dart';
 import 'package:arklores/shared/providers/handoff_provider.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
-import 'package:arklores/shared/widgets/floating_bar.dart';
+import 'package:arklores/shared/widgets/page_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -120,16 +120,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the navigation floats: off the edges, the pages reach under '
-      'it, and it steps aside for the keyboard', (tester) async {
+  testWidgets('the tab bar spans the bottom, the pages reach under it, it '
+      'marks the current tab and steps aside for the keyboard', (tester) async {
     await start(tester, tab: 3);
     final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
     final nav = tester.getRect(find.byKey(const ValueKey('main-navigation')));
-    expect(nav.left, greaterThan(0));
-    expect(nav.right, lessThan(screen.width));
-    expect(nav.bottom, lessThan(screen.height));
+    expect(nav.left, 0);
+    expect(nav.right, screen.width);
+    expect(nav.bottom, screen.height);
+    expect(nav.height, greaterThanOrEqualTo(AppTabBar.height));
     final page = tester.getRect(find.byType(IndexedStack).first);
     expect(page.bottom, screen.height);
+    // Every tab says its name, and the current one says it is current.
+    final tabs = tester
+        .widgetList<Semantics>(find.descendant(
+          of: find.byKey(const ValueKey('main-navigation')),
+          matching: find.byType(Semantics),
+        ),)
+        .where((s) => s.properties.button ?? false)
+        .toList();
+    expect([for (final s in tabs) s.properties.label],
+        ['Wiki', 'AI', '资料', '设置'],);
+    expect([for (final s in tabs) s.properties.selected],
+        [false, false, false, true],);
 
     tester.view.viewInsets = const FakeViewPadding(bottom: 600);
     addTearDown(tester.view.resetViewInsets);
@@ -138,21 +151,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('top docks with something on each side are two pills, the '
-      'page showing between them', (tester) async {
+  testWidgets('a main page has one top bar: its tabs on the left, its '
+      'action on the right', (tester) async {
     await start(tester, tab: 2);
-    Rect pillAround(Finder child) => tester.getRect(find
-        .ancestor(of: child, matching: find.byType(FloatingBar))
-        .first,);
-    final tabs = pillAround(find.byKey(const ValueKey('library-tabs')));
-    final action = pillAround(find.byKey(const ValueKey('library-search')));
-    expect(action.left - tabs.right, greaterThan(100));
-    expect(action.width, action.height); // round
+    final bar = tester.getRect(find.byKey(const ValueKey('main-top-bar')));
+    final tabs = tester.getRect(find.byKey(const ValueKey('library-tabs')));
+    final action = tester.getRect(find.byKey(const ValueKey('library-search')));
+    expect(tabs.left, lessThan(action.left));
+    expect(action.right, lessThanOrEqualTo(bar.right));
+    expect(action.width, greaterThanOrEqualTo(48));
 
     await tapTab(tester, 'Wiki');
-    final sites = pillAround(find.byKey(const ValueKey('wiki-site-0')));
-    final bookmarks = pillAround(find.byTooltip('书签'));
-    expect(bookmarks.left - sites.right, greaterThan(100));
+    final sites = tester.getRect(find.byKey(const ValueKey('wiki-site-0')));
+    final bookmarks = tester.getRect(find.byTooltip('书签'));
+    expect(bookmarks.left, greaterThan(sites.right));
     expect(tester.takeException(), isNull);
   });
 

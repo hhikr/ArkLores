@@ -21,15 +21,14 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
-import '../../shared/widgets/floating_bar.dart';
-import '../../shared/widgets/press_feedback.dart';
+import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
-import '../library/reading_text.dart' show FoldSection, ReadingText;
+import '../../shared/widgets/theme_aware_card.dart';
+import '../library/reading_text.dart'
+    show FoldSection, ReadingText, readingStyle;
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
-
-/// The story reader's font: LXGW WenKai Screen (bundled, see pubspec).
-const String readingFontFamily = 'LXGWWenKaiScreen';
 
 /// The whole text of one story. Three ways in:
 ///
@@ -75,19 +74,15 @@ class StoryReaderPage extends ConsumerWidget {
     final r = reading.valueOrNull;
     if (r == null) {
       final theme = ref.watch(themeProvider);
-      return FloatingScaffold(
+      return PageScaffold(
         title: '',
         backgroundColor: theme.bgPrimary,
         body: reading.isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const LoadingView()
             : Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text(
-                    context.t.aiCitedLinesUnavailable,
-                    textAlign: TextAlign.center,
-                    style: theme.bodyFont.copyWith(color: theme.textSecondary),
-                  ),
+                  padding: const EdgeInsets.all(24),
+                  child: EmptyState(text: context.t.aiCitedLinesUnavailable),
                 ),
               ),
       );
@@ -481,7 +476,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _nickname = ref.watch(nicknameProvider);
     // Floating docks; the text starts below them (a cited line is placed
     // near the top of the view and must not sit under the title).
-    return FloatingScaffold(
+    return PageScaffold(
       backgroundColor: theme.bgPrimary,
       title: chapter.isNotEmpty ? chapter : collection,
       // How far in: a line along the title plate and the line number.
@@ -495,7 +490,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 widthFactor: ((p.$1 + 1) / p.$2).clamp(0.0, 1.0),
                 child: SizedBox(
                   height: 2,
-                  child: ColoredBox(color: theme.accentPrimary),
+                  child: ColoredBox(color: theme.trace),
                 ),
               ),
       ),
@@ -510,28 +505,24 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                       child: Text(
                         '${p.$1 + 1} / ${p.$2}',
                         key: const ValueKey('story-reader-progress'),
-                        style: theme.bodyFont.copyWith(
-                          color: theme.textMuted,
-                          fontSize: 12,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
+                        style: theme.field(color: theme.textSecondary),
                       ),
                     ),
                   ),
           ),
           if (widget.text.isNotEmpty)
-            IconButton(
+            SquareIconButton(
               key: const ValueKey('story-reader-find'),
               tooltip: context.t.storyReaderFindHint,
               onPressed: () => _find(theme),
-              icon: const Icon(Icons.search_sharp),
+              icon: Icons.search_sharp,
             ),
           if (canJump)
-            IconButton(
+            SquareIconButton(
               key: const ValueKey('story-reader-jump'),
               tooltip: context.t.aiStoryReaderJumpBack,
               onPressed: _jumpToTarget,
-              icon: Icon(Icons.my_location_sharp, color: theme.accentText),
+              icon: Icons.my_location_sharp,
             ),
         ],
       body: Builder(
@@ -637,19 +628,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   }
 
   Widget _chip(AppThemeTokens theme, String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: theme.accentPrimary.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.zero,
-        ),
-        child: Text(
-          text,
-          style: theme.bodyFont.copyWith(
-            color: theme.accentText,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        color: theme.accentPrimary,
+        child: Text(text, style: theme.ui(13, weight: 700, color: theme.onAccent)),
       );
 
   Widget _header(
@@ -668,32 +649,21 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             if (_moved)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  context.t.aiStoryReaderMoved,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
+                child: NoticeBox(context.t.aiStoryReaderMoved),
               ),
             Text(
               collection,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-                letterSpacing: 0.5,
-              ),
+              style: theme.ui(14, weight: 700, color: theme.textSecondary),
             ),
             if (chapter.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                chapter,
-                style: theme.titleFont.copyWith(fontSize: 20, height: 1.3),
-              ),
+              const SizedBox(height: 4),
+              Text(chapter, style: theme.heading(24)),
             ],
+            const SizedBox(height: 10),
+            const TriStrip(),
             if (range != null) ...[
               const SizedBox(height: 10),
-              _chip(theme, '${context.t.aiStoryReaderTitle} · $range'),
+              _chip(theme, '${context.t.aiStoryReaderTitle} / $range'),
             ] else if (_resume != null) ...[
               const SizedBox(height: 10),
               _chip(theme, context.t.storyReaderResumed(_resume! + 1)),
@@ -704,7 +674,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               ReadingText(
                 _intro!,
                 key: const ValueKey('story-reader-intro'),
-                size: 14.5,
+                size: 15.5,
               ),
             ],
             // The official synopsis tells the whole story (it is what the
@@ -716,7 +686,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 title: context.t.storyReaderSynopsis,
                 initiallyOpen: false,
                 onToggle: (_) => _anchorOnHeader(),
-                child: ReadingText(synopsis.trim(), size: 14.5),
+                child: ReadingText(synopsis.trim(), size: 15.5),
               ),
             ],
             const SizedBox(height: 14),
@@ -878,7 +848,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         plain: true,
         initiallyOpen: _openSummaries.contains(p),
         onToggle: (open) => open ? _openSummaries.add(p) : _openSummaries.remove(p),
-        child: ReadingText(_lines[p].content.trim(), size: 14.5),
+        child: ReadingText(_lines[p].content.trim(), size: 15.5),
       );
 
   /// The heading of a folded group over [p] (the nearest heading above it,
@@ -895,10 +865,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   Widget _unplaced(AppThemeTokens theme, int p) {
     final open = _openUnplaced.contains(p);
     final count = _lines.skip(p + 1).takeWhile((l) => !headingLineKinds.contains(l.kind)).where((l) => l.kind == sectionLineKind).length;
-    return PressFeedback(
-      child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: withHaptic(() {
+    return Semantics(
+      button: true,
+      expanded: open,
+      child: PressRow(
+      onTap: () {
         final view = _scrollKey.currentContext?.findRenderObject();
         final box = _keyOf(p).currentContext?.findRenderObject();
         var at = 0.1;
@@ -912,25 +883,23 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           _center = _rows.indexWhere((r) => r.first == p) + 1;
           _centerAt = at;
         });
-      }),
-      child: Row(
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
         key: ValueKey('story-reader-unplaced-${_lines[p].lineIndex}'),
         children: [
-          Container(width: 3, height: 14, color: theme.accentPrimary),
+          Container(width: 4, height: 18, color: open ? theme.trace : theme.cardBorder),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               '${_lines[p].content}（$count）',
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-              ),
+              style: theme.ui(15, weight: 700, color: theme.textSecondary),
             ),
           ),
-          Icon(open ? Icons.expand_less_sharp : Icons.expand_more_sharp, size: 18, color: theme.accentText),
+          Icon(open ? Icons.expand_less_sharp : Icons.expand_more_sharp, size: 22, color: theme.textPrimary),
         ],
+      ),
       ),
       ),
     );
@@ -944,16 +913,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       key: ValueKey('story-reader-${line.kind}-${line.lineIndex}'),
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(width: 3, height: stage ? 20 : 14, color: theme.accentPrimary),
+        Container(width: 4, height: stage ? 22 : 16, color: theme.trace),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             line.content,
-            style: theme.bodyFont.copyWith(
+            style: theme.ui(
+              stage ? 17 : 14.5,
+              weight: 700,
               color: stage ? theme.textPrimary : theme.textSecondary,
-              fontSize: stage ? 15.5 : 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
             ),
           ),
         ),
@@ -992,12 +960,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 Expanded(child: Divider(color: theme.divider, endIndent: 12)),
                 Text(
                   label,
-                  style: theme.bodyFont.copyWith(
-                    color: theme.accentText,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
-                  ),
+                  style: theme.ui(13.5, weight: 700, color: theme.textPrimary),
                 ),
                 Expanded(child: Divider(color: theme.divider, indent: 12)),
               ],
@@ -1019,13 +982,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         builder: (context, child) => Container(
           decoration: BoxDecoration(
             color: theme.accentPrimary.withValues(
-              alpha: 0.10 + 0.22 * _strength.value,
+              alpha: (theme.isDark ? 0.08 : 0.14) + 0.22 * _strength.value,
             ),
-            borderRadius: BorderRadius.zero,
-            border: Border.all(
-              color: theme.accentText.withValues(alpha: 0.35),
-              width: 0.8,
-            ),
+            border: Border(left: BorderSide(color: theme.trace, width: 3)),
           ),
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: child,
@@ -1049,10 +1008,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               Expanded(child: Divider(color: theme.divider, endIndent: 12)),
               Text(
                 context.t.aiStoryReaderEnd,
-                style: theme.bodyFont.copyWith(
-                  color: theme.textSecondary,
-                  fontSize: 12,
-                ),
+                style: theme.ui(14, weight: 700, color: theme.textSecondary),
               ),
               Expanded(child: Divider(color: theme.divider, indent: 12)),
             ],
@@ -1104,65 +1060,47 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       if (target.group != null) target.group!,
       if (target.code == null && target.group == null) entryHeadline(target),
     ].join(' ');
-    return Material(
+    return ThemeAwareCard(
       key: key,
-      color: theme.cardSurface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-        side: BorderSide(color: theme.cardBorder),
+      padding: const EdgeInsets.fromLTRB(12, 14, 16, 12),
+      onTap: () => Navigator.of(context).pushReplacement(
+        smoothPageRoute<void>(
+          builder: (_) => StoryReaderPage(storyId: target.rawId!),
+        ),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.zero,
-        onTap: () => Navigator.of(context).pushReplacement(
-          smoothPageRoute<void>(
-            builder: (_) => StoryReaderPage(storyId: target.rawId!),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          child: Row(
-            mainAxisAlignment:
-                trailingIcon ? MainAxisAlignment.end : MainAxisAlignment.start,
-            children: [
-              if (!trailingIcon) Icon(icon, color: theme.accentText, size: 22),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: trailingIcon
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: theme.bodyFont.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 11,
-                      ),
-                    ),
-                    Text(
-                      text,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.titleFont.copyWith(fontSize: 14),
-                    ),
-                  ],
+      child: Row(
+        mainAxisAlignment:
+            trailingIcon ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!trailingIcon) Icon(icon, color: theme.textPrimary, size: 22),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: trailingIcon
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.ui(13, weight: 600, color: theme.textSecondary),
                 ),
-              ),
-              if (trailingIcon) Icon(icon, color: theme.accentText, size: 22),
-            ],
+                Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.heading(15),
+                ),
+              ],
+            ),
           ),
-        ),
+          if (trailingIcon) Icon(icon, color: theme.textPrimary, size: 22),
+        ],
       ),
     );
   }
-
   Widget _unavailable(AppThemeTokens theme) => Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            context.t.aiCitedLinesUnavailable,
-            textAlign: TextAlign.center,
-            style: theme.bodyFont.copyWith(color: theme.textSecondary),
-          ),
+          padding: const EdgeInsets.all(24),
+          child: EmptyState(text: context.t.aiCitedLinesUnavailable),
         ),
       );
 
@@ -1201,12 +1139,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
                     speaker,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.accentText,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
-                    ),
+                    style: theme.ui(14, weight: 700, color: theme.textSecondary),
                   ),
                 ),
               if (kindTag != null)
@@ -1214,25 +1147,22 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
                     kindTag,
-                    style: theme.bodyFont.copyWith(
-                      color: theme.textMuted,
-                      fontSize: 10.5,
-                      letterSpacing: 0.8,
-                    ),
+                    style: theme.eyebrow(color: theme.textMuted, size: 12),
                   ),
                 ),
               Text(
                 withPlaceholders(line.content, nickname),
-                style: theme.bodyFont.copyWith(
-                  fontFamily: readingFontFamily,
+                style: readingStyle(
+                  theme,
+                  size: narration && !plain ? 15.5 : 16.5,
                   color: narration && !plain
                       ? theme.textSecondary
                       : theme.textPrimary,
+                ).copyWith(
                   fontStyle: narration && !plain
                       ? FontStyle.italic
                       : FontStyle.normal,
-                  fontSize: narration && !plain ? 14.5 : 15.5,
-                  height: 1.7,
+                  height: 1.8,
                 ),
               ),
             ],
@@ -1240,18 +1170,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         ),
         const SizedBox(width: 8),
         SizedBox(
-          width: 26,
+          width: 32,
           child: Padding(
             padding: EdgeInsets.only(
-              top: showName ? 20 : (kindTag != null ? 18 : 4),
+              top: showName ? 24 : (kindTag != null ? 20 : 6),
             ),
             child: Text(
               '${(line.shownIndex ?? line.lineIndex) + 1}',
               textAlign: TextAlign.right,
-              style: theme.bodyFont.copyWith(
-                color: theme.textSecondary.withValues(alpha: 0.5),
-                fontSize: 9.5,
-              ),
+              style: theme.field(color: theme.textMuted, size: 11.5),
             ),
           ),
         ),
@@ -1262,7 +1189,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       padding: const EdgeInsets.only(left: 8),
       decoration: BoxDecoration(
         border: Border(
-          left: BorderSide(color: theme.accentPrimary, width: 3),
+          left: BorderSide(color: theme.trace, width: 3),
         ),
       ),
       child: content,

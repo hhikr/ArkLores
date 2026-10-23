@@ -10,6 +10,7 @@ import '../../core/userdata/library_ref.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/widgets/ef_widgets.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -28,10 +29,10 @@ class LibrarySearchButton extends StatelessWidget {
   final String? label;
 
   @override
-  Widget build(BuildContext context) => IconButton(
+  Widget build(BuildContext context) => SquareIconButton(
         key: const ValueKey('library-search'),
         tooltip: context.t.librarySearchHint,
-        icon: const Icon(Icons.search_sharp),
+        icon: Icons.search_sharp,
         onPressed: () => openSearch(context, scope: scope, label: label),
       );
 }
@@ -51,12 +52,12 @@ class SearchFurtherButton extends StatelessWidget {
   final String? label;
 
   @override
-  Widget build(BuildContext context) => TextButton.icon(
+  Widget build(BuildContext context) => AppButton(
+        context.t.librarySearchFurther(query.trim()),
         key: const ValueKey('search-further'),
+        icon: Icons.manage_search_sharp,
         onPressed: () =>
             openSearch(context, scope: scope, label: label, query: query.trim()),
-        icon: const Icon(Icons.manage_search_sharp, size: 18),
-        label: Text(context.t.librarySearchFurther(query.trim())),
       );
 }
 
@@ -144,11 +145,8 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
                     context.t.librarySearchIn(label),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.bodyFont.copyWith(fontSize: 12.5),
+                    style: theme.ui(14, weight: 600),
                   ),
-                  backgroundColor: theme.cardSurface,
-                  side: BorderSide(color: theme.cardBorder),
-                  visualDensity: VisualDensity.compact,
                   deleteIcon: const Icon(Icons.close_sharp, size: 16),
                   deleteButtonTooltipMessage: context.t.librarySearchEverywhere,
                   onDeleted: () => setState(() => _scope = everywhere),
@@ -157,11 +155,18 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
             ),
           Expanded(
             child: result == null
-                ? const SizedBox.shrink()
+                ? Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      context.t.librarySearchHint,
+                      textAlign: TextAlign.center,
+                      style: theme.text(14, color: theme.textMuted),
+                    ),
+                  )
                 : result.when(
                     skipLoadingOnReload: true,
                     loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                        const LoadingView(),
                     error: (_, __) => LibraryMessage(
                       icon: Icons.search_off_sharp,
                       title: context.t.libraryNoResults,
@@ -187,7 +192,12 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
       );
     }
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         if (!r.hasNameHits && !r.isEmpty)
           _note(theme, context.t.librarySearchNoNameMatch(q)),
@@ -200,7 +210,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
           r.similar,
         ),
         if (r.mentions.isNotEmpty) ...[
-          _heading(theme, context.t.librarySearchMentions),
+          _heading(theme, context.t.librarySearchMentions, r.mentions.length),
           for (final hit in r.mentions) ...[
             _textHitRow(theme, hit, count: true),
             rowDivider(theme),
@@ -238,7 +248,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
           loading: () => [
             const Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: BusyMark()),
             ),
           ],
           error: (e, _) => [
@@ -276,7 +286,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
       list.isEmpty
           ? const []
           : [
-              _heading(theme, heading),
+              _heading(theme, heading, list.length),
               for (final c in list) ...[
                 LibraryRow(
                   key: ValueKey('hit-collection-${c.id}'),
@@ -301,7 +311,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
     if (list.isEmpty) return const [];
     final progress = ref.watch(readingProgressProvider).valueOrNull ?? const {};
     return [
-      if (heading != null) _heading(theme, heading),
+      if (heading != null) _heading(theme, heading, list.length),
       for (final e in list) ...[
         e.isStory
             ? StoryRow(
@@ -326,7 +336,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
       if (e.collectionName != null) e.collectionName!,
       if (e.code != null) e.code!,
       if (count && hit.count > 1) context.t.librarySearchMatchCount(hit.count),
-    ].join(' · ');
+    ].join(' / ');
     final story = e.rawId;
     return LibraryRow(
       key: ValueKey('hit-text-${e.id}'),
@@ -351,51 +361,29 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
     required String label,
     required VoidCallback onTap,
   }) {
-    final theme = ref.watch(themeProvider);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      padding: const EdgeInsets.only(top: 12),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: TextButton.icon(
+        child: AppButton(
+          label,
           key: ValueKey(key),
+          icon: icon,
+          small: true,
           onPressed: onTap,
-          icon: Icon(icon, size: 18, color: theme.accentText),
-          label: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.bodyFont.copyWith(
-              color: theme.accentText,
-              fontSize: 13.5,
-            ),
-          ),
         ),
       ),
     );
   }
 
   Widget _note(AppThemeTokens theme, String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
         child: Text(
           text,
-          style: theme.bodyFont.copyWith(
-            color: theme.textSecondary,
-            fontSize: 12.5,
-            height: 1.5,
-          ),
+          style: theme.text(14, color: theme.textSecondary, height: 1.55),
         ),
       );
 
-  Widget _heading(AppThemeTokens theme, String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-        child: Text(
-          text,
-          style: theme.bodyFont.copyWith(
-            color: theme.textMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
-        ),
-      );
+  Widget _heading(AppThemeTokens theme, String text, [int? count]) =>
+      GroupHeading(title: text, count: count);
 }

@@ -477,12 +477,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aiAnswerDetails(int count) {
-    return 'Details · $count points';
+    return 'Details / $count points';
   }
 
   @override
   String aiEvidenceSummary(int count, int stories) {
-    return '$count citations · $stories stories';
+    return '$count citations / $stories stories';
   }
 
   @override
@@ -681,7 +681,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String storyReaderResumed(int line) {
-    return 'Continue · line $line';
+    return 'Continue / line $line';
   }
 
   @override
@@ -860,12 +860,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aiWorkSummary(int calls, int reads) {
-    return '$calls lookups · $reads stories read';
+    return '$calls lookups / $reads stories read';
   }
 
   @override
   String aiWorkHits(int hits, int stories) {
-    return '$hits hits · $stories stories';
+    return '$hits hits / $stories stories';
   }
 
   @override
@@ -1355,7 +1355,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String kbVectorSummary(int stories, int records) {
-    return '$stories story vectors · $records record vectors';
+    return '$stories story vectors / $records record vectors';
   }
 
   @override
@@ -1526,7 +1526,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String aiWikiVersion(String site, String date) {
-    return '$site · version read on $date';
+    return '$site / version read on $date';
   }
 
   @override
@@ -1622,4 +1622,87 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbEndfieldTitle => 'Endfield knowledge base';
+
+  @override
+  String get libraryFigureStories => 'Stories';
+
+  @override
+  String get libraryFigureCollections => 'Collections';
+
+  @override
+  String get libraryFigureEntries => 'Codex entries';
+
+  @override
+  String get libraryOpenKnowledgeBase => 'Open knowledge base';
+
+  @override
+  String get wikiTools => 'Page tools';
+
+  @override
+  String get wikiToolsClose => 'Close page tools';
+
+  @override
+  String get wikiZoomOut => 'Smaller text';
+
+  @override
+  String get wikiZoomIn => 'Larger text';
+
+  @override
+  String get wikiRefresh => 'Reload';
+
+  @override
+  String get wikiDarkPage => 'Dark page';
+
+  @override
+  String get wikiBookmarkAdd => 'Add bookmark';
+
+  @override
+  String get wikiBookmarkRemove => 'Remove bookmark';
+
+  @override
+  String get bookmarksRemoved => 'Bookmark removed';
+
+  @override
+  String get commonUndo => 'Undo';
+
+  @override
+  String get bookmarksDelete => 'Remove';
+
+  @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get settingsThemeSystemShort => 'System';
+
+  @override
+  String get settingsThemeSystem => 'Light or dark, as the system is';
+
+  @override
+  String get settingsReadingFont => 'Reading font';
+
+  @override
+  String get settingsReadingFontDesc =>
+      'The font of stories, files and answers';
+
+  @override
+  String get settingsReadingFontSans => 'Sans';
+
+  @override
+  String get settingsReadingFontKai => 'LXGW WenKai';
+
+  @override
+  String get apiSettingsShowKey => 'Show key';
+
+  @override
+  String get apiSettingsHideKey => 'Hide key';
+
+  @override
+  String get wikiSourcesResetConfirm =>
+      'The sites go back to the built-in list; added sites are removed.';
+
+  @override
+  String get aiConfigRequiredTitle => 'Set up the chat service first';
+
+  @override
+  String get aiAskTry => 'Try asking';
 }

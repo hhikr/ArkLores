@@ -62,7 +62,7 @@ void main() {
       );
 
   void tall(WidgetTester tester) {
-    tester.view.physicalSize = const Size(640, 1280);
+    tester.view.physicalSize = const Size(640, 2400);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -418,7 +418,7 @@ void main() {
     await tester.pumpWidget(app(const StoryReaderPage(storyId: _story), spoken));
     await settle(tester);
     expect(styleOf('旁白一句。')?.fontStyle, FontStyle.italic);
-    expect(styleOf('你好，博士。')?.fontFamily, readingFontFamily);
+    expect(styleOf('你好，博士。')?.fontFamily, isNull); // the sans by default (Settings)
 
     // All narration (a month squad's story): plain.
     await tester.pumpWidget(app(
