@@ -25,7 +25,7 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
 
 ## 发布资产
 
-- [v0.19.0](https://github.com/hhikr/ArkLores/releases/tag/v0.19.0)：`ArkLores-0.19.0.apk`（更跟手的界面、同时开几个对话、设置分类、开屏与字体、检索与出处的修正），游戏知识库沿用 v0.17.0 资产。
+- [v0.19.0](https://github.com/hhikr/ArkLores/releases/tag/v0.19.0)：`ArkLores-0.19.0.apk`（Quality of Life 更新：更跟手的界面、同时开几个对话、设置分类、开屏与字体、检索与出处的修正），游戏知识库沿用 v0.17.0 资产。
 - [v0.18.0](https://github.com/hhikr/ArkLores/releases/tag/v0.18.0)：`ArkLores-0.18.0.apk`，内含《大地巡旅》完整正文与向量；游戏知识库继续沿用 v0.17.0 资产。
 - [v0.17.1](https://github.com/hhikr/ArkLores/releases/tag/v0.17.1)：`ArkLores-0.17.1.apk`（换页动效、Wiki 标签与来源、关卡排列的修正），知识库沿用 v0.17.0 上的资产。
 - [v0.17.0](https://github.com/hhikr/ArkLores/releases/tag/v0.17.0)：`ArkLores-0.17.0.apk`（全 App 的新界面；项目签名，可覆盖安装 v0.10.0 及之后的版本；从 v0.9 及更早版本升级需先卸载一次）；

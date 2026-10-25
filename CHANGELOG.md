@@ -4,7 +4,7 @@ All notable changes to ArkLores will be documented in this file.
 
 ## [0.19.0] - 2026-10-25
 
-整个 App 更跟手，问答可以同时开几个对话，设置分类，开屏与字体换新，以及问答检索与出处的工程修正。Android build 41。两个游戏知识库沿用 v0.17.0 的发布资产。
+**Quality of Life 更新**：不加新的资料或玩法，专门打磨日常使用的手感——整个 App 更跟手，问答可以同时开几个对话，设置分类，开屏与字体换新，以及问答检索与出处的工程修正。Android build 41。两个游戏知识库沿用 v0.17.0 的发布资产。
 
 ### 问答
 
