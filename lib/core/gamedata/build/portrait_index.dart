@@ -52,8 +52,14 @@ const speakerNamesDdl = '''CREATE TABLE speaker_names (
   top_group TEXT NOT NULL,
   top_sprite TEXT NOT NULL,
   owns_group INTEGER NOT NULL,
-  highlight INTEGER NOT NULL
+  highlight INTEGER NOT NULL,
+  mentions INTEGER NOT NULL
 ) WITHOUT ROWID''';
+
+/// A name found in the story text more than this many times per line it
+/// speaks is a common word or part of longer words (a people, a title, a
+/// word inside a place name), not something to highlight in answers.
+const highlightMaxMentionsPerLine = 3;
 const _derived = {
   portraitSpritesTable: portraitSpritesDdl,
   portraitGroupsTable: portraitGroupsDdl,
@@ -182,23 +188,32 @@ Future<void> rebuildPortraitIndex(Database db) async {
           EXISTS(SELECT 1 FROM speaker_portraits q JOIN portrait_groups g ON g.group_id=q.group_id
             WHERE q.speaker=p.speaker AND q.lines*2 >= g.lines
             AND q.speaker=(SELECT r.speaker FROM speaker_portraits r WHERE r.group_id=q.group_id
-              ORDER BY r.lines DESC, r.speaker LIMIT 1)), 0
+              ORDER BY r.lines DESC, r.speaker LIMIT 1)), 0, 0
         FROM speaker_portraits p GROUP BY p.speaker''');
       final letters = RegExp(r'\p{L}', unicode: true);
+      final candidates = <String, int>{
+        for (final row in await txn.query(
+          speakerNamesTable,
+          where: 'lines >= 3 AND owns_group = 1',
+        ))
+          if ((row['speaker'] as String).runes.length >= 2 &&
+              letters.hasMatch(row['speaker'] as String))
+            row['speaker'] as String: row['lines'] as int,
+      };
+      final mentions = await _countMentions(txn, candidates.keys);
       final highlights = txn.batch();
-      for (final row in await txn.query(
-        speakerNamesTable,
-        where: 'lines >= 3 AND owns_group = 1',
-      )) {
-        final speaker = row['speaker'] as String;
-        if (speaker.runes.length >= 2 && letters.hasMatch(speaker)) {
-          highlights.update(
-            speakerNamesTable,
-            {'highlight': 1},
-            where: 'speaker=?',
-            whereArgs: [speaker],
-          );
-        }
+      for (final MapEntry(key: speaker, value: lines) in candidates.entries) {
+        final found = mentions[speaker]!;
+        highlights.update(
+          speakerNamesTable,
+          {
+            'mentions': found,
+            'highlight':
+                found <= lines * highlightMaxMentionsPerLine ? 1 : 0,
+          },
+          where: 'speaker=?',
+          whereArgs: [speaker],
+        );
       }
       await highlights.commit(noResult: true);
     } finally {
@@ -214,4 +229,31 @@ Future<void> rebuildPortraitIndex(Database db) async {
       'portrait_group_count': '${counts.single['groups']}',
     });
   });
+}
+
+/// How many times each of [names] occurs in the dialogue and narration text,
+/// inside longer words too.
+Future<Map<String, int>> _countMentions(
+  DatabaseExecutor db,
+  Iterable<String> names,
+) async {
+  final counts = {for (final name in names) name: 0};
+  final byFirst = <int, List<String>>{};
+  for (final name in counts.keys) {
+    (byFirst[name.codeUnitAt(0)] ??= []).add(name);
+  }
+  if (byFirst.isEmpty) return counts;
+  for (final row in await db.rawQuery(
+    "SELECT content FROM story_lines WHERE kind IN ('dialogue', 'narration')",
+  )) {
+    final text = row['content'] as String;
+    for (var i = 0; i < text.length; i++) {
+      final starting = byFirst[text.codeUnitAt(i)];
+      if (starting == null) continue;
+      for (final name in starting) {
+        if (text.startsWith(name, i)) counts[name] = counts[name]! + 1;
+      }
+    }
+  }
+  return counts;
 }

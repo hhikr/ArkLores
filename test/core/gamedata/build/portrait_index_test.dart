@@ -113,6 +113,7 @@ void main() {
       'top_sprite': a,
       'owns_group': 1,
       'highlight': 1,
+      'mentions': 0,
     });
     for (final name in ['W', '12', 'Short', 'Minor', 'Beta']) {
       expect(
@@ -142,6 +143,34 @@ void main() {
       '1',
     );
     await validateGameDataDatabase(db);
+  });
+  test('a name the text uses far more than it speaks is not highlighted',
+      () async {
+    for (var i = 0; i < 3; i++) {
+      await add('Gamma', r'avg_gamma#1$1');
+      await add('Delta', r'avg_delta#1$1');
+    }
+    // Gamma: 10 mentions for 3 lines (> 3 per line); Delta: 9, exactly 3 per line.
+    for (var i = 0; i < 5; i++) {
+      await db.insert('story_lines', {
+        'id': 'n$i',
+        'game': 'arknights',
+        'story_id': 'n',
+        'line_index': i,
+        'content': 'xGammay Gamma${i < 4 ? ' Delta Delta' : ' Delta'}',
+        'language': 'zh_CN',
+        'source_path': 'test',
+        'kind': 'narration',
+      });
+    }
+    await rebuildPortraitIndex(db);
+    final names = {
+      for (final n in await db.query(speakerNamesTable)) n['speaker']: n,
+    };
+    expect(names['Gamma']!['mentions'], 10);
+    expect(names['Gamma']!['highlight'], 0);
+    expect(names['Delta']!['mentions'], 9);
+    expect(names['Delta']!['highlight'], 1);
   });
   test('ties choose smallest speaker and group, exactly half owns group',
       () async {

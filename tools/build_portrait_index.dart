@@ -102,6 +102,9 @@ Future<void> main(List<String> args) async {
     for (final skip in skipped.take(20)) {
       stdout.writeln('  $skip');
     }
+    if (skipped.length > 20) {
+      stdout.writeln('  … ${skipped.length - 20} more');
+    }
     for (final table in [
       storyLinePortraitsTable,
       portraitSpritesTable,
