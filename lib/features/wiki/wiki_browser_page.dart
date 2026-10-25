@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/bars_provider.dart';
 import '../../shared/providers/bookmark_provider.dart';
 import '../../shared/providers/handoff_provider.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -719,6 +720,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     if (url != _currentUrls[index]) {
       setState(() => _currentUrls[index] = url);
       _saveWikiUrl(index, url);
+      // Another page: the bars back.
+      if (index == _tabController.index) _bars.show(ref);
     }
   }
 
@@ -741,6 +744,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// below them (a page cannot be told to leave room under a dock).
   Widget _buildSiteBar(AppThemeTokens theme) {
     return MainTopBar(
+      hides: true,
       leading: SingleChildScrollView(
         key: const ValueKey('wiki-site-bar'),
         scrollDirection: Axis.horizontal,
@@ -766,6 +770,18 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         onTap: () => _tabController.index = index,
         compact: true,
       );
+
+  /// Hides the bars as the page is scrolled on, shows them back (and at its
+  /// top), for the site shown.
+  final BarsFollower _bars = BarsFollower();
+  final Map<int, int> _scrollY = {};
+
+  void _onScrolled(int index, int y) {
+    final before = _scrollY[index];
+    _scrollY[index] = y;
+    if (index != _tabController.index || before == null || !mounted) return;
+    _bars.moved(ref, (y - before).toDouble(), atTop: y <= 0);
+  }
   // ─── Build ───────────────────────────────────────────────────────
 
   /// 0.13: a page asked for by another page (an answer's wiki citation)
@@ -857,6 +873,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                       onTitleChanged: _onTitleChanged,
                       onUrlChanged: _onUrlChanged,
                       onHistoryChanged: _onHistoryChanged,
+                      onScrolled: _onScrolled,
                     ),
                   );
                 }),
@@ -896,8 +913,12 @@ class _WikiTabView extends StatefulWidget {
     required this.onTitleChanged,
     required this.onUrlChanged,
     required this.onHistoryChanged,
+    required this.onScrolled,
   });
   final int index;
+
+  /// The page scrolled to [y] (CSS pixels from its top).
+  final void Function(int index, int y) onScrolled;
   final String initialUrl;
   final AppThemeTokens theme;
   final bool isDarkMode;
@@ -1092,6 +1113,8 @@ class _WikiTabViewState extends State<_WikiTabView> {
           onTitleChanged: (controller, title) {
             widget.onTitleChanged(widget.index, title);
           },
+          onScrollChanged: (controller, x, y) =>
+              widget.onScrolled(widget.index, y),
           onUpdateVisitedHistory: (controller, url, isReload) async {
             if (url != null) {
               widget.onUrlChanged(widget.index, url.toString());

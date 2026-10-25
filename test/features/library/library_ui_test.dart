@@ -192,15 +192,17 @@ List<Override> overrides(MemoryUserStore store) => [
                 : id.startsWith('investigation:')
                     ? const [
                         LibraryEntry(
-                            id: 'document:ef/paper_1',
-                            type: 'document',
-                            name: '一张纸条',
-                            rawId: 'ef/paper_1',),
+                          id: 'document:ef/paper_1',
+                          type: 'document',
+                          name: '一张纸条',
+                          rawId: 'ef/paper_1',
+                        ),
                         LibraryEntry(
-                            id: 'document:ef/report_1',
-                            type: 'document',
-                            name: '调查结论',
-                            rawId: 'ef/report_1',),
+                          id: 'document:ef/report_1',
+                          type: 'document',
+                          name: '调查结论',
+                          rawId: 'ef/report_1',
+                        ),
                       ]
                     : const [],
       ),
@@ -247,13 +249,18 @@ List<Override> overrides(MemoryUserStore store) => [
       operatorOwnedProvider.overrideWith(
         (ref, id) async => const [
           LibraryEntry(
-              id: 'module:m1', type: 'module', name: '模组甲', code: 'X-A',),
+            id: 'module:m1',
+            type: 'module',
+            name: '模组甲',
+            code: 'X-A',
+          ),
           LibraryEntry(id: 'skin:s1', type: 'skin', name: '皮肤甲'),
           LibraryEntry(
-              id: 'operator_stage:p1',
-              type: 'operator_stage',
-              name: '模拟场景',
-              code: 'EX',),
+            id: 'operator_stage:p1',
+            type: 'operator_stage',
+            name: '模拟场景',
+            code: 'EX',
+          ),
         ],
       ),
       entryTextsProvider.overrideWith(
@@ -446,11 +453,20 @@ void main() {
             (ref, game) async => game == Game.endfield
                 ? const [
                     ShelfSummary(
-                        kind: 'ef/main', collections: 64, stories: 1656,),
+                      kind: 'ef/main',
+                      collections: 64,
+                      stories: 1656,
+                    ),
                     ShelfSummary(
-                        kind: 'ef/archive', collections: 23, stories: 0,),
+                      kind: 'ef/archive',
+                      collections: 23,
+                      stories: 0,
+                    ),
                     ShelfSummary(
-                        kind: 'ef/memory', collections: 80, stories: 1476,),
+                      kind: 'ef/memory',
+                      collections: 80,
+                      stories: 1476,
+                    ),
                   ]
                 : const [
                     ShelfSummary(kind: 'main', collections: 18, stories: 463),
@@ -497,7 +513,9 @@ void main() {
     expect(find.text('主线任务'), findsOneWidget);
     expect(find.text('情报档案库'), findsOneWidget);
     expect(
-        find.byKey(const ValueKey('library-missing-endfield')), findsNothing,);
+      find.byKey(const ValueKey('library-missing-endfield')),
+      findsNothing,
+    );
 
     // Back to Arknights: the page is as it was.
     await tester.tap(find.byKey(const ValueKey('library-tab-0')));
@@ -623,9 +641,13 @@ void main() {
     // The kind is named where it changes; the next part of the same kind is
     // set off by a rule alone.
     expect(
-        find.byKey(const ValueKey('story-reader-section-0')), findsOneWidget,);
+      find.byKey(const ValueKey('story-reader-section-0')),
+      findsOneWidget,
+    );
     expect(
-        find.byKey(const ValueKey('story-reader-section-2')), findsOneWidget,);
+      find.byKey(const ValueKey('story-reader-section-2')),
+      findsOneWidget,
+    );
     expect(find.text('对话'), findsOneWidget);
     expect(find.text('通讯'), findsOneWidget);
     expect(find.text('第二段。'), findsOneWidget);
@@ -655,11 +677,17 @@ void main() {
             (ref, id) async => const [
               StoryLineEntry(lineIndex: 0, content: '对话', kind: 'section'),
               StoryLineEntry(
-                  lineIndex: 1, content: '甲与乙在谷地相遇。', kind: 'summary',),
+                lineIndex: 1,
+                content: '甲与乙在谷地相遇。',
+                kind: 'summary',
+              ),
               StoryLineEntry(lineIndex: 2, speaker: '甲', content: '第一段。'),
               StoryLineEntry(lineIndex: 3, content: '过场动画', kind: 'section'),
               StoryLineEntry(
-                  lineIndex: 4, content: '过场里的一句。', kind: 'subtitle',),
+                lineIndex: 4,
+                content: '过场里的一句。',
+                kind: 'subtitle',
+              ),
             ],
           ),
           storyCatalogEntryProvider.overrideWith(
@@ -686,7 +714,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byKey(const ValueKey('story-reader-synopsis')), findsNothing);
     expect(
-        find.byKey(const ValueKey('story-reader-summary-1')), findsOneWidget,);
+      find.byKey(const ValueKey('story-reader-summary-1')),
+      findsOneWidget,
+    );
     expect(find.text('甲与乙在谷地相遇。'), findsNothing);
     expect(find.text('过场动画'), findsOneWidget);
     expect(find.text('过场里的一句。'), findsOneWidget);
@@ -742,7 +772,10 @@ void main() {
             (ref, id) async => [
               for (var i = 0; i < 200; i++)
                 StoryLineEntry(
-                    lineIndex: i, speaker: '甲', content: '第${i + 1}句。',),
+                  lineIndex: i,
+                  speaker: '甲',
+                  content: '第${i + 1}句。',
+                ),
             ],
           ),
         ],
@@ -757,8 +790,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('1 / 200'), findsOneWidget);
-    expect(find.byKey(const ValueKey('story-reader-progress-bar')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('story-reader-progress-bar')),
+      findsOneWidget,
+    );
     await tester.drag(
       find.byKey(const ValueKey('story-reader-scroll')),
       const Offset(0, -3000),
@@ -768,6 +803,72 @@ void main() {
         .widget<Text>(find.byKey(const ValueKey('story-reader-progress')))
         .data!;
     expect(int.parse(shown.split(' / ').first), greaterThan(20));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('holding the title opens a track that moves through the text',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => [
+              for (var i = 0; i < 400; i++)
+                StoryLineEntry(
+                  lineIndex: i,
+                  speaker: '甲',
+                  content: '第${i + 1}句。',
+                ),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const StoryReaderPage(storyId: 'a/long.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('1 / 400'), findsOneWidget);
+    final scrub = find.byKey(const ValueKey('story-reader-scrub'));
+    expect(scrub, findsNothing);
+
+    final title = tester.getCenter(find.byKey(const ValueKey('page-title')));
+    final gesture = await tester.startGesture(title);
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    expect(scrub, findsOneWidget, reason: 'the track opens under the title');
+    // Half the screen's width to the right: about half the text further on.
+    await gesture.moveBy(const Offset(200, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(200, 0));
+    await tester.pump();
+    await tester.pump();
+    final at = int.parse(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('story-reader-progress')))
+          .data!
+          .split(' / ')
+          .first,
+    );
+    expect(at, inInclusiveRange(150, 260));
+    expect(find.text('甲：第$at句。'), findsOneWidget, reason: 'in the track');
+    expect(
+      find.text('第$at句。'),
+      findsOneWidget,
+      reason: 'the text follows the finger',
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(scrub, findsNothing, reason: 'let go, the track closes');
+    final shown = tester
+        .widget<Text>(find.byKey(const ValueKey('story-reader-progress')))
+        .data!;
+    expect(int.parse(shown.split(' / ').first), inInclusiveRange(150, 260));
     expect(tester.takeException(), isNull);
   });
 
@@ -783,7 +884,10 @@ void main() {
             (ref, id) async => [
               for (var i = 0; i < 6; i++)
                 StoryLineEntry(
-                    lineIndex: i, speaker: '甲', content: '第${i + 1}句。',),
+                  lineIndex: i,
+                  speaker: '甲',
+                  content: '第${i + 1}句。',
+                ),
             ],
           ),
           storyCatalogEntryProvider.overrideWith(
@@ -832,11 +936,15 @@ void main() {
       (tester) async {
     await pumpApp(tester, const MaterialsPage());
     expect(
-        find.byKey(const ValueKey('library-missing-endfield')), findsNothing,);
+      find.byKey(const ValueKey('library-missing-endfield')),
+      findsNothing,
+    );
     await tester.tap(find.byKey(const ValueKey('library-tab-1')));
     await tester.pumpAndSettle();
     expect(
-        find.byKey(const ValueKey('library-missing-endfield')), findsOneWidget,);
+      find.byKey(const ValueKey('library-missing-endfield')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('shelf-ef/main')), findsNothing);
   });
 
@@ -859,12 +967,16 @@ void main() {
     await tester.pumpAndSettle();
     await shoot(tester, 'library_collection');
     expect(find.text('风暴瞭望'), findsWidgets);
-    expect(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('story-row-story:a/1_beg.txt')),
+      findsOneWidget,
+    );
     expect(find.textContaining('官方梗概'), findsOneWidget);
     // A short list of one kind is listed in place, not behind a row.
     expect(
-        find.byKey(const ValueKey('collection-inline-stage')), findsOneWidget,);
+      find.byKey(const ValueKey('collection-inline-stage')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('collection-type-stage')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')));
@@ -932,19 +1044,29 @@ void main() {
     await shoot(tester, 'library_operator');
     expect(find.text('干员甲'), findsWidgets);
     expect(find.text('干员密录'), findsWidgets);
-    expect(find.byKey(const ValueKey('operator-record-story_x_set_1')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('operator-record-story_x_set_1')),
+      findsOneWidget,
+    );
     await tester.drag(
-        find.byType(CustomScrollView).first, const Offset(0, -2000),);
+      find.byType(CustomScrollView).first,
+      const Offset(0, -2000),
+    );
     await tester.pumpAndSettle();
     expect(
-        find.byKey(const ValueKey('operator-owned-module:m1')), findsOneWidget,);
+      find.byKey(const ValueKey('operator-owned-module:m1')),
+      findsOneWidget,
+    );
     expect(
-        find.byKey(const ValueKey('operator-owned-skin:s1')), findsOneWidget,);
+      find.byKey(const ValueKey('operator-owned-skin:s1')),
+      findsOneWidget,
+    );
     // The simulation stages carry their own name, not "密录关卡".
     expect(find.text('悖论模拟'), findsWidgets);
-    expect(find.byKey(const ValueKey('operator-owned-operator_stage:p1')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('operator-owned-operator_stage:p1')),
+      findsOneWidget,
+    );
     expect(find.textContaining('嗅觉敏锐'), findsOneWidget); // the profile text
     // The ids of the paradox simulation / module codes are not shown, and
     // the profile is the first section under the card.
@@ -952,7 +1074,9 @@ void main() {
     expect(find.text('EX'), findsNothing);
     expect(find.text('X-A'), findsNothing);
     await tester.drag(
-        find.byType(CustomScrollView).first, const Offset(0, 2000),);
+      find.byType(CustomScrollView).first,
+      const Offset(0, 2000),
+    );
     await tester.pumpAndSettle();
     final profileAt = tester.getTopLeft(find.text('干员档案').first).dy;
     final recordsAt = tester.getTopLeft(find.text('干员密录').last).dy;
@@ -1124,8 +1248,10 @@ void main() {
     await pumpApp(tester, const CollectionPage(collectionId: 'rogue_x'));
     expect(find.byKey(const ValueKey('collection-intro')), findsOneWidget);
     expect(find.text('这是一个主题的小小介绍。'), findsOneWidget);
-    expect(find.byKey(const ValueKey('part-roguelike_ending:rogue_x/e1')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('part-roguelike_ending:rogue_x/e1')),
+      findsOneWidget,
+    );
     expect(find.text('结局的一句话。'), findsOneWidget);
     expect(find.textContaining('2026年7月'), findsOneWidget);
     // The headings that split the page into stories and related texts are
@@ -1149,7 +1275,9 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(
-        find.byKey(const ValueKey('collection-inline-stage')), findsOneWidget,);
+      find.byKey(const ValueKey('collection-inline-stage')),
+      findsOneWidget,
+    );
     await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
     await tester.pumpAndSettle();
     // An ending's page: its stories, in order.
@@ -1191,22 +1319,30 @@ void main() {
     expect(find.text('关卡内对话'), findsOneWidget);
     expect(find.textContaining('第0句。'), findsWidgets);
     // Not a row to open: the dialogue is on the page.
-    expect(find.byKey(const ValueKey('part-story-story:t/battle.txt')),
-        findsNothing,);
+    expect(
+      find.byKey(const ValueKey('part-story-story:t/battle.txt')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
   testWidgets(
       "an investigation's documents and report open their pages, not the reader",
       (tester) async {
     await pumpApp(
-        tester, const EntryPage(entryId: 'investigation:ef/research_1'),);
+      tester,
+      const EntryPage(entryId: 'investigation:ef/research_1'),
+    );
     await tester.pumpAndSettle();
     expect(find.text('包含'), findsWidgets);
     expect(find.text('解锁的故事'), findsNothing);
-    expect(find.byKey(const ValueKey('entry-row-document:ef/report_1')),
-        findsOneWidget,);
-    expect(find.byKey(const ValueKey('story-row-document:ef/report_1')),
-        findsNothing,);
+    expect(
+      find.byKey(const ValueKey('entry-row-document:ef/report_1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('story-row-document:ef/report_1')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -1214,10 +1350,14 @@ void main() {
       '"unlocked" heading', (tester) async {
     await pumpApp(tester, const EntryPage(entryId: 'sandbox_act:s/1'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('part-story-story:a/1_beg.txt')),
-        findsOneWidget,);
-    expect(find.byKey(const ValueKey('part-story-story:a/2_beg.txt')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('part-story-story:a/1_beg.txt')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('part-story-story:a/2_beg.txt')),
+      findsOneWidget,
+    );
     expect(find.text('解锁的故事'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -1230,8 +1370,10 @@ void main() {
     await tester.pumpAndSettle();
     await shoot(tester, 'library_search');
     expect(find.byKey(const ValueKey('hit-collection-main_9')), findsOneWidget);
-    expect(find.byKey(const ValueKey('story-row-story:a/1_beg.txt')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('story-row-story:a/1_beg.txt')),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
     // Names matched: the texts are searched only on request.
     expect(find.byKey(const ValueKey('search-text')), findsOneWidget);
@@ -1251,8 +1393,10 @@ void main() {
     expect(find.text('相近的名字'), findsOneWidget);
     expect(find.byKey(const ValueKey('entry-row-enemy:e1')), findsOneWidget);
     expect(find.text('正文提到'), findsOneWidget);
-    expect(find.byKey(const ValueKey('hit-text-story:a/1_beg.txt')),
-        findsOneWidget,);
+    expect(
+      find.byKey(const ValueKey('hit-text-story:a/1_beg.txt')),
+      findsOneWidget,
+    );
     expect(find.textContaining('…提到无此名的一行…'), findsOneWidget);
     expect(find.byKey(const ValueKey('search-text')), findsNothing);
     // No embedding service configured: no semantic button.
@@ -1319,7 +1463,9 @@ void main() {
       isNull,
     );
     await tester.enterText(
-        find.byKey(const ValueKey('material-body')), '一段设定摘录\n第二行',);
+      find.byKey(const ValueKey('material-body')),
+      '一段设定摘录\n第二行',
+    );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('material-save')));
     await tester.pumpAndSettle();
@@ -1335,7 +1481,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('material-edit')));
     await tester.pumpAndSettle();
     await tester.enterText(
-        find.byKey(const ValueKey('material-title')), '改过的标题',);
+      find.byKey(const ValueKey('material-title')),
+      '改过的标题',
+    );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('material-save')));
     await tester.pumpAndSettle();
@@ -1362,7 +1510,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('materials-new')));
     await tester.pumpAndSettle();
     await tester.enterText(
-        find.byKey(const ValueKey('material-body')), '没存的内容',);
+      find.byKey(const ValueKey('material-body')),
+      '没存的内容',
+    );
     await tester.pump();
     final NavigatorState nav = tester.state(find.byType(Navigator).last);
     await nav.maybePop();

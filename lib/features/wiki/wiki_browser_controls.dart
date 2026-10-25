@@ -47,54 +47,59 @@ class ExpandableTray extends ConsumerWidget {
       right: _trayMargin,
       // Above the tab bar (the page reaches under it).
       bottom: _trayMargin + MediaQuery.paddingOf(context).bottom,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          AnimatedSize(
-            duration: Motion.of(
-              context,
-              expanded ? Motion.sheetIn : Motion.sheetOut,
-            ),
-            curve: expanded ? Motion.snap : Motion.mech,
-            alignment: Alignment.bottomRight,
-            child: expanded
-                ? Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SizedBox(
-                      width: _trayWidth,
-                      child: DockPanel(
-                        key: const ValueKey('wiki-tools'),
-                        theme: theme,
-                        padding: const EdgeInsets.only(top: 3),
-                        child: WikiToolbar(
-                          isDarkMode: isDarkMode,
-                          isBookmarked: isBookmarked,
-                          onZoomOut: onZoomOut,
-                          onZoomIn: onZoomIn,
-                          onRefresh: onRefresh,
-                          onToggleDarkMode: onToggleDarkMode,
-                          onToggleBookmark: onToggleBookmark,
+      // Down with the tab bar while the bars are away.
+      child: BarsAway(
+        distance: tabBarRoom(context),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            AnimatedSize(
+              duration: Motion.of(
+                context,
+                expanded ? Motion.sheetIn : Motion.sheetOut,
+              ),
+              curve: expanded ? Motion.snap : Motion.mech,
+              alignment: Alignment.bottomRight,
+              child: expanded
+                  ? Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SizedBox(
+                        width: _trayWidth,
+                        child: DockPanel(
+                          key: const ValueKey('wiki-tools'),
+                          theme: theme,
+                          padding: const EdgeInsets.only(top: 3),
+                          child: WikiToolbar(
+                            isDarkMode: isDarkMode,
+                            isBookmarked: isBookmarked,
+                            onZoomOut: onZoomOut,
+                            onZoomIn: onZoomIn,
+                            onRefresh: onRefresh,
+                            onToggleDarkMode: onToggleDarkMode,
+                            onToggleBookmark: onToggleBookmark,
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                : const SizedBox(width: 0, height: 0),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.cardSurface,
-              border: Border.all(color: theme.divider),
+                    )
+                  : const SizedBox(width: 0, height: 0),
             ),
-            child: SquareIconButton(
-              key: const ValueKey('wiki-tools-toggle'),
-              icon: expanded ? Icons.close_sharp : Icons.tune_sharp,
-              tooltip: expanded ? context.t.wikiToolsClose : context.t.wikiTools,
-              selected: expanded,
-              onPressed: onToggle,
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.cardSurface,
+                border: Border.all(color: theme.divider),
+              ),
+              child: SquareIconButton(
+                key: const ValueKey('wiki-tools-toggle'),
+                icon: expanded ? Icons.close_sharp : Icons.tune_sharp,
+                tooltip:
+                    expanded ? context.t.wikiToolsClose : context.t.wikiTools,
+                selected: expanded,
+                onPressed: onToggle,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

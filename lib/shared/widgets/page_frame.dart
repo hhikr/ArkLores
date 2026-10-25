@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/bars_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/cut_border.dart';
@@ -112,27 +113,49 @@ const Duration selectionDuration = Motion.wipe;
 /// left, [trailing] (one action) on the right, a hairline below. Put it last
 /// in a [Stack] whose content leaves [topBarInset] (plus the status bar)
 /// free at the top, or scrolls under it with [pagePadding].
+///
+/// With [hides] (the wiki, Ask) it slides up under the status bar while the
+/// bars are out of the way ([barsHiddenProvider]).
 class MainTopBar extends ConsumerWidget {
   const MainTopBar({
     super.key,
     required this.leading,
     this.trailing,
+    this.hides = false,
   });
 
   final Widget leading;
   final Widget? trailing;
+  final bool hides;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final top = MediaQuery.paddingOf(context).top;
+    final bar = _bar(theme);
     return Positioned(
       key: const ValueKey('main-top-bar'),
       top: 0,
       left: 0,
       right: 0,
-      child: Container(
-        padding: EdgeInsets.only(top: top),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: top,
+            width: double.infinity,
+            child: ColoredBox(color: theme.bgPrimary),
+          ),
+          if (hides)
+            ClipRect(child: BarsAway(distance: -topBarHeight, child: bar))
+          else
+            bar,
+        ],
+      ),
+    );
+  }
+
+  Widget _bar(AppThemeTokens theme) => DecoratedBox(
         decoration: BoxDecoration(
           color: theme.bgPrimary,
           border: Border(bottom: BorderSide(color: theme.divider)),
@@ -161,6 +184,41 @@ class MainTopBar extends ConsumerWidget {
             ],
           ),
         ),
+      );
+}
+
+/// The room the shell's tab bar takes at the bottom of a main screen (none
+/// on a page pushed on its own): how far what sits on it moves down with
+/// [BarsAway].
+double tabBarRoom(BuildContext context) {
+  final room = MediaQuery.paddingOf(context).bottom -
+      MediaQuery.viewPaddingOf(context).bottom;
+  return room < 0 ? 0 : room;
+}
+
+/// Moves [child] by [distance] (down when positive) while the main screen's
+/// bars are out of the way ([barsHiddenProvider]), mechanically: the top
+/// bar up, the tab bar and what sits on it (the question box, the wiki's
+/// tools) down. Only moved, never laid out again. Not while the keyboard is
+/// up (the tab bar is under it then).
+class BarsAway extends ConsumerWidget {
+  const BarsAway({super.key, required this.distance, required this.child});
+
+  final double distance;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hidden = ref.watch(barsHiddenProvider) &&
+        MediaQuery.viewInsetsOf(context).bottom == 0;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: hidden ? 1 : 0),
+      duration: Motion.of(context, hidden ? Motion.row : Motion.press * 2),
+      curve: Motion.mech,
+      child: child,
+      builder: (context, t, child) => Transform.translate(
+        offset: Offset(0, distance * t),
+        child: child,
       ),
     );
   }
@@ -245,8 +303,7 @@ class TopTab extends ConsumerWidget {
             child: Center(
               widthFactor: 1,
               child: AnimatedContainer(
-                duration:
-                    Motion.of(context, down ? Motion.press : Motion.wipe),
+                duration: Motion.of(context, down ? Motion.press : Motion.wipe),
                 curve: Motion.mech,
                 constraints: BoxConstraints(maxWidth: compact ? 160 : 180),
                 height: compact ? 32 : 36,
@@ -307,9 +364,19 @@ class PageScaffold extends ConsumerWidget {
     this.floatingActionButton,
     this.backgroundColor,
     this.titleFooter,
+    this.onTitleHoldStart,
+    this.onTitleHoldMove,
+    this.onTitleHoldEnd,
   });
 
   final String title;
+
+  /// The title held down and dragged (the reader's scrubbing): the hold
+  /// starts, the finger moves (its offset from where the hold started), the
+  /// finger lifts.
+  final GestureLongPressStartCallback? onTitleHoldStart;
+  final GestureLongPressMoveUpdateCallback? onTitleHoldMove;
+  final VoidCallback? onTitleHoldEnd;
 
   /// The English label over the title, or null.
   final String? code;
@@ -378,23 +445,33 @@ class PageScaffold extends ConsumerWidget {
                             ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Semantics(
-                              header: true,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (code != null)
-                                    ExcludeSemantics(child: Eyebrow(code!)),
-                                  if (title.isNotEmpty)
-                                    Text(
-                                      title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style:
-                                          theme.heading(code == null ? 18 : 16),
-                                    ),
-                                ],
+                            child: GestureDetector(
+                              key: const ValueKey('page-title'),
+                              behavior: HitTestBehavior.opaque,
+                              onLongPressStart: onTitleHoldStart,
+                              onLongPressMoveUpdate: onTitleHoldMove,
+                              onLongPressEnd: onTitleHoldEnd == null
+                                  ? null
+                                  : (_) => onTitleHoldEnd!(),
+                              onLongPressCancel: onTitleHoldEnd,
+                              child: Semantics(
+                                header: true,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (code != null)
+                                      ExcludeSemantics(child: Eyebrow(code!)),
+                                    if (title.isNotEmpty)
+                                      Text(
+                                        title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme
+                                            .heading(code == null ? 18 : 16),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

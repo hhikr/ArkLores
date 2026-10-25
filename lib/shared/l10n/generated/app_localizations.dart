@@ -2594,6 +2594,12 @@ abstract class AppLocalizations {
   /// **'Find in this story'**
   String get storyReaderFindHint;
 
+  /// No description provided for @storyReaderScrubHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag left or right; let go to stay here'**
+  String get storyReaderScrubHint;
+
   /// No description provided for @gameArknights.
   ///
   /// In en, this message translates to:

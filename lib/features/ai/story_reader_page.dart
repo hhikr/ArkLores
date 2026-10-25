@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/game.dart';
@@ -27,6 +28,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
@@ -232,6 +234,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _endTimer?.cancel();
     _progressTimer?.cancel();
     _progress.dispose();
+    _scrub.dispose();
     final container = _container;
     unawaited(
       _saveProgress().whenComplete(() => invalidateReadingIn(container)),
@@ -464,6 +467,182 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     });
   }
 
+  // ─── Scrubbing ─────────────────────────────────────────────────
+
+  /// While the title is held: the line (a position in [_lines]) the finger
+  /// has dragged to; null otherwise. The bar under the title grows into a
+  /// track and the text follows the finger.
+  final ValueNotifier<int?> _scrub = ValueNotifier(null);
+
+  /// Where the hold started, as a share of the text.
+  double _scrubFrom = 0;
+  bool _scrubMoved = false;
+
+  /// The row last jumped to, and whether a jump waits for the next frame
+  /// (at most one a frame).
+  int? _scrubRow;
+  bool _scrubBusy = false;
+
+  void _scrubStart(LongPressStartDetails _) {
+    if (_lines.isEmpty || _rows.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    final at = (_progress.value?.$1 ?? 0).clamp(0, _lines.length - 1);
+    _scrubFrom = _lines.length < 2 ? 0 : at / (_lines.length - 1);
+    _scrubMoved = false;
+    _scrubRow = null;
+    _scrub.value = at;
+  }
+
+  /// The finger's offset from where the hold started moves the place: the
+  /// track's width is the whole text.
+  void _scrubMove(LongPressMoveUpdateDetails details) {
+    if (_scrub.value == null) return;
+    final width = MediaQuery.sizeOf(context).width - 2 * _scrubGutter;
+    final share =
+        (_scrubFrom + details.offsetFromOrigin.dx / width).clamp(0.0, 1.0);
+    final p = (share * (_lines.length - 1)).round();
+    if (p == _scrub.value) return;
+    _scrubMoved = true;
+    _scrub.value = p;
+    _progress.value = (p, _lines.length);
+    if (_scrubBusy) return;
+    _scrubBusy = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrubBusy = false;
+      final at = _scrub.value;
+      if (at != null && mounted) _showLine(at);
+    });
+  }
+
+  void _scrubEnd() {
+    final p = _scrub.value;
+    if (p == null) return;
+    if (_scrubMoved) _showLine(p);
+    _scrub.value = null;
+    _saveSoon();
+    _showProgressSoon();
+  }
+
+  /// Anchors the list on the row holding line [p], at the top of the view.
+  void _showLine(int p) {
+    final r = _rows.indexWhere((row) => row.last >= p);
+    final row = r < 0 ? _rows.length - 1 : r;
+    if (row == _scrubRow) return;
+    _scrubRow = row;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    setState(() {
+      _center = row + 1;
+      _centerAt = 0;
+    });
+  }
+
+  /// The title of the step or group line [p] is under, if any.
+  String? _headingOver(int p) {
+    for (var i = p; i >= 0; i--) {
+      if (headingLineKinds.contains(_lines[i].kind)) {
+        final title = _lines[i].content.trim();
+        return title.isEmpty ? null : title;
+      }
+    }
+    return null;
+  }
+
+  /// The track under the title while it is held: where the finger is (line
+  /// and share), the step it is in and the line itself.
+  Widget _scrubPanel(AppThemeTokens theme, int p) {
+    final n = _lines.length;
+    final share = n < 2 ? 0.0 : p / (n - 1);
+    final line = _lines[p];
+    final speaker = (line.speaker ?? '').trim();
+    final heading = _headingOver(p);
+    return Container(
+      key: const ValueKey('story-reader-scrub'),
+      padding: const EdgeInsets.fromLTRB(_scrubGutter, 12, _scrubGutter, 14),
+      decoration: BoxDecoration(
+        color: theme.cardSurface,
+        border: Border(bottom: BorderSide(color: theme.divider)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '${p + 1}',
+                style: theme.ui(22, weight: 700, color: theme.textPrimary),
+              ),
+              Text(
+                ' / $n',
+                style: theme.field(color: theme.textSecondary),
+              ),
+              const Spacer(),
+              Text(
+                '${(share * 100).round()}%',
+                style: theme.field(color: theme.textSecondary),
+              ),
+            ],
+          ),
+          if (heading != null)
+            Text(
+              heading,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.ui(13, weight: 700, color: theme.textSecondary),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            speaker.isEmpty ? line.content : '$speaker：${line.content}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.ui(14, color: theme.textPrimary),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 20,
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final x = share * (box.maxWidth - _scrubThumb);
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 7,
+                      height: 6,
+                      child: ColoredBox(color: theme.divider),
+                    ),
+                    Positioned(
+                      left: 0,
+                      width: x + _scrubThumb / 2,
+                      top: 7,
+                      height: 6,
+                      child: ColoredBox(color: theme.trace),
+                    ),
+                    Positioned(
+                      left: x,
+                      top: 0,
+                      bottom: 0,
+                      width: _scrubThumb,
+                      child: ColoredBox(color: theme.accentPrimary),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.t.storyReaderScrubHint,
+            style: theme.ui(12, color: theme.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Find in this text; the line picked opens marked, as a cited line.
   Future<void> _find(AppThemeTokens theme) async {
     final line = await showStoryFind(
@@ -511,6 +690,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return PageScaffold(
       backgroundColor: theme.bgPrimary,
       title: chapter.isNotEmpty ? chapter : collection,
+      // Held, the title opens a track to drag through the text.
+      onTitleHoldStart: widget.text.isEmpty ? null : _scrubStart,
+      onTitleHoldMove: widget.text.isEmpty ? null : _scrubMove,
+      onTitleHoldEnd: widget.text.isEmpty ? null : _scrubEnd,
       // How far in: a line along the title plate and the line number.
       titleFooter: ValueListenableBuilder<(int, int)?>(
         valueListenable: _progress,
@@ -573,75 +756,120 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                       _start! - widget.shift + 1,
                       _stop! - widget.shift + 1,
                     );
-          return NotificationListener<ScrollNotification>(
-            onNotification: (n) {
-              if (n is ScrollUpdateNotification) _showProgressSoon();
-              if (n is ScrollEndNotification) {
-                _saveSoon();
-                _showProgressSoon();
-              }
-              return false;
-            },
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                key: _scrollKey,
-                constraints: const BoxConstraints(maxWidth: 720),
-                // Two lazy lists meet at the anchor item: what comes before it
-                // (built upward) and what comes from it on. The scroll offset
-                // is measured from the anchor, so no height is ever estimated
-                // and a story of any length is built the same way.
-                child: CustomScrollView(
-                  key: const ValueKey('story-reader-scroll'),
-                  controller: _scroll,
-                  center: const ValueKey('story-reader-center'),
-                  anchor: _centerAt,
-                  // Laid out: the screen and about half a screen either
-                  // way; the rest as it scrolls near.
-                  scrollCacheExtent: const ScrollCacheExtent.pixels(480),
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, i) => _item(
-                            theme,
-                            _center - 1 - i,
-                            collection,
-                            chapter,
-                            range,
-                            entry?.synopsis,
-                          ),
-                          childCount: _center,
-                        ),
-                      ),
-                    ),
-                    SliverPadding(
-                      key: const ValueKey('story-reader-center'),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, i) => _item(
-                            theme,
-                            _center + i,
-                            collection,
-                            chapter,
-                            range,
-                            entry?.synopsis,
-                          ),
-                          childCount: _rows.length + 2 - _center,
-                        ),
-                      ),
-                    ),
-                  ],
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: _text(
+                  theme,
+                  collection,
+                  chapter,
+                  range,
+                  entry?.synopsis,
                 ),
               ),
-            ),
+              // The track, unrolled down from the title while it is held.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: ValueListenableBuilder<int?>(
+                  valueListenable: _scrub,
+                  builder: (context, p, _) => AnimatedSwitcher(
+                    duration: Motion.of(context, Motion.row),
+                    reverseDuration: Motion.of(context, Motion.press),
+                    switchInCurve: Motion.snap,
+                    switchOutCurve: Motion.mech,
+                    transitionBuilder: (child, animation) => SizeTransition(
+                      sizeFactor: animation,
+                      alignment: Alignment.topCenter,
+                      child: child,
+                    ),
+                    child: p == null || p >= _lines.length
+                        ? const SizedBox(width: double.infinity)
+                        : _scrubPanel(theme, p),
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
     );
   }
+
+  /// The text: two lazy lists that meet at the anchor item.
+  Widget _text(
+    AppThemeTokens theme,
+    String collection,
+    String chapter,
+    String? range,
+    String? synopsis,
+  ) =>
+      NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          if (n is ScrollUpdateNotification) _showProgressSoon();
+          if (n is ScrollEndNotification) {
+            _saveSoon();
+            _showProgressSoon();
+          }
+          return false;
+        },
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            key: _scrollKey,
+            constraints: const BoxConstraints(maxWidth: 720),
+            // Two lazy lists meet at the anchor item: what comes before it
+            // (built upward) and what comes from it on. The scroll offset
+            // is measured from the anchor, so no height is ever estimated
+            // and a story of any length is built the same way.
+            child: CustomScrollView(
+              key: const ValueKey('story-reader-scroll'),
+              controller: _scroll,
+              center: const ValueKey('story-reader-center'),
+              anchor: _centerAt,
+              // Laid out: the screen and about half a screen either
+              // way; the rest as it scrolls near.
+              scrollCacheExtent: const ScrollCacheExtent.pixels(480),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => _item(
+                        theme,
+                        _center - 1 - i,
+                        collection,
+                        chapter,
+                        range,
+                        synopsis,
+                      ),
+                      childCount: _center,
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  key: const ValueKey('story-reader-center'),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => _item(
+                        theme,
+                        _center + i,
+                        collection,
+                        chapter,
+                        range,
+                        synopsis,
+                      ),
+                      childCount: _rows.length + 2 - _center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 
   /// Item `i` of the list: the header, a row, or the end of the text.
   Widget _item(
@@ -1265,6 +1493,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
 /// A row of the lazy list: the lines irst to last (positions in the text);
 /// more than one only for the cited block.
+/// The scrub track's side margins; the finger's drag is measured against
+/// the width between them.
+const double _scrubGutter = 16;
+
+/// The scrub track's thumb width.
+const double _scrubThumb = 10;
+
 class _Row {
   const _Row(this.first, this.last);
 
