@@ -1,0 +1,170 @@
+"""Fetch composed portraits once. Requires Python 3.12 standard library only."""
+
+import argparse
+from contextlib import closing
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+import http.client
+from pathlib import Path
+import shutil
+import sqlite3
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+ORIGIN = 'https://arkwaifu.sgp1.cdn.digitaloceanspaces.com/'
+USER_AGENT = 'ArkLores portrait pack builder (https://github.com/hhikr/ArkLores)'
+
+
+def readonly(path):
+    return sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)
+
+
+def asset_url(key):
+    return ORIGIN + urllib.parse.quote(key, safe='/')
+
+
+def png_path(cache, sprite):
+    return Path(cache) / 'png' / (urllib.parse.quote(sprite, safe='') + '.png')
+
+
+def sprite_rows(kb, groups=None, limit=None):
+    with closing(readonly(kb)) as db:
+        query = 'SELECT sprite, group_id, body, lines FROM portrait_sprites'
+        args = []
+        if groups:
+            args = groups.split(',')
+            query += ' WHERE group_id IN (' + ','.join('?' for _ in args) + ')'
+        query += ' ORDER BY sprite'
+        if limit is not None:
+            query += ' LIMIT ?'
+            args.append(limit)
+        return db.execute(query, args).fetchall()
+
+
+class Downloader:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.paused_until = 0.0
+
+    def wait(self):
+        while True:
+            with self.lock:
+                delay = self.paused_until - time.monotonic()
+            if delay <= 0:
+                return
+            time.sleep(delay)
+
+    def download(self, url, dest, size=None):
+        part = dest.with_name(dest.name + '.part')
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        for attempt in range(4):
+            self.wait()
+            try:
+                request = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
+                with urllib.request.urlopen(request, timeout=120) as response, part.open('wb') as output:
+                    shutil.copyfileobj(response, output)
+                if size is not None and part.stat().st_size != size:
+                    raise OSError(f'Wrong size: {part.stat().st_size} != {size}')
+                part.replace(dest)
+                return True
+            except (OSError, urllib.error.URLError, http.client.HTTPException) as error:
+                if isinstance(error, urllib.error.HTTPError) and error.code in (429, 503):
+                    with self.lock:
+                        self.paused_until = max(self.paused_until, time.monotonic() + 60)
+                print(f'Request failed ({attempt + 1}/4): {url}: {error}', flush=True)
+                if attempt < 3:
+                    time.sleep((5, 15, 45)[attempt])
+        return False
+
+
+def fetch(kb, cache, arkwaifu_db=None, workers=4, limit=None, groups=None):
+    cache = Path(cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    downloader = Downloader()
+    source = Path(arkwaifu_db) if arkwaifu_db else cache / 'arkwaifu.sqlite3'
+    if not source.exists():
+        if arkwaifu_db:
+            raise FileNotFoundError(source)
+        if not downloader.download(ORIGIN + 'arkwaifu.sqlite3', source):
+            raise RuntimeError('Could not download Arkwaifu database')
+    rows = sprite_rows(kb, groups, limit)
+    assets, missing = {}, []
+    with closing(readonly(source)) as db:
+        version = db.execute("SELECT res_version FROM unit_versions WHERE unit = 'artwork'").fetchone()[0]
+        print(f'artwork_version={version}', flush=True)
+        for sprite, *_ in rows:
+            row = db.execute("SELECT object_key, size, width, height FROM narrative_image_assets WHERE category = 'character' AND asset_id = ?", (sprite,)).fetchone()
+            if row is None:
+                missing.append(sprite)
+            else:
+                assets[sprite] = dict(zip(('object_key', 'size', 'width', 'height'), row))
+    index_path = cache / 'index.json'
+    old = json.loads(index_path.read_text(encoding='utf-8')) if index_path.exists() else {}
+    completed = dict(old.get('sprites', {}))
+    failed = []
+    counts = {'total': len(rows), 'downloaded': 0, 'skipped': 0, 'missing': len(missing), 'failed': 0, 'downloaded_bytes': 0}
+    start = time.monotonic()
+
+    def one(sprite, metadata):
+        path = png_path(cache, sprite)
+        if path.exists():
+            previous = completed.get(sprite)
+            if path.stat().st_size == metadata['size'] and (previous is None or previous['object_key'] == metadata['object_key']):
+                return sprite, 'skipped'
+            path.unlink()
+        ok = downloader.download(asset_url(metadata['object_key']), path, metadata['size'])
+        return sprite, 'downloaded' if ok else 'failed'
+
+    def save():
+        # Keep completed entries across filtered and interrupted runs.
+        temp = index_path.with_suffix('.json.part')
+        temp.write_text(json.dumps({'artwork_version': version, 'sprites': dict(sorted(completed.items()))}, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        temp.replace(index_path)
+
+    try:
+        with ThreadPoolExecutor(max_workers=max(1, min(4, workers))) as pool:
+            futures = [pool.submit(one, sprite, metadata) for sprite, metadata in assets.items()]
+            for done, future in enumerate(as_completed(futures), 1):
+                sprite, result = future.result()
+                counts[result] += 1
+                if result == 'failed':
+                    failed.append(sprite)
+                    completed.pop(sprite, None)
+                else:
+                    completed[sprite] = assets[sprite]
+                    if result == 'downloaded':
+                        counts['downloaded_bytes'] += assets[sprite]['size']
+                if done % 200 == 0 or done == len(futures):
+                    elapsed = time.monotonic() - start
+                    print(f'{done}/{len(assets)} bytes={counts["downloaded_bytes"]} eta_seconds={elapsed / done * (len(assets) - done):.0f}', flush=True)
+                    save()
+    finally:
+        save()
+        for filename, values in [('missing.txt', missing), ('failed.txt', failed)]:
+            (cache / filename).write_text(''.join(s + '\n' for s in sorted(values)), encoding='utf-8')
+    counts['elapsed_seconds'] = time.monotonic() - start
+    counts['cached_bytes'] = sum(m['size'] for s, m in assets.items() if s in completed)
+    print(json.dumps(counts, indent=2), flush=True)
+    (cache / 'fetch.report.json').write_text(json.dumps(counts, indent=2) + '\n', encoding='utf-8')
+    return counts
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--kb', required=True)
+    parser.add_argument('--cache', required=True)
+    parser.add_argument('--arkwaifu-db')
+    parser.add_argument('--workers', type=int, default=4)
+    parser.add_argument('--limit', type=int)
+    parser.add_argument('--groups')
+    args = parser.parse_args()
+    if args.limit is not None and args.limit < 0:
+        parser.error('--limit must be nonnegative')
+    fetch(**vars(args))
+
+
+if __name__ == '__main__':
+    main()

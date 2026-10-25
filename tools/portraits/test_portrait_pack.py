@@ -1,0 +1,206 @@
+"""Offline portrait pipeline tests. Requires standard library + Pillow 12.3.
+
+Run: python -I -m unittest discover -s tools/portraits -p test_portrait_pack.py
+"""
+
+import contextlib
+from contextlib import closing
+from concurrent.futures import ThreadPoolExecutor
+import io
+import http.client
+import json
+from pathlib import Path
+import sqlite3
+import sys
+import tempfile
+import unittest
+import urllib.error
+from unittest.mock import patch
+
+from PIL import Image, ImageDraw, ImageChops
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_portrait_pack import build, difference_box
+from check_portrait_pack import reconstruct, check
+from fetch_arkwaifu import Downloader, asset_url, fetch, png_path
+
+
+class PortraitPackTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.cache = self.root / 'cache'
+        (self.cache / 'png').mkdir(parents=True)
+        (self.cache / 'index.json').write_text(json.dumps({'artwork_version': 'fixture', 'sprites': {}}))
+        self.kb = self.root / 'kb.db'
+        with closing(sqlite3.connect(self.kb)) as db:
+            db.executescript("""
+                CREATE TABLE portrait_sprites (
+                  sprite TEXT PRIMARY KEY,
+                  group_id TEXT NOT NULL,
+                  face INTEGER NOT NULL,
+                  body INTEGER NOT NULL,
+                  lines INTEGER NOT NULL
+                ) WITHOUT ROWID;
+                CREATE INDEX portrait_sprites_group ON portrait_sprites(group_id);
+                CREATE TABLE gamedata_manifest(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO gamedata_manifest VALUES ('source_arknights_commit', 'fixture-commit');
+            """)
+
+    def add(self, sprite, image, lines=1):
+        group, suffix = sprite.split('#')
+        with closing(sqlite3.connect(self.kb)) as db:
+            face, body = map(int, suffix.split('$'))
+            db.execute('INSERT INTO portrait_sprites VALUES (?, ?, ?, ?, ?)', (sprite, group, face, body, lines))
+            db.commit()
+        if image is not None:
+            image.save(png_path(self.cache, sprite))
+
+    def run_build(self, name='pack.db', **kwargs):
+        out = self.root / name
+        with contextlib.redirect_stdout(io.StringIO()):
+            build(self.kb, self.cache, out, **kwargs)
+        return out
+
+    def test_small_patches_coordinates_and_reconstruction(self):
+        base = Image.new('RGBA', (100, 100), (0, 0, 0, 255))
+        self.add('unit#1$1', base, 20)
+        for face, x in ((2, 20), (3, 60)):
+            image = base.copy()
+            ImageDraw.Draw(image).rectangle((x, 30, x + 9, 39), fill=(255, 255, 255, 255))
+            self.add(f'unit#{face}$1', image)
+        with closing(sqlite3.connect(self.run_build())) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM portrait_bases').fetchone()[0], 1)
+            rows = db.execute('SELECT * FROM portrait_images ORDER BY sprite').fetchall()
+            self.assertIsNone(rows[0][7])
+            for row, x in zip(rows[1:], (20, 60)):
+                self.assertEqual(row[2:6], (x - 4, 26, 18, 18))
+                reference = base.copy()
+                ImageDraw.Draw(reference).rectangle((x, 30, x + 9, 39), fill=(255, 255, 255, 255))
+                diff = ImageChops.difference(reconstruct(db, row), reference)
+                self.assertLessEqual(max(high for _, high in diff.getextrema()), 3)
+
+    def test_full_blank_tie_and_determinism(self):
+        self.add('unit#2$1', Image.new('RGBA', (80, 120), 'white'))
+        self.add('unit#1$1', Image.new('RGBA', (80, 120), 'black'))
+        self.add('unit#3$1', Image.new('RGBA', (80, 120)))
+        self.add('empty#1$1', Image.new('RGBA', (80, 120)))
+        self.add('missing#1$1', None)
+        outputs = [self.run_build(name, height=60) for name in ('a.db', 'b.db')]
+        with closing(sqlite3.connect(outputs[0])) as a, closing(sqlite3.connect(outputs[1])) as b:
+            for table in ('portrait_bases', 'portrait_images'):
+                self.assertEqual(a.execute(f'SELECT * FROM {table} ORDER BY 1').fetchall(), b.execute(f'SELECT * FROM {table} ORDER BY 1').fetchall())
+            self.assertEqual(a.execute('SELECT sprite FROM portrait_bases').fetchone()[0], 'unit#1$1')
+            self.assertIsNone(a.execute("SELECT base_id FROM portrait_images WHERE sprite='unit#2$1'").fetchone()[0])
+            for sprite in ('unit#3$1', 'empty#1$1'):
+                row = a.execute('SELECT * FROM portrait_images WHERE sprite=?', (sprite,)).fetchone()
+                self.assertEqual(row[1:], (None, None, None, 0, 0, 1, None))
+            self.assertEqual(a.execute("SELECT value FROM pack_manifest WHERE key='missing_count'").fetchone()[0], '1')
+
+    def test_rgb_difference_without_alpha_difference(self):
+        base = Image.new('RGBA', (100, 100), (10, 10, 10, 255))
+        image = base.copy()
+        image.putpixel((50, 50), (17, 10, 10, 255))
+        self.assertEqual(difference_box(image, base), (46, 46, 55, 55))
+        image.putpixel((50, 50), (16, 10, 10, 255))
+        self.assertIsNone(difference_box(image, base))
+
+    def test_resize_width_rounds_half_up(self):
+        self.add('unit#1$1', Image.new('RGBA', (5, 4), 'white'))
+        with closing(sqlite3.connect(self.run_build(height=2))) as db:
+            self.assertEqual(db.execute('SELECT width, height FROM portrait_bases').fetchone(), (3, 2))
+
+    def test_paste_replaces_transparent_patch(self):
+        from build_portrait_pack import encode
+        db = sqlite3.connect(':memory:')
+        self.addCleanup(db.close)
+        db.execute('CREATE TABLE portrait_bases(base_id TEXT, webp BLOB)')
+        db.execute('INSERT INTO portrait_bases VALUES (?, ?)', ('unit$1', encode(Image.new('RGBA', (10, 10), 'white'), 80)))
+        row = ('unit#2$1', 'unit$1', 3, 4, 2, 2, 0, encode(Image.new('RGBA', (2, 2)), 85))
+        self.assertEqual(reconstruct(db, row).getpixel((3, 4))[3], 0)
+
+    def test_check_reference_uses_group_union(self):
+        base = Image.new('RGBA', (100, 100))
+        ImageDraw.Draw(base).rectangle((10, 10, 60, 90), fill='white')
+        self.add('unit#1$1', base, 10)
+        image = base.copy()
+        ImageDraw.Draw(image).rectangle((80, 10, 90, 90), fill='white')
+        self.add('unit#2$1', image)
+        out = self.run_build(height=60)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = check(out, self.cache, sheet=self.root / 'sheet.png')
+        self.assertEqual(result['same']['count'], 1)
+        self.assertTrue((self.root / 'sheet.png').is_file())
+
+    def test_url_double_encoding(self):
+        self.assertEqual(asset_url('ART/x/composition/character/avg_1_1%231%241.png'), 'https://arkwaifu.sgp1.cdn.digitaloceanspaces.com/ART/x/composition/character/avg_1_1%25231%25241.png')
+
+    def test_retry_intervals_and_global_throttle(self):
+        downloader = Downloader()
+        error = urllib.error.HTTPError('https://example.invalid', 503, 'busy', {}, None)
+        with patch('fetch_arkwaifu.urllib.request.urlopen', side_effect=error) as request, patch('fetch_arkwaifu.time.sleep') as sleep, patch.object(downloader, 'wait'), contextlib.redirect_stdout(io.StringIO()):
+            self.assertFalse(downloader.download('https://example.invalid', self.root / 'asset.png', 3))
+        self.assertEqual(request.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [5, 15, 45])
+        self.assertGreater(downloader.paused_until, 0)
+        request_headers = request.call_args.args[0].headers
+        self.assertIn('ArkLores portrait pack builder', request_headers['User-agent'])
+
+    def test_download_validates_size_and_replaces_part(self):
+        downloader = Downloader()
+        destination = self.root / 'asset.png'
+        with patch('fetch_arkwaifu.urllib.request.urlopen', side_effect=lambda *args, **kwargs: io.BytesIO(b'png')), patch('fetch_arkwaifu.time.sleep') as sleep, contextlib.redirect_stdout(io.StringIO()):
+            self.assertFalse(downloader.download('https://example.invalid', destination, 4))
+            self.assertFalse(destination.exists())
+            self.assertTrue(downloader.download('https://example.invalid', destination, 3))
+        self.assertEqual(destination.read_bytes(), b'png')
+        self.assertFalse(Path(str(destination) + '.part').exists())
+        self.assertEqual(sleep.call_count, 3)
+
+    def test_truncated_http_response_is_retried(self):
+        downloader = Downloader()
+        destination = self.root / 'asset.png'
+        with patch('fetch_arkwaifu.urllib.request.urlopen', side_effect=[http.client.IncompleteRead(b'p', 2), io.BytesIO(b'png')]), patch('fetch_arkwaifu.time.sleep') as sleep, contextlib.redirect_stdout(io.StringIO()):
+            self.assertTrue(downloader.download('https://example.invalid', destination, 3))
+        sleep.assert_called_once_with(5)
+
+    def test_fetch_resume_and_missing(self):
+        self.add('unit#1$1', Image.new('RGBA', (10, 10), 'white'))
+        self.add('absent#1$1', None)
+        size = png_path(self.cache, 'unit#1$1').stat().st_size
+        source = self.root / 'source.db'
+        with closing(sqlite3.connect(source)) as db:
+            db.executescript("CREATE TABLE unit_versions(unit TEXT, res_version TEXT); INSERT INTO unit_versions VALUES ('artwork', 'fixture'); CREATE TABLE narrative_image_assets(category TEXT, asset_id TEXT, object_key TEXT, size INTEGER, width INTEGER, height INTEGER);")
+            db.execute("INSERT INTO narrative_image_assets VALUES ('character', 'unit#1$1', 'key', ?, 10, 10)", (size,))
+            db.commit()
+        with patch('fetch_arkwaifu.Downloader.download') as download, patch('fetch_arkwaifu.ThreadPoolExecutor', wraps=ThreadPoolExecutor) as pool, contextlib.redirect_stdout(io.StringIO()):
+            result = fetch(self.kb, self.cache, source, workers=10)
+        download.assert_not_called()
+        pool.assert_called_once_with(max_workers=4)
+        self.assertEqual(result['skipped'], 1)
+        self.assertEqual(result['missing'], 1)
+        self.assertEqual((self.cache / 'missing.txt').read_text(), 'absent#1$1\n')
+        index = json.loads((self.cache / 'index.json').read_text())
+        self.assertEqual(list(index['sprites']), ['unit#1$1'])
+
+        def replacement(url, destination, expected):
+            destination.write_bytes(b'x' * expected)
+            return True
+
+        png_path(self.cache, 'unit#1$1').write_bytes(b'bad')
+        with patch('fetch_arkwaifu.Downloader.download', side_effect=replacement) as download, contextlib.redirect_stdout(io.StringIO()):
+            result = fetch(self.kb, self.cache, source)
+        self.assertEqual(result['downloaded'], 1)
+        download.assert_called_once()
+
+        index['sprites']['unit#1$1']['object_key'] = 'old-key'
+        (self.cache / 'index.json').write_text(json.dumps(index))
+        with patch('fetch_arkwaifu.Downloader.download', side_effect=replacement) as download, contextlib.redirect_stdout(io.StringIO()):
+            result = fetch(self.kb, self.cache, source)
+        self.assertEqual(result['downloaded'], 1)
+        download.assert_called_once()
+
+
+if __name__ == '__main__':
+    unittest.main()
