@@ -7,7 +7,7 @@
   v0.17.1（2026-10-23，Android build 39）；三版都只有 APK，知识库仍是 v0.17.0 上的资产。v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
   终末地库（2026-10-18 客户端）按任务步骤排列、加了过场台词与段首梗概（渠道 `min_app_build` 仍是 37）；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件指向 v0.17.0。
   v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
-  0.19.0 从分支 `fix/qa-retrieval-evidence` 发出，经 PR 合回 `main`；下一轮从合并后的 `main` 开新分支（推之前先确认 PR 没有合并）。
+  0.19.0 从分支 `fix/qa-retrieval-evidence` 发出，经 PR #23 合回 `main`；下一轮从合并后的 `main` 开新分支（推之前先确认 PR 没有合并）。
 - 未经开发者明确同意不发版。真实 API 测试（模型与向量）：测试模型用 glm-5.3-flash；预计一轮总消耗 ≤150 万 token 直接跑，超过先问（开发者 2026-10-19）。Android build 号每次发版递增。
 - **仓库里只放面向用户的内容和必要的开发约定**：调查笔记、方案讨论、普查数据放本地 `notes/`（gitignored），不提交、不写进 PR。
 - 用中文和开发者交流。
