@@ -14,6 +14,7 @@
 /// tell story from system (tutorial) text.
 library;
 
+import 'portrait_names.dart';
 import 'text_harvest.dart' show stripMarkup;
 
 /// What a story line is. Stored in `story_lines.kind`.
@@ -55,12 +56,13 @@ enum StoryLineKind {
 
 /// One text line of a story script.
 class StoryScriptLine {
-  const StoryScriptLine(this.speaker, this.content, this.kind);
+  const StoryScriptLine(this.speaker, this.content, this.kind, {this.portrait});
 
   /// Speaker name; null for narration and speaker-less boxes.
   final String? speaker;
   final String content;
   final StoryLineKind kind;
+  final String? portrait;
 }
 
 /// Removes rich-text tags and collapses whitespace. The script writes a
@@ -114,7 +116,9 @@ List<String> storyLogicalLines(String raw) {
       line = '${line.substring(0, line.length - 1).trimRight()} $next';
     }
     // A backslash left at the end continued nothing.
-    if (line.endsWith('\\')) line = line.substring(0, line.length - 1).trimRight();
+    if (line.endsWith('\\')) {
+      line = line.substring(0, line.length - 1).trimRight();
+    }
     if (line.isNotEmpty) out.add(line);
   }
   return out;
@@ -123,7 +127,9 @@ List<String> storyLogicalLines(String raw) {
 /// Parses a whole script into its text lines, in order.
 List<StoryScriptLine> parseStoryScript(String raw) {
   final lines = <StoryScriptLine>[];
-  for (final line in storyLogicalLines(raw)) {    if (!line.startsWith('[')) {
+  final portraits = _PortraitState();
+  for (final line in storyLogicalLines(raw)) {
+    if (!line.startsWith('[')) {
       final content = cleanStoryText(line);
       if (content.isNotEmpty) {
         lines.add(StoryScriptLine(null, content, StoryLineKind.narration));
@@ -131,9 +137,95 @@ List<StoryScriptLine> parseStoryScript(String raw) {
       continue;
     }
     final parsed = _parseCommandLine(line);
-    if (parsed != null) lines.add(parsed);
+    portraits.update(line);
+    if (parsed != null) {
+      lines.add(
+        StoryScriptLine(
+          parsed.speaker,
+          parsed.content,
+          parsed.kind,
+          portrait:
+              parsed.kind == StoryLineKind.dialogue && parsed.speaker != null
+                  ? portraits.sprite
+                  : null,
+        ),
+      );
+    }
   }
   return lines;
+}
+
+class _PortraitState {
+  final slots = <String, String>{};
+  String? focus;
+
+  String? get sprite => focus == null
+      ? (slots.length == 1 ? slots.values.single : null)
+      : slots[focus];
+
+  String position(String value) => switch (value.toLowerCase()) {
+        'left' => 'l',
+        'right' => 'r',
+        'middle' => 'm',
+        final value => value,
+      };
+
+  void update(String line) {
+    var rest = line;
+    while (rest.startsWith('[')) {
+      final end = _commandEnd(rest);
+      if (end < 0) return;
+      final body = rest.substring(1, end).trim();
+      final command = _commandHead.firstMatch(body)?.group(1)?.toLowerCase();
+      final attrs = _attributes(body);
+      if (command == 'character') {
+        slots.clear();
+        focus = null;
+        for (final (key, attr) in [('1', 'name'), ('2', 'name2')]) {
+          final name = canonicalSprite(attrs[attr] ?? '');
+          if (name != null) slots[key] = name;
+        }
+        if (slots.isNotEmpty) {
+          final f = attrs['focus'];
+          focus = f == null
+              ? (slots.length == 1 ? slots.keys.single : null)
+              : (f == '1' || f == '2' ? f : 'none');
+        }
+      } else if (command == 'charslot') {
+        if (attrs.isEmpty) {
+          slots.clear();
+          focus = null;
+        } else {
+          final slot = position(attrs['slot'] ?? 'm');
+          final name = canonicalSprite(attrs['name'] ?? '');
+          final hasName = name != null || attrs['name'] == '';
+          if (hasName) {
+            if (name == null) {
+              slots.remove(slot);
+            } else {
+              slots[slot] = name;
+            }
+          } else if (!attrs.containsKey('focus')) {
+            slots.remove(slot);
+          }
+          final f = attrs['focus'];
+          if (f != null) {
+            focus = switch (position(f)) {
+              'n' || 'none' => 'none',
+              'a' || 'all' => 'all',
+              'l' => 'l',
+              'm' => 'm',
+              'r' => 'r',
+              _ => 'none',
+            };
+          } else if (name != null && slots.length == 1) {
+            focus = slots.keys.single;
+          }
+        }
+      }
+      rest = rest.substring(end + 1).trim();
+    }
+  }
 }
 
 StoryScriptLine? _parseCommandLine(String line) {

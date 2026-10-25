@@ -432,6 +432,7 @@ extension _Derived on EntryImporter {
         'OR dst NOT IN (SELECT id FROM entries)',
       );
     });
+    await rebuildPortraitIndex(db);
   }
 
   /// Dialogue played inside a battle (tutorial popups, training, in-battle

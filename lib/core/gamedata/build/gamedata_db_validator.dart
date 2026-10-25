@@ -44,6 +44,13 @@ Future<void> validateGameDataDatabase(Database db) async {
     );
   }
 
+  final portraits = await db.rawQuery(
+    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='portrait_groups'",
+  );
+  if (portraits.isNotEmpty &&
+      (await db.rawQuery('SELECT 1 FROM portrait_groups LIMIT 1')).isEmpty) {
+    throw StateError('Downloaded GameData database has empty portrait_groups.');
+  }
   final manifest = {
     for (final row in await db.query('gamedata_manifest'))
       '${row['key']}': '${row['value']}',
