@@ -412,7 +412,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiStoryReaderEnd => '本章完';
 
   @override
-  String get libraryTabMine => '我的资料';
+  String get libraryTabMine => '补充资料';
 
   @override
   String get librarySearchTitle => '搜索';

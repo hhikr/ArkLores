@@ -21,7 +21,8 @@ final RegExp loreAnswerJsonStart =
 
 /// The markdown of a complete JSON answer in [content], or null when
 /// [content] holds no JSON answer (the model wrote markdown instead).
-String? loreAnswerMarkdown(String content) => loreAnswerParsed(content)?.markdown;
+String? loreAnswerMarkdown(String content) =>
+    loreAnswerParsed(content)?.markdown;
 
 /// [loreAnswerMarkdown] plus how many citation items of the answer gave no
 /// usable ref (written in a shape that cannot be read).
@@ -202,7 +203,9 @@ class LoreAnswerStream {
         return;
       }
       // More entries: back inside the object's `entries` array.
-      strayBrackets..add(_entriesEnd)..add(_rootEnd);
+      strayBrackets
+        ..add(_entriesEnd)
+        ..add(_rootEnd);
       _closed = false;
       _tail = 0;
       _rest.clear();
@@ -546,7 +549,11 @@ String? loreCitationRef(List<Object?> parts) {
     if (end != null) b = end.$2;
   }
   if (b < a) (a, b) = (b, a);
-  if (!first.contains('.') && !first.startsWith('wiki:')) first = '$first.txt';
+  if (!first.contains('.') &&
+      !first.startsWith('wiki:') &&
+      !first.startsWith('material:')) {
+    first = '$first.txt';
+  }
   return b == a ? '$first:$a' : '$first:$a-$b';
 }
 
@@ -554,7 +561,8 @@ String? loreCitationRef(List<Object?> parts) {
 /// (`[["id", 1, 2], ...]`) it accepts the flat form some models write
 /// (`["id", 1, 2]`, also several in a row) and plain strings (`"id:1-2"`).
 /// [onDropped] is called once per item that gave no ref.
-List<String> loreCitationRefs(List<Object?> items, {void Function()? onDropped}) {
+List<String> loreCitationRefs(List<Object?> items,
+    {void Function()? onDropped,}) {
   final out = <String>[];
   var group = <Object?>[];
   void add(String? ref) {
@@ -594,4 +602,3 @@ List<String> loreCitationRefs(List<Object?> items, {void Function()? onDropped})
   flush();
   return out;
 }
-

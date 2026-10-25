@@ -140,7 +140,7 @@
   "@aiCitationSources": {"placeholders": {"count": {"type": "int"}}},
   "aiStoryReaderJumpBack": "Back to the cited lines",
   "aiStoryReaderEnd": "End of chapter",
-  "libraryTabMine": "My texts",
+  "libraryTabMine": "References",
   "librarySearchTitle": "Search",
   "librarySearchHint": "Search chapters, entries, stage codes",
   "libraryContinue": "Continue reading",

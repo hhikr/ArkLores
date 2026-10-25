@@ -19,6 +19,7 @@ import '../../gamedata/story_line_search.dart' show maxKeywordTerms;
 import '../../gamedata/story_vectors.dart'
     show chunkWindow, nearMaxPassages, nearMinSimilarity;
 import '../../llm/embedding_client.dart';
+import '../../materials/material_snapshot.dart';
 import '../../wiki/wiki_lookup.dart';
 import '../../wiki/wiki_page.dart';
 import '../lore_tools.dart';
@@ -50,10 +51,12 @@ class SearchTool extends AgentTool {
     this.seen, {
     this.embeddingClient,
     this.wiki,
+    this.materials,
   });
 
   final GameDataRetrieval store;
   final SeenLines seen;
+  final MaterialSnapshot? materials;
   final EmbeddingClient? embeddingClient;
 
   /// The wikis (null when the wiki option is off).
@@ -90,7 +93,8 @@ class SearchTool extends AgentTool {
       '只列足够相近的，常常一段也没有。';
 
   @override
-  String get description => '$_queryDescription$_spreadNote$_nearNote';
+  String get description =>
+      '$_queryDescription$_spreadNote$_nearNote${materials?.isAvailable == true ? ' 同时检索已启用的补充资料原文；用 read_material 读上下文，near 也接受 material:文档ID@版本:段号，并可跨游戏和资料找相近段落。' : ''}';
 
   String get _queryDescription => keywordOnly
       ? '一次检索所有资料：已安装的每个游戏的剧情原文、剧情以外的资料原文（档案、干员资料、语音等）'
@@ -218,8 +222,7 @@ class SearchTool extends AgentTool {
     // brought records that had nothing to do with it.
     if (terms.isNotEmpty && inCollection == null) {
       final weights = {
-        for (final t in terms)
-          t: 1 / (1 + math.log(1 + (termLines[t] ?? 0))),
+        for (final t in terms) t: 1 / (1 + math.log(1 + (termLines[t] ?? 0))),
       };
       final records = await _timed(
         'records',
@@ -344,7 +347,8 @@ class SearchTool extends AgentTool {
           ? null
           : await _timed(
               'elsewhere:${g.key}',
-              () => _elsewhere(g, narrowTo(store, g), r, terms, spreads, vector),
+              () =>
+                  _elsewhere(g, narrowTo(store, g), r, terms, spreads, vector),
             );
       if (elsewhere != null) {
         buffer.writeln('### 关键词还出现在这些故事集（上面的分布里列出、还没有段落的，各一段）');
@@ -364,9 +368,18 @@ class SearchTool extends AgentTool {
       }
       final records = _renderRecords(r);
       if (records.isNotEmpty) {
-        buffer.writeln('## ${g.label}资料（档案、干员资料、语音等；格式：出处 | 类别 | 标题（所属对象） | 片段）');
+        buffer
+            .writeln('## ${g.label}资料（档案、干员资料、语音等；格式：出处 | 类别 | 标题（所属对象） | 片段）');
         records.forEach(buffer.write);
       }
+    }
+    if (materials != null && inCollection == null) {
+      final hits = materials!.search(query,
+          vector: vector,
+          model: embeddingClient?.model,
+          dims: embeddingClient?.dimensions,
+          game: game?.key,);
+      buffer.writeln(materials!.render(hits, seen.add));
     }
     if (wikiPart.isNotEmpty) {
       buffer.writeln('## Wiki');
@@ -377,7 +390,8 @@ class SearchTool extends AgentTool {
     buffer.writeln('（上面列出的行可以引用，没有列出的行要先读；要上下文用 read_story 从附近的行读。'
         '资料只列了片段，可以按片段引用，全文用 read_record 按 id 读'
         '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
-    return SearchResult(buffer.toString().trimRight(), mode, modeNote: modeNote);
+    return SearchResult(buffer.toString().trimRight(), mode,
+        modeNote: modeNote,);
   }
 
   static final RegExp _nearPattern =
@@ -388,6 +402,10 @@ class SearchTool extends AgentTool {
   /// embedding service is needed. Only those close enough are listed, so
   /// often none is: not every passage is echoed elsewhere.
   Future<String> runNear(String near) async {
+    if (materials?.isAvailable == true) {
+      final joined = await _joinedNear(near);
+      if (joined != null) return joined;
+    }
     final match = _nearPattern.firstMatch(near.trim());
     if (match == null) {
       return '错误：near 要写成 <story_id>:<行号>（一段读过的剧情的位置），收到：$near';
@@ -437,6 +455,73 @@ class SearchTool extends AgentTool {
     return buffer.toString().trimRight();
   }
 
+  Future<String?> _joinedNear(String near) async {
+    final m = _nearPattern.firstMatch(near.trim());
+    if (m == null) return null;
+    final id = m.group(1)!, line = int.parse(m.group(2)!);
+    List<double>? vector;
+    String? model;
+    int? dims;
+    final material = materials!.document(id);
+    if (id.startsWith('material:')) {
+      if (material == null) return '这份资料不在本轮启用范围内；先用 search 找到可读 id。';
+      if (!seen.covers(material.pageId, line, line)) {
+        return 'near 的段落必须先通过 search 或 read_material 读取。';
+      }
+      final c = materials!.chunks
+          .where((c) =>
+              c.document.pageId == id && c.start <= line && c.end >= line,)
+          .firstOrNull;
+      final v = c == null
+          ? null
+          : materials!.vectors.where((v) => v.hash == c.hash).firstOrNull;
+      if (v != null) {
+        vector = v.values;
+        model = v.model;
+        dims = v.dims;
+      }
+    } else if (store is GamePassageVectors) {
+      final story = id.endsWith('.txt') ? id : '$id.txt';
+      final v = await (store as GamePassageVectors).passageVector(story, line);
+      if (v != null) {
+        vector = v.vector;
+        model = v.model;
+        dims = v.dims;
+      }
+    }
+    if (vector == null || model == null || dims == null) {
+      return id.startsWith('material:') ? '该段还没有向量，先用 query 检索。' : null;
+    }
+    final materialHits = materials!
+        .search('',
+            vector: vector,
+            model: model,
+            dims: dims,
+            minScore: nearMinSimilarity,
+            limit: 6,)
+        .where((h) => h.chunk.document.pageId != id)
+        .toList();
+    final out = StringBuffer('与 $near 意思相近的原文（游戏库与补充资料联查）：\n');
+    final games = await _games(null);
+    for (final g in games) {
+      final own = narrowTo(store, g),
+          info = await narrowTo(store, g).storyVectorInfo;
+      if (info == null || info.model != model || info.dims != dims) continue;
+      final hits = (await own.searchStoryChunksByVector(vector, topK: 12))
+          .where((h) => h.score >= nearMinSimilarity && h.storyId != id)
+          .take(4)
+          .toList();
+      final ranked = _Ranked(hits.map((h) => h.storyId).toList(),
+          {for (final h in hits) h.storyId: h}, {},
+          best: 0, lines: 0,);
+      for (final block in await _render(own, ranked)) {
+        block.writeTo(out, seen);
+      }
+    }
+    out.writeln(materials!.render(materialHits, seen.add));
+    return out.toString();
+  }
+
   /// The games to search: [only] when given, else every installed one.
   Future<List<Game>> _games(Game? only) async {
     final store = this.store;
@@ -456,8 +541,7 @@ class SearchTool extends AgentTool {
   static List<String> termsOf(String query) {
     final words = {
       for (final t in query.split(RegExp(r'[\s|]+')))
-        if (t.trim().runes.length >= 2 && t.trim().runes.length <= 12)
-          t.trim(),
+        if (t.trim().runes.length >= 2 && t.trim().runes.length <= 12) t.trim(),
     }.toList();
     // Written without a space, only a short query is a word.
     return words.length == 1 && words.single.runes.length > loneWordChars
@@ -518,10 +602,25 @@ class SearchTool extends AgentTool {
   Future<String?> keywordOnlyReason() async {
     final client = embeddingClient;
     if (client == null) return '没有配置向量服务';
+    for (final g in await _games(null)) {
+      final candidate = await narrowTo(store, g).storyVectorInfo;
+      if (candidate?.model == client.model &&
+          candidate?.dims == client.dimensions) {
+        return null;
+      }
+    }
     final info = await store.storyVectorInfo;
-    if (info == null) return '知识库没有向量';
+    if (info == null) {
+      final compatible = materials?.vectors.any(
+              (v) => v.model == client.model && v.dims == client.dimensions,) ??
+          false;
+      return compatible ? null : '知识库与已启用资料没有匹配的向量';
+    }
     if (info.model != client.model || info.dims != client.dimensions) {
-      return '库里的向量是 ${info.model}，配置的是 ${client.model}';
+      final compatible = materials?.vectors.any(
+              (v) => v.model == client.model && v.dims == client.dimensions,) ??
+          false;
+      return compatible ? null : '库里的向量是 ${info.model}，配置的是 ${client.model}';
     }
     return null;
   }
@@ -530,7 +629,11 @@ class SearchTool extends AgentTool {
     final reason = await keywordOnlyReason();
     if (reason != null) return (null, reason);
     try {
-      return ((await embeddingClient!.embed([query])).single, null);
+      final vector=(await embeddingClient!.embed([query])).single;
+      if(vector.length!=embeddingClient!.dimensions || vector.any((v)=>!v.isFinite)) {
+        return (null,'向量服务返回了不匹配的向量');
+      }
+      return (vector, null);
     } catch (e) {
       return (null, '向量服务出错');
     }
@@ -552,7 +655,9 @@ class SearchTool extends AgentTool {
     var chunks = <StoryChunkHit>[];
     if (vector != null) {
       final info = await store.storyVectorInfo;
-      if (info != null && info.model == embeddingClient?.model) {
+      if (info != null &&
+          info.model == embeddingClient?.model &&
+          info.dims == embeddingClient?.dimensions) {
         chunks = await _timed(
           'vectors:${game.key}',
           () => store.searchStoryChunksByVector(
@@ -613,7 +718,11 @@ class SearchTool extends AgentTool {
     List<double> vector,
   ) async {
     final info = await store.storyVectorInfo;
-    if (info == null || info.model != embeddingClient?.model) return const [];
+    if (info == null ||
+        info.model != embeddingClient?.model ||
+        info.dims != embeddingClient?.dimensions) {
+      return const [];
+    }
     return store.searchRecordsByVector(vector, limit: recordsPerGame * 2);
   }
 
@@ -639,8 +748,7 @@ class SearchTool extends AgentTool {
       for (final h in byKeyword.take(recordsPerGame)) h.id,
       for (final h in byMeaning.take(recordsPerGame)) h.id,
     };
-    final ids = kept.toList()
-      ..sort((a, b) => score[b]!.compareTo(score[a]!));
+    final ids = kept.toList()..sort((a, b) => score[b]!.compareTo(score[a]!));
     return [for (final id in ids) hit[id]!];
   }
 
@@ -813,7 +921,9 @@ class SearchTool extends AgentTool {
         }
         if (unreadFrom != null) {
           // 0.14: not "the passage goes on to L…", which read as shown.
-          block.writeln('   …（L$unreadFrom-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）');
+          block.writeln(
+            '   …（L$unreadFrom-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）',
+          );
         }
       }
       for (final line in keyword?.lines ?? const <StoryLineEntry>[]) {
@@ -827,8 +937,8 @@ class SearchTool extends AgentTool {
   }
 
   static String _line(StoryLineEntry line) {
-    final text =
-        formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind);
+    final text = formatStoryLine(line.lineIndex, line.speaker, line.content,
+        kind: line.kind,);
     // 0.14: a line is shown whole, as `read_story` shows it (it counts as
     // read); only a very long one (a letter, a document) is cut, and says so.
     return text.length <= lineChars

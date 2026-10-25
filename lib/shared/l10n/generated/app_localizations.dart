@@ -851,7 +851,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryTabMine.
   ///
   /// In en, this message translates to:
-  /// **'My texts'**
+  /// **'References'**
   String get libraryTabMine;
 
   /// No description provided for @librarySearchTitle.

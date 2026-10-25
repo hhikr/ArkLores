@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.17.1+39
+version: 0.19.0+41
 
 environment:
   sdk: ^3.6.0
@@ -73,6 +73,7 @@ dependencies:
 
   # Hash verification for downloaded seed bundles
   crypto: ^3.0.6
+  file_picker: ^8.3.7
 
   # Secure storage for API keys
   flutter_secure_storage: ^9.2.4
@@ -110,6 +111,9 @@ flutter:
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
+  assets:
+    - assets/materials/terra.json.gz
+
   # Localization code generation (flutter gen-l10n)
   generate: true
 

@@ -10,6 +10,7 @@ import '../../../core/gamedata/game.dart' show gameOfId;
 import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../../core/library/library_queries.dart' show entryIdOfRecord;
 import '../../../core/library/placeholders.dart';
+import '../../../core/materials/material_provider.dart';
 import '../../../core/wiki/wiki_page.dart';
 import '../../../core/wiki/wiki_provider.dart';
 import '../../../shared/l10n/l10n.dart';
@@ -23,6 +24,7 @@ import '../../../shared/widgets/ef_widgets.dart';
 import '../../../shared/widgets/press_feedback.dart';
 import '../../../shared/widgets/smooth_page_route.dart';
 import '../../library/entry_page.dart';
+import '../../library/material_pages.dart';
 import '../../library/reading_text.dart';
 import '../investigation_ui.dart';
 import '../story_labels_provider.dart';
@@ -30,13 +32,15 @@ import '../story_reader_page.dart';
 
 /// Opens the whole story at [range] (R17b).
 void openStoryReader(BuildContext context, String storyId, CitedRange range) {
-  Navigator.of(context).push(smoothPageRoute<void>(
-    builder: (_) => StoryReaderPage(
-      storyId: storyId,
-      highlightStart: range.start,
-      highlightEnd: range.end,
+  Navigator.of(context).push(
+    smoothPageRoute<void>(
+      builder: (_) => StoryReaderPage(
+        storyId: storyId,
+        highlightStart: range.start,
+        highlightEnd: range.end,
+      ),
     ),
-  ),);
+  );
 }
 
 /// Opens a cited non-story record where the library shows it: the page of
@@ -56,12 +60,15 @@ Future<void> showCitedRecord(
   if (!context.mounted) return;
   if (entryId != null) {
     final target = entryId;
-    await Navigator.of(context).push(smoothPageRoute<void>(
-      builder: (_) => EntryPage(entryId: target),
-    ),);
+    await Navigator.of(context).push(
+      smoothPageRoute<void>(
+        builder: (_) => EntryPage(entryId: target),
+      ),
+    );
     return;
   }
-  await showAppSheet<void>(context, (_) => PlainSheet(child: _RecordSheet(id: id)));
+  await showAppSheet<void>(
+      context, (_) => PlainSheet(child: _RecordSheet(id: id)),);
 }
 
 /// 0.13: shows the cited paragraphs of a wiki page (the version the agent
@@ -81,7 +88,8 @@ String wikiTabIdOf(WikiSite site) => switch (site) {
 
 /// Opens [url] of [site] in the Wiki tab (leaving the pages pushed over the
 /// main tabs).
-void openInWikiTab(BuildContext context, WidgetRef ref, WikiSite site, Uri url) {
+void openInWikiTab(
+    BuildContext context, WidgetRef ref, WikiSite site, Uri url,) {
   ref.read(wikiOpenRequestProvider.notifier).state =
       WikiOpenRequest(wikiTabIdOf(site), url);
   ref.read(mainTabRequestProvider.notifier).state = 0;
@@ -137,8 +145,12 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
     // as in the summary tree below it.
     final recordNumbers = extractCitedRecordIds(content);
     if (cut < 0) {
-      return _blocks(splitAnswerBlocks(content), recordNumbers, theme,
-          streaming: widget.streaming,);
+      return _blocks(
+        splitAnswerBlocks(content),
+        recordNumbers,
+        theme,
+        streaming: widget.streaming,
+      );
     }
     final top = splitAnswerBlocks(content.substring(0, cut));
     final details = splitAnswerBlocks(
@@ -181,8 +193,12 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
         ),
         if (_detailsOpen) ...[
           const SizedBox(height: 6),
-          _blocks(details, recordNumbers, theme,
-              streaming: widget.streaming && !writingTop,),
+          _blocks(
+            details,
+            recordNumbers,
+            theme,
+            streaming: widget.streaming && !writingTop,
+          ),
         ],
       ],
     );
@@ -399,7 +415,9 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
     for (final group in groups.values) {
       group.chapters.sort((a, b) {
         final byOrder = a.sort.compareTo(b.sort);
-        return byOrder != 0 ? byOrder : a.story.storyId.compareTo(b.story.storyId);
+        return byOrder != 0
+            ? byOrder
+            : a.story.storyId.compareTo(b.story.storyId);
       });
     }
     return groups.values.toList();
@@ -424,7 +442,8 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
             ),
         ];
 
-    final collectionStyle = theme.ui(13, weight: 700, color: theme.textSecondary);
+    final collectionStyle =
+        theme.ui(13, weight: 700, color: theme.textSecondary);
     final chapterStyle = theme.text(13.5, weight: FontWeight.w500, height: 1.4);
 
     Widget groupWidget(_SourceGroup group) {
@@ -508,6 +527,35 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
               ),
           ],
         ),
+      for (final material in block.materials)
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+                ref
+                        .watch(citedMaterialProvider(material.pageId))
+                        .valueOrNull
+                        ?.title ??
+                    '补充资料',
+                style: chapterStyle,),
+            for (final range in material.ranges)
+              _chip(
+                  key: 'chain:${material.pageId}:${range.start}',
+                  text: range.start == range.end
+                      ? context.t.aiCitationParagraph(range.start + 1)
+                      : context.t
+                          .aiCitationParagraphs(range.start + 1, range.end + 1),
+                  tooltip: '${material.pageId}:${range.start}-${range.end}',
+                  onTap: () => openMaterialPage(
+                      context,
+                      MaterialReaderPage(
+                          pageId: material.pageId,
+                          start: range.start,
+                          end: range.end,),),),
+          ],
+        ),
       // 0.13: wiki pages — "PRTS《title》" and its paragraph chips.
       for (final wiki in block.wikis)
         Wrap(
@@ -557,6 +605,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
       ),
     );
   }
+
   String _title(String id) =>
       ref.watch(citedRecordProvider(id)).valueOrNull?.title ?? '';
 
@@ -616,6 +665,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
         ),
       );
 }
+
 class _RecordSheet extends ConsumerWidget {
   const _RecordSheet({required this.id});
   final String id;
@@ -633,7 +683,8 @@ class _RecordSheet extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         child: record.when(
           loading: () => const BusyMark(width: 80, cells: 8),
-          error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
+          error: (_, __) =>
+              Text(context.t.aiCitedLinesUnavailable, style: muted),
           data: (r) => r == null
               ? Text(context.t.aiCitedLinesUnavailable, style: muted)
               : Column(
@@ -674,7 +725,8 @@ class CitedRecordText extends ConsumerWidget {
 /// one paragraph around them for context), under their section headings;
 /// the page's site, title and when it was read; a button to the page.
 class WikiCitationSheet extends ConsumerWidget {
-  const WikiCitationSheet({super.key, required this.pageId, required this.range});
+  const WikiCitationSheet(
+      {super.key, required this.pageId, required this.range,});
 
   final String pageId;
   final CitedRange range;
@@ -774,7 +826,10 @@ class WikiCitationSheet extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.fromLTRB(10, 4, 4, 4),
         decoration: BoxDecoration(
-          color: cited ? theme.accentPrimary.withValues(alpha: theme.isDark ? 0.14 : 0.22) : null,
+          color: cited
+              ? theme.accentPrimary
+                  .withValues(alpha: theme.isDark ? 0.14 : 0.22)
+              : null,
           border: Border(
             left: BorderSide(
               color: cited ? theme.trace : theme.divider,

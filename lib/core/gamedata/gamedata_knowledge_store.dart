@@ -6,7 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' as sqflite;
 
-import 'build/gamedata_schema.dart' show storyLinesIndexName, storyLinesIndexSql;
+import 'build/gamedata_schema.dart'
+    show storyLinesIndexName, storyLinesIndexSql;
 import 'game_retrieval.dart';
 import 'name_similarity.dart';
 import 'readonly_sql.dart';
@@ -39,9 +40,18 @@ Future<RecordVectorIndex?> _loadRecordVectorsInBackground(
   }
 }
 
-class GameDataKnowledgeStore implements GameDataRetrieval {
-
+class GameDataKnowledgeStore implements GameDataRetrieval, GamePassageVectors {
   GameDataKnowledgeStore({this.dbPath, this.game = Game.arknights});
+  @override
+  Future<({List<double> vector, String model, int dims})?> passageVector(
+      String storyId, int line,) async {
+    final index = await _loadVectorIndex();
+    final vector = index?.passageVector(storyId, line);
+    return vector == null
+        ? null
+        : (vector: vector, model: index!.model, dims: index.dims);
+  }
+
   final String? dbPath;
 
   /// Which game's database this store reads (its own file).
@@ -125,9 +135,8 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
           kind: row['kind'] as String?,
         ),
     ];
-    final nextPageToken = hasMore && lines.isNotEmpty
-        ? '${lines.last.lineIndex + 1}'
-        : null;
+    final nextPageToken =
+        hasMore && lines.isNotEmpty ? '${lines.last.lineIndex + 1}' : null;
     return StoryLinesPage(
       lines: lines,
       storyFound: true,
@@ -343,7 +352,8 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   }
 
   @override
-  Future<List<RelatedCollection>> relatedCollections(String collectionId) async {
+  Future<List<RelatedCollection>> relatedCollections(
+      String collectionId,) async {
     final db = await _open();
     if (db == null) return const [];
     final speakers = await querySharedSpeakers(db, collectionId);
@@ -406,8 +416,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
 
   /// `entity_name`, or the name of the record's `entity_id` (a voice line
   /// carries only the id of its operator).
-  static const String _ownerSql =
-      "COALESCE(NULLIF(entity_name, ''), "
+  static const String _ownerSql = "COALESCE(NULLIF(entity_name, ''), "
       '(SELECT e.name FROM entities e WHERE e.id = entity_id), '
       "'')";
 
@@ -462,7 +471,9 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       for (final t in terms.take(6))
         if (t.trim().isNotEmpty) t.trim(),
     ];
-    if (db == null || cleaned.isEmpty || !await _hasTable(db, 'normalized_records')) {
+    if (db == null ||
+        cleaned.isEmpty ||
+        !await _hasTable(db, 'normalized_records')) {
       return const [];
     }
     // A record about the thing a term names (its entity_name is the term)
@@ -532,7 +543,8 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   /// About 120 characters of [text] around the first of [terms] found; a
   /// record about [subject] is shown around the other terms when it has
   /// them (its subject's name is everywhere in it).
-  static String _around(String text, List<String> terms, {String subject = ''}) {
+  static String _around(String text, List<String> terms,
+      {String subject = '',}) {
     final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     var at = -1;
     final others = [
@@ -641,8 +653,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       [...args, ...?ids],
     );
     return {
-      for (final row in rows)
-        '${row['story_id']}': (row['n'] as num).toInt(),
+      for (final row in rows) '${row['story_id']}': (row['n'] as num).toInt(),
     };
   }
 
@@ -784,7 +795,6 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
     }
     return p.join(dir.path, game.dbFileName);
   }
-
 
   Future<bool> _hasTable(sqflite.Database db, String tableName) async {
     final rows = await db.rawQuery(

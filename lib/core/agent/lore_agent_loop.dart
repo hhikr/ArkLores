@@ -32,6 +32,8 @@ import '../gamedata/game_retrieval.dart';
 import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../llm/llm_client.dart';
+import '../materials/material_document.dart';
+import '../materials/material_snapshot.dart';
 import '../wiki/wiki_lookup.dart';
 import '../wiki/wiki_page.dart';
 import 'coverage.dart';
@@ -121,6 +123,7 @@ class LoreAgentLoop {
     this.planTimeout = const Duration(seconds: 25),
     this.embeddingClient,
     this.wiki,
+    this.materials,
     this.maxTurns = 30,
     this.contextCharBudget = 80000,
     this.maxTokens = 8192,
@@ -150,6 +153,7 @@ class LoreAgentLoop {
 
   /// How turns are sent (see [AgentTransport]).
   final AgentTransport transport;
+  final MaterialSnapshot? materials;
 
   /// Measurement only: called when a tool run, a local check (citation
   /// text lookup, catalog lookup) or a failed model call finishes, with its
@@ -234,6 +238,8 @@ class LoreAgentLoop {
     // [asQuestion]: what a follow-up takes as the last question when
     // [query] is not the player's own words (the reader's review).
     final seen = prior?.seen ?? SeenLines();
+    seen.retainMaterials(
+        {for (final d in materials?.documents ?? const <MaterialDocument>[]) d.pageId},);
     // 0.12: the prompt describes every installed game's library.
     final games = store is MultiGameRetrieval
         ? await (store as MultiGameRetrieval).installedGames()
@@ -244,11 +250,11 @@ class LoreAgentLoop {
         ...loreTools(
           store,
           seen,
+          materials: materials,
           embeddingClient: embeddingClient,
           wiki: wiki,
-          picker: pickLines && !subtask
-              ? LinePicker(planClient ?? client)
-              : null,
+          picker:
+              pickLines && !subtask ? LinePicker(planClient ?? client) : null,
         ),
         if (wiki != null) ...wikiTools(wiki!, seen),
         if (delegating) DelegateTool((args) => _runSubtask(args, seen)),
@@ -272,12 +278,12 @@ class LoreAgentLoop {
     if (gather is GatherTool) gather.question = asQuestion ?? query;
 
     String systemPrompt() {
-      final base = loreRolePrompt(
+      final base = '${loreRolePrompt(
         subtask ? LoreRole.helper : LoreRole.answer,
         games: games,
         wiki: wiki != null,
         delegate: delegating,
-      );
+      )}\n\n${materials?.guide ?? ''}';
       return transport.textProtocol
           ? '$base\n\n${loreTextToolProtocol(_toolList(tools.values))}'
           : base;
@@ -295,10 +301,7 @@ class LoreAgentLoop {
     }
 
     final conversation = <Message>[
-      if (prior != null)
-        ...prior.messages
-      else
-        ...history,
+      if (prior != null) ...prior.messages else ...history,
       Message.user(query),
     ];
     // Indexes (in [conversation]) of tool results that may be folded.
@@ -615,8 +618,7 @@ class LoreAgentLoop {
                 type: ReActEventType.finalAnswerToken,
                 content: delta.content,
               );
-            } else if (text.length >= 160 &&
-                !text.toString().contains('```')) {
+            } else if (text.length >= 160 && !text.toString().contains('```')) {
               answerOpen = true;
               yield ReActEvent(
                 type: ReActEventType.finalAnswerToken,
@@ -628,7 +630,8 @@ class LoreAgentLoop {
         }
       } on LLMException catch (e) {
         // 0.14: a failed call is part of the timeline too.
-        onSpan?.call('llm_error:${_clip(e.message, 80)}', callStart, DateTime.now());
+        onSpan?.call(
+            'llm_error:${_clip(e.message, 80)}', callStart, DateTime.now(),);
         if (!transport.textProtocol && _rejectsTools(e)) {
           // The provider has no function calling: switch to plain-text tool
           // calls and ask again.
@@ -651,7 +654,8 @@ class LoreAgentLoop {
           }
           yield ReActEvent(
             type: ReActEventType.status,
-            content: '${e.message.contains('timed out') ? '服务商长时间没有响应' : '连接中断'}，'
+            content:
+                '${e.message.contains('timed out') ? '服务商长时间没有响应' : '连接中断'}，'
                 '正在重试（$streamRetries/$_maxStreamRetries）',
           );
           await Future<void>.delayed(streamRetryDelay * streamRetries);
@@ -748,7 +752,8 @@ class LoreAgentLoop {
           );
         }
         if (content.trim().isNotEmpty) {
-          yield ReActEvent(type: ReActEventType.thought, content: content.trim());
+          yield ReActEvent(
+              type: ReActEventType.thought, content: content.trim(),);
         }
         // 0.14: the gate — glued calls split, arguments checked against
         // each tool's schema; what enters the conversation is valid JSON.
@@ -763,11 +768,13 @@ class LoreAgentLoop {
         if (transport.textProtocol) {
           conversation.add(Message.assistant(text.toString()));
         } else {
-          conversation.add(Message.assistantToolCalls(
-            content,
-            [for (final c in checked) c.sanitized],
-            reasoningContent: reasoning.isEmpty ? null : reasoning.toString(),
-          ),);
+          conversation.add(
+            Message.assistantToolCalls(
+              content,
+              [for (final c in checked) c.sanitized],
+              reasoningContent: reasoning.isEmpty ? null : reasoning.toString(),
+            ),
+          );
         }
         final delegates = [
           for (final c in checked)
@@ -823,7 +830,8 @@ class LoreAgentLoop {
           if (lookupFoundNothing(result)) {
             final name = c.call.name;
             final n = failedLookups[name] = (failedLookups[name] ?? 0) + 1;
-            if (n <= maxFailedLookups && !result.startsWith(lookupLimitPrefix)) {
+            if (n <= maxFailedLookups &&
+                !result.startsWith(lookupLimitPrefix)) {
               final before = triedInVain[name] ??= [];
               result = '$result\n（这次问答里 $name 已有 $n 次没有结果'
                   '${n == maxFailedLookups ? '，到上限了：之后的 $name 调用不再执行。$lookupLimitAdvice' : '，上限 $maxFailedLookups 次'}'
@@ -916,7 +924,9 @@ class LoreAgentLoop {
       // A flat or odd citation shape is written back in the nested form, so
       // later turns (rewrite, follow-ups) do not copy it.
       final keep = fromJson == null ? content : normalizeAnswerCites(content);
-      var body = (fromJson ?? content).trim().replaceAllMapped(
+      var body = (fromJson ?? content)
+          .trim()
+          .replaceAllMapped(
             RegExp(r'(\.txt\s*[:：]\s*)L(\d+)(\s*[-–~]\s*)?L?(\d+)?'),
             (m) => '${m.group(1)}${m.group(2)}'
                 '${m.group(4) == null ? '' : '${m.group(3) ?? '-'}${m.group(4)}'}',
@@ -996,15 +1006,17 @@ class LoreAgentLoop {
           rollback: true,
         );
         redoNotes.add(conversation.length);
-        conversation.add(Message.user(
-          loreRedoNote(
-            unreadable: unreadable,
-            cutShort: cutShort,
-            unseen: manyUnseen ? unseen : const [],
-            bare: bare,
-            json: !subtask,
+        conversation.add(
+          Message.user(
+            loreRedoNote(
+              unreadable: unreadable,
+              cutShort: cutShort,
+              unseen: manyUnseen ? unseen : const [],
+              bare: bare,
+              json: !subtask,
+            ),
           ),
-        ),);
+        );
         redoing = true;
         continue;
       }
@@ -1064,6 +1076,7 @@ class LoreAgentLoop {
       final coverageWord = _coverageLine.firstMatch(body)?.group(1);
       final coverage = coverageWord == null ? null : _coverageOf(coverageWord);
       body = body.replaceAll(_coverageLine, '').trim();
+      var removedMaterialCitations = 0;
       if (unseen.isNotEmpty) {
         if (fewUnseen) {
           // 0.14: dropped rather than shown as unchecked; which ones is in
@@ -1076,14 +1089,19 @@ class LoreAgentLoop {
             content: '删去了没在读到的原文中核实的出处：${unseen.join('、')}',
           );
         } else {
+          for (final c in unseen.where((c) => c.startsWith('material:'))) {
+            body = body.replaceAll('`$c`', '').replaceAll(c, '');
+            removedMaterialCitations++;
+          }
           body = '$body\n\n> 以下出处未能在本次读到的原文中核实：'
-              '${unseen.map((c) => '`$c`').join('、')}';
+              '${unseen.map((c) => c.startsWith('material:') ? '补充资料的未读段落' : '`$c`').join('、')}';
         }
       }
       if (done?.finishReason == 'length') {
         body = '$body\n\n> 注意：答案达到长度上限，可能不完整。';
       }
-      final verified = _citationCount(body) - (fewUnseen ? 0 : unseen.length);
+      final verified = _citationCount(body) -
+          (fewUnseen ? 0 : unseen.length - removedMaterialCitations);
       // The model's own text (JSON) stays in the conversation, so a
       // follow-up sees the format it is asked for.
       hidden.addAll(redoNotes);
@@ -1094,7 +1112,8 @@ class LoreAgentLoop {
       // passed the check.
       final entries = [
         if (fromJson != null && !subtask)
-          for (final e in loreAnswerEntries(content) ?? const <LoreAnswerEntry>[])
+          for (final e
+              in loreAnswerEntries(content) ?? const <LoreAnswerEntry>[])
             LoreAnswerEntry(
               heading: e.heading,
               text: e.text,
@@ -1184,8 +1203,7 @@ class LoreAgentLoop {
       final ids = <String>{
         for (final m in _citation.allMatches(answer)) m.group(1)!,
       };
-      final catalog =
-          ids.isEmpty
+      final catalog = ids.isEmpty
           ? const <String, StoryCatalogEntry>{}
           : await _span('catalog', () => store.storyCatalogEntries(ids));
       final stories = <String>{
@@ -1261,7 +1279,8 @@ class LoreAgentLoop {
     yield const ReActEvent(type: ReActEventType.status, content: '整理答案');
     final messages = [
       Message.system(loreRolePrompt(LoreRole.stager)),
-      Message.user(loreStagePrompt(numberedEntries(entries), question: question)),
+      Message.user(
+          loreStagePrompt(numberedEntries(entries), question: question),),
     ];
     final text = StringBuffer();
     var shown = 0;
@@ -1339,6 +1358,7 @@ class LoreAgentLoop {
       store: store,
       embeddingClient: embeddingClient,
       wiki: wiki,
+      materials: materials,
       maxTurns: subtaskMaxTurns,
       contextCharBudget: contextCharBudget,
       maxTokens: maxTokens,
@@ -1358,13 +1378,15 @@ class LoreAgentLoop {
           event.type == ReActEventType.error) {
         final side = _side;
         if (side != null && !side.isClosed) {
-          side.add(ReActEvent(
-            type: event.type,
-            content: event.content,
-            toolName: event.toolName,
-            toolArgs: event.toolArgs,
-            subtask: number,
-          ),);
+          side.add(
+            ReActEvent(
+              type: event.type,
+              content: event.content,
+              toolName: event.toolName,
+              toolArgs: event.toolArgs,
+              subtask: number,
+            ),
+          );
         }
       }
     }
@@ -1660,7 +1682,8 @@ class LoreAgentLoop {
           '${arg('start').isEmpty ? '' : ' L${arg('start')} 起'}',
       'outline' => '查看故事集 ${arg('collection')}',
       'similar_names' => '查找与“${arg('name')}”相近的名字',
-      'gather' => '按名字取材：${args['names'] is List ? (args['names'] as List).join('、') : arg('names')}',
+      'gather' =>
+        '按名字取材：${args['names'] is List ? (args['names'] as List).join('、') : arg('names')}',
       'wiki_search' => '在 Wiki 上搜索“${arg('query')}”',
       'wiki_read' => '阅读 Wiki 页面 ${arg('page')}',
       'delegate' => '子任务：${_clip(arg('task'), 40)}',
@@ -1717,12 +1740,15 @@ class LoreAgentLoop {
       final decoded = decodeToolArguments(match.group(1)!);
       final name = '${decoded['name'] ?? ''}'.trim();
       if (name.isEmpty) continue;
-      final args = decoded['arguments'] ?? decoded['parameters'] ?? decoded['args'];
-      calls.add(ToolCall(
-        id: 'text_$i',
-        name: name,
-        arguments: jsonEncode(args is Map ? args : const {}),
-      ),);
+      final args =
+          decoded['arguments'] ?? decoded['parameters'] ?? decoded['args'];
+      calls.add(
+        ToolCall(
+          id: 'text_$i',
+          name: name,
+          arguments: jsonEncode(args is Map ? args : const {}),
+        ),
+      );
     }
     return calls;
   }
@@ -1772,6 +1798,7 @@ class LoreAgentLoop {
         _citation.hasMatch(first) ||
         _recordCitation.hasMatch(first) ||
         wikiCitationPattern.hasMatch(first) ||
+        materialCitationPattern.hasMatch(first) ||
         !_processLeadIn.hasMatch(first)) {
       return body;
     }
@@ -1811,7 +1838,8 @@ class LoreAgentLoop {
           story = cite.group(1);
           refs.add(token);
         } else if (whole(_recordCitation, token) ||
-            whole(wikiCitationPattern, token)) {
+            whole(wikiCitationPattern, token) ||
+            whole(materialCitationPattern, token)) {
           refs.add(token);
         } else if (story != null && _bareRange.hasMatch(token)) {
           refs.add('$story:$token'); // more lines of the story before it
@@ -1819,7 +1847,9 @@ class LoreAgentLoop {
           return m.group(0)!;
         }
       }
-      return refs.isEmpty ? m.group(0)! : ' ${refs.map((r) => '`$r`').join(' ')}';
+      return refs.isEmpty
+          ? m.group(0)!
+          : ' ${refs.map((r) => '`$r`').join(' ')}';
     }).replaceAllMapped(_plainCoverage, (m) => '[COVERAGE: ${m.group(1)}]');
   }
 
@@ -1870,6 +1900,10 @@ class LoreAgentLoop {
       final (lo, hi) = _wikiRange(m);
       check(m.group(0)!, _wikiPageIdOf(m), lo, hi);
     }
+    for (final m in materialCitationPattern.allMatches(body)) {
+      final a = int.parse(m[3]!), b = int.tryParse(m[4] ?? '') ?? a;
+      check(m[0]!, 'material:${m[1]}@${m[2]}', a <= b ? a : b, a <= b ? b : a);
+    }
     return out;
   }
 
@@ -1877,6 +1911,7 @@ class LoreAgentLoop {
         ..._citation.allMatches(body).map((m) => m.group(0)),
         ..._recordCitation.allMatches(body).map((m) => m.group(0)),
         ...wikiCitationPattern.allMatches(body).map((m) => m.group(0)),
+        ...materialCitationPattern.allMatches(body).map((m) => m[0]),
       }.length;
 
   /// Citations of [body] pointing at lines or records no tool showed in
@@ -1897,6 +1932,13 @@ class LoreAgentLoop {
     for (final m in wikiCitationPattern.allMatches(body)) {
       final (lo, hi) = _wikiRange(m);
       if (!seen.covers(_wikiPageIdOf(m), lo, hi)) unseen.add(m.group(0)!);
+    }
+    for (final m in materialCitationPattern.allMatches(body)) {
+      final a = int.parse(m[3]!), b = int.tryParse(m[4] ?? '') ?? a;
+      if (!seen.covers(
+          'material:${m[1]}@${m[2]}', a <= b ? a : b, a <= b ? b : a,)) {
+        unseen.add(m[0]!);
+      }
     }
     return unseen.toList()..sort();
   }

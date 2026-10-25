@@ -425,7 +425,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiStoryReaderEnd => 'End of chapter';
 
   @override
-  String get libraryTabMine => 'My texts';
+  String get libraryTabMine => 'References';
 
   @override
   String get librarySearchTitle => 'Search';

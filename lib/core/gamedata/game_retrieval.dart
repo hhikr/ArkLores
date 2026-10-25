@@ -86,6 +86,11 @@ class RecordText {
 }
 
 /// The retrieval surface the investigation tools depend on.
+abstract interface class GamePassageVectors {
+  Future<({List<double> vector, String model, int dims})?> passageVector(
+      String storyId, int line,);
+}
+
 abstract interface class GameDataRetrieval {
   /// Whether the local knowledge DB is present and readable.
   Future<bool> get isAvailable;
