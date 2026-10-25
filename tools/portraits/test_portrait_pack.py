@@ -98,6 +98,34 @@ class PortraitPackTest(unittest.TestCase):
                 self.assertEqual(row[1:], (None, None, None, 0, 0, 1, None))
             self.assertEqual(a.execute("SELECT value FROM pack_manifest WHERE key='missing_count'").fetchone()[0], '1')
 
+    def test_unchanged_sets_are_copied_from_the_previous_pack(self):
+        base = Image.new('RGBA', (60, 60), (0, 0, 0, 255))
+        self.add('keep#1$1', base, 5)
+        self.add('keep#2$1', Image.new('RGBA', (60, 60), (255, 0, 0, 255)))
+        self.add('grow#1$1', base, 5)
+        first = self.run_build('pack.db')
+        with closing(sqlite3.connect(first)) as db:
+            before = {t: db.execute(f'SELECT * FROM {t} ORDER BY 1').fetchall() for t in ('portrait_bases', 'portrait_images')}
+        self.add('grow#2$1', Image.new('RGBA', (60, 60), (0, 0, 255, 255)))
+        with patch('build_portrait_pack.prepare_group', wraps=__import__('build_portrait_pack').prepare_group) as encode:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                # A thread pool so the patched function is the one called.
+                with patch('build_portrait_pack.ProcessPoolExecutor', ThreadPoolExecutor):
+                    stats = build(self.kb, self.cache, first)
+        self.assertEqual([call.args[1] for call in encode.call_args_list], [('grow', 1)])
+        self.assertEqual(stats['reused_groups'], 1)
+        with closing(sqlite3.connect(first)) as db:
+            for table in ('portrait_bases', 'portrait_images'):
+                rows = db.execute(f"SELECT * FROM {table} WHERE {'base_id' if table == 'portrait_bases' else 'sprite'} LIKE 'keep%' ORDER BY 1").fetchall()
+                self.assertEqual(rows, [r for r in before[table] if r[0].startswith('keep')])
+            self.assertEqual(db.execute("SELECT count(*) FROM portrait_images WHERE sprite LIKE 'grow%'").fetchone()[0], 2)
+        # The same result as building from nothing.
+        fresh = self.run_build('fresh.db', previous=self.root / 'none.db')
+        with closing(sqlite3.connect(first)) as a, closing(sqlite3.connect(fresh)) as b:
+            for table in ('portrait_bases', 'portrait_images', 'pack_groups'):
+                self.assertEqual(a.execute(f'SELECT * FROM {table} ORDER BY 1').fetchall(), b.execute(f'SELECT * FROM {table} ORDER BY 1').fetchall())
+
     def test_rgb_difference_without_alpha_difference(self):
         base = Image.new('RGBA', (100, 100), (10, 10, 10, 255))
         image = base.copy()
@@ -172,7 +200,8 @@ class PortraitPackTest(unittest.TestCase):
         source = self.root / 'source.db'
         with closing(sqlite3.connect(source)) as db:
             db.executescript("CREATE TABLE unit_versions(unit TEXT, res_version TEXT); INSERT INTO unit_versions VALUES ('artwork', 'fixture'); CREATE TABLE narrative_image_assets(category TEXT, asset_id TEXT, object_key TEXT, size INTEGER, width INTEGER, height INTEGER);")
-            db.execute("INSERT INTO narrative_image_assets VALUES ('character', 'unit#1$1', 'key', ?, 10, 10)", (size,))
+            # Arkwaifu keeps the script's spelling; the knowledge base's is canonical.
+            db.execute("INSERT INTO narrative_image_assets VALUES ('character', 'Unit #1$1', 'key', ?, 10, 10)", (size,))
             db.commit()
         with patch('fetch_arkwaifu.Downloader.download') as download, patch('fetch_arkwaifu.ThreadPoolExecutor', wraps=ThreadPoolExecutor) as pool, contextlib.redirect_stdout(io.StringIO()):
             result = fetch(self.kb, self.cache, source, workers=10)

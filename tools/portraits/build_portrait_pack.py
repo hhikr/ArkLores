@@ -36,7 +36,29 @@ CREATE TABLE portrait_images (
   webp    BLOB
 );
 CREATE TABLE pack_manifest (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE pack_groups (
+  base_id   TEXT PRIMARY KEY,         -- 一套图（立绘 + 服装），同 portrait_bases.base_id
+  signature TEXT NOT NULL             -- 这套图的输入（group_signature）；没变就从上一个包原样拷过来
+);
 """
+
+
+def base_of(members):
+    """The base sprite of a set: the one with the most lines, ties by name."""
+    return min(members, key=lambda row: (-row[3], row[0]))[0]
+
+
+def group_signature(cache, members, sources, height):
+    """Everything a set's rows depend on: its sprites, their source images
+    (Arkwaifu's object key and the cached file's size), which one is the base,
+    and the height. Equal signature, equal rows."""
+    return json.dumps({
+        'height': height,
+        'base': base_of(members),
+        'members': sorted(
+            [row[0], sources.get(row[0], {}).get('object_key'), png_path(cache, row[0]).stat().st_size]
+            for row in members),
+    }, sort_keys=True, ensure_ascii=False)
 
 
 def load_group(cache, rows, height):
@@ -80,7 +102,7 @@ def difference_box(image, base):
 def prepare_group(cache, key, members, height):
     group, body = key
     images, blank = load_group(cache, members, height)
-    base_sprite = min(members, key=lambda row: (-row[3], row[0]))[0]
+    base_sprite = base_of(members)
     base = images[base_sprite]
     base_id = f'{group}${body}'
     base_row = None
@@ -110,30 +132,51 @@ def prepare_group(cache, key, members, height):
     return base_row, image_rows
 
 
-def prepared_groups(cache, grouped, height):
+def reused_group(previous, base_id, members):
+    """The rows of a set copied from the previous pack, in prepare_group's shape."""
+    base_row = previous.execute('SELECT * FROM portrait_bases WHERE base_id=?', (base_id,)).fetchone()
+    image_rows = []
+    for sprite, *_ in members:
+        row = previous.execute('SELECT * FROM portrait_images WHERE sprite=?', (sprite,)).fetchone()
+        kind = 'blank' if row[6] else 'full' if row[1] is None else 'same' if row[7] is None else 'patches'
+        image_rows.append((kind, row))
+    return base_row, image_rows
+
+
+def prepared_groups(cache, grouped, height, reuse):
     # Bound decoded-image memory and consume results in deterministic group order.
+    # [reuse] gives a function that reads a set's rows from the previous pack
+    # (called only when its turn comes), or None to encode the set.
     items = iter(sorted(grouped.items()))
     pending = deque()
     with ProcessPoolExecutor(max_workers=4) as pool:
         def submit_next():
-            item = next(items, None)
-            if item is not None:
+            while (item := next(items, None)) is not None:
                 key, members = item
-                pending.append(pool.submit(prepare_group, cache, key, members, height))
+                ready = reuse(key, members)
+                if ready is not None:
+                    pending.append((key, ready, True))
+                    continue
+                pending.append((key, pool.submit(prepare_group, cache, key, members, height), False))
+                return
 
         for _ in range(4):
             submit_next()
         while pending:
-            yield pending.popleft().result()
+            key, result, reused = pending.popleft()
+            yield key, (result() if reused else result.result()), reused
             submit_next()
 
 
-def build(kb, cache, out, groups=None, height=800):
+def build(kb, cache, out, groups=None, height=800, previous=None):
+    """Writes the pack to [out]. Sets whose signature is the same as in
+    [previous] (default: the pack already at [out]) are copied, not encoded
+    again; [out] is replaced only when the new pack is complete."""
     if height <= 0:
         raise ValueError('height must be positive')
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.unlink(missing_ok=True)
+    previous = Path(previous) if previous else out
     part = out.with_name(out.name + '.part')
     part.unlink(missing_ok=True)
     rows = sprite_rows(kb, groups)
@@ -147,12 +190,30 @@ def build(kb, cache, out, groups=None, height=800):
     index = json.loads((Path(cache) / 'index.json').read_text(encoding='utf-8'))
     with closing(readonly(kb)) as source:
         commit = source.execute("SELECT value FROM gamedata_manifest WHERE key='source_arknights_commit'").fetchone()[0]
-    stats = {'groups': len(grouped), 'bases': 0, 'base_bytes': 0, 'patches': 0, 'patch_bytes': 0, 'full': 0, 'full_bytes': 0, 'same': 0, 'blank': 0, 'missing': len(missing)}
+    stats = {'groups': len(grouped), 'reused_groups': 0, 'bases': 0, 'base_bytes': 0, 'patches': 0, 'patch_bytes': 0, 'full': 0, 'full_bytes': 0, 'same': 0, 'blank': 0, 'missing': len(missing)}
     largest = []
+    signatures = {key: group_signature(cache, members, index['sprites'], height) for key, members in grouped.items()}
+    old = None
+    if previous.is_file():
+        old = readonly(previous)
+        has_groups = old.execute("SELECT 1 FROM sqlite_master WHERE name='pack_groups'").fetchone()
+        old_signatures = dict(old.execute('SELECT base_id, signature FROM pack_groups')) if has_groups else {}
+    else:
+        old_signatures = {}
+
+    def reuse(key, members):
+        base_id = f'{key[0]}${key[1]}'
+        if old_signatures.get(base_id) != signatures[key]:
+            return None
+        return lambda: reused_group(old, base_id, members)
+
+    part.unlink(missing_ok=True)
     db = sqlite3.connect(part)
     try:
         db.executescript(SCHEMA)
-        for number, (base_row, image_rows) in enumerate(prepared_groups(cache, grouped, height), 1):
+        for number, (key, (base_row, image_rows), reused) in enumerate(prepared_groups(cache, grouped, height, reuse), 1):
+            db.execute('INSERT INTO pack_groups VALUES (?, ?)', (f'{key[0]}${key[1]}', signatures[key]))
+            stats['reused_groups'] += reused
             if base_row:
                 db.execute('INSERT INTO portrait_bases VALUES (?, ?, ?, ?, ?)', base_row)
                 stats['bases'] += 1
@@ -173,6 +234,8 @@ def build(kb, cache, out, groups=None, height=800):
         db.execute('VACUUM')
     finally:
         db.close()
+        if old is not None:
+            old.close()
     part.replace(out)
     stats['file_bytes'] = out.stat().st_size
     stats['largest_images'] = sorted(largest, key=lambda row: (-row['bytes'], row['sprite']))[:10]
@@ -188,6 +251,7 @@ def main():
         parser.add_argument('--' + name, required=True)
     parser.add_argument('--groups')
     parser.add_argument('--height', type=int, default=800)
+    parser.add_argument('--previous', help='pack to copy unchanged sets from (default: the one at --out)')
     args = parser.parse_args()
     if args.height <= 0:
         parser.error('--height must be positive')

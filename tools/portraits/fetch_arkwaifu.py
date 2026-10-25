@@ -95,8 +95,13 @@ def fetch(kb, cache, arkwaifu_db=None, workers=4, limit=None, groups=None):
     with closing(readonly(source)) as db:
         version = db.execute("SELECT res_version FROM unit_versions WHERE unit = 'artwork'").fetchone()[0]
         print(f'artwork_version={version}', flush=True)
+        # Arkwaifu keeps the script's spelling (avg_1029_Yato2_1, AVG_char_…);
+        # the knowledge base's names are canonical: no whitespace, lower case.
+        by_name = {}
+        for asset_id, *row in db.execute("SELECT asset_id, object_key, size, width, height FROM narrative_image_assets WHERE category = 'character' ORDER BY asset_id"):
+            by_name.setdefault(''.join(asset_id.split()).lower(), row)
         for sprite, *_ in rows:
-            row = db.execute("SELECT object_key, size, width, height FROM narrative_image_assets WHERE category = 'character' AND asset_id = ?", (sprite,)).fetchone()
+            row = by_name.get(sprite)
             if row is None:
                 missing.append(sprite)
             else:
