@@ -135,3 +135,23 @@ final embeddingConfigProvider =
 final githubTokenProvider = FutureProvider<String>((ref) async {
   return ref.watch(settingsServiceProvider).loadGithubToken();
 });
+
+final initialContextWarnTokensProvider = Provider<int>((ref) => 100000);
+
+class ContextWarnTokensNotifier extends StateNotifier<int> {
+  ContextWarnTokensNotifier(this._service, int initial) : super(initial);
+  final SettingsService _service;
+
+  Future<void> set(int value) async {
+    state = value;
+    await _service.saveContextWarnTokens(value);
+  }
+}
+
+final contextWarnTokensProvider =
+    StateNotifierProvider<ContextWarnTokensNotifier, int>(
+  (ref) => ContextWarnTokensNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialContextWarnTokensProvider),
+  ),
+);

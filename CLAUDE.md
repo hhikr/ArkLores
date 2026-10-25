@@ -14,6 +14,8 @@
 
 ## 当前进度（每轮结束时更新；细节进 CHANGELOG 与 docs，这里只留要点）
 
+- **0.20 P5a（开发中，分支 `v0.20`）**：主 agent 取消轮数上限，子助手保留 10 轮；每次主请求报告上下文用量并写入会话统计，设置可调整提醒值，输入框显示用量、越界提示与一次性弹窗。只用 mock LLM 和 widget 测试，截图在本地 `build/shots/v020_p5a/`，未在真机验证。去重与压缩留给 P5b、P5c。
+
 - **0.19.1（2026-10-25，分支 `releases-tidy`，Android build 42）**：长按阅读器标题展开拖动进度条（按行定位）；Wiki 与问答往下拖时顶栏、底栏让出屏幕（只平移，`BarsAway`，见 `docs/DESIGN.md`）；毛玻璃换页只在资料页（`smoothPageRoute(frosted: true)`）；知识库只放 `gamedata-channel`。只有 widget 测试，没上真机。
 - **0.19.0（2026-10-25，分支 `fix/qa-retrieval-evidence`，Android build 41，从 v0.17.1 开出、合并了 0.18.0 的 `main`）**：Quality of Life 版本（开发者 2026-10-25 定名），不加新资料或玩法。整个 App 的流畅度与人机交互修正，加上问答检索的工程修正。
   - 界面：问答可以同时开几个对话、各自在后台答（左上角对话栏：作答中 / 最近 / 查看全部）；设置分五个大类、各一页；开屏动画（`launch_curtain.dart`），深色主题下开屏不闪白（App 把自己的深浅告诉 Android 12+）；

@@ -1578,4 +1578,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskTry => 'Try asking';
+
+  @override
+  String get settingsContextWarnTokens => 'Context warning threshold';
+
+  @override
+  String get settingsContextWarnTokensDesc =>
+      'Warn when a conversation exceeds this value; automatically compress earlier content at 80% of this value.';
+
+  @override
+  String aiContextMeter(String n, String limit) {
+    return 'Context $n / $limit';
+  }
+
+  @override
+  String aiContextNotice(String n, String limit) {
+    return 'This conversation has exceeded the context warning threshold ($n / $limit). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.';
+  }
+
+  @override
+  String get aiContextWarningTitle => 'Context warning threshold exceeded';
+
+  @override
+  String aiContextWarningBody(String n, String limit) {
+    return 'This conversation now has $n of context (warning threshold $limit). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.';
+  }
+
+  @override
+  String get aiContextNewChat => 'New conversation';
+
+  @override
+  String get aiContextStop => 'Stop answering';
+
+  @override
+  String get aiContextDismiss => 'Got it';
 }

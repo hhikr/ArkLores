@@ -17,6 +17,7 @@ import '../../shared/widgets/page_frame.dart';
 import '../settings/background_access.dart';
 import 'widgets/answer_options_menu.dart';
 import 'widgets/ask_composer.dart';
+import 'widgets/ask_context_meter.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/conversations_panel.dart';
 
@@ -268,15 +269,31 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     setState(() => _composerHeight = height);
                   }
                 },
-                child: AskComposer(
-                  controller: _inputController,
-                  theme: theme,
-                  isSending: isSending,
-                  onSend: isSending ? chatNotifier.cancel : _handleAskSend,
-                  hintText: context.t.aiAskInputPlaceholder,
-                  maxHeight: constraints.maxHeight,
-                  leading: (card) =>
-                      AnswerOptionsMenu(theme: theme, above: card),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxHeight: constraints.maxHeight * 0.55,),
+                      child:
+                          const SingleChildScrollView(child: AskContextMeter()),
+                    ),
+                    Flexible(
+                      child: LayoutBuilder(
+                        builder: (context, room) => AskComposer(
+                          controller: _inputController,
+                          theme: theme,
+                          isSending: isSending,
+                          onSend:
+                              isSending ? chatNotifier.cancel : _handleAskSend,
+                          hintText: context.t.aiAskInputPlaceholder,
+                          maxHeight: room.maxHeight,
+                          leading: (card) =>
+                              AnswerOptionsMenu(theme: theme, above: card),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

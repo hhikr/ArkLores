@@ -526,5 +526,44 @@
   "apiSettingsHideKey": "Hide key",
   "wikiSourcesResetConfirm": "The sites go back to the built-in list; added sites are removed.",
   "aiConfigRequiredTitle": "Set up the chat service first",
-  "aiAskTry": "Try asking"
+  "aiAskTry": "Try asking",
+  "settingsContextWarnTokens": "Context warning threshold",
+  "settingsContextWarnTokensDesc": "Warn when a conversation exceeds this value; automatically compress earlier content at 80% of this value.",
+  "aiContextMeter": "Context {n} / {limit}",
+  "@aiContextMeter": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextNotice": "This conversation has exceeded the context warning threshold ({n} / {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.",
+  "@aiContextNotice": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextWarningTitle": "Context warning threshold exceeded",
+  "aiContextWarningBody": "This conversation now has {n} of context (warning threshold {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.",
+  "@aiContextWarningBody": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextNewChat": "New conversation",
+  "aiContextStop": "Stop answering",
+  "aiContextDismiss": "Got it"
 }

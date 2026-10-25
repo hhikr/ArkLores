@@ -1519,4 +1519,38 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiAskTry => '可以这样问';
+
+  @override
+  String get settingsContextWarnTokens => '上下文提醒值';
+
+  @override
+  String get settingsContextWarnTokensDesc =>
+      '一个对话的上下文超过这个值时提醒；到这个值的 80% 时自动压缩较早的内容。';
+
+  @override
+  String aiContextMeter(String n, String limit) {
+    return '上下文 $n / $limit';
+  }
+
+  @override
+  String aiContextNotice(String n, String limit) {
+    return '这个对话的上下文已超过提醒值（$n / $limit）。上下文越长，每一步越贵，模型也越容易漏看前面的内容。可以开一个新对话接着问。';
+  }
+
+  @override
+  String get aiContextWarningTitle => '上下文超过提醒值';
+
+  @override
+  String aiContextWarningBody(String n, String limit) {
+    return '这个对话的上下文已有 $n（提醒值 $limit）。上下文越长，每一步越贵，模型也越容易漏看前面的内容。可以开一个新对话接着问。';
+  }
+
+  @override
+  String get aiContextNewChat => '开新对话';
+
+  @override
+  String get aiContextStop => '停止作答';
+
+  @override
+  String get aiContextDismiss => '知道了';
 }

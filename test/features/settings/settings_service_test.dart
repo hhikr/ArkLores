@@ -6,7 +6,9 @@ import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/shared/l10n/locale_provider.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,6 +25,27 @@ void main() {
     FlutterSecureStorage.setMockInitialValues(values);
     return SettingsService();
   }
+
+  test('context warning changes immediately and survives a restart', () async {
+    expect(await service.loadContextWarnTokens(), 100000);
+    final container = ProviderContainer(
+        overrides: [settingsServiceProvider.overrideWithValue(service)],);
+    addTearDown(container.dispose);
+    final saved = container.read(contextWarnTokensProvider.notifier).set(64000);
+    expect(container.read(contextWarnTokensProvider), 64000);
+    await saved;
+    expect(
+        await const FlutterSecureStorage().read(key: 'ask_context_warn_tokens'),
+        '64000',);
+    final restarted = ProviderContainer(
+      overrides: [
+        initialContextWarnTokensProvider
+            .overrideWithValue(await SettingsService().loadContextWarnTokens()),
+      ],
+    );
+    addTearDown(restarted.dispose);
+    expect(restarted.read(contextWarnTokensProvider), 64000);
+  });
 
   group('API', () {
     test('defaults to Zhipu GLM without a key', () async {

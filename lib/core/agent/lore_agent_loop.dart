@@ -10,7 +10,7 @@
 ///   whole corpus, chapter reads, grep with context (`lore_tools.dart`);
 /// - an append-only message list, so providers serve most of each request
 ///   from their prompt cache;
-/// - no hand-written progress rules — only a turn limit, a context budget
+/// - no hand-written progress rules — only a helper turn limit, a context budget
 ///   (oldest tool results folded) and one citation check at the end.
 ///
 /// 0.14 (`notes/ask_0.14_review.md`, kept locally): the question is searched
@@ -49,6 +49,7 @@ import 'tool_call_gate.dart';
 import 'tools/agent_tool.dart';
 import 'tools/search_tool.dart';
 import 'tools/wiki_tools.dart';
+import 'turn_stats.dart';
 
 /// The messages and seen lines of a conversation, carried into follow-up
 /// questions so they continue with the text already read.
@@ -124,7 +125,7 @@ class LoreAgentLoop {
     this.embeddingClient,
     this.wiki,
     this.materials,
-    this.maxTurns = 30,
+    this.maxTurns,
     this.contextCharBudget = 80000,
     this.maxTokens = 8192,
     this.temperature = 0.3,
@@ -210,7 +211,7 @@ class LoreAgentLoop {
   final bool pickLines;
 
   /// Model turns per question; the last one must answer.
-  final int maxTurns;
+  final int? maxTurns;
 
   /// Characters of conversation kept whole; past it the oldest tool results
   /// are folded to a one-line pointer (re-read when needed).
@@ -504,7 +505,7 @@ class LoreAgentLoop {
             if (!hidden.contains(i)) m,
         ];
 
-    for (var turn = 1; turn <= maxTurns; turn++) {
+    for (var turn = 1; maxTurns == null || turn <= maxTurns!; turn++) {
       if (!retrying) {
         if (degradedThisTurn &&
             transport.degradedTurns < AgentTransport.stickyAfter) {
@@ -522,7 +523,7 @@ class LoreAgentLoop {
         degradedThisTurn = true;
       }
 
-      final lastTurn = turn == maxTurns;
+      final lastTurn = maxTurns != null && turn == maxTurns;
       // (Once: an empty last turn may be sent again another way.)
       if (lastTurn && !hitTurnLimit) {
         hitTurnLimit = true;
@@ -555,8 +556,18 @@ class LoreAgentLoop {
       LoreAnswerStream? jsonAnswer;
       CompletionDelta? done;
       final callStart = DateTime.now();
+      var requestChars = 0;
+      int? promptTokens;
       try {
         final messages = [Message.system(systemPrompt()), ...visible()];
+        requestChars = messages.fold<int>(
+          0,
+          (n, m) =>
+              n +
+              m.content.length +
+              (m.reasoningContent?.length ?? 0) +
+              (m.toolCalls == null ? 0 : jsonEncode(m.toolCalls).length),
+        );
         final turnTools = transport.textProtocol ? null : toolSpecs;
         final stream = transport.plain
             ? _plainTurn(messages, turnTools)
@@ -626,6 +637,7 @@ class LoreAgentLoop {
               );
             }
           }
+          if ((delta.promptTokens ?? 0) > 0) promptTokens = delta.promptTokens;
           if (delta.done) done = delta;
         }
       } on LLMException catch (e) {
@@ -737,6 +749,13 @@ class LoreAgentLoop {
           turn--;
           continue;
         }
+      }
+      if (!subtask) {
+        yield ReActEvent(
+          type: ReActEventType.contextSize,
+          contextTokens: promptTokens ?? estimateTokens(requestChars),
+          contextEstimated: promptTokens == null,
+        );
       }
       // Session records keep one tool per iteration: each call of a turn
       // gets its own record (the first carries the turn's raw response).

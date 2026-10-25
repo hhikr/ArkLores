@@ -85,6 +85,7 @@ class SettingsService {
   static const _keyAnswerOptions = 'ask_answer_options';
   static const _keyProfileSectionsOpen = 'library_profile_sections_open';
   static const _keyReadingFont = 'reading_font';
+  static const _keyContextWarnTokens = 'ask_context_warn_tokens';
 
   // ── Profile keys ─────────────────────────────────────────
   static const _keyNickname = 'profile_nickname';
@@ -215,6 +216,15 @@ class SettingsService {
 
   Future<void> saveProfileSectionsOpen(bool open) =>
       _storage.write(key: _keyProfileSectionsOpen, value: '$open');
+
+  Future<int> loadContextWarnTokens() async {
+    final value =
+        int.tryParse(await _storage.read(key: _keyContextWarnTokens) ?? '');
+    return value != null && value > 0 ? value : 100000;
+  }
+
+  Future<void> saveContextWarnTokens(int value) =>
+      _storage.write(key: _keyContextWarnTokens, value: '$value');
 
   /// The font of long reading text (default: the interface's Chinese sans).
   Future<ReadingFont> loadReadingFont() async {

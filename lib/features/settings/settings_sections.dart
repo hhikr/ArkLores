@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
+import '../../core/agent/turn_stats.dart';
 import '../../shared/app_version.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -154,6 +155,24 @@ class AiSettingsPage extends ConsumerWidget {
           label: context.t.settingsApiSettings,
           description: context.t.settingsApiSettingsDesc,
           onTap: () => Navigator.pushNamed(context, '/api-settings'),
+        ),
+        _ChoiceRow<int>(
+          key: const ValueKey('settings-context-warning'),
+          title:
+              '${context.t.settingsContextWarnTokens} / ${formatTokenCount(ref.watch(contextWarnTokensProvider))}',
+          description: context.t.settingsContextWarnTokensDesc,
+          value: ref.watch(contextWarnTokensProvider),
+          options: const [
+            (32000, '32k'),
+            (64000, '64k'),
+            (100000, '100k'),
+            (128000, '128k'),
+            (200000, '200k'),
+            (500000, '500k'),
+            (1000000, '1M'),
+          ],
+          onChanged: (value) =>
+              ref.read(contextWarnTokensProvider.notifier).set(value),
         ),
         ActionRow(
           key: const ValueKey('settings-session-logs'),

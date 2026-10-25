@@ -1,15 +1,35 @@
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/settings/settings_page.dart';
 import 'package:arklores/features/settings/settings_sections.dart';
+import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/main.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('AI context warning selection persists at 390px', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_testApp(locale: const Locale('zh')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-category-ai')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('64k'));
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(AiSettingsPage)));
+    expect(container.read(contextWarnTokensProvider), 64000);
+    expect(await SettingsService().loadContextWarnTokens(), 64000);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'the categories, each with what is in it; a category opens its '
       'page, where the theme switch works', (tester) async {

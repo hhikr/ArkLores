@@ -2791,6 +2791,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Try asking'**
   String get aiAskTry;
+
+  /// No description provided for @settingsContextWarnTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Context warning threshold'**
+  String get settingsContextWarnTokens;
+
+  /// No description provided for @settingsContextWarnTokensDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Warn when a conversation exceeds this value; automatically compress earlier content at 80% of this value.'**
+  String get settingsContextWarnTokensDesc;
+
+  /// No description provided for @aiContextMeter.
+  ///
+  /// In en, this message translates to:
+  /// **'Context {n} / {limit}'**
+  String aiContextMeter(String n, String limit);
+
+  /// No description provided for @aiContextNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation has exceeded the context warning threshold ({n} / {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.'**
+  String aiContextNotice(String n, String limit);
+
+  /// No description provided for @aiContextWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Context warning threshold exceeded'**
+  String get aiContextWarningTitle;
+
+  /// No description provided for @aiContextWarningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation now has {n} of context (warning threshold {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.'**
+  String aiContextWarningBody(String n, String limit);
+
+  /// No description provided for @aiContextNewChat.
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get aiContextNewChat;
+
+  /// No description provided for @aiContextStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop answering'**
+  String get aiContextStop;
+
+  /// No description provided for @aiContextDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get aiContextDismiss;
 }
 
 class _AppLocalizationsDelegate

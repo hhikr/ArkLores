@@ -1490,7 +1490,7 @@ void main() {
       );
     });
 
-    test('the last turn answers without tools and is partial', () async {
+    test('a limited helper answers without tools on its last turn', () async {
       final client = _ScriptedClient([
         _call('grep', {'pattern': '星灯'}),
         _call('grep', {'pattern': '钟楼'}),
@@ -1500,12 +1500,110 @@ void main() {
         client: client,
         store: store,
         maxTurns: 3,
+        subtask: true,
         preSearch: false,
       ).run(query: '星灯？').toList();
       expect(client.toolChoices.last, 'none');
       expect(client.requests.last.last.content, contains('检索轮数上限'));
       // grep with no scope only gives counts, so line 1 was never shown.
       expect(finalAnswerOf(events), contains('未能在本次读到的原文中核实'));
+    });
+
+    test('delegated helpers retain their default ten-turn limit', () async {
+      final client = _ScriptedClient([
+        _call('delegate', {'task': '查资料'}),
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        for (var i = 0; i < 8; i++) _call('guide', {}),
+        _answer('星灯 `obt/main/level_main_fx-01.txt:1`'),
+        _answer('星灯 `obt/main/level_main_fx-01.txt:1`'),
+      ]);
+      final events = await LoreAgentLoop(client: client, store: store,
+          preSearch: false, delegate: true,).run(query: '查资料').toList();
+      expect(client.requests, hasLength(12));
+      expect(client.toolChoices[10], 'none');
+      expect(client.requests[10].last.content, contains(loreTurnLimitNote));
+      expect(client.toolChoices[11], isNull);
+      expect(events.where((e) => e.type == ReActEventType.contextSize), hasLength(2));
+      expect(finalAnswerOf(events), contains('status=answered'));
+    });
+
+    test('context uses reported input tokens and omits helper requests',
+        () async {
+      for (final helper in [false, true]) {
+        final client = _ScriptedClient([_answer('完成')], promptTokens: 84000);
+        final events = await LoreAgentLoop(
+          client: client,
+          store: store,
+          preSearch: false,
+          subtask: helper,
+        ).run(query: '资料').toList();
+        final sizes =
+            events.where((e) => e.type == ReActEventType.contextSize).toList();
+        if (helper) {
+          expect(sizes, isEmpty);
+        } else {
+          expect(sizes.single.contextTokens, 84000);
+          expect(sizes.single.contextEstimated, false);
+        }
+      }
+    });
+
+    test(
+        'context estimates only the successful retry including system and tools',
+        () async {
+      final client = _DroppingClient(
+        [
+          _call('guide', {}),
+          _answer('完成'),
+        ],
+        drops: 1,
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        preSearch: false,
+        streamRetryDelay: Duration.zero,
+      ).run(query: '资料').toList();
+      final sizes =
+          events.where((e) => e.type == ReActEventType.contextSize).toList();
+      expect(sizes, hasLength(2));
+      for (var i = 0; i < sizes.length; i++) {
+        final chars = client.requests[i].fold<int>(
+          0,
+          (n, m) =>
+              n +
+              m.content.length +
+              (m.reasoningContent?.length ?? 0) +
+              (m.toolCalls == null ? 0 : jsonEncode(m.toolCalls).length),
+        );
+        expect(sizes[i].contextTokens, (chars / 1.6).round());
+      }
+    });
+
+    test('the main agent completes after forty tool turns without a limit',
+        () async {
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
+        for (var i = 0; i < 39; i++) _call('guide', {}),
+        _answer('星灯 `obt/main/level_main_fx-01.txt:1`'),
+      ]);
+      final events =
+          await LoreAgentLoop(client: client, store: store, preSearch: false)
+              .run(query: '读取资料')
+              .toList();
+      expect(client.requests, hasLength(41));
+      expect(events.last.type, ReActEventType.complete);
+      expect(finalAnswerOf(events), contains('status=answered'));
+      expect(finalAnswerOf(events), isNot(contains('status=partial')));
+      expect(
+        client.requests.expand((r) => r).map((m) => m.content).join(),
+        isNot(contains(loreTurnLimitNote)),
+      );
+      final sizes =
+          events.where((e) => e.type == ReActEventType.contextSize).toList();
+      expect(sizes, hasLength(41));
+      expect(sizes.every((e) => e.contextEstimated && e.contextTokens! > 0),
+          isTrue,);
     });
 
     test('old tool results are folded past the context budget', () async {
@@ -2075,6 +2173,7 @@ class _ScriptedClient extends LLMClient {
   _ScriptedClient(
     this.turns, {
     this.rejectTools = false,
+    this.promptTokens,
     this.reviews = const [],
     this.plans = const [],
   });
@@ -2086,6 +2185,7 @@ class _ScriptedClient extends LLMClient {
 
   final List<_Turn> turns;
   final bool rejectTools;
+  final int? promptTokens;
 
   /// R18: replies of the reviewer (`chatCompletion`); with none left the
   /// call fails, which lets the answer through.
@@ -2149,7 +2249,7 @@ class _ScriptedClient extends LLMClient {
     toolSpecs.add(List.of(tools ?? const <Map<String, dynamic>>[]));
     final turn = turns[_next++];
     if (turn.content.isNotEmpty) yield CompletionDelta(content: turn.content);
-    yield CompletionDelta(done: true, toolCalls: turn.calls);
+    yield CompletionDelta(done: true, toolCalls: turn.calls, promptTokens: promptTokens);
   }
 }
 

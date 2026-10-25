@@ -93,12 +93,14 @@ class AskChatNotifier extends ChatNotifierBase {
     LLMClient? Function()? clientReader,
     AnswerOptions Function()? optionsReader,
     UsageMeter? usage,
+    int Function()? contextWarnTokensReader,
   })  : _agent = agent,
         _sessionStore = sessionStore,
         _configReader = configReader,
         _clientReader = clientReader,
         _optionsReader = optionsReader,
         _usage = usage,
+        _contextWarnTokensReader = contextWarnTokensReader ?? (() => 100000),
         super([]);
 
   /// R16: the client for the next question (the thinking client when
@@ -111,6 +113,14 @@ class AskChatNotifier extends ChatNotifierBase {
   /// Adds up the usage of every LLM call of the running question (all
   /// clients report into it); null in tests that do not look at it.
   final UsageMeter? _usage;
+  final int Function() _contextWarnTokensReader;
+  bool contextWarningPending = false;
+
+  void acknowledgeContextWarning() {
+    contextWarningPending = false;
+  }
+
+  TurnStats? get latestContext => latestContextStats(state);
 
   /// R17: the tool agent's conversation after each answer (by assistant
   /// message id), so a follow-up continues with the text already read.
@@ -135,6 +145,7 @@ class AskChatNotifier extends ChatNotifierBase {
   /// file; the next message begins a new session).
   void newSession() {
     cancel();
+    contextWarningPending = false;
     _currentSession = null;
     _conversations.clear();
     state = const [];
@@ -145,6 +156,7 @@ class AskChatNotifier extends ChatNotifierBase {
   /// session file.
   void loadSession(ChatSessionFile session) {
     if (isStreaming) cancel();
+    contextWarningPending = false;
     _currentSession = session;
     _conversations.clear();
     state = chatSessionToMessages(session);
@@ -159,6 +171,7 @@ class AskChatNotifier extends ChatNotifierBase {
   @override
   void clearChat() {
     cancel();
+    contextWarningPending = false;
     _currentSession = null;
     _conversations.clear();
     state = const [];
@@ -407,8 +420,15 @@ class AskChatNotifier extends ChatNotifierBase {
     // What the question costs, shown live under the answer (every LLM call
     // of every client reports into the meter).
     final usage = _usage;
-    TurnStats currentStats() =>
-        TurnStats.of(usage!, DateTime.now().difference(turnStart));
+    var contextTokens = 0;
+    var contextEstimated = false;
+    TurnStats currentStats() => TurnStats.of(
+          usage ?? UsageMeter(),
+          DateTime.now().difference(turnStart),
+          contextTokens: contextTokens,
+          contextEstimated: contextEstimated,
+        );
+
     if (usage != null) {
       usage.reset();
       usage.onChanged = () {
@@ -643,6 +663,16 @@ class AskChatNotifier extends ChatNotifierBase {
             reasoning.write(event.content);
             coalescer.schedule();
             break;
+          case ReActEventType.contextSize:
+            final limit = _contextWarnTokensReader();
+            final previous = latestContext?.contextTokens ?? 0;
+            contextTokens = event.contextTokens ?? 0;
+            contextEstimated = event.contextEstimated;
+            if (previous < limit && contextTokens >= limit) {
+              contextWarningPending = true;
+            }
+            updateMessage(assistantId, stats: currentStats());
+            break;
           case ReActEventType.status:
             updateMessage(assistantId, liveStatus: event.content);
             break;
@@ -701,8 +731,8 @@ class AskChatNotifier extends ChatNotifierBase {
       }
       coalescer.cancel();
       TurnStats? stats;
-      if (usage != null) {
-        usage.onChanged = null;
+      if (usage != null || contextTokens > 0) {
+        if (usage != null) usage.onChanged = null;
         stats = currentStats();
         // The final totals stay under the answer (also when it failed or
         // was canceled: that run still cost something).
@@ -859,6 +889,7 @@ final askChatProvider = StateNotifierProvider.family<AskChatNotifier,
     List<ChatMessage>, String>((ref, key) {
   return AskChatNotifier(
     agent: ref.watch(storyQaAgentProvider),
+    contextWarnTokensReader: () => ref.read(contextWarnTokensProvider),
     usage: UsageMeter(),
     sessionStore: ref.watch(chatSessionStoreProvider),
     configReader: () => ref.read(apiConfigProvider),
@@ -986,3 +1017,13 @@ final askSessionsProvider =
 /// The key of the conversation on the Ask page.
 final shownAskProvider =
     Provider<String>((ref) => ref.watch(askSessionsProvider).shown);
+
+TurnStats? latestContextStats(List<ChatMessage> messages) {
+  for (final message in messages.reversed) {
+    if (message.role == MessageRole.assistant &&
+        (message.stats?.contextTokens ?? 0) > 0) {
+      return message.stats;
+    }
+  }
+  return null;
+}
