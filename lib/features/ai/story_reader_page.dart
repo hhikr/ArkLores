@@ -475,6 +475,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (line == null || !mounted) return;
     await Navigator.of(context).pushReplacement(
       smoothPageRoute<void>(
+        frosted: true,
         builder: (_) => StoryReaderPage(
           storyId: widget.storyId,
           highlightStart: line,
@@ -1128,6 +1129,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       padding: const EdgeInsets.fromLTRB(12, 14, 16, 12),
       onTap: () => Navigator.of(context).pushReplacement(
         smoothPageRoute<void>(
+          frosted: true,
           builder: (_) => StoryReaderPage(storyId: target.rawId!),
         ),
       ),

@@ -82,7 +82,7 @@ IconData _shelfIcon(String kind) => switch (kind) {
     };
 
 void pushLibraryPage(BuildContext context, WidgetBuilder builder) =>
-    Navigator.of(context).push(smoothPageRoute<void>(builder: builder));
+    Navigator.of(context).push(smoothPageRoute<void>(frosted: true, builder: builder));
 
 /// The operator shelf lists the operators; every other shelf its
 /// collections (the codex its entry types).
