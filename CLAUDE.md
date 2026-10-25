@@ -3,7 +3,7 @@
 明日方舟剧情阅读与问答 App（Flutter）。主线：中文 GameData 知识库（SQLite，schema 5 条目层 + 可选剧情向量/故事目录）+ 资料页（阅读）
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
-- **已发布**：v0.19.0（2026-10-25，Android build 41，Quality of Life 更新：流畅度、多对话、设置分类与检索修正，只有 APK）；v0.18.0（2026-10-23，Android build 40，补充资料与《大地巡旅》）；
+- **已发布**：v0.19.1（2026-10-25，Android build 42，阅读器拖动进度、Wiki 与问答滚动时收起栏、毛玻璃换页只在资料页，只有 APK，从分支 `releases-tidy` 发出、经 PR #25 合回）；v0.19.0（2026-10-25，Android build 41，Quality of Life 更新：流畅度、多对话、设置分类与检索修正，只有 APK）；v0.18.0（2026-10-23，Android build 40，补充资料与《大地巡旅》）；
   v0.17.1（2026-10-23，Android build 39）；三版都只有 APK。**官方知识库 2026-10-25 起只放在 `gamedata-channel` Release 上**（v0.10.0–v0.16.0 上的旧知识库与 `gamedata-20261020` 已删，tag 都在；v0.17.0 上的同一份留作备用地址）。v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
   终末地库（2026-10-18 客户端）按任务步骤排列、加了过场台词与段首梗概（渠道 `min_app_build` 仍是 37）；`tools/release_gamedata.env` 与渠道文件指向 `gamedata-channel` 上的文件。
   v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
@@ -14,6 +14,7 @@
 
 ## 当前进度（每轮结束时更新；细节进 CHANGELOG 与 docs，这里只留要点）
 
+- **0.19.1（2026-10-25，分支 `releases-tidy`，Android build 42）**：长按阅读器标题展开拖动进度条（按行定位）；Wiki 与问答往下拖时顶栏、底栏让出屏幕（只平移，`BarsAway`，见 `docs/DESIGN.md`）；毛玻璃换页只在资料页（`smoothPageRoute(frosted: true)`）；知识库只放 `gamedata-channel`。只有 widget 测试，没上真机。
 - **0.19.0（2026-10-25，分支 `fix/qa-retrieval-evidence`，Android build 41，从 v0.17.1 开出、合并了 0.18.0 的 `main`）**：Quality of Life 版本（开发者 2026-10-25 定名），不加新资料或玩法。整个 App 的流畅度与人机交互修正，加上问答检索的工程修正。
   - 界面：问答可以同时开几个对话、各自在后台答（左上角对话栏：作答中 / 最近 / 查看全部）；设置分五个大类、各一页；开屏动画（`launch_curtain.dart`），深色主题下开屏不闪白（App 把自己的深浅告诉 Android 12+）；
     启动图标只留一个（纸色底的自适应图标，删掉了浅色/深色图标设置）；后台问答在 ColorOS 上保活，新用户导览里有这一步。

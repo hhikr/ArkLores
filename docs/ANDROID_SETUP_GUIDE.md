@@ -78,7 +78,7 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 
 ## 发布（开发者明确同意后）
 
-1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.19.0 是 41）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
+1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.19.1 是 42）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
 2. 先 `git fetch`，确认 `origin/main` 没有这条分支之外的新提交（别的会话可能已经发过版），有就先合进来再跑测试。
 3. 知识库有变化：按 `GAMEDATA_BUILD_PIPELINE.md` §7 先发布知识库（`tools/publish_gamedata.ps1`，原地替换 `gamedata-channel` Release 上的文件）。
    知识库只放在那里，App 的 Release 不带知识库。

@@ -47,6 +47,8 @@
 - **分隔符**用 `/` 或竖线（`FactsRow`），不用 `·`。
 - **英文小标**是中文标题的直译（`// SHELVES` / 书架）；想不出贴切的英文就只写中文或用编号。
 - **加载**用 `LoadingView` / `BusyMark`（分段条，不知道进度时一段亮格走动，完成即停），不用转圈（守卫测试）。
+- **栏让出屏幕**（0.19.1，Wiki 与问答）：往后拖内容时顶栏收到状态栏下、底栏滑出，往回拖或回到顶部时回来（`MainTopBar(hides: true)`、`BarsAway`、`BarsFollower`，`shared/providers/bars_provider.dart`）。只做平移，内容不重新排版；坐在底栏上的东西（问答输入框、Wiki 工具按钮）包一层 `BarsAway(distance: tabBarRoom(context))` 一起下移。资料页、设置不收起。
+- **阅读器的拖动进度**（0.19.1）：长按标题，标题下展开一条拖动条（行号、百分比、所在步骤、那一行），按住左右拖、文字跟着跳到那一段，松手收起（`PageScaffold` 的 `onTitleHold*`）。
 - **空状态**用 `EmptyState`：一句完整的话说明这里将来会有什么，有下一步就给按钮。
 - **提示与出错**用 `NoticeBox` / `kbFlag`（强调色小旗），贴在出问题的地方；输入框的错误写在框下（`errorText`），不弹底部提示。
 - **底部弹出**用 `showAppSheet`（机械推入、不回弹），**对话框**用 `showAppDialog` + `AppDialog`。
