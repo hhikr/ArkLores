@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/agent/agent_provider.dart';
 import '../../core/llm/llm_provider.dart' show embeddingClientProvider;
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/bars_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
@@ -42,9 +43,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   /// it), for the list's bottom padding.
   double _composerHeight = 0;
 
-  /// R17d: the list never follows a streaming answer — the thinking, the
+  /// R17d: the list never follows a streaming answer 鈥?the thinking, the
   /// steps and the answer grow below and the reader scrolls at their own
-  /// pace. Only a new question scrolls (once) to the end. The ↓ button
+  /// pace. Only a new question scrolls (once) to the end. The 鈫?button
   /// shows whenever the end is out of view.
   bool _showJumpToEnd = false;
 
@@ -168,8 +169,11 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 height: 48,
                 child: Row(
                   children: [
-                    Icon(Icons.delete_sweep_sharp,
-                        size: 20, color: theme.danger,),
+                    Icon(
+                      Icons.delete_sweep_sharp,
+                      size: 20,
+                      color: theme.danger,
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       context.t.aiClearHistory,
@@ -213,11 +217,16 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     final chatNotifier = ref.read(askChatProvider(key).notifier);
 
     ref.listen(askChatProvider(key), (prev, next) {
-      // A new question (not a streaming update): bring it into view once.
-      if ((prev?.length ?? 0) < next.length) _scrollToBottom(afterFrame: true);
+      // A new question (not a streaming update): bring it into view once,
+      // the bars back.
+      if ((prev?.length ?? 0) < next.length) {
+        _bars.show(ref);
+        _scrollToBottom(afterFrame: true);
+      }
     });
     // Another conversation shown: its end in view.
     ref.listen(shownAskProvider, (_, __) {
+      _bars.show(ref);
       _scrollToBottom(afterFrame: true);
     });
 
@@ -241,25 +250,34 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               ),
             ),
           ),
-          MainTopBar(leading: _title(), trailing: _buildActions(theme)),
+          MainTopBar(
+            leading: _title(),
+            trailing: _buildActions(theme),
+            hides: true,
+          ),
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _SizeReporter(
-              onHeight: (height) {
-                if ((height - _composerHeight).abs() > 0.5) {
-                  setState(() => _composerHeight = height);
-                }
-              },
-              child: AskComposer(
-                controller: _inputController,
-                theme: theme,
-                isSending: isSending,
-                onSend: isSending ? chatNotifier.cancel : _handleAskSend,
-                hintText: context.t.aiAskInputPlaceholder,
-                maxHeight: constraints.maxHeight,
-                leading: (card) => AnswerOptionsMenu(theme: theme, above: card),
+            // Down onto the tab bar's room while the bars are away.
+            child: BarsAway(
+              distance: tabBarRoom(context),
+              child: _SizeReporter(
+                onHeight: (height) {
+                  if ((height - _composerHeight).abs() > 0.5) {
+                    setState(() => _composerHeight = height);
+                  }
+                },
+                child: AskComposer(
+                  controller: _inputController,
+                  theme: theme,
+                  isSending: isSending,
+                  onSend: isSending ? chatNotifier.cancel : _handleAskSend,
+                  hintText: context.t.aiAskInputPlaceholder,
+                  maxHeight: constraints.maxHeight,
+                  leading: (card) =>
+                      AnswerOptionsMenu(theme: theme, above: card),
+                ),
               ),
             ),
           ),
@@ -268,7 +286,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  /// The messages, with the ↓ button while the end is out of view.
+  /// Hides the bars as the conversation is dragged on, shows them back.
+  final BarsFollower _bars = BarsFollower();
+
+  /// The messages, with the 鈫?button while the end is out of view.
   Widget _buildChatList(AppThemeTokens theme, int count) {
     final top = MediaQuery.paddingOf(context).top + topBarInset;
     return Stack(
@@ -276,7 +297,18 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         NotificationListener<ScrollMetricsNotification>(
           onNotification: (n) => n.depth == 0 && _onScrollMetrics(n.metrics),
           child: NotificationListener<ScrollUpdateNotification>(
-            onNotification: (n) => n.depth == 0 && _onScrollMetrics(n.metrics),
+            onNotification: (n) {
+              if (n.depth != 0) return false;
+              // Only the reader's own drags move the bars.
+              if (n.dragDetails != null) {
+                _bars.moved(
+                  ref,
+                  n.scrollDelta ?? 0,
+                  atTop: n.metrics.pixels <= n.metrics.minScrollExtent,
+                );
+              }
+              return _onScrollMetrics(n.metrics);
+            },
             child: ListView.builder(
               key: const ValueKey('ask-chat-list'),
               controller: _scrollController,
@@ -295,16 +327,19 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           Positioned(
             right: 12,
             bottom: 8 + _composerHeight,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.cardSurface,
-                border: Border.all(color: theme.divider),
-              ),
-              child: SquareIconButton(
-                key: const ValueKey('scroll-to-bottom'),
-                tooltip: context.t.aiScrollToBottom,
-                onPressed: _scrollToBottom,
-                icon: Icons.arrow_downward_sharp,
+            child: BarsAway(
+              distance: tabBarRoom(context),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.cardSurface,
+                  border: Border.all(color: theme.divider),
+                ),
+                child: SquareIconButton(
+                  key: const ValueKey('scroll-to-bottom'),
+                  tooltip: context.t.aiScrollToBottom,
+                  onPressed: _scrollToBottom,
+                  icon: Icons.arrow_downward_sharp,
+                ),
               ),
             ),
           ),
@@ -436,7 +471,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     await explainBackgroundOnce(context, ref);
     if (!mounted) return;
     unawaited(
-      ref.read(askChatProvider(ref.read(shownAskProvider)).notifier)
+      ref
+          .read(askChatProvider(ref.read(shownAskProvider)).notifier)
           .sendMessage(text),
     );
   }

@@ -26,6 +26,7 @@ void openStory(BuildContext context, String storyId, {ReadingEntry? resume}) {
   if (resume != null && resume.finished) resume = null;
   Navigator.of(context).push(
     smoothPageRoute<void>(
+      frosted: true,
       builder: (_) => StoryReaderPage(
         storyId: storyId,
         resumeLine: resume?.lineIndex,
@@ -39,6 +40,7 @@ void openStory(BuildContext context, String storyId, {ReadingEntry? resume}) {
 void openStoryAt(BuildContext context, String storyId, int start, int end) {
   Navigator.of(context).push(
     smoothPageRoute<void>(
+      frosted: true,
       builder: (_) => StoryReaderPage(
         storyId: storyId,
         highlightStart: start,

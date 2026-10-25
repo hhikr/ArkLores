@@ -89,7 +89,7 @@ docs/                  文档（索引见 CLAUDE.md）
 ### 4.3 安装与更新（App）
 
 - `gamedata_installer.dart`：下载 Release 上的 `.db.gz`（断点续传、阶段显示、取消、45 秒连接超时、可手动放置 `.download.gz`）→ 校验 SHA → 解压到临时文件 → 校验 → 原子替换。**已安装的库在替换前永不修改。**
-- 资产地址与 SHA 在构建 APK 时从 `tools/release_gamedata.env` 烘进去；`gamedata_channel.dart` 另外读 `gamedata-channel` Release 上的渠道文件，发现只上传、没随版本发的新库。
+- 资产地址与 SHA 在构建 APK 时从 `tools/release_gamedata.env` 烘进去；`gamedata_channel.dart` 另外读 `gamedata-channel` Release 上的渠道文件（官方知识库也只放在那个 Release 上，更新时原地替换），所以新库不用等新 App。
 - 官方资产与本机更新过的库按游戏数据的新旧排先后（`GameDataInstallStatus.updateReason`）。
 - `gamedata_build_provider.dart` + `source_build_card.dart`：明日方舟页的“检查更新 / 拉取并更新”（增量更新）。
 - `story_vector_updater.dart` + `story_vector_card.dart`：每个游戏的“语义检索”卡片，补缺的剧情与资料向量（用户自己的向量服务）。
@@ -160,5 +160,5 @@ docs/                  文档（索引见 CLAUDE.md）
 - `flutter test`（约 1–3 分钟，全部离线）：测试目录与 `lib/` 一一对应，测试知识库一律用生产 schema（`test/support/gamedata_fixture.dart`），mock LLM。守卫测试在 `test/guards/` 与 `lore_agent_loop_test.dart`。
 - `test/live/`：要真实服务或真实库的测试，用环境变量开启（真实模型问答、召回测试、真实库验收、Wiki 联网、资产安装、场景卡与前缀试验）。命令见 `QA_CHECKLIST.md`。
 - `tools/`：建库与更新（`build_gamedata_database.dart`、`update_gamedata.dart`、`rederive_gamedata.dart`、`build_story_embeddings.dart`、`build_story_catalog.dart`、`compact_gamedata.dart`、`finalize_gamedata_assets.dart`）、
-  终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、发布（`release_app.ps1/.sh`、`write_gamedata_channel.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）。
+  终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、发布（`release_app.ps1/.sh`、知识库 `publish_gamedata.ps1` + `write_gamedata_channel.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）。
 - 构建与发布：APK 由 GitHub Actions 构建签名（推 `release/<版本>` 触发），见 `ANDROID_SETUP_GUIDE.md`；云端会话见 `CLOUD_DEV.md`。

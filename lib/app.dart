@@ -6,6 +6,7 @@ import 'features/materials/materials_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/wiki/wiki_browser_page.dart';
 import 'shared/l10n/l10n.dart';
+import 'shared/providers/bars_provider.dart';
 import 'shared/providers/handoff_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/wiki_navigation_provider.dart';
@@ -83,15 +84,22 @@ class _MainShellState extends ConsumerState<MainShell> {
         bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom >
                 AppTabBar.height + MediaQuery.viewPaddingOf(context).bottom
             ? const SizedBox.shrink()
-            : AppTabBar(
-                current: _currentIndex,
-                onSelected: _selectTab,
-                items: [
-                  ('LOOKUP', context.t.navWiki),
-                  ('ASK', context.t.navAI),
-                  ('LIBRARY', context.t.navMaterials),
-                  ('SETTINGS', context.t.navSettings),
-                ],
+            // Off the bottom while the wiki or Ask reads full screen; its
+            // room stays (the pages are not laid out again), the page shows
+            // through it.
+            : BarsAway(
+                distance:
+                    AppTabBar.height + MediaQuery.viewPaddingOf(context).bottom,
+                child: AppTabBar(
+                  current: _currentIndex,
+                  onSelected: _selectTab,
+                  items: [
+                    ('LOOKUP', context.t.navWiki),
+                    ('ASK', context.t.navAI),
+                    ('LIBRARY', context.t.navMaterials),
+                    ('SETTINGS', context.t.navSettings),
+                  ],
+                ),
               ),
       ),
     );
@@ -99,6 +107,7 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   void _selectTab(int index) {
     if (index == _currentIndex) return;
+    ref.read(barsHiddenProvider.notifier).state = false;
     setState(() => _currentIndex = index);
     ref.read(settingsServiceProvider).saveMainTabIndex(index).catchError(
           (Object error) => debugPrint(

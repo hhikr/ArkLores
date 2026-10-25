@@ -1477,6 +1477,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyReaderFindHint => 'Find in this story';
 
   @override
+  String get storyReaderScrubHint => 'Drag left or right; let go to stay here';
+
+  @override
   String get gameArknights => 'Arknights';
 
   @override

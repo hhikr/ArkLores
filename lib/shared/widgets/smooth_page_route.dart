@@ -11,7 +11,13 @@ import '../theme/app_theme.dart';
 import '../theme/motion.dart';
 import 'industrial_ui.dart';
 
-/// The app's page change, a push, as one frosted pane: the pane (a blur
+/// The app's page change, a push. Only the materials pages (routes made
+/// with `smoothPageRoute(frosted: true)`) come in as the frosted pane below;
+/// every other page itself slides in from the right, a 2px trace line on
+/// its leading edge, over the page below, which dims under it
+/// (Motion.coverIn), and is built at once.
+///
+/// The frosted pane: the pane (a blur
 /// with the paper colour over it, a 2px trace line on its leading edge)
 /// slides in from the right over the page below, which dims under it
 /// (Motion.coverIn, moving at once and settling, so it answers the tap).
@@ -33,11 +39,13 @@ Widget smoothPageTransition(
   BuildContext context,
   Animation<double> animation,
   Animation<double> secondaryAnimation,
-  Widget child,
-) =>
+  Widget child, {
+  bool frosted = false,
+}) =>
     _ShutterTransition(
       animation: animation,
       secondaryAnimation: secondaryAnimation,
+      frosted: frosted,
       child: child,
     );
 
@@ -45,11 +53,13 @@ class _ShutterTransition extends ConsumerStatefulWidget {
   const _ShutterTransition({
     required this.animation,
     required this.secondaryAnimation,
+    required this.frosted,
     required this.child,
   });
 
   final Animation<double> animation;
   final Animation<double> secondaryAnimation;
+  final bool frosted;
   final Widget child;
 
   @override
@@ -87,8 +97,10 @@ class _ShutterTransitionState extends ConsumerState<_ShutterTransition>
     // A route that is there without coming in (the first route), or reduced
     // motion: no pane. The first frame of a push is built offstage with a
     // finished animation (for heroes): that is not one.
+    // A page that is not frosted is built at once and only slides.
     final offstage = ModalRoute.of(context)?.offstage ?? false;
-    if (Motion.reduced(context) ||
+    if (!widget.frosted ||
+        Motion.reduced(context) ||
         (!offstage && widget.animation.status == AnimationStatus.completed)) {
       _built = true;
       _reveal.value = 1;
@@ -245,10 +257,12 @@ class _ShutterTransitionState extends ConsumerState<_ShutterTransition>
         final covered = below.value;
         final shift = -_belowShift * covered;
         final leaving = widget.animation.status == AnimationStatus.reverse;
+        // Not frosted: the page itself slides, in and out.
+        final sliding = leaving || (!widget.frosted && t.value < 1);
         final reveal = _reveal.value;
         return FractionalTranslation(
           // Going back: the whole page slides out to the right.
-          translation: Offset((leaving ? 1 - t.value : 0) + shift, 0),
+          translation: Offset((sliding ? 1 - t.value : 0) + shift, 0),
           child: Stack(
             fit: StackFit.passthrough,
             children: [
@@ -293,7 +307,7 @@ class _ShutterTransitionState extends ConsumerState<_ShutterTransition>
                     ),
                   ),
                 ),
-              if (leaving)
+              if (sliding)
                 Positioned(
                   left: 0,
                   top: 0,
@@ -362,14 +376,28 @@ class SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) =>
-      smoothPageTransition(context, animation, secondaryAnimation, child);
+      smoothPageTransition(
+        context,
+        animation,
+        secondaryAnimation,
+        child,
+        frosted: route is _FrostedPageRoute,
+      );
 }
 
 /// A pushed page. A [MaterialPageRoute], so the theme's
 /// [SmoothPageTransitionsBuilder] moves it in and the page below moves with
 /// it (Flutter animates the covered page only for material routes).
+/// [frosted] (the materials pages only) brings it in behind the frosted pane.
 PageRoute<T> smoothPageRoute<T>({
   required WidgetBuilder builder,
   RouteSettings? settings,
+  bool frosted = false,
 }) =>
-    MaterialPageRoute<T>(settings: settings, builder: builder);
+    frosted
+        ? _FrostedPageRoute<T>(settings: settings, builder: builder)
+        : MaterialPageRoute<T>(settings: settings, builder: builder);
+
+class _FrostedPageRoute<T> extends MaterialPageRoute<T> {
+  _FrostedPageRoute({required super.builder, super.settings});
+}

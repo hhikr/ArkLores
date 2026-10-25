@@ -3,7 +3,7 @@
 # Linux / cloud: tools/release_app.sh. Same steps:
 #   1. push HEAD to release/v<version> (android-release.yml builds and signs),
 #   2. wait for the run and download the APK artifact,
-#   3. create the pre-release v<version> with ArkLores-<version>.apk.
+#   3. create the pre-release v<version> with ArkLores-<version>.apk and its .sha256.
 #
 #   .\tools\release_app.ps1 -Version 0.10.4 -NotesFile notes.md
 param(
@@ -82,4 +82,10 @@ $upload = $release.upload_url -replace '\{.*\}', ''
 $asset = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/vnd.android.package-archive' `
   -Uri "${upload}?name=ArkLores-$Version.apk" -InFile $named
 "asset: $($asset.browser_download_url)"
+# Every app release carries the APK and its SHA-256, nothing else (the
+# knowledge bases are on the gamedata-channel Release).
+$shaFile = "$named.sha256"
+[IO.File]::WriteAllText($shaFile, "$((Get-FileHash $named -Algorithm SHA256).Hash.ToLower())  ArkLores-$Version.apk`n", (New-Object Text.UTF8Encoding($false)))
+Invoke-RestMethod -Method Post -Headers $headers -ContentType 'text/plain' `
+  -Uri "${upload}?name=ArkLores-$Version.apk.sha256" -InFile $shaFile | Out-Null
 $release.html_url

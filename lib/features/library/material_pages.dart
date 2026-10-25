@@ -17,7 +17,7 @@ import 'my_materials.dart';
 import 'reading_text.dart';
 
 void openMaterialPage(BuildContext context, Widget page) =>
-    Navigator.of(context).push(smoothPageRoute<void>(builder: (_) => page));
+    Navigator.of(context).push(smoothPageRoute<void>(frosted: true, builder: (_) => page));
 
 class SupplementalMaterialsView extends ConsumerStatefulWidget {
   const SupplementalMaterialsView({super.key});

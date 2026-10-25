@@ -1,9 +1,8 @@
 # GameData 知识库：构建、更新、补算与发布
 
-> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**现行的官方资产在 v0.15.0 Release**（2026-10-20；同样的文件先以只发知识库的 `gamedata-20261020` 发过）：
-> 按现在的建库代码重建，游戏数据仍是上游 `17759cc`（2026-10-08），向量全部从 v0.14.0 的库迁移；明日方舟 `story_catalog` 多一列 `show_time`，终末地档案 id 带 `ef/`。
-> 终末地库之后换成了 2026-10-18 的客户端重建的版本（覆盖了 v0.15.0 上的同名资产），现行的两个库随 v0.15.1 发布（2026-10-21，明日方舟库不变），见 `KNOWN_ISSUES.md` §1.1。
-> 本地文件是 `build/gamedata_rebuild/`、`build/endfield/`。v0.14.0 Release 上的旧库保留。差别与检查见 `KNOWN_ISSUES.md` §1.1。终末地只能在本机从游戏客户端构建（§9）。
+> 当前：两个中文知识库，都是 schema 5（条目层 + 可选剧情向量 + 可选故事目录）。**官方知识库只放在固定的 `gamedata-channel` Release 上**（2026-10-25 起；之前随各版 App 的 Release 发布）：
+> 明日方舟库的游戏数据是上游 `17759cc`（2026-10-08），终末地库是 2026-10-18 客户端（任务按步骤排列），两个库与 v0.16.0 / v0.17.0 发布的是同一份。
+> 本地文件是 `build/gamedata_rebuild/`、`build/endfield/`。差别与检查见 `KNOWN_ISSUES.md` §1.1。终末地只能在本机从游戏客户端构建（§9）。
 > 经验与踩过的坑见 **`KNOWLEDGE_BASE_LESSONS.md`**（改建库代码前必读）；Agent 怎样用这些表见 `ASK_AGENT.md`。
 > 建库代码全部在 `lib/core/gamedata/build/`：桌面命令行、App 内构建、增量更新、补算工具共用同一份实现。
 
@@ -162,26 +161,22 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
 1. 压缩：`finalize_gamedata_assets.dart --output=<目录>`（没有 `.gz` 时自己压缩，Windows 不需要 gzip），写 manifest 的大小与 SHA。
 2. 验收：`flutter test`；`ARKLORES_RUN_DB_CHECK=true flutter test test/live/gamedata_v5_acceptance_test.dart`（真实库）；
    改了建库结构时做一致性实验。
-3. `tools/release_gamedata.env` 写 **将要创建的 Release** 的资产 URL 与 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
+3. `tools/release_gamedata.env` 写新 gz 的 SHA，以及这份库所基于的上游提交和那个提交的日期
    （`GAMEDATA_DB_COMMIT` = 库清单里的 `source_arknights_commit`；`GAMEDATA_DB_COMMIT_DATE` = GitHub 上该提交的 committer 日期，
-   `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`），提交。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
-4. 渠道文件：`dart run tools/write_gamedata_channel.dart`（从 env 写 `build/gamedata_channel.json`；`GAMEDATA_MIN_APP_BUILD` 是能装这两个库的最早 build 号，
-   库的结构或校验要求变了就改成这次的 build 号），在两个库上传之后，替换 `gamedata-channel` Release 上的同名资产（Release 第一次要手动建，tag 名 `gamedata-channel`，
-   不要标成 latest）。**只发库、不发 App 时做 1–3、6、7，最后做这一步**；每次发 App 也要更新渠道文件，否则渠道指着旧库，新 App 会被它带回旧库
-   （没有提交日期的终末地库不比新旧）。
-5. `tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
-6. 把 `arklores_gamedata_zh.db.gz`（和 `gamedata_manifest.json`）上传到同一个 Release。
+   `https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/<sha>` 的 `commit.committer.date`）。提交和日期写错，本机更新过的库会被错误地提示或不提示（§4.4）。
+   两个 URL 固定是 `gamedata-channel/<文件名>`，不改。`GAMEDATA_MIN_APP_BUILD` 是能装这两个库的最早 build 号，库的结构或校验要求变了就改成那个 build 号。
+4. **发布知识库**：`.\tools\publish_gamedata.ps1 -Files <gz>,<manifest>[,…]`。知识库只放在固定的 `gamedata-channel` Release 上（App 从 v0.14.5 起每次打开知识库页都读那里的渠道文件），
+   每次原地替换：每个文件先以 `<名字>.new` 上传、核对 SHA，再删掉旧的、改名，旧文件只缺那一瞬间；最后从 env 写出渠道文件（`write_gamedata_channel.dart`）并同样替换。
+   之后用公开地址下载两个 gz 核对 SHA，改 `gamedata-channel` Release 的说明（当前版本、SHA、和上一份的差别），提交 env 的改动。
+   渠道里的资产与包里的同一提交、同一日期时也算“不比包里的旧”；SHA 不同就会提示用着旧官方库的手机更新。
+5. **发布 App**：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
+   App 的 Release 只放 APK 和 `ArkLores-<v>.apk.sha256`，说明末尾一行指向知识库 Release。发版之后删掉 `release/v<v>` 分支（tag 指向同一提交）。
+   知识库和 App 一起变时，先做第 4 步再发 App。
    v0.11.0 时建 Release 的请求遇到过 GitHub 500：Release 没建出来，CI 产物已下载到 `%TEMP%\arklores_release_<v>`，直接用 REST 补建即可，不要重推分支。
-7. 终末地库：`arklores_endfield_zh.db.gz` 与 `endfield_manifest.json`（库里 `gamedata_manifest` 表的导出，补完向量后再导，
-   形如 `{game, database: {fileName}, manifest: {...}}`）上传到同一个 Release，`release_gamedata.env` 的 `ENDFIELD_DB_URL/SHA256` 指向它。
-   从 v0.13.0 起每个 Release 都带齐两个库（没变的库原样再传一份，SHA 不变，已装好的不会重新下载），env 的两个 URL 都指向这次的 Release；
-   v0.12.0 时两个库曾分在两个 Release 上。上传后用公开地址 HEAD 一次确认 200。
 
-**只发知识库、不发 App**（第一次是 2026-10-20 的 `gamedata-20261020`）：tag 叫 `gamedata-<年月日>`，指向构建这两个库的代码所在的提交，**不标 latest**（`make_latest: false`，
-最新的 App 版本仍是 latest），两个库都带上；说明里写清和上一份库的差别、哪些 App 会被提示。做法：1–3 → 用 REST 建 Release 并上传四个文件
-（PAT 只放在单条命令的请求头里）→ 用公开地址下载两个 gz、核对 SHA → 第 4 步替换渠道文件（删掉旧资产再上传，取回核对）→ 提交 env 的改动。
-渠道里的资产与包里的同一提交、同一日期时也算“不比包里的旧”，用着包里那份官方库的手机会被提示更新、重新下载。
-
+历史：v0.10–v0.17.0 的 App Release 都带着当时的知识库，`gamedata-20261020` 是只发知识库的一次。2026-10-25 起统一到 `gamedata-channel`：
+v0.10.0–v0.16.0 上的知识库文件和 `gamedata-20261020` 的 Release 已删除（tag 保留；这些旧版 App 装不了现在的库，build 37 之前的 App 也不读渠道里 build 37 起的库）；
+v0.17.0 上的两个库保留，是 v0.17.0–v0.19.0 的 APK 里烘进的备用地址（渠道读不到、或渠道里的库要求更新的 App 时用它）。
 未发布时在手机上试：`tools/install_local.ps1 -Build -Kb`（用 release key 签名、烘入 env 的 SHA，并把本地 gz 放进应用目录，
 在知识库页点“下载”即离线校验安装）。
 

@@ -227,6 +227,7 @@ class GameLibraryView extends ConsumerWidget {
                 icon: Icons.chevron_right_sharp,
                 onPressed: () => Navigator.of(context).push(
                   smoothPageRoute<void>(
+                    frosted: true,
                     builder: (_) => const ReadingHistoryPage(),
                   ),
                 ),

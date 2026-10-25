@@ -1,4 +1,5 @@
-// The push as a frosted pane: the new page is not built while the pane
+// A plain push slides the page in; a frosted one (the materials pages) comes
+// in as a frosted pane: the new page is not built while the pane
 // comes in, is built behind it once it covers the screen, and the pane then
 // clears where it is; going back needs no pane; reduced motion shows the
 // page at once.
@@ -49,7 +50,9 @@ void main() {
     await tester.pumpWidget(app());
     final builds = <int>[];
     final nav = tester.state<NavigatorState>(find.byType(Navigator));
-    nav.push(smoothPageRoute<void>(builder: (_) => _Counted(builds)));
+    nav.push(
+      smoothPageRoute<void>(frosted: true, builder: (_) => _Counted(builds)),
+    );
     await tester.pump();
     await tester.pump(Motion.coverIn ~/ 2);
     expect(builds, isEmpty, reason: 'not built while the cover closes');
@@ -86,6 +89,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('pushed page'), findsNothing);
     expect(find.text('first page'), findsOneWidget);
+  });
+
+  testWidgets('a page that is not frosted is built at once and slides in',
+      (tester) async {
+    await tester.pumpWidget(app());
+    final builds = <int>[];
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .push(smoothPageRoute<void>(builder: (_) => _Counted(builds)));
+    await tester.pump();
+    await tester.pump(Motion.coverIn ~/ 2);
+    expect(builds, isNotEmpty);
+    expect(coverAt(tester), isNull, reason: 'no frosted pane');
+    expect(find.byType(BackdropFilter), findsNothing);
+    final dx = tester
+        .widget<FractionalTranslation>(
+          find
+              .ancestor(
+                of: find.text('pushed page'),
+                matching: find.byType(FractionalTranslation),
+              )
+              .first,
+        )
+        .translation
+        .dx;
+    expect(dx, inExclusiveRange(0, 1), reason: 'on its way in');
+    await tester.pumpAndSettle();
+    expect(find.text('pushed page'), findsOneWidget);
   });
 
   testWidgets('with reduced motion the page is there at once', (tester) async {

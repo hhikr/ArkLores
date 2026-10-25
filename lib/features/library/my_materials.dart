@@ -15,7 +15,7 @@ import 'library_widgets.dart';
 import 'material_pages.dart';
 
 void _open(BuildContext context, WidgetBuilder builder) =>
-    Navigator.of(context).push(smoothPageRoute<void>(builder: builder));
+    Navigator.of(context).push(smoothPageRoute<void>(frosted: true, builder: builder));
 
 /// Opens the editor for a new material, optionally with a starting text.
 void newMaterial(BuildContext context, {String? body}) =>
