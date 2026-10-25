@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,12 +55,16 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   var _canGoBack = <bool>[];
   var _canGoForward = <bool>[];
 
-  /// Dark mode toggle state for Wiki WebView pages.
+  /// Whether the Wiki pages are dark: the app's theme, unless the reader
+  /// switched them ([_ownDarkMode]) since the theme last changed.
   bool _isDarkMode = false;
   double _pageScale = 1.0;
   bool _trayExpanded = false;
   bool _restoredState = false;
-  bool _hasStoredDarkMode = false;
+
+  /// The reader's switch, against the theme. Kept (and saved) until the
+  /// app's theme next turns light or dark, by hand or with the system.
+  bool _ownDarkMode = false;
   late final SettingsService _settings;
 
   @override
@@ -67,9 +72,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     super.initState();
     _settings = ref.read(settingsServiceProvider);
     WidgetsBinding.instance.addObserver(this);
-    _isDarkMode =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-            Brightness.dark;
+    _isDarkMode = ref.read(themeProvider).isDark;
     _resetTabState(SettingsService.defaultWikiSites);
     _tabController = TabController(length: _wikiSites.length, vsync: this);
     _tabController.addListener(_onTabChanged);
@@ -123,16 +126,6 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     }
   }
 
-  @override
-  void didChangePlatformBrightness() {
-    if (_hasStoredDarkMode) return;
-    final prefersDark =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-            Brightness.dark;
-    if (prefersDark == _isDarkMode) return;
-    setState(() => _isDarkMode = prefersDark);
-  }
-
   Future<void> _restoreBrowsingState() async {
     var tabIndex = 0;
     bool? storedDarkMode;
@@ -177,9 +170,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
       _tabController = TabController(length: _wikiSites.length, vsync: this);
       _tabController.addListener(_onTabChanged);
       _tabController.index = tabIndex.clamp(0, _wikiSites.length - 1).toInt();
-      if (storedDarkMode != null) {
+      // A switch saved against the theme. One that equals the theme now
+      // was made before the theme turned: the theme wins.
+      if (storedDarkMode != null &&
+          storedDarkMode != ref.read(themeProvider).isDark) {
         _isDarkMode = storedDarkMode;
-        _hasStoredDarkMode = true;
+        _ownDarkMode = true;
       }
       _restoredState = true;
     });
@@ -198,13 +194,15 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   Future<void> _persistBrowsingState() async {
     final service = _settings;
     final tabIndex = _tabController.index;
-    final darkMode = _hasStoredDarkMode ? _isDarkMode : null;
+    final darkMode = _ownDarkMode ? _isDarkMode : null;
     final urls = List.of(_currentUrls);
     final appliedUrls = List.of(_appliedSourceUrls);
     try {
       await service.saveWikiTabIndex(tabIndex);
       if (darkMode != null) {
         await service.saveWikiDarkMode(darkMode);
+      } else {
+        await service.clearWikiDarkMode();
       }
       await Future.wait([
         for (var i = 0; i < urls.length; i++)
@@ -330,13 +328,34 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
 
   void _toggleDarkMode() {
     final newValue = !_isDarkMode;
-    setState(() => _isDarkMode = newValue);
-    _hasStoredDarkMode = true;
-    ref.read(settingsServiceProvider).saveWikiDarkMode(newValue).catchError(
-          (Object error) => debugPrint(
-            '[WikiBrowser] Error saving wiki appearance: $error',
-          ),
-        );
+    setState(() {
+      _isDarkMode = newValue;
+      // Switched back to the theme's: following it again.
+      _ownDarkMode = newValue != ref.read(themeProvider).isDark;
+    });
+    _saveDarkMode();
+  }
+
+  /// The app's theme turned light or dark: the pages follow it, whatever
+  /// the reader had switched them to.
+  void _followTheme(bool dark) {
+    if (!_ownDarkMode && _isDarkMode == dark) return;
+    setState(() {
+      _isDarkMode = dark;
+      _ownDarkMode = false;
+    });
+    _saveDarkMode();
+  }
+
+  void _saveDarkMode() {
+    (_ownDarkMode
+            ? _settings.saveWikiDarkMode(_isDarkMode)
+            : _settings.clearWikiDarkMode())
+        .catchError(
+      (Object error) => debugPrint(
+        '[WikiBrowser] Error saving wiki appearance: $error',
+      ),
+    );
   }
 
   /// Room the floating docks take over the web page (logical px = CSS px):
@@ -783,6 +802,9 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    ref.listen<bool>(themeProvider.select((t) => t.isDark), (before, dark) {
+      if (before != dark) _followTheme(dark);
+    });
     final bookmarkAsync = ref.watch(bookmarkProvider);
     ref.listen<WikiOpenRequest?>(wikiOpenRequestProvider, (_, request) {
       if (request == null) return;
@@ -820,19 +842,22 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
               child: IndexedStack(
                 index: _tabController.index,
                 children: List.generate(_wikiSites.length, (i) {
-                  return _WikiTabView(
-                    key: ValueKey(_wikiSites[i].id),
-                    index: i,
-                    initialUrl: _currentUrls[i].trim().isNotEmpty
-                        ? _currentUrls[i]
-                        : _wikiSites[i].url,
-                    theme: theme,
-                    isDarkMode: _isDarkMode,
-                    onNormalAppearance: _applyNormalWebViewEnhancements,
-                    onControllerCreated: _onControllerCreated,
-                    onTitleChanged: _onTitleChanged,
-                    onUrlChanged: _onUrlChanged,
-                    onHistoryChanged: _onHistoryChanged,
+                  return TickerMode(
+                    enabled: i == _tabController.index,
+                    child: _WikiTabView(
+                      key: ValueKey(_wikiSites[i].id),
+                      index: i,
+                      initialUrl: _currentUrls[i].trim().isNotEmpty
+                          ? _currentUrls[i]
+                          : _wikiSites[i].url,
+                      theme: theme,
+                      isDarkMode: _isDarkMode,
+                      onNormalAppearance: _applyNormalWebViewEnhancements,
+                      onControllerCreated: _onControllerCreated,
+                      onTitleChanged: _onTitleChanged,
+                      onUrlChanged: _onUrlChanged,
+                      onHistoryChanged: _onHistoryChanged,
+                    ),
                   );
                 }),
               ),
@@ -886,6 +911,24 @@ class _WikiTabView extends StatefulWidget {
   State<_WikiTabView> createState() => _WikiTabViewState();
 }
 
+/// Counts the page's animation frames (the rate the web view is given
+/// frames at) and logs them once a second.
+const _webFpsScript = '''
+(function () {
+  var n = 0, start = 0;
+  function tick(t) {
+    if (!start) start = t;
+    n++;
+    if (t - start >= 1000) {
+      if (n > 2) console.log('[webfps] ' + Math.round(n * 1000 / (t - start)) + ' fps');
+      n = 0; start = t;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+''';
+
 class _WikiTabViewState extends State<_WikiTabView> {
   InAppWebViewController? _controller;
   String? _loadError;
@@ -893,6 +936,34 @@ class _WikiTabViewState extends State<_WikiTabView> {
   bool _isPreparingWebView = true;
   bool _hasLoadedPage = false;
   int _appearanceRequest = 0;
+  bool _paused = false;
+
+  /// The page's load progress (0–1), null before the web view reports it.
+  double? _progress;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPaused();
+  }
+
+  /// An Android WebView keeps drawing its page (animations, video) while it
+  /// is off screen, on the app's main thread, which is also where the app's
+  /// frames start: off screen (another tab, the other site, a page pushed
+  /// over it; TickerMode) it is paused.
+  void _syncPaused() {
+    final controller = _controller;
+    if (controller == null || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    final pause = !TickerMode.valuesOf(context).enabled;
+    if (pause == _paused) return;
+    _paused = pause;
+    (pause ? controller.pause() : controller.resume()).catchError(
+      (Object error) =>
+          debugPrint('[WikiBrowser] Error pausing WebView: $error'),
+    );
+  }
 
   @override
   void didUpdateWidget(covariant _WikiTabView oldWidget) {
@@ -964,6 +1035,13 @@ class _WikiTabViewState extends State<_WikiTabView> {
             useWideViewPort: true,
             supportZoom: true,
             transparentBackground: false,
+            // Android: the page is a view of its own the system composes.
+            // Drawn into a texture instead, the page rendered every vsync
+            // but Flutter picked the frames up unevenly: a quarter of them
+            // never shown, the scroll jerked (traced 2026-10-24, 120 Hz).
+            // Hybrid Composition once made the whole app stutter, but that
+            // was the 60 Hz cap and the hidden tabs' redraws, since fixed.
+            useHybridComposition: true,
           ),
           initialUserScripts: UnmodifiableListView<UserScript>([
             UserScript(
@@ -974,13 +1052,36 @@ class _WikiTabViewState extends State<_WikiTabView> {
                 dark: widget.isDarkMode,
               ),
             ),
+            // Profile builds (`-FrameLog`): the page's own frames a second,
+            // next to Flutter's `[frame]` lines — whether the page draws
+            // fewer, or Flutter composes fewer of them.
+            if (kProfileMode)
+              UserScript(
+                groupName: 'arklores-web-fps',
+                injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                forMainFrameOnly: true,
+                source: _webFpsScript,
+              ),
           ]),
+          onConsoleMessage: kProfileMode
+              ? (controller, message) {
+                  if (message.message.startsWith('[webfps]')) {
+                    debugPrint(message.message);
+                  }
+                }
+              : null,
           onWebViewCreated: (controller) {
             _controller = controller;
             widget.onControllerCreated(widget.index, controller);
+            _syncPaused();
+          },
+          onProgressChanged: (controller, progress) {
+            if (!mounted || !_isPreparingWebView) return;
+            setState(() => _progress = progress / 100);
           },
           onLoadStart: (controller, url) {
             _hasLoadedPage = false;
+            _progress = null;
             _showLoadingOverlay();
             if (_loadError != null) setState(() => _loadError = null);
           },
@@ -1020,7 +1121,14 @@ class _WikiTabViewState extends State<_WikiTabView> {
     return AbsorbPointer(
       child: ColoredBox(
         color: widget.theme.bgPrimary,
-        child: const Center(child: BusyMark()),
+        // The page's own load progress (the web view reports it), as a
+        // browser shows it; before the first report, the walking mark.
+        child: Center(
+          child: SizedBox(
+            width: 144,
+            child: SegmentProgress(value: _progress, cells: 12, height: 6),
+          ),
+        ),
       ),
     );
   }
@@ -1107,6 +1215,7 @@ class _WikiTabViewState extends State<_WikiTabView> {
       ),
     );
   }
+
   String _friendlyWebViewError(String description) {
     final lower = description.toLowerCase();
     if (lower.contains('host') || lower.contains('dns')) {

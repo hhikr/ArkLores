@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../../support/gamedata_fixture.dart' show fastWrites;
 import '../../../support/temp_dir.dart';
 
 /// 0.11 entry layer: entries owned by collections, deterministic bindings
@@ -997,6 +998,7 @@ void main() {
       db = await databaseFactoryFfi.openDatabase(
         p.join(dir.path, 'entry.db'),
       );
+      await fastWrites(db);
       await createGamedataSchema(db);
       stats = BuildStats();
       final source = Directory(p.join(dir.path, 'src'));

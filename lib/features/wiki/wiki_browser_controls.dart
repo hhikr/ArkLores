@@ -56,7 +56,7 @@ class ExpandableTray extends ConsumerWidget {
               context,
               expanded ? Motion.sheetIn : Motion.sheetOut,
             ),
-            curve: Motion.mech,
+            curve: expanded ? Motion.snap : Motion.mech,
             alignment: Alignment.bottomRight,
             child: expanded
                 ? Padding(

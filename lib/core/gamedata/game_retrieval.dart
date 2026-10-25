@@ -110,6 +110,7 @@ abstract interface class GameDataRetrieval {
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
     String? scopeId,
+    Set<String>? storyIds,
     int storyLimit,
     int linesPerStory,
     Map<String, int>? termLines,
@@ -249,10 +250,12 @@ class StoryLineHitRow {
     required this.lineIndex,
     required this.content,
     this.speaker,
+    this.kind,
   });
 
   final String storyId;
   final int lineIndex;
   final String? speaker;
   final String content;
+  final String? kind;
 }

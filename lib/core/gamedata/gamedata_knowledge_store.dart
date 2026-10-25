@@ -140,6 +140,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
     String? scopeId,
+    Set<String>? storyIds,
     int storyLimit = 8,
     int linesPerStory = 3,
     Map<String, int>? termLines,
@@ -151,6 +152,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
       db,
       terms,
       scopeId: scopeId,
+      storyIds: storyIds,
       storyLimit: storyLimit,
       linesPerStory: linesPerStory,
       termLines: termLines,
@@ -597,8 +599,9 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
         ? ''
         : ' AND story_id IN (${List.filled(ids.length, '?').join(',')})';
     final searchable = await searchableLinesFilter(db);
+    final kindColumn = await storyLinesHaveKind(db) ? ', kind' : '';
     final rows = await db.rawQuery(
-      'SELECT story_id, line_index, speaker, content FROM story_lines '
+      'SELECT story_id, line_index, speaker, content$kindColumn FROM story_lines '
       'WHERE $clause$scope$searchable ORDER BY story_id, line_index LIMIT ?',
       [...args, ...?ids, limit],
     );
@@ -609,6 +612,7 @@ class GameDataKnowledgeStore implements GameDataRetrieval {
           lineIndex: (row['line_index'] as num).toInt(),
           speaker: row['speaker'] as String?,
           content: '${row['content'] ?? ''}',
+          kind: row['kind'] as String?,
         ),
     ];
   }

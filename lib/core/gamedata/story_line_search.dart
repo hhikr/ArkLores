@@ -32,11 +32,13 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
   DatabaseExecutor db,
   List<String> terms, {
   String? scopeId,
+  Set<String>? storyIds,
   int storyLimit = 8,
   int linesPerStory = 3,
   Map<String, int>? termLines,
   Map<String, Map<String, int>>? termStories,
 }) async {
+  if (storyIds != null && storyIds.isEmpty) return const [];
   final cleaned = <String>[];
   for (final t in terms) {
     final term = t.trim();
@@ -116,6 +118,9 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
       "THEN s.scope_type ELSE s.scope_type || ':' || s.scope_id END";
   final scope = scopeId?.trim();
   final scoped = scope != null && scope.isNotEmpty;
+  final within = storyIds == null
+      ? ''
+      : ' AND l.story_id IN (${List.filled(storyIds.length, '?').join(',')})';
 
   final stories = await db.rawQuery(
     'SELECT story_id, scope_key, COUNT(*) AS hits, MAX(score) AS best, '
@@ -123,13 +128,14 @@ Future<List<StoryLineHit>> queryStoryLinesLike(
     'SELECT l.story_id AS story_id, $scopeKey AS scope_key, '
     '($score) AS score, ($count) AS matched '
     'FROM story_lines l LEFT JOIN story_scopes s ON s.story_id = l.story_id '
-    'WHERE ($any)$searchable${scoped ? ' AND $scopeKey = ?' : ''}'
+    'WHERE ($any)$searchable${scoped ? ' AND $scopeKey = ?' : ''}$within'
     ') GROUP BY story_id ORDER BY best DESC, total DESC, story_id LIMIT ?',
     [
       ...scoreArgs,
       ...countArgs,
       ...anyArgs,
       if (scoped) scope,
+      if (storyIds != null) ...storyIds,
       storyLimit,
     ],
   );

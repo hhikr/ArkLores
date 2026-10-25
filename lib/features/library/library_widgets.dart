@@ -214,7 +214,8 @@ class LibraryRow extends ConsumerWidget {
       title,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: theme.text(16, weight: FontWeight.w500, height: 1.4),
+      // Bold like the shelves' names: a row's name is its heading.
+      style: theme.heading(16),
     );
     return Semantics(
       button: onTap != null,
@@ -646,8 +647,8 @@ class FilterField extends ConsumerWidget {
   }
 }
 
-/// The heading of a group inside a long list (a year, a region): `// LABEL`
-/// in the wide face, with the number of rows under it on the right.
+/// The heading of a group inside a long list (a year, a region): the name
+/// in bold, with the number of rows under it on the right.
 class GroupHeading extends ConsumerWidget {
   const GroupHeading({super.key, required this.title, this.count});
 
@@ -663,18 +664,12 @@ class GroupHeading extends ConsumerWidget {
         padding: const EdgeInsets.fromLTRB(12, 22, 12, 8),
         child: Row(
           children: [
-            ExcludeSemantics(
-              child: Text(
-                '// ',
-                style: theme.ui(14, weight: 700, color: theme.textMuted),
-              ),
-            ),
             Expanded(
               child: Text(
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.ui(14, weight: 700, width: 112),
+                style: theme.heading(16),
               ),
             ),
             if (count != null) Text('$count', style: theme.field()),

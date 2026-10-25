@@ -9,9 +9,6 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'ArkLores';
-
-  @override
   String get navWiki => 'Wiki';
 
   @override
@@ -25,9 +22,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTitle => 'Settings';
-
-  @override
-  String get settingsSystemCode => 'ARKLORES / SYSTEM';
 
   @override
   String get settingsTheme => 'Theme';
@@ -55,9 +49,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsProfile => 'Profile';
-
-  @override
-  String get settingsProfileDesc => 'How the stories address you.';
 
   @override
   String get settingsProfileSectionCode => 'PROFILE';
@@ -124,9 +115,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enables semantic story-line recall for investigations. Must use the same model as the installed knowledge base vectors (e.g. Alibaba Cloud Bailian qwen3.7-text-embedding). Leave the key empty to use keyword search only.';
 
   @override
-  String get apiSettingsUseSameProvider => 'Use same provider as Chat';
-
-  @override
   String get apiSettingsLabelBaseUrl => 'Base URL';
 
   @override
@@ -143,28 +131,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbTitle => 'Knowledge Base';
-
-  @override
-  String get kbConfigWarning =>
-      'Please configure your API Key in Settings before building the knowledge base.';
-
-  @override
-  String get kbIndexOverview => 'Index Overview';
-
-  @override
-  String get kbTotalChunks => 'Total Chunks';
-
-  @override
-  String get kbWikiChunks => 'Wiki Chunks';
-
-  @override
-  String get kbBookChunks => 'Book Chunks';
-
-  @override
-  String get kbBooks => 'Books';
-
-  @override
-  String get kbWikiSources => 'Wiki Sources';
 
   @override
   String get kbUpdate => 'Update';
@@ -189,65 +155,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbCancel => 'Cancel';
 
   @override
-  String get kbIndexing => 'Indexing...';
-
-  @override
-  String kbStartingCrawl(Object site) {
-    return 'Starting crawl of $site...';
-  }
-
-  @override
-  String kbCrawlingPages(Object count, Object site) {
-    return 'Crawling $site: $count pages...';
-  }
-
-  @override
-  String kbCompleted(Object chunks, Object pages) {
-    return 'Completed: $chunks chunks from $pages pages.';
-  }
-
-  @override
-  String kbFailed(Object error) {
-    return 'Indexing failed: $error';
-  }
-
-  @override
-  String get kbEngineNative => 'Search engine: sqlite-vec (native)';
-
-  @override
-  String get kbEngineFallback => 'Search engine: pure Dart (fallback)';
-
-  @override
   String get materialsTitle => 'Materials';
-
-  @override
-  String get materialsWarning =>
-      '⚠️ Imported book content may contain unofficial interpretations, translation errors, or personal summaries. AI will prioritize Wiki content and cite book sources with caution.';
-
-  @override
-  String get materialsNoBooks => 'No books yet';
 
   @override
   String get materialsEmptyDesc =>
       'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.';
-
-  @override
-  String get materialsNoApiKeyHint =>
-      'Configure your API Key in Settings to enable import.';
-
-  @override
-  String get materialsImportButton => 'Import Books';
-
-  @override
-  String materialsLoadFailed(Object error) {
-    return 'Failed to load books: $error';
-  }
-
-  @override
-  String get materialsEditTitle => 'Edit Display Name';
-
-  @override
-  String get materialsEditHint => 'Enter a display name';
 
   @override
   String get materialsCancel => 'Cancel';
@@ -256,80 +168,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get materialsSave => 'Save';
 
   @override
-  String get materialsDeleteTitle => 'Delete Book';
-
-  @override
   String get materialsDeleteConfirm => 'Delete this text?';
 
   @override
   String get materialsDelete => 'Delete';
-
-  @override
-  String materialsImportFailed(Object error) {
-    return 'Import failed: $error';
-  }
-
-  @override
-  String materialsChunks(Object count) {
-    return '$count chunks';
-  }
-
-  @override
-  String get materialsJustNow => 'just now';
-
-  @override
-  String materialsMinutesAgo(Object n) {
-    return '${n}m ago';
-  }
-
-  @override
-  String materialsHoursAgo(Object n) {
-    return '${n}h ago';
-  }
-
-  @override
-  String materialsDaysAgo(Object n) {
-    return '${n}d ago';
-  }
-
-  @override
-  String importReading(Object file) {
-    return 'Reading $file';
-  }
-
-  @override
-  String get importChunking => 'Chunking text...';
-
-  @override
-  String get importStoring => 'Saving to knowledge base...';
-
-  @override
-  String get importDone => 'Import complete';
-
-  @override
-  String get importFailed => 'Import failed';
-
-  @override
-  String get importErrorOccurred => 'Error occurred during import.';
-
-  @override
-  String get importDismiss => 'Dismiss';
-
-  @override
-  String get aiChatTitle => 'Lore Advisor';
-
-  @override
-  String get aiChatComingSoon => 'Coming in v0.4';
-
-  @override
-  String get aiChatComingSoonDesc =>
-      'Three AI agent modes with citation cards and streaming markdown responses.';
-
-  @override
-  String get wikiTabPrts => 'PRTS Wiki';
-
-  @override
-  String get wikiTabEndfield => 'Endfield Wiki';
 
   @override
   String get bookmarksTitle => 'Bookmarks';
@@ -344,15 +186,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bookmarksEmptyDesc => 'Save Wiki pages you want to revisit later.';
-
-  @override
-  String get citationWiki => 'Wiki';
-
-  @override
-  String get citationBook => 'Book';
-
-  @override
-  String get citationViewInWiki => 'View in Wiki';
 
   @override
   String get onboardingNotNow => 'Not now';
@@ -372,7 +205,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onboardingApiDesc =>
-      'ArkLores uses your own AI API key.\nConfigure a Chat provider to use AI features.';
+      'Ask uses your own model service: requests go from this phone straight to the provider, with no ArkLores server in between. What you filled in before is read in; unchanged, just go on.';
 
   @override
   String get onboardingSaveContinue => 'Save & Continue';
@@ -381,14 +214,89 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingConfigureLater => 'Configure later';
 
   @override
+  String get onboardingNext => 'Next';
+
+  @override
+  String get onboardingSkipGuide => 'Skip the guide';
+
+  @override
+  String get onboardingAppearanceTitle => 'Appearance';
+
+  @override
+  String get onboardingAppearanceDesc =>
+      'The theme and the reading font; both can be changed in Settings later.';
+
+  @override
+  String get onboardingProfileDesc =>
+      'How the stories address you is replaced with this name.';
+
+  @override
+  String get onboardingEmbeddingDesc =>
+      'The vector service finds story text by meaning. It can be left empty, but answers will be much worse.';
+
+  @override
+  String get onboardingKbTitle => 'Knowledge bases';
+
+  @override
+  String get onboardingKbDesc =>
+      'The story text and the game records are in the knowledge bases, which reading and Ask both use. One per game, usable offline once downloaded; those already downloaded say so.';
+
+  @override
+  String get onboardingWikiTitle => 'Wiki sites';
+
+  @override
+  String get onboardingWikiDesc =>
+      'The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.';
+
+  @override
+  String get onboardingBackgroundTitle => 'Running in the background';
+
+  @override
   String get onboardingDoneTitle => 'All Set!';
 
   @override
   String get onboardingDoneDesc =>
-      'You\'re ready to explore the world of Arknights and Endfield.\n\nInstall the GameData knowledge base in Settings,\nor start browsing the Wiki!';
+      'Everything can be changed again in Settings, where this guide can also be opened again.';
 
   @override
   String get onboardingStartExploring => 'Start Exploring';
+
+  @override
+  String get backgroundAccessTitle => 'Keep answering in the background';
+
+  @override
+  String get backgroundAccessBody =>
+      'ArkLores has no server of its own: calling the model, searching the knowledge base and writing the answer all happen on this phone, and an answer takes minutes. Once you switch to another app, some systems (ColorOS, for one) freeze the app within seconds, its connections drop, and the answer stops.\n\nExempt from battery optimisation, ArkLores runs in the background only while such work goes on (an answer, a download; the notification shows it), and stops when it is done.';
+
+  @override
+  String get backgroundAccessAllow => 'Allow';
+
+  @override
+  String get backgroundAccessNotifications => 'Notifications';
+
+  @override
+  String get backgroundAccessNotificationsDesc =>
+      'Shows the progress of background work.';
+
+  @override
+  String get backgroundAccessBattery =>
+      'Not restricted by battery optimisation';
+
+  @override
+  String get backgroundAccessBatteryDesc =>
+      'Answers and downloads are not frozen when you switch apps.';
+
+  @override
+  String get backgroundAccessGranted => 'Allowed';
+
+  @override
+  String get backgroundAccessGrant => 'Allow';
+
+  @override
+  String get settingsVersion => 'Version';
+
+  @override
+  String get settingsKnowledgeCategory => 'Knowledge & Library';
 
   @override
   String get settingsHelpGuide => 'Help & Guide';
@@ -514,15 +422,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiStoryReaderJumpBack => 'Back to the cited lines';
 
   @override
-  String aiStoryReaderCited(String range) {
-    return 'Cited: $range';
-  }
-
-  @override
   String get aiStoryReaderEnd => 'End of chapter';
-
-  @override
-  String get libraryTabRead => 'Read';
 
   @override
   String get libraryTabMine => 'My texts';
@@ -567,9 +467,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shelfSandbox => 'Sandbox';
 
   @override
-  String get shelfRetro => 'Re-runs';
-
-  @override
   String get shelfCodex => 'Codex';
 
   @override
@@ -600,9 +497,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get libraryNotInstalledTitle => 'No knowledge base yet';
-
-  @override
   String get libraryNotInstalledDesc =>
       'Download or build it under Settings → Knowledge base; the stories and texts to read appear here.';
 
@@ -626,15 +520,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryParts => 'Unlocked stories';
 
   @override
-  String get libraryLeftoverStories => 'Other stories';
-
-  @override
   String get libraryFilterHint => 'Filter this list';
-
-  @override
-  String libraryProgress(int percent) {
-    return '$percent% read';
-  }
 
   @override
   String get libraryFinished => 'Finished';
@@ -651,11 +537,6 @@ class AppLocalizationsEn extends AppLocalizations {
       one: 'Read once',
     );
     return '$_temp0';
-  }
-
-  @override
-  String libraryRelease(String month) {
-    return 'Released $month';
   }
 
   @override
@@ -922,12 +803,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get aiWorkRunning => 'running';
-
-  @override
-  String get aiWorkRaw => 'Raw output';
-
-  @override
   String aiStepsStatus(String status, int count) {
     return '$status ($count steps)';
   }
@@ -940,9 +815,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiSend => 'Send';
-
-  @override
-  String get aiInputPlaceholder => 'Enter lore query or claim...';
 
   @override
   String get aiSettingsRequired =>
@@ -960,6 +832,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiClearConfirmBtn => 'Clear';
+
+  @override
+  String get aiConversations => 'Conversations';
+
+  @override
+  String get aiConversationsAnswering => 'Answering';
+
+  @override
+  String aiConversationsAnsweringCount(int count) {
+    return '$count answering';
+  }
+
+  @override
+  String get aiConversationsRecent => 'Recent';
+
+  @override
+  String get aiConversationsAll => 'See all';
+
+  @override
+  String get aiConversationsNone =>
+      'No conversations yet. They appear here once you ask.';
 
   @override
   String get aiNewConversation => 'New conversation';
@@ -988,25 +881,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String aiHistoryTurns(int count) {
     return '$count turns';
   }
-
-  @override
-  String get settingsAppIcon => 'App icon';
-
-  @override
-  String get settingsIconLightLabel => 'Light icon';
-
-  @override
-  String get settingsIconDarkLabel => 'Dark icon';
-
-  @override
-  String get settingsIconLightShort => 'LIGHT';
-
-  @override
-  String get settingsIconDarkShort => 'DARK';
-
-  @override
-  String get settingsIconUnsupported =>
-      'Runtime icon switching is not supported on this platform. Settings were saved.';
 
   @override
   String get settingsWikiSources => 'Wiki Sources';
@@ -1284,13 +1158,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbBuildTokenSetHint => 'GitHub token set (quota 5000/hr)';
-
-  @override
-  String get materialsPausedTitle => 'User material import is not enabled yet';
-
-  @override
-  String get materialsPausedDesc =>
-      'The legacy PDF/TXT import pipeline is paused. The AI currently uses only the GameData knowledge base as evidence.';
 
   @override
   String get wikiLoadFailed => 'Wiki page failed to load';
@@ -1614,6 +1481,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gameEndfield => 'Endfield';
+
+  @override
+  String get launchTagline => 'Story reader and Q&A';
 
   @override
   String libraryGameMissing(String game) {

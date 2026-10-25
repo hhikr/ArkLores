@@ -5,6 +5,7 @@ import '../../../shared/l10n/l10n.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/theme/cut_border.dart';
 import '../../../shared/theme/motion.dart';
+import '../../../shared/widgets/press_feedback.dart';
 
 /// How tall the question box is: grown to its text (up to four lines), half
 /// of the Ask tab, or all of it.
@@ -318,17 +319,13 @@ class ComposerButton extends StatefulWidget {
   State<ComposerButton> createState() => _ComposerButtonState();
 }
 
-class _ComposerButtonState extends State<ComposerButton> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (mounted && _down != v) setState(() => _down = v);
-  }
-
+class _ComposerButtonState extends State<ComposerButton>
+    with PressHold<ComposerButton> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
-    final on = _down || widget.selected;
+    final down = pressed;
+    final on = down || widget.selected;
     return Tooltip(
       message: widget.tooltip,
       child: Semantics(
@@ -336,32 +333,32 @@ class _ComposerButtonState extends State<ComposerButton> {
         label: widget.tooltip,
         toggled: widget.selected ? true : null,
         excludeSemantics: true,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _set(true),
-          onTapCancel: () => _set(false),
-          onTapUp: (_) => _set(false),
-          onTap: () {
-            HapticFeedback.selectionClick();
-            widget.onPressed();
-          },
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Center(
-              child: AnimatedContainer(
-                duration: Motion.of(context, _down ? Motion.press : Motion.wipe),
-                curve: Motion.mech,
-                width: 40,
-                height: 40,
-                decoration: ShapeDecoration(
-                  color: on ? theme.accentPrimary : theme.surfaceElevated,
-                  shape: const CutBorder.br(7),
-                ),
-                child: Icon(
-                  widget.icon,
-                  size: 20,
-                  color: on ? theme.onAccent : theme.textPrimary,
+        child: pressListener(
+          enabled: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              widget.onPressed();
+            },
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: Motion.of(context, down ? Motion.press : Motion.wipe),
+                  curve: Motion.mech,
+                  width: 40,
+                  height: 40,
+                  decoration: ShapeDecoration(
+                    color: on ? theme.accentPrimary : theme.surfaceElevated,
+                    shape: const CutBorder.br(7),
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    size: 20,
+                    color: on ? theme.onAccent : theme.textPrimary,
+                  ),
                 ),
               ),
             ),
@@ -391,13 +388,8 @@ class _SendButton extends StatefulWidget {
   State<_SendButton> createState() => _SendButtonState();
 }
 
-class _SendButtonState extends State<_SendButton> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (mounted && _down != v) setState(() => _down = v);
-  }
-
+class _SendButtonState extends State<_SendButton>
+    with PressHold<_SendButton> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
@@ -419,52 +411,52 @@ class _SendButtonState extends State<_SendButton> {
         button: true,
         label: label,
         excludeSemantics: true,
-        child: GestureDetector(
-          key: const ValueKey('ask-send'),
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _set(true),
-          onTapCancel: () => _set(false),
-          onTapUp: (_) => _set(false),
-          onTap: () {
-            HapticFeedback.lightImpact();
-            widget.onPressed();
-          },
-          child: SizedBox(
-            width: 52,
-            height: 44,
-            child: Center(
-              child: ClipPath(
-                clipper: const ShapeBorderClipper(shape: CutBorder.br(8)),
-                child: SizedBox(
-                  width: 48,
-                  height: 40,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ColoredBox(color: bg),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: AnimatedFractionallySizedBox(
-                          duration: Motion.of(
-                            context,
-                            _down ? Motion.press : Motion.wipe,
-                          ),
-                          curve: Motion.mech,
-                          widthFactor: _down ? 1 : 0,
-                          heightFactor: 1,
-                          child: ColoredBox(
-                            color: theme.textPrimary.withValues(alpha: 0.16),
+        child: pressListener(
+          enabled: true,
+          child: GestureDetector(
+            key: const ValueKey('ask-send'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              widget.onPressed();
+            },
+            child: SizedBox(
+              width: 52,
+              height: 44,
+              child: Center(
+                child: ClipPath(
+                  clipper: const ShapeBorderClipper(shape: CutBorder.br(8)),
+                  child: SizedBox(
+                    width: 48,
+                    height: 40,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ColoredBox(color: bg),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedFractionallySizedBox(
+                            duration: Motion.of(
+                              context,
+                              pressed ? Motion.press : Motion.wipe,
+                            ),
+                            curve: Motion.mech,
+                            widthFactor: pressed ? 1 : 0,
+                            heightFactor: 1,
+                            child: ColoredBox(
+                              color: theme.textPrimary.withValues(alpha: 0.16),
+                            ),
                           ),
                         ),
-                      ),
-                      Icon(
-                        widget.sending
-                            ? Icons.stop_sharp
-                            : Icons.arrow_upward_sharp,
-                        size: 22,
-                        color: fg,
-                      ),
-                    ],
+                        Icon(
+                          widget.sending
+                              ? Icons.stop_sharp
+                              : Icons.arrow_upward_sharp,
+                          size: 22,
+                          color: fg,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

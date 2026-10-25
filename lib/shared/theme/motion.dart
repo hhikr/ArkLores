@@ -17,6 +17,14 @@ abstract final class Motion {
   static const row = Duration(milliseconds: 200);
   static const shutter = Duration(milliseconds: 360);
   static const shutterOut = Duration(milliseconds: 240);
+
+  /// A pushed page's frosted pane sliding over the screen; the page is
+  /// built behind it once it covers the screen.
+  static const coverIn = Duration(milliseconds: 280);
+
+  /// The pane clearing after the page's first frame: slow, the page comes
+  /// into focus (the developer, 2026-10-24).
+  static const reveal = Duration(milliseconds: 900);
   static const sheetIn = Duration(milliseconds: 360);
   static const sheetOut = Duration(milliseconds: 240);
   static const dialogIn = Duration(milliseconds: 280);

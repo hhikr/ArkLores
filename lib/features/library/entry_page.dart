@@ -186,7 +186,11 @@ class EntryPage extends ConsumerWidget {
                           // investigation's) are what it holds.
                           title: unlocked.every((s) => s.type == 'story')
                               ? context.t.libraryParts
-                              : bindingName('part_of', outgoing: false, ownerType: e.type),
+                              : bindingName(
+                                  'part_of',
+                                  outgoing: false,
+                                  ownerType: e.type,
+                                ),
                           code: 'parts',
                         ),
                         for (final s in unlocked) storyRow(s),
@@ -302,11 +306,98 @@ class EntryPage extends ConsumerWidget {
         padding: padding.copyWith(bottom: 14),
       );
     }
+    // Plain text and voice lines: the panel of [textBlock] around a lazy
+    // list of its paragraphs (lines), so a long text is laid out only as far
+    // as it is on screen.
+    final heading = _heading(e, b);
+    if (text.isNotEmpty &&
+        !eventEntryTypes.contains(e.type) &&
+        !markdownEntryTypes.contains(e.type)) {
+      final voices =
+          ProfileText.isVoice(heading) ? VoiceLines.parse(text) : null;
+      final paragraphs = voices == null
+          ? readingParagraphs(text, fields: isFieldList(text))
+          : const <ReadingParagraph>[];
+      final rows = voices?.length ?? paragraphs.length;
+      final head = heading.isEmpty ? 0 : 1;
+      return SliverPadding(
+        padding: padding.copyWith(bottom: 14),
+        sliver: DecoratedSliver(
+          decoration: BoxDecoration(
+            color: theme.cardSurface,
+            border: Border.all(color: theme.divider),
+          ),
+          sliver: SliverMainAxisGroup(
+            slivers: [
+              // The panel's ink tab, as on every panel.
+              SliverToBoxAdapter(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: 40,
+                    height: 4,
+                    child: ColoredBox(color: theme.textPrimary),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) {
+                      if (i < head) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _headingRow(theme, heading),
+                        );
+                      }
+                      final r = i - head;
+                      return voices != null
+                          ? VoiceLine(
+                              voices[r],
+                              key: ValueKey('voice-$r'),
+                              first: r == 0,
+                            )
+                          : ReadingParagraphView(paragraphs[r], theme: theme);
+                    },
+                    childCount: head + rows,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return SliverPadding(
       padding: padding,
       sliver: SliverToBoxAdapter(child: textBlock(theme, e, b, nickname)),
     );
   }
+
+  /// The heading of a block: its section (the record's own part name),
+  /// else its title, when that is neither the entry's name again nor the
+  /// name of its kind (`敌人`, `集成战略收藏品`).
+  static String _heading(LibraryEntry e, EntryTextBlock b) {
+    final kind = entryTypeName(e.type);
+    return [b.section, b.title].map((t) => t?.trim() ?? '').firstWhere(
+          (t) =>
+              t.isNotEmpty &&
+              t != e.name &&
+              !t.endsWith(e.name) &&
+              !t.contains(kind) &&
+              !kind.contains(t),
+          orElse: () => '',
+        );
+  }
+
+  static Widget _headingRow(AppThemeTokens theme, String heading) => Row(
+        children: [
+          Container(width: 4, height: 18, color: theme.trace),
+          const SizedBox(width: 8),
+          Expanded(child: Text(heading, style: theme.heading(16))),
+        ],
+      );
 
   static Widget textBlock(
     AppThemeTokens theme,
@@ -323,19 +414,7 @@ class EntryPage extends ConsumerWidget {
         child: ProfileText(text),
       );
     }
-    // The heading of a block: its section (the record's own part name),
-    // else its title, when that is neither the entry's name again nor the
-    // name of its kind (`敌人`, `集成战略收藏品`).
-    final kind = entryTypeName(e.type);
-    final heading = [b.section, b.title].map((t) => t?.trim() ?? '').firstWhere(
-          (t) =>
-              t.isNotEmpty &&
-              t != e.name &&
-              !t.endsWith(e.name) &&
-              !t.contains(kind) &&
-              !kind.contains(t),
-          orElse: () => '',
-        );
+    final heading = _heading(e, b);
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: ThemeAwareCard(
@@ -344,18 +423,7 @@ class EntryPage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (heading.isNotEmpty) ...[
-              Row(
-                children: [
-                  Container(width: 4, height: 18, color: theme.trace),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      heading,
-                      style: theme.heading(16),
-                    ),
-                  ),
-                ],
-              ),
+              _headingRow(theme, heading),
               const SizedBox(height: 10),
             ],
             if (eventEntryTypes.contains(e.type))
@@ -399,7 +467,8 @@ class EntryPage extends ConsumerWidget {
       ),
       for (final g in groups.entries) ...[
         GroupHeading(
-          title: '${g.key.split('\u0000').first} / ${g.key.split('\u0000').last}',
+          title:
+              '${g.key.split('\u0000').first} / ${g.key.split('\u0000').last}',
           count: g.value.length,
         ),
         Wrap(

@@ -98,12 +98,6 @@ abstract class AppLocalizations {
     Locale('zh')
   ];
 
-  /// No description provided for @appTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'ArkLores'**
-  String get appTitle;
-
   /// No description provided for @navWiki.
   ///
   /// In en, this message translates to:
@@ -133,12 +127,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Settings'**
   String get settingsTitle;
-
-  /// No description provided for @settingsSystemCode.
-  ///
-  /// In en, this message translates to:
-  /// **'ARKLORES / SYSTEM'**
-  String get settingsSystemCode;
 
   /// No description provided for @settingsTheme.
   ///
@@ -193,12 +181,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Profile'**
   String get settingsProfile;
-
-  /// No description provided for @settingsProfileDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'How the stories address you.'**
-  String get settingsProfileDesc;
 
   /// No description provided for @settingsProfileSectionCode.
   ///
@@ -320,12 +302,6 @@ abstract class AppLocalizations {
   /// **'Enables semantic story-line recall for investigations. Must use the same model as the installed knowledge base vectors (e.g. Alibaba Cloud Bailian qwen3.7-text-embedding). Leave the key empty to use keyword search only.'**
   String get apiSettingsEmbeddingDesc;
 
-  /// No description provided for @apiSettingsUseSameProvider.
-  ///
-  /// In en, this message translates to:
-  /// **'Use same provider as Chat'**
-  String get apiSettingsUseSameProvider;
-
   /// No description provided for @apiSettingsLabelBaseUrl.
   ///
   /// In en, this message translates to:
@@ -361,48 +337,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Knowledge Base'**
   String get kbTitle;
-
-  /// No description provided for @kbConfigWarning.
-  ///
-  /// In en, this message translates to:
-  /// **'Please configure your API Key in Settings before building the knowledge base.'**
-  String get kbConfigWarning;
-
-  /// No description provided for @kbIndexOverview.
-  ///
-  /// In en, this message translates to:
-  /// **'Index Overview'**
-  String get kbIndexOverview;
-
-  /// No description provided for @kbTotalChunks.
-  ///
-  /// In en, this message translates to:
-  /// **'Total Chunks'**
-  String get kbTotalChunks;
-
-  /// No description provided for @kbWikiChunks.
-  ///
-  /// In en, this message translates to:
-  /// **'Wiki Chunks'**
-  String get kbWikiChunks;
-
-  /// No description provided for @kbBookChunks.
-  ///
-  /// In en, this message translates to:
-  /// **'Book Chunks'**
-  String get kbBookChunks;
-
-  /// No description provided for @kbBooks.
-  ///
-  /// In en, this message translates to:
-  /// **'Books'**
-  String get kbBooks;
-
-  /// No description provided for @kbWikiSources.
-  ///
-  /// In en, this message translates to:
-  /// **'Wiki Sources'**
-  String get kbWikiSources;
 
   /// No description provided for @kbUpdate.
   ///
@@ -446,101 +380,17 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get kbCancel;
 
-  /// No description provided for @kbIndexing.
-  ///
-  /// In en, this message translates to:
-  /// **'Indexing...'**
-  String get kbIndexing;
-
-  /// No description provided for @kbStartingCrawl.
-  ///
-  /// In en, this message translates to:
-  /// **'Starting crawl of {site}...'**
-  String kbStartingCrawl(Object site);
-
-  /// No description provided for @kbCrawlingPages.
-  ///
-  /// In en, this message translates to:
-  /// **'Crawling {site}: {count} pages...'**
-  String kbCrawlingPages(Object count, Object site);
-
-  /// No description provided for @kbCompleted.
-  ///
-  /// In en, this message translates to:
-  /// **'Completed: {chunks} chunks from {pages} pages.'**
-  String kbCompleted(Object chunks, Object pages);
-
-  /// No description provided for @kbFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Indexing failed: {error}'**
-  String kbFailed(Object error);
-
-  /// No description provided for @kbEngineNative.
-  ///
-  /// In en, this message translates to:
-  /// **'Search engine: sqlite-vec (native)'**
-  String get kbEngineNative;
-
-  /// No description provided for @kbEngineFallback.
-  ///
-  /// In en, this message translates to:
-  /// **'Search engine: pure Dart (fallback)'**
-  String get kbEngineFallback;
-
   /// No description provided for @materialsTitle.
   ///
   /// In en, this message translates to:
   /// **'Materials'**
   String get materialsTitle;
 
-  /// No description provided for @materialsWarning.
-  ///
-  /// In en, this message translates to:
-  /// **'⚠️ Imported book content may contain unofficial interpretations, translation errors, or personal summaries. AI will prioritize Wiki content and cite book sources with caution.'**
-  String get materialsWarning;
-
-  /// No description provided for @materialsNoBooks.
-  ///
-  /// In en, this message translates to:
-  /// **'No books yet'**
-  String get materialsNoBooks;
-
   /// No description provided for @materialsEmptyDesc.
   ///
   /// In en, this message translates to:
   /// **'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.'**
   String get materialsEmptyDesc;
-
-  /// No description provided for @materialsNoApiKeyHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Configure your API Key in Settings to enable import.'**
-  String get materialsNoApiKeyHint;
-
-  /// No description provided for @materialsImportButton.
-  ///
-  /// In en, this message translates to:
-  /// **'Import Books'**
-  String get materialsImportButton;
-
-  /// No description provided for @materialsLoadFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed to load books: {error}'**
-  String materialsLoadFailed(Object error);
-
-  /// No description provided for @materialsEditTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit Display Name'**
-  String get materialsEditTitle;
-
-  /// No description provided for @materialsEditHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter a display name'**
-  String get materialsEditHint;
 
   /// No description provided for @materialsCancel.
   ///
@@ -554,12 +404,6 @@ abstract class AppLocalizations {
   /// **'Save'**
   String get materialsSave;
 
-  /// No description provided for @materialsDeleteTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete Book'**
-  String get materialsDeleteTitle;
-
   /// No description provided for @materialsDeleteConfirm.
   ///
   /// In en, this message translates to:
@@ -571,114 +415,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete'**
   String get materialsDelete;
-
-  /// No description provided for @materialsImportFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Import failed: {error}'**
-  String materialsImportFailed(Object error);
-
-  /// No description provided for @materialsChunks.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} chunks'**
-  String materialsChunks(Object count);
-
-  /// No description provided for @materialsJustNow.
-  ///
-  /// In en, this message translates to:
-  /// **'just now'**
-  String get materialsJustNow;
-
-  /// No description provided for @materialsMinutesAgo.
-  ///
-  /// In en, this message translates to:
-  /// **'{n}m ago'**
-  String materialsMinutesAgo(Object n);
-
-  /// No description provided for @materialsHoursAgo.
-  ///
-  /// In en, this message translates to:
-  /// **'{n}h ago'**
-  String materialsHoursAgo(Object n);
-
-  /// No description provided for @materialsDaysAgo.
-  ///
-  /// In en, this message translates to:
-  /// **'{n}d ago'**
-  String materialsDaysAgo(Object n);
-
-  /// No description provided for @importReading.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading {file}'**
-  String importReading(Object file);
-
-  /// No description provided for @importChunking.
-  ///
-  /// In en, this message translates to:
-  /// **'Chunking text...'**
-  String get importChunking;
-
-  /// No description provided for @importStoring.
-  ///
-  /// In en, this message translates to:
-  /// **'Saving to knowledge base...'**
-  String get importStoring;
-
-  /// No description provided for @importDone.
-  ///
-  /// In en, this message translates to:
-  /// **'Import complete'**
-  String get importDone;
-
-  /// No description provided for @importFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Import failed'**
-  String get importFailed;
-
-  /// No description provided for @importErrorOccurred.
-  ///
-  /// In en, this message translates to:
-  /// **'Error occurred during import.'**
-  String get importErrorOccurred;
-
-  /// No description provided for @importDismiss.
-  ///
-  /// In en, this message translates to:
-  /// **'Dismiss'**
-  String get importDismiss;
-
-  /// No description provided for @aiChatTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Lore Advisor'**
-  String get aiChatTitle;
-
-  /// No description provided for @aiChatComingSoon.
-  ///
-  /// In en, this message translates to:
-  /// **'Coming in v0.4'**
-  String get aiChatComingSoon;
-
-  /// No description provided for @aiChatComingSoonDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Three AI agent modes with citation cards and streaming markdown responses.'**
-  String get aiChatComingSoonDesc;
-
-  /// No description provided for @wikiTabPrts.
-  ///
-  /// In en, this message translates to:
-  /// **'PRTS Wiki'**
-  String get wikiTabPrts;
-
-  /// No description provided for @wikiTabEndfield.
-  ///
-  /// In en, this message translates to:
-  /// **'Endfield Wiki'**
-  String get wikiTabEndfield;
 
   /// No description provided for @bookmarksTitle.
   ///
@@ -703,24 +439,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Save Wiki pages you want to revisit later.'**
   String get bookmarksEmptyDesc;
-
-  /// No description provided for @citationWiki.
-  ///
-  /// In en, this message translates to:
-  /// **'Wiki'**
-  String get citationWiki;
-
-  /// No description provided for @citationBook.
-  ///
-  /// In en, this message translates to:
-  /// **'Book'**
-  String get citationBook;
-
-  /// No description provided for @citationViewInWiki.
-  ///
-  /// In en, this message translates to:
-  /// **'View in Wiki'**
-  String get citationViewInWiki;
 
   /// No description provided for @onboardingNotNow.
   ///
@@ -755,7 +473,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingApiDesc.
   ///
   /// In en, this message translates to:
-  /// **'ArkLores uses your own AI API key.\nConfigure a Chat provider to use AI features.'**
+  /// **'Ask uses your own model service: requests go from this phone straight to the provider, with no ArkLores server in between. What you filled in before is read in; unchanged, just go on.'**
   String get onboardingApiDesc;
 
   /// No description provided for @onboardingSaveContinue.
@@ -770,6 +488,72 @@ abstract class AppLocalizations {
   /// **'Configure later'**
   String get onboardingConfigureLater;
 
+  /// No description provided for @onboardingNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get onboardingNext;
+
+  /// No description provided for @onboardingSkipGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip the guide'**
+  String get onboardingSkipGuide;
+
+  /// No description provided for @onboardingAppearanceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get onboardingAppearanceTitle;
+
+  /// No description provided for @onboardingAppearanceDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The theme and the reading font; both can be changed in Settings later.'**
+  String get onboardingAppearanceDesc;
+
+  /// No description provided for @onboardingProfileDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'How the stories address you is replaced with this name.'**
+  String get onboardingProfileDesc;
+
+  /// No description provided for @onboardingEmbeddingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The vector service finds story text by meaning. It can be left empty, but answers will be much worse.'**
+  String get onboardingEmbeddingDesc;
+
+  /// No description provided for @onboardingKbTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge bases'**
+  String get onboardingKbTitle;
+
+  /// No description provided for @onboardingKbDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The story text and the game records are in the knowledge bases, which reading and Ask both use. One per game, usable offline once downloaded; those already downloaded say so.'**
+  String get onboardingKbDesc;
+
+  /// No description provided for @onboardingWikiTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wiki sites'**
+  String get onboardingWikiTitle;
+
+  /// No description provided for @onboardingWikiDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.'**
+  String get onboardingWikiDesc;
+
+  /// No description provided for @onboardingBackgroundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Running in the background'**
+  String get onboardingBackgroundTitle;
+
   /// No description provided for @onboardingDoneTitle.
   ///
   /// In en, this message translates to:
@@ -779,7 +563,7 @@ abstract class AppLocalizations {
   /// No description provided for @onboardingDoneDesc.
   ///
   /// In en, this message translates to:
-  /// **'You\'re ready to explore the world of Arknights and Endfield.\n\nInstall the GameData knowledge base in Settings,\nor start browsing the Wiki!'**
+  /// **'Everything can be changed again in Settings, where this guide can also be opened again.'**
   String get onboardingDoneDesc;
 
   /// No description provided for @onboardingStartExploring.
@@ -787,6 +571,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start Exploring'**
   String get onboardingStartExploring;
+
+  /// No description provided for @backgroundAccessTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep answering in the background'**
+  String get backgroundAccessTitle;
+
+  /// No description provided for @backgroundAccessBody.
+  ///
+  /// In en, this message translates to:
+  /// **'ArkLores has no server of its own: calling the model, searching the knowledge base and writing the answer all happen on this phone, and an answer takes minutes. Once you switch to another app, some systems (ColorOS, for one) freeze the app within seconds, its connections drop, and the answer stops.\n\nExempt from battery optimisation, ArkLores runs in the background only while such work goes on (an answer, a download; the notification shows it), and stops when it is done.'**
+  String get backgroundAccessBody;
+
+  /// No description provided for @backgroundAccessAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get backgroundAccessAllow;
+
+  /// No description provided for @backgroundAccessNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get backgroundAccessNotifications;
+
+  /// No description provided for @backgroundAccessNotificationsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Shows the progress of background work.'**
+  String get backgroundAccessNotificationsDesc;
+
+  /// No description provided for @backgroundAccessBattery.
+  ///
+  /// In en, this message translates to:
+  /// **'Not restricted by battery optimisation'**
+  String get backgroundAccessBattery;
+
+  /// No description provided for @backgroundAccessBatteryDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers and downloads are not frozen when you switch apps.'**
+  String get backgroundAccessBatteryDesc;
+
+  /// No description provided for @backgroundAccessGranted.
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed'**
+  String get backgroundAccessGranted;
+
+  /// No description provided for @backgroundAccessGrant.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get backgroundAccessGrant;
+
+  /// No description provided for @settingsVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get settingsVersion;
+
+  /// No description provided for @settingsKnowledgeCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Knowledge & Library'**
+  String get settingsKnowledgeCategory;
 
   /// No description provided for @settingsHelpGuide.
   ///
@@ -992,23 +842,11 @@ abstract class AppLocalizations {
   /// **'Back to the cited lines'**
   String get aiStoryReaderJumpBack;
 
-  /// No description provided for @aiStoryReaderCited.
-  ///
-  /// In en, this message translates to:
-  /// **'Cited: {range}'**
-  String aiStoryReaderCited(String range);
-
   /// No description provided for @aiStoryReaderEnd.
   ///
   /// In en, this message translates to:
   /// **'End of chapter'**
   String get aiStoryReaderEnd;
-
-  /// No description provided for @libraryTabRead.
-  ///
-  /// In en, this message translates to:
-  /// **'Read'**
-  String get libraryTabRead;
 
   /// No description provided for @libraryTabMine.
   ///
@@ -1094,12 +932,6 @@ abstract class AppLocalizations {
   /// **'Sandbox'**
   String get shelfSandbox;
 
-  /// No description provided for @shelfRetro.
-  ///
-  /// In en, this message translates to:
-  /// **'Re-runs'**
-  String get shelfRetro;
-
   /// No description provided for @shelfCodex.
   ///
   /// In en, this message translates to:
@@ -1148,12 +980,6 @@ abstract class AppLocalizations {
   /// **'{n} entries'**
   String libraryCountEntries(int n);
 
-  /// No description provided for @libraryNotInstalledTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'No knowledge base yet'**
-  String get libraryNotInstalledTitle;
-
   /// No description provided for @libraryNotInstalledDesc.
   ///
   /// In en, this message translates to:
@@ -1196,23 +1022,11 @@ abstract class AppLocalizations {
   /// **'Unlocked stories'**
   String get libraryParts;
 
-  /// No description provided for @libraryLeftoverStories.
-  ///
-  /// In en, this message translates to:
-  /// **'Other stories'**
-  String get libraryLeftoverStories;
-
   /// No description provided for @libraryFilterHint.
   ///
   /// In en, this message translates to:
   /// **'Filter this list'**
   String get libraryFilterHint;
-
-  /// No description provided for @libraryProgress.
-  ///
-  /// In en, this message translates to:
-  /// **'{percent}% read'**
-  String libraryProgress(int percent);
 
   /// No description provided for @libraryFinished.
   ///
@@ -1231,12 +1045,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{Read once} other{Read {count} times}}'**
   String libraryReadTimes(int count);
-
-  /// No description provided for @libraryRelease.
-  ///
-  /// In en, this message translates to:
-  /// **'Released {month}'**
-  String libraryRelease(String month);
 
   /// No description provided for @libraryRelated.
   ///
@@ -1688,18 +1496,6 @@ abstract class AppLocalizations {
   /// **'{given} of {located} stories'**
   String aiWorkGathered(int given, int located);
 
-  /// No description provided for @aiWorkRunning.
-  ///
-  /// In en, this message translates to:
-  /// **'running'**
-  String get aiWorkRunning;
-
-  /// No description provided for @aiWorkRaw.
-  ///
-  /// In en, this message translates to:
-  /// **'Raw output'**
-  String get aiWorkRaw;
-
   /// No description provided for @aiStepsStatus.
   ///
   /// In en, this message translates to:
@@ -1723,12 +1519,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Send'**
   String get aiSend;
-
-  /// No description provided for @aiInputPlaceholder.
-  ///
-  /// In en, this message translates to:
-  /// **'Enter lore query or claim...'**
-  String get aiInputPlaceholder;
 
   /// No description provided for @aiSettingsRequired.
   ///
@@ -1759,6 +1549,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get aiClearConfirmBtn;
+
+  /// No description provided for @aiConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations'**
+  String get aiConversations;
+
+  /// No description provided for @aiConversationsAnswering.
+  ///
+  /// In en, this message translates to:
+  /// **'Answering'**
+  String get aiConversationsAnswering;
+
+  /// No description provided for @aiConversationsAnsweringCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} answering'**
+  String aiConversationsAnsweringCount(int count);
+
+  /// No description provided for @aiConversationsRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get aiConversationsRecent;
+
+  /// No description provided for @aiConversationsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get aiConversationsAll;
+
+  /// No description provided for @aiConversationsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversations yet. They appear here once you ask.'**
+  String get aiConversationsNone;
 
   /// No description provided for @aiNewConversation.
   ///
@@ -1807,42 +1633,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} turns'**
   String aiHistoryTurns(int count);
-
-  /// No description provided for @settingsAppIcon.
-  ///
-  /// In en, this message translates to:
-  /// **'App icon'**
-  String get settingsAppIcon;
-
-  /// No description provided for @settingsIconLightLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Light icon'**
-  String get settingsIconLightLabel;
-
-  /// No description provided for @settingsIconDarkLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Dark icon'**
-  String get settingsIconDarkLabel;
-
-  /// No description provided for @settingsIconLightShort.
-  ///
-  /// In en, this message translates to:
-  /// **'LIGHT'**
-  String get settingsIconLightShort;
-
-  /// No description provided for @settingsIconDarkShort.
-  ///
-  /// In en, this message translates to:
-  /// **'DARK'**
-  String get settingsIconDarkShort;
-
-  /// No description provided for @settingsIconUnsupported.
-  ///
-  /// In en, this message translates to:
-  /// **'Runtime icon switching is not supported on this platform. Settings were saved.'**
-  String get settingsIconUnsupported;
 
   /// No description provided for @settingsWikiSources.
   ///
@@ -2324,18 +2114,6 @@ abstract class AppLocalizations {
   /// **'GitHub token set (quota 5000/hr)'**
   String get kbBuildTokenSetHint;
 
-  /// No description provided for @materialsPausedTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'User material import is not enabled yet'**
-  String get materialsPausedTitle;
-
-  /// No description provided for @materialsPausedDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'The legacy PDF/TXT import pipeline is paused. The AI currently uses only the GameData knowledge base as evidence.'**
-  String get materialsPausedDesc;
-
   /// No description provided for @wikiLoadFailed.
   ///
   /// In en, this message translates to:
@@ -2657,7 +2435,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiNoVectorWarning.
   ///
   /// In en, this message translates to:
-  /// **'No embedding service configured: keyword search only, answers may be less accurate. Set one up in Settings.'**
+  /// **'No embedding service configured: keyword search only, answers will be markedly worse. Set one up in Settings.'**
   String get aiNoVectorWarning;
 
   /// No description provided for @aiCitedWiki.
@@ -2827,6 +2605,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Endfield'**
   String get gameEndfield;
+
+  /// No description provided for @launchTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Story reader and Q&A'**
+  String get launchTagline;
 
   /// No description provided for @libraryGameMissing.
   ///

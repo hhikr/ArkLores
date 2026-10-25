@@ -165,8 +165,25 @@ class AskChatNotifier extends ChatNotifierBase {
   /// leaving the app does not cut it.
   Future<void> sendMessage(String text) => BackgroundWork.instance.run(
         BackgroundWork.text('正在回答问题', 'Answering a question'),
-        () => _sendMessage(text),
+        () => _metered(() => _sendMessage(text)),
       );
+
+  /// What this conversation's question costs; another conversation answering
+  /// at the same time counts into its own ([UsageMeter.runWith]).
+  UsageMeter? get usage => _usage;
+
+  /// [body] with the shared clients' usage counted by this conversation.
+  Future<void> _metered(Future<void> Function() body) {
+    final usage = _usage;
+    return usage == null ? body() : UsageMeter.runWith(usage, body);
+  }
+
+  /// The conversation's name in lists: its first question, cut short.
+  String? get title {
+    final first =
+        state.where((m) => m.role == MessageRole.user).firstOrNull?.content;
+    return first == null ? _currentSession?.title : _truncateTitle(first);
+  }
 
   /// "复核" under the answer [id]: a reader's review of it, as a turn of
   /// its own ([label] is what the turn shows as its question). The answer
@@ -189,7 +206,9 @@ class AskChatNotifier extends ChatNotifierBase {
         .trim();
     return BackgroundWork.instance.run(
       BackgroundWork.text('正在复核回答', 'Reviewing the answer'),
-      () => _sendMessage(label, review: (id, conversation, answer)),
+      () => _metered(
+        () => _sendMessage(label, review: (id, conversation, answer)),
+      ),
     );
   }
 
@@ -197,7 +216,7 @@ class AskChatNotifier extends ChatNotifierBase {
   /// paragraphs above the detailed answer (one more model call).
   Future<void> digestAnswer(String id) => BackgroundWork.instance.run(
         BackgroundWork.text('正在整理提要', 'Writing the digest'),
-        () => _digest(id),
+        () => _metered(() => _digest(id)),
       );
 
   /// Puts the answer being digested back as it was (set while one runs).
@@ -828,12 +847,15 @@ final chatHistoryPageProvider = FutureProvider.autoDispose
       ref.watch(chatSessionStoreProvider).page(page, ChatSessionStore.pageSize),
 );
 
-/// Provider for the unified Ask chat state.
-final askChatProvider =
-    StateNotifierProvider<AskChatNotifier, List<ChatMessage>>((ref) {
+/// One open Ask conversation, by its key in [askSessionsProvider]. Several
+/// can answer at once: each keeps running while another is shown, each
+/// counts its own usage. Not disposed while open (a conversation answering
+/// in the background has nobody watching it).
+final askChatProvider = StateNotifierProvider.family<AskChatNotifier,
+    List<ChatMessage>, String>((ref, key) {
   return AskChatNotifier(
     agent: ref.watch(storyQaAgentProvider),
-    usage: ref.watch(usageMeterProvider),
+    usage: UsageMeter(),
     sessionStore: ref.watch(chatSessionStoreProvider),
     configReader: () => ref.read(apiConfigProvider),
     // R16: read per question, so the switch never rebuilds the notifier
@@ -845,3 +867,118 @@ final askChatProvider =
     optionsReader: () => ref.read(answerOptionsProvider),
   );
 });
+
+/// The Ask conversations open in memory: the one [shown] on the page and
+/// the others, answering in the background or idle, newest first ([open]
+/// includes [shown]). A saved conversation that is not open is only a file.
+class AskSessions {
+  const AskSessions({required this.shown, required this.open});
+
+  final String shown;
+  final List<String> open;
+}
+
+/// Opens, shows and drops the Ask conversations. Showing another one never
+/// stops the one shown before: it goes on answering where it is.
+class AskSessionsNotifier extends StateNotifier<AskSessions> {
+  AskSessionsNotifier(this._ref) : super(_first());
+
+  final Ref _ref;
+  static int _seq = 0;
+
+  static String _newKey() => 'ask-${_seq++}';
+
+  static AskSessions _first() {
+    final key = _newKey();
+    return AskSessions(shown: key, open: [key]);
+  }
+
+  AskChatNotifier chat(String key) => _ref.read(askChatProvider(key).notifier);
+
+  List<ChatMessage> messagesOf(String key) => _ref.read(askChatProvider(key));
+
+  /// Whether conversation [key] has an answer being written.
+  bool answering(String key) => messagesOf(key).any((m) => m.isStreaming);
+
+  /// The open conversation of the saved one [sessionId], if it is open.
+  String? keyOf(String sessionId) => state.open
+      .where((k) => chat(k).currentSessionId == sessionId)
+      .firstOrNull;
+
+  /// Shows the open conversation [key].
+  void show(String key) {
+    if (key == state.shown || !state.open.contains(key)) return;
+    _leave();
+    state = AskSessions(shown: key, open: state.open);
+  }
+
+  /// A new conversation: the one shown when it is still empty, an empty
+  /// open one, or a new one.
+  void startNew() {
+    if (messagesOf(state.shown).isEmpty) return;
+    final empty = state.open.where((k) => messagesOf(k).isEmpty).firstOrNull;
+    if (empty != null) return show(empty);
+    _leave();
+    final key = _newKey();
+    state = AskSessions(shown: key, open: [key, ...state.open]);
+  }
+
+  /// Shows the saved conversation [sessionId]: its open conversation, or
+  /// opened from its file. False when the file cannot be read.
+  Future<bool> openSaved(String sessionId) async {
+    final open = keyOf(sessionId);
+    if (open != null) {
+      show(open);
+      return true;
+    }
+    final session = await _ref.read(chatSessionStoreProvider).load(sessionId);
+    if (session == null || !mounted) return false;
+    // It may have been opened while the file was read.
+    final again = keyOf(sessionId);
+    if (again != null) {
+      show(again);
+      return true;
+    }
+    _leave();
+    final key = _newKey();
+    chat(key).loadSession(session);
+    state = AskSessions(shown: key, open: [key, ...state.open]);
+    return true;
+  }
+
+  /// Drops conversation [key] (its file was deleted) and forgets it; when it
+  /// was shown, a new one is shown.
+  void close(String key) {
+    // One answering is not closed (its turn would write the file again).
+    if (!state.open.contains(key) || answering(key)) return;
+    final rest = [for (final k in state.open) if (k != key) k];
+    _ref.invalidate(askChatProvider(key));
+    if (key != state.shown) {
+      state = AskSessions(shown: state.shown, open: rest);
+      return;
+    }
+    final next = _newKey();
+    state = AskSessions(shown: next, open: [next, ...rest]);
+  }
+
+  /// Before another conversation is shown: the one shown, when it is empty,
+  /// is forgotten (nothing to come back to).
+  void _leave() {
+    final key = state.shown;
+    if (messagesOf(key).isNotEmpty) return;
+    state = AskSessions(
+      shown: key,
+      open: [for (final k in state.open) if (k != key) k],
+    );
+    _ref.invalidate(askChatProvider(key));
+  }
+}
+
+final askSessionsProvider =
+    StateNotifierProvider<AskSessionsNotifier, AskSessions>(
+  AskSessionsNotifier.new,
+);
+
+/// The key of the conversation on the Ask page.
+final shownAskProvider =
+    Provider<String>((ref) => ref.watch(askSessionsProvider).shown);

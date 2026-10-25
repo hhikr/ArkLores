@@ -15,8 +15,8 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 
-/// The style of long text: the reading font chosen in Settings (the Chinese
-/// sans by default), a generous line height.
+/// The style of long text: the reading font chosen in Settings (思源黑体
+/// by default), a generous line height.
 TextStyle readingStyle(
   AppThemeTokens theme, {
   double size = 16,
@@ -27,7 +27,19 @@ TextStyle readingStyle(
       color: color ?? theme.textPrimary,
       fontSize: size,
       height: 1.85,
-      letterSpacing: theme.readingFontFamily == null ? 0 : 0.2,
+      letterSpacing:
+          theme.readingFontFamily == ReadingFont.kai.family ? 0.2 : 0,
+    );
+
+/// A reading font's name set in that font, so the choice shows what it
+/// picks (the settings and the onboarding); 黑体 in its heaviest weight.
+TextStyle readingFontSample(ReadingFont font) => TextStyle(
+      fontFamily: font.family,
+      fontFamilyFallback: cjkSansFallback,
+      fontWeight: font == ReadingFont.sans ? FontWeight.w900 : null,
+      fontVariations: font == ReadingFont.sans
+          ? const [FontVariation('wght', 900)]
+          : const [],
     );
 
 /// A `【标签】值` line, or a `标签：值` line of a field list.
@@ -288,19 +300,23 @@ class _FoldSectionState extends ConsumerState<FoldSection> {
         setState(() => _open = !_open);
       },
     );
+    // Opening answers the tap at once (snap); the text is its own layer, so
+    // the frames of the fold only clip it, they do not repaint it.
     final body = AnimatedSize(
       duration: Motion.of(context, Motion.wipe),
-      curve: Motion.mech,
+      curve: _open ? Motion.snap : Motion.mech,
       alignment: Alignment.topCenter,
       child: _open
-          ? Padding(
-              padding: EdgeInsets.fromLTRB(
-                widget.plain ? 0 : 14,
-                0,
-                widget.plain ? 0 : 14,
-                14,
+          ? RepaintBoundary(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  widget.plain ? 0 : 14,
+                  0,
+                  widget.plain ? 0 : 14,
+                  14,
+                ),
+                child: widget.child,
               ),
-              child: widget.child,
             )
           : const SizedBox(width: double.infinity),
     );

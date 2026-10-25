@@ -1448,7 +1448,7 @@ class LoreAgentLoop {
     if (unread.isEmpty) return null;
     for (final p in unread) {
       for (final l in p.lines) {
-        seen.add(p.storyId, l.lineIndex);
+        seen.addStoryLine(p.storyId, l);
       }
     }
     return (

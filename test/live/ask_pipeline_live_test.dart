@@ -165,7 +165,7 @@ void main() {
           markTestSkipped('skipped after provider failure: $providerFailure');
           return;
         }
-        final notifier = container.read(askChatProvider.notifier);
+        final notifier = container.read(askChatProvider(container.read(shownAskProvider)).notifier);
         // One session file per question, or (R14,
         // ARKLORES_LIVE_CONVERSATION=true) all questions as consecutive turns
         // of one conversation, the way a user asks follow-ups in the app.
@@ -182,7 +182,7 @@ void main() {
         final start = DateTime.now();
         int? writerStartMs;
         int? firstTextMs;
-        final subscription = container.listen(askChatProvider, (_, messages) {
+        final subscription = container.listen(askChatProvider(container.read(shownAskProvider)), (_, messages) {
           if (messages.isEmpty || !messages.last.isStreaming) return;
           final last = messages.last;
           final elapsed = DateTime.now().difference(start).inMilliseconds;
@@ -198,14 +198,14 @@ void main() {
         // The buttons under the answer, pressed when the answer has them.
         final pressed = <String, Object?>{};
         for (final button in after) {
-          final answer = container.read(askChatProvider).last;
+          final answer = container.read(askChatProvider(container.read(shownAskProvider))).last;
           final before = {'calls': usage.calls, 'prompt': usage.promptTokens, 'completion': usage.completionTokens};
           final clock = Stopwatch()..start();
           if (button == 'digest') {
             pressed['digest'] = {'offered': answer.canDigest};
             if (!answer.canDigest) continue;
             await notifier.digestAnswer(answer.id);
-            final now = container.read(askChatProvider).last;
+            final now = container.read(askChatProvider(container.read(shownAskProvider))).last;
             pressed['digest'] = {
               'offered': true,
               'written': now.content != answer.content,
@@ -217,7 +217,7 @@ void main() {
             pressed['review'] = {'offered': answer.canReview};
             if (!answer.canReview) continue;
             await notifier.reviewAnswer(answer.id, label: '复核');
-            final now = container.read(askChatProvider).last;
+            final now = container.read(askChatProvider(container.read(shownAskProvider))).last;
             pressed['review'] = {
               'offered': true,
               'new_turn': now.id != answer.id,

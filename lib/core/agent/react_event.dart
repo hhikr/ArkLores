@@ -5,12 +5,6 @@
 /// pulling in Flutter dependencies.
 library;
 
-/// Output transform applied to the final answer before it is streamed.
-typedef FinalAnswerTransform = String Function(
-  String answer,
-  List<String> observations,
-);
-
 /// Types of events emitted by the ReAct/Planner loops.
 enum ReActEventType {
   thought,

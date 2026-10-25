@@ -2,18 +2,18 @@
 <resources>
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="android:windowSplashScreenBackground">#070A12</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_logo</item>
-        <item name="android:statusBarColor">#070A12</item>
-        <item name="android:navigationBarColor">#070A12</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_paper</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:statusBarColor">@color/splash_paper</item>
+        <item name="android:navigationBarColor">@color/splash_paper</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>
 
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">#070A12</item>
-        <item name="android:statusBarColor">#070A12</item>
-        <item name="android:navigationBarColor">#070A12</item>
+        <item name="android:windowBackground">@color/splash_paper</item>
+        <item name="android:statusBarColor">@color/splash_paper</item>
+        <item name="android:navigationBarColor">@color/splash_paper</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>

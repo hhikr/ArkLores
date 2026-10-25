@@ -17,7 +17,7 @@ import '../../gamedata/game_retrieval.dart';
 import '../../gamedata/multi_game_retrieval.dart';
 import '../../gamedata/story_line_search.dart' show maxKeywordTerms;
 import '../../gamedata/story_vectors.dart'
-    show nearMaxPassages, nearMinSimilarity;
+    show chunkWindow, nearMaxPassages, nearMinSimilarity;
 import '../../llm/embedding_client.dart';
 import '../../wiki/wiki_lookup.dart';
 import '../../wiki/wiki_page.dart';
@@ -59,14 +59,16 @@ class SearchTool extends AgentTool {
   /// The wikis (null when the wiki option is off).
   final WikiLookup? wiki;
 
-  /// Stories listed per game, lines shown per story, characters in all.
+  /// Stories and records listed per game, passage characters in all.
   static const int storiesPerGame = 5;
-  static const int linesPerPassage = 8;
   static const int recordsPerGame = 3;
   static const int maxChars = 7000;
 
   /// Most characters of one line printed.
   static const int lineChars = 400;
+  // One embedding window's maximum printed size, including line formatting.
+  // Migrated chunks can contain more short lines within the same budget.
+  static const int maxPassageChars = chunkWindow * (lineChars + 16);
   static const int _rrfK = 60;
 
   @override
@@ -328,12 +330,12 @@ class SearchTool extends AgentTool {
       for (final block in part) {
         // Only the passages count: the lines about the words above must
         // not take their room.
-        if (passageChars + block.length > maxChars) {
+        if (passageChars + block.text.length > maxChars) {
           buffer.writeln('……（篇幅已满，其余从略）');
           break;
         }
-        buffer.write(block);
-        passageChars += block.length;
+        block.writeTo(buffer, seen);
+        passageChars += block.text.length;
       }
       // 0.14: the collections the words' spreads list and no passage above
       // is from, a passage each — where a word is must not depend on the
@@ -352,12 +354,12 @@ class SearchTool extends AgentTool {
           elsewhere,
           from: part.length,
         )) {
-          if (chars + block.length > elsewhereChars) {
+          if (chars + block.text.length > elsewhereChars) {
             buffer.writeln('……（篇幅已满，其余的故事集用 search 加 collection 再查）');
             break;
           }
-          buffer.write(block);
-          chars += block.length;
+          block.writeTo(buffer, seen);
+          chars += block.text.length;
         }
       }
       final records = _renderRecords(r);
@@ -427,12 +429,12 @@ class SearchTool extends AgentTool {
         lines: 0,
       ),
     );
-    return (StringBuffer()
-          ..writeln('检索与$where 相近的段落（按意思）：')
-          ..writeAll(blocks)
-          ..writeln('（$scope。上面列出的行可以引用，没有列出的行要先读）'))
-        .toString()
-        .trimRight();
+    final buffer = StringBuffer('检索与$where 相近的段落（按意思）：\n');
+    for (final block in blocks) {
+      block.writeTo(buffer, seen);
+    }
+    buffer.writeln('（$scope。上面列出的行可以引用，没有列出的行要先读）');
+    return buffer.toString().trimRight();
   }
 
   /// The games to search: [only] when given, else every installed one.
@@ -547,42 +549,34 @@ class SearchTool extends AgentTool {
     Set<String>? inCollection,
     Map<String, int> termLines,
   ) async {
-    bool keep(String storyId) =>
-        inCollection == null || inCollection.contains(storyId);
-    final wide = inCollection == null ? 1 : 6;
-
     var chunks = <StoryChunkHit>[];
     if (vector != null) {
       final info = await store.storyVectorInfo;
       if (info != null && info.model == embeddingClient?.model) {
-        chunks = [
-          for (final c in await _timed(
-            'vectors:${game.key}',
-            () => store.searchStoryChunksByVector(
-              vector,
-              topK: storiesPerGame * 4 * wide,
-            ),
-          ))
-            if (keep(c.storyId)) c,
-        ];
+        chunks = await _timed(
+          'vectors:${game.key}',
+          () => store.searchStoryChunksByVector(
+            vector,
+            topK: storiesPerGame * 4,
+            storyIds: inCollection,
+          ),
+        );
       }
     }
     final termStories = <String, Map<String, int>>{};
     final keywords = terms.isEmpty
         ? const <StoryLineHit>[]
-        : [
-            for (final h in await _timed(
-              'keywords:${game.key}',
-              () => store.searchStoryLinesLike(
-                terms,
-                storyLimit: storiesPerGame * 2 * wide,
-                linesPerStory: 3,
-                termLines: termLines,
-                termStories: termStories,
-              ),
-            ))
-              if (keep(h.storyId)) h,
-          ];
+        : await _timed(
+            'keywords:${game.key}',
+            () => store.searchStoryLinesLike(
+              terms,
+              storyLimit: storiesPerGame * 2,
+              storyIds: inCollection,
+              linesPerStory: 3,
+              termLines: termLines,
+              termStories: termStories,
+            ),
+          );
 
     // Reciprocal-rank fusion per story.
     final score = <String, double>{};
@@ -754,6 +748,7 @@ class SearchTool extends AgentTool {
                       lineIndex: row.lineIndex,
                       speaker: row.speaker,
                       content: row.content,
+                      kind: row.kind,
                     ),
                 ],
         );
@@ -770,9 +765,9 @@ class SearchTool extends AgentTool {
           );
   }
 
-  /// [ranked] as printed blocks, numbered after [from]; the lines printed
-  /// become citable.
-  Future<List<String>> _render(
+  /// Prepares blocks without marking them read: the caller applies its
+  /// output budget before committing each block to the evidence ledger.
+  Future<List<_Passage>> _render(
     GameDataRetrieval store,
     _Ranked ranked, {
     int from = 0,
@@ -781,7 +776,7 @@ class SearchTool extends AgentTool {
     if (top.isEmpty) return const [];
     final labels = await store.storyCatalogEntries(top);
 
-    final blocks = <String>[];
+    final blocks = <_Passage>[];
     for (final (i, storyId) in top.indexed) {
       final chunk = ranked.firstChunk[storyId];
       final keyword = ranked.keywordOf[storyId];
@@ -793,32 +788,40 @@ class SearchTool extends AgentTool {
           if (keyword != null && keyword.hits > 0) '关键词 ${keyword.hits} 行',
         ].join('；')}）');
       final shown = <int>{};
+      final evidence = <int>{};
       if (chunk != null) {
-        final end = chunk.lineEnd < chunk.lineStart + linesPerPassage - 1
-            ? chunk.lineEnd
-            : chunk.lineStart + linesPerPassage - 1;
         final page = await store.readStoryLines(
           storyId: storyId,
           startLine: chunk.lineStart,
-          endLine: end,
-          maxLines: linesPerPassage,
+          endLine: chunk.lineEnd,
+          maxLines: 500,
         );
+        var chars = 0;
+        int? unreadFrom = page.hasMore && page.lines.isNotEmpty
+            ? page.lines.last.lineIndex + 1
+            : null;
         for (final line in page.lines) {
-          block.writeln('   ${_line(line)}');
+          final text = '   ${_line(line)}';
+          if (chars + text.length + 1 > maxPassageChars) {
+            unreadFrom = line.lineIndex;
+            break;
+          }
+          block.writeln(text);
+          chars += text.length + 1;
           shown.add(line.lineIndex);
-          seen.add(storyId, line.lineIndex);
+          if (isStoryEvidence(line.kind)) evidence.add(line.lineIndex);
         }
-        if (chunk.lineEnd > end) {
+        if (unreadFrom != null) {
           // 0.14: not "the passage goes on to L…", which read as shown.
-          block.writeln('   …（L${end + 1}-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）');
+          block.writeln('   …（L$unreadFrom-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）');
         }
       }
       for (final line in keyword?.lines ?? const <StoryLineEntry>[]) {
         if (!shown.add(line.lineIndex)) continue;
         block.writeln('   ${_line(line)}');
-        seen.add(storyId, line.lineIndex);
+        if (isStoryEvidence(line.kind)) evidence.add(line.lineIndex);
       }
-      blocks.add(block.toString());
+      blocks.add(_Passage(block.toString(), storyId, evidence));
     }
     return blocks;
   }
@@ -876,6 +879,20 @@ class SearchTool extends AgentTool {
   static String _clip(String text, int max) {
     final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     return flat.length <= max ? flat : '${flat.substring(0, max)}…';
+  }
+}
+
+class _Passage {
+  const _Passage(this.text, this.storyId, this.lines);
+  final String text;
+  final String storyId;
+  final Set<int> lines;
+
+  void writeTo(StringBuffer buffer, SeenLines seen) {
+    buffer.write(text);
+    for (final line in lines) {
+      seen.add(storyId, line);
+    }
   }
 }
 

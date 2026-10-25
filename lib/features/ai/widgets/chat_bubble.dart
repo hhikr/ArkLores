@@ -14,6 +14,7 @@ import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/theme/cut_border.dart';
+import '../../../shared/theme/motion.dart';
 import '../../../shared/widgets/ef_widgets.dart';
 import '../../../shared/widgets/press_feedback.dart';
 import '../../library/reading_text.dart' show readingStyle;
@@ -99,7 +100,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   Widget _buildAnswerActions(AppThemeTokens theme) {
     final msg = widget.message;
     // Read when pressed: showing an answer does not need the chat itself.
-    AskChatNotifier chat() => ref.read(askChatProvider.notifier);
+    AskChatNotifier chat() =>
+        ref.read(askChatProvider(ref.read(shownAskProvider)).notifier);
     Widget action(String key, IconData icon, String label, String hint,
             VoidCallback onTap,) =>
         AppButton(
@@ -380,20 +382,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   ),
                   const SizedBox(width: 10),
                   Flexible(child: FactsRow(facts)),
-                  if (msg.steps.isNotEmpty)
-                    Icon(
-                      _showSteps
-                          ? Icons.expand_less_sharp
-                          : Icons.expand_more_sharp,
-                      size: 20,
-                      color: theme.textSecondary,
-                    ),
+                  if (msg.steps.isNotEmpty) _chevron(theme, _showSteps),
                 ],
               ),
             ),
           ),
         ),
-        if (_showSteps) _buildStepsList(theme),
+        _unfold(_showSteps, () => _buildStepsList(theme)),
         if (coverage != null)
           FactsRow([
             context.t.aiInvestigationCoverage,
@@ -434,23 +429,40 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                       style: theme.ui(14, weight: 600, color: theme.textSecondary),
                     ),
                   ),
-                  if (msg.steps.isNotEmpty)
-                    Icon(
-                      _showSteps
-                          ? Icons.expand_less_sharp
-                          : Icons.expand_more_sharp,
-                      size: 20,
-                      color: theme.textSecondary,
-                    ),
+                  if (msg.steps.isNotEmpty) _chevron(theme, _showSteps),
                 ],
               ),
             ),
           ),
         ),
-        if (_showSteps) _buildStepsList(theme),
+        _unfold(_showSteps, () => _buildStepsList(theme)),
       ],
     );
   }
+
+  /// A part under a tapped header, folding as [FoldSection] does: it opens
+  /// at once (snap) and folds with a hard stop (mech); the part is its own
+  /// layer, so the fold's frames clip it without repainting it.
+  Widget _unfold(bool open, Widget Function() body) => AnimatedSize(
+        duration: Motion.of(context, Motion.wipe),
+        curve: open ? Motion.snap : Motion.mech,
+        alignment: Alignment.topLeft,
+        child: open
+            ? RepaintBoundary(child: body())
+            : const SizedBox(width: double.infinity),
+      );
+
+  /// The header's chevron, turning with the fold.
+  Widget _chevron(AppThemeTokens theme, bool open) => AnimatedRotation(
+        turns: open ? 0.5 : 0,
+        duration: Motion.of(context, Motion.wipe),
+        curve: Motion.mech,
+        child: Icon(
+          Icons.expand_more_sharp,
+          size: 20,
+          color: theme.textSecondary,
+        ),
+      );
 
   bool _showReasoning = true;
   final ScrollController _reasoningScroll = ScrollController();
@@ -490,20 +502,15 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                     context.t.aiThinkingProcess,
                     style: theme.ui(14, weight: 600, color: theme.textSecondary),
                   ),
-                  Icon(
-                    _showReasoning
-                        ? Icons.expand_less_sharp
-                        : Icons.expand_more_sharp,
-                    size: 20,
-                    color: theme.textSecondary,
-                  ),
+                  _chevron(theme, _showReasoning),
                 ],
               ),
             ),
           ),
         ),
-        if (_showReasoning)
-          Container(
+        _unfold(
+          _showReasoning,
+          () => Container(
             key: const ValueKey('reasoning-text'),
             width: double.infinity,
             height: reasoningWindowHeight,
@@ -522,6 +529,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               ),
             ),
           ),
+        ),
       ],
     );
   }
@@ -601,30 +609,40 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         Semantics(
           button: true,
           selected: selected,
-          child: GestureDetector(
-            key: ValueKey('cite:$key'),
-            behavior: HitTestBehavior.opaque,
-            onTap: withHaptic(onTap ?? () => _toggle(key)),
-            child: Padding(
-              // 44 to the finger.
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 36),
-                padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
-                decoration: ShapeDecoration(
-                  color: selected ? theme.accentPrimary : theme.surfaceElevated,
-                  shape: const CutBorder.br(6),
-                ),
-                child: Text(
-                  text,
-                  style: theme.field(
-                    color: selected ? theme.onAccent : theme.textPrimary,
-                    size: 13,
-                    weight: 600,
+          child: PressBuilder(
+            builder: (context, down) {
+              final ground =
+                  selected ? theme.accentPrimary : theme.surfaceElevated;
+              return GestureDetector(
+                key: ValueKey('cite:$key'),
+                behavior: HitTestBehavior.opaque,
+                onTap: withHaptic(onTap ?? () => _toggle(key)),
+                child: Padding(
+                  // 44 to the finger.
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: AnimatedContainer(
+                    duration: Motion.of(context, Motion.press),
+                    curve: Motion.mech,
+                    constraints: const BoxConstraints(minHeight: 36),
+                    padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
+                    decoration: ShapeDecoration(
+                      color: down
+                          ? pressTint(ground, theme.textPrimary)
+                          : ground,
+                      shape: const CutBorder.br(6),
+                    ),
+                    child: Text(
+                      text,
+                      style: theme.field(
+                        color: selected ? theme.onAccent : theme.textPrimary,
+                        size: 13,
+                        weight: 600,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         );
 
@@ -1016,7 +1034,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         theme,
         last: last,
         dot: null,
-        child: InkWell(
+        child: PressRow(
           key: record ? ValueKey('work-record-$index') : null,
           onTap: toggle,
           child: Padding(
@@ -1070,9 +1088,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       theme,
       last: last,
       dot: Icon(_workIcon(step.kind), size: 14, color: theme.textPrimary),
-      child: InkWell(
+      child: PressRow(
         key: ValueKey('work-step-$index'),
-        borderRadius: BorderRadius.zero,
         onTap: canOpen ? toggle : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),

@@ -142,7 +142,10 @@ class _SwitchedPagesState extends State<SwitchedPages>
         offset: Offset(_from * (1 - _t.value), 0),
         child: child,
       ),
-      child: IndexedStack(index: widget.index, children: widget.children),
+      // Its own layer: the slide moves the page, it does not repaint it.
+      child: RepaintBoundary(
+        child: IndexedStack(index: widget.index, children: widget.children),
+      ),
     );
   }
 }
@@ -255,6 +258,7 @@ class _GameFigures extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
     final summaries =
         ref.watch(shelfSummariesProvider(game)).valueOrNull ?? const [];
     final codex = ref.watch(codexTypesProvider(game)).valueOrNull ?? const [];
@@ -268,7 +272,13 @@ class _GameFigures extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Eyebrow(game == Game.arknights ? 'arknights' : 'endfield'),
+          // Which game, in words (not the decorative script).
+          Text(
+            game == Game.arknights
+                ? 'ARKNIGHTS  ${context.t.gameArknights}'
+                : 'ENDFIELD  ${context.t.gameEndfield}',
+            style: theme.label(),
+          ),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -34,7 +34,15 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
     final total = count.valueOrNull ?? 0;
     final pages = pageCountOf(total, ChatSessionStore.pageSize);
     final page = _page.clamp(0, pages - 1);
-    final current = ref.read(askChatProvider.notifier).currentSessionId;
+    final sessions = ref.watch(askSessionsProvider);
+    final control = ref.read(askSessionsProvider.notifier);
+    final current = control.chat(sessions.shown).currentSessionId;
+    // The saved conversations answering now (open and writing).
+    final answering = {
+      for (final key in sessions.open)
+        if (ref.watch(askChatProvider(key)).any((m) => m.isStreaming))
+          if (control.chat(key).currentSessionId case final id?) id,
+    };
 
     return PageScaffold(
       title: context.t.aiHistoryTitle,
@@ -78,7 +86,12 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
                   ),
                   for (final s in shown) ...[
                     divider,
-                    _tile(theme, s, isCurrent: s.sessionId == current),
+                    _tile(
+                      theme,
+                      s,
+                      isCurrent: s.sessionId == current,
+                      isAnswering: answering.contains(s.sessionId),
+                    ),
                   ],
                   divider,
                   if (pager != null)
@@ -107,17 +120,20 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
       );
 
   /// One conversation. The current one is marked with an accent block at
-  /// its left edge and says so in its second line.
+  /// its left edge and says so in its second line; one answering now says
+  /// so too and cannot be deleted until it is done.
   Widget _tile(
     AppThemeTokens theme,
     ChatSessionSummary summary, {
     required bool isCurrent,
+    required bool isAnswering,
   }) {
     final t = context.t;
     final row = LibraryRow(
       key: ValueKey('chat-history-tile-${summary.sessionId}'),
       title: summary.corrupt ? t.aiHistoryCorrupt : summary.title,
       subtitle: [
+        if (isAnswering) t.aiConversationsAnswering,
         if (isCurrent) t.aiHistoryCurrent,
         _formatTime(summary.updatedAt),
         if (!summary.corrupt) t.aiHistoryTurns(summary.turnCount),
@@ -126,20 +142,28 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
       trailing: SquareIconButton(
         key: ValueKey('chat-history-delete-${summary.sessionId}'),
         tooltip: t.aiHistoryDelete,
-        onPressed: () => _confirmDelete(summary.sessionId),
+        onPressed:
+            isAnswering ? null : () => _confirmDelete(summary.sessionId),
         icon: Icons.delete_outline_sharp,
         color: theme.danger,
       ),
       onTap: summary.corrupt ? null : () => _open(summary.sessionId),
     );
-    if (!isCurrent) return row;
+    if (!isCurrent && !isAnswering) return row;
+    // Answering: the accent block (look at this); only current: the trace.
     return Semantics(
-      selected: true,
+      selected: isCurrent,
       child: DecoratedBox(
-        key: const ValueKey('chat-history-current'),
+        key: ValueKey(
+          isCurrent ? 'chat-history-current' : 'chat-history-answering',
+        ),
         decoration: BoxDecoration(
+          color: isAnswering ? theme.cardSurface : null,
           border: Border(
-            left: BorderSide(color: theme.accentPrimary, width: 6),
+            left: BorderSide(
+              color: isAnswering ? theme.accentPrimary : theme.trace,
+              width: 6,
+            ),
           ),
         ),
         child: row,
@@ -147,20 +171,16 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
     );
   }
 
-  /// Makes the conversation the current one and goes back to it.
+  /// Shows the conversation on the Ask page and goes back to it; the one
+  /// shown before goes on (answering, if it was).
   Future<void> _open(String sessionId) async {
-    final notifier = ref.read(askChatProvider.notifier);
-    if (sessionId == notifier.currentSessionId) {
-      Navigator.of(context).pop();
-      return;
-    }
-    final session = await ref.read(chatSessionStoreProvider).load(sessionId);
+    final ok =
+        await ref.read(askSessionsProvider.notifier).openSaved(sessionId);
     if (!mounted) return;
-    if (session == null) {
+    if (!ok) {
       showToast(context, context.t.aiHistoryCorrupt);
       return;
     }
-    notifier.loadSession(session);
     Navigator.of(context).pop();
   }
 
@@ -174,9 +194,10 @@ class _ChatHistoryPageState extends ConsumerState<ChatHistoryPage> {
       confirmKey: const ValueKey('chat-history-delete-confirm'),
     );
     if (!confirmed || !mounted) return;
-    // The conversation on screen goes with its file.
-    final notifier = ref.read(askChatProvider.notifier);
-    if (sessionId == notifier.currentSessionId) notifier.newSession();
+    // An open conversation goes with its file.
+    final control = ref.read(askSessionsProvider.notifier);
+    final open = control.keyOf(sessionId);
+    if (open != null) control.close(open);
     await ref.read(chatSessionStoreProvider).delete(sessionId);
     ref
       ..invalidate(chatHistoryCountProvider)

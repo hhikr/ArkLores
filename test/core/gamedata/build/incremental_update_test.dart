@@ -12,6 +12,7 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../../support/gamedata_fixture.dart' show fastWrites;
 import '../../../support/git_tree_mock.dart';
 import '../../../support/temp_dir.dart';
 
@@ -190,6 +191,7 @@ void main() {
 
     setUp(() async {
       db = await databaseFactoryFfi.openDatabase(p.join(dir.path, 'v.db'));
+      await fastWrites(db);
       await createGamedataSchema(db);
       await addStory('s/a.txt', [for (var i = 0; i < 30; i++) ('dialogue', '')]);
       await addStory('s/b.txt', [for (var i = 0; i < 5; i++) ('narration', '')]);

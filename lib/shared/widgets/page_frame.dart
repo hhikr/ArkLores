@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../theme/cut_border.dart';
 import '../theme/motion.dart';
 import 'ef_widgets.dart';
+import 'press_feedback.dart';
 
 /// Height of a page's top bar, below the status bar.
 const double topBarHeight = 56;
@@ -229,42 +230,54 @@ class TopTab extends ConsumerWidget {
     return Semantics(
       button: true,
       selected: selected,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: selected
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onTap();
-              },
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
-          child: Center(
-            widthFactor: 1,
-            child: AnimatedContainer(
-              duration: Motion.of(context, Motion.wipe),
-              curve: Motion.mech,
-              constraints: BoxConstraints(maxWidth: compact ? 160 : 180),
-              height: compact ? 32 : 36,
-              padding: compact
-                  ? const EdgeInsets.fromLTRB(10, 0, 12, 0)
-                  : const EdgeInsets.fromLTRB(12, 0, 16, 0),
-              decoration: ShapeDecoration(
-                color: selected ? theme.accentPrimary : Colors.transparent,
-                shape: const CutBorder.br(7),
-              ),
-              // As wide as the label (an aligned container would fill
-              // its whole maxWidth).
-              child: Center(
-                widthFactor: 1,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.ui(
-                    compact ? 14 : 15,
-                    weight: selected ? 700 : 500,
-                    color: selected ? theme.onAccent : theme.textSecondary,
+      child: PressBuilder(
+        enabled: !selected,
+        builder: (context, down) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: selected
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  onTap();
+                },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+            child: Center(
+              widthFactor: 1,
+              child: AnimatedContainer(
+                duration:
+                    Motion.of(context, down ? Motion.press : Motion.wipe),
+                curve: Motion.mech,
+                constraints: BoxConstraints(maxWidth: compact ? 160 : 180),
+                height: compact ? 32 : 36,
+                padding: compact
+                    ? const EdgeInsets.fromLTRB(10, 0, 12, 0)
+                    : const EdgeInsets.fromLTRB(12, 0, 16, 0),
+                decoration: ShapeDecoration(
+                  color: selected
+                      ? theme.accentPrimary
+                      : down
+                          ? pressTint(Colors.transparent, theme.textPrimary)
+                          : Colors.transparent,
+                  shape: const CutBorder.br(7),
+                ),
+                // As wide as the label (an aligned container would fill
+                // its whole maxWidth).
+                child: Center(
+                  widthFactor: 1,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.ui(
+                      compact ? 14 : 15,
+                      weight: selected ? 700 : 500,
+                      color: selected
+                          ? theme.onAccent
+                          : down
+                              ? theme.textPrimary
+                              : theme.textSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -456,6 +469,8 @@ class AppTabBar extends ConsumerWidget {
       ),
       child: SafeArea(
         top: false,
+        // The same height while the keyboard comes up (MainShell).
+        maintainBottomViewPadding: true,
         child: SizedBox(
           height: height,
           child: Padding(
@@ -469,57 +484,68 @@ class AppTabBar extends ConsumerWidget {
                       selected: i == current,
                       label: items[i].$2,
                       excludeSemantics: true,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          if (i != current) HapticFeedback.selectionClick();
-                          onSelected(i);
-                        },
-                        child: AnimatedContainer(
-                          duration: Motion.of(context, Motion.wipe),
-                          curve: Motion.mech,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: ShapeDecoration(
-                            color: i == current
-                                ? theme.accentPrimary
-                                : Colors.transparent,
-                            shape: const CutBorder.br(8),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                // The English over the Chinese; where it
-                                // would only repeat the label, the tab's
-                                // number.
-                                zh &&
-                                        items[i].$1.toLowerCase() !=
-                                            items[i].$2.toLowerCase()
-                                    ? items[i].$1
-                                    : '0${i + 1}',
-                                maxLines: 1,
-                                overflow: TextOverflow.clip,
-                                style: theme.eyebrow(
-                                  size: 10,
-                                  color: i == current
-                                      ? theme.onAccent
-                                      : theme.textMuted,
+                      child: PressBuilder(
+                        enabled: i != current,
+                        builder: (context, down) => GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            if (i != current) HapticFeedback.selectionClick();
+                            onSelected(i);
+                          },
+                          child: AnimatedContainer(
+                            duration: Motion.of(
+                              context,
+                              down ? Motion.press : Motion.wipe,
+                            ),
+                            curve: Motion.mech,
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            decoration: ShapeDecoration(
+                              color: i == current
+                                  ? theme.accentPrimary
+                                  : down
+                                      ? pressTint(
+                                          Colors.transparent,
+                                          theme.textPrimary,
+                                        )
+                                      : Colors.transparent,
+                              shape: const CutBorder.br(8),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  // The English over the Chinese; where it
+                                  // would only repeat the label, the tab's
+                                  // number.
+                                  zh &&
+                                          items[i].$1.toLowerCase() !=
+                                              items[i].$2.toLowerCase()
+                                      ? items[i].$1
+                                      : '0${i + 1}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.clip,
+                                  style: theme.eyebrow(
+                                    size: 10,
+                                    color: i == current
+                                        ? theme.onAccent
+                                        : theme.textMuted,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                items[i].$2,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.ui(
-                                  14,
-                                  weight: i == current ? 700 : 500,
-                                  color: i == current
-                                      ? theme.onAccent
-                                      : theme.textPrimary,
+                                const SizedBox(height: 2),
+                                Text(
+                                  items[i].$2,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.ui(
+                                    14,
+                                    weight: i == current ? 700 : 500,
+                                    color: i == current
+                                        ? theme.onAccent
+                                        : theme.textPrimary,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

@@ -34,13 +34,8 @@ dependencies:
     sdk: flutter
   intl: any
 
-  cupertino_icons: ^1.0.8
-
   # State Management
   flutter_riverpod: ^2.6.1
-
-  # Fonts
-  google_fonts: ^6.1.0
 
   # WebView
   flutter_inappwebview: ^6.1.0
@@ -98,7 +93,6 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
-  path_provider_platform_interface: ^2.1.2
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -116,9 +110,6 @@ flutter:
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
-  assets:
-    - assets/fonts/lxgw-wenkai/
-
   # Localization code generation (flutter gen-l10n)
   generate: true
 
@@ -134,6 +125,17 @@ flutter:
     - family: Saira
       fonts:
         - asset: assets/fonts/Saira.ttf
+    # Noto Sans SC (思源黑体, variable: wght 100–900; SIL OFL, see
+    # assets/fonts/NotoSansSC-OFL.txt): the interface's Chinese and the
+    # reading font "黑体", the same on every phone.
+    - family: NotoSansSC
+      fonts:
+        - asset: assets/fonts/NotoSansSC.ttf
+    # The in-world script (EndfieldByButan, CC BY-NC 4.0, see
+    # assets/fonts/README.md): decoration only (cipherStyle).
+    - family: EndfieldCipher
+      fonts:
+        - asset: assets/fonts/EndfieldByButan.ttf
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a

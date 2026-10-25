@@ -10,6 +10,8 @@
 #   .\tools\install_local.ps1 -Ef             # ... and the Endfield knowledge base
 #   .\tools\install_local.ps1 -DryRun         # show what would happen
 #   .\tools\install_local.ps1 -Build -Bridge  # ... with the developer bridge for tools/phone_ask.dart
+#   .\tools\install_local.ps1 -Build -BuildNumber 41  # ... as build 41 (pubspec unchanged)
+#   .\tools\install_local.ps1 -Build -FrameLog # a profile build that logs frame times
 #
 # The APK is build\local_release\ArkLores-*-local.apk, else the newest
 # *.apk under build\ (the last `flutter build apk --release`). Without
@@ -41,6 +43,15 @@ param(
   # the phone from the computer with tools/phone_ask.dart. Never for a release.
   [switch]$Bridge,
   [switch]$NoLaunch,
+  # With -Build: the Android build number of this APK instead of pubspec's
+  # (pubspec is not changed), to update a phone that has a newer local build.
+  [string]$BuildNumber,
+  # With -Build: a profile build (frame times in `adb logcat -s flutter`,
+  # lib/shared/frame_log.dart) instead of a release one. Never for a release.
+  [switch]$FrameLog,
+  # With -FrameLog: every widget's build/layout/paint in the timeline
+  # (slower builds; lib/shared/frame_log.dart).
+  [switch]$TraceWidgets,
   [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
@@ -118,10 +129,12 @@ if ($Build -and -not $KbOnly -and -not $Apk) {
   if (-not $DryRun) {
     # Gradle and Flutter write warnings to stderr; only the exit code counts.
     $ErrorActionPreference = 'Continue'
-    & flutter build apk --release "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT=$commit" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT_DATE=$commitDate" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha" "--dart-define=ARKLORES_GAMEDATA_CHANNEL_URL=$channel" "--dart-define=ARKLORES_PHONE_BRIDGE=$(if ($Bridge) { 'true' } else { 'false' })"
+    $extra = @(if ($BuildNumber) { "--build-number=$BuildNumber" }) + @(if ($TraceWidgets) { '--dart-define=ARKLORES_TRACE_WIDGETS=true' })
+    $mode = if ($FrameLog) { 'profile' } else { 'release' }
+    & flutter build apk "--$mode" @extra "--dart-define=ARKLORES_GAMEDATA_DB_URL=$url" "--dart-define=ARKLORES_GAMEDATA_DB_SHA256=$sha" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT=$commit" "--dart-define=ARKLORES_GAMEDATA_DB_COMMIT_DATE=$commitDate" "--dart-define=ARKLORES_ENDFIELD_DB_URL=$efUrl" "--dart-define=ARKLORES_ENDFIELD_DB_SHA256=$efSha" "--dart-define=ARKLORES_GAMEDATA_CHANNEL_URL=$channel" "--dart-define=ARKLORES_PHONE_BRIDGE=$(if ($Bridge) { 'true' } else { 'false' })"
     if ($LASTEXITCODE -ne 0) { throw 'flutter build failed' }
     New-Item -ItemType Directory -Force build\local_release | Out-Null
-    $built = 'build\app\outputs\flutter-apk\app-release.apk'
+    $built = "build\app\outputs\flutter-apk\app-$mode.apk"
     # Without android/key.properties the build is signed with the debug key;
     # re-sign it with the release key when it is here.
     $propsFile = 'tools\android_signing.properties'

@@ -129,6 +129,7 @@ class LoreAnswerStream {
   _Block _last = _Block.none;
   bool _sectionOpen = false;
   bool _entryOpen = false; // the current entry has started its block
+  final List<String> _pendingCites = []; // cite may precede text in an entry
   final List<Object?> _tuple = [];
   // Scalars written directly inside `cite` (the flat form), grouped when the
   // array closes or a nested tuple starts.
@@ -171,6 +172,7 @@ class LoreAnswerStream {
       _closeValueString();
     }
     if (_scalar.isNotEmpty) _endScalar();
+    _flushPendingCites();
     final body = _md.toString().trim();
     return [
       if (_verdict != null) '[FACT_CHECK_VERDICT:${_verdict!.trim()}]',
@@ -369,7 +371,6 @@ class LoreAnswerStream {
   /// A value (container or string) starts inside [parent].
   void _openValue(_Frame parent, _Role role) {
     if (role == _Role.entry) _entryOpen = false;
-    if (role == _Role.cites) _openEntryBlock();
     if (role == _Role.tuple || role == _Role.ignore) _flushFlat();
   }
 
@@ -404,6 +405,7 @@ class LoreAnswerStream {
     final value = _collect?.toString();
     _collect = null;
     _streamKey = null;
+    if (parent.role == _Role.entry && parent.key == 'text') _flushPendingCites();
     if (value == null) return;
     switch ((parent.role, parent.key)) {
       case (_Role.root, 'verdict'):
@@ -437,6 +439,8 @@ class LoreAnswerStream {
       _tuple.clear();
     } else if (frame.role == _Role.cites) {
       _flushFlat();
+    } else if (frame.role == _Role.entry) {
+      _flushPendingCites();
     } else if (frame.role == _Role.entries) {
       _entriesClosedLast = true;
     }
@@ -447,9 +451,25 @@ class LoreAnswerStream {
     final items = List.of(_flat);
     _flat.clear();
     for (final ref in loreCitationRefs(items, onDropped: () => droppedCites++)) {
-      _openEntryBlock();
+      _appendCite(ref);
+    }
+  }
+
+  void _appendCite(String ref) {
+    if (_entryOpen) {
+      _md.write(' `$ref`');
+    } else {
+      _pendingCites.add(ref);
+    }
+  }
+
+  void _flushPendingCites() {
+    if (_pendingCites.isEmpty) return;
+    _openEntryBlock();
+    for (final ref in _pendingCites) {
       _md.write(' `$ref`');
     }
+    _pendingCites.clear();
   }
 
   /// Starts the current entry's block (a list item after a heading, a
@@ -477,8 +497,7 @@ class LoreAnswerStream {
       droppedCites++;
       return;
     }
-    _openEntryBlock();
-    _md.write(' `$ref`');
+    _appendCite(ref);
   }
 }
 

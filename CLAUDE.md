@@ -13,6 +13,8 @@
 
 ## 当前进度（每轮结束时更新；细节进 CHANGELOG 与 docs，这里只留要点）
 
+- **2026-10-24（未发布，分支 `fix/qa-retrieval-evidence`）**：修正 collection 检索范围与实际展示行的引用登记；结构标题和梗概不再能作剧情证据，包含 SQL 与 missing 回查路径。离线回归通过，真实概念题和时间顺序题仍有语义错误；不能将工程修复当作问答质量验收通过。实验结果见 `docs/ASK_EXPERIMENTS.md`，恢复记录在本地 `notes/qa-repair-status.md`。
+
 - **0.11（已发布）**：知识库重做为条目层（`entries`/`collections`/`entry_links`）、剧本全量解析、增量更新通道、用户库与阅读历史、
   资料页与阅读器、悬浮式界面与点击反馈、工作过程时间线、非 GLM 服务商兼容、删除角色扮演（开发者 2026-10-07 决定，不要恢复）。
   建库/更新/补算的经验与全部错误见 `docs/KNOWLEDGE_BASE_LESSONS.md`。

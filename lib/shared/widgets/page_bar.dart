@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 import '../theme/cut_border.dart';
+import '../theme/motion.dart';
 import 'ef_widgets.dart';
+import 'press_feedback.dart';
 
 /// How many pages [total] items make at [pageSize] a page (at least one).
 int pageCountOf(int total, int pageSize) =>
@@ -73,34 +75,44 @@ class PageBar extends StatelessWidget {
         selected: here,
         label: context.t.readingHistoryPage(i + 1, pages),
         excludeSemantics: true,
-        child: GestureDetector(
-          key: ValueKey('$keyPrefix-page-box-${i + 1}'),
-          behavior: HitTestBehavior.opaque,
-          onTap: here
-              ? null
-              : () {
-                  HapticFeedback.selectionClick();
-                  onPage(i);
-                },
-          child: SizedBox(
-            height: 48,
-            child: Center(
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                alignment: Alignment.center,
-                decoration: ShapeDecoration(
-                  color: here ? theme.accentPrimary : theme.surfaceElevated,
-                  shape: here
-                      ? const RoundedRectangleBorder()
-                      : const CutBorder.br(6),
-                ),
-                child: Text(
-                  '${i + 1}',
-                  style: theme.field(
-                    size: 15,
-                    weight: here ? 700 : 500,
-                    color: here ? theme.onAccent : theme.textPrimary,
+        child: PressBuilder(
+          enabled: !here,
+          builder: (context, down) => GestureDetector(
+            key: ValueKey('$keyPrefix-page-box-${i + 1}'),
+            behavior: HitTestBehavior.opaque,
+            onTap: here
+                ? null
+                : () {
+                    HapticFeedback.selectionClick();
+                    onPage(i);
+                  },
+            child: SizedBox(
+              height: 48,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: Motion.of(context, Motion.press),
+                  curve: Motion.mech,
+                  constraints:
+                      const BoxConstraints(minWidth: 40, minHeight: 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  alignment: Alignment.center,
+                  decoration: ShapeDecoration(
+                    color: here
+                        ? theme.accentPrimary
+                        : down
+                            ? pressTint(theme.surfaceElevated, theme.textPrimary)
+                            : theme.surfaceElevated,
+                    shape: here
+                        ? const RoundedRectangleBorder()
+                        : const CutBorder.br(6),
+                  ),
+                  child: Text(
+                    '${i + 1}',
+                    style: theme.field(
+                      size: 15,
+                      weight: here ? 700 : 500,
+                      color: here ? theme.onAccent : theme.textPrimary,
+                    ),
                   ),
                 ),
               ),

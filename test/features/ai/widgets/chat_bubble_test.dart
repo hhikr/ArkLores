@@ -534,8 +534,19 @@ void main() {
       expect(find.text('已作答'), findsOneWidget);
     expect(find.text('查阅 3 次 / 读了 2 篇原文'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('answer-header')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      // The steps unfold rather than appear at once.
+      final unfolding = tester.getSize(find.ancestor(
+        of: find.byKey(const ValueKey('work-timeline')),
+        matching: find.byType(AnimatedSize),
+      ).first,).height;
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('work-timeline')), findsOneWidget);
+      expect(
+        unfolding,
+        lessThan(tester.getSize(find.byKey(const ValueKey('work-timeline'))).height),
+      );
       expect(find.text('先找故事集。'), findsOneWidget);
       // The tool and its arguments as the model wrote them, not a sentence
       // about them.

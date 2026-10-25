@@ -40,12 +40,11 @@ lib/
     llm/               OpenAI 兼容的 Chat / Embedding 客户端，用量统计
     wiki/              PRTS / Warfarin 的请求、HTML → 段落、缓存与快照
     background/        长时操作的 Android 前台服务保活
-    rag/chunker.dart   旧的文字切块，没有任何代码引用（死代码，见 KNOWN_ISSUES）
   features/
     ai/                问答页、对话列表、阅读器（story_reader_page）、工作过程、答案与出处的部件、真机调试桥
     library/           资料页：书架、集合、条目列表、条目页、干员页、搜索、我的资料、阅读字体
     materials/         “资料”标签的外壳（每个游戏一页 + 我的资料）
-    settings/          设置、模型服务、知识库页（下载卡、更新卡、向量卡）、Wiki 来源、首次引导
+    settings/          设置、模型服务、知识库页（下载卡、更新卡、向量卡）、Wiki 来源、首次引导（每一项设置一步，读入本机已保存的值）
     wiki/              Wiki 浏览器、站点主题适配、书签
   shared/              主题（明日方舟 / 终末地两套 token）、界面语言（ARB 中英）、全局 provider、共用部件
 tools/                 建库、更新、补算、向量、终末地解包、发布、本机试装、真机桥（phone_ask.dart）
@@ -59,6 +58,14 @@ docs/                  文档（索引见 CLAUDE.md）
 - 设置存在 `flutter_secure_storage`（Android 上是加密的 SharedPreferences，`settings_service.dart`），API key 也在这里。
 - 只在本机测试构建里（`--dart-define=ARKLORES_PHONE_BRIDGE=true`）套一层 `PhoneBridgeHost`，供电脑上的 `tools/phone_ask.dart` 提问和看输出（`ANDROID_SETUP_GUIDE.md`）。
 - 长时操作（问答、知识库下载/构建、向量）都包在 `BackgroundWork.instance.run(...)` 里：Android 上有操作在跑时开前台服务（通知 + 唤醒锁），防止切到后台后进程被冻结、连接被断。
+  这还不够：ColorOS（2026-10-25 真机日志）不管前台服务，只要 App 不在电池优化白名单里，退到后台约 9 秒、没有网络流量时就会把进程冻结（`OplusHansManager freeze`）。
+  所以 App 要申请“忽略电池优化”（`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`，系统自己的对话框）。申请之前先说明为什么要申请（`background_access.dart`），只说明一次：
+  在导览的“后台运行”一步，或者第一次提问时（已有问答记录的老用户在第一次打开问答页时）。设置页“AI 服务”二级页也显示通知和电池优化的状态。
+- 设置页（`settings_page.dart`）只列大类（外观、资料设置、AI 服务、知识库与资料、帮助与引导），每行是编号、装饰小标、粗体名字和一行当前状态或内容；
+  点进去是二级页（`settings_sections.dart`），具体设置都在二级页里。
+- 开屏：系统开屏只有纸色（Android 12+ 的开屏只能放图标），颜色按 App 自己的深浅（`syncSystemNightMode` 用 `UiModeManager.setApplicationNightMode` 告诉系统，
+  选“跟随系统”时交回系统；否则深色 App 在浅色系统上会先白一下），App 第一帧起由 `LaunchCurtain`（`shared/widgets/launch_curtain.dart`）盖在主界面上：
+  强调色块从左扫入再向右退出、露出 ARKLORES，三色条推出、一行说明，约 1.5 秒后淡出；减少动态效果时没有；只有 `main()` 启动时开（`launchCurtainProvider`）。
 
 ## 4. 知识库
 
@@ -106,7 +113,7 @@ docs/                  文档（索引见 CLAUDE.md）
 
 - 阅读器（`features/ai/story_reader_page.dart`）：惰性列表从锚点双向建（任意长的故事打开不卡），记住位置与读过的次数，标题板下有进度条；从问答出处打开时高亮所引的行。
   终末地的篇里有种类分段线、折叠的段首梗概、步骤标题，“未定位的对话”默认收起（点标题展开）。
-- 排版：长文用阅读字体（`reading_text.dart`，设置里选：默认黑体，可选霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。
+- 排版：长文用阅读字体（`reading_text.dart`，设置里选：默认黑体，即内置的思源黑体子集，可选霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 搜索（`library_search.dart`）：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。与问答无关。
 - 用户库（`core/userdata/`）：阅读历史、阅读进度、我的资料存在独立的库，只存引用字符串（`story:<id>` 等）加原文片段，知识库更新后按片段重新定位。**所以知识库的 id 必须稳定。**
 
@@ -118,6 +125,13 @@ docs/                  文档（索引见 CLAUDE.md）
 - 第一轮之前：一次小调用拟定检索词和锚点，代码执行检索、按名字取材；追问时先重读上一答引用的原文。
 - 界面：问答页（`ai_chat_page.dart`）、输入框与选项面板（`ask_composer.dart`、`answer_options_menu.dart`）、答案与出处（`chat_bubble.dart`、`story_answer_body.dart`）、工作过程（`work_steps.dart`）、对话列表（`chat_history_page.dart`）。
 - 会话记录：`ChatSessionStore`，每个对话一个 JSON（每次模型输出、工具调用与结果、答案、用量、分段计时）。
+- 多个对话（`agent_provider.dart`）：每个打开的对话是 `askChatProvider(key)` 的一个 `AskChatNotifier`；`askSessionsProvider` 记着打开的对话和显示的那个（`shownAskProvider`）。
+  换一个对话、开新对话都不停正在作答的那个，它在后台接着答（前台服务照常保活，几个同时作答时通知合在一起）；离开的空对话不留。
+  用量各算各的：模型客户端共用一个计数器，每个对话在 `UsageMeter.runWith` 里跑，计数记到它自己的计数器上。
+  正在作答的对话不能删除（作答结束时会把文件再写一次）。
+- 对话栏（`widgets/conversations_panel.dart`）：问答页左上角的按钮从左侧滑出——新对话、作答中（强调色块、实时进度，按钮角上是别处作答中的个数）、
+  最近（打开着的和保存的，当前的有竖线）、“查看全部”进完整的对话记录页。没做下拉刷新：设计不用转圈，打开对话栏时会重读列表。
+  打开着、还没保存（“保存 AI 对话记录”关着）的对话也在“最近”里，只到这次退出 App 为止。
 
 ## 7. 模型服务
 

@@ -767,42 +767,6 @@ int nowSeconds() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
   return ('story', storyId);
 }
 
-String storyCategory(String storyId) {
-  if (storyId.contains('/rogue/') || storyId.contains('/roguelike/')) {
-    return 'roguelike';
-  }
-  if (storyId.contains('/sandbox')) return 'sandbox';
-  return 'story';
-}
-
-String storySubtype(String storyId) {
-  if (storyId.contains('/memory/')) return 'operator_record_story';
-  if (storyId.startsWith('activities/')) return 'activity_story';
-  if (storyId.contains('/main/')) return 'main_story';
-  if (storyId.contains('/rogue/') || storyId.contains('/roguelike/')) {
-    if (storyId.contains('/month_chat_')) return 'monthly_squad';
-    return 'story';
-  }
-  if (storyId.contains('/sandbox')) return 'story';
-  if (storyId.contains('/guide/') || storyId.contains('/tutorial/')) {
-    return 'tutorial_story';
-  }
-  return 'story';
-}
-
-String storyContentType(String storyId) {
-  final subtype = storySubtype(storyId);
-  if (subtype == 'operator_record_story') return 'operator_record_story';
-  if (subtype == 'activity_story') return 'activity_story';
-  if (subtype == 'main_story') return 'main_story';
-  if (storyCategory(storyId) == 'roguelike') {
-    if (subtype == 'monthly_squad') return 'roguelike_monthly_squad';
-    return 'roguelike_story';
-  }
-  if (storyCategory(storyId) == 'sandbox') return 'sandbox_story';
-  return subtype;
-}
-
 class TextSection {
   const TextSection(this.section, this.content);
   final String section;

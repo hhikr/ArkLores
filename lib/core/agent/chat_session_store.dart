@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -26,6 +25,25 @@ class ChatSessionSummary {
   final int turnCount;
   final String lastQuery;
   final bool corrupt;
+}
+
+// A recorded conversation holds every tool output and can run to megabytes:
+// it is encoded and decoded off the UI isolate (a page of the history list
+// decoded on it stalled the page opening it), with these.
+
+String _encode(ChatSessionFile session) => session.encode();
+
+ChatSessionSummary _summarize((String, String) file) {
+  final (sessionId, source) = file;
+  final session = ChatSessionFile.decode(source);
+  return ChatSessionSummary(
+    sessionId: sessionId,
+    title: session.title,
+    updatedAt: session.updatedAt,
+    createdAt: session.createdAt,
+    turnCount: session.turnCount,
+    lastQuery: session.lastQuery,
+  );
 }
 
 /// Persists AI chat sessions as JSON files in a user-visible directory
@@ -70,7 +88,7 @@ class ChatSessionStore {
     final file = await _fileFor(session.sessionId);
     await file.parent.create(recursive: true);
     final temporary = File('${file.path}.tmp');
-    await temporary.writeAsString(session.encode(), flush: true);
+    await temporary.writeAsString(await compute(_encode, session), flush: true);
     await temporary.rename(file.path);
   }
 
@@ -79,7 +97,7 @@ class ChatSessionStore {
     final file = await _fileFor(sessionId);
     if (!await file.exists()) return null;
     try {
-      return ChatSessionFile.decode(await file.readAsString());
+      return await compute(ChatSessionFile.decode, await file.readAsString());
     } on FormatException {
       debugPrint('[ChatSessionStore] corrupt session file: ${file.path}');
       return null;
@@ -119,18 +137,9 @@ class ChatSessionStore {
     final sessionId =
         name.startsWith('conversation_') ? name.substring(13) : name;
     try {
-      final decoded = jsonDecode(await file.readAsString());
-      if (decoded is! Map<String, dynamic>) {
-        throw const FormatException('not an object');
-      }
-      final session = ChatSessionFile.fromJson(decoded);
-      return ChatSessionSummary(
-        sessionId: sessionId,
-        title: session.title,
-        updatedAt: session.updatedAt,
-        createdAt: session.createdAt,
-        turnCount: session.turnCount,
-        lastQuery: session.lastQuery,
+      return await compute(
+        _summarize,
+        (sessionId, await file.readAsString()),
       );
     } catch (_) {
       return ChatSessionSummary(

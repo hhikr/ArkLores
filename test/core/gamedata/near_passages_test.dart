@@ -9,6 +9,7 @@ import 'package:arklores/core/gamedata/story_vectors.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi;
 
 import '../../support/gamedata_fixture.dart';
 import '../../support/sqlite.dart';
@@ -136,18 +137,35 @@ void main() {
     expect(out, isNot(contains(a2)));
     expect(out, isNot(contains(c)));
     expect(out, contains('L8 [某人] 乙集的第 8 句。'));
-    expect(out, contains('…（L16-19 没有列出，要引用先用 read_story 读）'));
+    expect(out, contains('L19 [某人] 乙集的第 19 句。'));
     expect(
       lines.last,
       '（只列相近程度 0.70 以上的，每个故事集一段，最多 5 段；这一段所在的故事集不列。'
       '上面列出的行可以引用，没有列出的行要先读）',
     );
-    // The eight lines printed of each are read; the passage asked about and
-    // the rest are not.
-    expect(seen.covers(b, 8, 15), isTrue);
-    expect(seen.covers(b, 16, 16), isFalse);
-    expect(seen.covers(d, 0, 7), isTrue);
+    // The complete matching chunks are read, not the passage asked about.
+    expect(seen.covers(b, 8, 19), isTrue);
+    expect(seen.covers(b, 20, 20), isFalse);
+    expect(seen.covers(d, 0, 11), isTrue);
     expect(seen.stories, unorderedEquals([b, d]));
+  });
+
+  test('search near reads a sparse chunk through its actual end', () async {
+    final db = await databaseFactoryFfi.openDatabase(dbPath);
+    await db.rawUpdate('UPDATE story_lines SET line_index = line_index + 1000 '
+        'WHERE story_id = ?', [b],);
+    await db.rawUpdate('UPDATE story_lines SET line_index = (line_index - 1000) * 3 '
+        'WHERE story_id = ?', [b],);
+    await db.update(storyChunkVectorsTable, {'line_start': 24, 'line_end': 57},
+        where: 'story_id = ? AND line_start = 8', whereArgs: [b],);
+    await db.close();
+    final seen = SeenLines();
+    final out = await SearchTool(store, seen).execute({'near': '$a1:3'});
+    expect(out, contains('L24 [某人] 乙集的第 8 句。'));
+    expect(out, contains('L57 [某人] 乙集的第 19 句。'));
+    expect(out, isNot(contains('没有列出，要引用先用')));
+    expect(seen.covers(b, 57, 57), isTrue);
+    expect(seen.covers(b, 56, 56), isFalse);
   });
 
   test('search near: nothing alike, no vector, no such story, a bad position',

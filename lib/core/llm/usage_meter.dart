@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'llm_client.dart';
 
 /// One finished completion, as the usage meter saw it.
@@ -28,7 +30,24 @@ class UsageRecord {
 /// Adds up the usage of every completion of one question (all clients: the
 /// main agent, sub-agents, the reviewer, the reorganiser). Passive: it never
 /// changes a request or a result.
+///
+/// The clients share one meter; several conversations may answer at once,
+/// each in [runWith] its own meter: what the shared meter is given there goes
+/// to that conversation's meter instead.
 class UsageMeter {
+  static const _zoneKey = #arkloresUsageMeter;
+
+  /// Runs [body] with every completion and span reported to any meter
+  /// counted by [meter].
+  static R runWith<R>(UsageMeter meter, R Function() body) =>
+      runZoned(body, zoneValues: {_zoneKey: meter});
+
+  /// The meter this one's reports go to: the running conversation's.
+  UsageMeter get _sink {
+    final zoned = Zone.current[_zoneKey];
+    return zoned is UsageMeter ? zoned : this;
+  }
+
   int calls = 0;
   int promptTokens = 0;
   int completionTokens = 0;
@@ -43,13 +62,18 @@ class UsageMeter {
   final List<({String name, DateTime start, DateTime end})> spans = [];
 
   /// Records one finished tool run or local check.
-  void addSpan(String name, DateTime start, DateTime end) =>
-      spans.add((name: name, start: start, end: end));
+  void addSpan(String name, DateTime start, DateTime end) {
+    final sink = _sink;
+    if (!identical(sink, this)) return sink.addSpan(name, start, end);
+    spans.add((name: name, start: start, end: end));
+  }
 
   /// Called after each add (the app uses it to show running totals).
   void Function()? onChanged;
 
   void add(ChatCompletionResult result) {
+    final sink = _sink;
+    if (!identical(sink, this)) return sink.add(result);
     calls++;
     promptTokens += result.promptTokens ?? 0;
     completionTokens += result.completionTokens ?? 0;

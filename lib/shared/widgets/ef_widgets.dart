@@ -8,6 +8,7 @@ import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/cut_border.dart';
 import '../theme/motion.dart';
+import 'press_feedback.dart';
 
 // The app's parts (0.17). Each one says in its comment what it MEANS:
 // the accent marks "here", "act on this" or "look at this" and is a fill;
@@ -134,22 +135,24 @@ class ContourPainter extends CustomPainter {
   bool shouldRepaint(ContourPainter old) => old.color != color;
 }
 
-/// The small wide upper-case label above a heading. [slash] adds the `//`
-/// that names a section.
+/// The small upper-case label above a heading, in the in-world script.
 class Eyebrow extends ConsumerWidget {
-  const Eyebrow(this.text, {super.key, this.slash = true, this.color});
+  const Eyebrow(this.text, {super.key, this.color});
 
   final String text;
-  final bool slash;
   final Color? color;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     return Text(
-      '${slash ? '// ' : ''}${text.toUpperCase()}',
+      text.toUpperCase(),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
+      // Decoration: it grows a little with large text, not so much that it
+      // pushes the name it sits over out of a bar.
+      textScaler:
+          MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.2),
       style: theme.eyebrow(color: color),
     );
   }
@@ -310,45 +313,52 @@ class FilterBlock extends ConsumerWidget {
     return Semantics(
       button: true,
       selected: selected,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                onTap!();
-              },
-        // 48 high to the finger, 36 to the eye.
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: AnimatedContainer(
-            duration: Motion.of(context, Motion.press),
-            constraints: const BoxConstraints(minHeight: 36, minWidth: 44),
-            padding: const EdgeInsets.fromLTRB(12, 0, 16, 0),
-            decoration: ShapeDecoration(
-              color: selected ? theme.accentPrimary : theme.surfaceElevated,
-              shape: const CutBorder.br(7),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.ui(
-                      14,
-                      weight: selected ? 700 : 500,
-                      color: fg,
+      child: PressBuilder(
+        enabled: onTap != null,
+        builder: (context, down) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap == null
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  onTap!();
+                },
+          // 48 high to the finger, 36 to the eye.
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: AnimatedContainer(
+              duration: Motion.of(context, Motion.press),
+              constraints: const BoxConstraints(minHeight: 36, minWidth: 44),
+              padding: const EdgeInsets.fromLTRB(12, 0, 16, 0),
+              decoration: ShapeDecoration(
+                color: selected
+                    ? theme.accentPrimary
+                    : down
+                        ? pressTint(theme.surfaceElevated, theme.textPrimary)
+                        : theme.surfaceElevated,
+                shape: const CutBorder.br(7),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.ui(
+                        14,
+                        weight: selected ? 700 : 500,
+                        color: fg,
+                      ),
                     ),
                   ),
-                ),
-                if (count != null) ...[
-                  const SizedBox(width: 6),
-                  Text('$count', style: theme.field(color: fg)),
+                  if (count != null) ...[
+                    const SizedBox(width: 6),
+                    Text('$count', style: theme.field(color: fg)),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -401,8 +411,7 @@ class AppButton extends ConsumerStatefulWidget {
 }
 
 class _AppButtonState extends ConsumerState<AppButton>
-    with SingleTickerProviderStateMixin {
-  bool _down = false;
+    with SingleTickerProviderStateMixin, PressHold<AppButton> {
   late final AnimationController _run = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 600),
@@ -435,15 +444,12 @@ class _AppButtonState extends ConsumerState<AppButton>
     super.dispose();
   }
 
-  void _set(bool v) {
-    if (mounted && _down != v) setState(() => _down = v);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final enabled = widget.onPressed != null && !widget.busy;
     final kind = widget.kind;
+    final down = pressed;
     final rest = switch (kind) {
       ButtonKind.go => theme.accentPrimary,
       ButtonKind.quiet => Colors.transparent,
@@ -457,7 +463,7 @@ class _AppButtonState extends ConsumerState<AppButton>
     final Color fg;
     if (!enabled && !widget.busy) {
       fg = theme.textMuted;
-    } else if (_down) {
+    } else if (down) {
       fg = switch (kind) {
         ButtonKind.danger => theme.isDark ? theme.bgPrimary : Colors.white,
         _ => theme.onAccent,
@@ -492,87 +498,87 @@ class _AppButtonState extends ConsumerState<AppButton>
       button: true,
       enabled: enabled,
       label: widget.busy ? widget.label : null,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: enabled ? (_) => _set(true) : null,
-        onTapCancel: () => _set(false),
-        onTapUp: enabled ? (_) => _set(false) : null,
-        onTap: enabled
-            ? () {
-                if (kind == ButtonKind.go || kind == ButtonKind.danger) {
-                  HapticFeedback.lightImpact();
-                } else {
-                  HapticFeedback.selectionClick();
+      child: pressListener(
+        enabled: enabled,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: enabled
+              ? () {
+                  if (kind == ButtonKind.go || kind == ButtonKind.danger) {
+                    HapticFeedback.lightImpact();
+                  } else {
+                    HapticFeedback.selectionClick();
+                  }
+                  widget.onPressed!();
                 }
-                widget.onPressed!();
-              }
-            : null,
-        child: ConstrainedBox(
-          // The finger gets 48 even where the block is drawn 40 high.
-          constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
-          child: Center(
-            widthFactor: widget.expand ? null : 1,
-            heightFactor: 1,
-            child: ClipPath(
-              clipper: const ShapeBorderClipper(shape: CutBorder.br(8)),
-              child: SizedBox(
-                height: h,
-                width: widget.expand ? double.infinity : null,
-                child: Stack(
-                  fit: StackFit.passthrough,
-                  children: [
-                    Positioned.fill(
-                      child: ColoredBox(
-                        color: enabled || widget.busy
-                            ? rest
-                            : (kind == ButtonKind.quiet
-                                ? Colors.transparent
-                                : theme.surfaceElevated.withValues(alpha: 0.6)),
-                      ),
-                    ),
-                    if (widget.busy)
+              : null,
+          child: ConstrainedBox(
+            // The finger gets 48 even where the block is drawn 40 high.
+            constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+            child: Center(
+              widthFactor: widget.expand ? null : 1,
+              heightFactor: 1,
+              child: ClipPath(
+                clipper: const ShapeBorderClipper(shape: CutBorder.br(8)),
+                child: SizedBox(
+                  height: h,
+                  width: widget.expand ? double.infinity : null,
+                  child: Stack(
+                    fit: StackFit.passthrough,
+                    children: [
                       Positioned.fill(
-                        child: AnimatedBuilder(
-                          animation: _run,
-                          builder: (context, _) => CustomPaint(
-                            painter: HatchPainter(
-                              (kind == ButtonKind.go
-                                      ? theme.onAccent
-                                      : theme.textPrimary)
-                                  .withValues(alpha: 0.22),
-                              offset: _run.value * 9.2,
+                        child: ColoredBox(
+                          color: enabled || widget.busy
+                              ? rest
+                              : (kind == ButtonKind.quiet
+                                  ? Colors.transparent
+                                  : theme.surfaceElevated.withValues(alpha: 0.6)),
+                        ),
+                      ),
+                      if (widget.busy)
+                        Positioned.fill(
+                          child: AnimatedBuilder(
+                            animation: _run,
+                            builder: (context, _) => CustomPaint(
+                              painter: HatchPainter(
+                                (kind == ButtonKind.go
+                                        ? theme.onAccent
+                                        : theme.textPrimary)
+                                    .withValues(alpha: 0.22),
+                                offset: _run.value * 9.2,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    Positioned.fill(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: AnimatedFractionallySizedBox(
-                          duration: Motion.of(
-                            context,
-                            _down ? Motion.press : Motion.wipe,
+                      Positioned.fill(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedFractionallySizedBox(
+                            duration: Motion.of(
+                              context,
+                              down ? Motion.press : Motion.wipe,
+                            ),
+                            curve: Motion.mech,
+                            widthFactor: down ? 1 : 0,
+                            heightFactor: 1,
+                            child: ColoredBox(color: wipe),
                           ),
-                          curve: Motion.mech,
-                          widthFactor: _down ? 1 : 0,
-                          heightFactor: 1,
-                          child: ColoredBox(color: wipe),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        widget.small ? 12 : 18,
-                        0,
-                        widget.small ? 16 : 22,
-                        0,
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          widget.small ? 12 : 18,
+                          0,
+                          widget.small ? 16 : 22,
+                          0,
+                        ),
+                        child: Center(
+                          widthFactor: widget.expand ? null : 1,
+                          child: label,
+                        ),
                       ),
-                      child: Center(
-                        widthFactor: widget.expand ? null : 1,
-                        child: label,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -616,18 +622,14 @@ class SquareIconButton extends ConsumerStatefulWidget {
   ConsumerState<SquareIconButton> createState() => _SquareIconButtonState();
 }
 
-class _SquareIconButtonState extends ConsumerState<SquareIconButton> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (mounted && _down != v) setState(() => _down = v);
-  }
-
+class _SquareIconButtonState extends ConsumerState<SquareIconButton>
+    with PressHold<SquareIconButton> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final enabled = widget.onPressed != null;
-    final on = _down || widget.selected;
+    final down = pressed;
+    final on = down || widget.selected;
     final fg = !enabled
         ? theme.textMuted
         : on
@@ -641,36 +643,36 @@ class _SquareIconButtonState extends ConsumerState<SquareIconButton> {
         toggled: widget.selected ? true : null,
         label: widget.tooltip,
         excludeSemantics: true,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: enabled ? (_) => _set(true) : null,
-          onTapCancel: () => _set(false),
-          onTapUp: enabled ? (_) => _set(false) : null,
-          onTap: enabled
-              ? () {
-                  HapticFeedback.selectionClick();
-                  widget.onPressed!();
-                }
-              : null,
-          child: SizedBox(
-            width: 48,
-            height: 48,
-            child: Center(
-              child: AnimatedContainer(
-                duration:
-                    Motion.of(context, _down ? Motion.press : Motion.wipe),
-                curve: Motion.mech,
-                width: 40,
-                height: 40,
-                decoration: ShapeDecoration(
-                  color: on
-                      ? theme.accentPrimary
-                      : widget.filled
-                          ? theme.surfaceElevated
-                          : Colors.transparent,
-                  shape: const CutBorder.br(7),
+        child: pressListener(
+          enabled: enabled,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: enabled
+                ? () {
+                    HapticFeedback.selectionClick();
+                    widget.onPressed!();
+                  }
+                : null,
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Center(
+                child: AnimatedContainer(
+                  duration:
+                      Motion.of(context, down ? Motion.press : Motion.wipe),
+                  curve: Motion.mech,
+                  width: 40,
+                  height: 40,
+                  decoration: ShapeDecoration(
+                    color: on
+                        ? theme.accentPrimary
+                        : widget.filled
+                            ? theme.surfaceElevated
+                            : Colors.transparent,
+                    shape: const CutBorder.br(7),
+                  ),
+                  child: Icon(widget.icon, size: widget.size, color: fg),
                 ),
-                child: Icon(widget.icon, size: widget.size, color: fg),
               ),
             ),
           ),
@@ -985,35 +987,46 @@ class SquareSwitch extends ConsumerWidget {
       toggled: value,
       enabled: enabled,
       label: semanticLabel,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: enabled
-            ? () {
-                HapticFeedback.selectionClick();
-                onChanged!(!value);
-              }
-            : null,
-        child: SizedBox(
-          width: 56,
-          height: 48,
-          child: Center(
-            child: Opacity(
-              opacity: enabled ? 1 : 0.45,
-              child: AnimatedContainer(
-                duration: Motion.of(context, Motion.wipe),
-                curve: Motion.mech,
-                width: 48,
-                height: 26,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: value ? theme.accentPrimary : theme.surfaceElevated,
-                  border: value ? null : Border.all(color: theme.cardBorder),
-                ),
-                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  color: value ? theme.onAccent : theme.cardSurface,
+      child: PressBuilder(
+        enabled: enabled,
+        builder: (context, down) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: enabled
+              ? () {
+                  HapticFeedback.selectionClick();
+                  onChanged!(!value);
+                }
+              : null,
+          child: SizedBox(
+            width: 56,
+            height: 48,
+            child: Center(
+              child: Opacity(
+                opacity: enabled ? 1 : 0.45,
+                child: AnimatedContainer(
+                  duration: Motion.of(context, Motion.wipe),
+                  curve: Motion.mech,
+                  width: 48,
+                  height: 26,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: value
+                        ? theme.accentPrimary
+                        : down
+                            ? pressTint(theme.surfaceElevated, theme.textPrimary)
+                            : theme.surfaceElevated,
+                    border: value ? null : Border.all(color: theme.cardBorder),
+                  ),
+                  alignment:
+                      value ? Alignment.centerRight : Alignment.centerLeft,
+                  // Pressed, the block grows toward where it will go.
+                  child: AnimatedContainer(
+                    duration: Motion.of(context, Motion.press),
+                    curve: Motion.mech,
+                    width: down ? 22 : 18,
+                    height: 18,
+                    color: value ? theme.onAccent : theme.cardSurface,
+                  ),
                 ),
               ),
             ),
@@ -1032,11 +1045,15 @@ class SegmentedChoice<T> extends ConsumerWidget {
     required this.options,
     required this.value,
     required this.onChanged,
+    this.labelStyle,
   });
 
   final List<(T, String)> options;
   final T value;
   final ValueChanged<T> onChanged;
+
+  /// Laid over a choice's label (a font set in itself).
+  final TextStyle Function(T value)? labelStyle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1051,30 +1068,44 @@ class SegmentedChoice<T> extends ConsumerWidget {
                 button: true,
                 inMutuallyExclusiveGroup: true,
                 checked: v == value,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: v == value
-                      ? null
-                      : () {
-                          HapticFeedback.selectionClick();
-                          onChanged(v);
-                        },
-                  child: AnimatedContainer(
-                    duration: Motion.of(context, Motion.wipe),
-                    curve: Motion.mech,
-                    constraints: const BoxConstraints(minHeight: 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    alignment: Alignment.center,
-                    color: v == value ? theme.textPrimary : Colors.transparent,
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: theme.ui(
-                        14,
-                        weight: v == value ? 700 : 500,
-                        color: v == value ? theme.bgPrimary : theme.textPrimary,
+                child: PressBuilder(
+                  enabled: v != value,
+                  builder: (context, down) => GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: v == value
+                        ? null
+                        : () {
+                            HapticFeedback.selectionClick();
+                            onChanged(v);
+                          },
+                    child: AnimatedContainer(
+                      duration: Motion.of(
+                        context,
+                        down ? Motion.press : Motion.wipe,
+                      ),
+                      curve: Motion.mech,
+                      constraints: const BoxConstraints(minHeight: 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      alignment: Alignment.center,
+                      color: v == value
+                          ? theme.textPrimary
+                          : down
+                              ? pressTint(Colors.transparent, theme.textPrimary)
+                              : Colors.transparent,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: theme
+                            .ui(
+                              14,
+                              weight: v == value ? 700 : 500,
+                              color: v == value
+                                  ? theme.bgPrimary
+                                  : theme.textPrimary,
+                            )
+                            .merge(labelStyle?.call(v)),
                       ),
                     ),
                   ),
@@ -1490,53 +1521,49 @@ class PressRow extends ConsumerStatefulWidget {
   ConsumerState<PressRow> createState() => _PressRowState();
 }
 
-class _PressRowState extends ConsumerState<PressRow> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (mounted && _down != v) setState(() => _down = v);
-  }
-
+class _PressRowState extends ConsumerState<PressRow>
+    with PressHold<PressRow> {
   @override
   Widget build(BuildContext context) {
     if (widget.onTap == null && widget.onLongPress == null) return widget.child;
     final theme = ref.watch(themeProvider);
     final d = Motion.of(context, Motion.row);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _set(true),
-      onTapCancel: () => _set(false),
-      onTapUp: (_) => _set(false),
-      onTap: widget.onTap == null
-          ? null
-          : () {
-              HapticFeedback.selectionClick();
-              widget.onTap!();
-            },
-      onLongPress: widget.onLongPress,
-      child: Stack(
-        children: [
-          AnimatedContainer(
-            duration: d,
-            curve: Motion.snap,
-            transform: Matrix4.translationValues(_down ? 6 : 0, 0, 0),
-            color: _down
-                ? theme.textPrimary.withValues(alpha: 0.04)
-                : Colors.transparent,
-            child: widget.child,
-          ),
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            child: AnimatedContainer(
+    final down = pressed;
+    return pressListener(
+      enabled: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap == null
+            ? null
+            : () {
+                HapticFeedback.selectionClick();
+                widget.onTap!();
+              },
+        onLongPress: widget.onLongPress,
+        child: Stack(
+          children: [
+            AnimatedContainer(
               duration: d,
               curve: Motion.snap,
-              width: _down ? 4 : 0,
-              color: theme.trace,
+              transform: Matrix4.translationValues(down ? 6 : 0, 0, 0),
+              color: down
+                  ? theme.textPrimary.withValues(alpha: 0.04)
+                  : Colors.transparent,
+              child: widget.child,
             ),
-          ),
-        ],
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: AnimatedContainer(
+                duration: d,
+                curve: Motion.snap,
+                width: down ? 4 : 0,
+                color: theme.trace,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

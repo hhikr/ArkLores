@@ -57,6 +57,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
   Future<List<StoryLineHit>> searchStoryLinesLike(
     List<String> terms, {
     String? scopeId,
+    Set<String>? storyIds,
     int storyLimit = 8,
     int linesPerStory = 3,
     Map<String, int>? termLines,
@@ -66,6 +67,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
       return _of(scopeId).searchStoryLinesLike(
         terms,
         scopeId: scopeId,
+        storyIds: storyIds,
         storyLimit: storyLimit,
         linesPerStory: linesPerStory,
         termLines: termLines,
@@ -76,6 +78,7 @@ class MultiGameRetrieval implements GameDataRetrieval {
       for (final store in await _installed())
         ...await store.searchStoryLinesLike(
           terms,
+          storyIds: storyIds,
           storyLimit: storyLimit,
           linesPerStory: linesPerStory,
           termLines: termLines,

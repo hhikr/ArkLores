@@ -6,6 +6,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/motion.dart';
+import '../../shared/widgets/press_feedback.dart';
 
 /// The page tools of the wiki: one labelled row per tool (an icon alone does
 /// not say what it does). Rendered inside the tray in [WikiBrowserPage]; the
@@ -108,74 +109,69 @@ class _ToolRow extends StatefulWidget {
   State<_ToolRow> createState() => _ToolRowState();
 }
 
-class _ToolRowState extends State<_ToolRow> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (mounted && _down != v) setState(() => _down = v);
-  }
-
+class _ToolRowState extends State<_ToolRow> with PressHold<_ToolRow> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
-    final fg = _down ? theme.onAccent : theme.textPrimary;
+    final down = pressed;
+    final fg = down ? theme.onAccent : theme.textPrimary;
     return Semantics(
       button: true,
       toggled: widget.on,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => _set(true),
-        onTapCancel: () => _set(false),
-        onTapUp: (_) => _set(false),
-        onTap: () {
-          HapticFeedback.selectionClick();
-          widget.onTap();
-        },
-        child: SizedBox(
-          height: 48,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AnimatedFractionallySizedBox(
-                  duration: Motion.of(context, _down ? Motion.press : Motion.wipe),
-                  curve: Motion.mech,
-                  widthFactor: _down ? 1 : 0,
-                  heightFactor: 1,
-                  child: ColoredBox(color: theme.accentPrimary),
+      child: pressListener(
+        enabled: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            widget.onTap();
+          },
+          child: SizedBox(
+            height: 48,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedFractionallySizedBox(
+                    duration: Motion.of(context, down ? Motion.press : Motion.wipe),
+                    curve: Motion.mech,
+                    widthFactor: down ? 1 : 0,
+                    heightFactor: 1,
+                    child: ColoredBox(color: theme.accentPrimary),
+                  ),
                 ),
-              ),
-              if (widget.on ?? false)
-                Positioned(
-                  left: 0,
-                  top: 10,
-                  bottom: 10,
-                  width: 4,
-                  child: ColoredBox(color: theme.trace),
-                ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  children: [
-                    Icon(widget.icon, size: 20, color: fg),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        widget.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.ui(
-                          15,
-                          weight: (widget.on ?? false) ? 700 : 500,
-                          color: fg,
+                if (widget.on ?? false)
+                  Positioned(
+                    left: 0,
+                    top: 10,
+                    bottom: 10,
+                    width: 4,
+                    child: ColoredBox(color: theme.trace),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    children: [
+                      Icon(widget.icon, size: 20, color: fg),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.ui(
+                            15,
+                            weight: (widget.on ?? false) ? 700 : 500,
+                            color: fg,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

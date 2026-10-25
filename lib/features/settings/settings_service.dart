@@ -8,22 +8,6 @@ import '../../core/llm/llm_client.dart';
 import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 
-enum AppLauncherIcon {
-  light('light'),
-  dark('dark');
-
-  const AppLauncherIcon(this.storageValue);
-
-  final String storageValue;
-
-  static AppLauncherIcon fromStorage(String? value) {
-    return AppLauncherIcon.values.firstWhere(
-      (icon) => icon.storageValue == value,
-      orElse: () => AppLauncherIcon.light,
-    );
-  }
-}
-
 class WikiSiteConfig {
   const WikiSiteConfig({
     required this.id,
@@ -107,13 +91,13 @@ class SettingsService {
 
   // ── App state keys ───────────────────────────────────────
   static const _keyOnboardingDone = 'onboarding_done';
+  static const _keyBackgroundExplained = 'background_explained';
   static const _keyMainTabIndex = 'main_tab_index';
   static const _keyWikiTabIndex = 'wiki_tab_index';
   static const _keyWikiUrlPrefix = 'wiki_url_';
   static const _keyWikiAppliedUrlPrefix = 'wiki_applied_url_';
   static const _keyWikiSources = 'wiki_sources';
   static const _keyWikiDarkMode = 'wiki_dark_mode';
-  static const _keyAppLauncherIcon = 'app_launcher_icon';
 
   // ── Appearance keys ──────────────────────────────────────
   static const _keyTheme = 'theme';
@@ -262,6 +246,14 @@ class SettingsService {
     await _storage.write(key: _keyOnboardingDone, value: 'true');
   }
 
+  /// Whether the reader was told why the app asks to run in the
+  /// background (asked once, from Ask or from the onboarding).
+  Future<bool> isBackgroundExplained() async =>
+      await _storage.read(key: _keyBackgroundExplained) == 'true';
+
+  Future<void> markBackgroundExplained() =>
+      _storage.write(key: _keyBackgroundExplained, value: 'true');
+
   Future<int> loadMainTabIndex() async {
     return _loadBoundedInt(_keyMainTabIndex, min: 0, max: 3);
   }
@@ -403,19 +395,6 @@ class SettingsService {
     ]);
   }
 
-  Future<AppLauncherIcon> loadAppLauncherIcon() async {
-    return AppLauncherIcon.fromStorage(
-      await _storage.read(key: _keyAppLauncherIcon),
-    );
-  }
-
-  Future<void> saveAppLauncherIcon(AppLauncherIcon icon) async {
-    await _storage.write(
-      key: _keyAppLauncherIcon,
-      value: icon.storageValue,
-    );
-  }
-
   Future<bool?> loadWikiDarkMode() async {
     final value = await _storage.read(key: _keyWikiDarkMode);
     if (value == null) return null;
@@ -426,6 +405,11 @@ class SettingsService {
 
   Future<void> saveWikiDarkMode(bool enabled) async {
     await _storage.write(key: _keyWikiDarkMode, value: '$enabled');
+  }
+
+  /// Forgets the Wiki page's own appearance: it follows the app's theme.
+  Future<void> clearWikiDarkMode() async {
+    await _storage.delete(key: _keyWikiDarkMode);
   }
 
   Future<AppTheme> loadTheme() async {

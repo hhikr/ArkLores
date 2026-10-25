@@ -62,20 +62,32 @@ class _MainShellState extends ConsumerState<MainShell> {
         // padding (MediaQuery).
         extendBody: true,
         // Tabs switch at once: the accent block in the tab bar is what
-        // moves.
+        // moves. The hidden tabs stay built but not running (TickerMode):
+        // the wiki's web pages pause there, which otherwise redraw on the
+        // thread the app's frames start on and slowed every tab. Nor do they
+        // follow the keyboard (_TabSlot).
         body: IndexedStack(
           index: _currentIndex,
-          children: _pages,
+          children: [
+            for (var i = 0; i < _pages.length; i++)
+              TickerMode(
+                enabled: i == _currentIndex,
+                child: _TabSlot(shown: i == _currentIndex, child: _pages[i]),
+              ),
+          ],
         ),
-        // Hidden while the keyboard is up: the question box then sits on
-        // the keyboard, not on the tab bar.
-        bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
+        // Under the keyboard once the keyboard is taller than it: until then
+        // the question box stays on the bar, after that it rides the
+        // keyboard, with no jump in between (dropping the bar on the first
+        // frame of the keyboard took its height from under the box at once).
+        bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom >
+                AppTabBar.height + MediaQuery.viewPaddingOf(context).bottom
             ? const SizedBox.shrink()
             : AppTabBar(
                 current: _currentIndex,
                 onSelected: _selectTab,
                 items: [
-                  ('WIKI', context.t.navWiki),
+                  ('LOOKUP', context.t.navWiki),
                   ('ASK', context.t.navAI),
                   ('LIBRARY', context.t.navMaterials),
                   ('SETTINGS', context.t.navSettings),
@@ -93,5 +105,33 @@ class _MainShellState extends ConsumerState<MainShell> {
             '[MainShell] Error saving selected tab: $error',
           ),
         );
+  }
+}
+
+/// One tab of [MainShell]. A hidden tab is laid out at the screen's full
+/// height and sees no keyboard: while the keyboard moves the shell's body
+/// changes height every frame, and the stack lays out all its children, so
+/// every tab rebuilt and laid out its text again each frame (the question
+/// box rose in stutters). The same widgets either way, so a tab keeps its
+/// state when it is shown or hidden.
+class _TabSlot extends StatelessWidget {
+  const _TabSlot({required this.shown, required this.child});
+
+  final bool shown;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final height = shown ? null : media.size.height;
+    return MediaQuery(
+      data: shown ? media : media.removeViewInsets(removeBottom: true),
+      child: OverflowBox(
+        alignment: Alignment.topCenter,
+        minHeight: height,
+        maxHeight: height,
+        child: child,
+      ),
+    );
   }
 }

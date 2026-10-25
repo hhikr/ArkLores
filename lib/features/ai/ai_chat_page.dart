@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,11 +14,11 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
-import '../../shared/widgets/smooth_page_route.dart';
-import 'chat_history_page.dart';
+import '../settings/background_access.dart';
 import 'widgets/answer_options_menu.dart';
 import 'widgets/ask_composer.dart';
 import 'widgets/chat_bubble.dart';
+import 'widgets/conversations_panel.dart';
 
 /// The Ask page: the conversation fills the page under the top bar (its
 /// name and the conversation actions), the question box sits at the bottom.
@@ -112,50 +114,47 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   }
 
   /// The page's name in the top bar, after a back button when it was
-  /// opened as a page of its own (from a wiki page).
-  Widget _title() => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (ModalRoute.of(context)?.canPop ?? false)
-            SquareIconButton(
-              icon: Icons.arrow_back_sharp,
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              filled: true,
-              onPressed: () => Navigator.of(context).maybePop(),
-            ),
-          Flexible(child: TopBarTitle(title: context.t.aiTabAsk, code: 'ask')),
-        ],
-      );
+  /// opened as a page of its own (from a wiki page), or the button of the
+  /// conversations panel.
+  Widget _title() {
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (canPop)
+          SquareIconButton(
+            icon: Icons.arrow_back_sharp,
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            filled: true,
+            onPressed: () => Navigator.of(context).maybePop(),
+          )
+        else
+          const ConversationsButton(),
+        Flexible(child: TopBarTitle(title: context.t.aiTabAsk, code: 'ask')),
+      ],
+    );
+  }
 
-  /// The conversation actions in the top bar: the conversations, a new
-  /// conversation, and a menu with retry / clear.
+  /// The conversation actions in the top bar: a new conversation (the one
+  /// shown goes on answering in the background), and a menu with retry /
+  /// clear.
   Widget _buildActions(AppThemeTokens theme) {
-    final chatHistory = ref.watch(askChatProvider);
-    final chatNotifier = ref.read(askChatProvider.notifier);
-    final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
+    final key = ref.watch(shownAskProvider);
+    final (count, isSending) = ref.watch(askChatProvider(key).select(_shape));
+    final chatNotifier = ref.read(askChatProvider(key).notifier);
     return Row(
       key: const ValueKey('ask-floating-actions'),
       mainAxisSize: MainAxisSize.min,
       children: [
         SquareIconButton(
-          key: const ValueKey('ask-chat-history'),
-          onPressed: isSending
-              ? null
-              : () => Navigator.of(context).push(
-                    smoothPageRoute<void>(
-                      builder: (_) => const ChatHistoryPage(),
-                    ),
-                  ),
-          tooltip: context.t.aiHistoryTitle,
-          icon: Icons.history_sharp,
-        ),
-        SquareIconButton(
           key: const ValueKey('ask-new-conversation'),
-          onPressed: isSending ? null : chatNotifier.newSession,
+          onPressed: count == 0
+              ? null
+              : ref.read(askSessionsProvider.notifier).startNew,
           tooltip: context.t.aiNewConversation,
           icon: Icons.add_comment_outlined,
         ),
-        if (chatHistory.isNotEmpty)
+        if (count > 0)
           PopupMenuButton<String>(
             tooltip: context.t.aiMoreActions,
             icon: const Icon(Icons.more_vert_sharp),
@@ -220,13 +219,17 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   /// The conversation (under the top bar) and the question box. Touching the
   /// conversation moves the focus off the question box ([_chatFocus]).
   Widget _buildAskTab(AppThemeTokens theme) {
-    final chatHistory = ref.watch(askChatProvider);
-    final chatNotifier = ref.read(askChatProvider.notifier);
-    final isSending = chatHistory.isNotEmpty && chatHistory.last.isStreaming;
+    final key = ref.watch(shownAskProvider);
+    final (count, isSending) = ref.watch(askChatProvider(key).select(_shape));
+    final chatNotifier = ref.read(askChatProvider(key).notifier);
 
-    ref.listen(askChatProvider, (prev, next) {
+    ref.listen(askChatProvider(key), (prev, next) {
       // A new question (not a streaming update): bring it into view once.
       if ((prev?.length ?? 0) < next.length) _scrollToBottom(afterFrame: true);
+    });
+    // Another conversation shown: its end in view.
+    ref.listen(shownAskProvider, (_, __) {
+      _scrollToBottom(afterFrame: true);
     });
 
     // The list scrolls under the top bar and the question box; its padding
@@ -243,9 +246,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 onPointerDown: (_) {
                   if (!_chatFocus.hasFocus) _chatFocus.requestFocus();
                 },
-                child: chatHistory.isEmpty
+                child: count == 0
                     ? _buildEmptyState(theme)
-                    : _buildChatList(theme, chatHistory),
+                    : _buildChatList(theme, count),
               ),
             ),
           ),
@@ -278,7 +281,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   }
 
   /// The messages, with the ↓ button while the end is out of view.
-  Widget _buildChatList(AppThemeTokens theme, List<ChatMessage> chatHistory) {
+  Widget _buildChatList(AppThemeTokens theme, int count) {
     final top = MediaQuery.paddingOf(context).top + topBarInset;
     return Stack(
       children: [
@@ -296,10 +299,8 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                 16,
                 12 + _composerHeight,
               ),
-              itemCount: chatHistory.length,
-              itemBuilder: (context, index) {
-                return ChatBubble(message: chatHistory[index]);
-              },
+              itemCount: count,
+              itemBuilder: (context, index) => _MessageAt(index),
             ),
           ),
         ),
@@ -344,14 +345,19 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'ASK',
-                  style: sairaStyle(
-                    size: 56,
-                    weight: 800,
-                    width: 125,
-                    color: theme.textPrimary,
-                    height: 1,
+                // One line on a narrow phone: shrinks rather than wraps.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'JUST ASK.',
+                    style: sairaStyle(
+                      size: 56,
+                      weight: 800,
+                      width: 125,
+                      color: theme.textPrimary,
+                      height: 1,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -431,12 +437,38 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  void _handleAskSend() {
+  Future<void> _handleAskSend() async {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
 
     _inputController.clear();
-    ref.read(askChatProvider.notifier).sendMessage(text);
+    // The first question: why the app asks to run in the background, before
+    // the answer that needs it.
+    await explainBackgroundOnce(context, ref);
+    if (!mounted) return;
+    unawaited(
+      ref.read(askChatProvider(ref.read(shownAskProvider)).notifier)
+          .sendMessage(text),
+    );
+  }
+
+  bool _backgroundChecked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A reader who has asked before is told once, when Ask is first shown
+    // (hidden tabs have their tickers off).
+    if (_backgroundChecked || !TickerMode.valuesOf(context).enabled) return;
+    _backgroundChecked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final saved = await ref
+          .read(chatSessionStoreProvider)
+          .count()
+          .catchError((Object _) => 0);
+      if (saved > 0 && mounted) await explainBackgroundOnce(context, ref);
+    });
   }
 
   Future<void> _confirmClearHistory(AskChatNotifier notifier) async {
@@ -449,6 +481,31 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       danger: true,
     );
     if (ok) notifier.clearChat();
+  }
+}
+
+/// What the page itself shows of the conversation: how many messages, and
+/// whether the last one is still being written. A streaming answer changes
+/// its message many times a second; only that message's bubble rebuilds
+/// ([_MessageAt]), not the page, the question box or the other bubbles.
+(int, bool) _shape(List<ChatMessage> messages) =>
+    (messages.length, messages.isNotEmpty && messages.last.isStreaming);
+
+/// The bubble of the message at [index], rebuilt when that message changes
+/// (an unchanged message is the same object, see `updateMessage`).
+class _MessageAt extends ConsumerWidget {
+  const _MessageAt(this.index);
+
+  final int index;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final message = ref.watch(
+      askChatProvider(ref.watch(shownAskProvider))
+          .select((s) => index < s.length ? s[index] : null),
+    );
+    if (message == null) return const SizedBox.shrink();
+    return ChatBubble(key: ValueKey(message.id), message: message);
   }
 }
 

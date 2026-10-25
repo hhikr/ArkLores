@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The light theme's paper (EndfieldThemeTokens.bgPrimary). -->
+    <color name="ic_launcher_background">#F4F4F2</color>
+    <!-- Behind the app while it starts: the paper of the theme the system
+         is in (the app draws its own opening, LaunchCurtain, on it). -->
+    <color name="splash_paper">#F4F4F2</color>
+</resources>

@@ -1,6 +1,5 @@
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/chat_session_models.dart';
-import 'package:arklores/core/agent/chat_session_store.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/ai/chat_history_page.dart';
 import 'package:arklores/main.dart';
@@ -11,11 +10,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/memory_chat_store.dart';
+
 void main() {
-  late _FakeChatSessionStore store;
+  late MemoryChatSessionStore store;
 
   setUp(() {
-    store = _FakeChatSessionStore();
+    store = MemoryChatSessionStore();
   });
 
   Future<void> saveSampleSessions() async {
@@ -152,11 +153,11 @@ void main() {
 
     expect(find.byType(ChatHistoryPage), findsNothing);
     final container = containerOf(tester);
-    final messages = container.read(askChatProvider);
+    final messages = container.read(askChatProvider(container.read(shownAskProvider)));
     expect(messages, hasLength(2));
     expect(messages[0].content, '特蕾西娅之死是谁造成的？');
     expect(messages[1].content, '博士是下手者。');
-    expect(container.read(askChatProvider.notifier).currentSessionId, 's1');
+    expect(container.read(askChatProvider(container.read(shownAskProvider)).notifier).currentSessionId, 's1');
 
     // Back in the list it is the marked one; the other is still there.
     await tester.tap(find.text('open'));
@@ -172,8 +173,8 @@ void main() {
     // Opening another one switches; the first stays in its file.
     await tester.tap(find.text('阿米娅是谁'));
     await tester.pumpAndSettle();
-    expect(container.read(askChatProvider.notifier).currentSessionId, 's2');
-    expect(container.read(askChatProvider).first.content, '阿米娅是谁');
+    expect(container.read(askChatProvider(container.read(shownAskProvider)).notifier).currentSessionId, 's2');
+    expect(container.read(askChatProvider(container.read(shownAskProvider))).first.content, '阿米娅是谁');
     expect(store.sessions.keys, containsAll(['s1', 's2']));
   });
 
@@ -199,7 +200,7 @@ void main() {
     await tester.tap(find.text('阿米娅是谁'));
     await tester.pumpAndSettle();
     final container = containerOf(tester);
-    expect(container.read(askChatProvider), isNotEmpty);
+    expect(container.read(askChatProvider(container.read(shownAskProvider))), isNotEmpty);
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
@@ -208,8 +209,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat-history-delete-confirm')));
     await tester.pumpAndSettle();
 
-    expect(container.read(askChatProvider), isEmpty);
-    expect(container.read(askChatProvider.notifier).currentSessionId, isNull);
+    expect(container.read(askChatProvider(container.read(shownAskProvider))), isEmpty);
+    expect(container.read(askChatProvider(container.read(shownAskProvider)).notifier).currentSessionId, isNull);
     expect(find.byKey(const ValueKey('chat-history-current')), findsNothing);
     expect(store.sessions.keys, ['s1']);
   });
@@ -248,46 +249,4 @@ void main() {
     expect(find.text('对话 10'), findsOneWidget);
     expect(find.text('对话 11'), findsNothing);
   });
-}
-
-/// In-memory store: widget tests run under FakeAsync where real file IO never
-/// completes, so every store method resolves immediately.
-class _FakeChatSessionStore extends ChatSessionStore {
-  final Map<String, ChatSessionFile> sessions = {};
-
-  @override
-  Future<void> save(ChatSessionFile session) async {
-    sessions[session.sessionId] = session;
-  }
-
-  @override
-  Future<ChatSessionFile?> load(String sessionId) async => sessions[sessionId];
-
-  @override
-  Future<List<ChatSessionSummary>> list() async {
-    final summaries = [
-      for (final session in sessions.values)
-        ChatSessionSummary(
-          sessionId: session.sessionId,
-          title: session.title,
-          updatedAt: session.updatedAt,
-          createdAt: session.createdAt,
-          turnCount: session.turnCount,
-          lastQuery: session.lastQuery,
-        ),
-    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return summaries;
-  }
-
-  @override
-  Future<int> count() async => sessions.length;
-
-  @override
-  Future<List<ChatSessionSummary>> page(int page, int size) async =>
-      (await list()).skip(page * size).take(size).toList();
-
-  @override
-  Future<bool> delete(String sessionId) async {
-    return sessions.remove(sessionId) != null;
-  }
 }
