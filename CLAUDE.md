@@ -4,8 +4,8 @@
 + 工具型问答 Agent（`LoreAgentLoop`，直接查库作答，代码核对出处）。向量、目录、梗概只作定位线索，不作证据。
 
 - **已发布**：v0.19.0（2026-10-25，Android build 41，Quality of Life 更新：流畅度、多对话、设置分类与检索修正，只有 APK）；v0.18.0（2026-10-23，Android build 40，补充资料与《大地巡旅》）；
-  v0.17.1（2026-10-23，Android build 39）；三版都只有 APK，知识库仍是 v0.17.0 上的资产。v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
-  终末地库（2026-10-18 客户端）按任务步骤排列、加了过场台词与段首梗概（渠道 `min_app_build` 仍是 37）；`tools/release_gamedata.env` 与 `gamedata-channel` 上的渠道文件指向 v0.17.0。
+  v0.17.1（2026-10-23，Android build 39）；三版都只有 APK。**官方知识库 2026-10-25 起只放在 `gamedata-channel` Release 上**（v0.10.0–v0.16.0 上的旧知识库与 `gamedata-20261020` 已删，tag 都在；v0.17.0 上的同一份留作备用地址）。v0.17.0（正式版，2026-10-22，Android build 38，全 App 新界面）：APK + 两个知识库 + 源码。两个库与 v0.16.0 同一份：明日方舟库与 v0.15.x 同一份（上游 `17759cc`）；
+  终末地库（2026-10-18 客户端）按任务步骤排列、加了过场台词与段首梗概（渠道 `min_app_build` 仍是 37）；`tools/release_gamedata.env` 与渠道文件指向 `gamedata-channel` 上的文件。
   v0.10.0 之前的 Release 已删（tag 都保留）；`release/v<版本>` 分支在发版后删掉（tag 指向同一提交）。
   0.19.0 从分支 `fix/qa-retrieval-evidence` 发出，经 PR #23 合回 `main`；下一轮从合并后的 `main` 开新分支（推之前先确认 PR 没有合并）。
 - 未经开发者明确同意不发版。真实 API 测试（模型与向量）：测试模型用 glm-5.3-flash；预计一轮总消耗 ≤150 万 token 直接跑，超过先问（开发者 2026-10-19）。Android build 号每次发版递增。
@@ -163,8 +163,10 @@
 
 - APK 由 GitHub Actions 构建签名：推 `release/<版本>` 触发 `android-release.yml`（证书 SHA-256 `b1b09ebf…e364`）。
   一条命令：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`（Linux/云端 `tools/release_app.sh`）。云端不能建 Release（403）。
-- 知识库资产的 URL/SHA 在 `tools/release_gamedata.env`，**先指向将要创建的 Release** 再构建 APK；资产 gz 与 manifest 另行上传。
-  上传后用 `tools/write_gamedata_channel.dart` 写渠道文件，替换 `gamedata-channel` Release 上的那份（App 由它发现只上传、没随版本发的新库）。详见 `docs/ANDROID_SETUP_GUIDE.md`。
+- **知识库只放在固定的 `gamedata-channel` Release 上**（开发者 2026-10-25 定）：App 每次打开知识库页都读那里的渠道文件，从那里检查和下载。
+  更新时 `tools/publish_gamedata.ps1` 原地替换文件并重写渠道文件；`tools/release_gamedata.env` 的 URL 固定指向那里，只改 SHA、提交与日期、`GAMEDATA_MIN_APP_BUILD`。
+  App 的 Release 只放 APK 与 `.sha256`，说明末尾一行指向知识库 Release。不要再把知识库传到 App 的 Release 或另建 `gamedata-<日期>` Release。详见 `docs/GAMEDATA_BUILD_PIPELINE.md` §7。
+- 发版前先 `git fetch`，确认 `origin/main` 没有本分支之外的提交（别的会话可能已经发过版，0.19.0 时就是这样）。
 - `release/<版本>` 分支只放构建 APK 的那一个提交：再推会重新构建，APK 哈希会变。
 - 本地 `flutter build apk --release` 没有签名文件时退回 debug key，不能发布。本机试装用 `tools/install_local.ps1 -Build -Kb`。
 

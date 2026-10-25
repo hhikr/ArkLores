@@ -23,7 +23,7 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 .\tools\install_local.ps1 -DryRun
 ```
 
-知识库默认是 `build\gamedata_rebuild\arklores_gamedata_zh.db.gz`（现行官方资产 `gamedata-20261020` 的那份；`-KbFile <gz>` 指定别的；终末地固定是 `build\endfield\arklores_endfield_zh.db.gz`），
+知识库默认是 `build\gamedata_rebuild\arklores_gamedata_zh.db.gz`（与 `gamedata-channel` 上的现行官方库同一份；`-KbFile <gz>` 指定别的；终末地固定是 `build\endfield\arklores_endfield_zh.db.gz`），
 被拷成应用目录里的 `arklores_gamedata_zh.db.download.gz`；打开 设置 → 知识库，
 点“下载”即离线校验 SHA 并安装。**APK 必须是用这个 gz 的 SHA 构建的**（改了知识库就先改 `release_gamedata.env` 再 `-Build`；库所基于的上游提交变了，`GAMEDATA_DB_COMMIT` / `GAMEDATA_DB_COMMIT_DATE` 也要改，见 `GAMEDATA_BUILD_PIPELINE.md` §7）。
 
@@ -78,14 +78,14 @@ App 只认校验值与构建时写进去的一致的库，所以要连包一起�
 
 ## 发布（开发者明确同意后）
 
-1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.15.0 是 35）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
-2. 知识库有变化：按 `GAMEDATA_BUILD_PIPELINE.md` §7 准备资产，`tools/release_gamedata.env` 指向将要创建的 Release。
-3. 工作区干净（`coverage/` 已 gitignore），提交并推送功能分支。
-4. `.\tools\release_app.ps1 -Version <v> -NotesFile <说明.md> [-Stable]`（Linux/云端：`tools/release_app.sh`，`STABLE=1`）：
-   推 `release/v<v>` → `android-release.yml` 构建签名并校验证书指纹 `b1b09ebf…e364` → 下载 APK → 建 Release 并上传 APK。
-5. 上传两个知识库的 gz 与 manifest 到同一个 Release（知识库没变也照传，一个 Release 带齐 APK、两个知识库和源码）；用公开地址 HEAD 一次确认 200。
-   然后 `dart run tools/write_gamedata_channel.dart`，用生成的 `build/gamedata_channel.json` 替换 `gamedata-channel` Release 上的同名资产（`GAMEDATA_BUILD_PIPELINE.md` §7）。
-   只更新知识库、不发 App 时，传完库后只换这份文件即可。
+1. 改 `pubspec.yaml` 版本（Android build 号递增，v0.19.0 是 41）与 `lib/shared/app_version.dart`，更新 CHANGELOG 与文档。
+2. 先 `git fetch`，确认 `origin/main` 没有这条分支之外的新提交（别的会话可能已经发过版），有就先合进来再跑测试。
+3. 知识库有变化：按 `GAMEDATA_BUILD_PIPELINE.md` §7 先发布知识库（`tools/publish_gamedata.ps1`，原地替换 `gamedata-channel` Release 上的文件）。
+   知识库只放在那里，App 的 Release 不带知识库。
+4. 工作区干净（`coverage/` 已 gitignore），提交并推送功能分支。
+5. `.\tools\release_app.ps1 -Version <v> -NotesFile <说明.md> [-Stable]`（Linux/云端：`tools/release_app.sh`，`STABLE=1`）：
+   推 `release/v<v>` → `android-release.yml` 构建签名并校验证书指纹 `b1b09ebf…e364` → 下载 APK → 建 Release，上传 APK 和 `.sha256`。
+   说明的格式：第一段一句话说这一版是什么；接着按方面分节；末尾 `---` 后一行“知识库：统一放在 [知识库（App 从这里检查更新）](…/releases/tag/gamedata-channel)……”，再一行 APK 的 SHA-256。
 6. 开 PR 把功能分支合回 `main`（开发者合并）；合并后删掉功能分支；撤下被正式版取代的预发布（Release 与 tag）；删掉 `release/v<v>` 分支（tag 指向同一提交）。
 
 建 Release 的请求失败（v0.11.0 遇到 GitHub 500）时：APK 已在 `%TEMP%\arklores_release_<v>`，用 REST 补建 Release 并上传，不要重推 release 分支

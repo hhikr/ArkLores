@@ -10,7 +10,7 @@
 #   1. pushes the commit to release/v<version> (triggers android-release.yml,
 #      which builds and signs the APK and checks the certificate),
 #   2. waits for that run, downloads the APK artifact,
-#   3. creates the release v<version> with ArkLores-<version>.apk.
+#   3. creates the release v<version> with ArkLores-<version>.apk and its .sha256.
 # release/v<version> must not exist yet: a second push rebuilds the APK and
 # changes its hash.
 set -euo pipefail
@@ -57,7 +57,9 @@ apk="$(find "$tmp" -name '*.apk' | head -n 1)"
 named="$tmp/ArkLores-$ver.apk"
 [ "$apk" = "$named" ] || mv "$apk" "$named"
 echo "APK: $(stat -c %s "$named") bytes, SHA-256 $(sha256sum "$named" | awk '{print $1}')"
+# The APK and its SHA-256, nothing else (knowledge bases: gamedata-channel).
+(cd "$tmp" && sha256sum "ArkLores-$ver.apk" > "ArkLores-$ver.apk.sha256")
 
-gh release create "v$ver" "$named" -R "$repo" --target "$sha" \
+gh release create "v$ver" "$named" "$named.sha256" -R "$repo" --target "$sha" \
   --title "v$ver" ${STABLE:+--latest} ${STABLE:---prerelease} --notes-file "$notes"
 echo "https://github.com/$repo/releases/tag/v$ver"
