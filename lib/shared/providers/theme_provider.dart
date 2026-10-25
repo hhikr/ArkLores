@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show Brightness, PlatformDispatcher;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/app_theme.dart';
 import '../theme/ark_theme_tokens.dart';
 import '../theme/endfield_theme_tokens.dart';
+import '../theme/system_night_mode.dart';
 
 /// The theme choice the user saved: dark ([ark]), light ([endfield]), or
 /// whichever the system is in ([system]).
@@ -16,8 +18,8 @@ enum AppTheme {
 
 /// The font of long reading text (stories, profiles, answers).
 enum ReadingFont {
-  /// The Chinese sans of the interface.
-  sans(null),
+  /// Noto Sans SC (思源黑体, bundled), the Chinese of the interface.
+  sans('NotoSansSC'),
 
   /// LXGW WenKai Screen (bundled).
   kai('LXGWWenKaiScreen');
@@ -91,6 +93,8 @@ class ThemeNotifier extends StateNotifier<AppThemeTokens> {
 
   void switchTo(AppTheme theme) {
     _choice = theme;
+    // The next start's splash in the same light or dark.
+    unawaited(syncSystemNightMode(theme));
     if (theme == AppTheme.system) _follow();
     state = _resolve(theme, _font);
   }

@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Plain paper until the app's first frame: the opening is drawn by the
+     app (LaunchCurtain). -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
-        <shape android:shape="rectangle">
-            <solid android:color="#F4F5F2" />
-        </shape>
-    </item>
-
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/launch_logo" />
-    </item>
+    <item android:drawable="@color/splash_paper" />
 </layer-list>

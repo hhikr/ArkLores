@@ -193,7 +193,7 @@ void main() {
               chatBaseUrl: 'https://example.com/v1',
             ),
           ),
-          askChatProvider.overrideWith((ref) => fake),
+          askChatProvider.overrideWith((ref, key) => fake),
         ],
         child: PhoneBridgeHost(
           port: server.port,

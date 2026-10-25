@@ -108,16 +108,10 @@ abstract class AppThemeTokens {
   bool get isDark;
 }
 
-/// The Chinese sans the interface falls back to after Saira: the system's
-/// CJK sans on each platform (Noto Sans CJK on Android, PingFang on iOS).
-const List<String> cjkSansFallback = [
-  'Noto Sans SC',
-  'Noto Sans CJK SC',
-  'Source Han Sans SC',
-  'PingFang SC',
-  'Microsoft YaHei',
-  'sans-serif',
-];
+/// The Chinese sans the interface falls back to after Saira: the bundled
+/// Noto Sans SC (思源黑体, variable weight, so a heading's weight is the
+/// same on every phone); the system's own only for what it lacks.
+const List<String> cjkSansFallback = ['NotoSansSC', 'sans-serif'];
 
 /// The interface face: Saira, a variable font whose weight and width are
 /// set through its axes (a plain `fontWeight` does not change its glyphs).
@@ -148,6 +142,26 @@ TextStyle sairaStyle({
 FontWeight _weightOf(double w) =>
     FontWeight.values[((w / 100).round() - 1).clamp(0, 8)];
 
+/// The in-world script of Arknights and Endfield (EndfieldByButan, see
+/// assets/fonts/README.md): Latin letters, digits and a little punctuation
+/// as its glyphs, nothing else (Chinese falls back to the interface face).
+/// Decoration only: the small labels over headings and tabs, never text
+/// that has to be read.
+TextStyle cipherStyle({
+  double size = 12,
+  Color? color,
+  double? height,
+  double spacing = 0,
+}) =>
+    TextStyle(
+      fontFamily: 'EndfieldCipher',
+      fontFamilyFallback: const ['Saira', ...cjkSansFallback],
+      fontSize: size,
+      color: color,
+      height: height,
+      letterSpacing: spacing == 0 ? null : spacing * size,
+    );
+
 /// Type roles, read off the theme so the colours follow it.
 extension AppType on AppThemeTokens {
   /// Interface text in Saira (buttons, labels, headings).
@@ -166,10 +180,21 @@ extension AppType on AppThemeTokens {
         height: height,
       );
 
-  /// The small wide upper-case label over a heading (`// RECORDS`).
-  TextStyle eyebrow({Color? color, double size = 12}) => sairaStyle(
+  /// The small upper-case label over a heading (`RECORDS`) or a tab:
+  /// decoration, in the in-world script ([cipherStyle]); what it says is
+  /// also said in Chinese next to it.
+  TextStyle eyebrow({Color? color, double size = 12}) => cipherStyle(
         size: size,
-        weight: 600,
+        color: color ?? textSecondary,
+        spacing: 0.12,
+        height: 1.2,
+      );
+
+  /// A small wide upper-case label that is read (not decoration): Saira at
+  /// its heaviest, wide, the Chinese bold beside it.
+  TextStyle label({Color? color, double size = 12}) => sairaStyle(
+        size: size,
+        weight: 800,
         width: 125,
         color: color ?? textSecondary,
         spacing: 0.12,
@@ -187,10 +212,11 @@ extension AppType on AppThemeTokens {
         height: 1.4,
       );
 
-  /// A heading in bold Chinese.
+  /// A heading in bold Chinese; a page's big title (22 and up) in the
+  /// heaviest weight, like the games' big white captions.
   TextStyle heading(double size, {Color? color}) => sairaStyle(
         size: size,
-        weight: 700,
+        weight: size >= 22 ? 900 : 700,
         color: color ?? textPrimary,
         height: 1.3,
       );

@@ -99,6 +99,7 @@ void main() {
     final busy = OpenAICompatibleEmbeddingClient(
       config: _config,
       maxRetries: 1,
+      retryDelay: Duration.zero,
       httpClient: MockClient((request) async {
         calls++;
         return calls == 1 ? http.Response('busy', 429) : _vectors(request);

@@ -7,7 +7,7 @@
 
 ```powershell
 flutter analyze
-flutter test        # 约 1–3 分钟，全部离线
+flutter test --concurrency=2   # 约 1 分钟，全部离线
 ```
 
 守卫测试（随 `flutter test` 运行）：
@@ -18,7 +18,7 @@ flutter test        # 约 1–3 分钟，全部离线
 - `test/core/agent/lore_agent_loop_test.dart`：提示词与工具说明里没有具体人物/章节/活动名和剧情手法名。
 - `test/shared/app_version_test.dart`：`app_version.dart` 与 `pubspec.yaml` 一致。
 
-`test/live/scratch/` 是本地探针（不提交），有的已编译不过，全量测试会报一个加载失败，与改动无关。
+本地探针（对真实库的一次性测量、截图）放 `notes/probes/`（不提交、不在 `test/` 下，全量测试不编译它们），用 `flutter test notes/probes/<文件>` 单独跑。
 
 ## 2. 改了建库代码
 

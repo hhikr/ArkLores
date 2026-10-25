@@ -11,16 +11,55 @@ import 'settings_service.dart';
 
 /// The Wiki sites shown on the Wiki tab: add, edit, delete, reset. Deleting
 /// and resetting ask first.
-class WikiSourcesSettingsPage extends ConsumerStatefulWidget {
+class WikiSourcesSettingsPage extends ConsumerWidget {
   const WikiSourcesSettingsPage({super.key});
 
+  Future<void> _resetSites(BuildContext context, WidgetRef ref) async {
+    final ok = await confirmAction(
+      context,
+      title: context.t.wikiSourcesReset,
+      message: context.t.wikiSourcesResetConfirm,
+      confirm: context.t.wikiSourcesReset,
+      cancel: context.t.wikiSourcesCancel,
+      danger: true,
+    );
+    if (!ok) return;
+    await ref.read(settingsServiceProvider).resetWikiSites();
+    // The list reads the sites again.
+    ref.read(wikiSourcesRevisionProvider.notifier).state++;
+  }
+
   @override
-  ConsumerState<WikiSourcesSettingsPage> createState() =>
-      _WikiSourcesSettingsPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PageScaffold(
+      title: context.t.settingsWikiSources,
+      scrollUnder: true,
+      actions: [
+        SquareIconButton(
+          tooltip: context.t.wikiSourcesReset,
+          icon: Icons.restore_sharp,
+          onPressed: () => _resetSites(context, ref),
+        ),
+      ],
+      body: ListView(
+        padding: pagePadding(context, const EdgeInsets.fromLTRB(16, 16, 16, 32)),
+        children: const [WikiSourcesList()],
+      ),
+    );
+  }
 }
 
-class _WikiSourcesSettingsPageState
-    extends ConsumerState<WikiSourcesSettingsPage> {
+/// The saved Wiki sites as rows (name, address, edit, delete) and a button
+/// that adds one; every change is saved at once. On the settings page and
+/// in the onboarding.
+class WikiSourcesList extends ConsumerStatefulWidget {
+  const WikiSourcesList({super.key});
+
+  @override
+  ConsumerState<WikiSourcesList> createState() => _WikiSourcesListState();
+}
+
+class _WikiSourcesListState extends ConsumerState<WikiSourcesList> {
   var _sites = <WikiSiteConfig>[];
   var _loading = true;
 
@@ -40,25 +79,9 @@ class _WikiSourcesSettingsPageState
   }
 
   Future<void> _saveSites(List<WikiSiteConfig> sites) async {
+    setState(() => _sites = sites);
     await ref.read(settingsServiceProvider).saveWikiSites(sites);
     ref.read(wikiSourcesRevisionProvider.notifier).state++;
-    if (!mounted) return;
-    setState(() => _sites = sites);
-  }
-
-  Future<void> _resetSites() async {
-    final ok = await confirmAction(
-      context,
-      title: context.t.wikiSourcesReset,
-      message: context.t.wikiSourcesResetConfirm,
-      confirm: context.t.wikiSourcesReset,
-      cancel: context.t.wikiSourcesCancel,
-      danger: true,
-    );
-    if (!ok) return;
-    await ref.read(settingsServiceProvider).resetWikiSites();
-    ref.read(wikiSourcesRevisionProvider.notifier).state++;
-    await _loadSites();
   }
 
   Future<void> _editSite({WikiSiteConfig? site, int? index}) async {
@@ -95,23 +118,12 @@ class _WikiSourcesSettingsPageState
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    return PageScaffold(
-      title: context.t.settingsWikiSources,
-      scrollUnder: true,
-      actions: [
-        SquareIconButton(
-          tooltip: context.t.wikiSourcesReset,
-          icon: Icons.restore_sharp,
-          onPressed: _resetSites,
-        ),
-      ],
-      body: _loading
+    // Reset on the settings page (or a change elsewhere): read them again.
+    ref.listen<int>(wikiSourcesRevisionProvider, (_, __) => _loadSites());
+    return _loading
           ? const LoadingView()
-          : ListView(
-              padding: pagePadding(
-                context,
-                const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              ),
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final (index, site) in _sites.indexed) ...[
                   Divider(height: 1, color: theme.divider),
@@ -183,8 +195,7 @@ class _WikiSourcesSettingsPageState
                   onPressed: () => _editSite(),
                 ),
               ],
-            ),
-    );
+            );
   }
 }
 

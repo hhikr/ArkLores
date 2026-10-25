@@ -16,6 +16,11 @@
 
 只修改站点已经定义的主题状态，不对第三方页面做全量反色。桥接脚本在 WebView 的 document-start 运行，并把当前模式短暂存在 sessionStorage，减少导航与重载时的白闪。
 
+页面深浅跟 App 主题（开发者 2026-10-24）：
+- 工具盘里的“深色页面”可以手动切换，切换后保存，在 App 主题下一次变深或变浅之前一直有效。主题变化时，手动切换的结果被覆盖，页面重新跟随主题；主题是手动改的还是跟着系统变的都一样。
+- 手动切回和主题一致时，等于重新跟随。
+- 启动时，存下的切换只有和当前主题相反才生效；如果与当前主题相同，说明 App 关着的时候主题变过了，由主题决定。
+
 - **PRTS**：只在 `html` 与 `body` 上切 `skin-theme-clientpref-night` / `-day`（去掉 `-os`），document-start 时先切 `html`；不注入任何样式（2026-10-17 起）。站点改了切换方式时要跟着改；没在真机上核对。
 - **fz.wiki**：站点自己维护 `endfield-wiki-theme` localStorage，根节点用 `data-theme="light|dark"`；只设置这个属性、同步持久化状态与 `theme-color`。
 - **Warfarin**：CSS 用 `.dark` 切换一组语义变量；只切 `html.dark`、设置 `color-scheme` 与 `theme-color`，不直接覆盖变量。

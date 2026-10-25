@@ -301,14 +301,17 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _toggle(count, collections.join(' / ')),
+        // As FoldSection: snap open, the card its own layer.
         AnimatedSize(
           duration: Motion.of(context, Motion.wipe),
-          curve: Motion.mech,
+          curve: _open ? Motion.snap : Motion.mech,
           alignment: Alignment.topLeft,
           child: _open
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: _card(context),
+              ? RepaintBoundary(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: _card(context),
+                  ),
                 )
               : const SizedBox(width: double.infinity),
         ),
@@ -319,70 +322,79 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
   Widget _toggle(int count, String collections) => Semantics(
         button: true,
         expanded: _open,
-        child: GestureDetector(
-          key: const ValueKey('evidence-toggle'),
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            HapticFeedback.selectionClick();
-            setState(() => _open = !_open);
-          },
-          child: Padding(
-            // 44 to the finger.
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 36),
-              padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-              decoration: ShapeDecoration(
-                color: _open ? theme.accentPrimary : theme.surfaceElevated,
-                shape: const CutBorder.br(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.menu_book_sharp,
-                    size: 16,
-                    color: _open ? theme.onAccent : theme.textPrimary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    context.t.aiCitationSources(count),
-                    style: theme.ui(
-                      13,
-                      weight: 700,
+        child: PressBuilder(
+          builder: (context, down) => GestureDetector(
+            key: const ValueKey('evidence-toggle'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _open = !_open);
+            },
+            child: Padding(
+              // 44 to the finger.
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: AnimatedContainer(
+                duration: Motion.of(context, Motion.press),
+                curve: Motion.mech,
+                constraints: const BoxConstraints(minHeight: 36),
+                padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
+                decoration: ShapeDecoration(
+                  color: down
+                      ? pressTint(_toggleGround, theme.textPrimary)
+                      : _toggleGround,
+                  shape: const CutBorder.br(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.menu_book_sharp,
+                      size: 16,
                       color: _open ? theme.onAccent : theme.textPrimary,
                     ),
-                  ),
-                  if (collections.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        collections,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.text(
-                          13,
-                          color: _open ? theme.onAccent : theme.textSecondary,
+                    const SizedBox(width: 6),
+                    Text(
+                      context.t.aiCitationSources(count),
+                      style: theme.ui(
+                        13,
+                        weight: 700,
+                        color: _open ? theme.onAccent : theme.textPrimary,
+                      ),
+                    ),
+                    if (collections.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          collections,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.text(
+                            13,
+                            color: _open ? theme.onAccent : theme.textSecondary,
+                          ),
                         ),
+                      ),
+                    ],
+                    AnimatedRotation(
+                      turns: _open ? 0.5 : 0,
+                      duration: Motion.of(context, Motion.wipe),
+                      curve: Motion.mech,
+                      child: Icon(
+                        Icons.expand_more_sharp,
+                        size: 18,
+                        color: _open ? theme.onAccent : theme.textSecondary,
                       ),
                     ),
                   ],
-                  AnimatedRotation(
-                    turns: _open ? 0.5 : 0,
-                    duration: Motion.of(context, Motion.wipe),
-                    curve: Motion.mech,
-                    child: Icon(
-                      Icons.expand_more_sharp,
-                      size: 18,
-                      color: _open ? theme.onAccent : theme.textSecondary,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
       );
+
+  Color get _toggleGround =>
+      _open ? theme.accentPrimary : theme.surfaceElevated;
 
   /// The block's stories grouped by collection (first-cited order), the
   /// chapters of one collection in story order.
@@ -608,38 +620,44 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
         triggerMode: TooltipTriggerMode.longPress,
         child: Semantics(
           button: true,
-          child: GestureDetector(
-            key: ValueKey(key),
-            behavior: HitTestBehavior.opaque,
-            onTap: withHaptic(onTap),
-            child: Padding(
-              // 44 to the finger.
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 36),
-                padding: const EdgeInsets.fromLTRB(9, 6, 10, 6),
-                decoration: ShapeDecoration(
-                  color: theme.surfaceElevated,
-                  shape: const CutBorder.br(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      text,
-                      style: theme.field(
-                        color: theme.textPrimary,
-                        size: 13,
-                        weight: 600,
+          child: PressBuilder(
+            builder: (context, down) => GestureDetector(
+              key: ValueKey(key),
+              behavior: HitTestBehavior.opaque,
+              onTap: withHaptic(onTap),
+              child: Padding(
+                // 44 to the finger.
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: AnimatedContainer(
+                  duration: Motion.of(context, Motion.press),
+                  curve: Motion.mech,
+                  constraints: const BoxConstraints(minHeight: 36),
+                  padding: const EdgeInsets.fromLTRB(9, 6, 10, 6),
+                  decoration: ShapeDecoration(
+                    color: down
+                        ? pressTint(theme.surfaceElevated, theme.textPrimary)
+                        : theme.surfaceElevated,
+                    shape: const CutBorder.br(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        text,
+                        style: theme.field(
+                          color: theme.textPrimary,
+                          size: 13,
+                          weight: 600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 2),
-                    Icon(
-                      Icons.chevron_right_sharp,
-                      size: 16,
-                      color: theme.textPrimary,
-                    ),
-                  ],
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_sharp,
+                        size: 16,
+                        color: theme.textPrimary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

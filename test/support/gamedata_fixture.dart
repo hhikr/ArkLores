@@ -2,6 +2,8 @@
 // (`createGamedataSchema`), never a hand-written copy: a copy drifts from the
 // real tables (other columns, another FTS tokenizer) and the tests then pass
 // on a database the app never sees.
+import 'dart:typed_data';
+
 import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart';
 import 'package:arklores/core/gamedata/story_vectors.dart';
@@ -27,11 +29,58 @@ Future<Database> createGameDataDb(
   bool vectors = false,
 }) async {
   final db = await databaseFactoryFfi.openDatabase(path);
+  await fastWrites(db);
   await createGamedataSchema(db);
   if (catalog) await db.execute(storyCatalogDdl);
   if (vectors) await db.execute(storyChunkVectorsDdl);
   await writeGamedataManifest(db, manifest);
   return db;
+}
+
+/// A test database is thrown away after the test: its writes skip the sync to
+/// disk and keep the rollback journal in memory. Committed one row at a time
+/// (as fixtures write), each insert otherwise waits for the disk, and a test
+/// that writes a thousand lines takes seconds, more on a busy machine.
+Future<void> fastWrites(Database db) async {
+  await db.rawQuery('PRAGMA journal_mode = MEMORY');
+  await db.execute('PRAGMA synchronous = OFF');
+}
+
+/// [databaseFactoryFfi] for code under test that opens its own database:
+/// every database it opens gets [fastWrites].
+final DatabaseFactory fastTestDatabaseFactory = _FastFactory(databaseFactoryFfi);
+
+class _FastFactory implements DatabaseFactory {
+  _FastFactory(this._inner);
+
+  final DatabaseFactory _inner;
+
+  @override
+  Future<Database> openDatabase(String path, {OpenDatabaseOptions? options}) async {
+    final db = await _inner.openDatabase(path, options: options);
+    await fastWrites(db);
+    return db;
+  }
+
+  @override
+  Future<bool> databaseExists(String path) => _inner.databaseExists(path);
+
+  @override
+  Future<void> deleteDatabase(String path) => _inner.deleteDatabase(path);
+
+  @override
+  Future<String> getDatabasesPath() => _inner.getDatabasesPath();
+
+  @override
+  Future<void> setDatabasesPath(String path) => _inner.setDatabasesPath(path);
+
+  @override
+  Future<Uint8List> readDatabaseBytes(String path) =>
+      _inner.readDatabaseBytes(path);
+
+  @override
+  Future<void> writeDatabaseBytes(String path, Uint8List bytes) =>
+      _inner.writeDatabaseBytes(path, bytes);
 }
 
 /// Inserts one story: its scope row and its lines. A line written
@@ -44,7 +93,8 @@ Future<void> insertStory(
   String? scopeId,
   String kind = 'dialogue',
 }) async {
-  await db.insert('story_scopes', {
+  final batch = db.batch();
+  batch.insert('story_scopes', {
     'story_id': storyId,
     'scope_type': scopeType,
     'scope_id': scopeId ?? storyId.split('/').reversed.skip(1).first,
@@ -54,7 +104,7 @@ Future<void> insertStory(
     final text = lines[i];
     final colon = text.indexOf('：');
     final speaker = colon > 0 && colon <= 12 ? text.substring(0, colon) : null;
-    await db.insert('story_lines', {
+    batch.insert('story_lines', {
       'id': '$storyId#$i',
       'game': gamedataGame,
       'story_id': storyId,
@@ -65,6 +115,7 @@ Future<void> insertStory(
       'kind': kind,
     });
   }
+  await batch.commit(noResult: true);
 }
 
 /// Inserts an entity with its canonical name and [aliases].

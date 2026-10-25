@@ -14,6 +14,7 @@ import 'package:arklores/core/library/library_queries.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../../../support/gamedata_fixture.dart' show fastWrites;
 import '../../../../support/sqlite.dart';
 import '../../../../support/temp_dir.dart';
 
@@ -392,6 +393,7 @@ void main() {
     final tablesDir = Directory('${dir.path}/tables')..createSync();
     writeTables(tablesDir);
     db = await databaseFactoryFfi.openDatabase('${dir.path}/ef.db');
+    await fastWrites(db);
     final writer = EndfieldWriter(db);
     await writer.createSchema(sourceVersion: 'test');
     final tables = EndfieldTables(tablesDir);

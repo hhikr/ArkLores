@@ -314,3 +314,13 @@ void invalidateReading(WidgetRef ref) {
     ..invalidate(readingPageProvider)
     ..invalidate(readingProgressProvider);
 }
+
+/// [invalidateReading] from where there is no [WidgetRef] (a page that is
+/// closing).
+void invalidateReadingIn(ProviderContainer container) {
+  container
+    ..invalidate(recentReadingProvider)
+    ..invalidate(readingCountProvider)
+    ..invalidate(readingPageProvider)
+    ..invalidate(readingProgressProvider);
+}

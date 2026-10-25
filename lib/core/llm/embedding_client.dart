@@ -77,11 +77,15 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 60),
     this.maxRetries = 4,
+    this.retryDelay = const Duration(milliseconds: 500),
   }) : _http = httpClient ?? http.Client();
 
   final EmbeddingConfig config;
   final Duration timeout;
   final int maxRetries;
+
+  /// The first wait before a retry; it doubles with each attempt.
+  final Duration retryDelay;
   final http.Client _http;
 
   /// Small cache for repeated query strings within a session.
@@ -124,7 +128,7 @@ class OpenAICompatibleEmbeddingClient implements EmbeddingClient {
     Object? lastError;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) {
-        await Future<void>.delayed(Duration(milliseconds: 500 * (1 << attempt)));
+        await Future<void>.delayed(retryDelay * (1 << attempt));
       }
       try {
         final response = await _http

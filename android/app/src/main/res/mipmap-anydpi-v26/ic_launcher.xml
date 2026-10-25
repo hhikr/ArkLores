@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An adaptive icon on the light theme's paper. No launcher shows a
+     transparent icon: a plain transparent PNG (mipmap-*/ic_launcher.png,
+     kept for Android 7 and older) is put on a white plate, and ColorOS fills
+     a transparent background layer with black. The foreground is
+     assets/app_icon/icon_foreground.png cropped to the art and scaled to
+     64/108 of the layer, inside the part every mask shows. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

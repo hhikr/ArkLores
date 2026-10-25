@@ -111,10 +111,6 @@ void main() {
       expect(await service.loadLocale(), SupportedLocale.zh);
       await service.saveLocale(SupportedLocale.en);
       expect(await service.loadLocale(), SupportedLocale.en);
-
-      expect(await service.loadAppLauncherIcon(), AppLauncherIcon.light);
-      await service.saveAppLauncherIcon(AppLauncherIcon.dark);
-      expect(await service.loadAppLauncherIcon(), AppLauncherIcon.dark);
     });
   });
 

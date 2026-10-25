@@ -66,6 +66,10 @@ class SeenLines {
     _call?.add(storyId, line);
   }
 
+  void addStoryLine(String storyId, StoryLineEntry line) {
+    if (isStoryEvidence(line.kind)) add(storyId, line.lineIndex);
+  }
+
   void addRange(String storyId, int first, int last) {
     final set = _lines.putIfAbsent(storyId, () => <int>{});
     for (var i = first; i <= last; i++) {
@@ -80,17 +84,17 @@ class SeenLines {
     if (set == null) return const [];
     final out = <(int, int)>[];
     int? start;
-    for (var i = first; i <= last && i - first < 1000; i++) {
-      if (set.contains(i)) {
-        start ??= i;
-      } else if (start != null) {
-        out.add((start, i - 1));
+    final sorted = set.where((i) => i >= first && i <= last).toList()..sort();
+    int? end;
+    for (final i in sorted) {
+      if (end != null && i != end + 1) {
+        out.add((start!, end));
         start = null;
       }
+      start ??= i;
+      end = i;
     }
-    if (start != null) {
-      out.add((start, last - first < 1000 ? last : first + 999));
-    }
+    if (start != null) out.add((start, end!));
     return out;
   }
 
@@ -136,8 +140,8 @@ class SeenLines {
   /// Whether every line of `first..last` was shown.
   bool covers(String storyId, int first, int last) {
     final set = _lines[storyId];
-    if (set == null) return false;
-    for (var i = first; i <= last && i - first < 1000; i++) {
+    if (set == null || last < first || last - first + 1 > set.length) return false;
+    for (var i = first; i <= last; i++) {
       if (!set.contains(i)) return false;
     }
     return true;
@@ -378,6 +382,36 @@ class SqlTool extends AgentTool {
         .replaceAll(_measured, '');
     final showsContent = _contentOrAll.hasMatch(list);
     final contentCol = showsContent ? 0 : -1;
+    final sourceKinds = <(String, int), String?>{};
+    if (storyCol >= 0 && lineCol >= 0 && showsContent) {
+      final byStory = <String, Set<int>>{};
+      for (final row in result.rows) {
+        final line = _int(row[lineCol]);
+        if (line != null) {
+          byStory.putIfAbsent('${row[storyCol]}', () => {}).add(line);
+        }
+      }
+      if (byStory.isNotEmpty) {
+        final where = byStory.entries.map((e) =>
+            "(story_id = '${e.key.replaceAll("'", "''")}' AND line_index IN (${e.value.join(',')}))",)
+            .join(' OR ');
+        // Validate against source rows even when SQL omits or aliases kind.
+        var sources = await store.readOnlySql(
+          'SELECT story_id, line_index, kind FROM story_lines WHERE $where',
+          maxRows: result.rows.length, game: game,
+        );
+        if (sources.error?.contains('no such column: kind') ?? false) {
+          sources = await store.readOnlySql(
+            'SELECT story_id, line_index FROM story_lines WHERE $where',
+            maxRows: result.rows.length, game: game,
+          );
+        }
+        for (final row in sources.rows) {
+          sourceKinds[('${row[0]}', _int(row[1])!)] =
+              row.length > 2 ? row[2] as String? : null;
+        }
+      }
+    }
     final wholeContent = columns.contains('content');
     final onlyId = idCol < 0 && result.rows.length == 1
         ? _idEquals.firstMatch(query)?.group(1)?.replaceFirst(_recordPrefix, '')
@@ -397,7 +431,11 @@ class SqlTool extends AgentTool {
       shown++;
       if (storyCol >= 0 && lineCol >= 0 && contentCol >= 0) {
         final line = _int(row[lineCol]);
-        if (line != null) seen.add('${row[storyCol]}', line);
+        final key = ('${row[storyCol]}', line);
+        if (line != null && sourceKinds.containsKey(key) &&
+            isStoryEvidence(sourceKinds[key])) {
+          seen.add('${row[storyCol]}', line);
+        }
       }
       // A record shown with its id can be cited as `record:<id>`.
       final id = idCol >= 0 ? row[idCol] : onlyId;
@@ -703,8 +741,8 @@ class ReadStoryTool extends AgentTool {
       }
       buffer.writeln(text);
       last = line.lineIndex;
+      seen.addStoryLine(storyId, line);
     }
-    seen.addRange(storyId, page.lines.first.lineIndex, last);
     final more = last < page.lines.last.lineIndex || page.hasMore;
     buffer.writeln(
       more ? '（本页到 L$last，后面还有；继续读用 start=${last + 1}）' : '（到 L$last 为止，本章结束）',
@@ -837,6 +875,8 @@ class GrepTool extends AgentTool {
       final block = StringBuffer()
         ..writeln('## 《${_storyLabel(storyId, entries)}》 $storyId'
             '（${lines.length} 处）');
+      final blockLines = <StoryLineEntry>[];
+      readWindows:
       for (final (a, b) in windows) {
         final page = await store.readStoryLines(
           storyId: storyId,
@@ -846,27 +886,33 @@ class GrepTool extends AgentTool {
         );
         for (final line in page.lines) {
           final mark = hitSet.contains(line.lineIndex) ? '* ' : '  ';
-          block.writeln(
-            '$mark${formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind)}',
-          );
-          seen.add(storyId, line.lineIndex);
+          final text = '$mark${formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind)}';
+          if (buffer.length + block.length + text.length > maxToolResultChars &&
+              (printedStories > 0 || blockLines.isNotEmpty)) {
+            full = true;
+            block.writeln('（篇幅已满，后面的行没有列出；继续读用 read_story '
+                'story_id=$storyId start=${line.lineIndex}）');
+            break readWindows;
+          }
+          block.writeln(text);
+          blockLines.add(line);
         }
         block.writeln('  …');
       }
-      if (buffer.length + block.length > maxToolResultChars &&
-          printedStories > 0) {
-        buffer.writeln('（篇幅已满，后面的故事没有列出；请缩小范围或调小 context）');
-        full = true;
-        break;
-      }
       buffer.write(block);
-      printedStories++;
-      printed[storyId] = lines.length;
+      if (blockLines.isNotEmpty) {
+        for (final line in blockLines) {
+          seen.addStoryLine(storyId, line);
+        }
+        printedStories++;
+        printed[storyId] = blockLines.where((l) => hitSet.contains(l.lineIndex)).length;
+      }
+      if (full) break;
     }
     buffer.writeln(
       '（* 为命中行${truncated ? '；命中超过 $limit 行，只列出前 $limit 行' : ''}）',
     );
-    final text = _clip(buffer.toString().trimRight(), maxToolResultChars + 200);
+    final text = buffer.toString().trimRight();
     if (!truncated && !full) return text;
     // Where the hits not listed are (0.14 live: with "only the first N"
     // and no way on, the same call was sent again twice).

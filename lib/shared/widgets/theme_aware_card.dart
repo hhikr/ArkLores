@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/theme_provider.dart';
 import '../theme/cut_border.dart';
 import '../theme/motion.dart';
+import 'press_feedback.dart';
 
 /// A panel: white (the theme's panel colour), a hairline frame and a short
 /// ink tab on its top edge. With [onTap] it can be pressed, and says so by
@@ -31,17 +32,13 @@ class ThemeAwareCard extends ConsumerStatefulWidget {
   ConsumerState<ThemeAwareCard> createState() => _ThemeAwareCardState();
 }
 
-class _ThemeAwareCardState extends ConsumerState<ThemeAwareCard> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (mounted && _down != v) setState(() => _down = v);
-  }
-
+class _ThemeAwareCardState extends ConsumerState<ThemeAwareCard>
+    with PressHold<ThemeAwareCard> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final tappable = widget.onTap != null;
+    final down = tappable && pressed;
     final cut = tappable ? 14.0 : 0.0;
     Widget card = Stack(
       children: [
@@ -51,7 +48,7 @@ class _ThemeAwareCardState extends ConsumerState<ThemeAwareCard> {
             shape: CutBorder(
               bottomRight: cut,
               side: BorderSide(
-                color: _down ? theme.trace : theme.divider,
+                color: down ? theme.trace : theme.divider,
               ),
             ),
           ),
@@ -74,9 +71,9 @@ class _ThemeAwareCardState extends ConsumerState<ThemeAwareCard> {
               alignment: Alignment.centerLeft,
               child: AnimatedFractionallySizedBox(
                 duration:
-                    Motion.of(context, _down ? Motion.press : Motion.wipe),
+                    Motion.of(context, down ? Motion.press : Motion.wipe),
                 curve: Motion.mech,
-                widthFactor: _down ? 1 : 0,
+                widthFactor: down ? 1 : 0,
                 heightFactor: 1,
                 child: ColoredBox(color: theme.accentPrimary),
               ),
@@ -88,16 +85,16 @@ class _ThemeAwareCardState extends ConsumerState<ThemeAwareCard> {
       card = Semantics(
         button: true,
         label: widget.semanticLabel,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _set(true),
-          onTapCancel: () => _set(false),
-          onTapUp: (_) => _set(false),
-          onTap: () {
-            HapticFeedback.selectionClick();
-            widget.onTap!();
-          },
-          child: card,
+        child: pressListener(
+          enabled: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              widget.onTap!();
+            },
+            child: card,
+          ),
         ),
       );
     }

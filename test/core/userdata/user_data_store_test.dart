@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../support/gamedata_fixture.dart' show fastTestDatabaseFactory;
 import '../../support/temp_dir.dart';
 
 void main() {
@@ -16,7 +17,7 @@ void main() {
   late UserDataStore store;
 
   UserDataStore open() => UserDataStore(
-        factory: databaseFactoryFfi,
+        factory: fastTestDatabaseFactory,
         path: p.join(dir.path, userDataFileName),
         clock: () => now,
       );

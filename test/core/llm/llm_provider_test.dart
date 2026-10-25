@@ -34,8 +34,8 @@ void main() {
     final low = c.read(llmClientProvider(ReasoningLevel.low));
     expect((low as OpenAICompatibleClient).reasoning, ReasoningLevel.low);
     // A rebuild would drop the conversation.
-    final notifier = c.read(askChatProvider.notifier);
+    final notifier = c.read(askChatProvider(c.read(shownAskProvider)).notifier);
     c.read(deepThinkingProvider.notifier).state = true;
-    expect(identical(c.read(askChatProvider.notifier), notifier), isTrue);
+    expect(identical(c.read(askChatProvider(c.read(shownAskProvider)).notifier), notifier), isTrue);
   });
 }

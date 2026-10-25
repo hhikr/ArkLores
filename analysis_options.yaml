@@ -14,8 +14,9 @@ analyzer:
     - build/**
     - android/**
     - ios/**
-    # Local, gitignored probes against real knowledge bases.
-    - test/live/scratch/**
+    # Local, gitignored notes and probes against real knowledge bases
+    # (notes/probes/, run one at a time with `flutter test <file>`).
+    - notes/**
   language:
     # Strict mode surfaces implicit dynamic casts and raw generics so they can
     # be fixed instead of silently weakening type safety.

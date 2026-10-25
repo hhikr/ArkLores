@@ -62,34 +62,54 @@ void main() {
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        onboardingDoneProvider.overrideWithValue(onboardingDone),
-        initialApiConfigProvider.overrideWithValue(const LLMConfig()),
-        initialMainTabIndexProvider.overrideWithValue(tab),
-        initialSessionLogsEnabledProvider.overrideWithValue(false),
-        plainThemeOverride(),
-      ],
-      child: const ArkLoresApp(),
-    ),);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          onboardingDoneProvider.overrideWithValue(onboardingDone),
+          initialApiConfigProvider.overrideWithValue(const LLMConfig()),
+          initialMainTabIndexProvider.overrideWithValue(tab),
+          initialSessionLogsEnabledProvider.overrideWithValue(false),
+          plainThemeOverride(),
+        ],
+        child: const ArkLoresApp(),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 500));
     return ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
   }
 
   /// Which of the four pages is on screen.
   Type visiblePage(WidgetTester tester) {
-    final stack = tester.widget<IndexedStack>(find.descendant(
-      of: find.byType(MainShell),
-      matching: find.byType(IndexedStack),
-    ).first,);
-    return stack.children[stack.index!].runtimeType;
+    final stack = tester.widget<IndexedStack>(
+      find
+          .descendant(
+            of: find.byType(MainShell),
+            matching: find.byType(IndexedStack),
+          )
+          .first,
+    );
+    // Each page is in a TickerMode (only the shown one runs) and a slot
+    // (only the shown one follows the keyboard).
+    final shown = stack.children[stack.index!] as TickerMode;
+    expect(shown.enabled, isTrue);
+    return const [WikiBrowserPage, AiChatPage, MaterialsPage, SettingsPage]
+        .singleWhere(
+      (page) => find
+          .descendant(of: find.byWidget(shown), matching: find.byType(page))
+          .evaluate()
+          .isNotEmpty,
+    );
   }
 
   Future<void> tapTab(WidgetTester tester, String label) async {
-    await tester.tap(find.descendant(
-      of: find.byType(MainShell),
-      matching: find.text(label),
-    ).last,);
+    await tester.tap(
+      find
+          .descendant(
+            of: find.byType(MainShell),
+            matching: find.text(label),
+          )
+          .last,
+    );
     await tester.pump(); // the tap acts after the frame
     await tester.pump(const Duration(milliseconds: 400));
   }
@@ -105,8 +125,10 @@ void main() {
       (tester) async {
     await start(tester, tab: 3);
     expect(visiblePage(tester), SettingsPage);
-    expect(find.byKey(const ValueKey('fake-webview'), skipOffstage: false),
-        findsWidgets,);
+    expect(
+      find.byKey(const ValueKey('fake-webview'), skipOffstage: false),
+      findsWidgets,
+    );
 
     for (final (label, page, index) in [
       ('AI', AiChatPage, 1),
@@ -120,7 +142,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the tab bar spans the bottom, the pages reach under it, it '
+  testWidgets(
+      'the tab bar spans the bottom, the pages reach under it, it '
       'marks the current tab and steps aside for the keyboard', (tester) async {
     await start(tester, tab: 3);
     final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
@@ -133,25 +156,44 @@ void main() {
     expect(page.bottom, screen.height);
     // Every tab says its name, and the current one says it is current.
     final tabs = tester
-        .widgetList<Semantics>(find.descendant(
-          of: find.byKey(const ValueKey('main-navigation')),
-          matching: find.byType(Semantics),
-        ),)
+        .widgetList<Semantics>(
+          find.descendant(
+            of: find.byKey(const ValueKey('main-navigation')),
+            matching: find.byType(Semantics),
+          ),
+        )
         .where((s) => s.properties.button ?? false)
         .toList();
-    expect([for (final s in tabs) s.properties.label],
-        ['Wiki', 'AI', '资料', '设置'],);
-    expect([for (final s in tabs) s.properties.selected],
-        [false, false, false, true],);
+    expect(
+      [for (final s in tabs) s.properties.label],
+      ['Wiki', 'AI', '资料', '设置'],
+    );
+    expect(
+      [for (final s in tabs) s.properties.selected],
+      [false, false, false, true],
+    );
+
+    // A keyboard on its way up, still lower than the bar: the bar stays
+    // (the page above it does not jump).
+    addTearDown(tester.view.resetViewInsets);
+    tester.view.viewInsets = FakeViewPadding(
+      bottom: AppTabBar.height * tester.view.devicePixelRatio / 2,
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('main-navigation')), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const ValueKey('main-navigation'))).height,
+      nav.height,
+    );
 
     tester.view.viewInsets = const FakeViewPadding(bottom: 600);
-    addTearDown(tester.view.resetViewInsets);
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byKey(const ValueKey('main-navigation')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a main page has one top bar: its tabs on the left, its '
+  testWidgets(
+      'a main page has one top bar: its tabs on the left, its '
       'action on the right', (tester) async {
     await start(tester, tab: 2);
     final bar = tester.getRect(find.byKey(const ValueKey('main-top-bar')));
@@ -179,7 +221,8 @@ void main() {
 
   testWidgets('the named routes open their pages', (tester) async {
     await start(tester, tab: 3);
-    final navigator = tester.state<NavigatorState>(find.byType(Navigator).first);
+    final navigator =
+        tester.state<NavigatorState>(find.byType(Navigator).first);
     for (final (route, page) in [
       ('/knowledge-base', KnowledgeBasePage),
       ('/api-settings', ApiSettingsPage),

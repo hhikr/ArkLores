@@ -20,18 +20,23 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `shared/theme/app_theme.dart` | `AppThemeTokens`（全部颜色 token 的含义）、`sairaStyle`、`AppType` 扩展：`ui()` 界面字、`eyebrow()` 宽体小标、`field()` 数字与日期、`heading()` 标题、`text()` 正文 |
+| `shared/theme/app_theme.dart` | `AppThemeTokens`（全部颜色 token 的含义）、`sairaStyle`、`AppType` 扩展：`ui()` 界面字、`eyebrow()` 装饰小标（原创文字）、`field()` 数字与日期、`heading()` 标题、`text()` 正文 |
 | `shared/theme/endfield_theme_tokens.dart` / `ark_theme_tokens.dart` | 浅色 / 深色两套完整取值（深色不是反色） |
 | `shared/theme/cut_border.dart` | `CutBorder`：切角形状（可点的东西才用） |
 | `shared/theme/motion.dart` | `Motion`：三条曲线（`snap` 出现、`mech` 擦入与所有退出、`ease`）、各档时长、`Motion.of()`（减少动效时为 0） |
 | `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
 | `shared/widgets/page_frame.dart` | `PageScaffold`（推入页的顶栏）、`MainTopBar` + `TopTab` + `TopBarTitle`（四个主标签页的顶栏）、`AppTabBar`（底部标签栏）、`DockPanel`（盖在内容上的控件板）、`pagePadding` |
 | `shared/widgets/theme_aware_card.dart` | 面板：可点时右下切角、按下时底边擦入强调色 |
-| `shared/widgets/smooth_page_route.dart` | 换页：新页面整页从右推入（前缘一条 2px `trace` 线），下面的页面左移三分之一并变暗（360 ms，返回 240 ms） |
+| `shared/widgets/smooth_page_route.dart` | 换页是一块毛玻璃：玻璃（模糊加一层纸色，前缘一条 2px `trace` 线）从右推入（`Motion.coverIn` 280 ms，`snap`，一点就动），下面的页面只变暗、不左移（左移会在玻璃后面留出一条空白）；**玻璃盖满屏幕之后才在它后面构建新页面**（第一帧排版再久，屏幕上也只是静止的模糊画面），画完第一帧玻璃就地变清（把这一帧拍成快照、一次算出 sigma 8 / 5 / 3 / 1.5 四张模糊图，依次交叉淡入，最后一张淡出露出页面，纸色一起退去；不要每帧重算整屏模糊——手机上每帧 9–15 ms、120Hz 下一抽一抽；也不要只拿一张模糊图淡出——淡到一半字就清楚了，不像对焦；`Motion.reveal` 900 ms，`ease`，按帧推进、一帧最多推进 25 ms，慢帧只让它慢一点、不跳一截），页面对焦出来。返回是整页向右滑出（240 ms，`mech`），下面的页早已建好、不用盖板。整页画进自己的层（`RepaintBoundary`）只做平移 |
+| `shared/widgets/press_feedback.dart` | `PressHold`：可点部件的按下状态——手指落下即按下（不等点按识别的 100 ms），抬起后至少停留 `Motion.press`，拖动超过 `kTouchSlop` 立即松开；`PressBuilder` 是给没有自己状态的部件（标签、小标签、闭包里的行）用的同一件事；`pressTint` 是块、标签、行统一的按下颜色（底色上盖一层 10% 的墨） |
 | `main.dart` `buildAppTheme` | Material 自带部件的主题（按钮、输入框、对话框、菜单、开关……都改成这套样式） |
 
-字体：界面字是 **Saira**（`assets/fonts/Saira.ttf`，SIL OFL，许可证同目录），可变字体，字重和宽度一律通过 `sairaStyle` 设轴；中文落到系统黑体。
-阅读字体可在设置里选（默认黑体，可换回霞鹜文楷），token 是 `readingFontFamily`，长文一律用 `readingStyle()`。
+字体：界面字是 **Saira**（`assets/fonts/Saira.ttf`，SIL OFL，许可证同目录），可变字体，字重和宽度一律通过 `sairaStyle` 设轴；中文落到内置的**思源黑体**（`NotoSansSC`，可变字重，每台手机一样），缺字才用系统字体。
+页面大标题（`heading()` 22 号及以上）用最粗的 900，像游戏里的大白字；其余标题 700。
+装饰小标（`eyebrow()`：分区上的英文标签、底栏小字；不加 `// `，原创文字里斜杠是个实心方块）用游戏里的**原创文字**（`cipherStyle`，`EndfieldByButan`，CC BY-NC 4.0，见 `assets/fonts/README.md`）：只有拉丁字母、数字和少量标点，是装饰，旁边总有中文说同一件事；要读的字（剧情里的种类标签等）不用它。
+资料页里列表行的名字和组标题与书架的名字一样用粗体标题（`heading(16)`），不用正文字。
+阅读字体可在设置里选（默认黑体 = 思源黑体，可换霞鹜文楷），选项的名字用各自的字体写（`readingFontSample`）；token 是 `readingFontFamily`，长文一律用 `readingStyle()`。
+内置的两个中文字体是子集（GB2312 + 两个知识库与 App 文案里出现的字，约 9100 字，各约 4 MB）：重建知识库后用 `tools/subset_fonts.py` 从完整字体重新裁一次。
 
 ## 3. 写界面时的规则
 
@@ -53,9 +58,20 @@
 - **字号**：正文 16（长文 15.5–16.5），界面字不小于 12；守卫测试拒绝 `fontSize` 小于 12。
 - **对比度**：次要文字 `textSecondary`、最淡的 `textMuted` 在纸面上都 ≥ 4.5:1；输入框与控件的边框 `cardBorder` ≥ 3:1。
 - **读屏**：选中的标签、开关、折叠头带 `selected` / `toggled` / `expanded`；状态行用 `liveRegion`。
+- **按压反馈**：自己画按下样子的部件用 `PressHold`（`pressListener` + `pressed`），不要用 `onTapDown`/`onTapUp` 设按下状态——在可滚动的列表里，`onTapDown` 要等 100 ms，快速点一下时按下与抬起落在同一帧，什么都看不到。**每个能点的东西都要有按下的样子**：没有自己擦入效果的块、标签、行用 `PressBuilder` + `pressTint`，列表行用 `PressRow`，不用 `InkWell`（全局关了水波纹，高亮几乎看不见）。
+- **流式内容只重建变了的部分**：问答列表每条消息各自 `select` 自己（`_MessageAt`），页面只看消息条数和是否在写；不要在页面上 `ref.watch(askChatProvider)` 整个列表。
+- **出现的东西一点就动**：换页、面板推入这类回应点按的进场用 `snap`（快起步、慢停）；`mech`（慢起步）只给退出和擦入，进场用它前 100 ms 几乎不动，像没点上。折叠展开同理：打开用 `snap`、收起用 `mech`。
+- **重的画面只画一次**：`IndustrialBackdrop` 的等高线是自己的一层；动画里只改位置、透明度的包装不要随动画值增删（`if` 只能加在 `Stack` 末尾的装饰上），否则整页在首尾帧被重新挂接。整页平移（换页、`SwitchedPages`）和 `AnimatedSize` 展开的内容包一层 `RepaintBoundary`。
 - **减少动效**：所有动效走 `Motion.of(context, …)`；系统打开"减少动态效果"时换页、擦入、展开、走动的进度格全部静止。
 - **系统手势**：Wiki 页从左缘右滑是后退、从右缘左滑是前进（与浏览器一致）；导览页的系统返回键回到上一步。
-- **键盘**：问答输入框旁的面板与按钮不取焦点（键盘不收起）。
+- **键盘**：问答输入框旁的面板与按钮不取焦点（键盘不收起）。底栏在键盘高过它之后才收起（`MainShell`，底栏的 `SafeArea` 保持系统导航条的高度），输入框先停在底栏上、再跟着键盘走，中间不跳。
+  不在屏幕上的主标签按全屏高度排版、看不到键盘（`_TabSlot`）：否则键盘每动一帧，`IndexedStack` 把四个标签全部重建、重排一遍。
+- **后台的标签不运行**：主标签和 Wiki 的站点各包一层 `TickerMode`，只有显示的那个开着；Wiki 的网页在 `TickerMode` 关掉时暂停（`WebView.onPause`）。Android 上 Flutter 的帧在 Android 主线程上开始，后台的网页每帧重画会拖慢所有页面。
+- **网页用混合合成**（`useHybridComposition: true`）：网页是系统直接合成的视图。画进纹理再由 Flutter 合成时，网页每个 vsync 出一帧，Flutter 却取得不匀，四分之一的帧没显示出来，滑动一抽一抽（2026-10-24 追踪）。profile 版的日志里 `[webfps]` 是网页自己的帧率，和 `[frame]` 对照看。
+- **刷新率**：`MainActivity` 向系统要当前分辨率下最快的显示模式（ColorOS 等系统不给没要的 App 高刷，Flutter 不会自己要）。
+- **加载**：Wiki 网页加载时显示网页自己报告的进度（`SegmentProgress` 带数值），不用走动的格子。
+- **长文只排屏幕附近的**：慢帧几乎都是文字排版（`RenderParagraph`）。长文一律是懒列表，一段（一行台词、一条语音）一项：阅读器（缓存上下各 480 px）、档案（`ProfileSliver`）、条目页的正文和语音（`EntryPage.textSliver`：面板是 `DecoratedSliver`，里面是懒列表）。不要把长文放进 `Column` 或 `SliverToBoxAdapter`。
+- **不让看不见的页面重建**：被盖住的页面照样会因为 provider 变化而整页重建。阅读器滚动时只保存进度，关闭时才通知进度相关的页面（`invalidateReadingIn`）；每次保存都通知，资料首页和集合页在下面每隔几百毫秒整页重建一次。
 - **长标签**：顶部标签放不下时缩短（省略号），不滚出屏幕；窄屏上一行放不下的按钮换行，不溢出。
 
 ## 5. 守卫测试
@@ -64,4 +80,4 @@
 - `test/guards/floating_docks_test.dart`：不用 `AppBar`。
 - `test/guards/design_rules_test.dart`：不用转圈、投影、elevation、红绿（与琥珀、橙）色、Material 原生开关 / 分段按钮 / 底部弹出（这套样式各有自己的版本），`fontSize` 不小于 12。
 
-截图检查：`test/support/screenshot.dart` 的 `shoot()`（`ARKLORES_SHOT_DIR`）。要看真实字体时，在测试里用 `FontLoader` 加载 `assets/fonts/Saira.ttf` 和一个中文字体再截图。
+截图检查：`test/support/screenshot.dart` 的 `shoot()`（`ARKLORES_SHOT_DIR`）。要看真实字体时，在测试里用 `FontLoader` 加载 `assets/fonts/` 里的 Saira、NotoSansSC（和要看的 EndfieldCipher）再截图。

@@ -279,9 +279,11 @@ class _PhoneBridgeHostState extends ConsumerState<PhoneBridgeHost> {
       if (socket.readyState == WebSocket.open) socket.add(jsonEncode(event));
     }
 
-    final transcriber = BridgeTranscriber(ref.read(askChatProvider));
+    // The conversation shown when the computer connected.
+    final shown = askChatProvider(ref.read(shownAskProvider));
+    final transcriber = BridgeTranscriber(ref.read(shown));
     final listener = ref.listenManual<List<ChatMessage>>(
-      askChatProvider,
+      shown,
       (_, next) => transcriber.update(next).forEach(send),
     );
     send(_hello());
@@ -313,10 +315,11 @@ class _PhoneBridgeHostState extends ConsumerState<PhoneBridgeHost> {
     Map<String, dynamic> command,
     void Function(Map<String, Object?>) send,
   ) async {
-    final chat = ref.read(askChatProvider.notifier);
+    final shown = askChatProvider(ref.read(shownAskProvider));
+    final chat = ref.read(shown.notifier);
     switch (command['cmd']) {
       case 'ask':
-        if (ref.read(askChatProvider).any((m) => m.isStreaming)) {
+        if (ref.read(shown).any((m) => m.isStreaming)) {
           send({'t': 'busy'});
           return;
         }
@@ -333,9 +336,8 @@ class _PhoneBridgeHostState extends ConsumerState<PhoneBridgeHost> {
         );
       case 'review' || 'digest':
         // The buttons under the last answer.
-        final answers = ref
-            .read(askChatProvider)
-            .where((m) => m.role == MessageRole.assistant);
+        final answers =
+            ref.read(shown).where((m) => m.role == MessageRole.assistant);
         final last = answers.isEmpty ? null : answers.last;
         final review = command['cmd'] == 'review';
         if (last == null ||

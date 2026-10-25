@@ -9,6 +9,7 @@ import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/settings_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/theme/motion.dart';
+import '../../../shared/widgets/press_feedback.dart';
 import 'ask_composer.dart' show ComposerButton;
 
 /// The question box's one options button: a small panel that opens upward
@@ -32,14 +33,48 @@ class AnswerOptionsMenu extends ConsumerStatefulWidget {
   ConsumerState<AnswerOptionsMenu> createState() => _AnswerOptionsMenuState();
 }
 
-class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
+class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu>
+    with SingleTickerProviderStateMixin {
   final OverlayPortalController _portal = OverlayPortalController();
   final LayerLink _link = LayerLink();
 
-  void _toggle() => setState(_portal.toggle);
+  /// The panel wipes up out of the box when opened (`snap`) and back down
+  /// into it when closed (`mech`); it leaves the overlay once closed.
+  late final AnimationController _open = AnimationController(
+    vsync: this,
+    duration: Motion.wipe,
+    reverseDuration: Motion.sheetOut,
+  );
+  late final Animation<double> _wipe = CurvedAnimation(
+    parent: _open,
+    curve: Motion.snap,
+    reverseCurve: Motion.mech.flipped,
+  );
+
+  /// Shown, and not on its way out.
+  bool get _opened => _portal.isShowing && _open.status != AnimationStatus.reverse;
+
+  @override
+  void dispose() {
+    _open.dispose();
+    super.dispose();
+  }
+
+  void _toggle() => _opened ? _close() : _show();
+
+  void _show() {
+    setState(_portal.show);
+    _open.duration = Motion.of(context, Motion.wipe);
+    _open.reverseDuration = Motion.of(context, Motion.sheetOut);
+    _open.forward();
+  }
 
   void _close() {
-    if (_portal.isShowing) setState(_portal.hide);
+    if (!_opened) return;
+    setState(() {});
+    _open.reverse().whenCompleteOrCancel(() {
+      if (mounted && _open.isDismissed) setState(_portal.hide);
+    });
   }
 
   @override
@@ -48,7 +83,7 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
     final options = ref.watch(answerOptionsProvider);
     final thinkingAvailable = ref.watch(deepThinkingAvailableProvider);
     final thinking = thinkingAvailable && ref.watch(deepThinkingProvider);
-    final lit = options.delegate || thinking || _portal.isShowing;
+    final lit = options.delegate || thinking || _opened;
     return TapRegion(
       groupId: _link,
       onTapOutside: (_) => _close(),
@@ -67,7 +102,14 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
               offset: Offset(widget.above == null ? 0 : 0, -6),
               child: TapRegion(
                 groupId: _link,
-                child: _panel(theme, options, thinkingAvailable, thinking),
+                child: FadeTransition(
+                  opacity: _wipe,
+                  child: SizeTransition(
+                    sizeFactor: _wipe,
+                    alignment: Alignment.bottomLeft,
+                    child: _panel(theme, options, thinkingAvailable, thinking),
+                  ),
+                ),
               ),
             ),
           ),
@@ -160,56 +202,63 @@ class _AnswerOptionsMenuState extends ConsumerState<AnswerOptionsMenu> {
         toggled: checked,
         label: title,
         excludeSemantics: true,
-        child: GestureDetector(
-          key: ValueKey('answer-option-$value'),
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onTap();
-          },
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 52),
-            padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: theme.divider)),
-            ),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: Motion.of(context, Motion.press),
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: checked ? theme.accentPrimary : Colors.transparent,
-                    border: Border.all(
-                      color: checked ? theme.accentPrimary : theme.cardBorder,
-                      width: 1.5,
+        child: PressBuilder(
+          builder: (context, down) => GestureDetector(
+            key: ValueKey('answer-option-$value'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
+            child: AnimatedContainer(
+              duration: Motion.of(context, down ? Motion.press : Motion.row),
+              curve: Motion.mech,
+              constraints: const BoxConstraints(minHeight: 52),
+              padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+              decoration: BoxDecoration(
+                color: down
+                    ? pressTint(Colors.transparent, theme.textPrimary)
+                    : Colors.transparent,
+                border: Border(bottom: BorderSide(color: theme.divider)),
+              ),
+              child: Row(
+                children: [
+                  AnimatedContainer(
+                    duration: Motion.of(context, Motion.press),
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: checked ? theme.accentPrimary : Colors.transparent,
+                      border: Border.all(
+                        color: checked ? theme.accentPrimary : theme.cardBorder,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: checked
+                        ? Icon(Icons.check_sharp, size: 16, color: theme.onAccent)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.ui(15, weight: checked ? 700 : 500),
+                        ),
+                        Text(
+                          hint,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.text(12.5, color: theme.textSecondary, height: 1.4),
+                        ),
+                      ],
                     ),
                   ),
-                  child: checked
-                      ? Icon(Icons.check_sharp, size: 16, color: theme.onAccent)
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        title,
-                        style: theme.ui(15, weight: checked ? 700 : 500),
-                      ),
-                      Text(
-                        hint,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.text(12.5, color: theme.textSecondary, height: 1.4),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

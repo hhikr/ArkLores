@@ -4,7 +4,9 @@ import '../theme/app_theme.dart';
 import 'ef_widgets.dart';
 
 /// The app's ground: the paper, with two faint patches of open contour
-/// lines in opposite corners (the only texture there is).
+/// lines in opposite corners (the only texture there is). The lines are a
+/// layer of their own behind [child]: what repaints in the page (a fading
+/// barrier, a moving page) does not draw them again.
 class IndustrialBackdrop extends StatelessWidget {
   const IndustrialBackdrop({
     super.key,
@@ -19,11 +21,21 @@ class IndustrialBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: theme.bgPrimary,
-      child: CustomPaint(
-        painter: ContourPainter(
-          theme.textPrimary.withValues(alpha: theme.isDark ? 0.07 : 0.08),
-        ),
-        child: child,
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: ContourPainter(
+                  theme.textPrimary
+                      .withValues(alpha: theme.isDark ? 0.07 : 0.08),
+                ),
+              ),
+            ),
+          ),
+          child,
+        ],
       ),
     );
   }

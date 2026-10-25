@@ -1,4 +1,6 @@
+import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/settings/settings_page.dart';
+import 'package:arklores/features/settings/settings_sections.dart';
 import 'package:arklores/main.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
@@ -8,8 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('fits a narrow Chinese viewport; the theme switch works',
-      (tester) async {
+  testWidgets(
+      'the categories, each with what is in it; a category opens its '
+      'page, where the theme switch works', (tester) async {
     tester.view.physicalSize = const Size(720, 1600);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.resetPhysicalSize);
@@ -19,25 +22,59 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('设置'), findsOneWidget);
-    // A section heading and its row.
-    expect(find.text('知识库管理'), findsNWidgets(2));
-    expect(find.text('夜间'), findsOneWidget);
-    expect(find.text('跟随系统'), findsOneWidget);
-    expect(tester.getSize(find.text('知识库管理').first).height, lessThan(32));
+    for (final key in ['appearance', 'profile', 'ai', 'knowledge', 'help']) {
+      expect(
+        find.byKey(ValueKey('settings-category-$key')),
+        findsOneWidget,
+        reason: key,
+      );
+    }
+    // The settings themselves are a page further.
+    expect(find.byKey(const ValueKey('settings-theme')), findsNothing);
     // The rows take the page's width (16 on each side).
     final list = tester.getRect(find.byKey(const ValueKey('settings-list')));
-    final theme = tester.getRect(find.byKey(const ValueKey('settings-theme')));
-    expect(theme.left, list.left + 16);
-    expect(theme.right, list.right - 16);
+    final row = tester
+        .getRect(find.byKey(const ValueKey('settings-category-appearance')));
+    expect(row.left, list.left + 16);
+    expect(row.right, list.right - 16);
+    expect(row.height, greaterThanOrEqualTo(48));
     expect(tester.takeException(), isNull);
 
+    await tester
+        .tap(find.byKey(const ValueKey('settings-category-appearance')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-theme')), findsOneWidget);
     await tester.tap(find.text('日间'));
     await tester.pumpAndSettle();
 
-    final context = tester.element(find.byType(SettingsPage));
+    final context = tester.element(find.byType(AppearanceSettingsPage));
     final container = ProviderScope.containerOf(context);
     expect(
         container.read(themeProvider.notifier).currentTheme, AppTheme.endfield,);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the other categories open their settings', (tester) async {
+    tester.view.physicalSize = const Size(720, 1600);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_testApp(locale: const Locale('zh')));
+    await tester.pumpAndSettle();
+
+    for (final (key, inside) in [
+      ('ai', 'settings-session-logs'),
+      ('knowledge', 'settings-profile-sections'),
+    ]) {
+      await tester.tap(find.byKey(ValueKey('settings-category-$key')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey(inside)), findsOneWidget, reason: key);
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.byKey(const ValueKey('settings-category-help')));
+    await tester.pumpAndSettle();
+    expect(find.text('新用户导览'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -54,8 +91,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Knowledge & Library'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester
+        .tap(find.byKey(const ValueKey('settings-category-appearance')));
+    await tester.pumpAndSettle();
     expect(find.text('DAY'), findsOneWidget);
-    expect(find.text('Knowledge Base Management'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 }
@@ -64,6 +105,7 @@ Widget _testApp({required Locale locale, double textScale = 1}) {
   return ProviderScope(
     overrides: [
       initialSessionLogsEnabledProvider.overrideWithValue(false),
+      initialApiConfigProvider.overrideWithValue(const LLMConfig()),
     ],
     child: Consumer(
       builder: (context, ref, _) {

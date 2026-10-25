@@ -10,6 +10,7 @@ import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/library/library_widgets.dart' show openStory;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/theme_provider.dart' show ReadingFont;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -418,7 +419,8 @@ void main() {
     await tester.pumpWidget(app(const StoryReaderPage(storyId: _story), spoken));
     await settle(tester);
     expect(styleOf('旁白一句。')?.fontStyle, FontStyle.italic);
-    expect(styleOf('你好，博士。')?.fontFamily, isNull); // the sans by default (Settings)
+    // The bundled sans by default (Settings).
+    expect(styleOf('你好，博士。')?.fontFamily, ReadingFont.sans.family);
 
     // All narration (a month squad's story): plain.
     await tester.pumpWidget(app(

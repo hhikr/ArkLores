@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,21 +10,24 @@ import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
 import 'features/ai/phone_bridge.dart';
 import 'features/settings/api_settings_page.dart';
-import 'features/settings/app_icon_service.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
 import 'features/settings/settings_service.dart';
+import 'shared/frame_log.dart';
 import 'shared/l10n/generated/app_localizations.dart';
 import 'shared/l10n/locale_provider.dart';
 import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/theme/cut_border.dart';
+import 'shared/theme/system_night_mode.dart';
 import 'shared/widgets/industrial_ui.dart';
+import 'shared/widgets/launch_curtain.dart';
 import 'shared/widgets/smooth_page_route.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  startFrameLog();
 
   final settingsService = SettingsService();
 
@@ -44,7 +49,6 @@ void main() async {
     appLocale,
     sessionLogsEnabled,
     (nickname, answerOptions, profileSectionsOpen, readingFont),
-    _,
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
     load('API config', settingsService.loadApiConfig, const LLMConfig()),
@@ -63,19 +67,17 @@ void main() async {
           true,),
       load('reading font', settingsService.loadReadingFont, ReadingFont.sans),
     ).wait,
-    load(
-      'launcher icon',
-      () async =>
-          AppIconService.setIcon(await settingsService.loadAppLauncherIcon()),
-      null,
-    ),
   ).wait;
   // Apply the user's per-session AI log toggle before any agent runs.
   AgentLogger.setEnabled(sessionLogsEnabled);
+  // The system starts the app in its own light or dark from now on (a
+  // theme chosen before this was told to the system).
+  unawaited(syncSystemNightMode(appTheme));
 
   runApp(
     ProviderScope(
       overrides: [
+        launchCurtainProvider.overrideWithValue(true),
         onboardingDoneProvider.overrideWithValue(onboardingDone),
         initialApiConfigProvider.overrideWithValue(apiConfig),
         initialEmbeddingConfigProvider.overrideWithValue(embeddingConfig),
@@ -121,9 +123,11 @@ class ArkLoresApp extends ConsumerWidget {
       locale: locale.flutterLocale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      builder: (context, child) => IndustrialBackdrop(
-        theme: theme,
-        child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => LaunchCurtain(
+        child: IndustrialBackdrop(
+          theme: theme,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       home: onboardingDone
           ? const MainShell()

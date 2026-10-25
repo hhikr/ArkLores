@@ -41,6 +41,11 @@ Future<bool> storyLinesHaveKind(DatabaseExecutor db) async {
 /// 2026-10-21); the reader still shows them.
 const Set<String> unsearchedLineKinds = {'step', 'stage', 'unplaced'};
 
+/// Navigation and summaries may locate a passage, but are not source text.
+bool isStoryEvidence(String? kind) => !const {
+  'step', 'stage', 'unplaced', 'summary', 'section', 'title', 'system', 'divider',
+}.contains(kind);
+
 /// ` AND <alias>kind NOT IN (…)` leaving [unsearchedLineKinds] out of a query
 /// over `story_lines`; empty for a database without the kind column.
 Future<String> searchableLinesFilter(DatabaseExecutor db, {String alias = ''}) async =>

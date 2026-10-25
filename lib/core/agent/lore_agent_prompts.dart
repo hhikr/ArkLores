@@ -29,8 +29,9 @@ const String _loreDatabaseTables = '''
   line_index 从 0 开始，是引用用的行号；speaker 为空表示旁白/叙述。
   kind 是这一行的性质：dialogue 对白、narration 旁白、subtitle 场景字幕、document 剧情里出现的书信/文档/笔记、
   choice 玩家选项（多个选项用“／”连接）、title 标题、system 教程与引导提示（不属于故事）。
-- story_catalog(story_id, collection_id, collection_name, collection_type, story_code, story_name, avg_tag, story_sort, synopsis, start_time)：
+- story_catalog(story_id, collection_id, collection_name, collection_type, story_code, story_name, avg_tag, story_sort, synopsis, start_time, show_time)：
   每个故事文件属于哪个故事集、关卡号（形如 <章>-<关>）、章名、行动前/行动后/幕间、在故事集内的顺序、官方梗概、上线时间（unix 秒，主线为空）。
+  show_time 是剧情回顾开放时间（旧库可能没有此列），不是故事发生时间；也不能把回顾开放时间直接当作首次上线时间。
   collection_type：MAINLINE 主线（collection_id 形如 main_<章>）、ACTIVITY / MINI_ACTIVITY 活动、NONE 干员密录。
 - entities(id, name, entity_type, ...) 与 entity_aliases(alias, entity_id, ...)：人物、干员、敌人、地点、活动等名字及别名。
 - normalized_records(id, category, subtype, content_type, title, entity_name, content, entry_id, collection_id, ...)：剧情以外的资料
@@ -45,12 +46,6 @@ const String _loreDatabaseTables = '''
   attached_to：这类关卡内对话归属的剧情（它读在那篇剧情的末尾）或关卡；part_of：故事属于结局/小队/篇章；summoned_by：召唤物属于哪位干员。
   视图 collection_enemies(collection_id, enemy_id) 列出某个故事集/活动/主题里出现过的敌人。
 梗概、章节简介、实体表、条目与绑定只用于定位，不是剧情证据；证据是 story_lines 的原文（以及 normalized_records 的原文，引用时写清来源）。''';
-
-/// How the library pages (the player's reading view) are arranged and what
-/// each part is for. The knowledge base is the same structure: read it before
-/// querying to know where a thing lives. Nothing here names a character, a
-/// chapter or an activity; the kinds are named as prts.wiki names them.
-const String loreLibraryGuide = '$loreLibraryStructure\n$loreReadingPrinciples';
 
 /// The shelves, kinds of entries and bindings: reference for querying
 /// (part of the manual, [loreLibraryManual]).
@@ -73,6 +68,9 @@ const String loreLibraryStructure = '''
 /// What holds for reading whatever was asked: time in the story is not the
 /// release order; versions of one person. Always in the system prompt.
 const String loreReadingPrinciples = '''
+证据与结论
+- 提问里的前提也要核实。区分原文明确交代的事实、人物在特定场合的说法和自己的推断；推断必须写明依据与不确定处。
+- 每条结论的范围不能超过出处：个别人物的言行不自动代表整个群体，局部的善待或限制不自动证明普遍制度。原文没有交代的身份、地点归属和因果关系不要补成事实。
 时间
 - collections.start_time、story_catalog.start_time 是上线时间，不是故事里的时间。后上线的内容可以补充、修正甚至推翻先上线的叙述，但它讲的事在故事里可能发生得更早。
 - 库里没有故事内的时间表。故事里的先后只能从原文判断：日期、几年前、人物的状态、别人的回忆与提及。不要用上线顺序推断先后。
@@ -152,7 +150,8 @@ String loreCitationRules({bool wiki = false}) => '''
 
 - Wiki 段落：wiki_read 输出开头的页面 id（形如 wiki:<站点>:<页面>@<版本>，原样照抄，含 @ 后的版本）加段号，段号是 P 后面的数字。
   最终答案的 cite 里写 ["<页面 id>", <起始段>, <结束段>]；笔记里写 `<页面 id>:<起始段>-<结束段>`。只引用 wiki_read 实际给你看过的段；搜索结果的摘要不能当出处。''' : ''}
-只引用你在本次对话中通过工具实际看到的行和记录：一个范围里没有展示过的行不算读过；较早的工具结果折叠以后，行号仍可引用，但要用其中的内容得先重新读。''';
+只引用你在本次对话中通过工具实际看到的行和记录：一个范围里没有展示过的行不算读过；较早的工具结果折叠以后，行号仍可引用，但要用其中的内容得先重新读。
+标题、分段、步骤、任务、未定位提示、教程和梗概只帮助定位，不能作为剧情事实的出处。''';
 
 /// How one citation is written inside the answer's JSON.
 const String loreCiteShape =

@@ -67,6 +67,55 @@ void main() {
     }
   });
 
+  test('citation-first entries render like text-first entries in every chunk size', () {
+    for (final flat in [false, true]) {
+      String ordered(bool citeFirst) => jsonEncode({
+        'entries': [
+          for (final entry in [
+            {'text': '星灯是城里的守灯人。', 'cite': flat ? [a, 1, 3] : [[a, 1, 3]]},
+            {'heading': '经过'},
+            {'text': '他点亮钟楼。', 'cite': flat ? ['record', 'ab12'] : [['record', 'ab12']]},
+          ])
+            if (citeFirst && entry.containsKey('text'))
+              {'cite': entry['cite'], 'text': entry['text']}
+            else
+              entry,
+        ],
+        'coverage': 'full',
+      });
+      final textFirst = ordered(false);
+      final citeFirst = ordered(true);
+      final expected = loreAnswerMarkdown(textFirst)!;
+      expect(loreAnswerMarkdown(citeFirst), expected, reason: 'flat=$flat');
+      for (final size in [1, 3, 7, citeFirst.length]) {
+        final stream = LoreAnswerStream();
+        final live = StringBuffer();
+        for (var i = 0; i < citeFirst.length; i += size) {
+          final end = (i + size).clamp(0, citeFirst.length);
+          live.write(stream.add(citeFirst.substring(i, end)));
+        }
+        expect(stream.finish(), expected, reason: 'flat=$flat, chunk=$size');
+        expect(expected, startsWith(live.toString().trim()));
+        expect(stream.droppedCites, 0);
+      }
+    }
+  });
+
+  test('text streams immediately and early citations wait until its end', () {
+    final textFirst = LoreAnswerStream();
+    expect(textFirst.add('{"entries":[{"text":"星灯'), '星灯');
+    expect(textFirst.add('点亮钟楼。","cite":['), '点亮钟楼。');
+    expect(textFirst.add('["$a",1,3]'), ' `$a:1-3`');
+    textFirst.add(']}]}');
+
+    final citeFirst = LoreAnswerStream();
+    expect(citeFirst.add('{"entries":[{"cite":[["$a",1,3]],'), isEmpty);
+    expect(citeFirst.add('"text":"星灯'), '星灯');
+    expect(citeFirst.add('点亮钟楼。'), '点亮钟楼。');
+    expect(citeFirst.add('"}]}'), ' `$a:1-3`');
+    expect(citeFirst.finish(), textFirst.finish());
+  });
+
   test('the fact-check verdict comes first; escapes are decoded', () {
     final md = loreAnswerMarkdown(
       r'{"entries":[{"text":"他说\"不\"了","cite":["' '$a' r':4"]}],'

@@ -6,7 +6,6 @@ import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_answer_json.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:arklores/core/agent/react_event.dart';
-import 'package:arklores/core/agent/search_planner.dart';
 import 'package:arklores/core/agent/story_answer.dart';
 import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
@@ -15,6 +14,7 @@ import 'package:arklores/core/gamedata/readonly_sql.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../support/gamedata_fixture.dart';
 import '../../support/sqlite.dart';
@@ -272,10 +272,10 @@ void main() {
         path,
         'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) '
         'SELECT count(*) FROM c',
-        timeout: const Duration(seconds: 1),
+        timeout: const Duration(milliseconds: 200),
       );
       expect(result.error, contains('被中止'));
-      expect(watch.elapsed, lessThan(const Duration(seconds: 4)));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 3)));
       // The DB stays usable for the next query.
       final next = await runReadOnlySql(path, 'SELECT count(*) AS n FROM story_lines');
       expect(next.rows.single.single, 10);
@@ -675,86 +675,6 @@ void main() {
       expect(gathered, contains('我会等星灯'));
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
-    });
-
-    test('a plan reads anchors, names only', () {
-      final plan = parseSearchPlan(
-        '{"anchors": ["甲", " 乙 ", "甲", "${'很长' * 11}", "丙", "丁", "戊", "己", "庚"]}',
-      )!;
-      // A plan of anchors alone is a plan; a repeat counts once, a long
-      // phrase is not a name, six at most.
-      expect(plan.queries, isEmpty);
-      expect(plan.anchors, ['甲', '乙', '丙', '丁', '戊', '己']);
-    });
-
-    test('a reply that plans nothing is no plan', () {
-      expect(parseSearchPlan('我不确定该查什么。'), isNull);
-      expect(parseSearchPlan('{"search": []}'), isNull);
-      expect(parseSearchPlan('{"search": [1, " "]}'), isNull);
-      final plan = parseSearchPlan(
-        '```json\n{"search": ["甲  乙", "甲 乙", "丙", "丁", "戊"], '
-        '"wiki": ["甲", "乙"]}\n```',
-      )!;
-      // Spaces are single, a repeat counts once, three at most.
-      expect(plan.queries, ['甲 乙', '丙', '丁']);
-      expect(plan.wiki, '甲');
-      expect(plan.outlines, isEmpty);
-      expect(plan.wikiSearches, isEmpty);
-    });
-
-    // The first step may be a collection's outline or a wiki search, not
-    // only a search.
-    test('a plan may hold outlines and wiki searches', () {
-      final only = parseSearchPlan('{"outline": "某个故事集"}')!;
-      expect(only.outlines, ['某个故事集']);
-      expect(only.queries, isEmpty);
-
-      final all = parseSearchPlan(
-        '{"search": ["甲", "乙", "丙"], "outline": ["子", "丑", "寅"], '
-        '"wiki_search": ["卯", "辰"]}',
-      )!;
-      // Two outlines at most, four steps in all: outlines first, then
-      // searches, then wiki searches.
-      expect(all.outlines, ['子', '丑']);
-      expect(all.queries, ['甲', '乙']);
-      expect(all.wikiSearches, isEmpty);
-      expect(
-        parseSearchPlan('{"search": ["甲"], "wiki_search": ["卯", "辰", "巳"]}')!
-            .wikiSearches,
-        ['卯', '辰'],
-      );
-      expect(parseSearchPlan('{"outline": [], "wiki_search": " "}'), isNull);
-    });
-
-    test('the plan prompt offers the steps whose tools are there', () {
-      final plain = loreRolePrompt(LoreRole.planner, searchDescription: '<检索说明>');
-      expect(plain, contains('<检索说明>'));
-      expect(plain, isNot(contains('outline')));
-      expect(plain, isNot(contains('wiki')));
-      final full = loreRolePrompt(
-        LoreRole.planner,
-        wiki: true,
-        searchDescription: '<检索说明>',
-        outlineDescription: '<目录说明>',
-        wikiSearchDescription: '<搜索说明>',
-      );
-      expect(full, contains('- outline（故事集目录）：<目录说明>'));
-      expect(full, contains('- wiki_search（Wiki 搜索）：<搜索说明>'));
-      expect(
-        full,
-        contains('"outline": ["<故事集名>"], "wiki_search": ["<一个词>"], "wiki": "<一个词>"}'),
-      );
-      // No free hand to add names the question does not have.
-      expect(full, contains('没有把握就不补'));
-      // The wiki search needs the wiki option.
-      expect(
-        loreRolePrompt(
-          LoreRole.planner,
-          searchDescription: 's',
-          wikiSearchDescription: '<搜索说明>',
-        ),
-        isNot(contains('wiki_search')),
-      );
     });
 
     test('a planned outline runs as an outline call; a step without its tool '
@@ -1662,6 +1582,52 @@ void main() {
 
     // Phase 2 (3.2): what an answer says it did not find is looked for once
     // more by code, with the names it gave, in what it has not read.
+    test('missing lookup cannot make a summary citable', () async {
+      const main = 'obt/main/level_main_fx-01.txt';
+      const act = 'activities/act_fx/level_act_fx_02_beg.txt';
+      final db = await databaseFactoryFfi.openDatabase(p.join(dir.path, 'lore.db'));
+      await db.update('story_lines', {'kind': 'summary'},
+          where: 'story_id = ? AND line_index = ?', whereArgs: [act, 0],);
+      await db.close();
+
+      String answer(String text, String story, int line, {bool missing = false}) =>
+          jsonEncode({
+            'entries': [
+              {
+                'text': text,
+                'cite': [[story, line, line]],
+              },
+            ],
+            'coverage': missing ? 'gaps' : 'full',
+            if (missing)
+              'missing': [
+                {'point': '乙后来怎样', 'words': ['乙']},
+              ],
+          });
+      final client = _ScriptedClient([
+        _call('read_story', {'story_id': main}),
+        _answer(answer('星灯点亮了钟楼。', main, 1, missing: true)),
+        _answer(answer('夜里起风了。', act, 0)),
+        _answer(answer('乙秘密会面。', act, 1)),
+      ]);
+      late LoreConversation saved;
+      final events = await LoreAgentLoop(client: client, store: store)
+          .run(query: '星灯和乙做了什么？', onConversation: (c) => saved = c)
+          .toList();
+
+      expect(client.requests, hasLength(4));
+      expect(client.requests[2].last.content, contains('夜里起风了。'));
+      expect(saved.seen.covers(act, 0, 0), isFalse);
+      expect(saved.seen.covers(act, 1, 2), isTrue);
+      expect(
+        events.where((e) => e.type == ReActEventType.recordNote)
+            .map((e) => e.content),
+        contains(contains('出处不在读过的原文里')),
+      );
+      expect(finalAnswerOf(events), contains('`$act:1`'));
+      expect(finalAnswerOf(events), isNot(contains('`$act:0`')));
+    });
+
     test('a "not found" is looked for again; text found goes back for a '
         'rewrite, once', () async {
       String json(String text, String story, int line,

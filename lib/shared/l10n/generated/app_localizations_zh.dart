@@ -9,9 +9,6 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'ArkLores';
-
-  @override
   String get navWiki => 'Wiki';
 
   @override
@@ -25,9 +22,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsTitle => '设置';
-
-  @override
-  String get settingsSystemCode => 'ARKLORES / 系统设置';
 
   @override
   String get settingsTheme => '主题';
@@ -55,9 +49,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsProfile => '资料设置';
-
-  @override
-  String get settingsProfileDesc => '设置剧情里怎样称呼你。';
 
   @override
   String get settingsProfileSectionCode => 'PROFILE';
@@ -124,9 +115,6 @@ class AppLocalizationsZh extends AppLocalizations {
       '用于剧情调查的语义原文召回。模型需与已安装知识库的向量一致（如阿里云百炼 qwen3.7-text-embedding）。不填 Key 时只用关键词检索。';
 
   @override
-  String get apiSettingsUseSameProvider => '使用与对话相同的提供商';
-
-  @override
   String get apiSettingsLabelBaseUrl => '接口地址';
 
   @override
@@ -143,27 +131,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbTitle => '知识库';
-
-  @override
-  String get kbConfigWarning => '请先在设置中配置 API 密钥，再建立知识库。';
-
-  @override
-  String get kbIndexOverview => '索引概览';
-
-  @override
-  String get kbTotalChunks => '总片段数';
-
-  @override
-  String get kbWikiChunks => 'Wiki 片段';
-
-  @override
-  String get kbBookChunks => '书籍片段';
-
-  @override
-  String get kbBooks => '书籍数';
-
-  @override
-  String get kbWikiSources => 'Wiki 来源';
 
   @override
   String get kbUpdate => '更新';
@@ -188,64 +155,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbCancel => '取消';
 
   @override
-  String get kbIndexing => '索引中...';
-
-  @override
-  String kbStartingCrawl(Object site) {
-    return '开始爬取 $site...';
-  }
-
-  @override
-  String kbCrawlingPages(Object count, Object site) {
-    return '正在爬取 $site：$count 页...';
-  }
-
-  @override
-  String kbCompleted(Object chunks, Object pages) {
-    return '完成：来自 $pages 个页面的 $chunks 个片段。';
-  }
-
-  @override
-  String kbFailed(Object error) {
-    return '索引失败：$error';
-  }
-
-  @override
-  String get kbEngineNative => '搜索引擎：sqlite-vec（原生）';
-
-  @override
-  String get kbEngineFallback => '搜索引擎：纯 Dart（回退）';
-
-  @override
   String get materialsTitle => '资料';
-
-  @override
-  String get materialsWarning =>
-      '⚠️ 资料内容属用户导入，可能包含非官方解读、翻译误差或个人总结。AI 将小心引用并以 Wiki 内容为优先参考。';
-
-  @override
-  String get materialsNoBooks => '还没有书籍';
 
   @override
   String get materialsEmptyDesc =>
       '把想留的文字放在这里：设定摘录、笔记、考据都可以。它们只保存在这台设备上，不会进入知识库。';
-
-  @override
-  String get materialsNoApiKeyHint => '请在设置中配置 API 密钥以启用导入功能。';
-
-  @override
-  String get materialsImportButton => '导入书籍';
-
-  @override
-  String materialsLoadFailed(Object error) {
-    return '加载书籍失败：$error';
-  }
-
-  @override
-  String get materialsEditTitle => '编辑显示名称';
-
-  @override
-  String get materialsEditHint => '输入显示名称';
 
   @override
   String get materialsCancel => '取消';
@@ -254,79 +168,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get materialsSave => '保存';
 
   @override
-  String get materialsDeleteTitle => '删除书籍';
-
-  @override
   String get materialsDeleteConfirm => '删除这份资料？';
 
   @override
   String get materialsDelete => '删除';
-
-  @override
-  String materialsImportFailed(Object error) {
-    return '导入失败：$error';
-  }
-
-  @override
-  String materialsChunks(Object count) {
-    return '$count 个片段';
-  }
-
-  @override
-  String get materialsJustNow => '刚刚';
-
-  @override
-  String materialsMinutesAgo(Object n) {
-    return '$n 分钟前';
-  }
-
-  @override
-  String materialsHoursAgo(Object n) {
-    return '$n 小时前';
-  }
-
-  @override
-  String materialsDaysAgo(Object n) {
-    return '$n 天前';
-  }
-
-  @override
-  String importReading(Object file) {
-    return '正在读取 $file';
-  }
-
-  @override
-  String get importChunking => '正在分块...';
-
-  @override
-  String get importStoring => '正在保存到知识库...';
-
-  @override
-  String get importDone => '导入完成';
-
-  @override
-  String get importFailed => '导入失败';
-
-  @override
-  String get importErrorOccurred => '导入过程中发生错误。';
-
-  @override
-  String get importDismiss => '关闭';
-
-  @override
-  String get aiChatTitle => '剧情智囊';
-
-  @override
-  String get aiChatComingSoon => '即将在 v0.4 推出';
-
-  @override
-  String get aiChatComingSoonDesc => '三种 AI 代理模式：带引用卡片和流式 Markdown 输出。';
-
-  @override
-  String get wikiTabPrts => 'PRTS Wiki';
-
-  @override
-  String get wikiTabEndfield => '终末地 Wiki';
 
   @override
   String get bookmarksTitle => '书签';
@@ -341,15 +186,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get bookmarksEmptyDesc => '保存你想稍后回看的 Wiki 页面。';
-
-  @override
-  String get citationWiki => 'Wiki';
-
-  @override
-  String get citationBook => '书籍';
-
-  @override
-  String get citationViewInWiki => '在 Wiki 中查看';
 
   @override
   String get onboardingNotNow => '以后再说';
@@ -369,7 +205,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get onboardingApiDesc =>
-      'ArkLores 使用你自己的 AI API 密钥。\n请配置一个对话提供商以使用 AI 功能。';
+      '问答用你自己的模型服务：请求从这台手机直接发给服务商，ArkLores 没有中转服务器。已经填过的会读进来，没改就直接下一步。';
 
   @override
   String get onboardingSaveContinue => '保存并继续';
@@ -378,14 +214,81 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingConfigureLater => '稍后配置';
 
   @override
+  String get onboardingNext => '下一步';
+
+  @override
+  String get onboardingSkipGuide => '跳过导览';
+
+  @override
+  String get onboardingAppearanceTitle => '外观';
+
+  @override
+  String get onboardingAppearanceDesc => '主题和阅读字体，之后都能在设置里改。';
+
+  @override
+  String get onboardingProfileDesc => '剧情里对你的称呼会换成这个名字。';
+
+  @override
+  String get onboardingEmbeddingDesc => '向量服务用来按意思查找剧情原文。可以不填，但问答质量会显著下降。';
+
+  @override
+  String get onboardingKbTitle => '知识库';
+
+  @override
+  String get onboardingKbDesc =>
+      '剧情原文和游戏资料都在知识库里，阅读和问答都靠它。每个游戏一个，下载后离线可用；已经下载的会显示出来。';
+
+  @override
+  String get onboardingWikiTitle => 'Wiki 站点';
+
+  @override
+  String get onboardingWikiDesc => 'Wiki 页显示这些站点，问答也会从这里查资料。可以改地址，或者加别的站点。';
+
+  @override
+  String get onboardingBackgroundTitle => '后台运行';
+
+  @override
   String get onboardingDoneTitle => '准备就绪！';
 
   @override
-  String get onboardingDoneDesc =>
-      '你已经准备好探索明日方舟与终末地的世界了。\n\n可前往设置安装 GameData 知识库，\n或直接开始浏览 Wiki！';
+  String get onboardingDoneDesc => '设置都可以在“设置”页再改，导览也能从那里重新打开。';
 
   @override
   String get onboardingStartExploring => '开始探索';
+
+  @override
+  String get backgroundAccessTitle => '让问答在后台继续';
+
+  @override
+  String get backgroundAccessBody =>
+      'ArkLores 没有自己的服务器：调用模型、查知识库、整理答案都在这台手机上进行，一次问答要几分钟。切到别的 App 后，有些系统（比如 ColorOS）几秒内就会冻结后台的 App，连接随之中断，问答就停了。\n\n允许 ArkLores 不受电池优化限制后，它只在问答、下载知识库这类工作进行时在后台运行（通知栏会显示），做完就停。';
+
+  @override
+  String get backgroundAccessAllow => '去允许';
+
+  @override
+  String get backgroundAccessNotifications => '通知';
+
+  @override
+  String get backgroundAccessNotificationsDesc => '后台工作时在通知栏显示进度。';
+
+  @override
+  String get backgroundAccessBattery => '不受电池优化限制';
+
+  @override
+  String get backgroundAccessBatteryDesc => '切到别的 App 时，问答和下载不会被系统冻结。';
+
+  @override
+  String get backgroundAccessGranted => '已允许';
+
+  @override
+  String get backgroundAccessGrant => '允许';
+
+  @override
+  String get settingsVersion => '版本';
+
+  @override
+  String get settingsKnowledgeCategory => '知识库与资料';
 
   @override
   String get settingsHelpGuide => '帮助与引导';
@@ -506,15 +409,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiStoryReaderJumpBack => '回到引用处';
 
   @override
-  String aiStoryReaderCited(String range) {
-    return '引用 / $range';
-  }
-
-  @override
   String get aiStoryReaderEnd => '本章完';
-
-  @override
-  String get libraryTabRead => '阅读';
 
   @override
   String get libraryTabMine => '补充资料';
@@ -559,9 +454,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shelfSandbox => '生息演算';
 
   @override
-  String get shelfRetro => '复刻';
-
-  @override
   String get shelfCodex => '图鉴';
 
   @override
@@ -592,9 +484,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get libraryNotInstalledTitle => '还没有知识库';
-
-  @override
   String get libraryNotInstalledDesc => '到 设置 → 知识库 下载或构建后，这里会出现可以阅读的剧情和资料。';
 
   @override
@@ -617,15 +506,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get libraryParts => '解锁的故事';
 
   @override
-  String get libraryLeftoverStories => '其他剧情';
-
-  @override
   String get libraryFilterHint => '在列表中筛选';
-
-  @override
-  String libraryProgress(int percent) {
-    return '已读 $percent%';
-  }
 
   @override
   String get libraryFinished => '已读完';
@@ -636,11 +517,6 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String libraryReadTimes(int count) {
     return '读过 $count 次';
-  }
-
-  @override
-  String libraryRelease(String month) {
-    return '上线 $month';
   }
 
   @override
@@ -905,12 +781,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get aiWorkRunning => '进行中';
-
-  @override
-  String get aiWorkRaw => '原始输出';
-
-  @override
   String aiStepsStatus(String status, int count) {
     return '$status（$count 步）';
   }
@@ -923,9 +793,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiSend => '发送';
-
-  @override
-  String get aiInputPlaceholder => '输入剧情内容或设定...';
 
   @override
   String get aiSettingsRequired => '请先在设置中配置对话 API 密钥以使用 AI 功能。';
@@ -941,6 +808,26 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiClearConfirmBtn => '清空';
+
+  @override
+  String get aiConversations => '对话';
+
+  @override
+  String get aiConversationsAnswering => '作答中';
+
+  @override
+  String aiConversationsAnsweringCount(int count) {
+    return '$count 个对话正在作答';
+  }
+
+  @override
+  String get aiConversationsRecent => '最近';
+
+  @override
+  String get aiConversationsAll => '查看全部';
+
+  @override
+  String get aiConversationsNone => '还没有对话。提问后会出现在这里。';
 
   @override
   String get aiNewConversation => '新建对话';
@@ -968,24 +855,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String aiHistoryTurns(int count) {
     return '$count 轮对话';
   }
-
-  @override
-  String get settingsAppIcon => '应用图标';
-
-  @override
-  String get settingsIconLightLabel => '白天图标';
-
-  @override
-  String get settingsIconDarkLabel => '夜间图标';
-
-  @override
-  String get settingsIconLightShort => '浅色';
-
-  @override
-  String get settingsIconDarkShort => '深色';
-
-  @override
-  String get settingsIconUnsupported => '当前平台暂不支持运行时切换图标，设置已保存。';
 
   @override
   String get settingsWikiSources => 'Wiki 来源';
@@ -1249,13 +1118,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbBuildTokenSetHint => '已设置 GitHub Token（配额 5000/小时）';
-
-  @override
-  String get materialsPausedTitle => '用户资料导入暂未启用';
-
-  @override
-  String get materialsPausedDesc =>
-      '旧版 PDF/TXT 导入链路已暂停。当前 AI 只使用 GameData 知识库作为证据。';
 
   @override
   String get wikiLoadFailed => 'Wiki 页面加载失败';
@@ -1562,6 +1424,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get gameEndfield => '终末地';
+
+  @override
+  String get launchTagline => '剧情阅读与问答';
 
   @override
   String libraryGameMissing(String game) {

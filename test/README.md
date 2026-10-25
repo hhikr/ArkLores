@@ -1,6 +1,7 @@
 # 测试
 
-`flutter test` 跑全部离线测试（正常约 1 分钟，机器忙时更久；不联网、不花钱）。
+`flutter test` 跑全部离线测试（`--concurrency=2` 约 1 分钟，大半是逐个文件编译；不联网、不花钱）。
+开发机上跑测试一律带 `--concurrency=2`，也不要同时构建 APK（内存不够，电脑会卡住）。
 
 ## 目录
 
@@ -14,7 +15,7 @@
 | `core/`、`features/`、`shared/` | 对应 `lib/` 的单元测试与 Widget 测试 |
 | `app_test.dart` | 启动后的整个 App：引导页、四个标签页、记住的标签、命名路由 |
 | `guards/` | 全仓库守卫：禁止特判（`no_special_case_test`）、新页面用自己的顶栏不用 `AppBar`（`floating_docks_test`）、不用圆角/圆形/`_rounded` 图标/回弹曲线（`square_shapes_test`）、不用转圈/投影/红绿色/原生开关、字不小于 12（`design_rules_test`） |
-| `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md） |
+| `live/` | 真实 API / 真实知识库的 opt-in 测试，默认跳过，要环境变量才跑（花钱，规则见 CLAUDE.md）。随全量编译，所以必须一直编译得过；一次性的本地探针不放这里，放 `notes/probes/`（不提交，`flutter test notes/probes/<文件>` 单独跑） |
 | `support/` | 共用的夹具与替身 |
 | `fixtures/` | 数据文件（live 评测题：`investigation_eval.json` 带金标；`history_questions_eval.json` 是玩家实际问过的 37 问，同一个 `session` 的题是一次对话的连续几轮；`recall_eval.json` 是第一步召回的行级金标） |
 
@@ -24,6 +25,9 @@
   `insertStory` / `insertEntity` / `insertRecord` 写数据。**不要在测试里手写 `CREATE TABLE`**：
   手写的表会和真实的表分叉（列不同、FTS 分词器不同），测试过了而 App 用的库是另一个样子。
   唯一的例外是专门测“旧版本的库”（如 `gamedata_knowledge_store_test.dart` 里没有索引的旧库），注释里写明。
+  夹具建的库写入不同步到磁盘（`fastWrites`：`synchronous = OFF`、回滚日志放内存）、`insertStory` 一篇一次批量写入：
+  逐行提交时每一行都等磁盘，写一千行的用例要几秒、机器忙时超过 30 秒超时。测试里自己打开要写的库也先调 `fastWrites(db)`；
+  被测代码自己开库的（如 `UserDataStore`），把 `fastTestDatabaseFactory` 传给它的 `factory`。
 - `source_fixture.dart`：一棵小的 ArknightsGameData 源码树（3 个角色、1 个物品、一个活动 5 章），
   构建、更新的测试都从它开始；`fake_github.dart` 把它按提交在内存里当作 GitHub 提供
   （提交、git 树、raw 文件、codeload zip）。
@@ -40,7 +44,7 @@
 - `fake_llm.dart`：`ScriptedLLM` 按脚本回答并记录收到的请求；截断、流式、永不回答这类特殊行为在测试文件里继承它或 `LLMClient`。
 - `fake_installer.dart`、`fake_webview.dart`（WebView 页面在 Widget 测试里显示为空盒子）、
   `plain_theme.dart`（主题的 Google 字体在测试里会联网下载并失败，Widget 测试用 `plainThemeOverride()`）、
-  `memory_user_store.dart`、`screenshot.dart`、`sqlite.dart`（`setUpAll(useSqfliteFfi)`）、`temp_dir.dart`（`deleteTempDir`，Windows 文件锁时重试）。
+  `memory_user_store.dart`、`memory_chat_store.dart`（内存里的对话记录）、`screenshot.dart`、`sqlite.dart`（`setUpAll(useSqfliteFfi)`）、`temp_dir.dart`（`deleteTempDir`，Windows 文件锁时重试）。
 
 ## 约定
 

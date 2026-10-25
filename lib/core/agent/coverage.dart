@@ -101,7 +101,7 @@ class Coverage {
   void register(SeenLines seen) {
     for (final p in passages) {
       for (final l in p.lines) {
-        seen.add(p.storyId, l.lineIndex);
+        seen.addStoryLine(p.storyId, l);
       }
     }
     for (final r in records) {
