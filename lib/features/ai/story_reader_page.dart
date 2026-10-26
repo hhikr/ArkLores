@@ -20,6 +20,7 @@ import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart' show LibraryEntry;
 import '../../core/library/placeholders.dart';
+import '../../core/library/portrait_provider.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart'
@@ -33,6 +34,8 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import '../library/portrait_sheet.dart';
+import '../library/portrait_speaker_name.dart';
 import '../library/reading_text.dart'
     show FoldSection, ReadingText, readingStyle;
 import 'story_find_sheet.dart';
@@ -64,6 +67,7 @@ class StoryReaderPage extends ConsumerWidget {
     this.highlightEnd,
     this.resumeLine,
     this.snippet,
+    this.portraitOrigin = PortraitOrigin.materials,
   });
 
   final String storyId;
@@ -75,6 +79,7 @@ class StoryReaderPage extends ConsumerWidget {
 
   /// The text of the anchor line, to find it again in a changed story.
   final String? snippet;
+  final PortraitOrigin portraitOrigin;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -101,12 +106,14 @@ class StoryReaderPage extends ConsumerWidget {
       key: ValueKey('story-reader-${r.hostId}'),
       storyId: r.hostId,
       text: r.lines,
+      portraitSources: r.portraitSources,
       shift: r.offset,
       highlightStart:
           highlightStart == null ? null : highlightStart! + r.offset,
       highlightEnd: highlightEnd == null ? null : highlightEnd! + r.offset,
       resumeLine: resumeLine == null ? null : resumeLine! + r.offset,
       snippet: snippet,
+      portraitOrigin: portraitOrigin,
     );
   }
 }
@@ -116,17 +123,20 @@ class _StoryReaderBody extends ConsumerStatefulWidget {
     super.key,
     required this.storyId,
     required this.text,
+    this.portraitSources = const {},
     this.shift = 0,
     this.highlightStart,
     this.highlightEnd,
     this.resumeLine,
     this.snippet,
+    this.portraitOrigin = PortraitOrigin.materials,
   });
 
   final String storyId;
 
   /// The whole text: the story, then the dialogue attached to it.
   final List<StoryLineEntry> text;
+  final Map<int, ({String storyId, int lineIndex})> portraitSources;
 
   /// Where the story asked for begins in [text]; the numbers the reader shows
   /// for a cited range are its own.
@@ -135,6 +145,7 @@ class _StoryReaderBody extends ConsumerStatefulWidget {
   final int? highlightEnd;
   final int? resumeLine;
   final String? snippet;
+  final PortraitOrigin portraitOrigin;
 
   @override
   ConsumerState<_StoryReaderBody> createState() => _StoryReaderPageState();
@@ -153,6 +164,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// The header (titles, description, synopsis), measured to re-anchor on it.
   final GlobalKey _headerKey = GlobalKey();
   final Map<int, GlobalKey> _lineKeys = {};
+  final Map<int, GlobalKey> _speakerKeys = {};
   bool _scrolled = false;
   bool _recorded = false;
   bool _anchored = false;
@@ -654,9 +666,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (line == null || !mounted) return;
     await Navigator.of(context).pushReplacement(
       smoothPageRoute<void>(
-        frosted: true,
+        frosted: widget.portraitOrigin == PortraitOrigin.materials,
         builder: (_) => StoryReaderPage(
           storyId: widget.storyId,
+          portraitOrigin: widget.portraitOrigin,
           highlightStart: line,
           highlightEnd: line,
         ),
@@ -1357,8 +1370,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       padding: const EdgeInsets.fromLTRB(12, 14, 16, 12),
       onTap: () => Navigator.of(context).pushReplacement(
         smoothPageRoute<void>(
-          frosted: true,
-          builder: (_) => StoryReaderPage(storyId: target.rawId!),
+          frosted: widget.portraitOrigin == PortraitOrigin.materials,
+          builder: (_) => StoryReaderPage(
+            storyId: target.rawId!,
+            portraitOrigin: widget.portraitOrigin,
+          ),
         ),
       ),
       child: Row(
@@ -1409,6 +1425,32 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         _ => null,
       };
 
+  Widget _speakerName(AppThemeTokens theme, StoryLineEntry line, String name) {
+    final style = theme.ui(14, weight: 700, color: theme.textSecondary);
+    final enabled = gameOfId(widget.storyId) == Game.arknights &&
+        ref.watch(hasPortraitIndexProvider).valueOrNull == true;
+    if (!enabled) return Text(name, style: style);
+    return PortraitSpeakerName(
+      key: _speakerKeys.putIfAbsent(line.lineIndex, GlobalKey.new),
+      name: name,
+      style: style,
+      onTap: () {
+        showPortraitSheet(
+          context,
+          speaker: name,
+          spriteFuture: ref.read(
+            spriteOfLineProvider(
+              widget.portraitSources[line.lineIndex] ??
+                  (storyId: widget.storyId, lineIndex: line.lineIndex),
+            ).future,
+          ),
+          fromLine: true,
+          origin: widget.portraitOrigin,
+        );
+      },
+    );
+  }
+
   Widget _line(
     AppThemeTokens theme,
     StoryLineEntry line, {
@@ -1421,7 +1463,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final narration = speaker.isEmpty;
     final plain = narration && !italicNarration;
     final kindTag = _kindTag(line.kind);
-    final content = Row(
+    final row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
@@ -1431,11 +1473,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               if (showName)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    speaker,
-                    style:
-                        theme.ui(14, weight: 700, color: theme.textSecondary),
-                  ),
+                  child: _speakerName(theme, line, speaker),
                 ),
               if (kindTag != null)
                 Padding(
@@ -1478,6 +1516,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         ),
       ],
     );
+    final target = _speakerKeys[line.lineIndex];
+    final content = showName && target != null
+        ? PortraitSpeakerTarget(target: target, child: row)
+        : row;
     if (!marked) return content;
     return Container(
       padding: const EdgeInsets.only(left: 8),

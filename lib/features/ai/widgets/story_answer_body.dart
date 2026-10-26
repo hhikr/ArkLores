@@ -10,6 +10,7 @@ import '../../../core/gamedata/game.dart' show gameOfId;
 import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../../core/library/library_queries.dart' show entryIdOfRecord;
 import '../../../core/library/placeholders.dart';
+import '../../../core/library/portrait_provider.dart';
 import '../../../core/materials/material_provider.dart';
 import '../../../core/wiki/wiki_page.dart';
 import '../../../core/wiki/wiki_provider.dart';
@@ -25,8 +26,10 @@ import '../../../shared/widgets/press_feedback.dart';
 import '../../../shared/widgets/smooth_page_route.dart';
 import '../../library/entry_page.dart';
 import '../../library/material_pages.dart';
+import '../../library/portrait_sheet.dart';
 import '../../library/reading_text.dart';
 import '../investigation_ui.dart';
+import '../speaker_highlight.dart';
 import '../story_labels_provider.dart';
 import '../story_reader_page.dart';
 
@@ -36,6 +39,7 @@ void openStoryReader(BuildContext context, String storyId, CitedRange range) {
     smoothPageRoute<void>(
       builder: (_) => StoryReaderPage(
         storyId: storyId,
+        portraitOrigin: PortraitOrigin.ask,
         highlightStart: range.start,
         highlightEnd: range.end,
       ),
@@ -68,7 +72,9 @@ Future<void> showCitedRecord(
     return;
   }
   await showAppSheet<void>(
-      context, (_) => PlainSheet(child: _RecordSheet(id: id)),);
+    context,
+    (_) => PlainSheet(child: _RecordSheet(id: id)),
+  );
 }
 
 /// 0.13: shows the cited paragraphs of a wiki page (the version the agent
@@ -89,7 +95,11 @@ String wikiTabIdOf(WikiSite site) => switch (site) {
 /// Opens [url] of [site] in the Wiki tab (leaving the pages pushed over the
 /// main tabs).
 void openInWikiTab(
-    BuildContext context, WidgetRef ref, WikiSite site, Uri url,) {
+  BuildContext context,
+  WidgetRef ref,
+  WikiSite site,
+  Uri url,
+) {
   ref.read(wikiOpenRequestProvider.notifier).state =
       WikiOpenRequest(wikiTabIdOf(site), url);
   ref.read(mainTabRequestProvider.notifier).state = 0;
@@ -135,10 +145,18 @@ class StoryAnswerBody extends ConsumerStatefulWidget {
 
 class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
   bool _detailsOpen = false;
+  List<String>? _names;
+  SpeakerMatcher? _matcher;
 
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final names =
+        widget.streaming ? null : ref.watch(highlightNamesProvider).valueOrNull;
+    if (!identical(names, _names)) {
+      _names = names;
+      _matcher = names == null || names.isEmpty ? null : SpeakerMatcher(names);
+    }
     final content = widget.content;
     final cut = content.indexOf(loreDetailsMarker);
     // Records are numbered in order of first citation in the whole answer,
@@ -222,8 +240,28 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
                 children: [
                   if (block.markdown.trim().isNotEmpty)
                     MarkdownBody(
-                      data: block.markdown,
-                      styleSheet: widget.styleSheet,
+                      data: !widget.streaming && _matcher != null
+                          ? _matcher!.linkNames(block.markdown)
+                          : block.markdown,
+                      styleSheet: widget.styleSheet.copyWith(
+                        a: (widget.styleSheet.p ?? theme.text(16)).copyWith(
+                          backgroundColor: theme.accentPrimary,
+                          color: theme.onAccent,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                      onTapLink: (_, href, __) {
+                        final prefix = '$speakerLinkScheme:';
+                        if (href != null && href.startsWith(prefix)) {
+                          showPortraitSheet(
+                            context,
+                            speaker: Uri.decodeComponent(
+                              href.substring(prefix.length),
+                            ),
+                            origin: PortraitOrigin.ask,
+                          );
+                        }
+                      },
                     ),
                   // The last block may still be receiving its citations.
                   if (block.hasCitations &&
@@ -534,26 +572,30 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
-                ref
-                        .watch(citedMaterialProvider(material.pageId))
-                        .valueOrNull
-                        ?.title ??
-                    '补充资料',
-                style: chapterStyle,),
+              ref
+                      .watch(citedMaterialProvider(material.pageId))
+                      .valueOrNull
+                      ?.title ??
+                  '补充资料',
+              style: chapterStyle,
+            ),
             for (final range in material.ranges)
               _chip(
-                  key: 'chain:${material.pageId}:${range.start}',
-                  text: range.start == range.end
-                      ? context.t.aiCitationParagraph(range.start + 1)
-                      : context.t
-                          .aiCitationParagraphs(range.start + 1, range.end + 1),
-                  tooltip: '${material.pageId}:${range.start}-${range.end}',
-                  onTap: () => openMaterialPage(
-                      context,
-                      MaterialReaderPage(
-                          pageId: material.pageId,
-                          start: range.start,
-                          end: range.end,),),),
+                key: 'chain:${material.pageId}:${range.start}',
+                text: range.start == range.end
+                    ? context.t.aiCitationParagraph(range.start + 1)
+                    : context.t
+                        .aiCitationParagraphs(range.start + 1, range.end + 1),
+                tooltip: '${material.pageId}:${range.start}-${range.end}',
+                onTap: () => openMaterialPage(
+                  context,
+                  MaterialReaderPage(
+                    pageId: material.pageId,
+                    start: range.start,
+                    end: range.end,
+                  ),
+                ),
+              ),
           ],
         ),
       // 0.13: wiki pages — "PRTS《title》" and its paragraph chips.
@@ -725,8 +767,11 @@ class CitedRecordText extends ConsumerWidget {
 /// one paragraph around them for context), under their section headings;
 /// the page's site, title and when it was read; a button to the page.
 class WikiCitationSheet extends ConsumerWidget {
-  const WikiCitationSheet(
-      {super.key, required this.pageId, required this.range,});
+  const WikiCitationSheet({
+    super.key,
+    required this.pageId,
+    required this.range,
+  });
 
   final String pageId;
   final CitedRange range;

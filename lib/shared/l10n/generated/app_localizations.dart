@@ -2971,6 +2971,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{received} / {total} ({percent}%)'**
   String portraitPackProgress(String received, String total, String percent);
+
+  /// No description provided for @portraitEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'PORTRAIT'**
+  String get portraitEyebrow;
+
+  /// No description provided for @portraitLines.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} lines'**
+  String portraitLines(int n);
+
+  /// No description provided for @portraitStories.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} stories'**
+  String portraitStories(int n);
+
+  /// No description provided for @portraitSprites.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} variants'**
+  String portraitSprites(int n);
+
+  /// No description provided for @portraitFaceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'face {face} / outfit {body}'**
+  String portraitFaceBody(int face, int body);
+
+  /// No description provided for @portraitGroupSpeakers.
+  ///
+  /// In en, this message translates to:
+  /// **'Speakers using this portrait'**
+  String get portraitGroupSpeakers;
+
+  /// No description provided for @portraitSpeakerGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits used by “{name}”'**
+  String portraitSpeakerGroups(String name);
+
+  /// No description provided for @portraitOperator.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator file'**
+  String get portraitOperator;
+
+  /// No description provided for @portraitNoSprite.
+  ///
+  /// In en, this message translates to:
+  /// **'No portrait is shown for this line.'**
+  String get portraitNoSprite;
+
+  /// No description provided for @portraitTapSpeaker.
+  ///
+  /// In en, this message translates to:
+  /// **'Show portraits of “{name}”'**
+  String portraitTapSpeaker(String name);
+
+  /// No description provided for @portraitGroupPageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portrait speakers'**
+  String get portraitGroupPageTitle;
+
+  /// No description provided for @portraitSpeakerPageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits of “{name}”'**
+  String portraitSpeakerPageTitle(String name);
 }
 
 class _AppLocalizationsDelegate

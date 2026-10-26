@@ -1625,4 +1625,54 @@ class AppLocalizationsZh extends AppLocalizations {
   String portraitPackProgress(String received, String total, String percent) {
     return '$received / $total（$percent%）';
   }
+
+  @override
+  String get portraitEyebrow => 'PORTRAIT';
+
+  @override
+  String portraitLines(int n) {
+    return '$n 句';
+  }
+
+  @override
+  String portraitStories(int n) {
+    return '$n 篇';
+  }
+
+  @override
+  String portraitSprites(int n) {
+    return '差分 $n 张';
+  }
+
+  @override
+  String portraitFaceBody(int face, int body) {
+    return '表情 $face / 服装 $body';
+  }
+
+  @override
+  String get portraitGroupSpeakers => '用这个立绘的说话人';
+
+  @override
+  String portraitSpeakerGroups(String name) {
+    return '“$name”用过的立绘';
+  }
+
+  @override
+  String get portraitOperator => '干员资料';
+
+  @override
+  String get portraitNoSprite => '这一句没有显示立绘。';
+
+  @override
+  String portraitTapSpeaker(String name) {
+    return '查看“$name”的立绘';
+  }
+
+  @override
+  String get portraitGroupPageTitle => '立绘的说话人';
+
+  @override
+  String portraitSpeakerPageTitle(String name) {
+    return '“$name”的立绘';
+  }
 }

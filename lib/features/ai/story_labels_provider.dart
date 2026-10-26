@@ -95,6 +95,7 @@ class StoryReading {
     required this.hostId,
     required this.lines,
     this.offset = 0,
+    this.portraitSources = const {},
   });
 
   /// The story the text is the text of: the asked-for story, or the story its
@@ -105,6 +106,9 @@ class StoryReading {
   /// Added to a line number of the asked-for story to get its place in
   /// [lines] (not zero for attached dialogue opened by its own id).
   final int offset;
+
+  /// Merged dialogue uses synthetic indices; portrait queries need its own key.
+  final Map<int, ({String storyId, int lineIndex})> portraitSources;
 }
 
 /// The text the reader shows for a story id (see [StoryReading]).
@@ -124,7 +128,8 @@ final storyReadingProvider =
   var children = const <String>[];
   try {
     children = [
-      for (final c in await ref.watch(attachedStoriesProvider('story:$hostId').future))
+      for (final c
+          in await ref.watch(attachedStoriesProvider('story:$hostId').future))
         if (c.rawId != null) c.rawId!,
     ];
   } catch (_) {}
@@ -132,6 +137,7 @@ final storyReadingProvider =
     return StoryReading(hostId: hostId, lines: own);
   }
   final lines = [...own];
+  final portraitSources = <int, ({String storyId, int lineIndex})>{};
   var cursor = own.last.lineIndex + 1;
   var offset = 0;
   final parts = <(String, List<StoryLineEntry>)>[
@@ -148,6 +154,8 @@ final storyReadingProvider =
     );
     if (part.$1 == storyId) offset = cursor + 1;
     for (final line in part.$2) {
+      portraitSources[cursor + 1 + line.lineIndex] =
+          (storyId: part.$1, lineIndex: line.lineIndex);
       lines.add(
         StoryLineEntry(
           lineIndex: cursor + 1 + line.lineIndex,
@@ -160,8 +168,14 @@ final storyReadingProvider =
     }
     cursor += 1 + part.$2.last.lineIndex + 1;
   }
-  return StoryReading(hostId: hostId, lines: lines, offset: offset);
+  return StoryReading(
+    hostId: hostId,
+    lines: lines,
+    offset: offset,
+    portraitSources: portraitSources,
+  );
 });
+
 /// R17: a cited non-story record (`record:<id>`): title and text.
 final citedRecordProvider =
     FutureProvider.family<({String title, String content})?, String>(

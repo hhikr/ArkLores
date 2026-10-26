@@ -635,5 +635,69 @@
         "type": "String"
       }
     }
+  },
+  "portraitEyebrow": "PORTRAIT",
+  "portraitLines": "{n} 句",
+  "@portraitLines": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitStories": "{n} 篇",
+  "@portraitStories": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitSprites": "差分 {n} 张",
+  "@portraitSprites": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitFaceBody": "表情 {face} / 服装 {body}",
+  "@portraitFaceBody": {
+    "placeholders": {
+      "face": {
+        "type": "int"
+      },
+      "body": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitGroupSpeakers": "用这个立绘的说话人",
+  "portraitSpeakerGroups": "“{name}”用过的立绘",
+  "@portraitSpeakerGroups": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitOperator": "干员资料",
+  "portraitNoSprite": "这一句没有显示立绘。",
+  "portraitTapSpeaker": "查看“{name}”的立绘",
+  "@portraitTapSpeaker": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitGroupPageTitle": "立绘的说话人",
+  "portraitSpeakerPageTitle": "“{name}”的立绘",
+  "@portraitSpeakerPageTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   }
 }

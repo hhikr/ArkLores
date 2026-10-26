@@ -1692,4 +1692,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String portraitPackProgress(String received, String total, String percent) {
     return '$received / $total ($percent%)';
   }
+
+  @override
+  String get portraitEyebrow => 'PORTRAIT';
+
+  @override
+  String portraitLines(int n) {
+    return '$n lines';
+  }
+
+  @override
+  String portraitStories(int n) {
+    return '$n stories';
+  }
+
+  @override
+  String portraitSprites(int n) {
+    return '$n variants';
+  }
+
+  @override
+  String portraitFaceBody(int face, int body) {
+    return 'face $face / outfit $body';
+  }
+
+  @override
+  String get portraitGroupSpeakers => 'Speakers using this portrait';
+
+  @override
+  String portraitSpeakerGroups(String name) {
+    return 'Portraits used by “$name”';
+  }
+
+  @override
+  String get portraitOperator => 'Operator file';
+
+  @override
+  String get portraitNoSprite => 'No portrait is shown for this line.';
+
+  @override
+  String portraitTapSpeaker(String name) {
+    return 'Show portraits of “$name”';
+  }
+
+  @override
+  String get portraitGroupPageTitle => 'Portrait speakers';
+
+  @override
+  String portraitSpeakerPageTitle(String name) {
+    return 'Portraits of “$name”';
+  }
 }

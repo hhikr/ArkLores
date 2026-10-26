@@ -636,5 +636,69 @@
         "type": "String"
       }
     }
+  },
+  "portraitEyebrow": "PORTRAIT",
+  "portraitLines": "{n} lines",
+  "@portraitLines": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitStories": "{n} stories",
+  "@portraitStories": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitSprites": "{n} variants",
+  "@portraitSprites": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitFaceBody": "face {face} / outfit {body}",
+  "@portraitFaceBody": {
+    "placeholders": {
+      "face": {
+        "type": "int"
+      },
+      "body": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitGroupSpeakers": "Speakers using this portrait",
+  "portraitSpeakerGroups": "Portraits used by “{name}”",
+  "@portraitSpeakerGroups": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitOperator": "Operator file",
+  "portraitNoSprite": "No portrait is shown for this line.",
+  "portraitTapSpeaker": "Show portraits of “{name}”",
+  "@portraitTapSpeaker": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitGroupPageTitle": "Portrait speakers",
+  "portraitSpeakerPageTitle": "Portraits of “{name}”",
+  "@portraitSpeakerPageTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   }
 }
