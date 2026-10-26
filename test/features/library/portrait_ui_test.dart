@@ -412,6 +412,27 @@ void main() {
     expect(find.text('更多'), findsNothing);
   });
 
+  testWidgets('a tap outside the preview only closes it', (tester) async {
+    await pump(tester, const StoryReaderPage(storyId: 'fixture.txt'));
+    final names = find.byType(PortraitSpeakerName);
+    await tester.tap(names.first);
+    await tester.pumpAndSettle();
+    expect(find.text('更多'), findsOneWidget);
+    // The search button under the barrier: the first tap closes the card
+    // and does not open the search field.
+    final search = find.byIcon(Icons.search_sharp);
+    expect(search, findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(search, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.text('更多'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+    // With the card gone, a name opens its card again.
+    await tester.tap(names.last);
+    await tester.pumpAndSettle();
+    expect(find.text('更多'), findsOneWidget);
+  });
+
   testWidgets('preview keeps the answer input focused', (tester) async {
     final focus = FocusNode();
     addTearDown(focus.dispose);

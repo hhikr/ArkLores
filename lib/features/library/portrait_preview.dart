@@ -130,11 +130,16 @@ class _PreviewOverlay extends ConsumerWidget {
     final name = ref.watch(speakerPortraitsProvider(speaker)).valueOrNull;
     return Stack(
       children: [
+        // The first touch outside only closes the card: it does not reach
+        // what is under it (another name, a link). Inside the text field's
+        // tap region, so the Ask input keeps its focus.
         Positioned.fill(
-          child: Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) => onClose(),
-            onPointerSignal: (_) => onClose(),
+          child: TextFieldTapRegion(
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (_) => onClose(),
+              onPointerSignal: (_) => onClose(),
+            ),
           ),
         ),
         Positioned(
