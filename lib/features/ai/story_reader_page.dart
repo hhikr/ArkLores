@@ -903,7 +903,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (i == 0) return _header(theme, collection, chapter, range, synopsis);
     if (i == _rows.length + 1) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 40),
+        padding: EdgeInsets.only(
+          bottom: 40 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
         child: _end(theme),
       );
     }

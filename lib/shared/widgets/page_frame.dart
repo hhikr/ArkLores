@@ -138,7 +138,18 @@ class MainTopBar extends ConsumerWidget {
       top: 0,
       left: 0,
       right: 0,
-      child: Column(
+      child: hides
+          ? ClipRect(
+              child: BarsAway(
+                distance: -(top + topBarHeight),
+                child: _withStatusBar(top, theme, bar),
+              ),
+            )
+          : _withStatusBar(top, theme, bar),
+    );
+  }
+
+  Widget _withStatusBar(double top, AppThemeTokens theme, Widget bar) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
@@ -146,14 +157,9 @@ class MainTopBar extends ConsumerWidget {
             width: double.infinity,
             child: ColoredBox(color: theme.bgPrimary),
           ),
-          if (hides)
-            ClipRect(child: BarsAway(distance: -topBarHeight, child: bar))
-          else
-            bar,
+          bar,
         ],
-      ),
-    );
-  }
+      );
 
   Widget _bar(AppThemeTokens theme) => DecoratedBox(
         decoration: BoxDecoration(

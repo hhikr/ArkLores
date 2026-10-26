@@ -844,10 +844,14 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         ) ??
         false;
 
-    _syncDockInsets(topBarInset, MediaQuery.paddingOf(context).bottom);
+    _syncDockInsets(
+      MediaQuery.paddingOf(context).top + topBarInset,
+      MediaQuery.paddingOf(context).bottom,
+    );
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
+        top: false,
         bottom: false,
         child: Stack(
           children: [

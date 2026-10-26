@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
@@ -20,6 +21,7 @@ import 'shared/providers/settings_provider.dart';
 import 'shared/providers/theme_provider.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/theme/cut_border.dart';
+import 'shared/theme/system_bars_style.dart';
 import 'shared/theme/system_night_mode.dart';
 import 'shared/widgets/industrial_ui.dart';
 import 'shared/widgets/launch_curtain.dart';
@@ -27,6 +29,7 @@ import 'shared/widgets/smooth_page_route.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   startFrameLog();
 
   final settingsService = SettingsService();
@@ -135,10 +138,13 @@ class ArkLoresApp extends ConsumerWidget {
       locale: locale.flutterLocale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      builder: (context, child) => LaunchCurtain(
-        child: IndustrialBackdrop(
-          theme: theme,
-          child: child ?? const SizedBox.shrink(),
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: systemBarsStyle(dark: theme.isDark),
+        child: LaunchCurtain(
+          child: IndustrialBackdrop(
+            theme: theme,
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
       ),
       home: onboardingDone

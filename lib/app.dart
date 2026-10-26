@@ -73,7 +73,11 @@ class _MainShellState extends ConsumerState<MainShell> {
             for (var i = 0; i < _pages.length; i++)
               TickerMode(
                 enabled: i == _currentIndex,
-                child: _TabSlot(shown: i == _currentIndex, child: _pages[i]),
+                child: _TabSlot(
+                  shown: i == _currentIndex,
+                  systemBottom: MediaQuery.viewPaddingOf(context).bottom,
+                  child: _pages[i],
+                ),
               ),
           ],
         ),
@@ -124,14 +128,24 @@ class _MainShellState extends ConsumerState<MainShell> {
 /// box rose in stutters). The same widgets either way, so a tab keeps its
 /// state when it is shown or hidden.
 class _TabSlot extends StatelessWidget {
-  const _TabSlot({required this.shown, required this.child});
+  const _TabSlot({
+    required this.shown,
+    required this.systemBottom,
+    required this.child,
+  });
 
   final bool shown;
+  final double systemBottom;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
+    // Scaffold removes the bottom view padding when it owns a tab bar.
+    // Keep the system inset so floating controls stop above the gesture bar.
+    final inherited = MediaQuery.of(context);
+    final media = inherited.copyWith(
+      viewPadding: inherited.viewPadding.copyWith(bottom: systemBottom),
+    );
     final height = shown ? null : media.size.height;
     return MediaQuery(
       data: shown ? media : media.removeViewInsets(removeBottom: true),
