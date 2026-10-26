@@ -29,7 +29,8 @@ Future<void> _push(WidgetTester tester, Widget page) async {
 }
 
 void main() {
-  testWidgets('back, title and actions sit in one bar; no app bar; '
+  testWidgets(
+      'back, title and actions sit in one bar; no app bar; '
       'the back button is 48 to the finger', (tester) async {
     await _push(
       tester,
@@ -79,7 +80,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('scrollUnder: the list starts under the bar, padded clear of '
+  testWidgets(
+      'scrollUnder: the list starts under the bar, padded clear of '
       'it; otherwise the body starts below it', (tester) async {
     await _push(
       tester,
@@ -96,8 +98,10 @@ void main() {
     );
     final bar = tester.getRect(find.byKey(const ValueKey('page-top-bar')));
     expect(tester.getRect(find.byType(ListView)).top, 0);
-    expect(tester.getTopLeft(find.text('first')).dy,
-        greaterThanOrEqualTo(bar.bottom),);
+    expect(
+      tester.getTopLeft(find.text('first')).dy,
+      greaterThanOrEqualTo(bar.bottom),
+    );
 
     await tester.tap(find.byKey(const ValueKey('page-back')));
     await tester.pumpAndSettle();
@@ -107,5 +111,82 @@ void main() {
       const PageScaffold(title: 'T', body: SizedBox.expand(key: Key('b'))),
     );
     expect(tester.getRect(find.byKey(const Key('b'))).top, topBarInset);
+  });
+
+  testWidgets('a dock page: the controls at the bottom, the body above them',
+      (tester) async {
+    var opened = 0;
+    await _push(
+      tester,
+      DockScaffold(
+        title: '章节',
+        status: const Text('3 / 10'),
+        onTitleTap: () => opened++,
+        actions: [
+          IconButton(
+            tooltip: 'find',
+            icon: const Icon(Icons.search),
+            onPressed: () {},
+          ),
+        ],
+        body: const SizedBox.expand(key: Key('b')),
+      ),
+    );
+    final dock = tester.getRect(find.byKey(const ValueKey('page-bottom-dock')));
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    expect(dock.bottom, screen.height);
+    expect(dock.height, bottomDockHeight);
+    expect(tester.getRect(find.byKey(const Key('b'))).bottom, dock.top);
+    for (final part in [
+      find.byKey(const ValueKey('page-back')),
+      find.text('章节'),
+      find.text('3 / 10'),
+      find.byTooltip('find'),
+    ]) {
+      expect(tester.getRect(part).top, greaterThanOrEqualTo(dock.top));
+    }
+    await tester.tap(find.byKey(const ValueKey('page-title')));
+    expect(opened, 1);
+    await tester.tap(find.byKey(const ValueKey('page-back')));
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('the tab bar slides one block to the tab chosen', (tester) async {
+    var current = 0;
+    late StateSetter set;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: StatefulBuilder(
+              builder: (context, setState) {
+                set = setState;
+                return AppTabBar(
+                  items: const [('A', '甲'), ('B', '乙'), ('C', '丙')],
+                  current: current,
+                  onSelected: (i) => set(() => current = i),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    final block = find.byKey(const ValueKey('main-navigation-block'));
+    expect(block, findsOneWidget);
+    final from = tester.getRect(block).left;
+    await tester.tap(find.text('丙'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 140));
+    final mid = tester.getRect(block).left;
+    await tester.pumpAndSettle();
+    final to = tester.getRect(block).left;
+    expect(mid, greaterThan(from));
+    expect(mid, lessThan(to));
+    expect(
+      tester.getCenter(block).dx,
+      closeTo(tester.getCenter(find.text('丙')).dx, 4),
+    );
   });
 }

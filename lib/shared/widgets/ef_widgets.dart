@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -151,8 +152,7 @@ class Eyebrow extends ConsumerWidget {
       overflow: TextOverflow.ellipsis,
       // Decoration: it grows a little with large text, not so much that it
       // pushes the name it sits over out of a bar.
-      textScaler:
-          MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.2),
+      textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.2),
       style: theme.eyebrow(color: color),
     );
   }
@@ -534,7 +534,8 @@ class _AppButtonState extends ConsumerState<AppButton>
                               ? rest
                               : (kind == ButtonKind.quiet
                                   ? Colors.transparent
-                                  : theme.surfaceElevated.withValues(alpha: 0.6)),
+                                  : theme.surfaceElevated
+                                      .withValues(alpha: 0.6)),
                         ),
                       ),
                       if (widget.busy)
@@ -1015,7 +1016,10 @@ class SquareSwitch extends ConsumerWidget {
                     color: value
                         ? theme.accentPrimary
                         : down
-                            ? pressTint(theme.surfaceElevated, theme.textPrimary)
+                            ? pressTint(
+                                theme.surfaceElevated,
+                                theme.textPrimary,
+                              )
                             : theme.surfaceElevated,
                     border: value ? null : Border.all(color: theme.cardBorder),
                   ),
@@ -1569,25 +1573,43 @@ class PressRow extends ConsumerStatefulWidget {
   ConsumerState<PressRow> createState() => _PressRowState();
 }
 
-class _PressRowState extends ConsumerState<PressRow>
-    with PressHold<PressRow> {
+class _PressRowState extends ConsumerState<PressRow> with PressHold<PressRow> {
+  /// Tapped: the bar runs its full length at once and stays while what the
+  /// row opens covers it. Let go with the press (100 ms after a quick tap),
+  /// it drew back half-drawn under the page coming in.
+  bool _held = false;
+  Timer? _hold;
+
+  void _tapped() {
+    HapticFeedback.selectionClick();
+    if (widget.shift) {
+      setState(() => _held = true);
+      _hold?.cancel();
+      _hold = Timer(Motion.coverIn + Motion.row, () {
+        if (mounted) setState(() => _held = false);
+      });
+    }
+    widget.onTap!();
+  }
+
+  @override
+  void dispose() {
+    _hold?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.onTap == null && widget.onLongPress == null) return widget.child;
     final theme = ref.watch(themeProvider);
     final d = Motion.of(context, Motion.row);
-    final down = pressed;
+    final down = pressed || _held;
     final bar = (down && widget.shift) || widget.marked;
     return pressListener(
       enabled: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                widget.onTap!();
-              },
+        onTap: widget.onTap == null ? null : _tapped,
         onLongPress: widget.onLongPress,
         child: Stack(
           children: [
@@ -1609,7 +1631,11 @@ class _PressRowState extends ConsumerState<PressRow>
               top: 0,
               bottom: 0,
               width: traceRailWidth,
-              child: TraceRail(on: bar, duration: d),
+              child: TraceRail(
+                on: bar,
+                // Fast once tapped: full before the new page has moved far.
+                duration: _held ? Motion.of(context, Motion.press) : d,
+              ),
             ),
           ],
         ),
@@ -1982,7 +2008,9 @@ class _AppSliderState extends ConsumerState<AppSlider> {
   @override
   void didUpdateWidget(AppSlider oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.value != oldWidget.value) _value = widget.value;
+    // Under the finger the thumb is where the finger is, not where the
+    // owner rounded it to.
+    if (!_dragging && widget.value != oldWidget.value) _value = widget.value;
   }
 
   double _snap(double value) {
@@ -2145,9 +2173,8 @@ class _AppSliderState extends ConsumerState<AppSlider> {
                           child: DecoratedBox(
                             key: const ValueKey('app-slider-thumb'),
                             decoration: ShapeDecoration(
-                              color: enabled
-                                  ? theme.textPrimary
-                                  : theme.textMuted,
+                              color:
+                                  enabled ? theme.textPrimary : theme.textMuted,
                               shape: const CutBorder.br(8),
                             ),
                             child: Row(

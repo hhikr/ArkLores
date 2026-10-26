@@ -160,6 +160,21 @@ void main() {
     );
   });
 
+  test('the bars only moving sets the variables without a page scan', () {
+    final script = wikiDockInsetsScript(
+      top: 88,
+      bottom: 85,
+      visibleTop: 32,
+      visibleBottom: 24,
+      duration: Motion.row,
+      scan: false,
+    );
+    expect(script, contains("'--arklores-dock-top', '32.0px'"));
+    expect(script, contains("'--arklores-dock-bottom', '24.0px'"));
+    expect(script, isNot(contains('querySelectorAll')));
+    expect(script, isNot(contains('padding-top')));
+  });
+
   test('reduced motion generates no transition', () {
     final script = wikiDockInsetsScript(
       top: 88,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -582,8 +583,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final open = _isOpen('*');
     final muted = theme.text(13.5, color: theme.textSecondary, height: 1.45);
 
-    Widget row(String key, String text,
-            {required bool isOpen, double indent = 0, TextStyle? style,}) =>
+    Widget row(
+      String key,
+      String text, {
+      required bool isOpen,
+      double indent = 0,
+      TextStyle? style,
+    }) =>
         Semantics(
           button: true,
           expanded: isOpen,
@@ -1242,20 +1248,43 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           margin: const EdgeInsets.fromLTRB(10, 2, 0, 6),
           constraints: const BoxConstraints(maxHeight: workRawHeight),
           color: theme.bgSecondary.withValues(alpha: 0.6),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(8),
-            child: SelectableText(
-              [
-                if (args.isNotEmpty)
-                  const JsonEncoder.withIndent('  ').convert(step.args),
-                step.text.trim(),
-              ].join('\n\n'),
-              style: mono.copyWith(
-                color: theme.textSecondary,
-                fontSize: 12,
-              ),
-            ),
+          child: _rawText(
+            [
+              if (args.isNotEmpty)
+                const JsonEncoder.withIndent('  ').convert(step.args),
+              step.text.trim(),
+            ].join('\n\n'),
+            mono.copyWith(color: theme.textSecondary, fontSize: 12),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// A step's whole output. A long one (a gather runs to tens of thousands
+  /// of characters) is laid out a few dozen lines at a time as it scrolls
+  /// into the box: laid out whole, the first frame of opening took it all
+  /// and the output jumped in instead of unfolding.
+  Widget _rawText(String text, TextStyle style) {
+    const padding = EdgeInsets.all(8);
+    if (text.length <= 3000) {
+      return SingleChildScrollView(
+        padding: padding,
+        child: SelectableText(text, style: style),
+      );
+    }
+    final lines = text.split('\n');
+    final chunks = [
+      for (var i = 0; i < lines.length; i += 30)
+        lines.sublist(i, math.min(i + 30, lines.length)).join('\n'),
+    ];
+    return SizedBox(
+      height: workRawHeight,
+      child: SelectionArea(
+        child: ListView.builder(
+          padding: padding,
+          itemCount: chunks.length,
+          itemBuilder: (_, i) => Text(chunks[i], style: style),
         ),
       ),
     );

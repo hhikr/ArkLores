@@ -104,6 +104,35 @@ void showPortraitPreview(
   overlay.insert(entry);
 }
 
+/// The part of the card shown while it opens: [across] of its width around
+/// the name's place ([side], -1 to 1), [along] of its height from the edge
+/// by the name (the top when it is [below] the name).
+class _Reveal extends CustomClipper<Rect> {
+  const _Reveal({
+    required this.across,
+    required this.along,
+    required this.side,
+    required this.below,
+  });
+  final double across, along, side;
+  final bool below;
+
+  @override
+  Rect getClip(Size size) {
+    final w = size.width * across;
+    final h = size.height * along;
+    final x = (size.width - w) * (side + 1) / 2;
+    return Rect.fromLTWH(x, below ? 0 : size.height - h, w, h);
+  }
+
+  @override
+  bool shouldReclip(_Reveal old) =>
+      old.across != across ||
+      old.along != along ||
+      old.side != side ||
+      old.below != below;
+}
+
 class _PreviewOverlay extends ConsumerWidget {
   const _PreviewOverlay({
     required this.anchor,
@@ -130,8 +159,11 @@ class _PreviewOverlay extends ConsumerWidget {
     final width = math.min(_width, size.width - 32);
     final height = math.min(_height, size.height * 0.5);
     final below = anchor.bottom + 6 + height <= bottom;
-    final top =
-        below ? anchor.bottom + 6 : math.max(16.0, anchor.top - height - 6);
+    final left = anchor.left.clamp(16.0, size.width - width - 16);
+    // Where the name is along the card's width (-1 its left edge, 1 its
+    // right): the card is put under or over the name and pushed in from
+    // the screen's edge, so it may sit right, left or across it.
+    final side = ((anchor.center.dx - left) / width * 2 - 1).clamp(-1.0, 1.0);
     final name = ref.watch(speakerPortraitsProvider(speaker)).valueOrNull;
     return Stack(
       children: [
@@ -148,25 +180,37 @@ class _PreviewOverlay extends ConsumerWidget {
           ),
         ),
         Positioned(
-          left: anchor.left.clamp(16.0, size.width - width - 16),
-          top: top,
+          left: left,
+          // Held by the edge next to the name, so it grows away from it.
+          top: below ? anchor.bottom + 6 : null,
+          bottom: below
+              ? null
+              : size.height - math.max(16.0 + height, anchor.top - 6),
           width: width,
           child: ExcludeFocus(
             child: TextFieldTapRegion(
               child: TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0, end: 1),
                 duration: Motion.of(context, Motion.dialogIn),
-                curve: Motion.mech,
-                // It opens out of the name: down from it, or up when it
-                // sits above.
-                builder: (_, value, child) => ClipRect(
-                  child: Align(
-                    alignment:
-                        below ? Alignment.topCenter : Alignment.bottomCenter,
-                    heightFactor: value,
+                curve: Curves.linear,
+                // It opens out of the name: its edge by the name is drawn
+                // out sideways from over the name, then the card unfolds
+                // from that edge, down when it sits below, up when above.
+                builder: (_, t, child) {
+                  final across = Motion.mech
+                      .transform(const Interval(0, 0.45).transform(t));
+                  final along = Motion.mech
+                      .transform(const Interval(0.3, 1).transform(t));
+                  return ClipRect(
+                    clipper: _Reveal(
+                      across: across,
+                      along: math.max(along, 2 / height),
+                      side: side,
+                      below: below,
+                    ),
                     child: child,
-                  ),
-                ),
+                  );
+                },
                 child: Material(
                   color: theme.cardSurface,
                   child: Container(
@@ -256,7 +300,8 @@ class _PreviewOverlay extends ConsumerWidget {
                           ],
                         ),
                       ],
-                    ),                  ),
+                    ),
+                  ),
                 ),
               ),
             ),

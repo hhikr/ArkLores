@@ -924,9 +924,23 @@ void main() {
       reason: 'the text follows the finger',
     );
     expect(
-      tester.getTopLeft(find.text('第$at句。')).dy,
-      greaterThanOrEqualTo(tester.getBottomLeft(scrub).dy),
+      tester.getBottomLeft(find.text('第$at句。')).dy,
+      lessThanOrEqualTo(tester.getTopLeft(scrub).dy),
       reason: 'the line jumped to is not under the panel',
+    );
+    expect(
+      tester.getTopLeft(scrub).dy,
+      greaterThan(300),
+      reason: 'the panel grows up out of the dock at the bottom',
+    );
+    final thumbAt = tester.widget<AppSlider>(slider).value;
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    expect(find.text('$at / 400'), findsOneWidget);
+    expect(
+      tester.widget<AppSlider>(slider).value,
+      thumbAt,
+      reason: 'held still, the thumb is not pulled to the line on screen',
     );
     await gesture.up();
     await tester.pumpAndSettle();
@@ -945,8 +959,8 @@ void main() {
     final jumped = tester.widget<AppSlider>(slider).value.round() + 1;
     final line = find.text('第$jumped句。');
     expect(line, findsOneWidget);
-    expect(tester.getTopLeft(line).dy,
-        greaterThanOrEqualTo(tester.getBottomLeft(scrub).dy),);
+    expect(tester.getBottomLeft(line).dy,
+        lessThanOrEqualTo(tester.getTopLeft(scrub).dy),);
     final screen = tester.view.physicalSize.height / tester.view.devicePixelRatio;
     expect(tester.getBottomLeft(line).dy, lessThanOrEqualTo(screen));
     await tester.drag(find.byKey(const ValueKey('story-reader-scroll')),
@@ -963,7 +977,8 @@ void main() {
     expect(scrub, findsNothing);
     await tester.tap(title);
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(400, 450));
+    // On the text above the panel.
+    await tester.tapAt(const Offset(400, 120));
     await tester.pumpAndSettle();
     expect(scrub, findsNothing);
     expect(tester.takeException(), isNull);

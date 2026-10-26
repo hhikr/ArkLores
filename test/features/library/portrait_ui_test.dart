@@ -720,6 +720,13 @@ void main() {
         dark: dark,
       );
       await open(tester);
+      // Above the name the card is held by its bottom edge, by the name, so
+      // it grows up from there.
+      final card = find.byWidgetPredicate(
+        (w) => w is Positioned && w.width == 172 && w.bottom != null,
+      );
+      expect(card, findsOneWidget);
+      expect(tester.getRect(card).bottom, closeTo(760 - 6, 0.5));
       await capture(tester, '${mode}_preview_above');
       await tester.tapAt(const Offset(380, 100));
       await tester.pumpAndSettle();

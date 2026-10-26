@@ -507,6 +507,187 @@ class PageScaffold extends ConsumerWidget {
   }
 }
 
+/// Height of a [DockScaffold]'s dock, above the system's navigation.
+const double bottomDockHeight = 60;
+
+/// A pushed page held in one hand (the reader): the paper runs up to the
+/// status bar and the controls sit in a dock at the bottom, under the
+/// thumb: back on the left, a cut block in the middle naming the page (its
+/// [title], a [status] line under it) that opens what [onTitleTap] opens
+/// (the chevron turns while [open]), the [actions] on the right. [progress]
+/// runs along the dock's top edge. Put what the title opens in the body,
+/// at its bottom: it then grows up out of the dock.
+class DockScaffold extends ConsumerWidget {
+  const DockScaffold({
+    super.key,
+    required this.title,
+    required this.body,
+    this.status,
+    this.onTitleTap,
+    this.open = false,
+    this.progress,
+    this.actions = const [],
+    this.backgroundColor,
+  });
+
+  final String title;
+  final Widget? status;
+  final VoidCallback? onTitleTap;
+  final bool open;
+  final Widget? progress;
+  final List<Widget> actions;
+  final Widget body;
+  final Color? backgroundColor;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final padding = MediaQuery.viewPaddingOf(context);
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
+    final ground = backgroundColor ?? theme.bgPrimary;
+    return Scaffold(
+      backgroundColor: ground,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: padding.top,
+                bottom: bottomDockHeight + padding.bottom,
+              ),
+              child: MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                removeBottom: true,
+                child: body,
+              ),
+            ),
+          ),
+          // The status bar keeps the paper under it: the text scrolls
+          // beneath, not under the system's icons.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: padding.top,
+            child: ColoredBox(color: ground),
+          ),
+          Positioned(
+            key: const ValueKey('page-bottom-dock'),
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.cardSurface,
+                border: Border(top: BorderSide(color: theme.divider)),
+              ),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: padding.bottom),
+                child: SizedBox(
+                  height: bottomDockHeight,
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          children: [
+                            if (canPop)
+                              SquareIconButton(
+                                key: const ValueKey('page-back'),
+                                icon: Icons.arrow_back_sharp,
+                                tooltip: MaterialLocalizations.of(context)
+                                    .backButtonTooltip,
+                                filled: true,
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                              ),
+                            const SizedBox(width: 4),
+                            Expanded(child: _titleBlock(context, theme)),
+                            if (actions.isNotEmpty) ...[
+                              const SizedBox(width: 2),
+                              ...actions,
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (progress != null)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          top: 0,
+                          child: progress!,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _titleBlock(BuildContext context, AppThemeTokens theme) {
+    final text = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.heading(15),
+        ),
+        if (status != null) status!,
+      ],
+    );
+    if (onTitleTap == null) {
+      return Padding(padding: const EdgeInsets.only(left: 8), child: text);
+    }
+    return Semantics(
+      header: true,
+      button: true,
+      expanded: open,
+      child: PressBuilder(
+        builder: (context, down) => GestureDetector(
+          key: const ValueKey('page-title'),
+          behavior: HitTestBehavior.opaque,
+          onTap: withHaptic(onTitleTap),
+          child: AnimatedContainer(
+            duration: Motion.of(context, Motion.press),
+            curve: Motion.mech,
+            height: 44,
+            padding: const EdgeInsets.fromLTRB(10, 0, 14, 0),
+            decoration: ShapeDecoration(
+              color: down
+                  ? pressTint(theme.bgSecondary, theme.textPrimary)
+                  : theme.bgSecondary,
+              shape: const CutBorder.br(8),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: text),
+                AnimatedRotation(
+                  turns: open ? 0.5 : 0,
+                  duration: Motion.of(context, Motion.wipe),
+                  curve: Motion.mech,
+                  child: Icon(
+                    Icons.expand_less_sharp,
+                    size: 20,
+                    color: open ? theme.textPrimary : theme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// [base] plus the room the bars take: the top bar (when [topBar]) and the
 /// status bar above it, and whatever the shell reserves at the bottom (the
 /// tab bar).
@@ -559,87 +740,99 @@ class AppTabBar extends ConsumerWidget {
           height: height,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            child: Row(
-              children: [
-                for (var i = 0; i < items.length; i++)
-                  Expanded(
-                    child: Semantics(
-                      button: true,
-                      selected: i == current,
-                      label: items[i].$2,
-                      excludeSemantics: true,
-                      child: PressBuilder(
-                        enabled: i != current,
-                        builder: (context, down) => GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            if (i != current) HapticFeedback.selectionClick();
-                            onSelected(i);
-                          },
-                          child: AnimatedContainer(
-                            duration: Motion.of(
-                              context,
-                              down ? Motion.press : Motion.wipe,
-                            ),
-                            curve: Motion.mech,
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            decoration: ShapeDecoration(
-                              color: i == current
-                                  ? theme.accentPrimary
-                                  : down
-                                      ? pressTint(
-                                          Colors.transparent,
-                                          theme.textPrimary,
-                                        )
-                                      : Colors.transparent,
-                              shape: const CutBorder.br(8),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  // The English over the Chinese; where it
-                                  // would only repeat the label, the tab's
-                                  // number.
-                                  zh &&
-                                          items[i].$1.toLowerCase() !=
-                                              items[i].$2.toLowerCase()
-                                      ? items[i].$1
-                                      : '0${i + 1}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.clip,
-                                  style: theme.eyebrow(
-                                    size: 10,
-                                    color: i == current
-                                        ? theme.onAccent
-                                        : theme.textMuted,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  items[i].$2,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.ui(
-                                    14,
-                                    weight: i == current ? 700 : 500,
-                                    color: i == current
-                                        ? theme.onAccent
-                                        : theme.textPrimary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final each = box.maxWidth / items.length;
+                return Stack(
+                  children: [
+                    // One accent block that slides to the tab chosen.
+                    AnimatedPositioned(
+                      key: const ValueKey('main-navigation-block'),
+                      duration: Motion.of(context, Motion.wipe),
+                      curve: Motion.mech,
+                      left: each * current + 3,
+                      top: 0,
+                      bottom: 0,
+                      width: each - 6,
+                      child: DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: theme.accentPrimary,
+                          shape: const CutBorder.br(8),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                    Row(
+                      children: [
+                        for (var i = 0; i < items.length; i++)
+                          Expanded(child: _tab(context, theme, zh, i)),
+                      ],
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
       ),
     );
   }
+
+  Widget _tab(BuildContext context, AppThemeTokens theme, bool zh, int i) =>
+      Semantics(
+        button: true,
+        selected: i == current,
+        label: items[i].$2,
+        excludeSemantics: true,
+        child: PressBuilder(
+          enabled: i != current,
+          builder: (context, down) => GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (i != current) HapticFeedback.selectionClick();
+              onSelected(i);
+            },
+            child: AnimatedContainer(
+              duration: Motion.of(context, Motion.press),
+              curve: Motion.mech,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: ShapeDecoration(
+                color: down
+                    ? pressTint(Colors.transparent, theme.textPrimary)
+                    : Colors.transparent,
+                shape: const CutBorder.br(8),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    // The English over the Chinese; where it
+                    // would only repeat the label, the tab's
+                    // number.
+                    zh && items[i].$1.toLowerCase() != items[i].$2.toLowerCase()
+                        ? items[i].$1
+                        : '0${i + 1}',
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: theme.eyebrow(
+                      size: 10,
+                      color: i == current ? theme.onAccent : theme.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    items[i].$2,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.ui(
+                      14,
+                      weight: i == current ? 700 : 500,
+                      color: i == current ? theme.onAccent : theme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }

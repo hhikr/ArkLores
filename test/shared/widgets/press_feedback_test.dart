@@ -77,6 +77,42 @@ void main() {
     await tester.pumpAndSettle();
     check();
   });
+  testWidgets('a tapped row runs its rail full and keeps it while covered',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                PressRow(
+                  onTap: () {},
+                  child:
+                      const SizedBox(key: ValueKey('row-content'), height: 70),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    double rail() => tester
+        .getSize(
+          find.descendant(
+            of: find.byType(TraceRail),
+            matching: find.byType(ColoredBox),
+          ),
+        )
+        .height;
+    await tester.tap(find.byKey(const ValueKey('row-content')));
+    await tester.pump();
+    await tester.pump(Motion.press + const Duration(milliseconds: 16));
+    expect(rail(), 70, reason: 'full within the press, not the row time');
+    await tester.pump(Motion.coverIn);
+    expect(rail(), 70, reason: 'past the quick tap, it has not drawn back');
+    await tester.pumpAndSettle();
+    expect(rail(), 0);
+  });
   group('PressHold', () {
     // In a list, where a tap's own onTapDown waits 100 ms for a drag.
     Widget host({bool enabled = true, VoidCallback? onTap}) => MaterialApp(

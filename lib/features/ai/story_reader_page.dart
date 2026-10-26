@@ -88,7 +88,7 @@ class StoryReaderPage extends ConsumerWidget {
     final r = reading.valueOrNull;
     if (r == null) {
       final theme = ref.watch(themeProvider);
-      return PageScaffold(
+      return DockScaffold(
         title: '',
         backgroundColor: theme.bgPrimary,
         body: reading.isLoading
@@ -250,6 +250,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _saveTimer?.cancel();
     _endTimer?.cancel();
     _progressTimer?.cancel();
+    _scrubDone?.cancel();
     _progress.dispose();
     _scrub.dispose();
     final container = _container;
@@ -355,8 +356,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (viewport is! RenderBox || !viewport.attached || _lines.isEmpty) {
       return null;
     }
-    final top = viewport.localToGlobal(Offset.zero).dy + 8 + _panelCover();
-    final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy;
+    final top = viewport.localToGlobal(Offset.zero).dy + 8;
+    final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy -
+        _panelCover();
     int? first, last;
     // Keys of lines scrolled out of the lazy list are dropped (a line built
     // again gets a new one), so this looks at the lines near the screen, not
@@ -408,9 +410,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   /// Shows where the reader is, at most every 120 ms while scrolling.
   void _showProgressSoon() {
-    if (_progressTimer?.isActive ?? false) return;
+    if (_scrubbing || (_progressTimer?.isActive ?? false)) return;
     _progressTimer = Timer(const Duration(milliseconds: 120), () {
-      if (!mounted) return;
+      if (!mounted || _scrubbing) return;
       final range = _visibleRange();
       if (range != null) _progress.value = (range.$1, _lines.length);
     });
@@ -497,7 +499,15 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _scrubRow = null;
   }
 
+  /// While the finger is on the slider the line it points at is where the
+  /// reader is: the count from the screen (the first line of the row shown,
+  /// a line or two off) would pull the thumb back under the finger.
+  bool _scrubbing = false;
+  Timer? _scrubDone;
+
   void _scrubMove(double value) {
+    _scrubbing = true;
+    _scrubDone?.cancel();
     final p = value.round();
     _scrubTarget = p;
     _progress.value = (p, _lines.length);
@@ -512,16 +522,18 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   void _scrubEnd(double value) {
     _scrubMove(value);
+    // Past the last jump's own frames (its layout and the scroll reset):
+    // the thumb stays where it was let go until the text is scrolled.
+    _scrubDone?.cancel();
+    _scrubDone = Timer(Motion.wipe, () => _scrubbing = false);
     _saveSoon();
-    _showProgressSoon();
   }
 
   /// The progress panel, measured to tell how much of the text it covers.
   final GlobalKey _scrubPanelKey = GlobalKey();
 
-  /// How far down the text the open progress panel reaches (0 when shut):
-  /// the line jumped to is put under it, and where the reader is counts
-  /// from there.
+  /// How far up the text the open progress panel reaches from the bottom of
+  /// the view (0 when shut): where the reader is counts above it.
   double _panelCover() {
     if (!_scrub.value) return 0;
     final view = _scrollKey.currentContext?.findRenderObject();
@@ -529,23 +541,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (view is! RenderBox || panel is! RenderBox || !panel.attached) {
       return 0;
     }
-    final bottom = panel
-        .localToGlobal(Offset(0, panel.size.height), ancestor: view)
-        .dy;
-    return bottom.clamp(0.0, view.size.height);
+    final top = panel.localToGlobal(Offset.zero, ancestor: view).dy;
+    return (view.size.height - top).clamp(0.0, view.size.height);
   }
 
   /// Anchors the list on the row holding line [p], at the top of the view
-  /// (under the progress panel while it is open).
+  /// (the panel is at the bottom, by the thumb).
   void _showLine(int p) {
     final r = _rows.indexWhere((row) => row.last >= p);
     final row = r < 0 ? _rows.length - 1 : r;
     if (row == _scrubRow) return;
     _scrubRow = row;
-    final height = _scrollKey.currentContext?.size?.height ?? 0;
     setState(() {
       _center = row + 1;
-      _centerAt = height > 0 ? (_panelCover() / height).clamp(0.0, 0.9) : 0;
+      _centerAt = 0;
     });
     // Changing the upward sliver can preserve the old visible item. Reset
     // once after layout so consecutive jumps reach the requested row.
@@ -601,7 +610,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       padding: const EdgeInsets.fromLTRB(_scrubGutter, 12, _scrubGutter, 14),
       decoration: BoxDecoration(
         color: theme.cardSurface,
-        border: Border(bottom: BorderSide(color: theme.divider)),
+        border: Border(top: BorderSide(color: theme.divider)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -706,12 +715,26 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _scrub.value) setState(() => _scrub.value = false);
       },
-      child: PageScaffold(
+      // The controls are in a dock at the bottom, under the thumb; the
+      // progress panel grows up out of it.
+      child: DockScaffold(
         backgroundColor: theme.bgPrimary,
         title: chapter.isNotEmpty ? chapter : collection,
         onTitleTap: widget.text.isEmpty ? null : _scrubStart,
-        // How far in: a line along the title plate and the line number.
-        titleFooter: ValueListenableBuilder<(int, int)?>(
+        open: _scrub.value,
+        status: ValueListenableBuilder<(int, int)?>(
+          valueListenable: _progress,
+          builder: (context, p, _) => p == null
+              ? const SizedBox.shrink()
+              : Text(
+                  '${p.$1 + 1} / ${p.$2}',
+                  key: const ValueKey('story-reader-progress'),
+                  maxLines: 1,
+                  style: theme.field(size: 12, color: theme.textSecondary),
+                ),
+        ),
+        // How far in: a line along the dock's top edge.
+        progress: ValueListenableBuilder<(int, int)?>(
           valueListenable: _progress,
           builder: (context, p, _) => p == null || p.$2 == 0
               ? const SizedBox.shrink()
@@ -726,21 +749,6 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                 ),
         ),
         actions: [
-          ValueListenableBuilder<(int, int)?>(
-            valueListenable: _progress,
-            builder: (context, p, _) => p == null
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Center(
-                      child: Text(
-                        '${p.$1 + 1} / ${p.$2}',
-                        key: const ValueKey('story-reader-progress'),
-                        style: theme.field(color: theme.textSecondary),
-                      ),
-                    ),
-                  ),
-          ),
           if (widget.text.isNotEmpty)
             SquareIconButton(
               key: const ValueKey('story-reader-find'),
@@ -787,9 +795,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                     ),
                   ),
                 ),
-                // Keep the panel open while the reader scrolls or adjusts the slider.
+                // Keep the panel open while the reader scrolls or adjusts the
+                // slider. It grows up out of the dock under it.
                 Positioned(
-                  top: 0,
+                  bottom: 0,
                   left: 0,
                   right: 0,
                   child: ValueListenableBuilder<bool>(
@@ -801,7 +810,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                       switchOutCurve: Motion.mech,
                       transitionBuilder: (child, animation) => SizeTransition(
                         sizeFactor: animation,
-                        alignment: Alignment.topCenter,
+                        alignment: Alignment.bottomCenter,
                         child: child,
                       ),
                       child: !p
@@ -918,7 +927,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (i == _rows.length + 1) {
       return Padding(
         padding: EdgeInsets.only(
-          bottom: 40 + MediaQuery.viewPaddingOf(context).bottom,
+          bottom: 40 + MediaQuery.paddingOf(context).bottom,
         ),
         child: _end(theme),
       );

@@ -375,11 +375,11 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     final visibleBottom =
         hidden ? MediaQuery.viewPaddingOf(context).bottom : bottom;
     final duration = Motion.of(context, hidden ? Motion.row : Motion.press * 2);
-    if (top == _dockTop &&
-        bottom == _dockBottom &&
+    final layout =
+        top != _dockTop || bottom != _dockBottom || duration != _dockDuration;
+    if (!layout &&
         visibleTop == _visibleDockTop &&
-        visibleBottom == _visibleDockBottom &&
-        duration == _dockDuration) {
+        visibleBottom == _visibleDockBottom) {
       return;
     }
     _dockTop = top;
@@ -389,21 +389,29 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     _dockDuration = duration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (final controller in _controllers) {
-        if (controller != null) unawaited(_applyDockInsets(controller));
+        if (controller != null) {
+          unawaited(_applyDockInsets(controller, scan: layout));
+        }
       }
     });
   }
 
   /// Pads the page by the docks' room, so its top and its end can be
   /// scrolled clear of them, and moves the site's own fixed/sticky bars
-  /// (which ignore padding) down/up by the same amount.
-  Future<void> _applyDockInsets(InAppWebViewController controller) async {
+  /// (which ignore padding) down/up by the same amount. The bars only
+  /// moving ([scan] false) sets two variables: looking through the whole
+  /// page then, while it is being scrolled, made the scroll stutter.
+  Future<void> _applyDockInsets(
+    InAppWebViewController controller, {
+    bool scan = true,
+  }) async {
     final js = wikiDockInsetsScript(
       top: _dockTop,
       bottom: _dockBottom,
       visibleTop: _visibleDockTop,
       visibleBottom: _visibleDockBottom,
       duration: _dockDuration,
+      scan: scan,
     );
     try {
       await controller.evaluateJavascript(source: js);
@@ -1305,7 +1313,17 @@ String wikiDockInsetsScript({
   required double visibleTop,
   required double visibleBottom,
   required Duration duration,
+  bool scan = true,
 }) {
+  if (!scan) {
+    return '''
+(function() {
+  var root = document.documentElement;
+  root.style.setProperty('--arklores-dock-top', '${visibleTop}px');
+  root.style.setProperty('--arklores-dock-bottom', '${visibleBottom}px');
+})();
+''';
+  }
   String transition(String edge) => duration == Duration.zero
       ? ''
       : 'transition:$edge ${duration.inMilliseconds}ms cubic-bezier(0.7,0,0.2,1) !important;';
