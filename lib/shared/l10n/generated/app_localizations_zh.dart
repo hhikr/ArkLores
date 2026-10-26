@@ -1553,4 +1553,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiContextDismiss => '知道了';
+
+  @override
+  String aiWorkCompaction(String from, String to, int count) {
+    return '压缩上下文 / 约 $from → $to / 保留 $count 段';
+  }
 }

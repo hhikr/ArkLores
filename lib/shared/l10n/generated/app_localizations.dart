@@ -2845,6 +2845,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Got it'**
   String get aiContextDismiss;
+
+  /// No description provided for @aiWorkCompaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact context / ≈ {from} → {to} / {count} passages kept'**
+  String aiWorkCompaction(String from, String to, int count);
 }
 
 class _AppLocalizationsDelegate

@@ -25,6 +25,7 @@ enum WorkKind {
   /// `gather`: the lines around a few names.
   gather,
   otherTool,
+  compaction,
   note,
 
   /// What code did to the answer (sent back, citations cut or dropped).
@@ -325,6 +326,18 @@ List<WorkStep> workStepsOf(List<ReActStep> steps) {
       case ReActEventType.thought:
         final text = step.content.trim();
         if (text.isNotEmpty) out.add(WorkStep(WorkKind.note, text: text));
+      case ReActEventType.contextCompacted:
+        out.add(
+          WorkStep(
+            WorkKind.compaction,
+            text: step.content,
+            args: {
+              'from': step.compactedFrom ?? 0,
+              'to': step.compactedTo ?? 0,
+              'retained': step.retainedCount ?? 0,
+            },
+          )..done = true,
+        );
       case ReActEventType.recordNote:
         out.add(WorkStep(WorkKind.record, text: step.content.trim()));
       case ReActEventType.error:

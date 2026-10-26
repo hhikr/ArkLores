@@ -203,12 +203,12 @@ void main() {
         llm.planRequests.last.last.content,
         allOf(contains('上一问：谁藏起了那把匕首呢'), endsWith('玩家的问题：那后来呢？')),
       );
-      // The first question's searches are folded in the follow-up.
+      // The first question's original search results stay in the follow-up.
       final later = llm.requests.last
           .where((m) => m.role == MessageRole.tool)
           .map((m) => m.content.startsWith('[已折叠]'))
           .toList();
-      expect(later, [true, true, false]);
+      expect(later, [false, false, false]);
     });
 
     test('without a plan the question itself is searched by meaning',

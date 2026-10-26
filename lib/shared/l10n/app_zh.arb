@@ -564,5 +564,19 @@
   },
   "aiContextNewChat": "开新对话",
   "aiContextStop": "停止作答",
-  "aiContextDismiss": "知道了"
+  "aiContextDismiss": "知道了",
+    "aiWorkCompaction": "压缩上下文 / 约 {from} → {to} / 保留 {count} 段",
+    "@aiWorkCompaction": {
+      "placeholders": {
+        "from": {
+          "type": "String"
+        },
+        "to": {
+          "type": "String"
+        },
+        "count": {
+          "type": "int"
+        }
+      }
+    }
 }

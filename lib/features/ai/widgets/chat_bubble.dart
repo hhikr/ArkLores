@@ -1027,6 +1027,39 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     void toggle() => setState(() {
           if (!_openSteps.remove(index)) _openSteps.add(index);
         });
+    if (step.kind == WorkKind.compaction) {
+      return _timelineRow(
+        theme,
+        last: last,
+        dot: null,
+        child: PressRow(
+          key: ValueKey('work-compaction-$index'),
+          onTap: toggle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t.aiWorkCompaction(
+                    formatTokenCount(step.args['from'] as int),
+                    formatTokenCount(step.args['to'] as int),
+                    step.args['retained'] as int,
+                  ),
+                  style: small,
+                ),
+                if (open)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: workRawHeight),
+                    child: SingleChildScrollView(
+                        child: SelectableText(step.text, style: small),),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     if (step.kind == WorkKind.note || step.kind == WorkKind.record) {
       final record = step.kind == WorkKind.record;
       return _timelineRow(
@@ -1279,7 +1312,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         WorkKind.error => Icons.error_outline_sharp,
         WorkKind.otherTool ||
         WorkKind.note ||
-        WorkKind.record =>
+        WorkKind.record ||
+        WorkKind.compaction =>
           Icons.build_outlined,
       };
   String _workResult(WorkStep step) {

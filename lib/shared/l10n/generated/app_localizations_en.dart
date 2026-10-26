@@ -1612,4 +1612,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiContextDismiss => 'Got it';
+
+  @override
+  String aiWorkCompaction(String from, String to, int count) {
+    return 'Compact context / ≈ $from → $to / $count passages kept';
+  }
 }

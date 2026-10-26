@@ -61,6 +61,7 @@ class ReActIterationRecord {
             ? Map<String, dynamic>.from(json['tool_args'] as Map)
             : null,
         observation: '${json['observation'] ?? ''}',
+        compaction: json['compaction'] as Map<String, dynamic>?,
       );
   ReActIterationRecord({
     required this.iteration,
@@ -71,6 +72,7 @@ class ReActIterationRecord {
     this.tool,
     this.toolArgs,
     this.observation = '',
+    this.compaction,
   });
 
   int iteration;
@@ -82,7 +84,10 @@ class ReActIterationRecord {
   Map<String, dynamic>? toolArgs;
   String observation;
 
+  Map<String, dynamic>? compaction;
+
   Map<String, dynamic> toJson() => {
+        if (compaction != null) 'compaction': compaction,
         'iteration': iteration,
         'raw_response': rawResponse,
         'thought': thought,
@@ -193,6 +198,9 @@ class ChatSessionTurn {
 class ChatSessionFile {
   factory ChatSessionFile.fromJson(Map<String, dynamic> json) =>
       ChatSessionFile(
+        loreConversation: json['lore_conversation'] is Map<String, dynamic>
+            ? json['lore_conversation'] as Map<String, dynamic>
+            : null,
         sessionId: '${json['session_id'] ?? ''}',
         createdAt: DateTime.tryParse('${json['created_at'] ?? ''}') ??
             DateTime.fromMillisecondsSinceEpoch(0),
@@ -218,6 +226,7 @@ class ChatSessionFile {
     required this.updatedAt,
     required this.title,
     this.turns = const [],
+    this.loreConversation,
   });
 
   final String sessionId;
@@ -225,6 +234,7 @@ class ChatSessionFile {
   final DateTime updatedAt;
   final String title;
   final List<ChatSessionTurn> turns;
+  final Map<String, dynamic>? loreConversation;
 
   /// Derived display summary for the history list.
   int get turnCount => turns.length;
@@ -232,6 +242,7 @@ class ChatSessionFile {
       turns.isEmpty ? '' : turns.last.query;
 
   Map<String, dynamic> toJson() => {
+        if (loreConversation != null) 'lore_conversation': loreConversation,
         'format': chatSessionFormat,
         'version': chatSessionFormatVersion,
         'session_id': sessionId,
@@ -254,6 +265,18 @@ class ChatSessionFile {
 List<ChatMessage> chatTurnToMessages(ChatSessionTurn turn, String assistantId) {
   final steps = <ReActStep>[];
   for (final iteration in turn.iterations) {
+    final compact = iteration.compaction;
+    if (compact != null) {
+      steps.add(
+        ReActStep(
+          type: ReActEventType.contextCompacted,
+          content: compact['content'] as String,
+          compactedFrom: compact['from'] as int?,
+          compactedTo: compact['to'] as int?,
+          retainedCount: compact['retained'] as int?,
+        ),
+      );
+    }
     if (iteration.thought.isNotEmpty) {
       steps.add(ReActStep(
         type: ReActEventType.thought,

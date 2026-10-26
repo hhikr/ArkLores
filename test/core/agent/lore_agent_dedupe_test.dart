@@ -179,7 +179,7 @@ void main() {
     expect(out.content, contains('L201 [甲]'));
     expect(out.content, isNot(contains('L100 [甲]')));
   });
-  test('folded results allow the same lines to execute again', () async {
+  test('retained results still block the same lines', () async {
     final client = _ScriptedClient([
       _call('read_story', read()),
       for (var i = 0; i < 4; i++) _call('grep', {'pattern': '正文$i'}),
@@ -190,15 +190,16 @@ void main() {
             client: client,
             store: store,
             preSearch: false,
-            contextCharBudget: 100,)
+    )
         .run(query: '问题')
         .toList();
     final reads = events.where((e) =>
         e.type == ReActEventType.toolObservation && e.toolName == 'read_story',);
-    expect(reads.last.inContext, isFalse);
-    expect(reads.last.content, contains('L0 [甲]'));
+    expect(reads.last.inContext, isTrue);
+    expect(reads.last.content, contains('仍在上文'));
     expect(
-        client.requests.last.any((m) => m.content.startsWith('[已折叠]')), isTrue,);
+        client.requests.last.any((m) => m.content.startsWith('[已折叠]')),
+      isFalse,);
   });
   test('same grep call is blocked even without original lines', () async {
     final args = {'pattern': '正文'};

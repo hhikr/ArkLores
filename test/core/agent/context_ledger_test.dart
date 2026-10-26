@@ -8,7 +8,7 @@ void main() {
     for (final n in [5, 1, 3, 2]) {
       ledger.record(n, SeenLines()..add('a', 0), step: n, callKey: '$n');
     }
-    expect(contextSteps(ledger, 'a', [0, 0]), '1、2、3 等');
+    expect(contextSteps(ledger, 'a', [0, 0]), '第 1 步、第 2 步、第 3 步 等');
   });
 
   test('record snapshots, overlap, forget and clear', () {

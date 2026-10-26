@@ -502,3 +502,11 @@ $toolList
 
 /// Developer rule (2026-10-25) for repeated context-only calls.
 const loreUseContextNote = '需要的原文都在上文里，这一轮不能再调用工具。请根据上文作答。';
+
+String loreCompactRequest(String question, int keepChars) => '''
+【压缩上下文】对话太长，较早的内容要压缩。这一条不是新问题：不要调用工具，不要作答。
+只输出一个 JSON 对象，不要输出任何别的文字：
+{"notes": "<要点>", "keep": ["<出处>", "<出处>"]}
+- notes：写给接下来继续工作的你自己，300–800 字：这个对话问过什么；已经确认的事实，每条后面写它的出处；还没查到、还要查的事。
+- keep：接下来作答还要直接看原文的段落，按重要程度从高到低排列。只能写上文里读过的出处，格式与答案的出处相同：story_id:起始行-结束行、record:<id>、wiki:<站点>:<页面>@<版本>:<段>。代码会把这些原文原样放回对话，合计约 $keepChars 字，放不下的从后往前丢掉；不需要的不要写。
+当前问题：$question''';

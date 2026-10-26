@@ -10,8 +10,8 @@
 ///   whole corpus, chapter reads, grep with context (`lore_tools.dart`);
 /// - an append-only message list, so providers serve most of each request
 ///   from their prompt cache;
-/// - no hand-written progress rules — only a helper turn limit, a context budget
-///   (oldest tool results folded) and one citation check at the end.
+/// - no hand-written progress rules — only a helper turn limit, context
+///   compaction and one citation check at the end.
 ///
 /// 0.14 (`notes/ask_0.14_review.md`, kept locally): the question is searched
 /// once before the first turn; tool calls pass a gate before they run or
@@ -52,15 +52,45 @@ import 'tools/search_tool.dart';
 import 'tools/wiki_tools.dart';
 import 'turn_stats.dart';
 
+part 'lore_context_compaction.dart';
+
 /// The messages and seen lines of a conversation, carried into follow-up
 /// questions so they continue with the text already read.
 class LoreConversation {
+  factory LoreConversation.fromJson(Map<String, dynamic> json) {
+    if (json['version'] != 1) {
+      throw const FormatException('Unknown conversation version');
+    }
+    return LoreConversation(
+      messages: (json['messages'] as List)
+          .map((m) => Message.fromJson(m as Map<String, dynamic>))
+          .toList(),
+      seen: SeenLines.fromJson(json['seen'] as Map<String, dynamic>),
+      ledger: ContextLedger.fromJson(json['ledger'] as Map<String, dynamic>),
+      question: json['question'] as String,
+      questions: List<String>.from(json['questions'] as List),
+      lastAnswer: json['last_answer'] as String,
+      entries: (json['entries'] as List)
+          .map((e) => LoreAnswerEntry.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      compactions: json['compactions'] as int,
+      lastPromptTokens: json['last_prompt_tokens'] as int,
+      lastPromptChars: json['last_prompt_chars'] as int,
+      lastCompactionTokens: json['last_compaction_tokens'] as int?,
+    );
+  }
   LoreConversation({
     List<Message>? messages,
     SeenLines? seen,
     ContextLedger? ledger,
     this.question = '',
     this.entries = const [],
+    this.questions = const [],
+    this.lastAnswer = '',
+    this.compactions = 0,
+    this.lastPromptTokens = 0,
+    this.lastPromptChars = 0,
+    this.lastCompactionTokens,
   })  : messages = messages ?? [],
         seen = seen ?? SeenLines(),
         ledger = ledger ?? ContextLedger();
@@ -78,6 +108,34 @@ class LoreConversation {
   /// The last question as the user wrote it (0.14: a follow-up's search
   /// before the first turn includes it).
   final String question;
+  final List<String> questions;
+  final String lastAnswer;
+  final int compactions;
+  final int lastPromptTokens;
+  final int lastPromptChars;
+  final int? lastCompactionTokens;
+
+  Map<String, dynamic> toJson() => {
+        'version': 1,
+        'messages': [
+          for (final m in messages)
+            {
+              ...m.toJson(),
+              if (m.reasoningContent != null)
+                'reasoning_content': m.reasoningContent,
+            },
+        ],
+        'seen': seen.toJson(),
+        'ledger': ledger.toJson(),
+        'question': question,
+        'questions': questions,
+        'last_answer': lastAnswer,
+        'entries': [for (final e in entries) e.toJson()],
+        'compactions': compactions,
+        'last_prompt_tokens': lastPromptTokens,
+        'last_prompt_chars': lastPromptChars,
+        'last_compaction_tokens': lastCompactionTokens,
+      };
 }
 
 /// `story_id:12` or `story_id:12-40` (story ids end in .txt).
@@ -130,7 +188,7 @@ class LoreAgentLoop {
     this.wiki,
     this.materials,
     this.maxTurns,
-    this.contextCharBudget = 80000,
+    this.contextWarnTokens,
     this.maxTokens = 8192,
     this.temperature = 0.3,
     this.subtask = false,
@@ -217,14 +275,9 @@ class LoreAgentLoop {
   /// Model turns per question; the last one must answer.
   final int? maxTurns;
 
-  /// Characters of conversation kept whole; past it the oldest tool results
-  /// are folded to a one-line pointer (re-read when needed).
-  final int contextCharBudget;
+  final int? contextWarnTokens;
   final int maxTokens;
   final double temperature;
-
-  /// Messages kept whole at the end of the conversation when folding.
-  static const int _recentKept = 6;
 
   /// Sub-agents started so far in this question.
   int _subtasks = 0;
@@ -242,9 +295,14 @@ class LoreAgentLoop {
   }) async* {
     // [asQuestion]: what a follow-up takes as the last question when
     // [query] is not the player's own words (the reader's review).
-    final seen = prior?.seen ?? SeenLines();
-    final ledger = prior?.ledger ?? ContextLedger();
-    var step = 0;
+    final seen = prior == null
+        ? SeenLines()
+        : subtask
+            ? prior.seen
+            : SeenLines.fromJson(prior.seen.toJson());
+    final ledger = prior?.ledger
+            .remap({for (var i = 0; i < prior.messages.length; i++) i: i}) ?? ContextLedger();
+    var step = ledger.lastStep;
     var displayTurn = 1;
     var contextOnlyTurns = 0;
     seen.retainMaterials(
@@ -319,18 +377,11 @@ class LoreAgentLoop {
       if (prior != null) ...prior.messages else ...history,
       Message.user(query),
     ];
-    // Indexes (in [conversation]) of tool results that may be folded.
+    // Tool-result indices also cover results converted to the text protocol.
     final toolResults = <int>{
       for (final (i, m) in conversation.indexed)
         if (m.role == MessageRole.tool) i,
     };
-    // 0.14: a follow-up keeps the earlier questions, answers and what was
-    // read (citable), not the earlier tool output itself.
-    if (prior != null) {
-      _foldOldToolResults(conversation, toolResults, const {},
-          ledger: ledger, all: true,);
-      ledger.clear();
-    }
     // 0.14: messages of turns whose every call was refused by the gate are
     // left out of later requests once a call has gone through (pending
     // until then, so the model still sees why it was refused).
@@ -346,14 +397,169 @@ class LoreAgentLoop {
     // without this the model sent the same query three times.
     final triedInVain = <String, List<String>>{};
     final emptyTurns = <int>{};
-    // 0.14: what each tool result showed (by its index), for the pointer a
-    // folded result leaves.
-    final shownIn = <int, String>{};
+    // 0.14: notes a rejected final answer was asked again with (the answer
+    // itself is never added); hidden once an answer is accepted.
+    final redoNotes = <int>[];
+    List<Message> visible() => [
+          for (final (i, m) in conversation.indexed)
+            if (!hidden.contains(i)) m,
+        ];
+
+    final earlierQuestions = prior == null
+        ? <String>[]
+        : prior.questions.isNotEmpty
+            ? prior.questions
+            : [if (prior.question.isNotEmpty) prior.question];
+    final questions = [...earlierQuestions, if (asQuestion == null) query];
+    var compactions = prior?.compactions ?? 0;
+    var lastPromptTokens = prior?.lastPromptTokens ?? 0;
+    var lastPromptChars = prior?.lastPromptChars ?? 0;
+    int? lastCompactionTokens = prior?.lastCompactionTokens;
+    int chars() =>
+        _messageChars([Message.system(systemPrompt()), ...visible()]);
+    int estimate() {
+      final size = chars();
+      if (lastPromptTokens <= 0 || lastPromptChars <= 0) {
+        return estimateTokens(size);
+      }
+      return (lastPromptTokens +
+              (size - lastPromptChars) / (lastPromptChars / lastPromptTokens))
+          .round()
+          .clamp(0, 1 << 40);
+    }
+
+    Stream<ReActEvent> compactIfNeeded({bool followUp = false}) async* {
+      final limit = contextWarnTokens;
+      if (subtask || limit == null || limit <= 0) return;
+      final from = estimate();
+      if (from < limit * 0.8 ||
+          (lastCompactionTokens != null &&
+              from - lastCompactionTokens! < limit * 0.1)) {
+        return;
+      }
+      yield const ReActEvent(type: ReActEventType.status, content: '正在压缩上下文…');
+      final keepChars = (limit * 0.3 * 1.6).round();
+      var notes = '';
+      var keep = <String>[];
+      var raw = '';
+      try {
+        final reply = client.streamTurn(
+          [
+            Message.system(systemPrompt()),
+            ...visible(),
+            Message.user(loreCompactRequest(query, keepChars)),
+          ],
+          tools: toolSpecs,
+          toolChoice: 'none',
+          maxTokens: 4096,
+          temperature: temperature,
+        );
+        final buffer = StringBuffer();
+        await for (final delta in reply) {
+          buffer.write(delta.content);
+        }
+        raw = buffer.toString();
+        final parsed = _compactObject(raw);
+        notes = parsed.$1;
+        keep = parsed.$2;
+        if (notes.trim().isEmpty && keep.isEmpty) {
+          throw const FormatException('Empty compaction');
+        }
+      } catch (e) {
+        raw = raw.isEmpty ? '$e' : raw;
+        notes = '';
+        keep = [
+          for (final r in followUpReads(
+            [Message.assistant(prior?.lastAnswer ?? '')],
+            seen,
+          ))
+            '${r.storyId}:${r.start}-${r.start + r.count - 1}',
+        ];
+        yield const ReActEvent(
+          type: ReActEventType.recordNote,
+          content: '压缩没有成功，改用上一答引用过的原文',
+        );
+      }
+      final retained =
+          await _retainOriginals(keep, keepChars, store, seen, wiki, materials);
+      final tailIndexes = <int>[];
+      if (!followUp) {
+        final lastCall = conversation.indexed.where((e) =>
+          !hidden.contains(e.$1) && e.$2.role == MessageRole.assistant &&
+          ((e.$2.toolCalls?.isNotEmpty ?? false) || _textToolCall.hasMatch(e.$2.content)),
+        ).map((e) => e.$1).lastOrNull ?? -1;
+        if (lastCall >= 0 && !hidden.contains(lastCall)) {
+          tailIndexes.add(lastCall);
+          for (var i = lastCall + 1; i < conversation.length; i++) {
+            if (hidden.contains(i)) continue;
+            final m = conversation[i];
+            if (m.role == MessageRole.tool ||
+                (transport.textProtocol && toolResults.contains(i))) {
+              tailIndexes.add(i);
+            } else {
+              break;
+            }
+          }
+        }
+      }
+      final tail = [for (final i in tailIndexes) conversation[i]];
+      final nextLedger = ledger
+          .remap({for (final (i, old) in tailIndexes.indexed) old: i + 1});
+      compactions++;
+      final memo = _compactMemo(
+        compactions,
+        followUp ? earlierQuestions : questions,
+        prior?.lastAnswer ?? '',
+        notes,
+        retained,
+        seen,
+        followUp ? null : query,
+      );
+      nextLedger.record(0, retained.shown, step: 0, callKey: '');
+      ledger.replaceWith(nextLedger);
+      conversation
+        ..clear()
+        ..add(Message.user(memo))
+        ..addAll(tail);
+      if (followUp) conversation.add(Message.user(query));
+      hidden.clear();
+      refusedTurns.clear();
+      emptyTurns.clear();
+      redoNotes.clear();
+      toolResults
+        ..clear()
+        ..addAll([
+          for (final (i, m) in conversation.indexed)
+            if (m.role == MessageRole.tool ||
+                (transport.textProtocol && i > 1 && m.role == MessageRole.user))
+              i,
+        ]);
+      final to = estimate();
+      lastCompactionTokens = to;
+      onRawLlmResponse?.call(
+        ++record,
+        '（压缩上下文 #$compactions：约 $from → $to token，保留 ${retained.count} 段原文）\n$raw',
+      );
+      yield ReActEvent(
+        type: ReActEventType.contextCompacted,
+        content: memo,
+        compactedFrom: from,
+        compactedTo: to,
+        retainedCount: retained.count,
+      );
+      yield ReActEvent(
+        type: ReActEventType.contextSize,
+        contextTokens: to,
+        contextEstimated: true,
+      );
+    }
+
+    if (prior != null) yield* compactIfNeeded(followUp: true);
 
     // 0.14: the first steps, written by a call of its own
     // (`search_planner.dart`) and run here: searches, a collection's
     // outline, a wiki search. They enter the conversation as calls and
-    // results like the model's own (folded like them); the question stays
+    // results like the model's own; the question stays
     // as it was asked. Without a plan: with vectors the question itself is
     // searched by meaning; without, the model searches in its first turn.
     if (preSearch && !subtask && search is SearchTool) {
@@ -371,7 +577,7 @@ class LoreAgentLoop {
       // A step whose tool this question does not have is left out.
       final planned = <({String tool, Map<String, dynamic> args})>[
         // S0 (refactor phase 1): a follow-up gets the text the last answer
-        // cited again (its tool results are folded to pointers by now).
+        // cited again, unless those lines are still in context.
         if (prior != null && tools['read_story'] != null)
           for (final r in followUpReads(prior.messages, prior.seen))
             (
@@ -492,9 +698,6 @@ class LoreAgentLoop {
           toolResults.add(plannedBase + plannedResults.length);
           ledger.record(plannedBase + plannedResults.length, shown[k],
               step: step, callKey: key,);
-          if (!shown[k].isEmpty) {
-            shownIn[plannedBase + plannedResults.length] = shown[k].summary();
-          }
           plannedResults.add(Message.toolResult(call.id, text));
         }
         if (plannedCalls.isNotEmpty) {
@@ -511,9 +714,6 @@ class LoreAgentLoop {
       }
     }
 
-    // 0.14: notes a rejected final answer was asked again with (the answer
-    // itself is never added); hidden once an answer is accepted.
-    final redoNotes = <int>[];
     // The turn about to be sent asks again for a rejected answer.
     var redoing = false;
 
@@ -533,11 +733,6 @@ class LoreAgentLoop {
     var emptyRetried = false;
     var degradedThisTurn = false;
     var turnBase = (transport.plain, transport.textProtocol);
-
-    List<Message> visible() => [
-          for (final (i, m) in conversation.indexed)
-            if (!hidden.contains(i)) m,
-        ];
 
     for (var turn = 1; maxTurns == null || turn <= maxTurns!; turn++) {
       if (!retrying) {
@@ -573,7 +768,7 @@ class LoreAgentLoop {
       if (transport.textProtocol) {
         _convertToTextProtocol(conversation, toolResults);
       }
-      _foldOldToolResults(conversation, toolResults, shownIn, ledger: ledger);
+      yield* compactIfNeeded();
       final statusPrefix = redoing
           ? '重新构思回答'
           : displayTurn == 1
@@ -797,6 +992,8 @@ class LoreAgentLoop {
         }
       }
       if (!subtask) {
+        lastPromptTokens = promptTokens ?? estimateTokens(requestChars);
+        lastPromptChars = requestChars;
         yield ReActEvent(
           type: ReActEventType.contextSize,
           contextTokens: promptTokens ?? estimateTokens(requestChars),
@@ -863,7 +1060,7 @@ class LoreAgentLoop {
                                 canonicalCallKey(c.call.name, c.arguments),) !=
                             null
                     ? Future<String>.value(
-                        '$inContextPrefix 同样的调用在第 ${ledger.stepOfCall(canonicalCallKey(c.call.name, c.arguments))} 步，结果仍在上文，没有重新执行。',)
+                        '$inContextPrefix 同样的调用在${contextStep(ledger.stepOfCall(canonicalCallKey(c.call.name, c.arguments))!)}，结果仍在上文，没有重新执行。',)
                     : (failedLookups[c.call.name] ?? 0) >= maxFailedLookups
                         ? Future<String>.value(lookupLimitNote(c.call.name))
                         : _runTool(tools[c.call.name]!, c, shown[k]),
@@ -940,10 +1137,8 @@ class LoreAgentLoop {
           if (!inContext && c.ok) {
             ledger.record(conversation.length, shown[k],
                 step: callSteps[k],
-                callKey: canonicalCallKey(c.call.name, c.arguments),);
-          }
-          if (!shown[k].isEmpty) {
-            shownIn[conversation.length] = shown[k].summary();
+                callKey: canonicalCallKey(c.call.name, c.arguments),
+            );
           }
           conversation.add(
             transport.textProtocol
@@ -1232,15 +1427,25 @@ class LoreAgentLoop {
           : (coverage == 'gaps' || hitTurnLimit)
               ? StoryAnswerStatus.partial
               : StoryAnswerStatus.answered;
-      // What a follow-up starts from: the tool results folded now, while
-      // what each showed is still known.
-      _foldOldToolResults(conversation, toolResults, shownIn,
-          ledger: ledger, all: true,);
       onConversation?.call(
         LoreConversation(
           messages: visible(),
           seen: seen,
-          ledger: ledger,
+          ledger: ledger.remap({
+            for (final (newIndex, oldIndex) in [
+              for (var i = 0; i < conversation.length; i++)
+                if (!hidden.contains(i)) i,
+            ].indexed)
+              oldIndex: newIndex,
+          }),
+          questions: questions,
+          lastAnswer: visible()
+              .lastWhere((m) => m.role == MessageRole.assistant)
+              .content,
+          compactions: compactions,
+          lastPromptTokens: lastPromptTokens,
+          lastPromptChars: lastPromptChars,
+          lastCompactionTokens: lastCompactionTokens,
           question: asQuestion ?? query,
           entries: entries,
         ),
@@ -1457,7 +1662,6 @@ class LoreAgentLoop {
       wiki: wiki,
       materials: materials,
       maxTurns: subtaskMaxTurns,
-      contextCharBudget: contextCharBudget,
       maxTokens: maxTokens,
       temperature: temperature,
       subtask: true,
@@ -1848,41 +2052,6 @@ class LoreAgentLoop {
       );
     }
     return calls;
-  }
-
-  /// Folds the oldest tool results to a pointer while the conversation is
-  /// over [contextCharBudget] (the recent [_recentKept] messages stay
-  /// whole); with [all], every tool result so far (a follow-up question).
-  /// Lines a folded result showed stay citable ([SeenLines] keeps them).
-  void _foldOldToolResults(
-    List<Message> conversation,
-    Set<int> toolResults,
-    Map<int, String> shownIn, {
-    bool all = false,
-    ContextLedger? ledger,
-  }) {
-    var size = conversation.fold<int>(0, (n, m) => n + m.content.length);
-    if (!all && size <= contextCharBudget) return;
-    final target = all ? 0 : contextCharBudget * 7 ~/ 10;
-    final limit = all ? conversation.length : conversation.length - _recentKept;
-    for (final i in toolResults.toList()..sort()) {
-      if (size <= target || i >= limit) break;
-      final m = conversation[i];
-      if (m.content.startsWith('[已折叠]')) continue;
-      ledger?.forget([i]);
-      final firstLine = m.content.split('\n').first;
-      // 0.14: which lines it showed stays; their text does not, and an
-      // answer written from memory of it cited the wrong lines.
-      final shown = shownIn[i];
-      final folded = '[已折叠] 较早的工具结果（${m.content.length} 字）：'
-          '${firstLine.length > 120 ? '${firstLine.substring(0, 120)}…' : firstLine}'
-          '。${shown == null ? '' : '展示过：$shown。'}'
-          '这些行号仍可引用，但原文已不在对话里：要用其中的内容，先重新读取再写。';
-      size -= m.content.length - folded.length;
-      conversation[i] = m.role == MessageRole.tool
-          ? Message.toolResult(m.toolCallId ?? '', folded)
-          : Message.user(folded);
-    }
   }
 
   /// Drops a short first paragraph that only narrates the process ("已核实，

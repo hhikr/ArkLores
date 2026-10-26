@@ -33,6 +33,7 @@ enum ReActEventType {
 
   /// Input tokens of the latest successful main-agent request.
   contextSize,
+  contextCompacted,
 
   /// R16: what the run is doing right now ("第 7 步 · 阅读 …"), for the
   /// status line while streaming.
@@ -52,6 +53,9 @@ class ReActEvent {
     this.rollback = false,
     this.planned = false,
     this.inContext = false,
+    this.compactedFrom,
+    this.compactedTo,
+    this.retainedCount,
     this.contextTokens,
     this.contextEstimated = false,
   });
@@ -60,6 +64,9 @@ class ReActEvent {
   /// by the planning call and run by code, not asked for by the model.
   final bool planned;
   final bool inContext;
+  final int? compactedFrom;
+  final int? compactedTo;
+  final int? retainedCount;
 
   /// 0.14 ([ReActEventType.finalAnswerReset]): the turn is taken back as if
   /// it had not happened.

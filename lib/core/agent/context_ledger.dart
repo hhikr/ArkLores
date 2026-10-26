@@ -4,6 +4,58 @@ import 'lore_tools.dart' show SeenLines;
 
 /// Original text still present in each tool-result message.
 class ContextLedger {
+  ContextLedger();
+
+  factory ContextLedger.fromJson(Map<String, dynamic> json) {
+    final ledger = ContextLedger();
+    for (final item in json['messages'] as List) {
+      final m = item as Map<String, dynamic>;
+      ledger.record(
+        m['index'] as int,
+        SeenLines.fromJson(m['shown'] as Map<String, dynamic>),
+        step: m['step'] as int,
+        callKey: m['call_key'] as String,
+      );
+    }
+    return ledger;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'messages': [
+          for (final e in _messages.entries)
+            {
+              'index': e.key,
+              'shown': e.value.shown.toJson(),
+              'step': e.value.step,
+              'call_key': e.value.callKey,
+            },
+        ],
+      };
+
+  ContextLedger remap(Map<int, int> oldToNew) {
+    final ledger = ContextLedger();
+    for (final e in _messages.entries) {
+      final index = oldToNew[e.key];
+      if (index != null) {
+        ledger.record(
+          index,
+          e.value.shown,
+          step: e.value.step,
+          callKey: e.value.callKey,
+        );
+      }
+    }
+    return ledger;
+  }
+
+  void replaceWith(ContextLedger other) {
+    _messages
+      ..clear()
+      ..addAll(other._messages);
+  }
+
+  int get lastStep =>
+      _messages.values.fold(0, (n, m) => m.step > n ? m.step : n);
   final _messages = <int, ({SeenLines shown, int step, String callKey})>{};
   /// Snapshot what this message showed; later reads cannot expand it.
   void record(int index, SeenLines shown,
@@ -12,7 +64,7 @@ class ContextLedger {
         (shown: SeenLines()..addAll(shown), step: step, callKey: callKey);
   }
 
-  /// Remove hidden or folded messages without affecting other copies.
+  /// Remove hidden or compacted messages without affecting other copies.
   void forget(Iterable<int> indexes) {
     for (final index in indexes) {
       _messages.remove(index);
@@ -60,5 +112,8 @@ String contextSteps(ContextLedger ledger, String id, Iterable<int> lines) {
   final steps = {for (final line in lines) ...ledger.stepsShowing(id, line)}
       .toList()
     ..sort();
-  return '${steps.take(3).join('、')}${steps.length > 3 ? ' 等' : ''}';
+  return steps.take(3).map(contextStep).join('、') +
+      (steps.length > 3 ? ' 等' : '');
 }
+
+String contextStep(int step) => step == 0 ? '纪要' : '第 $step 步';

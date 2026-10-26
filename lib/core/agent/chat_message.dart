@@ -13,11 +13,17 @@ class ReActStep {
     this.subtask,
     this.planned = false,
     this.inContext = false,
+    this.compactedFrom,
+    this.compactedTo,
+    this.retainedCount,
   });
 
   /// A tool call of the planned first searches (see [ReActEvent.planned]).
   final bool planned;
   final bool inContext;
+  final int? compactedFrom;
+  final int? compactedTo;
+  final int? retainedCount;
 
   final ReActEventType type;
   final String content;

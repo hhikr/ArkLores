@@ -32,6 +32,7 @@ class _Agent extends StoryQaAgent {
     List<Message> history = const [],
     LLMClient? client,
     AnswerOptions options = const AnswerOptions(),
+    int? contextWarnTokens,
     LoreConversation? prior,
     void Function(LoreConversation)? onConversation,
     void Function(int, String)? onRawLlmResponse,

@@ -34,8 +34,33 @@ import 'tools/search_tool.dart';
 /// [add], [addRange] and [addRecord]; a line counts only when its text was
 /// printed, a record is whole or only an excerpt ([recordIsPartial]). What
 /// one tool call showed is also noted for that call ([duringCall]), so a
-/// folded result can still say which lines it held.
+/// context ledger can track exactly which text remains visible.
 class SeenLines {
+  SeenLines();
+
+  factory SeenLines.fromJson(Map<String, dynamic> json) {
+    final seen = SeenLines();
+    for (final e in (json['lines'] as Map<String, dynamic>).entries) {
+      for (final value in e.value as List) {
+        final range = value as List;
+        seen.addRange(e.key, range[0] as int, range[1] as int);
+      }
+    }
+    for (final e in (json['records'] as Map<String, dynamic>).entries) {
+      seen.addRecord(e.key, partial: e.value as bool);
+    }
+    return seen;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'lines': {
+          for (final id in stories)
+            id: [
+              for (final r in seenRanges(id, 0, 1 << 30)) [r.$1, r.$2],
+            ],
+        },
+        'records': Map<String, bool>.of(_records),
+      };
   final Map<String, Set<int>> _lines = {};
 
   /// Record id → only an excerpt of it was shown.
@@ -658,7 +683,7 @@ class ReadRecordTool extends AgentTool {
     if (id.isEmpty) return '缺少参数 id：写检索结果里 record: 后面的记录 id。';
     if ((_int(arguments['start']) ?? 0) <= 0 &&
         (ledger?.recordInContext(id) ?? false)) {
-      return '$inContextPrefix record:$id 的全文仍在上文（第 ${ledger!.stepOfRecord(id)} 步的结果），没有重新读取。';
+      return '$inContextPrefix record:$id 的全文仍在上文（${contextStep(ledger!.stepOfRecord(id)!)}的结果），没有重新读取。';
     }
     final record = await store.readRecord(id);
     if (record == null) {
@@ -776,7 +801,7 @@ class ReadStoryTool extends AgentTool {
       final steps =
           contextSteps(ledger!, storyId, evidence.map((l) => l.lineIndex));
       final more = last < page.lines.last.lineIndex || page.hasMore;
-      return '$inContextPrefix L$first–L$last 的原文仍在上文（第 $steps 步的结果），没有重新读取。'
+      return '$inContextPrefix L$first–L$last 的原文仍在上文（$steps的结果），没有重新读取。'
           '${more ? '直接使用上文；要读后面的内容用 start=${last + 1}。' : '这一章到 L$last 结束。'}';
     }
     var last = start;

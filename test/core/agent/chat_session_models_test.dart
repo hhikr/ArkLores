@@ -13,6 +13,19 @@ void main() {
     expect(restored.last.steps.first.inContext, isTrue);
   });
 
+  test('saved compaction restores its memo and measurements as a separate step', () {
+    final turn = ChatSessionTurn(turn: 1, timestamp: DateTime(2026), query: 'q', model: 'm', baseUrl: 'b',
+      iterations: [ReActIterationRecord(iteration: 1, rawResponse: 'raw', compaction: {
+        'content': '【对话纪要 #1】正文', 'from': 84000, 'to': 21000, 'retained': 3,
+      },),],
+    );
+    final restored = chatTurnToMessages(ChatSessionTurn.fromJson(turn.toJson()), 'a');
+    final step = restored.last.steps.single;
+    expect(step.type, ReActEventType.contextCompacted);
+    expect(step.content, '【对话纪要 #1】正文');
+    expect(step.compactedFrom, 84000); expect(step.compactedTo, 21000); expect(step.retainedCount, 3);
+  });
+
   group('ChatSessionFile JSON round-trip', () {
     test('preserves turns, iterations, verdict and what the turn cost', () {
       final session = ChatSessionFile(

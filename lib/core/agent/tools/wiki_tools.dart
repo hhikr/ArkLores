@@ -187,7 +187,7 @@ class WikiReadTool extends AgentTool {
     if (ledger != null &&
         requested.isNotEmpty &&
         requested.every((p) => ledger!.lineInContext(page!.id, p.$1))) {
-      return '$inContextPrefix《${page.title}》 的第 ${requested.first.$1}–${requested.last.$1} 段仍在上文（第 ${contextSteps(ledger!, page.id, requested.map((p) => p.$1))} 步的结果），没有重新读取。';
+      return '$inContextPrefix《${page.title}》 的第 ${requested.first.$1}–${requested.last.$1} 段仍在上文（${contextSteps(ledger!, page.id, requested.map((p) => p.$1))}的结果），没有重新读取。';
     }
     final buffer = StringBuffer()
       ..writeln('《${page.title}》 ${page.site.label}，共 ${page.blocks.length} 段')

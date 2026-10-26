@@ -565,5 +565,19 @@
   },
   "aiContextNewChat": "New conversation",
   "aiContextStop": "Stop answering",
-  "aiContextDismiss": "Got it"
+  "aiContextDismiss": "Got it",
+    "aiWorkCompaction": "Compact context / ≈ {from} → {to} / {count} passages kept",
+    "@aiWorkCompaction": {
+      "placeholders": {
+        "from": {
+          "type": "String"
+        },
+        "to": {
+          "type": "String"
+        },
+        "count": {
+          "type": "int"
+        }
+      }
+    }
 }

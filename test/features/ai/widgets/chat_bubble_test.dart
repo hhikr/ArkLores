@@ -478,7 +478,36 @@ void main() {
   });
 
   group('work timeline', () {
-    testWidgets('each step shows its tool, its arguments as written and '
+    testWidgets('compaction is unnumbered and opens its full memo',
+        (tester) async {
+      final message = ChatMessage(
+        id: 'compact',
+        role: MessageRole.assistant,
+        content: _answered('回答。'),
+        timestamp: DateTime(2026),
+        steps: const [
+          ReActStep(
+              type: ReActEventType.contextCompacted,
+              content: '【对话纪要 #1】\n完整纪要正文',
+              compactedFrom: 84000,
+              compactedTo: 21000,
+              retainedCount: 3,),
+        ],
+      );
+      await _pump(tester, message);
+      await tester.tap(find.byKey(const ValueKey('answer-header')));
+      await tester.pumpAndSettle();
+      expect(find.text('压缩上下文 / 约 84.0k → 21.0k / 保留 3 段'), findsOneWidget);
+      expect(find.text('1'), findsNothing);
+      expect(find.textContaining('完整纪要正文'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('work-compaction-0')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('完整纪要正文'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'each step shows its tool, its arguments as written and '
         'what came back; the whole output on tap', (tester) async {
       final message = ChatMessage(
         id: 'a',

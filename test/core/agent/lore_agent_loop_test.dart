@@ -1606,7 +1606,7 @@ void main() {
           isTrue,);
     });
 
-    test('old tool results are folded past the context budget', () async {
+    test('old tool results remain without compaction', () async {
       final client = _ScriptedClient([
         _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
         _call('read_story', {'story_id': 'activities/act_fx/level_act_fx_01_beg.txt'}),
@@ -1616,11 +1616,10 @@ void main() {
       await LoreAgentLoop(
         client: client,
         store: store,
-        contextCharBudget: 1200,
       ).run(query: '读读看').toList();
       final last = client.requests.last;
       final tools = last.where((m) => m.role == MessageRole.tool).toList();
-      expect(tools.first.content, startsWith('[已折叠]'));
+      expect(tools.first.content, contains('L1'));
       expect(tools.last.content, isNot(startsWith('[已折叠]')));
     });
 
@@ -1647,33 +1646,14 @@ void main() {
           .run(query: '那后来呢？', prior: saved)
           .toList();
       final request = client.requests.single;
-      // 0.14: the earlier tool output is folded; what it showed stays
-      // citable.
       final tools = request.where((m) => m.role == MessageRole.tool).toList();
-      expect(tools.map((m) => m.content.startsWith('[已折叠]')), [true, false]);
-      // It says which lines it showed, and that their text is gone.
+      expect(tools, hasLength(1));
       expect(
-        tools.first.content,
-        allOf(
-          contains('展示过：obt/main/level_main_fx-01.txt L0-'),
-          contains('先重新读取'),
-        ),
-      );
-      // S0 (phase 1): the lines the last answer cited are read again, with
-      // two lines around them, before the follow-up's first turn.
-      expect(
-        [
-          for (final e in events)
-            if (e.type == ReActEventType.toolCall) '${e.toolName} ${e.toolArgs}',
-        ],
-        [
-          'read_story {story_id: obt/main/level_main_fx-01.txt, start: 0, '
-              'count: 4}',
-        ],
-      );
+        tools.single.content, contains('L1'),);
+      expect(events.where((e) => e.type == ReActEventType.toolCall), isEmpty);
       final question = request.lastIndexWhere((m) => m.role == MessageRole.user);
       expect(request[question].content, '那后来呢？');
-      expect(request.last.content, contains('L1'));
+      expect(request.last.content, '那后来呢？');
       expect(parseStoryAnswerEnvelope(finalAnswerOf(events))!.status,
           StoryAnswerStatus.answered,);
     });
