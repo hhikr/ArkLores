@@ -162,9 +162,19 @@ class GroupSpeaker {
     required this.speaker,
     required this.lines,
     required this.stories,
+    this.mainElsewhere = false,
   });
   final String speaker;
   final int lines, stories;
+
+  /// This speaker's most used portrait (`speaker_names.top_group`) is
+  /// another one.
+  final bool mainElsewhere;
+
+  /// At most 2 lines here, the speaker's main portrait elsewhere: mostly a
+  /// voice from off the stage while someone else stands on it. The list
+  /// folds these under one row; the index keeps them.
+  bool get passing => lines <= 2 && mainElsewhere;
 }
 
 Future<bool> _hasGroups(DatabaseExecutor db) async =>
@@ -217,11 +227,19 @@ Future<PortraitGroup?> portraitGroup(
       .query('portrait_groups', where: 'group_id = ?', whereArgs: [groupId]);
   if (rows.isEmpty) return null;
   final row = rows.single;
-  final speakers = await db.query(
-    'speaker_portraits',
-    where: 'group_id = ?',
-    whereArgs: [groupId],
-    orderBy: 'lines DESC, speaker ASC',
+  final names = await _hasTable(db, 'speaker_names');
+  final speakers = await db.rawQuery(
+    names
+        ? '''
+    SELECT p.speaker, p.lines, p.stories, n.top_group FROM speaker_portraits p
+    LEFT JOIN speaker_names n ON n.speaker = p.speaker
+    WHERE p.group_id = ? ORDER BY p.lines DESC, p.speaker ASC
+  '''
+        : '''
+    SELECT speaker, lines, stories, NULL AS top_group FROM speaker_portraits
+    WHERE group_id = ? ORDER BY lines DESC, speaker ASC
+  ''',
+    [groupId],
   );
   return PortraitGroup(
     groupId: groupId,
@@ -235,6 +253,8 @@ Future<PortraitGroup?> portraitGroup(
           speaker: s['speaker'] as String,
           lines: s['lines'] as int,
           stories: s['stories'] as int,
+          mainElsewhere:
+              s['top_group'] != null && s['top_group'] != groupId,
         ),
     ],
   );

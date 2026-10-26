@@ -1821,6 +1821,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String portraitPassingSpeakers(int n) {
+    return '另有 $n 人各说 1–2 句，主要立绘在别处';
+  }
+
+  @override
   String portraitSpeakerCount(int n) {
     return '$n 个说话人';
   }

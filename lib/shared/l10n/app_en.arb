@@ -749,6 +749,14 @@
       }
     }
   },
+  "portraitPassingSpeakers": "{n} more with 1–2 lines each, their main portrait elsewhere",
+  "@portraitPassingSpeakers": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "portraitSpeakerCount": "{n} speakers",
   "@portraitSpeakerCount": {
     "placeholders": {

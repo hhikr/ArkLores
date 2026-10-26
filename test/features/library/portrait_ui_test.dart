@@ -68,6 +68,12 @@ PortraitGroup get _group => PortraitGroup(
       speakers: [
         GroupSpeaker(speaker: _speaker, lines: 340, stories: 12),
         GroupSpeaker(speaker: '另一说话人', lines: 20, stories: 2),
+        GroupSpeaker(
+          speaker: '画外音',
+          lines: 1,
+          stories: 1,
+          mainElsewhere: true,
+        ),
       ],
     );
 
@@ -513,6 +519,13 @@ void main() {
           .origin,
       PortraitOrigin.materials,
     );
+    // A speaker passing by is folded under one row until it is opened.
+    expect(find.text('3 个说话人'), findsOneWidget);
+    expect(find.text('画外音'), findsNothing);
+    await tester.tap(find.text('另有 1 人各说 1–2 句，主要立绘在别处'));
+    await tester.pumpAndSettle();
+    expect(find.text('画外音'), findsOneWidget);
+    expect(find.text('No.03'), findsOneWidget);
     await tester.tap(find.text(_speaker));
     await tester.pumpAndSettle();
     expect(
@@ -765,6 +778,9 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(RawImage), findsOneWidget);
       await capture(tester, '${mode}_speakers');
+      await tester.tap(find.byKey(const ValueKey('portrait-passing-speakers')));
+      await tester.pumpAndSettle();
+      await capture(tester, '${mode}_speakers_open');
       await pump(
         tester,
         const SpeakerPortraitsPage(

@@ -148,6 +148,12 @@ void main() {
     expect(group.speakers.map((s) => s.speaker), ['gamma', 'alpha', 'beta']);
     expect(group.speakers.first.lines, 15);
     expect(group.speakers.first.stories, 2);
+    expect(
+      group.speakers.map((s) => s.mainElsewhere),
+      [false, false, true],
+      reason: "beta's own portrait is b",
+    );
+    expect(group.speakers.any((s) => s.passing), isFalse);
     expect(await highlightNames(db), ['alpha', 'beta']);
     expect(await highlightNames(db, skipOperators: true), ['beta']);
   });

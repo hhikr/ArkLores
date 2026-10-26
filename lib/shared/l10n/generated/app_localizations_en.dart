@@ -1900,6 +1900,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String portraitPassingSpeakers(int n) {
+    return '$n more with 1–2 lines each, their main portrait elsewhere';
+  }
+
+  @override
   String portraitSpeakerCount(int n) {
     return '$n speakers';
   }
