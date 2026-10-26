@@ -91,10 +91,12 @@ class MainActivity: FlutterActivity() {
                         // Share only finished APKs in the update cache, never arbitrary app files.
                         require(file.parentFile == folder && file.isFile && file.name.endsWith(".apk"))
                         val uri = FileProvider.getUriForFile(this, "$packageName.updates", file)
-                        startActivity(Intent(Intent.ACTION_VIEW)
-                            .setDataAndType(uri, "application/vnd.android.package-archive")
-                            .setClipData(ClipData.newRawUri("update", uri))
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                        // setClipData returns nothing: it cannot be chained.
+                        startActivity(Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, "application/vnd.android.package-archive")
+                            clipData = ClipData.newRawUri("update", uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        })
                         result.success(null)
                     }
                     else -> result.notImplemented()
