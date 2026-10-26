@@ -24,13 +24,14 @@ String? get shotDir => Platform.environment['ARKLORES_SHOT_DIR'];
 
 /// Saves the [Shot] on screen as `<dir>/<name>.png`. Text is drawn with the
 /// test font (boxes), so these check layout, not typography.
-Future<void> shoot(WidgetTester tester, String name) async {
+Future<void> shoot(WidgetTester tester, String name,
+    {double pixelRatio = 2,}) async {
   final dir = shotDir;
   if (dir == null) return;
   await tester.runAsync(() async {
     final boundary = Shot.boundaryKey.currentContext!.findRenderObject()!
         as RenderRepaintBoundary;
-    final image = await boundary.toImage(pixelRatio: 2);
+    final image = await boundary.toImage(pixelRatio: pixelRatio);
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     await Directory(dir).create(recursive: true);
     await File('$dir/$name.png').writeAsBytes(data!.buffer.asUint8List());

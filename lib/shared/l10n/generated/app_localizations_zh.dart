@@ -1657,12 +1657,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get portraitGroupSpeakers => '用这个立绘的说话人';
+  String get portraitGroupSpeakers => '还有谁使用了这个立绘？';
 
   @override
-  String portraitSpeakerGroups(String name) {
-    return '“$name”用过的立绘';
-  }
+  String get portraitSpeakerGroups => '这个人还有哪些立绘？';
 
   @override
   String get portraitOperator => '干员资料';
@@ -1682,4 +1680,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String portraitSpeakerPageTitle(String name) {
     return '“$name”的立绘';
   }
+
+  @override
+  String portraitSpeakerCount(int n) {
+    return '$n 个说话人';
+  }
+
+  @override
+  String get portraitMore => '更多';
+
+  @override
+  String portraitStoryTitle(String name) {
+    return '$name 的剧情';
+  }
+
+  @override
+  String get portraitNoStories => '没有找到剧情。';
 }

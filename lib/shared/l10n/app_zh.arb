@@ -674,15 +674,8 @@
       }
     }
   },
-  "portraitGroupSpeakers": "用这个立绘的说话人",
-  "portraitSpeakerGroups": "“{name}”用过的立绘",
-  "@portraitSpeakerGroups": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "portraitGroupSpeakers": "还有谁使用了这个立绘？",
+  "portraitSpeakerGroups": "这个人还有哪些立绘？",
   "portraitOperator": "干员资料",
   "portraitNoSprite": "这一句没有显示立绘。",
   "portraitTapSpeaker": "查看“{name}”的立绘",
@@ -701,5 +694,23 @@
         "type": "String"
       }
     }
-  }
+  },
+  "portraitSpeakerCount": "{n} 个说话人",
+  "@portraitSpeakerCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitMore": "更多",
+  "portraitStoryTitle": "{name} 的剧情",
+  "@portraitStoryTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitNoStories": "没有找到剧情。"
 }

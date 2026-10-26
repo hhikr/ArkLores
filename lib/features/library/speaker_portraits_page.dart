@@ -9,7 +9,7 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/portrait_image.dart';
 import 'portrait_sheet.dart';
-import 'portrait_speakers_page.dart';
+import 'portrait_stories_page.dart';
 
 class SpeakerPortraitsPage extends ConsumerWidget {
   const SpeakerPortraitsPage({
@@ -46,7 +46,8 @@ class SpeakerPortraitsPage extends ConsumerWidget {
                       onTap: () => pushPortraitPage(
                         context,
                         origin,
-                        (_) => PortraitSpeakersPage(
+                        (_) => PortraitStoriesPage(
+                          speaker: speaker,
                           groupId: row.groupId,
                           origin: origin,
                         ),
@@ -76,7 +77,7 @@ class SpeakerPortraitsPage extends ConsumerWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${t.portraitGroupSpeakers} ${row.groupSpeakers}',
+                                    t.portraitSpeakerCount(row.groupSpeakers),
                                     style: theme.text(
                                       14,
                                       color: theme.textSecondary,

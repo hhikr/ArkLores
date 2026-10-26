@@ -1,4 +1,5 @@
 import 'package:arklores/core/gamedata/build/portrait_index.dart';
+import 'package:arklores/core/gamedata/story_catalog.dart';
 import 'package:arklores/core/library/portrait_queries.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -10,6 +11,57 @@ void main() {
   setUpAll(sqfliteFfiInit);
   setUp(() async => db = await createGameDataDb(inMemoryDatabasePath));
   tearDown(() => db.close());
+
+  test('speaker and group select stories, first lines and release order',
+      () async {
+    await db.execute(storyLinePortraitsDdl);
+    await db.execute(portraitSpritesDdl);
+    await db.execute(storyCatalogDdl);
+    for (final (sprite, face, body) in [
+      ('g#2\$1', 2, 1),
+      ('g#1\$2', 1, 2),
+      ('other#1\$1', 1, 1),
+    ]) {
+      await db.insert('portrait_sprites', {
+        'sprite': sprite,
+        'group_id': sprite.startsWith('g#') ? 'g' : 'other',
+        'face': face,
+        'body': body,
+        'lines': 1,
+      });
+    }
+    for (final (id, time) in [('late', 200), ('early', 100)]) {
+      await insertStory(db, id, ['甲乙：一', ' 甲乙 ：二', '甲乙：三', '丙丁：四'],
+          scopeId: 'fixture',);
+      await db.insert(
+        'story_catalog',
+        StoryCatalogEntry(
+          storyId: id,
+          collectionId: id,
+          collectionName: id,
+          collectionType: 'ACTIVITY',
+          storySort: 1,
+          startTime: time,
+        ).toRow(),
+      );
+      for (final (line, sprite) in [
+        (0, 'other#1\$1'),
+        (1, 'g#2\$1'),
+        (2, 'g#1\$2'),
+        (3, 'g#2\$1'),
+      ]) {
+        await db.insert('story_line_portraits',
+            {'story_id': id, 'line_index': line, 'sprite': sprite},);
+      }
+    }
+    expect(await portraitSprites(db, 'g'), ['g#2\$1', 'g#1\$2']);
+    final rows = await portraitStories(db, ' 甲乙 ', 'g');
+    expect(rows.map((r) => r.storyId), ['early', 'late']);
+    expect(rows.map((r) => r.firstLine), [1, 1]);
+    expect(rows.map((r) => r.lines), [2, 2]);
+    expect(await portraitStories(db, 'missing', 'g'), isEmpty);
+    expect(await portraitStories(db, '甲乙', 'absent'), isEmpty);
+  });
 
   test('optional tables missing return empty results', () async {
     for (final table in [
@@ -36,8 +88,10 @@ void main() {
     ]) {
       await db.execute(ddl);
     }
-    await db.insert('story_line_portraits',
-        {'story_id': 'story', 'line_index': 1, 'sprite': 'sprite'},);
+    await db.insert(
+      'story_line_portraits',
+      {'story_id': 'story', 'line_index': 1, 'sprite': 'sprite'},
+    );
     for (final id in ['b', 'a', 'c']) {
       await db.insert('portrait_groups', {
         'group_id': id,

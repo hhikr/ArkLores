@@ -3017,14 +3017,14 @@ abstract class AppLocalizations {
   /// No description provided for @portraitGroupSpeakers.
   ///
   /// In en, this message translates to:
-  /// **'Speakers using this portrait'**
+  /// **'Who else uses this portrait?'**
   String get portraitGroupSpeakers;
 
   /// No description provided for @portraitSpeakerGroups.
   ///
   /// In en, this message translates to:
-  /// **'Portraits used by “{name}”'**
-  String portraitSpeakerGroups(String name);
+  /// **'Other portraits of this character'**
+  String get portraitSpeakerGroups;
 
   /// No description provided for @portraitOperator.
   ///
@@ -3055,6 +3055,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Portraits of “{name}”'**
   String portraitSpeakerPageTitle(String name);
+
+  /// No description provided for @portraitSpeakerCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} speakers'**
+  String portraitSpeakerCount(int n);
+
+  /// No description provided for @portraitMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get portraitMore;
+
+  /// No description provided for @portraitStoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories with {name}'**
+  String portraitStoryTitle(String name);
+
+  /// No description provided for @portraitNoStories.
+  ///
+  /// In en, this message translates to:
+  /// **'No stories found.'**
+  String get portraitNoStories;
 }
 
 class _AppLocalizationsDelegate

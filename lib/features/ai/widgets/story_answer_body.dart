@@ -26,6 +26,7 @@ import '../../../shared/widgets/press_feedback.dart';
 import '../../../shared/widgets/smooth_page_route.dart';
 import '../../library/entry_page.dart';
 import '../../library/material_pages.dart';
+import '../../library/portrait_preview.dart';
 import '../../library/portrait_sheet.dart';
 import '../../library/reading_text.dart';
 import '../investigation_ui.dart';
@@ -151,6 +152,7 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
   /// Each paragraph with its names linked, by the paragraph's text (a
   /// rebuild, such as opening the details, does not scan it again).
   final _linked = <String, String>{};
+  Offset? _portraitTap;
 
   @override
   Widget build(BuildContext context) {
@@ -250,34 +252,48 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (block.markdown.trim().isNotEmpty)
-                    MarkdownBody(
-                      data: !widget.streaming && _matcher != null
-                          ? _linked.putIfAbsent(block.markdown,
-                              () => _matcher!.linkNames(block.markdown),)
-                          : block.markdown,
-                      styleSheet: widget.styleSheet.copyWith(
-                        // A quiet underline, as on the reader's speaker
-                        // names: the names must not outweigh the answer.
-                        a: (widget.styleSheet.p ?? theme.text(16)).copyWith(
-                          // Without a colour the link takes the theme's.
-                          color: widget.styleSheet.p?.color ?? theme.textPrimary,
-                          decoration: TextDecoration.underline,
-                          decorationColor: theme.textMuted,
-                          decorationThickness: 1,
+                    TextFieldTapRegion(
+                      child: Listener(
+                        onPointerDown: (event) => _portraitTap = event.position,
+                        child: MarkdownBody(
+                          data: !widget.streaming && _matcher != null
+                              ? _linked.putIfAbsent(
+                                  block.markdown,
+                                  () => _matcher!.linkNames(block.markdown),
+                                )
+                              : block.markdown,
+                          styleSheet: widget.styleSheet.copyWith(
+                            a: (widget.styleSheet.p ?? theme.text(16)).copyWith(
+                              // Without a colour the link takes the theme's.
+                              color: widget.styleSheet.p?.color ??
+                                  theme.textPrimary,
+                              decoration: TextDecoration.underline,
+                              decorationColor: theme.accentPrimary,
+                              decorationThickness: 2,
+                            ),
+                          ),
+                          onTapLink: (_, href, __) {
+                            final prefix = '$speakerLinkScheme:';
+                            if (href != null && href.startsWith(prefix)) {
+                              showPortraitPreview(
+                                context,
+                                anchor: _portraitTap == null
+                                    ? null
+                                    : Rect.fromLTWH(
+                                        _portraitTap!.dx,
+                                        _portraitTap!.dy - 16,
+                                        32,
+                                        24,
+                                      ),
+                                speaker: Uri.decodeComponent(
+                                  href.substring(prefix.length),
+                                ),
+                                origin: PortraitOrigin.ask,
+                              );
+                            }
+                          },
                         ),
                       ),
-                      onTapLink: (_, href, __) {
-                        final prefix = '$speakerLinkScheme:';
-                        if (href != null && href.startsWith(prefix)) {
-                          showPortraitSheet(
-                            context,
-                            speaker: Uri.decodeComponent(
-                              href.substring(prefix.length),
-                            ),
-                            origin: PortraitOrigin.ask,
-                          );
-                        }
-                      },
                     ),
                   // The last block may still be receiving its citations.
                   if (block.hasCitations &&

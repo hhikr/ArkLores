@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
+import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/press_feedback.dart';
 
 /// The hit region extends into the dialogue row without moving its text.
@@ -36,13 +37,25 @@ class PortraitSpeakerName extends ConsumerWidget {
                 color: down
                     ? pressTint(Colors.transparent, theme.textPrimary)
                     : Colors.transparent,
-                child: Text(
-                  name,
-                  style: style.copyWith(
-                    decoration: TextDecoration.underline,
-                    decorationColor: theme.textMuted,
-                    decorationThickness: 1,
-                  ),
+                child: Stack(
+                  children: [
+                    if (!theme.isDark)
+                      Positioned.fill(
+                        top: 12,
+                        child: ColoredBox(color: theme.accentPrimary),
+                      ),
+                    Text(
+                      name,
+                      style: theme
+                          .heading(
+                            14,
+                            color: theme.isDark
+                                ? theme.accentText
+                                : theme.textPrimary,
+                          )
+                          .copyWith(height: 1.4),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -76,8 +89,11 @@ class _SpeakerHitBox extends RenderProxyBox {
 
 /// Test the expanded name target before the paragraph occupying its lower part.
 class PortraitSpeakerTarget extends SingleChildRenderObjectWidget {
-  const PortraitSpeakerTarget(
-      {super.key, required this.target, required super.child,});
+  const PortraitSpeakerTarget({
+    super.key,
+    required this.target,
+    required super.child,
+  });
   final GlobalKey target;
 
   @override

@@ -1725,12 +1725,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get portraitGroupSpeakers => 'Speakers using this portrait';
+  String get portraitGroupSpeakers => 'Who else uses this portrait?';
 
   @override
-  String portraitSpeakerGroups(String name) {
-    return 'Portraits used by “$name”';
-  }
+  String get portraitSpeakerGroups => 'Other portraits of this character';
 
   @override
   String get portraitOperator => 'Operator file';
@@ -1750,4 +1748,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String portraitSpeakerPageTitle(String name) {
     return 'Portraits of “$name”';
   }
+
+  @override
+  String portraitSpeakerCount(int n) {
+    return '$n speakers';
+  }
+
+  @override
+  String get portraitMore => 'More';
+
+  @override
+  String portraitStoryTitle(String name) {
+    return 'Stories with $name';
+  }
+
+  @override
+  String get portraitNoStories => 'No stories found.';
 }

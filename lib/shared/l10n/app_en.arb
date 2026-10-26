@@ -675,15 +675,8 @@
       }
     }
   },
-  "portraitGroupSpeakers": "Speakers using this portrait",
-  "portraitSpeakerGroups": "Portraits used by “{name}”",
-  "@portraitSpeakerGroups": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "portraitGroupSpeakers": "Who else uses this portrait?",
+  "portraitSpeakerGroups": "Other portraits of this character",
   "portraitOperator": "Operator file",
   "portraitNoSprite": "No portrait is shown for this line.",
   "portraitTapSpeaker": "Show portraits of “{name}”",
@@ -702,5 +695,23 @@
         "type": "String"
       }
     }
-  }
+  },
+  "portraitSpeakerCount": "{n} speakers",
+  "@portraitSpeakerCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitMore": "More",
+  "portraitStoryTitle": "Stories with {name}",
+  "@portraitStoryTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitNoStories": "No stories found."
 }

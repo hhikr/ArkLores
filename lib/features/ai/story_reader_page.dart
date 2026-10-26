@@ -34,6 +34,7 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import '../library/portrait_preview.dart';
 import '../library/portrait_sheet.dart';
 import '../library/portrait_speaker_name.dart';
 import '../library/reading_text.dart'
@@ -1442,8 +1443,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       name: name,
       style: style,
       onTap: () {
-        showPortraitSheet(
+        showPortraitPreview(
           context,
+          anchorContext: _speakerKeys[line.lineIndex]?.currentContext,
           speaker: name,
           spriteFuture: ref.read(
             spriteOfLineProvider(

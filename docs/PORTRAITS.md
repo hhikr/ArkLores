@@ -103,7 +103,7 @@ python tools/portraits/check_portrait_pack.py --pack=build/portraits/arklores_po
 
 2026-10 实测：10,210 张差分、1,950 套，包约 186 MB；可见像素平均误差 3–5 / 255，没有接缝。
 
-## 4. App
+## 4. App 的入口
 
 | 部分 | 代码 |
 | --- | --- |
@@ -112,15 +112,17 @@ python tools/portraits/check_portrait_pack.py --pack=build/portraits/arklores_po
 | 画一张差分（底图画满，补丁用 `BlendMode.src` 替换像素；合成结果缓存最近 24 张） | `lib/shared/widgets/portrait_image.dart` |
 | 下载、校验、替换、删除（复用知识库的断点续传；校验 SHA、`pack_version` 与非空；替换中断后自动恢复） | `lib/core/gamedata/portrait_pack_installer.dart`、`portrait_pack_provider.dart` |
 | 知识库页的“剧情立绘”卡片（两个游戏都有；终末地只有一句说明） | `lib/features/settings/portrait_pack_card.dart` |
-| 立绘卡片与两个列表页 | `lib/features/library/portrait_sheet.dart`、`portrait_speakers_page.dart`、`speaker_portraits_page.dart` |
+| 立绘卡片、预览与列表页 | `lib/features/library/portrait_sheet.dart`、`portrait_speakers_page.dart`、`speaker_portraits_page.dart`、`portrait_preview.dart`、`portrait_stories_page.dart` |
 | 阅读器的说话人 | `lib/features/library/portrait_speaker_name.dart`、`story_reader_page.dart` |
 | 问答答案里的名字 | `lib/features/ai/speaker_highlight.dart`、`widgets/story_answer_body.dart` |
 
 - 取图顺序：要的那张 → 不在包里时用这个立绘最常用的一张 → 都没有时斜线纹占位加一句话；`blank` 的差分写“这一句的立绘是空的。”
-- 只有**阅读器里点某一句的说话人**时显示那一句的确切差分（卡片上写表情、服装号）；问答和两个列表页一律显示最常用的一张。
-- 阅读器：明日方舟的故事、知识库有立绘表时，说话人名字有一条淡色下划线，点开卡片；热区扩到 48×48，不改排版。附属对话用原故事的 id 和行号查。
+- 首次打开时，只有**阅读器里点某一句的说话人**显示那一句的确切差分（卡片上写表情、服装号）；问答和两个列表页一律显示最常用的一张。
+- 阅读器：明日方舟的故事、知识库有立绘表时，名字可以点开旁边的小卡片，点“更多”打开大卡片。标题字体 14 号、无下划线；深色用 `accentText`，浅色墨字下面垫强调色色块。热区扩到 48×48、行高不变。附属对话用原故事的 id 和行号查。
 - 问答：作答结束后按段落扫答案正文，每个名字每段只标第一次出现；最左最长匹配，跳过行内代码、已有链接、标题行、尖括号；英文名只按整词匹配。
-  样式是正文颜色加淡色下划线（开发者 2026-10-26：不要喧宾夺主）。只引了终末地剧情的答案不标。
+  样式是正文颜色加 2 px `accentPrimary` 下划线（开发者 2026-10-26）。点名字先显示旁边的小卡片；预览不取焦点，问答输入框的键盘保持展开。只引了终末地剧情的答案不标。
   设置“回答里不标干员名”（默认关）：打开后，最常用立绘对应干员条目的名字不标（2026-10 的库上 1,049 个里有 316 个）。
-- 立绘卡片：名字、立绘图、句数与差分张数、“用这个立绘的说话人”、“「名字」用过的立绘”、有干员条目时的“干员资料”，底部署名“立绘：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络”。
+- 立绘预览：名字下方显示高约 160 px 的图、名字、句数与“更多”；下方放不下时放上方，左右留 16 px。点外面、滚动、返回时关闭，同时只有一张。
+- 立绘卡片：名字、立绘图、句数与差分张数、表情与服装号，以及“还有谁使用了这个立绘？”、“这个人还有哪些立绘？”、有干员条目时的“干员资料”。大图下方按服装、表情排列同组全部差分，横向懒加载，选中项用 `trace` 线框；点缩略图切换大图和编号。从台词打开时先选中该句差分。底部署名“立绘：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络”。
+- 两个列表都通向同一个剧情列表：说话人 × 立绘 → 每篇剧情的标题、所属故事集、句数 → 阅读器，定位并高亮该组合在这篇里的首次台词。查询连接 `story_line_portraits`、`story_lines`、`portrait_sprites`，说话人去两端空格后匹配，按篇取 `MIN(line_index)` 与句数；目录标题和排序复用 `StoryCatalogEntry.label` 与 `storyReleaseKey`。沿用已有的立绘与台词索引。
   从资料页打开的页面用毛玻璃换页，从问答打开的用普通推入。

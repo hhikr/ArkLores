@@ -12,13 +12,16 @@ import 'package:arklores/core/userdata/user_data_provider.dart';
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/ai/widgets/story_answer_body.dart';
+import 'package:arklores/features/library/portrait_preview.dart';
 import 'package:arklores/features/library/portrait_sheet.dart';
 import 'package:arklores/features/library/portrait_speaker_name.dart';
 import 'package:arklores/features/library/portrait_speakers_page.dart';
+import 'package:arklores/features/library/portrait_stories_page.dart';
 import 'package:arklores/features/library/speaker_portraits_page.dart';
 import 'package:arklores/main.dart' show buildAppTheme;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
+import 'package:arklores/shared/theme/app_theme.dart';
 import 'package:arklores/shared/theme/ark_theme_tokens.dart';
 import 'package:arklores/shared/theme/endfield_theme_tokens.dart';
 import 'package:arklores/shared/widgets/ef_widgets.dart';
@@ -36,33 +39,37 @@ import '../../support/screenshot.dart';
 import '../../support/sqlite.dart';
 import '../../support/temp_dir.dart';
 
-const _sprite = 'char_fixture#4\$1';
+var _sprite = 'char_fixture#4\$1';
+List<String> _sprites = [];
+List<PortraitStory> _stories = const [
+  PortraitStory(storyId: 'fixture.txt', firstLine: 2, lines: 9),
+];
 const _speaker = '测试角色';
-const _name = SpeakerPortraits(
-  speaker: _speaker,
-  lines: 340,
-  topSprite: _sprite,
-  highlight: true,
-  groups: [
-    SpeakerGroup(
-      groupId: 'char_fixture',
+SpeakerPortraits get _name => SpeakerPortraits(
+      speaker: _speaker,
       lines: 340,
-      stories: 12,
       topSprite: _sprite,
-      groupSpeakers: 2,
-    ),
-  ],
-);
-const _group = PortraitGroup(
-  groupId: 'char_fixture',
-  lines: 360,
-  sprites: 12,
-  topSprite: _sprite,
-  speakers: [
-    GroupSpeaker(speaker: _speaker, lines: 340, stories: 12),
-    GroupSpeaker(speaker: '另一说话人', lines: 20, stories: 2),
-  ],
-);
+      highlight: true,
+      groups: [
+        SpeakerGroup(
+          groupId: 'char_fixture',
+          lines: 340,
+          stories: 12,
+          topSprite: _sprite,
+          groupSpeakers: 2,
+        ),
+      ],
+    );
+PortraitGroup get _group => PortraitGroup(
+      groupId: 'char_fixture',
+      lines: 360,
+      sprites: _sprites.isEmpty ? 12 : _sprites.length,
+      topSprite: _sprite,
+      speakers: [
+        GroupSpeaker(speaker: _speaker, lines: 340, stories: 12),
+        GroupSpeaker(speaker: '另一说话人', lines: 20, stories: 2),
+      ],
+    );
 
 class _MemoryPack extends PortraitPack {
   _MemoryPack(this.data) : super('fixture');
@@ -72,6 +79,15 @@ class _MemoryPack extends PortraitPack {
   @override
   Future<PortraitLayers?> layers(String sprite) async =>
       sprite == _sprite ? data : null;
+}
+
+class _RealMemoryPack extends PortraitPack {
+  _RealMemoryPack(this.images) : super('real-pack-snapshot');
+  final Map<String, PortraitLayers> images;
+  @override
+  Future<bool> get installed async => true;
+  @override
+  Future<PortraitLayers?> layers(String sprite) async => images[sprite];
 }
 
 void main() {
@@ -106,6 +122,34 @@ void main() {
     final source = PortraitPack(file.path);
     pack = _MemoryPack((await source.layers(_sprite))!);
     await source.close();
+    final real = Platform.environment['P8_REAL_PACK'];
+    if (real != null) {
+      final realPack = PortraitPack(real);
+      final kb = await databaseFactoryFfi.openDatabase(
+        '${Directory.current.path}/build/gamedata_portraits/arklores_gamedata_zh.db',
+        options: OpenDatabaseOptions(readOnly: true),
+      );
+      final row = (await kb.rawQuery(
+              'SELECT * FROM portrait_groups ORDER BY sprites DESC LIMIT 1',))
+          .single;
+      _sprite = row['top_sprite'] as String;
+      _sprites = await portraitSprites(kb, row['group_id'] as String);
+      _stories = await portraitStories(
+          kb,
+          (await kb.rawQuery(
+                  'SELECT speaker FROM speaker_portraits WHERE group_id = ? ORDER BY lines DESC LIMIT 1',
+                  [row['group_id']],))
+              .single['speaker'] as String,
+          row['group_id'] as String,);
+      await kb.close();
+      final images = <String, PortraitLayers>{};
+      for (final sprite in _sprites) {
+        final layers = await realPack.layers(sprite);
+        if (layers != null) images[sprite] = layers;
+      }
+      await realPack.close();
+      pack = _RealMemoryPack(images);
+    }
   });
   tearDownAll(() async {
     await pack.close();
@@ -117,7 +161,8 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         storyHostProvider.overrideWith(
-            (ref, id) async => id == 'child.txt' ? 'host.txt' : null,),
+          (ref, id) async => id == 'child.txt' ? 'host.txt' : null,
+        ),
         storyFullLinesProvider.overrideWith(
           (ref, id) async => [
             StoryLineEntry(lineIndex: 0, content: id),
@@ -127,10 +172,11 @@ void main() {
         attachedStoriesProvider.overrideWith(
           (ref, id) async => const [
             LibraryEntry(
-                id: 'story:child.txt',
-                type: 'story',
-                name: '附属对话',
-                rawId: 'child.txt',),
+              id: 'story:child.txt',
+              type: 'story',
+              name: '附属对话',
+              rawId: 'child.txt',
+            ),
           ],
         ),
       ],
@@ -145,6 +191,25 @@ void main() {
       6: (storyId: 'child.txt', lineIndex: 2),
     });
   });
+
+  Future<void> settlePortraits(WidgetTester tester) async {
+    if (Platform.environment['P8_REAL_PACK'] == null) return;
+    for (var i = 0; i < 30; i++) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pumpAndSettle();
+      if (find.byType(RawImage).evaluate().length >=
+          find.byType(PortraitImage).evaluate().length) {
+        break;
+      }
+    }
+  }
+
+  Future<void> capture(WidgetTester tester, String name) async {
+    await settlePortraits(tester);
+    await shoot(tester, name, pixelRatio: 1);
+  }
 
   Future<void> pump(
     WidgetTester tester,
@@ -173,6 +238,9 @@ void main() {
                 names?.call() ?? Future.value(name == _speaker ? _name : null),
           ),
           portraitGroupProvider.overrideWith((ref, id) async => _group),
+          portraitSpritesProvider.overrideWith((ref, id) async =>
+              _sprites.isEmpty ? [_sprite, 'char_fixture#2\$2'] : _sprites,),
+          portraitStoriesProvider.overrideWith((ref, key) async => _stories),
           highlightNamesProvider.overrideWith((ref) async => [_speaker]),
           spriteOfLineProvider.overrideWith(
             (ref, key) => sprite?.call(key) ?? Future.value(_sprite),
@@ -227,11 +295,12 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();
+    await settlePortraits(tester);
   }
 
   Widget launcher({
     bool fromLine = false,
-    String? sprite = _sprite,
+    String? sprite = 'default',
     Future<String?>? future,
     PortraitOrigin origin = PortraitOrigin.ask,
   }) =>
@@ -243,7 +312,7 @@ void main() {
               context,
               speaker: _speaker,
               fromLine: fromLine,
-              sprite: sprite,
+              sprite: sprite == 'default' ? _sprite : sprite,
               spriteFuture: future,
               origin: origin,
             ),
@@ -258,6 +327,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 60));
     });
     await tester.pumpAndSettle();
+    await settlePortraits(tester);
   }
 
   testWidgets('sheet appears before query or exact sprite completes',
@@ -279,11 +349,141 @@ void main() {
     expect(find.text('表情 4 / 服装 1'), findsOneWidget);
   });
 
+  testWidgets('thumbnails switch the image and face/body metadata',
+      (tester) async {
+    await pump(tester, launcher(fromLine: true));
+    await open(tester);
+    expect(find.text('表情 4 / 服装 1'), findsOneWidget);
+    expect(find.byType(PortraitImage), findsNWidgets(3));
+    final thumb = find.byWidgetPredicate(
+        (w) => w is PortraitImage && w.sprite == 'char_fixture#2\$2',);
+    await tester.tap(thumb);
+    await tester.pumpAndSettle();
+    expect(find.text('表情 2 / 服装 2'), findsOneWidget);
+    expect(
+        tester.widget<PortraitImage>(find.byType(PortraitImage).first).sprite,
+        'char_fixture#2\$2',);
+  });
+
+  testWidgets('story row opens reader at the first matching line',
+      (tester) async {
+    await pump(
+      tester,
+      const PortraitStoriesPage(
+        speaker: _speaker,
+        groupId: 'char_fixture',
+        origin: PortraitOrigin.ask,
+      ),
+    );
+    await tester.tap(find.byType(PressRow).first);
+    await tester.pumpAndSettle();
+    final reader = tester.widget<StoryReaderPage>(find.byType(StoryReaderPage));
+    expect(reader.storyId, 'fixture.txt');
+    expect(reader.highlightStart, 2);
+    expect(reader.highlightEnd, 2);
+    expect(reader.portraitOrigin, PortraitOrigin.ask);
+  });
+
+  testWidgets('preview closes outside, on back and on scroll', (tester) async {
+    await pump(tester, const StoryReaderPage(storyId: 'fixture.txt'));
+    Future<void> preview() async {
+      await tester.tap(find.byType(PortraitSpeakerName).first);
+      await tester.pumpAndSettle();
+      expect(find.text('更多'), findsOneWidget);
+    }
+
+    await preview();
+    final nameBottom =
+        tester.getBottomLeft(find.byType(PortraitSpeakerName).first).dy;
+    expect(tester.getTopLeft(find.text('更多')).dy, greaterThan(nameBottom));
+    await tester.tapAt(const Offset(380, 800));
+    await tester.pumpAndSettle();
+    expect(find.text('更多'), findsNothing);
+    await preview();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('更多'), findsNothing);
+    expect(find.byType(StoryReaderPage), findsOneWidget);
+    await preview();
+    final nameContext = tester.element(find.byType(PortraitSpeakerName).first);
+    final position = Scrollable.of(nameContext).position;
+    position.jumpTo(1);
+    await tester.pumpAndSettle();
+    expect(find.text('更多'), findsNothing);
+  });
+
+  testWidgets('preview keeps the answer input focused', (tester) async {
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    await pump(
+      tester,
+      Scaffold(
+        body: Column(
+          children: [
+            StoryAnswerBody(
+              content: '$_speaker 的回答。',
+              styleSheet: MarkdownStyleSheet(p: const TextStyle(fontSize: 16)),
+              streaming: false,
+            ),
+            TextField(focusNode: focus),
+          ],
+        ),
+      ),
+    );
+    focus.requestFocus();
+    await tester.pump();
+    final rich = find
+        .descendant(
+            of: find.byType(MarkdownBody), matching: find.byType(RichText),)
+        .first;
+    await tester.tapAt(tester.getTopLeft(rich) + const Offset(12, 8));
+    await tester.pumpAndSettle();
+    expect(find.text('更多'), findsOneWidget);
+    expect(focus.hasFocus, isTrue);
+    await tester.tapAt(const Offset(380, 800));
+    await tester.pumpAndSettle();
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets('reader name style dark=$dark', (tester) async {
+      await pump(tester, const StoryReaderPage(storyId: 'fixture.txt'),
+          dark: dark,);
+      final name = find.byType(PortraitSpeakerName).first;
+      final text = tester.widget<Text>(
+          find.descendant(of: name, matching: find.byType(Text)).first,);
+      final context = tester.element(name);
+      final theme = ProviderScope.containerOf(context).read(themeProvider);
+      expect(text.style!.decoration, isNot(TextDecoration.underline));
+      expect(text.style!.fontFamily, theme.heading(14).fontFamily);
+      expect(text.style!.fontVariations, theme.heading(14).fontVariations);
+      expect(text.style!.color, dark ? theme.accentText : theme.textPrimary);
+      final old = TextPainter(
+        text: TextSpan(
+          text: _speaker,
+          style: theme.ui(14, weight: 700, color: theme.textSecondary),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      expect(tester.getSize(name).height, old.height);
+      debugPrint(
+          'P8 name height: old ${old.height}, current ${tester.getSize(name).height}',);
+      old.dispose();
+      if (!dark) {
+        expect(
+            find.descendant(
+                of: name,
+                matching: find.byWidgetPredicate(
+                    (w) => w is ColoredBox && w.color == theme.accentPrimary,),),
+            findsOneWidget,);
+      }
+    });
+  }
+
   testWidgets('sheet closes before opening pages and preserves origin',
       (tester) async {
     await pump(tester, launcher(origin: PortraitOrigin.materials));
     await open(tester);
-    await tester.tap(find.text('用这个立绘的说话人'));
+    await tester.tap(find.text('还有谁使用了这个立绘？'));
     await tester.pumpAndSettle();
     expect(find.byType(PortraitSheet), findsNothing);
     expect(
@@ -296,29 +496,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<SpeakerPortraitsPage>(find.byType(SpeakerPortraitsPage))
+          .widget<PortraitStoriesPage>(find.byType(PortraitStoriesPage))
           .origin,
       PortraitOrigin.materials,
     );
-    await tester.tap(find.byType(PressRow).last);
-    await tester.pumpAndSettle();
-    expect(find.byType(PortraitSpeakersPage), findsOneWidget);
   });
 
   testWidgets('no sprite hides image and group action', (tester) async {
     await pump(tester, launcher(fromLine: true, sprite: null));
     await open(tester);
     expect(find.byType(PortraitImage), findsNothing);
-    expect(find.text('用这个立绘的说话人'), findsNothing);
-    expect(find.text('“测试角色”用过的立绘'), findsOneWidget);
+    expect(find.text('还有谁使用了这个立绘？'), findsNothing);
+    expect(find.text('这个人还有哪些立绘？'), findsOneWidget);
   });
 
   testWidgets('unknown speaker keeps only the exact portrait actions',
       (tester) async {
     await pump(tester, launcher(fromLine: true), names: () async => null);
     await open(tester);
-    expect(find.text('用这个立绘的说话人'), findsOneWidget);
-    expect(find.text('“测试角色”用过的立绘'), findsNothing);
+    expect(find.text('还有谁使用了这个立绘？'), findsOneWidget);
+    expect(find.text('这个人还有哪些立绘？'), findsNothing);
     expect(find.text('干员资料'), findsNothing);
   });
 
@@ -357,7 +554,9 @@ void main() {
         // An underline in the body's colour, not an accent fill.
         expect(markdown.styleSheet!.a!.backgroundColor, isNull);
         expect(markdown.styleSheet!.a!.decoration, TextDecoration.underline);
-        expect(markdown.styleSheet!.a!.decorationColor, theme.textMuted);
+        expect(markdown.styleSheet!.a!.decorationColor, theme.accentPrimary);
+        expect(markdown.styleSheet!.a!.decorationThickness, 2);
+        expect(markdown.styleSheet!.a!.color, markdown.styleSheet!.p?.color ?? theme.textPrimary);
         final rich = find
             .descendant(
               of: find.byType(MarkdownBody),
@@ -365,6 +564,9 @@ void main() {
             )
             .first;
         await tester.tapAt(tester.getTopLeft(rich) + const Offset(12, 8));
+        await tester.pumpAndSettle();
+        expect(find.text('更多'), findsOneWidget);
+        await tester.tap(find.text('更多'));
         await tester.pumpAndSettle();
         expect(find.byType(PortraitSheet), findsOneWidget);
       }
@@ -427,7 +629,7 @@ void main() {
         final name = find.byType(PortraitSpeakerName).first;
         await tester.tapAt(tester.getTopLeft(name) + const Offset(24, 46));
         await tester.pumpAndSettle();
-        expect(find.text('表情 4 / 服装 1'), findsOneWidget);
+        expect(find.text('更多'), findsOneWidget);
       }
     });
   }
@@ -470,7 +672,37 @@ void main() {
         dark: dark,
       );
       expect(tester.takeException(), isNull);
-      await shoot(tester, '${mode}_reader');
+      await capture(tester, '${mode}_reader');
+      await tester.tap(find.byType(PortraitSpeakerName).first);
+      await tester.pumpAndSettle();
+      await capture(tester, '${mode}_preview_below');
+      await tester.tapAt(const Offset(380, 800));
+      await tester.pumpAndSettle();
+      await pump(
+        tester,
+        Scaffold(
+          body: Align(
+            alignment: Alignment.bottomLeft,
+            child: Builder(
+              builder: (context) => AppButton(
+                '打开',
+                onPressed: () => showPortraitPreview(
+                  context,
+                  speaker: _speaker,
+                  origin: PortraitOrigin.ask,
+                  anchor: const Rect.fromLTWH(24, 760, 80, 20),
+                ),
+              ),
+            ),
+          ),
+        ),
+        dark: dark,
+      );
+      await open(tester);
+      await capture(tester, '${mode}_preview_above');
+      await tester.tapAt(const Offset(380, 100));
+      await tester.pumpAndSettle();
+
       for (final kind in ['reader', 'ask', 'none']) {
         await pump(
           tester,
@@ -482,7 +714,17 @@ void main() {
         );
         await open(tester);
         expect(tester.takeException(), isNull);
-        await shoot(tester, '${mode}_sheet_$kind');
+        await capture(tester, '${mode}_sheet_$kind');
+        if (kind == 'ask' && _sprites.length > 10) {
+          final strip = find.byWidgetPredicate(
+              (w) => w is ListView && w.scrollDirection == Axis.horizontal,);
+          expect(find.byType(PortraitImage).evaluate().length, lessThan(12));
+          final watch = Stopwatch()..start();
+          await tester.fling(strip, const Offset(-2500, 0), 1800);
+          await tester.pumpAndSettle();
+          debugPrint(
+              'P8 thumbnails: ${_sprites.length}, fling elapsed ${watch.elapsedMilliseconds} ms (widget test, not device FPS)',);
+        }
       }
       await pump(
         tester,
@@ -494,7 +736,7 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expect(find.byType(RawImage), findsOneWidget);
-      await shoot(tester, '${mode}_speakers');
+      await capture(tester, '${mode}_speakers');
       await pump(
         tester,
         const SpeakerPortraitsPage(
@@ -505,7 +747,16 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expect(find.byType(RawImage), findsOneWidget);
-      await shoot(tester, '${mode}_portraits');
+      await capture(tester, '${mode}_portraits');
+      await pump(
+          tester,
+          const PortraitStoriesPage(
+              speaker: _speaker,
+              groupId: 'char_fixture',
+              origin: PortraitOrigin.ask,),
+          dark: dark,);
+      await capture(tester, '${mode}_stories');
+
       await pump(
         tester,
         Scaffold(
@@ -528,7 +779,7 @@ void main() {
         dark: dark,
       );
       expect(tester.takeException(), isNull);
-      await shoot(tester, '${mode}_answer');
+      await capture(tester, '${mode}_answer');
     });
   }
 }
