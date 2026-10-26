@@ -12,10 +12,13 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
 - **资料**：每个游戏一页（明日方舟 / 终末地 / 补充资料，点标签切换）。书架（明日方舟：主线、SideStory、故事集、插曲、干员、集成战略、生息演算、图鉴；
   终末地：照游戏任务面板的主线 / 探索 / 支线 / 活动 / 委派任务、情报档案库、干员、百科）→ 故事集或任务（章节、官方梗概、阅读进度）→ 条目，
   条目之间按游戏表里的关系互相链接；每页可搜索。长文用阅读字体排版（默认黑体，即内置的思源黑体；可在设置里换成霞鹜文楷），干员档案分段可折叠，剧情开头的官方梗概默认折叠；阅读器记住位置与读过的次数，长按标题可以拖动进度。
+- **剧情立绘**（0.20）：知识库记下每一句台词显示的立绘，另有可下载的立绘包（全部差分）。阅读器里点说话人看这一句的确切表情，问答答案里的人名也能点开；
+  立绘卡片里可以看同一张立绘被哪些名字用过、一个名字用过哪些立绘。只有明日方舟有。
   “补充资料”预置《大地巡旅》全文与向量，并保存个人笔记；在资料页选择参与问答的资料，可导入 Markdown／文本、自定义来源说明。已启用的个人资料会发送给配置的向量服务建立索引。
 - **问答**：一个工具型 AI Agent 直接查询本地知识库（统一检索、整章阅读、只读 SQL），答案每条都带可点开的原文出处，出处由代码核对是否真的读过；
   一次检索同时查两个游戏的剧情、档案、已启用的补充资料和 PRTS / Warfarin Wiki（游戏原文优先，只有 Wiki 支持的说法会写明；可在输入框的选项里关闭）。
   答完之后可以点“提要”把长答案整理成几段，或点“复核”让另一次调用以读者身份提问。工作过程逐步列出每次查找的工具、参数和结果。可以同时开几个对话，正在答的在后台继续，从左上角的对话栏切换。
+  不限步数；显示上下文用量，接近提醒值时自动压缩成纪要并保留要用的原文；对话随记录保存，重开 App 也能接着问。
   支持任意 OpenAI 兼容的模型服务（默认智谱 `glm-5.3-flash`），可选配置向量服务做语义检索（没有时退回关键词并提示）。
 - **终末地**（0.12）：第二个知识库——干员档案、语音记录与干员情报，情报档案库，敌人、武器、物品描述，以及全部剧情对话与过场台词
   （一个任务一篇，按任务步骤排列：每段放在游戏播放它的那一步，步骤目标作标题）；
@@ -78,6 +81,7 @@ docs/           文档（索引见 CLAUDE.md）
 - [`docs/MATERIALS.md`](docs/MATERIALS.md)：补充资料的选择、向量、来源说明与段落取证。
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：项目结构与各模块的实现方式。
+- [`docs/PORTRAITS.md`](docs/PORTRAITS.md)：剧情立绘的数据、立绘包与界面。
 - [`docs/ASK_AGENT.md`](docs/ASK_AGENT.md)：问答 Agent 现在怎么工作；[`docs/ASK_EXPERIMENTS.md`](docs/ASK_EXPERIMENTS.md)：问答试过的办法、实测表现与评估；
   [`docs/WIKI.md`](docs/WIKI.md)：Wiki 浏览与问答取证。
 - [`docs/GAMEDATA_BUILD_PIPELINE.md`](docs/GAMEDATA_BUILD_PIPELINE.md)：两个知识库的构建、更新、发布；
@@ -87,4 +91,5 @@ docs/           文档（索引见 CLAUDE.md）
 - [`CHANGELOG.md`](CHANGELOG.md)：各版本的变化。
 
 明日方舟的数据来自社区解包仓库 [Kengxxiao/ArknightsGameData](https://github.com/Kengxxiao/ArknightsGameData)；终末地的数据从本机安装的游戏客户端解包
-（[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 的 AnimeStudio）。游戏内容版权归 Hypergryph 所有。
+（[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 的 AnimeStudio）。剧情立绘的图片来自 [Arkwaifu](https://arkwaifu.cc)（CC BY-NC 4.0）。
+游戏内容（含立绘）版权归 Hypergryph 所有。

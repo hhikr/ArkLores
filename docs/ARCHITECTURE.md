@@ -75,7 +75,8 @@ docs/                  文档（索引见 CLAUDE.md）
 
 - **条目层**：`collections`（书架与集合）、`entries`（每个官方条目一行）、`entry_links`（绑定：出场、所属、同一人物…）。归属与绑定只来自表里的 id，不用名字猜。
 - **原文**：`story_lines`（剧情逐行，带 `kind`）、`normalized_records`（档案、语音、描述等）、`entities` / `entity_aliases` / `entity_documents`（实体与干员的整份档案）。
-- **可选**：`story_catalog`（故事集名、章名、顺序、官方梗概、上线时间、剧情回顾的开放时间）、`story_chunk_vectors`（剧情向量，12 行一块、步长 8，int8）、`record_chunk_vectors`（资料向量）。
+- **可选**：`story_catalog`（故事集名、章名、顺序、官方梗概、上线时间、剧情回顾的开放时间）、`story_chunk_vectors`（剧情向量，12 行一块、步长 8，int8）、`record_chunk_vectors`（资料向量）、
+  立绘五张表（0.20，明日方舟库：每句显示的立绘与按立绘、说话人的统计，`PORTRAITS.md`）。立绘图片不在库里，在单独的立绘包。
 - 两个游戏各一个库文件、表结构相同；**终末地的所有 id 以 `ef/` 开头**，所以任何地方拿到一个 id 就知道该去哪个库（`game.dart` 的 `gameOfId`）。
 
 ### 4.2 建库
@@ -93,6 +94,7 @@ docs/                  文档（索引见 CLAUDE.md）
 - 官方资产与本机更新过的库按游戏数据的新旧排先后（`GameDataInstallStatus.updateReason`）。
 - `gamedata_build_provider.dart` + `source_build_card.dart`：明日方舟页的“检查更新 / 拉取并更新”（增量更新）。
 - `story_vector_updater.dart` + `story_vector_card.dart`：每个游戏的“语义检索”卡片，补缺的剧情与资料向量（用户自己的向量服务）。
+- `portrait_pack_installer.dart` + `portrait_pack_card.dart`（0.20）：“剧情立绘”卡片，下载 / 更新 / 删除立绘包（复用断点续传，`resumable_download.dart`），见 `PORTRAITS.md`。
 
 ### 4.4 检索面
 
@@ -112,6 +114,7 @@ docs/                  文档（索引见 CLAUDE.md）
 | `main` 主线（每章一个集合）、`sidestory` / `ministory` / `branchline`、`activity`、`memory`（干员：档案、密录、模组、皮肤、信物、召唤物）、`roguelike` 集成战略、`sandbox` 生息演算；图鉴（敌人、物品、奖章…） | `ef/main` 主线任务（按章、进程分组）、`ef/discovery` / `ef/side` / `ef/activity` / `ef/other`（任务面板的分类，按地区分组）、`ef/world` 其他（地点交互、敌人通讯）、`ef/unused` 未实装任务、`ef/archive` 情报档案库、`ef/memory` 干员（档案、语音、角色纪事、Baker 话题、帝江号互动）、`ef/codex` 百科 |
 
 - 阅读器（`features/ai/story_reader_page.dart`）：惰性列表从锚点双向建（任意长的故事打开不卡），记住位置与读过的次数，标题板下有进度条；从问答出处打开时高亮所引的行。
+  明日方舟的说话人名字可以点开立绘卡片（这一句的确切差分，0.20，`PORTRAITS.md` §4）。
   终末地的篇里有种类分段线、折叠的段首梗概、步骤标题，“未定位的对话”默认收起（点标题展开）。
 - 排版：长文用阅读字体（`reading_text.dart`，设置里选：默认黑体，即内置的思源黑体子集，可选霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。
 - 搜索（`library_search.dart`）：名字/代号 → 相近名字 → 正文提到；“按意思找剧情”是手动按钮。与问答无关。
@@ -122,7 +125,9 @@ docs/                  文档（索引见 CLAUDE.md）
 细节：`ASK_AGENT.md`（现在的流程）、`ASK_EXPERIMENTS.md`（试过的办法与数据）。
 
 - 一个模型 + 通用工具（`search`、`read_story`、`read_record`、`grep`、只读 `sql`、`guide`、`outline`、`similar_names`、`gather`，可选 Wiki 工具与子助手），对话只追加，代码核对出处。
-- 第一轮之前：一次小调用拟定检索词和锚点，代码执行检索、按名字取材；追问时先重读上一答引用的原文。
+- 第一轮之前：一次小调用拟定检索词和锚点，代码执行检索、按名字取材；追问时先重读上一答引用、已不在上文的原文。
+- 0.20：主 agent 不限轮数；还在上文的原文与相同的调用不再执行（`ContextLedger`）；接近上下文提醒值时由模型写纪要、代码按“已读”取回保留的原文重建对话（`lore_context_compaction.dart`）；
+  完整对话随会话文件保存（`lore_conversation`），重启后接着问。答完后答案里有立绘的名字可以点开立绘卡片。
 - 界面：问答页（`ai_chat_page.dart`）、输入框与选项面板（`ask_composer.dart`、`answer_options_menu.dart`）、答案与出处（`chat_bubble.dart`、`story_answer_body.dart`）、工作过程（`work_steps.dart`）、对话列表（`chat_history_page.dart`）。
 - 会话记录：`ChatSessionStore`，每个对话一个 JSON（每次模型输出、工具调用与结果、答案、用量、分段计时）。
 - 多个对话（`agent_provider.dart`）：每个打开的对话是 `askChatProvider(key)` 的一个 `AskChatNotifier`；`askSessionsProvider` 记着打开的对话和显示的那个（`shownAskProvider`）。
@@ -152,6 +157,8 @@ docs/                  文档（索引见 CLAUDE.md）
 - 两套主题 token：明日方舟（`ark_theme_tokens.dart`）与终末地（`endfield_theme_tokens.dart`，黑白工业风 + 信号黄）。信号黄（`accentPrimary`）只做填充和粗线；文字、图标、细边框用 `accentText`，黄底上的前景用 `onAccent`。
 - 界面设计（0.17）见 `docs/DESIGN.md`：两套主题 token（`shared/theme/`）、部件（`shared/widgets/ef_widgets.dart`）、页面框架（`page_frame.dart`）、动效（`motion.dart`）与人机交互约定；守卫测试禁止圆角、`_rounded` 图标、回弹曲线、转圈、投影、红绿色和小于 12 的字。
 - 全 App 不用 `AppBar`：推入的页面用 `PageScaffold`，主标签页用 `MainTopBar`（`page_frame.dart`，有守卫测试）。
+- 系统栏（0.20）：Android 状态栏、导航栏透明，App 铺到屏幕边上（`SystemUiMode.edgeToEdge`，`styles.xml` 四份）；图标深浅由 `MaterialApp.builder` 外层的 `AnnotatedRegion` 按 App 当前主题定（`system_bars_style.dart`）。
+  顶栏背景画到状态栏下，收起时一起移出；主标签页保留系统底部留白，收栏后的输入框与 Wiki 工具停在手势条之上。
 - 输入框旁的面板、菜单用浮层且不取焦点（不把键盘收起来）。
 - 界面文字进中英 ARB（`shared/l10n/`，`flutter gen-l10n`）；提示词留在 Dart 里。
 
@@ -160,5 +167,5 @@ docs/                  文档（索引见 CLAUDE.md）
 - `flutter test`（约 1–3 分钟，全部离线）：测试目录与 `lib/` 一一对应，测试知识库一律用生产 schema（`test/support/gamedata_fixture.dart`），mock LLM。守卫测试在 `test/guards/` 与 `lore_agent_loop_test.dart`。
 - `test/live/`：要真实服务或真实库的测试，用环境变量开启（真实模型问答、召回测试、真实库验收、Wiki 联网、资产安装、场景卡与前缀试验）。命令见 `QA_CHECKLIST.md`。
 - `tools/`：建库与更新（`build_gamedata_database.dart`、`update_gamedata.dart`、`rederive_gamedata.dart`、`build_story_embeddings.dart`、`build_story_catalog.dart`、`compact_gamedata.dart`、`finalize_gamedata_assets.dart`）、
-  终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、发布（`release_app.ps1/.sh`、知识库 `publish_gamedata.ps1` + `write_gamedata_channel.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）。
+  终末地（`unpack_endfield.ps1`、`build_endfield_database.dart`）、立绘（`build_portrait_index.dart`，`portraits/` 下的 Python 打包脚本）、发布（`release_app.ps1/.sh`、知识库 `publish_gamedata.ps1` + `write_gamedata_channel.dart`）、本机试装（`install_local.ps1`）、真机桥（`phone_ask.dart`）、云端会话（`tools/cloud/`）。
 - 构建与发布：APK 由 GitHub Actions 构建签名（推 `release/<版本>` 触发），见 `ANDROID_SETUP_GUIDE.md`；云端会话见 `CLOUD_DEV.md`。
