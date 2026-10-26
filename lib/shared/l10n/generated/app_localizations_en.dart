@@ -1584,7 +1584,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsContextWarnTokensDesc =>
-      'Warn when a conversation exceeds this value; automatically compress earlier content at 80% of this value.';
+      'Warn when a conversation exceeds this value.';
+
+  @override
+  String get settingsCompactPercent => 'Auto-compaction point';
+
+  @override
+  String get settingsCompactPercentDesc =>
+      'When the context reaches this share of the warning threshold, earlier content is compacted into notes.';
 
   @override
   String aiContextMeter(String n, String limit) {

@@ -33,6 +33,7 @@ class _Agent extends StoryQaAgent {
     LLMClient? client,
     AnswerOptions options = const AnswerOptions(),
     int? contextWarnTokens,
+    int compactPercent = 80,
     LoreConversation? prior,
     void Function(LoreConversation)? onConversation,
     void Function(int, String)? onRawLlmResponse,
@@ -62,6 +63,7 @@ void main() {
         storyQaAgentProvider.overrideWithValue(agent),
         initialApiConfigProvider.overrideWithValue(const LLMConfig(chatApiKey: 'test-key')),
         initialThemeProvider.overrideWithValue(theme),
+        initialContextWarnTokensProvider.overrideWithValue(100000),
       ],
     );
     addTearDown(container.dispose);

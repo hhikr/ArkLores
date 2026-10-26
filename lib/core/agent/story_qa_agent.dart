@@ -51,6 +51,7 @@ class StoryQaAgent {
     LLMClient? client,
     AnswerOptions options = const AnswerOptions(),
     int? contextWarnTokens,
+    int compactPercent = 80,
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
@@ -81,6 +82,7 @@ class StoryQaAgent {
       store, client, options,
       materials: materials,
       contextWarnTokens: contextWarnTokens,
+      compactPercent: compactPercent,
     ).run(
       query: query,
       history: history,
@@ -96,6 +98,7 @@ class StoryQaAgent {
     AnswerOptions options, {
     bool preSearch = true,
     int? contextWarnTokens,
+    int compactPercent = 80,
     MaterialSnapshot? materials,
   }) =>
       LoreAgentLoop(
@@ -110,6 +113,7 @@ class StoryQaAgent {
         delegate: options.delegate,
         preSearch: preSearch,
         contextWarnTokens: contextWarnTokens,
+        compactPercent: compactPercent,
         onSpan: _usage?.addSpan,
       );
 
@@ -128,6 +132,7 @@ class StoryQaAgent {
     LLMClient? client,
     AnswerOptions options = const AnswerOptions(),
     int? contextWarnTokens,
+    int compactPercent = 80,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) async* {
@@ -146,6 +151,7 @@ class StoryQaAgent {
       store, client, options,
       preSearch: false,
       contextWarnTokens: contextWarnTokens,
+      compactPercent: compactPercent,
       materials: await materialSnapshot?.call(),
     );
     yield const ReActEvent(type: ReActEventType.status, content: '审稿中');

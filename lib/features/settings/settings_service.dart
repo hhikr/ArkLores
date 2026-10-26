@@ -52,6 +52,14 @@ class WikiSiteConfig {
   }
 }
 
+/// The context warning when none was saved; Ask compacts at 80% of it.
+/// Long-context models compact poorly, so the default is the largest
+/// option and a conversation compacts only when it gets very long.
+const defaultContextWarnTokens = 1000000;
+
+/// The share of the context warning, in percent, at which Ask compacts.
+const defaultCompactPercent = 80;
+
 /// Persistent storage for API configuration via flutter_secure_storage.
 ///
 /// Keys are stored encrypted at the OS level (Keychain on iOS,
@@ -86,6 +94,7 @@ class SettingsService {
   static const _keyProfileSectionsOpen = 'library_profile_sections_open';
   static const _keyReadingFont = 'reading_font';
   static const _keyContextWarnTokens = 'ask_context_warn_tokens';
+  static const _keyCompactPercent = 'ask_compact_percent';
 
   // ── Profile keys ─────────────────────────────────────────
   static const _keyNickname = 'profile_nickname';
@@ -220,11 +229,22 @@ class SettingsService {
   Future<int> loadContextWarnTokens() async {
     final value =
         int.tryParse(await _storage.read(key: _keyContextWarnTokens) ?? '');
-    return value != null && value > 0 ? value : 100000;
+    return value != null && value > 0 ? value : defaultContextWarnTokens;
   }
 
   Future<void> saveContextWarnTokens(int value) =>
       _storage.write(key: _keyContextWarnTokens, value: '$value');
+
+  Future<int> loadCompactPercent() async {
+    final value =
+        int.tryParse(await _storage.read(key: _keyCompactPercent) ?? '');
+    return value != null && value > 0 && value <= 100
+        ? value
+        : defaultCompactPercent;
+  }
+
+  Future<void> saveCompactPercent(int value) =>
+      _storage.write(key: _keyCompactPercent, value: '$value');
 
   /// The font of long reading text (default: the interface's Chinese sans).
   Future<ReadingFont> loadReadingFont() async {

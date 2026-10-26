@@ -48,7 +48,14 @@ void main() async {
     appTheme,
     appLocale,
     sessionLogsEnabled,
-    (nickname, answerOptions, profileSectionsOpen, readingFont, contextWarnTokens),
+    (
+      nickname,
+      answerOptions,
+      profileSectionsOpen,
+      readingFont,
+      contextWarnTokens,
+      compactPercent,
+    ),
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
     load('API config', settingsService.loadApiConfig, const LLMConfig()),
@@ -66,7 +73,9 @@ void main() async {
       load('profile fold setting', settingsService.loadProfileSectionsOpen,
           true,),
       load('reading font', settingsService.loadReadingFont, ReadingFont.sans),
-      load('context warning', settingsService.loadContextWarnTokens, 100000),
+      load('context warning', settingsService.loadContextWarnTokens, defaultContextWarnTokens),
+      load('compaction point', settingsService.loadCompactPercent,
+          defaultCompactPercent,),
     ).wait,
   ).wait;
   // Apply the user's per-session AI log toggle before any agent runs.
@@ -86,6 +95,7 @@ void main() async {
         initialThemeProvider.overrideWithValue(appTheme),
         initialReadingFontProvider.overrideWithValue(readingFont),
         initialContextWarnTokensProvider.overrideWithValue(contextWarnTokens),
+        initialCompactPercentProvider.overrideWithValue(compactPercent),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
         initialNicknameProvider.overrideWithValue(nickname),

@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/settings/settings_service.dart'
+    show defaultCompactPercent, defaultContextWarnTokens;
 import '../../shared/providers/settings_provider.dart';
 import '../background/background_work.dart';
 import '../gamedata/game.dart';
@@ -94,13 +96,16 @@ class AskChatNotifier extends ChatNotifierBase {
     AnswerOptions Function()? optionsReader,
     UsageMeter? usage,
     int Function()? contextWarnTokensReader,
+    int Function()? compactPercentReader,
   })  : _agent = agent,
         _sessionStore = sessionStore,
         _configReader = configReader,
         _clientReader = clientReader,
         _optionsReader = optionsReader,
         _usage = usage,
-        _contextWarnTokensReader = contextWarnTokensReader ?? (() => 100000),
+        _contextWarnTokensReader = contextWarnTokensReader ?? (() => defaultContextWarnTokens),
+        _compactPercentReader =
+            compactPercentReader ?? (() => defaultCompactPercent),
         super([]);
 
   /// R16: the client for the next question (the thinking client when
@@ -118,6 +123,7 @@ class AskChatNotifier extends ChatNotifierBase {
   /// timeline; the clients' own meter forwards into it).
   UsageMeter? get usageMeter => _usage;
   final int Function() _contextWarnTokensReader;
+  final int Function() _compactPercentReader;
   bool contextWarningPending = false;
 
   void acknowledgeContextWarning() {
@@ -506,6 +512,7 @@ class AskChatNotifier extends ChatNotifierBase {
             client: client,
             options: options,
             contextWarnTokens: _contextWarnTokensReader(),
+            compactPercent: _compactPercentReader(),
             onRawLlmResponse: onRaw,
             onConversation: onConversation,
           )
@@ -515,6 +522,7 @@ class AskChatNotifier extends ChatNotifierBase {
             client: client,
             options: options,
             contextWarnTokens: _contextWarnTokensReader(),
+            compactPercent: _compactPercentReader(),
             onRawLlmResponse: onRaw,
             prior: prior,
             onConversation: onConversation,
@@ -937,6 +945,7 @@ final askChatProvider = StateNotifierProvider.family<AskChatNotifier,
   return AskChatNotifier(
     agent: ref.watch(storyQaAgentProvider),
     contextWarnTokensReader: () => ref.read(contextWarnTokensProvider),
+    compactPercentReader: () => ref.read(compactPercentProvider),
     usage: UsageMeter(),
     sessionStore: ref.watch(chatSessionStoreProvider),
     configReader: () => ref.read(apiConfigProvider),

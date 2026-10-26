@@ -189,6 +189,7 @@ class LoreAgentLoop {
     this.materials,
     this.maxTurns,
     this.contextWarnTokens,
+    this.compactPercent = 80,
     this.maxTokens = 8192,
     this.temperature = 0.3,
     this.subtask = false,
@@ -276,6 +277,10 @@ class LoreAgentLoop {
   final int? maxTurns;
 
   final int? contextWarnTokens;
+
+  /// The share of [contextWarnTokens], in percent, at which the earlier
+  /// context is compacted (the setting "自动压缩位置").
+  final int compactPercent;
   final int maxTokens;
   final double temperature;
 
@@ -432,7 +437,7 @@ class LoreAgentLoop {
       final limit = contextWarnTokens;
       if (subtask || limit == null || limit <= 0) return;
       final from = estimate();
-      if (from < limit * 0.8 ||
+      if (from < limit * compactPercent / 100 ||
           (lastCompactionTokens != null &&
               from - lastCompactionTokens! < limit * 0.1)) {
         return;

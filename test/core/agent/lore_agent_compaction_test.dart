@@ -214,6 +214,32 @@ void main() {
     expect(events.last.type, ReActEventType.complete);
   });
 
+  test('the compaction point is a setting: the context compacts once it '
+      'reaches that share of the warning', () async {
+    Future<int?> compactedFrom(int percent) async {
+      final client = _ScriptedClient(
+          [_answer('{"notes":"N","keep":[]}'), _answer(answer), _answer(answer)],);
+      final events = await LoreAgentLoop(
+              client: client,
+              store: store,
+              preSearch: false,
+              contextWarnTokens: 100000,
+              compactPercent: percent,)
+          .run(query: '新问题', prior: prior(tokens: 2000))
+          .toList();
+      return events
+          .where((e) => e.type == ReActEventType.contextCompacted)
+          .firstOrNull
+          ?.compactedFrom;
+    }
+
+    // The size before the first request, as the loop estimates it.
+    final size = (await compactedFrom(1))!;
+    final share = size * 100 ~/ 100000;
+    expect(await compactedFrom(share), size);
+    expect(await compactedFrom(share + 2), isNull);
+  });
+
   test('follow-up compaction leaves only memo and new question before planning',
       () async {
     final client =

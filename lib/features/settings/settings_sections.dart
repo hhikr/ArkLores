@@ -174,6 +174,22 @@ class AiSettingsPage extends ConsumerWidget {
           onChanged: (value) =>
               ref.read(contextWarnTokensProvider.notifier).set(value),
         ),
+        _ChoiceRow<int>(
+          key: const ValueKey('settings-compact-percent'),
+          title:
+              '${context.t.settingsCompactPercent} / ${ref.watch(compactPercentProvider)}%',
+          description: context.t.settingsCompactPercentDesc,
+          value: ref.watch(compactPercentProvider),
+          options: const [
+            (50, '50%'),
+            (60, '60%'),
+            (70, '70%'),
+            (80, '80%'),
+            (90, '90%'),
+          ],
+          onChanged: (value) =>
+              ref.read(compactPercentProvider.notifier).set(value),
+        ),
         ActionRow(
           key: const ValueKey('settings-session-logs'),
           icon: Icons.receipt_long_sharp,

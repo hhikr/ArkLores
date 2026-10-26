@@ -527,7 +527,9 @@
   "aiConfigRequiredTitle": "先配置对话服务",
   "aiAskTry": "可以这样问",
   "settingsContextWarnTokens": "上下文提醒值",
-  "settingsContextWarnTokensDesc": "一个对话的上下文超过这个值时提醒；到这个值的 80% 时自动压缩较早的内容。",
+  "settingsContextWarnTokensDesc": "一个对话的上下文超过这个值时提醒。",
+  "settingsCompactPercent": "自动压缩位置",
+  "settingsCompactPercentDesc": "上下文到提醒值的这个比例时，较早的内容自动压缩成纪要。",
   "aiContextMeter": "上下文 {n} / {limit}",
   "@aiContextMeter": {
     "placeholders": {

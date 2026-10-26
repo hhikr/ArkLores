@@ -1524,8 +1524,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsContextWarnTokens => '上下文提醒值';
 
   @override
-  String get settingsContextWarnTokensDesc =>
-      '一个对话的上下文超过这个值时提醒；到这个值的 80% 时自动压缩较早的内容。';
+  String get settingsContextWarnTokensDesc => '一个对话的上下文超过这个值时提醒。';
+
+  @override
+  String get settingsCompactPercent => '自动压缩位置';
+
+  @override
+  String get settingsCompactPercentDesc => '上下文到提醒值的这个比例时，较早的内容自动压缩成纪要。';
 
   @override
   String aiContextMeter(String n, String limit) {

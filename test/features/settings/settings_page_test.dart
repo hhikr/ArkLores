@@ -27,6 +27,10 @@ void main() {
     final container = ProviderScope.containerOf(tester.element(find.byType(AiSettingsPage)));
     expect(container.read(contextWarnTokensProvider), 64000);
     expect(await SettingsService().loadContextWarnTokens(), 64000);
+    await tester.tap(find.text('60%'));
+    await tester.pumpAndSettle();
+    expect(container.read(compactPercentProvider), 60);
+    expect(await SettingsService().loadCompactPercent(), 60);
     expect(tester.takeException(), isNull);
   });
 

@@ -2801,8 +2801,20 @@ abstract class AppLocalizations {
   /// No description provided for @settingsContextWarnTokensDesc.
   ///
   /// In en, this message translates to:
-  /// **'Warn when a conversation exceeds this value; automatically compress earlier content at 80% of this value.'**
+  /// **'Warn when a conversation exceeds this value.'**
   String get settingsContextWarnTokensDesc;
+
+  /// No description provided for @settingsCompactPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-compaction point'**
+  String get settingsCompactPercent;
+
+  /// No description provided for @settingsCompactPercentDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'When the context reaches this share of the warning threshold, earlier content is compacted into notes.'**
+  String get settingsCompactPercentDesc;
 
   /// No description provided for @aiContextMeter.
   ///

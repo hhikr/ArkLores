@@ -27,7 +27,7 @@ void main() {
   }
 
   test('context warning changes immediately and survives a restart', () async {
-    expect(await service.loadContextWarnTokens(), 100000);
+    expect(await service.loadContextWarnTokens(), 1000000);
     final container = ProviderContainer(
         overrides: [settingsServiceProvider.overrideWithValue(service)],);
     addTearDown(container.dispose);
@@ -45,6 +45,19 @@ void main() {
     );
     addTearDown(restarted.dispose);
     expect(restarted.read(contextWarnTokensProvider), 64000);
+  });
+
+  test('compaction point: 80% by default, saved, out-of-range refused',
+      () async {
+    expect(await service.loadCompactPercent(), 80);
+    final container = ProviderContainer(
+        overrides: [settingsServiceProvider.overrideWithValue(service)],);
+    addTearDown(container.dispose);
+    await container.read(compactPercentProvider.notifier).set(60);
+    expect(container.read(compactPercentProvider), 60);
+    expect(await SettingsService().loadCompactPercent(), 60);
+    expect(await withStored({'ask_compact_percent': '150'}).loadCompactPercent(),
+        80,);
   });
 
   group('API', () {

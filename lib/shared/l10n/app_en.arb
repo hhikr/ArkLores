@@ -528,7 +528,9 @@
   "aiConfigRequiredTitle": "Set up the chat service first",
   "aiAskTry": "Try asking",
   "settingsContextWarnTokens": "Context warning threshold",
-  "settingsContextWarnTokensDesc": "Warn when a conversation exceeds this value; automatically compress earlier content at 80% of this value.",
+  "settingsContextWarnTokensDesc": "Warn when a conversation exceeds this value.",
+  "settingsCompactPercent": "Auto-compaction point",
+  "settingsCompactPercentDesc": "When the context reaches this share of the warning threshold, earlier content is compacted into notes.",
   "aiContextMeter": "Context {n} / {limit}",
   "@aiContextMeter": {
     "placeholders": {
