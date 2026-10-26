@@ -14,6 +14,7 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
@@ -364,12 +365,28 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// [build].
   double _dockTop = 0;
   double _dockBottom = 0;
+  double _visibleDockTop = 0;
+  double _visibleDockBottom = 0;
+  Duration _dockDuration = Duration.zero;
 
   /// Records the docks' room and, when it changed, pads every open page.
-  void _syncDockInsets(double top, double bottom) {
-    if (top == _dockTop && bottom == _dockBottom) return;
+  void _syncDockInsets(double top, double bottom, bool hidden) {
+    final visibleTop = hidden ? MediaQuery.paddingOf(context).top : top;
+    final visibleBottom =
+        hidden ? MediaQuery.viewPaddingOf(context).bottom : bottom;
+    final duration = Motion.of(context, hidden ? Motion.row : Motion.press * 2);
+    if (top == _dockTop &&
+        bottom == _dockBottom &&
+        visibleTop == _visibleDockTop &&
+        visibleBottom == _visibleDockBottom &&
+        duration == _dockDuration) {
+      return;
+    }
     _dockTop = top;
     _dockBottom = bottom;
+    _visibleDockTop = visibleTop;
+    _visibleDockBottom = visibleBottom;
+    _dockDuration = duration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (final controller in _controllers) {
         if (controller != null) unawaited(_applyDockInsets(controller));
@@ -381,42 +398,13 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// scrolled clear of them, and moves the site's own fixed/sticky bars
   /// (which ignore padding) down/up by the same amount.
   Future<void> _applyDockInsets(InAppWebViewController controller) async {
-    final js = '''
-(function(t, b) {
-  var id = 'arklores-dock-insets';
-  var style = document.getElementById(id);
-  if (!style) {
-    style = document.createElement('style');
-    style.id = id;
-    (document.head || document.documentElement).appendChild(style);
-  }
-  style.textContent = 'html{padding-top:' + t + 'px !important;' +
-      'padding-bottom:' + b + 'px !important;' +
-      'scroll-padding-top:' + t + 'px;}';
-  function shift() {
-    if (!document.body) return;
-    var all = document.body.querySelectorAll('*');
-    for (var i = 0; i < all.length; i++) {
-      var e = all[i];
-      var cs = window.getComputedStyle(e);
-      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
-      if (e.dataset.arkloresDock === undefined) {
-        if (parseFloat(cs.top) === 0) e.dataset.arkloresDock = 'top';
-        else if (cs.position === 'fixed' && parseFloat(cs.bottom) === 0)
-          e.dataset.arkloresDock = 'bottom';
-        else e.dataset.arkloresDock = '';
-      }
-      if (e.dataset.arkloresDock === 'top')
-        e.style.setProperty('top', t + 'px', 'important');
-      if (e.dataset.arkloresDock === 'bottom')
-        e.style.setProperty('bottom', b + 'px', 'important');
-    }
-  }
-  shift();
-  window.setTimeout(shift, 600);
-  window.setTimeout(shift, 1600);
-})($_dockTop, $_dockBottom);
-''';
+    final js = wikiDockInsetsScript(
+      top: _dockTop,
+      bottom: _dockBottom,
+      visibleTop: _visibleDockTop,
+      visibleBottom: _visibleDockBottom,
+      duration: _dockDuration,
+    );
     try {
       await controller.evaluateJavascript(source: js);
     } catch (_) {
@@ -847,6 +835,8 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     _syncDockInsets(
       MediaQuery.paddingOf(context).top + topBarInset,
       MediaQuery.paddingOf(context).bottom,
+      ref.watch(barsHiddenProvider) &&
+          MediaQuery.viewInsetsOf(context).bottom == 0,
     );
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -1256,4 +1246,61 @@ class _WikiTabViewState extends State<_WikiTabView> {
     }
     return description;
   }
+}
+
+/// Generic fixed/sticky dock adaptation; page padding stays stable while bars move.
+@visibleForTesting
+String wikiDockInsetsScript({
+  required double top,
+  required double bottom,
+  required double visibleTop,
+  required double visibleBottom,
+  required Duration duration,
+}) {
+  String transition(String edge) => duration == Duration.zero
+      ? ''
+      : 'transition:$edge ${duration.inMilliseconds}ms cubic-bezier(0.7,0,0.2,1) !important;';
+  final topTransition = transition('top');
+  final bottomTransition = transition('bottom');
+  return '''
+(function(t, b) {
+  var root = document.documentElement;
+  root.style.setProperty('--arklores-dock-top', '${visibleTop}px');
+  root.style.setProperty('--arklores-dock-bottom', '${visibleBottom}px');
+  var id = 'arklores-dock-insets';
+  var style = document.getElementById(id);
+  if (!style) {
+    style = document.createElement('style');
+    style.id = id;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  style.textContent = 'html{padding-top:' + t + 'px !important;' +
+      'padding-bottom:' + b + 'px !important;' +
+      'scroll-padding-top:var(--arklores-dock-top);}' +
+      '[data-arklores-dock=top]{top:var(--arklores-dock-top) !important;$topTransition}' +
+      '[data-arklores-dock=bottom]{bottom:var(--arklores-dock-bottom) !important;$bottomTransition}';
+  function shift() {
+    if (!document.body) return;
+    var all = document.body.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i];
+      var cs = window.getComputedStyle(e);
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      if (e.dataset.arkloresDock === undefined) {
+        if (parseFloat(cs.top) === 0) e.dataset.arkloresDock = 'top';
+        else if (cs.position === 'fixed' && parseFloat(cs.bottom) === 0)
+          e.dataset.arkloresDock = 'bottom';
+        else e.dataset.arkloresDock = '';
+      }
+      if (e.dataset.arkloresDock === 'top')
+        e.style.setProperty('top', 'var(--arklores-dock-top)', 'important');
+      if (e.dataset.arkloresDock === 'bottom')
+        e.style.setProperty('bottom', 'var(--arklores-dock-bottom)', 'important');
+    }
+  }
+  shift();
+  window.setTimeout(shift, 600);
+  window.setTimeout(shift, 1600);
+})($top, $bottom);
+''';
 }

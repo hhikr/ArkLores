@@ -259,41 +259,53 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           Positioned(
             left: 0,
             right: 0,
+            top: MediaQuery.paddingOf(context).top + topBarInset,
             bottom: 0,
             // Down onto the tab bar's room while the bars are away.
             child: BarsAway(
               distance: tabBarRoom(context),
-              child: _SizeReporter(
-                onHeight: (height) {
-                  if ((height - _composerHeight).abs() > 0.5) {
-                    setState(() => _composerHeight = height);
-                  }
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                          maxHeight: constraints.maxHeight * 0.55,),
-                      child:
-                          const SingleChildScrollView(child: AskContextMeter()),
-                    ),
-                    Flexible(
-                      child: LayoutBuilder(
-                        builder: (context, room) => AskComposer(
-                          controller: _inputController,
-                          theme: theme,
-                          isSending: isSending,
-                          onSend:
-                              isSending ? chatNotifier.cancel : _handleAskSend,
-                          hintText: context.t.aiAskInputPlaceholder,
-                          maxHeight: room.maxHeight,
-                          leading: (card) =>
-                              AnswerOptionsMenu(theme: theme, above: card),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: _SizeReporter(
+                  onHeight: (height) {
+                    if ((height - _composerHeight).abs() > 0.5) {
+                      setState(() => _composerHeight = height);
+                    }
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: (constraints.maxHeight -
+                                      MediaQuery.paddingOf(context).top -
+                                      topBarInset)
+                                  .clamp(0.0, double.infinity) *
+                              0.55,
+                        ),
+                        child: const SingleChildScrollView(
+                          child: AskContextMeter(),
                         ),
                       ),
-                    ),
-                  ],
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (context, room) => AskComposer(
+                            controller: _inputController,
+                            theme: theme,
+                            isSending: isSending,
+                            onSend: isSending
+                                ? chatNotifier.cancel
+                                : _handleAskSend,
+                            hintText: context.t.aiAskInputPlaceholder,
+                            maxHeight: room.maxHeight,
+                            leading: (card) =>
+                                AnswerOptionsMenu(theme: theme, above: card),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
