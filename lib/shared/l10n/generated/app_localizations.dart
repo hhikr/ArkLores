@@ -2816,6 +2816,18 @@ abstract class AppLocalizations {
   /// **'When the context reaches this share of the warning threshold, earlier content is compacted into notes.'**
   String get settingsCompactPercentDesc;
 
+  /// No description provided for @settingsSkipOperatorNames.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave operator names plain in answers'**
+  String get settingsSkipOperatorNames;
+
+  /// No description provided for @settingsSkipOperatorNamesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.'**
+  String get settingsSkipOperatorNamesDesc;
+
   /// No description provided for @aiContextMeter.
   ///
   /// In en, this message translates to:

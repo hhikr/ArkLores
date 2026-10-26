@@ -530,6 +530,8 @@
   "settingsContextWarnTokensDesc": "一个对话的上下文超过这个值时提醒。",
   "settingsCompactPercent": "自动压缩位置",
   "settingsCompactPercentDesc": "上下文到提醒值的这个比例时，较早的内容自动压缩成纪要。",
+  "settingsSkipOperatorNames": "回答里不标干员名",
+  "settingsSkipOperatorNamesDesc": "打开后，回答里的干员名字不加下划线、不能点开立绘；其他人物照旧。",
   "aiContextMeter": "上下文 {n} / {limit}",
   "@aiContextMeter": {
     "placeholders": {

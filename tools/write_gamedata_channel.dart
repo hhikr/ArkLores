@@ -10,6 +10,11 @@ import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 /// knowledge-base assets themselves are uploaded.
 ///
 ///   dart run tools/write_gamedata_channel.dart [--output=build/gamedata_channel.json]
+///     [--portraits-url=… --portraits-sha256=… --portraits-size=… --portraits-kb-commit=…]
+///
+/// The portrait pack entry (`arknights_portraits`) comes from the env's
+/// PORTRAITS_* values, or the options above; with neither, the entry already
+/// in the output file is kept.
 void main(List<String> args) {
   final output = args
           .where((a) => a.startsWith('--output='))
@@ -45,16 +50,21 @@ void main(List<String> args) {
     'arknights': asset('GAMEDATA'),
     'endfield': asset('ENDFIELD'),
   };
-  String? option(String name) => args
-      .where((a) => a.startsWith('--$name='))
-      .map((a) => a.substring(name.length + 3))
-      .firstOrNull;
+  // The portrait pack (0.20): from the env like the knowledge bases
+  // (PORTRAITS_URL / _SHA256 / _SIZE / _KB_COMMIT); an option overrides the
+  // env value of the same name.
+  String? option(String name) =>
+      args
+          .where((a) => a.startsWith('--$name='))
+          .map((a) => a.substring(name.length + 3))
+          .firstOrNull ??
+      env[name.toUpperCase().replaceAll('-', '_')];
   final url = option('portraits-url');
   final sha = option('portraits-sha256');
-  if (url != null || sha != null) {
+  if ((url ?? '').isNotEmpty || (sha ?? '').isNotEmpty) {
     if (url == null || url.isEmpty || sha == null || sha.isEmpty) {
       throw ArgumentError(
-          'Both --portraits-url and --portraits-sha256 are required',);
+          'Both the portrait pack URL and SHA-256 are required',);
     }
     channel['arknights_portraits'] = {
       'url': url,

@@ -58,6 +58,7 @@ void main() async {
       readingFont,
       contextWarnTokens,
       compactPercent,
+      skipOperatorNames,
     ),
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
@@ -79,6 +80,8 @@ void main() async {
       load('context warning', settingsService.loadContextWarnTokens, defaultContextWarnTokens),
       load('compaction point', settingsService.loadCompactPercent,
           defaultCompactPercent,),
+      load('operator names in answers', settingsService.loadSkipOperatorNames,
+          false,),
     ).wait,
   ).wait;
   // Apply the user's per-session AI log toggle before any agent runs.
@@ -99,6 +102,7 @@ void main() async {
         initialReadingFontProvider.overrideWithValue(readingFont),
         initialContextWarnTokensProvider.overrideWithValue(contextWarnTokens),
         initialCompactPercentProvider.overrideWithValue(compactPercent),
+        initialSkipOperatorNamesProvider.overrideWithValue(skipOperatorNames),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
         initialNicknameProvider.overrideWithValue(nickname),

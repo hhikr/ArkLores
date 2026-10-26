@@ -145,14 +145,24 @@ Future<PortraitGroup?> portraitGroup(
   );
 }
 
-Future<List<String>> highlightNames(DatabaseExecutor db) async {
+/// Names an Ask answer may highlight (speaker_names.highlight = 1). With
+/// [skipOperators], not the names whose most used portrait
+/// (`speaker_names.top_group`) is an operator's
+/// (`portrait_groups.operator_entry_id`, from the tables' ids).
+Future<List<String>> highlightNames(
+  DatabaseExecutor db, {
+  bool skipOperators = false,
+}) async {
   if (!await _hasTable(db, 'speaker_names')) return const [];
+  final operatorFilter = skipOperators && await hasPortraitIndex(db)
+      ? ' AND NOT EXISTS (SELECT 1 FROM portrait_groups g'
+          ' WHERE g.group_id = n.top_group'
+          ' AND g.operator_entry_id IS NOT NULL)'
+      : '';
   return [
-    for (final row in await db.query(
-      'speaker_names',
-      columns: ['speaker'],
-      where: 'highlight = 1',
-      orderBy: 'speaker ASC',
+    for (final row in await db.rawQuery(
+      'SELECT n.speaker FROM speaker_names n WHERE n.highlight = 1'
+      '$operatorFilter ORDER BY n.speaker ASC',
     ))
       row['speaker'] as String,
   ];

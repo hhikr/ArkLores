@@ -531,6 +531,8 @@
   "settingsContextWarnTokensDesc": "Warn when a conversation exceeds this value.",
   "settingsCompactPercent": "Auto-compaction point",
   "settingsCompactPercentDesc": "When the context reaches this share of the warning threshold, earlier content is compacted into notes.",
+  "settingsSkipOperatorNames": "Leave operator names plain in answers",
+  "settingsSkipOperatorNamesDesc": "When on, operators' names in answers are not underlined and do not open their portraits; other characters still do.",
   "aiContextMeter": "Context {n} / {limit}",
   "@aiContextMeter": {
     "placeholders": {

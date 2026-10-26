@@ -1594,6 +1594,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'When the context reaches this share of the warning threshold, earlier content is compacted into notes.';
 
   @override
+  String get settingsSkipOperatorNames =>
+      'Leave operator names plain in answers';
+
+  @override
+  String get settingsSkipOperatorNamesDesc =>
+      'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.';
+
+  @override
   String aiContextMeter(String n, String limit) {
     return 'Context $n / $limit';
   }

@@ -53,7 +53,8 @@ void main() {
         'speaker': name,
         'lines': 30,
         'groups': 3,
-        'top_group': 'a',
+        // alpha's own portrait is the operator's (a); beta's is not.
+        'top_group': name == 'beta' ? 'b' : 'a',
         'top_sprite': 'top',
         'owns_group': 1,
         'highlight': name == 'gamma' ? 0 : 1,
@@ -94,5 +95,6 @@ void main() {
     expect(group.speakers.first.lines, 15);
     expect(group.speakers.first.stories, 2);
     expect(await highlightNames(db), ['alpha', 'beta']);
+    expect(await highlightNames(db, skipOperators: true), ['beta']);
   });
 }

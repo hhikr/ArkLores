@@ -143,9 +143,16 @@ class AiSettingsPage extends ConsumerWidget {
     await ref.read(settingsServiceProvider).saveSessionLogsEnabled(value);
   }
 
+  /// Operators' names in answers: plain (on) or linked like the others.
+  static Future<void> _setSkipOperators(WidgetRef ref, bool value) async {
+    ref.read(skipOperatorNamesProvider.notifier).state = value;
+    await ref.read(settingsServiceProvider).saveSkipOperatorNames(value);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(sessionLogsEnabledProvider);
+    final skipOperators = ref.watch(skipOperatorNamesProvider);
     return _SectionPage(
       title: context.t.settingsAiServices,
       code: context.t.settingsAiSectionCode,
@@ -189,6 +196,18 @@ class AiSettingsPage extends ConsumerWidget {
           ],
           onChanged: (value) =>
               ref.read(compactPercentProvider.notifier).set(value),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-skip-operator-names'),
+          icon: Icons.person_off_sharp,
+          label: context.t.settingsSkipOperatorNames,
+          description: context.t.settingsSkipOperatorNamesDesc,
+          onTap: () => _setSkipOperators(ref, !skipOperators),
+          trailing: SquareSwitch(
+            value: skipOperators,
+            semanticLabel: context.t.settingsSkipOperatorNames,
+            onChanged: (value) => _setSkipOperators(ref, value),
+          ),
         ),
         ActionRow(
           key: const ValueKey('settings-session-logs'),

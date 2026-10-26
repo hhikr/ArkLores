@@ -52,8 +52,9 @@ class AskComposer extends StatefulWidget {
 
 class _AskComposerState extends State<AskComposer> {
   static const _toolbarHeight = 48.0;
-  // Leave room between the text and the toolbar buttons.
-  static const _textPadding = EdgeInsets.fromLTRB(14, 12, 52, 8);
+  // Leave room between the text and the toolbar buttons (all of them are in
+  // the toolbar now, so the text takes the full width).
+  static const _textPadding = EdgeInsets.fromLTRB(14, 12, 14, 8);
   static const _maxCollapsedLines = 4;
 
   final FocusNode _focus = FocusNode();

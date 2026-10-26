@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common/sqlite_api.dart';
 
+import '../../shared/providers/settings_provider.dart'
+    show skipOperatorNamesProvider;
 import '../agent/agent_provider.dart' show gameStoreProvider;
 import '../gamedata/game.dart';
 import '../gamedata/gamedata_provider.dart';
@@ -35,6 +37,8 @@ final speakerPortraitsProvider =
 final portraitGroupProvider = FutureProvider.family<PortraitGroup?, String>(
   (ref, id) => _query<PortraitGroup?>(ref, (db) => portraitGroup(db, id)),
 );
-final highlightNamesProvider = FutureProvider<List<String>>(
-  (ref) async => await _query(ref, highlightNames) ?? const [],
-);
+final highlightNamesProvider = FutureProvider<List<String>>((ref) async {
+  final skip = ref.watch(skipOperatorNamesProvider);
+  return await _query(ref, (db) => highlightNames(db, skipOperators: skip)) ??
+      const [];
+});

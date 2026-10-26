@@ -1533,6 +1533,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsCompactPercentDesc => '上下文到提醒值的这个比例时，较早的内容自动压缩成纪要。';
 
   @override
+  String get settingsSkipOperatorNames => '回答里不标干员名';
+
+  @override
+  String get settingsSkipOperatorNamesDesc =>
+      '打开后，回答里的干员名字不加下划线、不能点开立绘；其他人物照旧。';
+
+  @override
   String aiContextMeter(String n, String limit) {
     return '上下文 $n / $limit';
   }

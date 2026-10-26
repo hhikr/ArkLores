@@ -9,6 +9,8 @@
 #      renamed, so the old file is gone only for that moment. The channel file is
 #      written from the env (tools/write_gamedata_channel.dart) and replaced last,
 #      after the knowledge bases it points at are in place.
+#   The portrait pack (0.20) goes the same way: PORTRAITS_* in the env, and
+#   -Files build\portraits\arklores_portraits_zh.db (uncompressed).
 #   -ChannelOnly: only rewrite and replace the channel file.
 param(
   [string[]]$Files = @(),
@@ -28,7 +30,7 @@ function Replace-Asset([string]$path) {
   $name = Split-Path $path -Leaf
   $sha = (Get-FileHash $path -Algorithm SHA256).Hash.ToLower()
   if ($DryRun) { "would replace $name ($sha)"; return }
-  $type = if ($name -like '*.gz') { 'application/gzip' } else { 'application/json' }
+  $type = if ($name -like '*.gz') { 'application/gzip' } elseif ($name -like '*.db') { 'application/octet-stream' } else { 'application/json' }
   $fresh = Invoke-RestMethod -Method Post -Headers $headers -ContentType $type `
     -Uri "${upload}?name=$name.new" -InFile $path -TimeoutSec 3600
   if ($fresh.digest -and $fresh.digest -ne "sha256:$sha") { throw "$name uploaded as $($fresh.digest), expected $sha" }

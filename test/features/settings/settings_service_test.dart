@@ -60,6 +60,13 @@ void main() {
         80,);
   });
 
+  test('operator names in answers: linked by default, the choice is kept',
+      () async {
+    expect(await service.loadSkipOperatorNames(), isFalse);
+    await service.saveSkipOperatorNames(true);
+    expect(await SettingsService().loadSkipOperatorNames(), isTrue);
+  });
+
   group('API', () {
     test('defaults to Zhipu GLM without a key', () async {
       final config = await service.loadApiConfig();

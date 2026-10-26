@@ -92,6 +92,7 @@ class SettingsService {
   static const _keySessionLogsEnabled = 'session_logs_enabled';
   static const _keyAnswerOptions = 'ask_answer_options';
   static const _keyProfileSectionsOpen = 'library_profile_sections_open';
+  static const _keySkipOperatorNames = 'ask_skip_operator_names';
   static const _keyReadingFont = 'reading_font';
   static const _keyContextWarnTokens = 'ask_context_warn_tokens';
   static const _keyCompactPercent = 'ask_compact_percent';
@@ -225,6 +226,14 @@ class SettingsService {
 
   Future<void> saveProfileSectionsOpen(bool open) =>
       _storage.write(key: _keyProfileSectionsOpen, value: '$open');
+
+  /// Whether an answer leaves operators' names plain (default: off, every
+  /// highlighted name is linked to its portrait card).
+  Future<bool> loadSkipOperatorNames() async =>
+      await _storage.read(key: _keySkipOperatorNames) == 'true';
+
+  Future<void> saveSkipOperatorNames(bool skip) =>
+      _storage.write(key: _keySkipOperatorNames, value: '$skip');
 
   Future<int> loadContextWarnTokens() async {
     final value =

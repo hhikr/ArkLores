@@ -40,6 +40,15 @@ final profileSectionsOpenProvider = StateProvider<bool>((ref) {
   return ref.watch(initialProfileSectionsOpenProvider);
 });
 
+/// Whether answers leave operators' names plain, loaded at startup.
+final initialSkipOperatorNamesProvider = Provider<bool>((ref) => false);
+
+/// Whether answers leave operators' names plain (players know them); other
+/// highlighted names keep their link. Set in Settings, default off.
+final skipOperatorNamesProvider = StateProvider<bool>((ref) {
+  return ref.watch(initialSkipOperatorNamesProvider);
+});
+
 /// Whether the user enabled per-session AI logs (default off; applied to
 /// [AgentLogger] at startup and on toggle in Settings).
 final sessionLogsEnabledProvider = StateProvider<bool>((ref) {
