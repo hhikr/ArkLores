@@ -15,6 +15,7 @@
 ## 当前进度（每轮结束时更新；细节进 CHANGELOG 与 docs，这里只留要点）
 
 - **0.20.0（收尾中，分支 `v0.20`，Android build 43，未发布）**：重大更新——剧情立绘的建立与它对阅读、问答体验的改善（开发者 2026-10-26 定名）。
+  - App 内更新：帮助与引导 → 更新，公开 GitHub Releases 检查、断点下载、SHA-256 校验与 Android 安装通道；自动检查默认关闭，每 24 小时最多在启动时检查一次，不自动下载。仅离线测试，原生编译和真机覆盖安装待验证，见 `docs/ANDROID_SETUP_GUIDE.md`。
   - 立绘（`docs/PORTRAITS.md`）：建库按剧本的立绘命令算出每句显示的立绘（明日方舟库五张可选表，旧 App 不读，四条构建路径都写；给已有库补用 `tools/build_portrait_index.dart`）；
     立绘索引版本 2 按 `Image` 命令排除 CG 遮挡期间的立绘；本地库已补算，原库备份后缀为 `.before_cg`，未发布。
     立绘包 `arklores_portraits_zh.db`（Arkwaifu 的整张差分，按套存底图 + 表情补丁，186 MB，`tools/portraits/` 增量打包，原图缓存 `build/portraits_src/`）；

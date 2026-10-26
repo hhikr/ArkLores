@@ -110,6 +110,8 @@ class SettingsService {
   static const _keyWikiAppliedUrlPrefix = 'wiki_applied_url_';
   static const _keyWikiSources = 'wiki_sources';
   static const _keyWikiDarkMode = 'wiki_dark_mode';
+  static const _keyAutoUpdateCheck = 'auto_update_check';
+  static const _keyLastUpdateCheck = 'last_update_check';
 
   // ── Appearance keys ──────────────────────────────────────
   static const _keyTheme = 'theme';
@@ -301,6 +303,22 @@ class SettingsService {
 
   Future<void> markBackgroundExplained() =>
       _storage.write(key: _keyBackgroundExplained, value: 'true');
+
+  /// Whether the app looks for a new version on start (default off).
+  Future<bool> loadAutoUpdateCheck() async =>
+      await _storage.read(key: _keyAutoUpdateCheck) == 'true';
+
+  Future<void> saveAutoUpdateCheck(bool enabled) =>
+      _storage.write(key: _keyAutoUpdateCheck, value: '$enabled');
+
+  /// When the app last read its releases (by hand or on start).
+  Future<DateTime?> loadLastUpdateCheck() async =>
+      DateTime.tryParse(await _storage.read(key: _keyLastUpdateCheck) ?? '');
+
+  Future<void> saveLastUpdateCheck(DateTime at) => _storage.write(
+        key: _keyLastUpdateCheck,
+        value: at.toUtc().toIso8601String(),
+      );
 
   Future<int> loadMainTabIndex() async {
     return _loadBoundedInt(_keyMainTabIndex, min: 0, max: 3);

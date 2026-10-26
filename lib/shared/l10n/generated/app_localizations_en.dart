@@ -360,6 +360,104 @@ class AppLocalizationsEn extends AppLocalizations {
       'Replay the first-launch guide to configure the app';
 
   @override
+  String get settingsUpdate => 'Updates';
+
+  @override
+  String get settingsUpdateDesc =>
+      'Check for a new version and update in the app';
+
+  @override
+  String updateVersionBuild(String version, int build) {
+    return '$version (build $build)';
+  }
+
+  @override
+  String get updateAutoCheck => 'Check automatically';
+
+  @override
+  String get updateAutoCheckDesc =>
+      'Checks when the app opens, at most once a day. It only tells you; nothing is downloaded.';
+
+  @override
+  String get updateCheck => 'Check for updates';
+
+  @override
+  String get updateChecking => 'Checking.';
+
+  @override
+  String get updateUpToDate => 'You have the latest version.';
+
+  @override
+  String updateAvailable(String version) {
+    return 'New version $version';
+  }
+
+  @override
+  String updateAvailableSize(String size) {
+    return 'Package: $size.';
+  }
+
+  @override
+  String get updateDownloadInstall => 'Download and install';
+
+  @override
+  String updateDownloading(String received, String total) {
+    return 'Downloading $received / $total';
+  }
+
+  @override
+  String get updateVerifying => 'Checking the package.';
+
+  @override
+  String get updateCancel => 'Cancel';
+
+  @override
+  String get updateNeedsPermission =>
+      'To install the update, allow ArkLores to install apps. Come back here afterwards and it continues.';
+
+  @override
+  String get updateAllow => 'Allow';
+
+  @override
+  String get updateReady =>
+      'The installer is open. If the update was not installed, tap again.';
+
+  @override
+  String get updateInstall => 'Install';
+
+  @override
+  String get updateRetry => 'Retry';
+
+  @override
+  String get updateErrorCheck =>
+      'Could not read the releases. Check the network and retry.';
+
+  @override
+  String get updateErrorDownload =>
+      'The download did not finish. Retry continues it.';
+
+  @override
+  String get updateErrorChecksum =>
+      'The package did not match its checksum and was deleted. Download it again.';
+
+  @override
+  String get updateErrorInstall => 'Could not open the installer.';
+
+  @override
+  String get updateUnsupported => 'Only the Android app can update itself.';
+
+  @override
+  String updateFound(String version) {
+    return 'New version $version';
+  }
+
+  @override
+  String get updateFoundOpen => 'View';
+
+  @override
+  String get updateNotification => 'Downloading the update';
+
+  @override
   String get aiTabAsk => 'Ask AI';
 
   @override

@@ -8,8 +8,8 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 
-/// Profile settings: one entry for now, how the stories address the reader.
-/// Saved as it is typed.
+/// Profile settings: how the stories address the reader (saved as it is
+/// typed) and what goes into the reading history.
 class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
 
@@ -36,6 +36,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    final skipUnread = ref.watch(skipUnreadOpensProvider);
     return PageScaffold(
       title: context.t.settingsProfile,
       scrollUnder: true,
@@ -56,8 +57,28 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
               helperMaxLines: 4,
             ),
           ),
+          const SizedBox(height: 24),
+          SectionTitle(title: context.t.readingHistoryTitle, code: 'history'),
+          ActionRow(
+            key: const ValueKey('settings-skip-unread-opens'),
+            icon: Icons.history_toggle_off_sharp,
+            label: context.t.settingsSkipUnreadOpens,
+            description: context.t.settingsSkipUnreadOpensDesc,
+            onTap: () => _setSkipUnread(!skipUnread),
+            trailing: SquareSwitch(
+              value: skipUnread,
+              semanticLabel: context.t.settingsSkipUnreadOpens,
+              onChanged: _setSkipUnread,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// A story opened and left where it opened: kept out of the history (on).
+  Future<void> _setSkipUnread(bool value) async {
+    ref.read(skipUnreadOpensProvider.notifier).state = value;
+    await ref.read(settingsServiceProvider).saveSkipUnreadOpens(value);
   }
 }

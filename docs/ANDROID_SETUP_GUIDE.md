@@ -30,6 +30,18 @@ Flutter 3.47.5、Gradle 8.14.3、AGP 8.11.1、Kotlin 2.2.20、Java 17，compileS
 签名：`tools/arklores-release.jks` + `tools/android_signing.properties`（gitignored，绝不提交、绝不打印）。没有它们时本地
 `flutter build apk --release` 会退回 debug key，这样的包不能覆盖安装正式版、也不能发布。
 
+## App 内更新（0.20）
+
+设置 → 帮助与引导，页面上直接有更新：显示当前版本和 build，可手动检查、下载并安装新版本。“自动检查更新”默认关闭；打开后，启动时每 24 小时最多检查一次，失败的检查也计入间隔。发现新版本只给带“查看”操作的提示，不自动下载。
+
+版本来自 `hhikr/ArkLores` 的公开 GitHub Releases API，不带 token。只接受非草稿、非预发布且 tag 为 `v主版本.次版本.修订号` 的 App Release，按三个整数比较；跳过 `gamedata-channel`。安装包与校验文件须分别命名为 `ArkLores-<版本>.apk` 和 `ArkLores-<版本>.apk.sha256`，与发布脚本一致。
+
+下载复用断点续传和 `BackgroundWork`，离开更新页后继续。文件放在应用缓存 `updates/`，SHA-256 不符就删除，不交给安装器。Android 通过 `arklores/app_update` MethodChannel 调用系统安装器；FileProvider 只共享该缓存目录的成品 APK。未允许“安装未知应用”时，页面说明原因并提供系统设置入口；允许后返回更新页继续安装。
+
+发布 APK 由 CI 签名，只有签名一致且 build 更高的包才能覆盖更新。CI 签名的正式包之间可以更新；本机 debug key 签名的包不能被 CI 包覆盖。使用同一正式签名构建的本地包不受此限制。App 比较 Release 的语义版本，最终由 Android 校验签名和 build。
+
+真机仍需验证未知来源权限的拒绝与允许、从设置返回、取消安装后的重试、切到后台下载与断点续传，以及两个 CI 签名包之间的覆盖安装。本轮续做只执行相关 Flutter 测试和静态分析，未构建 APK，也未验证 Android 原生通道的编译与真机行为。
+
 ## 真机问答调试（0.14，`tools/phone_ask.dart`）
 
 在电脑上向手机里的 App 提问，App 把界面上显示的内容实时传回终端：工作过程每一步（工具与参数、找到了什么、失败原因、子助手）、
