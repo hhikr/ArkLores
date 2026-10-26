@@ -1822,7 +1822,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String portraitPassingPortraits(int n) {
-    return '另有 $n 个立绘，各只说 1–2 句';
+    return '另有 $n 个立绘出现很少';
   }
 
   @override
@@ -1830,7 +1830,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String portraitPassingSpeakers(int n) {
-    return '另有 $n 人各说 1–2 句，主要立绘在别处';
+    return '另有 $n 人出现很少，主要立绘在别处';
   }
 
   @override

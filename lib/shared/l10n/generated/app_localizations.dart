@@ -3305,7 +3305,7 @@ abstract class AppLocalizations {
   /// No description provided for @portraitPassingPortraits.
   ///
   /// In en, this message translates to:
-  /// **'{n} more portraits with 1–2 lines each'**
+  /// **'{n} more portraits used little'**
   String portraitPassingPortraits(int n);
 
   /// No description provided for @portraitPassingHint.
@@ -3317,7 +3317,7 @@ abstract class AppLocalizations {
   /// No description provided for @portraitPassingSpeakers.
   ///
   /// In en, this message translates to:
-  /// **'{n} more with 1–2 lines each, their main portrait elsewhere'**
+  /// **'{n} more who appear little, their main portrait elsewhere'**
   String portraitPassingSpeakers(int n);
 
   /// No description provided for @portraitSpeakerCount.

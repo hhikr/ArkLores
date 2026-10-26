@@ -749,7 +749,7 @@
       }
     }
   },
-  "portraitPassingPortraits": "{n} more portraits with 1–2 lines each",
+  "portraitPassingPortraits": "{n} more portraits used little",
   "@portraitPassingPortraits": {
     "placeholders": {
       "n": {
@@ -758,7 +758,7 @@
     }
   },
   "portraitPassingHint": "Too few lines; probably voices from off the stage",
-  "portraitPassingSpeakers": "{n} more with 1–2 lines each, their main portrait elsewhere",
+  "portraitPassingSpeakers": "{n} more who appear little, their main portrait elsewhere",
   "@portraitPassingSpeakers": {
     "placeholders": {
       "n": {

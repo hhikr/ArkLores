@@ -171,11 +171,16 @@ class GroupSpeaker {
   /// another one.
   final bool mainElsewhere;
 
-  /// At most 2 lines here, the speaker's main portrait elsewhere: mostly a
+  /// Few lines here and the speaker's main portrait elsewhere: mostly a
   /// voice from off the stage while someone else stands on it. The list
   /// folds these under one row; the index keeps them.
-  bool get passing => lines <= 2 && mainElsewhere;
+  bool get passing => mainElsewhere && passingCount(lines, stories);
 }
+
+/// A speaker passes by a portrait with at most 2 lines on it, or fewer than
+/// 6 all in one story (developer 2026-10-26).
+bool passingCount(int lines, int stories) =>
+    lines <= 2 || (stories == 1 && lines < 6);
 
 Future<bool> _hasGroups(DatabaseExecutor db) async =>
     await hasPortraitIndex(db) && await _hasTable(db, 'speaker_portraits');
@@ -253,8 +258,7 @@ Future<PortraitGroup?> portraitGroup(
           speaker: s['speaker'] as String,
           lines: s['lines'] as int,
           stories: s['stories'] as int,
-          mainElsewhere:
-              s['top_group'] != null && s['top_group'] != groupId,
+          mainElsewhere: s['top_group'] != null && s['top_group'] != groupId,
         ),
     ],
   );

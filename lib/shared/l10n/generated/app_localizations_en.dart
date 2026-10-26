@@ -1901,7 +1901,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String portraitPassingPortraits(int n) {
-    return '$n more portraits with 1–2 lines each';
+    return '$n more portraits used little';
   }
 
   @override
@@ -1910,7 +1910,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String portraitPassingSpeakers(int n) {
-    return '$n more with 1–2 lines each, their main portrait elsewhere';
+    return '$n more who appear little, their main portrait elsewhere';
   }
 
   @override

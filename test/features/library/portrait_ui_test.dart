@@ -513,13 +513,15 @@ void main() {
     });
   }
 
-  testWidgets('sheet closes before opening pages and preserves origin',
+  testWidgets('pages open over the sheet, back returns to it; origin kept',
       (tester) async {
     await pump(tester, launcher(origin: PortraitOrigin.materials));
     await open(tester);
     await tester.tap(find.text('还有谁使用了这个立绘？'));
     await tester.pumpAndSettle();
+    // The card stays under the page (offstage).
     expect(find.byType(PortraitSheet), findsNothing);
+    expect(find.byType(PortraitSheet, skipOffstage: false), findsOneWidget);
     expect(
       tester
           .widget<PortraitSpeakersPage>(find.byType(PortraitSpeakersPage))
@@ -530,7 +532,7 @@ void main() {
     expect(find.text('3 个说话人'), findsOneWidget);
     expect(find.text('画外音'), findsNothing);
     expect(find.text('出现次数过少，可能是画外音'), findsOneWidget);
-    await tester.tap(find.text('另有 1 人各说 1–2 句，主要立绘在别处'));
+    await tester.tap(find.text('另有 1 人出现很少，主要立绘在别处'));
     await tester.pumpAndSettle();
     expect(find.text('画外音'), findsOneWidget);
     expect(find.text('No.03'), findsOneWidget);
@@ -542,6 +544,12 @@ void main() {
           .origin,
       PortraitOrigin.materials,
     );
+    // Back from the stories, then from the speakers: the card again.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(PortraitSheet), findsOneWidget);
   });
 
   testWidgets('no sprite hides image and group action', (tester) async {
@@ -805,7 +813,7 @@ void main() {
         find.byKey(const ValueKey('speaker-portrait-avg_npc_passing')),
         findsNothing,
       );
-      expect(find.text('另有 1 个立绘，各只说 1–2 句'), findsOneWidget);
+      expect(find.text('另有 1 个立绘出现很少'), findsOneWidget);
       expect(find.text('出现次数过少，可能是画外音'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('speaker-passing-portraits')));
       await tester.pumpAndSettle();

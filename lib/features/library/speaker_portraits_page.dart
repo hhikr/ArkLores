@@ -12,7 +12,7 @@ import '../../shared/widgets/portrait_image.dart';
 import 'portrait_sheet.dart';
 
 /// One speaker's portraits, most lines first. Portraits the speaker only
-/// passes by (at most 2 lines, not their main one) fold under one row at
+/// passes by (few lines, not their main one: [passingCount]) fold under one row at
 /// the bottom, as on [PortraitSpeakersPage]'s list.
 class SpeakerPortraitsPage extends ConsumerWidget {
   const SpeakerPortraitsPage({
@@ -39,8 +39,9 @@ class SpeakerPortraitsPage extends ConsumerWidget {
       );
     }
     // The first is the speaker's main portrait: never folded.
-    final main = [groups.first, ...groups.skip(1).where((g) => g.lines > 2)];
-    final passing = groups.skip(1).where((g) => g.lines <= 2).toList();
+    bool passes(SpeakerGroup g) => passingCount(g.lines, g.stories);
+    final main = [groups.first, ...groups.skip(1).where((g) => !passes(g))];
+    final passing = groups.skip(1).where(passes).toList();
     Widget row(SpeakerGroup g) => _PortraitRow(
           group: g,
           // The card of that portrait (not the stories): its variants, who

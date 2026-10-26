@@ -43,7 +43,7 @@ Future<void> showPortraitSheet(
   bool fromLine = false,
   required PortraitOrigin origin,
 }) async {
-  final target = await showAppSheet<WidgetBuilder>(
+  await showAppSheet<void>(
     context,
     (_) => PlainSheet(
       child: FutureBuilder<String?>(
@@ -59,9 +59,6 @@ Future<void> showPortraitSheet(
       ),
     ),
   );
-  if (target != null && context.mounted) {
-    await pushPortraitPage(context, origin, target);
-  }
 }
 
 /// The card of one portrait opened from a list of portraits: nothing there
@@ -74,7 +71,7 @@ Future<void> showPortraitGroupSheet(
   String? listSpeaker,
   required PortraitOrigin origin,
 }) async {
-  final target = await showAppSheet<WidgetBuilder>(
+  await showAppSheet<void>(
     context,
     (_) => PlainSheet(
       child: PortraitSheet(
@@ -86,9 +83,6 @@ Future<void> showPortraitGroupSheet(
       ),
     ),
   );
-  if (target != null && context.mounted) {
-    await pushPortraitPage(context, origin, target);
-  }
 }
 
 class PortraitSheet extends ConsumerStatefulWidget {
@@ -140,7 +134,9 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
         ? const <String>[]
         : ref.watch(portraitSpritesProvider(parsed.group)).valueOrNull ??
             const <String>[];
-    void open(WidgetBuilder builder) => Navigator.of(context).pop(builder);
+    // Over the card, which stays: back from the page returns to it.
+    void open(WidgetBuilder builder) =>
+        pushPortraitPage(context, origin, builder);
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         16,

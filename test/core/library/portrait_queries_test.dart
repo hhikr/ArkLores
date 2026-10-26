@@ -154,6 +154,12 @@ void main() {
       reason: "beta's own portrait is b",
     );
     expect(group.speakers.any((s) => s.passing), isFalse);
+    // At most 2 lines anywhere, or fewer than 6 in a single story.
+    expect(
+      [(2, 2), (3, 2), (5, 1), (6, 1), (1, 1)]
+          .map((c) => passingCount(c.$1, c.$2)),
+      [true, false, true, false, true],
+    );
     expect(await highlightNames(db), ['alpha', 'beta']);
     expect(await highlightNames(db, skipOperators: true), ['beta']);
   });
