@@ -11,8 +11,8 @@ import '../../../shared/widgets/press_feedback.dart';
 /// of the Ask tab, or all of it.
 enum AskComposerSize { collapsed, half, full }
 
-/// The Ask page's question box: one panel with the text on top and a toolbar
-/// (the answer options, send) below. It grows with the text up to four
+/// The Ask page's question box: one row at rest, text above a toolbar
+/// while focused. It grows with the text up to four
 /// lines; the expand button opens it to half of the tab, and from there to
 /// the full tab. The same [TextField] lives in every size (only the height
 /// around it animates), so focus, caret and draft survive. Focused, its
@@ -52,8 +52,7 @@ class AskComposer extends StatefulWidget {
 
 class _AskComposerState extends State<AskComposer> {
   static const _toolbarHeight = 48.0;
-  // The text keeps a gap above the toolbar's buttons and right of the
-  // expand button.
+  // Leave room between the text and the toolbar buttons.
   static const _textPadding = EdgeInsets.fromLTRB(14, 12, 52, 8);
   static const _maxCollapsedLines = 4;
 
@@ -76,7 +75,10 @@ class _AskComposerState extends State<AskComposer> {
       widget.controller.addListener(_changed);
     }
     // A question was sent: give the answer the room back.
-    if (!old.isSending && widget.isSending) _size = AskComposerSize.collapsed;
+    if (!old.isSending && widget.isSending) {
+      _size = AskComposerSize.collapsed;
+      _focus.unfocus();
+    }
   }
 
   @override
@@ -87,7 +89,11 @@ class _AskComposerState extends State<AskComposer> {
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        if (!_focus.hasFocus) _size = AskComposerSize.collapsed;
+      });
+    }
   }
 
   /// Number of lines [text] takes in a field [width] wide.
@@ -119,6 +125,7 @@ class _AskComposerState extends State<AskComposer> {
     final scaler = MediaQuery.textScalerOf(context);
     final expanded = _size != AskComposerSize.collapsed;
     final focused = _focus.hasFocus;
+    final editing = focused || expanded;
     final empty = widget.controller.text.trim().isEmpty;
     // What the tab bar (or the system bar) takes below the box.
     final below = MediaQuery.paddingOf(context).bottom;
@@ -130,7 +137,8 @@ class _AskComposerState extends State<AskComposer> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final textWidth = constraints.maxWidth - _textPadding.horizontal;
-            final lines = _lines(widget.controller.text, style, textWidth, scaler);
+            final lines =
+                _lines(widget.controller.text, style, textWidth, scaler);
             final lineHeight = (TextPainter(
               text: TextSpan(text: 'M', style: style),
               textDirection: Directionality.of(context),
@@ -147,13 +155,13 @@ class _AskComposerState extends State<AskComposer> {
             // and the room below it.
             final room = widget.maxHeight - 15 - below;
             final target = switch (_size) {
-              AskComposerSize.collapsed => collapsedHeight,
+              AskComposerSize.collapsed =>
+                editing ? collapsedHeight : _toolbarHeight + 3,
               AskComposerSize.half => (room * 0.5).clamp(collapsedHeight, room),
               AskComposerSize.full => room,
             }
                 .clamp(0.0, room > 0 ? room : collapsedHeight)
                 .toDouble();
-            final showExpand = lines >= 3 || expanded;
 
             return CompositedTransformTarget(
               link: _cardLink,
@@ -176,108 +184,139 @@ class _AskComposerState extends State<AskComposer> {
                 ),
                 child: Stack(
                   children: [
-                    Column(
-                      children: [
-                        Expanded(
-                          child: Stack(
-                            children: [
-                              TextField(
-                                key: const ValueKey('ask-input-field'),
-                                controller: widget.controller,
-                                focusNode: _focus,
-                                style: style,
-                                expands: true,
-                                maxLines: null,
-                                minLines: null,
-                                textAlignVertical: TextAlignVertical.top,
-                                keyboardType: TextInputType.multiline,
-                                // Collapsed: the keyboard's key sends; opened
-                                // up, it writes a new line.
-                                textInputAction: expanded
-                                    ? TextInputAction.newline
-                                    : TextInputAction.send,
-                                onSubmitted: expanded || widget.isSending
-                                    ? null
-                                    : (_) => widget.onSend(),
-                                decoration: InputDecoration(
-                                  hintText: widget.hintText,
-                                  hintStyle:
-                                      theme.text(15, color: theme.textMuted),
-                                  contentPadding: _textPadding,
-                                  filled: false,
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  disabledBorder: InputBorder.none,
-                                  errorBorder: InputBorder.none,
-                                  focusedErrorBorder: InputBorder.none,
-                                  isDense: true,
-                                ),
-                              ),
-                              if (showExpand)
-                                Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: ComposerButton(
-                                    key: const ValueKey('ask-input-expand-toggle'),
-                                    theme: theme,
-                                    tooltip: expanded
-                                        ? context.t.aiInputCollapse
-                                        : context.t.aiInputExpand,
-                                    icon: expanded
-                                        ? Icons.unfold_less_sharp
-                                        : Icons.unfold_more_sharp,
-                                    onPressed: () => _setSize(
-                                      expanded
-                                          ? AskComposerSize.collapsed
-                                          : AskComposerSize.half,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                    Positioned.fill(
+                      child: PressBuilder(
+                        builder: (context, down) => GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _focus.requestFocus,
+                          child: ColoredBox(
+                            color: down
+                                ? pressTint(
+                                    theme.cardSurface,
+                                    theme.textPrimary,
+                                  )
+                                : theme.cardSurface,
                           ),
                         ),
-                        SizedBox(
-                          height: _toolbarHeight,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-                            child: Row(
-                              children: [
-                                if (widget.leading != null)
-                                  widget.leading!(expanded ? null : _cardLink),
-                                const Spacer(),
-                                if (expanded) ...[
-                                  ComposerButton(
-                                    key: const ValueKey(
-                                      'ask-input-fullscreen-toggle',
-                                    ),
-                                    theme: theme,
-                                    tooltip: _size == AskComposerSize.full
-                                        ? context.t.aiInputExitFullscreen
-                                        : context.t.aiInputFullscreen,
-                                    icon: _size == AskComposerSize.full
-                                        ? Icons.close_fullscreen_sharp
-                                        : Icons.open_in_full_sharp,
-                                    onPressed: () => _setSize(
-                                      _size == AskComposerSize.full
-                                          ? AskComposerSize.half
-                                          : AskComposerSize.full,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                                _SendButton(
-                                  theme: theme,
-                                  sending: widget.isSending,
-                                  empty: empty,
-                                  onPressed: widget.onSend,
-                                ),
-                              ],
+                      ),
+                    ),
+                    // Fixed tree position preserves the keyboard connection.
+                    Positioned(
+                      top: 0,
+                      bottom: editing ? _toolbarHeight : 0,
+                      left: editing ? 0 : (widget.leading == null ? 4 : 48),
+                      right: editing ? 0 : 56,
+                      child: Opacity(
+                        opacity: editing ? 1 : 0,
+                        alwaysIncludeSemantics: true,
+                        child: TextField(
+                          key: const ValueKey('ask-input-field'),
+                          controller: widget.controller,
+                          focusNode: _focus,
+                          style: style,
+                          expands: editing,
+                          maxLines: editing ? null : 1,
+                          minLines: null,
+                          textAlignVertical: TextAlignVertical.top,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          decoration: InputDecoration(
+                            hintText: widget.hintText,
+                            hintStyle: theme.text(15, color: theme.textMuted),
+                            contentPadding: editing
+                                ? _textPadding
+                                : const EdgeInsets.fromLTRB(10, 12, 4, 8),
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 4,
+                      bottom: 4,
+                      child:
+                          widget.leading?.call(expanded ? null : _cardLink) ??
+                              const SizedBox.shrink(),
+                    ),
+                    Positioned(
+                      right: 4,
+                      bottom: 4,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (editing)
+                            ComposerButton(
+                              key: const ValueKey('ask-input-expand-toggle'),
+                              theme: theme,
+                              tooltip: expanded
+                                  ? context.t.aiInputCollapse
+                                  : context.t.aiInputExpand,
+                              icon: expanded
+                                  ? Icons.unfold_less_sharp
+                                  : Icons.unfold_more_sharp,
+                              onPressed: () => _setSize(
+                                expanded
+                                    ? AskComposerSize.collapsed
+                                    : AskComposerSize.half,
+                              ),
+                            ),
+                          if (expanded) ...[
+                            ComposerButton(
+                              key:
+                                  const ValueKey('ask-input-fullscreen-toggle'),
+                              theme: theme,
+                              tooltip: _size == AskComposerSize.full
+                                  ? context.t.aiInputExitFullscreen
+                                  : context.t.aiInputFullscreen,
+                              icon: _size == AskComposerSize.full
+                                  ? Icons.close_fullscreen_sharp
+                                  : Icons.open_in_full_sharp,
+                              onPressed: () => _setSize(
+                                _size == AskComposerSize.full
+                                    ? AskComposerSize.half
+                                    : AskComposerSize.full,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          _SendButton(
+                            theme: theme,
+                            sending: widget.isSending,
+                            empty: empty,
+                            onPressed: widget.onSend,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // A single-line preview must not flatten or scroll the
+                    // underlying draft when it contains line breaks.
+                    if (!editing)
+                      Positioned(
+                        top: 12,
+                        left: widget.leading == null ? 14 : 58,
+                        right: 60,
+                        child: IgnorePointer(
+                          child: ExcludeSemantics(
+                            child: Text(
+                              empty
+                                  ? widget.hintText
+                                  : widget.controller.text.split('\n').first,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: empty
+                                  ? theme.text(15, color: theme.textMuted)
+                                  : style,
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
                     Positioned(
                       left: 0,
                       top: 0,
@@ -346,7 +385,8 @@ class _ComposerButtonState extends State<ComposerButton>
               height: 44,
               child: Center(
                 child: AnimatedContainer(
-                  duration: Motion.of(context, down ? Motion.press : Motion.wipe),
+                  duration:
+                      Motion.of(context, down ? Motion.press : Motion.wipe),
                   curve: Motion.mech,
                   width: 40,
                   height: 40,
@@ -388,8 +428,7 @@ class _SendButton extends StatefulWidget {
   State<_SendButton> createState() => _SendButtonState();
 }
 
-class _SendButtonState extends State<_SendButton>
-    with PressHold<_SendButton> {
+class _SendButtonState extends State<_SendButton> with PressHold<_SendButton> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
