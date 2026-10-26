@@ -10,6 +10,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/search_marks.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -157,14 +158,17 @@ class _ShelfPageState extends ConsumerState<ShelfPage> {
                         label: shelfLabel(context, widget.kind),
                       ),
                     )
-                  : ListView(
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        4,
-                        16,
-                        24 + MediaQuery.paddingOf(context).bottom,
+                  : SearchMarks(
+                      words: searchWords(_filter),
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          4,
+                          16,
+                          24 + MediaQuery.paddingOf(context).bottom,
+                        ),
+                        children: rows,
                       ),
-                      children: rows,
                     ),
             ),
           ],

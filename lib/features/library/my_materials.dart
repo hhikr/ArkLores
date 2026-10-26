@@ -67,6 +67,7 @@ class MyMaterialPage extends ConsumerWidget {
     return LibraryScaffold(
       title: m?.title ?? '',
       scrollUnder: true,
+      hides: true,
       actions: [
         if (m != null) ...[
           SquareIconButton(

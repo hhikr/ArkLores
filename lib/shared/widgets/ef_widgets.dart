@@ -1686,9 +1686,14 @@ class FoldBlock extends ConsumerStatefulWidget {
     required this.onTap,
     this.body,
     this.headKey,
+    this.railTop = 0,
   });
 
   final Widget head;
+
+  /// Where the rail starts below the top of the head: a tall head with a
+  /// short label in it starts the rail just above the label.
+  final double railTop;
 
   /// On the head (what is tapped), not the whole block.
   final Key? headKey;
@@ -1746,7 +1751,7 @@ class _FoldBlockState extends ConsumerState<FoldBlock>
         ),
         Positioned(
           left: 0,
-          top: 0,
+          top: widget.railTop,
           bottom: 0,
           width: traceRailWidth,
           child: TraceRail(on: open || down),

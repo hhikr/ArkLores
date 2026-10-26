@@ -981,6 +981,12 @@ class _WikiTabViewState extends State<_WikiTabView> {
     _syncPaused();
   }
 
+  @override
+  void dispose() {
+    _resume?.cancel();
+    super.dispose();
+  }
+
   /// An Android WebView keeps drawing its page (animations, video) while it
   /// is off screen, on the app's main thread, which is also where the app's
   /// frames start: off screen (another tab, the other site, a page pushed
@@ -993,11 +999,24 @@ class _WikiTabViewState extends State<_WikiTabView> {
     final pause = !TickerMode.valuesOf(context).enabled;
     if (pause == _paused) return;
     _paused = pause;
-    (pause ? controller.pause() : controller.resume()).catchError(
-      (Object error) =>
-          debugPrint('[WikiBrowser] Error pausing WebView: $error'),
-    );
+    _resume?.cancel();
+    if (pause) {
+      controller.pause().catchError(_pauseFailed);
+      return;
+    }
+    // Back on screen: the page starts drawing again once the tab bar's block
+    // has slid over. Restarted at once, its first frames fell on the frames
+    // of that slide, on the same Android main thread, and the slide jerked
+    // (only on the way to the wiki; leaving it costs nothing).
+    _resume = Timer(Motion.of(context, Motion.wipe), () {
+      if (!_paused) controller.resume().catchError(_pauseFailed);
+    });
   }
+
+  Timer? _resume;
+
+  void _pauseFailed(Object error) =>
+      debugPrint('[WikiBrowser] Error pausing WebView: $error');
 
   @override
   void didUpdateWidget(covariant _WikiTabView oldWidget) {

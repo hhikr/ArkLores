@@ -327,6 +327,7 @@ class MaterialReaderPage extends ConsumerWidget {
     return LibraryScaffold(
       title: doc.valueOrNull?.title ?? '资料原文',
       scrollUnder: true,
+      hides: true,
       body: doc.when(
         loading: () => const LoadingView(),
         error: (_, __) => const NoticeBox('暂时无法读取资料原文。'),

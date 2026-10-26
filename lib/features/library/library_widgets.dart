@@ -14,6 +14,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
+import '../../shared/widgets/search_marks.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../ai/story_labels_provider.dart';
 import '../ai/story_reader_page.dart';
@@ -69,6 +70,7 @@ class LibraryScaffold extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.scrollUnder = false,
+    this.hides = false,
   });
 
   final String title;
@@ -76,11 +78,15 @@ class LibraryScaffold extends StatelessWidget {
   final List<Widget> actions;
   final bool scrollUnder;
 
+  /// A text read through: the bar gets out of the way ([PageScaffold.hides]).
+  final bool hides;
+
   @override
   Widget build(BuildContext context) => PageScaffold(
         title: title,
         actions: actions,
         scrollUnder: scrollUnder,
+        hides: hides,
         body: body,
       );
 }
@@ -212,7 +218,7 @@ class LibraryRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    final titleText = Text(
+    final titleText = MarkedText(
       title,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
@@ -251,7 +257,7 @@ class LibraryRow extends ConsumerWidget {
                         titleText,
                       if (subtitle != null && subtitle!.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(
+                        MarkedText(
                           subtitle!,
                           maxLines: subtitleLines,
                           overflow: TextOverflow.ellipsis,

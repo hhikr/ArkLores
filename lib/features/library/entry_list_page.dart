@@ -11,6 +11,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/search_marks.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -218,7 +219,13 @@ class _EntryListPageState extends ConsumerState<EntryListPage> {
                     final e = item as LibraryEntry;
                     return Column(
                       children: [
-                        EntryRow(entry: e, onTap: () => openEntry(context, e)),
+                        SearchMarks(
+                          words: searchWords(_query),
+                          child: EntryRow(
+                            entry: e,
+                            onTap: () => openEntry(context, e),
+                          ),
+                        ),
                         rowDivider(theme),
                       ],
                     );

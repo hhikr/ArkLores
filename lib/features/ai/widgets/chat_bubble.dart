@@ -503,6 +503,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       expanded: _showReasoning,
       child: FoldBlock(
         headKey: const ValueKey('reasoning-header'),
+        // A little above the label, centred in the 44-high head.
+        railTop: 9,
         open: _showReasoning,
         onTap: () => setState(() => _showReasoning = !_showReasoning),
         head: ConstrainedBox(

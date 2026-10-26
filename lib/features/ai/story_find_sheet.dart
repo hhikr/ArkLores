@@ -9,6 +9,7 @@ import '../../core/library/placeholders.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/search_marks.dart';
 
 /// Positions in [lines] whose text or speaker has every word of [query]
 /// (ignoring case), in reading order.
@@ -71,6 +72,7 @@ class _StoryFindState extends State<_StoryFind> {
     final theme = widget.theme;
     final found = findStoryLines(widget.lines, _query);
     final words = _query.trim().split(RegExp(r'\s+'));
+    final marks = searchWords(_query);
     // As tall as what it holds: the box and a line saying what will come,
     // then the lines found, up to about half of what the keyboard leaves.
     final media = MediaQuery.of(context);
@@ -153,8 +155,16 @@ class _StoryFindState extends State<_StoryFind> {
                                 ),
                               ),
                               Expanded(
-                                child: Text(
-                                  speaker.isEmpty ? text : '$speaker：$text',
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: searchSpans(
+                                      speaker.isEmpty
+                                          ? text
+                                          : '$speaker：$text',
+                                      marks,
+                                      searchMarkStyle(theme),
+                                    ),
+                                  ),
                                   maxLines: 3,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.text(14.5, height: 1.5),

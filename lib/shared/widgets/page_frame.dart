@@ -359,7 +359,13 @@ class TopTab extends ConsumerWidget {
 /// With [scrollUnder] the body starts at the top of the screen and scrolls
 /// beneath the bar (its scrollables use [pagePadding]); without it the body
 /// starts below the bar.
-class PageScaffold extends ConsumerWidget {
+///
+/// With [hides] (a long text read through: an entry, a material) the bar
+/// slides up with the status bar's strip while the reader drags onward, so
+/// the text shows under the transparent status bar as in the wiki and Ask;
+/// a drag back, the top of the page or a tap on the text brings it back,
+/// another tap sends it away again. Needs [scrollUnder].
+class PageScaffold extends ConsumerStatefulWidget {
   const PageScaffold({
     super.key,
     required this.title,
@@ -371,7 +377,10 @@ class PageScaffold extends ConsumerWidget {
     this.backgroundColor,
     this.titleFooter,
     this.onTitleTap,
+    this.hides = false,
   });
+
+  final bool hides;
 
   final String title;
   final VoidCallback? onTitleTap;
@@ -391,18 +400,58 @@ class PageScaffold extends ConsumerWidget {
   final Color? backgroundColor;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PageScaffold> createState() => _PageScaffoldState();
+}
+
+class _PageScaffoldState extends ConsumerState<PageScaffold> {
+  final ValueNotifier<bool> _away = ValueNotifier(false);
+  late final BarsFollower _follower = BarsFollower(away: _away);
+  bool _atTop = true;
+
+  @override
+  void dispose() {
+    _away.dispose();
+    super.dispose();
+  }
+
+  bool _scrolled(ScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final m = n.metrics;
+    _atTop = m.pixels <= m.minScrollExtent + 1;
+    if (n is ScrollUpdateNotification) {
+      final atEnd = m.pixels >= m.maxScrollExtent - 1;
+      if (n.dragDetails != null || _atTop || atEnd) {
+        _follower.moved(ref, n.scrollDelta ?? 0, atTop: _atTop || atEnd);
+      }
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final top = MediaQuery.viewPaddingOf(context).top;
-    final canPop = ModalRoute.of(context)?.canPop ?? false;
-    final ground = backgroundColor ?? theme.bgPrimary;
+    final ground = widget.backgroundColor ?? theme.bgPrimary;
+    var body = widget.body;
+    if (widget.hides) {
+      body = NotificationListener<ScrollNotification>(
+        onNotification: _scrolled,
+        child: GestureDetector(
+          key: const ValueKey('page-blank-tap'),
+          behavior: HitTestBehavior.translucent,
+          onTap: () => _follower.tapped(ref, canHide: !_atTop),
+          child: body,
+        ),
+      );
+    }
+    final bar = _bar(context, theme, top, ground);
     return Scaffold(
-      backgroundColor: backgroundColor ?? Colors.transparent,
-      floatingActionButton: floatingActionButton,
+      backgroundColor: widget.backgroundColor ?? Colors.transparent,
+      floatingActionButton: widget.floatingActionButton,
       body: Stack(
         children: [
           Positioned.fill(
-            child: scrollUnder
+            child: widget.scrollUnder
                 ? body
                 : Padding(
                     padding: EdgeInsets.only(top: top + topBarInset),
@@ -418,90 +467,124 @@ class PageScaffold extends ConsumerWidget {
             top: 0,
             left: 0,
             right: 0,
-            child: Container(
-              padding: EdgeInsets.only(top: top),
-              decoration: BoxDecoration(
-                color: ground,
-                border: Border(bottom: BorderSide(color: theme.divider)),
-              ),
-              child: SizedBox(
-                height: topBarHeight - 1,
-                child: Stack(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Row(
-                        children: [
-                          if (canPop)
-                            SquareIconButton(
-                              key: const ValueKey('page-back'),
-                              icon: Icons.arrow_back_sharp,
-                              tooltip: MaterialLocalizations.of(context)
-                                  .backButtonTooltip,
-                              filled: true,
-                              onPressed: () => Navigator.of(context).maybePop(),
-                            ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: PressBuilder(
-                              enabled: onTitleTap != null,
-                              builder: (context, down) => ColoredBox(
-                                color: down
-                                    ? pressTint(ground, theme.textPrimary)
-                                    : ground,
-                                child: GestureDetector(
-                                  key: const ValueKey('page-title'),
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: onTitleTap,
-                                  child: Semantics(
-                                    header: true,
-                                    button: onTitleTap != null,
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (code != null)
-                                          ExcludeSemantics(
-                                            child: Eyebrow(code!),
-                                          ),
-                                        if (title.isNotEmpty)
-                                          Text(
-                                            title,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.heading(
-                                              code == null ? 18 : 16,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (actions.isNotEmpty) ...[
-                            const SizedBox(width: 4),
-                            ...actions,
-                          ],
-                        ],
+            child: !widget.hides
+                ? bar
+                : ValueListenableBuilder<bool>(
+                    valueListenable: _away,
+                    child: bar,
+                    builder: (context, away, bar) => IgnorePointer(
+                      ignoring: away,
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(end: away ? 1 : 0),
+                        duration: Motion.of(
+                          context,
+                          away ? Motion.row : Motion.press * 2,
+                        ),
+                        curve: Motion.mech,
+                        child: bar,
+                        builder: (context, t, bar) => Transform.translate(
+                          offset: Offset(0, -(top + topBarHeight) * t),
+                          child: bar,
+                        ),
                       ),
                     ),
-                    if (titleFooter != null)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: titleFooter!,
-                      ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _bar(
+    BuildContext context,
+    AppThemeTokens theme,
+    double top,
+    Color ground,
+  ) {
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
+    final title = widget.title;
+    final code = widget.code;
+    final actions = widget.actions;
+    final onTitleTap = widget.onTitleTap;
+    final titleFooter = widget.titleFooter;
+    return Container(
+      padding: EdgeInsets.only(top: top),
+      decoration: BoxDecoration(
+        color: ground,
+        border: Border(bottom: BorderSide(color: theme.divider)),
+      ),
+      child: SizedBox(
+        height: topBarHeight - 1,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  if (canPop)
+                    SquareIconButton(
+                      key: const ValueKey('page-back'),
+                      icon: Icons.arrow_back_sharp,
+                      tooltip:
+                          MaterialLocalizations.of(context).backButtonTooltip,
+                      filled: true,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: PressBuilder(
+                      enabled: onTitleTap != null,
+                      builder: (context, down) => ColoredBox(
+                        color: down
+                            ? pressTint(ground, theme.textPrimary)
+                            : ground,
+                        child: GestureDetector(
+                          key: const ValueKey('page-title'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onTitleTap,
+                          child: Semantics(
+                            header: true,
+                            button: onTitleTap != null,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (code != null)
+                                  ExcludeSemantics(
+                                    child: Eyebrow(code),
+                                  ),
+                                if (title.isNotEmpty)
+                                  Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.heading(
+                                      code == null ? 18 : 16,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (actions.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    ...actions,
+                  ],
+                ],
+              ),
+            ),
+            if (titleFooter != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: titleFooter,
+              ),
+          ],
+        ),
       ),
     );
   }

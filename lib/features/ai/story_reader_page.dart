@@ -358,7 +358,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (viewport is! RenderBox || !viewport.attached || _lines.isEmpty) {
       return null;
     }
-    final top = viewport.localToGlobal(Offset.zero).dy + 8;
+    // Lines under the status bar are not being read.
+    final top = viewport.localToGlobal(Offset.zero).dy +
+        MediaQuery.viewPaddingOf(context).top +
+        8;
     final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy -
         _panelCover();
     int? first, last;
@@ -552,6 +555,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return (view.size.height - top).clamp(0.0, view.size.height);
   }
 
+  /// The anchor that puts an item's top just below the status bar.
+  double _belowStatusBar() {
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final top = MediaQuery.viewPaddingOf(context).top;
+    if (view is! RenderBox || !view.hasSize || view.size.height <= 0) return 0;
+    return (top / view.size.height).clamp(0.0, 1.0);
+  }
+
   /// Anchors the list on the row holding line [p], at the top of the view
   /// (the panel is at the bottom, by the thumb).
   void _showLine(int p) {
@@ -561,7 +572,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _scrubRow = row;
     setState(() {
       _center = row + 1;
-      _centerAt = 0;
+      _centerAt = _belowStatusBar();
     });
     // Changing the upward sliver can preserve the old visible item. Reset
     // once after layout so consecutive jumps reach the requested row.
@@ -977,7 +988,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   ) =>
       Padding(
         key: _headerKey,
-        padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
+        // Below the status bar the text scrolls under.
+        padding: EdgeInsets.fromLTRB(
+          10,
+          4 + MediaQuery.viewPaddingOf(context).top,
+          10,
+          16,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

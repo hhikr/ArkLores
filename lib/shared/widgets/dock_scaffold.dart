@@ -38,8 +38,8 @@ class DockAction {
   final Key? key;
 }
 
-/// A pushed page held in one hand (the reader). The paper fills the screen
-/// up to the status bar; the controls float over it near the bottom, in
+/// A pushed page held in one hand (the reader). The paper fills the whole
+/// screen, under the status bar too; the controls float over it near the bottom, in
 /// reach of the thumb, as separate plates with gaps between them: back, a
 /// plate naming the page ([title], a [status] line under it and [progress]
 /// along its foot) that opens what [onTitleTap] opens, and the [actions].
@@ -88,25 +88,10 @@ class DockScaffold extends ConsumerWidget {
       backgroundColor: ground,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.only(top: insets.top),
-              child: MediaQuery.removePadding(
-                context: context,
-                removeTop: true,
-                child: body,
-              ),
-            ),
-          ),
-          // The status bar keeps the paper under it: the text scrolls
-          // beneath, not under the system's icons.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: insets.top,
-            child: ColoredBox(color: ground),
-          ),
+          // The text runs under the transparent status bar, as in the wiki
+          // and Ask with their bars away; the body starts its first line
+          // below it (the top padding stays in its MediaQuery).
+          Positioned.fill(child: body),
           if (panel != null)
             Positioned(
               left: _edge,
