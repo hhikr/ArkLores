@@ -41,28 +41,46 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   final FocusNode _chatFocus = FocusNode(debugLabel: 'ask-chat');
 
   /// Height of the question box (with what it leaves for the tab bar below
-  /// it), for the list's bottom padding.
-  double _composerHeight = 0;
+  /// it), for the list's bottom padding. Notifiers, not page state: only the
+  /// padding and the ↓ button follow them, never the bubbles.
+  final ValueNotifier<double> _composerHeight = ValueNotifier(0);
 
-  /// R17d: the list never follows a streaming answer 鈥?the thinking, the
+  /// What the question box grew by and the list has not yet moved for.
+  final _Shift _composerShift = _Shift();
+
+  /// R17d: the list never follows a streaming answer: the thinking, the
   /// steps and the answer grow below and the reader scrolls at their own
-  /// pace. Only a new question scrolls (once) to the end. The 鈫?button
+  /// pace. Only a new question scrolls (once) to the end. The ↓ button
   /// shows whenever the end is out of view.
-  bool _showJumpToEnd = false;
+  final ValueNotifier<bool> _showJumpToEnd = ValueNotifier(false);
 
   @override
   void dispose() {
     _chatFocus.dispose();
     _inputController.dispose();
     _scrollController.dispose();
+    _composerHeight.dispose();
+    _showJumpToEnd.dispose();
     super.dispose();
   }
 
   /// Called on scrolling and on content size changes.
   bool _onScrollMetrics(ScrollMetrics metrics) {
-    final away = metrics.maxScrollExtent - metrics.pixels > 48;
-    if (away != _showJumpToEnd) setState(() => _showJumpToEnd = away);
+    _showJumpToEnd.value = metrics.maxScrollExtent - metrics.pixels > 48;
     return false;
+  }
+
+  void _composerResized(double height) {
+    final delta = height - _composerHeight.value;
+    if (delta.abs() <= 0.5) return;
+    if (_scrollController.hasClients) {
+      _composerShift.value += delta;
+      // Spent by the list's next layout; dropped if that layout did not
+      // change the list's extent (a short conversation).
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _composerShift.value = 0);
+    }
+    _composerHeight.value = height;
   }
 
   /// Animates to the end; [afterFrame] when the content just changed and
@@ -231,31 +249,37 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       _scrollToBottom(afterFrame: true);
     });
 
+    // Built out here, not in the LayoutBuilder below: the keyboard changes
+    // the page's height on every frame it moves, and a list built in there
+    // would rebuild every bubble in view (their markdown too) each frame.
+    final conversation = Positioned.fill(
+      child: Focus(
+        focusNode: _chatFocus,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) {
+            if (!_chatFocus.hasFocus) _chatFocus.requestFocus();
+          },
+          child: count == 0
+              ? _buildEmptyState(theme)
+              : _buildChatList(theme, count),
+        ),
+      ),
+    );
+    final topBar = MainTopBar(
+      leading: _title(),
+      trailing: _buildActions(theme),
+      hides: true,
+    );
+
     // The list scrolls under the top bar and the question box; its padding
     // follows the box's height. The box may grow to half or all of the page
     // (its height budget).
     return LayoutBuilder(
       builder: (context, constraints) => Stack(
         children: [
-          Positioned.fill(
-            child: Focus(
-              focusNode: _chatFocus,
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: (_) {
-                  if (!_chatFocus.hasFocus) _chatFocus.requestFocus();
-                },
-                child: count == 0
-                    ? _buildEmptyState(theme)
-                    : _buildChatList(theme, count),
-              ),
-            ),
-          ),
-          MainTopBar(
-            leading: _title(),
-            trailing: _buildActions(theme),
-            hides: true,
-          ),
+          conversation,
+          topBar,
           Positioned(
             left: 0,
             right: 0,
@@ -267,11 +291,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: _SizeReporter(
-                  onHeight: (height) {
-                    if ((height - _composerHeight).abs() > 0.5) {
-                      setState(() => _composerHeight = height);
-                    }
-                  },
+                  onHeight: _composerResized,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -318,7 +338,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   /// Hides the bars as the conversation is dragged on, shows them back.
   final BarsFollower _bars = BarsFollower();
 
-  /// The messages, with the 鈫?button while the end is out of view.
+  /// The messages, with the ↓ button while the end is out of view.
   Widget _buildChatList(AppThemeTokens theme, int count) {
     final top = MediaQuery.paddingOf(context).top + topBarInset;
     return Stack(
@@ -352,38 +372,56 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   canHide: p != null && p.pixels > p.minScrollExtent,
                 );
               },
-              child: ListView.builder(
+              child: CustomScrollView(
                 key: const ValueKey('ask-chat-list'),
                 controller: _scrollController,
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  top + 12,
-                  16,
-                  12 + _composerHeight,
-                ),
-                itemCount: count,
-                itemBuilder: (context, index) => _MessageAt(index),
+                physics: _BottomAnchoredPhysics(_composerShift),
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(16, top + 12, 16, 0),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _MessageAt(index),
+                        childCount: count,
+                      ),
+                    ),
+                  ),
+                  // Only this space follows the question box's height.
+                  ValueListenableBuilder<double>(
+                    valueListenable: _composerHeight,
+                    builder: (context, height, _) => SliverToBoxAdapter(
+                      child: SizedBox(height: 12 + height),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-        if (_showJumpToEnd)
-          Positioned(
-            right: 12,
-            bottom: 8 + _composerHeight,
-            child: BarsAway(
-              distance: tabBarRoom(context),
-              // A chip-grey block like the composer's own buttons; it
-              // covers what scrolls under it.
-              child: SquareIconButton(
-                key: const ValueKey('scroll-to-bottom'),
-                tooltip: context.t.aiScrollToBottom,
-                onPressed: _scrollToBottom,
-                icon: Icons.arrow_downward_sharp,
-                filled: true,
-              ),
-            ),
-          ),
+        ValueListenableBuilder<bool>(
+          valueListenable: _showJumpToEnd,
+          builder: (context, show, _) => !show
+              ? const SizedBox.shrink()
+              : ValueListenableBuilder<double>(
+                  valueListenable: _composerHeight,
+                  builder: (context, height, _) => Positioned(
+                    right: 12,
+                    bottom: 8 + height,
+                    child: BarsAway(
+                      distance: tabBarRoom(context),
+                      // A chip-grey block like the composer's own buttons;
+                      // it covers what scrolls under it.
+                      child: SquareIconButton(
+                        key: const ValueKey('scroll-to-bottom'),
+                        tooltip: context.t.aiScrollToBottom,
+                        onPressed: _scrollToBottom,
+                        icon: Icons.arrow_downward_sharp,
+                        filled: true,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
       ],
     );
   }
@@ -394,111 +432,115 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       context.t.aiAskSuggestionVerify,
       context.t.aiAskSuggestionInvestigate,
     ];
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        MediaQuery.paddingOf(context).top + topBarInset + 24,
-        16,
-        24 + _composerHeight,
+    return ValueListenableBuilder<double>(
+      valueListenable: _composerHeight,
+      builder: (context, height, child) => ListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + topBarInset + 24,
+          16,
+          24 + height,
+        ),
+        children: [child!],
       ),
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // One line on a narrow phone: shrinks rather than wraps.
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'JUST ASK.',
-                    style: sairaStyle(
-                      size: 56,
-                      weight: 800,
-                      width: 125,
-                      color: theme.textPrimary,
-                      height: 1,
-                    ),
-                  ),
+      child: _emptyStateBody(theme, suggestions),
+    );
+  }
+
+  Widget _emptyStateBody(AppThemeTokens theme, List<String> suggestions) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // One line on a narrow phone: shrinks rather than wraps.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'JUST ASK.',
+                style: sairaStyle(
+                  size: 56,
+                  weight: 800,
+                  width: 125,
+                  color: theme.textPrimary,
+                  height: 1,
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  context.t.aiAskEmpty,
-                  style: theme.text(17, height: 1.6),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.t.aiAskSource,
-                  style:
-                      theme.text(14, color: theme.textSecondary, height: 1.55),
-                ),
-                // 0.14: search runs on meaning only with an embedding service.
-                if (ref.watch(embeddingClientProvider) == null) ...[
-                  const SizedBox(height: 16),
-                  NoticeBox(
-                    context.t.aiNoVectorWarning,
-                    key: const ValueKey('ask-no-vector-warning'),
-                  ),
-                ],
-                SectionTitle(
-                  title: context.t.aiAskTry,
-                  code: 'try',
-                  size: 17,
-                ),
-                for (final (i, s) in suggestions.indexed) ...[
-                  Divider(height: 1, color: theme.divider),
-                  Semantics(
-                    button: true,
-                    child: PressRow(
-                      onTap: () {
-                        _inputController.value = TextEditingValue(
-                          text: s,
-                          selection: TextSelection.collapsed(offset: s.length),
-                        );
-                      },
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 52),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 10, 4, 10),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 36,
-                                child: Text(
-                                  (i + 1).toString().padLeft(2, '0'),
-                                  style: theme.field(
-                                    color: theme.textMuted,
-                                    size: 14,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  s,
-                                  style:
-                                      theme.text(15.5, weight: FontWeight.w500),
-                                ),
-                              ),
-                              Icon(
-                                Icons.north_west_sharp,
-                                size: 18,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              context.t.aiAskEmpty,
+              style: theme.text(17, height: 1.6),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              context.t.aiAskSource,
+              style: theme.text(14, color: theme.textSecondary, height: 1.55),
+            ),
+            // 0.14: search runs on meaning only with an embedding service.
+            if (ref.watch(embeddingClientProvider) == null) ...[
+              const SizedBox(height: 16),
+              NoticeBox(
+                context.t.aiNoVectorWarning,
+                key: const ValueKey('ask-no-vector-warning'),
+              ),
+            ],
+            SectionTitle(
+              title: context.t.aiAskTry,
+              code: 'try',
+              size: 17,
+            ),
+            for (final (i, s) in suggestions.indexed) ...[
+              Divider(height: 1, color: theme.divider),
+              Semantics(
+                button: true,
+                child: PressRow(
+                  onTap: () {
+                    _inputController.value = TextEditingValue(
+                      text: s,
+                      selection: TextSelection.collapsed(offset: s.length),
+                    );
+                  },
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 52),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 10, 4, 10),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 36,
+                            child: Text(
+                              (i + 1).toString().padLeft(2, '0'),
+                              style: theme.field(
                                 color: theme.textMuted,
+                                size: 14,
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                          Expanded(
+                            child: Text(
+                              s,
+                              style: theme.text(15.5, weight: FontWeight.w500),
+                            ),
+                          ),
+                          Icon(
+                            Icons.north_west_sharp,
+                            size: 18,
+                            color: theme.textMuted,
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-                Divider(height: 1, color: theme.divider),
-              ],
-            ),
-          ),
+                ),
+              ),
+            ],
+            Divider(height: 1, color: theme.divider),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -572,6 +614,63 @@ class _MessageAt extends ConsumerWidget {
     );
     if (message == null) return const SizedBox.shrink();
     return ChatBubble(key: ValueKey(message.id), message: message);
+  }
+}
+
+class _Shift {
+  double value = 0;
+
+  /// The view's height the list last moved for. The position's own old
+  /// metrics are not enough: one layout may ask several times (the list's
+  /// estimated length changes as it lays out more bubbles), and each time
+  /// against the same old height.
+  double? viewport;
+}
+
+/// Keeps the text just above the question box where it is when the room
+/// under the list changes: the keyboard coming up or going down (the view
+/// gets shorter or taller) and the question box growing or shrinking
+/// ([_Shift], one frame after the box). Done in the list's own layout, so
+/// the text moves with the keyboard frame by frame; it used to stay put and
+/// then spring back when out of range. An answer that grows does not move
+/// the list (R17d), and the position is only ever clamped, never sprung.
+class _BottomAnchoredPhysics extends ScrollPhysics {
+  const _BottomAnchoredPhysics(this.shift, {super.parent});
+
+  final _Shift shift;
+
+  @override
+  _BottomAnchoredPhysics applyTo(ScrollPhysics? ancestor) =>
+      _BottomAnchoredPhysics(shift, parent: buildParent(ancestor));
+
+  @override
+  double adjustPositionForNewDimensions({
+    required ScrollMetrics oldPosition,
+    required ScrollMetrics newPosition,
+    required bool isScrolling,
+    required double velocity,
+  }) {
+    final pixels = super.adjustPositionForNewDimensions(
+      oldPosition: oldPosition,
+      newPosition: newPosition,
+      isScrolling: isScrolling,
+      velocity: velocity,
+    );
+    var by = shift.value;
+    shift.value = 0;
+    final viewport =
+        newPosition.hasViewportDimension ? newPosition.viewportDimension : null;
+    final last = shift.viewport ??
+        (oldPosition.hasViewportDimension
+            ? oldPosition.viewportDimension
+            : null);
+    shift.viewport = viewport;
+    if (isScrolling || !newPosition.hasContentDimensions) return pixels;
+    if (last != null && viewport != null) by += last - viewport;
+    // Moved from where it was, not from where the parent already clamped
+    // it to (the view growing shortens the list's range first).
+    return (by == 0 ? pixels : newPosition.pixels + by)
+        .clamp(newPosition.minScrollExtent, newPosition.maxScrollExtent);
   }
 }
 

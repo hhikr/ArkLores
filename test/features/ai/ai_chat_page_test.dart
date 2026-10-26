@@ -434,6 +434,67 @@ void main() {
       expect(tester.widget<AskComposer>(find.byType(AskComposer)),
           same(composer),);
     });
+
+    testWidgets(
+        'the keyboard and the question box move the text above the box with '
+        'them, frame by frame, without rebuilding the bubbles or springing '
+        'back', (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpWidget(_app(const AiChatPage(),
+          overrides: _withModel(ScriptedLLM(['Final Answer: silent'])),),);
+      await tester.pumpAndSettle();
+      final container =
+          ProviderScope.containerOf(tester.element(find.byType(AiChatPage)));
+      final chat = container.read(askChatProvider(container.read(shownAskProvider)).notifier);
+      // ignore: invalid_use_of_protected_member
+      chat.state = [
+        ChatMessage(
+          id: 'q',
+          role: MessageRole.user,
+          content: '问题',
+          timestamp: DateTime(2026),
+        ),
+        answer(longAnswer),
+      ];
+      await settle(tester);
+      final position = tester
+          .state<ScrollableState>(find.descendant(
+            of: find.byKey(const ValueKey('ask-chat-list')),
+            matching: find.byType(Scrollable),
+          ).first,)
+          .position;
+      position.jumpTo(position.maxScrollExtent - 200);
+      await settle(tester);
+
+      // The box opens to two rows on focus: the text above goes up with it.
+      final bar = find.byKey(const ValueKey('ask-input-bar'));
+      final top = tester.getRect(bar).top;
+      final resting = position.pixels;
+      await tester.tap(bar);
+      await settle(tester);
+      final grown = top - tester.getRect(bar).top;
+      expect(grown, greaterThan(20));
+      expect(position.pixels, closeTo(resting + grown, 0.5));
+
+      final before = position.pixels;
+      final bubble = tester.widget<ChatBubble>(find.byKey(const ValueKey('a')));
+      final ratio = tester.view.devicePixelRatio;
+      // Each keyboard frame: the list moves by what the view lost, at once.
+      for (final inset in [80.0, 160.0, 240.0]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset * ratio);
+        await tester.pump();
+        expect(position.pixels, closeTo(before + inset, 0.5));
+        expect(tester.widget<ChatBubble>(find.byKey(const ValueKey('a'))),
+            same(bubble),);
+      }
+      // Down again: back where it was, nothing left to animate.
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+      expect(position.pixels, closeTo(before, 0.5));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(position.pixels, closeTo(before, 0.5));
+      expect(tester.takeException(), isNull);
+    });
   });
 }
 
