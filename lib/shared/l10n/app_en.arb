@@ -493,6 +493,7 @@
   "librarySearchFurther": "Search for “{query}” (close names and texts too)",
   "@librarySearchFurther": {"placeholders": {"query": {"type": "String"}}},
   "storyReaderFindHint": "Find in this story",
+  "storyReaderFindEmpty": "Type a name or a word: the lines of this story that have it are listed here; tap one to go to it.",
   "gameArknights": "Arknights",
   "gameEndfield": "Endfield",
   "launchTagline": "Story reader and Q&A",

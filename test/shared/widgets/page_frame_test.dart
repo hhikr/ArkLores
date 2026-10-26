@@ -1,6 +1,7 @@
 // The top bar of a pushed page: a back button with a cut corner, the title
 // (ellipsised when long), the actions on the right, a hairline below;
 // content that scrolls under it is padded clear of it.
+import 'package:arklores/shared/widgets/dock_scaffold.dart';
 import 'package:arklores/shared/widgets/page_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,38 +114,43 @@ void main() {
     expect(tester.getRect(find.byKey(const Key('b'))).top, topBarInset);
   });
 
-  testWidgets('a dock page: the controls at the bottom, the body above them',
-      (tester) async {
+  testWidgets(
+      'a dock page: separate plates float over the body near the '
+      'bottom', (tester) async {
     var opened = 0;
-    await _push(
-      tester,
-      DockScaffold(
-        title: '章节',
-        status: const Text('3 / 10'),
-        onTitleTap: () => opened++,
-        actions: [
-          IconButton(
-            tooltip: 'find',
-            icon: const Icon(Icons.search),
-            onPressed: () {},
-          ),
-        ],
-        body: const SizedBox.expand(key: Key('b')),
-      ),
-    );
-    final dock = tester.getRect(find.byKey(const ValueKey('page-bottom-dock')));
+    Widget page() => DockScaffold(
+          title: '章节',
+          status: const Text('3 / 10'),
+          onTitleTap: () => opened++,
+          actions: [
+            DockAction(
+              key: const ValueKey('find'),
+              tooltip: 'find',
+              icon: Icons.search,
+              onPressed: () {},
+            ),
+          ],
+          body: const SizedBox.expand(key: Key('b')),
+        );
+    await _push(tester, page());
     final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
-    expect(dock.bottom, screen.height);
-    expect(dock.height, bottomDockHeight);
-    expect(tester.getRect(find.byKey(const Key('b'))).bottom, dock.top);
-    for (final part in [
-      find.byKey(const ValueKey('page-back')),
-      find.text('章节'),
-      find.text('3 / 10'),
-      find.byTooltip('find'),
-    ]) {
-      expect(tester.getRect(part).top, greaterThanOrEqualTo(dock.top));
+    final back = tester.getRect(find.byKey(const ValueKey('page-back')));
+    final title = tester.getRect(find.byKey(const ValueKey('page-title')));
+    final find_ = tester.getRect(find.byKey(const ValueKey('find')));
+    // The body runs under them, to the bottom of the screen.
+    expect(tester.getRect(find.byKey(const Key('b'))).bottom, screen.height);
+    for (final plate in [back, title, find_]) {
+      expect(plate.height, floatingDockHeight);
+      expect(plate.bottom, lessThan(screen.height - 4), reason: 'floating');
     }
+    expect(back.left, greaterThanOrEqualTo(8), reason: 'off the edge');
+    expect(title.left - back.right, greaterThanOrEqualTo(6), reason: 'apart');
+    expect(find_.left - title.right, greaterThanOrEqualTo(6));
+    expect(find_.right, lessThanOrEqualTo(screen.width - 8));
+    expect(
+      floatingDockRoom(tester.element(find.byKey(const Key('b')))),
+      greaterThanOrEqualTo(screen.height - title.top),
+    );
     await tester.tap(find.byKey(const ValueKey('page-title')));
     expect(opened, 1);
     await tester.tap(find.byKey(const ValueKey('page-back')));

@@ -1477,6 +1477,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyReaderFindHint => 'Find in this story';
 
   @override
+  String get storyReaderFindEmpty =>
+      'Type a name or a word: the lines of this story that have it are listed here; tap one to go to it.';
+
+  @override
   String get gameArknights => 'Arknights';
 
   @override

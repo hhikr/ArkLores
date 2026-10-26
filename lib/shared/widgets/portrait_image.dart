@@ -129,8 +129,11 @@ final _imageProvider = FutureProvider.autoDispose
   return _Result(_State.image, image);
 });
 
-/// Draws one sprite fitted inside the box, bottom-centred.
-class PortraitImage extends ConsumerWidget {
+/// Draws one sprite fitted inside the box, bottom-centred. Given another
+/// sprite, it keeps showing the last one until the new one is ready, so a
+/// change of picture (another variant) does not blink through the empty
+/// box.
+class PortraitImage extends ConsumerStatefulWidget {
   const PortraitImage({
     super.key,
     required this.sprite,
@@ -141,10 +144,26 @@ class PortraitImage extends ConsumerWidget {
   final String? fallbackSprite, semanticLabel;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PortraitImage> createState() => _PortraitImageState();
+}
+
+class _PortraitImageState extends ConsumerState<PortraitImage> {
+  /// The picture on screen, while another is being made: still watched, so
+  /// its image is not let go before the new one replaces it.
+  ({String sprite, String? fallback})? _shown;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final result =
-        ref.watch(_imageProvider((sprite: sprite, fallback: fallbackSprite)));
+    final key = (sprite: widget.sprite, fallback: widget.fallbackSprite);
+    var result = ref.watch(_imageProvider(key));
+    final last = _shown;
+    if (result.isLoading && last != null && last != key) {
+      final before = ref.watch(_imageProvider(last));
+      if (before.hasValue) result = before;
+    } else if (!result.isLoading) {
+      _shown = key;
+    }
     Widget placeholder(String text, {bool hatch = true}) {
       // A thumbnail is too small for the sentence: the hatching alone says
       // there is no picture (the sentence is still read out).
@@ -168,7 +187,7 @@ class PortraitImage extends ConsumerWidget {
     }
 
     return Semantics(
-      label: semanticLabel,
+      label: widget.semanticLabel,
       child: ColoredBox(
         color: theme.cardSurface,
         child: result.when(

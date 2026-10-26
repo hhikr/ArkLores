@@ -25,7 +25,8 @@
 | `shared/theme/cut_border.dart` | `CutBorder`：切角形状（可点的东西才用） |
 | `shared/theme/motion.dart` | `Motion`：三条曲线（`snap` 出现、`mech` 擦入与所有退出、`ease`）、各档时长、`Motion.of()`（减少动效时为 0） |
 | `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`AppSlider` 共用滑块、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`TraceRail` / `FoldBlock` / `FoldTile` 左侧 trace 线与展开、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
-| `shared/widgets/page_frame.dart` | `PageScaffold`（推入页的顶栏）、`DockScaffold`（控件在底部工具栏的推入页：阅读器）、`MainTopBar` + `TopTab` + `TopBarTitle`（四个主标签页的顶栏）、`AppTabBar`（底部标签栏）、`DockPanel`（盖在内容上的控件板）、`pagePadding` |
+| `shared/widgets/dock_scaffold.dart` | `DockScaffold`（控件浮在底部的推入页：阅读器）、`DockAction`、`floatingDockRoom` |
+| `shared/widgets/page_frame.dart` | `PageScaffold`（推入页的顶栏）、`MainTopBar` + `TopTab` + `TopBarTitle`（四个主标签页的顶栏）、`AppTabBar`（底部标签栏）、`DockPanel`（盖在内容上的控件板）、`pagePadding` |
 | `shared/widgets/theme_aware_card.dart` | 面板：可点时右下切角、按下时底边擦入强调色 |
 | `shared/widgets/smooth_page_route.dart` | 换页：**只有资料页**（`smoothPageRoute(frosted: true)`：资料页里打开的集合、条目、阅读器、阅读历史）用毛玻璃，其他页面（设置、知识库、问答里打开的出处等）整页从右推入（同样 280 ms、`snap`，前缘一条 2px `trace` 线，下面的页变暗），立即构建（开发者 2026-10-25）。毛玻璃：玻璃（模糊加一层纸色，前缘一条 2px `trace` 线）从右推入（`Motion.coverIn` 280 ms，`snap`，一点就动），下面的页面只变暗、不左移（左移会在玻璃后面留出一条空白）；**玻璃盖满屏幕之后才在它后面构建新页面**（第一帧排版再久，屏幕上也只是静止的模糊画面），画完第一帧玻璃就地变清（把这一帧拍成快照、一次算出 sigma 8 / 5 / 3 / 1.5 四张模糊图，依次交叉淡入，最后一张淡出露出页面，纸色一起退去；不要每帧重算整屏模糊——手机上每帧 9–15 ms、120Hz 下一抽一抽；也不要只拿一张模糊图淡出——淡到一半字就清楚了，不像对焦；`Motion.reveal` 900 ms，`ease`，按帧推进、一帧最多推进 25 ms，慢帧只让它慢一点、不跳一截），页面对焦出来。返回是整页向右滑出（240 ms，`mech`），下面的页早已建好、不用盖板。整页画进自己的层（`RepaintBoundary`）只做平移 |
 | `shared/widgets/press_feedback.dart` | `PressHold`：可点部件的按下状态——手指落下等待 `kPressTimeout`（100 ms），期间移动超过 `kTouchSlop` 不显示反馈；快速点按在抬起时显示，反馈至少保持 `Motion.press`，已显示后拖动超过阈值立即松开；`PressBuilder` 是给没有自己状态的部件（标签、小标签、闭包里的行）用的同一件事；`pressTint` 是块、标签、行统一的按下颜色（底色上盖一层 10% 的墨） |
@@ -41,7 +42,7 @@
 ## 3. 写界面时的规则
 
 - **新页面**：推入的页面用 `PageScaffold`（顶栏有返回、标题、操作），主标签页用 `MainTopBar`。全 App 不用 `AppBar`（守卫测试）。列表用 `pagePadding` 让出顶栏和底栏。
-  单手读的页面（现在只有剧情阅读器，开发者 2026-10-26）用 `DockScaffold`：控件在屏幕底部的一条工具栏里（面板色底、上沿细线、进度线沿上沿），左边返回，中间一个切角的标题块（标题、下面一行状态、右边一个箭头，点开它打开的东西时箭头转向），右边操作。正文从状态栏下一直到工具栏上沿，状态栏那一块铺纸色。标题打开的面板放在正文底部，从工具栏往上长出来。
+  单手读的页面（现在只有剧情阅读器，开发者 2026-10-26）用 `DockScaffold`（`shared/widgets/dock_scaffold.dart`）：控件是浮在正文上、靠近屏幕底部的几块分开的板（离两边 12 px、离手势条 8 px、彼此隔 8 px），不是一条连到底边的实心栏。板是面板色加细框，能点的切一个角，按下时填强调色，不用意义不明的灰块。左边返回，中间标题板（标题、下面一行状态、右边箭头，进度线沿板的下沿），右边每个操作一块 48×48 的板。往后拖正文时板滑出屏幕下方，往回拖、到开头或结尾、点正文空白处时回来，再点一次让开（和 Wiki、问答的栏一样，`BarsFollower(away:)`，状态由页面自己存，不动主界面的栏）。正文铺到屏幕底，结尾留出 `floatingDockRoom`。标题打开的面板同样是一块浮板，放在控件上方、同宽，从下往上展开；面板开着时控件不让开。
 - **能点的东西切一个角**（`CutBorder`、`AppButton`、`IndexTag`、可点的 `ThemeAwareCard`）；不能点的容器是直角。
 - **一组操作只有一个主要按钮**（`ButtonKind.go`，静止就是强调色）；删除用 `ButtonKind.danger`，并先用 `confirmAction(danger: true)` 问一句；其余用 normal / quiet。
 - **列表**是细线分隔的行（`LibraryRow` / `ActionRow` / `PressRow`），不是卡片网格；行里有编号、日期、计数时用 `field()` 排出来，都是真实数据。
@@ -56,7 +57,9 @@
 - **可以点的人名**（0.20，开发者 2026-10-26）：答案里字保持正文色，用 2 px `accentPrimary` 下划线。阅读器里不用下划线，能点的名字用 `heading(14)`（Saira，700）；深色用 `accentText`，浅色用 `textPrimary`，字高下方约 40% 垫 `accentPrimary` 填充。不能点的名字仍用 `ui(14, weight: 700, color: textSecondary)`。名字行高保持 20 px，热区扩到 48×48，不改正文排版。
 - **名字旁的立绘预览**：竖长的小卡片（172×300，不超过半屏高）：整身立绘占满上部，底下一条放名字、句数与小号“更多”。在名字下方 6 px，放不下时放上方，左右留 16 px（所以卡片可能在名字的右下、左下、右上、左上）。“更多”打开大卡片；第一下点外面只关卡片，滚动、返回也关，同时只有一张。预览不取焦点；出现时从名字展开（`Motion.dialogIn`）：靠名字的那条边先从名字所在的位置向两边拉开，接着卡片从这条边展开，在名字下方往下、在上方往上（放在上方时卡片按下沿定位，不按上沿）；退出淡出，减少动效时立即切换。
 - **立绘**（0.20）：立绘区是展示内容，直角、不可点、面板色底，图片 contain、底对齐；没有图时斜线纹加一句话。见 `PORTRAITS.md` §4。
-- **阅读器的进度面板**（0.20）：点底部工具栏的标题块展开行号、百分比、所在步骤、当前行与 `AppSlider`（滑块在面板最下面，挨着拇指）；再点标题、点正文或按返回键收起。拖滑块或点轨道按行跳转，每帧最多处理一次定位，松手保存进度并保留面板。手指在滑块上时（松手后再等一个 `Motion.wipe`）不按屏幕上的行重算进度：屏幕上第一行是所在那组的第一行，比手指指的差一两行，重算会把滑块拉回去、来回抽动；`AppSlider` 拖动时也不跟外部取整后的值。滚动正文时面板保留，滑块跟随当前行。工具栏的定位按钮仍用于回到引用行。
+- **阅读器的查找**：底部弹出只有内容那么高：输入框、下面一句说明会列出什么（没有结果时写没有结果），有结果时列表最高到键盘以上空间的 60%。不要给它固定高度，否则键盘下面是一大片空白。
+- **立绘换图**：`PortraitImage` 换了另一张立绘时，新图做好之前继续显示上一张（同时仍持有上一张的 provider，图片不会在显示中被释放），不在两张之间露出空底。
+- **阅读器的进度面板**（0.20）：点底部的标题板展开行号、百分比、所在步骤、当前行与 `AppSlider`（滑块在面板最下面，挨着拇指）；再点标题、点正文或按返回键收起。拖滑块或点轨道按行跳转，每帧最多处理一次定位，松手保存进度并保留面板。手指在滑块上时（松手后再等一个 `Motion.wipe`）不按屏幕上的行重算进度：屏幕上第一行是所在那组的第一行，比手指指的差一两行，重算会把滑块拉回去、来回抽动；`AppSlider` 拖动时也不跟外部取整后的值。滚动正文时面板保留，滑块跟随当前行。工具栏的定位按钮仍用于回到引用行。
 - **滑块**（`AppSlider`）：48 px 高触控区、28 px 粗轨道、右下切角；已填部分用 `accentPrimary`、未填部分用 `divider`，填到滑块中线。滑块是 40×40 的墨色方块（`textPrimary`，右下切角，上下各伸出轨道 6 px），中间两道握纹，按住时握纹变强调色（开发者 2026-10-26：要大方块，不要细指针）。拖动直接跟手；点轨道与外部改值使用 `Motion.row` / `Motion.snap`，减少动效时立即到位。可选等距分档，换档用轻触感；拖动时回调 `onChanged`，松手或点轨道后回调 `onChangeEnd`。支持键盘方向键与读屏加减，当前值用 `field()` 显示在滑块上方或右侧。现在只有阅读器的进度面板用它；设置里的档位用分段选项（开发者 2026-10-26），标题只写设置名称。
 - **左侧的 trace 线**（0.20 复核）：它是一条会延展的线，不是变粗的块。宽度固定 3 px（`traceRailWidth`），动的只有长度：`TraceRail` 从上往下伸到所在内容的全高（`snap`），收回时从下往上（`mech`）。
   - 列表行按下（`PressRow`）：线沿行落下、行右移 6 px，抬起收回。点了以后线在 `Motion.press` 内伸满，并一直留到新页面盖过来（`Motion.coverIn + Motion.row`）再收回：跟着按压收回时，快点一下线只伸到一半就往回缩，新页面已经盖上来了。状态行、展开头这类不该动的行用 `shift: false`，按下只盖一层薄墨。

@@ -2594,6 +2594,12 @@ abstract class AppLocalizations {
   /// **'Find in this story'**
   String get storyReaderFindHint;
 
+  /// No description provided for @storyReaderFindEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a name or a word: the lines of this story that have it are listed here; tap one to go to it.'**
+  String get storyReaderFindEmpty;
+
   /// No description provided for @gameArknights.
   ///
   /// In en, this message translates to:

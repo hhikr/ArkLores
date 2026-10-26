@@ -1420,6 +1420,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyReaderFindHint => '在本篇中查找';
 
   @override
+  String get storyReaderFindEmpty => '输入人名或词语，这里会列出本篇中含有它的台词，点一句跳过去。';
+
+  @override
   String get gameArknights => '明日方舟';
 
   @override

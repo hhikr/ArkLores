@@ -492,6 +492,7 @@
   "librarySearchFurther": "搜索「{query}」（含相近名字与正文）",
   "@librarySearchFurther": {"placeholders": {"query": {"type": "String"}}},
   "storyReaderFindHint": "在本篇中查找",
+  "storyReaderFindEmpty": "输入人名或词语，这里会列出本篇中含有它的台词，点一句跳过去。",
   "gameArknights": "明日方舟",
   "gameEndfield": "终末地",
   "launchTagline": "剧情阅读与问答",

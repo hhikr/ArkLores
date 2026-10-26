@@ -491,6 +491,9 @@ void main() {
     await settle(tester);
     expect(find.byKey(const ValueKey('story-line-target-12000')), findsNothing);
 
+    // Read on, the controls are away: a tap on the text brings them back.
+    await tester.tapAt(const Offset(300, 300));
+    await settle(tester);
     await tester.tap(find.byKey(const ValueKey('story-reader-jump')));
     await settle(tester);
     expect(find.byKey(const ValueKey('story-line-target-12000')), findsOneWidget);

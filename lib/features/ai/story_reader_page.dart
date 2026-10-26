@@ -26,12 +26,13 @@ import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart'
     show UserDataStore, readingEndDwell, readingEndLines, reanchorLine;
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/bars_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/motion.dart';
+import '../../shared/widgets/dock_scaffold.dart';
 import '../../shared/widgets/ef_widgets.dart';
-import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import '../library/portrait_preview.dart';
@@ -251,6 +252,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _endTimer?.cancel();
     _progressTimer?.cancel();
     _scrubDone?.cancel();
+    _dockAway.dispose();
     _progress.dispose();
     _scrub.dispose();
     final container = _container;
@@ -493,8 +495,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   bool _scrubBusy = false;
   int? _scrubTarget;
 
+  /// Whether the floating controls are out of the way, and what moves them.
+  final ValueNotifier<bool> _dockAway = ValueNotifier(false);
+  late final BarsFollower _dock = BarsFollower(away: _dockAway);
+
   void _scrubStart() {
     if (_lines.isEmpty || _rows.isEmpty) return;
+    _dock.show(ref);
     setState(() => _scrub.value = !_scrub.value);
     _scrubRow = null;
   }
@@ -532,10 +539,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// The progress panel, measured to tell how much of the text it covers.
   final GlobalKey _scrubPanelKey = GlobalKey();
 
-  /// How far up the text the open progress panel reaches from the bottom of
-  /// the view (0 when shut): where the reader is counts above it.
+  /// How far up the text the open progress panel, or else the controls,
+  /// reach from the bottom of the view: where the reader is counts above.
   double _panelCover() {
-    if (!_scrub.value) return 0;
+    if (!_scrub.value) return _dockAway.value ? 0 : floatingDockRoom(context);
     final view = _scrollKey.currentContext?.findRenderObject();
     final panel = _scrubPanelKey.currentContext?.findRenderObject();
     if (view is! RenderBox || panel is! RenderBox || !panel.attached) {
@@ -607,10 +614,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final heading = _headingOver(p);
     return Container(
       key: const ValueKey('story-reader-scrub'),
-      padding: const EdgeInsets.fromLTRB(_scrubGutter, 12, _scrubGutter, 14),
+      padding: const EdgeInsets.fromLTRB(_scrubGutter, 12, _scrubGutter, 12),
+      // A floating plate like the controls under it; the slider at its
+      // foot, by the thumb.
       decoration: BoxDecoration(
         color: theme.cardSurface,
-        border: Border(top: BorderSide(color: theme.divider)),
+        border: Border.all(color: theme.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -708,134 +717,141 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         : null;
 
     _nickname = ref.watch(nicknameProvider);
-    // Floating docks; the text starts below them (a cited line is placed
-    // near the top of the view and must not sit under the title).
+    final body = _body(theme, collection, chapter, entry?.synopsis);
+    final panel = _panel(theme);
     return PopScope(
       canPop: !_scrub.value,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _scrub.value) setState(() => _scrub.value = false);
       },
-      // The controls are in a dock at the bottom, under the thumb; the
-      // progress panel grows up out of it.
-      child: DockScaffold(
-        backgroundColor: theme.bgPrimary,
-        title: chapter.isNotEmpty ? chapter : collection,
-        onTitleTap: widget.text.isEmpty ? null : _scrubStart,
-        open: _scrub.value,
-        status: ValueListenableBuilder<(int, int)?>(
-          valueListenable: _progress,
-          builder: (context, p, _) => p == null
-              ? const SizedBox.shrink()
-              : Text(
-                  '${p.$1 + 1} / ${p.$2}',
-                  key: const ValueKey('story-reader-progress'),
-                  maxLines: 1,
-                  style: theme.field(size: 12, color: theme.textSecondary),
-                ),
-        ),
-        // How far in: a line along the dock's top edge.
-        progress: ValueListenableBuilder<(int, int)?>(
-          valueListenable: _progress,
-          builder: (context, p, _) => p == null || p.$2 == 0
-              ? const SizedBox.shrink()
-              : FractionallySizedBox(
-                  key: const ValueKey('story-reader-progress-bar'),
-                  alignment: Alignment.centerLeft,
-                  widthFactor: ((p.$1 + 1) / p.$2).clamp(0.0, 1.0),
-                  child: SizedBox(
-                    height: 2,
-                    child: ColoredBox(color: theme.trace),
+      // The controls float at the bottom, under the thumb, and slide away
+      // while the text is read on (back with a drag back or a tap on the
+      // text); the progress panel opens over them.
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _dockAway,
+        child: body,
+        builder: (context, away, body) => DockScaffold(
+          backgroundColor: theme.bgPrimary,
+          title: chapter.isNotEmpty ? chapter : collection,
+          onTitleTap: widget.text.isEmpty ? null : _scrubStart,
+          open: _scrub.value,
+          away: away && !_scrub.value,
+          panel: panel,
+          status: ValueListenableBuilder<(int, int)?>(
+            valueListenable: _progress,
+            builder: (context, p, _) => p == null
+                ? const SizedBox.shrink()
+                : Text(
+                    '${p.$1 + 1} / ${p.$2}',
+                    key: const ValueKey('story-reader-progress'),
+                    maxLines: 1,
+                    style: theme.field(size: 12, color: theme.textSecondary),
                   ),
-                ),
-        ),
-        actions: [
-          if (widget.text.isNotEmpty)
-            SquareIconButton(
-              key: const ValueKey('story-reader-find'),
-              tooltip: context.t.storyReaderFindHint,
-              onPressed: () => _find(theme),
-              icon: Icons.search_sharp,
-            ),
-          if (canJump)
-            SquareIconButton(
-              key: const ValueKey('story-reader-jump'),
-              tooltip: context.t.aiStoryReaderJumpBack,
-              onPressed: _jumpToTarget,
-              icon: Icons.my_location_sharp,
-            ),
-        ],
-        body: Builder(
-          builder: (context) {
-            final lines = widget.text;
-            if (lines.isEmpty) return _unavailable(theme);
-            _anchor(lines);
-            _prepare(lines);
-            _recordLater(lines);
-            _scrollToTarget();
-            final range = !_cited
-                ? null
-                : _start == _stop
-                    ? context.t.aiCitationLine(_start! - widget.shift + 1)
-                    : context.t.aiCitationLines(
-                        _start! - widget.shift + 1,
-                        _stop! - widget.shift + 1,
-                      );
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => setState(() => _scrub.value = false),
-                    child: _text(
-                      theme,
-                      collection,
-                      chapter,
-                      range,
-                      entry?.synopsis,
+          ),
+          // How far in: a line along the foot of the title's plate.
+          progress: ValueListenableBuilder<(int, int)?>(
+            valueListenable: _progress,
+            builder: (context, p, _) => p == null || p.$2 == 0
+                ? const SizedBox.shrink()
+                : FractionallySizedBox(
+                    key: const ValueKey('story-reader-progress-bar'),
+                    alignment: Alignment.centerLeft,
+                    widthFactor: ((p.$1 + 1) / p.$2).clamp(0.0, 1.0),
+                    child: SizedBox(
+                      height: 2,
+                      child: ColoredBox(color: theme.trace),
                     ),
                   ),
-                ),
-                // Keep the panel open while the reader scrolls or adjusts the
-                // slider. It grows up out of the dock under it.
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: _scrub,
-                    builder: (context, p, _) => AnimatedSwitcher(
-                      duration: Motion.of(context, Motion.row),
-                      reverseDuration: Motion.of(context, Motion.press),
-                      switchInCurve: Motion.snap,
-                      switchOutCurve: Motion.mech,
-                      transitionBuilder: (child, animation) => SizeTransition(
-                        sizeFactor: animation,
-                        alignment: Alignment.bottomCenter,
-                        child: child,
-                      ),
-                      child: !p
-                          ? const SizedBox(width: double.infinity)
-                          : ValueListenableBuilder<(int, int)?>(
-                              valueListenable: _progress,
-                              builder: (context, progress, _) => KeyedSubtree(
-                                key: _scrubPanelKey,
-                                child: _scrubPanel(
-                                  theme,
-                                  (progress?.$1 ?? 0)
-                                      .clamp(0, _lines.length - 1),
-                                ),
-                              ),
-                            ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
+          ),
+          actions: [
+            if (widget.text.isNotEmpty)
+              DockAction(
+                key: const ValueKey('story-reader-find'),
+                tooltip: context.t.storyReaderFindHint,
+                onPressed: () => _find(theme),
+                icon: Icons.search_sharp,
+              ),
+            if (canJump)
+              DockAction(
+                key: const ValueKey('story-reader-jump'),
+                tooltip: context.t.aiStoryReaderJumpBack,
+                onPressed: _jumpToTarget,
+                icon: Icons.my_location_sharp,
+              ),
+          ],
+          body: body!,
         ),
       ),
     );
   }
+
+  Widget _body(
+    AppThemeTokens theme,
+    String collection,
+    String chapter,
+    String? synopsis,
+  ) =>
+      Builder(
+        builder: (context) {
+          final lines = widget.text;
+          if (lines.isEmpty) return _unavailable(theme);
+          _anchor(lines);
+          _prepare(lines);
+          _recordLater(lines);
+          _scrollToTarget();
+          final range = !_cited
+              ? null
+              : _start == _stop
+                  ? context.t.aiCitationLine(_start! - widget.shift + 1)
+                  : context.t.aiCitationLines(
+                      _start! - widget.shift + 1,
+                      _stop! - widget.shift + 1,
+                    );
+          // A tap on the text (not on a name or a button): the panel
+          // shuts; with it shut, the controls come back or go away.
+          return GestureDetector(
+            key: const ValueKey('story-reader-blank-tap'),
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_scrub.value) {
+                setState(() => _scrub.value = false);
+              } else {
+                _dock.tapped(ref, canHide: true);
+              }
+            },
+            child: _text(theme, collection, chapter, range, synopsis),
+          );
+        },
+      );
+
+  /// The progress panel over the controls, kept open while the reader
+  /// scrolls or moves the slider; it grows up from them.
+  Widget _panel(AppThemeTokens theme) => ValueListenableBuilder<bool>(
+        valueListenable: _scrub,
+        builder: (context, p, _) => AnimatedSwitcher(
+          duration: Motion.of(context, Motion.row),
+          reverseDuration: Motion.of(context, Motion.press),
+          switchInCurve: Motion.snap,
+          switchOutCurve: Motion.mech,
+          transitionBuilder: (child, animation) => SizeTransition(
+            sizeFactor: animation,
+            alignment: Alignment.bottomCenter,
+            child: child,
+          ),
+          child: !p
+              ? const SizedBox(width: double.infinity)
+              : ValueListenableBuilder<(int, int)?>(
+                  valueListenable: _progress,
+                  builder: (context, progress, _) => KeyedSubtree(
+                    key: _scrubPanelKey,
+                    child: _scrubPanel(
+                      theme,
+                      (progress?.$1 ?? 0).clamp(0, _lines.length - 1),
+                    ),
+                  ),
+                ),
+        ),
+      );
 
   /// The text: two lazy lists that meet at the anchor item.
   Widget _text(
@@ -850,7 +866,17 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           if (n is ScrollStartNotification && n.dragDetails != null) {
             _scrubRow = null;
           }
-          if (n is ScrollUpdateNotification) _showProgressSoon();
+          if (n is ScrollUpdateNotification) {
+            _showProgressSoon();
+            // The reader's own drags move the controls; at either end of
+            // the text they are back.
+            final m = n.metrics;
+            final atEnd = m.pixels <= m.minScrollExtent + 1 ||
+                m.pixels >= m.maxScrollExtent - 1;
+            if ((n.dragDetails != null || atEnd) && !_scrub.value) {
+              _dock.moved(ref, n.scrollDelta ?? 0, atTop: atEnd);
+            }
+          }
           if (n is ScrollEndNotification) {
             _saveSoon();
             _showProgressSoon();
@@ -927,7 +953,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (i == _rows.length + 1) {
       return Padding(
         padding: EdgeInsets.only(
-          bottom: 40 + MediaQuery.paddingOf(context).bottom,
+          bottom: 24 + floatingDockRoom(context),
         ),
         child: _end(theme),
       );

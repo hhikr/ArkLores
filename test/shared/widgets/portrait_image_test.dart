@@ -16,6 +16,7 @@ import '../../support/temp_dir.dart';
 
 void main() {
   late Directory dir;
+  ui.Image? first;
   setUpAll(useSqfliteFfi);
   setUp(() => dir = Directory.systemTemp.createTempSync('portrait-image'));
   tearDown(() => deleteTempDir(dir));
@@ -43,6 +44,68 @@ void main() {
     }
     expect(image.debugDisposed, isFalse);
     expect(await image.toByteData(), isNotNull);
+  });
+
+  testWidgets('another sprite: the last picture stays until the new is made',
+      (tester) async {
+    late PortraitPack pack;
+    await tester.runAsync(() async {
+      pack = PortraitPack((await createPortraitPack(dir)).path);
+    });
+    var sprite = 'whole';
+    late StateSetter set;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          plainThemeOverride(),
+          portraitPackProvider.overrideWith((ref) async => pack),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                set = setState;
+                return SizedBox(
+                  width: 200,
+                  height: 200,
+                  child: PortraitImage(sprite: sprite),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    Future<ui.Image?> settled() async {
+      for (var i = 0; i < 30; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+        final raw = find.byType(RawImage);
+        if (raw.evaluate().isNotEmpty) {
+          final image = tester.widget<RawImage>(raw).image;
+          if (sprite == 'whole' || image != first) return image;
+        }
+      }
+      return null;
+    }
+
+    first = await settled();
+    expect(first, isNotNull);
+    set(() => sprite = 'patch');
+    await tester.pump();
+    final between = tester.widget<RawImage>(find.byType(RawImage)).image;
+    expect(between, same(first), reason: 'no empty frame between the two');
+    expect(between!.debugDisposed, isFalse);
+    final next = await settled();
+    expect(next, isNot(same(first)));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    await tester.runAsync(pack.close);
   });
 
   for (final state in [
