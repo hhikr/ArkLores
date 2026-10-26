@@ -93,6 +93,7 @@ class SettingsService {
   static const _keyAnswerOptions = 'ask_answer_options';
   static const _keyProfileSectionsOpen = 'library_profile_sections_open';
   static const _keySkipOperatorNames = 'ask_skip_operator_names';
+  static const _keySkipUnreadOpens = 'library_skip_unread_opens';
   static const _keyReadingFont = 'reading_font';
   static const _keyContextWarnTokens = 'ask_context_warn_tokens';
   static const _keyCompactPercent = 'ask_compact_percent';
@@ -202,7 +203,6 @@ class SettingsService {
     }
   }
 
-  /// Loads whether the user enabled per-session AI logs (default off).
   /// How the stories address the reader (empty: the default).
   Future<String> loadNickname() async =>
       (await _storage.read(key: _keyNickname)) ?? '';
@@ -210,8 +210,9 @@ class SettingsService {
   Future<void> saveNickname(String nickname) =>
       _storage.write(key: _keyNickname, value: nickname.trim());
 
+  /// Whether Ask conversations are saved (default on; a saved "off" stays).
   Future<bool> loadSessionLogsEnabled() async {
-    return await _storage.read(key: _keySessionLogsEnabled) == 'true';
+    return await _storage.read(key: _keySessionLogsEnabled) != 'false';
   }
 
   /// Persists the per-session AI log toggle.
@@ -226,6 +227,14 @@ class SettingsService {
 
   Future<void> saveProfileSectionsOpen(bool open) =>
       _storage.write(key: _keyProfileSectionsOpen, value: '$open');
+
+  /// Whether a story opened and left where it opened stays out of the
+  /// reading history (default on).
+  Future<bool> loadSkipUnreadOpens() async =>
+      await _storage.read(key: _keySkipUnreadOpens) != 'false';
+
+  Future<void> saveSkipUnreadOpens(bool skip) =>
+      _storage.write(key: _keySkipUnreadOpens, value: '$skip');
 
   /// Whether an answer leaves operators' names plain (default: off, every
   /// highlighted name is linked to its portrait card).

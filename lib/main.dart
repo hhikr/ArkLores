@@ -59,6 +59,7 @@ void main() async {
       contextWarnTokens,
       compactPercent,
       skipOperatorNames,
+      skipUnreadOpens,
     ),
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
@@ -68,7 +69,7 @@ void main() async {
     load('main tab index', settingsService.loadMainTabIndex, 0),
     load('theme', settingsService.loadTheme, AppTheme.system),
     load('locale', settingsService.loadLocale, SupportedLocale.zh),
-    load('session log toggle', settingsService.loadSessionLogsEnabled, false),
+    load('session log toggle', settingsService.loadSessionLogsEnabled, true),
     // A record's .wait takes at most nine futures.
     (
       load('nickname', settingsService.loadNickname, ''),
@@ -82,6 +83,8 @@ void main() async {
           defaultCompactPercent,),
       load('operator names in answers', settingsService.loadSkipOperatorNames,
           false,),
+      load('unread opens in history', settingsService.loadSkipUnreadOpens,
+          true,),
     ).wait,
   ).wait;
   // Apply the user's per-session AI log toggle before any agent runs.
@@ -103,6 +106,7 @@ void main() async {
         initialContextWarnTokensProvider.overrideWithValue(contextWarnTokens),
         initialCompactPercentProvider.overrideWithValue(compactPercent),
         initialSkipOperatorNamesProvider.overrideWithValue(skipOperatorNames),
+        initialSkipUnreadOpensProvider.overrideWithValue(skipUnreadOpens),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
         initialNicknameProvider.overrideWithValue(nickname),

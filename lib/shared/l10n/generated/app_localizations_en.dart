@@ -83,6 +83,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.';
 
   @override
+  String get settingsSkipUnreadOpens =>
+      'Don\'t record stories left at the first line';
+
+  @override
+  String get settingsSkipUnreadOpensDesc =>
+      'A story opened and left without reading on from the line it opened at is not added to Recently read, and an entry already there keeps its place and position.';
+
+  @override
   String get settingsSessionLogs => 'Save AI conversations';
 
   @override

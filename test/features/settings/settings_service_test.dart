@@ -117,12 +117,18 @@ void main() {
   });
 
   group('app state', () {
-    test('session logs default off and persist', () async {
-      expect(await service.loadSessionLogsEnabled(), isFalse);
-      await service.saveSessionLogsEnabled(true);
+    test('session logs default on and a choice persists', () async {
       expect(await service.loadSessionLogsEnabled(), isTrue);
       await service.saveSessionLogsEnabled(false);
       expect(await service.loadSessionLogsEnabled(), isFalse);
+      await service.saveSessionLogsEnabled(true);
+      expect(await service.loadSessionLogsEnabled(), isTrue);
+    });
+
+    test('a story opened and not read on is skipped by default', () async {
+      expect(await service.loadSkipUnreadOpens(), isTrue);
+      await service.saveSkipUnreadOpens(false);
+      expect(await service.loadSkipUnreadOpens(), isFalse);
     });
 
     test('nickname is trimmed; onboarding is remembered', () async {

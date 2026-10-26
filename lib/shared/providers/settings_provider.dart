@@ -40,6 +40,16 @@ final profileSectionsOpenProvider = StateProvider<bool>((ref) {
   return ref.watch(initialProfileSectionsOpenProvider);
 });
 
+/// Whether an unread open stays out of the history, loaded at startup.
+final initialSkipUnreadOpensProvider = Provider<bool>((ref) => true);
+
+/// Whether a story opened and left without the reading position moving
+/// from where it opened is kept out of the reading history (the reader
+/// records the visit only once it moves). Set in Settings, default on.
+final skipUnreadOpensProvider = StateProvider<bool>((ref) {
+  return ref.watch(initialSkipUnreadOpensProvider);
+});
+
 /// Whether answers leave operators' names plain, loaded at startup.
 final initialSkipOperatorNamesProvider = Provider<bool>((ref) => false);
 
@@ -49,7 +59,7 @@ final skipOperatorNamesProvider = StateProvider<bool>((ref) {
   return ref.watch(initialSkipOperatorNamesProvider);
 });
 
-/// Whether the user enabled per-session AI logs (default off; applied to
+/// Whether the user enabled per-session AI logs (default on; applied to
 /// [AgentLogger] at startup and on toggle in Settings).
 final sessionLogsEnabledProvider = StateProvider<bool>((ref) {
   return ref.watch(initialSessionLogsEnabledProvider);
