@@ -33,7 +33,9 @@ class PortraitPackCard extends ConsumerWidget {
         asset != null &&
         !downloading &&
         (s?.installed != true || s?.updateAvailable == true);
-    final canDelete = ready && s?.installed == true && !downloading;
+    // An installed pack can be deleted even when the knowledge base no
+    // longer has the portrait tables.
+    final canDelete = s?.installed == true && !downloading;
     final String? text;
     if (endfield) {
       text = t.portraitPackEndfield;

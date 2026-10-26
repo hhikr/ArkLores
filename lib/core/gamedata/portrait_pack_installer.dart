@@ -54,8 +54,22 @@ class PortraitPackInstaller {
     return p.join(dir.path, fileName);
   }
 
+  /// An install stopped between moving the old pack aside and moving the new
+  /// one in leaves only `.previous`: put it back. With the pack in place it
+  /// is a leftover, and rename cannot replace it on every platform.
+  Future<void> _recover(File file) async {
+    final backup = File('${file.path}.previous');
+    if (!await backup.exists()) return;
+    if (await file.exists()) {
+      await backup.delete();
+    } else {
+      await backup.rename(file.path);
+    }
+  }
+
   Future<PortraitPackStatus> status({PortraitPackAsset? asset}) async {
     final file = File(await path);
+    await _recover(file);
     final pack = PortraitPack(file.path);
     try {
       if (!await pack.installed) return PortraitPackStatus(asset: asset);
@@ -90,6 +104,7 @@ class PortraitPackInstaller {
     final part = File('${file.path}.download');
     final key = File('${part.path}.key');
     await file.parent.create(recursive: true);
+    await _recover(file);
     void checkCancelled() {
       if (cancelToken?.cancelled ?? false) {
         throw const GameDataDownloadCancelled();

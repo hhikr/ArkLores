@@ -192,6 +192,12 @@ class PortraitPackAsset {
     );
   }
 
+  /// The pack format this app reads (A.4).
+  static const supportedPackVersion = 1;
+
+  /// A pack in a format this app does not read is never offered, whatever
+  /// its `min_app_build` says (it would fail the check after the download).
   bool usableBy(int? appBuild) =>
-      minAppBuild == null || appBuild == null || appBuild >= minAppBuild!;
+      packVersion == supportedPackVersion &&
+      (minAppBuild == null || appBuild == null || appBuild >= minAppBuild!);
 }

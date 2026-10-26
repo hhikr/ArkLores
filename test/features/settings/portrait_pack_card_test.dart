@@ -103,6 +103,17 @@ void main() {
     expect(find.textContaining('装的知识库还没有立绘数据'), findsOneWidget);
     expect(find.byType(AppButton), findsNothing);
   });
+  testWidgets('a pack installed under an old knowledge base can be deleted',
+      (tester) async {
+    await pump(
+      tester,
+      index: false,
+      status: const PortraitPackStatus(asset: _asset, installed: true),
+    );
+    expect(find.textContaining('装的知识库还没有立绘数据'), findsOneWidget);
+    expect(find.text('删除'), findsOneWidget);
+    expect(find.text('下载立绘包'), findsNothing);
+  });
   testWidgets('unreleased has no download action', (tester) async {
     await pump(tester, status: const PortraitPackStatus());
     expect(find.text('立绘包还没有发布。'), findsOneWidget);

@@ -68,6 +68,26 @@ void main() {
     expect(await pack.installed, isFalse);
     expect((await installer.status()).installed, isFalse);
   });
+  test('a pack left aside by a stopped install is put back; a leftover '
+      'beside an installed pack is removed', () async {
+    await seed();
+    final previous = File('${pack.path}.previous');
+    await pack.close();
+    await File(pack.path).rename(previous.path);
+    expect((await installer.status()).installed, isTrue);
+    expect(previous.existsSync(), isFalse);
+
+    await File(pack.path).copy(previous.path);
+    final bytes = await (await createPortraitPack(dir)).readAsBytes();
+    await installer.install(
+      asset(bytes),
+      pack: pack,
+      client: MockClient((_) async => http.Response.bytes(bytes, 200)),
+    );
+    expect((await pack.manifest())['kb_commit'], 'fixture');
+    expect(previous.existsSync(), isFalse);
+  });
+
   test('wrong SHA preserves installed pack', () async {
     await seed();
     final before = await File(pack.path).readAsBytes();

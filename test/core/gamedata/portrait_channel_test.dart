@@ -17,25 +17,34 @@ void main() {
           isNull,);
     }
   });
-  test('portrait fields parse; build compatibility ignores pack version', () {
-    final asset = GameDataChannel.parse(jsonEncode({
-      'arknights_portraits': {
-        'url': 'https://example.test/pack',
-        'sha256': 'hash',
-        'size': 280000000,
-        'kb_commit': 'commit',
-        'pack_version': 9,
-        'min_app_build': 43,
-      },
-    }),)!
-        .portraits!;
+  PortraitPackAsset parse(int version) => GameDataChannel.parse(jsonEncode({
+        'arknights_portraits': {
+          'url': 'https://example.test/pack',
+          'sha256': 'hash',
+          'size': 280000000,
+          'kb_commit': 'commit',
+          'pack_version': version,
+          'min_app_build': 43,
+        },
+      }),)!
+          .portraits!;
+
+  test('portrait fields parse; the build must reach min_app_build', () {
+    final asset = parse(1);
     expect(asset.url, 'https://example.test/pack');
     expect(asset.sha256, 'hash');
     expect(asset.size, 280000000);
     expect(asset.kbCommit, 'commit');
-    expect(asset.packVersion, 9);
+    expect(asset.packVersion, 1);
     expect(asset.usableBy(42), isFalse);
     expect(asset.usableBy(43), isTrue);
     expect(asset.usableBy(null), isTrue);
+  });
+
+  test('a pack format this app does not read is never offered', () {
+    final asset = parse(2);
+    expect(asset.packVersion, 2);
+    expect(asset.usableBy(99), isFalse);
+    expect(asset.usableBy(null), isFalse);
   });
 }
