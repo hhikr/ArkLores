@@ -53,6 +53,11 @@ void main() {
     expect(node.textContent, name);
     expect(Uri.decodeComponent(node.attributes['href']!.split(':').last), name);
   });
+  test('a Latin name matches only as a whole word', () {
+    final matcher = SpeakerMatcher(['Ace', 'W2']);
+    expect(matcher.linkNames('Space W22'), 'Space W22');
+    expect(matcher.linkNames('Ace与W2'), '${link('Ace')}与${link('W2')}');
+  });
   test('empty inputs preserve original text', () {
     expect(SpeakerMatcher([]).linkNames('原文'), '原文');
     expect(SpeakerMatcher(['名字']).linkNames(''), '');

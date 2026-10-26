@@ -59,7 +59,9 @@ class SpeakerMatcher {
         if (next == null) break;
         node = next;
         j++;
-        if (node.name != null) match = node.name;
+        if (node.name != null && !_insideWord(markdown, i, j)) {
+          match = node.name;
+        }
       }
       if (match == null) {
         out.write(c);
@@ -79,6 +81,18 @@ class SpeakerMatcher {
     }
     return out.toString();
   }
+
+  static final _latin = RegExp('[A-Za-z0-9]');
+
+  /// A Latin name is a match only as a whole word ("Ace" in "Space" is
+  /// not); a Chinese name has no word boundaries to check.
+  static bool _insideWord(String text, int start, int end) =>
+      (_latin.hasMatch(text[start]) &&
+          start > 0 &&
+          _latin.hasMatch(text[start - 1])) ||
+      (_latin.hasMatch(text[end - 1]) &&
+          end < text.length &&
+          _latin.hasMatch(text[end]));
 
   int _linkEnd(String text, int start) {
     var depth = 1;

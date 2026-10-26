@@ -165,6 +165,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   final GlobalKey _headerKey = GlobalKey();
   final Map<int, GlobalKey> _lineKeys = {};
   final Map<int, GlobalKey> _speakerKeys = {};
+
+  /// Whether a speaker's name opens the portrait card (an Arknights story
+  /// and a knowledge base with the portrait tables).
+  bool _speakersTappable = false;
   bool _scrolled = false;
   bool _recorded = false;
   bool _anchored = false;
@@ -682,6 +686,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    // Watched here, not in the list's item builder (which runs at layout).
+    _speakersTappable = gameOfId(widget.storyId) == Game.arknights &&
+        ref.watch(hasPortraitIndexProvider).valueOrNull == true;
     final entry =
         ref.watch(storyCatalogEntryProvider(widget.storyId)).valueOrNull;
     final fallback = fallbackStoryLabel(widget.storyId);
@@ -1427,9 +1434,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   Widget _speakerName(AppThemeTokens theme, StoryLineEntry line, String name) {
     final style = theme.ui(14, weight: 700, color: theme.textSecondary);
-    final enabled = gameOfId(widget.storyId) == Game.arknights &&
-        ref.watch(hasPortraitIndexProvider).valueOrNull == true;
-    if (!enabled) return Text(name, style: style);
+    if (!_speakersTappable) return Text(name, style: style);
     return PortraitSpeakerName(
       key: _speakerKeys.putIfAbsent(line.lineIndex, GlobalKey.new),
       name: name,

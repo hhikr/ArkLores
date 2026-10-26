@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/agent/agent_provider.dart' show gameStoreProvider;
 import '../../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../../core/gamedata/build/text_harvest.dart' show cleanRichText;
-import '../../../core/gamedata/game.dart' show gameOfId;
+import '../../../core/gamedata/game.dart' show Game, gameOfId;
 import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../../core/library/library_queries.dart' show entryIdOfRecord;
 import '../../../core/library/placeholders.dart';
@@ -148,16 +148,27 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
   List<String>? _names;
   SpeakerMatcher? _matcher;
 
+  /// Each paragraph with its names linked, by the paragraph's text (a
+  /// rebuild, such as opening the details, does not scan it again).
+  final _linked = <String, String>{};
+
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final names =
-        widget.streaming ? null : ref.watch(highlightNamesProvider).valueOrNull;
+    final content = widget.content;
+    // The names are those of Arknights stories: an answer from Endfield
+    // stories alone has none to show (DESIGN A.6).
+    final stories = extractCitedStoryIds(content);
+    final endfield = stories.isNotEmpty &&
+        stories.every((id) => gameOfId(id) == Game.endfield);
+    final names = widget.streaming || endfield
+        ? null
+        : ref.watch(highlightNamesProvider).valueOrNull;
     if (!identical(names, _names)) {
       _names = names;
       _matcher = names == null || names.isEmpty ? null : SpeakerMatcher(names);
+      _linked.clear();
     }
-    final content = widget.content;
     final cut = content.indexOf(loreDetailsMarker);
     // Records are numbered in order of first citation in the whole answer,
     // as in the summary tree below it.
@@ -241,13 +252,18 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
                   if (block.markdown.trim().isNotEmpty)
                     MarkdownBody(
                       data: !widget.streaming && _matcher != null
-                          ? _matcher!.linkNames(block.markdown)
+                          ? _linked.putIfAbsent(block.markdown,
+                              () => _matcher!.linkNames(block.markdown),)
                           : block.markdown,
                       styleSheet: widget.styleSheet.copyWith(
+                        // A quiet underline, as on the reader's speaker
+                        // names: the names must not outweigh the answer.
                         a: (widget.styleSheet.p ?? theme.text(16)).copyWith(
-                          backgroundColor: theme.accentPrimary,
-                          color: theme.onAccent,
-                          decoration: TextDecoration.none,
+                          // Without a colour the link takes the theme's.
+                          color: widget.styleSheet.p?.color ?? theme.textPrimary,
+                          decoration: TextDecoration.underline,
+                          decorationColor: theme.textMuted,
+                          decorationThickness: 1,
                         ),
                       ),
                       onTapLink: (_, href, __) {

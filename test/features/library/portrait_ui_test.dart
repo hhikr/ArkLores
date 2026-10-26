@@ -354,8 +354,10 @@ void main() {
       if (!streaming) {
         final context = tester.element(find.byType(StoryAnswerBody));
         final theme = ProviderScope.containerOf(context).read(themeProvider);
-        expect(markdown.styleSheet!.a!.backgroundColor, theme.accentPrimary);
-        expect(markdown.styleSheet!.a!.color, theme.onAccent);
+        // An underline in the body's colour, not an accent fill.
+        expect(markdown.styleSheet!.a!.backgroundColor, isNull);
+        expect(markdown.styleSheet!.a!.decoration, TextDecoration.underline);
+        expect(markdown.styleSheet!.a!.decorationColor, theme.textMuted);
         final rich = find
             .descendant(
               of: find.byType(MarkdownBody),
@@ -368,6 +370,22 @@ void main() {
       }
     });
   }
+
+  testWidgets('an answer from Endfield stories alone links no names',
+      (tester) async {
+    await pump(
+      tester,
+      Scaffold(
+        body: StoryAnswerBody(
+          content: '$_speaker 的回答。`ef/mission_a.txt:3`',
+          styleSheet: MarkdownStyleSheet(p: const TextStyle(fontSize: 16)),
+          streaming: false,
+        ),
+      ),
+    );
+    final markdown = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
+    expect(markdown.data.contains('arklores-speaker:'), isFalse);
+  });
 
   testWidgets('speaker target extends to 48 px without moving dialogue',
       (tester) async {
