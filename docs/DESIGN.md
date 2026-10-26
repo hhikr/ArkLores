@@ -24,11 +24,11 @@
 | `shared/theme/endfield_theme_tokens.dart` / `ark_theme_tokens.dart` | 浅色 / 深色两套完整取值（深色不是反色） |
 | `shared/theme/cut_border.dart` | `CutBorder`：切角形状（可点的东西才用） |
 | `shared/theme/motion.dart` | `Motion`：三条曲线（`snap` 出现、`mech` 擦入与所有退出、`ease`）、各档时长、`Motion.of()`（减少动效时为 0） |
-| `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
+| `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`AppSlider` 共用滑块、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
 | `shared/widgets/page_frame.dart` | `PageScaffold`（推入页的顶栏）、`MainTopBar` + `TopTab` + `TopBarTitle`（四个主标签页的顶栏）、`AppTabBar`（底部标签栏）、`DockPanel`（盖在内容上的控件板）、`pagePadding` |
 | `shared/widgets/theme_aware_card.dart` | 面板：可点时右下切角、按下时底边擦入强调色 |
 | `shared/widgets/smooth_page_route.dart` | 换页：**只有资料页**（`smoothPageRoute(frosted: true)`：资料页里打开的集合、条目、阅读器、阅读历史）用毛玻璃，其他页面（设置、知识库、问答里打开的出处等）整页从右推入（同样 280 ms、`snap`，前缘一条 2px `trace` 线，下面的页变暗），立即构建（开发者 2026-10-25）。毛玻璃：玻璃（模糊加一层纸色，前缘一条 2px `trace` 线）从右推入（`Motion.coverIn` 280 ms，`snap`，一点就动），下面的页面只变暗、不左移（左移会在玻璃后面留出一条空白）；**玻璃盖满屏幕之后才在它后面构建新页面**（第一帧排版再久，屏幕上也只是静止的模糊画面），画完第一帧玻璃就地变清（把这一帧拍成快照、一次算出 sigma 8 / 5 / 3 / 1.5 四张模糊图，依次交叉淡入，最后一张淡出露出页面，纸色一起退去；不要每帧重算整屏模糊——手机上每帧 9–15 ms、120Hz 下一抽一抽；也不要只拿一张模糊图淡出——淡到一半字就清楚了，不像对焦；`Motion.reveal` 900 ms，`ease`，按帧推进、一帧最多推进 25 ms，慢帧只让它慢一点、不跳一截），页面对焦出来。返回是整页向右滑出（240 ms，`mech`），下面的页早已建好、不用盖板。整页画进自己的层（`RepaintBoundary`）只做平移 |
-| `shared/widgets/press_feedback.dart` | `PressHold`：可点部件的按下状态——手指落下即按下（不等点按识别的 100 ms），抬起后至少停留 `Motion.press`，拖动超过 `kTouchSlop` 立即松开；`PressBuilder` 是给没有自己状态的部件（标签、小标签、闭包里的行）用的同一件事；`pressTint` 是块、标签、行统一的按下颜色（底色上盖一层 10% 的墨） |
+| `shared/widgets/press_feedback.dart` | `PressHold`：可点部件的按下状态——手指落下等待 `kPressTimeout`（100 ms），期间移动超过 `kTouchSlop` 不显示反馈；快速点按在抬起时显示，反馈至少保持 `Motion.press`，已显示后拖动超过阈值立即松开；`PressBuilder` 是给没有自己状态的部件（标签、小标签、闭包里的行）用的同一件事；`pressTint` 是块、标签、行统一的按下颜色（底色上盖一层 10% 的墨） |
 | `main.dart` `buildAppTheme` | Material 自带部件的主题（按钮、输入框、对话框、菜单、开关……都改成这套样式） |
 
 字体：界面字是 **Saira**（`assets/fonts/Saira.ttf`，SIL OFL，许可证同目录），可变字体，字重和宽度一律通过 `sairaStyle` 设轴；中文落到内置的**思源黑体**（`NotoSansSC`，可变字重，每台手机一样），缺字才用系统字体。
@@ -55,7 +55,8 @@
 - **可以点的人名**（0.20，开发者 2026-10-26）：答案里字保持正文色，用 2 px `accentPrimary` 下划线。阅读器里不用下划线，能点的名字用 `heading(14)`（Saira，700）；深色用 `accentText`，浅色用 `textPrimary`，字高下方约 40% 垫 `accentPrimary` 填充。不能点的名字仍用 `ui(14, weight: 700, color: textSecondary)`。名字行高保持 20 px，热区扩到 48×48，不改正文排版。
 - **名字旁的立绘预览**：先在名字下方显示小图、名字、句数与“更多”，下方放不下时放上方，左右留 16 px。“更多”打开大卡片；点外面、滚动、返回时关闭，同时只有一张。预览不取焦点，出现与退出用 `Motion` 淡入淡出，减少动效时立即切换。
 - **立绘**（0.20）：立绘区是展示内容，直角、不可点、面板色底，图片 contain、底对齐；没有图时斜线纹加一句话。见 `PORTRAITS.md` §4。
-- **阅读器的拖动进度**（0.19.1）：长按标题，标题下展开一条拖动条（行号、百分比、所在步骤、那一行），按住左右拖、文字跟着跳到那一段，松手收起（`PageScaffold` 的 `onTitleHold*`）。
+- **阅读器的进度面板**（0.20）：点标题展开行号、百分比、所在步骤、当前行与 `AppSlider`；再点标题、点正文或按返回键收起。拖滑块或点轨道按行跳转，每帧最多处理一次定位，松手保存进度并保留面板。滚动正文时面板保留，滑块跟随当前行。标题旁的定位按钮仍用于回到引用行。
+- **滑块**（`AppSlider`）：48 px 高触控区、28 px 粗轨道、轨道内的方形滑块与右下切角。已填部分用 `accentPrimary`，未填部分用 `divider`，滑块用 `onAccent` 配对比边框。拖动直接跟手；点轨道与外部改值使用 `Motion.row` / `Motion.snap`，减少动效时立即到位。可选等距分档，换档用轻触感；拖动时回调 `onChanged`，松手或点轨道后回调 `onChangeEnd`。支持键盘方向键与读屏加减，当前值用 `field()` 显示在滑块上方或右侧，标题只写设置名称。上下文提醒值与压缩位置在松手时保存。
 - **空状态**用 `EmptyState`：一句完整的话说明这里将来会有什么，有下一步就给按钮。
 - **提示与出错**用 `NoticeBox` / `kbFlag`（强调色小旗），贴在出问题的地方；输入框的错误写在框下（`errorText`），不弹底部提示。
 - **底部弹出**用 `showAppSheet`（机械推入、不回弹），**对话框**用 `showAppDialog` + `AppDialog`。
@@ -67,7 +68,7 @@
 - **字号**：正文 16（长文 15.5–16.5），界面字不小于 12；守卫测试拒绝 `fontSize` 小于 12。
 - **对比度**：次要文字 `textSecondary`、最淡的 `textMuted` 在纸面上都 ≥ 4.5:1；输入框与控件的边框 `cardBorder` ≥ 3:1。
 - **读屏**：选中的标签、开关、折叠头带 `selected` / `toggled` / `expanded`；状态行用 `liveRegion`。
-- **按压反馈**：自己画按下样子的部件用 `PressHold`（`pressListener` + `pressed`），不要用 `onTapDown`/`onTapUp` 设按下状态——在可滚动的列表里，`onTapDown` 要等 100 ms，快速点一下时按下与抬起落在同一帧，什么都看不到。**每个能点的东西都要有按下的样子**：没有自己擦入效果的块、标签、行用 `PressBuilder` + `pressTint`，列表行用 `PressRow`，不用 `InkWell`（全局关了水波纹，高亮几乎看不见）。
+- **按压反馈**：自己画按下样子的部件用 `PressHold`（`pressListener` + `pressed`）。手指落下先等待 `kPressTimeout`（100 ms），超过 `kTouchSlop` 的滚动不显示反馈；快速点按抬起时显示，保持至少 `Motion.press`，持续按住时显示后再拖动则立即松开。每个可点部件都要有反馈：块、标签用 `PressBuilder` + `pressTint`，列表行用 `PressRow`。展开的工具结果只在标题行显示按压反馈，结果区独立滚动、选字。不要自行用 `Listener` 或 `onTapDown` 设置按压状态，不用 `InkWell`。
 - **流式内容只重建变了的部分**：问答列表每条消息各自 `select` 自己（`_MessageAt`），页面只看消息条数和是否在写；不要在页面上 `ref.watch(askChatProvider)` 整个列表。
 - **出现的东西一点就动**：换页、面板推入这类回应点按的进场用 `snap`（快起步、慢停）；`mech`（慢起步）只给退出和擦入，进场用它前 100 ms 几乎不动，像没点上。折叠展开同理：打开用 `snap`、收起用 `mech`。
 - **重的画面只画一次**：`IndustrialBackdrop` 的等高线是自己的一层；动画里只改位置、透明度的包装不要随动画值增删（`if` 只能加在 `Stack` 末尾的装饰上），否则整页在首尾帧被重新挂接。整页平移（换页、`SwitchedPages`）和 `AnimatedSize` 展开的内容包一层 `RepaintBoundary`。

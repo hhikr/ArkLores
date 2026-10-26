@@ -370,19 +370,11 @@ class PageScaffold extends ConsumerWidget {
     this.floatingActionButton,
     this.backgroundColor,
     this.titleFooter,
-    this.onTitleHoldStart,
-    this.onTitleHoldMove,
-    this.onTitleHoldEnd,
+    this.onTitleTap,
   });
 
   final String title;
-
-  /// The title held down and dragged (the reader's scrubbing): the hold
-  /// starts, the finger moves (its offset from where the hold started), the
-  /// finger lifts.
-  final GestureLongPressStartCallback? onTitleHoldStart;
-  final GestureLongPressMoveUpdateCallback? onTitleHoldMove;
-  final VoidCallback? onTitleHoldEnd;
+  final VoidCallback? onTitleTap;
 
   /// The English label over the title, or null.
   final String? code;
@@ -451,32 +443,41 @@ class PageScaffold extends ConsumerWidget {
                             ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: GestureDetector(
-                              key: const ValueKey('page-title'),
-                              behavior: HitTestBehavior.opaque,
-                              onLongPressStart: onTitleHoldStart,
-                              onLongPressMoveUpdate: onTitleHoldMove,
-                              onLongPressEnd: onTitleHoldEnd == null
-                                  ? null
-                                  : (_) => onTitleHoldEnd!(),
-                              onLongPressCancel: onTitleHoldEnd,
-                              child: Semantics(
-                                header: true,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (code != null)
-                                      ExcludeSemantics(child: Eyebrow(code!)),
-                                    if (title.isNotEmpty)
-                                      Text(
-                                        title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme
-                                            .heading(code == null ? 18 : 16),
-                                      ),
-                                  ],
+                            child: PressBuilder(
+                              enabled: onTitleTap != null,
+                              builder: (context, down) => ColoredBox(
+                                color: down
+                                    ? pressTint(ground, theme.textPrimary)
+                                    : ground,
+                                child: GestureDetector(
+                                  key: const ValueKey('page-title'),
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: onTitleTap,
+                                  child: Semantics(
+                                    header: true,
+                                    button: onTitleTap != null,
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        if (code != null)
+                                          ExcludeSemantics(
+                                            child: Eyebrow(code!),
+                                          ),
+                                        if (title.isNotEmpty)
+                                          Text(
+                                            title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.heading(
+                                              code == null ? 18 : 16,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),

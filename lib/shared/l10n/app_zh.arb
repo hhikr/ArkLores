@@ -492,7 +492,6 @@
   "librarySearchFurther": "搜索「{query}」（含相近名字与正文）",
   "@librarySearchFurther": {"placeholders": {"query": {"type": "String"}}},
   "storyReaderFindHint": "在本篇中查找",
-  "storyReaderScrubHint": "按住左右拖动，松手停在这里",
   "gameArknights": "明日方舟",
   "gameEndfield": "终末地",
   "launchTagline": "剧情阅读与问答",

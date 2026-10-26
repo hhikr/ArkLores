@@ -1,24 +1,18 @@
 import 'dart:async';
 
-import 'package:flutter/gestures.dart' show kTouchSlop;
+import 'package:flutter/gestures.dart' show kTouchSlop, kPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/motion.dart';
 
-/// The pressed state of a tappable part, shown as soon as the finger lands
-/// and kept for at least [Motion.press] after it lifts, so a quick tap is
-/// seen too. A tap's own `onTapDown` comes 100 ms late inside a scrollable
-/// (it waits to see whether the touch is a drag), and a tap shorter than
-/// that brought down and up in one frame: nothing moved. A drag (a scroll
-/// starting on it) lets go at once.
-///
-/// Wrap the part in [pressListener]; read [pressed] in `build`.
+/// Defers feedback until a stationary touch survives [kPressTimeout].
+/// Quick taps still show feedback; scrolling never flashes a pressed row.
 mixin PressHold<T extends StatefulWidget> on State<T> {
   bool _pressed = false;
   int? _pointer;
   Offset? _origin;
-  final Stopwatch _held = Stopwatch();
+  Timer? _pending;
   Timer? _release;
 
   /// Whether the part is drawn pressed.
@@ -33,10 +27,17 @@ mixin PressHold<T extends StatefulWidget> on State<T> {
     _pointer = e.pointer;
     _origin = e.position;
     _release?.cancel();
-    _held
-      ..reset()
-      ..start();
+    _pending?.cancel();
+    _show(false);
+    _pending = Timer(kPressTimeout, _beginFeedback);
+  }
+
+  void _beginFeedback() {
     _show(true);
+    _release?.cancel();
+    _release = Timer(Motion.of(context, Motion.press), () {
+      if (_pointer == null) _show(false);
+    });
   }
 
   void _move(PointerMoveEvent e) {
@@ -53,12 +54,14 @@ mixin PressHold<T extends StatefulWidget> on State<T> {
   void _letGo({required bool now}) {
     _pointer = null;
     _origin = null;
-    _release?.cancel();
-    final left = Motion.press - _held.elapsed;
-    if (now || left <= Duration.zero) {
+    _pending?.cancel();
+    if (now) {
+      _release?.cancel();
       _show(false);
-    } else {
-      _release = Timer(left, () => _show(false));
+    } else if (!_pressed) {
+      _beginFeedback();
+    } else if (!(_release?.isActive ?? false)) {
+      _show(false);
     }
   }
 
@@ -69,6 +72,7 @@ mixin PressHold<T extends StatefulWidget> on State<T> {
       _pointer = null;
       _origin = null;
       _release?.cancel();
+      _pending?.cancel();
       _pressed = false;
     }
     // The same shape either way: the child keeps its state when [enabled]
@@ -86,6 +90,7 @@ mixin PressHold<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     _release?.cancel();
+    _pending?.cancel();
     super.dispose();
   }
 }
@@ -126,65 +131,3 @@ VoidCallback? withHaptic(VoidCallback? onTap) => onTap == null
         HapticFeedback.selectionClick();
         onTap();
       };
-
-/// Makes a tappable surface answer the finger: it sinks a pixel and
-/// shrinks very slightly (never below [pressedScale], at most 1.5 %) as soon
-/// as it is touched, and settles back on release, so a tap is felt even when
-/// it opens another page at once. Mechanical, not springy. A drag (a scroll
-/// starting on it) lets it go. Pointer-only: the child keeps its own tap
-/// handling. Still when the system asks for reduced motion.
-class PressFeedback extends StatefulWidget {
-  const PressFeedback({
-    super.key,
-    required this.child,
-    this.enabled = true,
-    this.pressedScale = 0.985,
-  });
-
-  final Widget child;
-  final bool enabled;
-  final double pressedScale;
-
-  @override
-  State<PressFeedback> createState() => _PressFeedbackState();
-}
-
-class _PressFeedbackState extends State<PressFeedback> {
-  static const double _slop = 12;
-  bool _pressed = false;
-  Offset? _down;
-
-  void _set(bool value) {
-    if (mounted && _pressed != value) setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.enabled || Motion.reduced(context)) return widget.child;
-    final scale = widget.pressedScale < 0.985 ? 0.985 : widget.pressedScale;
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (e) {
-        _down = e.position;
-        _set(true);
-      },
-      onPointerMove: (e) {
-        final down = _down;
-        if (down != null && (e.position - down).distance > _slop) _set(false);
-      },
-      onPointerUp: (_) => _set(false),
-      onPointerCancel: (_) => _set(false),
-      child: AnimatedContainer(
-        duration: _pressed ? Motion.press : Motion.row,
-        curve: Motion.mech,
-        transform: Matrix4.translationValues(0, _pressed ? 1 : 0, 0),
-        child: AnimatedScale(
-          scale: _pressed ? scale : 1,
-          duration: _pressed ? Motion.press : Motion.row,
-          curve: Motion.mech,
-          child: widget.child,
-        ),
-      ),
-    );
-  }
-}

@@ -113,7 +113,7 @@ docs/                  文档（索引见 CLAUDE.md）
 | --- | --- |
 | `main` 主线（每章一个集合）、`sidestory` / `ministory` / `branchline`、`activity`、`memory`（干员：档案、密录、模组、皮肤、信物、召唤物）、`roguelike` 集成战略、`sandbox` 生息演算；图鉴（敌人、物品、奖章…） | `ef/main` 主线任务（按章、进程分组）、`ef/discovery` / `ef/side` / `ef/activity` / `ef/other`（任务面板的分类，按地区分组）、`ef/world` 其他（地点交互、敌人通讯）、`ef/unused` 未实装任务、`ef/archive` 情报档案库、`ef/memory` 干员（档案、语音、角色纪事、Baker 话题、帝江号互动）、`ef/codex` 百科 |
 
-- 阅读器（`features/ai/story_reader_page.dart`）：惰性列表从锚点双向建（任意长的故事打开不卡），记住位置与读过的次数，标题板下有进度条；从问答出处打开时高亮所引的行。
+- 阅读器（`features/ai/story_reader_page.dart`）：惰性列表从锚点双向建（任意长的故事打开不卡），记住位置与读过的次数，标题板下有进度条；点标题展开共用 `AppSlider`，拖动或点轨道按行跳转，松手保存并保留面板，滚动正文同步当前行。再点标题、点正文或按返回键收起；从问答出处打开时高亮所引的行。
   明日方舟的说话人名字可以点开立绘卡片（这一句的确切差分，0.20，`PORTRAITS.md` §4）。
   终末地的篇里有种类分段线、折叠的段首梗概、步骤标题，“未定位的对话”默认收起（点标题展开）。
 - 排版：长文用阅读字体（`reading_text.dart`，设置里选：默认黑体，即内置的思源黑体子集，可选霞鹜文楷）；档案按段可折叠（`ProfileText` / `ProfileSliver`，按需构建，默认展开还是收起按设置）；语音用 `VoiceLines`；剧情开头的官方梗概默认折叠（`FoldSection`）。

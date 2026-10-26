@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
-import '../../core/agent/turn_stats.dart';
 import '../../shared/app_version.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
@@ -163,10 +162,9 @@ class AiSettingsPage extends ConsumerWidget {
           description: context.t.settingsApiSettingsDesc,
           onTap: () => Navigator.pushNamed(context, '/api-settings'),
         ),
-        _ChoiceRow<int>(
+        _SliderRow(
           key: const ValueKey('settings-context-warning'),
-          title:
-              '${context.t.settingsContextWarnTokens} / ${formatTokenCount(ref.watch(contextWarnTokensProvider))}',
+          title: context.t.settingsContextWarnTokens,
           description: context.t.settingsContextWarnTokensDesc,
           value: ref.watch(contextWarnTokensProvider),
           options: const [
@@ -181,10 +179,9 @@ class AiSettingsPage extends ConsumerWidget {
           onChanged: (value) =>
               ref.read(contextWarnTokensProvider.notifier).set(value),
         ),
-        _ChoiceRow<int>(
+        _SliderRow(
           key: const ValueKey('settings-compact-percent'),
-          title:
-              '${context.t.settingsCompactPercent} / ${ref.watch(compactPercentProvider)}%',
+          title: context.t.settingsCompactPercent,
           description: context.t.settingsCompactPercentDesc,
           value: ref.watch(compactPercentProvider),
           options: const [
@@ -354,6 +351,71 @@ class _ChoiceRow<T> extends ConsumerWidget {
             value: value,
             onChanged: onChanged,
             labelStyle: labelStyle,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A local draft keeps dragging responsive; persistence happens on release.
+class _SliderRow extends ConsumerStatefulWidget {
+  const _SliderRow({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+  final String title;
+  final String description;
+  final int value;
+  final List<(int, String)> options;
+  final ValueChanged<int> onChanged;
+  @override
+  ConsumerState<_SliderRow> createState() => _SliderRowState();
+}
+
+class _SliderRowState extends ConsumerState<_SliderRow> {
+  double? _draft;
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    final index = _draft ??
+        widget.options
+            .indexWhere((v) => v.$1 == widget.value)
+            .clamp(0, widget.options.length - 1)
+            .toDouble();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration:
+          BoxDecoration(border: Border(top: BorderSide(color: theme.divider))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: theme.ui(16, weight: 600)),
+          const SizedBox(height: 2),
+          Text(
+            widget.description,
+            style: theme.text(13, color: theme.textSecondary, height: 1.45),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(widget.options[index.round()].$2, style: theme.field()),
+          ),
+          AppSlider(
+            value: index,
+            max: (widget.options.length - 1).toDouble(),
+            divisions: widget.options.length - 1,
+            semanticLabel: widget.title,
+            semanticValue: widget.options[index.round()].$2,
+            onChanged: (value) => setState(() => _draft = value),
+            onChangeEnd: (value) {
+              widget.onChanged(widget.options[value.round()].$1);
+              setState(() => _draft = null);
+            },
           ),
         ],
       ),

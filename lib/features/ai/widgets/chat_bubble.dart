@@ -1019,8 +1019,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   /// call's number, the tool, what it was asked (its arguments as written)
   /// and what came back (how much, and what went wrong); tap for the whole
   /// arguments and output.
-  Widget _buildWorkRow(AppThemeTokens theme, WorkStep step, int index,
-      {required bool last,}) {
+  Widget _buildWorkRow(
+    AppThemeTokens theme,
+    WorkStep step,
+    int index, {
+    required bool last,
+  }) {
     final open = _openSteps.contains(index);
     final small = theme.text(12.5, height: 1.45);
     final mono = small.copyWith(fontFamily: 'monospace', height: 1.4);
@@ -1032,31 +1036,37 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         theme,
         last: last,
         dot: null,
-        child: PressRow(
-          key: ValueKey('work-compaction-$index'),
-          onTap: toggle,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t.aiWorkCompaction(
-                    formatTokenCount(step.args['from'] as int),
-                    formatTokenCount(step.args['to'] as int),
-                    step.args['retained'] as int,
-                  ),
-                  style: small,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            PressRow(
+              key: ValueKey('work-compaction-$index'),
+              onTap: toggle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t.aiWorkCompaction(
+                        formatTokenCount(step.args['from'] as int),
+                        formatTokenCount(step.args['to'] as int),
+                        step.args['retained'] as int,
+                      ),
+                      style: small,
+                    ),
+                  ],
                 ),
-                if (open)
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: workRawHeight),
-                    child: SingleChildScrollView(
-                        child: SelectableText(step.text, style: small),),
-                  ),
-              ],
+              ),
             ),
-          ),
+            if (open)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: workRawHeight),
+                child: SingleChildScrollView(
+                  child: SelectableText(step.text, style: small),
+                ),
+              ),
+          ],
         ),
       );
     }
@@ -1104,7 +1114,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final result = _workResult(step);
     final args = step.argsJson;
     final flags = <(String, Color)>[
-      if (step.subtask != null) (t.aiWorkHelper(step.subtask!), theme.textMuted),
+      if (step.subtask != null)
+        (t.aiWorkHelper(step.subtask!), theme.textMuted),
       if (step.planned) (t.aiWorkPlanned, theme.textMuted),
       if (step.inContext) (t.aiWorkInContext, theme.textMuted),
       if (step.notRun)
@@ -1120,103 +1131,108 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       theme,
       last: last,
       dot: Icon(_workIcon(step.kind), size: 14, color: theme.textPrimary),
-      child: PressRow(
-        key: ValueKey('work-step-$index'),
-        onTap: canOpen ? toggle : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PressRow(
+            key: ValueKey('work-step-$index'),
+            onTap: canOpen ? toggle : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 2,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (!step.inContext)
-                          Text(
-                            '${step.number}',
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 2,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (!step.inContext)
+                              Text(
+                                '${step.number}',
+                                style: small.copyWith(color: theme.textMuted),
+                              ),
+                            Text(
+                              step.tool ?? '',
+                              style: mono.copyWith(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.bold,
+                                color: theme.textPrimary,
+                              ),
+                            ),
+                            for (final (label, color) in flags)
+                              _workFlag(theme, label, color),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      if (!step.done)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: const BusyMark(width: 28, cells: 4),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Text(
+                            [
+                              if (result.isNotEmpty) result,
+                              t.aiWorkChars(step.text.length),
+                            ].join(' / '),
                             style: small.copyWith(color: theme.textMuted),
                           ),
-                        Text(
-                          step.tool ?? '',
-                          style: mono.copyWith(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textPrimary,
-                          ),
                         ),
-                        for (final (label, color) in flags)
-                          _workFlag(theme, label, color),
-                      ],
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  if (!step.done)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: const BusyMark(width: 28, cells: 4),
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Text(
-                        [
-                          if (result.isNotEmpty) result,
-                          t.aiWorkChars(step.text.length),
-                        ].join(' / '),
-                        style: small.copyWith(color: theme.textMuted),
-                      ),
+                  if (args.isNotEmpty && !open)
+                    Text(
+                      args,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: mono.copyWith(color: theme.textMuted),
+                    ),
+                  // Why a failed step failed, in the tool's own words.
+                  if (bad && !open)
+                    Text(
+                      step.text.trimLeft().split('\n').first,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: small.copyWith(color: theme.textPrimary),
                     ),
                 ],
               ),
-              if (args.isNotEmpty && !open)
-                Text(
-                  args,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: mono.copyWith(color: theme.textMuted),
-                ),
-              // Why a failed step failed, in the tool's own words.
-              if (bad && !open)
-                Text(
-                  step.text.trimLeft().split('\n').first,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: small.copyWith(color: theme.textPrimary),
-                ),
-              if (open)
-                Container(
-                  key: ValueKey('work-raw-$index'),
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(top: 6),
-                  constraints: const BoxConstraints(maxHeight: workRawHeight),
-                  decoration: BoxDecoration(
-                    color: theme.bgSecondary.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.zero,
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(8),
-                    child: SelectableText(
-                      [
-                        if (args.isNotEmpty)
-                          const JsonEncoder.withIndent('  ').convert(step.args),
-                        step.text.trim(),
-                      ].join('\n\n'),
-                      style: mono.copyWith(
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
+          if (open)
+            Container(
+              key: ValueKey('work-raw-$index'),
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 6),
+              constraints: const BoxConstraints(maxHeight: workRawHeight),
+              decoration: BoxDecoration(
+                color: theme.bgSecondary.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.zero,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(8),
+                child: SelectableText(
+                  [
+                    if (args.isNotEmpty)
+                      const JsonEncoder.withIndent('  ').convert(step.args),
+                    step.text.trim(),
+                  ].join('\n\n'),
+                  style: mono.copyWith(
+                    color: theme.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

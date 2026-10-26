@@ -14,6 +14,7 @@ import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -478,6 +479,64 @@ void main() {
   });
 
   group('work timeline', () {
+    testWidgets(
+        'expanded tool output scrolls without pressing or moving its header',
+        (tester) async {
+      await _pump(
+        tester,
+        ChatMessage(
+          id: 'scroll-output',
+          role: MessageRole.assistant,
+          content: _answered('回答。'),
+          timestamp: DateTime(2026),
+          steps: [
+            const ReActStep(
+                type: ReActEventType.toolCall,
+                content: '',
+                toolName: 'grep',
+                toolArgs: {'pattern': '甲'},),
+            ReActStep(
+                type: ReActEventType.toolObservation,
+                toolName: 'grep',
+                content: List.filled(100, '工具输出的一行。').join('\n'),),
+          ],
+        ),
+        phone: false,
+      );
+      await tester.tap(find.byKey(const ValueKey('answer-header')));
+      await tester.pumpAndSettle();
+      final header = find.byKey(const ValueKey('work-step-0'));
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+      final raw = find.byKey(const ValueKey('work-raw-0'));
+      expect(find.ancestor(of: raw, matching: find.byType(PressRow)),
+          findsNothing,);
+      final scroll = find.descendant(
+          of: raw, matching: find.byType(SingleChildScrollView),);
+      final scrollable =
+          find.descendant(of: scroll, matching: find.byType(Scrollable));
+      final position = tester.state<ScrollableState>(scrollable.first).position;
+      final gesture = await tester.startGesture(tester.getCenter(raw));
+      await tester.pump(const Duration(milliseconds: 150));
+      for (final container in tester.widgetList<AnimatedContainer>(find
+          .descendant(of: header, matching: find.byType(AnimatedContainer)),)) {
+        if (container.transform != null) {
+          expect(container.transform!.getTranslation().x, 0);
+        }
+        if (container.constraints != null) {
+          expect(container.constraints!.maxWidth, 0);
+        }
+      }
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      expect(position.pixels, greaterThan(0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(raw, findsOneWidget);
+    });
+
     testWidgets('compaction is unnumbered and opens its full memo',
         (tester) async {
       final message = ChatMessage(

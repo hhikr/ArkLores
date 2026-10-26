@@ -1420,9 +1420,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyReaderFindHint => '在本篇中查找';
 
   @override
-  String get storyReaderScrubHint => '按住左右拖动，松手停在这里';
-
-  @override
   String get gameArknights => '明日方舟';
 
   @override

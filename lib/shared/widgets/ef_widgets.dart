@@ -1701,3 +1701,208 @@ Future<bool> confirmAction(
   );
   return ok ?? false;
 }
+
+/// A cut track containing a square thumb; taps and drags share one scale.
+class AppSlider extends ConsumerStatefulWidget {
+  const AppSlider({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.min = 0,
+    this.max = 1,
+    this.divisions,
+    this.onChangeEnd,
+    this.semanticLabel,
+    this.semanticValue,
+  })  : assert(max > min),
+        assert(divisions == null || divisions > 0);
+  final double value;
+  final double min;
+  final double max;
+  final int? divisions;
+  final ValueChanged<double>? onChanged;
+  final ValueChanged<double>? onChangeEnd;
+  final String? semanticLabel;
+  final String? semanticValue;
+  @override
+  ConsumerState<AppSlider> createState() => _AppSliderState();
+}
+
+class _AppSliderState extends ConsumerState<AppSlider> {
+  late double _value = widget.value;
+  bool _dragging = false;
+  bool _focused = false;
+  static const _thumb = 22.0;
+
+  @override
+  void didUpdateWidget(AppSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) _value = widget.value;
+  }
+
+  double _snap(double value) {
+    final share =
+        ((value - widget.min) / (widget.max - widget.min)).clamp(0.0, 1.0);
+    final steps = widget.divisions;
+    return widget.min +
+        (steps == null ? share : (share * steps).round() / steps) *
+            (widget.max - widget.min);
+  }
+
+  void _change(double value) {
+    final next = _snap(value);
+    if (next == _value) return;
+    if (widget.divisions != null) HapticFeedback.selectionClick();
+    setState(() => _value = next);
+    widget.onChanged?.call(next);
+  }
+
+  void _adjust(int direction) {
+    _change(
+      _value +
+          direction * (widget.max - widget.min) / (widget.divisions ?? 100),
+    );
+    widget.onChangeEnd?.call(_value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    final enabled = widget.onChanged != null;
+    return Semantics(
+      slider: true,
+      enabled: enabled,
+      label: widget.semanticLabel,
+      value: widget.semanticValue ?? '${_value.round()}',
+      increasedValue:
+          '${_snap(_value + (widget.max - widget.min) / (widget.divisions ?? 100))}',
+      decreasedValue:
+          '${_snap(_value - (widget.max - widget.min) / (widget.divisions ?? 100))}',
+      onIncrease: enabled && _value < widget.max ? () => _adjust(1) : null,
+      onDecrease: enabled && _value > widget.min ? () => _adjust(-1) : null,
+      child: Focus(
+        canRequestFocus: enabled,
+        onFocusChange: (value) => setState(() => _focused = value),
+        onKeyEvent: (_, event) {
+          if (!enabled || event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.arrowRight ||
+              key == LogicalKeyboardKey.arrowUp) {
+            _adjust(1);
+            return KeyEventResult.handled;
+          }
+          if (key == LogicalKeyboardKey.arrowLeft ||
+              key == LogicalKeyboardKey.arrowDown) {
+            _adjust(-1);
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final travel = math.max(1.0, box.maxWidth - _thumb - 6);
+            final rtl = Directionality.of(context) == TextDirection.rtl;
+            double at(Offset position) {
+              final x = rtl ? box.maxWidth - position.dx : position.dx;
+              return widget.min +
+                  ((x - _thumb / 2 - 3) / travel).clamp(0.0, 1.0) *
+                      (widget.max - widget.min);
+            }
+
+            void finish() {
+              if (!_dragging) return;
+              setState(() => _dragging = false);
+              widget.onChangeEnd?.call(_value);
+            }
+
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: enabled
+                  ? (details) {
+                      _change(at(details.localPosition));
+                      widget.onChangeEnd?.call(_value);
+                    }
+                  : null,
+              onHorizontalDragStart: enabled
+                  ? (details) {
+                      setState(() => _dragging = true);
+                      _change(at(details.localPosition));
+                    }
+                  : null,
+              onHorizontalDragUpdate: enabled
+                  ? (details) => _change(at(details.localPosition))
+                  : null,
+              onHorizontalDragEnd: enabled ? (_) => finish() : null,
+              onHorizontalDragCancel: enabled ? finish : null,
+              child: SizedBox(
+                height: 48,
+                child: Center(
+                  child: Container(
+                    height: 28,
+                    decoration: ShapeDecoration(
+                      color: theme.divider,
+                      shape: CutBorder.br(
+                        7,
+                        side: BorderSide(
+                          color: _focused ? theme.trace : theme.cardBorder,
+                          width: _focused ? 2 : 1,
+                        ),
+                      ),
+                    ),
+                    child: ClipPath(
+                      clipper: const ShapeBorderClipper(shape: CutBorder.br(7)),
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(
+                          end: ((_value - widget.min) /
+                                  (widget.max - widget.min))
+                              .clamp(0.0, 1.0),
+                        ),
+                        duration: _dragging
+                            ? Duration.zero
+                            : Motion.of(context, Motion.row),
+                        curve: Motion.snap,
+                        builder: (context, share, _) {
+                          final x = 3 + share * travel;
+                          return Stack(
+                            children: [
+                              PositionedDirectional(
+                                start: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: x + _thumb / 2,
+                                child: ColoredBox(
+                                  color: enabled
+                                      ? theme.accentPrimary
+                                      : theme.surfaceElevated,
+                                ),
+                              ),
+                              PositionedDirectional(
+                                start: x,
+                                top: 3,
+                                bottom: 3,
+                                width: _thumb,
+                                child: DecoratedBox(
+                                  key: const ValueKey('app-slider-thumb'),
+                                  decoration: BoxDecoration(
+                                    color: theme.onAccent,
+                                    border: Border.all(
+                                      color: theme.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
