@@ -184,6 +184,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   late int? _resume = widget.highlightStart == null ? widget.resumeLine : null;
 
   UserDataStore? _store;
+
+  /// The setting "读到第一行不计入历史记录" when the reader opened: the
+  /// visit is written only once the first line on screen moves from
+  /// [_openedAt] (or a text that fits the screen has been read to its end),
+  /// so a story opened by mistake leaves the history as it was.
+  late final bool _deferOpen;
+
+  /// The visit waiting for the reader to move, with what it will record.
+  bool _openPending = false;
+  String _openTitle = '';
+  StoryLineEntry? _openAnchor;
+
+  /// The first line on screen (a position in [_lines]) when the text opened.
+  int? _openedAt;
   List<StoryLineEntry> _lines = const [];
   Timer? _saveTimer;
 
@@ -244,6 +258,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   void initState() {
     super.initState();
     _container;
+    _deferOpen = ref.read(skipUnreadOpensProvider);
   }
 
   @override
@@ -320,7 +335,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   // ─── History ───────────────────────────────────────────────────
 
   /// Writes this visit to the reading history (once, after the text loaded;
-  /// the history is a convenience, so a failure is ignored).
+  /// the history is a convenience, so a failure is ignored). With
+  /// [_deferOpen] it is only made ready here and written by [_saveProgress]
+  /// once the reader moves.
   void _recordLater(List<StoryLineEntry> lines) {
     if (_recorded) return;
     _recorded = true;
@@ -333,12 +350,19 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           await ref.read(storyCatalogEntryProvider(widget.storyId).future);
       final title = entry?.label ?? fallbackStoryLabel(widget.storyId);
       final store = await ref.read(userDataStoreProvider.future);
-      _store = store;
       final at = _start ?? _resume ?? 0;
       final anchor = lines.firstWhere(
         (l) => l.lineIndex == at,
         orElse: () => lines.first,
       );
+      if (_deferOpen) {
+        _openTitle = title;
+        _openAnchor = anchor;
+        _openPending = true;
+        _store = store;
+        return;
+      }
+      _store = store;
       await store.recordOpen(
         LibraryRef.story(widget.storyId),
         title: title,
@@ -401,6 +425,27 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       });
     }
     final atEnd = nearEnd && _endStayed;
+    if (_openPending) {
+      // Still where it opened: nothing is written (a text that fits the
+      // screen cannot move, and counts once its end has stayed in view).
+      final opened = _openedAt ??= range.$1;
+      final fitsAndRead = range.$1 == 0 && atEnd;
+      if (range.$1 == opened && !fitsAndRead) return;
+      _openPending = false;
+      final anchor = _openAnchor!;
+      try {
+        await store.recordOpen(
+          LibraryRef.story(widget.storyId),
+          title: _openTitle,
+          lineIndex: anchor.lineIndex,
+          snippet: anchor.content,
+          totalLines: _lines.length,
+        );
+      } catch (_) {
+        return;
+      }
+      if (mounted) invalidateReading(ref);
+    }
     try {
       await store.updateProgress(
         LibraryRef.story(widget.storyId),
@@ -484,6 +529,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (_scrolled) return;
     _scrolled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Where the text opened: the reader has read on once this changes.
+      if (mounted) _openedAt ??= _visibleRange()?.$1;
       if (_cited && mounted) _flash.forward(from: 0);
       // Short stories fit the screen: no scroll will report them.
       if (mounted) _saveSoon();

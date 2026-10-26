@@ -83,6 +83,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '打开干员等资料页时，档案的各段全部展开；关掉后全部收起，点标题再展开。剧情开头的梗概始终默认收起。';
 
   @override
+  String get settingsSkipUnreadOpens => '读到第一行不计入历史记录';
+
+  @override
+  String get settingsSkipUnreadOpensDesc =>
+      '打开剧情后没有往下读、阅读位置停在打开时的那一行就离开，不记入最近阅读，也不改动已有记录的位置和先后。';
+
+  @override
   String get settingsSessionLogs => '保存 AI 对话记录';
 
   @override

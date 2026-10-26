@@ -114,6 +114,7 @@ void main() {
     for (final (key, inside) in [
       ('ai', 'settings-session-logs'),
       ('knowledge', 'settings-profile-sections'),
+      ('knowledge', 'settings-skip-unread-opens'),
     ]) {
       await tester.tap(find.byKey(ValueKey('settings-category-$key')));
       await tester.pumpAndSettle();

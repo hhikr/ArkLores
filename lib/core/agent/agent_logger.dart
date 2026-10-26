@@ -1,4 +1,4 @@
-/// The "保存 AI 对话记录" switch (off by default): when on, every Ask turn
+/// The "保存 AI 对话记录" switch (on by default): when on, every Ask turn
 /// is recorded into the user-visible `chat_sessions/` files
 /// (`ChatSessionStore`). Applied at startup via [AgentLogger.setEnabled] and
 /// on toggle in Settings.

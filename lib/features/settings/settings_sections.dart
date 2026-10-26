@@ -235,9 +235,16 @@ class KnowledgeSettingsPage extends ConsumerWidget {
     await ref.read(settingsServiceProvider).saveProfileSectionsOpen(value);
   }
 
+  /// A story opened and left where it opened: kept out of the history (on).
+  static Future<void> _setSkipUnread(WidgetRef ref, bool value) async {
+    ref.read(skipUnreadOpensProvider.notifier).state = value;
+    await ref.read(settingsServiceProvider).saveSkipUnreadOpens(value);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
+    final skipUnread = ref.watch(skipUnreadOpensProvider);
     return _SectionPage(
       title: context.t.settingsKnowledgeCategory,
       code: context.t.settingsKnowledgeSectionCode,
@@ -268,6 +275,18 @@ class KnowledgeSettingsPage extends ConsumerWidget {
             value: foldOpen,
             semanticLabel: context.t.settingsProfileSectionsOpen,
             onChanged: (value) => _setFoldOpen(ref, value),
+          ),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-skip-unread-opens'),
+          icon: Icons.history_toggle_off_sharp,
+          label: context.t.settingsSkipUnreadOpens,
+          description: context.t.settingsSkipUnreadOpensDesc,
+          onTap: () => _setSkipUnread(ref, !skipUnread),
+          trailing: SquareSwitch(
+            value: skipUnread,
+            semanticLabel: context.t.settingsSkipUnreadOpens,
+            onChanged: (value) => _setSkipUnread(ref, value),
           ),
         ),
       ],

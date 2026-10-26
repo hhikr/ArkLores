@@ -242,6 +242,18 @@ abstract class AppLocalizations {
   /// **'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.'**
   String get settingsProfileSectionsOpenDesc;
 
+  /// No description provided for @settingsSkipUnreadOpens.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t record stories left at the first line'**
+  String get settingsSkipUnreadOpens;
+
+  /// No description provided for @settingsSkipUnreadOpensDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'A story opened and left without reading on from the line it opened at is not added to Recently read, and an entry already there keeps its place and position.'**
+  String get settingsSkipUnreadOpensDesc;
+
   /// No description provided for @settingsSessionLogs.
   ///
   /// In en, this message translates to:
