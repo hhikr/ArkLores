@@ -162,6 +162,20 @@ Future<_RetainedOriginals> _retainOriginals(
   return out;
 }
 
+/// The last answer for the memo: its entries as text with their citations
+/// (the answer JSON is a third longer for the same content), or the reply as
+/// it was when it was not a JSON answer.
+String _answerForMemo(LoreConversation? prior) {
+  if (prior == null) return '';
+  if (prior.entries.isEmpty) return prior.lastAnswer;
+  return [
+    for (final e in prior.entries)
+      e.isText
+          ? '- ${e.text}${e.cites.isEmpty ? '' : '（${e.cites.join('、')}）'}'
+          : '### ${e.heading}',
+  ].join('\n');
+}
+
 String _compactMemo(
   int n,
   List<String> questions,

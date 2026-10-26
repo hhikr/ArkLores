@@ -235,6 +235,65 @@ void main() {
         StoryAnswerStatus.answered,);
   });
 
+  test('the memo gives the last answer as text with citations, not its JSON',
+      () async {
+    final client =
+        _ScriptedClient([_answer('{"notes":"N","keep":[]}'), _answer(answer)]);
+    final p = prior(tokens: 100000);
+    await LoreAgentLoop(
+            client: client,
+            store: store,
+            preSearch: false,
+            contextWarnTokens: 1000,)
+        .run(
+          query: '新问题',
+          prior: LoreConversation(
+            messages: p.messages,
+            seen: p.seen,
+            questions: p.questions,
+            question: p.question,
+            lastAnswer: p.lastAnswer,
+            lastPromptTokens: p.lastPromptTokens,
+            lastPromptChars: p.lastPromptChars,
+            entries: const [
+              LoreAnswerEntry(heading: '小节'),
+              LoreAnswerEntry(text: '结论。', cites: ['a.txt:10-12']),
+            ],
+          ),
+        )
+        .toList();
+    final memo = client.requests.last[1].content;
+    expect(memo, contains('### 小节\n- 结论。（a.txt:10-12）'));
+    expect(memo, isNot(contains('"entries"')));
+  });
+
+  test('a large last turn is not kept whole: the compaction saw it', () async {
+    const long =
+        '{"entries":[{"text":"结论。","cite":[["fixture/long.txt",0,1]]}],"coverage":"full"}';
+    final client = _ScriptedClient([
+      _Turn(calls: [
+        ToolCall(
+          id: 'r',
+          name: 'read_story',
+          arguments: jsonEncode(
+              {'story_id': 'fixture/long.txt', 'start': 0, 'count': 200},),
+        ),
+      ], tokens: 18000,),
+      _answer('{"notes":"N","keep":[]}'),
+      _answer(long),
+    ]);
+    await LoreAgentLoop(
+            client: client,
+            store: store,
+            preSearch: false,
+            contextWarnTokens: 4000,)
+        .run(query: '问题')
+        .toList();
+    final rebuilt = client.requests.last;
+    expect(rebuilt.where((m) => m.role == MessageRole.tool), isEmpty);
+    expect(rebuilt[1].content, contains('【对话纪要 #1】'));
+  });
+
   test(
       'less than ten percent growth prevents repeated compaction even above threshold',
       () async {

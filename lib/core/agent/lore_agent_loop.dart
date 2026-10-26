@@ -480,8 +480,6 @@ class LoreAgentLoop {
           content: '压缩没有成功，改用上一答引用过的原文',
         );
       }
-      final retained =
-          await _retainOriginals(keep, keepChars, store, seen, wiki, materials);
       final tailIndexes = <int>[];
       if (!followUp) {
         final lastCall = conversation.indexed.where((e) =>
@@ -502,6 +500,17 @@ class LoreAgentLoop {
           }
         }
       }
+      // The last calls' results stay as they are only when small: they count
+      // against the originals kept, and past half of that budget they go too
+      // (the compaction request saw them; what matters is in its notes and
+      // keep list, and the model may read them again).
+      var tailChars = _messageChars([for (final i in tailIndexes) conversation[i]]);
+      if (tailChars > keepChars ~/ 2) {
+        tailIndexes.clear();
+        tailChars = 0;
+      }
+      final retained = await _retainOriginals(
+          keep, keepChars - tailChars, store, seen, wiki, materials,);
       final tail = [for (final i in tailIndexes) conversation[i]];
       final nextLedger = ledger
           .remap({for (final (i, old) in tailIndexes.indexed) old: i + 1});
@@ -509,7 +518,7 @@ class LoreAgentLoop {
       final memo = _compactMemo(
         compactions,
         followUp ? earlierQuestions : questions,
-        prior?.lastAnswer ?? '',
+        _answerForMemo(prior),
         notes,
         retained,
         seen,

@@ -113,6 +113,10 @@ class AskChatNotifier extends ChatNotifierBase {
   /// Adds up the usage of every LLM call of the running question (all
   /// clients report into it); null in tests that do not look at it.
   final UsageMeter? _usage;
+
+  /// This conversation's meter (the live test harness reads its totals and
+  /// timeline; the clients' own meter forwards into it).
+  UsageMeter? get usageMeter => _usage;
   final int Function() _contextWarnTokensReader;
   bool contextWarningPending = false;
 
