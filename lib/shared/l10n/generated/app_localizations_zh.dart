@@ -308,6 +308,100 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
 
   @override
+  String get settingsUpdate => '更新';
+
+  @override
+  String get settingsUpdateDesc => '检查新版本，在 App 里更新';
+
+  @override
+  String updateVersionBuild(String version, int build) {
+    return '$version（build $build）';
+  }
+
+  @override
+  String get updateAutoCheck => '自动检查更新';
+
+  @override
+  String get updateAutoCheckDesc => '打开 App 时检查，一天最多一次。只提示，不自动下载。';
+
+  @override
+  String get updateCheck => '检查更新';
+
+  @override
+  String get updateChecking => '正在检查。';
+
+  @override
+  String get updateUpToDate => '已是最新版本。';
+
+  @override
+  String updateAvailable(String version) {
+    return '新版本 $version';
+  }
+
+  @override
+  String updateAvailableSize(String size) {
+    return '安装包 $size。';
+  }
+
+  @override
+  String get updateDownloadInstall => '下载并安装';
+
+  @override
+  String updateDownloading(String received, String total) {
+    return '正在下载 $received / $total';
+  }
+
+  @override
+  String get updateVerifying => '正在校验安装包。';
+
+  @override
+  String get updateCancel => '取消';
+
+  @override
+  String get updateNeedsPermission => '安装更新要先允许 ArkLores 安装应用。允许后回到这里，会接着安装。';
+
+  @override
+  String get updateAllow => '去允许';
+
+  @override
+  String get updateReady => '已打开安装界面。没有装上的话，可以再点一次。';
+
+  @override
+  String get updateInstall => '安装';
+
+  @override
+  String get updateRetry => '重试';
+
+  @override
+  String get updateErrorCheck => '没能读到版本信息。请检查网络后重试。';
+
+  @override
+  String get updateErrorDownload => '下载没有完成。重试会接着下载。';
+
+  @override
+  String get updateErrorChecksum => '安装包校验不一致，已删除。请重新下载。';
+
+  @override
+  String get updateErrorInstall => '没能打开安装界面。';
+
+  @override
+  String get updateUnsupported => '只有 Android 版可以在 App 里更新。';
+
+  @override
+  String get updateSignatureNote => '安装包必须与当前 App 签名一致。本机 debug 包不能被 CI 发布包覆盖。';
+
+  @override
+  String updateFound(String version) {
+    return '有新版本 $version';
+  }
+
+  @override
+  String get updateFoundOpen => '查看';
+
+  @override
+  String get updateNotification => '下载更新';
+
+  @override
   String get aiTabAsk => 'AI 问答';
 
   @override

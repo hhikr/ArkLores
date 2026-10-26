@@ -6,11 +6,14 @@ import android.app.UiModeManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.ClipData
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.core.content.FileProvider
+import java.io.File
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -70,6 +73,36 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "arklores/app_update").setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "canInstall" -> result.success(canInstallUpdates())
+                    "openInstallSettings" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            openSettings(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                                .setData(Uri.parse("package:$packageName")))
+                        }
+                        result.success(null)
+                    }
+                    "install" -> {
+                        check(canInstallUpdates()) { "Installing updates is not allowed" }
+                        val file = File(requireNotNull(call.argument<String>("path"))).canonicalFile
+                        val folder = File(cacheDir, "updates").canonicalFile
+                        // Share only finished APKs in the update cache, never arbitrary app files.
+                        require(file.parentFile == folder && file.isFile && file.name.endsWith(".apk"))
+                        val uri = FileProvider.getUriForFile(this, "$packageName.updates", file)
+                        startActivity(Intent(Intent.ACTION_VIEW)
+                            .setDataAndType(uri, "application/vnd.android.package-archive")
+                            .setClipData(ClipData.newRawUri("update", uri))
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                result.error("update_failed", e.message, null)
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, themeChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "setNightMode" -> {
@@ -134,6 +167,9 @@ class MainActivity: FlutterActivity() {
     private fun notificationsAllowed(): Boolean =
         (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .areNotificationsEnabled()
+
+    private fun canInstallUpdates(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
 
     /**
      * Asks for notifications (Android 13+). Once asked, the system may not

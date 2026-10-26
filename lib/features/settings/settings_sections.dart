@@ -20,12 +20,14 @@ import '../../shared/widgets/smooth_page_route.dart';
 import '../library/reading_text.dart' show readingFontSample;
 import 'background_access.dart';
 import 'onboarding_page.dart';
+import 'update_page.dart';
 import 'wiki_sources_settings_page.dart';
 
 /// One category's page: its title and code, the rows in a column at most
 /// 640 wide, the last row closed by a hairline.
-class _SectionPage extends ConsumerWidget {
-  const _SectionPage({
+class SettingsSectionPage extends ConsumerWidget {
+  const SettingsSectionPage({
+    super.key,
     required this.title,
     required this.code,
     required this.children,
@@ -74,7 +76,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
     final currentTheme = themes.currentTheme;
     final currentLocale = ref.watch(localeProvider);
     final service = ref.read(settingsServiceProvider);
-    return _SectionPage(
+    return SettingsSectionPage(
       title: context.t.settingsAppearance,
       code: 'appearance',
       children: [
@@ -152,7 +154,7 @@ class AiSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(sessionLogsEnabledProvider);
     final skipOperators = ref.watch(skipOperatorNamesProvider);
-    return _SectionPage(
+    return SettingsSectionPage(
       title: context.t.settingsAiServices,
       code: context.t.settingsAiSectionCode,
       children: [
@@ -238,7 +240,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
-    return _SectionPage(
+    return SettingsSectionPage(
       title: context.t.settingsKnowledgeCategory,
       code: context.t.settingsKnowledgeSectionCode,
       children: [
@@ -275,13 +277,13 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   }
 }
 
-/// The onboarding again, and the version.
+/// The onboarding again, and updates (with the version).
 class HelpSettingsPage extends ConsumerWidget {
   const HelpSettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return _SectionPage(
+    return SettingsSectionPage(
       title: context.t.settingsHelpGuide,
       code: context.t.settingsHelpSectionCode,
       children: [
@@ -298,10 +300,14 @@ class HelpSettingsPage extends ConsumerWidget {
           ),
         ),
         ActionRow(
-          icon: Icons.info_outline_sharp,
-          label: context.t.settingsVersion,
-          meta: context.t.settingsVersionLabel(appVersion),
-          showChevron: false,
+          key: const ValueKey('settings-update'),
+          icon: Icons.system_update_sharp,
+          label: context.t.settingsUpdate,
+          description: context.t.settingsUpdateDesc,
+          meta: appVersion,
+          onTap: () => Navigator.of(context).push(
+            smoothPageRoute<void>(builder: (_) => const UpdatePage()),
+          ),
         ),
       ],
     );

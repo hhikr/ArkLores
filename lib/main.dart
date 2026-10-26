@@ -9,11 +9,13 @@ import 'core/agent/agent_logger.dart';
 import 'core/agent/answer_options.dart';
 import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
+import 'core/update/app_update_provider.dart';
 import 'features/ai/phone_bridge.dart';
 import 'features/settings/api_settings_page.dart';
 import 'features/settings/knowledge_base_page.dart';
 import 'features/settings/onboarding_page.dart';
 import 'features/settings/settings_service.dart';
+import 'features/settings/update_startup.dart';
 import 'shared/frame_log.dart';
 import 'shared/l10n/generated/app_localizations.dart';
 import 'shared/l10n/locale_provider.dart';
@@ -59,6 +61,7 @@ void main() async {
       contextWarnTokens,
       compactPercent,
       skipOperatorNames,
+      autoUpdateCheck,
     ),
   ) = await (
     load('onboarding status', settingsService.isOnboardingDone, false),
@@ -82,6 +85,8 @@ void main() async {
           defaultCompactPercent,),
       load('operator names in answers', settingsService.loadSkipOperatorNames,
           false,),
+      load('automatic update check', settingsService.loadAutoUpdateCheck,
+          false,),
     ).wait,
   ).wait;
   // Apply the user's per-session AI log toggle before any agent runs.
@@ -103,6 +108,7 @@ void main() async {
         initialContextWarnTokensProvider.overrideWithValue(contextWarnTokens),
         initialCompactPercentProvider.overrideWithValue(compactPercent),
         initialSkipOperatorNamesProvider.overrideWithValue(skipOperatorNames),
+        initialAutoUpdateCheckProvider.overrideWithValue(autoUpdateCheck),
         initialLocaleProvider.overrideWithValue(appLocale),
         initialSessionLogsEnabledProvider.overrideWithValue(sessionLogsEnabled),
         initialNicknameProvider.overrideWithValue(nickname),
@@ -152,7 +158,7 @@ class ArkLoresApp extends ConsumerWidget {
         ),
       ),
       home: onboardingDone
-          ? const MainShell()
+          ? const UpdateStartup(child: MainShell())
           : OnboardingPage(
               onComplete: () {
                 ref.read(onboardingStatusProvider.notifier).state = true;

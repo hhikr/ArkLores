@@ -668,6 +668,174 @@ abstract class AppLocalizations {
   /// **'Replay the first-launch guide to configure the app'**
   String get settingsShowOnboardingDesc;
 
+  /// No description provided for @settingsUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get settingsUpdate;
+
+  /// No description provided for @settingsUpdateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for a new version and update in the app'**
+  String get settingsUpdateDesc;
+
+  /// No description provided for @updateVersionBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'{version} (build {build})'**
+  String updateVersionBuild(String version, int build);
+
+  /// No description provided for @updateAutoCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check automatically'**
+  String get updateAutoCheck;
+
+  /// No description provided for @updateAutoCheckDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks when the app opens, at most once a day. It only tells you; nothing is downloaded.'**
+  String get updateAutoCheckDesc;
+
+  /// No description provided for @updateCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get updateCheck;
+
+  /// No description provided for @updateChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking.'**
+  String get updateChecking;
+
+  /// No description provided for @updateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You have the latest version.'**
+  String get updateUpToDate;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'New version {version}'**
+  String updateAvailable(String version);
+
+  /// No description provided for @updateAvailableSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Package: {size}.'**
+  String updateAvailableSize(String size);
+
+  /// No description provided for @updateDownloadInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and install'**
+  String get updateDownloadInstall;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading {received} / {total}'**
+  String updateDownloading(String received, String total);
+
+  /// No description provided for @updateVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the package.'**
+  String get updateVerifying;
+
+  /// No description provided for @updateCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get updateCancel;
+
+  /// No description provided for @updateNeedsPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'To install the update, allow ArkLores to install apps. Come back here afterwards and it continues.'**
+  String get updateNeedsPermission;
+
+  /// No description provided for @updateAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get updateAllow;
+
+  /// No description provided for @updateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'The installer is open. If the update was not installed, tap again.'**
+  String get updateReady;
+
+  /// No description provided for @updateInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get updateInstall;
+
+  /// No description provided for @updateRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get updateRetry;
+
+  /// No description provided for @updateErrorCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the releases. Check the network and retry.'**
+  String get updateErrorCheck;
+
+  /// No description provided for @updateErrorDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not finish. Retry continues it.'**
+  String get updateErrorDownload;
+
+  /// No description provided for @updateErrorChecksum.
+  ///
+  /// In en, this message translates to:
+  /// **'The package did not match its checksum and was deleted. Download it again.'**
+  String get updateErrorChecksum;
+
+  /// No description provided for @updateErrorInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the installer.'**
+  String get updateErrorInstall;
+
+  /// No description provided for @updateUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the Android app can update itself.'**
+  String get updateUnsupported;
+
+  /// No description provided for @updateSignatureNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The update must have the same signature as the installed app. CI releases cannot replace a local debug-signed build.'**
+  String get updateSignatureNote;
+
+  /// No description provided for @updateFound.
+  ///
+  /// In en, this message translates to:
+  /// **'New version {version}'**
+  String updateFound(String version);
+
+  /// No description provided for @updateFoundOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get updateFoundOpen;
+
+  /// No description provided for @updateNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the update'**
+  String get updateNotification;
+
   /// No description provided for @aiTabAsk.
   ///
   /// In en, this message translates to:
