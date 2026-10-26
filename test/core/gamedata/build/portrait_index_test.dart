@@ -1,5 +1,6 @@
 import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';
 import 'package:arklores/core/gamedata/build/portrait_index.dart';
+import 'package:arklores/core/gamedata/build/story_script.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -9,7 +10,7 @@ void main() {
   sqfliteFfiInit();
   late Database db;
   var index = 0;
-  Future<void> add(String speaker, String sprite, {String story = 's'}) async {
+  Future<void> add(String speaker, String? sprite, {String story = 's'}) async {
     final i = index++;
     await db.insert('story_lines', {
       'id': '$i',
@@ -22,10 +23,12 @@ void main() {
       'source_path': 'test',
       'kind': 'dialogue',
     });
-    await db.insert(
-      storyLinePortraitsTable,
-      {'story_id': story, 'line_index': i, 'sprite': sprite},
-    );
+    if (sprite != null) {
+      await db.insert(
+        storyLinePortraitsTable,
+        {'story_id': story, 'line_index': i, 'sprite': sprite},
+      );
+    }
   }
 
   setUp(() async {
@@ -34,6 +37,33 @@ void main() {
     await ensurePortraitTables(db);
   });
   tearDown(() => db.close());
+
+  test('CG dialogue does not enter portrait aggregates', () async {
+    final lines = parseStoryScript('''
+[Character(name="char_002_amiya_1#5")]
+[name="Alpha"]before
+[Image(image="avg_1_1")]
+[name="Beta"]covered
+[Image]
+[name="Alpha"]after
+''');
+    for (final line in lines) {
+      await add(line.speaker!, line.portrait);
+    }
+    await rebuildPortraitIndex(db);
+    expect((await db.query(storyLinePortraitsTable)).length, 2);
+    expect((await db.query('story_lines')).length, 3);
+    expect((await db.query(portraitGroupsTable)).single['lines'], 2);
+    expect((await db.query(speakerNamesTable)).single['speaker'], 'Alpha');
+    expect(
+      await db.query(
+        speakerPortraitsTable,
+        where: 'speaker=?',
+        whereArgs: ['Beta'],
+      ),
+      isEmpty,
+    );
+  });
 
   test(
       'all tables, lexical ties, ownership, highlight and deterministic rebuild',
@@ -140,7 +170,7 @@ void main() {
         whereArgs: ['portrait_index_version'],
       ))
           .single['value'],
-      '1',
+      '2',
     );
     await validateGameDataDatabase(db);
   });

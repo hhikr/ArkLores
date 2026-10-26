@@ -48,6 +48,47 @@ void main() {
     expect(lines.map((l) => l.portrait), [a, b, b, null, null]);
     expect(parseStoryScript('[name="乙"]四').single.portrait, isNull);
   });
+  test('a picture covers the stage until an Image without one', () {
+    final lines = parseStoryScript('''
+[Character(name="char_002_amiya_1#5")]
+[name="甲"]一
+[Image(image="avg_1_1", x=50, fadetime=0)]
+[ImageTween(xTo=-50, duration=20, block=false)]
+[name="乙"]二
+[Character(name="char_010_chen_1#2")]
+[name="乙"]三
+[image]
+[name="乙"]四
+[Character(name="char_002_amiya_1#5")] [IMAGE(Image="avg_1_2")]
+[name="甲"]五
+[Image(fadetime=1)]
+[name="甲"]六
+[Image(image="")]
+[name="甲"]七
+[cgitem(image="cgitem_1", style="cg", layer=1)]
+[Background(image="bg_1")]
+[Blocker(a=1, fadetime=1)]
+[name="甲"]八
+[charslot(slot="l",name="char_010_chen_1#2",focus="l")]
+[Image(image="avg_1_3")]
+[charslot(slot="l",name="char_002_amiya_1#5",focus="l")]
+[name="甲"]九
+[Image(fadetime=1)]
+[name="甲"]十
+[Image(image="avg_1_4")]
+''');
+    expect(
+      lines.map((l) => l.portrait),
+      [a, null, null, b, null, a, a, a, null, a],
+    );
+    expect(
+      parseStoryScript(
+        '[Character(name="char_002_amiya_1#5")]\n[name="甲"]一',
+      ).single.portrait,
+      a,
+      reason: 'a picture left at the end of a script does not carry over',
+    );
+  });
   final root = Directory('notes/upstream/story');
   test(
     '30 upstream scripts preserve every kind, speaker and content',

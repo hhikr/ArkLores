@@ -159,9 +159,16 @@ class _PortraitState {
   final slots = <String, String>{};
   String? focus;
 
-  String? get sprite => focus == null
-      ? (slots.length == 1 ? slots.values.single : null)
-      : slots[focus];
+  /// An `[Image(image=…)]` picture covers the stage until an `[Image]`
+  /// without one takes it away: nobody's portrait shows meanwhile, though
+  /// the slots keep what the commands put there.
+  bool covered = false;
+
+  String? get sprite => covered
+      ? null
+      : focus == null
+          ? (slots.length == 1 ? slots.values.single : null)
+          : slots[focus];
 
   String position(String value) => switch (value.toLowerCase()) {
         'left' => 'l',
@@ -178,7 +185,9 @@ class _PortraitState {
       final body = rest.substring(1, end).trim();
       final command = _commandHead.firstMatch(body)?.group(1)?.toLowerCase();
       final attrs = _attributes(body);
-      if (command == 'character') {
+      if (command == 'image') {
+        covered = (attrs['image']?.trim() ?? '').isNotEmpty;
+      } else if (command == 'character') {
         slots.clear();
         focus = null;
         for (final (key, attr) in [('1', 'name'), ('2', 'name2')]) {

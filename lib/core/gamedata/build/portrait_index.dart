@@ -224,7 +224,7 @@ Future<void> rebuildPortraitIndex(Database db) async {
       'SELECT (SELECT COUNT(*) FROM story_line_portraits) AS lines, (SELECT COUNT(*) FROM portrait_groups) AS groups',
     );
     await writeGamedataManifest(txn, {
-      'portrait_index_version': '1',
+      'portrait_index_version': '2',
       'portrait_line_count': '${counts.single['lines']}',
       'portrait_group_count': '${counts.single['groups']}',
     });
