@@ -58,6 +58,13 @@ SpeakerPortraits get _name => SpeakerPortraits(
           topSprite: _sprite,
           groupSpeakers: 2,
         ),
+        SpeakerGroup(
+          groupId: 'avg_npc_passing',
+          lines: 1,
+          stories: 1,
+          topSprite: 'avg_npc_passing#1\$1',
+          groupSpeakers: 7,
+        ),
       ],
     );
 PortraitGroup get _group => PortraitGroup(
@@ -793,6 +800,20 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(RawImage), findsOneWidget);
       await capture(tester, '${mode}_portraits');
+      // A portrait the speaker passes by folds under one row.
+      expect(
+        find.byKey(const ValueKey('speaker-portrait-avg_npc_passing')),
+        findsNothing,
+      );
+      expect(find.text('另有 1 个立绘，各只说 1–2 句'), findsOneWidget);
+      expect(find.text('出现次数过少，可能是画外音'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('speaker-passing-portraits')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('speaker-portrait-avg_npc_passing')),
+        findsOneWidget,
+      );
+      await capture(tester, '${mode}_portraits_open');
       // A row opens that portrait's card: no name on it (the list holds
       // others' portraits too), who uses it and this speaker's stories.
       await tester.tap(

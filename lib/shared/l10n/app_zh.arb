@@ -748,6 +748,14 @@
       }
     }
   },
+  "portraitPassingPortraits": "另有 {n} 个立绘，各只说 1–2 句",
+  "@portraitPassingPortraits": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "portraitPassingHint": "出现次数过少，可能是画外音",
   "portraitPassingSpeakers": "另有 {n} 人各说 1–2 句，主要立绘在别处",
   "@portraitPassingSpeakers": {

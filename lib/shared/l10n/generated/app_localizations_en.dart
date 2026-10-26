@@ -1900,6 +1900,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String portraitPassingPortraits(int n) {
+    return '$n more portraits with 1–2 lines each';
+  }
+
+  @override
   String get portraitPassingHint =>
       'Too few lines; probably voices from off the stage';
 

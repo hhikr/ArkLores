@@ -3302,6 +3302,12 @@ abstract class AppLocalizations {
   /// **'Portraits of “{name}”'**
   String portraitSpeakerPageTitle(String name);
 
+  /// No description provided for @portraitPassingPortraits.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} more portraits with 1–2 lines each'**
+  String portraitPassingPortraits(int n);
+
   /// No description provided for @portraitPassingHint.
   ///
   /// In en, this message translates to:

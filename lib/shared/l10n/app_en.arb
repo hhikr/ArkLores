@@ -749,6 +749,14 @@
       }
     }
   },
+  "portraitPassingPortraits": "{n} more portraits with 1–2 lines each",
+  "@portraitPassingPortraits": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "portraitPassingHint": "Too few lines; probably voices from off the stage",
   "portraitPassingSpeakers": "{n} more with 1–2 lines each, their main portrait elsewhere",
   "@portraitPassingSpeakers": {
