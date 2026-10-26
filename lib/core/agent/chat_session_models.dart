@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
+import 'lore_tools.dart' show inContextPrefix;
 import 'react_event.dart' show ReActEventType;
 import 'story_answer.dart' show FactCheckVerdict;
 import 'turn_stats.dart';
@@ -48,7 +49,6 @@ enum ChatTurnStatus {
 /// Mutable while a turn is being recorded (the notifier fills fields as ReAct
 /// events arrive); serialized once the turn completes.
 class ReActIterationRecord {
-
   factory ReActIterationRecord.fromJson(Map<String, dynamic> json) =>
       ReActIterationRecord(
         iteration: (json['iteration'] as num?)?.toInt() ?? 0,
@@ -96,7 +96,6 @@ class ReActIterationRecord {
 
 /// One question-answer turn of a chat session.
 class ChatSessionTurn {
-
   factory ChatSessionTurn.fromJson(Map<String, dynamic> json) {
     return ChatSessionTurn(
       turn: (json['turn'] as num?)?.toInt() ?? 0,
@@ -192,7 +191,6 @@ class ChatSessionTurn {
 
 /// A persisted chat session file.
 class ChatSessionFile {
-
   factory ChatSessionFile.fromJson(Map<String, dynamic> json) =>
       ChatSessionFile(
         sessionId: '${json['session_id'] ?? ''}',
@@ -263,15 +261,18 @@ List<ChatMessage> chatTurnToMessages(ChatSessionTurn turn, String assistantId) {
       ),);
     }
     if (iteration.tool != null && iteration.tool!.isNotEmpty) {
-      steps.add(ReActStep(
-        type: ReActEventType.toolCall,
-        content: 'Executing tool "${iteration.tool}" with arguments: '
-            '${iteration.toolArgs ?? const <String, dynamic>{}}',
-        toolName: iteration.tool,
-        toolArgs: iteration.toolArgs,
-        // What the session record says of a planned step.
-        planned: iteration.rawResponse.startsWith('（拟定'),
-      ),);
+      steps.add(
+        ReActStep(
+          type: ReActEventType.toolCall,
+          content: 'Executing tool "${iteration.tool}" with arguments: '
+              '${iteration.toolArgs ?? const <String, dynamic>{}}',
+          toolName: iteration.tool,
+          toolArgs: iteration.toolArgs,
+          // What the session record says of a planned step.
+          planned: iteration.rawResponse.startsWith('（拟定'),
+          inContext: iteration.observation.startsWith(inContextPrefix),
+        ),
+      );
     }
     if (iteration.observation.isNotEmpty) {
       steps.add(ReActStep(

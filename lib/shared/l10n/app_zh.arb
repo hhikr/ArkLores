@@ -258,7 +258,7 @@
   "aiWorkNone": "没有结果",
   "aiWorkFailed": "出错",
   "aiWorkPlanned": "拟定",
-  "aiWorkRepeated": "重复",
+  "aiWorkInContext": "已在上文",
   "aiWorkNotRun": "未执行",
   "aiWorkWikiDown": "Wiki 超时",
   "aiWorkChars": "{count} 字",

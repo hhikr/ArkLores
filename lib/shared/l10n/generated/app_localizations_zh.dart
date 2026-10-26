@@ -747,7 +747,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiWorkPlanned => '拟定';
 
   @override
-  String get aiWorkRepeated => '重复';
+  String get aiWorkInContext => '已在上文';
 
   @override
   String get aiWorkNotRun => '未执行';

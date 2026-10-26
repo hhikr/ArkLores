@@ -259,7 +259,7 @@
   "aiWorkNone": "nothing found",
   "aiWorkFailed": "failed",
   "aiWorkPlanned": "planned",
-  "aiWorkRepeated": "repeated",
+  "aiWorkInContext": "already above",
   "aiWorkNotRun": "not run",
   "aiWorkWikiDown": "wiki timed out",
   "aiWorkChars": "{count} chars",

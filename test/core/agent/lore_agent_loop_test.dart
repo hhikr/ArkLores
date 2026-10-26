@@ -1610,7 +1610,7 @@ void main() {
       final client = _ScriptedClient([
         _call('read_story', {'story_id': 'obt/main/level_main_fx-01.txt'}),
         _call('read_story', {'story_id': 'activities/act_fx/level_act_fx_01_beg.txt'}),
-        for (var i = 0; i < 9; i++) _call('outline', {'collection': '虚构活动'}),
+        for (var i = 0; i < 9; i++) _call('sql', {'query': 'SELECT *, $i AS iteration FROM story_catalog'}),
         _answer('完'),
       ]);
       await LoreAgentLoop(

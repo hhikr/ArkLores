@@ -560,6 +560,7 @@ class AskChatNotifier extends ChatNotifierBase {
                 toolArgs: event.toolArgs,
                 subtask: event.subtask,
                 planned: event.planned,
+                inContext: event.inContext,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
@@ -590,6 +591,7 @@ class AskChatNotifier extends ChatNotifierBase {
                 content: event.content,
                 toolName: event.toolName,
                 subtask: event.subtask,
+                inContext: event.inContext,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));

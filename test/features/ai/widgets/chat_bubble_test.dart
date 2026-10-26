@@ -13,6 +13,7 @@ import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -510,16 +511,17 @@ void main() {
             content: '【第一章】 $_c5\nL0 [甲] 一\nL1 [乙] 二\nL40 [甲] 三',
             toolName: 'read_story',
           ),
-          // The same call again, and nothing found this time.
+          // The loop marked this call as still in context.
           ReActStep(
             type: ReActEventType.toolCall,
             content: 'Executing tool "grep"',
+            inContext: true,
             toolName: 'grep',
             toolArgs: {'pattern': '甲|乙', 'collection': 'act_fixture'},
           ),
           ReActStep(
             type: ReActEventType.toolObservation,
-            content: '0 行：act_fixture 里没有 甲 / 乙。',
+            content: '（已在上文）第 1 步的结果仍在上文。',
             toolName: 'grep',
           ),
           ReActStep(
@@ -560,8 +562,11 @@ void main() {
       expect(find.textContaining('第 0–40 行 / '), findsOneWidget);
       expect(find.textContaining(' 字'), findsNWidgets(3));
       expect(find.text('拟定'), findsOneWidget);
-      expect(find.text('重复'), findsOneWidget);
-      expect(find.text('没有结果'), findsOneWidget);
+      expect(find.text('已在上文'), findsOneWidget);
+      final flag = tester.widget<Text>(find.text('已在上文'));
+      expect(flag.style!.color, ProviderScope.containerOf(tester.element(find.text('已在上文'))).read(themeProvider).textMuted);
+      expect(find.text('3'), findsNothing);
+      expect(find.text('没有结果'), findsNothing);
       expect(find.text('记录：出处裁到读过的行：a:1-9 → a:1-3'), findsOneWidget);
       expect(find.textContaining('Observation'), findsNothing);
       expect(find.textContaining('Executing tool'), findsNothing);

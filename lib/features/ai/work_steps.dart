@@ -41,7 +41,7 @@ class WorkStep {
     this.subtask,
     this.planned = false,
     this.number = 0,
-    this.repeated = false,
+    this.inContext = false,
   });
 
   /// One of the first searches, written by the planning call.
@@ -50,8 +50,8 @@ class WorkStep {
   /// The tool call's number among the calls of this answer (from 1).
   final int number;
 
-  /// The same tool with the same arguments was called earlier.
-  final bool repeated;
+  /// The call was blocked because its result is still in context.
+  final bool inContext;
 
   /// The arguments as the model wrote them (one line of JSON).
   String get argsJson => args.isEmpty ? '' : jsonEncode(args);
@@ -204,8 +204,7 @@ class WorkStep {
   /// [WorkKind.grep]: hits and stories in the output. A search of the
   /// whole library states its totals in a line of its own.
   (int hits, int stories) get grepCounts {
-    final corpus =
-        RegExp(r'全库共 (\d+) 行命中，分布在 (\d+) 个故事').firstMatch(text);
+    final corpus = RegExp(r'全库共 (\d+) 行命中，分布在 (\d+) 个故事').firstMatch(text);
     if (corpus != null) {
       return (int.parse(corpus.group(1)!), int.parse(corpus.group(2)!));
     }
@@ -294,8 +293,8 @@ WorkKind _kindOf(String tool) => switch (tool) {
 List<WorkStep> workStepsOf(List<ReActStep> steps) {
   final out = <WorkStep>[];
   final waiting = <WorkStep>[];
-  final asked = <String>{};
   var number = 0;
+  final helperNumbers = <int, int>{};
   for (final step in steps) {
     switch (step.type) {
       case ReActEventType.toolCall:
@@ -307,8 +306,9 @@ List<WorkStep> workStepsOf(List<ReActStep> steps) {
           args: args,
           subtask: step.subtask,
           planned: step.planned,
-          number: ++number,
-          repeated: !asked.add('${step.subtask}|$tool|${jsonEncode(args)}'),
+          number: step.inContext ? 0 : step.subtask == null ? ++number
+              : helperNumbers.update(step.subtask!, (n) => n + 1, ifAbsent: () => 1),
+          inContext: step.inContext,
         );
         out.add(work);
         waiting.add(work);

@@ -12,10 +12,12 @@ class ReActStep {
     this.toolArgs,
     this.subtask,
     this.planned = false,
+    this.inContext = false,
   });
 
   /// A tool call of the planned first searches (see [ReActEvent.planned]).
   final bool planned;
+  final bool inContext;
 
   final ReActEventType type;
   final String content;

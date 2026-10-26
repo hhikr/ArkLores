@@ -6,6 +6,13 @@ import 'package:arklores/core/llm/llm_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('restored context steps retain the flag from the saved observation', () {
+    final turn = ChatSessionTurn(turn: 1, timestamp: DateTime(2026), query: 'q', model: 'm', baseUrl: 'b',
+      iterations: [ReActIterationRecord(iteration: 1, rawResponse: '', tool: 'grep', observation: '（已在上文）第 1 步')],);
+    final restored = chatTurnToMessages(ChatSessionTurn.fromJson(turn.toJson()), 'a');
+    expect(restored.last.steps.first.inContext, isTrue);
+  });
+
   group('ChatSessionFile JSON round-trip', () {
     test('preserves turns, iterations, verdict and what the turn cost', () {
       final session = ChatSessionFile(

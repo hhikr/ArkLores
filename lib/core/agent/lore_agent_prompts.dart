@@ -499,3 +499,6 @@ String loreTextToolProtocol(String toolList) => '''
 工具结果会以“工具结果”消息返回给你。可用工具：
 $toolList
 不再需要工具时，直接写最终答案（不要包含 tool 代码块）。''';
+
+/// Developer rule (2026-10-25) for repeated context-only calls.
+const loreUseContextNote = '需要的原文都在上文里，这一轮不能再调用工具。请根据上文作答。';

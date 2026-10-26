@@ -51,6 +51,7 @@ class ReActEvent {
     this.subtask,
     this.rollback = false,
     this.planned = false,
+    this.inContext = false,
     this.contextTokens,
     this.contextEstimated = false,
   });
@@ -58,6 +59,7 @@ class ReActEvent {
   /// 0.14 ([ReActEventType.toolCall]): a step of the first searches, written
   /// by the planning call and run by code, not asked for by the model.
   final bool planned;
+  final bool inContext;
 
   /// 0.14 ([ReActEventType.finalAnswerReset]): the turn is taken back as if
   /// it had not happened.

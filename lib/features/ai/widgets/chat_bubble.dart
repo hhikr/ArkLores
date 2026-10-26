@@ -27,7 +27,6 @@ import 'story_answer_body.dart';
 /// Renders a single chat bubble with support for ReAct steps disclosure
 /// and lazy loading of citations.
 class ChatBubble extends ConsumerStatefulWidget {
-
   const ChatBubble({super.key, required this.message});
   final ChatMessage message;
 
@@ -1074,7 +1073,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final flags = <(String, Color)>[
       if (step.subtask != null) (t.aiWorkHelper(step.subtask!), theme.textMuted),
       if (step.planned) (t.aiWorkPlanned, theme.textMuted),
-      if (step.repeated) (t.aiWorkRepeated, theme.danger),
+      if (step.inContext) (t.aiWorkInContext, theme.textMuted),
       if (step.notRun)
         (t.aiWorkNotRun, theme.danger)
       else if (step.failed)
@@ -1105,8 +1104,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                       runSpacing: 2,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text('${step.number}',
-                            style: small.copyWith(color: theme.textMuted),),
+                        if (!step.inContext)
+                          Text(
+                            '${step.number}',
+                            style: small.copyWith(color: theme.textMuted),
+                          ),
                         Text(
                           step.tool ?? '',
                           style: mono.copyWith(
@@ -1205,11 +1207,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         style: theme.ui(
           12,
           weight: 600,
-          color: look ? theme.onAccent : theme.textSecondary,
+          color: look ? theme.onAccent : color,
         ),
       ),
     );
   }
+
   /// A timeline row: a dot (or a short tick for notes) on a thin rail.
   Widget _timelineRow(AppThemeTokens theme,
       {required bool last, required Widget? dot, required Widget child, Color? dotFill,}) {

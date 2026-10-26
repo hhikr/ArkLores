@@ -1448,11 +1448,11 @@ abstract class AppLocalizations {
   /// **'planned'**
   String get aiWorkPlanned;
 
-  /// No description provided for @aiWorkRepeated.
+  /// No description provided for @aiWorkInContext.
   ///
   /// In en, this message translates to:
-  /// **'repeated'**
-  String get aiWorkRepeated;
+  /// **'already above'**
+  String get aiWorkInContext;
 
   /// No description provided for @aiWorkNotRun.
   ///

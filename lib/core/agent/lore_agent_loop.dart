@@ -36,6 +36,7 @@ import '../materials/material_document.dart';
 import '../materials/material_snapshot.dart';
 import '../wiki/wiki_lookup.dart';
 import '../wiki/wiki_page.dart';
+import 'context_ledger.dart';
 import 'coverage.dart';
 import 'line_picker.dart';
 import 'lore_agent_prompts.dart';
@@ -57,10 +58,12 @@ class LoreConversation {
   LoreConversation({
     List<Message>? messages,
     SeenLines? seen,
+    ContextLedger? ledger,
     this.question = '',
     this.entries = const [],
   })  : messages = messages ?? [],
-        seen = seen ?? SeenLines();
+        seen = seen ?? SeenLines(),
+        ledger = ledger ?? ContextLedger();
 
   /// The entries of the last answer with the citations that passed the
   /// check (what "提要" reorganises); empty when it was not a JSON answer.
@@ -70,6 +73,7 @@ class LoreConversation {
   /// results and answers.
   final List<Message> messages;
   final SeenLines seen;
+  final ContextLedger ledger;
 
   /// The last question as the user wrote it (0.14: a follow-up's search
   /// before the first turn includes it).
@@ -239,8 +243,16 @@ class LoreAgentLoop {
     // [asQuestion]: what a follow-up takes as the last question when
     // [query] is not the player's own words (the reader's review).
     final seen = prior?.seen ?? SeenLines();
+    final ledger = prior?.ledger ?? ContextLedger();
+    var step = 0;
+    var displayTurn = 1;
+    var contextOnlyTurns = 0;
     seen.retainMaterials(
-        {for (final d in materials?.documents ?? const <MaterialDocument>[]) d.pageId},);
+      {
+        for (final d in materials?.documents ?? const <MaterialDocument>[])
+          d.pageId,
+      },
+    );
     // 0.12: the prompt describes every installed game's library.
     final games = store is MultiGameRetrieval
         ? await (store as MultiGameRetrieval).installedGames()
@@ -252,12 +264,14 @@ class LoreAgentLoop {
           store,
           seen,
           materials: materials,
+          ledger: subtask ? null : ledger,
           embeddingClient: embeddingClient,
           wiki: wiki,
           picker:
               pickLines && !subtask ? LinePicker(planClient ?? client) : null,
         ),
-        if (wiki != null) ...wikiTools(wiki!, seen),
+        if (wiki != null)
+          ...wikiTools(wiki!, seen, ledger: subtask ? null : ledger),
         if (delegating) DelegateTool((args) => _runSubtask(args, seen)),
       ])
         t.name: t,
@@ -313,7 +327,9 @@ class LoreAgentLoop {
     // 0.14: a follow-up keeps the earlier questions, answers and what was
     // read (citable), not the earlier tool output itself.
     if (prior != null) {
-      _foldOldToolResults(conversation, toolResults, const {}, all: true);
+      _foldOldToolResults(conversation, toolResults, const {},
+          ledger: ledger, all: true,);
+      ledger.clear();
     }
     // 0.14: messages of turns whose every call was refused by the gate are
     // left out of later requests once a call has gone through (pending
@@ -416,56 +432,47 @@ class LoreAgentLoop {
           }
         }
 
-        final runs = <Future<(String, SearchResult?)>>[];
-        for (var k = 0; k < planned.length; k++) {
-          runs.add(
-            planned[k].tool == 'gather'
-                ? Future.wait([...runs]).then((_) => runOne(k))
-                : runOne(k),
-          );
-        }
-        final calls = [
-          for (final (k, step) in planned.indexed)
-            ToolCall(
-              id: 'planned_${k + 1}',
-              name: step.tool,
-              arguments: jsonEncode(step.args),
-            ),
-        ];
-        for (final (k, step) in planned.indexed) {
-          // (The first call shares the record of the plan itself.)
-          if (k > 0) {
-            onRawLlmResponse?.call(++record, '（拟定的第 ${k + 1} 步）');
-          }
-          yield ReActEvent(
-            type: ReActEventType.toolCall,
-            content: _describeCall(step.tool, step.args),
-            toolName: step.tool,
-            toolArgs: step.args,
-            planned: true,
-          );
-        }
-        yield ReActEvent(
-          type: ReActEventType.status,
-          content: planned.length > 1 ? '${planned.length} 项查找同时进行' : '正在检索资料…',
-        );
-        conversation.add(Message.assistantToolCalls('', calls));
         String? lostVectors;
+        final plannedCalls = <ToolCall>[];
+        final plannedResults = <Message>[];
+        final plannedBase = conversation.length + 1;
         for (var k = 0; k < planned.length; k++) {
-          final (text, found) = await runs[k];
+          final plannedStep = planned[k];
+          final key = canonicalCallKey(plannedStep.tool, plannedStep.args);
+          if (ledger.stepOfCall(key) != null) continue;
+          final (text, found) = await runOne(k);
+          if (text.startsWith(inContextPrefix)) continue;
+          final call = ToolCall(
+              id: 'planned_${k + 1}',
+              name: plannedStep.tool,
+              arguments: jsonEncode(plannedStep.args),);
+          if (k > 0) onRawLlmResponse?.call(++record, '（拟定的第 ${k + 1} 步）');
+          step++;
           yield ReActEvent(
-            type: ReActEventType.toolObservation,
-            content: text,
-            toolName: planned[k].tool,
-          );
+              type: ReActEventType.toolCall,
+              content: _describeCall(plannedStep.tool, plannedStep.args),
+              toolName: plannedStep.tool,
+              toolArgs: plannedStep.args,
+              planned: true,);
+          plannedCalls.add(call);
+          yield ReActEvent(
+              type: ReActEventType.toolObservation,
+              content: text,
+              toolName: plannedStep.tool,);
           if (found?.mode == SearchMode.keywordOnly && keywordOnly == null) {
             lostVectors = found?.modeNote ?? '没有向量检索';
           }
-          toolResults.add(conversation.length);
+          toolResults.add(plannedBase + plannedResults.length);
+          ledger.record(plannedBase + plannedResults.length, shown[k],
+              step: step, callKey: key,);
           if (!shown[k].isEmpty) {
-            shownIn[conversation.length] = shown[k].summary();
+            shownIn[plannedBase + plannedResults.length] = shown[k].summary();
           }
-          conversation.add(Message.toolResult(calls[k].id, text));
+          plannedResults.add(Message.toolResult(call.id, text));
+        }
+        if (plannedCalls.isNotEmpty) {
+          conversation.add(Message.assistantToolCalls('', plannedCalls));
+          conversation.addAll(plannedResults);
         }
         if (lostVectors != null) {
           yield ReActEvent(
@@ -523,6 +530,13 @@ class LoreAgentLoop {
         degradedThisTurn = true;
       }
 
+      // Developer rule, 2026-10-25: three context-only turns must answer.
+      final useContext = !subtask && contextOnlyTurns >= 3;
+      if (useContext &&
+          !visible().any((m) => m.content == loreUseContextNote)) {
+        redoNotes.add(conversation.length);
+        conversation.add(Message.user(loreUseContextNote));
+      }
       final lastTurn = maxTurns != null && turn == maxTurns;
       // (Once: an empty last turn may be sent again another way.)
       if (lastTurn && !hitTurnLimit) {
@@ -532,19 +546,19 @@ class LoreAgentLoop {
       if (transport.textProtocol) {
         _convertToTextProtocol(conversation, toolResults);
       }
-      _foldOldToolResults(conversation, toolResults, shownIn);
+      _foldOldToolResults(conversation, toolResults, shownIn, ledger: ledger);
       final statusPrefix = redoing
           ? '重新构思回答'
-          : turn == 1
+          : displayTurn == 1
               ? '正在思考'
-              : '第 $turn 轮';
+              : '第 $displayTurn 轮';
       yield ReActEvent(
         type: ReActEventType.status,
         content: redoing
             ? redoStatus
-            : turn == 1
+            : displayTurn == 1
                 ? '正在思考…'
-                : '第 $turn 轮 · 思考中',
+                : '第 $displayTurn 轮 · 思考中',
       );
       redoing = false;
 
@@ -569,12 +583,14 @@ class LoreAgentLoop {
               (m.toolCalls == null ? 0 : jsonEncode(m.toolCalls).length),
         );
         final turnTools = transport.textProtocol ? null : toolSpecs;
-        final stream = transport.plain
+        final stream = transport.plain && !useContext
             ? _plainTurn(messages, turnTools)
             : client.streamTurn(
                 messages,
                 tools: turnTools,
-                toolChoice: lastTurn && !transport.textProtocol ? 'none' : null,
+                toolChoice: (lastTurn || useContext) && !transport.textProtocol
+                    ? 'none'
+                    : null,
                 temperature: temperature,
                 maxTokens: maxTokens,
               );
@@ -643,7 +659,10 @@ class LoreAgentLoop {
       } on LLMException catch (e) {
         // 0.14: a failed call is part of the timeline too.
         onSpan?.call(
-            'llm_error:${_clip(e.message, 80)}', callStart, DateTime.now(),);
+          'llm_error:${_clip(e.message, 80)}',
+          callStart,
+          DateTime.now(),
+        );
         if (!transport.textProtocol && _rejectsTools(e)) {
           // The provider has no function calling: switch to plain-text tool
           // calls and ask again.
@@ -772,7 +791,9 @@ class LoreAgentLoop {
         }
         if (content.trim().isNotEmpty) {
           yield ReActEvent(
-              type: ReActEventType.thought, content: content.trim(),);
+            type: ReActEventType.thought,
+            content: content.trim(),
+          );
         }
         // 0.14: the gate — glued calls split, arguments checked against
         // each tool's schema; what enters the conversation is valid JSON.
@@ -781,6 +802,7 @@ class LoreAgentLoop {
             checkToolCall(c, tools[c.name], tools.keys),
         ];
         // The model has answered the last turn's empty lookups: they go.
+        ledger.forget(emptyTurns);
         hidden.addAll(emptyTurns);
         emptyTurns.clear();
         final turnStart = conversation.length;
@@ -808,32 +830,40 @@ class LoreAgentLoop {
           for (final (k, c) in checked.indexed)
             !c.ok
                 ? Future<String>.value(c.error)
-                : (failedLookups[c.call.name] ?? 0) >= maxFailedLookups
-                    ? Future<String>.value(lookupLimitNote(c.call.name))
-                    : _runTool(tools[c.call.name]!, c, shown[k]),
+                : !subtask &&
+                        c.call.name != 'delegate' &&
+                        ledger.stepOfCall(
+                                canonicalCallKey(c.call.name, c.arguments),) !=
+                            null
+                    ? Future<String>.value(
+                        '$inContextPrefix 同样的调用在第 ${ledger.stepOfCall(canonicalCallKey(c.call.name, c.arguments))} 步，结果仍在上文，没有重新执行。',)
+                    : (failedLookups[c.call.name] ?? 0) >= maxFailedLookups
+                        ? Future<String>.value(lookupLimitNote(c.call.name))
+                        : _runTool(tools[c.call.name]!, c, shown[k]),
         ];
         var found = 0;
+        var blocked = 0;
+        var executed = false;
+        final inContextCalls = <bool>[];
+        final callSteps = <int>[];
         for (final (k, c) in checked.indexed) {
-          onRawLlmResponse?.call(
-            ++record,
-            k == 0
-                ? '$content\n${jsonEncode([for (final c in calls) c.toJson()])}'
-                    .trim()
-                : '（第 $turn 轮的第 ${k + 1} 个调用）',
-          );
-          final label = _describeCall(c.call.name, c.arguments);
-          yield ReActEvent(
-            type: ReActEventType.toolCall,
-            content: label,
-            toolName: c.call.name,
-            toolArgs: c.arguments,
-          );
+          // Delegation cannot be deduplicated; announce it before helper events.
+          final inContext = c.call.name != 'delegate' &&
+              (await results[k]).startsWith(inContextPrefix);
+          inContextCalls.add(inContext);
+          callSteps.add(inContext ? 0 : ++step);
+          onRawLlmResponse?.call(++record, k == 0
+              ? '$content\n${jsonEncode([for (final c in calls) c.toJson()])}'.trim()
+              : '（第 $turn 轮的第 ${k + 1} 个调用）',);
+          yield ReActEvent(type: ReActEventType.toolCall,
+              content: _describeCall(c.call.name, c.arguments),
+              toolName: c.call.name, toolArgs: c.arguments, inContext: inContext,);
         }
         yield ReActEvent(
           type: ReActEventType.status,
           content: delegates > 1
-              ? '第 $turn 轮 · $delegates 个子任务并行查阅中'
-              : '第 $turn 轮 · ${checked.length > 1 ? '${checked.length} 个工具同时运行' : _describeCall(checked.first.call.name, checked.first.arguments)}',
+              ? '第 $displayTurn 轮 · $delegates 个子任务并行查阅中'
+              : '第 $displayTurn 轮 · ${checked.length > 1 ? '${checked.length} 个工具同时运行' : _describeCall(checked.first.call.name, checked.first.arguments)}',
         );
         if (side != null) {
           // Sub-agents' steps show up while they work.
@@ -845,8 +875,13 @@ class LoreAgentLoop {
         }
         for (final (k, c) in checked.indexed) {
           var result = await results[k];
+          final inContext = inContextCalls[k];
+          if (inContext) blocked++;
+          if (c.ok && !inContext && !result.startsWith(lookupLimitPrefix)) {
+            executed = true;
+          }
           if (c.ok && c.note != null) result = '$result\n${c.note}';
-          if (lookupFoundNothing(result)) {
+          if (!inContext && lookupFoundNothing(result)) {
             final name = c.call.name;
             final n = failedLookups[name] = (failedLookups[name] ?? 0) + 1;
             if (n <= maxFailedLookups &&
@@ -872,8 +907,14 @@ class LoreAgentLoop {
             type: ReActEventType.toolObservation,
             content: result,
             toolName: c.call.name,
+            inContext: inContext,
           );
           toolResults.add(conversation.length);
+          if (!inContext && c.ok) {
+            ledger.record(conversation.length, shown[k],
+                step: callSteps[k],
+                callKey: canonicalCallKey(c.call.name, c.arguments),);
+          }
           if (!shown[k].isEmpty) {
             shownIn[conversation.length] = shown[k].summary();
           }
@@ -883,11 +924,16 @@ class LoreAgentLoop {
                 : Message.toolResult(c.call.id, result),
           );
         }
-        if (checked.every((c) => !c.ok)) {
+        final allInContext = blocked == checked.length;
+        if (allInContext) contextOnlyTurns++;
+        if (executed) contextOnlyTurns = 0;
+        if (!allInContext) displayTurn++;
+        if (checked.every((c) => !c.ok) || allInContext) {
           refusedTurns.addAll([
             for (var i = turnStart; i < conversation.length; i++) i,
           ]);
-        } else if (refusedTurns.isNotEmpty) {
+        } else if (executed && refusedTurns.isNotEmpty) {
+          ledger.forget(refusedTurns);
           hidden.addAll(refusedTurns);
           refusedTurns.clear();
         }
@@ -1123,7 +1169,9 @@ class LoreAgentLoop {
           (fewUnseen ? 0 : unseen.length - removedMaterialCitations);
       // The model's own text (JSON) stays in the conversation, so a
       // follow-up sees the format it is asked for.
+      ledger.forget(redoNotes);
       hidden.addAll(redoNotes);
+      ledger.forget(emptyTurns);
       hidden.addAll(emptyTurns);
       conversation.add(Message.assistant(fromJson == null ? body : keep));
 
@@ -1159,11 +1207,13 @@ class LoreAgentLoop {
               : StoryAnswerStatus.answered;
       // What a follow-up starts from: the tool results folded now, while
       // what each showed is still known.
-      _foldOldToolResults(conversation, toolResults, shownIn, all: true);
+      _foldOldToolResults(conversation, toolResults, shownIn,
+          ledger: ledger, all: true,);
       onConversation?.call(
         LoreConversation(
           messages: visible(),
           seen: seen,
+          ledger: ledger,
           question: asQuestion ?? query,
           entries: entries,
         ),
@@ -1299,7 +1349,8 @@ class LoreAgentLoop {
     final messages = [
       Message.system(loreRolePrompt(LoreRole.stager)),
       Message.user(
-          loreStagePrompt(numberedEntries(entries), question: question),),
+        loreStagePrompt(numberedEntries(entries), question: question),
+      ),
     ];
     final text = StringBuffer();
     var shown = 0;
@@ -1781,6 +1832,7 @@ class LoreAgentLoop {
     Set<int> toolResults,
     Map<int, String> shownIn, {
     bool all = false,
+    ContextLedger? ledger,
   }) {
     var size = conversation.fold<int>(0, (n, m) => n + m.content.length);
     if (!all && size <= contextCharBudget) return;
@@ -1790,6 +1842,7 @@ class LoreAgentLoop {
       if (size <= target || i >= limit) break;
       final m = conversation[i];
       if (m.content.startsWith('[已折叠]')) continue;
+      ledger?.forget([i]);
       final firstLine = m.content.split('\n').first;
       // 0.14: which lines it showed stays; their text does not, and an
       // answer written from memory of it cited the wrong lines.
@@ -1955,7 +2008,10 @@ class LoreAgentLoop {
     for (final m in materialCitationPattern.allMatches(body)) {
       final a = int.parse(m[3]!), b = int.tryParse(m[4] ?? '') ?? a;
       if (!seen.covers(
-          'material:${m[1]}@${m[2]}', a <= b ? a : b, a <= b ? b : a,)) {
+        'material:${m[1]}@${m[2]}',
+        a <= b ? a : b,
+        a <= b ? b : a,
+      )) {
         unseen.add(m[0]!);
       }
     }
