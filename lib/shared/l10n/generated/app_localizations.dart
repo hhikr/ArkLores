@@ -2863,6 +2863,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Compact context / ≈ {from} → {to} / {count} passages kept'**
   String aiWorkCompaction(String from, String to, int count);
+
+  /// No description provided for @portraitPackMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'No portrait pack installed.'**
+  String get portraitPackMissing;
+
+  /// No description provided for @portraitNotInPack.
+  ///
+  /// In en, this message translates to:
+  /// **'This portrait is not in the pack.'**
+  String get portraitNotInPack;
+
+  /// No description provided for @portraitBlank.
+  ///
+  /// In en, this message translates to:
+  /// **'The portrait for this line is blank.'**
+  String get portraitBlank;
+
+  /// No description provided for @portraitPackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Story portraits'**
+  String get portraitPackTitle;
+
+  /// No description provided for @portraitPackOldIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed knowledge base has no portrait data yet. Update it before downloading the portrait pack.'**
+  String get portraitPackOldIndex;
+
+  /// No description provided for @portraitPackUnreleased.
+  ///
+  /// In en, this message translates to:
+  /// **'The portrait pack has not been released yet.'**
+  String get portraitPackUnreleased;
+
+  /// No description provided for @portraitPackDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'View story portraits by tapping speakers in the reader or names in answers. About {size}.'**
+  String portraitPackDescription(String size);
+
+  /// No description provided for @portraitPackInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed: {count} sprites, {size}.'**
+  String portraitPackInstalled(int count, String size);
+
+  /// No description provided for @portraitPackUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'A new portrait pack is available ({size}).'**
+  String portraitPackUpdateAvailable(String size);
+
+  /// No description provided for @portraitPackDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download portrait pack'**
+  String get portraitPackDownload;
+
+  /// No description provided for @portraitPackUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get portraitPackUpdate;
+
+  /// No description provided for @portraitPackDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get portraitPackDelete;
+
+  /// No description provided for @portraitPackCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get portraitPackCancel;
+
+  /// No description provided for @portraitPackCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits: Arkwaifu (CC BY-NC 4.0) / Hypergryph'**
+  String get portraitPackCredit;
+
+  /// No description provided for @portraitPackEndfield.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield stories have no portrait data yet.'**
+  String get portraitPackEndfield;
+
+  /// No description provided for @portraitPackDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the downloaded portrait pack? You can download it again later.'**
+  String get portraitPackDeleteConfirm;
+
+  /// No description provided for @portraitPackError.
+  ///
+  /// In en, this message translates to:
+  /// **'The portrait pack operation failed. Please retry.'**
+  String get portraitPackError;
+
+  /// No description provided for @portraitPackProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{received} / {total} ({percent}%)'**
+  String portraitPackProgress(String received, String total, String percent);
 }
 
 class _AppLocalizationsDelegate

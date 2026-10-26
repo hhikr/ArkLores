@@ -1563,4 +1563,66 @@ class AppLocalizationsZh extends AppLocalizations {
   String aiWorkCompaction(String from, String to, int count) {
     return '压缩上下文 / 约 $from → $to / 保留 $count 段';
   }
+
+  @override
+  String get portraitPackMissing => '没有安装立绘包。';
+
+  @override
+  String get portraitNotInPack => '立绘包里没有这一张。';
+
+  @override
+  String get portraitBlank => '这一句的立绘是空的。';
+
+  @override
+  String get portraitPackTitle => '剧情立绘';
+
+  @override
+  String get portraitPackOldIndex => '装的知识库还没有立绘数据，更新知识库后可以下载立绘包。';
+
+  @override
+  String get portraitPackUnreleased => '立绘包还没有发布。';
+
+  @override
+  String portraitPackDescription(String size) {
+    return '阅读器里点说话人、问答里点名字时显示剧情立绘。约 $size。';
+  }
+
+  @override
+  String portraitPackInstalled(int count, String size) {
+    return '已安装：$count 张差分，$size。';
+  }
+
+  @override
+  String portraitPackUpdateAvailable(String size) {
+    return '有新的立绘包（$size）。';
+  }
+
+  @override
+  String get portraitPackDownload => '下载立绘包';
+
+  @override
+  String get portraitPackUpdate => '更新';
+
+  @override
+  String get portraitPackDelete => '删除';
+
+  @override
+  String get portraitPackCancel => '取消';
+
+  @override
+  String get portraitPackCredit => '立绘：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络';
+
+  @override
+  String get portraitPackEndfield => '终末地的剧情还没有立绘数据。';
+
+  @override
+  String get portraitPackDeleteConfirm => '删除已下载的立绘包？之后可以重新下载。';
+
+  @override
+  String get portraitPackError => '立绘包操作失败，请重试。';
+
+  @override
+  String portraitPackProgress(String received, String total, String percent) {
+    return '$received / $total（$percent%）';
+  }
 }

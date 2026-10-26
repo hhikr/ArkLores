@@ -154,6 +154,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('kb-build-start')),
+      200,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('kb-game-arknights')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     ElevatedButton pull() => tester
         .widget<ElevatedButton>(find.byKey(const Key('kb-build-start')));
     expect(pull().onPressed, isNull);

@@ -1624,4 +1624,72 @@ class AppLocalizationsEn extends AppLocalizations {
   String aiWorkCompaction(String from, String to, int count) {
     return 'Compact context / ≈ $from → $to / $count passages kept';
   }
+
+  @override
+  String get portraitPackMissing => 'No portrait pack installed.';
+
+  @override
+  String get portraitNotInPack => 'This portrait is not in the pack.';
+
+  @override
+  String get portraitBlank => 'The portrait for this line is blank.';
+
+  @override
+  String get portraitPackTitle => 'Story portraits';
+
+  @override
+  String get portraitPackOldIndex =>
+      'The installed knowledge base has no portrait data yet. Update it before downloading the portrait pack.';
+
+  @override
+  String get portraitPackUnreleased =>
+      'The portrait pack has not been released yet.';
+
+  @override
+  String portraitPackDescription(String size) {
+    return 'View story portraits by tapping speakers in the reader or names in answers. About $size.';
+  }
+
+  @override
+  String portraitPackInstalled(int count, String size) {
+    return 'Installed: $count sprites, $size.';
+  }
+
+  @override
+  String portraitPackUpdateAvailable(String size) {
+    return 'A new portrait pack is available ($size).';
+  }
+
+  @override
+  String get portraitPackDownload => 'Download portrait pack';
+
+  @override
+  String get portraitPackUpdate => 'Update';
+
+  @override
+  String get portraitPackDelete => 'Delete';
+
+  @override
+  String get portraitPackCancel => 'Cancel';
+
+  @override
+  String get portraitPackCredit =>
+      'Portraits: Arkwaifu (CC BY-NC 4.0) / Hypergryph';
+
+  @override
+  String get portraitPackEndfield =>
+      'Endfield stories have no portrait data yet.';
+
+  @override
+  String get portraitPackDeleteConfirm =>
+      'Delete the downloaded portrait pack? You can download it again later.';
+
+  @override
+  String get portraitPackError =>
+      'The portrait pack operation failed. Please retry.';
+
+  @override
+  String portraitPackProgress(String received, String total, String percent) {
+    return '$received / $total ($percent%)';
+  }
 }

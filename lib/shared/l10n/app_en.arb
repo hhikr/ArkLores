@@ -581,5 +581,60 @@
           "type": "int"
         }
       }
+    },
+  "portraitPackMissing": "No portrait pack installed.",
+  "portraitNotInPack": "This portrait is not in the pack.",
+  "portraitBlank": "The portrait for this line is blank.",
+  "portraitPackTitle": "Story portraits",
+  "portraitPackOldIndex": "The installed knowledge base has no portrait data yet. Update it before downloading the portrait pack.",
+  "portraitPackUnreleased": "The portrait pack has not been released yet.",
+  "portraitPackDescription": "View story portraits by tapping speakers in the reader or names in answers. About {size}.",
+  "@portraitPackDescription": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
     }
+  },
+  "portraitPackInstalled": "Installed: {count} sprites, {size}.",
+  "@portraitPackInstalled": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitPackUpdateAvailable": "A new portrait pack is available ({size}).",
+  "@portraitPackUpdateAvailable": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitPackDownload": "Download portrait pack",
+  "portraitPackUpdate": "Update",
+  "portraitPackDelete": "Delete",
+  "portraitPackCancel": "Cancel",
+  "portraitPackCredit": "Portraits: Arkwaifu (CC BY-NC 4.0) / Hypergryph",
+  "portraitPackEndfield": "Endfield stories have no portrait data yet.",
+  "portraitPackDeleteConfirm": "Delete the downloaded portrait pack? You can download it again later.",
+  "portraitPackError": "The portrait pack operation failed. Please retry.",
+  "portraitPackProgress": "{received} / {total} ({percent}%)",
+  "@portraitPackProgress": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  }
 }

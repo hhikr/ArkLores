@@ -580,5 +580,60 @@
           "type": "int"
         }
       }
+    },
+  "portraitPackMissing": "没有安装立绘包。",
+  "portraitNotInPack": "立绘包里没有这一张。",
+  "portraitBlank": "这一句的立绘是空的。",
+  "portraitPackTitle": "剧情立绘",
+  "portraitPackOldIndex": "装的知识库还没有立绘数据，更新知识库后可以下载立绘包。",
+  "portraitPackUnreleased": "立绘包还没有发布。",
+  "portraitPackDescription": "阅读器里点说话人、问答里点名字时显示剧情立绘。约 {size}。",
+  "@portraitPackDescription": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
     }
+  },
+  "portraitPackInstalled": "已安装：{count} 张差分，{size}。",
+  "@portraitPackInstalled": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitPackUpdateAvailable": "有新的立绘包（{size}）。",
+  "@portraitPackUpdateAvailable": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitPackDownload": "下载立绘包",
+  "portraitPackUpdate": "更新",
+  "portraitPackDelete": "删除",
+  "portraitPackCancel": "取消",
+  "portraitPackCredit": "立绘：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络",
+  "portraitPackEndfield": "终末地的剧情还没有立绘数据。",
+  "portraitPackDeleteConfirm": "删除已下载的立绘包？之后可以重新下载。",
+  "portraitPackError": "立绘包操作失败，请重试。",
+  "portraitPackProgress": "{received} / {total}（{percent}%）",
+  "@portraitPackProgress": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  }
 }
