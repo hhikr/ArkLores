@@ -432,15 +432,42 @@ class LoreAgentLoop {
           }
         }
 
+        // The steps run at the same time (gather after the others: the
+        // stories they found count a little more); one whose call or text
+        // is still above does not appear at all.
+        final keys = [
+          for (final p in planned) canonicalCallKey(p.tool, p.args),
+        ];
+        final runs = <Future<(String, SearchResult?)>?>[];
+        for (var k = 0; k < planned.length; k++) {
+          if (ledger.stepOfCall(keys[k]) != null) {
+            runs.add(null);
+            continue;
+          }
+          final before = [for (final r in runs) if (r != null) r];
+          runs.add(
+            planned[k].tool == 'gather'
+                ? Future.wait(before).then((_) => runOne(k))
+                : runOne(k),
+          );
+        }
+        final running = runs.nonNulls.length;
+        if (running > 0) {
+          yield ReActEvent(
+            type: ReActEventType.status,
+            content: running > 1 ? '$running 项查找同时进行' : '正在检索资料…',
+          );
+        }
         String? lostVectors;
         final plannedCalls = <ToolCall>[];
         final plannedResults = <Message>[];
         final plannedBase = conversation.length + 1;
         for (var k = 0; k < planned.length; k++) {
           final plannedStep = planned[k];
-          final key = canonicalCallKey(plannedStep.tool, plannedStep.args);
-          if (ledger.stepOfCall(key) != null) continue;
-          final (text, found) = await runOne(k);
+          final key = keys[k];
+          final run = runs[k];
+          if (run == null) continue;
+          final (text, found) = await run;
           if (text.startsWith(inContextPrefix)) continue;
           final call = ToolCall(
               id: 'planned_${k + 1}',

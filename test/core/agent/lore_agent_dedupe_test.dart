@@ -77,6 +77,21 @@ void main() {
     final outputs = events.where((e) => e.type == ReActEventType.toolObservation).toList();
     expect(outputs.last.content, contains('第 1 步'));
   });
+  test('planned steps are started together, before any of them is shown',
+      () async {
+    final client = _ScriptedClient([_answer(answer)], plans: [
+      '{"search":["正文","甲"],"outline":[],"anchors":[]}',
+    ],);
+    final events = await LoreAgentLoop(client: client, store: store).run(query: '问题').toList();
+    final together = events.indexWhere((e) =>
+        e.type == ReActEventType.status && e.content == '2 项查找同时进行',);
+    final firstCall =
+        events.indexWhere((e) => e.type == ReActEventType.toolCall);
+    expect(together, isNonNegative);
+    expect(together, lessThan(firstCall));
+    expect(events.where((e) => e.type == ReActEventType.toolCall && e.planned),
+        hasLength(2),);
+  });
   test(
       'wiki pages block only fully present requested paragraphs including section filters',
       () async {
