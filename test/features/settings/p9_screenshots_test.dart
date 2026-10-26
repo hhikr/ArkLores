@@ -79,17 +79,16 @@ void main() {
       }
 
       await host(const AiSettingsPage());
-      expect(find.byType(AppSlider), findsNWidgets(2));
+      expect(find.byType(SegmentedChoice<int>), findsNWidgets(2));
       expect(tester.takeException(), isNull);
       await shoot(tester, '${prefix}_settings_default', pixelRatio: 1);
-      for (final slider in find.byType(AppSlider).evaluate().toList()) {
-        final finder = find.byWidget(slider.widget);
-        final rect = tester.getRect(finder);
-        await tester.dragFrom(rect.center, Offset(-rect.width, 0));
-        await tester.pumpAndSettle();
-      }
-      expect(find.text('32k'), findsOneWidget);
-      expect(find.text('50%'), findsOneWidget);
+      await tester.tap(find.text('32k'));
+      await tester.tap(find.text('50%'));
+      // Halfway through the slide.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      await shoot(tester, '${prefix}_settings_sliding', pixelRatio: 1);
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await shoot(tester, '${prefix}_settings_min', pixelRatio: 1);
       await host(const StoryReaderPage(storyId: 'a/long.txt'));

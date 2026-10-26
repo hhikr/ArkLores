@@ -870,6 +870,11 @@ void main() {
       findsOneWidget,
       reason: 'the text follows the finger',
     );
+    expect(
+      tester.getTopLeft(find.text('第$at句。')).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(scrub).dy),
+      reason: 'the line jumped to is not under the panel',
+    );
     await gesture.up();
     await tester.pumpAndSettle();
     expect(scrub, findsOneWidget, reason: 'release keeps the panel open');
@@ -884,6 +889,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<AppSlider>(slider).value, greaterThan(390));
     expect(scrub, findsOneWidget);
+    final jumped = tester.widget<AppSlider>(slider).value.round() + 1;
+    final line = find.text('第$jumped句。');
+    expect(line, findsOneWidget);
+    expect(tester.getTopLeft(line).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(scrub).dy),);
+    final screen = tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    expect(tester.getBottomLeft(line).dy, lessThanOrEqualTo(screen));
     await tester.drag(find.byKey(const ValueKey('story-reader-scroll')),
         const Offset(0, 500),);
     await tester.pumpAndSettle();

@@ -6,7 +6,6 @@ import 'package:arklores/main.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
-import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -23,33 +22,35 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('settings-category-ai')));
     await tester.pumpAndSettle();
-    final warning = find.descendant(
-      of: find.byKey(const ValueKey('settings-context-warning')),
-      matching: find.byType(AppSlider),
+    final warning = find.byKey(const ValueKey('settings-context-warning'));
+    expect(
+      find.descendant(of: warning, matching: find.text('上下文提醒值')),
+      findsOneWidget,
+      reason: 'the title carries no value',
     );
-    final warningRect = tester.getRect(warning);
-    await tester.tapAt(
-      Offset(
-        warningRect.left + 14 + (warningRect.width - 28) / 6,
-        warningRect.center.dy,
-      ),
+    final block = find.descendant(
+      of: warning,
+      matching: find.byWidgetPredicate((w) =>
+          w is Positioned && w.child is ColoredBox && w.width != null,),
     );
+    double blockLeft() => tester.getTopLeft(block).dx;
+    final from = blockLeft();
+    final target = tester.getTopLeft(
+      find.descendant(of: warning, matching: find.text('64k')),
+    );
+    await tester.tap(find.descendant(of: warning, matching: find.text('64k')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final midway = blockLeft();
+    expect(midway, isNot(from), reason: 'the block slides');
+    expect(midway, greaterThan(target.dx), reason: 'not there yet');
     await tester.pumpAndSettle();
+    expect(blockLeft(), lessThan(target.dx));
     final container =
         ProviderScope.containerOf(tester.element(find.byType(AiSettingsPage)));
     expect(container.read(contextWarnTokensProvider), 64000);
     expect(await SettingsService().loadContextWarnTokens(), 64000);
-    final compact = find.descendant(
-      of: find.byKey(const ValueKey('settings-compact-percent')),
-      matching: find.byType(AppSlider),
-    );
-    final compactRect = tester.getRect(compact);
-    await tester.tapAt(
-      Offset(
-        compactRect.left + 14 + (compactRect.width - 28) / 4,
-        compactRect.center.dy,
-      ),
-    );
+    await tester.tap(find.text('60%'));
     await tester.pumpAndSettle();
     expect(container.read(compactPercentProvider), 60);
     expect(await SettingsService().loadCompactPercent(), 60);

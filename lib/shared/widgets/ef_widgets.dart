@@ -1038,7 +1038,9 @@ class SquareSwitch extends ConsumerWidget {
 }
 
 /// A segmented choice: an ink frame, the current segment filled with ink
-/// (the accent is kept for navigation and the main action).
+/// (the accent is kept for navigation and the main action). On a change the
+/// ink block slides to the new segment, and each label turns light as the
+/// block passes under it.
 class SegmentedChoice<T> extends ConsumerWidget {
   const SegmentedChoice({
     super.key,
@@ -1058,61 +1060,95 @@ class SegmentedChoice<T> extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
+    final n = options.length;
+    final selected = options.indexWhere((o) => o.$1 == value);
     return Container(
       decoration: BoxDecoration(border: Border.all(color: theme.textPrimary)),
-      child: Row(
-        children: [
-          for (final (v, label) in options)
-            Expanded(
-              child: Semantics(
-                button: true,
-                inMutuallyExclusiveGroup: true,
-                checked: v == value,
-                child: PressBuilder(
-                  enabled: v != value,
-                  builder: (context, down) => GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: v == value
-                        ? null
-                        : () {
-                            HapticFeedback.selectionClick();
-                            onChanged(v);
-                          },
-                    child: AnimatedContainer(
-                      duration: Motion.of(
-                        context,
-                        down ? Motion.press : Motion.wipe,
-                      ),
-                      curve: Motion.mech,
-                      constraints: const BoxConstraints(minHeight: 44),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      alignment: Alignment.center,
-                      color: v == value
-                          ? theme.textPrimary
-                          : down
-                              ? pressTint(Colors.transparent, theme.textPrimary)
-                              : Colors.transparent,
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: theme
-                            .ui(
-                              14,
-                              weight: v == value ? 700 : 500,
-                              color: v == value
-                                  ? theme.bgPrimary
-                                  : theme.textPrimary,
-                            )
-                            .merge(labelStyle?.call(v)),
-                      ),
-                    ),
+      child: TweenAnimationBuilder<double>(
+        // Where the ink block stands, in segments (it slides between them).
+        tween: Tween(end: selected < 0 ? -1 : selected.toDouble()),
+        duration: Motion.of(context, Motion.row),
+        curve: Motion.snap,
+        builder: (context, at, _) => LayoutBuilder(
+          builder: (context, box) {
+            final width = box.maxWidth / n;
+            return Stack(
+              children: [
+                if (selected >= 0)
+                  Positioned(
+                    left: at * width,
+                    top: 0,
+                    bottom: 0,
+                    width: width,
+                    child: ColoredBox(color: theme.textPrimary),
                   ),
+                Row(
+                  children: [
+                    for (var i = 0; i < n; i++)
+                      Expanded(
+                        child: _segment(
+                          theme,
+                          options[i],
+                          // How much of the block is under this segment.
+                          (1 - (at - i).abs()).clamp(0.0, 1.0),
+                        ),
+                      ),
+                  ],
                 ),
-              ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(AppThemeTokens theme, (T, String) option, double covered) {
+    final (v, label) = option;
+    final current = v == value;
+    return Semantics(
+      button: true,
+      inMutuallyExclusiveGroup: true,
+      checked: current,
+      child: PressBuilder(
+        enabled: !current,
+        builder: (context, down) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: current
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  onChanged(v);
+                },
+          child: AnimatedContainer(
+            duration: Motion.of(context, down ? Motion.press : Motion.wipe),
+            curve: Motion.mech,
+            constraints: const BoxConstraints(minHeight: 44),
+            // Narrow: seven short values fit across a phone.
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            alignment: Alignment.center,
+            color: down && !current
+                ? pressTint(Colors.transparent, theme.textPrimary)
+                : Colors.transparent,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: theme
+                  .ui(
+                    14,
+                    weight: covered > 0.5 ? 700 : 500,
+                    color: Color.lerp(
+                      theme.textPrimary,
+                      theme.bgPrimary,
+                      covered,
+                    ),
+                  )
+                  .merge(labelStyle?.call(v)),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }

@@ -355,7 +355,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (viewport is! RenderBox || !viewport.attached || _lines.isEmpty) {
       return null;
     }
-    final top = viewport.localToGlobal(Offset.zero).dy + 8;
+    final top = viewport.localToGlobal(Offset.zero).dy + 8 + _panelCover();
     final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy;
     int? first, last;
     // Keys of lines scrolled out of the lazy list are dropped (a line built
@@ -516,15 +516,36 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _showProgressSoon();
   }
 
-  /// Anchors the list on the row holding line [p], at the top of the view.
+  /// The progress panel, measured to tell how much of the text it covers.
+  final GlobalKey _scrubPanelKey = GlobalKey();
+
+  /// How far down the text the open progress panel reaches (0 when shut):
+  /// the line jumped to is put under it, and where the reader is counts
+  /// from there.
+  double _panelCover() {
+    if (!_scrub.value) return 0;
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final panel = _scrubPanelKey.currentContext?.findRenderObject();
+    if (view is! RenderBox || panel is! RenderBox || !panel.attached) {
+      return 0;
+    }
+    final bottom = panel
+        .localToGlobal(Offset(0, panel.size.height), ancestor: view)
+        .dy;
+    return bottom.clamp(0.0, view.size.height);
+  }
+
+  /// Anchors the list on the row holding line [p], at the top of the view
+  /// (under the progress panel while it is open).
   void _showLine(int p) {
     final r = _rows.indexWhere((row) => row.last >= p);
     final row = r < 0 ? _rows.length - 1 : r;
     if (row == _scrubRow) return;
     _scrubRow = row;
+    final height = _scrollKey.currentContext?.size?.height ?? 0;
     setState(() {
       _center = row + 1;
-      _centerAt = 0;
+      _centerAt = height > 0 ? (_panelCover() / height).clamp(0.0, 0.9) : 0;
     });
     // Changing the upward sliver can preserve the old visible item. Reset
     // once after layout so consecutive jumps reach the requested row.
@@ -767,9 +788,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                           ? const SizedBox(width: double.infinity)
                           : ValueListenableBuilder<(int, int)?>(
                               valueListenable: _progress,
-                              builder: (context, progress, _) => _scrubPanel(
-                                theme,
-                                (progress?.$1 ?? 0).clamp(0, _lines.length - 1),
+                              builder: (context, progress, _) => KeyedSubtree(
+                                key: _scrubPanelKey,
+                                child: _scrubPanel(
+                                  theme,
+                                  (progress?.$1 ?? 0)
+                                      .clamp(0, _lines.length - 1),
+                                ),
                               ),
                             ),
                     ),
