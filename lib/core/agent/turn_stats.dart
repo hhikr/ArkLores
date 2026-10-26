@@ -50,8 +50,13 @@ class TurnStats {
   /// This and [other] together (an answer and the digest asked for later).
   TurnStats operator +(TurnStats other) => TurnStats(
         calls: calls + other.calls,
-        contextTokens: other.contextTokens,
-        contextEstimated: other.contextEstimated,
+        // The later context, unless the later part reported none (a digest
+        // is a separate request, not this conversation's context).
+        contextTokens:
+            other.contextTokens > 0 ? other.contextTokens : contextTokens,
+        contextEstimated: other.contextTokens > 0
+            ? other.contextEstimated
+            : contextEstimated,
         promptTokens: promptTokens + other.promptTokens,
         cachedPromptTokens: cachedPromptTokens + other.cachedPromptTokens,
         completionTokens: completionTokens + other.completionTokens,

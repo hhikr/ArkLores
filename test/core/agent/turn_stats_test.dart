@@ -13,6 +13,10 @@ void main() {
     expect((first + second).contextTokens, 32000);
     expect((first + second).contextEstimated, true);
     expect((first + second).calls, 3);
+    // A digest's cost added later reports no context: the answer's stays.
+    final withDigest = second + const TurnStats(calls: 1);
+    expect(withDigest.contextTokens, 32000);
+    expect(withDigest.contextEstimated, true);
     expect(formatUsageLine(second), startsWith('ctx ≈32.0k / '));
     expect(formatUsageLine(first), startsWith('ctx 100k / '));
     expect(formatUsageLine(const TurnStats()), isNot(contains('ctx')));
