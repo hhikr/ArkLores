@@ -180,9 +180,11 @@ class ReadingText extends ConsumerWidget {
   }
 }
 
-/// The head of a part that folds: a trace bar (the part is open) or a
-/// hairline-grey one (folded), the title, a short note (a count) and a
-/// chevron; tapping it calls [onTap]. At least 48 high.
+/// The head of a part that folds, for a part drawn row by row (a lazy
+/// list): the title, a short note (a count) and a chevron; tapping it calls
+/// [onTap]. Its trace rail stays while the part is open (the rows under it
+/// draw theirs, so the rail runs the length of the part). At least 48 high.
+/// A part built whole uses [FoldSection].
 class FoldHead extends ConsumerWidget {
   const FoldHead({
     super.key,
@@ -200,53 +202,70 @@ class FoldHead extends ConsumerWidget {
   final bool plain;
 
   @override
+  Widget build(BuildContext context, WidgetRef ref) => Semantics(
+        button: true,
+        expanded: open,
+        child: PressRow(
+          key: ValueKey('fold-$title'),
+          onTap: onTap,
+          shift: false,
+          marked: open,
+          child: FoldHeadRow(
+            title: title,
+            open: open,
+            trailing: trailing,
+            plain: plain,
+          ),
+        ),
+      );
+}
+
+/// What a fold's head shows: the title, a short note and a chevron that
+/// turns down when the part is open. At least 48 high; room on the left for
+/// the trace rail.
+class FoldHeadRow extends ConsumerWidget {
+  const FoldHeadRow({
+    super.key,
+    required this.title,
+    required this.open,
+    this.trailing,
+    this.plain = false,
+  });
+
+  final String title;
+  final bool open;
+  final String? trailing;
+  final bool plain;
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final d = Motion.of(context, Motion.wipe);
-    return Semantics(
-      button: true,
-      expanded: open,
-      child: PressRow(
-        key: ValueKey('fold-$title'),
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: plain ? 0 : 14,
-              vertical: 10,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(plain ? 12 : 14, 10, plain ? 0 : 10, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(title, style: theme.heading(16)),
             ),
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: d,
-                  curve: Motion.mech,
-                  width: 4,
-                  height: 18,
-                  color: open ? theme.trace : theme.cardBorder,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(title, style: theme.heading(16)),
-                ),
-                if (trailing != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Text(trailing!, style: theme.field()),
-                  ),
-                AnimatedRotation(
-                  turns: open ? 0 : -0.25,
-                  duration: d,
-                  curve: Motion.mech,
-                  child: Icon(
-                    Icons.expand_more_sharp,
-                    color: open ? theme.textPrimary : theme.textSecondary,
-                    size: 22,
-                  ),
-                ),
-              ],
+            if (trailing != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Text(trailing!, style: theme.field()),
+              ),
+            AnimatedRotation(
+              turns: open ? 0 : -0.25,
+              duration: d,
+              curve: Motion.mech,
+              child: Icon(
+                Icons.expand_more_sharp,
+                color: open ? theme.textPrimary : theme.textSecondary,
+                size: 22,
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -290,39 +309,34 @@ class _FoldSectionState extends ConsumerState<FoldSection> {
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
-    final head = FoldHead(
-      title: widget.title,
-      open: _open,
-      trailing: widget.trailing,
-      plain: widget.plain,
-      onTap: () {
-        widget.onToggle?.call(!_open);
-        setState(() => _open = !_open);
-      },
-    );
-    // Opening answers the tap at once (snap); the text is its own layer, so
-    // the frames of the fold only clip it, they do not repaint it.
-    final body = AnimatedSize(
-      duration: Motion.of(context, Motion.wipe),
-      curve: _open ? Motion.snap : Motion.mech,
-      alignment: Alignment.topCenter,
-      child: _open
-          ? RepaintBoundary(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  widget.plain ? 0 : 14,
-                  0,
-                  widget.plain ? 0 : 14,
-                  14,
-                ),
-                child: widget.child,
-              ),
-            )
-          : const SizedBox(width: double.infinity),
-    );
-    final column = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [head, body],
+    // The rail on the left runs along the head while pressed, then down
+    // with the body as it opens, and stays while the part is open.
+    final column = Semantics(
+      button: true,
+      expanded: _open,
+      child: FoldBlock(
+        headKey: ValueKey('fold-${widget.title}'),
+        open: _open,
+        onTap: () {
+          widget.onToggle?.call(!_open);
+          setState(() => _open = !_open);
+        },
+        head: FoldHeadRow(
+          title: widget.title,
+          open: _open,
+          trailing: widget.trailing,
+          plain: widget.plain,
+        ),
+        body: () => Padding(
+          padding: EdgeInsets.fromLTRB(
+            widget.plain ? 12 : 14,
+            0,
+            widget.plain ? 0 : 14,
+            14,
+          ),
+          child: widget.child,
+        ),
+      ),
     );
     if (widget.plain) return column;
     return Container(
@@ -537,7 +551,23 @@ class _ProfileSliverState extends ConsumerState<ProfileSliver> {
             bottom: last ? side : BorderSide.none,
           ),
         ),
-        child: child,
+        // The rows of an open part carry on the head's rail, so it runs the
+        // length of the part (the head draws its own, which also answers
+        // the finger).
+        child: r < 0
+            ? child
+            : DecoratedBox(
+                position: DecorationPosition.foreground,
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: theme.trace,
+                      width: traceRailWidth,
+                    ),
+                  ),
+                ),
+                child: child,
+              ),
       ),
     );
   }

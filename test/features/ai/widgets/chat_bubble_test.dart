@@ -19,6 +19,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../support/screenshot.dart';
+
 const _c5 = 'activities/act_fixture/level_fixture_c5.txt';
 const _c6 = 'activities/act_fixture/level_fixture_c6.txt';
 const _other = 'activities/act_other/level_other_c1.txt';
@@ -75,8 +77,10 @@ Future<void> _pump(
               .copyWith(textScaler: TextScaler.linear(textScale)),
           child: child!,
         ),
-        home: Scaffold(
-          body: scroll ? SingleChildScrollView(child: bubble) : bubble,
+        home: Shot(
+          child: Scaffold(
+            body: scroll ? SingleChildScrollView(child: bubble) : bubble,
+          ),
         ),
       ),
     ),
@@ -660,9 +664,13 @@ void main() {
       expect(find.textContaining('Executing tool'), findsNothing);
 
       expect(find.byKey(const ValueKey('work-raw-1')), findsNothing);
+      final head = tester.getTopLeft(find.byKey(const ValueKey('work-step-1')));
       await tester.tap(find.byKey(const ValueKey('work-step-1')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('work-raw-1')), findsOneWidget);
+      // The step's head stays where it was; only the output comes in.
+      expect(tester.getTopLeft(find.byKey(const ValueKey('work-step-1'))), head);
+      await shoot(tester, 'work_step_open');
       expect(tester.takeException(), isNull);
     });
   });

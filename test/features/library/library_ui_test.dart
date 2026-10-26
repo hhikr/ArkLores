@@ -2,6 +2,7 @@ import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart'
     show StoryCatalogEntry;
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
+import 'package:arklores/core/gamedata/story_vectors.dart' show stepLineKind;
 import 'package:arklores/core/library/library_provider.dart';
 import 'package:arklores/core/library/library_queries.dart';
 import 'package:arklores/core/materials/material_provider.dart';
@@ -803,6 +804,58 @@ void main() {
         .widget<Text>(find.byKey(const ValueKey('story-reader-progress')))
         .data!;
     expect(int.parse(shown.split(' / ').first), greaterThan(20));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the slider stays put while the preview line changes',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => [
+              for (var i = 0; i < 300; i++)
+                StoryLineEntry(
+                  lineIndex: i,
+                  speaker: i % 3 == 0 ? null : 'Speaker',
+                  // A step from the middle on: the panel then has a
+                  // step's title to show, before it none.
+                  kind: i == 150 ? stepLineKind : null,
+                  content: switch (i % 3) {
+                    0 => '短。',
+                    1 => '很长的一句话' * 30,
+                    _ => 'A long English line\nwith a break ' * 8,
+                  },
+                ),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const StoryReaderPage(storyId: 'a/mixed.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const ValueKey('page-title')));
+    await tester.pumpAndSettle();
+    final slider = find.byKey(const ValueKey('story-reader-slider'));
+    final track = tester.getRect(slider);
+    final gesture =
+        await tester.startGesture(Offset(track.left + 4, track.center.dy));
+    final tops = <double>{};
+    for (var x = 0.0; x < track.width - 8; x += track.width / 37) {
+      await gesture.moveTo(Offset(track.left + 4 + x, track.center.dy));
+      await tester.pump();
+      tops.add(tester.getTopLeft(slider).dy);
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tops, hasLength(1));
     expect(tester.takeException(), isNull);
   });
 

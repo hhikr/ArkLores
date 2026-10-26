@@ -770,6 +770,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     if (index != _tabController.index || before == null || !mounted) return;
     _bars.moved(ref, (y - before).toDouble(), atTop: y <= 0);
   }
+
+  /// A tap on the page's text or empty space: the bars back, or away again.
+  void _onBlankTap(int index) {
+    if (index != _tabController.index || !mounted) return;
+    _bars.tapped(ref, canHide: (_scrollY[index] ?? 0) > 0);
+  }
   // ─── Build ───────────────────────────────────────────────────────
 
   /// 0.13: a page asked for by another page (an answer's wiki citation)
@@ -868,6 +874,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                       onUrlChanged: _onUrlChanged,
                       onHistoryChanged: _onHistoryChanged,
                       onScrolled: _onScrolled,
+                      onBlankTap: _onBlankTap,
                     ),
                   );
                 }),
@@ -908,8 +915,12 @@ class _WikiTabView extends StatefulWidget {
     required this.onUrlChanged,
     required this.onHistoryChanged,
     required this.onScrolled,
+    required this.onBlankTap,
   });
   final int index;
+
+  /// A tap ended on the page where nothing answers it.
+  final void Function(int index) onBlankTap;
 
   /// The page scrolled to [y] (CSS pixels from its top).
   final void Function(int index, int y) onScrolled;
@@ -1070,6 +1081,12 @@ class _WikiTabViewState extends State<_WikiTabView> {
             // Profile builds (`-FrameLog`): the page's own frames a second,
             // next to Flutter's `[frame]` lines — whether the page draws
             // fewer, or Flutter composes fewer of them.
+            UserScript(
+              groupName: 'arklores-blank-tap',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: true,
+              source: wikiBlankTapScript,
+            ),
             if (kProfileMode)
               UserScript(
                 groupName: 'arklores-web-fps',
@@ -1087,6 +1104,10 @@ class _WikiTabViewState extends State<_WikiTabView> {
               : null,
           onWebViewCreated: (controller) {
             _controller = controller;
+            controller.addJavaScriptHandler(
+              handlerName: wikiBlankTapHandler,
+              callback: (_) => widget.onBlankTap(widget.index),
+            );
             widget.onControllerCreated(widget.index, controller);
             _syncPaused();
           },
@@ -1247,6 +1268,34 @@ class _WikiTabViewState extends State<_WikiTabView> {
     return description;
   }
 }
+
+/// The handler the page calls when a tap ends where nothing on it answers.
+const String wikiBlankTapHandler = 'arkloresBlankTap';
+
+/// Tells the app about taps that end on text or empty space: a `click`
+/// (the browser sends none for a scroll or a long press) that the page did
+/// not take for itself (no link, control or handler-marked element under
+/// it, not cancelled) and that selected no text. Bubbling, so the page's
+/// own handlers run first. The same for every site.
+const String wikiBlankTapScript = '''
+(function () {
+  if (window.__arkloresBlankTap) return;
+  window.__arkloresBlankTap = true;
+  var live = 'a[href],button,input,select,textarea,label,summary,video,audio,'
+    + '[onclick],[role="button"],[role="link"],[role="tab"],[role="menuitem"],'
+    + '[contenteditable=""],[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented) return;
+    var t = e.target;
+    if (t && t.closest && t.closest(live)) return;
+    var s = window.getSelection && window.getSelection();
+    if (s && !s.isCollapsed) return;
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      window.flutter_inappwebview.callHandler('$wikiBlankTapHandler');
+    }
+  }, false);
+})();
+''';
 
 /// Generic fixed/sticky dock adaptation; page padding stays stable while bars move.
 @visibleForTesting

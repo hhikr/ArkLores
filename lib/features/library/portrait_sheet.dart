@@ -12,6 +12,7 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/cut_border.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/portrait_image.dart';
+import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'entry_page.dart';
 import 'portrait_speakers_page.dart';
@@ -226,27 +227,50 @@ class _PortraitVariantsState extends ConsumerState<_PortraitVariants> {
         itemBuilder: (context, index) {
           final item = widget.sprites[index];
           final parsed = SpriteName.parse(item)!;
+          final current = item == widget.selected;
+          // The one shown carries the trace rail on its left; choosing
+          // another draws it back up here and down there.
           return Semantics(
-            selected: item == widget.selected,
+            selected: current,
+            button: true,
             label: context.t.portraitFaceBody(parsed.face, parsed.body),
             child: Padding(
               padding: const EdgeInsets.only(top: 8, right: 8),
-              child: PressRow(
-                onTap: () => widget.onSelect(item),
-                child: Container(
-                  decoration: ShapeDecoration(
-                    shape: CutBorder(
-                      bottomRight: 7,
-                      side: BorderSide(
-                        color: item == widget.selected
-                            ? theme.trace
-                            : theme.cardBorder,
-                        width: item == widget.selected ? 2 : 1,
+              child: PressBuilder(
+                builder: (context, down) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: withHaptic(() => widget.onSelect(item)),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: down
+                              ? pressTint(theme.cardSurface, theme.textPrimary)
+                              : theme.cardSurface,
+                          shape: CutBorder(
+                            bottomRight: 7,
+                            side: BorderSide(
+                              color: current
+                                  ? theme.textSecondary
+                                  : theme.cardBorder,
+                            ),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 3, 3, 3),
+                          child: PortraitImage(sprite: item),
+                        ),
                       ),
-                    ),
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: traceRailWidth,
+                        child: TraceRail(on: current),
+                      ),
+                    ],
                   ),
-                  padding: const EdgeInsets.all(3),
-                  child: PortraitImage(sprite: item),
                 ),
               ),
             ),

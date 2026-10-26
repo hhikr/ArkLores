@@ -15,6 +15,10 @@ import 'portrait_sheet.dart';
 
 VoidCallback? _dismissPreview;
 
+const double _pad = 8;
+const double _width = 172;
+const double _height = 300;
+
 void showPortraitPreview(
   BuildContext context, {
   required String speaker,
@@ -122,11 +126,12 @@ class _PreviewOverlay extends ConsumerWidget {
     final theme = ref.watch(themeProvider);
     final size = MediaQuery.sizeOf(context);
     final bottom = size.height - MediaQuery.viewInsetsOf(context).bottom - 16;
-    final width = math.min(280.0, size.width - 32);
-    const height = 256.0;
-    final top = anchor.bottom + 8 + height <= bottom
-        ? anchor.bottom + 8
-        : math.max(16.0, anchor.top - height - 8);
+    // A tall, narrow card: the figure standing in it, a strip under it.
+    final width = math.min(_width, size.width - 32);
+    final height = math.min(_height, size.height * 0.5);
+    final below = anchor.bottom + 6 + height <= bottom;
+    final top =
+        below ? anchor.bottom + 6 : math.max(16.0, anchor.top - height - 6);
     final name = ref.watch(speakerPortraitsProvider(speaker)).valueOrNull;
     return Stack(
       children: [
@@ -151,21 +156,31 @@ class _PreviewOverlay extends ConsumerWidget {
               child: TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0, end: 1),
                 duration: Motion.of(context, Motion.dialogIn),
-                curve: Motion.snap,
-                builder: (_, value, child) =>
-                    Opacity(opacity: value, child: child),
+                curve: Motion.mech,
+                // It opens out of the name: down from it, or up when it
+                // sits above.
+                builder: (_, value, child) => ClipRect(
+                  child: Align(
+                    alignment:
+                        below ? Alignment.topCenter : Alignment.bottomCenter,
+                    heightFactor: value,
+                    child: child,
+                  ),
+                ),
                 child: Material(
                   color: theme.cardSurface,
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    height: height,
+                    padding: const EdgeInsets.all(_pad),
                     decoration: BoxDecoration(
                       border: Border.all(color: theme.cardBorder),
                     ),
+                    // The figure fills the card; the name, the count and the
+                    // way to the whole card share one strip under it.
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SizedBox(
-                          height: 160,
+                        Expanded(
                           child: FutureBuilder<String?>(
                             future: spriteFuture,
                             builder: (_, snapshot) {
@@ -180,9 +195,20 @@ class _PreviewOverlay extends ConsumerWidget {
                                 return const SizedBox.shrink();
                               }
                               if (shown == null) {
-                                return Text(
-                                  context.t.portraitNoSprite,
-                                  style: theme.text(14),
+                                return Hatch(
+                                  child: Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Text(
+                                        context.t.portraitNoSprite,
+                                        textAlign: TextAlign.center,
+                                        style: theme.text(
+                                          13,
+                                          color: theme.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 );
                               }
                               final group = ref
@@ -199,11 +225,13 @@ class _PreviewOverlay extends ConsumerWidget {
                             },
                           ),
                         ),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     speaker,
@@ -214,20 +242,21 @@ class _PreviewOverlay extends ConsumerWidget {
                                   if (name != null)
                                     Text(
                                       context.t.portraitLines(name.lines),
-                                      style: theme.field(),
+                                      maxLines: 1,
+                                      style: theme.field(size: 12),
                                     ),
                                 ],
                               ),
                             ),
                             AppButton(
                               context.t.portraitMore,
+                              small: true,
                               onPressed: onMore,
                             ),
                           ],
                         ),
                       ],
-                    ),
-                  ),
+                    ),                  ),
                 ),
               ),
             ),

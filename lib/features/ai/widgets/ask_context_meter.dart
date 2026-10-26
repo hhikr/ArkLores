@@ -118,8 +118,9 @@ class _AskContextMeterState extends ConsumerState<AskContextMeter> {
             alignment: Alignment.centerRight,
             child: Container(
               key: const ValueKey('ask-context-meter'),
-              color: over ? theme.accentPrimary : null,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              // On the page's ground: the answer scrolls under it.
+              color: over ? theme.accentPrimary : theme.bgPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

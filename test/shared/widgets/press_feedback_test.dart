@@ -42,20 +42,21 @@ void main() {
           )
           .toList();
       expect(containers.first.transform!.getTranslation().x, 0);
-      expect(containers.last.constraints!.maxWidth, 0);
       for (final transform in tester.widgetList<Transform>(
         find.descendant(of: row, matching: find.byType(Transform)),
       )) {
         expect(transform.transform.getTranslation().x, 0);
       }
+      // The trace rail has not started down the row.
       expect(
         tester
             .getSize(
-              find
-                  .descendant(of: row, matching: find.byType(AnimatedContainer))
-                  .last,
+              find.descendant(
+                of: find.descendant(of: row, matching: find.byType(TraceRail)),
+                matching: find.byType(ColoredBox),
+              ),
             )
-            .width,
+            .height,
         0,
       );
     }

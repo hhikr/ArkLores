@@ -200,6 +200,7 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
         ],
         PressRow(
           key: const ValueKey('answer-details-toggle'),
+          shift: false,
           onTap: () => setState(() => _detailsOpen = !_detailsOpen),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),

@@ -182,8 +182,13 @@ class CollectionPage extends ConsumerWidget {
                           size: 15.5,
                         ),
                       ),
-                    ..._ownParts(context, theme, inline,
-                        notes: true, nickname: nickname,),
+                    ..._ownParts(
+                      context,
+                      theme,
+                      inline,
+                      notes: true,
+                      nickname: nickname,
+                    ),
                     if (opening.isNotEmpty) ...[
                       Padding(
                         padding: EdgeInsets.zero,
@@ -203,8 +208,13 @@ class CollectionPage extends ConsumerWidget {
                         rowDivider(theme),
                       ],
                     ],
-                    ..._ownParts(context, theme, inline,
-                        notes: false, nickname: nickname,),
+                    ..._ownParts(
+                      context,
+                      theme,
+                      inline,
+                      notes: false,
+                      nickname: nickname,
+                    ),
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
                         Padding(
@@ -226,33 +236,26 @@ class CollectionPage extends ConsumerWidget {
                         ]
                       else
                         for (final g in sections.entries) ...[
-                          Theme(
-                            data: Theme.of(context)
-                                .copyWith(dividerColor: Colors.transparent),
-                            child: ExpansionTile(
-                              key: ValueKey('story-group-${g.key}'),
-                              shape: const Border(),
-                              collapsedShape: const Border(),
-                              tilePadding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              title: Text(g.key, style: theme.heading(16)),
-                              subtitle: Text(
-                                context.t.libraryCountStories(g.value.length),
-                                style: theme.field(),
-                              ),
-                              children: [
-                                for (final s in g.value) ...[
-                                  StoryRow(
-                                    story: s,
-                                    showGroup: false,
-                                    read: progress[LibraryRef.story(
-                                      s.rawId ?? '',
-                                    ).toString()],
-                                  ),
-                                  rowDivider(theme),
-                                ],
-                              ],
+                          FoldTile(
+                            key: ValueKey('story-group-${g.key}'),
+                            childrenPadding: const EdgeInsets.only(left: 6),
+                            title: Text(g.key, style: theme.heading(16)),
+                            subtitle: Text(
+                              context.t.libraryCountStories(g.value.length),
+                              style: theme.field(),
                             ),
+                            children: [
+                              for (final s in g.value) ...[
+                                StoryRow(
+                                  story: s,
+                                  showGroup: false,
+                                  read: progress[LibraryRef.story(
+                                    s.rawId ?? '',
+                                  ).toString()],
+                                ),
+                                rowDivider(theme),
+                              ],
+                            ],
                           ),
                           rowDivider(theme),
                         ],
@@ -277,35 +280,42 @@ class CollectionPage extends ConsumerWidget {
                             type: t.type,
                             collectionId: collectionId,
                             heading: typeList.length > 1
-                                ? (t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
+                                ? (t.type == 'roguelike_buff' &&
+                                        ruleKinds.isNotEmpty
                                     ? ruleKinds.join('、')
-                                    : entryTypeNameIn(t.type, gameOfId(collectionId)))
+                                    : entryTypeNameIn(
+                                        t.type,
+                                        gameOfId(collectionId),
+                                      ))
                                 : null,
                           )
                         else ...[
-                        LibraryRow(
-                          key: ValueKey('collection-type-${t.type}'),
-                          title:
-                              t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
-                                  ? ruleKinds.join('、')
-                                  : entryTypeNameIn(t.type, gameOfId(collectionId)),
-                          subtitle: context.t.libraryCountEntries(t.count),
-                          subtitleLines: 1,
-                          trailing: Icon(
-                            Icons.chevron_right_sharp,
-                            color: theme.textMuted,
-                          ),
-                          onTap: () => pushLibraryPage(
-                            context,
-                            (_) => EntryListPage(
-                              type: t.type,
-                              collectionId: collectionId,
-                              collectionName: c.name,
+                          LibraryRow(
+                            key: ValueKey('collection-type-${t.type}'),
+                            title: t.type == 'roguelike_buff' &&
+                                    ruleKinds.isNotEmpty
+                                ? ruleKinds.join('、')
+                                : entryTypeNameIn(
+                                    t.type,
+                                    gameOfId(collectionId),
+                                  ),
+                            subtitle: context.t.libraryCountEntries(t.count),
+                            subtitleLines: 1,
+                            trailing: Icon(
+                              Icons.chevron_right_sharp,
+                              color: theme.textMuted,
+                            ),
+                            onTap: () => pushLibraryPage(
+                              context,
+                              (_) => EntryListPage(
+                                type: t.type,
+                                collectionId: collectionId,
+                                collectionName: c.name,
+                              ),
                             ),
                           ),
-                        ),
-                        rowDivider(theme),
-                      ],
+                          rowDivider(theme),
+                        ],
                     ],
                     if (storyList.isEmpty &&
                         typeList.isEmpty &&
@@ -346,38 +356,33 @@ class CollectionPage extends ConsumerWidget {
       final list = byType['roguelike_tip'];
       if (list == null) return const [];
       return [
-        Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            key: const ValueKey('notes-group'),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-            title: Text(
-              entryTypeName('roguelike_tip'),
-              style: theme.heading(16),
-            ),
-            subtitle: Text(
-              context.t.libraryCountEntries(list.length),
-              style: theme.field(),
-            ),
-            children: [
-              for (final e in list) ...[
-                LibraryRow(
-                  key: ValueKey('part-${e.id}'),
-                  title: e.name,
-                  subtitle: withPlaceholders(e.synopsis ?? '', nickname),
-                  subtitleLines: 2,
-                  trailing: Icon(
-                    Icons.chevron_right_sharp,
-                    color: theme.textMuted,
-                  ),
-                  onTap: () => openEntry(context, e),
-                ),
-                rowDivider(theme),
-              ],
-            ],
+        FoldTile(
+          key: const ValueKey('notes-group'),
+          childrenPadding: const EdgeInsets.only(left: 6),
+          title: Text(
+            entryTypeName('roguelike_tip'),
+            style: theme.heading(16),
           ),
+          subtitle: Text(
+            context.t.libraryCountEntries(list.length),
+            style: theme.field(),
+          ),
+          children: [
+            for (final e in list) ...[
+              LibraryRow(
+                key: ValueKey('part-${e.id}'),
+                title: e.name,
+                subtitle: withPlaceholders(e.synopsis ?? '', nickname),
+                subtitleLines: 2,
+                trailing: Icon(
+                  Icons.chevron_right_sharp,
+                  color: theme.textMuted,
+                ),
+                onTap: () => openEntry(context, e),
+              ),
+              rowDivider(theme),
+            ],
+          ],
         ),
         rowDivider(theme),
       ];

@@ -146,16 +146,22 @@ class PortraitImage extends ConsumerWidget {
     final result =
         ref.watch(_imageProvider((sprite: sprite, fallback: fallbackSprite)));
     Widget placeholder(String text, {bool hatch = true}) {
-      final child = SizedBox.expand(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              text,
-              style: theme.text(14, color: theme.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ),
+      // A thumbnail is too small for the sentence: the hatching alone says
+      // there is no picture (the sentence is still read out).
+      final child = LayoutBuilder(
+        builder: (context, box) => SizedBox.expand(
+          child: box.maxWidth < 120
+              ? Semantics(label: text)
+              : Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      text,
+                      style: theme.text(14, color: theme.textSecondary),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
         ),
       );
       return hatch ? Hatch(child: child) : child;

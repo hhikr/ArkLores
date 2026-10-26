@@ -24,7 +24,7 @@
 | `shared/theme/endfield_theme_tokens.dart` / `ark_theme_tokens.dart` | 浅色 / 深色两套完整取值（深色不是反色） |
 | `shared/theme/cut_border.dart` | `CutBorder`：切角形状（可点的东西才用） |
 | `shared/theme/motion.dart` | `Motion`：三条曲线（`snap` 出现、`mech` 擦入与所有退出、`ease`）、各档时长、`Motion.of()`（减少动效时为 0） |
-| `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`AppSlider` 共用滑块、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
+| `shared/widgets/ef_widgets.dart` | 部件：`TriStrip` 三色条、`Hatch` 斜线纹、`Eyebrow`、`SectionTitle`、`IndexTag` 编号、`FactsRow` 字段行、`FilterBlock` 筛选块、`AppButton`（normal / go / danger / quiet，按下擦入、busy 铺斜线纹）、`SquareIconButton`、`NoticeBox` 提示、`EmptyState` 空状态、`SegmentProgress` / `BusyMark` / `LoadingView` 分段进度、`SquareSwitch`、`SegmentedChoice`、`AppSlider` 共用滑块、`Figure` 大数字、`InkPanel`、`PressRow` 按压行、`TraceRail` / `FoldBlock` / `FoldTile` 左侧 trace 线与展开、`ActionRow`、`showAppSheet` + `SheetFrame` / `PlainSheet`、`showAppDialog` + `AppDialog`、`confirmAction`、`showToast` |
 | `shared/widgets/page_frame.dart` | `PageScaffold`（推入页的顶栏）、`MainTopBar` + `TopTab` + `TopBarTitle`（四个主标签页的顶栏）、`AppTabBar`（底部标签栏）、`DockPanel`（盖在内容上的控件板）、`pagePadding` |
 | `shared/widgets/theme_aware_card.dart` | 面板：可点时右下切角、按下时底边擦入强调色 |
 | `shared/widgets/smooth_page_route.dart` | 换页：**只有资料页**（`smoothPageRoute(frosted: true)`：资料页里打开的集合、条目、阅读器、阅读历史）用毛玻璃，其他页面（设置、知识库、问答里打开的出处等）整页从右推入（同样 280 ms、`snap`，前缘一条 2px `trace` 线，下面的页变暗），立即构建（开发者 2026-10-25）。毛玻璃：玻璃（模糊加一层纸色，前缘一条 2px `trace` 线）从右推入（`Motion.coverIn` 280 ms，`snap`，一点就动），下面的页面只变暗、不左移（左移会在玻璃后面留出一条空白）；**玻璃盖满屏幕之后才在它后面构建新页面**（第一帧排版再久，屏幕上也只是静止的模糊画面），画完第一帧玻璃就地变清（把这一帧拍成快照、一次算出 sigma 8 / 5 / 3 / 1.5 四张模糊图，依次交叉淡入，最后一张淡出露出页面，纸色一起退去；不要每帧重算整屏模糊——手机上每帧 9–15 ms、120Hz 下一抽一抽；也不要只拿一张模糊图淡出——淡到一半字就清楚了，不像对焦；`Motion.reveal` 900 ms，`ease`，按帧推进、一帧最多推进 25 ms，慢帧只让它慢一点、不跳一截），页面对焦出来。返回是整页向右滑出（240 ms，`mech`），下面的页早已建好、不用盖板。整页画进自己的层（`RepaintBoundary`）只做平移 |
@@ -53,12 +53,20 @@
 - **问答输入框**（0.20，`ask_composer.dart`）：没有焦点时一行（选项、草稿第一行、发送），整条除按钮外点哪里都给输入框焦点；有焦点时两行（文字在上、按钮一排在下，按钮之间的空白也给焦点），可展开到半屏、全屏。
   回车一律换行，只用发送按钮发。两种形态用同一个 `TextField`（固定的 `Stack` 结构，不重建），否则一切换形态焦点就丢、键盘收回。输入框所在区域从顶栏下沿到当前页面底边提供有限约束；页面底边由 `Scaffold` 随键盘缩短，不重复扣减键盘高度。上下文提示先占空间，输入框在剩余空间内展开，全屏仍避开顶栏。面板用 `ClipRect` 裁切，尺寸动画期间文字不能画到框外。
 - **可以点的人名**（0.20，开发者 2026-10-26）：答案里字保持正文色，用 2 px `accentPrimary` 下划线。阅读器里不用下划线，能点的名字用 `heading(14)`（Saira，700）；深色用 `accentText`，浅色用 `textPrimary`，字高下方约 40% 垫 `accentPrimary` 填充。不能点的名字仍用 `ui(14, weight: 700, color: textSecondary)`。名字行高保持 20 px，热区扩到 48×48，不改正文排版。
-- **名字旁的立绘预览**：先在名字下方显示小图、名字、句数与“更多”，下方放不下时放上方，左右留 16 px。“更多”打开大卡片；点外面、滚动、返回时关闭，同时只有一张。预览不取焦点，出现与退出用 `Motion` 淡入淡出，减少动效时立即切换。
+- **名字旁的立绘预览**：竖长的小卡片（172×300，不超过半屏高）：整身立绘占满上部，底下一条放名字、句数与小号“更多”。在名字下方 6 px，放不下时放上方，左右留 16 px。“更多”打开大卡片；第一下点外面只关卡片，滚动、返回也关，同时只有一张。预览不取焦点；出现时从名字一侧展开（`Motion.dialogIn`，`mech`），退出淡出，减少动效时立即切换。
 - **立绘**（0.20）：立绘区是展示内容，直角、不可点、面板色底，图片 contain、底对齐；没有图时斜线纹加一句话。见 `PORTRAITS.md` §4。
 - **阅读器的进度面板**（0.20）：点标题展开行号、百分比、所在步骤、当前行与 `AppSlider`；再点标题、点正文或按返回键收起。拖滑块或点轨道按行跳转，每帧最多处理一次定位，松手保存进度并保留面板。滚动正文时面板保留，滑块跟随当前行。标题旁的定位按钮仍用于回到引用行。
-- **滑块**（`AppSlider`）：48 px 高触控区、28 px 粗轨道、轨道内的方形滑块与右下切角。已填部分用 `accentPrimary`，未填部分用 `divider`，滑块用 `onAccent` 配对比边框。拖动直接跟手；点轨道与外部改值使用 `Motion.row` / `Motion.snap`，减少动效时立即到位。可选等距分档，换档用轻触感；拖动时回调 `onChanged`，松手或点轨道后回调 `onChangeEnd`。支持键盘方向键与读屏加减，当前值用 `field()` 显示在滑块上方或右侧。现在只有阅读器的进度面板用它；设置里的档位用分段选项（开发者 2026-10-26），标题只写设置名称。
+- **滑块**（`AppSlider`）：48 px 高触控区、28 px 粗轨道、右下切角；已填部分用 `accentPrimary`、未填部分用 `divider`，填到滑块中线。滑块是 40×40 的墨色方块（`textPrimary`，右下切角，上下各伸出轨道 6 px），中间两道握纹，按住时握纹变强调色（开发者 2026-10-26：要大方块，不要细指针）。拖动直接跟手；点轨道与外部改值使用 `Motion.row` / `Motion.snap`，减少动效时立即到位。可选等距分档，换档用轻触感；拖动时回调 `onChanged`，松手或点轨道后回调 `onChangeEnd`。支持键盘方向键与读屏加减，当前值用 `field()` 显示在滑块上方或右侧。现在只有阅读器的进度面板用它；设置里的档位用分段选项（开发者 2026-10-26），标题只写设置名称。
+- **左侧的 trace 线**（0.20 复核）：它是一条会延展的线，不是变粗的块。宽度固定 3 px（`traceRailWidth`），动的只有长度：`TraceRail` 从上往下伸到所在内容的全高（`snap`），收回时从下往上（`mech`）。
+  - 列表行按下（`PressRow`）：线沿行落下、行右移 6 px，抬起收回。状态行、展开头这类不该动的行用 `shift: false`，按下只盖一层薄墨。
+  - 展开的东西（`FoldBlock`：`FoldSection`、`FoldTile`、工作过程的每一步、思考过程、GitHub 令牌）：按下时线沿头部落下，展开时随内容的 `AnimatedSize` 一起往下伸，**展开期间常驻**，收起时随内容收回。头部打开前后不变（工作过程的参数预览一直在），只有内容从下面进来。懒加载的档案（`ProfileSliver`）每行画自己那一段，连成一条。
+  - 当前项：差分缩略图里当前的一张、阅读器的续读行、引用的资料段落常驻一条；换选择时旧的收回、新的落下。续读行的线画在左边距里，不把那一行挤进去。
+  - 不要再用 `AnimatedContainer(width: 0→4)` 画按下线，也不要用 Material 的 `ExpansionTile`（用 `FoldTile`）。时间线不用 `IntrinsicHeight`（展开的长输出每帧要排两次版，会卡）。
+- **按钮的大小**：画出来比触控区小。`AppButton` 普通 42 高、`small` 34 高（触控区都是 48）；`SquareIconButton` 画 38×38。卡片、列表行里的次要操作用 `small`，一组只一个 `go`。
+- **点空白处唤回栏**（0.20，Wiki 与问答）：栏让开后，点内容里不能点的地方（正文、空白；不是按钮、链接、行）唤回顶栏和底栏，再点一次让开（在页面顶部不让开）。只认点按结束：问答里是列表外层的 `GestureDetector.onTap`（里面能点的东西先赢，拖动归列表），Wiki 里是页面脚本的 `click`（浏览器不为滚动、长按发 click；落在链接、控件、带处理器的元素上或选了字时不算），都走 `BarsFollower.tapped`。
+- **补充资料页**（0.20 复核）：标签已经写着“补充资料”，页内不再重复大标题；开头一句用途、两个小号导入按钮（新建在顶栏 +，个人资料为空时空状态里也有）。每条资料一行：名字和字段（种类 / 是否参与问答 / 索引状态）点开阅读，右边开关选它参与问答，下面一排小号次要操作（来源说明、编辑、重试或取消索引）。来源说明是说明文字，不用 `NoticeBox`；个人资料正文用阅读字体，不套卡片。资料原文打开时，引用的段落从顶栏下沿开始，不被顶栏盖住。
 - **分段选项**（`SegmentedChoice`）：墨色细框，选中的一段填墨；换选项时墨块用 `Motion.row` / `Motion.snap` 滑到新的一段，经过的字随覆盖程度由墨变纸色，不闪切（减少动效时立即到位）。每段左右只留 2 px，七个短值在手机宽度上放得下。
-- 阅读器的进度面板开着时，跳到的那一行放在面板下沿，“当前在第几行”与保存的进度也从面板下沿算起。
+- 阅读器的进度面板开着时，跳到的那一行放在面板下沿，“当前在第几行”与保存的进度也从面板下沿算起。面板里每一行固定高度（强制行高，换行当空格，有步骤的剧情始终留出步骤那一行），拖动时面板不随预览的长短、中英文变高，滑块不抖。
 - **空状态**用 `EmptyState`：一句完整的话说明这里将来会有什么，有下一步就给按钮。
 - **提示与出错**用 `NoticeBox` / `kbFlag`（强调色小旗），贴在出问题的地方；输入框的错误写在框下（`errorText`），不弹底部提示。
 - **底部弹出**用 `showAppSheet`（机械推入、不回弹），**对话框**用 `showAppDialog` + `AppDialog`。

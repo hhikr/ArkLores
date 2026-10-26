@@ -10,12 +10,12 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
-import '../../shared/widgets/theme_aware_card.dart';
 import 'library_widgets.dart';
 import 'material_pages.dart';
+import 'reading_text.dart';
 
-void _open(BuildContext context, WidgetBuilder builder) =>
-    Navigator.of(context).push(smoothPageRoute<void>(frosted: true, builder: builder));
+void _open(BuildContext context, WidgetBuilder builder) => Navigator.of(context)
+    .push(smoothPageRoute<void>(frosted: true, builder: builder));
 
 /// Opens the editor for a new material, optionally with a starting text.
 void newMaterial(BuildContext context, {String? body}) =>
@@ -106,14 +106,9 @@ class MyMaterialPage extends ConsumerWidget {
                   materialDate(m.updatedAt),
                   context.t.materialsChars(m.body.length),
                 ]),
-                const SizedBox(height: 16),
-                ThemeAwareCard(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-                  child: SelectableText(
-                    m.body,
-                    style: theme.text(16, height: 1.8),
-                  ),
-                ),
+                const SizedBox(height: 18),
+                // Read like the other texts: the reading font, no frame.
+                ReadingText(m.body),
                 const SizedBox(height: 16),
               ],
             ),
@@ -123,8 +118,12 @@ class MyMaterialPage extends ConsumerWidget {
 
 /// Create or edit a material.
 class MaterialEditorPage extends ConsumerStatefulWidget {
-  const MaterialEditorPage(
-      {super.key, this.materialId, this.initialBody, this.initialTitle,});
+  const MaterialEditorPage({
+    super.key,
+    this.materialId,
+    this.initialBody,
+    this.initialTitle,
+  });
 
   /// The material to edit; null creates a new one.
   final String? materialId;
@@ -189,13 +188,24 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
     setState(() => _saving = true);
     try {
       final store = await ref.read(userDataStoreProvider.future);
-      final note = await store.saveMaterial(id:_savedId??widget.materialId,title:_title.text,body:_body.text);
-      _savedId=note.id;
+      final note = await store.saveMaterial(
+        id: _savedId ?? widget.materialId,
+        title: _title.text,
+        body: _body.text,
+      );
+      _savedId = note.id;
       await ref.read(materialLibraryProvider.notifier).saveNote(note);
       ref.invalidate(materialsProvider);
       ref.invalidate(materialProvider(note.id));
-      if(mounted)Navigator.of(context).pop();
-    }catch(_){if(mounted)setState((){_saving=false;_error='暂时无法完成保存，请重试。';});}
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = '暂时无法完成保存，请重试。';
+        });
+      }
+    }
   }
 
   Future<bool> _confirmDiscard() async {
@@ -257,7 +267,10 @@ class _MaterialEditorPageState extends ConsumerState<MaterialEditorPage> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(
                   children: [
-                    if(_error!=null)NoticeBox(_error!),
+                    if (_error != null) ...[
+                      NoticeBox(_error!),
+                      const SizedBox(height: 12),
+                    ],
                     TextField(
                       key: const ValueKey('material-title'),
                       controller: _title,

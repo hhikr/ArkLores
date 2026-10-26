@@ -338,17 +338,32 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               }
               return _onScrollMetrics(n.metrics);
             },
-            child: ListView.builder(
-              key: const ValueKey('ask-chat-list'),
-              controller: _scrollController,
-              padding: EdgeInsets.fromLTRB(
-                16,
-                top + 12,
-                16,
-                12 + _composerHeight,
+            // A tap that ends on the text or the space between messages (a
+            // button, a row or a link under the finger takes the tap for
+            // itself, a drag goes to the list): the bars back, or away.
+            child: GestureDetector(
+              key: const ValueKey('ask-blank-tap'),
+              onTap: () {
+                final p = _scrollController.hasClients
+                    ? _scrollController.position
+                    : null;
+                _bars.tapped(
+                  ref,
+                  canHide: p != null && p.pixels > p.minScrollExtent,
+                );
+              },
+              child: ListView.builder(
+                key: const ValueKey('ask-chat-list'),
+                controller: _scrollController,
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  top + 12,
+                  16,
+                  12 + _composerHeight,
+                ),
+                itemCount: count,
+                itemBuilder: (context, index) => _MessageAt(index),
               ),
-              itemCount: count,
-              itemBuilder: (context, index) => _MessageAt(index),
             ),
           ),
         ),
@@ -358,17 +373,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             bottom: 8 + _composerHeight,
             child: BarsAway(
               distance: tabBarRoom(context),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: theme.cardSurface,
-                  border: Border.all(color: theme.divider),
-                ),
-                child: SquareIconButton(
-                  key: const ValueKey('scroll-to-bottom'),
-                  tooltip: context.t.aiScrollToBottom,
-                  onPressed: _scrollToBottom,
-                  icon: Icons.arrow_downward_sharp,
-                ),
+              // A chip-grey block like the composer's own buttons; it
+              // covers what scrolls under it.
+              child: SquareIconButton(
+                key: const ValueKey('scroll-to-bottom'),
+                tooltip: context.t.aiScrollToBottom,
+                onPressed: _scrollToBottom,
+                icon: Icons.arrow_downward_sharp,
+                filled: true,
               ),
             ),
           ),

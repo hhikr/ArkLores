@@ -31,6 +31,19 @@ class BarsFollower {
     if (_run < -_run0 && bars.state) bars.state = false;
   }
 
+  /// A tap that ended on nothing tappable in the view (not a drag, not a
+  /// button or a link): away, the bars come back; back, they go away again
+  /// when [canHide] (the view is not at its start).
+  void tapped(WidgetRef ref, {required bool canHide}) {
+    _run = 0;
+    final bars = ref.read(barsHiddenProvider.notifier);
+    if (bars.state) {
+      bars.state = false;
+    } else if (canHide) {
+      bars.state = true;
+    }
+  }
+
   /// The bars back (a new question, another page).
   void show(WidgetRef ref) {
     _run = 0;

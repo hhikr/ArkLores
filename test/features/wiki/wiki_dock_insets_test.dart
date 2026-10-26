@@ -79,6 +79,31 @@ void main() {
         contains("'--arklores-dock-bottom', '85.0px'"),
       );
     }
+    // A tap on nothing on the page (the page script reports it): with the
+    // bars away they come back; at the page's top they stay; scrolled on,
+    // a second tap sends them away again.
+    final tap = controllers.first.handlers[wikiBlankTapHandler]!;
+    container.read(barsHiddenProvider.notifier).state = true;
+    tap(const <dynamic>[]);
+    expect(container.read(barsHiddenProvider), isFalse);
+    tap(const <dynamic>[]);
+    expect(container.read(barsHiddenProvider), isFalse);
+    final web = tester.widgetList<InAppWebView>(find.byType(InAppWebView)).first;
+    web.platform.params.onScrollChanged!(
+      InAppWebViewController.fromPlatform(platform: controllers.first),
+      0,
+      400,
+    );
+    tap(const <dynamic>[]);
+    expect(container.read(barsHiddenProvider), isTrue);
+    tap(const <dynamic>[]);
+    expect(container.read(barsHiddenProvider), isFalse);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    for (final controller in controllers) {
+      controller.scripts.clear();
+      controller.scripts.addAll(['', '']);
+    }
     reduced = true;
     await mount();
     for (final controller in controllers) {
@@ -153,6 +178,13 @@ class _RecordingController extends PlatformInAppWebViewController {
           const PlatformInAppWebViewControllerCreationParams(id: 'test'),
         );
   final scripts = <String>[];
+  final handlers = <String, JavaScriptHandlerCallback>{};
+  @override
+  void addJavaScriptHandler({
+    required String handlerName,
+    required JavaScriptHandlerCallback callback,
+  }) =>
+      handlers[handlerName] = callback;
   @override
   Future<dynamic> evaluateJavascript({
     required String source,

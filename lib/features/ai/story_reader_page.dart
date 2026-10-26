@@ -568,6 +568,27 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return null;
   }
 
+  /// One line of the scrub panel at a fixed height: the text on one line
+  /// (its breaks as spaces), the strut forced, the box sized to it.
+  Widget _panelLine(String text, TextStyle style) {
+    final size = style.fontSize ?? 14;
+    return SizedBox(
+      height: size * 1.5,
+      child: Text(
+        text.replaceAll('\n', ' '),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: style.copyWith(height: 1.5),
+        strutStyle: StrutStyle(
+          fontSize: size,
+          height: 1.5,
+          forceStrutHeight: true,
+        ),
+      ),
+    );
+  }
+
   /// The current reading position and the line being previewed.
   Widget _scrubPanel(AppThemeTokens theme, int p) {
     final n = _lines.length;
@@ -605,19 +626,18 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               ),
             ],
           ),
-          if (heading != null)
-            Text(
-              heading,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.ui(13, weight: 700, color: theme.textSecondary),
+          // Every line of the panel keeps one height whatever it holds (a
+          // long line or a short one, Latin or Chinese, a step's title or
+          // none), so the slider under it stays still while it is dragged.
+          if (_lines.any((l) => headingLineKinds.contains(l.kind)))
+            _panelLine(
+              heading ?? '',
+              theme.ui(13, weight: 700, color: theme.textSecondary),
             ),
           const SizedBox(height: 4),
-          Text(
+          _panelLine(
             speaker.isEmpty ? line.content : '$speaker：${line.content}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.ui(14, color: theme.textPrimary),
+            theme.ui(14, color: theme.textPrimary),
           ),
           const SizedBox(height: 12),
           AppSlider(
@@ -1523,14 +1543,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         ? PortraitSpeakerTarget(target: target, child: row)
         : row;
     if (!marked) return content;
-    return Container(
-      padding: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: theme.trace, width: 3),
+    // The rail stands in the margin, so the marked line stays in line with
+    // the others.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        content,
+        Positioned(
+          left: -8,
+          top: 0,
+          bottom: 0,
+          width: traceRailWidth,
+          child: ColoredBox(color: theme.trace),
         ),
-      ),
-      child: content,
+      ],
     );
   }
 }

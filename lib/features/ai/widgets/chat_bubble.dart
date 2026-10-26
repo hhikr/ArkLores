@@ -36,7 +36,7 @@ class ChatBubble extends ConsumerStatefulWidget {
 
 class _ChatBubbleState extends ConsumerState<ChatBubble> {
   bool _showSteps = false;
-  bool _showEvidence = false;
+  static const bool _showEvidence = false;
 
   @override
   Widget build(BuildContext context) {
@@ -101,8 +101,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     // Read when pressed: showing an answer does not need the chat itself.
     AskChatNotifier chat() =>
         ref.read(askChatProvider(ref.read(shownAskProvider)).notifier);
-    Widget action(String key, IconData icon, String label, String hint,
-            VoidCallback onTap,) =>
+    Widget action(
+      String key,
+      IconData icon,
+      String label,
+      String hint,
+      VoidCallback onTap,
+    ) =>
         AppButton(
           label,
           key: ValueKey(key),
@@ -192,7 +197,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
     // Scan for citation UUIDs
     final uuidRegex = RegExp(
-        r'\[([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\]',);
+      r'\[([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\]',
+    );
     final matches = uuidRegex.allMatches(content);
     final citationIds = matches.map((m) => m.group(1)!).toSet().toList();
 
@@ -208,8 +214,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
     // An answer is read like the stories: the reading font, generous lines.
     final body = readingStyle(theme, size: 16).copyWith(height: 1.75);
-    final styleSheet =
-        MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+    final styleSheet = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
       p: body,
       h1: theme.heading(20),
       h2: theme.heading(18),
@@ -263,9 +268,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       : context.t.aiCitationLines(start, end);
 
   List<String> get _evidenceObservations => widget.message.steps
-      .where((step) =>
-          step.type == ReActEventType.toolObservation &&
-          step.content.contains('Source Kind: GameData'),)
+      .where(
+        (step) =>
+            step.type == ReActEventType.toolObservation &&
+            step.content.contains('Source Kind: GameData'),
+      )
       .map((step) => step.content)
       .toList(growable: false);
 
@@ -311,7 +318,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               : supported
                   ? Colors.transparent
                   : theme.surfaceElevated,
-          border: supported ? Border.all(color: theme.textPrimary, width: 1.5) : null,
+          border: supported
+              ? Border.all(color: theme.textPrimary, width: 1.5)
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -353,6 +362,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           expanded: msg.steps.isEmpty ? null : _showSteps,
           child: PressRow(
             key: const ValueKey('answer-header'),
+            shift: false,
             onTap: msg.steps.isEmpty
                 ? null
                 : () => setState(() => _showSteps = !_showSteps),
@@ -363,7 +373,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                   // Answered: an ink frame; partly or not at all: an accent
                   // block (look at this).
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
                     decoration: BoxDecoration(
                       color: answered ? null : theme.accentPrimary,
                       border: answered
@@ -411,6 +422,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
           liveRegion: true,
           child: PressRow(
             key: const ValueKey('live-header'),
+            shift: false,
             onTap: msg.steps.isEmpty
                 ? null
                 : () => setState(() => _showSteps = !_showSteps),
@@ -425,7 +437,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                       msg.liveStatus,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.ui(14, weight: 600, color: theme.textSecondary),
+                      style:
+                          theme.ui(14, weight: 600, color: theme.textSecondary),
                     ),
                   ),
                   if (msg.steps.isNotEmpty) _chevron(theme, _showSteps),
@@ -483,53 +496,47 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   Widget _buildReasoningPanel(AppThemeTokens theme) {
     final text = widget.message.reasoning;
     final muted = theme.text(13, color: theme.textSecondary, height: 1.55);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Semantics(
-          button: true,
-          expanded: _showReasoning,
-          child: PressRow(
-            key: const ValueKey('reasoning-header'),
-            onTap: () => setState(() => _showReasoning = !_showReasoning),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    context.t.aiThinkingProcess,
-                    style: theme.ui(14, weight: 600, color: theme.textSecondary),
-                  ),
-                  _chevron(theme, _showReasoning),
-                ],
-              ),
+    // The rail runs from the head down the window while it is open.
+    return Semantics(
+      button: true,
+      expanded: _showReasoning,
+      child: FoldBlock(
+        headKey: const ValueKey('reasoning-header'),
+        open: _showReasoning,
+        onTap: () => setState(() => _showReasoning = !_showReasoning),
+        head: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.only(left: 10),
+            child: Row(
+              children: [
+                Text(
+                  context.t.aiThinkingProcess,
+                  style: theme.ui(14, weight: 600, color: theme.textSecondary),
+                ),
+                _chevron(theme, _showReasoning),
+              ],
             ),
           ),
         ),
-        _unfold(
-          _showReasoning,
-          () => Container(
-            key: const ValueKey('reasoning-text'),
-            width: double.infinity,
-            height: reasoningWindowHeight,
-            decoration: BoxDecoration(
-              color: theme.surfaceElevated,
-              border: Border(left: BorderSide(color: theme.cardBorder, width: 3)),
-            ),
-            child: Scrollbar(
+        body: () => Container(
+          key: const ValueKey('reasoning-text'),
+          width: double.infinity,
+          height: reasoningWindowHeight,
+          margin: const EdgeInsets.only(left: 10),
+          color: theme.surfaceElevated,
+          child: Scrollbar(
+            controller: _reasoningScroll,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              key: const ValueKey('reasoning-scroll'),
               controller: _reasoningScroll,
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                key: const ValueKey('reasoning-scroll'),
-                controller: _reasoningScroll,
-                padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
-                child: Text(text, style: muted),
-              ),
+              padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+              child: Text(text, style: muted),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -575,12 +582,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final open = _isOpen('*');
     final muted = theme.text(13.5, color: theme.textSecondary, height: 1.45);
 
-    Widget row(String key, String text, {required bool isOpen, double indent = 0, TextStyle? style}) =>
+    Widget row(String key, String text,
+            {required bool isOpen, double indent = 0, TextStyle? style,}) =>
         Semantics(
           button: true,
           expanded: isOpen,
           child: PressRow(
             key: ValueKey('cite:$key'),
+            shift: false,
             onTap: () => _toggle(key),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 44),
@@ -589,7 +598,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                 child: Row(
                   children: [
                     Icon(
-                      isOpen ? Icons.expand_more_sharp : Icons.chevron_right_sharp,
+                      isOpen
+                          ? Icons.expand_more_sharp
+                          : Icons.chevron_right_sharp,
                       size: 20,
                       color: theme.textSecondary,
                     ),
@@ -603,8 +614,12 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         );
 
     // A cited place: a pressable tag with a cut corner (it opens the lines).
-    Widget chip(String key, String text,
-            {required bool selected, VoidCallback? onTap,}) =>
+    Widget chip(
+      String key,
+      String text, {
+      required bool selected,
+      VoidCallback? onTap,
+    }) =>
         Semantics(
           button: true,
           selected: selected,
@@ -625,9 +640,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                     constraints: const BoxConstraints(minHeight: 36),
                     padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
                     decoration: ShapeDecoration(
-                      color: down
-                          ? pressTint(ground, theme.textPrimary)
-                          : ground,
+                      color:
+                          down ? pressTint(ground, theme.textPrimary) : ground,
                       shape: const CutBorder.br(6),
                     ),
                     child: Text(
@@ -658,13 +672,16 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
     Widget citedRecord(String id) {
       final record = ref.watch(citedRecordProvider(id));
-      return quote(record.when(
-        loading: () => const BusyMark(width: 60, cells: 6),
-        error: (_, __) => Text(context.t.aiCitedLinesUnavailable, style: muted),
-        data: (r) => r == null
-            ? Text(context.t.aiCitedLinesUnavailable, style: muted)
-            : CitedRecordText(r.content, size: 13),
-      ),);
+      return quote(
+        record.when(
+          loading: () => const BusyMark(width: 60, cells: 6),
+          error: (_, __) =>
+              Text(context.t.aiCitedLinesUnavailable, style: muted),
+          data: (r) => r == null
+              ? Text(context.t.aiCitedLinesUnavailable, style: muted)
+              : CitedRecordText(r.content, size: 13),
+        ),
+      );
     }
 
     return Padding(
@@ -718,7 +735,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                                 citedRangeText(range, _lineText),
                                 selected: false,
                                 onTap: () => openStoryReader(
-                                    context, chapter.storyId, range,),
+                                  context,
+                                  chapter.storyId,
+                                  range,
+                                ),
                               ),
                             ),
                         ],
@@ -811,12 +831,9 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
   Widget _buildEvidenceSection(AppThemeTokens theme) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: ExpansionTile(
-        initiallyExpanded: _showEvidence,
-        onExpansionChanged: (value) => setState(() => _showEvidence = value),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 10),
+      child: FoldTile(
+        initiallyOpen: _showEvidence,
         childrenPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        leading: Icon(Icons.source_sharp, color: theme.textSecondary),
         title: Text(
           context.t.aiEvidenceTitle(_evidenceRecords.length),
           style: theme.heading(15),
@@ -882,11 +899,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
             button: true,
             expanded: _showSteps,
             child: PressRow(
+              shift: false,
               onTap: () => setState(() => _showSteps = !_showSteps),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   child: Row(
                     children: [
                       if (isThinking) ...[
@@ -899,7 +918,11 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                               ? context.t.aiStepsStatus(statusText, stepsCount)
                               : _workSummary(),
                           softWrap: true,
-                          style: theme.ui(14, weight: 600, color: theme.textSecondary),
+                          style: theme.ui(
+                            14,
+                            weight: 600,
+                            color: theme.textSecondary,
+                          ),
                         ),
                       ),
                       Icon(
@@ -915,7 +938,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               ),
             ),
           ),
-          if (_showSteps) _buildStepsList(theme),
+          _unfold(_showSteps, () => _buildStepsList(theme)),
         ],
       ),
     );
@@ -969,8 +992,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(record.title,
-                    style: theme.heading(15),),
+                Text(
+                  record.title,
+                  style: theme.heading(15),
+                ),
                 _evidenceBadge(theme, coverage),
               ],
             ),
@@ -978,21 +1003,35 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
               _metadata(context.t.aiEvidenceSection, record.section!, theme),
             if (record.contentType != null)
               _metadata(
-                  context.t.aiEvidenceContentType, record.contentType!, theme,),
+                context.t.aiEvidenceContentType,
+                record.contentType!,
+                theme,
+              ),
             _metadata(
-                context.t.aiEvidenceRetrievalType, record.retrievalType, theme,),
+              context.t.aiEvidenceRetrievalType,
+              record.retrievalType,
+              theme,
+            ),
             _metadata(
-                context.t.aiEvidenceRankingReason, record.rankingReason, theme,),
+              context.t.aiEvidenceRankingReason,
+              record.rankingReason,
+              theme,
+            ),
             if (record.sourcePath != null)
               _metadata(
-                  context.t.aiEvidenceSourcePath, record.sourcePath!, theme,),
+                context.t.aiEvidenceSourcePath,
+                record.sourcePath!,
+                theme,
+              ),
             if (record.rawId != null)
               _metadata(context.t.aiEvidenceRawId, record.rawId!, theme),
             _metadata(context.t.aiEvidenceTrustNote, record.trustNote, theme),
             if (record.excerpt.isNotEmpty) ...[
               const SizedBox(height: 6),
-              SelectableText(record.excerpt,
-                  style: theme.text(14, height: 1.6),),
+              SelectableText(
+                record.excerpt,
+                style: theme.text(14, height: 1.6),
+              ),
             ],
           ],
         ),
@@ -1002,8 +1041,10 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
 
   Widget _metadata(String label, String value, AppThemeTokens theme) => Padding(
         padding: const EdgeInsets.only(top: 4),
-        child: SelectableText('$label: $value',
-            style: theme.text(12.5, color: theme.textSecondary, height: 1.45),),
+        child: SelectableText(
+          '$label: $value',
+          style: theme.text(12.5, color: theme.textSecondary, height: 1.45),
+        ),
       );
 
   Widget _evidenceBadge(AppThemeTokens theme, String label) => Container(
@@ -1036,37 +1077,30 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         theme,
         last: last,
         dot: null,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            PressRow(
-              key: ValueKey('work-compaction-$index'),
-              onTap: toggle,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t.aiWorkCompaction(
-                        formatTokenCount(step.args['from'] as int),
-                        formatTokenCount(step.args['to'] as int),
-                        step.args['retained'] as int,
-                      ),
-                      style: small,
-                    ),
-                  ],
-                ),
+        child: FoldBlock(
+          headKey: ValueKey('work-compaction-$index'),
+          open: open,
+          onTap: toggle,
+          head: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
+            child: Text(
+              context.t.aiWorkCompaction(
+                formatTokenCount(step.args['from'] as int),
+                formatTokenCount(step.args['to'] as int),
+                step.args['retained'] as int,
+              ),
+              style: small,
+            ),
+          ),
+          body: () => Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 0, 6),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: workRawHeight),
+              child: SingleChildScrollView(
+                child: SelectableText(step.text, style: small),
               ),
             ),
-            if (open)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: workRawHeight),
-                child: SingleChildScrollView(
-                  child: SelectableText(step.text, style: small),
-                ),
-              ),
-          ],
+          ),
         ),
       );
     }
@@ -1076,18 +1110,25 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         theme,
         last: last,
         dot: null,
-        child: PressRow(
-          key: record ? ValueKey('work-record-$index') : null,
+        child: FoldBlock(
+          headKey: record ? ValueKey('work-record-$index') : null,
+          open: open,
           onTap: toggle,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Text(
-              record ? context.t.aiWorkRecord(step.text) : step.text,
-              maxLines: open ? null : (record ? 3 : 2),
-              overflow: open ? null : TextOverflow.ellipsis,
-              style: small.copyWith(
-                color: record ? theme.textPrimary : theme.textSecondary,
-                fontStyle: record ? null : FontStyle.italic,
+          head: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 3, 0, 3),
+            // The note itself grows to its whole text, as a body would.
+            child: AnimatedSize(
+              duration: Motion.of(context, Motion.wipe),
+              curve: open ? Motion.snap : Motion.mech,
+              alignment: Alignment.topLeft,
+              child: Text(
+                record ? context.t.aiWorkRecord(step.text) : step.text,
+                maxLines: open ? null : (record ? 3 : 2),
+                overflow: open ? null : TextOverflow.ellipsis,
+                style: small.copyWith(
+                  color: record ? theme.textPrimary : theme.textSecondary,
+                  fontStyle: record ? null : FontStyle.italic,
+                ),
               ),
             ),
           ),
@@ -1101,7 +1142,7 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
         dot: Icon(Icons.priority_high_sharp, size: 14, color: theme.onAccent),
         dotFill: theme.accentPrimary,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
           child: SelectableText(
             step.text,
             style: theme.text(13.5, height: 1.45),
@@ -1131,108 +1172,91 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
       theme,
       last: last,
       dot: Icon(_workIcon(step.kind), size: 14, color: theme.textPrimary),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          PressRow(
-            key: ValueKey('work-step-$index'),
-            onTap: canOpen ? toggle : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      // The head stays as it is when the step opens (only the output comes
+      // in under it), so nothing above the output jumps.
+      child: FoldBlock(
+        headKey: ValueKey('work-step-$index'),
+        open: open,
+        onTap: canOpen ? toggle : null,
+        head: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // The number, the tool, its marks and what came back flow on
+              // as one line, wrapping as a whole: a long result does not
+              // squeeze the tool's name into a column.
+              Wrap(
+                spacing: 6,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 2,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (!step.inContext)
-                              Text(
-                                '${step.number}',
-                                style: small.copyWith(color: theme.textMuted),
-                              ),
-                            Text(
-                              step.tool ?? '',
-                              style: mono.copyWith(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.bold,
-                                color: theme.textPrimary,
-                              ),
-                            ),
-                            for (final (label, color) in flags)
-                              _workFlag(theme, label, color),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (!step.done)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: const BusyMark(width: 28, cells: 4),
-                        )
-                      else
-                        Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: Text(
-                            [
-                              if (result.isNotEmpty) result,
-                              t.aiWorkChars(step.text.length),
-                            ].join(' / '),
-                            style: small.copyWith(color: theme.textMuted),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (args.isNotEmpty && !open)
+                  if (!step.inContext)
                     Text(
-                      args,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: mono.copyWith(color: theme.textMuted),
+                      '${step.number}',
+                      style: small.copyWith(color: theme.textMuted),
                     ),
-                  // Why a failed step failed, in the tool's own words.
-                  if (bad && !open)
+                  Text(
+                    step.tool ?? '',
+                    style: mono.copyWith(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textPrimary,
+                    ),
+                  ),
+                  for (final (label, color) in flags)
+                    _workFlag(theme, label, color),
+                  if (!step.done)
+                    const BusyMark(width: 28, cells: 4)
+                  else
                     Text(
-                      step.text.trimLeft().split('\n').first,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: small.copyWith(color: theme.textPrimary),
+                      [
+                        if (result.isNotEmpty) result,
+                        t.aiWorkChars(step.text.length),
+                      ].join(' / '),
+                      style: small.copyWith(color: theme.textMuted),
                     ),
                 ],
               ),
+              if (args.isNotEmpty)
+                Text(
+                  args,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: mono.copyWith(color: theme.textMuted),
+                ),
+              // Why a failed step failed, in the tool's own words.
+              if (bad)
+                Text(
+                  step.text.trimLeft().split('\n').first,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: small.copyWith(color: theme.textPrimary),
+                ),
+            ],
+          ),
+        ),
+        body: () => Container(
+          key: ValueKey('work-raw-$index'),
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(10, 2, 0, 6),
+          constraints: const BoxConstraints(maxHeight: workRawHeight),
+          color: theme.bgSecondary.withValues(alpha: 0.6),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(8),
+            child: SelectableText(
+              [
+                if (args.isNotEmpty)
+                  const JsonEncoder.withIndent('  ').convert(step.args),
+                step.text.trim(),
+              ].join('\n\n'),
+              style: mono.copyWith(
+                color: theme.textSecondary,
+                fontSize: 12,
+              ),
             ),
           ),
-          if (open)
-            Container(
-              key: ValueKey('work-raw-$index'),
-              width: double.infinity,
-              margin: const EdgeInsets.only(top: 6),
-              constraints: const BoxConstraints(maxHeight: workRawHeight),
-              decoration: BoxDecoration(
-                color: theme.bgSecondary.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.zero,
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(8),
-                child: SelectableText(
-                  [
-                    if (args.isNotEmpty)
-                      const JsonEncoder.withIndent('  ').convert(step.args),
-                    step.text.trim(),
-                  ].join('\n\n'),
-                  style: mono.copyWith(
-                    color: theme.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -1262,35 +1286,42 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// A timeline row: a dot (or a short tick for notes) on a thin rail.
-  Widget _timelineRow(AppThemeTokens theme,
-      {required bool last, required Widget? dot, required Widget child, Color? dotFill,}) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: 22,
-            child: Stack(
-              alignment: Alignment.topCenter,
-              children: [
-                Positioned(
-                  top: 0,
-                  bottom: last ? null : 0,
-                  height: last ? 12 : null,
-                  child: Container(width: 1, color: theme.divider),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
+  /// A timeline row: a dot (or a short tick for notes) on a thin rail. The
+  /// rail is laid over the row, not measured against it (no intrinsic
+  /// heights: an unfolded output would be laid out twice per frame).
+  Widget _timelineRow(
+    AppThemeTokens theme, {
+    required bool last,
+    required Widget? dot,
+    required Widget child,
+    Color? dotFill,
+  }) {
+    return Stack(
+      children: [
+        Positioned(
+          left: 10.5,
+          top: 0,
+          bottom: last ? null : 0,
+          height: last ? 12 : null,
+          width: 1,
+          child: ColoredBox(color: theme.divider),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 22,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Center(
+                  heightFactor: 1,
                   child: dot == null
                       ? Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Container(
                             width: 5,
                             height: 5,
-                            decoration: BoxDecoration(
-                              color: theme.divider,
-                            ),
+                            color: theme.divider,
                           ),
                         )
                       : Container(
@@ -1303,13 +1334,13 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                           child: dot,
                         ),
                 ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(child: child),
-        ],
-      ),
+            const SizedBox(width: 4),
+            Expanded(child: child),
+          ],
+        ),
+      ],
     );
   }
 
