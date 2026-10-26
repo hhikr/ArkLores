@@ -156,6 +156,8 @@ List<StoryScriptLine> parseStoryScript(String raw) {
 }
 
 class _PortraitState {
+  /// One stage for both ways of writing it: `[Character]` puts one person in
+  /// the middle, two on the left and right; `[charslot]` changes one place.
   final slots = <String, String>{};
   String? focus;
 
@@ -164,11 +166,18 @@ class _PortraitState {
   /// the slots keep what the commands put there.
   bool covered = false;
 
+  /// `[CharacterCutin(name=…)]` shows the speaker in a band over the stage
+  /// (a call, a voice from elsewhere). It speaks until a CharacterCutin
+  /// without a name, or until a stage command gives the turn back to the
+  /// stage (the band may stay up while someone there answers).
+  String? cutin;
+
   String? get sprite => covered
       ? null
-      : focus == null
-          ? (slots.length == 1 ? slots.values.single : null)
-          : slots[focus];
+      : cutin ??
+          (focus == null
+              ? (slots.length == 1 ? slots.values.single : null)
+              : slots[focus]);
 
   String position(String value) => switch (value.toLowerCase()) {
         'left' => 'l',
@@ -187,20 +196,29 @@ class _PortraitState {
       final attrs = _attributes(body);
       if (command == 'image') {
         covered = (attrs['image']?.trim() ?? '').isNotEmpty;
+      } else if (command == 'charactercutin') {
+        cutin = canonicalSprite(attrs['name'] ?? '');
       } else if (command == 'character') {
+        cutin = null;
         slots.clear();
         focus = null;
-        for (final (key, attr) in [('1', 'name'), ('2', 'name2')]) {
-          final name = canonicalSprite(attrs[attr] ?? '');
-          if (name != null) slots[key] = name;
-        }
+        final first = canonicalSprite(attrs['name'] ?? '');
+        final second = canonicalSprite(attrs['name2'] ?? '');
+        // Two names written (even one this app cannot draw): two places.
+        bool written(String attr) => (attrs[attr]?.trim() ?? '').isNotEmpty;
+        final places = written('name') && written('name2')
+            ? {'1': 'l', '2': 'r'}
+            : {'1': 'm', '2': 'm'};
+        if (first != null) slots[places['1']!] = first;
+        if (second != null) slots[places['2']!] = second;
         if (slots.isNotEmpty) {
           final f = attrs['focus'];
           focus = f == null
               ? (slots.length == 1 ? slots.keys.single : null)
-              : (f == '1' || f == '2' ? f : 'none');
+              : (f == '1' || f == '2' ? places[f] : 'none');
         }
       } else if (command == 'charslot') {
+        cutin = null;
         if (attrs.isEmpty) {
           slots.clear();
           focus = null;

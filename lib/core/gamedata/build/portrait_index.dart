@@ -1,4 +1,4 @@
-import 'package:sqflite_common/sqlite_api.dart';
+﻿import 'package:sqflite_common/sqlite_api.dart';
 
 import 'gamedata_schema.dart';
 import 'portrait_names.dart';
@@ -224,7 +224,7 @@ Future<void> rebuildPortraitIndex(Database db) async {
       'SELECT (SELECT COUNT(*) FROM story_line_portraits) AS lines, (SELECT COUNT(*) FROM portrait_groups) AS groups',
     );
     await writeGamedataManifest(txn, {
-      'portrait_index_version': '2',
+      'portrait_index_version': '3',
       'portrait_line_count': '${counts.single['lines']}',
       'portrait_group_count': '${counts.single['groups']}',
     });

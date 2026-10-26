@@ -89,6 +89,46 @@ void main() {
       reason: 'a picture left at the end of a script does not carry over',
     );
   });
+  test('Character and charslot change one stage', () {
+    final lines = parseStoryScript('''
+[Character(name="$a")]
+[name="甲"]一
+[charslot(slot="m", name="$b")]
+[name="乙"]二
+[Character(name="char_001_x_1", name2="$a", focus=2)]
+[name="甲"]三
+[charslot(slot="r", name="$b")]
+[name="乙"]四
+''');
+    expect(lines.map((l) => l.portrait), [a, b, a, b]);
+    expect(
+      parseStoryScript(
+        '[Character(name="$a", name2="npc_1_x", focus=2)]\n[name="乙"]一',
+      ).single.portrait,
+      isNull,
+      reason: 'the focused place holds a name that is not a portrait',
+    );
+  });
+  test('a cutin shows its speaker until a cutin without a name', () {
+    final lines = parseStoryScript('''
+[Character(name="$a")]
+[name="甲"]一
+[CharacterCutin(widgetID="1", name="char_010_chen_1#2", style="cutin")]
+[name="乙"]二
+[CharacterCutin(widgetID="1", fadetime=0.5)]
+[name="甲"]三
+''');
+    expect(lines.map((l) => l.portrait), [a, b, a]);
+  });
+  test('a cutin answered from the stage gives the turn back', () {
+    final lines = parseStoryScript('''
+[CharacterCutin(widgetID="1", name="char_010_chen_1#2", style="cutin")]
+[name="乙"]一
+[Character(name="char_001_x_1", name2="$a", focus=2)]
+[name="甲"]二
+''');
+    expect(lines.map((l) => l.portrait), [b, a]);
+  });
   final root = Directory('notes/upstream/story');
   test(
     '30 upstream scripts preserve every kind, speaker and content',

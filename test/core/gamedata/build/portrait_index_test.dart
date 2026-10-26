@@ -1,4 +1,4 @@
-import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';
+﻿import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';
 import 'package:arklores/core/gamedata/build/portrait_index.dart';
 import 'package:arklores/core/gamedata/build/story_script.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -170,7 +170,7 @@ void main() {
         whereArgs: ['portrait_index_version'],
       ))
           .single['value'],
-      '2',
+      '3',
     );
     await validateGameDataDatabase(db);
   });
