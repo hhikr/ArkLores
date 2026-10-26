@@ -21,6 +21,8 @@
 //                                    only Arknights is installed, as on a
 //                                    phone that has not downloaded Endfield)
 //   ARKLORES_LIVE_OUT=<dir>         (default build/live_sessions)
+//   ARKLORES_LIVE_CONTEXT_WARN=<tokens> (the "上下文提醒值" setting, default
+//                                    100000; compaction starts at 80% of it)
 // API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL),
 // or from the file named by ARKLORES_API_INFO (another provider).
 //
@@ -114,6 +116,8 @@ void main() {
         initialApiConfigProvider.overrideWithValue(api),
         initialEmbeddingConfigProvider.overrideWithValue(embedding),
         initialSessionLogsEnabledProvider.overrideWithValue(true),
+        if (int.tryParse(env['ARKLORES_LIVE_CONTEXT_WARN'] ?? '') case final warn?)
+          initialContextWarnTokensProvider.overrideWithValue(warn),
         // Platform paths (the app resolves these via path_provider):
         sharedGameDataStoreProvider
             .overrideWithValue(GameDataKnowledgeStore(dbPath: dbPath)),
