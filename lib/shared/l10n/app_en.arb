@@ -84,6 +84,16 @@
   "onboardingKbDesc": "The story text and the game records are in the knowledge bases, which reading and Ask both use. One per game, usable offline once downloaded; those already downloaded say so.",
   "onboardingWikiTitle": "Wiki sites",
   "onboardingWikiDesc": "The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.",
+  "onboardingPortraitsDesc": "Tap a speaker in the reader or a name in an answer to see that character's story portraits. The portrait pack is a separate download; you can get it later on the knowledge base page.",
+  "onboardingReadingTitle": "How to use it",
+  "onboardingTipBarsTitle": "Bars out of the way",
+  "onboardingTipBars": "Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.",
+  "onboardingTipReaderTitle": "The reader",
+  "onboardingTipReader": "Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.",
+  "onboardingTipPortraitTitle": "Portraits",
+  "onboardingTipPortrait": "Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.",
+  "onboardingTipSourcesTitle": "Sources",
+  "onboardingTipSources": "Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.",
   "onboardingBackgroundTitle": "Running in the background",
   "onboardingDoneTitle": "All Set!",
   "onboardingDoneDesc": "Everything can be changed again in Settings, where this guide can also be opened again.",
@@ -678,6 +688,15 @@
     }
   },
   "portraitGroupSpeakers": "Who else uses this portrait?",
+  "portraitWhoUses": "Who uses this portrait?",
+  "portraitStoriesWith": "Stories where “{name}” has this portrait",
+  "@portraitStoriesWith": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "portraitSpeakerGroups": "Other portraits of this character",
   "portraitOperator": "Operator file",
   "portraitNoSprite": "No portrait is shown for this line.",

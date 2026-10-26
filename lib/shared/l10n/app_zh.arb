@@ -84,6 +84,16 @@
   "onboardingKbDesc": "剧情原文和游戏资料都在知识库里，阅读和问答都靠它。每个游戏一个，下载后离线可用；已经下载的会显示出来。",
   "onboardingWikiTitle": "Wiki 站点",
   "onboardingWikiDesc": "Wiki 页显示这些站点，问答也会从这里查资料。可以改地址，或者加别的站点。",
+  "onboardingPortraitsDesc": "阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。立绘包要另外下载，可以以后再在知识库页下。",
+  "onboardingReadingTitle": "怎么用",
+  "onboardingTipBarsTitle": "让开与唤回",
+  "onboardingTipBars": "在 Wiki、问答和阅读器里往下读，栏会让出屏幕。点一下空白处叫回来，再点一下让开。",
+  "onboardingTipReaderTitle": "阅读器",
+  "onboardingTipReader": "按钮在屏幕下方，拇指够得着。点标题打开进度，拖动滑块跳到任意一行；放大镜在本篇里查找。",
+  "onboardingTipPortraitTitle": "立绘",
+  "onboardingTipPortrait": "点说话人或答案里画了下划线的名字，先看旁边的小卡片；点“更多”打开能切换差分的大卡片。",
+  "onboardingTipSourcesTitle": "出处",
+  "onboardingTipSources": "答案的每一段都有出处。点开看原文，也能从那里跳到剧情里的那一行。",
   "onboardingBackgroundTitle": "后台运行",
   "onboardingDoneTitle": "准备就绪！",
   "onboardingDoneDesc": "设置都可以在“设置”页再改，导览也能从那里重新打开。",
@@ -677,6 +687,15 @@
     }
   },
   "portraitGroupSpeakers": "还有谁使用了这个立绘？",
+  "portraitWhoUses": "谁在用这个立绘？",
+  "portraitStoriesWith": "“{name}”用这个立绘的剧情",
+  "@portraitStoriesWith": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "portraitSpeakerGroups": "这个人还有哪些立绘？",
   "portraitOperator": "干员资料",
   "portraitNoSprite": "这一句没有显示立绘。",

@@ -252,6 +252,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingWikiDesc => 'Wiki 页显示这些站点，问答也会从这里查资料。可以改地址，或者加别的站点。';
 
   @override
+  String get onboardingPortraitsDesc =>
+      '阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。立绘包要另外下载，可以以后再在知识库页下。';
+
+  @override
+  String get onboardingReadingTitle => '怎么用';
+
+  @override
+  String get onboardingTipBarsTitle => '让开与唤回';
+
+  @override
+  String get onboardingTipBars => '在 Wiki、问答和阅读器里往下读，栏会让出屏幕。点一下空白处叫回来，再点一下让开。';
+
+  @override
+  String get onboardingTipReaderTitle => '阅读器';
+
+  @override
+  String get onboardingTipReader =>
+      '按钮在屏幕下方，拇指够得着。点标题打开进度，拖动滑块跳到任意一行；放大镜在本篇里查找。';
+
+  @override
+  String get onboardingTipPortraitTitle => '立绘';
+
+  @override
+  String get onboardingTipPortrait =>
+      '点说话人或答案里画了下划线的名字，先看旁边的小卡片；点“更多”打开能切换差分的大卡片。';
+
+  @override
+  String get onboardingTipSourcesTitle => '出处';
+
+  @override
+  String get onboardingTipSources => '答案的每一段都有出处。点开看原文，也能从那里跳到剧情里的那一行。';
+
+  @override
   String get onboardingBackgroundTitle => '后台运行';
 
   @override
@@ -1665,6 +1698,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get portraitGroupSpeakers => '还有谁使用了这个立绘？';
+
+  @override
+  String get portraitWhoUses => '谁在用这个立绘？';
+
+  @override
+  String portraitStoriesWith(String name) {
+    return '“$name”用这个立绘的剧情';
+  }
 
   @override
   String get portraitSpeakerGroups => '这个人还有哪些立绘？';

@@ -115,6 +115,45 @@ void main() {
   });
 
   testWidgets(
+      'hides: dragging on moves the bar off the screen, a tap on the text '
+      'brings it back, dragging back too', (tester) async {
+    await _push(
+      tester,
+      PageScaffold(
+        title: 'T',
+        scrollUnder: true,
+        hides: true,
+        body: Builder(
+          builder: (context) => ListView(
+            padding: pagePadding(context, EdgeInsets.zero),
+            children: [
+              for (var i = 0; i < 60; i++)
+                SizedBox(height: 40, child: Text('line $i')),
+            ],
+          ),
+        ),
+      ),
+    );
+    // The bar moves as a picture: its title says where it is.
+    final shown = tester.getRect(find.text('T')).bottom;
+    double barBottom() =>
+        tester.getRect(find.text('T')).bottom - shown + topBarHeight;
+    expect(barBottom(), topBarHeight);
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(barBottom(), lessThanOrEqualTo(0));
+    await tester.tap(find.text('line 12'));
+    await tester.pumpAndSettle();
+    expect(barBottom(), topBarHeight);
+    await tester.tap(find.text('line 12'));
+    await tester.pumpAndSettle();
+    expect(barBottom(), lessThanOrEqualTo(0));
+    await tester.drag(find.byType(ListView), const Offset(0, 100));
+    await tester.pumpAndSettle();
+    expect(barBottom(), topBarHeight);
+  });
+
+  testWidgets(
       'a dock page: separate plates float over the body near the '
       'bottom', (tester) async {
     var opened = 0;

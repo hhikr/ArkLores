@@ -9,7 +9,6 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/portrait_image.dart';
 import 'portrait_sheet.dart';
-import 'portrait_stories_page.dart';
 
 class SpeakerPortraitsPage extends ConsumerWidget {
   const SpeakerPortraitsPage({
@@ -42,15 +41,16 @@ class SpeakerPortraitsPage extends ConsumerWidget {
                   itemCount: groups.length,
                   itemBuilder: (context, index) {
                     final row = groups[index];
+                    // The card of that portrait (not the stories): its
+                    // variants, who uses it, and this speaker's stories
+                    // with it from there.
                     return PressRow(
-                      onTap: () => pushPortraitPage(
+                      key: ValueKey('speaker-portrait-${row.groupId}'),
+                      onTap: () => showPortraitGroupSheet(
                         context,
-                        origin,
-                        (_) => PortraitStoriesPage(
-                          speaker: speaker,
-                          groupId: row.groupId,
-                          origin: origin,
-                        ),
+                        sprite: row.topSprite,
+                        listSpeaker: speaker,
+                        origin: origin,
                       ),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),

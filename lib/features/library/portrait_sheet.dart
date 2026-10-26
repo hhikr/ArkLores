@@ -16,6 +16,7 @@ import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import 'entry_page.dart';
 import 'portrait_speakers_page.dart';
+import 'portrait_stories_page.dart';
 import 'speaker_portraits_page.dart';
 
 enum PortraitOrigin { materials, ask }
@@ -63,6 +64,33 @@ Future<void> showPortraitSheet(
   }
 }
 
+/// The card of one portrait opened from a list of portraits: nothing there
+/// says whose it is (a speaker's list holds others' portraits too), so it
+/// has no name; who uses it is one tap away. [listSpeaker], the speaker
+/// whose list it came from, leads to their stories with it.
+Future<void> showPortraitGroupSheet(
+  BuildContext context, {
+  required String sprite,
+  String? listSpeaker,
+  required PortraitOrigin origin,
+}) async {
+  final target = await showAppSheet<WidgetBuilder>(
+    context,
+    (_) => PlainSheet(
+      child: PortraitSheet(
+        speaker: null,
+        sprite: sprite,
+        fromLine: true,
+        listSpeaker: listSpeaker,
+        origin: origin,
+      ),
+    ),
+  );
+  if (target != null && context.mounted) {
+    await pushPortraitPage(context, origin, target);
+  }
+}
+
 class PortraitSheet extends ConsumerStatefulWidget {
   const PortraitSheet({
     super.key,
@@ -71,8 +99,12 @@ class PortraitSheet extends ConsumerStatefulWidget {
     this.fromLine = false,
     required this.origin,
     this.spriteLoading = false,
+    this.listSpeaker,
   });
-  final String speaker;
+
+  /// Null: the card of a portrait, not of a name ([showPortraitGroupSheet]).
+  final String? speaker;
+  final String? listSpeaker;
   final String? sprite;
   final bool fromLine;
   final PortraitOrigin origin;
@@ -84,7 +116,7 @@ class PortraitSheet extends ConsumerStatefulWidget {
 
 class _PortraitSheetState extends ConsumerState<PortraitSheet> {
   String? selected;
-  String get speaker => widget.speaker;
+  String? get speaker => widget.speaker;
   String? get sprite => widget.sprite;
   bool get fromLine => widget.fromLine;
   PortraitOrigin get origin => widget.origin;
@@ -94,8 +126,11 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
     final t = context.t;
-    final names = ref.watch(speakerPortraitsProvider(speaker));
-    final name = names.valueOrNull;
+    final speaker = this.speaker;
+    final names =
+        speaker == null ? null : ref.watch(speakerPortraitsProvider(speaker));
+    final name = names?.valueOrNull;
+    final listSpeaker = widget.listSpeaker;
     final shown = selected ?? (fromLine ? sprite : name?.topSprite);
     final parsed = shown == null ? null : SpriteName.parse(shown);
     final group =
@@ -117,7 +152,7 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Eyebrow(t.portraitEyebrow),
-          Text(speaker, style: theme.heading(22)),
+          if (speaker != null) Text(speaker, style: theme.heading(22)),
           const SizedBox(height: 12),
           if (spriteLoading)
             const SizedBox(height: 48)
@@ -145,30 +180,44 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
               onSelect: (item) => setState(() => selected = item),
             ),
           const SizedBox(height: 12),
-          if (names.isLoading || (group?.isLoading ?? false))
+          if ((names?.isLoading ?? false) || (group?.isLoading ?? false))
             const SizedBox(height: 20)
           else
             FactsRow([
               if (name != null) t.portraitLines(name.lines),
+              if (speaker == null && data != null) t.portraitLines(data.lines),
               if (data != null) t.portraitSprites(data.sprites),
               if (parsed != null) t.portraitFaceBody(parsed.face, parsed.body),
             ]),
           const SizedBox(height: 12),
           if (data != null)
             ActionRow(
-              label: t.portraitGroupSpeakers,
+              label:
+                  speaker == null ? t.portraitWhoUses : t.portraitGroupSpeakers,
               meta: '${data.speakers.length}',
               onTap: () => open(
                 (_) =>
                     PortraitSpeakersPage(groupId: data.groupId, origin: origin),
               ),
             ),
-          if (name != null)
+          if (name != null && speaker != null)
             ActionRow(
               label: t.portraitSpeakerGroups,
               meta: '${name.groups.length}',
               onTap: () => open(
                 (_) => SpeakerPortraitsPage(speaker: speaker, origin: origin),
+              ),
+            ),
+          if (speaker == null && listSpeaker != null && data != null)
+            ActionRow(
+              key: const ValueKey('portrait-stories-of-list-speaker'),
+              label: t.portraitStoriesWith(listSpeaker),
+              onTap: () => open(
+                (_) => PortraitStoriesPage(
+                  speaker: listSpeaker,
+                  groupId: data.groupId,
+                  origin: origin,
+                ),
               ),
             ),
           if (data?.operatorEntryId != null)

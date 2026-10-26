@@ -124,5 +124,6 @@ python tools/portraits/check_portrait_pack.py --pack=build/portraits/arklores_po
   设置“回答里不标干员名”（默认关）：打开后，最常用立绘对应干员条目的名字不标（2026-10 的库上 1,049 个里有 316 个）。
 - 立绘预览：名字下方显示高约 160 px 的图、名字、句数与“更多”；下方放不下时放上方，左右留 16 px。点外面、滚动、返回时关闭，同时只有一张。
 - 立绘卡片：名字、立绘图、句数与差分张数、表情与服装号，以及“还有谁使用了这个立绘？”、“这个人还有哪些立绘？”、有干员条目时的“干员资料”。大图下方按服装、表情排列同组全部差分，横向懒加载，选中项用 `trace` 线框；点缩略图切换大图和编号。从台词打开时先选中该句差分。底部署名“立绘：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络”。
-- 两个列表都通向同一个剧情列表：说话人 × 立绘 → 每篇剧情的标题、所属故事集、句数 → 阅读器，定位并高亮该组合在这篇里的首次台词。查询连接 `story_line_portraits`、`story_lines`、`portrait_sprites`，说话人去两端空格后匹配，按篇取 `MIN(line_index)` 与句数；目录标题和排序复用 `StoryCatalogEntry.label` 与 `storyReleaseKey`。沿用已有的立绘与台词索引。
+- “某人的立绘”列表（`SpeakerPortraitsPage`）点一个立绘，打开那个立绘的大卡片（`showPortraitGroupSheet`）：卡片不写名字，因为说话人的列表里有别人的立绘（开发者 2026-10-26）；卡片上“谁在用这个立绘？”和“某人用这个立绘的剧情”。“立绘的说话人”列表点一个名字仍直接进剧情列表。
+- 剧情列表：说话人 × 立绘 → 每篇剧情的标题、所属故事集、句数 → 阅读器，定位并高亮该组合在这篇里的首次台词。查询连接 `story_line_portraits`、`story_lines`、`portrait_sprites`，说话人去两端空格后匹配，按篇取 `MIN(line_index)` 与句数；目录标题和排序复用 `StoryCatalogEntry.label` 与 `storyReleaseKey`。沿用已有的立绘与台词索引。
   从资料页打开的页面用毛玻璃换页，从问答打开的用普通推入。

@@ -560,6 +560,66 @@ abstract class AppLocalizations {
   /// **'The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.'**
   String get onboardingWikiDesc;
 
+  /// No description provided for @onboardingPortraitsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The portrait pack is a separate download; you can get it later on the knowledge base page.'**
+  String get onboardingPortraitsDesc;
+
+  /// No description provided for @onboardingReadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How to use it'**
+  String get onboardingReadingTitle;
+
+  /// No description provided for @onboardingTipBarsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bars out of the way'**
+  String get onboardingTipBarsTitle;
+
+  /// No description provided for @onboardingTipBars.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.'**
+  String get onboardingTipBars;
+
+  /// No description provided for @onboardingTipReaderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The reader'**
+  String get onboardingTipReaderTitle;
+
+  /// No description provided for @onboardingTipReader.
+  ///
+  /// In en, this message translates to:
+  /// **'Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.'**
+  String get onboardingTipReader;
+
+  /// No description provided for @onboardingTipPortraitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits'**
+  String get onboardingTipPortraitTitle;
+
+  /// No description provided for @onboardingTipPortrait.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.'**
+  String get onboardingTipPortrait;
+
+  /// No description provided for @onboardingTipSourcesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources'**
+  String get onboardingTipSourcesTitle;
+
+  /// No description provided for @onboardingTipSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.'**
+  String get onboardingTipSources;
+
   /// No description provided for @onboardingBackgroundTitle.
   ///
   /// In en, this message translates to:
@@ -3031,6 +3091,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Who else uses this portrait?'**
   String get portraitGroupSpeakers;
+
+  /// No description provided for @portraitWhoUses.
+  ///
+  /// In en, this message translates to:
+  /// **'Who uses this portrait?'**
+  String get portraitWhoUses;
+
+  /// No description provided for @portraitStoriesWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories where “{name}” has this portrait'**
+  String portraitStoriesWith(String name);
 
   /// No description provided for @portraitSpeakerGroups.
   ///

@@ -776,6 +776,20 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(RawImage), findsOneWidget);
       await capture(tester, '${mode}_portraits');
+      // A row opens that portrait's card: no name on it (the list holds
+      // others' portraits too), who uses it and this speaker's stories.
+      await tester.tap(
+        find.byKey(const ValueKey('speaker-portrait-char_fixture')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('谁在用这个立绘？'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('portrait-stories-of-list-speaker')),
+        findsOneWidget,
+      );
+      expect(find.text(_speaker), findsNothing);
+      expect(tester.takeException(), isNull);
+      await capture(tester, '${mode}_portrait_card_from_list');
       await pump(
           tester,
           const PortraitStoriesPage(

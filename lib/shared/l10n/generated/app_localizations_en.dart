@@ -257,6 +257,41 @@ class AppLocalizationsEn extends AppLocalizations {
       'The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.';
 
   @override
+  String get onboardingPortraitsDesc =>
+      'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The portrait pack is a separate download; you can get it later on the knowledge base page.';
+
+  @override
+  String get onboardingReadingTitle => 'How to use it';
+
+  @override
+  String get onboardingTipBarsTitle => 'Bars out of the way';
+
+  @override
+  String get onboardingTipBars =>
+      'Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.';
+
+  @override
+  String get onboardingTipReaderTitle => 'The reader';
+
+  @override
+  String get onboardingTipReader =>
+      'Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.';
+
+  @override
+  String get onboardingTipPortraitTitle => 'Portraits';
+
+  @override
+  String get onboardingTipPortrait =>
+      'Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.';
+
+  @override
+  String get onboardingTipSourcesTitle => 'Sources';
+
+  @override
+  String get onboardingTipSources =>
+      'Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.';
+
+  @override
   String get onboardingBackgroundTitle => 'Running in the background';
 
   @override
@@ -1735,6 +1770,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get portraitGroupSpeakers => 'Who else uses this portrait?';
+
+  @override
+  String get portraitWhoUses => 'Who uses this portrait?';
+
+  @override
+  String portraitStoriesWith(String name) {
+    return 'Stories where “$name” has this portrait';
+  }
 
   @override
   String get portraitSpeakerGroups => 'Other portraits of this character';
