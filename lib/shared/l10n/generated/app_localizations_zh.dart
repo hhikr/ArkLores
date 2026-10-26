@@ -1821,6 +1821,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get portraitPassingHint => '出现次数过少，可能是画外音';
+
+  @override
   String portraitPassingSpeakers(int n) {
     return '另有 $n 人各说 1–2 句，主要立绘在别处';
   }

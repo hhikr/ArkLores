@@ -101,6 +101,13 @@ class PortraitSpeakersPage extends ConsumerWidget {
                   t.portraitPassingSpeakers(passing.length),
                   style: theme.text(14, color: theme.textSecondary),
                 ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    t.portraitPassingHint,
+                    style: theme.text(12, color: theme.textMuted),
+                  ),
+                ),
                 children: [
                   for (final (i, s) in passing.indexed)
                     Padding(

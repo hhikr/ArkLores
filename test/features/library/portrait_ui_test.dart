@@ -522,6 +522,7 @@ void main() {
     // A speaker passing by is folded under one row until it is opened.
     expect(find.text('3 个说话人'), findsOneWidget);
     expect(find.text('画外音'), findsNothing);
+    expect(find.text('出现次数过少，可能是画外音'), findsOneWidget);
     await tester.tap(find.text('另有 1 人各说 1–2 句，主要立绘在别处'));
     await tester.pumpAndSettle();
     expect(find.text('画外音'), findsOneWidget);
