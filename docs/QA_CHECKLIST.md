@@ -96,6 +96,25 @@ flutter test test/live/ask_pipeline_live_test.dart
 
 比较两版代码时每边跑几次：单次运行波动很大，answered 的比例不是质量指标（`ASK_EXPERIMENTS.md` §1）。
 
+### 离线回放（免费）
+
+固定历史模型回复，用当前 `LoreAgentLoop`、工具与真实库重新执行，比较工具输出和累计输入字数；不调用模型服务。
+
+```powershell
+$env:ARKLORES_RUN_TOKEN_REPLAY='true'
+$env:ARKLORES_REPLAY_SESSION="$PWD\notes\v0.21\sessions\grand_duchess_think_on.json"
+$env:ARKLORES_GAMEDATA_DB="$PWD\build\gamedata_rebuild\arklores_gamedata_zh.db"
+$env:ARKLORES_ENDFIELD_DB="$PWD\build\endfield\arklores_endfield_zh.db" # 可选
+flutter test test/live/token_replay_test.dart
+```
+
+- `ARKLORES_REPLAY_OUT` 指定输出 JSON；默认写入 `build/token_replay/<会话名>.<时间>.json`。含逐请求表、系统/工具说明/对话字数、工具结果、被拦标记、重复与行前缀统计。
+- `ARKLORES_REPLAY_WIKI` 默认 `false`，移除 `search.wiki` 且不注册 Wiki 工具；设为 `true` 才联网查 Wiki，结果可能变化。默认开关关闭时整项测试跳过，不联网。
+- 查询向量缓存于 `build/token_replay/query_vectors.json`；启用回放后，缺失向量使用 `tools/embedding-apiKey.csv` 补算（少量付费），没有 key 或缓存时退回关键词。测试环境没有用户补充资料，输出会注明。
+- `ARKLORES_REPLAY_MERGE_READS=true` 估算合并连续阅读的收益：同一故事的范围取并集，移到第一次读取所在的回复；允许中间读取其他故事，遇到其他工具结束本组。现有工具仍有分页上限，因此并集拆成同轮的多个小页，保留其他调用。
+- 累计 token 用历史 `last_prompt_tokens / last_prompt_chars` 校准，属于估算。比较前后应保持数据库、向量、Wiki 与补充资料条件相同；先看请求数、累计字数和按工具结果字数，再看重复量。`dup_py_exact_duplicate_chars` 沿用旧脚本口径；台词去重主指标按故事 id 与行号，其他重复行列出明细供检查固定说明。
+- 历史对话可能已删除被拦调用或被退回的答案，因此请求数可少于真实用量记录；不能据此断言生产环境已经节省相同比例。脚本耗尽仍被要求回答时测试失败，并保留诊断 JSON。
+
 ## 4. 改了界面
 
 - 对应的 widget 测试（`test/features/**`、`test/app_test.dart`），窄屏与大字下无溢出。
