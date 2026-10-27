@@ -48,6 +48,7 @@ void main() {
         [
           [0, 'background', '61_i12/61_i11', 'row'],
           [0, 'item', 'i_2', null],
+          [1, 'item_off', 'i_2', null],
         ]);
   });
   test('layers settle at the next text and retain omitted state', () {
@@ -82,5 +83,14 @@ One
 [cgitem(image="b")][hidecgitem]
 Two''').art;
     expect(art, isEmpty);
+  });
+  test('layers still up when the story ends go with it', () {
+    final art = parseStoryScriptWithArt('''[Image(image="x")][cgitem(image="a")]
+One
+[Image]''').art;
+    expect(
+      art.map((e) => (e.atLine, e.kind.value, e.image)),
+      [(0, 'cg', 'x'), (0, 'item', 'a'), (1, 'cg_off', null), (1, 'item_off', 'a')],
+    );
   });
 }

@@ -188,6 +188,13 @@ List<StoryArtShot> arrangeStoryArt(
       sceneNumber++;
     }
     if (!newScene && !changed) return;
+    // The last layers went: show the scene bare again, unless the stage
+    // under them is flat or cleared (the story ending says the same).
+    if (!newScene &&
+        layers.isEmpty &&
+        (background == null || background != displayed)) {
+      return;
+    }
     // A flat background still forms the stage under visible layers.
     final image = changed ? background ?? '' : displayed!;
     shots.add(

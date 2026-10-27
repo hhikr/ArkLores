@@ -105,6 +105,25 @@ void main() {
     expect(shots[1].layers.map((l) => l.image), ['i1', 'i2']);
     expect(shots.last.layers.map((l) => l.image), ['i2', 'i3']);
   });
+  test('layers leaving a real scene show it bare; a cleared stage shows nothing',
+      () {
+    final shots = arrangeStoryArt(
+      [
+        e(0, 'background', 'a'),
+        e(1, 'item', 'i1'),
+        e(2, 'item_off', 'i1'),
+        e(3, 'background'),
+        e(3, 'item', 'i2'),
+        e(5, 'item_off', 'i2'),
+        e(6, 'background', 'solid'),
+        e(6, 'item', 'i3'),
+        e(8, 'item_off'),
+      ],
+      lookup,
+    );
+    expect(shots.map((s) => (s.image, s.layers.length)),
+        [('a', 0), ('a', 1), ('a', 0), ('', 1), ('solid', 1)],);
+  });
   test('layers sort by depth then appearance; updates retain appearance', () {
     StoryArtEvent layer(String id, int depth, double x) => StoryArtEvent(
           storyId: 's',

@@ -52,8 +52,11 @@ void main() {
         .first,);
     expect(layer.width, closeTo(1600 * 1.5 * 1.4 * .2, .001));
     expect(layer.height, closeTo(900 * 1.5 * 1.4 * .2, .001));
-    expect(layer.left, closeTo((960 + 200 - 1600 * 1.5 * 1.4 / 2) * .2, .001));
-    expect(layer.top, closeTo((540 - 100 - 900 * 1.5 * 1.4 / 2) * .2, .001));
+    // Positions are on the 1280×720 stage too.
+    expect(layer.left,
+        closeTo((960 + 200 * 1.5 - 1600 * 1.5 * 1.4 / 2) * .2, .001),);
+    expect(layer.top,
+        closeTo((540 - 100 * 1.5 - 900 * 1.5 * 1.4 / 2) * .2, .001),);
     expect(find.byType(StoryArtImage), findsNWidgets(2));
     expect(
         tester
@@ -93,5 +96,25 @@ void main() {
     expect(layer.width, 480);
     expect(layer.height, 270);
     expect(tester.takeException(), isNull);
+  });
+  testWidgets('layers over a cleared stage sit on black', (tester) async {
+    const shot = StoryArtShot(
+        kind: 'scene', image: '', at: 0, layers: [StoryArtLayer(image: 'actor')],);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [storyArtPackProvider.overrideWith((ref) async => _Pack())],
+        child: const MaterialApp(
+            home: Center(
+                child: SizedBox(
+                    width: 384, height: 216, child: StoryArtComposite(shot),),),),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byWidgetPredicate((w) => w is StoryArtImage && w.kind == 'scene'),
+        findsNothing,);
+    expect(
+        find.byWidgetPredicate(
+            (w) => w is ColoredBox && w.color == Colors.black,),
+        findsOneWidget,);
   });
 }

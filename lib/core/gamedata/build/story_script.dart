@@ -211,6 +211,10 @@ List<StoryScriptLine> parseStoryScript(String raw) =>
       );
     }
   }
+  // The story is over: whatever is still up goes with it.
+  artState
+    ..items.clear()
+    ..flush(lines.length);
   return (lines: lines, art: art);
 }
 

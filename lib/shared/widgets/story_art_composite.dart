@@ -8,8 +8,9 @@ import '../../core/gamedata/story_art_pack_provider.dart';
 import '../../core/library/story_art.dart';
 import 'story_art_image.dart';
 
-// Game scripts use a 1920×1080 stage; Arkwaifu exports are drawn at 1.5×
-// their original pixel dimensions, including both 720- and 900-high layers.
+// Close-ups are laid out on a 1280×720 stage: their pixels and the script's
+// positions both scale by 1.5 onto the 1920×1080 stage drawn here (checked
+// against layers whose edges must meet the picture's or the screen's).
 const storyArtLayerPixelScale = 1.5;
 
 final _layerInfo = FutureProvider.autoDispose
@@ -65,19 +66,24 @@ class StoryArtComposite extends ConsumerWidget {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Positioned.fill(child: base(BoxFit.cover)),
+                    // A cleared stage is black in the game.
+                    Positioned.fill(
+                      child: shot.image.isEmpty
+                          ? const ColoredBox(color: Colors.black)
+                          : base(BoxFit.cover),
+                    ),
                     for (final layer in shot.layers)
                       if (info[layer.image] case final art?)
                         Positioned(
                           left: (960 +
-                                  layer.x -
+                                  layer.x * storyArtLayerPixelScale -
                                   art.width *
                                       storyArtLayerPixelScale *
                                       layer.scale /
                                       2) *
                               factor,
                           top: (540 -
-                                  layer.y -
+                                  layer.y * storyArtLayerPixelScale -
                                   art.height *
                                       storyArtLayerPixelScale *
                                       layer.scale /
