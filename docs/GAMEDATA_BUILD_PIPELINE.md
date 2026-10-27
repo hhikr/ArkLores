@@ -36,6 +36,7 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 | `story_chunk_vectors`（可选） | 剧情向量，12 行一块、步长 8，int8；模型/维度/切块记在 manifest |
 | `record_chunk_vectors`（可选，0.14） | 资料向量：`normalized_records` 里不是剧情副本的每条记录与 `entity_documents` 的每份档案；一条一块，超过 800 字的在 `## ` 小节处切、再按行切；每块存文字哈希与它覆盖的字符范围；与剧情向量同一模型 |
 | 立绘五张表（可选，0.20，只有明日方舟库） | `story_line_portraits`（每句显示的立绘）与派生的 `portrait_sprites`、`portrait_groups`、`speaker_portraits`、`speaker_names`；格式、规则与四条路径的写法见 `PORTRAITS.md` §2。旧 App 不读，加表不改 `min_app_build` |
+| 剧情美术事件表（可选，仅明日方舟） | `story_art_events` 记录背景、CG 和特写的位置；四条路径与补算工具同立绘，见 `PORTRAITS.md` §2。 |
 | `gamedata_manifest` | schema 版本、上游提交、计数、向量与目录元数据（0.20 起有 `portrait_index_version`、立绘行数与立绘数） |
 
 关系、名字、复刻合并、去重等规则见 `KNOWLEDGE_BASE_LESSONS.md` §2。

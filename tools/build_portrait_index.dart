@@ -1,6 +1,9 @@
+/// Backfills portraits and story art events in an existing database.
+library;
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/portrait_index.dart';
+import 'package:arklores/core/gamedata/build/story_art_index.dart';
 import 'package:arklores/core/gamedata/build/story_script.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -14,6 +17,7 @@ Future<void> main(List<String> args) async {
   if (args.contains('--help') ||
       !options.containsKey('--db') ||
       !options.containsKey('--source')) {
+    stdout.writeln('Backfill portraits and story art events.');
     stdout.writeln(
       'dart run tools/build_portrait_index.dart --db=<db> --source=<ArknightsGameData>',
     );
@@ -48,10 +52,12 @@ Future<void> main(List<String> args) async {
     final skipped = <String>[];
     await db.transaction((txn) async {
       await ensurePortraitTables(txn);
+      await ensureStoryArtTable(txn);
       for (final file in files) {
         final id =
             p.relative(file.path, from: root.path).replaceAll(p.separator, '/');
-        final lines = parseStoryScript(await file.readAsString());
+        final parsed = parseStoryScriptWithArt(await file.readAsString());
+        final lines = parsed.lines;
         final stored = await txn.query(
           'story_lines',
           columns: ['line_index', 'kind', 'speaker', 'content'],
@@ -81,6 +87,8 @@ Future<void> main(List<String> args) async {
           continue;
         }
         await deletePortraitRows(txn, id);
+        await deleteStoryArtRows(txn, id);
+        await writeStoryArtRows(txn, id, parsed.art);
         final batch = txn.batch();
         for (var i = 0; i < lines.length; i++) {
           if (lines[i].portrait != null) {
@@ -96,6 +104,7 @@ Future<void> main(List<String> args) async {
       }
     });
     await rebuildPortraitIndex(db);
+    await updateStoryArtManifest(db);
     stdout.writeln('Stories total: ${files.length}');
     stdout.writeln('Stories written: $written');
     stdout.writeln('Stories skipped: ${skipped.length}');
@@ -106,6 +115,7 @@ Future<void> main(List<String> args) async {
       stdout.writeln('  … ${skipped.length - 20} more');
     }
     for (final table in [
+      storyArtEventsTable,
       storyLinePortraitsTable,
       portraitSpritesTable,
       portraitGroupsTable,

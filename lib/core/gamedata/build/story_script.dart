@@ -125,9 +125,34 @@ List<String> storyLogicalLines(String raw) {
 }
 
 /// Parses a whole script into its text lines, in order.
-List<StoryScriptLine> parseStoryScript(String raw) {
+enum StoryArtKind {
+  background('background'),
+  cg('cg'),
+  cgOff('cg_off'),
+  item('item'),
+  itemOff('item_off');
+
+  const StoryArtKind(this.value);
+  final String value;
+}
+
+class StoryArtEvent {
+  const StoryArtEvent(this.atLine, this.kind, {this.image, this.layout});
+  final int atLine;
+  final StoryArtKind kind;
+  final String? image;
+  final String? layout;
+}
+
+List<StoryScriptLine> parseStoryScript(String raw) =>
+    parseStoryScriptWithArt(raw).lines;
+
+({List<StoryScriptLine> lines, List<StoryArtEvent> art})
+    parseStoryScriptWithArt(String raw) {
   final lines = <StoryScriptLine>[];
   final portraits = _PortraitState();
+  final art = <StoryArtEvent>[];
+  final artState = _ArtState(art);
   for (final line in storyLogicalLines(raw)) {
     if (!line.startsWith('[')) {
       final content = cleanStoryText(line);
@@ -137,7 +162,7 @@ List<StoryScriptLine> parseStoryScript(String raw) {
       continue;
     }
     final parsed = _parseCommandLine(line);
-    portraits.update(line);
+    portraits.update(line, artState, lines.length);
     if (parsed != null) {
       lines.add(
         StoryScriptLine(
@@ -152,7 +177,7 @@ List<StoryScriptLine> parseStoryScript(String raw) {
       );
     }
   }
-  return lines;
+  return (lines: lines, art: art);
 }
 
 class _PortraitState {
@@ -186,7 +211,7 @@ class _PortraitState {
         final value => value,
       };
 
-  void update(String line) {
+  void update(String line, _ArtState art, int atLine) {
     var rest = line;
     while (rest.startsWith('[')) {
       final end = _commandEnd(rest);
@@ -195,7 +220,9 @@ class _PortraitState {
       final command = _commandHead.firstMatch(body)?.group(1)?.toLowerCase();
       final attrs = _attributes(body);
       if (command == 'image') {
-        covered = (attrs['image']?.trim() ?? '').isNotEmpty;
+        final image = _artImage(attrs['image']);
+        covered = image != null;
+        art.cgImage(image, atLine);
       } else if (command == 'charactercutin') {
         cutin = canonicalSprite(attrs['name'] ?? '');
       } else if (command == 'character') {
@@ -250,7 +277,65 @@ class _PortraitState {
           }
         }
       }
+      art.command(command, attrs, atLine);
       rest = rest.substring(end + 1).trim();
+    }
+  }
+}
+
+String? _artImage(String? value) {
+  final result = value?.trim().toLowerCase() ?? '';
+  return result.isEmpty ? null : result;
+}
+
+class _ArtState {
+  _ArtState(this.events);
+  final List<StoryArtEvent> events;
+  String? background, layout, cg, item;
+  bool hasBackground = false;
+
+  void cgImage(String? image, int atLine) {
+    if (image == cg) return;
+    cg = image;
+    events.add(StoryArtEvent(
+        atLine, image == null ? StoryArtKind.cgOff : StoryArtKind.cg,
+        image: image,),);
+  }
+
+  void command(String? command, Map<String, String> attrs, int atLine) {
+    if (command == 'background' ||
+        command == 'largebg' ||
+        command == 'verticalbg' ||
+        command == 'gridbg') {
+      final composite = command != 'background';
+      final value = composite ? attrs['imagegroup'] : attrs['image'];
+      final image = composite
+          ? _artImage(value)?.split('/').map((part) => part.trim()).join('/')
+          : _artImage(value);
+      final nextLayout = image == null
+          ? null
+          : switch (command) {
+              'largebg' => 'row',
+              'verticalbg' => 'column',
+              'gridbg' => 'grid2',
+              _ => null,
+            };
+      if (!hasBackground || image != background || nextLayout != layout) {
+        events.add(StoryArtEvent(atLine, StoryArtKind.background,
+            image: image, layout: nextLayout,),);
+        hasBackground = true;
+        background = image;
+        layout = nextLayout;
+      }
+    } else if (command == 'cgitem') {
+      final image = _artImage(attrs['image']);
+      if (image != null && image != item) {
+        item = image;
+        events.add(StoryArtEvent(atLine, StoryArtKind.item, image: image));
+      }
+    } else if (command == 'hidecgitem' && item != null) {
+      item = null;
+      events.add(StoryArtEvent(atLine, StoryArtKind.itemOff));
     }
   }
 }

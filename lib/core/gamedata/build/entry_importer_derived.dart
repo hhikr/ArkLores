@@ -433,6 +433,7 @@ extension _Derived on EntryImporter {
       );
     });
     await rebuildPortraitIndex(db);
+    await updateStoryArtManifest(db);
   }
 
   /// Dialogue played inside a battle (tutorial popups, training, in-battle

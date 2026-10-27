@@ -70,11 +70,32 @@ void main() {
     expect(await db.query('story_chunk_vectors'), isEmpty);
   });
 
+  test('art events follow changed story text without changing the signature', () async {
+    const other = 'zh_CN/gamedata/story/other.txt';
+    await write(relative, '[Background(image="first")]\nOne');
+    await write(other, '[Image(image="cg")]\nOther');
+    await importer.importStoryFile(relative);
+    await importer.importStoryFile(other);
+    await addVector();
+    final original = await db.query('story_art_events', orderBy: 'story_id, seq');
+    expect(original.map((row) => row['image']), ['cg', 'first']);
+    await write(relative, '[Background(image="new")]\nOne');
+    expect(await importer.reimportChangedStories(), isEmpty);
+    expect(await db.query('story_art_events', orderBy: 'story_id, seq'), original);
+    expect(await db.query('story_chunk_vectors'), hasLength(1));
+    await write(relative, '[Background(image="new")]\nChanged');
+    expect(await importer.reimportChangedStories(), [relative]);
+    final rows = await db.query('story_art_events', orderBy: 'story_id, seq');
+    expect(rows.map((row) => row['image']), ['cg', 'new']);
+    expect(await db.query('story_chunk_vectors'), isEmpty);
+  });
+
   test(
       'backfill preserves unrelated tables, skips mismatches and is repeatable',
       () async {
-    await write(relative, '[Character(name="char_test#2")]\n[name="Name"]text');
+    await write(relative, '[Background(image="art")][Character(name="char_test#2")]\n[name="Name"]text');
     await importer.importStoryFile(relative);
+    await db.delete('story_art_events');
     await addVector();
     await write('zh_CN/gamedata/story/mismatch.txt', '[name="Other"]before');
     await importer.importStoryFile('zh_CN/gamedata/story/mismatch.txt');
@@ -96,6 +117,7 @@ void main() {
     await tool.main(args);
     db = await databaseFactoryFfi.openDatabase(dbPath);
     final portraits = await db.query(storyLinePortraitsTable);
+    expect((await db.query('story_art_events')).single['image'], 'art');
     expect(portraits.length, 2);
     expect(portraits.firstWhere((p) => p['story_id'] == 's.txt')['sprite'],
         r'char_test#2$1',);
@@ -106,7 +128,7 @@ void main() {
     expect(await db.query('story_chunk_vectors'), vectors);
     expect(
         await db.rawQuery(
-            "SELECT * FROM gamedata_manifest WHERE substr(key,1,9) <> 'portrait_'",),
+            "SELECT * FROM gamedata_manifest WHERE substr(key,1,9) <> 'portrait_' AND substr(key,1,10) <> 'story_art_'",),
         manifest,);
     final first = await db.query(speakerNamesTable);
     await db.close();

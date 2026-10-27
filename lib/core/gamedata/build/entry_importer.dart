@@ -27,6 +27,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 import 'arknights_importer.dart';
 import 'event_outline.dart';
 import 'portrait_index.dart';
+import 'story_art_index.dart';
 import 'story_naming.dart';
 import 'text_harvest.dart';
 

@@ -143,6 +143,11 @@ void main() {
       for (final file in files.take(30)) {
         final raw = file.readAsStringSync();
         expect(
+          parseStoryScriptWithArt(raw).lines.map((l) => (l.kind, l.speaker, l.content, l.portrait)).toList(),
+          parseStoryScript(raw).map((l) => (l.kind, l.speaker, l.content, l.portrait)).toList(),
+          reason: file.path,
+        );
+        expect(
           parseStoryScript(raw)
               .map((l) => (l.kind.value, l.speaker, l.content))
               .toList(),
