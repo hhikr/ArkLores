@@ -110,6 +110,7 @@ flutter test test/live/token_replay_test.dart
 
 - `ARKLORES_REPLAY_OUT` 指定输出 JSON；默认写入 `build/token_replay/<会话名>.<时间>.json`。含逐请求表、系统/工具说明/对话字数、工具结果、被拦标记、重复与行前缀统计。
 - `ARKLORES_REPLAY_WIKI` 默认 `false`，移除 `search.wiki` 且不注册 Wiki 工具；设为 `true` 才联网查 Wiki，结果可能变化。默认开关关闭时整项测试跳过，不联网。
+- `ARKLORES_REPLAY_MATERIALS` 默认 `true`，只加载 App 预置资料；用户导入资料不会同步。设为 `false` 可关闭资料。
 - 查询向量缓存于 `build/token_replay/query_vectors.json`；启用回放后，缺失向量使用 `tools/embedding-apiKey.csv` 补算（少量付费），没有 key 或缓存时退回关键词。测试环境没有用户补充资料，输出会注明。
 - `ARKLORES_REPLAY_MERGE_READS=true` 估算合并连续阅读的收益：同一故事的范围取并集，移到第一次读取所在的回复；允许中间读取其他故事，遇到其他工具结束本组。现有工具仍有分页上限，因此并集拆成同轮的多个小页，保留其他调用。
 - 累计 token 用历史 `last_prompt_tokens / last_prompt_chars` 校准，属于估算。比较前后应保持数据库、向量、Wiki 与补充资料条件相同；先看请求数、累计字数和按工具结果字数，再看重复量。`dup_py_exact_duplicate_chars` 沿用旧脚本口径；台词去重主指标按故事 id 与行号，其他重复行列出明细供检查固定说明。

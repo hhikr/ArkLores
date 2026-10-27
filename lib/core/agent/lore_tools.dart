@@ -239,6 +239,117 @@ String formatStoryLine(
   return 'L$index $who${oneLine(content)}';
 }
 
+/// A story passage after replacing evidence that is still in the conversation.
+class ContextStoryLines {
+  const ContextStoryLines({
+    required this.lines,
+    required this.printedEvidence,
+    required this.allEvidenceInContext,
+    this.firstLine,
+    this.lastLine,
+    this.steps,
+  });
+
+  final List<String> lines;
+  final Set<int> printedEvidence;
+  final bool allEvidenceInContext;
+  final int? firstLine;
+  final int? lastLine;
+  final String? steps;
+}
+
+/// Do not replace source text when the pointer cannot save characters.
+const int minimumContextOmissionSavings = 1;
+
+/// Render [lines] in their existing order, replacing evidence still in the
+/// conversation with pointers. [formatLine] and [formatPointer] preserve the
+/// caller's indentation and hit markers.
+ContextStoryLines renderStoryLinesWithContext({
+  required String storyId,
+  required List<StoryLineEntry> lines,
+  required ContextLedger? ledger,
+  required String Function(StoryLineEntry) formatLine,
+  String Function(String note, List<StoryLineEntry> omitted)? formatPointer,
+  bool requireSavings = true,
+}) {
+  String pointer(String note, List<StoryLineEntry> omitted) =>
+      formatPointer?.call(note, omitted) ?? note;
+  final evidence = lines.where((line) => isStoryEvidence(line.kind)).toList();
+  final first = lines.isEmpty ? null : lines.first.lineIndex;
+  final last = lines.isEmpty ? null : lines.last.lineIndex;
+  final allInContext = ledger != null &&
+      evidence.isNotEmpty &&
+      evidence.every((line) => ledger.lineInContext(storyId, line.lineIndex));
+  if (allInContext) {
+    final steps = contextSteps(
+      ledger,
+      storyId,
+      evidence.map((line) => line.lineIndex),
+    );
+    final note = '（L$first–L$last 的原文仍在上文，$steps的结果）';
+    return ContextStoryLines(
+      lines: [pointer(note, lines)],
+      printedEvidence: const {},
+      allEvidenceInContext: true,
+      firstLine: first,
+      lastLine: last,
+      steps: steps,
+    );
+  }
+
+  final rendered = <String>[];
+  final printedEvidence = <int>{};
+  bool above(StoryLineEntry line) =>
+      ledger?.lineInContext(storyId, line.lineIndex) ?? false;
+  for (var i = 0; i < lines.length;) {
+    final line = lines[i];
+    if (!isStoryEvidence(line.kind) || !above(line)) {
+      rendered.add(formatLine(line));
+      if (isStoryEvidence(line.kind)) printedEvidence.add(line.lineIndex);
+      i++;
+      continue;
+    }
+
+    var end = i;
+    var previousLine = line.lineIndex;
+    for (var scan = i + 1; scan < lines.length; scan++) {
+      final next = lines[scan];
+      if (next.lineIndex != previousLine + 1) break;
+      if (isStoryEvidence(next.kind)) {
+        if (!above(next)) break;
+        end = scan;
+      }
+      previousLine = next.lineIndex;
+    }
+    final omitted = lines.sublist(i, end + 1);
+    final note = '（L${line.lineIndex}–L${lines[end].lineIndex} 的原文仍在上文，略去）';
+    final renderedPointer = pointer(note, omitted);
+    final sourceChars = omitted.fold<int>(
+      0,
+      (total, item) => total + formatLine(item).length,
+    );
+    if (!requireSavings ||
+        sourceChars - renderedPointer.length >= minimumContextOmissionSavings) {
+      rendered.add(renderedPointer);
+      i = end + 1;
+      continue;
+    }
+
+    for (final item in omitted) {
+      rendered.add(formatLine(item));
+      if (isStoryEvidence(item.kind)) printedEvidence.add(item.lineIndex);
+    }
+    i = end + 1;
+  }
+  return ContextStoryLines(
+    lines: rendered,
+    printedEvidence: printedEvidence,
+    allEvidenceInContext: false,
+    firstLine: first,
+    lastLine: last,
+  );
+}
+
 /// Readable chapter name for [storyId] from [entries] (path-derived when the
 /// catalog lacks it).
 String _storyLabel(String storyId, Map<String, StoryCatalogEntry> entries) =>
@@ -784,48 +895,45 @@ class ReadStoryTool extends AgentTool {
     final printable = <StoryLineEntry>[];
     var chars = buffer.length;
     for (final line in page.lines) {
-      final text = formatStoryLine(line.lineIndex, line.speaker, line.content,
-          kind: line.kind,);
+      final text = formatStoryLine(
+        line.lineIndex,
+        line.speaker,
+        line.content,
+        kind: line.kind,
+      );
       if (chars + text.length > maxToolResultChars && printable.isNotEmpty) {
         break;
       }
       printable.add(line);
       chars += text.length + 1;
     }
-    final evidence = printable.where((l) => isStoryEvidence(l.kind)).toList();
-    bool above(StoryLineEntry l) =>
-        ledger?.lineInContext(storyId, l.lineIndex) ?? false;
-    if (ledger != null && evidence.isNotEmpty && evidence.every(above)) {
-      final first = printable.first.lineIndex;
-      final last = printable.last.lineIndex;
-      final steps =
-          contextSteps(ledger!, storyId, evidence.map((l) => l.lineIndex));
+    final deduped = renderStoryLinesWithContext(
+      storyId: storyId,
+      lines: printable,
+      ledger: ledger,
+      formatLine: (line) => formatStoryLine(
+        line.lineIndex,
+        line.speaker,
+        line.content,
+        kind: line.kind,
+      ),
+      requireSavings: false,
+    );
+    if (deduped.allEvidenceInContext) {
+      final first = deduped.firstLine!;
+      final last = deduped.lastLine!;
       final more = last < page.lines.last.lineIndex || page.hasMore;
-      return '$inContextPrefix L$first–L$last 的原文仍在上文（$steps的结果），没有重新读取。'
+      return '$inContextPrefix L$first–L$last 的原文仍在上文（${deduped.steps}的结果），没有重新读取。'
           '${more ? '直接使用上文；要读后面的内容用 start=${last + 1}。' : '这一章到 L$last 结束。'}';
     }
-    var last = start;
-    for (var i = 0; i < printable.length; i++) {
-      final line = printable[i];
-      if (isStoryEvidence(line.kind) && above(line)) {
-        var end = i;
-        for (var scan = i + 1; scan < printable.length; scan++) {
-          final next = printable[scan];
-          if (isStoryEvidence(next.kind)) {
-            if (!above(next)) break;
-            end = scan;
-          }
-        }
-        buffer.writeln(
-            '（L${line.lineIndex}–L${printable[end].lineIndex} 的原文仍在上文，略去）',);
-        last = printable[end].lineIndex;
-        i = end;
-        continue;
+    final last = printable.last.lineIndex;
+    for (final line in deduped.lines) {
+      buffer.writeln(line);
+    }
+    for (final line in printable) {
+      if (deduped.printedEvidence.contains(line.lineIndex)) {
+        seen.addStoryLine(storyId, line);
       }
-      buffer.writeln(formatStoryLine(line.lineIndex, line.speaker, line.content,
-          kind: line.kind,),);
-      last = line.lineIndex;
-      seen.addStoryLine(storyId, line);
     }
     final more = last < page.lines.last.lineIndex || page.hasMore;
     buffer.writeln(
@@ -837,10 +945,11 @@ class ReadStoryTool extends AgentTool {
 
 /// `grep`: lines containing words, in some chapters or across the corpus.
 class GrepTool extends AgentTool {
-  GrepTool(this.store, this.seen);
+  GrepTool(this.store, this.seen, {this.ledger});
 
   final GameDataRetrieval store;
   final SeenLines seen;
+  final ContextLedger? ledger;
 
   static const int defaultHits = 60;
   static const int maxHits = 150;
@@ -940,6 +1049,7 @@ class GrepTool extends AgentTool {
     }
     final entries = await store.storyCatalogEntries(byStory.keys);
     final buffer = StringBuffer();
+    var budgetChars = 0;
     var printedStories = 0;
     final printed = <String, int>{};
     var full = false;
@@ -956,10 +1066,13 @@ class GrepTool extends AgentTool {
           windows.add((a, b));
         }
       }
-      final block = StringBuffer()
-        ..writeln('## 《${_storyLabel(storyId, entries)}》 $storyId'
-            '（${lines.length} 处）');
+      final heading = '## 《${_storyLabel(storyId, entries)}》 $storyId'
+          '（${lines.length} 处）';
+      final block = StringBuffer()..writeln(heading);
+      var originalBlockChars = block.length;
       final blockLines = <StoryLineEntry>[];
+      final printedWindows = <List<StoryLineEntry>>[];
+      String? truncatedNote;
       readWindows:
       for (final (a, b) in windows) {
         final page = await store.readStoryLines(
@@ -968,26 +1081,59 @@ class GrepTool extends AgentTool {
           endLine: b,
           maxLines: b - a + 1,
         );
+        final windowLines = <StoryLineEntry>[];
         for (final line in page.lines) {
           final mark = hitSet.contains(line.lineIndex) ? '* ' : '  ';
           final text =
               '$mark${formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind)}';
-          if (buffer.length + block.length + text.length > maxToolResultChars &&
+          // Use pre-omission lengths so saved characters cannot add hits or stories.
+          if (budgetChars + originalBlockChars + text.length >
+                  maxToolResultChars &&
               (printedStories > 0 || blockLines.isNotEmpty)) {
             full = true;
-            block.writeln('（篇幅已满，后面的行没有列出；继续读用 read_story '
-                'story_id=$storyId start=${line.lineIndex}）');
+            printedWindows.add(windowLines);
+            truncatedNote = '（篇幅已满，后面的行没有列出；继续读用 read_story '
+                'story_id=$storyId start=${line.lineIndex}）';
+            originalBlockChars += truncatedNote.length + 1;
             break readWindows;
           }
-          block.writeln(text);
+          windowLines.add(line);
           blockLines.add(line);
+          originalBlockChars += text.length + 1;
         }
-        block.writeln('  …');
+        printedWindows.add(windowLines);
+        originalBlockChars += '  …'.length + 1;
       }
+      final printedEvidence = <int>{};
+      for (final window in printedWindows) {
+        final rendered = renderStoryLinesWithContext(
+          storyId: storyId,
+          lines: window,
+          ledger: ledger,
+          formatLine: (line) =>
+              '${hitSet.contains(line.lineIndex) ? '* ' : '  '}'
+              '${formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind)}',
+          formatPointer: (note, omitted) =>
+              '${omitted.any((line) => hitSet.contains(line.lineIndex)) ? '* ' : '  '}'
+              '$note',
+        );
+        for (final line in rendered.lines) {
+          block.writeln(line);
+        }
+        printedEvidence.addAll(rendered.printedEvidence);
+        // A window separator and truncation guide are navigation information.
+        if (truncatedNote == null || !identical(window, printedWindows.last)) {
+          block.writeln('  …');
+        }
+      }
+      if (truncatedNote != null) block.writeln(truncatedNote);
+      budgetChars += originalBlockChars;
       buffer.write(block);
       if (blockLines.isNotEmpty) {
         for (final line in blockLines) {
-          seen.addStoryLine(storyId, line);
+          if (printedEvidence.contains(line.lineIndex)) {
+            seen.addStoryLine(storyId, line);
+          }
         }
         printedStories++;
         printed[storyId] =
@@ -1294,21 +1440,22 @@ List<AgentTool> loreTools(
       embeddingClient: embeddingClient,
       wiki: wiki,
       materials: materials,
+      ledger: ledger,
     ),
     ReadStoryTool(store, seen, ledger: ledger),
     ReadRecordTool(store, seen, ledger: ledger),
-    GrepTool(store, seen),
+    GrepTool(store, seen, ledger: ledger),
     SqlTool(store, seen, manual: manual),
     GuideTool(manual),
     OutlineTool(store),
     SimilarNamesTool(store),
-    GatherTool(store, seen, picker: picker),
+    GatherTool(store, seen, picker: picker, ledger: ledger),
   ];
   if (materials == null || !materials.isAvailable) return tools;
   return [
     for (final tool in tools)
       if (const {'grep', 'gather', 'sql', 'guide'}.contains(tool.name))
-        MaterialJoinedTool(tool, materials, seen)
+        MaterialJoinedTool(tool, materials, seen, ledger: ledger)
       else
         tool,
     ReadMaterialTool(materials, seen),

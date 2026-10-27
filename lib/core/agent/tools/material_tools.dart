@@ -1,4 +1,5 @@
 import '../../materials/material_snapshot.dart';
+import '../context_ledger.dart';
 import '../lore_tools.dart';
 import 'agent_tool.dart';
 
@@ -32,10 +33,11 @@ class ReadMaterialTool extends AgentTool {
 
 /// The existing tools retain their names and cover both game and supplemental text.
 class MaterialJoinedTool extends AgentTool {
-  MaterialJoinedTool(this.inner, this.materials, this.seen);
+  MaterialJoinedTool(this.inner, this.materials, this.seen, {this.ledger});
   final AgentTool inner;
   final MaterialSnapshot materials;
   final SeenLines seen;
+  final ContextLedger? ledger;
   @override
   String get name => inner.name;
   @override
@@ -97,8 +99,12 @@ class MaterialJoinedTool extends AgentTool {
     final query = name == 'gather'
         ? (a['names'] as List? ?? []).join(' ')
         : '${a['pattern'] ?? ''}';
-    final hits = materials.search(query,
-        game: a['game'] as String?, limit: 6, bodyOnly: true,);
+    final hits = materials.search(
+      query,
+      game: a['game'] as String?,
+      limit: 6,
+      bodyOnly: true,
+    );
     return '$original\n\n${materials.render(hits, seen.add, maxChars: name == 'gather' ? 6000 : 4000)}';
   }
 }

@@ -22,6 +22,7 @@ import '../../llm/embedding_client.dart';
 import '../../materials/material_snapshot.dart';
 import '../../wiki/wiki_lookup.dart';
 import '../../wiki/wiki_page.dart';
+import '../context_ledger.dart';
 import '../lore_tools.dart';
 import 'agent_tool.dart';
 
@@ -52,12 +53,14 @@ class SearchTool extends AgentTool {
     this.embeddingClient,
     this.wiki,
     this.materials,
+    this.ledger,
   });
 
   final GameDataRetrieval store;
   final SeenLines seen;
   final MaterialSnapshot? materials;
   final EmbeddingClient? embeddingClient;
+  final ContextLedger? ledger;
 
   /// The wikis (null when the wiki option is off).
   final WikiLookup? wiki;
@@ -331,14 +334,13 @@ class SearchTool extends AgentTool {
       buffer.writeln('## ${g.label}剧情'
           '${part.isEmpty ? '：没有相关段落' : '（最相关的 ${part.length} 篇）'}');
       for (final block in part) {
-        // Only the passages count: the lines about the words above must
-        // not take their room.
-        if (passageChars + block.text.length > maxChars) {
+        // Keep the original budget so deduplication cannot add more passages.
+        if (passageChars + block.budgetChars > maxChars) {
           buffer.writeln('……（篇幅已满，其余从略）');
           break;
         }
         block.writeTo(buffer, seen);
-        passageChars += block.text.length;
+        passageChars += block.budgetChars;
       }
       // 0.14: the collections the words' spreads list and no passage above
       // is from, a passage each — where a word is must not depend on the
@@ -358,12 +360,12 @@ class SearchTool extends AgentTool {
           elsewhere,
           from: part.length,
         )) {
-          if (chars + block.text.length > elsewhereChars) {
+          if (chars + block.budgetChars > elsewhereChars) {
             buffer.writeln('……（篇幅已满，其余的故事集用 search 加 collection 再查）');
             break;
           }
           block.writeTo(buffer, seen);
-          chars += block.text.length;
+          chars += block.budgetChars;
         }
       }
       final records = _renderRecords(r);
@@ -374,11 +376,13 @@ class SearchTool extends AgentTool {
       }
     }
     if (materials != null && inCollection == null) {
-      final hits = materials!.search(query,
-          vector: vector,
-          model: embeddingClient?.model,
-          dims: embeddingClient?.dimensions,
-          game: game?.key,);
+      final hits = materials!.search(
+        query,
+        vector: vector,
+        model: embeddingClient?.model,
+        dims: embeddingClient?.dimensions,
+        game: game?.key,
+      );
       buffer.writeln(materials!.render(hits, seen.add));
     }
     if (wikiPart.isNotEmpty) {
@@ -390,8 +394,11 @@ class SearchTool extends AgentTool {
     buffer.writeln('（上面列出的行可以引用，没有列出的行要先读；要上下文用 read_story 从附近的行读。'
         '资料只列了片段，可以按片段引用，全文用 read_record 按 id 读'
         '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
-    return SearchResult(buffer.toString().trimRight(), mode,
-        modeNote: modeNote,);
+    return SearchResult(
+      buffer.toString().trimRight(),
+      mode,
+      modeNote: modeNote,
+    );
   }
 
   static final RegExp _nearPattern =
@@ -469,8 +476,9 @@ class SearchTool extends AgentTool {
         return 'near 的段落必须先通过 search 或 read_material 读取。';
       }
       final c = materials!.chunks
-          .where((c) =>
-              c.document.pageId == id && c.start <= line && c.end >= line,)
+          .where(
+            (c) => c.document.pageId == id && c.start <= line && c.end >= line,
+          )
           .firstOrNull;
       final v = c == null
           ? null
@@ -493,12 +501,14 @@ class SearchTool extends AgentTool {
       return id.startsWith('material:') ? '该段还没有向量，先用 query 检索。' : null;
     }
     final materialHits = materials!
-        .search('',
-            vector: vector,
-            model: model,
-            dims: dims,
-            minScore: nearMinSimilarity,
-            limit: 6,)
+        .search(
+          '',
+          vector: vector,
+          model: model,
+          dims: dims,
+          minScore: nearMinSimilarity,
+          limit: 6,
+        )
         .where((h) => h.chunk.document.pageId != id)
         .toList();
     final out = StringBuffer('与 $near 意思相近的原文（游戏库与补充资料联查）：\n');
@@ -511,9 +521,13 @@ class SearchTool extends AgentTool {
           .where((h) => h.score >= nearMinSimilarity && h.storyId != id)
           .take(4)
           .toList();
-      final ranked = _Ranked(hits.map((h) => h.storyId).toList(),
-          {for (final h in hits) h.storyId: h}, {},
-          best: 0, lines: 0,);
+      final ranked = _Ranked(
+        hits.map((h) => h.storyId).toList(),
+        {for (final h in hits) h.storyId: h},
+        {},
+        best: 0,
+        lines: 0,
+      );
       for (final block in await _render(own, ranked)) {
         block.writeTo(out, seen);
       }
@@ -612,13 +626,15 @@ class SearchTool extends AgentTool {
     final info = await store.storyVectorInfo;
     if (info == null) {
       final compatible = materials?.vectors.any(
-              (v) => v.model == client.model && v.dims == client.dimensions,) ??
+            (v) => v.model == client.model && v.dims == client.dimensions,
+          ) ??
           false;
       return compatible ? null : '知识库与已启用资料没有匹配的向量';
     }
     if (info.model != client.model || info.dims != client.dimensions) {
       final compatible = materials?.vectors.any(
-              (v) => v.model == client.model && v.dims == client.dimensions,) ??
+            (v) => v.model == client.model && v.dims == client.dimensions,
+          ) ??
           false;
       return compatible ? null : '库里的向量是 ${info.model}，配置的是 ${client.model}';
     }
@@ -629,9 +645,10 @@ class SearchTool extends AgentTool {
     final reason = await keywordOnlyReason();
     if (reason != null) return (null, reason);
     try {
-      final vector=(await embeddingClient!.embed([query])).single;
-      if(vector.length!=embeddingClient!.dimensions || vector.any((v)=>!v.isFinite)) {
-        return (null,'向量服务返回了不匹配的向量');
+      final vector = (await embeddingClient!.embed([query])).single;
+      if (vector.length != embeddingClient!.dimensions ||
+          vector.any((v) => !v.isFinite)) {
+        return (null, '向量服务返回了不匹配的向量');
       }
       return (vector, null);
     } catch (e) {
@@ -888,15 +905,33 @@ class SearchTool extends AgentTool {
     for (final (i, storyId) in top.indexed) {
       final chunk = ranked.firstChunk[storyId];
       final keyword = ranked.keywordOf[storyId];
-      final block = StringBuffer()
-        ..writeln(
-            '${from + i + 1}. 《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》 $storyId'
-            '（${[
-          if (chunk != null) '意思相近 ${chunk.score.toStringAsFixed(2)}',
-          if (keyword != null && keyword.hits > 0) '关键词 ${keyword.hits} 行',
-        ].join('；')}）');
+      final heading =
+          '${from + i + 1}. 《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》 $storyId'
+          '（${[
+        if (chunk != null) '意思相近 ${chunk.score.toStringAsFixed(2)}',
+        if (keyword != null && keyword.hits > 0) '关键词 ${keyword.hits} 行',
+      ].join('；')}）';
+      final block = StringBuffer()..writeln(heading);
+      final original = StringBuffer()..writeln(heading);
       final shown = <int>{};
-      final evidence = <int>{};
+      final printedEvidence = <int>{};
+      void writeLines(List<StoryLineEntry> lines) {
+        final rendered = renderStoryLinesWithContext(
+          storyId: storyId,
+          lines: lines,
+          ledger: ledger,
+          formatLine: (line) => '   ${_line(line)}',
+          formatPointer: (note, _) => '   $note',
+        );
+        for (final line in rendered.lines) {
+          block.writeln(line);
+        }
+        for (final line in lines) {
+          original.writeln('   ${_line(line)}');
+        }
+        printedEvidence.addAll(rendered.printedEvidence);
+      }
+
       if (chunk != null) {
         final page = await store.readStoryLines(
           storyId: storyId,
@@ -908,37 +943,51 @@ class SearchTool extends AgentTool {
         int? unreadFrom = page.hasMore && page.lines.isNotEmpty
             ? page.lines.last.lineIndex + 1
             : null;
+        final chunkLines = <StoryLineEntry>[];
         for (final line in page.lines) {
           final text = '   ${_line(line)}';
           if (chars + text.length + 1 > maxPassageChars) {
             unreadFrom = line.lineIndex;
             break;
           }
-          block.writeln(text);
           chars += text.length + 1;
           shown.add(line.lineIndex);
-          if (isStoryEvidence(line.kind)) evidence.add(line.lineIndex);
+          chunkLines.add(line);
         }
+        writeLines(chunkLines);
         if (unreadFrom != null) {
           // 0.14: not "the passage goes on to L…", which read as shown.
-          block.writeln(
-            '   …（L$unreadFrom-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）',
-          );
+          final note =
+              '   …（L$unreadFrom-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）';
+          block.writeln(note);
+          original.writeln(note);
         }
       }
+      final keywordLines = <StoryLineEntry>[];
       for (final line in keyword?.lines ?? const <StoryLineEntry>[]) {
         if (!shown.add(line.lineIndex)) continue;
-        block.writeln('   ${_line(line)}');
-        if (isStoryEvidence(line.kind)) evidence.add(line.lineIndex);
+        keywordLines.add(line);
       }
-      blocks.add(_Passage(block.toString(), storyId, evidence));
+      writeLines(keywordLines);
+      blocks.add(
+        _Passage(
+          block.toString(),
+          storyId,
+          printedEvidence,
+          original.length,
+        ),
+      );
     }
     return blocks;
   }
 
   static String _line(StoryLineEntry line) {
-    final text = formatStoryLine(line.lineIndex, line.speaker, line.content,
-        kind: line.kind,);
+    final text = formatStoryLine(
+      line.lineIndex,
+      line.speaker,
+      line.content,
+      kind: line.kind,
+    );
     // 0.14: a line is shown whole, as `read_story` shows it (it counts as
     // read); only a very long one (a letter, a document) is cut, and says so.
     return text.length <= lineChars
@@ -993,9 +1042,12 @@ class SearchTool extends AgentTool {
 }
 
 class _Passage {
-  const _Passage(this.text, this.storyId, this.lines);
+  const _Passage(this.text, this.storyId, this.lines, this.budgetChars);
   final String text;
   final String storyId;
+
+  /// Original result length, before ledger-based omission.
+  final int budgetChars;
   final Set<int> lines;
 
   void writeTo(StringBuffer buffer, SeenLines seen) {
