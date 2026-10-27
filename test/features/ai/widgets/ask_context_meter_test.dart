@@ -182,7 +182,12 @@ void main() {
       final cipher = FontLoader('EndfieldCipher')..addFont(rootBundle.load('assets/fonts/EndfieldByButan.ttf'));
       await cipher.load();
       await tester.runAsync(() async {
-        final bytes = await File('C:/src/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf').readAsBytes();
+        // The icon font of the Windows dev machine; elsewhere (CI) icons
+        // draw as boxes.
+        final file = File(
+            'C:/src/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',);
+        if (!await file.exists()) return;
+        final bytes = await file.readAsBytes();
         final icons = FontLoader('MaterialIcons')..addFont(Future.value(ByteData.sublistView(bytes)));
         await icons.load();
       });
