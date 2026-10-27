@@ -794,6 +794,8 @@
   "storyArtJump": "回到剧情这里",
   "storyArtScene": "场景",
   "storyArtItem": "特写",
+  "storyArtTall": "竖长图，点开看全部",
+  "storyArtNoScene": "还没有出现场景",
   "storyArtMissing": "图片不在美术包中。",
   "storyArtSceneSemantic": "场景 {number}，共 {total}",
   "@storyArtSceneSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}}},

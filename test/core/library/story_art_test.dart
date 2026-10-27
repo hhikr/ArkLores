@@ -23,10 +23,12 @@ void main() {
     expect(shots.map((s) => s.until), [2,2,null,null]);
     expect(shots.last.missing, isTrue);
   });
-  test('missing backgrounds are skipped and item remains unnumbered', () {
+  test('missing backgrounds retain a scene label and item remains unnumbered', () {
     final shots = arrangeStoryArt([e(0,'background','missing'), e(1,'item','item')], lookup);
-    expect(shots.single.kind, 'item');
-    expect(shots.single.number, isNull);
+    expect(shots.first.kind, 'scene');
+    expect(shots.first.missing, isTrue);
+    expect(shots.last.kind, 'item');
+    expect(shots.last.number, isNull);
   });
   test('removing a CG over an unchanged background adds no scene; solid close-ups are skipped', () {
     final shots = arrangeStoryArt([e(0,'background','a'), e(1,'cg','x'), e(2,'item','solid'), e(3,'cg_off')], lookup);

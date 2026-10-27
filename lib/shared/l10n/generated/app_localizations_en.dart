@@ -1944,6 +1944,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyArtItem => 'Close-up';
 
   @override
+  String get storyArtTall => 'Tall image, tap to see all';
+
+  @override
+  String get storyArtNoScene => 'No scene has appeared yet';
+
+  @override
   String get storyArtMissing => 'Image not in the story art pack.';
 
   @override

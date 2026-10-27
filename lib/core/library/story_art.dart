@@ -74,12 +74,14 @@ class StoryArtShot {
       this.number,
       this.total,
       this.until,
+      this.segment,
       this.titleGroup,
       this.missing = false,});
   final String kind, image;
   final int at;
   final String? layout, titleGroup;
   final int? number, total, until;
+  final int? segment;
   final bool missing;
 }
 
@@ -91,15 +93,17 @@ List<StoryArtShot> arrangeStoryArt(
   String? background, backgroundLayout, displayed;
   bool covered = false;
   int segmentStart = 0;
+  var segment = 0;
   void scene(int at) {
     if (background == null ||
         background == displayed ||
-        solid(background, 'background') != false) {
+        solid(background, 'background') == true) {
       return;
     }
     displayed = background;
     shots.add(StoryArtShot(
-        kind: 'scene', image: background, layout: backgroundLayout, at: at,),);
+        kind: 'scene', image: background, layout: backgroundLayout, at: at,
+        missing: solid(background, 'background') == null,),);
   }
 
   for (final e in events) {
@@ -113,6 +117,7 @@ List<StoryArtShot> arrangeStoryArt(
         if (!covered) {
           covered = true;
           segmentStart = shots.length;
+          segment++;
         }
         final number =
             cgNumbers.putIfAbsent(e.image!, () => cgNumbers.length + 1);
@@ -122,6 +127,7 @@ List<StoryArtShot> arrangeStoryArt(
             layout: e.layout,
             at: e.at,
             number: number,
+            segment: segment,
             titleGroup: titleGroup?.call(e.image!),
             missing: solid(e.image!, 'cg') == null,),);
       case 'cg_off':
@@ -135,6 +141,7 @@ List<StoryArtShot> arrangeStoryArt(
                   layout: s.layout,
                   at: s.at,
                   number: s.number,
+                  segment: s.segment,
                   until: e.at,
                   titleGroup: s.titleGroup,
                   missing: s.missing,);
@@ -151,6 +158,7 @@ List<StoryArtShot> arrangeStoryArt(
               image: e.image!,
               layout: e.layout,
               at: e.at,
+              segment: covered ? segment : null,
               missing: solid(e.image!, 'item') == null,),);
         }
     }
@@ -165,6 +173,7 @@ List<StoryArtShot> arrangeStoryArt(
           layout: s.layout,
           at: s.at,
           number: s.kind == 'scene' ? ++sceneNumber : s.number,
+          segment: s.segment,
           total: s.kind == 'scene'
               ? sceneTotal
               : s.kind == 'cg'

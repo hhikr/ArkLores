@@ -21,6 +21,7 @@ import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart' show LibraryEntry;
 import '../../core/library/placeholders.dart';
 import '../../core/library/portrait_provider.dart';
+import '../../core/library/story_art.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart'
@@ -30,16 +31,21 @@ import '../../shared/providers/bars_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/theme/cut_border.dart';
 import '../../shared/theme/motion.dart';
 import '../../shared/widgets/dock_scaffold.dart';
 import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
+import '../../shared/widgets/story_art_image.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import '../library/portrait_preview.dart';
 import '../library/portrait_sheet.dart';
 import '../library/portrait_speaker_name.dart';
 import '../library/reading_text.dart'
     show FoldSection, ReadingText, readingStyle;
+import '../library/story_art_viewer.dart';
+import 'reader_story_art.dart';
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
 
@@ -155,13 +161,14 @@ class _StoryReaderBody extends ConsumerStatefulWidget {
 
 class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     with SingleTickerProviderStateMixin {
-  final GlobalKey _targetKey = GlobalKey();
   final GlobalKey _scrollKey = GlobalKey();
 
   /// Where the reader is: the first line on screen and the number of lines
   /// (shown by the title); null until the list is laid out.
   final ValueNotifier<(int, int)?> _progress = ValueNotifier(null);
+  final ValueNotifier<int?> _lastVisible = ValueNotifier(null);
   Timer? _progressTimer;
+  Timer? _panelMeasureTimer;
 
   /// The header (titles, description, synopsis), measured to re-anchor on it.
   final GlobalKey _headerKey = GlobalKey();
@@ -208,6 +215,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
+  ReaderStoryArt? _art;
+  ReaderStoryArt? _preparedArt;
 
   /// Positions of the section lines that follow one of the same kind.
   Set<int> _quietSections = const {};
@@ -266,9 +275,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _saveTimer?.cancel();
     _endTimer?.cancel();
     _progressTimer?.cancel();
+    _panelMeasureTimer?.cancel();
     _scrubDone?.cancel();
     _dockAway.dispose();
     _progress.dispose();
+    _lastVisible.dispose();
     _scrub.dispose();
     final container = _container;
     unawaited(
@@ -302,8 +313,25 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   /// Computes what the list needs from the text, once per text.
   void _prepare(List<StoryLineEntry> lines) {
-    if (identical(_preparedFor, lines)) return;
+    if (identical(_preparedFor, lines) && identical(_preparedArt, _art)) return;
+    final movedFromTop =
+        _center != 0 || (_scroll.hasClients && _scroll.offset.abs() > 1);
+    final previous = identical(_preparedFor, lines) && movedFromTop
+        ? _visibleRange()?.$1
+        : null;
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final box = previous == null
+        ? null
+        : _lineKeys[previous]?.currentContext?.findRenderObject();
+    final anchor = view is RenderBox &&
+            box is RenderBox &&
+            box.attached &&
+            view.size.height > 0
+        ? (box.localToGlobal(Offset.zero, ancestor: view).dy / view.size.height)
+            .clamp(0.0, 1.0)
+        : null;
     _preparedFor = lines;
+    _preparedArt = _art;
     _lines = lines;
     // Narration is set in italics only between spoken lines; a text that is
     // all narration (a month squad's story, a document) is plain.
@@ -329,7 +357,19 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     }
     _rows = _makeRows(lines);
     // Open anchored on the cited block or the line to resume at.
-    _anchorOnTarget();
+    if (previous != null && anchor != null) {
+      final row = _rows.indexWhere(
+          (r) => r.isLine && r.first <= previous && previous <= r.last,);
+      if (row >= 0) {
+        _center = row + 1;
+        _centerAt = anchor;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
+        });
+      }
+    } else {
+      _anchorOnTarget();
+    }
   }
 
   // ─── History ───────────────────────────────────────────────────
@@ -464,7 +504,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _progressTimer = Timer(const Duration(milliseconds: 120), () {
       if (!mounted || _scrubbing) return;
       final range = _visibleRange();
-      if (range != null) _progress.value = (range.$1, _lines.length);
+      if (range != null) {
+        _progress.value = (range.$1, _lines.length);
+        _lastVisible.value = range.$2;
+      }
     });
   }
 
@@ -485,7 +528,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (at == null) return null;
     final p = _lines.indexWhere((l) => l.lineIndex == at);
     if (p < 0) return null;
-    final r = _rows.indexWhere((row) => row.first <= p && p <= row.last);
+    final r = _rows.indexWhere(
+      (row) => row.isLine && row.first <= p && p <= row.last,
+    );
     return r < 0 ? null : r;
   }
 
@@ -542,6 +587,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   final ValueNotifier<bool> _scrub = ValueNotifier(false);
   int? _scrubRow;
+  int? _lineSplit;
   bool _scrubBusy = false;
   int? _scrubTarget;
 
@@ -553,6 +599,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (_lines.isEmpty || _rows.isEmpty) return;
     _dock.show(ref);
     setState(() => _scrub.value = !_scrub.value);
+    _panelMeasureTimer?.cancel();
+    _panelMeasureTimer = Timer(Motion.of(context, Motion.row), () {
+      if (mounted) _showProgressSoon();
+    });
     _scrubRow = null;
   }
 
@@ -613,8 +663,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// Anchors the list on the row holding line [p], at the top of the view
   /// (the panel is at the bottom, by the thumb).
   void _showLine(int p) {
-    final r = _rows.indexWhere((row) => row.last >= p);
-    final row = r < 0 ? _rows.length - 1 : r;
+    var r = _rows.indexWhere((row) => row.isLine && row.last >= p);
+    if (r >= 0 && _rows[r].first < p && _rows[r].last >= p) {
+      _lineSplit = p;
+      _rows = _makeRows(_lines);
+      r = _rows.indexWhere((row) => row.isLine && row.last >= p);
+    }
+    final row = r < 0 ? _rows.lastIndexWhere((row) => row.isLine) : r;
+    if (row < 0) return;
     if (row == _scrubRow) return;
     _scrubRow = row;
     setState(() {
@@ -627,6 +683,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       if (mounted && _scrubRow == row && _scroll.hasClients) {
         _scroll.jumpTo(0);
         _showProgressSoon();
+        // The panel's picture follows the drag (the count above does not:
+        // it stays with the finger), from the last line above the panel.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final range = mounted ? _visibleRange() : null;
+          if (range != null) _lastVisible.value = range.$2;
+        });
       }
     });
   }
@@ -702,6 +764,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               ),
             ],
           ),
+          if (_art != null)
+            ValueListenableBuilder<int?>(
+              valueListenable: _lastVisible,
+              builder: (context, last, _) => _currentArtRow(theme, last ?? p),
+            ),
           // Every line of the panel keeps one height whatever it holds (a
           // long line or a short one, Latin or Chinese, a step's title or
           // none), so the slider under it stays still while it is dragged.
@@ -725,6 +792,61 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             onChangeEnd: _scrubEnd,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _currentArtRow(AppThemeTokens theme, int p) {
+    final shots = _art!.shots;
+    int? scene, cg;
+    for (final (i, shot) in shots.indexed) {
+      if (shot.at > p) break;
+      if (shot.kind == 'scene') scene = i;
+      if (shot.kind == 'cg' && (shot.until ?? _lines.length) > p) cg = i;
+    }
+    final index = cg ?? scene;
+    if (index == null) {
+      return SizedBox(
+        height: 48,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            context.t.storyArtNoScene,
+            style: theme.ui(13, color: theme.textSecondary),
+          ),
+        ),
+      );
+    }
+    final shot = shots[index];
+    final title = _art!.titles[shot.image]?.title;
+    return PressRow(
+      shift: false,
+      onTap: () => _openArt(index),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 64,
+              height: 36,
+              child: StoryArtImage(
+                imageId: shot.image,
+                kind: shot.kind,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${_artLabel(shot)}${title == null || title.isEmpty ? '' : ' $title'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.ui(13, color: theme.textPrimary),
+              ),
+            ),
+            Icon(Icons.chevron_right_sharp, color: theme.textPrimary),
+          ],
+        ),
       ),
     );
   }
@@ -756,6 +878,17 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    _art = ref
+        .watch(
+          readerStoryArtProvider(
+            (
+              storyId: widget.storyId,
+              lines: widget.text,
+              sources: widget.portraitSources,
+            ),
+          ),
+        )
+        .valueOrNull;
     // Watched here, not in the list's item builder (which runs at layout).
     _speakersTappable = gameOfId(widget.storyId) == Game.arknights &&
         ref.watch(hasPortraitIndexProvider).valueOrNull == true;
@@ -1100,11 +1233,60 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// one highlighted block. Positions are indexes into [_lines].
   List<_Row> _makeRows(List<StoryLineEntry> lines) {
     final rows = <_Row>[];
+    final shots = _art?.shots ?? const <StoryArtShot>[];
+    final at = <int, List<int>>{};
+    for (final (index, shot) in shots.indexed) {
+      (at[shot.at] ??= []).add(index);
+    }
+    int? cgUntil;
+    int? cgSegment;
     var i = 0;
-    while (i < lines.length) {
+    while (i <= lines.length) {
+      if (cgUntil != null && cgUntil <= i) {
+        rows.add(_Row.art(_RowKind.cgEnd, i));
+        cgUntil = null;
+        cgSegment = null;
+      }
+      for (final index in at[i] ?? const <int>[]) {
+        final shot = shots[index];
+        if (cgUntil != null && shot.segment != cgSegment) {
+          rows.add(_Row.art(_RowKind.cgEnd, i));
+          cgUntil = null;
+          cgSegment = null;
+        }
+        if (shot.kind == 'cg') {
+          final top = cgUntil == null;
+          rows.add(
+            _Row.art(
+              top ? _RowKind.cgTop : _RowKind.cgChange,
+              i,
+              shot: index,
+              inCg: true,
+            ),
+          );
+          cgUntil = shot.until ?? lines.length;
+          cgSegment = shot.segment;
+        } else {
+          rows.add(
+            _Row.art(
+              shot.kind == 'scene' ? _RowKind.scene : _RowKind.item,
+              i,
+              shot: index,
+              inCg: cgUntil != null,
+            ),
+          );
+        }
+      }
+      // A CG can start and end before any line is spoken.
+      if (cgUntil != null && cgUntil <= i) {
+        rows.add(_Row.art(_RowKind.cgEnd, i));
+        cgUntil = null;
+        cgSegment = null;
+      }
+      if (i == lines.length) break;
       // (a folded group: its heading only)
       if (lines[i].kind == unplacedLineKind && !_openUnplaced.contains(i)) {
-        rows.add(_Row(i, i));
+        rows.add(_Row(i, i, inCg: cgUntil != null));
         i++;
         while (i < lines.length && !headingLineKinds.contains(lines[i].kind)) {
           i++;
@@ -1113,13 +1295,17 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       }
       if (_isTarget(lines[i].lineIndex)) {
         var j = i;
-        while (j + 1 < lines.length && _isTarget(lines[j + 1].lineIndex)) {
+        // A cited block breaks where a picture comes in or a CG ends.
+        while (j + 1 < (cgUntil ?? lines.length) &&
+            j + 1 != _lineSplit &&
+            !at.containsKey(j + 1) &&
+            _isTarget(lines[j + 1].lineIndex)) {
           j++;
         }
-        rows.add(_Row(i, j));
+        rows.add(_Row(i, j, inCg: cgUntil != null));
         i = j + 1;
       } else {
-        rows.add(_Row(i, i));
+        rows.add(_Row(i, i, inCg: cgUntil != null));
         i++;
       }
     }
@@ -1131,6 +1317,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// scrolls the same.
   Widget _rowWidget(AppThemeTokens theme, int index) {
     final row = _rows[index];
+    if (!row.isLine) return _artRow(theme, row);
+    final child = _textRow(theme, row);
+    // Inside a CG the lines sit 12 in from the frame, like its header.
+    return row.inCg
+        ? CgFrameSlice(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: child,
+            ),
+          )
+        : child;
+  }
+
+  Widget _textRow(AppThemeTokens theme, _Row row) {
     final first = row.first == 0;
     if (row.first == row.last && !_isTarget(_lines[row.first].lineIndex)) {
       final line = _lines[row.first];
@@ -1246,6 +1446,238 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     );
   }
 
+  void _openArt(int index) {
+    final shots = _art?.shots;
+    if (shots == null) return;
+    openStoryArtViewer(
+      context,
+      storyId: widget.storyId,
+      shots: shots,
+      initial: index,
+      onJump: (at) {
+        if (!mounted || _lines.isEmpty) return;
+        _scrubRow = null;
+        _showLine(at.clamp(0, _lines.length - 1));
+      },
+    );
+  }
+
+  String _artLabel(StoryArtShot shot) {
+    final number = (shot.number ?? 0).toString().padLeft(2, '0');
+    final total = (shot.total ?? 0).toString().padLeft(2, '0');
+    return shot.kind == 'scene'
+        ? '${context.t.storyArtScene} $number / $total'
+        : shot.kind == 'cg'
+            ? 'CG $number / $total'
+            : context.t.storyArtItem;
+  }
+
+  Widget _artPicture(
+    AppThemeTokens theme,
+    StoryArtShot shot,
+    int index, {
+    required double cut,
+    BoxFit fit = BoxFit.cover,
+    Alignment alignment = Alignment.center,
+  }) {
+    final child = StoryArtImage(
+      imageId: shot.image,
+      kind: shot.kind,
+      fit: fit,
+      alignment: alignment,
+      placeholder: context.t.storyArtMissing,
+    );
+    if (shot.missing) return child;
+    return ClipPath(
+      clipper: ShapeBorderClipper(shape: CutBorder.br(cut)),
+      child: PressBuilder(
+        builder: (context, pressed) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openArt(index),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              child,
+              if (pressed)
+                ColoredBox(color: pressTint(Colors.transparent, theme.textPrimary)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _artRow(AppThemeTokens theme, _Row row) {
+    if (row.kind == _RowKind.cgEnd) {
+      return const CgFrameSlice(end: true, child: SizedBox(height: 12));
+    }
+    final art = _art!;
+    final shot = art.shots[row.shot!];
+    final info =
+        art.info[(shot.image, shot.kind == 'scene' ? 'background' : shot.kind)];
+    if (row.kind == _RowKind.scene) {
+      return Padding(
+        key: ValueKey('story-art-scene-${shot.number}'),
+        padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
+        child: Column(
+          children: [
+            _ruled(
+              theme,
+              '${context.t.storyArtScene} ${shot.number.toString().padLeft(2, '0')}',
+              key: ValueKey('story-art-scene-label-${shot.number}'),
+            ),
+            if (!shot.missing) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 56,
+                width: double.infinity,
+                child: _artPicture(theme, shot, row.shot!, cut: 8),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    if (row.kind == _RowKind.item) {
+      final picture = LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth * .6;
+          final aspect =
+              info == null || info.height == 0 ? 1.0 : info.width / info.height;
+          final width = math.min(maxWidth, 200 * aspect);
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: width,
+              height: width / aspect,
+              child: DecoratedBox(
+                position: DecorationPosition.foreground,
+                decoration: ShapeDecoration(
+                  shape: CutBorder.br(
+                    8,
+                    side: BorderSide(color: theme.cardBorder),
+                  ),
+                ),
+                child: _artPicture(
+                  theme,
+                  shot,
+                  row.shot!,
+                  cut: 8,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      final side = row.inCg ? 12.0 : 10.0;
+      final child = Padding(
+        padding: EdgeInsets.fromLTRB(side, 16, side, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.t.storyArtItem,
+              style: theme.field(size: 12, color: theme.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            picture,
+          ],
+        ),
+      );
+      return row.inCg ? CgFrameSlice(child: child) : child;
+    }
+    final title = art.titles[shot.image];
+    final seenGroup = shot.titleGroup != null &&
+        art.shots
+            .take(row.shot!)
+            .any((s) => s.kind == 'cg' && s.titleGroup == shot.titleGroup);
+    final nextCg = art.shots
+        .skip(row.shot! + 1)
+        .where(
+          (s) => s.kind == 'cg' && s.segment == shot.segment,
+        )
+        .firstOrNull;
+    final hasLines = math.min(
+          shot.until ?? _lines.length,
+          nextCg?.at ?? _lines.length,
+        ) >
+        shot.at;
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _artLabel(shot),
+            style: theme.field(size: 12, color: theme.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final aspect = info == null || info.width == 0
+                  ? 9 / 16
+                  : info.height / info.width;
+              final tall = aspect > 1.3;
+              return Column(
+                children: [
+                  SizedBox(
+                    height: width * (tall ? 1.25 : aspect),
+                    width: width,
+                    child: _artPicture(
+                      theme,
+                      shot,
+                      row.shot!,
+                      cut: 14,
+                      alignment: tall ? Alignment.topCenter : Alignment.center,
+                    ),
+                  ),
+                  if (tall)
+                    Hatch(
+                      child: SizedBox(
+                        height: 24,
+                        width: width,
+                        child: Center(
+                          child: Text(
+                            context.t.storyArtTall,
+                            style: theme.ui(
+                              12,
+                              color: theme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          if (!seenGroup && title?.title?.isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Text(title!.title!, style: theme.heading(17)),
+          ],
+          if (!seenGroup && title?.description?.isNotEmpty == true) ...[
+            const SizedBox(height: 4),
+            Text(
+              title!.description!,
+              style: theme.text(13, color: theme.textMuted),
+            ),
+          ],
+          if (hasLines) ...[
+            const SizedBox(height: 12),
+            Divider(height: 1, color: theme.divider),
+          ],
+        ],
+      ),
+    );
+    return CgFrameSlice(
+      key: ValueKey('story-art-cg-${row.shot}'),
+      top: row.kind == _RowKind.cgTop,
+      child: content,
+    );
+  }
+
   /// The game's summary of the part it opens: folded like the official
   /// synopsis (it tells what the part is about before it is read).
   Widget _summary(int p) => FoldSection(
@@ -1298,7 +1730,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           setState(() {
             open ? _openUnplaced.remove(p) : _openUnplaced.add(p);
             _rows = _makeRows(_lines);
-            _center = _rows.indexWhere((r) => r.first == p) + 1;
+            _center = _rows.indexWhere((r) => r.isLine && r.first == p) + 1;
             _centerAt = at;
           });
         },
@@ -1404,7 +1836,6 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       p > 0 && _speakerOf(p) == _speakerOf(p - 1) ? 14.0 : 20.0;
   Widget _citedBlock(AppThemeTokens theme, List<Widget> rows) =>
       AnimatedBuilder(
-        key: _targetKey,
         animation: _strength,
         builder: (context, child) => Container(
           decoration: BoxDecoration(
@@ -1666,9 +2097,112 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 /// the width between them.
 const double _scrubGutter = 16;
 
+enum _RowKind { line, block, scene, cgTop, cgChange, cgEnd, item }
+
 class _Row {
-  const _Row(this.first, this.last);
+  const _Row(this.first, this.last, {this.inCg = false})
+      : kind = first == last ? _RowKind.line : _RowKind.block,
+        shot = null;
+
+  const _Row.art(this.kind, this.first, {this.shot, this.inCg = false})
+      : last = first;
 
   final int first;
   final int last;
+  final _RowKind kind;
+  final int? shot;
+  final bool inCg;
+
+  bool get isLine => kind == _RowKind.line || kind == _RowKind.block;
+}
+
+/// Each lazy list item paints only its part of the continuous CG frame.
+class CgFrameSlice extends ConsumerWidget {
+  const CgFrameSlice({
+    super.key,
+    required this.child,
+    this.top = false,
+    this.end = false,
+  });
+  final Widget child;
+  final bool top, end;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      // Full width whatever the child is (the end is an empty strip).
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Stack(
+            fit: StackFit.passthrough,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: CustomPaint(
+                  painter: _CgFramePainter(
+                    theme.cardSurface,
+                    theme.textPrimary,
+                    top: top,
+                    end: end,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: child,
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                top: top ? 6 : 0,
+                bottom: 0,
+                width: 6,
+                child: const Hatch(child: SizedBox.expand()),
+              ),
+            ],
+          ),
+          if (end)
+            const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Hatch(child: SizedBox(height: 6, width: double.infinity)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The slice's face and side edges. Rows end at fractional pixels, where a
+/// fill ending on the edge leaves a faint seam; each slice but the last
+/// paints one pixel past its bottom, under the next slice's same face.
+class _CgFramePainter extends CustomPainter {
+  const _CgFramePainter(this.face, this.edge, {this.top = false, this.end = false});
+
+  final Color face, edge;
+  final bool top, end;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bottom = end ? size.height : size.height + 1;
+    canvas.drawRect(
+      Rect.fromLTRB(0, 0, size.width, bottom),
+      Paint()..color = face,
+    );
+    final line = Paint()..color = edge;
+    canvas.drawRect(Rect.fromLTRB(0, 0, 1, bottom), line);
+    canvas.drawRect(Rect.fromLTRB(size.width - 1, 0, size.width, bottom), line);
+    if (top) canvas.drawRect(Rect.fromLTRB(0, 0, size.width, 1), line);
+    if (end) {
+      canvas.drawRect(
+        Rect.fromLTRB(0, size.height - 1, size.width, size.height),
+        line,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CgFramePainter old) =>
+      old.face != face || old.edge != edge || old.top != top || old.end != end;
 }

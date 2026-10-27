@@ -86,9 +86,11 @@ class StoryArtImage extends ConsumerStatefulWidget {
       required this.imageId,
       required this.kind,
       this.fit = BoxFit.contain,
+      this.alignment = Alignment.center,
       this.placeholder,});
   final String imageId, kind;
   final BoxFit fit;
+  final Alignment alignment;
   final String? placeholder;
 
   @override
@@ -126,6 +128,7 @@ class _StoryArtImageState extends ConsumerState<StoryArtImage> {
                   : RawImage(
                       image: image,
                       fit: widget.fit,
+                      alignment: widget.alignment,
                       filterQuality: FilterQuality.medium,),
             ),);
       },);
