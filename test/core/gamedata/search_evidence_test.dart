@@ -169,7 +169,7 @@ void main() {
           .run('询问没有共同关键词的事情'),
     );
     expect(result.text, contains('L33 ${line(33)}'));
-    expect(result.text, contains('L35-35 没有列出'));
+    expect(result.text, contains('L35-35 未列出'));
     expect(result.text, isNot(contains('L35 ${line(35)}')));
     final displayed =
         result.text.split('\n').where((l) => l.startsWith('   L'));
@@ -342,6 +342,72 @@ void main() {
     expect(result, contains('（L0–L24 的原文仍在上文，第 1 步的结果）'));
     expect(result, isNot(contains('L0 锚点0')));
     expect(seen.toJson(), before);
+  });
+
+  test('search, gather and grep descriptions carry their fixed result notes',
+      () async {
+    for (var i = 0; i < 8; i++) {
+      await story(
+        'activities/spread/$i.txt',
+        ['跨集词出现在这里。'],
+        collection: 'spread-$i',
+      );
+    }
+    const gatherStory = 'activities/gather/notes.txt';
+    await story(gatherStory, ['锚点前。', '取材词命中。', '锚点后。']);
+
+    final search = SearchTool(store, SeenLines(), embeddingClient: _Embedder());
+    expect(search.description, contains('“关键词还出现在这些故事集”一节列出'));
+    expect(search.description, contains('用 game 参数单独查该游戏'));
+    expect(search.description, contains('资料行格式：出处 | 类别 | 标题（所属对象） | 片段'));
+    expect(search.description, contains('未列出的行在 read_story 读到后才能引用'));
+    final found = (await search.run('跨集词')).text;
+    expect(found, contains('### 关键词还出现在这些故事集'));
+    expect(found, isNot(contains('分布里的是故事集的名字')));
+    expect(found, isNot(contains('上面的分布里列出、还没有段落的')));
+    expect(found, isNot(contains('上面列出的行可以引用')));
+    expect(found, isNot(contains('要引用先用 read_story 读')));
+
+    final gather = GatherTool(store, SeenLines());
+    expect(gather.description, contains('按上线顺序排列'));
+    expect(gather.description, contains('默认取每处前后各两行原文'));
+    expect(gather.description, contains('启用挑行时'));
+    expect(gather.description, contains('行号可以直接引用'));
+    expect(gather.description, contains('前后更多内容用 read_story'));
+    final gathered = await gather.execute({'names': ['取材词']});
+    expect(gathered, contains('取材词命中'));
+    expect(gathered, isNot(contains('按上线顺序排列')));
+    expect(gathered, isNot(contains('行号可以直接引用')));
+    expect(gathered, isNot(contains('每篇只取这些名字出现')));
+
+    final grep = GrepTool(store, SeenLines());
+    expect(grep.description, contains('命中标记'));
+    expect(grep.description, contains('格式为 story_id | 章节 | 命中行数'));
+    expect(grep.description, contains('可用 sql 按需要的条件统计'));
+    expect(grep.description, contains('未列出的命中及其所在故事'));
+    final distribution = await grep.execute({'pattern': '跨集词'});
+    expect(distribution, isNot(contains('主线在前，其余按上线时间')));
+    expect(distribution, isNot(contains('这里只是分布')));
+    final hits = await grep.execute({
+      'pattern': '跨集词',
+      'story_ids': ['activities/spread/0.txt'],
+    });
+    expect(hits, contains('* L'));
+    expect(hits, isNot(contains('为命中行')));
+  });
+
+  test('read tools put fixed lookup guidance in their descriptions', () async {
+    final readStory = ReadStoryTool(store, SeenLines());
+    expect(readStory.description, contains('story_catalog'));
+    final absentStory = await readStory.execute({'story_id': 'missing'});
+    expect(absentStory, '没有这个 story_id：missing.txt。');
+    expect(absentStory, isNot(contains('可以用 sql')));
+
+    final readRecord = ReadRecordTool(store, SeenLines());
+    expect(readRecord.description, contains('normalized_records / entity_documents'));
+    final absentRecord = await readRecord.execute({'id': 'missing'});
+    expect(absentRecord, '没有 id 为 missing 的资料。');
+    expect(absentRecord, isNot(contains('按名字找资料用 search')));
   });
 
   test('search passage count still uses the pre-omission budget', () async {

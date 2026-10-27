@@ -88,32 +88,47 @@ class SearchTool extends AgentTool {
   /// The other use, said after either description.
   /// What the spread at the top is and what follows from it.
   static const String _spreadNote =
-      '分布里列出的故事集，除了最相关的几篇之外各给一段原文；要在其中一部里细找，用 collection 参数（故事集的名字不是检索词）。';
+      '分布中的名称是故事集名；未在段落中出现的故事集各给一段原文。'
+      '“关键词还出现在这些故事集”一节列出分布里出现、前面尚未列过段落的故事集，每集一段。'
+      '故事集名不是剧情检索词；结果把关键词标为故事集名时，可用 outline 看目录和相关故事集。'
+      '要在某部里找，用 search 或 grep 的 collection 参数。'
+      '同时查多个游戏时，只按意思命中且明显较远的游戏段落可能被省略；需要时用 game 参数单独查该游戏。';
 
-  static const String _nearNote =
+  String get _nearNote =>
       '另一种用法：near 写一段读过的剧情的位置（<story_id>:<行号>）时不按 query，'
       '而是找别的故事集里与那一段意思相近的段落——想知道一件事在别处有没有呼应时用；'
-      '只列足够相近的，常常一段也没有。';
+      '只列相近程度 ${nearMinSimilarity.toStringAsFixed(2)} 以上的段落，每个故事集最多一段、最多 $nearMaxPassages 段，不列原段所在故事集；'
+      '常常一段也没有。结果里列出的行可以引用，未列出的行要先读；原段没有向量时用 query 检索。';
 
   @override
   String get description =>
-      '$_queryDescription$_spreadNote$_nearNote${materials?.isAvailable == true ? ' 同时检索已启用的补充资料原文；用 read_material 读上下文，near 也接受 material:文档ID@版本:段号，并可跨游戏和资料找相近段落。' : ''}';
+      '$_queryDescription$_spreadNote$_nearNote${materials?.isAvailable == true ? ' 同时检索已启用的补充资料原文；用 read_material 读上下文，near 也接受 `material:<文档ID>@<版本>:<段号>`，并可跨游戏和资料找相近段落。near 指向的资料段要先用 search 或 read_material 展示；资料段没有向量时用 query 检索。补充资料来源说明再次出现时，若写“来源说明同第 N 步”，按该步的完整说明理解。' : ''}';
 
   String get _queryDescription => keywordOnly
       ? '一次检索所有资料：已安装的每个游戏的剧情原文、剧情以外的资料原文（档案、干员资料、语音等）'
           '${wiki == null ? '' : '和游戏 Wiki'}，按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
+          '资料行格式：出处 | 类别 | 标题（所属对象） | 片段。'
           '现在没有向量服务，只按字面（子串）匹配原文：query 写原文里会出现的词——人物、地点、组织、事件、物品的叫法，'
           '以及它们的别称、相关的说法，空格分隔，每个词 2–6 个字，不要写整句或长短语（整句不会出现在原文里）。'
+          '如果 query 没有可匹配的词，空格分隔写 2–12 个字的词，不要写整句。'
           '一次最多 $maxKeywordTerms 个词；结果开头列出每个词命中多少行、分布在哪些故事集（没有列出原文的故事集也在里面），命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
+          '未列出的行在 read_story 读到后才能引用。'
+          '资料只列片段，可按片段引用；全文用 read_record 按 id 读。'
+          '${wiki == null ? '' : '结果有 Wiki 一组时，正文要先用 wiki_read 读取后才能引用。'}'
           '要精确统计某个词出现在哪些故事里时用 grep。'
       : '一次检索所有资料：已安装的每个游戏的剧情原文和剧情以外的资料原文（档案、干员资料、语音等）'
           '${wiki == null ? '' : '，以及游戏 Wiki'}。剧情和资料按整个 query 的意思检索，query 里用空格分开的词还各自做关键词检索。'
           '按来源分组返回最相关的段落：故事名、story_id、行号和原文片段，资料给出 record 出处。'
+          '资料行格式：出处 | 类别 | 标题（所属对象） | 片段。'
           '适合任何“发生了什么、是什么、为什么、谁”的问题：写空格分隔的几个词（原文里会出现的名字、叫法和相关说法，'
           '每个词 2–6 个字，一次最多 $maxKeywordTerms 个），或一句描述（只按意思检索；Wiki 要靠词才查得到）。'
+          '如果 query 没有可匹配的词，空格分隔写 2–12 个字的词，不要写整句。'
           '结果开头列出每个词命中多少行、分布在哪些故事集（没有列出原文的故事集也在里面），命中 0 行的词换个说法再查。'
           '片段里列出的行已经读到，可以直接引用；需要上下文时用 read_story 从附近读。'
+          '未列出的行在 read_story 读到后才能引用。'
+          '资料只列片段，可按片段引用；全文用 read_record 按 id 读。'
+          '${wiki == null ? '' : '结果有 Wiki 一组时，正文要先用 wiki_read 读取后才能引用。'}'
           '要精确统计某个词出现在哪些故事里时用 grep。';
 
   @override
@@ -133,7 +148,7 @@ class SearchTool extends AgentTool {
           },
           'collection': {
             'type': 'string',
-            'description': '只在这个故事集里找（可选，故事集名字或 collection_id）',
+            'description': '只在这个故事集里找（可选，故事集名字或 collection_id）；没找到时去掉该参数再搜，或用 outline 查目录',
           },
           if (wiki != null)
             'wiki': {
@@ -297,7 +312,6 @@ class SearchTool extends AgentTool {
       ..writeln('检索“$query”'
           '${scopeLabel.isEmpty ? '' : '（$scopeLabel 内）'}：'
           '${mode == SearchMode.semantic ? '按意思检索 + 关键词' : '只有关键词检索（$modeNote）'}'
-          '${terms.isEmpty && mode == SearchMode.keywordOnly ? '；query 里没有可以匹配的词：要写空格分隔的词（每个 2–12 个字），不是整句' : ''}'
           '${unused.isEmpty ? '' : '；一次最多 $maxKeywordTerms 个词，未使用：${unused.join('、')}'}');
     if (terms.isNotEmpty) {
       buffer.writeln('关键词：');
@@ -308,14 +322,9 @@ class SearchTool extends AgentTool {
         named.keys.toSet(),
         spreads,
       ).forEach(buffer.writeln);
-      if (spreads.isNotEmpty) {
-        buffer.writeln('（分布里的是故事集的名字：要到某一部里找，用 search 或 grep 的 collection 参数，'
-            '或用 outline 看它的目录；名字本身不是检索词）');
-      }
     }
     for (final MapEntry(key: term, value: c) in named.entries) {
-      buffer.writeln('“$term”是故事集（${c.id}，${c.chapters} 章）：'
-          '用 outline 看它的目录和相关的故事集。');
+      buffer.writeln('“$term”是故事集（${c.id}，${c.chapters} 章）。');
     }
     var passageChars = 0;
     for (final (i, g) in games.indexed) {
@@ -324,10 +333,9 @@ class SearchTool extends AgentTool {
           games.length > 1 &&
           r.best < best - farther &&
           (r.lines == 0 || r.lines < mostLines)) {
-        buffer.writeln('## ${g.label}剧情：只有意思较远的段落（最接近 '
+        buffer.writeln('## ${g.label}剧情：最接近 '
             '${r.best.toStringAsFixed(2)}，另一游戏 ${best.toStringAsFixed(2)}'
-            '${r.lines == 0 && r.records.isEmpty ? '' : '；关键词命中 ${r.lines} 行、${r.records.length} 条资料'}），已略去；'
-            '需要时用 search 指定 game=${g.key} 再查');
+            '${r.lines == 0 && r.records.isEmpty ? '' : '；关键词命中 ${r.lines} 行、${r.records.length} 条资料'}，已略去');
         continue;
       }
       final part = await _render(narrowTo(store, g), r);
@@ -353,7 +361,7 @@ class SearchTool extends AgentTool {
                   _elsewhere(g, narrowTo(store, g), r, terms, spreads, vector),
             );
       if (elsewhere != null) {
-        buffer.writeln('### 关键词还出现在这些故事集（上面的分布里列出、还没有段落的，各一段）');
+        buffer.writeln('### 关键词还出现在这些故事集');
         var chars = 0;
         for (final block in await _render(
           narrowTo(store, g),
@@ -361,7 +369,7 @@ class SearchTool extends AgentTool {
           from: part.length,
         )) {
           if (chars + block.budgetChars > elsewhereChars) {
-            buffer.writeln('……（篇幅已满，其余的故事集用 search 加 collection 再查）');
+            buffer.writeln('……（篇幅已满；后续故事集未列出）');
             break;
           }
           block.writeTo(buffer, seen);
@@ -371,7 +379,7 @@ class SearchTool extends AgentTool {
       final records = _renderRecords(r);
       if (records.isNotEmpty) {
         buffer
-            .writeln('## ${g.label}资料（档案、干员资料、语音等；格式：出处 | 类别 | 标题（所属对象） | 片段）');
+            .writeln('## ${g.label}资料');
         records.forEach(buffer.write);
       }
     }
@@ -383,7 +391,14 @@ class SearchTool extends AgentTool {
         dims: embeddingClient?.dimensions,
         game: game?.key,
       );
-      buffer.writeln(materials!.render(hits, seen.add));
+      buffer.writeln(
+        materials!.render(
+          hits,
+          seen.add,
+          contextDescriptionStep: ledger?.stepOfContextDescription,
+          onContextDescriptionPrinted: seen.addContextDescription,
+        ),
+      );
     }
     if (wikiPart.isNotEmpty) {
       buffer.writeln('## Wiki');
@@ -391,9 +406,6 @@ class SearchTool extends AgentTool {
         buffer.writeln(line);
       }
     }
-    buffer.writeln('（上面列出的行可以引用，没有列出的行要先读；要上下文用 read_story 从附近的行读。'
-        '资料只列了片段，可以按片段引用，全文用 read_record 按 id 读'
-        '${wikiPart.isEmpty ? '' : '；Wiki 正文用 wiki_read 读后才能引用'}）');
     return SearchResult(
       buffer.toString().trimRight(),
       mode,
@@ -415,7 +427,7 @@ class SearchTool extends AgentTool {
     }
     final match = _nearPattern.firstMatch(near.trim());
     if (match == null) {
-      return '错误：near 要写成 <story_id>:<行号>（一段读过的剧情的位置），收到：$near';
+      return '错误：near 格式不正确，收到：$near';
     }
     var storyId = match.group(1)!.trim();
     if (!storyId.endsWith('.txt')) storyId = '$storyId.txt';
@@ -426,7 +438,7 @@ class SearchTool extends AgentTool {
       maxLines: 1,
     );
     if (!page.storyFound) {
-      return '没有这个 story_id：$storyId。near 要写检索或阅读结果里的 story_id 和行号。';
+      return '没有这个 story_id：$storyId。';
     }
     final found = await _timed(
       'near',
@@ -436,13 +448,11 @@ class SearchTool extends AgentTool {
     final source = '《${labels[storyId]?.label ?? fallbackStoryLabel(storyId)}》';
     if (found == null) {
       return '$source L$line 没有向量（知识库没有向量，或这一行不在任何一段里），'
-          '不能按意思找相近的段落；用 query 检索。';
+          '不能按意思找相近的段落。';
     }
-    final scope = '只列相近程度 ${nearMinSimilarity.toStringAsFixed(2)} 以上的，'
-        '每个故事集一段，最多 $nearMaxPassages 段；这一段所在的故事集不列';
     final where = '$source L${found.lineStart}-${found.lineEnd}';
     if (found.hits.isEmpty) {
-      return '别处没有与$where 相近的段落（$scope）。';
+      return '别处没有与$where 相近的段落。';
     }
     final blocks = await _render(
       narrowTo(store, gameOfId(storyId)),
@@ -454,11 +464,10 @@ class SearchTool extends AgentTool {
         lines: 0,
       ),
     );
-    final buffer = StringBuffer('检索与$where 相近的段落（按意思）：\n');
+    final buffer = StringBuffer('检索与$where 相近的段落：\n');
     for (final block in blocks) {
       block.writeTo(buffer, seen);
     }
-    buffer.writeln('（$scope。上面列出的行可以引用，没有列出的行要先读）');
     return buffer.toString().trimRight();
   }
 
@@ -471,9 +480,9 @@ class SearchTool extends AgentTool {
     int? dims;
     final material = materials!.document(id);
     if (id.startsWith('material:')) {
-      if (material == null) return '这份资料不在本轮启用范围内；先用 search 找到可读 id。';
+      if (material == null) return 'near 指向的资料不在本轮启用范围内：$id。';
       if (!seen.covers(material.pageId, line, line)) {
-        return 'near 的段落必须先通过 search 或 read_material 读取。';
+        return 'near 指向的资料段尚未展示：$id P$line。';
       }
       final c = materials!.chunks
           .where(
@@ -498,7 +507,7 @@ class SearchTool extends AgentTool {
       }
     }
     if (vector == null || model == null || dims == null) {
-      return id.startsWith('material:') ? '该段还没有向量，先用 query 检索。' : null;
+      return id.startsWith('material:') ? '$id P$line 还没有向量。' : null;
     }
     final materialHits = materials!
         .search(
@@ -511,7 +520,7 @@ class SearchTool extends AgentTool {
         )
         .where((h) => h.chunk.document.pageId != id)
         .toList();
-    final out = StringBuffer('与 $near 意思相近的原文（游戏库与补充资料联查）：\n');
+    final out = StringBuffer('与 $near 意思相近的原文：\n');
     final games = await _games(null);
     for (final g in games) {
       final own = narrowTo(store, g),
@@ -532,7 +541,14 @@ class SearchTool extends AgentTool {
         block.writeTo(out, seen);
       }
     }
-    out.writeln(materials!.render(materialHits, seen.add));
+    out.writeln(
+      materials!.render(
+        materialHits,
+        seen.add,
+        contextDescriptionStep: ledger?.stepOfContextDescription,
+        onContextDescriptionPrinted: seen.addContextDescription,
+      ),
+    );
     return out.toString();
   }
 
@@ -581,7 +597,7 @@ class SearchTool extends AgentTool {
         for (final t in terms)
           switch (lines[t]) {
             null => t,
-            0 when collections.contains(t) => '$t（0 行：这是故事集的名字，正文里不这样写）',
+            0 when collections.contains(t) => '$t（0 行，故事集名）',
             0 => '$t（0 行，原文里没有这个写法）',
             final n => switch (spreads[t] ?? const []) {
                 [] => '$t（${scoped ? '全库 ' : ''}$n 行）',
@@ -957,8 +973,7 @@ class SearchTool extends AgentTool {
         writeLines(chunkLines);
         if (unreadFrom != null) {
           // 0.14: not "the passage goes on to L…", which read as shown.
-          final note =
-              '   …（L$unreadFrom-${chunk.lineEnd} 没有列出，要引用先用 read_story 读）';
+          final note = '   …（L$unreadFrom-${chunk.lineEnd} 未列出）';
           block.writeln(note);
           original.writeln(note);
         }

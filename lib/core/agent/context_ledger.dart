@@ -15,6 +15,8 @@ class ContextLedger {
         SeenLines.fromJson(m['shown'] as Map<String, dynamic>),
         step: m['step'] as int,
         callKey: m['call_key'] as String,
+        contextDescriptions: (m['context_descriptions'] as List? ?? [])
+            .cast<String>(),
       );
     }
     return ledger;
@@ -28,6 +30,9 @@ class ContextLedger {
               'shown': e.value.shown.toJson(),
               'step': e.value.step,
               'call_key': e.value.callKey,
+              if (e.value.contextDescriptions.isNotEmpty)
+                'context_descriptions': e.value.contextDescriptions.toList()
+                  ..sort(),
             },
         ],
       };
@@ -42,6 +47,7 @@ class ContextLedger {
           e.value.shown,
           step: e.value.step,
           callKey: e.value.callKey,
+          contextDescriptions: e.value.contextDescriptions,
         );
       }
     }
@@ -56,12 +62,29 @@ class ContextLedger {
 
   int get lastStep =>
       _messages.values.fold(0, (n, m) => m.step > n ? m.step : n);
-  final _messages = <int, ({SeenLines shown, int step, String callKey})>{};
+  final _messages = <int, ({
+    SeenLines shown,
+    int step,
+    String callKey,
+    Set<String> contextDescriptions,
+  })>{};
   /// Snapshot what this message showed; later reads cannot expand it.
-  void record(int index, SeenLines shown,
-      {required int step, required String callKey,}) {
+  void record(
+    int index,
+    SeenLines shown, {
+    required int step,
+    required String callKey,
+    Iterable<String>? contextDescriptions,
+  }) {
     _messages[index] =
-        (shown: SeenLines()..addAll(shown), step: step, callKey: callKey);
+        (
+          shown: SeenLines()..addAll(shown),
+          step: step,
+          callKey: callKey,
+          contextDescriptions: Set.of(
+            contextDescriptions ?? shown.contextDescriptions,
+          ),
+        );
   }
 
   /// Remove hidden or compacted messages without affecting other copies.
@@ -92,6 +115,19 @@ class ContextLedger {
     }
     return null;
   }
+
+  /// The first visible step that printed a reusable, non-citation description.
+  /// Keep this on the result message so hiding or compacting that message
+  /// removes the description from the context ledger too.
+  int? stepOfContextDescription(String key) {
+    for (final message in _messages.values) {
+      if (message.contextDescriptions.contains(key)) return message.step;
+    }
+    return null;
+  }
+
+  bool hasContextDescription(int messageIndex, String key) =>
+      _messages[messageIndex]?.contextDescriptions.contains(key) ?? false;
 }
 
 /// Recursively sort object keys; preserve meaningful array order.

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arklores/core/agent/context_ledger.dart';
 import 'package:arklores/core/agent/lore_agent_loop.dart';
 import 'package:arklores/core/agent/lore_agent_prompts.dart';
 import 'package:arklores/core/agent/lore_answer_json.dart';
@@ -12,6 +13,8 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/gamedata/readonly_sql.dart';
 import 'package:arklores/core/llm/llm_client.dart';
+import 'package:arklores/core/materials/material_document.dart';
+import 'package:arklores/core/materials/material_snapshot.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -245,6 +248,42 @@ void main() {
       expect(seen.covers('obt/main/level_main_fx-01.txt', 1, 1), isTrue);
     });
 
+    test('SQL manual stays in descriptions and follows result visibility',
+        () async {
+      final manual = LibraryManual(store);
+      final ledger = ContextLedger();
+      final seen = SeenLines();
+      final sql = SqlTool(store, seen, manual: manual, ledger: ledger);
+      expect(sql.description, contains('手册尚未出现在上文时，第一条查询的结果会附上它'));
+      expect(sql.description, contains('默认查询明日方舟库；查终末地要加 game=endfield'));
+
+      final firstShown = SeenLines();
+      final first = await SeenLines.duringCall(
+        firstShown,
+        () => sql.execute({'query': 'SELECT 1 AS value'}),
+      );
+      expect(first, contains('value'));
+      expect(first, isNot(contains('这次问答第一次用 sql')));
+      ledger.record(0, firstShown, step: 2, callKey: 'sql|first');
+
+      final second = await SqlTool(
+        store,
+        seen,
+        manual: manual,
+        ledger: ledger,
+      ).execute({'query': 'SELECT 2 AS value'});
+      expect(second, contains('2'));
+      expect(second, isNot(contains('知识库手册')));
+      expect(
+        await GuideTool(manual, seen, ledger: ledger).execute({}),
+        inContextPrefix,
+      );
+      expect(
+        GuideTool(manual, seen, ledger: ledger).description,
+        contains('若首次 sql 结果已附手册，照它写查询'),
+      );
+    });
+
     test('sql reports errors, rejections and zero rows in words', () async {
       final seen = SeenLines();
       final tool = SqlTool(store, seen);
@@ -341,7 +380,11 @@ void main() {
           .allMatches(cut.substring(cut.indexOf('没有列出的命中：')))
           .fold(0, (n, m) => n + int.parse(m.group(1)!));
       expect(rest, total - 1);
-      expect(cut, contains('用 story_ids 指定这些故事再 grep'));
+      expect(cut, isNot(contains('用 story_ids 指定这些故事再 grep')));
+      expect(
+        GrepTool(store, SeenLines()).description,
+        contains('用 story_ids 指定故事再 grep'),
+      );
     });
 
     test('read_story pages a chapter and suggests real ids', () async {
@@ -353,7 +396,7 @@ void main() {
       });
       expect(first, contains('《主线·虚构主线 0-1 幕间《开端》》'));
       expect(first, contains('L0 '));
-      expect(first, contains('继续读用 start=2'));
+      expect(first, contains('下一页 start=2'));
       final rest = await tool.execute({
         'story_id': 'obt/main/level_main_fx-01.txt',
         'start': 2,
@@ -638,6 +681,54 @@ void main() {
           StoryAnswerStatus.answered,);
     });
 
+    test('parallel planned searches point to the first visible source note',
+        () async {
+      const story = 'obt/main/level_main_fx-01.txt';
+      const policy = '按资料作者的说明理解正文。';
+      final materials = MaterialSnapshot(
+        const [
+          MaterialSource(
+            id: 'source-a',
+            title: '补充来源',
+            enabled: true,
+            kind: '设定资料',
+            policy: policy,
+          ),
+        ],
+        [
+          MaterialDocument(
+            id: 'document-a',
+            sourceId: 'source-a',
+            title: '资料页',
+            body: '星灯相关线索。',
+            blocks: const [MaterialBlock('星灯相关线索。', '')],
+          ),
+        ],
+        const [],
+      );
+      final client = _ScriptedClient(
+        [_answer('星灯点亮了钟楼 `$story:1`。')],
+        plans: ['{"search": ["星灯 钟楼", "星灯 城门"]}'],
+      );
+      final events = await LoreAgentLoop(
+        client: client,
+        store: store,
+        materials: materials,
+      ).run(query: '星灯做了什么？').toList();
+      final results = [
+        for (final event in events)
+          if (event.type == ReActEventType.toolObservation &&
+              event.toolName == 'search')
+            event.content,
+      ];
+
+      expect(results, hasLength(2));
+      expect(results.first, contains(policy));
+      expect(results.first, isNot(contains('来源说明同第')));
+      expect(results.last, contains('来源说明同第 1 步'));
+      expect(results.last, isNot(contains(policy)));
+    });
+
     // Phase 1 (2026-10-18): the plan names the question's anchors, and the
     // lines around them are gathered after the searches, as one more call
     // of the first turn; what it showed is citable.
@@ -650,13 +741,15 @@ void main() {
       final events = await LoreAgentLoop(client: client, store: store)
           .run(query: '甲在等谁？')
           .toList();
-      expect(
-        [
-          for (final e in events)
-            if (e.type == ReActEventType.toolCall) '${e.toolName} ${e.toolArgs}',
-        ],
-        ['search {query: 城门}', 'gather {names: [甲, 星灯]}'],
-      );
+      final calls = [
+        for (final e in events)
+          if (e.type == ReActEventType.toolCall) e,
+      ];
+      expect(calls.map((e) => e.toolName), ['search', 'gather']);
+      expect(calls.map((e) => e.toolArgs), [
+        {'query': '城门'},
+        {'names': ['甲', '星灯']},
+      ]);
       // The skeleton opens with the anchors, which are always to be written
       // (0.15 live: a planner left the optional field out).
       final planPrompt = client.planRequests.single.first.content;

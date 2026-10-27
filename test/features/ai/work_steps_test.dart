@@ -75,10 +75,10 @@ void main() {
             '## 明日方舟剧情（最相关的 2 篇）\n'
             '1. 《一》 a/one.txt（意思相近 0.62；关键词 3 行）\n'
             '   L12 [甲] 一句。\n'
-            '   …（L13-15 没有列出，要引用先用 read_story 读）\n'
+            '   …（L13-15 未列出）\n'
             '2. 《二》 a/two.txt（意思相近 0.60）\n'
             '   L3 [乙] 一句。\n'
-            '## 明日方舟资料（档案、干员资料、语音等）\n'
+            '## 明日方舟资料\n'
             '   record:r1 | item | 灯 | 一盏灯\n'
             '## 终末地剧情：只有意思较远的段落（最接近 0.50），已略去',
       ),
@@ -86,7 +86,7 @@ void main() {
         'pattern': '甲',
         'story_ids': ['ef/three.txt'],
       }),
-      _out('grep', '## 《三》 ef/three.txt（1 处）\n* L7 [甲] 一句。\n  …\n（* 为命中行）'),
+      _out('grep', '## 《三》 ef/three.txt（1 处）\n* L7 [甲] 一句。\n  …'),
       // Counts over the whole library show no line.
       _call('grep', {'pattern': '乙'}),
       _out('grep', '全库共 32 行命中，分布在 16 个故事\n《四》 a/four.txt 2 行'),

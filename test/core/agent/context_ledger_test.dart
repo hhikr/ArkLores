@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:arklores/core/agent/context_ledger.dart';
 import 'package:arklores/core/agent/lore_tools.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +33,23 @@ void main() {
     expect(ledger.stepOfCall('first'), isNull);
     ledger.clear();
     expect(ledger.lineInContext('a', 2), isFalse);
+  });
+  test('context descriptions follow visible result messages', () {
+    const key = 'material-source-policy:manual';
+    final shown = SeenLines()..addContextDescription(key);
+    final ledger = ContextLedger()
+      ..record(4, shown, step: 7, callKey: 'search');
+    expect(ledger.stepOfContextDescription(key), 7);
+    expect(SeenLines.fromJson(shown.toJson()).contextDescriptions, isEmpty);
+
+    final restored = ContextLedger.fromJson(
+      jsonDecode(jsonEncode(ledger.toJson())) as Map<String, dynamic>,
+    );
+    expect(restored.stepOfContextDescription(key), 7);
+    final remapped = restored.remap({4: 0});
+    expect(remapped.stepOfContextDescription(key), 7);
+    remapped.forget([0]);
+    expect(remapped.stepOfContextDescription(key), isNull);
   });
   test('partial records are not whole and readonly accessors cannot mutate',
       () {

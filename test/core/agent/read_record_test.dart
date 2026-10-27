@@ -108,7 +108,7 @@ void main() {
     expect(first, contains('## 基础档案'));
     expect(first, isNot(contains('结尾的一句')));
     expect(seen.recordIsPartial('doc_fx_keeper'), isTrue);
-    final next = RegExp(r'继续读用 start=(\d+)').firstMatch(first)!.group(1)!;
+    final next = RegExp(r'下一页 start=(\d+)').firstMatch(first)!.group(1)!;
     expect(first, contains('全文 ${long.length} 个字'));
     final rest = await tool.execute({
       'id': 'doc_fx_keeper',
@@ -137,7 +137,7 @@ void main() {
     final first = await tool.execute({'id': 'doc_fx_keeper'});
     expect(first.split('\n')[1], spread);
     // Not on a later page.
-    final next = RegExp(r'继续读用 start=(\d+)').firstMatch(first)!.group(1)!;
+    final next = RegExp(r'下一页 start=(\d+)').firstMatch(first)!.group(1)!;
     expect(
       await tool.execute({'id': 'doc_fx_keeper', 'start': int.parse(next)}),
       isNot(contains('在剧情里')),
@@ -169,12 +169,13 @@ void main() {
     const query = "SELECT title FROM normalized_records WHERE id = 'rec_fx_item'";
     final first = await tools['sql']!.execute({'query': query}) as String;
     expect(first, startsWith('title\n'));
-    expect(first, contains('这次问答第一次用 sql：下面是知识库手册'));
+    expect(first, isNot(contains('这次问答第一次用 sql')));
     expect(first, contains('entry_links(src, relation, dst)'));
     expect(first, contains('资料页结构'));
+    expect(tools['sql']!.description, contains('手册尚未出现在上文时'));
     final second = await tools['sql']!.execute({'query': query}) as String;
     expect(second, isNot(contains('知识库手册')));
-    expect(await tools['guide']!.execute({}), startsWith('手册在这次问答里已经给过'));
+    expect(await tools['guide']!.execute({}), startsWith(inContextPrefix));
 
     // Asked for first: the query after it comes alone. An error brings it
     // too (it is what the next try needs).
@@ -187,7 +188,7 @@ void main() {
     final failing = {for (final t in loreTools(store, SeenLines())) t.name: t};
     expect(
       await failing['sql']!.execute({'query': 'SELECT nope FROM story_lines'}),
-      contains('下面是知识库手册'),
+      contains('story_lines(story_id, line_index, speaker, content, kind'),
     );
   });
 
@@ -241,8 +242,9 @@ void main() {
           "WHERE id = 'record:doc_fx_keeper'",
     });
     expect(out, startsWith('0 行'));
-    expect(out, contains('read_record'));
+    expect(out, isNot(contains('read_record')));
     expect(out, contains('doc_fx_keeper'));
+    expect(tool.description, contains('用 read_record 读全文'));
   });
 
   test('a name the library has is never called missing', () async {
@@ -270,7 +272,11 @@ void main() {
     final seen = SeenLines();
     final out = (await SearchTool(store, seen).run('舞会')).text;
     expect(out, contains('record:rec_fx_voice | operator·voice | 交谈1（守灯人）'));
-    expect(out, contains('全文用 read_record 按 id 读'));
+    expect(out, isNot(contains('全文用 read_record 按 id 读')));
+    expect(
+      SearchTool(store, seen).description,
+      contains('资料只列片段，可按片段引用；全文用 read_record 按 id 读'),
+    );
     expect(out, isNot(contains('normalized_records')));
   });
 }

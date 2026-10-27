@@ -34,15 +34,18 @@ void main() {
       final search = await WikiSearchTool(wiki).execute({'query': '星灯'});
       expect(search, contains('wiki:prts:101 | 星灯'));
       expect(search, contains('1 个页面'));
+      expect(search, isNot(contains('（格式：页面引用')));
+      expect(WikiSearchTool(wiki).description, contains('格式为页面引用 | 标题 | 摘要'));
 
       final read = await WikiReadTool(wiki, seen)
           .execute({'page': 'wiki:prts:101', 'count': 2});
       expect(read, contains('页面 id：wiki:prts:101@7'));
+      expect(read, isNot(contains('引用写 ["wiki:prts:101@7"')));
       expect(read, contains('小节：人物关系(P1) 相关活动(P3)'));
       expect(read, contains('P0 星灯是虚构城市里的点灯人。'));
       expect(read, contains('## 人物关系\nP1 星灯与守夜人是旧识。'));
       expect(read, isNot(contains('P2 ')));
-      expect(read, contains('继续读用 start=2'));
+      expect(read, contains('下一段 start=2'));
       expect(seen.covers('wiki:prts:101@7', 0, 1), isTrue);
       expect(seen.covers('wiki:prts:101@7', 0, 2), isFalse);
 
@@ -67,7 +70,15 @@ void main() {
       prts.unavailable = true;
       final down = await WikiSearchTool(wiki).execute({'query': '星灯'});
       expect(down, contains('PRTS 暂时无法访问'));
-      expect(down, contains('只用本地知识库'));
+      expect(down, isNot(contains('只用本地知识库')));
+      final readDown = await WikiReadTool(wiki, SeenLines())
+          .execute({'page': 'wiki:prts:101'});
+      expect(readDown, contains('PRTS 暂时无法访问'));
+      expect(readDown, isNot(contains('只用本地知识库')));
+      expect(
+        WikiReadTool(wiki, SeenLines()).description,
+        contains('网络不可用时改用本地知识库作答'),
+      );
     });
 
     test('words no page holds together are searched one by one', () async {
