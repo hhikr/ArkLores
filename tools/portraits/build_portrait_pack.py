@@ -18,6 +18,7 @@ from PIL import Image, ImageChops
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fetch_arkwaifu import png_path, readonly, sprite_rows
+from story_art import add_art
 
 SCHEMA = """
 CREATE TABLE portrait_bases (
@@ -35,6 +36,8 @@ CREATE TABLE portrait_images (
   blank   INTEGER NOT NULL,           -- 1 = 整张透明（如 char_empty#1$1），什么都不画
   webp    BLOB
 );
+CREATE TABLE art_images (category TEXT NOT NULL, image_id TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, solid INTEGER NOT NULL, webp BLOB NOT NULL, PRIMARY KEY (category, image_id));
+CREATE TABLE art_titles (image_id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL, group_key TEXT NOT NULL);
 CREATE TABLE pack_manifest (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE pack_groups (
   base_id   TEXT PRIMARY KEY,         -- 一套图（立绘 + 服装），同 portrait_bases.base_id
@@ -168,7 +171,7 @@ def prepared_groups(cache, grouped, height, reuse):
             submit_next()
 
 
-def build(kb, cache, out, groups=None, height=800, previous=None):
+def build(kb, cache, out, groups=None, height=800, previous=None, art_cache=None, arkwaifu_db=None):
     """Writes the pack to [out]. Sets whose signature is the same as in
     [previous] (default: the pack already at [out]) are copied, not encoded
     again; [out] is replaced only when the new pack is complete."""
@@ -228,7 +231,10 @@ def build(kb, cache, out, groups=None, height=800, previous=None):
             db.commit()
             if number % 50 == 0 or number == len(grouped):
                 print(f'groups={number}/{len(grouped)}', flush=True)
-        manifest = {'pack_version': 1, 'source': 'arkwaifu', 'source_artwork_version': index['artwork_version'], 'kb_commit': commit, 'sprite_count': len(rows) - len(missing), 'missing_count': len(missing), 'max_height': height, 'built_at': datetime.now(timezone.utc).isoformat()}
+        art_stats = add_art(db, old, old_signatures, kb, art_cache, arkwaifu_db, encode) if art_cache and arkwaifu_db else {}
+        stats.update(art_stats)
+        manifest = {'pack_version': 2, 'source': 'arkwaifu', 'source_artwork_version': index['artwork_version'], 'kb_commit': commit, 'sprite_count': len(rows) - len(missing), 'missing_count': len(missing), 'max_height': height, 'built_at': datetime.now(timezone.utc).isoformat()}
+        manifest.update(art_stats)
         db.executemany('INSERT INTO pack_manifest VALUES (?, ?)', [(k, str(v)) for k, v in manifest.items()])
         db.commit()
         db.execute('VACUUM')
@@ -247,8 +253,11 @@ def build(kb, cache, out, groups=None, height=800, previous=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('kb', 'cache', 'out'):
+    for name in ('kb', 'cache'):
         parser.add_argument('--' + name, required=True)
+    parser.add_argument('--out', default='build/story_art/arklores_story_art_zh.db')
+    parser.add_argument('--art-cache', default='build/story_art_src')
+    parser.add_argument('--arkwaifu-db', default='notes/v0.20/arkwaifu/arkwaifu.sqlite3')
     parser.add_argument('--groups')
     parser.add_argument('--height', type=int, default=800)
     parser.add_argument('--previous', help='pack to copy unchanged sets from (default: the one at --out)')

@@ -63,9 +63,18 @@ class Downloader:
         for attempt in range(4):
             self.wait()
             try:
-                request = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
-                with urllib.request.urlopen(request, timeout=120) as response, part.open('wb') as output:
-                    shutil.copyfileobj(response, output)
+                offset = part.stat().st_size if part.exists() else 0
+                if size is not None and offset >= size:
+                    part.unlink(missing_ok=True)
+                    offset = 0
+                headers = {'User-Agent': USER_AGENT}
+                if offset:
+                    headers['Range'] = f'bytes={offset}-'
+                request = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    resumed = offset and getattr(response, 'status', None) == 206
+                    with part.open('ab' if resumed else 'wb') as output:
+                        shutil.copyfileobj(response, output)
                 if size is not None and part.stat().st_size != size:
                     raise OSError(f'Wrong size: {part.stat().st_size} != {size}')
                 part.replace(dest)
@@ -120,6 +129,9 @@ def fetch(kb, cache, arkwaifu_db=None, workers=4, limit=None, groups=None):
             if path.stat().st_size == metadata['size'] and (previous is None or previous['object_key'] == metadata['object_key']):
                 return sprite, 'skipped'
             path.unlink()
+        previous = completed.get(sprite)
+        if previous is not None and previous['object_key'] != metadata['object_key']:
+            path.with_name(path.name + '.part').unlink(missing_ok=True)
         ok = downloader.download(asset_url(metadata['object_key']), path, metadata['size'])
         return sprite, 'downloaded' if ok else 'failed'
 
@@ -157,6 +169,109 @@ def fetch(kb, cache, arkwaifu_db=None, workers=4, limit=None, groups=None):
     return counts
 
 
+
+
+def art_key(category, name):
+    return category + ':' + name
+
+
+def art_path(cache, category, name):
+    return png_path(Path(cache) / category, name)
+
+
+def art_requests(kb, source, limit=None):
+    with closing(readonly(kb)) as db:
+        rows = db.execute("SELECT image, kind, layout, count(*) FROM story_art_events WHERE image IS NOT NULL GROUP BY image, kind, layout ORDER BY image").fetchall()
+    layouts, kinds = {}, {}
+    for image, kind, layout, count in rows:
+        layouts.setdefault(image, {})[layout] = layouts.setdefault(image, {}).get(layout, 0) + count
+        kinds.setdefault(image, set()).add(kind)
+    with closing(readonly(source)) as db:
+        assets = {}
+        for asset_id, category, key, size, width, height in db.execute("SELECT asset_id, category, object_key, size, width, height FROM narrative_image_assets WHERE category != 'character' ORDER BY asset_id"):
+            assets.setdefault((category, ''.join(asset_id.split()).lower()), dict(asset_id=asset_id, category=category, object_key=key, size=size, width=width, height=height))
+    preferences = {'background': ('background', 'illustration', 'item'), 'cg': ('illustration', 'background', 'item'), 'item': ('item', 'illustration', 'background')}
+    requests, missing, images = {}, [], {}
+    for image in sorted(layouts)[:limit]:
+        options = sorted(layouts[image].items(), key=lambda x: (-x[1], x[0] or ''))
+        if len(options) > 1: print(f'Layout conflict: {image}: {options}', flush=True)
+        layout = options[0][0]
+        for kind in sorted(kinds[image]):
+            if kind not in preferences: continue
+            selected = None
+            for category in preferences[kind]:
+                parts = [image] if (category, image) in assets else image.split('/')
+                if all((category, part) in assets for part in parts):
+                    selected = (category, parts)
+                    break
+            if selected is None:
+                missing.append(kind + ':' + image)
+                continue
+            category, parts = selected
+            images[art_key(category, image)] = {'category': category, 'image_id': image, 'parts': parts, 'layout': layout}
+            for part in parts:
+                requests[art_key(category, part)] = assets[(category, part)]
+    return requests, missing, images
+
+
+def fetch_art(kb, cache, arkwaifu_db, workers=4, limit=None):
+    cache = Path(cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    assets, missing, images = art_requests(kb, arkwaifu_db, limit)
+    index_path = cache / 'index.json'
+    old = json.loads(index_path.read_text(encoding='utf-8')) if index_path.exists() else {}
+    old_assets = old.get('assets', {})
+    completed = {k: v for k, v in old_assets.items() if ':' in k}
+    legacy_assets = {k: v for k, v in old_assets.items() if ':' not in k}
+    downloader = Downloader()
+    counts = dict(total=len(assets), downloaded=0, skipped=0, failed=0, missing=len(missing), downloaded_bytes=0)
+    failed = []
+    start = time.monotonic()
+    def one(item):
+        key, metadata = item
+        category, name = key.split(':', 1)
+        path = art_path(cache, category, name)
+        previous = completed.get(key)
+        if path.exists() and path.stat().st_size == metadata['size'] and previous and previous['object_key'] == metadata['object_key']:
+            return key, 'skipped'
+        # Migrate the original single-category cache only when its object key matches.
+        legacy = old_assets.get(name)
+        legacy_path = png_path(cache, name)
+        if legacy and legacy['object_key'] == metadata['object_key'] and legacy_path.is_file() and legacy_path.stat().st_size == metadata['size']:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(legacy_path, path)
+            return key, 'skipped'
+        if previous and previous['object_key'] != metadata['object_key']:
+            path.with_name(path.name + '.part').unlink(missing_ok=True)
+        return key, 'downloaded' if downloader.download(asset_url(metadata['object_key']), path, metadata['size']) else 'failed'
+    def save():
+        temp = index_path.with_suffix('.json.part')
+        temp.write_text(json.dumps({'assets': dict(sorted((legacy_assets | completed).items())), 'images': images}, ensure_ascii=False, indent=2), encoding='utf-8')
+        temp.replace(index_path)
+    try:
+        with ThreadPoolExecutor(max_workers=max(1, min(4, workers))) as pool:
+            futures = [pool.submit(one, item) for item in assets.items()]
+            for done, future in enumerate(as_completed(futures), 1):
+                key, result = future.result()
+                counts[result] += 1
+                if result == 'failed':
+                    failed.append(key)
+                    completed.pop(key, None)
+                else:
+                    completed[key] = assets[key]
+                    if result == 'downloaded': counts['downloaded_bytes'] += assets[key]['size']
+                if done % 100 == 0 or done == len(futures):
+                    print(f'art={done}/{len(assets)} bytes={counts["downloaded_bytes"]}', flush=True)
+                    save()
+    finally:
+        save()
+        for filename, values in [('missing.txt', missing), ('failed.txt', failed)]:
+            (cache / filename).write_text(''.join(s + '\n' for s in sorted(values)), encoding='utf-8')
+    counts['elapsed_seconds'] = time.monotonic() - start
+    (cache / 'fetch.report.json').write_text(json.dumps(counts, indent=2), encoding='utf-8')
+    print(json.dumps(counts, indent=2), flush=True)
+    return counts
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--kb', required=True)
@@ -165,10 +280,13 @@ def main():
     parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--limit', type=int)
     parser.add_argument('--groups')
+    parser.add_argument('--art-cache', default='build/story_art_src')
     args = parser.parse_args()
     if args.limit is not None and args.limit < 0:
         parser.error('--limit must be nonnegative')
-    fetch(**vars(args))
+    fetch(args.kb, args.cache, args.arkwaifu_db, args.workers, args.limit, args.groups)
+    if args.arkwaifu_db:
+        fetch_art(args.kb, args.art_cache, args.arkwaifu_db, args.workers, args.limit)
 
 
 if __name__ == '__main__':

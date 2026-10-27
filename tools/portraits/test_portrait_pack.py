@@ -186,6 +186,16 @@ class PortraitPackTest(unittest.TestCase):
         self.assertFalse(Path(str(destination) + '.part').exists())
         self.assertEqual(sleep.call_count, 3)
 
+    def test_download_resumes_partial_response(self):
+        destination = self.root / 'asset.png'
+        Path(str(destination) + '.part').write_bytes(b'ab')
+        response = io.BytesIO(b'cd')
+        response.status = 206
+        with patch('fetch_arkwaifu.urllib.request.urlopen', return_value=response) as request:
+            self.assertTrue(Downloader().download('https://example.invalid', destination, 4))
+        self.assertEqual(destination.read_bytes(), b'abcd')
+        self.assertEqual(request.call_args.args[0].get_header('Range'), 'bytes=2-')
+
     def test_truncated_http_response_is_retried(self):
         downloader = Downloader()
         destination = self.root / 'asset.png'
@@ -230,6 +240,139 @@ class PortraitPackTest(unittest.TestCase):
         self.assertEqual(result['downloaded'], 1)
         download.assert_called_once()
 
+
+
+class StoryArtTest(unittest.TestCase):
+    def test_sizes_and_transparency(self):
+        from story_art import resize_art
+        for category in ('background', 'item'):
+            image = resize_art(Image.new('RGBA', (2560, 1000)), category)
+            self.assertEqual(image.size, (1280, 500))
+            self.assertEqual(image.mode, 'RGBA')
+            self.assertEqual(resize_art(Image.new('RGBA', (3, 3), 'white'), category).mode, 'RGB')
+        self.assertEqual(resize_art(Image.new('RGB', (2000, 1000)), 'illustration').size, (1600, 800))
+        self.assertEqual(resize_art(Image.new('RGB', (1600, 4000)), 'illustration').size, (1280, 3200))
+        self.assertEqual(resize_art(Image.new('RGB', (20, 30)), 'illustration').size, (20, 30))
+
+    def test_layouts(self):
+        from story_art import compose
+        images = [Image.new('RGBA', (5, 5), color) for color in ('red', 'green', 'blue', 'white')]
+        self.assertEqual(compose(images[:2], 'row').size, (10, 5))
+        self.assertEqual(compose(images[:2], 'column').size, (5, 10))
+        grid = compose(images, 'grid2')
+        self.assertEqual([grid.getpixel(p)[:3] for p in ((0, 0), (5, 0), (0, 5), (5, 5))], [(255, 0, 0), (0, 128, 0), (0, 0, 255), (255, 255, 255)])
+
+    def test_solid(self):
+        from story_art import solid
+        image = Image.new('RGBA', (64, 64), (100, 100, 100, 255))
+        self.assertEqual(solid(image), 1)
+        image.putpixel((0, 0), (104, 100, 100, 255))
+        self.assertEqual(solid(image), 1)
+        ImageDraw.Draw(image).rectangle((0, 0, 31, 63), fill='black')
+        self.assertEqual(solid(image), 0)
+
+    def test_art_requests_prefers_composite_and_reports_missing(self):
+        from fetch_arkwaifu import art_requests
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            kb, source = root / 'kb', root / 'source'
+            with closing(sqlite3.connect(kb)) as db:
+                db.executescript("CREATE TABLE story_art_events(image, layout, kind); INSERT INTO story_art_events(image,layout) VALUES ('a/b','row'),('c/d','column'),('c/d','row'),('c/d','row'),('absent',NULL);")
+            with closing(sqlite3.connect(kb)) as db:
+                db.execute("UPDATE story_art_events SET kind='background'")
+                db.commit()
+            with closing(sqlite3.connect(source)) as db:
+                db.executescript("CREATE TABLE narrative_image_assets(asset_id, category, object_key, size, width, height); INSERT INTO narrative_image_assets VALUES (' A / B ','background','composite',1,1,1),('C','background','c',1,1,1),('D','background','d',1,1,1);")
+            with contextlib.redirect_stdout(io.StringIO()):
+                assets, missing, layouts = art_requests(kb, source)
+            self.assertEqual(set(assets), {'background:a/b', 'background:c', 'background:d'})
+            self.assertEqual(assets['background:a/b']['asset_id'], ' A / B ')
+            self.assertEqual(missing, ['background:absent'])
+            self.assertEqual(layouts['background:c/d']['layout'], 'row')
+
+    def test_categories_follow_event_and_fallback(self):
+        from fetch_arkwaifu import art_requests
+        with tempfile.TemporaryDirectory() as temp:
+            kb, source = Path(temp) / 'kb', Path(temp) / 'source'
+            with closing(sqlite3.connect(kb)) as db:
+                db.executescript("CREATE TABLE story_art_events(image, layout, kind); INSERT INTO story_art_events VALUES ('scene',NULL,'background'),('scene',NULL,'cg'),('scene',NULL,'item'),('fallback',NULL,'cg');")
+            with closing(sqlite3.connect(source)) as db:
+                db.executescript("CREATE TABLE narrative_image_assets(asset_id, category, object_key, size, width, height); INSERT INTO narrative_image_assets VALUES ('scene','background','bg',1,1,1),('scene','illustration','cg',1,1,1),('fallback','item','item',1,1,1);")
+            assets, missing, images = art_requests(kb, source)
+            self.assertEqual(set(assets), {'background:scene', 'illustration:scene', 'item:fallback'})
+            self.assertEqual(set(images), {'background:scene', 'illustration:scene', 'item:fallback'})
+            self.assertEqual(missing, [])
+
+    def test_art_incremental_matches_fresh(self):
+        from story_art import add_art
+        from build_portrait_pack import encode
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            kb, source, cache = root / 'kb', root / 'source', root / 'cache'
+            from fetch_arkwaifu import art_path
+            art_path(cache, 'background', 'scene').parent.mkdir(parents=True)
+            Image.new('RGBA', (16, 8), 'black').save(art_path(cache, 'background', 'scene'))
+            (cache / 'index.json').write_text(json.dumps({'assets': {'background:scene': {'category': 'background', 'object_key': 'x'}}, 'images': {'background:scene': {'category': 'background', 'image_id': 'scene', 'parts': ['scene'], 'layout': None}}}), encoding='utf-8')
+            with closing(sqlite3.connect(kb)) as db:
+                db.execute('CREATE TABLE story_art_events(image, layout)')
+                db.execute("INSERT INTO story_art_events VALUES ('scene', NULL)")
+                db.commit()
+            with closing(sqlite3.connect(source)) as db:
+                db.executescript('CREATE TABLE gallery_groups(locale, gallery_id, group_id, position, name, description); CREATE TABLE gallery_narrative_asset_references(locale, gallery_id, group_id, position, asset_id);')
+            def output():
+                db = sqlite3.connect(':memory:')
+                db.executescript('CREATE TABLE art_images(category, image_id, width, height, solid, webp); CREATE TABLE art_titles(image_id, title, description, group_key); CREATE TABLE pack_groups(base_id, signature);')
+                return db
+            first, incremental, fresh = output(), output(), output()
+            self.addCleanup(first.close); self.addCleanup(incremental.close); self.addCleanup(fresh.close)
+            add_art(first, None, {}, kb, cache, source, encode)
+            signatures = dict(first.execute('SELECT * FROM pack_groups'))
+            with patch('story_art.resize_art', side_effect=AssertionError('should reuse')):
+                add_art(incremental, first, signatures, kb, cache, source, encode)
+            add_art(fresh, None, {}, kb, cache, source, encode)
+            for table in ('art_images', 'art_titles', 'pack_groups'):
+                self.assertEqual(incremental.execute(f'SELECT * FROM {table}').fetchall(), fresh.execute(f'SELECT * FROM {table}').fetchall())
+
+    def test_two_categories_keep_distinct_images_and_alpha(self):
+        from fetch_arkwaifu import art_path
+        from story_art import add_art
+        from build_portrait_pack import encode
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); kb, source, cache = root / 'kb', root / 'source', root / 'cache'
+            assets, images = {}, {}
+            for category, color in [('background', 'white'), ('illustration', (255, 0, 0, 0))]:
+                path = art_path(cache, category, 'scene'); path.parent.mkdir(parents=True, exist_ok=True)
+                Image.new('RGBA', (8, 8), color).save(path)
+                key = category + ':scene'
+                assets[key] = {'object_key': key}
+                images[key] = {'category': category, 'image_id': 'scene', 'parts': ['scene'], 'layout': None}
+            (cache / 'index.json').write_text(json.dumps({'assets': assets, 'images': images}), encoding='utf-8')
+            with closing(sqlite3.connect(kb)) as db:
+                db.execute('CREATE TABLE story_art_events(image, kind, layout)')
+            with closing(sqlite3.connect(source)) as db:
+                db.executescript("CREATE TABLE gallery_groups(locale, gallery_id, group_id, position, name, description); CREATE TABLE gallery_narrative_asset_references(locale, gallery_id, group_id, position, asset_id); INSERT INTO gallery_groups VALUES('CN','g','a',0,'title','desc'); INSERT INTO gallery_narrative_asset_references VALUES('CN','g','a',0,'scene');")
+            db = sqlite3.connect(':memory:'); self.addCleanup(db.close)
+            db.executescript('CREATE TABLE art_images(category, image_id, width, height, solid, webp, PRIMARY KEY(category,image_id)); CREATE TABLE art_titles(image_id PRIMARY KEY, title, description, group_key); CREATE TABLE pack_groups(base_id PRIMARY KEY, signature);')
+            add_art(db, None, {}, kb, cache, source, encode)
+            rows = db.execute('SELECT category, webp FROM art_images ORDER BY category').fetchall()
+            self.assertEqual([row[0] for row in rows], ['background', 'illustration'])
+            with Image.open(io.BytesIO(rows[1][1])) as image:
+                self.assertLess(image.convert('RGBA').getchannel('A').getextrema()[0], 255)
+            self.assertEqual(db.execute('SELECT count(*) FROM art_titles').fetchone()[0], 1)
+
+    def test_titles_split_and_lowest_position(self):
+        from story_art import titles
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'db'
+            with closing(sqlite3.connect(path)) as db:
+                db.executescript("""CREATE TABLE gallery_groups(locale, gallery_id, group_id, position, name, description);
+                    CREATE TABLE gallery_narrative_asset_references(locale, gallery_id, group_id, position, asset_id);
+                    INSERT INTO gallery_groups VALUES ('CN','a','one',3,'late','late desc'), ('CN','b','two',1,'early','desc');
+                    INSERT INTO gallery_narrative_asset_references VALUES ('CN','a','one',0,'A/B'), ('CN','b','two',0,'A/B');""")
+                db.commit()
+            result = titles(path)
+            for key in ('a', 'b', 'a/b'):
+                self.assertEqual(result[key], ('early', 'desc', 'b/two'))
 
 if __name__ == '__main__':
     unittest.main()

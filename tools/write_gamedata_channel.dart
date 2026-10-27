@@ -10,10 +10,10 @@ import 'package:arklores/core/gamedata/build/gamedata_schema.dart';
 /// knowledge-base assets themselves are uploaded.
 ///
 ///   dart run tools/write_gamedata_channel.dart [--output=build/gamedata_channel.json]
-///     [--portraits-url=… --portraits-sha256=… --portraits-size=… --portraits-kb-commit=…]
+///     [--story-art-url=… --story-art-sha256=… --story-art-size=… --story-art-kb-commit=…]
 ///
-/// The portrait pack entry (`arknights_portraits`) comes from the env's
-/// PORTRAITS_* values, or the options above; with neither, the entry already
+/// The portrait pack entry (`arknights_story_art`) comes from the env's
+/// STORY_ART_* values, or the options above; with neither, the entry already
 /// in the output file is kept.
 void main(List<String> args) {
   final output = args
@@ -51,7 +51,7 @@ void main(List<String> args) {
     'endfield': asset('ENDFIELD'),
   };
   // The portrait pack (0.20): from the env like the knowledge bases
-  // (PORTRAITS_URL / _SHA256 / _SIZE / _KB_COMMIT); an option overrides the
+  // (STORY_ART_URL / _SHA256 / _SIZE / _KB_COMMIT); an option overrides the
   // env value of the same name.
   String? option(String name) =>
       args
@@ -59,25 +59,25 @@ void main(List<String> args) {
           .map((a) => a.substring(name.length + 3))
           .firstOrNull ??
       env[name.toUpperCase().replaceAll('-', '_')];
-  final url = option('portraits-url');
-  final sha = option('portraits-sha256');
+  final url = option('story-art-url');
+  final sha = option('story-art-sha256');
   if ((url ?? '').isNotEmpty || (sha ?? '').isNotEmpty) {
     if (url == null || url.isEmpty || sha == null || sha.isEmpty) {
       throw ArgumentError(
           'Both the portrait pack URL and SHA-256 are required',);
     }
-    channel['arknights_portraits'] = {
+    channel['arknights_story_art'] = {
       'url': url,
       'sha256': sha,
-      'size': int.parse(option('portraits-size') ?? '0'),
-      'kb_commit': option('portraits-kb-commit') ?? '',
-      'pack_version': 1,
+      'size': int.parse(option('story-art-size') ?? '0'),
+      'kb_commit': option('story-art-kb-commit') ?? '',
+      'pack_version': 2,
       'min_app_build': 43,
     };
   } else if (File(output).existsSync()) {
     final previous = jsonDecode(File(output).readAsStringSync());
-    if (previous is Map && previous.containsKey('arknights_portraits')) {
-      channel['arknights_portraits'] = previous['arknights_portraits'];
+    if (previous is Map && previous.containsKey('arknights_story_art')) {
+      channel['arknights_story_art'] = previous['arknights_story_art'];
     }
   }
   File(output)

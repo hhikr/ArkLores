@@ -9,8 +9,8 @@
 #      renamed, so the old file is gone only for that moment. The channel file is
 #      written from the env (tools/write_gamedata_channel.dart) and replaced last,
 #      after the knowledge bases it points at are in place.
-#   The portrait pack (0.20) goes the same way: PORTRAITS_* in the env, and
-#   -Files build\portraits\arklores_portraits_zh.db (uncompressed).
+#   The portrait pack (0.20) goes the same way: STORY_ART_* in the env, and
+#   -Files build\story_art\arklores_story_art_zh.db (uncompressed).
 #   -ChannelOnly: only rewrite and replace the channel file.
 param(
   [string[]]$Files = @(),

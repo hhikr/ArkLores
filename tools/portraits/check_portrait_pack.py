@@ -13,7 +13,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageStat
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_portrait_pack import load_group
-from fetch_arkwaifu import readonly
+from fetch_arkwaifu import readonly, art_path, art_key
+from story_art import compose, resize_art
 
 
 def decode(data):
@@ -39,7 +40,7 @@ def image_kind(row):
     return 'full' if row[1] is None else ('patch' if row[7] is not None else 'same')
 
 
-def check(pack, cache, sample=60, seed=20261025, sheet=None):
+def check(pack, cache, sample=60, seed=20261025, sheet=None, art_cache=None, kb=None):
     rng = random.Random(seed)
     with closing(readonly(pack)) as db:
         rows = db.execute('SELECT * FROM portrait_images ORDER BY sprite').fetchall()
@@ -92,6 +93,32 @@ def check(pack, cache, sample=60, seed=20261025, sheet=None):
                         image = image.resize((width, 300), Image.Resampling.LANCZOS)
                         tile.paste(image, (offset, 30), image)
                     tiles.append(tile)
+            has_art = db.execute("SELECT 1 FROM sqlite_master WHERE name='art_images'").fetchone()
+            if has_art:
+                for category in ('background', 'illustration', 'item'):
+                    art_rows = db.execute('SELECT image_id, webp FROM art_images WHERE category=? ORDER BY image_id LIMIT 3', (category,)).fetchall()
+                    art_rows += db.execute("SELECT image_id, webp FROM art_images WHERE category=? AND image_id LIKE '%/%' ORDER BY image_id LIMIT 1", (category,)).fetchall()
+                    for name, data in art_rows:
+                        image = decode(data)
+                        reference = None
+                        if art_cache and kb:
+                            index = json.loads((Path(art_cache) / 'index.json').read_text(encoding='utf-8'))
+                            entry = index['images'][art_key(category, name)]
+                            paths = entry['parts']
+                            if all(art_path(art_cache, category, p).is_file() for p in paths):
+                                images = []
+                                for p in paths:
+                                    with Image.open(art_path(art_cache, category, p)) as src:
+                                        images.append(src.convert('RGBA'))
+                                layout = entry['layout']
+                                reference = resize_art(compose(images, layout) if len(images) > 1 else images[0], category).convert('RGBA')
+                        tile = Image.new('RGB', (460, 330), 'white')
+                        ImageDraw.Draw(tile).text((4, 4), f'{category}: {name} | reference / packed', fill='black')
+                        for offset, view in ((0, reference), (230, image)):
+                            if view is not None:
+                                view.thumbnail((225, 290), Image.Resampling.LANCZOS)
+                                tile.paste(view, (offset, 30), view)
+                        tiles.append(tile)
             if tiles:
                 cell_width = max(tile.width for tile in tiles)
                 canvas = Image.new('RGB', (cell_width * 3, ((len(tiles) + 2) // 3) * 330), 'white')
@@ -112,6 +139,8 @@ def main():
     parser.add_argument('--sample', type=int, default=60)
     parser.add_argument('--seed', type=int, default=20261025)
     parser.add_argument('--sheet', required=True)
+    parser.add_argument('--art-cache')
+    parser.add_argument('--kb')
     check(**vars(parser.parse_args()))
 
 
