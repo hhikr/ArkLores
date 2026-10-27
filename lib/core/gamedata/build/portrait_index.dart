@@ -56,11 +56,6 @@ const speakerNamesDdl = '''CREATE TABLE speaker_names (
   mentions INTEGER NOT NULL
 ) WITHOUT ROWID''';
 
-/// A name found in the story text more than this many times per line it
-/// speaks is a common word or part of longer words (a people, a title, a
-/// word inside a place name), not something to highlight in answers.
-// Thresholds verified against the October 2026 local story corpus (P17).
-const highlightMaxMentionsPerLine = 3;
 /// One character is too often part of other words to link.
 const highlightMinNameLength = 2;
 const _derived = {
@@ -195,14 +190,12 @@ Future<void> rebuildPortraitIndex(Database db) async {
         FROM speaker_portraits p GROUP BY p.speaker''');
       final letters = RegExp(r'\p{L}', unicode: true);
       final combined = RegExp(r'[&＆/]');
-      final uncertain = RegExp(r'[？?！!]$');
-      // Every speaker with a portrait is highlighted, titles, crowds and
-      // shared portraits included (developer, 2026-10-27): only what could
-      // underline the wrong words is left out.
+      // Every speaker with a portrait is highlighted, titles, crowds, shared
+      // portraits, often used words and `<name>？` included (developer,
+      // 2026-10-27): left out are one character, no letters and joint
+      // labels.
       bool named(String name) =>
-          letters.hasMatch(name) &&
-          !combined.hasMatch(name) &&
-          !uncertain.hasMatch(name);
+          letters.hasMatch(name) && !combined.hasMatch(name);
       final candidates = <String, Map<String, Object?>>{
         for (final row in await txn.query(speakerNamesTable))
           if ((row['speaker'] as String).runes.length >=
@@ -212,17 +205,10 @@ Future<void> rebuildPortraitIndex(Database db) async {
       };
       final mentions = await _countMentions(txn, candidates.keys);
       final highlights = txn.batch();
-      for (final MapEntry(key: speaker, value: row) in candidates.entries) {
-        final found = mentions[speaker]!;
+      for (final speaker in candidates.keys) {
         highlights.update(
           speakerNamesTable,
-          {
-            'mentions': found,
-            'highlight':
-                found <= (row['lines'] as int) * highlightMaxMentionsPerLine
-                    ? 1
-                    : 0,
-          },
+          {'mentions': mentions[speaker]!, 'highlight': 1},
           where: 'speaker=?',
           whereArgs: [speaker],
         );
@@ -236,7 +222,7 @@ Future<void> rebuildPortraitIndex(Database db) async {
       'SELECT (SELECT COUNT(*) FROM story_line_portraits) AS lines, (SELECT COUNT(*) FROM portrait_groups) AS groups',
     );
     await writeGamedataManifest(txn, {
-      'portrait_index_version': '6',
+      'portrait_index_version': '7',
       'portrait_line_count': '${counts.single['lines']}',
       'portrait_group_count': '${counts.single['groups']}',
     });

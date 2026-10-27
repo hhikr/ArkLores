@@ -172,7 +172,7 @@ void main() {
         whereArgs: ['portrait_index_version'],
       ))
           .single['value'],
-      '6',
+      '7',
     );
     await validateGameDataDatabase(db);
   });
@@ -235,17 +235,18 @@ void main() {
       '渡鸦',
       '行人0',
       '甲客',
+      '林舟？',
     ]) {
       expect(rows[name]!['highlight'], 1, reason: name);
     }
-    for (final name in ['？？？', '林舟？', '洛青＆青石', '岚']) {
+    for (final name in ['？？？', '洛青＆青石', '岚']) {
       expect(rows[name]!['highlight'], 0, reason: name);
     }
     expect(rows['洛青']!['owns_group'], 0);
     expect(rows['林舟']!['owns_group'], 0);
   });
 
-  test('a name the text uses far more than it speaks is not highlighted',
+  test('mentions are counted; a name the text uses often is still highlighted',
       () async {
     for (var i = 0; i < 3; i++) {
       await add('Gamma', r'avg_gamma#1$1');
@@ -269,7 +270,7 @@ void main() {
       for (final n in await db.query(speakerNamesTable)) n['speaker']: n,
     };
     expect(names['Gamma']!['mentions'], 10);
-    expect(names['Gamma']!['highlight'], 0);
+    expect(names['Gamma']!['highlight'], 1);
     expect(names['Delta']!['mentions'], 9);
     expect(names['Delta']!['highlight'], 1);
   });
