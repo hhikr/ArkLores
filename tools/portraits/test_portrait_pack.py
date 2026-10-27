@@ -254,6 +254,26 @@ class StoryArtTest(unittest.TestCase):
         self.assertEqual(resize_art(Image.new('RGB', (1600, 4000)), 'illustration').size, (1280, 3200))
         self.assertEqual(resize_art(Image.new('RGB', (20, 30)), 'illustration').size, (20, 30))
 
+    def test_transparency_threshold_for_all_categories(self):
+        from story_art import resize_art
+        for category in ('background', 'illustration', 'item'):
+            with self.subTest(category=category):
+                noise = Image.new('RGBA', (100, 100), (20, 30, 40, 254))
+                self.assertEqual(resize_art(noise, category).mode, 'RGB')
+                corner = noise.copy()
+                for i in range(99): corner.putpixel((i, 0), (20, 30, 40, 0))
+                self.assertEqual(resize_art(corner, category).mode, 'RGB')
+                corner.putpixel((99, 0), (20, 30, 40, 0))
+                self.assertEqual(resize_art(corner, category).mode, 'RGB')
+                corner.putpixel((0, 1), (20, 30, 40, 249))
+                self.assertEqual(resize_art(corner, category).mode, 'RGBA')
+                overlay = Image.new('RGBA', (100, 100), (20, 30, 40, 0))
+                self.assertEqual(resize_art(overlay, category).mode, 'RGBA')
+                half = Image.new('RGBA', (100, 100), (0, 0, 0, 77))
+                self.assertEqual(resize_art(half, category).mode, 'RGBA')
+                threshold = Image.new('RGBA', (100, 100), (0, 0, 0, 250))
+                self.assertEqual(resize_art(threshold, category).mode, 'RGB')
+
     def test_layouts(self):
         from story_art import compose
         images = [Image.new('RGBA', (5, 5), color) for color in ('red', 'green', 'blue', 'white')]
@@ -330,6 +350,13 @@ class StoryArtTest(unittest.TestCase):
             with patch('story_art.resize_art', side_effect=AssertionError('should reuse')):
                 add_art(incremental, first, signatures, kb, cache, source, encode)
             add_art(fresh, None, {}, kb, cache, source, encode)
+            legacy = {key: value.replace('\"spec\": 4', '\"spec\": 3') for key, value in signatures.items()}
+            self.assertNotEqual(legacy, signatures)
+            changed = output()
+            self.addCleanup(changed.close)
+            with patch('story_art.resize_art', wraps=__import__('story_art').resize_art) as resize:
+                add_art(changed, first, legacy, kb, cache, source, encode)
+                self.assertEqual(resize.call_count, 1)
             for table in ('art_images', 'art_titles', 'pack_groups'):
                 self.assertEqual(incremental.execute(f'SELECT * FROM {table}').fetchall(), fresh.execute(f'SELECT * FROM {table}').fetchall())
 

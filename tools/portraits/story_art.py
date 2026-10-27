@@ -15,7 +15,8 @@ def resize_art(image, category):
     else:
         scale = min(1, 1280 / w)
     rgba = image.convert('RGBA')
-    image = rgba if rgba.getchannel('A').getextrema()[0] < 255 else rgba.convert('RGB')
+    alpha = rgba.getchannel('A').histogram()
+    image = rgba if sum(alpha[:250]) * 100 > w * h else rgba.convert('RGB')
     if scale < 1:
         image = image.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.Resampling.LANCZOS)
     return image
@@ -82,7 +83,7 @@ def add_art(db, old, old_signatures, kb, cache, source, encode):
                 if any(k not in assets or not art_path(cache, category, p).is_file() for k, p in zip(part_keys, parts)):
                     counts['art_missing_count'] += 1
                     continue
-                signature = json.dumps({'category': category, 'sources': [[p, assets[k]['object_key'], art_path(cache, category, p).stat().st_size] for k, p in zip(part_keys, parts)], 'layout': layout if len(parts) > 1 else None, 'spec': 3}, sort_keys=True)
+                signature = json.dumps({'category': category, 'sources': [[p, assets[k]['object_key'], art_path(cache, category, p).stat().st_size] for k, p in zip(part_keys, parts)], 'layout': layout if len(parts) > 1 else None, 'spec': 4}, sort_keys=True)
                 group_key = 'art:' + key
                 row = None
                 if old is not None and old_signatures.get(group_key) == signature:
