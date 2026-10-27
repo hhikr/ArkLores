@@ -323,7 +323,7 @@ void main() {
     expect(find.text('立绘 02 / 02'), findsOneWidget);
     expect(find.text('回到剧情这里'), findsNothing);
     final image = tester.widget<PortraitImage>(find.descendant(of: find.byType(StoryArtViewer), matching: find.byType(PortraitImage)).last);
-    expect(image.cropFigure, false);
+    expect(image.transparent, true);
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
     expect(tester.widget<PortraitImage>(find.byType(PortraitImage).first).sprite, 'char_fixture#2\$2');

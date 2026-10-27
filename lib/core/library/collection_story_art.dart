@@ -16,8 +16,17 @@ class CollectionArtShot {
   final StoryArtShot shot;
 }
 
-/// Equality includes layer order and transforms: the same base can form
-/// several different pictures during one scene.
+/// A story as the story list names it: code, name and the part it is
+/// (`<code> <name> / <part>`), so the stories of one stage stay apart.
+String collectionStoryLabel(LibraryEntry story) => [
+      story.code ?? '',
+      story.name,
+      if (story.group != null && !story.name.contains(story.group!))
+        '/ ${story.group}',
+    ].where((s) => s.isNotEmpty).join(' ');
+
+/// One picture per base and set of layers: the same layers moved, scaled or
+/// faded during a scene look alike in a gallery, so the first stays.
 List<CollectionArtShot> groupCollectionArt(
   List<LibraryEntry> stories,
   List<StoryArtEvent> events,
@@ -36,18 +45,10 @@ List<CollectionArtShot> groupCollectionArt(
             shot.kind,
             shot.image,
             shot.layout,
-            for (final layer in shot.layers)
-              [
-                layer.image,
-                layer.x,
-                layer.y,
-                layer.scale,
-                layer.alpha,
-                layer.layer,
-              ],
+            for (final layer in shot.layers) layer.image,
           ]),
         ))
-          CollectionArtShot(story.rawId!, story.name, shot),
+          CollectionArtShot(story.rawId!, collectionStoryLabel(story), shot),
   ];
 }
 

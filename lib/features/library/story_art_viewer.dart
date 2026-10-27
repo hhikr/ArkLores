@@ -308,10 +308,17 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
           transformationController: transform,
           minScale: 1,
           maxScale: 4,
+          // The figure as large as it fits between the two bars: drawn to
+          // the bottom of the screen, its feet went under the lower bar.
           child: SizedBox.expand(
-            child: PortraitImage(
-              sprite: widget.page.sprite!,
-              cropFigure: false,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 72, 16, 112),
+                child: PortraitImage(
+                  sprite: widget.page.sprite!,
+                  transparent: true,
+                ),
+              ),
             ),
           ),
         ),

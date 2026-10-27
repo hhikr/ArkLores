@@ -88,7 +88,7 @@ void main() {
     LibraryEntry(id: 'story:a', rawId: 'a', type: 'story', name: 'First'),
   ];
   test(
-      'collection order, cross-story deduplication and distinct layer transforms',
+      'collection order, cross-story deduplication, moved layers count once',
       () {
     final art = groupCollectionArt(
       stories,
@@ -105,10 +105,9 @@ void main() {
       ],
       (_, __) => false,
     );
-    expect(art.map((a) => a.storyId), ['b', 'b', 'b', 'a']);
+    expect(art.map((a) => a.storyId), ['b', 'b', 'a']);
     expect(art.last.shot.image, 'unique');
     expect(art[1].shot.layers.single.x, 0);
-    expect(art[2].shot.layers.single.x, 20);
   });
   test('missing pack and Endfield need no database', () async {
     final c = ProviderContainer(overrides: [

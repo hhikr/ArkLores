@@ -295,10 +295,16 @@ class CollectionPage extends ConsumerWidget {
                           onTap: () => openCollectionArt(context, preview, i),
                         ),
                       ),
-                      if (art.length > 6)
+                      if (art.length > 6) ...[
+                        const SizedBox(height: 8),
                         LibraryRow(
                           title: context.t.collectionArtAll,
                           subtitle: '${art.length}',
+                          trailing: Icon(
+                            Icons.chevron_right_sharp,
+                            color: theme.textMuted,
+                            size: 22,
+                          ),
                           onTap: () => pushLibraryPage(
                             context,
                             (_) => CollectionArtPage(
@@ -306,6 +312,8 @@ class CollectionPage extends ConsumerWidget {
                             ),
                           ),
                         ),
+                        rowDivider(theme),
+                      ],
                     ],
                     if (typeList.isNotEmpty) ...[
                       // Zones to medals: one heading for all of them.

@@ -217,8 +217,12 @@ class PortraitImage extends ConsumerStatefulWidget {
     this.fallbackSprite,
     this.semanticLabel,
     this.cropFigure = true,
+    this.transparent = false,
   });
   final bool cropFigure;
+
+  /// No card face behind the figure (full screen, on the viewer's own ground).
+  final bool transparent;
   final String sprite;
   final String? fallbackSprite, semanticLabel;
 
@@ -268,7 +272,7 @@ class _PortraitImageState extends ConsumerState<PortraitImage> {
     return Semantics(
       label: widget.semanticLabel,
       child: ColoredBox(
-        color: theme.cardSurface,
+        color: widget.transparent ? Colors.transparent : theme.cardSurface,
         child: result.when(
           loading: () => const SizedBox.expand(),
           error: (_, __) => placeholder(context.t.portraitNotInPack),
