@@ -9,14 +9,20 @@ import 'package:arklores/core/gamedata/gamedata_knowledge_store.dart';
 import 'package:arklores/core/gamedata/multi_game_retrieval.dart';
 import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
+import 'package:arklores/core/materials/material_provider.dart'
+    show snapshotMaterials;
+import 'package:arklores/core/materials/material_snapshot.dart';
+import 'package:arklores/core/materials/material_store.dart';
 import 'package:arklores/core/wiki/wiki_lookup.dart';
 import 'package:arklores/core/wiki/wiki_page.dart';
 import 'package:arklores/core/wiki/wiki_sources.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi;
 
 import '../support/sqlite.dart';
+import '../support/temp_dir.dart';
 import '../support/token_replay.dart';
 
 void main() {
@@ -40,13 +46,22 @@ void main() {
       ];
       final wikiEnabled = env['ARKLORES_REPLAY_WIKI'] == 'true';
       final merge = env['ARKLORES_REPLAY_MERGE_READS'] == 'true';
+      final materialsEnabled = env['ARKLORES_REPLAY_MATERIALS'] != 'false';
+      final materials = materialsEnabled ? await _loadBuiltinMaterials() : null;
+      if (materials != null) {
+        expect(materials.sources, hasLength(1));
+        expect(materials.sources.single.builtin, isTrue);
+        expect(materials.documents, isNotEmpty);
+        expect(materials.vectors, isNotEmpty);
+      }
       final originalScript = replayScript(messages, wiki: wikiEnabled);
       final script = merge ? mergeReplayReads(originalScript) : originalScript;
       final requests = <Map<String, Object?>>[];
       final planner = ReplayLLM(
         [
           Message.assistant(
-              jsonEncode(replayPlan(messages, wiki: wikiEnabled)),),
+            jsonEncode(replayPlan(messages, wiki: wikiEnabled)),
+          ),
         ],
         phase: 'planner',
         requests: requests,
@@ -92,6 +107,7 @@ void main() {
           planClient: planner,
           store: MultiGameRetrieval(stores),
           embeddingClient: embedding,
+          materials: materials,
           wiki: wiki,
         ).run(
           query: '${saved['question']}',
@@ -139,6 +155,18 @@ void main() {
           ifAbsent: () => t['result_chars'] as int? ?? 0,
         );
       }
+      final firstBatchSearchChars = tools
+          .where((t) => t['planned'] == true && t['tool'] == 'search')
+          .fold<int>(0, (sum, t) => sum + (t['result_chars'] as int? ?? 0));
+      final sourceExplanation =
+          materials?.sources.map((s) => s.policy).firstOrNull ?? '';
+      final sourceExplanationOccurrences = sourceExplanation.isEmpty
+          ? 0
+          : tools.fold<int>(
+              0,
+              (sum, t) =>
+                  sum + _occurrences('${t['result'] ?? ''}', sourceExplanation),
+            );
       final table =
           StringBuffer('| 请求 | 阶段 | 系统 | 工具说明 | 对话 | 消息数 | 工具与结果字数（* 已拦下） |\n'
               '| --- | --- | --- | --- | --- | --- | --- |\n');
@@ -152,14 +180,35 @@ void main() {
         'session': sessionPath,
         'wiki': wikiEnabled,
         'merge_reads': merge,
+        'materials': materials == null
+            ? {
+                'enabled': false,
+                'scope': '已关闭（ARKLORES_REPLAY_MATERIALS=false）',
+                'personal_imports': '未加载用户导入资料',
+              }
+            : {
+                'enabled': true,
+                'scope': '只有预置资料',
+                'personal_imports': '未加载用户导入资料；未调用 synchronizePersonal',
+                'source_ids': materials.sources.map((s) => s.id).toList(),
+                'document_count': materials.documents.length,
+                'vector_count': materials.vectors.length,
+                'vector_model': materials.vectors.firstOrNull?.model,
+                'vector_dimensions': materials.vectors.firstOrNull?.dims,
+              },
+        'first_batch_search_result_chars': firstBatchSearchChars,
+        'source_explanation': {
+          'occurrences_in_tool_results': sourceExplanationOccurrences,
+          'chars_each': replayChars(sourceExplanation),
+          'chars_total':
+              replayChars(sourceExplanation) * sourceExplanationOccurrences,
+        },
         'databases': {
           for (final g in stores.keys)
             g.name: env[g == Game.arknights
                 ? 'ARKLORES_GAMEDATA_DB'
                 : 'ARKLORES_ENDFIELD_DB'],
         },
-        'materials':
-            'unavailable: no user material snapshot in test environment',
         'embedding_mode': embedding == null
             ? 'keyword_only_no_key_or_cache'
             : 'cached_vectors',
@@ -209,12 +258,50 @@ void main() {
       );
       expect(failure, isNull);
       expect(model.next, script.length);
-    expect(requests.where((r) => r['phase'] == 'main'), hasLength(script.length));
+      expect(
+        requests.where((r) => r['phase'] == 'main'),
+        hasLength(script.length),
+      );
       expect(result, isNotNull);
     },
     skip: env['ARKLORES_RUN_TOKEN_REPLAY'] != 'true',
     timeout: const Timeout(Duration(minutes: 10)),
   );
+}
+
+Future<MaterialSnapshot> _loadBuiltinMaterials() async {
+  final tempDir =
+      await Directory.systemTemp.createTemp('token_replay_materials');
+  MaterialStore? store;
+  try {
+    store = await MaterialStore.open(
+      databaseFactoryFfi,
+      p.join(tempDir.path, 'materials.db'),
+    );
+    final bytes = await File('assets/materials/terra.json.gz').readAsBytes();
+    final package =
+        jsonDecode(utf8.decode(gzip.decode(bytes))) as Map<String, dynamic>;
+    await store.installPackage(package);
+    return await snapshotMaterials(store);
+  } finally {
+    try {
+      await store?.db.close();
+    } finally {
+      await deleteTempDir(tempDir);
+    }
+  }
+}
+
+int _occurrences(String text, String value) {
+  if (value.isEmpty) return 0;
+  var count = 0;
+  var start = 0;
+  while (true) {
+    final index = text.indexOf(value, start);
+    if (index < 0) return count;
+    count++;
+    start = index + value.length;
+  }
 }
 
 /// Cache misses use only the embedding endpoint; no chat client is constructed.
