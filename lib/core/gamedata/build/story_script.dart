@@ -124,18 +124,36 @@ List<String> storyLogicalLines(String raw) {
   return out;
 }
 
-/// Parses a whole script into its text lines, in order.
+/// What a story art event does. Stored in `story_art_events.kind`.
 enum StoryArtKind {
+  /// The background changes (`Background`, `largebg`, `verticalbg`,
+  /// `gridbg`); a null image takes it away.
   background('background'),
+
+  /// A picture covers the stage (`Image`), or another replaces it.
   cg('cg'),
+
+  /// The picture is taken away (`Image` without one).
   cgOff('cg_off'),
+
+  /// A close-up is laid over the scene (`cgitem`).
   item('item'),
+
+  /// A close-up is taken away (`hidecgitem`): the one named, or all of them
+  /// when the image is null.
   itemOff('item_off');
 
   const StoryArtKind(this.value);
+
+  /// The value stored in the database.
   final String value;
 }
 
+/// A change of what the scene shows, between two text lines: [atLine] is
+/// the number of lines the script had produced before it. [image] is lower
+/// case and trimmed; a composite background joins its pieces with `/` in
+/// the script's order, [layout] saying how they sit (`row`, `column`,
+/// `grid2`).
 class StoryArtEvent {
   const StoryArtEvent(this.atLine, this.kind, {this.image, this.layout});
   final int atLine;
@@ -144,9 +162,11 @@ class StoryArtEvent {
   final String? layout;
 }
 
+/// Parses a whole script into its text lines, in order.
 List<StoryScriptLine> parseStoryScript(String raw) =>
     parseStoryScriptWithArt(raw).lines;
 
+/// The text lines and, from the same pass, the art events between them.
 ({List<StoryScriptLine> lines, List<StoryArtEvent> art})
     parseStoryScriptWithArt(String raw) {
   final lines = <StoryScriptLine>[];
@@ -288,18 +308,28 @@ String? _artImage(String? value) {
   return result.isEmpty ? null : result;
 }
 
+/// What the scene shows, so that a command that changes nothing (the camera
+/// moving over the same background, the same picture again) is not an
+/// event.
 class _ArtState {
   _ArtState(this.events);
   final List<StoryArtEvent> events;
-  String? background, layout, cg, item;
-  bool hasBackground = false;
+  String? background, layout, cg;
+
+  /// Close-ups on screen: several can be up at once
+  /// (`cgitem_x_1`, `cgitem_x_2`…) and go one by one.
+  final items = <String>{};
 
   void cgImage(String? image, int atLine) {
     if (image == cg) return;
     cg = image;
-    events.add(StoryArtEvent(
-        atLine, image == null ? StoryArtKind.cgOff : StoryArtKind.cg,
-        image: image,),);
+    events.add(
+      StoryArtEvent(
+        atLine,
+        image == null ? StoryArtKind.cgOff : StoryArtKind.cg,
+        image: image,
+      ),
+    );
   }
 
   void command(String? command, Map<String, String> attrs, int atLine) {
@@ -308,7 +338,9 @@ class _ArtState {
         command == 'verticalbg' ||
         command == 'gridbg') {
       final composite = command != 'background';
-      final value = composite ? attrs['imagegroup'] : attrs['image'];
+      // A few composites of pictures name them `cggroup`.
+      final value =
+          composite ? attrs['imagegroup'] ?? attrs['cggroup'] : attrs['image'];
       final image = composite
           ? _artImage(value)?.split('/').map((part) => part.trim()).join('/')
           : _artImage(value);
@@ -320,22 +352,35 @@ class _ArtState {
               'gridbg' => 'grid2',
               _ => null,
             };
-      if (!hasBackground || image != background || nextLayout != layout) {
-        events.add(StoryArtEvent(atLine, StoryArtKind.background,
-            image: image, layout: nextLayout,),);
-        hasBackground = true;
+      // A file starts with no background: clearing it then is no event.
+      if (image != background || nextLayout != layout) {
+        events.add(
+          StoryArtEvent(
+            atLine,
+            StoryArtKind.background,
+            image: image,
+            layout: nextLayout,
+          ),
+        );
         background = image;
         layout = nextLayout;
       }
     } else if (command == 'cgitem') {
       final image = _artImage(attrs['image']);
-      if (image != null && image != item) {
-        item = image;
+      if (image != null && items.add(image)) {
         events.add(StoryArtEvent(atLine, StoryArtKind.item, image: image));
       }
-    } else if (command == 'hidecgitem' && item != null) {
-      item = null;
-      events.add(StoryArtEvent(atLine, StoryArtKind.itemOff));
+    } else if (command == 'hidecgitem') {
+      final image = _artImage(attrs['image']);
+      if (image == null) {
+        if (items.isEmpty) return;
+        items.clear();
+        events.add(StoryArtEvent(atLine, StoryArtKind.itemOff));
+      } else if (items.remove(image)) {
+        events.add(
+          StoryArtEvent(atLine, StoryArtKind.itemOff, image: image),
+        );
+      }
     }
   }
 }

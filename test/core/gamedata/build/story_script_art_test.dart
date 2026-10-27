@@ -19,4 +19,16 @@ void main() {
       [1, 'item', 'x', null], [1, 'item_off', null, null], [1, 'cg', 'last', null],
     ]);
   });
+
+  test('composites named cggroup; several close-ups at once; clearing at the start is no event', () {
+    const raw = '''[Background][largebg(cggroup="61_I12/61_i11", solidwidth="1600/1600")]
+[cgitem(image="i_1")][cgitem(image="i_2")][hidecgitem(image="I_1", fadetime=1)][hidecgitem(image="i_1")]
+[name="X"]One
+[cgitem(image="i_3")][HidecgItem(fadetime=1.5)][hidecgitem]''';
+    expect(parseStoryScriptWithArt(raw).art.map((e) => [e.atLine, e.kind.value, e.image, e.layout]).toList(), [
+      [0, 'background', '61_i12/61_i11', 'row'],
+      [0, 'item', 'i_1', null], [0, 'item', 'i_2', null], [0, 'item_off', 'i_1', null],
+      [1, 'item', 'i_3', null], [1, 'item_off', null, null],
+    ]);
+  });
 }
