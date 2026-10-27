@@ -37,7 +37,7 @@ import '../../shared/widgets/dock_scaffold.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
-import '../../shared/widgets/story_art_image.dart';
+import '../../shared/widgets/story_art_composite.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import '../library/portrait_preview.dart';
 import '../library/portrait_sheet.dart';
@@ -359,7 +359,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     // Open anchored on the cited block or the line to resume at.
     if (previous != null && anchor != null) {
       final row = _rows.indexWhere(
-          (r) => r.isLine && r.first <= previous && previous <= r.last,);
+        (r) => r.isLine && r.first <= previous && previous <= r.last,
+      );
       if (row >= 0) {
         _center = row + 1;
         _centerAt = anchor;
@@ -829,9 +830,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             SizedBox(
               width: 64,
               height: 36,
-              child: StoryArtImage(
-                imageId: shot.image,
-                kind: shot.kind,
+              child: StoryArtComposite(
+                shot,
                 fit: BoxFit.cover,
               ),
             ),
@@ -1270,7 +1270,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           // (a joined scene is drawn in the item of the scene before it)
           rows.add(
             _Row.art(
-              shot.kind == 'scene' ? _RowKind.scene : _RowKind.item,
+              _RowKind.scene,
               i,
               shot: index,
               inCg: cgUntil != null,
@@ -1468,9 +1468,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final total = (shot.total ?? 0).toString().padLeft(2, '0');
     return shot.kind == 'scene'
         ? '${context.t.storyArtScene} $number / $total'
-        : shot.kind == 'cg'
-            ? 'CG $number / $total'
-            : context.t.storyArtItem;
+        : 'CG $number / $total';
   }
 
   Widget _artPicture(
@@ -1481,14 +1479,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     BoxFit fit = BoxFit.cover,
     Alignment alignment = Alignment.center,
   }) {
-    final child = StoryArtImage(
-      imageId: shot.image,
-      kind: shot.kind,
+    final child = StoryArtComposite(
+      shot,
       fit: fit,
       alignment: alignment,
       placeholder: context.t.storyArtMissing,
     );
-    if (shot.missing) return child;
+    if (shot.missing && shot.layers.isEmpty) return child;
     return ClipPath(
       clipper: ShapeBorderClipper(shape: CutBorder.br(cut)),
       child: PressBuilder(
@@ -1500,7 +1497,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
             children: [
               child,
               if (pressed)
-                ColoredBox(color: pressTint(Colors.transparent, theme.textPrimary)),
+                ColoredBox(
+                  color: pressTint(Colors.transparent, theme.textPrimary),
+                ),
             ],
           ),
         ),
@@ -1576,66 +1575,23 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               '${context.t.storyArtScene} ${two(shot.number)}',
               key: ValueKey('story-art-scene-label-${shot.number}'),
             ),
-            if (!shot.missing) ...[
+            if (!shot.missing || shot.layers.isNotEmpty) ...[
               const SizedBox(height: 8),
-              SizedBox(
-                height: 56,
-                width: double.infinity,
-                child: _artPicture(theme, shot, row.shot!, cut: 8),
-              ),
+              if (shot.layers.isNotEmpty)
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: _artPicture(theme, shot, row.shot!, cut: 8),
+                )
+              else
+                SizedBox(
+                  height: 56,
+                  width: double.infinity,
+                  child: _artPicture(theme, shot, row.shot!, cut: 8),
+                ),
             ],
           ],
         ),
       );
-    }
-    if (row.kind == _RowKind.item) {
-      final picture = LayoutBuilder(
-        builder: (context, constraints) {
-          final maxWidth = constraints.maxWidth * .6;
-          final aspect =
-              info == null || info.height == 0 ? 1.0 : info.width / info.height;
-          final width = math.min(maxWidth, 200 * aspect);
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: SizedBox(
-              width: width,
-              height: width / aspect,
-              child: DecoratedBox(
-                position: DecorationPosition.foreground,
-                decoration: ShapeDecoration(
-                  shape: CutBorder.br(
-                    8,
-                    side: BorderSide(color: theme.cardBorder),
-                  ),
-                ),
-                child: _artPicture(
-                  theme,
-                  shot,
-                  row.shot!,
-                  cut: 8,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-          );
-        },
-      );
-      final side = row.inCg ? 12.0 : 10.0;
-      final child = Padding(
-        padding: EdgeInsets.fromLTRB(side, 16, side, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.t.storyArtItem,
-              style: theme.field(size: 12, color: theme.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            picture,
-          ],
-        ),
-      );
-      return row.inCg ? CgFrameSlice(child: child) : child;
     }
     final title = art.titles[shot.image];
     final seenGroup = shot.titleGroup != null &&
@@ -1666,9 +1622,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-              final aspect = info == null || info.width == 0
+              final aspect = shot.layers.isNotEmpty
                   ? 9 / 16
-                  : info.height / info.width;
+                  : info == null || info.width == 0
+                      ? 9 / 16
+                      : info.height / info.width;
               final tall = aspect > 1.3;
               return Column(
                 children: [
@@ -2147,7 +2105,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 /// the width between them.
 const double _scrubGutter = 16;
 
-enum _RowKind { line, block, scene, cgTop, cgChange, cgEnd, item }
+enum _RowKind { line, block, scene, cgTop, cgChange, cgEnd }
 
 class _Row {
   const _Row(this.first, this.last, {this.inCg = false})
@@ -2228,7 +2186,12 @@ class CgFrameSlice extends ConsumerWidget {
 /// fill ending on the edge leaves a faint seam; each slice but the last
 /// paints one pixel past its bottom, under the next slice's same face.
 class _CgFramePainter extends CustomPainter {
-  const _CgFramePainter(this.face, this.edge, {this.top = false, this.end = false});
+  const _CgFramePainter(
+    this.face,
+    this.edge, {
+    this.top = false,
+    this.end = false,
+  });
 
   final Color face, edge;
   final bool top, end;

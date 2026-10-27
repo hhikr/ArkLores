@@ -1862,9 +1862,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyArtScene => '场景';
 
   @override
-  String get storyArtItem => '特写';
-
-  @override
   String get storyArtTall => '竖长图，点开看全部';
 
   @override

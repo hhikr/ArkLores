@@ -10,7 +10,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
-import '../../shared/widgets/story_art_image.dart';
+import '../../shared/widgets/story_art_composite.dart';
 
 Future<void> openStoryArtViewer(BuildContext context,
     {required String storyId,
@@ -87,7 +87,7 @@ class _StoryArtViewerState extends ConsumerState<StoryArtViewer> {
         '${context.t.storyArtScene} ${shot.number.toString().padLeft(2, '0')} / ${shot.total.toString().padLeft(2, '0')}',
       'cg' =>
         'CG ${shot.number.toString().padLeft(2, '0')} / ${shot.total.toString().padLeft(2, '0')}',
-      _ => context.t.storyArtItem,
+      _ => '',
     };
     return AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
@@ -211,17 +211,15 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
     final metadata =
         ref.watch(_artMetadata((shot.image, shot.kind))).valueOrNull;
     final art = metadata?.$1;
-    final tall = art != null && art.height > art.width * 1.3;
+    final tall = shot.layers.isEmpty && art != null && art.height > art.width * 1.3;
     final label = switch (shot.kind) {
       'scene' =>
         context.t.storyArtSceneSemantic(shot.number ?? 0, shot.total ?? 0),
       'cg' => context.t.storyArtCgSemantic(
           shot.number ?? 0, shot.total ?? 0, metadata?.$2?.title ?? '',),
-      _ => context.t.storyArtItem,
+      _ => '',
     };
-    final picture = StoryArtImage(
-        imageId: shot.image,
-        kind: shot.kind,
+    final picture = StoryArtComposite(shot,
         placeholder: context.t.storyArtMissing,);
     return Semantics(
         label: label,
@@ -240,6 +238,9 @@ class _ArtPageState extends ConsumerState<_ArtPage> {
                                 art.height /
                                 art.width,
                             child: picture,),)
-                    : SizedBox.expand(child: picture),),),);
+                    : Center(child: AspectRatio(
+                        aspectRatio: shot.layers.isNotEmpty ? 16 / 9
+                            : (art == null ? 16 / 9 : art.width / art.height),
+                        child: picture,),),),),);
   }
 }

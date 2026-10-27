@@ -55,7 +55,7 @@ void main() {
           segment: 1,
           number: 1,
           total: 1,),
-      const StoryArtShot(kind: 'item', image: 'item', at: 3, segment: 1),
+      const StoryArtShot(kind: 'cg', image: 'cg', at: 3, segment: 1, until:10, number:1,total:1, layers:[StoryArtLayer(image:'item')]),
     ];
     final info = {
       ('scene', 'background'): const StoryArtInfo(4, 4, 'background', false),
@@ -85,7 +85,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('story-art-scene-1')), findsOneWidget);
     expect(find.text('1 / 30'), findsOneWidget);
-    expect(find.text('CG 01 / 01'), findsOneWidget);
+    expect(find.text('CG 01 / 01'), findsNWidgets(2));
     await tester.tap(find.byKey(const ValueKey('story-art-scene-1')));
     await tester.pumpAndSettle();
     expect(find.text('回到剧情这里'), findsOneWidget);

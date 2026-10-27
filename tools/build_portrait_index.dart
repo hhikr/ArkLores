@@ -1,5 +1,6 @@
 /// Backfills portraits and story art events in an existing database.
 library;
+
 import 'dart:io';
 
 import 'package:arklores/core/gamedata/build/portrait_index.dart';
@@ -32,6 +33,8 @@ Future<void> main(List<String> args) async {
     exitCode = 66;
     return;
   }
+  final backup = File('${file.path}.before_layers');
+  if (!backup.existsSync()) await file.copy(backup.path);
   final files = await root
       .list(recursive: true)
       .where(
@@ -48,6 +51,12 @@ Future<void> main(List<String> args) async {
   sqfliteFfiInit();
   final db = await databaseFactoryFfi.openDatabase(file.absolute.path);
   try {
+    final exists = await db
+        .rawQuery("SELECT 1 FROM sqlite_master WHERE name='story_art_events'");
+    if (exists.isNotEmpty) {
+      stdout.writeln(
+          'Item events before: ${(await db.rawQuery("SELECT COUNT(*) AS n FROM story_art_events WHERE kind='item'")).single['n']}',);
+    }
     var written = 0;
     final skipped = <String>[];
     await db.transaction((txn) async {
@@ -105,6 +114,8 @@ Future<void> main(List<String> args) async {
     });
     await rebuildPortraitIndex(db);
     await updateStoryArtManifest(db);
+    stdout.writeln(
+        'Item events after: ${(await db.rawQuery("SELECT COUNT(*) AS n FROM story_art_events WHERE kind='item'")).single['n']}',);
     stdout.writeln('Stories total: ${files.length}');
     stdout.writeln('Stories written: $written');
     stdout.writeln('Stories skipped: ${skipped.length}');

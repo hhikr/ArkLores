@@ -80,7 +80,7 @@ void main() {
   const shots = [
     StoryArtShot(kind: 'scene', image: 'scene', at: 3, number: 1, total: 1),
     StoryArtShot(kind: 'cg', image: 'cg', at: 7, number: 1, total: 1),
-    StoryArtShot(kind: 'item', image: 'item', at: 9),
+    StoryArtShot(kind: 'cg', image: 'cg', at: 9,number:1,total:1,layers:[StoryArtLayer(image:'item')]),
   ];
   Future<void> start(WidgetTester tester, List<StoryArtShot> items,
       {int initial = 0, void Function(int)? onJump,}) async {
@@ -184,7 +184,7 @@ void main() {
         'tall',
         StoryArtShot(kind: 'cg', image: 'ac6_9', at: 0, number: 1, total: 1)
       ),
-      ('item', StoryArtShot(kind: 'item', image: 'cgitem_41_i12_1', at: 0)),
+      ('item', StoryArtShot(kind: 'cg', image: '53_i04', at: 0,layers:[StoryArtLayer(image:'cgitem_41_i12_1')])),
     ]) {
       testWidgets('real screenshot ${entry.$1}', (tester) async {
         await pack.close();

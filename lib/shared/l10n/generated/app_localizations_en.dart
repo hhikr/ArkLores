@@ -1941,9 +1941,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyArtScene => 'Scene';
 
   @override
-  String get storyArtItem => 'Close-up';
-
-  @override
   String get storyArtTall => 'Tall image, tap to see all';
 
   @override

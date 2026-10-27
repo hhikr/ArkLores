@@ -247,7 +247,7 @@ class StoryArtTest(unittest.TestCase):
         from story_art import resize_art
         for category in ('background', 'item'):
             image = resize_art(Image.new('RGBA', (2560, 1000)), category)
-            self.assertEqual(image.size, (1280, 500))
+            self.assertEqual(image.size, (2560, 1000) if category == 'item' else (1280, 500))
             self.assertEqual(image.mode, 'RGBA')
             self.assertEqual(resize_art(Image.new('RGBA', (3, 3), 'white'), category).mode, 'RGB')
         self.assertEqual(resize_art(Image.new('RGB', (2000, 1000)), 'illustration').size, (1600, 800))
@@ -350,7 +350,7 @@ class StoryArtTest(unittest.TestCase):
             with patch('story_art.resize_art', side_effect=AssertionError('should reuse')):
                 add_art(incremental, first, signatures, kb, cache, source, encode)
             add_art(fresh, None, {}, kb, cache, source, encode)
-            legacy = {key: value.replace('\"spec\": 4', '\"spec\": 3') for key, value in signatures.items()}
+            legacy = {key: value.replace('\"spec\": 5', '\"spec\": 4') for key, value in signatures.items()}
             self.assertNotEqual(legacy, signatures)
             changed = output()
             self.addCleanup(changed.close)
@@ -400,6 +400,16 @@ class StoryArtTest(unittest.TestCase):
             result = titles(path)
             for key in ('a', 'b', 'a/b'):
                 self.assertEqual(result[key], ('early', 'desc', 'b/two'))
+
+class StoryArtLayersTest(unittest.TestCase):
+    def test_item_keeps_original_pixels_and_alpha(self):
+        from story_art import resize_art
+        image = Image.new('RGBA', (1851, 900), (0, 0, 0, 77))
+        result = resize_art(image, 'item')
+        self.assertEqual(result.size, image.size)
+        self.assertEqual(result.mode, 'RGBA')
+        self.assertEqual(result.getpixel((0, 0)), (0, 0, 0, 77))
+        self.assertEqual(resize_art(image, 'background').width, 1280)
 
 if __name__ == '__main__':
     unittest.main()

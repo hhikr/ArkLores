@@ -87,11 +87,12 @@ class StoryArtImage extends ConsumerStatefulWidget {
       required this.kind,
       this.fit = BoxFit.contain,
       this.alignment = Alignment.center,
-      this.placeholder,});
+      this.placeholder, this.transparent = false,});
   final String imageId, kind;
   final BoxFit fit;
   final Alignment alignment;
   final String? placeholder;
+  final bool transparent;
 
   @override
   ConsumerState<StoryArtImage> createState() => _StoryArtImageState();
@@ -119,7 +120,7 @@ class _StoryArtImageState extends ConsumerState<StoryArtImage> {
           shown = key;
         }
         return ColoredBox(
-            color: theme.cardSurface,
+            color: widget.transparent ? Colors.transparent : theme.cardSurface,
             child: result.when(
               loading: () => const SizedBox.expand(),
               error: (_, __) => _placeholder(),
@@ -133,7 +134,7 @@ class _StoryArtImageState extends ConsumerState<StoryArtImage> {
             ),);
       },);
 
-  Widget _placeholder() => Hatch(
+  Widget _placeholder() => widget.transparent ? const SizedBox.expand() : Hatch(
       child: SizedBox.expand(
           child: widget.placeholder == null
               ? null

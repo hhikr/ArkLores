@@ -3368,12 +3368,6 @@ abstract class AppLocalizations {
   /// **'Scene'**
   String get storyArtScene;
 
-  /// No description provided for @storyArtItem.
-  ///
-  /// In en, this message translates to:
-  /// **'Close-up'**
-  String get storyArtItem;
-
   /// No description provided for @storyArtTall.
   ///
   /// In en, this message translates to:

@@ -155,11 +155,23 @@ enum StoryArtKind {
 /// the script's order, [layout] saying how they sit (`row`, `column`,
 /// `grid2`).
 class StoryArtEvent {
-  const StoryArtEvent(this.atLine, this.kind, {this.image, this.layout});
+  const StoryArtEvent(
+    this.atLine,
+    this.kind, {
+    this.image,
+    this.layout,
+    this.x,
+    this.y,
+    this.scale,
+    this.alpha,
+    this.layer,
+  });
   final int atLine;
   final StoryArtKind kind;
   final String? image;
   final String? layout;
+  final double? x, y, scale, alpha;
+  final int? layer;
 }
 
 /// Parses a whole script into its text lines, in order.
@@ -177,6 +189,7 @@ List<StoryScriptLine> parseStoryScript(String raw) =>
     if (!line.startsWith('[')) {
       final content = cleanStoryText(line);
       if (content.isNotEmpty) {
+        artState.flush(lines.length);
         lines.add(StoryScriptLine(null, content, StoryLineKind.narration));
       }
       continue;
@@ -184,6 +197,7 @@ List<StoryScriptLine> parseStoryScript(String raw) =>
     final parsed = _parseCommandLine(line);
     portraits.update(line, artState, lines.length);
     if (parsed != null) {
+      artState.flush(lines.length);
       lines.add(
         StoryScriptLine(
           parsed.speaker,
@@ -318,7 +332,38 @@ class _ArtState {
 
   /// Close-ups on screen: several can be up at once
   /// (`cgitem_x_1`, `cgitem_x_2`…) and go one by one.
-  final items = <String>{};
+  final items =
+      <String, ({double x, double y, double scale, double alpha, int layer})>{};
+  final visible =
+      <String, ({double x, double y, double scale, double alpha, int layer})>{};
+
+  void flush(int atLine) {
+    final next = Map.of(items)..removeWhere((_, value) => value.alpha <= .01);
+    for (final image in visible.keys) {
+      if (!next.containsKey(image)) {
+        events.add(StoryArtEvent(atLine, StoryArtKind.itemOff, image: image));
+      }
+    }
+    for (final entry in next.entries) {
+      if (visible[entry.key] == entry.value) continue;
+      final v = entry.value;
+      events.add(
+        StoryArtEvent(
+          atLine,
+          StoryArtKind.item,
+          image: entry.key,
+          x: v.x,
+          y: v.y,
+          scale: v.scale,
+          alpha: v.alpha,
+          layer: v.layer,
+        ),
+      );
+    }
+    visible
+      ..clear()
+      ..addAll(next);
+  }
 
   void cgImage(String? image, int atLine) {
     if (image == cg) return;
@@ -367,19 +412,30 @@ class _ArtState {
       }
     } else if (command == 'cgitem') {
       final image = _artImage(attrs['image']);
-      if (image != null && items.add(image)) {
-        events.add(StoryArtEvent(atLine, StoryArtKind.item, image: image));
+      if (image != null) {
+        final old =
+            items[image] ?? (x: 0.0, y: 0.0, scale: 1.0, alpha: 1.0, layer: 0);
+        final position = (attrs['pto'] ?? attrs['pfrom'])?.split(',');
+        double number(String to, String from, double fallback) =>
+            double.tryParse(attrs[to] ?? attrs[from] ?? '') ?? fallback;
+        items[image] = (
+          x: position == null
+              ? old.x
+              : double.tryParse(position.first.trim()) ?? old.x,
+          y: position == null || position.length < 2
+              ? old.y
+              : double.tryParse(position[1].trim()) ?? old.y,
+          scale: number('sto', 'sfrom', old.scale),
+          alpha: number('ato', 'afrom', old.alpha),
+          layer: int.tryParse(attrs['layer'] ?? '') ?? old.layer,
+        );
       }
     } else if (command == 'hidecgitem') {
       final image = _artImage(attrs['image']);
       if (image == null) {
-        if (items.isEmpty) return;
         items.clear();
-        events.add(StoryArtEvent(atLine, StoryArtKind.itemOff));
-      } else if (items.remove(image)) {
-        events.add(
-          StoryArtEvent(atLine, StoryArtKind.itemOff, image: image),
-        );
+      } else {
+        items.remove(image);
       }
     }
   }

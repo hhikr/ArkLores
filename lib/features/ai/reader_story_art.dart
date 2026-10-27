@@ -67,7 +67,7 @@ final readerStoryArtProvider = FutureProvider.autoDispose
   }
 
   final shots = <StoryArtShot>[];
-  var segmentOffset = 0;
+  var segmentOffset = 0, sceneOffset = 0;
   for (final group in groups) {
     final mapped = <StoryArtEvent>[];
     for (final e in eventsById[group.id]!) {
@@ -81,35 +81,46 @@ final readerStoryArtProvider = FutureProvider.autoDispose
           kind: e.kind,
           image: e.image,
           layout: e.layout,
+          x: e.x,
+          y: e.y,
+          scale: e.scale,
+          alpha: e.alpha,
+          layer: e.layer,
         ),
       );
     }
+    final arranged = arrangeStoryArt(
+      mapped,
+      (image, kind) => info[(image, kind)]?.solid,
+      titleGroup: (image) => titles[image]?.groupKey,
+    );
     shots.addAll(
-      arrangeStoryArt(
-        mapped,
-        (image, kind) => info[(image, kind)]?.solid,
-        titleGroup: (image) => titles[image]?.groupKey,
-      ).map(
+      arranged.map(
         (s) => s.copyWith(
+          number: s.kind == 'scene' ? s.number! + sceneOffset : null,
           segment: s.segment == null ? null : s.segment! + segmentOffset,
           until: s.kind == 'cg' ? s.until ?? group.end : null,
         ),
       ),
     );
+    sceneOffset += arranged
+        .where((s) => s.kind == 'scene')
+        .map((s) => s.number!)
+        .fold(0, (a, b) => a > b ? a : b);
     segmentOffset += mapped.where((event) => event.kind == 'cg').length;
   }
   if (shots.isEmpty) return null;
-  final sceneCount = shots.where((s) => s.kind == 'scene').length;
+  final sceneCount = sceneOffset;
   final cgNumbers = <String, int>{};
   for (final s in shots.where((s) => s.kind == 'cg')) {
     cgNumbers.putIfAbsent(s.image, () => cgNumbers.length + 1);
   }
-  var scene = 0;
+
   return ReaderStoryArt(
     [
       for (final s in shots)
         s.copyWith(
-          number: s.kind == 'scene' ? ++scene : cgNumbers[s.image],
+          number: s.kind == 'scene' ? s.number : cgNumbers[s.image],
           total: s.kind == 'scene'
               ? sceneCount
               : s.kind == 'cg'
