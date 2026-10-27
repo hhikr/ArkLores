@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/gamedata/build/story_naming.dart' show openingStoryKind;
 import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
+import '../../core/library/collection_story_art.dart';
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
@@ -16,6 +17,7 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/page_frame.dart';
+import 'collection_art_page.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -82,6 +84,11 @@ class CollectionPage extends ConsumerWidget {
     final collection = ref.watch(collectionProvider(collectionId));
     final stories = ref.watch(collectionStoriesProvider(collectionId));
     final types = ref.watch(collectionTypesProvider(collectionId));
+    final art =
+        ref.watch(collectionStoryArtProvider(collectionId)).valueOrNull ?? [];
+    final cgs = art.where((a) => a.shot.kind == 'cg').toList();
+    final scenes = art.where((a) => a.shot.kind == 'scene').toList();
+    final preview = cgs.isNotEmpty ? cgs : scenes;
     final nickname = ref.watch(nicknameProvider);
     // Special rules are named by what the game calls each kind.
     final ruleKinds = [
@@ -259,6 +266,46 @@ class CollectionPage extends ConsumerWidget {
                           ),
                           rowDivider(theme),
                         ],
+                    ],
+                    if (art.isNotEmpty) ...[
+                      IndustrialSectionHeader(
+                        theme: theme,
+                        title: context.t.collectionArtTitle,
+                        code: 'art',
+                      ),
+                      FactsRow([
+                        'CG ${cgs.length}',
+                        '${context.t.storyArtScene} ${scenes.length}',
+                      ]),
+                      const SizedBox(height: 8),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          childAspectRatio: 16 / 9,
+                          mainAxisSpacing: 6,
+                          crossAxisSpacing: 6,
+                        ),
+                        itemCount: preview.length.clamp(0, 6),
+                        itemBuilder: (context, i) => ArtThumbnail(
+                          art: preview[i],
+                          onTap: () => openCollectionArt(context, preview, i),
+                        ),
+                      ),
+                      if (art.length > 6)
+                        LibraryRow(
+                          title: context.t.collectionArtAll,
+                          subtitle: '${art.length}',
+                          onTap: () => pushLibraryPage(
+                            context,
+                            (_) => CollectionArtPage(
+                              collectionId: collectionId,
+                            ),
+                          ),
+                        ),
                     ],
                     if (typeList.isNotEmpty) ...[
                       // Zones to medals: one heading for all of them.

@@ -53,11 +53,12 @@ Future<ui.Image> composePortrait(PortraitLayers layers) async {
 /// with the figure standing in the middle third: fitted whole into a tall box
 /// they leave a band of nothing over the head.
 Future<Rect> figureBounds(ui.Image image) async {
-  final full = Offset.zero &
-      Size(image.width.toDouble(), image.height.toDouble());
+  final full =
+      Offset.zero & Size(image.width.toDouble(), image.height.toDouble());
   final bytes = await image.toByteData();
   if (bytes == null) return full;
-  final data = bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
+  final data =
+      bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes);
   final w = image.width, h = image.height;
   var left = w, right = -1, top = h, bottom = -1;
   for (var y = 0; y < h; y++) {
@@ -73,8 +74,12 @@ Future<Rect> figureBounds(ui.Image image) async {
     }
   }
   if (right < left) return full;
-  return Rect.fromLTRB(left.toDouble(), top.toDouble(), right + 1.0,
-      bottom + 1.0,);
+  return Rect.fromLTRB(
+    left.toDouble(),
+    top.toDouble(),
+    right + 1.0,
+    bottom + 1.0,
+  );
 }
 
 class PortraitImageCache {
@@ -211,7 +216,9 @@ class PortraitImage extends ConsumerStatefulWidget {
     required this.sprite,
     this.fallbackSprite,
     this.semanticLabel,
+    this.cropFigure = true,
   });
+  final bool cropFigure;
   final String sprite;
   final String? fallbackSprite, semanticLabel;
 
@@ -271,7 +278,7 @@ class _PortraitImageState extends ConsumerState<PortraitImage> {
             _State.blank => placeholder(context.t.portraitBlank, hatch: false),
             _State.image => PortraitFigure(
                 image: r.image!,
-                bounds: r.bounds ??
+                bounds: (widget.cropFigure ? r.bounds : null) ??
                     Offset.zero &
                         Size(
                           r.image!.width.toDouble(),

@@ -800,5 +800,9 @@
   "storyArtSceneSemantic": "Scene {number} of {total}",
   "@storyArtSceneSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}}},
   "storyArtCgSemantic": "CG {number} of {total}, {title}",
-  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}}
+  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}},
+  "portraitFullscreen": "View portrait fullscreen",
+  "portraitTitle": "Portrait",
+  "collectionArtTitle": "Story art",
+  "collectionArtAll": "All story art"
 }

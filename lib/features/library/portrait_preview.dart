@@ -12,6 +12,7 @@ import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/portrait_image.dart';
 import 'portrait_sheet.dart';
+import 'story_art_viewer.dart';
 
 VoidCallback? _dismissPreview;
 
@@ -262,9 +263,33 @@ class _PreviewOverlay extends ConsumerWidget {
                                     ),
                                   )
                                   .valueOrNull;
-                              return PortraitImage(
-                                sprite: shown,
-                                fallbackSprite: group?.topSprite,
+                              final variants = ref
+                                      .watch(
+                                        portraitSpritesProvider(
+                                          SpriteName.parse(shown)!.group,
+                                        ),
+                                      )
+                                      .valueOrNull ??
+                                  [shown];
+                              final pages = variants.contains(shown)
+                                  ? variants
+                                  : [shown, ...variants];
+                              return PortraitFullscreenTap(
+                                onTap: () => openArtViewer(
+                                  context,
+                                  pages: [
+                                    for (final item in pages)
+                                      ArtViewerPage.portrait(
+                                        sprite: item,
+                                        speaker: speaker,
+                                      ),
+                                  ],
+                                  initial: pages.indexOf(shown),
+                                ),
+                                child: PortraitImage(
+                                  sprite: shown,
+                                  fallbackSprite: group?.topSprite,
+                                ),
                               );
                             },
                           ),
@@ -300,7 +325,8 @@ class _PreviewOverlay extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(context.t.storyArtCredit,
+                        Text(
+                          context.t.storyArtCredit,
                           style: theme.text(12, color: theme.textMuted),
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,

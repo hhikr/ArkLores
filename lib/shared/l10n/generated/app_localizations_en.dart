@@ -1958,4 +1958,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String storyArtCgSemantic(int number, int total, String title) {
     return 'CG $number of $total, $title';
   }
+
+  @override
+  String get portraitFullscreen => 'View portrait fullscreen';
+
+  @override
+  String get portraitTitle => 'Portrait';
+
+  @override
+  String get collectionArtTitle => 'Story art';
+
+  @override
+  String get collectionArtAll => 'All story art';
 }

@@ -18,6 +18,7 @@ import 'package:arklores/features/library/portrait_speaker_name.dart';
 import 'package:arklores/features/library/portrait_speakers_page.dart';
 import 'package:arklores/features/library/portrait_stories_page.dart';
 import 'package:arklores/features/library/speaker_portraits_page.dart';
+import 'package:arklores/features/library/story_art_viewer.dart';
 import 'package:arklores/main.dart' show buildAppTheme;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
@@ -311,6 +312,33 @@ void main() {
     await settlePortraits(tester);
   }
 
+  testWidgets('fullscreen portrait pages update the sheet selection', (tester) async {
+    await pump(tester, const Scaffold(body: PortraitSheet(speaker: _speaker,
+      origin: PortraitOrigin.materials,),),);
+    await tester.tap(find.bySemanticsLabel('全屏查看立绘'));
+    await tester.pumpAndSettle();
+    expect(find.text('立绘 01 / 02'), findsOneWidget);
+    await tester.drag(find.byType(PageView), const Offset(-320, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('立绘 02 / 02'), findsOneWidget);
+    expect(find.text('回到剧情这里'), findsNothing);
+    final image = tester.widget<PortraitImage>(find.descendant(of: find.byType(StoryArtViewer), matching: find.byType(PortraitImage)).last);
+    expect(image.cropFigure, false);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<PortraitImage>(find.byType(PortraitImage).first).sprite, 'char_fixture#2\$2');
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets('fullscreen portrait screenshot dark=$dark', (tester) async {
+      await pump(tester, Scaffold(body: PortraitSheet(speaker: null, sprite: _sprite, fromLine: true, origin: PortraitOrigin.materials)), dark: dark);
+      await tester.tap(find.bySemanticsLabel('全屏查看立绘'));
+      await settlePortraits(tester);
+      await tester.pumpAndSettle();
+      await shoot(tester, dark ? 'portrait_viewer_dark' : 'portrait_viewer_light');
+    });
+  }
+
   Widget launcher({
     bool fromLine = false,
     String? sprite = 'default',
@@ -395,6 +423,18 @@ void main() {
     expect(reader.highlightStart, 2);
     expect(reader.highlightEnd, 2);
     expect(reader.portraitOrigin, PortraitOrigin.ask);
+  });
+
+  testWidgets('preview picture opens full set at the displayed sprite', (tester) async {
+    await pump(tester, const StoryReaderPage(storyId: 'fixture.txt'));
+    await tester.tap(find.byType(PortraitSpeakerName).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('全屏查看立绘'));
+    await tester.pumpAndSettle();
+    final viewer = tester.widget<StoryArtViewer>(find.byType(StoryArtViewer));
+    expect(viewer.pages.length, 2);
+    expect(viewer.pages[viewer.initial].sprite, _sprite);
+    expect(find.byType(PortraitSheet), findsNothing);
   });
 
   testWidgets('preview closes outside, on back and on scroll', (tester) async {

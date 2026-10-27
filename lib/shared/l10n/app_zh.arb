@@ -799,5 +799,9 @@
   "storyArtSceneSemantic": "场景 {number}，共 {total}",
   "@storyArtSceneSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}}},
   "storyArtCgSemantic": "CG {number}，共 {total}，{title}",
-  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}}
+  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}},
+  "portraitFullscreen": "全屏查看立绘",
+  "portraitTitle": "立绘",
+  "collectionArtTitle": "剧情美术",
+  "collectionArtAll": "全部剧情美术"
 }

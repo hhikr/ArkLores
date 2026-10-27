@@ -28,12 +28,17 @@ class _MemoryPack extends StoryArtPack {
       images[(id, kind)];
   @override
   Future<Map<(String, String), StoryArtInfo>> artInfo(
-          Iterable<(String, String)> keys,) async =>
+    Iterable<(String, String)> keys,
+  ) async =>
       {
         for (final key in keys)
           if (images[key] case final image?)
             key: StoryArtInfo(
-                image.width, image.height, image.category, image.solid,),
+              image.width,
+              image.height,
+              image.category,
+              image.solid,
+            ),
       };
   @override
   Future<StoryArtTitle?> artTitle(String id) async => titles[id];
@@ -42,7 +47,9 @@ class _MemoryPack extends StoryArtPack {
 }
 
 Future<StoryArtPack> memoryPack(
-    String path, List<(String, String)> keys,) async {
+  String path,
+  List<(String, String)> keys,
+) async {
   final source = StoryArtPack(path);
   final images = <(String, String), StoryArtImage?>{};
   final titles = <String, StoryArtTitle?>{};
@@ -71,8 +78,10 @@ void main() {
   });
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('art-viewer');
-    pack = await memoryPack((await createStoryArtPack(dir)).path,
-        [('scene', 'scene'), ('cg', 'cg'), ('item', 'item')],);
+    pack = await memoryPack(
+      (await createStoryArtPack(dir)).path,
+      [('scene', 'scene'), ('cg', 'cg'), ('item', 'item')],
+    );
   });
   tearDown(() async {
     await deleteTempDir(dir);
@@ -80,42 +89,70 @@ void main() {
   const shots = [
     StoryArtShot(kind: 'scene', image: 'scene', at: 3, number: 1, total: 1),
     StoryArtShot(kind: 'cg', image: 'cg', at: 7, number: 1, total: 1),
-    StoryArtShot(kind: 'cg', image: 'cg', at: 9,number:1,total:1,layers:[StoryArtLayer(image:'item')]),
+    StoryArtShot(
+        kind: 'cg',
+        image: 'cg',
+        at: 9,
+        number: 1,
+        total: 1,
+        layers: [StoryArtLayer(image: 'item')],),
   ];
-  Future<void> start(WidgetTester tester, List<StoryArtShot> items,
-      {int initial = 0, void Function(int)? onJump,}) async {
+  Future<void> start(
+    WidgetTester tester,
+    List<StoryArtShot> items, {
+    int initial = 0,
+    void Function(int)? onJump,
+  }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(ProviderScope(
+    await tester.pumpWidget(
+      ProviderScope(
         overrides: [
           initialThemeProvider.overrideWithValue(AppTheme.endfield),
           storyArtPackProvider.overrideWith((ref) async => pack),
         ],
         child: Shot(
-            child: MaterialApp(
-                debugShowCheckedModeBanner: false,
-                theme: buildAppTheme(EndfieldThemeTokens()).copyWith(
-                    textTheme: buildAppTheme(EndfieldThemeTokens())
-                        .textTheme
-                        .apply(fontFamily: 'Saira'),),
-                locale: const Locale('zh'),
-                localizationsDelegates: AppLocalizations.localizationsDelegates,
-                supportedLocales: AppLocalizations.supportedLocales,
-                home: Builder(
-                    builder: (context) => Scaffold(
-                        body: Center(
-                            child: AppButton('open',
-                                onPressed: () => openStoryArtViewer(context,
-                                    storyId: 's',
-                                    shots: items,
-                                    initial: initial,
-                                    onJump: onJump ?? (_) {},),),),),),),),),);
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: buildAppTheme(EndfieldThemeTokens()).copyWith(
+              textTheme: buildAppTheme(EndfieldThemeTokens())
+                  .textTheme
+                  .apply(fontFamily: 'Saira'),
+            ),
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: AppButton(
+                    'open',
+                    onPressed: () => openArtViewer(
+                      context,
+                      pages: [
+                        for (final shot in items)
+                          ArtViewerPage.story(
+                              storyId: 's',
+                              shot: shot,
+                              onJump: onJump ?? (_) {},),
+                      ],
+                      initial: initial,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 300)),);
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -123,26 +160,29 @@ void main() {
     int? jumped;
     await start(tester, shots, onJump: (n) => jumped = n);
     expect(find.text('场景 01 / 01'), findsOneWidget);
-    final scaffold = tester.widget<Scaffold>(find
-        .descendant(
-            of: find.byType(StoryArtViewer), matching: find.byType(Scaffold),)
-        .first,);
+    final scaffold = tester.widget<Scaffold>(
+      find
+          .descendant(
+            of: find.byType(StoryArtViewer),
+            matching: find.byType(Scaffold),
+          )
+          .first,
+    );
     expect(scaffold.backgroundColor, const Color(0xff191919));
     await tester.tapAt(const Offset(195, 400));
     await tester.pumpAndSettle();
     expect(
-        tester
-            .widget<AnimatedSlide>(find.byType(AnimatedSlide).first)
-            .offset
-            .dy,
-        -1,);
+      tester.widget<AnimatedSlide>(find.byType(AnimatedSlide).first).offset.dy,
+      -1,
+    );
     await tester.tapAt(const Offset(195, 400));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(PageView), const Offset(-300, 0));
     await tester.pumpAndSettle();
     expect(find.text('CG 01 / 01'), findsOneWidget);
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 300)),);
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('回到剧情这里'));
     await tester.pumpAndSettle();
@@ -156,8 +196,10 @@ void main() {
         tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first);
     viewer.transformationController!.value = Matrix4.diagonal3Values(2, 2, 1);
     await tester.pump();
-    expect(tester.widget<PageView>(find.byType(PageView)).physics,
-        isA<NeverScrollableScrollPhysics>(),);
+    expect(
+      tester.widget<PageView>(find.byType(PageView)).physics,
+      isA<NeverScrollableScrollPhysics>(),
+    );
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.byType(StoryArtViewer), findsNothing);
@@ -169,27 +211,41 @@ void main() {
       (
         'scene',
         StoryArtShot(
-            kind: 'scene',
-            image: '21_g1_interrogat_room',
-            at: 0,
-            number: 1,
-            total: 1,)
+          kind: 'scene',
+          image: '21_g1_interrogat_room',
+          at: 0,
+          number: 1,
+          total: 1,
+        )
       ),
       (
         'cg',
         StoryArtShot(
-            kind: 'cg', image: '071_mini01', at: 0, number: 1, total: 1,)
+          kind: 'cg',
+          image: '071_mini01',
+          at: 0,
+          number: 1,
+          total: 1,
+        )
       ),
       (
         'tall',
         StoryArtShot(kind: 'cg', image: 'ac6_9', at: 0, number: 1, total: 1)
       ),
-      ('item', StoryArtShot(kind: 'cg', image: '53_i04', at: 0,layers:[StoryArtLayer(image:'cgitem_41_i12_1')])),
+      (
+        'item',
+        StoryArtShot(
+            kind: 'cg',
+            image: '53_i04',
+            at: 0,
+            layers: [StoryArtLayer(image: 'cgitem_41_i12_1')],)
+      ),
     ]) {
       testWidgets('real screenshot ${entry.$1}', (tester) async {
         await pack.close();
         pack = await tester.runAsync(
-                () => memoryPack(real, [(entry.$2.image, entry.$2.kind)]),) ??
+              () => memoryPack(real, [(entry.$2.image, entry.$2.kind)]),
+            ) ??
             (throw StateError('missing pack'));
         await start(tester, [entry.$2]);
         await tester

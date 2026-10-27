@@ -1450,16 +1450,21 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   void _openArt(int index) {
     final shots = _art?.shots;
     if (shots == null) return;
-    openStoryArtViewer(
+    openArtViewer(
       context,
-      storyId: widget.storyId,
-      shots: shots,
+      pages: [
+        for (final shot in shots)
+          ArtViewerPage.story(
+            storyId: widget.storyId,
+            shot: shot,
+            onJump: (at) {
+              if (!mounted || _lines.isEmpty) return;
+              _scrubRow = null;
+              _showLine(at.clamp(0, _lines.length - 1));
+            },
+          ),
+      ],
       initial: index,
-      onJump: (at) {
-        if (!mounted || _lines.isEmpty) return;
-        _scrubRow = null;
-        _showLine(at.clamp(0, _lines.length - 1));
-      },
     );
   }
 

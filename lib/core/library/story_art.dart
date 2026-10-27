@@ -35,17 +35,19 @@ Future<List<StoryArtEvent>> readStoryArtEvents(
   );
   if (tables.isEmpty) return [];
   final result = <StoryArtEvent>[];
-  for (final id in storyIds.toSet()) {
+  final ids = storyIds.toSet().toList();
+  for (var start = 0; start < ids.length; start += 500) {
+    final batch = ids.skip(start).take(500).toList();
     final rows = await db.query(
       'story_art_events',
-      where: 'story_id = ?',
-      whereArgs: [id],
-      orderBy: 'seq',
+      where: 'story_id IN (${List.filled(batch.length, '?').join(',')})',
+      whereArgs: batch,
+      orderBy: 'story_id, seq',
     );
     result.addAll(
       rows.map(
         (row) => StoryArtEvent(
-          storyId: id,
+          storyId: row['story_id'] as String,
           seq: row['seq'] as int,
           at: row['at_line'] as int,
           kind: row['kind'] as String,

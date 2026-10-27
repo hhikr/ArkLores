@@ -3397,6 +3397,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'CG {number} of {total}, {title}'**
   String storyArtCgSemantic(int number, int total, String title);
+
+  /// No description provided for @portraitFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'View portrait fullscreen'**
+  String get portraitFullscreen;
+
+  /// No description provided for @portraitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portrait'**
+  String get portraitTitle;
+
+  /// No description provided for @collectionArtTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Story art'**
+  String get collectionArtTitle;
+
+  /// No description provided for @collectionArtAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All story art'**
+  String get collectionArtAll;
 }
 
 class _AppLocalizationsDelegate

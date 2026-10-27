@@ -18,6 +18,7 @@ import 'entry_page.dart';
 import 'portrait_speakers_page.dart';
 import 'portrait_stories_page.dart';
 import 'speaker_portraits_page.dart';
+import 'story_art_viewer.dart';
 
 enum PortraitOrigin { materials, ask }
 
@@ -162,9 +163,29 @@ class _PortraitSheetState extends ConsumerState<PortraitSheet> {
               color: theme.cardSurface,
               child: SizedBox(
                 height: math.min(MediaQuery.sizeOf(context).height * 0.46, 420),
-                child: PortraitImage(
-                  sprite: shown,
-                  fallbackSprite: data?.topSprite,
+                child: PortraitFullscreenTap(
+                  onTap: () {
+                    final items = variants.contains(shown)
+                        ? variants
+                        : [shown, ...variants];
+                    openArtViewer(
+                      context,
+                      pages: [
+                        for (final item in items)
+                          ArtViewerPage.portrait(
+                            sprite: item,
+                            speaker: speaker,
+                          ),
+                      ],
+                      initial: items.indexOf(shown),
+                      onPageChanged: (index) =>
+                          setState(() => selected = items[index]),
+                    );
+                  },
+                  child: PortraitImage(
+                    sprite: shown,
+                    fallbackSprite: data?.topSprite,
+                  ),
                 ),
               ),
             ),

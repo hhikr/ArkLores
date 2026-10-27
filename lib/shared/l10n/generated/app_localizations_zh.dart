@@ -1879,4 +1879,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String storyArtCgSemantic(int number, int total, String title) {
     return 'CG $number，共 $total，$title';
   }
+
+  @override
+  String get portraitFullscreen => '全屏查看立绘';
+
+  @override
+  String get portraitTitle => '立绘';
+
+  @override
+  String get collectionArtTitle => '剧情美术';
+
+  @override
+  String get collectionArtAll => '全部剧情美术';
 }
