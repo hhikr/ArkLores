@@ -1,8 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
-import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/gamedata/game.dart';
@@ -20,21 +20,32 @@ import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart' show LibraryEntry;
 import '../../core/library/placeholders.dart';
+import '../../core/library/portrait_provider.dart';
+import '../../core/library/story_art.dart';
 import '../../core/userdata/library_ref.dart';
 import '../../core/userdata/user_data_provider.dart';
 import '../../core/userdata/user_data_store.dart'
     show UserDataStore, readingEndDwell, readingEndLines, reanchorLine;
 import '../../shared/l10n/l10n.dart';
+import '../../shared/providers/bars_provider.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/theme/cut_border.dart';
 import '../../shared/theme/motion.dart';
+import '../../shared/widgets/dock_scaffold.dart';
 import '../../shared/widgets/ef_widgets.dart';
-import '../../shared/widgets/page_frame.dart';
+import '../../shared/widgets/press_feedback.dart';
 import '../../shared/widgets/smooth_page_route.dart';
+import '../../shared/widgets/story_art_composite.dart';
 import '../../shared/widgets/theme_aware_card.dart';
+import '../library/portrait_preview.dart';
+import '../library/portrait_sheet.dart';
+import '../library/portrait_speaker_name.dart';
 import '../library/reading_text.dart'
     show FoldSection, ReadingText, readingStyle;
+import '../library/story_art_viewer.dart';
+import 'reader_story_art.dart';
 import 'story_find_sheet.dart';
 import 'story_labels_provider.dart';
 
@@ -64,6 +75,7 @@ class StoryReaderPage extends ConsumerWidget {
     this.highlightEnd,
     this.resumeLine,
     this.snippet,
+    this.portraitOrigin = PortraitOrigin.materials,
   });
 
   final String storyId;
@@ -75,6 +87,7 @@ class StoryReaderPage extends ConsumerWidget {
 
   /// The text of the anchor line, to find it again in a changed story.
   final String? snippet;
+  final PortraitOrigin portraitOrigin;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,7 +95,7 @@ class StoryReaderPage extends ConsumerWidget {
     final r = reading.valueOrNull;
     if (r == null) {
       final theme = ref.watch(themeProvider);
-      return PageScaffold(
+      return DockScaffold(
         title: '',
         backgroundColor: theme.bgPrimary,
         body: reading.isLoading
@@ -101,12 +114,14 @@ class StoryReaderPage extends ConsumerWidget {
       key: ValueKey('story-reader-${r.hostId}'),
       storyId: r.hostId,
       text: r.lines,
+      portraitSources: r.portraitSources,
       shift: r.offset,
       highlightStart:
           highlightStart == null ? null : highlightStart! + r.offset,
       highlightEnd: highlightEnd == null ? null : highlightEnd! + r.offset,
       resumeLine: resumeLine == null ? null : resumeLine! + r.offset,
       snippet: snippet,
+      portraitOrigin: portraitOrigin,
     );
   }
 }
@@ -116,17 +131,20 @@ class _StoryReaderBody extends ConsumerStatefulWidget {
     super.key,
     required this.storyId,
     required this.text,
+    this.portraitSources = const {},
     this.shift = 0,
     this.highlightStart,
     this.highlightEnd,
     this.resumeLine,
     this.snippet,
+    this.portraitOrigin = PortraitOrigin.materials,
   });
 
   final String storyId;
 
   /// The whole text: the story, then the dialogue attached to it.
   final List<StoryLineEntry> text;
+  final Map<int, ({String storyId, int lineIndex})> portraitSources;
 
   /// Where the story asked for begins in [text]; the numbers the reader shows
   /// for a cited range are its own.
@@ -135,6 +153,7 @@ class _StoryReaderBody extends ConsumerStatefulWidget {
   final int? highlightEnd;
   final int? resumeLine;
   final String? snippet;
+  final PortraitOrigin portraitOrigin;
 
   @override
   ConsumerState<_StoryReaderBody> createState() => _StoryReaderPageState();
@@ -142,17 +161,23 @@ class _StoryReaderBody extends ConsumerStatefulWidget {
 
 class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     with SingleTickerProviderStateMixin {
-  final GlobalKey _targetKey = GlobalKey();
   final GlobalKey _scrollKey = GlobalKey();
 
   /// Where the reader is: the first line on screen and the number of lines
   /// (shown by the title); null until the list is laid out.
   final ValueNotifier<(int, int)?> _progress = ValueNotifier(null);
+  final ValueNotifier<int?> _lastVisible = ValueNotifier(null);
   Timer? _progressTimer;
+  Timer? _panelMeasureTimer;
 
   /// The header (titles, description, synopsis), measured to re-anchor on it.
   final GlobalKey _headerKey = GlobalKey();
   final Map<int, GlobalKey> _lineKeys = {};
+  final Map<int, GlobalKey> _speakerKeys = {};
+
+  /// Whether a speaker's name opens the portrait card (an Arknights story
+  /// and a knowledge base with the portrait tables).
+  bool _speakersTappable = false;
   bool _scrolled = false;
   bool _recorded = false;
   bool _anchored = false;
@@ -166,6 +191,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   late int? _resume = widget.highlightStart == null ? widget.resumeLine : null;
 
   UserDataStore? _store;
+
+  /// The setting "读到第一行不计入历史记录" when the reader opened: the
+  /// visit is written only once the first line on screen moves from
+  /// [_openedAt] (or a text that fits the screen has been read to its end),
+  /// so a story opened by mistake leaves the history as it was.
+  late final bool _deferOpen;
+
+  /// The visit waiting for the reader to move, with what it will record.
+  bool _openPending = false;
+  String _openTitle = '';
+  StoryLineEntry? _openAnchor;
+
+  /// The first line on screen (a position in [_lines]) when the text opened.
+  int? _openedAt;
   List<StoryLineEntry> _lines = const [];
   Timer? _saveTimer;
 
@@ -176,6 +215,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   final ScrollController _scroll = ScrollController();
   List<_Row> _rows = const [];
+  ReaderStoryArt? _art;
+  ReaderStoryArt? _preparedArt;
 
   /// Positions of the section lines that follow one of the same kind.
   Set<int> _quietSections = const {};
@@ -226,6 +267,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   void initState() {
     super.initState();
     _container;
+    _deferOpen = ref.read(skipUnreadOpensProvider);
   }
 
   @override
@@ -233,7 +275,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     _saveTimer?.cancel();
     _endTimer?.cancel();
     _progressTimer?.cancel();
+    _panelMeasureTimer?.cancel();
+    _scrubDone?.cancel();
+    _dockAway.dispose();
     _progress.dispose();
+    _lastVisible.dispose();
     _scrub.dispose();
     final container = _container;
     unawaited(
@@ -267,8 +313,25 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   /// Computes what the list needs from the text, once per text.
   void _prepare(List<StoryLineEntry> lines) {
-    if (identical(_preparedFor, lines)) return;
+    if (identical(_preparedFor, lines) && identical(_preparedArt, _art)) return;
+    final movedFromTop =
+        _center != 0 || (_scroll.hasClients && _scroll.offset.abs() > 1);
+    final previous = identical(_preparedFor, lines) && movedFromTop
+        ? _visibleRange()?.$1
+        : null;
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final box = previous == null
+        ? null
+        : _lineKeys[previous]?.currentContext?.findRenderObject();
+    final anchor = view is RenderBox &&
+            box is RenderBox &&
+            box.attached &&
+            view.size.height > 0
+        ? (box.localToGlobal(Offset.zero, ancestor: view).dy / view.size.height)
+            .clamp(0.0, 1.0)
+        : null;
     _preparedFor = lines;
+    _preparedArt = _art;
     _lines = lines;
     // Narration is set in italics only between spoken lines; a text that is
     // all narration (a month squad's story, a document) is plain.
@@ -294,13 +357,28 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     }
     _rows = _makeRows(lines);
     // Open anchored on the cited block or the line to resume at.
-    _anchorOnTarget();
+    if (previous != null && anchor != null) {
+      final row = _rows.indexWhere(
+        (r) => r.isLine && r.first <= previous && previous <= r.last,
+      );
+      if (row >= 0) {
+        _center = row + 1;
+        _centerAt = anchor;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
+        });
+      }
+    } else {
+      _anchorOnTarget();
+    }
   }
 
   // ─── History ───────────────────────────────────────────────────
 
   /// Writes this visit to the reading history (once, after the text loaded;
-  /// the history is a convenience, so a failure is ignored).
+  /// the history is a convenience, so a failure is ignored). With
+  /// [_deferOpen] it is only made ready here and written by [_saveProgress]
+  /// once the reader moves.
   void _recordLater(List<StoryLineEntry> lines) {
     if (_recorded) return;
     _recorded = true;
@@ -313,12 +391,19 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           await ref.read(storyCatalogEntryProvider(widget.storyId).future);
       final title = entry?.label ?? fallbackStoryLabel(widget.storyId);
       final store = await ref.read(userDataStoreProvider.future);
-      _store = store;
       final at = _start ?? _resume ?? 0;
       final anchor = lines.firstWhere(
         (l) => l.lineIndex == at,
         orElse: () => lines.first,
       );
+      if (_deferOpen) {
+        _openTitle = title;
+        _openAnchor = anchor;
+        _openPending = true;
+        _store = store;
+        return;
+      }
+      _store = store;
       await store.recordOpen(
         LibraryRef.story(widget.storyId),
         title: title,
@@ -338,8 +423,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (viewport is! RenderBox || !viewport.attached || _lines.isEmpty) {
       return null;
     }
-    final top = viewport.localToGlobal(Offset.zero).dy + 8;
-    final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy;
+    // Lines under the status bar are not being read.
+    final top = viewport.localToGlobal(Offset.zero).dy +
+        MediaQuery.viewPaddingOf(context).top +
+        8;
+    final bottom = viewport.localToGlobal(Offset(0, viewport.size.height)).dy -
+        _panelCover();
     int? first, last;
     // Keys of lines scrolled out of the lazy list are dropped (a line built
     // again gets a new one), so this looks at the lines near the screen, not
@@ -377,6 +466,27 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       });
     }
     final atEnd = nearEnd && _endStayed;
+    if (_openPending) {
+      // Still where it opened: nothing is written (a text that fits the
+      // screen cannot move, and counts once its end has stayed in view).
+      final opened = _openedAt ??= range.$1;
+      final fitsAndRead = range.$1 == 0 && atEnd;
+      if (range.$1 == opened && !fitsAndRead) return;
+      _openPending = false;
+      final anchor = _openAnchor!;
+      try {
+        await store.recordOpen(
+          LibraryRef.story(widget.storyId),
+          title: _openTitle,
+          lineIndex: anchor.lineIndex,
+          snippet: anchor.content,
+          totalLines: _lines.length,
+        );
+      } catch (_) {
+        return;
+      }
+      if (mounted) invalidateReading(ref);
+    }
     try {
       await store.updateProgress(
         LibraryRef.story(widget.storyId),
@@ -391,11 +501,14 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   /// Shows where the reader is, at most every 120 ms while scrolling.
   void _showProgressSoon() {
-    if (_progressTimer?.isActive ?? false) return;
+    if (_scrubbing || (_progressTimer?.isActive ?? false)) return;
     _progressTimer = Timer(const Duration(milliseconds: 120), () {
-      if (!mounted) return;
+      if (!mounted || _scrubbing) return;
       final range = _visibleRange();
-      if (range != null) _progress.value = (range.$1, _lines.length);
+      if (range != null) {
+        _progress.value = (range.$1, _lines.length);
+        _lastVisible.value = range.$2;
+      }
     });
   }
 
@@ -416,7 +529,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (at == null) return null;
     final p = _lines.indexWhere((l) => l.lineIndex == at);
     if (p < 0) return null;
-    final r = _rows.indexWhere((row) => row.first <= p && p <= row.last);
+    final r = _rows.indexWhere(
+      (row) => row.isLine && row.first <= p && p <= row.last,
+    );
     return r < 0 ? null : r;
   }
 
@@ -460,6 +575,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (_scrolled) return;
     _scrolled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Where the text opened: the reader has read on once this changes.
+      if (mounted) _openedAt ??= _visibleRange()?.$1;
       if (_cited && mounted) _flash.forward(from: 0);
       // Short stories fit the screen: no scroll will report them.
       if (mounted) _saveSoon();
@@ -469,70 +586,111 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 
   // ─── Scrubbing ─────────────────────────────────────────────────
 
-  /// While the title is held: the line (a position in [_lines]) the finger
-  /// has dragged to; null otherwise. The bar under the title grows into a
-  /// track and the text follows the finger.
-  final ValueNotifier<int?> _scrub = ValueNotifier(null);
-
-  /// Where the hold started, as a share of the text.
-  double _scrubFrom = 0;
-  bool _scrubMoved = false;
-
-  /// The row last jumped to, and whether a jump waits for the next frame
-  /// (at most one a frame).
+  final ValueNotifier<bool> _scrub = ValueNotifier(false);
   int? _scrubRow;
+  int? _lineSplit;
   bool _scrubBusy = false;
+  int? _scrubTarget;
 
-  void _scrubStart(LongPressStartDetails _) {
+  /// Whether the floating controls are out of the way, and what moves them.
+  final ValueNotifier<bool> _dockAway = ValueNotifier(false);
+  late final BarsFollower _dock = BarsFollower(away: _dockAway);
+
+  void _scrubStart() {
     if (_lines.isEmpty || _rows.isEmpty) return;
-    HapticFeedback.mediumImpact();
-    final at = (_progress.value?.$1 ?? 0).clamp(0, _lines.length - 1);
-    _scrubFrom = _lines.length < 2 ? 0 : at / (_lines.length - 1);
-    _scrubMoved = false;
+    _dock.show(ref);
+    setState(() => _scrub.value = !_scrub.value);
+    _panelMeasureTimer?.cancel();
+    _panelMeasureTimer = Timer(Motion.of(context, Motion.row), () {
+      if (mounted) _showProgressSoon();
+    });
     _scrubRow = null;
-    _scrub.value = at;
   }
 
-  /// The finger's offset from where the hold started moves the place: the
-  /// track's width is the whole text.
-  void _scrubMove(LongPressMoveUpdateDetails details) {
-    if (_scrub.value == null) return;
-    final width = MediaQuery.sizeOf(context).width - 2 * _scrubGutter;
-    final share =
-        (_scrubFrom + details.offsetFromOrigin.dx / width).clamp(0.0, 1.0);
-    final p = (share * (_lines.length - 1)).round();
-    if (p == _scrub.value) return;
-    _scrubMoved = true;
-    _scrub.value = p;
+  /// While the finger is on the slider the line it points at is where the
+  /// reader is: the count from the screen (the first line of the row shown,
+  /// a line or two off) would pull the thumb back under the finger.
+  bool _scrubbing = false;
+  Timer? _scrubDone;
+
+  void _scrubMove(double value) {
+    _scrubbing = true;
+    _scrubDone?.cancel();
+    final p = value.round();
+    _scrubTarget = p;
     _progress.value = (p, _lines.length);
     if (_scrubBusy) return;
     _scrubBusy = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrubBusy = false;
-      final at = _scrub.value;
+      final at = _scrubTarget;
       if (at != null && mounted) _showLine(at);
     });
   }
 
-  void _scrubEnd() {
-    final p = _scrub.value;
-    if (p == null) return;
-    if (_scrubMoved) _showLine(p);
-    _scrub.value = null;
+  void _scrubEnd(double value) {
+    _scrubMove(value);
+    // Past the last jump's own frames (its layout and the scroll reset):
+    // the thumb stays where it was let go until the text is scrolled.
+    _scrubDone?.cancel();
+    _scrubDone = Timer(Motion.wipe, () => _scrubbing = false);
     _saveSoon();
-    _showProgressSoon();
   }
 
-  /// Anchors the list on the row holding line [p], at the top of the view.
+  /// The progress panel, measured to tell how much of the text it covers.
+  final GlobalKey _scrubPanelKey = GlobalKey();
+
+  /// How far up the text the open progress panel, or else the controls,
+  /// reach from the bottom of the view: where the reader is counts above.
+  double _panelCover() {
+    if (!_scrub.value) return _dockAway.value ? 0 : floatingDockRoom(context);
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final panel = _scrubPanelKey.currentContext?.findRenderObject();
+    if (view is! RenderBox || panel is! RenderBox || !panel.attached) {
+      return 0;
+    }
+    final top = panel.localToGlobal(Offset.zero, ancestor: view).dy;
+    return (view.size.height - top).clamp(0.0, view.size.height);
+  }
+
+  /// The anchor that puts an item's top just below the status bar.
+  double _belowStatusBar() {
+    final view = _scrollKey.currentContext?.findRenderObject();
+    final top = MediaQuery.viewPaddingOf(context).top;
+    if (view is! RenderBox || !view.hasSize || view.size.height <= 0) return 0;
+    return (top / view.size.height).clamp(0.0, 1.0);
+  }
+
+  /// Anchors the list on the row holding line [p], at the top of the view
+  /// (the panel is at the bottom, by the thumb).
   void _showLine(int p) {
-    final r = _rows.indexWhere((row) => row.last >= p);
-    final row = r < 0 ? _rows.length - 1 : r;
+    var r = _rows.indexWhere((row) => row.isLine && row.last >= p);
+    if (r >= 0 && _rows[r].first < p && _rows[r].last >= p) {
+      _lineSplit = p;
+      _rows = _makeRows(_lines);
+      r = _rows.indexWhere((row) => row.isLine && row.last >= p);
+    }
+    final row = r < 0 ? _rows.lastIndexWhere((row) => row.isLine) : r;
+    if (row < 0) return;
     if (row == _scrubRow) return;
     _scrubRow = row;
-    if (_scroll.hasClients) _scroll.jumpTo(0);
     setState(() {
       _center = row + 1;
-      _centerAt = 0;
+      _centerAt = _belowStatusBar();
+    });
+    // Changing the upward sliver can preserve the old visible item. Reset
+    // once after layout so consecutive jumps reach the requested row.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrubRow == row && _scroll.hasClients) {
+        _scroll.jumpTo(0);
+        _showProgressSoon();
+        // The panel's picture follows the drag (the count above does not:
+        // it stays with the finger), from the last line above the panel.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final range = mounted ? _visibleRange() : null;
+          if (range != null) _lastVisible.value = range.$2;
+        });
+      }
     });
   }
 
@@ -547,8 +705,28 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     return null;
   }
 
-  /// The track under the title while it is held: where the finger is (line
-  /// and share), the step it is in and the line itself.
+  /// One line of the scrub panel at a fixed height: the text on one line
+  /// (its breaks as spaces), the strut forced, the box sized to it.
+  Widget _panelLine(String text, TextStyle style) {
+    final size = style.fontSize ?? 14;
+    return SizedBox(
+      height: size * 1.5,
+      child: Text(
+        text.replaceAll('\n', ' '),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: style.copyWith(height: 1.5),
+        strutStyle: StrutStyle(
+          fontSize: size,
+          height: 1.5,
+          forceStrutHeight: true,
+        ),
+      ),
+    );
+  }
+
+  /// The current reading position and the line being previewed.
   Widget _scrubPanel(AppThemeTokens theme, int p) {
     final n = _lines.length;
     final share = n < 2 ? 0.0 : p / (n - 1);
@@ -557,10 +735,12 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final heading = _headingOver(p);
     return Container(
       key: const ValueKey('story-reader-scrub'),
-      padding: const EdgeInsets.fromLTRB(_scrubGutter, 12, _scrubGutter, 14),
+      padding: const EdgeInsets.fromLTRB(_scrubGutter, 12, _scrubGutter, 12),
+      // A floating plate like the controls under it; the slider at its
+      // foot, by the thumb.
       decoration: BoxDecoration(
         color: theme.cardSurface,
-        border: Border(bottom: BorderSide(color: theme.divider)),
+        border: Border.all(color: theme.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -585,60 +765,88 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               ),
             ],
           ),
-          if (heading != null)
-            Text(
-              heading,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.ui(13, weight: 700, color: theme.textSecondary),
+          if (_art != null)
+            ValueListenableBuilder<int?>(
+              valueListenable: _lastVisible,
+              builder: (context, last, _) => _currentArtRow(theme, last ?? p),
+            ),
+          // Every line of the panel keeps one height whatever it holds (a
+          // long line or a short one, Latin or Chinese, a step's title or
+          // none), so the slider under it stays still while it is dragged.
+          if (_lines.any((l) => headingLineKinds.contains(l.kind)))
+            _panelLine(
+              heading ?? '',
+              theme.ui(13, weight: 700, color: theme.textSecondary),
             ),
           const SizedBox(height: 4),
-          Text(
+          _panelLine(
             speaker.isEmpty ? line.content : '$speaker：${line.content}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.ui(14, color: theme.textPrimary),
+            theme.ui(14, color: theme.textPrimary),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            height: 20,
-            child: LayoutBuilder(
-              builder: (context, box) {
-                final x = share * (box.maxWidth - _scrubThumb);
-                return Stack(
-                  children: [
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 7,
-                      height: 6,
-                      child: ColoredBox(color: theme.divider),
-                    ),
-                    Positioned(
-                      left: 0,
-                      width: x + _scrubThumb / 2,
-                      top: 7,
-                      height: 6,
-                      child: ColoredBox(color: theme.trace),
-                    ),
-                    Positioned(
-                      left: x,
-                      top: 0,
-                      bottom: 0,
-                      width: _scrubThumb,
-                      child: ColoredBox(color: theme.accentPrimary),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            context.t.storyReaderScrubHint,
-            style: theme.ui(12, color: theme.textMuted),
+          AppSlider(
+            key: const ValueKey('story-reader-slider'),
+            value: p.toDouble(),
+            max: math.max(1, n - 1).toDouble(),
+            semanticValue: '${p + 1} / $n',
+            onChanged: n < 2 ? null : _scrubMove,
+            onChangeEnd: _scrubEnd,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _currentArtRow(AppThemeTokens theme, int p) {
+    final shots = _art!.shots;
+    int? scene, cg;
+    for (final (i, shot) in shots.indexed) {
+      if (shot.at > p) break;
+      if (shot.kind == 'scene') scene = i;
+      if (shot.kind == 'cg' && (shot.until ?? _lines.length) > p) cg = i;
+    }
+    final index = cg ?? scene;
+    if (index == null) {
+      return SizedBox(
+        height: 48,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            context.t.storyArtNoScene,
+            style: theme.ui(13, color: theme.textSecondary),
+          ),
+        ),
+      );
+    }
+    final shot = shots[index];
+    final title = _art!.titles[shot.image]?.title;
+    return PressRow(
+      shift: false,
+      onTap: () => _openArt(index),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 64,
+              height: 36,
+              child: StoryArtComposite(
+                shot,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${_artLabel(shot)}${title == null || title.isEmpty ? '' : ' $title'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.ui(13, color: theme.textPrimary),
+              ),
+            ),
+            Icon(Icons.chevron_right_sharp, color: theme.textPrimary),
+          ],
+        ),
       ),
     );
   }
@@ -654,9 +862,10 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (line == null || !mounted) return;
     await Navigator.of(context).pushReplacement(
       smoothPageRoute<void>(
-        frosted: true,
+        frosted: widget.portraitOrigin == PortraitOrigin.materials,
         builder: (_) => StoryReaderPage(
           storyId: widget.storyId,
+          portraitOrigin: widget.portraitOrigin,
           highlightStart: line,
           highlightEnd: line,
         ),
@@ -669,6 +878,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   @override
   Widget build(BuildContext context) {
     final theme = ref.watch(themeProvider);
+    _art = ref
+        .watch(
+          readerStoryArtProvider(
+            (
+              storyId: widget.storyId,
+              lines: widget.text,
+              sources: widget.portraitSources,
+            ),
+          ),
+        )
+        .valueOrNull;
+    // Watched here, not in the list's item builder (which runs at layout).
+    _speakersTappable = gameOfId(widget.storyId) == Game.arknights &&
+        ref.watch(hasPortraitIndexProvider).valueOrNull == true;
     final entry =
         ref.watch(storyCatalogEntryProvider(widget.storyId)).valueOrNull;
     final fallback = fallbackStoryLabel(widget.storyId);
@@ -685,62 +908,81 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         : null;
 
     _nickname = ref.watch(nicknameProvider);
-    // Floating docks; the text starts below them (a cited line is placed
-    // near the top of the view and must not sit under the title).
-    return PageScaffold(
-      backgroundColor: theme.bgPrimary,
-      title: chapter.isNotEmpty ? chapter : collection,
-      // Held, the title opens a track to drag through the text.
-      onTitleHoldStart: widget.text.isEmpty ? null : _scrubStart,
-      onTitleHoldMove: widget.text.isEmpty ? null : _scrubMove,
-      onTitleHoldEnd: widget.text.isEmpty ? null : _scrubEnd,
-      // How far in: a line along the title plate and the line number.
-      titleFooter: ValueListenableBuilder<(int, int)?>(
-        valueListenable: _progress,
-        builder: (context, p, _) => p == null || p.$2 == 0
-            ? const SizedBox.shrink()
-            : FractionallySizedBox(
-                key: const ValueKey('story-reader-progress-bar'),
-                alignment: Alignment.centerLeft,
-                widthFactor: ((p.$1 + 1) / p.$2).clamp(0.0, 1.0),
-                child: SizedBox(
-                  height: 2,
-                  child: ColoredBox(color: theme.trace),
-                ),
-              ),
-      ),
-      actions: [
-        ValueListenableBuilder<(int, int)?>(
-          valueListenable: _progress,
-          builder: (context, p, _) => p == null
-              ? const SizedBox.shrink()
-              : Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Center(
-                    child: Text(
-                      '${p.$1 + 1} / ${p.$2}',
-                      key: const ValueKey('story-reader-progress'),
-                      style: theme.field(color: theme.textSecondary),
+    final body = _body(theme, collection, chapter, entry?.synopsis);
+    final panel = _panel(theme);
+    return PopScope(
+      canPop: !_scrub.value,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _scrub.value) setState(() => _scrub.value = false);
+      },
+      // The controls float at the bottom, under the thumb, and slide away
+      // while the text is read on (back with a drag back or a tap on the
+      // text); the progress panel opens over them.
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _dockAway,
+        child: body,
+        builder: (context, away, body) => DockScaffold(
+          backgroundColor: theme.bgPrimary,
+          title: chapter.isNotEmpty ? chapter : collection,
+          onTitleTap: widget.text.isEmpty ? null : _scrubStart,
+          open: _scrub.value,
+          away: away && !_scrub.value,
+          panel: panel,
+          status: ValueListenableBuilder<(int, int)?>(
+            valueListenable: _progress,
+            builder: (context, p, _) => p == null
+                ? const SizedBox.shrink()
+                : Text(
+                    '${p.$1 + 1} / ${p.$2}',
+                    key: const ValueKey('story-reader-progress'),
+                    maxLines: 1,
+                    style: theme.field(size: 12, color: theme.textSecondary),
+                  ),
+          ),
+          // How far in: a line along the foot of the title's plate.
+          progress: ValueListenableBuilder<(int, int)?>(
+            valueListenable: _progress,
+            builder: (context, p, _) => p == null || p.$2 == 0
+                ? const SizedBox.shrink()
+                : FractionallySizedBox(
+                    key: const ValueKey('story-reader-progress-bar'),
+                    alignment: Alignment.centerLeft,
+                    widthFactor: ((p.$1 + 1) / p.$2).clamp(0.0, 1.0),
+                    child: SizedBox(
+                      height: 2,
+                      child: ColoredBox(color: theme.trace),
                     ),
                   ),
-                ),
+          ),
+          actions: [
+            if (widget.text.isNotEmpty)
+              DockAction(
+                key: const ValueKey('story-reader-find'),
+                tooltip: context.t.storyReaderFindHint,
+                onPressed: () => _find(theme),
+                icon: Icons.search_sharp,
+              ),
+            if (canJump)
+              DockAction(
+                key: const ValueKey('story-reader-jump'),
+                tooltip: context.t.aiStoryReaderJumpBack,
+                onPressed: _jumpToTarget,
+                icon: Icons.my_location_sharp,
+              ),
+          ],
+          body: body!,
         ),
-        if (widget.text.isNotEmpty)
-          SquareIconButton(
-            key: const ValueKey('story-reader-find'),
-            tooltip: context.t.storyReaderFindHint,
-            onPressed: () => _find(theme),
-            icon: Icons.search_sharp,
-          ),
-        if (canJump)
-          SquareIconButton(
-            key: const ValueKey('story-reader-jump'),
-            tooltip: context.t.aiStoryReaderJumpBack,
-            onPressed: _jumpToTarget,
-            icon: Icons.my_location_sharp,
-          ),
-      ],
-      body: Builder(
+      ),
+    );
+  }
+
+  Widget _body(
+    AppThemeTokens theme,
+    String collection,
+    String chapter,
+    String? synopsis,
+  ) =>
+      Builder(
         builder: (context) {
           final lines = widget.text;
           if (lines.isEmpty) return _unavailable(theme);
@@ -756,46 +998,51 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
                       _start! - widget.shift + 1,
                       _stop! - widget.shift + 1,
                     );
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: _text(
-                  theme,
-                  collection,
-                  chapter,
-                  range,
-                  entry?.synopsis,
-                ),
-              ),
-              // The track, unrolled down from the title while it is held.
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: ValueListenableBuilder<int?>(
-                  valueListenable: _scrub,
-                  builder: (context, p, _) => AnimatedSwitcher(
-                    duration: Motion.of(context, Motion.row),
-                    reverseDuration: Motion.of(context, Motion.press),
-                    switchInCurve: Motion.snap,
-                    switchOutCurve: Motion.mech,
-                    transitionBuilder: (child, animation) => SizeTransition(
-                      sizeFactor: animation,
-                      alignment: Alignment.topCenter,
-                      child: child,
-                    ),
-                    child: p == null || p >= _lines.length
-                        ? const SizedBox(width: double.infinity)
-                        : _scrubPanel(theme, p),
-                  ),
-                ),
-              ),
-            ],
+          // A tap on the text (not on a name or a button): the panel
+          // shuts; with it shut, the controls come back or go away.
+          return GestureDetector(
+            key: const ValueKey('story-reader-blank-tap'),
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              if (_scrub.value) {
+                setState(() => _scrub.value = false);
+              } else {
+                _dock.tapped(ref, canHide: true);
+              }
+            },
+            child: _text(theme, collection, chapter, range, synopsis),
           );
         },
-      ),
-    );
-  }
+      );
+
+  /// The progress panel over the controls, kept open while the reader
+  /// scrolls or moves the slider; it grows up from them.
+  Widget _panel(AppThemeTokens theme) => ValueListenableBuilder<bool>(
+        valueListenable: _scrub,
+        builder: (context, p, _) => AnimatedSwitcher(
+          duration: Motion.of(context, Motion.row),
+          reverseDuration: Motion.of(context, Motion.press),
+          switchInCurve: Motion.snap,
+          switchOutCurve: Motion.mech,
+          transitionBuilder: (child, animation) => SizeTransition(
+            sizeFactor: animation,
+            alignment: Alignment.bottomCenter,
+            child: child,
+          ),
+          child: !p
+              ? const SizedBox(width: double.infinity)
+              : ValueListenableBuilder<(int, int)?>(
+                  valueListenable: _progress,
+                  builder: (context, progress, _) => KeyedSubtree(
+                    key: _scrubPanelKey,
+                    child: _scrubPanel(
+                      theme,
+                      (progress?.$1 ?? 0).clamp(0, _lines.length - 1),
+                    ),
+                  ),
+                ),
+        ),
+      );
 
   /// The text: two lazy lists that meet at the anchor item.
   Widget _text(
@@ -807,7 +1054,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   ) =>
       NotificationListener<ScrollNotification>(
         onNotification: (n) {
-          if (n is ScrollUpdateNotification) _showProgressSoon();
+          if (n is ScrollStartNotification && n.dragDetails != null) {
+            _scrubRow = null;
+          }
+          if (n is ScrollUpdateNotification) {
+            _showProgressSoon();
+            // The reader's own drags move the controls; at either end of
+            // the text they are back.
+            final m = n.metrics;
+            final atEnd = m.pixels <= m.minScrollExtent + 1 ||
+                m.pixels >= m.maxScrollExtent - 1;
+            if ((n.dragDetails != null || atEnd) && !_scrub.value) {
+              _dock.moved(ref, n.scrollDelta ?? 0, atTop: atEnd);
+            }
+          }
           if (n is ScrollEndNotification) {
             _saveSoon();
             _showProgressSoon();
@@ -883,7 +1143,9 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     if (i == 0) return _header(theme, collection, chapter, range, synopsis);
     if (i == _rows.length + 1) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 40),
+        padding: EdgeInsets.only(
+          bottom: 24 + floatingDockRoom(context),
+        ),
         child: _end(theme),
       );
     }
@@ -906,7 +1168,13 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   ) =>
       Padding(
         key: _headerKey,
-        padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
+        // Below the status bar the text scrolls under.
+        padding: EdgeInsets.fromLTRB(
+          10,
+          4 + MediaQuery.viewPaddingOf(context).top,
+          10,
+          16,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -965,11 +1233,61 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// one highlighted block. Positions are indexes into [_lines].
   List<_Row> _makeRows(List<StoryLineEntry> lines) {
     final rows = <_Row>[];
+    final shots = _art?.shots ?? const <StoryArtShot>[];
+    final at = <int, List<int>>{};
+    for (final (index, shot) in shots.indexed) {
+      (at[shot.at] ??= []).add(index);
+    }
+    int? cgUntil;
+    int? cgSegment;
     var i = 0;
-    while (i < lines.length) {
+    while (i <= lines.length) {
+      if (cgUntil != null && cgUntil <= i) {
+        rows.add(_Row.art(_RowKind.cgEnd, i));
+        cgUntil = null;
+        cgSegment = null;
+      }
+      for (final index in at[i] ?? const <int>[]) {
+        final shot = shots[index];
+        if (cgUntil != null && shot.segment != cgSegment) {
+          rows.add(_Row.art(_RowKind.cgEnd, i));
+          cgUntil = null;
+          cgSegment = null;
+        }
+        if (shot.kind == 'cg') {
+          final top = cgUntil == null;
+          rows.add(
+            _Row.art(
+              top ? _RowKind.cgTop : _RowKind.cgChange,
+              i,
+              shot: index,
+              inCg: true,
+            ),
+          );
+          cgUntil = shot.until ?? lines.length;
+          cgSegment = shot.segment;
+        } else if (!shot.joined) {
+          // (a joined scene is drawn in the item of the scene before it)
+          rows.add(
+            _Row.art(
+              _RowKind.scene,
+              i,
+              shot: index,
+              inCg: cgUntil != null,
+            ),
+          );
+        }
+      }
+      // A CG can start and end before any line is spoken.
+      if (cgUntil != null && cgUntil <= i) {
+        rows.add(_Row.art(_RowKind.cgEnd, i));
+        cgUntil = null;
+        cgSegment = null;
+      }
+      if (i == lines.length) break;
       // (a folded group: its heading only)
       if (lines[i].kind == unplacedLineKind && !_openUnplaced.contains(i)) {
-        rows.add(_Row(i, i));
+        rows.add(_Row(i, i, inCg: cgUntil != null));
         i++;
         while (i < lines.length && !headingLineKinds.contains(lines[i].kind)) {
           i++;
@@ -978,13 +1296,17 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       }
       if (_isTarget(lines[i].lineIndex)) {
         var j = i;
-        while (j + 1 < lines.length && _isTarget(lines[j + 1].lineIndex)) {
+        // A cited block breaks where a picture comes in or a CG ends.
+        while (j + 1 < (cgUntil ?? lines.length) &&
+            j + 1 != _lineSplit &&
+            !at.containsKey(j + 1) &&
+            _isTarget(lines[j + 1].lineIndex)) {
           j++;
         }
-        rows.add(_Row(i, j));
+        rows.add(_Row(i, j, inCg: cgUntil != null));
         i = j + 1;
       } else {
-        rows.add(_Row(i, i));
+        rows.add(_Row(i, i, inCg: cgUntil != null));
         i++;
       }
     }
@@ -996,6 +1318,20 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
   /// scrolls the same.
   Widget _rowWidget(AppThemeTokens theme, int index) {
     final row = _rows[index];
+    if (!row.isLine) return _artRow(theme, row);
+    final child = _textRow(theme, row);
+    // Inside a CG the lines sit 12 in from the frame, like its header.
+    return row.inCg
+        ? CgFrameSlice(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: child,
+            ),
+          )
+        : child;
+  }
+
+  Widget _textRow(AppThemeTokens theme, _Row row) {
     final first = row.first == 0;
     if (row.first == row.last && !_isTarget(_lines[row.first].lineIndex)) {
       final line = _lines[row.first];
@@ -1111,6 +1447,250 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     );
   }
 
+  void _openArt(int index) {
+    final shots = _art?.shots;
+    if (shots == null) return;
+    openArtViewer(
+      context,
+      pages: [
+        for (final shot in shots)
+          ArtViewerPage.story(
+            storyId: widget.storyId,
+            shot: shot,
+            onJump: (at) {
+              if (!mounted || _lines.isEmpty) return;
+              _scrubRow = null;
+              _showLine(at.clamp(0, _lines.length - 1));
+            },
+          ),
+      ],
+      initial: index,
+    );
+  }
+
+  String _artLabel(StoryArtShot shot) {
+    final number = (shot.number ?? 0).toString().padLeft(2, '0');
+    final total = (shot.total ?? 0).toString().padLeft(2, '0');
+    return shot.kind == 'scene'
+        ? '${context.t.storyArtScene} $number / $total'
+        : 'CG $number / $total';
+  }
+
+  Widget _artPicture(
+    AppThemeTokens theme,
+    StoryArtShot shot,
+    int index, {
+    required double cut,
+    BoxFit fit = BoxFit.cover,
+    Alignment alignment = Alignment.center,
+  }) {
+    final child = StoryArtComposite(
+      shot,
+      fit: fit,
+      alignment: alignment,
+      placeholder: context.t.storyArtMissing,
+    );
+    if (shot.missing && shot.layers.isEmpty) return child;
+    return ClipPath(
+      clipper: ShapeBorderClipper(shape: CutBorder.br(cut)),
+      child: PressBuilder(
+        builder: (context, pressed) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openArt(index),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              child,
+              if (pressed)
+                ColoredBox(
+                  color: pressTint(Colors.transparent, theme.textPrimary),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _artRow(AppThemeTokens theme, _Row row) {
+    if (row.kind == _RowKind.cgEnd) {
+      return const CgFrameSlice(end: true, child: SizedBox(height: 12));
+    }
+    final art = _art!;
+    final shot = art.shots[row.shot!];
+    final info =
+        art.info[(shot.image, shot.kind == 'scene' ? 'background' : shot.kind)];
+    if (row.kind == _RowKind.scene) {
+      String two(int? n) => (n ?? 0).toString().padLeft(2, '0');
+      final members = [row.shot!];
+      while (members.last + 1 < art.shots.length &&
+          art.shots[members.last + 1].joined) {
+        members.add(members.last + 1);
+      }
+      if (members.length > 1) {
+        // Scenes changed on one line: one label, the pictures three a row.
+        final last = art.shots[members.last];
+        return Padding(
+          key: ValueKey('story-art-scenes-${shot.number}-${last.number}'),
+          padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
+          child: Column(
+            children: [
+              _ruled(
+                theme,
+                '${context.t.storyArtScene} ${two(shot.number)}–${two(last.number)}',
+                key: ValueKey('story-art-scene-label-${shot.number}'),
+              ),
+              for (var i = 0; i < members.length; i += 3) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (var j = i; j < i + 3; j++) ...[
+                      if (j > i) const SizedBox(width: 6),
+                      Expanded(
+                        child: j < members.length
+                            ? SizedBox(
+                                key: ValueKey(
+                                  'story-art-scene-${art.shots[members[j]].number}',
+                                ),
+                                height: 56,
+                                child: _artPicture(
+                                  theme,
+                                  art.shots[members[j]],
+                                  members[j],
+                                  cut: 8,
+                                ),
+                              )
+                            : const SizedBox(height: 56),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      }
+      return Padding(
+        key: ValueKey('story-art-scene-${shot.number}'),
+        padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
+        child: Column(
+          children: [
+            _ruled(
+              theme,
+              '${context.t.storyArtScene} ${two(shot.number)}',
+              key: ValueKey('story-art-scene-label-${shot.number}'),
+            ),
+            if (!shot.missing || shot.layers.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              if (shot.layers.isNotEmpty)
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: _artPicture(theme, shot, row.shot!, cut: 8),
+                )
+              else
+                SizedBox(
+                  height: 56,
+                  width: double.infinity,
+                  child: _artPicture(theme, shot, row.shot!, cut: 8),
+                ),
+            ],
+          ],
+        ),
+      );
+    }
+    final title = art.titles[shot.image];
+    final seenGroup = shot.titleGroup != null &&
+        art.shots
+            .take(row.shot!)
+            .any((s) => s.kind == 'cg' && s.titleGroup == shot.titleGroup);
+    final nextCg = art.shots
+        .skip(row.shot! + 1)
+        .where(
+          (s) => s.kind == 'cg' && s.segment == shot.segment,
+        )
+        .firstOrNull;
+    final hasLines = math.min(
+          shot.until ?? _lines.length,
+          nextCg?.at ?? _lines.length,
+        ) >
+        shot.at;
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _artLabel(shot),
+            style: theme.field(size: 12, color: theme.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final aspect = shot.layers.isNotEmpty
+                  ? 9 / 16
+                  : info == null || info.width == 0
+                      ? 9 / 16
+                      : info.height / info.width;
+              final tall = aspect > 1.3;
+              return Column(
+                children: [
+                  SizedBox(
+                    height: width * (tall ? 1.25 : aspect),
+                    width: width,
+                    child: _artPicture(
+                      theme,
+                      shot,
+                      row.shot!,
+                      cut: 14,
+                      alignment: tall ? Alignment.topCenter : Alignment.center,
+                    ),
+                  ),
+                  if (tall)
+                    Hatch(
+                      child: SizedBox(
+                        height: 24,
+                        width: width,
+                        child: Center(
+                          child: Text(
+                            context.t.storyArtTall,
+                            style: theme.ui(
+                              12,
+                              color: theme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          if (!seenGroup && title?.title?.isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Text(title!.title!, style: theme.heading(17)),
+          ],
+          if (!seenGroup && title?.description?.isNotEmpty == true) ...[
+            const SizedBox(height: 4),
+            Text(
+              title!.description!,
+              style: theme.text(13, color: theme.textMuted),
+            ),
+          ],
+          if (hasLines) ...[
+            const SizedBox(height: 12),
+            Divider(height: 1, color: theme.divider),
+          ],
+        ],
+      ),
+    );
+    return CgFrameSlice(
+      key: ValueKey('story-art-cg-${row.shot}'),
+      top: row.kind == _RowKind.cgTop,
+      child: content,
+    );
+  }
+
   /// The game's summary of the part it opens: folded like the official
   /// synopsis (it tells what the part is about before it is read).
   Widget _summary(int p) => FoldSection(
@@ -1163,7 +1743,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           setState(() {
             open ? _openUnplaced.remove(p) : _openUnplaced.add(p);
             _rows = _makeRows(_lines);
-            _center = _rows.indexWhere((r) => r.first == p) + 1;
+            _center = _rows.indexWhere((r) => r.isLine && r.first == p) + 1;
             _centerAt = at;
           });
         },
@@ -1269,7 +1849,6 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       p > 0 && _speakerOf(p) == _speakerOf(p - 1) ? 14.0 : 20.0;
   Widget _citedBlock(AppThemeTokens theme, List<Widget> rows) =>
       AnimatedBuilder(
-        key: _targetKey,
         animation: _strength,
         builder: (context, child) => Container(
           decoration: BoxDecoration(
@@ -1357,8 +1936,11 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
       padding: const EdgeInsets.fromLTRB(12, 14, 16, 12),
       onTap: () => Navigator.of(context).pushReplacement(
         smoothPageRoute<void>(
-          frosted: true,
-          builder: (_) => StoryReaderPage(storyId: target.rawId!),
+          frosted: widget.portraitOrigin == PortraitOrigin.materials,
+          builder: (_) => StoryReaderPage(
+            storyId: target.rawId!,
+            portraitOrigin: widget.portraitOrigin,
+          ),
         ),
       ),
       child: Row(
@@ -1409,6 +1991,31 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         _ => null,
       };
 
+  Widget _speakerName(AppThemeTokens theme, StoryLineEntry line, String name) {
+    final style = theme.ui(14, weight: 700, color: theme.textSecondary);
+    if (!_speakersTappable) return Text(name, style: style);
+    return PortraitSpeakerName(
+      key: _speakerKeys.putIfAbsent(line.lineIndex, GlobalKey.new),
+      name: name,
+      style: style,
+      onTap: () {
+        showPortraitPreview(
+          context,
+          anchorContext: _speakerKeys[line.lineIndex]?.currentContext,
+          speaker: name,
+          spriteFuture: ref.read(
+            spriteOfLineProvider(
+              widget.portraitSources[line.lineIndex] ??
+                  (storyId: widget.storyId, lineIndex: line.lineIndex),
+            ).future,
+          ),
+          fromLine: true,
+          origin: widget.portraitOrigin,
+        );
+      },
+    );
+  }
+
   Widget _line(
     AppThemeTokens theme,
     StoryLineEntry line, {
@@ -1421,7 +2028,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final narration = speaker.isEmpty;
     final plain = narration && !italicNarration;
     final kindTag = _kindTag(line.kind);
-    final content = Row(
+    final row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
@@ -1431,11 +2038,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
               if (showName)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    speaker,
-                    style:
-                        theme.ui(14, weight: 700, color: theme.textSecondary),
-                  ),
+                  child: _speakerName(theme, line, speaker),
                 ),
               if (kindTag != null)
                 Padding(
@@ -1478,15 +2081,25 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
         ),
       ],
     );
+    final target = _speakerKeys[line.lineIndex];
+    final content = showName && target != null
+        ? PortraitSpeakerTarget(target: target, child: row)
+        : row;
     if (!marked) return content;
-    return Container(
-      padding: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: theme.trace, width: 3),
+    // The rail stands in the margin, so the marked line stays in line with
+    // the others.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        content,
+        Positioned(
+          left: -8,
+          top: 0,
+          bottom: 0,
+          width: traceRailWidth,
+          child: ColoredBox(color: theme.trace),
         ),
-      ),
-      child: content,
+      ],
     );
   }
 }
@@ -1497,12 +2110,117 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
 /// the width between them.
 const double _scrubGutter = 16;
 
-/// The scrub track's thumb width.
-const double _scrubThumb = 10;
+enum _RowKind { line, block, scene, cgTop, cgChange, cgEnd }
 
 class _Row {
-  const _Row(this.first, this.last);
+  const _Row(this.first, this.last, {this.inCg = false})
+      : kind = first == last ? _RowKind.line : _RowKind.block,
+        shot = null;
+
+  const _Row.art(this.kind, this.first, {this.shot, this.inCg = false})
+      : last = first;
 
   final int first;
   final int last;
+  final _RowKind kind;
+  final int? shot;
+  final bool inCg;
+
+  bool get isLine => kind == _RowKind.line || kind == _RowKind.block;
+}
+
+/// Each lazy list item paints only its part of the continuous CG frame.
+class CgFrameSlice extends ConsumerWidget {
+  const CgFrameSlice({
+    super.key,
+    required this.child,
+    this.top = false,
+    this.end = false,
+  });
+  final Widget child;
+  final bool top, end;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      // Full width whatever the child is (the end is an empty strip).
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Stack(
+            fit: StackFit.passthrough,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: CustomPaint(
+                  painter: _CgFramePainter(
+                    theme.cardSurface,
+                    theme.textPrimary,
+                    top: top,
+                    end: end,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: child,
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                top: top ? 6 : 0,
+                bottom: 0,
+                width: 6,
+                child: const Hatch(child: SizedBox.expand()),
+              ),
+            ],
+          ),
+          if (end)
+            const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Hatch(child: SizedBox(height: 6, width: double.infinity)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The slice's face and side edges. Rows end at fractional pixels, where a
+/// fill ending on the edge leaves a faint seam; each slice but the last
+/// paints one pixel past its bottom, under the next slice's same face.
+class _CgFramePainter extends CustomPainter {
+  const _CgFramePainter(
+    this.face,
+    this.edge, {
+    this.top = false,
+    this.end = false,
+  });
+
+  final Color face, edge;
+  final bool top, end;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bottom = end ? size.height : size.height + 1;
+    canvas.drawRect(
+      Rect.fromLTRB(0, 0, size.width, bottom),
+      Paint()..color = face,
+    );
+    final line = Paint()..color = edge;
+    canvas.drawRect(Rect.fromLTRB(0, 0, 1, bottom), line);
+    canvas.drawRect(Rect.fromLTRB(size.width - 1, 0, size.width, bottom), line);
+    if (top) canvas.drawRect(Rect.fromLTRB(0, 0, size.width, 1), line);
+    if (end) {
+      canvas.drawRect(
+        Rect.fromLTRB(0, size.height - 1, size.width, size.height),
+        line,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CgFramePainter old) =>
+      old.face != face || old.edge != edge || old.top != top || old.end != end;
 }

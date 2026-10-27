@@ -9,7 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
-import '../../shared/app_version.dart';
+import '../../core/library/portrait_provider.dart'
+    show NameLinks, nameLinksProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -19,13 +20,16 @@ import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../library/reading_text.dart' show readingFontSample;
 import 'background_access.dart';
+import 'blocked_names_page.dart';
 import 'onboarding_page.dart';
+import 'update_page.dart';
 import 'wiki_sources_settings_page.dart';
 
 /// One category's page: its title and code, the rows in a column at most
 /// 640 wide, the last row closed by a hairline.
-class _SectionPage extends ConsumerWidget {
-  const _SectionPage({
+class SettingsSectionPage extends ConsumerWidget {
+  const SettingsSectionPage({
+    super.key,
     required this.title,
     required this.code,
     required this.children,
@@ -43,7 +47,8 @@ class _SectionPage extends ConsumerWidget {
       code: code,
       scrollUnder: true,
       body: ListView(
-        padding: pagePadding(context, const EdgeInsets.fromLTRB(16, 12, 16, 40)),
+        padding:
+            pagePadding(context, const EdgeInsets.fromLTRB(16, 12, 16, 40)),
         children: [
           Center(
             child: ConstrainedBox(
@@ -74,7 +79,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
     final currentTheme = themes.currentTheme;
     final currentLocale = ref.watch(localeProvider);
     final service = ref.read(settingsServiceProvider);
-    return _SectionPage(
+    return SettingsSectionPage(
       title: context.t.settingsAppearance,
       code: 'appearance',
       children: [
@@ -142,10 +147,18 @@ class AiSettingsPage extends ConsumerWidget {
     await ref.read(settingsServiceProvider).saveSessionLogsEnabled(value);
   }
 
+  /// Operators' names in answers: plain (on) or linked like the others.
+  static Future<void> _setSkipOperators(WidgetRef ref, bool value) async {
+    ref.read(skipOperatorNamesProvider.notifier).state = value;
+    await ref.read(settingsServiceProvider).saveSkipOperatorNames(value);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(sessionLogsEnabledProvider);
-    return _SectionPage(
+    final skipOperators = ref.watch(skipOperatorNamesProvider);
+    final links = ref.watch(nameLinksProvider).valueOrNull ?? const NameLinks();
+    return SettingsSectionPage(
       title: context.t.settingsAiServices,
       code: context.t.settingsAiSectionCode,
       children: [
@@ -154,6 +167,73 @@ class AiSettingsPage extends ConsumerWidget {
           label: context.t.settingsApiSettings,
           description: context.t.settingsApiSettingsDesc,
           onTap: () => Navigator.pushNamed(context, '/api-settings'),
+        ),
+        _ChoiceRow<int>(
+          key: const ValueKey('settings-context-warning'),
+          title: context.t.settingsContextWarnTokens,
+          description: context.t.settingsContextWarnTokensDesc,
+          value: ref.watch(contextWarnTokensProvider),
+          options: const [
+            (32000, '32k'),
+            (64000, '64k'),
+            (100000, '100k'),
+            (128000, '128k'),
+            (200000, '200k'),
+            (500000, '500k'),
+            (1000000, '1M'),
+          ],
+          onChanged: (value) =>
+              ref.read(contextWarnTokensProvider.notifier).set(value),
+        ),
+        _ChoiceRow<int>(
+          key: const ValueKey('settings-compact-percent'),
+          title: context.t.settingsCompactPercent,
+          description: context.t.settingsCompactPercentDesc,
+          value: ref.watch(compactPercentProvider),
+          options: const [
+            (50, '50%'),
+            (60, '60%'),
+            (70, '70%'),
+            (80, '80%'),
+            (90, '90%'),
+          ],
+          onChanged: (value) =>
+              ref.read(compactPercentProvider.notifier).set(value),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-name-links'),
+          icon: Icons.format_underlined_sharp,
+          label: context.t.settingsNameLinks,
+          description: context.t.settingsNameLinksDesc,
+          onTap: () => ref.read(nameLinksProvider.notifier).setOn(!links.on),
+          trailing: SquareSwitch(
+            value: links.on,
+            semanticLabel: context.t.settingsNameLinks,
+            onChanged: (value) =>
+                ref.read(nameLinksProvider.notifier).setOn(value),
+          ),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-blocked-names'),
+          icon: Icons.format_strikethrough_sharp,
+          label: context.t.settingsBlockedNames,
+          description: context.t.settingsBlockedNamesDesc,
+          meta: context.t.settingsBlockedNamesCount(links.blocked.length),
+          onTap: () => Navigator.of(context).push(
+            smoothPageRoute<void>(builder: (_) => const BlockedNamesPage()),
+          ),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-skip-operator-names'),
+          icon: Icons.person_off_sharp,
+          label: context.t.settingsSkipOperatorNames,
+          description: context.t.settingsSkipOperatorNamesDesc,
+          onTap: () => _setSkipOperators(ref, !skipOperators),
+          trailing: SquareSwitch(
+            value: skipOperators,
+            semanticLabel: context.t.settingsSkipOperatorNames,
+            onChanged: (value) => _setSkipOperators(ref, value),
+          ),
         ),
         ActionRow(
           key: const ValueKey('settings-session-logs'),
@@ -187,7 +267,7 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final foldOpen = ref.watch(profileSectionsOpenProvider);
-    return _SectionPage(
+    return SettingsSectionPage(
       title: context.t.settingsKnowledgeCategory,
       code: context.t.settingsKnowledgeSectionCode,
       children: [
@@ -224,13 +304,13 @@ class KnowledgeSettingsPage extends ConsumerWidget {
   }
 }
 
-/// The onboarding again, and the version.
+/// The onboarding again, and updates (with the version).
 class HelpSettingsPage extends ConsumerWidget {
   const HelpSettingsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return _SectionPage(
+    return SettingsSectionPage(
       title: context.t.settingsHelpGuide,
       code: context.t.settingsHelpSectionCode,
       children: [
@@ -246,12 +326,7 @@ class HelpSettingsPage extends ConsumerWidget {
             ),
           ),
         ),
-        ActionRow(
-          icon: Icons.info_outline_sharp,
-          label: context.t.settingsVersion,
-          meta: context.t.settingsVersionLabel(appVersion),
-          showChevron: false,
-        ),
+        const UpdateRows(),
       ],
     );
   }

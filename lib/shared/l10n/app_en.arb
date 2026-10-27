@@ -26,6 +26,8 @@
   "settingsApiSettingsDesc": "Configure the chat provider",
   "settingsProfileSectionsOpen": "Open file sections in the library",
   "settingsProfileSectionsOpenDesc": "Show every section of an operator's file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.",
+  "settingsSkipUnreadOpens": "Don't record stories left at the first line",
+  "settingsSkipUnreadOpensDesc": "A story opened and left without reading on from the line it opened at is not added to Recently read, and an entry already there keeps its place and position.",
   "settingsSessionLogs": "Save AI conversations",
   "settingsSessionLogsDesc": "Fully record every AI conversation (mode selection, auto-routing decision, complete reasoning and retrieved text) to the chat_sessions folder in device storage, used by Chat History for viewing and restoring. Stored on-device only; deletable in-app or from the file manager.",
   "settingsKnowledgeBase": "Knowledge Base Management",
@@ -52,8 +54,6 @@
   "kbRedownloadConfirm": "Download again",
   "kbCancel": "Cancel",
 
-  "materialsTitle": "Materials",
-  "materialsEmptyDesc": "Import PDF or TXT files to build your personal lore reference library.",
   "materialsCancel": "Cancel",
   "materialsSave": "Save",
   "materialsDeleteConfirm": "Remove \"{name}\" and all its chunks from the knowledge base?",
@@ -82,6 +82,16 @@
   "onboardingKbDesc": "The story text and the game records are in the knowledge bases, which reading and Ask both use. One per game, usable offline once downloaded; those already downloaded say so.",
   "onboardingWikiTitle": "Wiki sites",
   "onboardingWikiDesc": "The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.",
+  "onboardingPortraitsDesc": "Tap a speaker in the reader or a name in an answer to see that character's story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.",
+  "onboardingReadingTitle": "How to use it",
+  "onboardingTipBarsTitle": "Bars out of the way",
+  "onboardingTipBars": "Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.",
+  "onboardingTipReaderTitle": "The reader",
+  "onboardingTipReader": "Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.",
+  "onboardingTipPortraitTitle": "Portraits",
+  "onboardingTipPortrait": "Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.",
+  "onboardingTipSourcesTitle": "Sources",
+  "onboardingTipSources": "Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.",
   "onboardingBackgroundTitle": "Running in the background",
   "onboardingDoneTitle": "All Set!",
   "onboardingDoneDesc": "Everything can be changed again in Settings, where this guide can also be opened again.",
@@ -103,6 +113,36 @@
   "@settingsVersionLabel": {"placeholders": {"version": {"type": "String"}}},
   "settingsShowOnboarding": "Show Onboarding Guide",
   "settingsShowOnboardingDesc": "Replay the first-launch guide to configure the app",
+  "updateVersionBuild": "{version} (build {build})",
+  "@updateVersionBuild": {"placeholders": {"version": {"type": "String"}, "build": {"type": "int"}}},
+  "updateAutoCheck": "Check automatically",
+  "updateAutoCheckDesc": "Checks when the app opens, at most once a day. It only tells you; nothing is downloaded.",
+  "updateCheck": "Check for updates",
+  "updateChecking": "Checking.",
+  "updateUpToDate": "You have the latest version.",
+  "updateAvailable": "New version {version}",
+  "@updateAvailable": {"placeholders": {"version": {"type": "String"}}},
+  "updateAvailableSize": "Package: {size}.",
+  "@updateAvailableSize": {"placeholders": {"size": {"type": "String"}}},
+  "updateDownloadInstall": "Download and install",
+  "updateDownloading": "Downloading {received} / {total}",
+  "@updateDownloading": {"placeholders": {"received": {"type": "String"}, "total": {"type": "String"}}},
+  "updateVerifying": "Checking the package.",
+  "updateCancel": "Cancel",
+  "updateNeedsPermission": "To install the update, allow ArkLores to install apps. Come back here afterwards and it continues.",
+  "updateAllow": "Allow",
+  "updateReady": "The installer is open. If the update was not installed, tap again.",
+  "updateInstall": "Install",
+  "updateRetry": "Retry",
+  "updateErrorCheck": "Could not read the releases. Check the network and retry.",
+  "updateErrorDownload": "The download did not finish. Retry continues it.",
+  "updateErrorChecksum": "The package did not match its checksum and was deleted. Download it again.",
+  "updateErrorInstall": "Could not open the installer.",
+  "updateUnsupported": "Only the Android app can update itself.",
+  "updateFound": "New version {version}",
+  "@updateFound": {"placeholders": {"version": {"type": "String"}}},
+  "updateFoundOpen": "View",
+  "updateNotification": "Downloading the update",
   "aiTabAsk": "Ask AI",
   "aiAskSource": "Searches the story text of both installed games, and the wikis when \"Wiki\" is on; every point of an answer has a source",
   "aiAskEmpty": "Ask any lore question: what a character went through, how an event came about, whether a claim is true.",
@@ -116,7 +156,6 @@
   "aiAskSuggestionInvestigate": "How was Reunion founded?",
   "aiAskError": "Failed to answer. Please retry.",
   "aiAskCanceled": "Answer canceled.",
-  "aiAnswerStatus": "Answer status",
   "aiAnswerStatusAnswered": "Answered",
   "aiAnswerStatusPartial": "Partial (limited evidence)",
   "aiAnswerStatusNotCovered": "Not covered by the knowledge base",
@@ -187,10 +226,7 @@
   "storyReaderResumed": "Continue / line {line}",
   "@storyReaderResumed": {"placeholders": {"line": {"type": "int"}}},
   "storyReaderSynopsis": "Official synopsis",
-  "materialsEmptyTitle": "No texts of your own yet",
-  "materialsEmptyDesc": "Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.",
   "materialsNew": "New",
-  "materialsPaste": "Paste from clipboard",
   "materialsTitleHint": "Title (optional)",
   "materialsBodyHint": "Text",
   "materialsSave": "Save",
@@ -199,10 +235,8 @@
   "materialsDeleteConfirm": "Delete this text?",
   "materialsChars": "{n} characters",
   "@materialsChars": {"placeholders": {"n": {"type": "int"}}},
-  "materialsClipboardEmpty": "The clipboard has no text",
   "materialsDiscard": "Discard unsaved changes?",
   "materialsDiscardAction": "Discard",
-  "materialsAskAbout": "Ask about it",
   "readingHistoryTitle": "Recently read",
   "readingHistoryEmpty": "Nothing read yet. Stories you open from an answer's evidence show up here.",
   "readingHistoryPage": "Page {page} / {pages}",  "readingHistoryClear": "Clear",
@@ -259,7 +293,7 @@
   "aiWorkNone": "nothing found",
   "aiWorkFailed": "failed",
   "aiWorkPlanned": "planned",
-  "aiWorkRepeated": "repeated",
+  "aiWorkInContext": "already above",
   "aiWorkNotRun": "not run",
   "aiWorkWikiDown": "wiki timed out",
   "aiWorkChars": "{count} chars",
@@ -459,6 +493,14 @@
   "aiCitedWiki": "Wiki",
   "aiCitedWikiPages": "{count} wiki pages",
   "@aiCitedWikiPages": {"placeholders": {"count": {"type": "int"}}},
+  "aiCitedMaterial": "Material",
+  "aiCitedMaterials": "{count} materials",
+  "@aiCitedMaterials": {"placeholders": {"count": {"type": "int"}}},
+  "aiNameLinks": "Name underlines",
+  "aiBlockNameQuestion": "Stop underlining this name?",
+  "aiBlockNameDesc": "Answers will leave it plain. You can undo this in Settings.",
+  "aiBlockNameConfirm": "Stop",
+  "aiBlockNameCancel": "Cancel",
   "aiCitationParagraph": "¶{n}",
   "@aiCitationParagraph": {"placeholders": {"n": {"type": "int"}}},
   "aiCitationParagraphs": "¶{start}–{end}",
@@ -493,7 +535,7 @@
   "librarySearchFurther": "Search for “{query}” (close names and texts too)",
   "@librarySearchFurther": {"placeholders": {"query": {"type": "String"}}},
   "storyReaderFindHint": "Find in this story",
-  "storyReaderScrubHint": "Drag left or right; let go to stay here",
+  "storyReaderFindEmpty": "Type a name or a word: the lines of this story that have it are listed here; tap one to go to it.",
   "gameArknights": "Arknights",
   "gameEndfield": "Endfield",
   "launchTagline": "Story reader and Q&A",
@@ -526,5 +568,251 @@
   "apiSettingsHideKey": "Hide key",
   "wikiSourcesResetConfirm": "The sites go back to the built-in list; added sites are removed.",
   "aiConfigRequiredTitle": "Set up the chat service first",
-  "aiAskTry": "Try asking"
+  "aiAskTry": "Try asking",
+  "settingsContextWarnTokens": "Context warning threshold",
+  "settingsContextWarnTokensDesc": "Warn when a conversation exceeds this value.",
+  "settingsCompactPercent": "Auto-compaction point",
+  "settingsCompactPercentDesc": "When the context reaches this share of the warning threshold, earlier content is compacted into notes.",
+  "settingsSkipOperatorNames": "Leave operator names plain in answers",
+  "settingsSkipOperatorNamesDesc": "When on, operators' names in answers are not underlined and do not open their portraits; other characters still do.",
+  "settingsNameLinks": "Underline names in answers",
+  "settingsNameLinksDesc": "Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.",
+  "settingsBlockedNames": "Names left plain",
+  "settingsBlockedNamesDesc": "These names are never underlined. Long-press an underlined name in an answer to add it.",
+  "settingsBlockedNamesCount": "{count}",
+  "@settingsBlockedNamesCount": {"placeholders": {"count": {"type": "int"}}},
+  "blockedNamesHint": "Name to leave plain",
+  "blockedNamesAdd": "Add",
+  "blockedNamesEmpty": "No names yet. Type one above, or long-press an underlined name in an answer.",
+  "blockedNamesRemove": "Underline {name} again",
+  "@blockedNamesRemove": {"placeholders": {"name": {"type": "String"}}},
+  "blockedNamesDuplicate": "This name is already on the list.",
+  "aiContextMeter": "Context {n} / {limit}",
+  "@aiContextMeter": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextNotice": "This conversation has exceeded the context warning threshold ({n} / {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.",
+  "@aiContextNotice": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextWarningTitle": "Context warning threshold exceeded",
+  "aiContextWarningBody": "This conversation now has {n} of context (warning threshold {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.",
+  "@aiContextWarningBody": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextNewChat": "New conversation",
+  "aiContextStop": "Stop answering",
+  "aiContextDismiss": "Got it",
+    "aiWorkCompaction": "Compact context / ≈ {from} → {to} / {count} passages kept",
+    "@aiWorkCompaction": {
+      "placeholders": {
+        "from": {
+          "type": "String"
+        },
+        "to": {
+          "type": "String"
+        },
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+  "storyArtPackMissing": "No story art pack installed.",
+  "portraitNotInPack": "This portrait is not in the pack.",
+  "portraitBlank": "The portrait for this line is blank.",
+  "storyArtPackTitle": "Story art",
+  "storyArtPackOldIndex": "The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.",
+  "storyArtPackUnreleased": "The story art pack has not been released yet.",
+  "storyArtPackDescription": "Download size: {size}",
+  "@storyArtPackDescription": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storyArtPackInstalled": "Portraits {count} / Scenes {scenes} / CG {cgs} / {size}",
+  "@storyArtPackInstalled": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "scenes": {
+        "type": "int"
+      },
+      "cgs": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storyArtPackUpdateAvailable": "A new story art pack is available ({size}).",
+  "@storyArtPackUpdateAvailable": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storyArtPackDownload": "Download story art pack",
+  "storyArtPackUpdate": "Update",
+  "storyArtPackDelete": "Delete",
+  "storyArtPackCancel": "Cancel",
+  "storyArtCredit": "Images: Arkwaifu (CC BY-NC 4.0) / Hypergryph",
+  "storyArtPackEndfield": "Endfield stories have no art data.",
+  "storyArtPackDeleteConfirm": "Delete the downloaded story art pack? You can download it again later.",
+  "storyArtPackError": "The story art pack operation failed. Please retry.",
+  "storyArtPackProgress": "{received} / {total} ({percent}%)",
+  "@storyArtPackProgress": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitEyebrow": "PORTRAIT",
+  "portraitLines": "{n} lines",
+  "@portraitLines": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitStories": "{n} stories",
+  "@portraitStories": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitSprites": "{n} variants",
+  "@portraitSprites": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitFaceBody": "face {face} / outfit {body}",
+  "@portraitFaceBody": {
+    "placeholders": {
+      "face": {
+        "type": "int"
+      },
+      "body": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitGroupSpeakers": "Who else uses this portrait?",
+  "portraitWhoUses": "Who uses this portrait?",
+  "portraitStoriesWith": "Stories where “{name}” has this portrait",
+  "@portraitStoriesWith": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitSpeakerGroups": "Other portraits of this character",
+  "portraitOperator": "Operator file",
+  "portraitNoSprite": "No portrait is shown for this line.",
+  "portraitTapSpeaker": "Show portraits of “{name}”",
+  "@portraitTapSpeaker": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitGroupPageTitle": "Portrait speakers",
+  "portraitSpeakerPageTitle": "Portraits of “{name}”",
+  "@portraitSpeakerPageTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitPassingPortraits": "{n} more portraits used little",
+  "@portraitPassingPortraits": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitPassingHint": "Too few lines; probably voices from off the stage",
+  "portraitPassingSpeakers": "{n} more who appear little, their main portrait elsewhere",
+  "@portraitPassingSpeakers": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitSpeakerCount": "{n} speakers",
+  "@portraitSpeakerCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitMore": "More",
+  "portraitStoryTitle": "Stories with {name}",
+  "@portraitStoryTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitNoStories": "No stories found.",
+  "storyArtDescription": "Portraits, backgrounds, CGs and close-ups from stories.",
+  "storyArtClose": "Close",
+  "storyArtJump": "Return to this point in the story",
+  "storyArtScene": "Scene",
+  "storyArtTall": "Tall image, tap to see all",
+  "storyArtNoScene": "No scene has appeared yet",
+  "storyArtMissing": "Image not in the story art pack.",
+  "storyArtSceneSemantic": "Scene {number} of {total}",
+  "@storyArtSceneSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}}},
+  "storyArtCgSemantic": "CG {number} of {total}, {title}",
+  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}},
+  "portraitFullscreen": "View portrait fullscreen",
+  "portraitTitle": "Portrait",
+  "collectionArtTitle": "Story art",
+  "collectionArtAll": "All story art"
 }

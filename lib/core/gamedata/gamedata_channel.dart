@@ -16,7 +16,9 @@ import 'gamedata_installer.dart';
 /// With the channel the knowledge-base page finds it; without one (no
 /// network, no file, a file this build cannot use) the baked-in asset stays.
 class GameDataChannel {
-  const GameDataChannel(this.assets);
+  const GameDataChannel(this.assets, {this.storyArt});
+
+  final StoryArtPackAsset? storyArt;
 
   final Map<Game, GameDataChannelAsset> assets;
 
@@ -31,11 +33,15 @@ class GameDataChannel {
       return null;
     }
     if (decoded is! Map) return null;
-    return GameDataChannel({
-      for (final game in Game.values)
-        if (GameDataChannelAsset.fromJson(decoded[game.key]) case final asset?)
-          game: asset,
-    });
+    return GameDataChannel(
+      {
+        for (final game in Game.values)
+          if (GameDataChannelAsset.fromJson(decoded[game.key])
+              case final asset?)
+            game: asset,
+      },
+      storyArt: StoryArtPackAsset.fromJson(decoded['arknights_story_art']),
+    );
   }
 }
 
@@ -67,7 +73,8 @@ class GameDataChannelAsset {
 
   static GameDataChannelAsset? fromJson(Object? json) {
     if (json is! Map) return null;
-    String text(String key) => json[key] is String ? (json[key] as String).trim() : '';
+    String text(String key) =>
+        json[key] is String ? (json[key] as String).trim() : '';
     int? number(String key) => switch (json[key]) {
           final int n => n,
           final String s => int.tryParse(s.trim()),
@@ -155,3 +162,42 @@ Future<GameDataChannel?> fetchGameDataChannel({
 final gameDataChannelProvider = FutureProvider<GameDataChannel?>(
   (ref) => fetchGameDataChannel(),
 );
+
+class StoryArtPackAsset {
+  const StoryArtPackAsset({
+    required this.url,
+    required this.sha256,
+    this.size = 0,
+    this.kbCommit = '',
+    this.packVersion = 2,
+    this.minAppBuild,
+  });
+  final String url, sha256, kbCommit;
+  final int size, packVersion;
+  final int? minAppBuild;
+
+  static StoryArtPackAsset? fromJson(Object? value) {
+    if (value is! Map) return null;
+    String text(String key) =>
+        value[key] is String ? (value[key] as String).trim() : '';
+    int? number(String key) => int.tryParse('${value[key]}');
+    if (text('url').isEmpty || text('sha256').isEmpty) return null;
+    return StoryArtPackAsset(
+      url: text('url'),
+      sha256: text('sha256'),
+      size: number('size') ?? 0,
+      kbCommit: text('kb_commit'),
+      packVersion: number('pack_version') ?? 1,
+      minAppBuild: number('min_app_build'),
+    );
+  }
+
+  /// The pack format this app reads (A.4).
+  static const supportedPackVersion = 2;
+
+  /// A pack in a format this app does not read is never offered, whatever
+  /// its `min_app_build` says (it would fail the check after the download).
+  bool usableBy(int? appBuild) =>
+      packVersion == supportedPackVersion &&
+      (minAppBuild == null || appBuild == null || appBuild >= minAppBuild!);
+}

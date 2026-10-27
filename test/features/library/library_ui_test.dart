@@ -2,6 +2,7 @@ import 'package:arklores/core/gamedata/game.dart';
 import 'package:arklores/core/gamedata/story_catalog.dart'
     show StoryCatalogEntry;
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
+import 'package:arklores/core/gamedata/story_vectors.dart' show stepLineKind;
 import 'package:arklores/core/library/library_provider.dart';
 import 'package:arklores/core/library/library_queries.dart';
 import 'package:arklores/core/materials/material_provider.dart';
@@ -806,7 +807,108 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('holding the title opens a track that moves through the text',
+  testWidgets('the slider stays put while the preview line changes',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => [
+              for (var i = 0; i < 300; i++)
+                StoryLineEntry(
+                  lineIndex: i,
+                  speaker: i % 3 == 0 ? null : 'Speaker',
+                  // A step from the middle on: the panel then has a
+                  // step's title to show, before it none.
+                  kind: i == 150 ? stepLineKind : null,
+                  content: switch (i % 3) {
+                    0 => '短。',
+                    1 => '很长的一句话' * 30,
+                    _ => 'A long English line\nwith a break ' * 8,
+                  },
+                ),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const StoryReaderPage(storyId: 'a/mixed.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byKey(const ValueKey('page-title')));
+    await tester.pumpAndSettle();
+    final slider = find.byKey(const ValueKey('story-reader-slider'));
+    final track = tester.getRect(slider);
+    final gesture =
+        await tester.startGesture(Offset(track.left + 4, track.center.dy));
+    final tops = <double>{};
+    for (var x = 0.0; x < track.width - 8; x += track.width / 37) {
+      await gesture.moveTo(Offset(track.left + 4 + x, track.center.dy));
+      await tester.pump();
+      tops.add(tester.getTopLeft(slider).dy);
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(tops, hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'the reader controls slide away as the text is read on and come back '
+      'with a tap on the text', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...overrides(store),
+          storyFullLinesProvider.overrideWith(
+            (ref, id) async => [
+              for (var i = 0; i < 400; i++)
+                StoryLineEntry(lineIndex: i, content: '第${i + 1}句。'),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const StoryReaderPage(storyId: 'a/long.txt'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final title = find.byKey(const ValueKey('page-title'));
+    final screen =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    final rest = tester.getRect(title).top;
+    expect(rest, lessThan(screen));
+    await tester.drag(
+      find.byKey(const ValueKey('story-reader-scroll')),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.getRect(title).top,
+      greaterThanOrEqualTo(screen),
+      reason: 'read on: out of the screen',
+    );
+    await tester.tapAt(const Offset(300, 200));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(title).top, rest, reason: 'a tap brings them back');
+    await tester.tapAt(const Offset(300, 200));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(title).top, greaterThanOrEqualTo(screen));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'title toggles persistent slider; drag and track tap save progress',
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -837,15 +939,22 @@ void main() {
     final scrub = find.byKey(const ValueKey('story-reader-scrub'));
     expect(scrub, findsNothing);
 
-    final title = tester.getCenter(find.byKey(const ValueKey('page-title')));
-    final gesture = await tester.startGesture(title);
-    await tester.pump(const Duration(milliseconds: 600));
+    final title = find.byKey(const ValueKey('page-title'));
+    await tester.tap(title);
     await tester.pumpAndSettle();
-    expect(scrub, findsOneWidget, reason: 'the track opens under the title');
-    // Half the screen's width to the right: about half the text further on.
-    await gesture.moveBy(const Offset(200, 0));
+    expect(scrub, findsOneWidget);
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    expect(scrub, findsNothing);
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    final slider = find.byKey(const ValueKey('story-reader-slider'));
+    final track = tester.getRect(slider);
+    final gesture =
+        await tester.startGesture(Offset(track.left + 14, track.center.dy));
+    await gesture.moveBy(Offset(track.width / 4, 0));
     await tester.pump();
-    await gesture.moveBy(const Offset(200, 0));
+    await gesture.moveTo(track.center);
     await tester.pump();
     await tester.pump();
     final at = int.parse(
@@ -862,13 +971,73 @@ void main() {
       findsOneWidget,
       reason: 'the text follows the finger',
     );
+    expect(
+      tester.getBottomLeft(find.text('第$at句。')).dy,
+      lessThanOrEqualTo(tester.getTopLeft(scrub).dy),
+      reason: 'the line jumped to is not under the panel',
+    );
+    expect(
+      tester.getTopLeft(scrub).dy,
+      greaterThan(300),
+      reason: 'the panel grows up out of the dock at the bottom',
+    );
+    final thumbAt = tester.widget<AppSlider>(slider).value;
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    expect(find.text('$at / 400'), findsOneWidget);
+    expect(
+      tester.widget<AppSlider>(slider).value,
+      thumbAt,
+      reason: 'held still, the thumb is not pulled to the line on screen',
+    );
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(scrub, findsNothing, reason: 'let go, the track closes');
+    expect(scrub, findsOneWidget, reason: 'release keeps the panel open');
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      store.rows[LibraryRef.story('a/long.txt').toString()]!.lineIndex,
+      inInclusiveRange(150, 260),
+    );
     final shown = tester
         .widget<Text>(find.byKey(const ValueKey('story-reader-progress')))
         .data!;
     expect(int.parse(shown.split(' / ').first), inInclusiveRange(150, 260));
+    await tester.tapAt(Offset(track.right - 14, track.center.dy));
+    await tester.pumpAndSettle();
+    expect(tester.widget<AppSlider>(slider).value, greaterThan(390));
+    expect(scrub, findsOneWidget);
+    final jumped = tester.widget<AppSlider>(slider).value.round() + 1;
+    final line = find.text('第$jumped句。');
+    expect(line, findsOneWidget);
+    expect(
+      tester.getBottomLeft(line).dy,
+      lessThanOrEqualTo(tester.getTopLeft(scrub).dy),
+    );
+    final screen =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    expect(tester.getBottomLeft(line).dy, lessThanOrEqualTo(screen));
+    await tester.drag(
+      find.byKey(const ValueKey('story-reader-scroll')),
+      const Offset(0, 500),
+    );
+    await tester.pumpAndSettle();
+    expect(scrub, findsOneWidget, reason: 'scrolling leaves the panel open');
+    final progress = tester
+        .widget<Text>(find.byKey(const ValueKey('story-reader-progress')))
+        .data!;
+    expect(
+      tester.widget<AppSlider>(slider).value.round() + 1,
+      int.parse(progress.split(' / ').first),
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(scrub, findsNothing);
+    await tester.tap(title);
+    await tester.pumpAndSettle();
+    // On the text above the panel.
+    await tester.tapAt(const Offset(400, 120));
+    await tester.pumpAndSettle();
+    expect(scrub, findsNothing);
     expect(tester.takeException(), isNull);
   });
 

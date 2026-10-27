@@ -1,80 +1,118 @@
-// Tap feedback: a pressed surface sinks and springs back; a drag lets it
-// go; a disabled one does nothing. PressHold: pressed at once, a quick tap
-// still seen.
 import 'package:arklores/shared/theme/motion.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:arklores/shared/widgets/press_feedback.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-double _scale(WidgetTester tester) =>
-    tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale;
-
 void main() {
-  Widget app({bool enabled = true, VoidCallback? onTap}) => MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: PressFeedback(
-              enabled: enabled,
-              child: InkWell(
-                onTap: withHaptic(onTap ?? () {}),
-                child: const SizedBox(width: 120, height: 60),
-              ),
+  test(
+    'withHaptic keeps disabled controls disabled',
+    () => expect(withHaptic(null), isNull),
+  );
+  testWidgets(
+      'scroll on PressRow never shifts content or paints its trace in any frame',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                PressRow(
+                  onTap: () {},
+                  child:
+                      const SizedBox(key: ValueKey('row-content'), height: 70),
+                ),
+                const SizedBox(height: 2000),
+              ],
             ),
           ),
         ),
-      );
-
-  testWidgets('sinks while pressed, springs back on release, taps go through',
-      (tester) async {
-    var taps = 0;
-    final haptics = <String>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      (call) async {
-        if (call.method == 'HapticFeedback.vibrate') {
-          haptics.add('${call.arguments}');
-        }
-        return null;
-      },
+      ),
     );
-    await tester.pumpWidget(app(onTap: () => taps++));
-    expect(_scale(tester), 1);
+    void check() {
+      final row = find.byType(PressRow);
+      final containers = tester
+          .widgetList<AnimatedContainer>(
+            find.descendant(
+              of: row,
+              matching: find.byType(AnimatedContainer),
+            ),
+          )
+          .toList();
+      expect(containers.first.transform!.getTranslation().x, 0);
+      for (final transform in tester.widgetList<Transform>(
+        find.descendant(of: row, matching: find.byType(Transform)),
+      )) {
+        expect(transform.transform.getTranslation().x, 0);
+      }
+      // The trace rail has not started down the row.
+      expect(
+        tester
+            .getSize(
+              find.descendant(
+                of: find.descendant(of: row, matching: find.byType(TraceRail)),
+                matching: find.byType(ColoredBox),
+              ),
+            )
+            .height,
+        0,
+      );
+    }
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(InkWell)),
+      tester.getCenter(find.byKey(const ValueKey('row-content'))),
     );
-    await tester.pump();
-    expect(_scale(tester), lessThan(1));
+    for (var frame = 0; frame < 3; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      check();
+    }
+    await gesture.moveBy(const Offset(0, -30));
+    for (var frame = 0; frame < 12; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      check();
+    }
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(_scale(tester), 1);
-    expect(taps, 1);
-    expect(haptics, ['HapticFeedbackType.selectionClick']);
+    check();
   });
-
-  testWidgets('a drag (a scroll starting on it) lets it go', (tester) async {
-    await tester.pumpWidget(app());
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(InkWell)),
+  testWidgets('a tapped row runs its rail full and keeps it while covered',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                PressRow(
+                  onTap: () {},
+                  child:
+                      const SizedBox(key: ValueKey('row-content'), height: 70),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
+    double rail() => tester
+        .getSize(
+          find.descendant(
+            of: find.byType(TraceRail),
+            matching: find.byType(ColoredBox),
+          ),
+        )
+        .height;
+    await tester.tap(find.byKey(const ValueKey('row-content')));
     await tester.pump();
-    expect(_scale(tester), lessThan(1));
-    await gesture.moveBy(const Offset(0, 40));
-    await tester.pump();
-    expect(_scale(tester), 1);
-    await gesture.up();
+    await tester.pump(Motion.press + const Duration(milliseconds: 16));
+    expect(rail(), 70, reason: 'full within the press, not the row time');
+    await tester.pump(Motion.coverIn);
+    expect(rail(), 70, reason: 'past the quick tap, it has not drawn back');
+    await tester.pumpAndSettle();
+    expect(rail(), 0);
   });
-
-  testWidgets('disabled: no scale at all', (tester) async {
-    await tester.pumpWidget(app(enabled: false));
-    expect(find.byType(AnimatedScale), findsNothing);
-  });
-
-  test('withHaptic keeps a disabled control disabled', () {
-    expect(withHaptic(null), isNull);
-  });
-
   group('PressHold', () {
     // In a list, where a tap's own onTapDown waits 100 ms for a drag.
     Widget host({bool enabled = true, VoidCallback? onTap}) => MaterialApp(
@@ -90,11 +128,14 @@ void main() {
     bool shown(WidgetTester tester) =>
         tester.widget<_Mark>(find.byType(_Mark)).pressed;
 
-    testWidgets('pressed as soon as the finger lands', (tester) async {
+    testWidgets('pressed only after a stationary touch survives 100 ms',
+        (tester) async {
       await tester.pumpWidget(host());
       final gesture =
           await tester.startGesture(tester.getCenter(find.byType(_Mark)));
       await tester.pump();
+      expect(shown(tester), isFalse);
+      await tester.pump(const Duration(milliseconds: 150));
       expect(shown(tester), isTrue);
       await gesture.up();
       await tester.pumpAndSettle();
@@ -111,9 +152,9 @@ void main() {
       await tester.pump();
       expect(taps, 1);
       expect(shown(tester), isTrue);
-      // (the hold is measured from the touch on the real clock, so at most
-      // Motion.press after the release)
-      await tester.pump(Motion.press);
+      await tester.pump(const Duration(milliseconds: 99));
+      expect(shown(tester), isTrue);
+      await tester.pump(const Duration(milliseconds: 1));
       expect(shown(tester), isFalse);
     });
 
@@ -122,6 +163,8 @@ void main() {
       final gesture =
           await tester.startGesture(tester.getCenter(find.byType(_Mark)));
       await tester.pump();
+      expect(shown(tester), isFalse);
+      await tester.pump(const Duration(milliseconds: 150));
       expect(shown(tester), isTrue);
       await gesture.moveBy(const Offset(0, -40));
       await tester.pump();
@@ -163,6 +206,8 @@ void main() {
       final gesture =
           await tester.startGesture(tester.getCenter(find.byType(_Mark)));
       await tester.pump();
+      expect(shown(tester), isFalse);
+      await tester.pump(const Duration(milliseconds: 150));
       expect(shown(tester), isTrue);
       await gesture.up();
       await tester.pump();
@@ -209,6 +254,5 @@ class _Mark extends StatelessWidget {
   final bool pressed;
 
   @override
-  Widget build(BuildContext context) =>
-      const SizedBox(width: 120, height: 60);
+  Widget build(BuildContext context) => const SizedBox(width: 120, height: 60);
 }

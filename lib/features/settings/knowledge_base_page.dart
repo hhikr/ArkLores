@@ -11,6 +11,7 @@ import '../materials/materials_page.dart' show SwitchedPages;
 import 'game_asset_card.dart';
 import 'kb_common.dart';
 import 'source_build_card.dart';
+import 'story_art_pack_card.dart';
 import 'story_vector_card.dart';
 
 /// The knowledge bases: one page per game, chosen in the top bar (as in the
@@ -83,6 +84,8 @@ class _GamePage extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         StoryVectorCard(game: game),
+        const SizedBox(height: 12),
+        StoryArtPackCard(game: game),
         const SizedBox(height: 16),
         if (game == Game.arknights)
           const SourceBuildCard()

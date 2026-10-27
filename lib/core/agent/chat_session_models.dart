@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../llm/llm_client.dart';
 import 'chat_message.dart';
+import 'lore_tools.dart' show inContextPrefix;
 import 'react_event.dart' show ReActEventType;
 import 'story_answer.dart' show FactCheckVerdict;
 import 'turn_stats.dart';
@@ -48,7 +49,6 @@ enum ChatTurnStatus {
 /// Mutable while a turn is being recorded (the notifier fills fields as ReAct
 /// events arrive); serialized once the turn completes.
 class ReActIterationRecord {
-
   factory ReActIterationRecord.fromJson(Map<String, dynamic> json) =>
       ReActIterationRecord(
         iteration: (json['iteration'] as num?)?.toInt() ?? 0,
@@ -61,6 +61,7 @@ class ReActIterationRecord {
             ? Map<String, dynamic>.from(json['tool_args'] as Map)
             : null,
         observation: '${json['observation'] ?? ''}',
+        compaction: json['compaction'] as Map<String, dynamic>?,
       );
   ReActIterationRecord({
     required this.iteration,
@@ -71,6 +72,7 @@ class ReActIterationRecord {
     this.tool,
     this.toolArgs,
     this.observation = '',
+    this.compaction,
   });
 
   int iteration;
@@ -82,7 +84,10 @@ class ReActIterationRecord {
   Map<String, dynamic>? toolArgs;
   String observation;
 
+  Map<String, dynamic>? compaction;
+
   Map<String, dynamic> toJson() => {
+        if (compaction != null) 'compaction': compaction,
         'iteration': iteration,
         'raw_response': rawResponse,
         'thought': thought,
@@ -96,7 +101,6 @@ class ReActIterationRecord {
 
 /// One question-answer turn of a chat session.
 class ChatSessionTurn {
-
   factory ChatSessionTurn.fromJson(Map<String, dynamic> json) {
     return ChatSessionTurn(
       turn: (json['turn'] as num?)?.toInt() ?? 0,
@@ -192,9 +196,11 @@ class ChatSessionTurn {
 
 /// A persisted chat session file.
 class ChatSessionFile {
-
   factory ChatSessionFile.fromJson(Map<String, dynamic> json) =>
       ChatSessionFile(
+        loreConversation: json['lore_conversation'] is Map<String, dynamic>
+            ? json['lore_conversation'] as Map<String, dynamic>
+            : null,
         sessionId: '${json['session_id'] ?? ''}',
         createdAt: DateTime.tryParse('${json['created_at'] ?? ''}') ??
             DateTime.fromMillisecondsSinceEpoch(0),
@@ -220,6 +226,7 @@ class ChatSessionFile {
     required this.updatedAt,
     required this.title,
     this.turns = const [],
+    this.loreConversation,
   });
 
   final String sessionId;
@@ -227,6 +234,7 @@ class ChatSessionFile {
   final DateTime updatedAt;
   final String title;
   final List<ChatSessionTurn> turns;
+  final Map<String, dynamic>? loreConversation;
 
   /// Derived display summary for the history list.
   int get turnCount => turns.length;
@@ -234,6 +242,7 @@ class ChatSessionFile {
       turns.isEmpty ? '' : turns.last.query;
 
   Map<String, dynamic> toJson() => {
+        if (loreConversation != null) 'lore_conversation': loreConversation,
         'format': chatSessionFormat,
         'version': chatSessionFormatVersion,
         'session_id': sessionId,
@@ -256,6 +265,18 @@ class ChatSessionFile {
 List<ChatMessage> chatTurnToMessages(ChatSessionTurn turn, String assistantId) {
   final steps = <ReActStep>[];
   for (final iteration in turn.iterations) {
+    final compact = iteration.compaction;
+    if (compact != null) {
+      steps.add(
+        ReActStep(
+          type: ReActEventType.contextCompacted,
+          content: compact['content'] as String,
+          compactedFrom: compact['from'] as int?,
+          compactedTo: compact['to'] as int?,
+          retainedCount: compact['retained'] as int?,
+        ),
+      );
+    }
     if (iteration.thought.isNotEmpty) {
       steps.add(ReActStep(
         type: ReActEventType.thought,
@@ -263,15 +284,18 @@ List<ChatMessage> chatTurnToMessages(ChatSessionTurn turn, String assistantId) {
       ),);
     }
     if (iteration.tool != null && iteration.tool!.isNotEmpty) {
-      steps.add(ReActStep(
-        type: ReActEventType.toolCall,
-        content: 'Executing tool "${iteration.tool}" with arguments: '
-            '${iteration.toolArgs ?? const <String, dynamic>{}}',
-        toolName: iteration.tool,
-        toolArgs: iteration.toolArgs,
-        // What the session record says of a planned step.
-        planned: iteration.rawResponse.startsWith('（拟定'),
-      ),);
+      steps.add(
+        ReActStep(
+          type: ReActEventType.toolCall,
+          content: 'Executing tool "${iteration.tool}" with arguments: '
+              '${iteration.toolArgs ?? const <String, dynamic>{}}',
+          toolName: iteration.tool,
+          toolArgs: iteration.toolArgs,
+          // What the session record says of a planned step.
+          planned: iteration.rawResponse.startsWith('（拟定'),
+          inContext: iteration.observation.startsWith(inContextPrefix),
+        ),
+      );
     }
     if (iteration.observation.isNotEmpty) {
       steps.add(ReActStep(

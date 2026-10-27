@@ -21,11 +21,16 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common/sqlite_api.dart';
 
+import 'portrait_index.dart';
+import 'story_art_index.dart';
+
 /// Removes everything a story file wrote: its lines, scope and vectors. [path] is the repo-relative path
 /// (`zh_CN/gamedata/story/<story id>`). The entry layer is rebuilt separately
 /// (`EntryImporter.rebuildDerived`).
 Future<void> deleteStoryRows(Database db, String path) async {
   final storyId = path.substring('zh_CN/gamedata/story/'.length);
+  await deletePortraitRows(db, storyId);
+  await deleteStoryArtRows(db, storyId);
   // Databases built on Windows hold the backslash spelling of the path.
   final paths = {path, path.replaceAll('/', r'\')}.toList();
   final marks = List.filled(paths.length, '?').join(',');
@@ -465,11 +470,17 @@ class ArknightsImporter {
     final storyId =
         p.relative(file.path, from: zhStory).replaceAll(p.separator, '/');
     final raw = await file.readAsString();
-    final lines = parseStoryScript(raw);
+    final parsed = parseStoryScriptWithArt(raw);
+    final lines = parsed.lines;
     if (lines.isEmpty) return;
     final scope = storyScope(storyId);
 
     await db.transaction((txn) async {
+      await ensurePortraitTables(txn);
+      await ensureStoryArtTable(txn);
+      await deleteStoryArtRows(txn, storyId);
+      await writeStoryArtRows(txn, storyId, parsed.art);
+      await deletePortraitRows(txn, storyId);
       await txn.insert(
         'story_scopes',
         {
@@ -499,6 +510,11 @@ class ArknightsImporter {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
         stats.storyLines++;
+        if (line.portrait != null) {
+          await txn.insert(storyLinePortraitsTable, {
+            'story_id': storyId, 'line_index': i, 'sprite': line.portrait,
+          });
+        }
       }
     });
   }

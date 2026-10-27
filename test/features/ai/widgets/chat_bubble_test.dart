@@ -8,14 +8,19 @@ import 'package:arklores/core/agent/turn_stats.dart';
 import 'package:arklores/core/gamedata/story_coverage_models.dart';
 import 'package:arklores/core/library/library_provider.dart'
     show attachedStoriesProvider, storyHostProvider;
+import 'package:arklores/core/library/portrait_provider.dart';
 import 'package:arklores/core/llm/llm_client.dart' show MessageRole;
 import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/theme_provider.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../support/screenshot.dart';
 
 const _c5 = 'activities/act_fixture/level_fixture_c5.txt';
 const _c6 = 'activities/act_fixture/level_fixture_c6.txt';
@@ -63,7 +68,10 @@ Future<void> _pump(
   final bubble = ChatBubble(message: message);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: overrides,
+      overrides: [
+        highlightNamesProvider.overrideWith((ref) async => []),
+        ...overrides,
+      ],
       child: MaterialApp(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -73,8 +81,10 @@ Future<void> _pump(
               .copyWith(textScaler: TextScaler.linear(textScale)),
           child: child!,
         ),
-        home: Scaffold(
-          body: scroll ? SingleChildScrollView(child: bubble) : bubble,
+        home: Shot(
+          child: Scaffold(
+            body: scroll ? SingleChildScrollView(child: bubble) : bubble,
+          ),
         ),
       ),
     ),
@@ -306,7 +316,7 @@ void main() {
       expect(find.textContaining('.txt'), findsNothing);
       // R17b: the citation leaves the text and the chain waits for the
       // finished answer, so nothing jumps.
-      expect(find.text('结论'), findsOneWidget);
+      expect(find.text('结论'), findsNothing);
       expect(find.textContaining('第 1 行'), findsNothing);
       // The thinking folds away on tap.
       await tester.tap(find.text('思考过程'));
@@ -389,8 +399,10 @@ void main() {
           elapsed: Duration(seconds: 262),
         ),
       );
-      expect(find.text('in 382k / out 11.7k / cache 87% / 14 calls / 4m22s'),
-          findsOneWidget,);
+      expect(
+        find.text('14 calls: in 382k, out 11.7k, cache 87% / 4m22s'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('a provider without usage shows what it has', (tester) async {
@@ -409,7 +421,7 @@ void main() {
         ),
         locale: const Locale('en'),
       );
-      expect(find.text('in 1.2k / out 300 / 2 calls / 1m05s'), findsOneWidget);
+      expect(find.text('2 calls: in 1.2k, out 300 / 1m05s'), findsOneWidget);
     });
 
     testWidgets('no stats, no line', (tester) async {
@@ -477,7 +489,94 @@ void main() {
   });
 
   group('work timeline', () {
-    testWidgets('each step shows its tool, its arguments as written and '
+    testWidgets(
+        'expanded tool output scrolls without pressing or moving its header',
+        (tester) async {
+      await _pump(
+        tester,
+        ChatMessage(
+          id: 'scroll-output',
+          role: MessageRole.assistant,
+          content: _answered('回答。'),
+          timestamp: DateTime(2026),
+          steps: [
+            const ReActStep(
+                type: ReActEventType.toolCall,
+                content: '',
+                toolName: 'grep',
+                toolArgs: {'pattern': '甲'},),
+            ReActStep(
+                type: ReActEventType.toolObservation,
+                toolName: 'grep',
+                content: List.filled(100, '工具输出的一行。').join('\n'),),
+          ],
+        ),
+        phone: false,
+      );
+      await tester.tap(find.byKey(const ValueKey('answer-header')));
+      await tester.pumpAndSettle();
+      final header = find.byKey(const ValueKey('work-step-0'));
+      await tester.tap(header);
+      await tester.pumpAndSettle();
+      final raw = find.byKey(const ValueKey('work-raw-0'));
+      expect(find.ancestor(of: raw, matching: find.byType(PressRow)),
+          findsNothing,);
+      final scroll = find.descendant(
+          of: raw, matching: find.byType(SingleChildScrollView),);
+      final scrollable =
+          find.descendant(of: scroll, matching: find.byType(Scrollable));
+      final position = tester.state<ScrollableState>(scrollable.first).position;
+      final gesture = await tester.startGesture(tester.getCenter(raw));
+      await tester.pump(const Duration(milliseconds: 150));
+      for (final container in tester.widgetList<AnimatedContainer>(find
+          .descendant(of: header, matching: find.byType(AnimatedContainer)),)) {
+        if (container.transform != null) {
+          expect(container.transform!.getTranslation().x, 0);
+        }
+        if (container.constraints != null) {
+          expect(container.constraints!.maxWidth, 0);
+        }
+      }
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      expect(position.pixels, greaterThan(0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(raw, findsOneWidget);
+    });
+
+    testWidgets('compaction is unnumbered and opens its full memo',
+        (tester) async {
+      final message = ChatMessage(
+        id: 'compact',
+        role: MessageRole.assistant,
+        content: _answered('回答。'),
+        timestamp: DateTime(2026),
+        steps: const [
+          ReActStep(
+              type: ReActEventType.contextCompacted,
+              content: '【对话纪要 #1】\n完整纪要正文',
+              compactedFrom: 84000,
+              compactedTo: 21000,
+              retainedCount: 3,),
+        ],
+      );
+      await _pump(tester, message);
+      await tester.tap(find.byKey(const ValueKey('answer-header')));
+      await tester.pumpAndSettle();
+      expect(find.text('压缩上下文 / 约 84.0k → 21.0k / 保留 3 段'), findsOneWidget);
+      expect(find.text('1'), findsNothing);
+      expect(find.textContaining('完整纪要正文'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('work-compaction-0')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('完整纪要正文'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'each step shows its tool, its arguments as written and '
         'what came back; the whole output on tap', (tester) async {
       final message = ChatMessage(
         id: 'a',
@@ -510,16 +609,17 @@ void main() {
             content: '【第一章】 $_c5\nL0 [甲] 一\nL1 [乙] 二\nL40 [甲] 三',
             toolName: 'read_story',
           ),
-          // The same call again, and nothing found this time.
+          // The loop marked this call as still in context.
           ReActStep(
             type: ReActEventType.toolCall,
             content: 'Executing tool "grep"',
+            inContext: true,
             toolName: 'grep',
             toolArgs: {'pattern': '甲|乙', 'collection': 'act_fixture'},
           ),
           ReActStep(
             type: ReActEventType.toolObservation,
-            content: '0 行：act_fixture 里没有 甲 / 乙。',
+            content: '（已在上文）第 1 步的结果仍在上文。',
             toolName: 'grep',
           ),
           ReActStep(
@@ -560,16 +660,23 @@ void main() {
       expect(find.textContaining('第 0–40 行 / '), findsOneWidget);
       expect(find.textContaining(' 字'), findsNWidgets(3));
       expect(find.text('拟定'), findsOneWidget);
-      expect(find.text('重复'), findsOneWidget);
-      expect(find.text('没有结果'), findsOneWidget);
+      expect(find.text('已在上文'), findsOneWidget);
+      final flag = tester.widget<Text>(find.text('已在上文'));
+      expect(flag.style!.color, ProviderScope.containerOf(tester.element(find.text('已在上文'))).read(themeProvider).textMuted);
+      expect(find.text('3'), findsNothing);
+      expect(find.text('没有结果'), findsNothing);
       expect(find.text('记录：出处裁到读过的行：a:1-9 → a:1-3'), findsOneWidget);
       expect(find.textContaining('Observation'), findsNothing);
       expect(find.textContaining('Executing tool'), findsNothing);
 
       expect(find.byKey(const ValueKey('work-raw-1')), findsNothing);
+      final head = tester.getTopLeft(find.byKey(const ValueKey('work-step-1')));
       await tester.tap(find.byKey(const ValueKey('work-step-1')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('work-raw-1')), findsOneWidget);
+      // The step's head stays where it was; only the output comes in.
+      expect(tester.getTopLeft(find.byKey(const ValueKey('work-step-1'))), head);
+      await shoot(tester, 'work_step_open');
       expect(tester.takeException(), isNull);
     });
   });

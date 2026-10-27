@@ -11,6 +11,7 @@
 library;
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import '../gamedata/game_retrieval.dart';
@@ -18,6 +19,7 @@ import '../gamedata/multi_game_retrieval.dart';
 import '../llm/embedding_client.dart';
 import '../materials/material_snapshot.dart';
 import '../wiki/wiki_lookup.dart';
+import 'context_ledger.dart';
 import 'coverage.dart';
 import 'line_picker.dart';
 import 'lore_agent_prompts.dart' show loreLibraryManual;
@@ -32,8 +34,33 @@ import 'tools/search_tool.dart';
 /// [add], [addRange] and [addRecord]; a line counts only when its text was
 /// printed, a record is whole or only an excerpt ([recordIsPartial]). What
 /// one tool call showed is also noted for that call ([duringCall]), so a
-/// folded result can still say which lines it held.
+/// context ledger can track exactly which text remains visible.
 class SeenLines {
+  SeenLines();
+
+  factory SeenLines.fromJson(Map<String, dynamic> json) {
+    final seen = SeenLines();
+    for (final e in (json['lines'] as Map<String, dynamic>).entries) {
+      for (final value in e.value as List) {
+        final range = value as List;
+        seen.addRange(e.key, range[0] as int, range[1] as int);
+      }
+    }
+    for (final e in (json['records'] as Map<String, dynamic>).entries) {
+      seen.addRecord(e.key, partial: e.value as bool);
+    }
+    return seen;
+  }
+
+  Map<String, dynamic> toJson() => {
+        'lines': {
+          for (final id in stories)
+            id: [
+              for (final r in seenRanges(id, 0, 1 << 30)) [r.$1, r.$2],
+            ],
+        },
+        'records': Map<String, bool>.of(_records),
+      };
   final Map<String, Set<int>> _lines = {};
 
   /// Record id → only an excerpt of it was shown.
@@ -56,6 +83,10 @@ class SeenLines {
     _call?.addRecord(id, partial: partial);
   }
 
+  Iterable<MapEntry<String, Set<int>>> get lineEntries =>
+      _lines.entries.map((e) => MapEntry(e.key, UnmodifiableSetView(e.value)));
+  bool recordIsWhole(String id) => _records[id] == false;
+  Iterable<String> get recordIds => _records.keys;
   bool hasRecord(String id) => _records.containsKey(id);
 
   /// Only an excerpt of record [id] was shown (false when unknown).
@@ -120,7 +151,8 @@ class SeenLines {
       // (Wiki pages are kept by paragraph: `P`.)
       final text = runs.join('、');
       parts.add(
-          '$story ${story.startsWith('wiki:') || story.startsWith('material:') ? text.replaceAll('L', 'P') : text}',);
+        '$story ${story.startsWith('wiki:') || story.startsWith('material:') ? text.replaceAll('L', 'P') : text}',
+      );
     }
     for (final MapEntry(key: id, value: partial) in _records.entries) {
       parts.add('record:$id${partial ? '（片段）' : ''}');
@@ -140,7 +172,9 @@ class SeenLines {
   /// Whether every line of `first..last` was shown.
   bool covers(String storyId, int first, int last) {
     final set = _lines[storyId];
-    if (set == null || last < first || last - first + 1 > set.length) return false;
+    if (set == null || last < first || last - first + 1 > set.length) {
+      return false;
+    }
     for (var i = first; i <= last; i++) {
       if (!set.contains(i)) return false;
     }
@@ -151,7 +185,8 @@ class SeenLines {
 
   void retainMaterials(Set<String> allowed) {
     _lines.removeWhere(
-        (id, _) => id.startsWith('material:') && !allowed.contains(id),);
+      (id, _) => id.startsWith('material:') && !allowed.contains(id),
+    );
   }
 
   /// Adds everything [other] saw (a sub-agent's reading counts as read).
@@ -174,6 +209,9 @@ class SeenLines {
 /// halved from 16000 — every result is sent again with each later turn, so
 /// its size is paid many times; a longer chapter is read in pages.
 const int maxToolResultChars = 8000;
+
+/// Original text still above; this call was not run.
+const String inContextPrefix = '（已在上文）';
 
 /// [text] on one line: its line breaks shown as ` / `.
 String oneLine(String text) => text.contains('\n')
@@ -392,18 +430,23 @@ class SqlTool extends AgentTool {
         }
       }
       if (byStory.isNotEmpty) {
-        final where = byStory.entries.map((e) =>
-            "(story_id = '${e.key.replaceAll("'", "''")}' AND line_index IN (${e.value.join(',')}))",)
+        final where = byStory.entries
+            .map(
+              (e) =>
+                  "(story_id = '${e.key.replaceAll("'", "''")}' AND line_index IN (${e.value.join(',')}))",
+            )
             .join(' OR ');
         // Validate against source rows even when SQL omits or aliases kind.
         var sources = await store.readOnlySql(
           'SELECT story_id, line_index, kind FROM story_lines WHERE $where',
-          maxRows: result.rows.length, game: game,
+          maxRows: result.rows.length,
+          game: game,
         );
         if (sources.error?.contains('no such column: kind') ?? false) {
           sources = await store.readOnlySql(
             'SELECT story_id, line_index FROM story_lines WHERE $where',
-            maxRows: result.rows.length, game: game,
+            maxRows: result.rows.length,
+            game: game,
           );
         }
         for (final row in sources.rows) {
@@ -432,7 +475,8 @@ class SqlTool extends AgentTool {
       if (storyCol >= 0 && lineCol >= 0 && contentCol >= 0) {
         final line = _int(row[lineCol]);
         final key = ('${row[storyCol]}', line);
-        if (line != null && sourceKinds.containsKey(key) &&
+        if (line != null &&
+            sourceKinds.containsKey(key) &&
             isStoryEvidence(sourceKinds[key])) {
           seen.add('${row[storyCol]}', line);
         }
@@ -583,7 +627,8 @@ class GuideTool extends AgentTool {
 /// `read_record`: the text of one record outside the story text (an
 /// archive, a voice line, a module's story, an item's description).
 class ReadRecordTool extends AgentTool {
-  ReadRecordTool(this.store, this.seen);
+  ReadRecordTool(this.store, this.seen, {this.ledger});
+  final ContextLedger? ledger;
 
   final GameDataRetrieval store;
   final SeenLines seen;
@@ -636,6 +681,10 @@ class ReadRecordTool extends AgentTool {
     final id =
         '${arguments['id'] ?? ''}'.trim().replaceFirst(_recordPrefix, '');
     if (id.isEmpty) return '缺少参数 id：写检索结果里 record: 后面的记录 id。';
+    if ((_int(arguments['start']) ?? 0) <= 0 &&
+        (ledger?.recordInContext(id) ?? false)) {
+      return '$inContextPrefix record:$id 的全文仍在上文（${contextStep(ledger!.stepOfRecord(id)!)}的结果），没有重新读取。';
+    }
     final record = await store.readRecord(id);
     if (record == null) {
       return '没有 id 为 $id 的资料。id 要与检索或查询结果里的完全一致；'
@@ -666,7 +715,8 @@ class ReadRecordTool extends AgentTool {
 
 /// `read_story`: consecutive lines of one chapter.
 class ReadStoryTool extends AgentTool {
-  ReadStoryTool(this.store, this.seen);
+  ReadStoryTool(this.store, this.seen, {this.ledger});
+  final ContextLedger? ledger;
 
   final GameDataRetrieval store;
   final SeenLines seen;
@@ -731,15 +781,49 @@ class ReadStoryTool extends AgentTool {
     final entries = await store.storyCatalogEntries([storyId]);
     final buffer = StringBuffer()
       ..writeln('《${_storyLabel(storyId, entries)}》 $storyId');
-    var last = start;
+    final printable = <StoryLineEntry>[];
+    var chars = buffer.length;
     for (final line in page.lines) {
       final text = formatStoryLine(line.lineIndex, line.speaker, line.content,
           kind: line.kind,);
-      if (buffer.length + text.length > maxToolResultChars &&
-          line.lineIndex > page.lines.first.lineIndex) {
+      if (chars + text.length > maxToolResultChars && printable.isNotEmpty) {
         break;
       }
-      buffer.writeln(text);
+      printable.add(line);
+      chars += text.length + 1;
+    }
+    final evidence = printable.where((l) => isStoryEvidence(l.kind)).toList();
+    bool above(StoryLineEntry l) =>
+        ledger?.lineInContext(storyId, l.lineIndex) ?? false;
+    if (ledger != null && evidence.isNotEmpty && evidence.every(above)) {
+      final first = printable.first.lineIndex;
+      final last = printable.last.lineIndex;
+      final steps =
+          contextSteps(ledger!, storyId, evidence.map((l) => l.lineIndex));
+      final more = last < page.lines.last.lineIndex || page.hasMore;
+      return '$inContextPrefix L$first–L$last 的原文仍在上文（$steps的结果），没有重新读取。'
+          '${more ? '直接使用上文；要读后面的内容用 start=${last + 1}。' : '这一章到 L$last 结束。'}';
+    }
+    var last = start;
+    for (var i = 0; i < printable.length; i++) {
+      final line = printable[i];
+      if (isStoryEvidence(line.kind) && above(line)) {
+        var end = i;
+        for (var scan = i + 1; scan < printable.length; scan++) {
+          final next = printable[scan];
+          if (isStoryEvidence(next.kind)) {
+            if (!above(next)) break;
+            end = scan;
+          }
+        }
+        buffer.writeln(
+            '（L${line.lineIndex}–L${printable[end].lineIndex} 的原文仍在上文，略去）',);
+        last = printable[end].lineIndex;
+        i = end;
+        continue;
+      }
+      buffer.writeln(formatStoryLine(line.lineIndex, line.speaker, line.content,
+          kind: line.kind,),);
       last = line.lineIndex;
       seen.addStoryLine(storyId, line);
     }
@@ -886,7 +970,8 @@ class GrepTool extends AgentTool {
         );
         for (final line in page.lines) {
           final mark = hitSet.contains(line.lineIndex) ? '* ' : '  ';
-          final text = '$mark${formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind)}';
+          final text =
+              '$mark${formatStoryLine(line.lineIndex, line.speaker, line.content, kind: line.kind)}';
           if (buffer.length + block.length + text.length > maxToolResultChars &&
               (printedStories > 0 || blockLines.isNotEmpty)) {
             full = true;
@@ -905,7 +990,8 @@ class GrepTool extends AgentTool {
           seen.addStoryLine(storyId, line);
         }
         printedStories++;
-        printed[storyId] = blockLines.where((l) => hitSet.contains(l.lineIndex)).length;
+        printed[storyId] =
+            blockLines.where((l) => hitSet.contains(l.lineIndex)).length;
       }
       if (full) break;
     }
@@ -1128,8 +1214,10 @@ class SimilarNamesTool extends AgentTool {
     final similar = await store.similarNames(term, limit: 8);
     if (similar.isEmpty) return '没有找到与“$term”相近的名字。';
     return similar
-        .map((s) =>
-            '${s.name}（${s.kind}${s.occurrences > 0 ? '，${s.occurrences} 次' : ''}）',)
+        .map(
+          (s) =>
+              '${s.name}（${s.kind}${s.occurrences > 0 ? '，${s.occurrences} 次' : ''}）',
+        )
         .join('\n');
   }
 }
@@ -1196,13 +1284,19 @@ List<AgentTool> loreTools(
   WikiLookup? wiki,
   LinePicker? picker,
   MaterialSnapshot? materials,
+  ContextLedger? ledger,
 }) {
   final manual = LibraryManual(store);
   final tools = <AgentTool>[
-    SearchTool(store, seen,
-        embeddingClient: embeddingClient, wiki: wiki, materials: materials,),
-    ReadStoryTool(store, seen),
-    ReadRecordTool(store, seen),
+    SearchTool(
+      store,
+      seen,
+      embeddingClient: embeddingClient,
+      wiki: wiki,
+      materials: materials,
+    ),
+    ReadStoryTool(store, seen, ledger: ledger),
+    ReadRecordTool(store, seen, ledger: ledger),
     GrepTool(store, seen),
     SqlTool(store, seen, manual: manual),
     GuideTool(manual),

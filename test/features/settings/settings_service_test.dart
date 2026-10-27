@@ -6,7 +6,9 @@ import 'package:arklores/core/llm/embedding_client.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/shared/l10n/locale_provider.dart';
+import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,6 +25,47 @@ void main() {
     FlutterSecureStorage.setMockInitialValues(values);
     return SettingsService();
   }
+
+  test('context warning changes immediately and survives a restart', () async {
+    expect(await service.loadContextWarnTokens(), 1000000);
+    final container = ProviderContainer(
+        overrides: [settingsServiceProvider.overrideWithValue(service)],);
+    addTearDown(container.dispose);
+    final saved = container.read(contextWarnTokensProvider.notifier).set(64000);
+    expect(container.read(contextWarnTokensProvider), 64000);
+    await saved;
+    expect(
+        await const FlutterSecureStorage().read(key: 'ask_context_warn_tokens'),
+        '64000',);
+    final restarted = ProviderContainer(
+      overrides: [
+        initialContextWarnTokensProvider
+            .overrideWithValue(await SettingsService().loadContextWarnTokens()),
+      ],
+    );
+    addTearDown(restarted.dispose);
+    expect(restarted.read(contextWarnTokensProvider), 64000);
+  });
+
+  test('compaction point: 80% by default, saved, out-of-range refused',
+      () async {
+    expect(await service.loadCompactPercent(), 80);
+    final container = ProviderContainer(
+        overrides: [settingsServiceProvider.overrideWithValue(service)],);
+    addTearDown(container.dispose);
+    await container.read(compactPercentProvider.notifier).set(60);
+    expect(container.read(compactPercentProvider), 60);
+    expect(await SettingsService().loadCompactPercent(), 60);
+    expect(await withStored({'ask_compact_percent': '150'}).loadCompactPercent(),
+        80,);
+  });
+
+  test('operator names in answers: linked by default, the choice is kept',
+      () async {
+    expect(await service.loadSkipOperatorNames(), isFalse);
+    await service.saveSkipOperatorNames(true);
+    expect(await SettingsService().loadSkipOperatorNames(), isTrue);
+  });
 
   group('API', () {
     test('defaults to Zhipu GLM without a key', () async {
@@ -74,12 +117,18 @@ void main() {
   });
 
   group('app state', () {
-    test('session logs default off and persist', () async {
-      expect(await service.loadSessionLogsEnabled(), isFalse);
-      await service.saveSessionLogsEnabled(true);
+    test('session logs default on and a choice persists', () async {
       expect(await service.loadSessionLogsEnabled(), isTrue);
       await service.saveSessionLogsEnabled(false);
       expect(await service.loadSessionLogsEnabled(), isFalse);
+      await service.saveSessionLogsEnabled(true);
+      expect(await service.loadSessionLogsEnabled(), isTrue);
+    });
+
+    test('a story opened and not read on is skipped by default', () async {
+      expect(await service.loadSkipUnreadOpens(), isTrue);
+      await service.saveSkipUnreadOpens(false);
+      expect(await service.loadSkipUnreadOpens(), isFalse);
     });
 
     test('nickname is trimmed; onboarding is remembered', () async {

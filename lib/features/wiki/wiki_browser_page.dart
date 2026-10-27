@@ -14,6 +14,7 @@ import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/providers/wiki_navigation_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
@@ -364,59 +365,54 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
   /// [build].
   double _dockTop = 0;
   double _dockBottom = 0;
+  double _visibleDockTop = 0;
+  double _visibleDockBottom = 0;
+  Duration _dockDuration = Duration.zero;
 
   /// Records the docks' room and, when it changed, pads every open page.
-  void _syncDockInsets(double top, double bottom) {
-    if (top == _dockTop && bottom == _dockBottom) return;
+  void _syncDockInsets(double top, double bottom, bool hidden) {
+    final visibleTop = hidden ? MediaQuery.paddingOf(context).top : top;
+    final visibleBottom =
+        hidden ? MediaQuery.viewPaddingOf(context).bottom : bottom;
+    final duration = Motion.of(context, hidden ? Motion.row : Motion.press * 2);
+    final layout =
+        top != _dockTop || bottom != _dockBottom || duration != _dockDuration;
+    if (!layout &&
+        visibleTop == _visibleDockTop &&
+        visibleBottom == _visibleDockBottom) {
+      return;
+    }
     _dockTop = top;
     _dockBottom = bottom;
+    _visibleDockTop = visibleTop;
+    _visibleDockBottom = visibleBottom;
+    _dockDuration = duration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (final controller in _controllers) {
-        if (controller != null) unawaited(_applyDockInsets(controller));
+        if (controller != null) {
+          unawaited(_applyDockInsets(controller, scan: layout));
+        }
       }
     });
   }
 
   /// Pads the page by the docks' room, so its top and its end can be
   /// scrolled clear of them, and moves the site's own fixed/sticky bars
-  /// (which ignore padding) down/up by the same amount.
-  Future<void> _applyDockInsets(InAppWebViewController controller) async {
-    final js = '''
-(function(t, b) {
-  var id = 'arklores-dock-insets';
-  var style = document.getElementById(id);
-  if (!style) {
-    style = document.createElement('style');
-    style.id = id;
-    (document.head || document.documentElement).appendChild(style);
-  }
-  style.textContent = 'html{padding-top:' + t + 'px !important;' +
-      'padding-bottom:' + b + 'px !important;' +
-      'scroll-padding-top:' + t + 'px;}';
-  function shift() {
-    if (!document.body) return;
-    var all = document.body.querySelectorAll('*');
-    for (var i = 0; i < all.length; i++) {
-      var e = all[i];
-      var cs = window.getComputedStyle(e);
-      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
-      if (e.dataset.arkloresDock === undefined) {
-        if (parseFloat(cs.top) === 0) e.dataset.arkloresDock = 'top';
-        else if (cs.position === 'fixed' && parseFloat(cs.bottom) === 0)
-          e.dataset.arkloresDock = 'bottom';
-        else e.dataset.arkloresDock = '';
-      }
-      if (e.dataset.arkloresDock === 'top')
-        e.style.setProperty('top', t + 'px', 'important');
-      if (e.dataset.arkloresDock === 'bottom')
-        e.style.setProperty('bottom', b + 'px', 'important');
-    }
-  }
-  shift();
-  window.setTimeout(shift, 600);
-  window.setTimeout(shift, 1600);
-})($_dockTop, $_dockBottom);
-''';
+  /// (which ignore padding) down/up by the same amount. The bars only
+  /// moving ([scan] false) sets two variables: looking through the whole
+  /// page then, while it is being scrolled, made the scroll stutter.
+  Future<void> _applyDockInsets(
+    InAppWebViewController controller, {
+    bool scan = true,
+  }) async {
+    final js = wikiDockInsetsScript(
+      top: _dockTop,
+      bottom: _dockBottom,
+      visibleTop: _visibleDockTop,
+      visibleBottom: _visibleDockBottom,
+      duration: _dockDuration,
+      scan: scan,
+    );
     try {
       await controller.evaluateJavascript(source: js);
     } catch (_) {
@@ -782,6 +778,12 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
     if (index != _tabController.index || before == null || !mounted) return;
     _bars.moved(ref, (y - before).toDouble(), atTop: y <= 0);
   }
+
+  /// A tap on the page's text or empty space: the bars back, or away again.
+  void _onBlankTap(int index) {
+    if (index != _tabController.index || !mounted) return;
+    _bars.tapped(ref, canHide: (_scrollY[index] ?? 0) > 0);
+  }
   // ─── Build ───────────────────────────────────────────────────────
 
   /// 0.13: a page asked for by another page (an answer's wiki citation)
@@ -844,10 +846,16 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
         ) ??
         false;
 
-    _syncDockInsets(topBarInset, MediaQuery.paddingOf(context).bottom);
+    _syncDockInsets(
+      MediaQuery.paddingOf(context).top + topBarInset,
+      MediaQuery.paddingOf(context).bottom,
+      ref.watch(barsHiddenProvider) &&
+          MediaQuery.viewInsetsOf(context).bottom == 0,
+    );
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
+        top: false,
         bottom: false,
         child: Stack(
           children: [
@@ -874,6 +882,7 @@ class _WikiBrowserPageState extends ConsumerState<WikiBrowserPage>
                       onUrlChanged: _onUrlChanged,
                       onHistoryChanged: _onHistoryChanged,
                       onScrolled: _onScrolled,
+                      onBlankTap: _onBlankTap,
                     ),
                   );
                 }),
@@ -914,8 +923,12 @@ class _WikiTabView extends StatefulWidget {
     required this.onUrlChanged,
     required this.onHistoryChanged,
     required this.onScrolled,
+    required this.onBlankTap,
   });
   final int index;
+
+  /// A tap ended on the page where nothing answers it.
+  final void Function(int index) onBlankTap;
 
   /// The page scrolled to [y] (CSS pixels from its top).
   final void Function(int index, int y) onScrolled;
@@ -968,6 +981,12 @@ class _WikiTabViewState extends State<_WikiTabView> {
     _syncPaused();
   }
 
+  @override
+  void dispose() {
+    _resume?.cancel();
+    super.dispose();
+  }
+
   /// An Android WebView keeps drawing its page (animations, video) while it
   /// is off screen, on the app's main thread, which is also where the app's
   /// frames start: off screen (another tab, the other site, a page pushed
@@ -980,11 +999,24 @@ class _WikiTabViewState extends State<_WikiTabView> {
     final pause = !TickerMode.valuesOf(context).enabled;
     if (pause == _paused) return;
     _paused = pause;
-    (pause ? controller.pause() : controller.resume()).catchError(
-      (Object error) =>
-          debugPrint('[WikiBrowser] Error pausing WebView: $error'),
-    );
+    _resume?.cancel();
+    if (pause) {
+      controller.pause().catchError(_pauseFailed);
+      return;
+    }
+    // Back on screen: the page starts drawing again once the tab bar's block
+    // has slid over. Restarted at once, its first frames fell on the frames
+    // of that slide, on the same Android main thread, and the slide jerked
+    // (only on the way to the wiki; leaving it costs nothing).
+    _resume = Timer(Motion.of(context, Motion.wipe), () {
+      if (!_paused) controller.resume().catchError(_pauseFailed);
+    });
   }
+
+  Timer? _resume;
+
+  void _pauseFailed(Object error) =>
+      debugPrint('[WikiBrowser] Error pausing WebView: $error');
 
   @override
   void didUpdateWidget(covariant _WikiTabView oldWidget) {
@@ -1076,6 +1108,12 @@ class _WikiTabViewState extends State<_WikiTabView> {
             // Profile builds (`-FrameLog`): the page's own frames a second,
             // next to Flutter's `[frame]` lines — whether the page draws
             // fewer, or Flutter composes fewer of them.
+            UserScript(
+              groupName: 'arklores-blank-tap',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+              forMainFrameOnly: true,
+              source: wikiBlankTapScript,
+            ),
             if (kProfileMode)
               UserScript(
                 groupName: 'arklores-web-fps',
@@ -1093,6 +1131,10 @@ class _WikiTabViewState extends State<_WikiTabView> {
               : null,
           onWebViewCreated: (controller) {
             _controller = controller;
+            controller.addJavaScriptHandler(
+              handlerName: wikiBlankTapHandler,
+              callback: (_) => widget.onBlankTap(widget.index),
+            );
             widget.onControllerCreated(widget.index, controller);
             _syncPaused();
           },
@@ -1252,4 +1294,99 @@ class _WikiTabViewState extends State<_WikiTabView> {
     }
     return description;
   }
+}
+
+/// The handler the page calls when a tap ends where nothing on it answers.
+const String wikiBlankTapHandler = 'arkloresBlankTap';
+
+/// Tells the app about taps that end on text or empty space: a `click`
+/// (the browser sends none for a scroll or a long press) that the page did
+/// not take for itself (no link, control or handler-marked element under
+/// it, not cancelled) and that selected no text. Bubbling, so the page's
+/// own handlers run first. The same for every site.
+const String wikiBlankTapScript = '''
+(function () {
+  if (window.__arkloresBlankTap) return;
+  window.__arkloresBlankTap = true;
+  var live = 'a[href],button,input,select,textarea,label,summary,video,audio,'
+    + '[onclick],[role="button"],[role="link"],[role="tab"],[role="menuitem"],'
+    + '[contenteditable=""],[contenteditable="true"],[tabindex]:not([tabindex="-1"])';
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented) return;
+    var t = e.target;
+    if (t && t.closest && t.closest(live)) return;
+    var s = window.getSelection && window.getSelection();
+    if (s && !s.isCollapsed) return;
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      window.flutter_inappwebview.callHandler('$wikiBlankTapHandler');
+    }
+  }, false);
+})();
+''';
+
+/// Generic fixed/sticky dock adaptation; page padding stays stable while bars move.
+@visibleForTesting
+String wikiDockInsetsScript({
+  required double top,
+  required double bottom,
+  required double visibleTop,
+  required double visibleBottom,
+  required Duration duration,
+  bool scan = true,
+}) {
+  if (!scan) {
+    return '''
+(function() {
+  var root = document.documentElement;
+  root.style.setProperty('--arklores-dock-top', '${visibleTop}px');
+  root.style.setProperty('--arklores-dock-bottom', '${visibleBottom}px');
+})();
+''';
+  }
+  String transition(String edge) => duration == Duration.zero
+      ? ''
+      : 'transition:$edge ${duration.inMilliseconds}ms cubic-bezier(0.7,0,0.2,1) !important;';
+  final topTransition = transition('top');
+  final bottomTransition = transition('bottom');
+  return '''
+(function(t, b) {
+  var root = document.documentElement;
+  root.style.setProperty('--arklores-dock-top', '${visibleTop}px');
+  root.style.setProperty('--arklores-dock-bottom', '${visibleBottom}px');
+  var id = 'arklores-dock-insets';
+  var style = document.getElementById(id);
+  if (!style) {
+    style = document.createElement('style');
+    style.id = id;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  style.textContent = 'html{padding-top:' + t + 'px !important;' +
+      'padding-bottom:' + b + 'px !important;' +
+      'scroll-padding-top:var(--arklores-dock-top);}' +
+      '[data-arklores-dock=top]{top:var(--arklores-dock-top) !important;$topTransition}' +
+      '[data-arklores-dock=bottom]{bottom:var(--arklores-dock-bottom) !important;$bottomTransition}';
+  function shift() {
+    if (!document.body) return;
+    var all = document.body.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i];
+      var cs = window.getComputedStyle(e);
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+      if (e.dataset.arkloresDock === undefined) {
+        if (parseFloat(cs.top) === 0) e.dataset.arkloresDock = 'top';
+        else if (cs.position === 'fixed' && parseFloat(cs.bottom) === 0)
+          e.dataset.arkloresDock = 'bottom';
+        else e.dataset.arkloresDock = '';
+      }
+      if (e.dataset.arkloresDock === 'top')
+        e.style.setProperty('top', 'var(--arklores-dock-top)', 'important');
+      if (e.dataset.arkloresDock === 'bottom')
+        e.style.setProperty('bottom', 'var(--arklores-dock-bottom)', 'important');
+    }
+  }
+  shift();
+  window.setTimeout(shift, 600);
+  window.setTimeout(shift, 1600);
+})($top, $bottom);
+''';
 }

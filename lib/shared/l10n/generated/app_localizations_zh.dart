@@ -83,6 +83,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '打开干员等资料页时，档案的各段全部展开；关掉后全部收起，点标题再展开。剧情开头的梗概始终默认收起。';
 
   @override
+  String get settingsSkipUnreadOpens => '读到第一行不计入历史记录';
+
+  @override
+  String get settingsSkipUnreadOpensDesc =>
+      '打开剧情后没有往下读、阅读位置停在打开时的那一行就离开，不记入最近阅读，也不改动已有记录的位置和先后。';
+
+  @override
   String get settingsSessionLogs => '保存 AI 对话记录';
 
   @override
@@ -153,13 +160,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get kbCancel => '取消';
-
-  @override
-  String get materialsTitle => '资料';
-
-  @override
-  String get materialsEmptyDesc =>
-      '把想留的文字放在这里：设定摘录、笔记、考据都可以。它们只保存在这台设备上，不会进入知识库。';
 
   @override
   String get materialsCancel => '取消';
@@ -245,6 +245,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingWikiDesc => 'Wiki 页显示这些站点，问答也会从这里查资料。可以改地址，或者加别的站点。';
 
   @override
+  String get onboardingPortraitsDesc =>
+      '阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。剧情美术包要另外下载，可以以后再在知识库页下。';
+
+  @override
+  String get onboardingReadingTitle => '怎么用';
+
+  @override
+  String get onboardingTipBarsTitle => '让开与唤回';
+
+  @override
+  String get onboardingTipBars => '在 Wiki、问答和阅读器里往下读，栏会让出屏幕。点一下空白处叫回来，再点一下让开。';
+
+  @override
+  String get onboardingTipReaderTitle => '阅读器';
+
+  @override
+  String get onboardingTipReader =>
+      '按钮在屏幕下方，拇指够得着。点标题打开进度，拖动滑块跳到任意一行；放大镜在本篇里查找。';
+
+  @override
+  String get onboardingTipPortraitTitle => '立绘';
+
+  @override
+  String get onboardingTipPortrait =>
+      '点说话人或答案里画了下划线的名字，先看旁边的小卡片；点“更多”打开能切换差分的大卡片。';
+
+  @override
+  String get onboardingTipSourcesTitle => '出处';
+
+  @override
+  String get onboardingTipSources => '答案的每一段都有出处。点开看原文，也能从那里跳到剧情里的那一行。';
+
+  @override
   String get onboardingBackgroundTitle => '后台运行';
 
   @override
@@ -308,6 +341,91 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
 
   @override
+  String updateVersionBuild(String version, int build) {
+    return '$version（build $build）';
+  }
+
+  @override
+  String get updateAutoCheck => '自动检查更新';
+
+  @override
+  String get updateAutoCheckDesc => '打开 App 时检查，一天最多一次。只提示，不自动下载。';
+
+  @override
+  String get updateCheck => '检查更新';
+
+  @override
+  String get updateChecking => '正在检查。';
+
+  @override
+  String get updateUpToDate => '已是最新版本。';
+
+  @override
+  String updateAvailable(String version) {
+    return '新版本 $version';
+  }
+
+  @override
+  String updateAvailableSize(String size) {
+    return '安装包 $size。';
+  }
+
+  @override
+  String get updateDownloadInstall => '下载并安装';
+
+  @override
+  String updateDownloading(String received, String total) {
+    return '正在下载 $received / $total';
+  }
+
+  @override
+  String get updateVerifying => '正在校验安装包。';
+
+  @override
+  String get updateCancel => '取消';
+
+  @override
+  String get updateNeedsPermission => '安装更新要先允许 ArkLores 安装应用。允许后回到这里，会接着安装。';
+
+  @override
+  String get updateAllow => '去允许';
+
+  @override
+  String get updateReady => '已打开安装界面。没有装上的话，可以再点一次。';
+
+  @override
+  String get updateInstall => '安装';
+
+  @override
+  String get updateRetry => '重试';
+
+  @override
+  String get updateErrorCheck => '没能读到版本信息。请检查网络后重试。';
+
+  @override
+  String get updateErrorDownload => '下载没有完成。重试会接着下载。';
+
+  @override
+  String get updateErrorChecksum => '安装包校验不一致，已删除。请重新下载。';
+
+  @override
+  String get updateErrorInstall => '没能打开安装界面。';
+
+  @override
+  String get updateUnsupported => '只有 Android 版可以在 App 里更新。';
+
+  @override
+  String updateFound(String version) {
+    return '有新版本 $version';
+  }
+
+  @override
+  String get updateFoundOpen => '查看';
+
+  @override
+  String get updateNotification => '下载更新';
+
+  @override
   String get aiTabAsk => 'AI 问答';
 
   @override
@@ -345,9 +463,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiAskCanceled => '已取消本次回答。';
-
-  @override
-  String get aiAnswerStatus => '回答状态';
 
   @override
   String get aiAnswerStatusAnswered => '已作答';
@@ -549,13 +664,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyReaderSynopsis => '官方梗概';
 
   @override
-  String get materialsEmptyTitle => '还没有自己的资料';
-
-  @override
   String get materialsNew => '新建';
-
-  @override
-  String get materialsPaste => '从剪贴板导入';
 
   @override
   String get materialsTitleHint => '标题（可留空）';
@@ -572,16 +681,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get materialsClipboardEmpty => '剪贴板里没有文字';
-
-  @override
   String get materialsDiscard => '放弃未保存的修改？';
 
   @override
   String get materialsDiscardAction => '放弃';
-
-  @override
-  String get materialsAskAbout => '用它提问';
 
   @override
   String get readingHistoryTitle => '最近阅读';
@@ -747,7 +850,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aiWorkPlanned => '拟定';
 
   @override
-  String get aiWorkRepeated => '重复';
+  String get aiWorkInContext => '已在上文';
 
   @override
   String get aiWorkNotRun => '未执行';
@@ -1326,6 +1429,29 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get aiCitedMaterial => '补充资料';
+
+  @override
+  String aiCitedMaterials(int count) {
+    return '补充资料 $count 篇';
+  }
+
+  @override
+  String get aiNameLinks => '人名下划线';
+
+  @override
+  String get aiBlockNameQuestion => '屏蔽这个名字？';
+
+  @override
+  String get aiBlockNameDesc => '回答里不再加下划线，可在设置里取消。';
+
+  @override
+  String get aiBlockNameConfirm => '屏蔽';
+
+  @override
+  String get aiBlockNameCancel => '取消';
+
+  @override
   String aiCitationParagraph(int n) {
     return '第 $n 段';
   }
@@ -1420,7 +1546,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyReaderFindHint => '在本篇中查找';
 
   @override
-  String get storyReaderScrubHint => '按住左右拖动，松手停在这里';
+  String get storyReaderFindEmpty => '输入人名或词语，这里会列出本篇中含有它的台词，点一句跳过去。';
 
   @override
   String get gameArknights => '明日方舟';
@@ -1519,4 +1645,279 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiAskTry => '可以这样问';
+
+  @override
+  String get settingsContextWarnTokens => '上下文提醒值';
+
+  @override
+  String get settingsContextWarnTokensDesc => '一个对话的上下文超过这个值时提醒。';
+
+  @override
+  String get settingsCompactPercent => '自动压缩位置';
+
+  @override
+  String get settingsCompactPercentDesc => '上下文到提醒值的这个比例时，较早的内容自动压缩成纪要。';
+
+  @override
+  String get settingsSkipOperatorNames => '回答里不标干员名';
+
+  @override
+  String get settingsSkipOperatorNamesDesc =>
+      '打开后，回答里的干员名字不加下划线、不能点开立绘；其他人物照旧。';
+
+  @override
+  String get settingsNameLinks => '回答里的人名下划线';
+
+  @override
+  String get settingsNameLinksDesc => '有立绘的人物名字加下划线，点开看立绘。问答页顶栏也有这个开关。';
+
+  @override
+  String get settingsBlockedNames => '下划线屏蔽词';
+
+  @override
+  String get settingsBlockedNamesDesc => '这些名字不加下划线。在回答里长按带下划线的名字也能加进来。';
+
+  @override
+  String settingsBlockedNamesCount(int count) {
+    return '$count 个';
+  }
+
+  @override
+  String get blockedNamesHint => '要屏蔽的名字';
+
+  @override
+  String get blockedNamesAdd => '添加';
+
+  @override
+  String get blockedNamesEmpty => '还没有屏蔽词。在上面输入名字，或在回答里长按带下划线的名字。';
+
+  @override
+  String blockedNamesRemove(String name) {
+    return '取消屏蔽 $name';
+  }
+
+  @override
+  String get blockedNamesDuplicate => '这个名字已经在屏蔽词里了。';
+
+  @override
+  String aiContextMeter(String n, String limit) {
+    return '上下文 $n / $limit';
+  }
+
+  @override
+  String aiContextNotice(String n, String limit) {
+    return '这个对话的上下文已超过提醒值（$n / $limit）。上下文越长，每一步越贵，模型也越容易漏看前面的内容。可以开一个新对话接着问。';
+  }
+
+  @override
+  String get aiContextWarningTitle => '上下文超过提醒值';
+
+  @override
+  String aiContextWarningBody(String n, String limit) {
+    return '这个对话的上下文已有 $n（提醒值 $limit）。上下文越长，每一步越贵，模型也越容易漏看前面的内容。可以开一个新对话接着问。';
+  }
+
+  @override
+  String get aiContextNewChat => '开新对话';
+
+  @override
+  String get aiContextStop => '停止作答';
+
+  @override
+  String get aiContextDismiss => '知道了';
+
+  @override
+  String aiWorkCompaction(String from, String to, int count) {
+    return '压缩上下文 / 约 $from → $to / 保留 $count 段';
+  }
+
+  @override
+  String get storyArtPackMissing => '没有安装剧情美术包。';
+
+  @override
+  String get portraitNotInPack => '剧情美术包里没有这一张。';
+
+  @override
+  String get portraitBlank => '这一句的立绘是空的。';
+
+  @override
+  String get storyArtPackTitle => '剧情美术';
+
+  @override
+  String get storyArtPackOldIndex => '装的知识库还没有立绘数据，更新知识库后可以下载剧情美术包。';
+
+  @override
+  String get storyArtPackUnreleased => '剧情美术包还没有发布。';
+
+  @override
+  String storyArtPackDescription(String size) {
+    return '下载大小：$size';
+  }
+
+  @override
+  String storyArtPackInstalled(int count, int scenes, int cgs, String size) {
+    return '立绘 $count / 场景 $scenes / CG $cgs / $size';
+  }
+
+  @override
+  String storyArtPackUpdateAvailable(String size) {
+    return '有新的剧情美术包（$size）。';
+  }
+
+  @override
+  String get storyArtPackDownload => '下载剧情美术包';
+
+  @override
+  String get storyArtPackUpdate => '更新';
+
+  @override
+  String get storyArtPackDelete => '删除';
+
+  @override
+  String get storyArtPackCancel => '取消';
+
+  @override
+  String get storyArtCredit => '图片：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络';
+
+  @override
+  String get storyArtPackEndfield => '终末地的剧情没有美术数据。';
+
+  @override
+  String get storyArtPackDeleteConfirm => '删除已下载的剧情美术包？之后可以重新下载。';
+
+  @override
+  String get storyArtPackError => '剧情美术包操作失败，请重试。';
+
+  @override
+  String storyArtPackProgress(String received, String total, String percent) {
+    return '$received / $total（$percent%）';
+  }
+
+  @override
+  String get portraitEyebrow => 'PORTRAIT';
+
+  @override
+  String portraitLines(int n) {
+    return '$n 句';
+  }
+
+  @override
+  String portraitStories(int n) {
+    return '$n 篇';
+  }
+
+  @override
+  String portraitSprites(int n) {
+    return '差分 $n 张';
+  }
+
+  @override
+  String portraitFaceBody(int face, int body) {
+    return '表情 $face / 服装 $body';
+  }
+
+  @override
+  String get portraitGroupSpeakers => '还有谁使用了这个立绘？';
+
+  @override
+  String get portraitWhoUses => '谁在用这个立绘？';
+
+  @override
+  String portraitStoriesWith(String name) {
+    return '“$name”用这个立绘的剧情';
+  }
+
+  @override
+  String get portraitSpeakerGroups => '这个人还有哪些立绘？';
+
+  @override
+  String get portraitOperator => '干员资料';
+
+  @override
+  String get portraitNoSprite => '这一句没有显示立绘。';
+
+  @override
+  String portraitTapSpeaker(String name) {
+    return '查看“$name”的立绘';
+  }
+
+  @override
+  String get portraitGroupPageTitle => '立绘的说话人';
+
+  @override
+  String portraitSpeakerPageTitle(String name) {
+    return '“$name”的立绘';
+  }
+
+  @override
+  String portraitPassingPortraits(int n) {
+    return '另有 $n 个立绘出现很少';
+  }
+
+  @override
+  String get portraitPassingHint => '出现次数过少，可能是画外音';
+
+  @override
+  String portraitPassingSpeakers(int n) {
+    return '另有 $n 人出现很少，主要立绘在别处';
+  }
+
+  @override
+  String portraitSpeakerCount(int n) {
+    return '$n 个说话人';
+  }
+
+  @override
+  String get portraitMore => '更多';
+
+  @override
+  String portraitStoryTitle(String name) {
+    return '$name 的剧情';
+  }
+
+  @override
+  String get portraitNoStories => '没有找到剧情。';
+
+  @override
+  String get storyArtDescription => '剧情里的立绘、场景背景、CG 与特写图。';
+
+  @override
+  String get storyArtClose => '关闭';
+
+  @override
+  String get storyArtJump => '回到剧情这里';
+
+  @override
+  String get storyArtScene => '场景';
+
+  @override
+  String get storyArtTall => '竖长图，点开看全部';
+
+  @override
+  String get storyArtNoScene => '还没有出现场景';
+
+  @override
+  String get storyArtMissing => '图片不在美术包中。';
+
+  @override
+  String storyArtSceneSemantic(int number, int total) {
+    return '场景 $number，共 $total';
+  }
+
+  @override
+  String storyArtCgSemantic(int number, int total, String title) {
+    return 'CG $number，共 $total，$title';
+  }
+
+  @override
+  String get portraitFullscreen => '全屏查看立绘';
+
+  @override
+  String get portraitTitle => '立绘';
+
+  @override
+  String get collectionArtTitle => '剧情美术';
+
+  @override
+  String get collectionArtAll => '全部剧情美术';
 }

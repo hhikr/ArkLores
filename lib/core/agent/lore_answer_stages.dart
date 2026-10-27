@@ -23,6 +23,18 @@ const int loreDigestMinEntries = 5;
 /// One entry of a detailed JSON answer.
 class LoreAnswerEntry {
   const LoreAnswerEntry({this.heading, this.text = '', this.cites = const []});
+  factory LoreAnswerEntry.fromJson(Map<String, dynamic> json) =>
+      LoreAnswerEntry(
+        heading: json['heading'] as String?,
+        text: json['text'] as String,
+        cites: List<String>.from(json['cites'] as List),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'heading': heading,
+        'text': text,
+        'cites': cites,
+      };
 
   /// Set for a section heading; [text] and [cites] are then empty.
   final String? heading;

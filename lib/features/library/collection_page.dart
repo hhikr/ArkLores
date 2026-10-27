@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/gamedata/build/story_naming.dart' show openingStoryKind;
 import '../../core/gamedata/game.dart';
 import '../../core/gamedata/story_catalog.dart' show releaseMonthOf;
+import '../../core/library/collection_story_art.dart';
 import '../../core/library/library_labels.dart';
 import '../../core/library/library_provider.dart';
 import '../../core/library/library_queries.dart';
@@ -16,6 +17,7 @@ import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/industrial_ui.dart';
 import '../../shared/widgets/page_frame.dart';
+import 'collection_art_page.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -82,6 +84,11 @@ class CollectionPage extends ConsumerWidget {
     final collection = ref.watch(collectionProvider(collectionId));
     final stories = ref.watch(collectionStoriesProvider(collectionId));
     final types = ref.watch(collectionTypesProvider(collectionId));
+    final art =
+        ref.watch(collectionStoryArtProvider(collectionId)).valueOrNull ?? [];
+    final cgs = art.where((a) => a.shot.kind == 'cg').toList();
+    final scenes = art.where((a) => a.shot.kind == 'scene').toList();
+    final preview = cgs.isNotEmpty ? cgs : scenes;
     final nickname = ref.watch(nicknameProvider);
     // Special rules are named by what the game calls each kind.
     final ruleKinds = [
@@ -182,8 +189,13 @@ class CollectionPage extends ConsumerWidget {
                           size: 15.5,
                         ),
                       ),
-                    ..._ownParts(context, theme, inline,
-                        notes: true, nickname: nickname,),
+                    ..._ownParts(
+                      context,
+                      theme,
+                      inline,
+                      notes: true,
+                      nickname: nickname,
+                    ),
                     if (opening.isNotEmpty) ...[
                       Padding(
                         padding: EdgeInsets.zero,
@@ -203,8 +215,13 @@ class CollectionPage extends ConsumerWidget {
                         rowDivider(theme),
                       ],
                     ],
-                    ..._ownParts(context, theme, inline,
-                        notes: false, nickname: nickname,),
+                    ..._ownParts(
+                      context,
+                      theme,
+                      inline,
+                      notes: false,
+                      nickname: nickname,
+                    ),
                     if (restStories.isNotEmpty) ...[
                       if (!ownParts)
                         Padding(
@@ -226,36 +243,77 @@ class CollectionPage extends ConsumerWidget {
                         ]
                       else
                         for (final g in sections.entries) ...[
-                          Theme(
-                            data: Theme.of(context)
-                                .copyWith(dividerColor: Colors.transparent),
-                            child: ExpansionTile(
-                              key: ValueKey('story-group-${g.key}'),
-                              shape: const Border(),
-                              collapsedShape: const Border(),
-                              tilePadding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              title: Text(g.key, style: theme.heading(16)),
-                              subtitle: Text(
-                                context.t.libraryCountStories(g.value.length),
-                                style: theme.field(),
-                              ),
-                              children: [
-                                for (final s in g.value) ...[
-                                  StoryRow(
-                                    story: s,
-                                    showGroup: false,
-                                    read: progress[LibraryRef.story(
-                                      s.rawId ?? '',
-                                    ).toString()],
-                                  ),
-                                  rowDivider(theme),
-                                ],
-                              ],
+                          FoldTile(
+                            key: ValueKey('story-group-${g.key}'),
+                            childrenPadding: const EdgeInsets.only(left: 6),
+                            title: Text(g.key, style: theme.heading(16)),
+                            subtitle: Text(
+                              context.t.libraryCountStories(g.value.length),
+                              style: theme.field(),
                             ),
+                            children: [
+                              for (final s in g.value) ...[
+                                StoryRow(
+                                  story: s,
+                                  showGroup: false,
+                                  read: progress[LibraryRef.story(
+                                    s.rawId ?? '',
+                                  ).toString()],
+                                ),
+                                rowDivider(theme),
+                              ],
+                            ],
                           ),
                           rowDivider(theme),
                         ],
+                    ],
+                    if (art.isNotEmpty) ...[
+                      IndustrialSectionHeader(
+                        theme: theme,
+                        title: context.t.collectionArtTitle,
+                        code: 'art',
+                      ),
+                      FactsRow([
+                        'CG ${cgs.length}',
+                        '${context.t.storyArtScene} ${scenes.length}',
+                      ]),
+                      const SizedBox(height: 8),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          childAspectRatio: 16 / 9,
+                          mainAxisSpacing: 6,
+                          crossAxisSpacing: 6,
+                        ),
+                        itemCount: preview.length.clamp(0, 6),
+                        itemBuilder: (context, i) => ArtThumbnail(
+                          art: preview[i],
+                          onTap: () => openCollectionArt(context, preview, i),
+                        ),
+                      ),
+                      if (art.length > 6) ...[
+                        const SizedBox(height: 8),
+                        LibraryRow(
+                          title: context.t.collectionArtAll,
+                          subtitle: '${art.length}',
+                          trailing: Icon(
+                            Icons.chevron_right_sharp,
+                            color: theme.textMuted,
+                            size: 22,
+                          ),
+                          onTap: () => pushLibraryPage(
+                            context,
+                            (_) => CollectionArtPage(
+                              collectionId: collectionId,
+                            ),
+                          ),
+                        ),
+                        rowDivider(theme),
+                      ],
                     ],
                     if (typeList.isNotEmpty) ...[
                       // Zones to medals: one heading for all of them.
@@ -277,35 +335,42 @@ class CollectionPage extends ConsumerWidget {
                             type: t.type,
                             collectionId: collectionId,
                             heading: typeList.length > 1
-                                ? (t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
+                                ? (t.type == 'roguelike_buff' &&
+                                        ruleKinds.isNotEmpty
                                     ? ruleKinds.join('、')
-                                    : entryTypeNameIn(t.type, gameOfId(collectionId)))
+                                    : entryTypeNameIn(
+                                        t.type,
+                                        gameOfId(collectionId),
+                                      ))
                                 : null,
                           )
                         else ...[
-                        LibraryRow(
-                          key: ValueKey('collection-type-${t.type}'),
-                          title:
-                              t.type == 'roguelike_buff' && ruleKinds.isNotEmpty
-                                  ? ruleKinds.join('、')
-                                  : entryTypeNameIn(t.type, gameOfId(collectionId)),
-                          subtitle: context.t.libraryCountEntries(t.count),
-                          subtitleLines: 1,
-                          trailing: Icon(
-                            Icons.chevron_right_sharp,
-                            color: theme.textMuted,
-                          ),
-                          onTap: () => pushLibraryPage(
-                            context,
-                            (_) => EntryListPage(
-                              type: t.type,
-                              collectionId: collectionId,
-                              collectionName: c.name,
+                          LibraryRow(
+                            key: ValueKey('collection-type-${t.type}'),
+                            title: t.type == 'roguelike_buff' &&
+                                    ruleKinds.isNotEmpty
+                                ? ruleKinds.join('、')
+                                : entryTypeNameIn(
+                                    t.type,
+                                    gameOfId(collectionId),
+                                  ),
+                            subtitle: context.t.libraryCountEntries(t.count),
+                            subtitleLines: 1,
+                            trailing: Icon(
+                              Icons.chevron_right_sharp,
+                              color: theme.textMuted,
+                            ),
+                            onTap: () => pushLibraryPage(
+                              context,
+                              (_) => EntryListPage(
+                                type: t.type,
+                                collectionId: collectionId,
+                                collectionName: c.name,
+                              ),
                             ),
                           ),
-                        ),
-                        rowDivider(theme),
-                      ],
+                          rowDivider(theme),
+                        ],
                     ],
                     if (storyList.isEmpty &&
                         typeList.isEmpty &&
@@ -346,38 +411,33 @@ class CollectionPage extends ConsumerWidget {
       final list = byType['roguelike_tip'];
       if (list == null) return const [];
       return [
-        Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            key: const ValueKey('notes-group'),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-            title: Text(
-              entryTypeName('roguelike_tip'),
-              style: theme.heading(16),
-            ),
-            subtitle: Text(
-              context.t.libraryCountEntries(list.length),
-              style: theme.field(),
-            ),
-            children: [
-              for (final e in list) ...[
-                LibraryRow(
-                  key: ValueKey('part-${e.id}'),
-                  title: e.name,
-                  subtitle: withPlaceholders(e.synopsis ?? '', nickname),
-                  subtitleLines: 2,
-                  trailing: Icon(
-                    Icons.chevron_right_sharp,
-                    color: theme.textMuted,
-                  ),
-                  onTap: () => openEntry(context, e),
-                ),
-                rowDivider(theme),
-              ],
-            ],
+        FoldTile(
+          key: const ValueKey('notes-group'),
+          childrenPadding: const EdgeInsets.only(left: 6),
+          title: Text(
+            entryTypeName('roguelike_tip'),
+            style: theme.heading(16),
           ),
+          subtitle: Text(
+            context.t.libraryCountEntries(list.length),
+            style: theme.field(),
+          ),
+          children: [
+            for (final e in list) ...[
+              LibraryRow(
+                key: ValueKey('part-${e.id}'),
+                title: e.name,
+                subtitle: withPlaceholders(e.synopsis ?? '', nickname),
+                subtitleLines: 2,
+                trailing: Icon(
+                  Icons.chevron_right_sharp,
+                  color: theme.textMuted,
+                ),
+                onTap: () => openEntry(context, e),
+              ),
+              rowDivider(theme),
+            ],
+          ],
         ),
         rowDivider(theme),
       ];

@@ -112,7 +112,7 @@ void main() {
       chatModel: 'saved-model',
     );
     await pumpOnboarding(tester, chat: saved);
-    expect(find.text('01 / 08'), findsOneWidget); // no background step here
+    expect(find.text('01 / 10'), findsOneWidget); // no background step here
 
     await next(tester); // welcome
     expect(step('appearance'), findsOneWidget);
@@ -139,8 +139,18 @@ void main() {
     expect(find.text('下载'), findsOneWidget); // Endfield only
     await next(tester);
 
+    // The portrait pack, then the sites, then how the app is handled.
+    expect(step('portraits'), findsOneWidget);
+    await next(tester);
+
     expect(step('wiki'), findsOneWidget);
     expect(find.text(SettingsService.defaultWikiSites.first.url), findsOneWidget);
+    await next(tester);
+
+    expect(step('reading'), findsOneWidget);
+    for (var i = 0; i < 4; i++) {
+      expect(find.byKey(ValueKey('onboarding-tip-$i')), findsOneWidget);
+    }
     await next(tester);
 
     expect(step('done'), findsOneWidget);
@@ -176,8 +186,8 @@ void main() {
     resetBackgroundExplained();
     final calls = <String>[];
     await pumpOnboarding(tester, android: true, calls: calls);
-    expect(find.text('01 / 09'), findsOneWidget);
-    for (var i = 0; i < 7; i++) {
+    expect(find.text('01 / 11'), findsOneWidget);
+    for (var i = 0; i < 9; i++) {
       await next(tester);
     }
     expect(step('background'), findsOneWidget);

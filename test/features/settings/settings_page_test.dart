@@ -1,15 +1,62 @@
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/features/settings/settings_page.dart';
 import 'package:arklores/features/settings/settings_sections.dart';
+import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/main.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
 import 'package:arklores/shared/providers/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('AI context warning selection persists at 390px', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_testApp(locale: const Locale('zh')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-category-ai')));
+    await tester.pumpAndSettle();
+    final warning = find.byKey(const ValueKey('settings-context-warning'));
+    expect(
+      find.descendant(of: warning, matching: find.text('上下文提醒值')),
+      findsOneWidget,
+      reason: 'the title carries no value',
+    );
+    final block = find.descendant(
+      of: warning,
+      matching: find.byWidgetPredicate((w) =>
+          w is Positioned && w.child is ColoredBox && w.width != null,),
+    );
+    double blockLeft() => tester.getTopLeft(block).dx;
+    final from = blockLeft();
+    final target = tester.getTopLeft(
+      find.descendant(of: warning, matching: find.text('64k')),
+    );
+    await tester.tap(find.descendant(of: warning, matching: find.text('64k')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final midway = blockLeft();
+    expect(midway, isNot(from), reason: 'the block slides');
+    expect(midway, greaterThan(target.dx), reason: 'not there yet');
+    await tester.pumpAndSettle();
+    expect(blockLeft(), lessThan(target.dx));
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(AiSettingsPage)));
+    expect(container.read(contextWarnTokensProvider), 64000);
+    expect(await SettingsService().loadContextWarnTokens(), 64000);
+    await tester.tap(find.text('60%'));
+    await tester.pumpAndSettle();
+    expect(container.read(compactPercentProvider), 60);
+    expect(await SettingsService().loadCompactPercent(), 60);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'the categories, each with what is in it; a category opens its '
       'page, where the theme switch works', (tester) async {
@@ -50,7 +97,9 @@ void main() {
     final context = tester.element(find.byType(AppearanceSettingsPage));
     final container = ProviderScope.containerOf(context);
     expect(
-        container.read(themeProvider.notifier).currentTheme, AppTheme.endfield,);
+      container.read(themeProvider.notifier).currentTheme,
+      AppTheme.endfield,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -65,6 +114,8 @@ void main() {
     for (final (key, inside) in [
       ('ai', 'settings-session-logs'),
       ('knowledge', 'settings-profile-sections'),
+      ('profile', 'settings-skip-unread-opens'),
+      ('help', 'settings-auto-update'),
     ]) {
       await tester.tap(find.byKey(ValueKey('settings-category-$key')));
       await tester.pumpAndSettle();
@@ -78,8 +129,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('English with enlarged text',
-      (tester) async {
+  testWidgets('English with enlarged text', (tester) async {
     tester.view.physicalSize = const Size(840, 1800);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.resetPhysicalSize);

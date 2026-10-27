@@ -5,17 +5,20 @@
 ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧情爱好者的 Android 应用（Flutter）。它把游戏解包文本整理成本地知识库（每个游戏一个），
 在上面提供可以阅读的资料页和带原文出处的剧情问答，并内置 PRTS 与终末地 Wiki 的浏览。
 
-最新版本：[v0.19.1](https://github.com/hhikr/ArkLores/releases/tag/v0.19.1)
+最新版本：[v0.20.0](https://github.com/hhikr/ArkLores/releases/tag/v0.20.0)
 
 ## 功能
 
 - **资料**：每个游戏一页（明日方舟 / 终末地 / 补充资料，点标签切换）。书架（明日方舟：主线、SideStory、故事集、插曲、干员、集成战略、生息演算、图鉴；
   终末地：照游戏任务面板的主线 / 探索 / 支线 / 活动 / 委派任务、情报档案库、干员、百科）→ 故事集或任务（章节、官方梗概、阅读进度）→ 条目，
-  条目之间按游戏表里的关系互相链接；每页可搜索。长文用阅读字体排版（默认黑体，即内置的思源黑体；可在设置里换成霞鹜文楷），干员档案分段可折叠，剧情开头的官方梗概默认折叠；阅读器记住位置与读过的次数，长按标题可以拖动进度。
-  “补充资料”预置《大地巡旅》全文与向量，并保存个人笔记；在资料页选择参与问答的资料，可导入 Markdown／文本、自定义来源说明。已启用的个人资料会发送给配置的向量服务建立索引。
+  条目之间按游戏表里的关系互相链接；每页可搜索。长文用阅读字体排版（默认黑体，即内置的思源黑体；可在设置里换成霞鹜文楷），干员档案分段可折叠，剧情开头的官方梗概默认折叠；阅读器记住位置与读过的次数，点标题展开进度面板，拖滑块或点轨道跳转，松手保留面板；再点标题或正文收起。
+  “补充资料”预置《大地巡旅》（问答检索全文与向量，阅读只显示答案引用的段落），并保存个人笔记；在资料页选择参与问答的资料，可导入 Markdown／文本、自定义来源说明。已启用的个人资料会发送给配置的向量服务建立索引。
+- **剧情美术**（0.20）：知识库记下每一句台词显示的立绘和每篇剧情的场景、CG、特写，另有可下载的剧情美术包（约 396 MB）。阅读器在剧情里排出场景与 CG，特写按剧本的位置叠在画面上；
+  点说话人看这一句的确切表情，问答答案里的人名也能点开；故事集页列出它的 CG 与场景；所有图都能全屏看。图片来自 [Arkwaifu](https://arkwaifu.cc)。只有明日方舟有。
 - **问答**：一个工具型 AI Agent 直接查询本地知识库（统一检索、整章阅读、只读 SQL），答案每条都带可点开的原文出处，出处由代码核对是否真的读过；
   一次检索同时查两个游戏的剧情、档案、已启用的补充资料和 PRTS / Warfarin Wiki（游戏原文优先，只有 Wiki 支持的说法会写明；可在输入框的选项里关闭）。
   答完之后可以点“提要”把长答案整理成几段，或点“复核”让另一次调用以读者身份提问。工作过程逐步列出每次查找的工具、参数和结果。可以同时开几个对话，正在答的在后台继续，从左上角的对话栏切换。
+  不限步数；显示上下文用量，接近提醒值时自动压缩成纪要并保留要用的原文；对话随记录保存，重开 App 也能接着问。
   支持任意 OpenAI 兼容的模型服务（默认智谱 `glm-5.3-flash`），可选配置向量服务做语义检索（没有时退回关键词并提示）。
 - **终末地**（0.12）：第二个知识库——干员档案、语音记录与干员情报，情报档案库，敌人、武器、物品描述，以及全部剧情对话与过场台词
   （一个任务一篇，按任务步骤排列：每段放在游戏播放它的那一步，步骤目标作标题）；
@@ -26,12 +29,14 @@ ArkLores 是一款面向《明日方舟》与《明日方舟：终末地》剧�
 ## 发布资产
 
 **知识库**：[知识库（App 从这里检查更新）](https://github.com/hhikr/ArkLores/releases/tag/gamedata-channel)。App 每次打开 设置 → 知识库 都从这里检查和下载，一般不用手动下载；
-更新时原地替换这里的文件。现在是 2026-10-22 版（App v0.16.0 起可用）：
-- `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 114 MB，上游 `17759cc`），SHA-256 `1b9e3505cf10eb6b852fcbacfa412fd312a31e85986333d2e6d1cbcf7be8d004`；
+更新时原地替换这里的文件。现在（2026-10-27）：
+- `arklores_gamedata_zh.db.gz`：明日方舟知识库（约 120 MB，上游 `17759cc`，带立绘与剧情美术数据；App v0.16.0 起可装），SHA-256 `94c07dbbdc039479fbf37613b911dac643005e2916fa0378722eb51f00ac77b4`；
 - `arklores_endfield_zh.db.gz`：终末地知识库（约 16 MB，2026-10-18 客户端，按任务步骤排列，含过场台词与段首梗概），SHA-256 `fc34c31aaa531555e09c19f700ca7dc6a987a470af634cecaa8f9e32fdefb965`；
+- `arklores_story_art_zh.db`：剧情美术包（约 396 MB，不压缩；App v0.20.0 起），SHA-256 `48b702bda869ddb656573150c7f06482380e0002d2be53e5ad214a6ee54aa28e`；
 - `gamedata_manifest.json`、`endfield_manifest.json`、`gamedata_channel.json`。
 
-**App**：每个版本的 Release 只放 APK 与它的 `.sha256`。项目签名，可覆盖安装 v0.10.0 及之后的版本（从 v0.9 及更早版本升级需先卸载一次）。App 不会提示新版本，要自己来 Release 页下载。
+**App**：每个版本的 Release 只放 APK 与它的 `.sha256`。项目签名，可覆盖安装 v0.10.0 及之后的版本（从 v0.9 及更早版本升级需先卸载一次）。v0.20.0 起可以在 设置 → 帮助与引导 → 更新 里检查和下载新版本（自动检查默认关闭）；更早的版本要自己来 Release 页下载。
+- [v0.20.0](https://github.com/hhikr/ArkLores/releases/tag/v0.20.0)：剧情美术——立绘、场景、CG 与特写进入阅读、问答与资料页；问答不限步数、自动压缩上下文；透明系统栏与新的输入框；App 内更新。
 - [v0.19.1](https://github.com/hhikr/ArkLores/releases/tag/v0.19.1)：阅读器长按标题拖动进度、Wiki 与问答往下读时收起顶栏底栏、毛玻璃换页只留在资料页。
 - [v0.19.0](https://github.com/hhikr/ArkLores/releases/tag/v0.19.0)：Quality of Life 更新——更跟手的界面、同时开几个对话、设置分类、开屏与字体、检索与出处的修正（约 32 MB）。
 - [v0.18.0](https://github.com/hhikr/ArkLores/releases/tag/v0.18.0)：补充资料参与问答，内含《大地巡旅》完整正文与向量。
@@ -78,6 +83,7 @@ docs/           文档（索引见 CLAUDE.md）
 - [`docs/MATERIALS.md`](docs/MATERIALS.md)：补充资料的选择、向量、来源说明与段落取证。
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：项目结构与各模块的实现方式。
+- [`docs/PORTRAITS.md`](docs/PORTRAITS.md)：剧情立绘与美术的数据、剧情美术包与界面。
 - [`docs/ASK_AGENT.md`](docs/ASK_AGENT.md)：问答 Agent 现在怎么工作；[`docs/ASK_EXPERIMENTS.md`](docs/ASK_EXPERIMENTS.md)：问答试过的办法、实测表现与评估；
   [`docs/WIKI.md`](docs/WIKI.md)：Wiki 浏览与问答取证。
 - [`docs/GAMEDATA_BUILD_PIPELINE.md`](docs/GAMEDATA_BUILD_PIPELINE.md)：两个知识库的构建、更新、发布；
@@ -87,4 +93,5 @@ docs/           文档（索引见 CLAUDE.md）
 - [`CHANGELOG.md`](CHANGELOG.md)：各版本的变化。
 
 明日方舟的数据来自社区解包仓库 [Kengxxiao/ArknightsGameData](https://github.com/Kengxxiao/ArknightsGameData)；终末地的数据从本机安装的游戏客户端解包
-（[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 的 AnimeStudio）。游戏内容版权归 Hypergryph 所有。
+（[Variante/endfield_research_kit](https://github.com/Variante/endfield_research_kit) 的 AnimeStudio）。剧情立绘的图片来自 [Arkwaifu](https://arkwaifu.cc)（CC BY-NC 4.0）。
+游戏内容（含立绘）版权归 Hypergryph 所有。

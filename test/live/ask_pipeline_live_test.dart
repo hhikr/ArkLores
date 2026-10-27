@@ -21,6 +21,8 @@
 //                                    only Arknights is installed, as on a
 //                                    phone that has not downloaded Endfield)
 //   ARKLORES_LIVE_OUT=<dir>         (default build/live_sessions)
+//   ARKLORES_LIVE_CONTEXT_WARN=<tokens> (the "上下文提醒值" setting, default
+//                                    1000000; compaction starts at 80% of it)
 // API config comes from the gitignored tools/api_info (API_KEY/MODEL/URL),
 // or from the file named by ARKLORES_API_INFO (another provider).
 //
@@ -114,6 +116,8 @@ void main() {
         initialApiConfigProvider.overrideWithValue(api),
         initialEmbeddingConfigProvider.overrideWithValue(embedding),
         initialSessionLogsEnabledProvider.overrideWithValue(true),
+        if (int.tryParse(env['ARKLORES_LIVE_CONTEXT_WARN'] ?? '') case final warn?)
+          initialContextWarnTokensProvider.overrideWithValue(warn),
         // Platform paths (the app resolves these via path_provider):
         sharedGameDataStoreProvider
             .overrideWithValue(GameDataKnowledgeStore(dbPath: dbPath)),
@@ -195,11 +199,14 @@ void main() {
         });
         await notifier.sendMessage(liveCase.query);
         subscription.close();
+        // Each conversation counts into its own meter (the clients' meter
+        // forwards there while the question runs).
+        final meter = notifier.usageMeter ?? usage;
         // The buttons under the answer, pressed when the answer has them.
         final pressed = <String, Object?>{};
         for (final button in after) {
           final answer = container.read(askChatProvider(container.read(shownAskProvider))).last;
-          final before = {'calls': usage.calls, 'prompt': usage.promptTokens, 'completion': usage.completionTokens};
+          final before = {'calls': meter.calls, 'prompt': meter.promptTokens, 'completion': meter.completionTokens};
           final clock = Stopwatch()..start();
           if (button == 'digest') {
             pressed['digest'] = {'offered': answer.canDigest};
@@ -232,7 +239,7 @@ void main() {
         expect(session, isNotNull, reason: 'session recording produced no file');
         final turn = session!.turns.last;
         final report = {
-          ...summarizeTurn(liveCase, session, turn, usage: usage),
+          ...summarizeTurn(liveCase, session, turn, usage: meter),
           'streaming': {
             'writer_start_ms': writerStartMs,
             'first_text_ms': firstTextMs,
@@ -247,7 +254,7 @@ void main() {
           // Per-call wall-clock timeline (start order): when each LLM call
           // began, time to headers / first data / first token, 429 waits,
           // tokens. Gaps between calls are tool time and local work.
-          'timeline': usage.timeline(start),
+          'timeline': meter.timeline(start),
           'wall_ms': DateTime.now().difference(start).inMilliseconds,
         };
         File('${outDir.path}/${liveCase.id}.summary.json').writeAsStringSync(

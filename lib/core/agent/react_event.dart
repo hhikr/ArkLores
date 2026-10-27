@@ -31,6 +31,10 @@ enum ReActEventType {
   /// written, never stored with the answer.
   reasoningToken,
 
+  /// Input tokens of the latest successful main-agent request.
+  contextSize,
+  contextCompacted,
+
   /// R16: what the run is doing right now ("第 7 步 · 阅读 …"), for the
   /// status line while streaming.
   status,
@@ -48,15 +52,28 @@ class ReActEvent {
     this.subtask,
     this.rollback = false,
     this.planned = false,
+    this.inContext = false,
+    this.compactedFrom,
+    this.compactedTo,
+    this.retainedCount,
+    this.contextTokens,
+    this.contextEstimated = false,
   });
 
   /// 0.14 ([ReActEventType.toolCall]): a step of the first searches, written
   /// by the planning call and run by code, not asked for by the model.
   final bool planned;
+  final bool inContext;
+  final int? compactedFrom;
+  final int? compactedTo;
+  final int? retainedCount;
 
   /// 0.14 ([ReActEventType.finalAnswerReset]): the turn is taken back as if
   /// it had not happened.
   final bool rollback;
+
+  final int? contextTokens;
+  final bool contextEstimated;
 
   final ReActEventType type;
   final String content;

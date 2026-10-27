@@ -1,6 +1,7 @@
 import 'package:arklores/core/agent/chat_message.dart';
 import 'package:arklores/core/agent/react_event.dart';
 import 'package:arklores/core/gamedata/game.dart';
+import 'package:arklores/core/library/portrait_provider.dart';
 import 'package:arklores/core/wiki/wiki_lookup.dart';
 import 'package:arklores/core/wiki/wiki_provider.dart';
 import 'package:arklores/features/ai/investigation_ui.dart';
@@ -109,6 +110,7 @@ void main() {
         ProviderScope(
           overrides: [
             wikiLookupProvider.overrideWithValue(wiki),
+            highlightNamesProvider.overrideWith((ref) async => []),
             ...overrides,
           ],
           child: Consumer(

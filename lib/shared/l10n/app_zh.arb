@@ -26,6 +26,8 @@
   "settingsApiSettingsDesc": "配置对话服务提供商",
   "settingsProfileSectionsOpen": "资料页的档案默认展开",
   "settingsProfileSectionsOpenDesc": "打开干员等资料页时，档案的各段全部展开；关掉后全部收起，点标题再展开。剧情开头的梗概始终默认收起。",
+  "settingsSkipUnreadOpens": "读到第一行不计入历史记录",
+  "settingsSkipUnreadOpensDesc": "打开剧情后没有往下读、阅读位置停在打开时的那一行就离开，不记入最近阅读，也不改动已有记录的位置和先后。",
   "settingsSessionLogs": "保存 AI 对话记录",
   "settingsSessionLogsDesc": "完整记录每次 AI 对话（含模式选择、自动路由决策、完整推理过程与检索原文）到手机存储的 chat_sessions 目录，用于「对话记录」查看与恢复；仅保存在本机，可在 app 内或文件管理器中删除。",
   "settingsKnowledgeBase": "知识库管理",
@@ -52,8 +54,6 @@
   "kbRedownloadConfirm": "重新下载",
   "kbCancel": "取消",
 
-  "materialsTitle": "资料",
-  "materialsEmptyDesc": "导入 PDF 或 TXT 文件来构建你的个人剧情资料库。",
   "materialsCancel": "取消",
   "materialsSave": "保存",
   "materialsDeleteConfirm": "确定要删除 \"{name}\" 及其所有知识库片段吗？",
@@ -82,6 +82,16 @@
   "onboardingKbDesc": "剧情原文和游戏资料都在知识库里，阅读和问答都靠它。每个游戏一个，下载后离线可用；已经下载的会显示出来。",
   "onboardingWikiTitle": "Wiki 站点",
   "onboardingWikiDesc": "Wiki 页显示这些站点，问答也会从这里查资料。可以改地址，或者加别的站点。",
+  "onboardingPortraitsDesc": "阅读器里点说话人、问答里点名字，会显示那个人的剧情立绘。剧情美术包要另外下载，可以以后再在知识库页下。",
+  "onboardingReadingTitle": "怎么用",
+  "onboardingTipBarsTitle": "让开与唤回",
+  "onboardingTipBars": "在 Wiki、问答和阅读器里往下读，栏会让出屏幕。点一下空白处叫回来，再点一下让开。",
+  "onboardingTipReaderTitle": "阅读器",
+  "onboardingTipReader": "按钮在屏幕下方，拇指够得着。点标题打开进度，拖动滑块跳到任意一行；放大镜在本篇里查找。",
+  "onboardingTipPortraitTitle": "立绘",
+  "onboardingTipPortrait": "点说话人或答案里画了下划线的名字，先看旁边的小卡片；点“更多”打开能切换差分的大卡片。",
+  "onboardingTipSourcesTitle": "出处",
+  "onboardingTipSources": "答案的每一段都有出处。点开看原文，也能从那里跳到剧情里的那一行。",
   "onboardingBackgroundTitle": "后台运行",
   "onboardingDoneTitle": "准备就绪！",
   "onboardingDoneDesc": "设置都可以在“设置”页再改，导览也能从那里重新打开。",
@@ -103,6 +113,36 @@
   "@settingsVersionLabel": {"placeholders": {"version": {"type": "String"}}},
   "settingsShowOnboarding": "新用户导览",
   "settingsShowOnboardingDesc": "重新进行首次启动导览与配置",
+  "updateVersionBuild": "{version}（build {build}）",
+  "@updateVersionBuild": {"placeholders": {"version": {"type": "String"}, "build": {"type": "int"}}},
+  "updateAutoCheck": "自动检查更新",
+  "updateAutoCheckDesc": "打开 App 时检查，一天最多一次。只提示，不自动下载。",
+  "updateCheck": "检查更新",
+  "updateChecking": "正在检查。",
+  "updateUpToDate": "已是最新版本。",
+  "updateAvailable": "新版本 {version}",
+  "@updateAvailable": {"placeholders": {"version": {"type": "String"}}},
+  "updateAvailableSize": "安装包 {size}。",
+  "@updateAvailableSize": {"placeholders": {"size": {"type": "String"}}},
+  "updateDownloadInstall": "下载并安装",
+  "updateDownloading": "正在下载 {received} / {total}",
+  "@updateDownloading": {"placeholders": {"received": {"type": "String"}, "total": {"type": "String"}}},
+  "updateVerifying": "正在校验安装包。",
+  "updateCancel": "取消",
+  "updateNeedsPermission": "安装更新要先允许 ArkLores 安装应用。允许后回到这里，会接着安装。",
+  "updateAllow": "去允许",
+  "updateReady": "已打开安装界面。没有装上的话，可以再点一次。",
+  "updateInstall": "安装",
+  "updateRetry": "重试",
+  "updateErrorCheck": "没能读到版本信息。请检查网络后重试。",
+  "updateErrorDownload": "下载没有完成。重试会接着下载。",
+  "updateErrorChecksum": "安装包校验不一致，已删除。请重新下载。",
+  "updateErrorInstall": "没能打开安装界面。",
+  "updateUnsupported": "只有 Android 版可以在 App 里更新。",
+  "updateFound": "有新版本 {version}",
+  "@updateFound": {"placeholders": {"version": {"type": "String"}}},
+  "updateFoundOpen": "查看",
+  "updateNotification": "下载更新",
   "aiTabAsk": "AI 问答",
   "aiAskSource": "检索已安装的两个游戏的剧情原文，开着“Wiki 资料”时同时查 Wiki；答案里的每一点都有出处",
   "aiAskEmpty": "直接问任何剧情问题——人物经历、事件前因后果、某个说法是否属实，都可以。",
@@ -116,7 +156,6 @@
   "aiAskSuggestionInvestigate": "整合运动是怎样成立的",
   "aiAskError": "回答失败，请重试。",
   "aiAskCanceled": "已取消本次回答。",
-  "aiAnswerStatus": "回答状态",
   "aiAnswerStatusAnswered": "已作答",
   "aiAnswerStatusPartial": "部分作答（资料不足）",
   "aiAnswerStatusNotCovered": "知识库未覆盖",
@@ -186,10 +225,7 @@
   "storyReaderResumed": "继续阅读 / 第 {line} 行",
   "@storyReaderResumed": {"placeholders": {"line": {"type": "int"}}},
   "storyReaderSynopsis": "官方梗概",
-  "materialsEmptyTitle": "还没有自己的资料",
-  "materialsEmptyDesc": "把想留的文字放在这里：设定摘录、笔记、考据都可以。它们只保存在这台设备上，不会进入知识库。",
   "materialsNew": "新建",
-  "materialsPaste": "从剪贴板导入",
   "materialsTitleHint": "标题（可留空）",
   "materialsBodyHint": "正文",
   "materialsSave": "保存",
@@ -198,10 +234,8 @@
   "materialsDeleteConfirm": "删除这份资料？",
   "materialsChars": "{n} 字",
   "@materialsChars": {"placeholders": {"n": {"type": "int"}}},
-  "materialsClipboardEmpty": "剪贴板里没有文字",
   "materialsDiscard": "放弃未保存的修改？",
   "materialsDiscardAction": "放弃",
-  "materialsAskAbout": "用它提问",
   "readingHistoryTitle": "最近阅读",
   "readingHistoryEmpty": "还没有阅读记录。在回答的证据链里点开原文后，会记在这里。",
   "readingHistoryPage": "第 {page} / {pages} 页",  "readingHistoryClear": "清空",
@@ -258,7 +292,7 @@
   "aiWorkNone": "没有结果",
   "aiWorkFailed": "出错",
   "aiWorkPlanned": "拟定",
-  "aiWorkRepeated": "重复",
+  "aiWorkInContext": "已在上文",
   "aiWorkNotRun": "未执行",
   "aiWorkWikiDown": "Wiki 超时",
   "aiWorkChars": "{count} 字",
@@ -458,6 +492,14 @@
   "aiCitedWiki": "Wiki",
   "aiCitedWikiPages": "Wiki 资料 {count} 页",
   "@aiCitedWikiPages": {"placeholders": {"count": {"type": "int"}}},
+  "aiCitedMaterial": "补充资料",
+  "aiCitedMaterials": "补充资料 {count} 篇",
+  "@aiCitedMaterials": {"placeholders": {"count": {"type": "int"}}},
+  "aiNameLinks": "人名下划线",
+  "aiBlockNameQuestion": "屏蔽这个名字？",
+  "aiBlockNameDesc": "回答里不再加下划线，可在设置里取消。",
+  "aiBlockNameConfirm": "屏蔽",
+  "aiBlockNameCancel": "取消",
   "aiCitationParagraph": "第 {n} 段",
   "@aiCitationParagraph": {"placeholders": {"n": {"type": "int"}}},
   "aiCitationParagraphs": "第 {start}–{end} 段",
@@ -492,7 +534,7 @@
   "librarySearchFurther": "搜索「{query}」（含相近名字与正文）",
   "@librarySearchFurther": {"placeholders": {"query": {"type": "String"}}},
   "storyReaderFindHint": "在本篇中查找",
-  "storyReaderScrubHint": "按住左右拖动，松手停在这里",
+  "storyReaderFindEmpty": "输入人名或词语，这里会列出本篇中含有它的台词，点一句跳过去。",
   "gameArknights": "明日方舟",
   "gameEndfield": "终末地",
   "launchTagline": "剧情阅读与问答",
@@ -525,5 +567,251 @@
   "apiSettingsHideKey": "隐藏密钥",
   "wikiSourcesResetConfirm": "站点恢复为内置的列表，自己添加的站点会被删除。",
   "aiConfigRequiredTitle": "先配置对话服务",
-  "aiAskTry": "可以这样问"
+  "aiAskTry": "可以这样问",
+  "settingsContextWarnTokens": "上下文提醒值",
+  "settingsContextWarnTokensDesc": "一个对话的上下文超过这个值时提醒。",
+  "settingsCompactPercent": "自动压缩位置",
+  "settingsCompactPercentDesc": "上下文到提醒值的这个比例时，较早的内容自动压缩成纪要。",
+  "settingsSkipOperatorNames": "回答里不标干员名",
+  "settingsSkipOperatorNamesDesc": "打开后，回答里的干员名字不加下划线、不能点开立绘；其他人物照旧。",
+  "settingsNameLinks": "回答里的人名下划线",
+  "settingsNameLinksDesc": "有立绘的人物名字加下划线，点开看立绘。问答页顶栏也有这个开关。",
+  "settingsBlockedNames": "下划线屏蔽词",
+  "settingsBlockedNamesDesc": "这些名字不加下划线。在回答里长按带下划线的名字也能加进来。",
+  "settingsBlockedNamesCount": "{count} 个",
+  "@settingsBlockedNamesCount": {"placeholders": {"count": {"type": "int"}}},
+  "blockedNamesHint": "要屏蔽的名字",
+  "blockedNamesAdd": "添加",
+  "blockedNamesEmpty": "还没有屏蔽词。在上面输入名字，或在回答里长按带下划线的名字。",
+  "blockedNamesRemove": "取消屏蔽 {name}",
+  "@blockedNamesRemove": {"placeholders": {"name": {"type": "String"}}},
+  "blockedNamesDuplicate": "这个名字已经在屏蔽词里了。",
+  "aiContextMeter": "上下文 {n} / {limit}",
+  "@aiContextMeter": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextNotice": "这个对话的上下文已超过提醒值（{n} / {limit}）。上下文越长，每一步越贵，模型也越容易漏看前面的内容。可以开一个新对话接着问。",
+  "@aiContextNotice": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextWarningTitle": "上下文超过提醒值",
+  "aiContextWarningBody": "这个对话的上下文已有 {n}（提醒值 {limit}）。上下文越长，每一步越贵，模型也越容易漏看前面的内容。可以开一个新对话接着问。",
+  "@aiContextWarningBody": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      }
+    }
+  },
+  "aiContextNewChat": "开新对话",
+  "aiContextStop": "停止作答",
+  "aiContextDismiss": "知道了",
+    "aiWorkCompaction": "压缩上下文 / 约 {from} → {to} / 保留 {count} 段",
+    "@aiWorkCompaction": {
+      "placeholders": {
+        "from": {
+          "type": "String"
+        },
+        "to": {
+          "type": "String"
+        },
+        "count": {
+          "type": "int"
+        }
+      }
+    },
+  "storyArtPackMissing": "没有安装剧情美术包。",
+  "portraitNotInPack": "剧情美术包里没有这一张。",
+  "portraitBlank": "这一句的立绘是空的。",
+  "storyArtPackTitle": "剧情美术",
+  "storyArtPackOldIndex": "装的知识库还没有立绘数据，更新知识库后可以下载剧情美术包。",
+  "storyArtPackUnreleased": "剧情美术包还没有发布。",
+  "storyArtPackDescription": "下载大小：{size}",
+  "@storyArtPackDescription": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storyArtPackInstalled": "立绘 {count} / 场景 {scenes} / CG {cgs} / {size}",
+  "@storyArtPackInstalled": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "scenes": {
+        "type": "int"
+      },
+      "cgs": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storyArtPackUpdateAvailable": "有新的剧情美术包（{size}）。",
+  "@storyArtPackUpdateAvailable": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "storyArtPackDownload": "下载剧情美术包",
+  "storyArtPackUpdate": "更新",
+  "storyArtPackDelete": "删除",
+  "storyArtPackCancel": "取消",
+  "storyArtCredit": "图片：Arkwaifu（CC BY-NC 4.0）/ 鹰角网络",
+  "storyArtPackEndfield": "终末地的剧情没有美术数据。",
+  "storyArtPackDeleteConfirm": "删除已下载的剧情美术包？之后可以重新下载。",
+  "storyArtPackError": "剧情美术包操作失败，请重试。",
+  "storyArtPackProgress": "{received} / {total}（{percent}%）",
+  "@storyArtPackProgress": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitEyebrow": "PORTRAIT",
+  "portraitLines": "{n} 句",
+  "@portraitLines": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitStories": "{n} 篇",
+  "@portraitStories": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitSprites": "差分 {n} 张",
+  "@portraitSprites": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitFaceBody": "表情 {face} / 服装 {body}",
+  "@portraitFaceBody": {
+    "placeholders": {
+      "face": {
+        "type": "int"
+      },
+      "body": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitGroupSpeakers": "还有谁使用了这个立绘？",
+  "portraitWhoUses": "谁在用这个立绘？",
+  "portraitStoriesWith": "“{name}”用这个立绘的剧情",
+  "@portraitStoriesWith": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitSpeakerGroups": "这个人还有哪些立绘？",
+  "portraitOperator": "干员资料",
+  "portraitNoSprite": "这一句没有显示立绘。",
+  "portraitTapSpeaker": "查看“{name}”的立绘",
+  "@portraitTapSpeaker": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitGroupPageTitle": "立绘的说话人",
+  "portraitSpeakerPageTitle": "“{name}”的立绘",
+  "@portraitSpeakerPageTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitPassingPortraits": "另有 {n} 个立绘出现很少",
+  "@portraitPassingPortraits": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitPassingHint": "出现次数过少，可能是画外音",
+  "portraitPassingSpeakers": "另有 {n} 人出现很少，主要立绘在别处",
+  "@portraitPassingSpeakers": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitSpeakerCount": "{n} 个说话人",
+  "@portraitSpeakerCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "portraitMore": "更多",
+  "portraitStoryTitle": "{name} 的剧情",
+  "@portraitStoryTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "portraitNoStories": "没有找到剧情。",
+  "storyArtDescription": "剧情里的立绘、场景背景、CG 与特写图。",
+  "storyArtClose": "关闭",
+  "storyArtJump": "回到剧情这里",
+  "storyArtScene": "场景",
+  "storyArtTall": "竖长图，点开看全部",
+  "storyArtNoScene": "还没有出现场景",
+  "storyArtMissing": "图片不在美术包中。",
+  "storyArtSceneSemantic": "场景 {number}，共 {total}",
+  "@storyArtSceneSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}}},
+  "storyArtCgSemantic": "CG {number}，共 {total}，{title}",
+  "@storyArtCgSemantic": {"placeholders": {"number": {"type": "int"}, "total": {"type": "int"}, "title": {"type": "String"}}},
+  "portraitFullscreen": "全屏查看立绘",
+  "portraitTitle": "立绘",
+  "collectionArtTitle": "剧情美术",
+  "collectionArtAll": "全部剧情美术"
 }

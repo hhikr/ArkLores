@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:arklores/core/agent/agent_provider.dart';
 import 'package:arklores/core/agent/answer_options.dart';
+import 'package:arklores/core/library/portrait_provider.dart';
 import 'package:arklores/core/llm/llm_client.dart';
 import 'package:arklores/core/llm/llm_provider.dart';
 import 'package:arklores/features/ai/ai_chat_page.dart';
@@ -13,6 +14,7 @@ import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,7 +31,10 @@ List<Override> _withModel(LLMClient model) => [
 
 Widget _app(Widget home, {List<Override> overrides = const []}) =>
     ProviderScope(
-      overrides: overrides,
+      overrides: [
+        highlightNamesProvider.overrideWith((ref) async => []),
+        ...overrides,
+      ],
       child: MaterialApp(
         locale: const Locale('zh'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -69,6 +74,38 @@ void main() {
     expect(find.byKey(const ValueKey('deep-thinking-toggle')), findsNothing);
     expect(find.byKey(const ValueKey('answer-options')), findsOneWidget);
     expect(find.byTooltip('发送'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the top bar turns name underlines on and off, with names to '
+      'underline only', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    for (final index in [false, true]) {
+      // A new scope each time (overrides do not change in place).
+      await tester.pumpWidget(
+        KeyedSubtree(
+          key: ValueKey(index),
+          child: _app(
+            const AiChatPage(),
+            overrides: [
+              ..._withModel(ScriptedLLM(['x'])),
+              hasPortraitIndexProvider.overrideWith((ref) async => index),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final toggle = find.byKey(const ValueKey('ask-name-links'));
+      expect(toggle, index ? findsOneWidget : findsNothing);
+    }
+    SquareIconButton button() => tester.widget<SquareIconButton>(
+          find.byKey(const ValueKey('ask-name-links')),
+        );
+    expect(button().selected, isTrue);
+    await tester.tap(find.byKey(const ValueKey('ask-name-links')));
+    await tester.pumpAndSettle();
+    expect(button().selected, isFalse);
+    expect(await SettingsService().loadNameLinks(), isFalse);
     expect(tester.takeException(), isNull);
   });
 
@@ -433,6 +470,67 @@ void main() {
       expect(bubble('q'), same(question));
       expect(tester.widget<AskComposer>(find.byType(AskComposer)),
           same(composer),);
+    });
+
+    testWidgets(
+        'the keyboard and the question box move the text above the box with '
+        'them, frame by frame, without rebuilding the bubbles or springing '
+        'back', (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpWidget(_app(const AiChatPage(),
+          overrides: _withModel(ScriptedLLM(['Final Answer: silent'])),),);
+      await tester.pumpAndSettle();
+      final container =
+          ProviderScope.containerOf(tester.element(find.byType(AiChatPage)));
+      final chat = container.read(askChatProvider(container.read(shownAskProvider)).notifier);
+      // ignore: invalid_use_of_protected_member
+      chat.state = [
+        ChatMessage(
+          id: 'q',
+          role: MessageRole.user,
+          content: '问题',
+          timestamp: DateTime(2026),
+        ),
+        answer(longAnswer),
+      ];
+      await settle(tester);
+      final position = tester
+          .state<ScrollableState>(find.descendant(
+            of: find.byKey(const ValueKey('ask-chat-list')),
+            matching: find.byType(Scrollable),
+          ).first,)
+          .position;
+      position.jumpTo(position.maxScrollExtent - 200);
+      await settle(tester);
+
+      // The box opens to two rows on focus: the text above goes up with it.
+      final bar = find.byKey(const ValueKey('ask-input-bar'));
+      final top = tester.getRect(bar).top;
+      final resting = position.pixels;
+      await tester.tap(bar);
+      await settle(tester);
+      final grown = top - tester.getRect(bar).top;
+      expect(grown, greaterThan(20));
+      expect(position.pixels, closeTo(resting + grown, 0.5));
+
+      final before = position.pixels;
+      final bubble = tester.widget<ChatBubble>(find.byKey(const ValueKey('a')));
+      final ratio = tester.view.devicePixelRatio;
+      // Each keyboard frame: the list moves by what the view lost, at once.
+      for (final inset in [80.0, 160.0, 240.0]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset * ratio);
+        await tester.pump();
+        expect(position.pixels, closeTo(before + inset, 0.5));
+        expect(tester.widget<ChatBubble>(find.byKey(const ValueKey('a'))),
+            same(bubble),);
+      }
+      // Down again: back where it was, nothing left to animate.
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pump();
+      expect(position.pixels, closeTo(before, 0.5));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(position.pixels, closeTo(before, 0.5));
+      expect(tester.takeException(), isNull);
     });
   });
 }

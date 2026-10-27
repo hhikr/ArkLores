@@ -1,10 +1,14 @@
 import '../llm/usage_meter.dart';
 
+int estimateTokens(int chars) => (chars / 1.6).round();
+
 /// What one question cost: LLM calls, tokens and wall-clock time (shown in
 /// grey under the answer and stored with the session turn).
 class TurnStats {
   const TurnStats({
     this.calls = 0,
+    this.contextTokens = 0,
+    this.contextEstimated = false,
     this.promptTokens = 0,
     this.cachedPromptTokens = 0,
     this.completionTokens = 0,
@@ -14,7 +18,15 @@ class TurnStats {
   });
 
   /// Totals of [meter] over [elapsed].
-  factory TurnStats.of(UsageMeter meter, Duration elapsed) => TurnStats(
+  factory TurnStats.of(
+    UsageMeter meter,
+    Duration elapsed, {
+    int contextTokens = 0,
+    bool contextEstimated = false,
+  }) =>
+      TurnStats(
+        contextTokens: contextTokens,
+        contextEstimated: contextEstimated,
         calls: meter.calls,
         promptTokens: meter.promptTokens,
         cachedPromptTokens: meter.cachedPromptTokens,
@@ -28,6 +40,8 @@ class TurnStats {
     int n(String key) => (json[key] as num?)?.toInt() ?? 0;
     return TurnStats(
       calls: n('llm_calls'),
+      contextTokens: n('context_tokens'),
+      contextEstimated: json['context_estimated'] as bool? ?? false,
       promptTokens: n('prompt_tokens'),
       cachedPromptTokens: n('cached_prompt_tokens'),
       completionTokens: n('completion_tokens'),
@@ -40,6 +54,12 @@ class TurnStats {
   /// This and [other] together (an answer and the digest asked for later).
   TurnStats operator +(TurnStats other) => TurnStats(
         calls: calls + other.calls,
+        // The later context, unless the later part reported none (a digest
+        // is a separate request, not this conversation's context).
+        contextTokens:
+            other.contextTokens > 0 ? other.contextTokens : contextTokens,
+        contextEstimated:
+            other.contextTokens > 0 ? other.contextEstimated : contextEstimated,
         promptTokens: promptTokens + other.promptTokens,
         cachedPromptTokens: cachedPromptTokens + other.cachedPromptTokens,
         completionTokens: completionTokens + other.completionTokens,
@@ -49,6 +69,8 @@ class TurnStats {
       );
 
   final int calls;
+  final int contextTokens;
+  final bool contextEstimated;
   final int promptTokens;
   final int cachedPromptTokens;
   final int completionTokens;
@@ -67,6 +89,8 @@ class TurnStats {
 
   Map<String, Object?> toJson() => {
         'llm_calls': calls,
+        'context_tokens': contextTokens,
+        'context_estimated': contextEstimated,
         'prompt_tokens': promptTokens,
         'cached_prompt_tokens': cachedPromptTokens,
         'completion_tokens': completionTokens,
@@ -88,18 +112,31 @@ String formatElapsed(Duration d) {
   final total = d.inSeconds;
   final minutes = total ~/ 60;
   final seconds = total % 60;
-  return minutes == 0 ? '${seconds}s' : '${minutes}m${seconds.toString().padLeft(2, '0')}s';
+  return minutes == 0
+      ? '${seconds}s'
+      : '${minutes}m${seconds.toString().padLeft(2, '0')}s';
 }
 
 /// The line under an answer, short and the same in every language:
-/// `in 382k · out 12k · cache 87% · 14 calls · 4m22s`. Parts the provider
-/// did not report are left out.
-String formatUsageLine(TurnStats s) => [
-      if (s.hasTokens) ...[
-        'in ${formatTokenCount(s.promptTokens)}',
-        'out ${formatTokenCount(s.completionTokens)}',
-        if (s.cacheRate != null) 'cache ${(s.cacheRate! * 100).round()}%',
-      ],
-      if (s.calls > 0) '${s.calls} calls',
-      formatElapsed(s.elapsed),
-    ].join(' / ');
+/// `ctx 62.3k / 14 calls: in 382k, out 12k, cache 87% / 4m22s`. ctx is the
+/// conversation now; in and out add up every call of the question (each
+/// call sends the conversation again), so in is usually several times ctx.
+/// Parts the provider did not report are left out.
+String formatUsageLine(TurnStats s) {
+  final tokens = [
+    if (s.hasTokens) ...[
+      'in ${formatTokenCount(s.promptTokens)}',
+      'out ${formatTokenCount(s.completionTokens)}',
+      if (s.cacheRate != null) 'cache ${(s.cacheRate! * 100).round()}%',
+    ],
+  ].join(', ');
+  return [
+    if (s.contextTokens > 0)
+      'ctx ${s.contextEstimated ? "≈" : ""}${formatTokenCount(s.contextTokens)}',
+    if (s.calls > 0)
+      tokens.isEmpty ? '${s.calls} calls' : '${s.calls} calls: $tokens'
+    else if (tokens.isNotEmpty)
+      tokens,
+    formatElapsed(s.elapsed),
+  ].join(' / ');
+}

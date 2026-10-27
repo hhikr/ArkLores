@@ -96,6 +96,7 @@ class EntryPage extends ConsumerWidget {
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
       scrollUnder: true,
+      hides: true,
       // An entry's search looks in its collection (the whole library for
       // the codex's free entries).
       actions: [

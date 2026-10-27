@@ -82,7 +82,7 @@ void main() {
                 store: games,
                 embeddingClient: embed,
                 materials: snapshot,
-                maxTurns: 8,)
+                )
             .run(query: question)
             .toList();
         final answers = events

@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/settings/settings_service.dart'
+    show defaultCompactPercent, defaultContextWarnTokens;
 import '../../shared/providers/settings_provider.dart';
 import '../background/background_work.dart';
 import '../gamedata/game.dart';
@@ -93,12 +95,17 @@ class AskChatNotifier extends ChatNotifierBase {
     LLMClient? Function()? clientReader,
     AnswerOptions Function()? optionsReader,
     UsageMeter? usage,
+    int Function()? contextWarnTokensReader,
+    int Function()? compactPercentReader,
   })  : _agent = agent,
         _sessionStore = sessionStore,
         _configReader = configReader,
         _clientReader = clientReader,
         _optionsReader = optionsReader,
         _usage = usage,
+        _contextWarnTokensReader = contextWarnTokensReader ?? (() => defaultContextWarnTokens),
+        _compactPercentReader =
+            compactPercentReader ?? (() => defaultCompactPercent),
         super([]);
 
   /// R16: the client for the next question (the thinking client when
@@ -112,9 +119,22 @@ class AskChatNotifier extends ChatNotifierBase {
   /// clients report into it); null in tests that do not look at it.
   final UsageMeter? _usage;
 
+  /// This conversation's meter (the live test harness reads its totals and
+  /// timeline; the clients' own meter forwards into it).
+  UsageMeter? get usageMeter => _usage;
+  final int Function() _contextWarnTokensReader;
+  final int Function() _compactPercentReader;
+  bool contextWarningPending = false;
+
+  void acknowledgeContextWarning() {
+    contextWarningPending = false;
+  }
+
+  TurnStats? get latestContext => latestContextStats(state);
+
   /// R17: the tool agent's conversation after each answer (by assistant
   /// message id), so a follow-up continues with the text already read.
-  /// In memory only; a restored session starts from the answer texts.
+  /// Persisted after each accepted answer, with legacy text-history fallback.
   final Map<String, LoreConversation> _conversations = {};
   final StoryQaAgent _agent;
   final ChatSessionStore _sessionStore;
@@ -135,6 +155,7 @@ class AskChatNotifier extends ChatNotifierBase {
   /// file; the next message begins a new session).
   void newSession() {
     cancel();
+    contextWarningPending = false;
     _currentSession = null;
     _conversations.clear();
     state = const [];
@@ -145,9 +166,20 @@ class AskChatNotifier extends ChatNotifierBase {
   /// session file.
   void loadSession(ChatSessionFile session) {
     if (isStreaming) cancel();
+    contextWarningPending = false;
     _currentSession = session;
     _conversations.clear();
     state = chatSessionToMessages(session);
+    final saved = session.loreConversation;
+    if (saved != null) {
+      try {
+        final conversation = LoreConversation.fromJson(saved);
+        final last = state.lastWhere((m) => m.role == MessageRole.assistant);
+        _conversations[last.id] = conversation;
+      } catch (_) {
+        // Old or damaged snapshots fall back to the visible answer history.
+      }
+    }
   }
 
   ChatSessionFile? get currentSession => _currentSession;
@@ -159,6 +191,7 @@ class AskChatNotifier extends ChatNotifierBase {
   @override
   void clearChat() {
     cancel();
+    contextWarningPending = false;
     _currentSession = null;
     _conversations.clear();
     state = const [];
@@ -324,6 +357,7 @@ class AskChatNotifier extends ChatNotifierBase {
       createdAt: session.createdAt,
       updatedAt: DateTime.now(),
       title: session.title,
+      loreConversation: session.loreConversation,
       turns: [
         for (final (i, t) in session.turns.indexed)
           if (i != k)
@@ -407,8 +441,15 @@ class AskChatNotifier extends ChatNotifierBase {
     // What the question costs, shown live under the answer (every LLM call
     // of every client reports into the meter).
     final usage = _usage;
-    TurnStats currentStats() =>
-        TurnStats.of(usage!, DateTime.now().difference(turnStart));
+    var contextTokens = 0;
+    var contextEstimated = false;
+    TurnStats currentStats() => TurnStats.of(
+          usage ?? UsageMeter(),
+          DateTime.now().difference(turnStart),
+          contextTokens: contextTokens,
+          contextEstimated: contextEstimated,
+        );
+
     if (usage != null) {
       usage.reset();
       usage.onChanged = () {
@@ -456,8 +497,12 @@ class AskChatNotifier extends ChatNotifierBase {
       };
     }
 
-    void onConversation(LoreConversation conversation) =>
-        _conversations[assistantId] = conversation;
+    LoreConversation? completedConversation;
+    void onConversation(LoreConversation conversation) {
+      completedConversation = conversation;
+      _conversations[assistantId] = conversation;
+    }
+
     final client = _clientReader?.call();
     final options = _optionsReader?.call() ?? const AnswerOptions();
     final stream = review != null
@@ -466,6 +511,8 @@ class AskChatNotifier extends ChatNotifierBase {
             answer: review.$3,
             client: client,
             options: options,
+            contextWarnTokens: _contextWarnTokensReader(),
+            compactPercent: _compactPercentReader(),
             onRawLlmResponse: onRaw,
             onConversation: onConversation,
           )
@@ -474,6 +521,8 @@ class AskChatNotifier extends ChatNotifierBase {
             history: history,
             client: client,
             options: options,
+            contextWarnTokens: _contextWarnTokensReader(),
+            compactPercent: _compactPercentReader(),
             onRawLlmResponse: onRaw,
             prior: prior,
             onConversation: onConversation,
@@ -540,6 +589,7 @@ class AskChatNotifier extends ChatNotifierBase {
                 toolArgs: event.toolArgs,
                 subtask: event.subtask,
                 planned: event.planned,
+                inContext: event.inContext,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
@@ -570,6 +620,7 @@ class AskChatNotifier extends ChatNotifierBase {
                 content: event.content,
                 toolName: event.toolName,
                 subtask: event.subtask,
+                inContext: event.inContext,
               ),
             );
             updateMessage(assistantId, steps: List.of(steps));
@@ -610,6 +661,26 @@ class AskChatNotifier extends ChatNotifierBase {
             }
             coalescer.flushNow();
             break;
+          case ReActEventType.contextCompacted:
+            steps.add(
+              ReActStep(
+                type: event.type,
+                content: event.content,
+                compactedFrom: event.compactedFrom,
+                compactedTo: event.compactedTo,
+                retainedCount: event.retainedCount,
+              ),
+            );
+            updateMessage(assistantId, steps: List.of(steps));
+            if (recording) {
+              iterations[currentIteration]?.compaction = {
+                'content': event.content,
+                'from': event.compactedFrom,
+                'to': event.compactedTo,
+                'retained': event.retainedCount,
+              };
+            }
+            break;
           case ReActEventType.recordNote:
             // In the work shown too (it is folded by default): what code
             // did to the answer — sent back, citations cut or dropped.
@@ -642,6 +713,16 @@ class AskChatNotifier extends ChatNotifierBase {
             }
             reasoning.write(event.content);
             coalescer.schedule();
+            break;
+          case ReActEventType.contextSize:
+            final limit = _contextWarnTokensReader();
+            final previous = latestContext?.contextTokens ?? 0;
+            contextTokens = event.contextTokens ?? 0;
+            contextEstimated = event.contextEstimated;
+            if (previous < limit && contextTokens >= limit) {
+              contextWarningPending = true;
+            }
+            updateMessage(assistantId, stats: currentStats());
             break;
           case ReActEventType.status:
             updateMessage(assistantId, liveStatus: event.content);
@@ -701,8 +782,8 @@ class AskChatNotifier extends ChatNotifierBase {
       }
       coalescer.cancel();
       TurnStats? stats;
-      if (usage != null) {
-        usage.onChanged = null;
+      if (usage != null || contextTokens > 0) {
+        if (usage != null) usage.onChanged = null;
         stats = currentStats();
         // The final totals stay under the answer (also when it failed or
         // was canceled: that run still cost something).
@@ -711,6 +792,8 @@ class AskChatNotifier extends ChatNotifierBase {
       if (recording && session != null) {
         await _finalizeTurn(
           session: session,
+          loreConversation:
+              completedConversation?.toJson() ?? session.loreConversation,
           query: query,
           stats: stats,
           config: config,
@@ -726,6 +809,7 @@ class AskChatNotifier extends ChatNotifierBase {
 
   Future<void> _finalizeTurn({
     required ChatSessionFile session,
+    required Map<String, dynamic>? loreConversation,
     required String query,
     required TurnStats? stats,
     required LLMConfig config,
@@ -761,6 +845,7 @@ class AskChatNotifier extends ChatNotifierBase {
       updatedAt: now,
       title: session.title,
       turns: [...session.turns, turn],
+      loreConversation: loreConversation,
     );
     // Another conversation may have been opened (or a new one started)
     // while this turn was stopping: its file is written, it is not made
@@ -859,6 +944,8 @@ final askChatProvider = StateNotifierProvider.family<AskChatNotifier,
     List<ChatMessage>, String>((ref, key) {
   return AskChatNotifier(
     agent: ref.watch(storyQaAgentProvider),
+    contextWarnTokensReader: () => ref.read(contextWarnTokensProvider),
+    compactPercentReader: () => ref.read(compactPercentProvider),
     usage: UsageMeter(),
     sessionStore: ref.watch(chatSessionStoreProvider),
     configReader: () => ref.read(apiConfigProvider),
@@ -986,3 +1073,13 @@ final askSessionsProvider =
 /// The key of the conversation on the Ask page.
 final shownAskProvider =
     Provider<String>((ref) => ref.watch(askSessionsProvider).shown);
+
+TurnStats? latestContextStats(List<ChatMessage> messages) {
+  for (final message in messages.reversed) {
+    if (message.role == MessageRole.assistant &&
+        (message.stats?.contextTokens ?? 0) > 0) {
+      return message.stats;
+    }
+  }
+  return null;
+}

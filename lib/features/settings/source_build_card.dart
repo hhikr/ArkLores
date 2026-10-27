@@ -10,6 +10,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
+import '../../shared/theme/motion.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/theme_aware_card.dart';
 import 'kb_common.dart';
@@ -246,71 +247,79 @@ class _SourceBuildCardState extends ConsumerState<SourceBuildCard> {
   ) {
     final tokenAsync = ref.watch(githubTokenProvider);
     final hasToken = tokenAsync.valueOrNull?.isNotEmpty ?? false;
-    // Folded: most updates need no token.
-    final header = PressRow(
-      key: const Key('kb-build-token-toggle'),
-      onTap: () => setState(() => _showToken = !_showToken),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        child: Row(
-          children: [
-            Icon(
-              _showToken ? Icons.expand_more_sharp : Icons.chevron_right_sharp,
-              size: 18,
-              color: theme.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(context.t.kbBuildTokenTitle, style: theme.heading(15)),
-            ),
-            if (hasToken)
-              StateStamp(context.t.kbBuildTokenSetHint),
-          ],
-        ),
-      ),
-    );
-    if (!_showToken) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [Divider(color: theme.divider, height: 1), header],
-      );
-    }
+    // Folded: most updates need no token. The rail runs down the part
+    // while it is open.
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Divider(color: theme.divider, height: 1),
-        header,
-        kbNote(context.t.kbBuildTokenDesc, theme, theme.textSecondary),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _tokenController,
-                // Visible, but the keyboard must not learn or autocorrect it.
-                keyboardType: TextInputType.visiblePassword,
-                autocorrect: false,
-                enableSuggestions: false,
-                style: theme.field(color: theme.textPrimary, size: 14),
-                decoration: InputDecoration(
-                  labelText: context.t.kbBuildTokenTitle,
-                  hintText: context.t.kbBuildTokenPlaceholder,
+        FoldBlock(
+          headKey: const Key('kb-build-token-toggle'),
+          open: _showToken,
+          onTap: () => setState(() => _showToken = !_showToken),
+          head: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 13, 0, 13),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.t.kbBuildTokenTitle,
+                    style: theme.heading(15),
+                  ),
                 ),
-              ),
+                if (hasToken) StateStamp(context.t.kbBuildTokenSetHint),
+                AnimatedRotation(
+                  turns: _showToken ? 0 : -0.25,
+                  duration: Motion.of(context, Motion.wipe),
+                  curve: Motion.mech,
+                  child: Icon(
+                    Icons.expand_more_sharp,
+                    size: 20,
+                    color: theme.textSecondary,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 6),
-            AppButton(
-              context.t.kbBuildTokenSave,
-              kind: ButtonKind.go,
-              onPressed: _saveGithubToken,
+          ),
+          body: () => Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 0, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                kbNote(context.t.kbBuildTokenDesc, theme, theme.textSecondary),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _tokenController,
+                        // Visible, but the keyboard must not learn or
+                        // autocorrect it.
+                        keyboardType: TextInputType.visiblePassword,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        style: theme.field(color: theme.textPrimary, size: 14),
+                        decoration: InputDecoration(
+                          labelText: context.t.kbBuildTokenTitle,
+                          hintText: context.t.kbBuildTokenPlaceholder,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    AppButton(
+                      context.t.kbBuildTokenSave,
+                      kind: ButtonKind.go,
+                      onPressed: _saveGithubToken,
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-        
       ],
     );
   }
-
   String? _currentGithubToken() {
     final text = _tokenController.text.trim();
     if (text.isNotEmpty) return text;

@@ -475,6 +475,48 @@ void main() {
       expect(reloaded.turns.last.query, '恢复后的追问');
     });
 
+    test(
+        'saved conversation restores the exact prefix while legacy and damaged files fall back',
+        () async {
+      AgentLogger.setEnabled(true);
+      final mock = _RecorderLLM();
+      final notifier = makeNotifier(mock);
+      await notifier.sendMessage('第一问');
+      final saved = await singleSession();
+      expect(saved.loreConversation, isNotNull);
+      final prefix = LoreConversation.fromJson(saved.loreConversation!)
+          .messages
+          .map((m) => m.toJson())
+          .toList();
+      mock.resetAgentCalls();
+      final restored = makeNotifier(mock)..loadSession(saved);
+      await restored.sendMessage('追问');
+      expect(
+          mock.requests.last
+              .skip(1)
+              .take(prefix.length)
+              .map((m) => m.toJson())
+              .toList(),
+          prefix,);
+      final latest = await singleSession();
+      expect(LoreConversation.fromJson(latest.loreConversation!).questions,
+          ['第一问', '追问'],);
+      for (final replacement in [
+        null,
+        <String, dynamic>{'version': 2},
+        <String, dynamic>{'version': 1},
+        <String, dynamic>{...saved.loreConversation!, 'questions': [1]},
+      ]) {
+        final json = saved.toJson()..['lore_conversation'] = replacement;
+        final legacy = ChatSessionFile.fromJson(json);
+        mock.resetAgentCalls();
+        final old = makeNotifier(mock)..loadSession(legacy);
+        await old.sendMessage('兼容追问');
+        expect(old.state.last.isError, isFalse);
+        expect(mock.requests.last.any((m) => m.content == '第一问'), isTrue);
+      }
+    });
+
     test('resendLast asks the last question again', () async {
       AgentLogger.setEnabled(true);
       final mock = _RecorderLLM()..verdict = true;
@@ -619,10 +661,10 @@ class _RecorderLLM extends LLMClient {
                 ? '[FACT_CHECK_VERDICT:supported]\n支持：她是罗德岛的公开领袖 `$_story:0`。'
                 : longAnswer
                     ? '{"entries": [${[
-                        for (var n = 1; n <= 5; n++)
-                          '{"text": "第 $n 条：她是领袖。", '
-                              '"cite": [["$_story", 0, 0]]}',
-                      ].join(', ')}], "coverage": "full"}'
+                            for (var n = 1; n <= 5; n++)
+                              '{"text": "第 $n 条：她是领袖。", '
+                                  '"cite": [["$_story", 0, 0]]}',
+                          ].join(', ')}], "coverage": "full"}'
                     : '她是罗德岛的公开领袖 `$_story:0`。结论：博士。',
           );
     meter?.add(result);

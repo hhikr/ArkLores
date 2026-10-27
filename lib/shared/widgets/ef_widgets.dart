@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -151,8 +152,7 @@ class Eyebrow extends ConsumerWidget {
       overflow: TextOverflow.ellipsis,
       // Decoration: it grows a little with large text, not so much that it
       // pushes the name it sits over out of a bar.
-      textScaler:
-          MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.2),
+      textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.2),
       style: theme.eyebrow(color: color),
     );
   }
@@ -475,7 +475,9 @@ class _AppButtonState extends ConsumerState<AppButton>
         _ => theme.textPrimary,
       };
     }
-    final h = widget.small ? 40.0 : 48.0;
+    // Drawn smaller than the finger's 48: a block the size of the touch
+    // area outweighs what is around it.
+    final h = widget.small ? 34.0 : 42.0;
     final label = Row(
       mainAxisSize: widget.expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -489,7 +491,7 @@ class _AppButtonState extends ConsumerState<AppButton>
             widget.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.ui(widget.small ? 14 : 15, weight: 700, color: fg),
+            style: theme.ui(widget.small ? 13.5 : 15, weight: 700, color: fg),
           ),
         ),
       ],
@@ -513,7 +515,7 @@ class _AppButtonState extends ConsumerState<AppButton>
                 }
               : null,
           child: ConstrainedBox(
-            // The finger gets 48 even where the block is drawn 40 high.
+            // The finger gets 48 even where the block is drawn 34 high.
             constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
             child: Center(
               widthFactor: widget.expand ? null : 1,
@@ -532,7 +534,8 @@ class _AppButtonState extends ConsumerState<AppButton>
                               ? rest
                               : (kind == ButtonKind.quiet
                                   ? Colors.transparent
-                                  : theme.surfaceElevated.withValues(alpha: 0.6)),
+                                  : theme.surfaceElevated
+                                      .withValues(alpha: 0.6)),
                         ),
                       ),
                       if (widget.busy)
@@ -567,9 +570,9 @@ class _AppButtonState extends ConsumerState<AppButton>
                       ),
                       Padding(
                         padding: EdgeInsets.fromLTRB(
-                          widget.small ? 12 : 18,
+                          widget.small ? 10 : 14,
                           0,
-                          widget.small ? 16 : 22,
+                          widget.small ? 14 : 18,
                           0,
                         ),
                         child: Center(
@@ -661,15 +664,15 @@ class _SquareIconButtonState extends ConsumerState<SquareIconButton>
                   duration:
                       Motion.of(context, down ? Motion.press : Motion.wipe),
                   curve: Motion.mech,
-                  width: 40,
-                  height: 40,
+                  width: 38,
+                  height: 38,
                   decoration: ShapeDecoration(
                     color: on
                         ? theme.accentPrimary
                         : widget.filled
                             ? theme.surfaceElevated
                             : Colors.transparent,
-                    shape: const CutBorder.br(7),
+                    shape: const CutBorder.br(6),
                   ),
                   child: Icon(widget.icon, size: widget.size, color: fg),
                 ),
@@ -1013,7 +1016,10 @@ class SquareSwitch extends ConsumerWidget {
                     color: value
                         ? theme.accentPrimary
                         : down
-                            ? pressTint(theme.surfaceElevated, theme.textPrimary)
+                            ? pressTint(
+                                theme.surfaceElevated,
+                                theme.textPrimary,
+                              )
                             : theme.surfaceElevated,
                     border: value ? null : Border.all(color: theme.cardBorder),
                   ),
@@ -1038,7 +1044,9 @@ class SquareSwitch extends ConsumerWidget {
 }
 
 /// A segmented choice: an ink frame, the current segment filled with ink
-/// (the accent is kept for navigation and the main action).
+/// (the accent is kept for navigation and the main action). On a change the
+/// ink block slides to the new segment, and each label turns light as the
+/// block passes under it.
 class SegmentedChoice<T> extends ConsumerWidget {
   const SegmentedChoice({
     super.key,
@@ -1058,61 +1066,95 @@ class SegmentedChoice<T> extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
+    final n = options.length;
+    final selected = options.indexWhere((o) => o.$1 == value);
     return Container(
       decoration: BoxDecoration(border: Border.all(color: theme.textPrimary)),
-      child: Row(
-        children: [
-          for (final (v, label) in options)
-            Expanded(
-              child: Semantics(
-                button: true,
-                inMutuallyExclusiveGroup: true,
-                checked: v == value,
-                child: PressBuilder(
-                  enabled: v != value,
-                  builder: (context, down) => GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: v == value
-                        ? null
-                        : () {
-                            HapticFeedback.selectionClick();
-                            onChanged(v);
-                          },
-                    child: AnimatedContainer(
-                      duration: Motion.of(
-                        context,
-                        down ? Motion.press : Motion.wipe,
-                      ),
-                      curve: Motion.mech,
-                      constraints: const BoxConstraints(minHeight: 44),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      alignment: Alignment.center,
-                      color: v == value
-                          ? theme.textPrimary
-                          : down
-                              ? pressTint(Colors.transparent, theme.textPrimary)
-                              : Colors.transparent,
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: theme
-                            .ui(
-                              14,
-                              weight: v == value ? 700 : 500,
-                              color: v == value
-                                  ? theme.bgPrimary
-                                  : theme.textPrimary,
-                            )
-                            .merge(labelStyle?.call(v)),
-                      ),
-                    ),
+      child: TweenAnimationBuilder<double>(
+        // Where the ink block stands, in segments (it slides between them).
+        tween: Tween(end: selected < 0 ? -1 : selected.toDouble()),
+        duration: Motion.of(context, Motion.row),
+        curve: Motion.snap,
+        builder: (context, at, _) => LayoutBuilder(
+          builder: (context, box) {
+            final width = box.maxWidth / n;
+            return Stack(
+              children: [
+                if (selected >= 0)
+                  Positioned(
+                    left: at * width,
+                    top: 0,
+                    bottom: 0,
+                    width: width,
+                    child: ColoredBox(color: theme.textPrimary),
                   ),
+                Row(
+                  children: [
+                    for (var i = 0; i < n; i++)
+                      Expanded(
+                        child: _segment(
+                          theme,
+                          options[i],
+                          // How much of the block is under this segment.
+                          (1 - (at - i).abs()).clamp(0.0, 1.0),
+                        ),
+                      ),
+                  ],
                 ),
-              ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(AppThemeTokens theme, (T, String) option, double covered) {
+    final (v, label) = option;
+    final current = v == value;
+    return Semantics(
+      button: true,
+      inMutuallyExclusiveGroup: true,
+      checked: current,
+      child: PressBuilder(
+        enabled: !current,
+        builder: (context, down) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: current
+              ? null
+              : () {
+                  HapticFeedback.selectionClick();
+                  onChanged(v);
+                },
+          child: AnimatedContainer(
+            duration: Motion.of(context, down ? Motion.press : Motion.wipe),
+            curve: Motion.mech,
+            constraints: const BoxConstraints(minHeight: 44),
+            // Narrow: seven short values fit across a phone.
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            alignment: Alignment.center,
+            color: down && !current
+                ? pressTint(Colors.transparent, theme.textPrimary)
+                : Colors.transparent,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: theme
+                  .ui(
+                    14,
+                    weight: covered > 0.5 ? 700 : 500,
+                    color: Color.lerp(
+                      theme.textPrimary,
+                      theme.bgPrimary,
+                      covered,
+                    ),
+                  )
+                  .merge(labelStyle?.call(v)),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -1502,50 +1544,83 @@ class ActionRow extends ConsumerWidget {
   }
 }
 
-/// A pressable row: while the finger is down a trace bar drops along its
-/// left edge and the content shifts 6 px right (200 ms, then back). No
-/// ripple, no scale; a drag (a scroll) lets go.
+/// A pressable row: while the finger is down a trace bar drops from the top
+/// of its left edge to the bottom and the content shifts 6 px right (200 ms,
+/// then back). No ripple, no scale; a drag (a scroll) lets go.
 class PressRow extends ConsumerStatefulWidget {
   const PressRow({
     super.key,
     required this.child,
     this.onTap,
     this.onLongPress,
+    this.shift = true,
+    this.marked = false,
   });
 
   final Widget child;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
+  /// Whether the bar drops and the content moves right while pressed. Off
+  /// for heads that should stay put (a status line, a fold's head): the
+  /// press is then only a light film.
+  final bool shift;
+
+  /// The bar stays: the row is the current one, or what it opens is open.
+  final bool marked;
+
   @override
   ConsumerState<PressRow> createState() => _PressRowState();
 }
 
-class _PressRowState extends ConsumerState<PressRow>
-    with PressHold<PressRow> {
+class _PressRowState extends ConsumerState<PressRow> with PressHold<PressRow> {
+  /// Tapped: the bar runs its full length at once and stays while what the
+  /// row opens covers it. Let go with the press (100 ms after a quick tap),
+  /// it drew back half-drawn under the page coming in.
+  bool _held = false;
+  Timer? _hold;
+
+  void _tapped() {
+    HapticFeedback.selectionClick();
+    if (widget.shift) {
+      setState(() => _held = true);
+      _hold?.cancel();
+      _hold = Timer(Motion.coverIn + Motion.row, () {
+        if (mounted) setState(() => _held = false);
+      });
+    }
+    widget.onTap!();
+  }
+
+  @override
+  void dispose() {
+    _hold?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.onTap == null && widget.onLongPress == null) return widget.child;
     final theme = ref.watch(themeProvider);
     final d = Motion.of(context, Motion.row);
-    final down = pressed;
+    final down = pressed || _held;
+    final bar = (down && widget.shift) || widget.marked;
     return pressListener(
       enabled: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap == null
-            ? null
-            : () {
-                HapticFeedback.selectionClick();
-                widget.onTap!();
-              },
+        onTap: widget.onTap == null ? null : _tapped,
         onLongPress: widget.onLongPress,
         child: Stack(
           children: [
             AnimatedContainer(
               duration: d,
               curve: Motion.snap,
-              transform: Matrix4.translationValues(down ? 6 : 0, 0, 0),
+              transform: Matrix4.translationValues(
+                down && widget.shift ? 6 : 0,
+                0,
+                0,
+              ),
               color: down
                   ? theme.textPrimary.withValues(alpha: 0.04)
                   : Colors.transparent,
@@ -1555,14 +1630,214 @@ class _PressRowState extends ConsumerState<PressRow>
               left: 0,
               top: 0,
               bottom: 0,
-              child: AnimatedContainer(
-                duration: d,
-                curve: Motion.snap,
-                width: down ? 4 : 0,
-                color: theme.trace,
+              width: traceRailWidth,
+              child: TraceRail(
+                on: bar,
+                // Fast once tapped: full before the new page has moved far.
+                duration: _held ? Motion.of(context, Motion.press) : d,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How wide the trace rail on the left of a pressed or open row is.
+const double traceRailWidth = 3;
+
+/// The trace rail of a row: it runs down from the top to the full height
+/// of what it is beside while [on] (snap) and draws back up when off (mech).
+/// It never grows thicker; its length is what moves. Give it a bounded
+/// height (a [Positioned] with top and bottom).
+class TraceRail extends ConsumerWidget {
+  const TraceRail({super.key, required this.on, this.duration, this.color});
+
+  final bool on;
+  final Duration? duration;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    return AnimatedFractionallySizedBox(
+      duration: duration ?? Motion.of(context, Motion.wipe),
+      curve: on ? Motion.snap : Motion.mech,
+      alignment: Alignment.topCenter,
+      heightFactor: on ? 1 : 0,
+      widthFactor: 1,
+      child: ColoredBox(color: color ?? theme.trace),
+    );
+  }
+}
+
+/// A head that unfolds a body under it. A trace rail on the left edge runs
+/// the length of what is open: it drops along the head while the finger is
+/// down, extends with the body as the body opens, stays while it is open and
+/// draws back with it as it folds. The head itself does not move; pressing
+/// it lays a light film over it. Leave at least 10 px on the left of the
+/// head and the body for the rail.
+class FoldBlock extends ConsumerStatefulWidget {
+  const FoldBlock({
+    super.key,
+    required this.head,
+    required this.open,
+    required this.onTap,
+    this.body,
+    this.headKey,
+    this.railTop = 0,
+  });
+
+  final Widget head;
+
+  /// Where the rail starts below the top of the head: a tall head with a
+  /// short label in it starts the rail just above the label.
+  final double railTop;
+
+  /// On the head (what is tapped), not the whole block.
+  final Key? headKey;
+
+  /// Built only while [open].
+  final Widget Function()? body;
+  final bool open;
+  final VoidCallback? onTap;
+
+  @override
+  ConsumerState<FoldBlock> createState() => _FoldBlockState();
+}
+
+class _FoldBlockState extends ConsumerState<FoldBlock>
+    with PressHold<FoldBlock> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    final open = widget.open;
+    final down = pressed;
+    final head = pressListener(
+      enabled: widget.onTap != null,
+      child: GestureDetector(
+        key: widget.headKey,
+        behavior: HitTestBehavior.opaque,
+        onTap: withHaptic(widget.onTap),
+        child: AnimatedContainer(
+          duration: Motion.of(context, Motion.press),
+          curve: Motion.mech,
+          color: down
+              ? theme.textPrimary.withValues(alpha: 0.04)
+              : Colors.transparent,
+          child: widget.head,
+        ),
+      ),
+    );
+    // Opening answers the tap at once (snap) and folding stops hard (mech);
+    // the body is its own layer, so the frames only clip it.
+    final body = widget.body == null
+        ? null
+        : AnimatedSize(
+            duration: Motion.of(context, Motion.wipe),
+            curve: open ? Motion.snap : Motion.mech,
+            alignment: Alignment.topLeft,
+            child: open
+                ? RepaintBoundary(child: widget.body!())
+                : const SizedBox(width: double.infinity),
+          );
+    return Stack(
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [head, if (body != null) body],
+        ),
+        Positioned(
+          left: 0,
+          top: widget.railTop,
+          bottom: 0,
+          width: traceRailWidth,
+          child: TraceRail(on: open || down),
+        ),
+      ],
+    );
+  }
+}
+
+/// A row that folds a list under it, keeping its own state (in place of
+/// Material's ExpansionTile): a [FoldBlock] whose head is the title, a
+/// short line under it and a chevron.
+class FoldTile extends ConsumerStatefulWidget {
+  const FoldTile({
+    super.key,
+    required this.title,
+    this.subtitle,
+    required this.children,
+    this.initiallyOpen = false,
+    this.padding = const EdgeInsets.symmetric(horizontal: 12),
+    this.childrenPadding = EdgeInsets.zero,
+  });
+
+  final Widget title;
+  final Widget? subtitle;
+  final List<Widget> children;
+  final bool initiallyOpen;
+
+  /// Left and right of the head (at least 10 on the left, for the rail).
+  final EdgeInsets padding;
+  final EdgeInsets childrenPadding;
+
+  @override
+  ConsumerState<FoldTile> createState() => _FoldTileState();
+}
+
+class _FoldTileState extends ConsumerState<FoldTile> {
+  late bool _open = widget.initiallyOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    return Semantics(
+      button: true,
+      expanded: _open,
+      child: FoldBlock(
+        open: _open,
+        onTap: () => setState(() => _open = !_open),
+        head: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Padding(
+            padding: widget.padding.add(
+              const EdgeInsets.symmetric(vertical: 8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      widget.title,
+                      if (widget.subtitle != null) widget.subtitle!,
+                    ],
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: _open ? 0 : -0.25,
+                  duration: Motion.of(context, Motion.wipe),
+                  curve: Motion.mech,
+                  child: Icon(
+                    Icons.expand_more_sharp,
+                    size: 22,
+                    color: _open ? theme.textPrimary : theme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: () => Padding(
+          padding: widget.childrenPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: widget.children,
+          ),
         ),
       ),
     );
@@ -1700,4 +1975,245 @@ Future<bool> confirmAction(
     ),
   );
   return ok ?? false;
+}
+
+/// A cut track filled with the accent up to a large ink thumb that stands
+/// past it above and below; taps and drags share one scale.
+class AppSlider extends ConsumerStatefulWidget {
+  const AppSlider({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.min = 0,
+    this.max = 1,
+    this.divisions,
+    this.onChangeEnd,
+    this.semanticLabel,
+    this.semanticValue,
+  })  : assert(max > min),
+        assert(divisions == null || divisions > 0);
+  final double value;
+  final double min;
+  final double max;
+  final int? divisions;
+  final ValueChanged<double>? onChanged;
+  final ValueChanged<double>? onChangeEnd;
+  final String? semanticLabel;
+  final String? semanticValue;
+  @override
+  ConsumerState<AppSlider> createState() => _AppSliderState();
+}
+
+class _AppSliderState extends ConsumerState<AppSlider> {
+  late double _value = widget.value;
+  bool _dragging = false;
+  bool _focused = false;
+  static const _thumb = 40.0;
+
+  @override
+  void didUpdateWidget(AppSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Under the finger the thumb is where the finger is, not where the
+    // owner rounded it to.
+    if (!_dragging && widget.value != oldWidget.value) _value = widget.value;
+  }
+
+  double _snap(double value) {
+    final share =
+        ((value - widget.min) / (widget.max - widget.min)).clamp(0.0, 1.0);
+    final steps = widget.divisions;
+    return widget.min +
+        (steps == null ? share : (share * steps).round() / steps) *
+            (widget.max - widget.min);
+  }
+
+  void _change(double value) {
+    final next = _snap(value);
+    if (next == _value) return;
+    if (widget.divisions != null) HapticFeedback.selectionClick();
+    setState(() => _value = next);
+    widget.onChanged?.call(next);
+  }
+
+  void _adjust(int direction) {
+    _change(
+      _value +
+          direction * (widget.max - widget.min) / (widget.divisions ?? 100),
+    );
+    widget.onChangeEnd?.call(_value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = ref.watch(themeProvider);
+    final enabled = widget.onChanged != null;
+    return Semantics(
+      slider: true,
+      enabled: enabled,
+      label: widget.semanticLabel,
+      value: widget.semanticValue ?? '${_value.round()}',
+      increasedValue:
+          '${_snap(_value + (widget.max - widget.min) / (widget.divisions ?? 100))}',
+      decreasedValue:
+          '${_snap(_value - (widget.max - widget.min) / (widget.divisions ?? 100))}',
+      onIncrease: enabled && _value < widget.max ? () => _adjust(1) : null,
+      onDecrease: enabled && _value > widget.min ? () => _adjust(-1) : null,
+      child: Focus(
+        canRequestFocus: enabled,
+        onFocusChange: (value) => setState(() => _focused = value),
+        onKeyEvent: (_, event) {
+          if (!enabled || event is! KeyDownEvent) return KeyEventResult.ignored;
+          final key = event.logicalKey;
+          if (key == LogicalKeyboardKey.arrowRight ||
+              key == LogicalKeyboardKey.arrowUp) {
+            _adjust(1);
+            return KeyEventResult.handled;
+          }
+          if (key == LogicalKeyboardKey.arrowLeft ||
+              key == LogicalKeyboardKey.arrowDown) {
+            _adjust(-1);
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final travel = math.max(1.0, box.maxWidth - _thumb);
+            final rtl = Directionality.of(context) == TextDirection.rtl;
+            double at(Offset position) {
+              final x = rtl ? box.maxWidth - position.dx : position.dx;
+              return widget.min +
+                  ((x - _thumb / 2) / travel).clamp(0.0, 1.0) *
+                      (widget.max - widget.min);
+            }
+
+            void finish() {
+              if (!_dragging) return;
+              setState(() => _dragging = false);
+              widget.onChangeEnd?.call(_value);
+            }
+
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: enabled
+                  ? (details) {
+                      _change(at(details.localPosition));
+                      widget.onChangeEnd?.call(_value);
+                    }
+                  : null,
+              onHorizontalDragStart: enabled
+                  ? (details) {
+                      setState(() => _dragging = true);
+                      _change(at(details.localPosition));
+                    }
+                  : null,
+              onHorizontalDragUpdate: enabled
+                  ? (details) => _change(at(details.localPosition))
+                  : null,
+              onHorizontalDragEnd: enabled ? (_) => finish() : null,
+              onHorizontalDragCancel: enabled ? finish : null,
+              child: SizedBox(
+                height: 48,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    end: ((_value - widget.min) / (widget.max - widget.min))
+                        .clamp(0.0, 1.0),
+                  ),
+                  duration: _dragging
+                      ? Duration.zero
+                      : Motion.of(context, Motion.row),
+                  curve: Motion.snap,
+                  builder: (context, share, _) {
+                    final x = share * travel;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // The track: filled up to the needle.
+                        Positioned.fill(
+                          top: 10,
+                          bottom: 10,
+                          child: DecoratedBox(
+                            decoration: ShapeDecoration(
+                              color: theme.divider,
+                              shape: CutBorder.br(
+                                7,
+                                side: BorderSide(
+                                  color:
+                                      _focused ? theme.trace : theme.cardBorder,
+                                  width: _focused ? 2 : 1,
+                                ),
+                              ),
+                            ),
+                            child: ClipPath(
+                              clipper: const ShapeBorderClipper(
+                                shape: CutBorder.br(7),
+                              ),
+                              child: Stack(
+                                children: [
+                                  PositionedDirectional(
+                                    start: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: x + _thumb / 2,
+                                    child: ColoredBox(
+                                      color: enabled
+                                          ? theme.accentPrimary
+                                          : theme.surfaceElevated,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // The thumb: an ink block standing past the track
+                        // above and below (it reads on the fill and on the
+                        // empty part alike), its corner cut (it is moved),
+                        // two grip lines that take the accent while held.
+                        PositionedDirectional(
+                          start: x,
+                          top: 4,
+                          width: _thumb,
+                          height: _thumb,
+                          child: DecoratedBox(
+                            key: const ValueKey('app-slider-thumb'),
+                            decoration: ShapeDecoration(
+                              color:
+                                  enabled ? theme.textPrimary : theme.textMuted,
+                              shape: const CutBorder.br(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                for (final gap in const [0.0, 5.0])
+                                  Padding(
+                                    padding: EdgeInsets.only(left: gap),
+                                    child: AnimatedContainer(
+                                      duration: Motion.of(
+                                        context,
+                                        _dragging ? Motion.press : Motion.wipe,
+                                      ),
+                                      curve: Motion.mech,
+                                      width: 2,
+                                      height: 14,
+                                      color: _dragging
+                                          ? theme.accentPrimary
+                                          : theme.bgPrimary,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }

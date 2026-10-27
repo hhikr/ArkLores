@@ -7,6 +7,7 @@ library;
 import '../../gamedata/game.dart';
 import '../../wiki/wiki_lookup.dart';
 import '../../wiki/wiki_page.dart';
+import '../context_ledger.dart';
 import '../lore_tools.dart';
 import 'agent_tool.dart';
 
@@ -59,8 +60,7 @@ class WikiSearchTool extends AgentTool {
     if (query.isEmpty) return '错误：query 为空';
     final game = Game.parse(arguments['game']) ?? Game.arknights;
     final site = WikiSite.of(game);
-    final limit =
-        (_int(arguments['limit']) ?? defaultLimit).clamp(1, maxLimit);
+    final limit = (_int(arguments['limit']) ?? defaultLimit).clamp(1, maxLimit);
     final List<WikiSearchHit> hits;
     try {
       hits = await wiki.search(game, query, limit: limit);
@@ -125,7 +125,8 @@ class WikiSearchTool extends AgentTool {
 
 /// `wiki_read`: paragraphs of one wiki page.
 class WikiReadTool extends AgentTool {
-  WikiReadTool(this.wiki, this.seen);
+  WikiReadTool(this.wiki, this.seen, {this.ledger});
+  final ContextLedger? ledger;
 
   final WikiLookup wiki;
   final SeenLines seen;
@@ -149,7 +150,8 @@ class WikiReadTool extends AgentTool {
         'properties': {
           'page': {
             'type': 'string',
-            'description': '页面引用（wiki_search 结果里的 wiki:… 或 wiki_read 给出的页面 id）或页面标题',
+            'description':
+                '页面引用（wiki_search 结果里的 wiki:… 或 wiki_read 给出的页面 id）或页面标题',
           },
           'game': _gameParameter('page 是标题时，在哪个游戏的 Wiki 上找，默认 arknights'),
           'start': {'type': 'integer', 'description': '起始段号（整数，不带 P），默认 0'},
@@ -175,13 +177,18 @@ class WikiReadTool extends AgentTool {
     }
     if (page.blocks.isEmpty) return '《${page.title}》没有可读的正文。';
     final start = (_int(arguments['start']) ?? 0).clamp(0, page.blocks.length);
-    final count =
-        (_int(arguments['count']) ?? defaultCount).clamp(1, maxCount);
+    final count = (_int(arguments['count']) ?? defaultCount).clamp(1, maxCount);
     final section = '${arguments['section'] ?? ''}'.trim();
     final picked = <(int, WikiBlock)>[
       for (final (i, b) in page.range(start, page.blocks.length - 1))
         if (section.isEmpty || b.section.contains(section)) (i, b),
     ];
+    final requested = picked.take(count).toList();
+    if (ledger != null &&
+        requested.isNotEmpty &&
+        requested.every((p) => ledger!.lineInContext(page!.id, p.$1))) {
+      return '$inContextPrefix《${page.title}》 的第 ${requested.first.$1}–${requested.last.$1} 段仍在上文（${contextSteps(ledger!, page.id, requested.map((p) => p.$1))}的结果），没有重新读取。';
+    }
     final buffer = StringBuffer()
       ..writeln('《${page.title}》 ${page.site.label}，共 ${page.blocks.length} 段')
       ..writeln('页面 id：${page.id}（引用写 ["${page.id}", 起始段, 结束段]）')
@@ -191,9 +198,9 @@ class WikiReadTool extends AgentTool {
       if (outline.isNotEmpty) buffer.writeln('小节：$outline');
     }
     if (picked.isEmpty) {
-      buffer.writeln(section.isEmpty
-          ? '（P$start 之后没有内容，已到结尾）'
-          : '（没有标题包含“$section”的小节）',);
+      buffer.writeln(
+        section.isEmpty ? '（P$start 之后没有内容，已到结尾）' : '（没有标题包含“$section”的小节）',
+      );
       return buffer.toString().trimRight();
     }
     String? lastSection;
@@ -213,9 +220,11 @@ class WikiReadTool extends AgentTool {
       shown++;
     }
     final more = picked.any((p) => p.$1 > last);
-    buffer.writeln(more
-        ? '（本次到 P$last，后面还有；继续读用 start=${last + 1}${section.isEmpty ? '' : ' 并保留 section'}）'
-        : '（到 P$last 为止${section.isEmpty ? '，页面结束' : '，该小节结束'}）',);
+    buffer.writeln(
+      more
+          ? '（本次到 P$last，后面还有；继续读用 start=${last + 1}${section.isEmpty ? '' : ' 并保留 section'}）'
+          : '（到 P$last 为止${section.isEmpty ? '，页面结束' : '，该小节结束'}）',
+    );
     return buffer.toString().trimRight();
   }
 
@@ -237,7 +246,9 @@ class WikiReadTool extends AgentTool {
 }
 
 /// The wiki tools sharing [seen] with the knowledge-base tools.
-List<AgentTool> wikiTools(WikiLookup wiki, SeenLines seen) => [
+List<AgentTool> wikiTools(WikiLookup wiki, SeenLines seen,
+        {ContextLedger? ledger,}) =>
+    [
       WikiSearchTool(wiki),
-      WikiReadTool(wiki, seen),
+      WikiReadTool(wiki, seen, ledger: ledger),
     ];

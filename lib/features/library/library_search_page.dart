@@ -11,6 +11,7 @@ import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/search_marks.dart';
 import 'library_pages.dart';
 import 'library_widgets.dart';
 
@@ -56,8 +57,12 @@ class SearchFurtherButton extends StatelessWidget {
         context.t.librarySearchFurther(query.trim()),
         key: const ValueKey('search-further'),
         icon: Icons.manage_search_sharp,
-        onPressed: () =>
-            openSearch(context, scope: scope, label: label, query: query.trim()),
+        onPressed: () => openSearch(
+          context,
+          scope: scope,
+          label: label,
+          query: query.trim(),
+        ),
       );
 }
 
@@ -165,8 +170,7 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
                   )
                 : result.when(
                     skipLoadingOnReload: true,
-                    loading: () =>
-                        const LoadingView(),
+                    loading: () => const LoadingView(),
                     error: (_, __) => LibraryMessage(
                       icon: Icons.search_off_sharp,
                       title: context.t.libraryNoResults,
@@ -191,50 +195,63 @@ class _LibrarySearchPageState extends ConsumerState<LibrarySearchPage> {
         description: context.t.librarySearchSemanticNeedsService,
       );
     }
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        0,
-        16,
-        24 + MediaQuery.paddingOf(context).bottom,
-      ),
-      children: [
-        if (!r.hasNameHits && !r.isEmpty)
-          _note(theme, context.t.librarySearchNoNameMatch(q)),
-        ..._collections(theme, context.t.librarySearchCollections, r.collections),
-        ..._entries(theme, context.t.librarySearchEntries, r.entries),
-        ..._collections(theme, context.t.librarySearchSimilar, r.similarCollections),
-        ..._entries(
-          theme,
-          r.similarCollections.isEmpty ? context.t.librarySearchSimilar : null,
-          r.similar,
+    return SearchMarks(
+      words: searchWords(q),
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          24 + MediaQuery.paddingOf(context).bottom,
         ),
-        if (r.mentions.isNotEmpty) ...[
-          _heading(theme, context.t.librarySearchMentions, r.mentions.length),
-          for (final hit in r.mentions) ...[
-            _textHitRow(theme, hit, count: true),
-            rowDivider(theme),
-          ],
-        ] else if (r.searchedText && r.hasNameHits)
-          _note(theme, context.t.librarySearchNoMentions),
-        if (!r.searchedText)
-          _action(
-            key: 'search-text',
-            icon: Icons.text_snippet_outlined,
-            label: context.t.librarySearchInText(q),
-            onTap: () => setState(() => _text = true),
+        children: [
+          if (!r.hasNameHits && !r.isEmpty)
+            _note(theme, context.t.librarySearchNoNameMatch(q)),
+          ..._collections(
+            theme,
+            context.t.librarySearchCollections,
+            r.collections,
           ),
-        if (semantic == null && semanticReady)
-          _action(
-            key: 'search-semantic',
-            icon: Icons.auto_awesome_outlined,
-            label: context.t.librarySearchSemantic,
-            onTap: () => setState(() => _semantic = true),
+          ..._entries(theme, context.t.librarySearchEntries, r.entries),
+          ..._collections(
+            theme,
+            context.t.librarySearchSimilar,
+            r.similarCollections,
           ),
-        if (semantic != null) ..._semanticSection(theme, semantic),
-        if (r.isEmpty && semantic == null)
-          _note(theme, context.t.libraryNoResults),
-      ],
+          ..._entries(
+            theme,
+            r.similarCollections.isEmpty
+                ? context.t.librarySearchSimilar
+                : null,
+            r.similar,
+          ),
+          if (r.mentions.isNotEmpty) ...[
+            _heading(theme, context.t.librarySearchMentions, r.mentions.length),
+            for (final hit in r.mentions) ...[
+              _textHitRow(theme, hit, count: true),
+              rowDivider(theme),
+            ],
+          ] else if (r.searchedText && r.hasNameHits)
+            _note(theme, context.t.librarySearchNoMentions),
+          if (!r.searchedText)
+            _action(
+              key: 'search-text',
+              icon: Icons.text_snippet_outlined,
+              label: context.t.librarySearchInText(q),
+              onTap: () => setState(() => _text = true),
+            ),
+          if (semantic == null && semanticReady)
+            _action(
+              key: 'search-semantic',
+              icon: Icons.auto_awesome_outlined,
+              label: context.t.librarySearchSemantic,
+              onTap: () => setState(() => _semantic = true),
+            ),
+          if (semantic != null) ..._semanticSection(theme, semantic),
+          if (r.isEmpty && semantic == null)
+            _note(theme, context.t.libraryNoResults),
+        ],
+      ),
     );
   }
 

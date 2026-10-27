@@ -14,6 +14,7 @@ import '../../shared/providers/theme_provider.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
 import '../../shared/widgets/page_frame.dart';
+import '../../shared/widgets/search_marks.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../ai/story_labels_provider.dart';
 import '../ai/story_reader_page.dart';
@@ -69,6 +70,7 @@ class LibraryScaffold extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.scrollUnder = false,
+    this.hides = false,
   });
 
   final String title;
@@ -76,14 +78,19 @@ class LibraryScaffold extends StatelessWidget {
   final List<Widget> actions;
   final bool scrollUnder;
 
+  /// A text read through: the bar gets out of the way ([PageScaffold.hides]).
+  final bool hides;
+
   @override
   Widget build(BuildContext context) => PageScaffold(
         title: title,
         actions: actions,
         scrollUnder: scrollUnder,
+        hides: hides,
         body: body,
       );
 }
+
 /// A centred message with an icon: empty lists, a missing knowledge base.
 class LibraryMessage extends ConsumerWidget {
   const LibraryMessage({
@@ -103,7 +110,6 @@ class LibraryMessage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -212,7 +218,7 @@ class LibraryRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    final titleText = Text(
+    final titleText = MarkedText(
       title,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
@@ -251,7 +257,7 @@ class LibraryRow extends ConsumerWidget {
                         titleText,
                       if (subtitle != null && subtitle!.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text(
+                        MarkedText(
                           subtitle!,
                           maxLines: subtitleLines,
                           overflow: TextOverflow.ellipsis,
@@ -351,6 +357,7 @@ Widget readMark(
       badge ??
       Icon(Icons.chevron_right_sharp, color: theme.textMuted, size: 22);
 }
+
 /// A story row (collection page, search): code, name, group, synopsis and
 /// the reader's progress.
 class StoryRow extends ConsumerWidget {
@@ -380,9 +387,7 @@ class StoryRow extends ConsumerWidget {
             story.group != null &&
             !story.name.contains(story.group!))
           '/ ${story.group}',
-      ]
-          .where((s) => s.isNotEmpty)
-          .join(' '),
+      ].where((s) => s.isNotEmpty).join(' '),
       subtitle: story.synopsis == null
           ? null
           : withPlaceholders(story.synopsis!, ref.watch(nicknameProvider)),
@@ -406,10 +411,11 @@ class MarkdownText extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
-    final cleaned = cleanRichText(withPlaceholders(text, ref.watch(nicknameProvider)))
-        .split('\n')
-        .map((l) => l.trimRight())
-        .join('  \n');
+    final cleaned =
+        cleanRichText(withPlaceholders(text, ref.watch(nicknameProvider)))
+            .split('\n')
+            .map((l) => l.trimRight())
+            .join('  \n');
     return MarkdownBody(
       data: cleaned,
       selectable: true,
@@ -468,10 +474,12 @@ class EventText extends ConsumerWidget {
             for (final n in parseEventOptions(s.lines))
               _OptionNode(n, theme: theme),
           ] else
-            MarkdownText([
-              if (s.heading != null) '## ${s.heading}',
-              ...s.lines,
-            ].join('\n'),),
+            MarkdownText(
+              [
+                if (s.heading != null) '## ${s.heading}',
+                ...s.lines,
+              ].join('\n'),
+            ),
       ],
     );
   }
@@ -539,30 +547,22 @@ class _OptionNode extends StatelessWidget {
         child: heading,
       );
     }
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        key: ValueKey('event-option-${node.depth}-${node.title}'),
-        shape: const Border(),
-        collapsedShape: const Border(),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-        childrenPadding: const EdgeInsets.only(left: 14),
-        expandedCrossAxisAlignment: CrossAxisAlignment.start,
-        iconColor: theme.textPrimary,
-        collapsedIconColor: theme.textSecondary,
-        title: heading,
-        children: [
-          if (node.body.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: SelectableText(
-                node.body.join('\n'),
-                style: readingStyle(theme, size: 15),
-              ),
+    return FoldTile(
+      key: ValueKey('event-option-${node.depth}-${node.title}'),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      childrenPadding: const EdgeInsets.only(left: 14),
+      title: heading,
+      children: [
+        if (node.body.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SelectableText(
+              node.body.join('\n'),
+              style: readingStyle(theme, size: 15),
             ),
-          for (final c in node.children) _OptionNode(c, theme: theme),
-        ],
-      ),
+          ),
+        for (final c in node.children) _OptionNode(c, theme: theme),
+      ],
     );
   }
 }
@@ -590,7 +590,8 @@ class EntryRow extends ConsumerWidget {
       title: entry.name.isEmpty ? entry.id : entry.name,
       subtitle: context2,
       subtitleLines: 1,
-      trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted, size: 22),
+      trailing:
+          Icon(Icons.chevron_right_sharp, color: theme.textMuted, size: 22),
       onTap: onTap,
     );
   }

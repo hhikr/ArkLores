@@ -84,6 +84,7 @@ class OperatorPage extends ConsumerWidget {
     return LibraryScaffold(
       title: e.name.isEmpty ? e.id : e.name,
       scrollUnder: true,
+      hides: true,
       actions: [
         LibrarySearchButton(
           scope: ownerScope(e.id),

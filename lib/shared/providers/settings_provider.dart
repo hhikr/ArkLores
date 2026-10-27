@@ -40,7 +40,26 @@ final profileSectionsOpenProvider = StateProvider<bool>((ref) {
   return ref.watch(initialProfileSectionsOpenProvider);
 });
 
-/// Whether the user enabled per-session AI logs (default off; applied to
+/// Whether an unread open stays out of the history, loaded at startup.
+final initialSkipUnreadOpensProvider = Provider<bool>((ref) => true);
+
+/// Whether a story opened and left without the reading position moving
+/// from where it opened is kept out of the reading history (the reader
+/// records the visit only once it moves). Set in Settings, default on.
+final skipUnreadOpensProvider = StateProvider<bool>((ref) {
+  return ref.watch(initialSkipUnreadOpensProvider);
+});
+
+/// Whether answers leave operators' names plain, loaded at startup.
+final initialSkipOperatorNamesProvider = Provider<bool>((ref) => false);
+
+/// Whether answers leave operators' names plain (players know them); other
+/// highlighted names keep their link. Set in Settings, default off.
+final skipOperatorNamesProvider = StateProvider<bool>((ref) {
+  return ref.watch(initialSkipOperatorNamesProvider);
+});
+
+/// Whether the user enabled per-session AI logs (default on; applied to
 /// [AgentLogger] at startup and on toggle in Settings).
 final sessionLogsEnabledProvider = StateProvider<bool>((ref) {
   return ref.watch(initialSessionLogsEnabledProvider);
@@ -135,3 +154,44 @@ final embeddingConfigProvider =
 final githubTokenProvider = FutureProvider<String>((ref) async {
   return ref.watch(settingsServiceProvider).loadGithubToken();
 });
+
+final initialContextWarnTokensProvider = Provider<int>((ref) => defaultContextWarnTokens);
+
+class ContextWarnTokensNotifier extends StateNotifier<int> {
+  ContextWarnTokensNotifier(this._service, int initial) : super(initial);
+  final SettingsService _service;
+
+  Future<void> set(int value) async {
+    state = value;
+    await _service.saveContextWarnTokens(value);
+  }
+}
+
+final contextWarnTokensProvider =
+    StateNotifierProvider<ContextWarnTokensNotifier, int>(
+  (ref) => ContextWarnTokensNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialContextWarnTokensProvider),
+  ),
+);
+
+final initialCompactPercentProvider =
+    Provider<int>((ref) => defaultCompactPercent);
+
+class CompactPercentNotifier extends StateNotifier<int> {
+  CompactPercentNotifier(this._service, int initial) : super(initial);
+  final SettingsService _service;
+
+  Future<void> set(int value) async {
+    state = value;
+    await _service.saveCompactPercent(value);
+  }
+}
+
+final compactPercentProvider =
+    StateNotifierProvider<CompactPercentNotifier, int>(
+  (ref) => CompactPercentNotifier(
+    ref.watch(settingsServiceProvider),
+    ref.watch(initialCompactPercentProvider),
+  ),
+);

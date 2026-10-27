@@ -52,6 +52,14 @@ class WikiSiteConfig {
   }
 }
 
+/// The context warning when none was saved; Ask compacts at 80% of it.
+/// Long-context models compact poorly, so the default is the largest
+/// option and a conversation compacts only when it gets very long.
+const defaultContextWarnTokens = 1000000;
+
+/// The share of the context warning, in percent, at which Ask compacts.
+const defaultCompactPercent = 80;
+
 /// Persistent storage for API configuration via flutter_secure_storage.
 ///
 /// Keys are stored encrypted at the OS level (Keychain on iOS,
@@ -84,7 +92,13 @@ class SettingsService {
   static const _keySessionLogsEnabled = 'session_logs_enabled';
   static const _keyAnswerOptions = 'ask_answer_options';
   static const _keyProfileSectionsOpen = 'library_profile_sections_open';
+  static const _keySkipOperatorNames = 'ask_skip_operator_names';
+  static const _keyNameLinks = 'ask_name_links';
+  static const _keyBlockedNames = 'ask_blocked_names';
+  static const _keySkipUnreadOpens = 'library_skip_unread_opens';
   static const _keyReadingFont = 'reading_font';
+  static const _keyContextWarnTokens = 'ask_context_warn_tokens';
+  static const _keyCompactPercent = 'ask_compact_percent';
 
   // ── Profile keys ─────────────────────────────────────────
   static const _keyNickname = 'profile_nickname';
@@ -98,6 +112,8 @@ class SettingsService {
   static const _keyWikiAppliedUrlPrefix = 'wiki_applied_url_';
   static const _keyWikiSources = 'wiki_sources';
   static const _keyWikiDarkMode = 'wiki_dark_mode';
+  static const _keyAutoUpdateCheck = 'auto_update_check';
+  static const _keyLastUpdateCheck = 'last_update_check';
 
   // ── Appearance keys ──────────────────────────────────────
   static const _keyTheme = 'theme';
@@ -191,7 +207,6 @@ class SettingsService {
     }
   }
 
-  /// Loads whether the user enabled per-session AI logs (default off).
   /// How the stories address the reader (empty: the default).
   Future<String> loadNickname() async =>
       (await _storage.read(key: _keyNickname)) ?? '';
@@ -199,8 +214,9 @@ class SettingsService {
   Future<void> saveNickname(String nickname) =>
       _storage.write(key: _keyNickname, value: nickname.trim());
 
+  /// Whether Ask conversations are saved (default on; a saved "off" stays).
   Future<bool> loadSessionLogsEnabled() async {
-    return await _storage.read(key: _keySessionLogsEnabled) == 'true';
+    return await _storage.read(key: _keySessionLogsEnabled) != 'false';
   }
 
   /// Persists the per-session AI log toggle.
@@ -215,6 +231,63 @@ class SettingsService {
 
   Future<void> saveProfileSectionsOpen(bool open) =>
       _storage.write(key: _keyProfileSectionsOpen, value: '$open');
+
+  /// Whether a story opened and left where it opened stays out of the
+  /// reading history (default on).
+  Future<bool> loadSkipUnreadOpens() async =>
+      await _storage.read(key: _keySkipUnreadOpens) != 'false';
+
+  Future<void> saveSkipUnreadOpens(bool skip) =>
+      _storage.write(key: _keySkipUnreadOpens, value: '$skip');
+
+  /// Whether an answer leaves operators' names plain (default: off, every
+  /// highlighted name is linked to its portrait card).
+  Future<bool> loadSkipOperatorNames() async =>
+      await _storage.read(key: _keySkipOperatorNames) == 'true';
+
+  Future<void> saveSkipOperatorNames(bool skip) =>
+      _storage.write(key: _keySkipOperatorNames, value: '$skip');
+
+  /// Whether names in answers are underlined at all (default on).
+  Future<bool> loadNameLinks() async =>
+      await _storage.read(key: _keyNameLinks) != 'false';
+
+  Future<void> saveNameLinks(bool on) =>
+      _storage.write(key: _keyNameLinks, value: '$on');
+
+  /// Names the reader chose never to underline, in the order added.
+  Future<List<String>> loadBlockedNames() async {
+    final raw = await _storage.read(key: _keyBlockedNames);
+    if (raw == null) return const [];
+    try {
+      return [for (final name in jsonDecode(raw) as List) '$name'];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> saveBlockedNames(List<String> names) =>
+      _storage.write(key: _keyBlockedNames, value: jsonEncode(names));
+
+  Future<int> loadContextWarnTokens() async {
+    final value =
+        int.tryParse(await _storage.read(key: _keyContextWarnTokens) ?? '');
+    return value != null && value > 0 ? value : defaultContextWarnTokens;
+  }
+
+  Future<void> saveContextWarnTokens(int value) =>
+      _storage.write(key: _keyContextWarnTokens, value: '$value');
+
+  Future<int> loadCompactPercent() async {
+    final value =
+        int.tryParse(await _storage.read(key: _keyCompactPercent) ?? '');
+    return value != null && value > 0 && value <= 100
+        ? value
+        : defaultCompactPercent;
+  }
+
+  Future<void> saveCompactPercent(int value) =>
+      _storage.write(key: _keyCompactPercent, value: '$value');
 
   /// The font of long reading text (default: the interface's Chinese sans).
   Future<ReadingFont> loadReadingFont() async {
@@ -253,6 +326,22 @@ class SettingsService {
 
   Future<void> markBackgroundExplained() =>
       _storage.write(key: _keyBackgroundExplained, value: 'true');
+
+  /// Whether the app looks for a new version on start (default off).
+  Future<bool> loadAutoUpdateCheck() async =>
+      await _storage.read(key: _keyAutoUpdateCheck) == 'true';
+
+  Future<void> saveAutoUpdateCheck(bool enabled) =>
+      _storage.write(key: _keyAutoUpdateCheck, value: '$enabled');
+
+  /// When the app last read its releases (by hand or on start).
+  Future<DateTime?> loadLastUpdateCheck() async =>
+      DateTime.tryParse(await _storage.read(key: _keyLastUpdateCheck) ?? '');
+
+  Future<void> saveLastUpdateCheck(DateTime at) => _storage.write(
+        key: _keyLastUpdateCheck,
+        value: at.toUtc().toIso8601String(),
+      );
 
   Future<int> loadMainTabIndex() async {
     return _loadBoundedInt(_keyMainTabIndex, min: 0, max: 3);

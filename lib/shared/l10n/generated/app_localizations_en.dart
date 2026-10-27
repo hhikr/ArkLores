@@ -83,6 +83,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.';
 
   @override
+  String get settingsSkipUnreadOpens =>
+      'Don\'t record stories left at the first line';
+
+  @override
+  String get settingsSkipUnreadOpensDesc =>
+      'A story opened and left without reading on from the line it opened at is not added to Recently read, and an entry already there keeps its place and position.';
+
+  @override
   String get settingsSessionLogs => 'Save AI conversations';
 
   @override
@@ -153,13 +161,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get kbCancel => 'Cancel';
-
-  @override
-  String get materialsTitle => 'Materials';
-
-  @override
-  String get materialsEmptyDesc =>
-      'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.';
 
   @override
   String get materialsCancel => 'Cancel';
@@ -249,6 +250,41 @@ class AppLocalizationsEn extends AppLocalizations {
       'The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.';
 
   @override
+  String get onboardingPortraitsDesc =>
+      'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.';
+
+  @override
+  String get onboardingReadingTitle => 'How to use it';
+
+  @override
+  String get onboardingTipBarsTitle => 'Bars out of the way';
+
+  @override
+  String get onboardingTipBars =>
+      'Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.';
+
+  @override
+  String get onboardingTipReaderTitle => 'The reader';
+
+  @override
+  String get onboardingTipReader =>
+      'Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.';
+
+  @override
+  String get onboardingTipPortraitTitle => 'Portraits';
+
+  @override
+  String get onboardingTipPortrait =>
+      'Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.';
+
+  @override
+  String get onboardingTipSourcesTitle => 'Sources';
+
+  @override
+  String get onboardingTipSources =>
+      'Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.';
+
+  @override
   String get onboardingBackgroundTitle => 'Running in the background';
 
   @override
@@ -317,6 +353,97 @@ class AppLocalizationsEn extends AppLocalizations {
       'Replay the first-launch guide to configure the app';
 
   @override
+  String updateVersionBuild(String version, int build) {
+    return '$version (build $build)';
+  }
+
+  @override
+  String get updateAutoCheck => 'Check automatically';
+
+  @override
+  String get updateAutoCheckDesc =>
+      'Checks when the app opens, at most once a day. It only tells you; nothing is downloaded.';
+
+  @override
+  String get updateCheck => 'Check for updates';
+
+  @override
+  String get updateChecking => 'Checking.';
+
+  @override
+  String get updateUpToDate => 'You have the latest version.';
+
+  @override
+  String updateAvailable(String version) {
+    return 'New version $version';
+  }
+
+  @override
+  String updateAvailableSize(String size) {
+    return 'Package: $size.';
+  }
+
+  @override
+  String get updateDownloadInstall => 'Download and install';
+
+  @override
+  String updateDownloading(String received, String total) {
+    return 'Downloading $received / $total';
+  }
+
+  @override
+  String get updateVerifying => 'Checking the package.';
+
+  @override
+  String get updateCancel => 'Cancel';
+
+  @override
+  String get updateNeedsPermission =>
+      'To install the update, allow ArkLores to install apps. Come back here afterwards and it continues.';
+
+  @override
+  String get updateAllow => 'Allow';
+
+  @override
+  String get updateReady =>
+      'The installer is open. If the update was not installed, tap again.';
+
+  @override
+  String get updateInstall => 'Install';
+
+  @override
+  String get updateRetry => 'Retry';
+
+  @override
+  String get updateErrorCheck =>
+      'Could not read the releases. Check the network and retry.';
+
+  @override
+  String get updateErrorDownload =>
+      'The download did not finish. Retry continues it.';
+
+  @override
+  String get updateErrorChecksum =>
+      'The package did not match its checksum and was deleted. Download it again.';
+
+  @override
+  String get updateErrorInstall => 'Could not open the installer.';
+
+  @override
+  String get updateUnsupported => 'Only the Android app can update itself.';
+
+  @override
+  String updateFound(String version) {
+    return 'New version $version';
+  }
+
+  @override
+  String get updateFoundOpen => 'View';
+
+  @override
+  String get updateNotification => 'Downloading the update';
+
+  @override
   String get aiTabAsk => 'Ask AI';
 
   @override
@@ -357,9 +484,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskCanceled => 'Answer canceled.';
-
-  @override
-  String get aiAnswerStatus => 'Answer status';
 
   @override
   String get aiAnswerStatusAnswered => 'Answered';
@@ -569,13 +693,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyReaderSynopsis => 'Official synopsis';
 
   @override
-  String get materialsEmptyTitle => 'No texts of your own yet';
-
-  @override
   String get materialsNew => 'New';
-
-  @override
-  String get materialsPaste => 'Paste from clipboard';
 
   @override
   String get materialsTitleHint => 'Title (optional)';
@@ -592,16 +710,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get materialsClipboardEmpty => 'The clipboard has no text';
-
-  @override
   String get materialsDiscard => 'Discard unsaved changes?';
 
   @override
   String get materialsDiscardAction => 'Discard';
-
-  @override
-  String get materialsAskAbout => 'Ask about it';
 
   @override
   String get readingHistoryTitle => 'Recently read';
@@ -769,7 +881,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiWorkPlanned => 'planned';
 
   @override
-  String get aiWorkRepeated => 'repeated';
+  String get aiWorkInContext => 'already above';
 
   @override
   String get aiWorkNotRun => 'not run';
@@ -1379,6 +1491,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get aiCitedMaterial => 'Material';
+
+  @override
+  String aiCitedMaterials(int count) {
+    return '$count materials';
+  }
+
+  @override
+  String get aiNameLinks => 'Name underlines';
+
+  @override
+  String get aiBlockNameQuestion => 'Stop underlining this name?';
+
+  @override
+  String get aiBlockNameDesc =>
+      'Answers will leave it plain. You can undo this in Settings.';
+
+  @override
+  String get aiBlockNameConfirm => 'Stop';
+
+  @override
+  String get aiBlockNameCancel => 'Cancel';
+
+  @override
   String aiCitationParagraph(int n) {
     return '¶$n';
   }
@@ -1477,7 +1613,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyReaderFindHint => 'Find in this story';
 
   @override
-  String get storyReaderScrubHint => 'Drag left or right; let go to stay here';
+  String get storyReaderFindEmpty =>
+      'Type a name or a word: the lines of this story that have it are listed here; tap one to go to it.';
 
   @override
   String get gameArknights => 'Arknights';
@@ -1578,4 +1715,291 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskTry => 'Try asking';
+
+  @override
+  String get settingsContextWarnTokens => 'Context warning threshold';
+
+  @override
+  String get settingsContextWarnTokensDesc =>
+      'Warn when a conversation exceeds this value.';
+
+  @override
+  String get settingsCompactPercent => 'Auto-compaction point';
+
+  @override
+  String get settingsCompactPercentDesc =>
+      'When the context reaches this share of the warning threshold, earlier content is compacted into notes.';
+
+  @override
+  String get settingsSkipOperatorNames =>
+      'Leave operator names plain in answers';
+
+  @override
+  String get settingsSkipOperatorNamesDesc =>
+      'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.';
+
+  @override
+  String get settingsNameLinks => 'Underline names in answers';
+
+  @override
+  String get settingsNameLinksDesc =>
+      'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.';
+
+  @override
+  String get settingsBlockedNames => 'Names left plain';
+
+  @override
+  String get settingsBlockedNamesDesc =>
+      'These names are never underlined. Long-press an underlined name in an answer to add it.';
+
+  @override
+  String settingsBlockedNamesCount(int count) {
+    return '$count';
+  }
+
+  @override
+  String get blockedNamesHint => 'Name to leave plain';
+
+  @override
+  String get blockedNamesAdd => 'Add';
+
+  @override
+  String get blockedNamesEmpty =>
+      'No names yet. Type one above, or long-press an underlined name in an answer.';
+
+  @override
+  String blockedNamesRemove(String name) {
+    return 'Underline $name again';
+  }
+
+  @override
+  String get blockedNamesDuplicate => 'This name is already on the list.';
+
+  @override
+  String aiContextMeter(String n, String limit) {
+    return 'Context $n / $limit';
+  }
+
+  @override
+  String aiContextNotice(String n, String limit) {
+    return 'This conversation has exceeded the context warning threshold ($n / $limit). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.';
+  }
+
+  @override
+  String get aiContextWarningTitle => 'Context warning threshold exceeded';
+
+  @override
+  String aiContextWarningBody(String n, String limit) {
+    return 'This conversation now has $n of context (warning threshold $limit). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.';
+  }
+
+  @override
+  String get aiContextNewChat => 'New conversation';
+
+  @override
+  String get aiContextStop => 'Stop answering';
+
+  @override
+  String get aiContextDismiss => 'Got it';
+
+  @override
+  String aiWorkCompaction(String from, String to, int count) {
+    return 'Compact context / ≈ $from → $to / $count passages kept';
+  }
+
+  @override
+  String get storyArtPackMissing => 'No story art pack installed.';
+
+  @override
+  String get portraitNotInPack => 'This portrait is not in the pack.';
+
+  @override
+  String get portraitBlank => 'The portrait for this line is blank.';
+
+  @override
+  String get storyArtPackTitle => 'Story art';
+
+  @override
+  String get storyArtPackOldIndex =>
+      'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.';
+
+  @override
+  String get storyArtPackUnreleased =>
+      'The story art pack has not been released yet.';
+
+  @override
+  String storyArtPackDescription(String size) {
+    return 'Download size: $size';
+  }
+
+  @override
+  String storyArtPackInstalled(int count, int scenes, int cgs, String size) {
+    return 'Portraits $count / Scenes $scenes / CG $cgs / $size';
+  }
+
+  @override
+  String storyArtPackUpdateAvailable(String size) {
+    return 'A new story art pack is available ($size).';
+  }
+
+  @override
+  String get storyArtPackDownload => 'Download story art pack';
+
+  @override
+  String get storyArtPackUpdate => 'Update';
+
+  @override
+  String get storyArtPackDelete => 'Delete';
+
+  @override
+  String get storyArtPackCancel => 'Cancel';
+
+  @override
+  String get storyArtCredit => 'Images: Arkwaifu (CC BY-NC 4.0) / Hypergryph';
+
+  @override
+  String get storyArtPackEndfield => 'Endfield stories have no art data.';
+
+  @override
+  String get storyArtPackDeleteConfirm =>
+      'Delete the downloaded story art pack? You can download it again later.';
+
+  @override
+  String get storyArtPackError =>
+      'The story art pack operation failed. Please retry.';
+
+  @override
+  String storyArtPackProgress(String received, String total, String percent) {
+    return '$received / $total ($percent%)';
+  }
+
+  @override
+  String get portraitEyebrow => 'PORTRAIT';
+
+  @override
+  String portraitLines(int n) {
+    return '$n lines';
+  }
+
+  @override
+  String portraitStories(int n) {
+    return '$n stories';
+  }
+
+  @override
+  String portraitSprites(int n) {
+    return '$n variants';
+  }
+
+  @override
+  String portraitFaceBody(int face, int body) {
+    return 'face $face / outfit $body';
+  }
+
+  @override
+  String get portraitGroupSpeakers => 'Who else uses this portrait?';
+
+  @override
+  String get portraitWhoUses => 'Who uses this portrait?';
+
+  @override
+  String portraitStoriesWith(String name) {
+    return 'Stories where “$name” has this portrait';
+  }
+
+  @override
+  String get portraitSpeakerGroups => 'Other portraits of this character';
+
+  @override
+  String get portraitOperator => 'Operator file';
+
+  @override
+  String get portraitNoSprite => 'No portrait is shown for this line.';
+
+  @override
+  String portraitTapSpeaker(String name) {
+    return 'Show portraits of “$name”';
+  }
+
+  @override
+  String get portraitGroupPageTitle => 'Portrait speakers';
+
+  @override
+  String portraitSpeakerPageTitle(String name) {
+    return 'Portraits of “$name”';
+  }
+
+  @override
+  String portraitPassingPortraits(int n) {
+    return '$n more portraits used little';
+  }
+
+  @override
+  String get portraitPassingHint =>
+      'Too few lines; probably voices from off the stage';
+
+  @override
+  String portraitPassingSpeakers(int n) {
+    return '$n more who appear little, their main portrait elsewhere';
+  }
+
+  @override
+  String portraitSpeakerCount(int n) {
+    return '$n speakers';
+  }
+
+  @override
+  String get portraitMore => 'More';
+
+  @override
+  String portraitStoryTitle(String name) {
+    return 'Stories with $name';
+  }
+
+  @override
+  String get portraitNoStories => 'No stories found.';
+
+  @override
+  String get storyArtDescription =>
+      'Portraits, backgrounds, CGs and close-ups from stories.';
+
+  @override
+  String get storyArtClose => 'Close';
+
+  @override
+  String get storyArtJump => 'Return to this point in the story';
+
+  @override
+  String get storyArtScene => 'Scene';
+
+  @override
+  String get storyArtTall => 'Tall image, tap to see all';
+
+  @override
+  String get storyArtNoScene => 'No scene has appeared yet';
+
+  @override
+  String get storyArtMissing => 'Image not in the story art pack.';
+
+  @override
+  String storyArtSceneSemantic(int number, int total) {
+    return 'Scene $number of $total';
+  }
+
+  @override
+  String storyArtCgSemantic(int number, int total, String title) {
+    return 'CG $number of $total, $title';
+  }
+
+  @override
+  String get portraitFullscreen => 'View portrait fullscreen';
+
+  @override
+  String get portraitTitle => 'Portrait';
+
+  @override
+  String get collectionArtTitle => 'Story art';
+
+  @override
+  String get collectionArtAll => 'All story art';
 }

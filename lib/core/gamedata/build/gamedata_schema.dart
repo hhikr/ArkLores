@@ -265,7 +265,7 @@ const List<String> entryLayerIndexes = [
 
 /// Upserts key/value rows into `gamedata_manifest`.
 Future<void> writeGamedataManifest(
-  Database db,
+  DatabaseExecutor db,
   Map<String, String> values,
 ) async {
   for (final entry in values.entries) {

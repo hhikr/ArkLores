@@ -14,6 +14,7 @@ import '../../shared/widgets/ef_widgets.dart';
 import '../library/reading_text.dart' show readingFontSample;
 import 'background_access.dart';
 import 'game_asset_card.dart';
+import 'story_art_pack_card.dart';
 import 'wiki_sources_settings_page.dart';
 
 /// The steps of the onboarding, in order. [background] only where the
@@ -25,15 +26,18 @@ enum OnboardingStep {
   chat,
   embedding,
   knowledgeBase,
+  portraits,
   wiki,
+  reading,
   background,
   done,
 }
 
 /// Onboarding, shown on first launch and from Settings: one step per part of
 /// the app's setup — what the app is, appearance, how the stories address
-/// the reader, the chat and vector services, the knowledge bases, the Wiki
-/// sites, running in the background, ready.
+/// the reader, the chat and vector services, the knowledge bases, the
+/// portrait pack, the Wiki sites, how the app is handled, running in the
+/// background, ready.
 ///
 /// Every field starts with what is saved on the device (a service filled in
 /// before, a knowledge base already downloaded shows so); a step whose
@@ -88,7 +92,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _embedUrl = TextEditingController(text: embedding.baseUrl);
     _embedKey = TextEditingController(text: embedding.apiKey);
     _embedModel = TextEditingController(text: embedding.model);
-    for (final c in [_chatUrl, _chatKey, _chatModel, _embedUrl, _embedKey, _embedModel]) {
+    for (final c in [
+      _chatUrl,
+      _chatKey,
+      _chatModel,
+      _embedUrl,
+      _embedKey,
+      _embedModel,
+    ]) {
       // The main button says whether there is something to save.
       c.addListener(_refresh);
     }
@@ -147,11 +158,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         now.chatModel != saved.chatModel;
   }
 
-  EmbeddingConfig get _embedConfig => ref.read(embeddingConfigProvider).copyWith(
-        baseUrl: _embedUrl.text.trim(),
-        apiKey: _embedKey.text.trim(),
-        model: _embedModel.text.trim(),
-      );
+  EmbeddingConfig get _embedConfig =>
+      ref.read(embeddingConfigProvider).copyWith(
+            baseUrl: _embedUrl.text.trim(),
+            apiKey: _embedKey.text.trim(),
+            model: _embedModel.text.trim(),
+          );
 
   bool get _embedChanged {
     final saved = ref.read(embeddingConfigProvider);
@@ -162,7 +174,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _saveChat() async {
-    final error = LLMConfig.apiKeyFormatError(_chatKey.text, label: 'Chat API Key');
+    final error =
+        LLMConfig.apiKeyFormatError(_chatKey.text, label: 'Chat API Key');
     setState(() => _chatKeyError = error);
     if (error != null) return;
     if (_chatChanged) {
@@ -234,7 +247,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                   ? SupportedLocale.zh
                                   : SupportedLocale.en;
                               ref.read(localeProvider.notifier).switchTo(next);
-                              ref.read(settingsServiceProvider).saveLocale(next);
+                              ref
+                                  .read(settingsServiceProvider)
+                                  .saveLocale(next);
                             },
                           ),
                           // The last step's main button finishes already.
@@ -291,7 +306,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         OnboardingStep.chat => _chat(theme),
         OnboardingStep.embedding => _embedding(theme),
         OnboardingStep.knowledgeBase => _knowledgeBase(theme),
+        OnboardingStep.portraits => _portraits(theme),
         OnboardingStep.wiki => _wiki(theme),
+        OnboardingStep.reading => _reading(theme),
         OnboardingStep.background => _background(theme),
         OnboardingStep.done => _done(theme),
       };
@@ -327,7 +344,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                     if (description != null) ...[
                       Text(
                         description,
-                        style: theme.text(15, color: theme.textSecondary, height: 1.6),
+                        style: theme.text(
+                          15,
+                          color: theme.textSecondary,
+                          height: 1.6,
+                        ),
                       ),
                       const SizedBox(height: 20),
                     ],
@@ -412,11 +433,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text(context.t.onboardingWelcomeTitle, style: theme.heading(26)),
+                    Text(
+                      context.t.onboardingWelcomeTitle,
+                      style: theme.heading(26),
+                    ),
                     const SizedBox(height: 14),
                     Text(
                       context.t.onboardingWelcomeDesc,
-                      style: theme.text(16, color: theme.textSecondary, height: 1.7),
+                      style: theme.text(
+                        16,
+                        color: theme.textSecondary,
+                        height: 1.7,
+                      ),
                     ),
                   ],
                 ),
@@ -541,8 +569,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       code: 'embedding',
       description: context.t.onboardingEmbeddingDesc,
       children: [
-        _field(_embedUrl, context.t.apiSettingsLabelBaseUrl,
-            hint: defaultEmbeddingConfig.baseUrl, url: true,),
+        _field(
+          _embedUrl,
+          context.t.apiSettingsLabelBaseUrl,
+          hint: defaultEmbeddingConfig.baseUrl,
+          url: true,
+        ),
         _SecretField(
           key: const ValueKey('onboarding-embedding-key'),
           controller: _embedKey,
@@ -552,8 +584,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             if (_embedKeyError != null) setState(() => _embedKeyError = null);
           },
         ),
-        _field(_embedModel, context.t.apiSettingsLabelModel,
-            hint: defaultEmbeddingConfig.model,),
+        _field(
+          _embedModel,
+          context.t.apiSettingsLabelModel,
+          hint: defaultEmbeddingConfig.model,
+        ),
       ],
       main: _nextButton(
         label: _embedChanged ? context.t.onboardingSaveContinue : null,
@@ -589,6 +624,71 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       code: 'wiki',
       description: context.t.onboardingWikiDesc,
       children: const [WikiSourcesList()],
+      main: _nextButton(),
+    );
+  }
+
+  Widget _portraits(AppThemeTokens theme) {
+    return _step(
+      title: context.t.storyArtPackTitle,
+      code: 'portraits',
+      description: context.t.onboardingPortraitsDesc,
+      children: const [StoryArtPackCard()],
+      main: _nextButton(),
+    );
+  }
+
+  /// How the app is handled, a numbered line each: what to know before the
+  /// first story and the first question.
+  Widget _reading(AppThemeTokens theme) {
+    final tips = [
+      (context.t.onboardingTipBarsTitle, context.t.onboardingTipBars),
+      (context.t.onboardingTipReaderTitle, context.t.onboardingTipReader),
+      (context.t.onboardingTipPortraitTitle, context.t.onboardingTipPortrait),
+      (context.t.onboardingTipSourcesTitle, context.t.onboardingTipSources),
+    ];
+    return _step(
+      title: context.t.onboardingReadingTitle,
+      code: 'how to',
+      children: [
+        for (final (i, (title, text)) in tips.indexed)
+          Container(
+            key: ValueKey('onboarding-tip-$i'),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: theme.divider)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 36,
+                  child: Text(
+                    (i + 1).toString().padLeft(2, '0'),
+                    style: theme.field(color: theme.textMuted),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: theme.heading(16)),
+                      const SizedBox(height: 4),
+                      Text(
+                        text,
+                        style: theme.text(
+                          14.5,
+                          color: theme.textSecondary,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
       main: _nextButton(),
     );
   }

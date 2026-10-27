@@ -242,6 +242,18 @@ abstract class AppLocalizations {
   /// **'Show every section of an operator\'s file unfolded when opening its page; when off, all start folded and open on tap. Story synopses always start folded.'**
   String get settingsProfileSectionsOpenDesc;
 
+  /// No description provided for @settingsSkipUnreadOpens.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t record stories left at the first line'**
+  String get settingsSkipUnreadOpens;
+
+  /// No description provided for @settingsSkipUnreadOpensDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'A story opened and left without reading on from the line it opened at is not added to Recently read, and an entry already there keeps its place and position.'**
+  String get settingsSkipUnreadOpensDesc;
+
   /// No description provided for @settingsSessionLogs.
   ///
   /// In en, this message translates to:
@@ -379,18 +391,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get kbCancel;
-
-  /// No description provided for @materialsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Materials'**
-  String get materialsTitle;
-
-  /// No description provided for @materialsEmptyDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.'**
-  String get materialsEmptyDesc;
 
   /// No description provided for @materialsCancel.
   ///
@@ -548,6 +548,66 @@ abstract class AppLocalizations {
   /// **'The Wiki tab shows these sites, and Ask looks things up in them. Their addresses can be changed and other sites added.'**
   String get onboardingWikiDesc;
 
+  /// No description provided for @onboardingPortraitsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a speaker in the reader or a name in an answer to see that character\'s story portraits. The story art pack is a separate download; you can get it later on the knowledge base page.'**
+  String get onboardingPortraitsDesc;
+
+  /// No description provided for @onboardingReadingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How to use it'**
+  String get onboardingReadingTitle;
+
+  /// No description provided for @onboardingTipBarsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bars out of the way'**
+  String get onboardingTipBarsTitle;
+
+  /// No description provided for @onboardingTipBars.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading down in the wiki, Ask or the reader moves the bars off the screen. Tap a blank spot to bring them back, tap again to send them away.'**
+  String get onboardingTipBars;
+
+  /// No description provided for @onboardingTipReaderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The reader'**
+  String get onboardingTipReaderTitle;
+
+  /// No description provided for @onboardingTipReader.
+  ///
+  /// In en, this message translates to:
+  /// **'Its buttons are at the bottom, in reach of the thumb. Tap the title for the progress bar and drag to any line; the magnifier finds words in the story.'**
+  String get onboardingTipReader;
+
+  /// No description provided for @onboardingTipPortraitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits'**
+  String get onboardingTipPortraitTitle;
+
+  /// No description provided for @onboardingTipPortrait.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a speaker, or an underlined name in an answer, for a small card beside it; More opens the large card with every variant.'**
+  String get onboardingTipPortrait;
+
+  /// No description provided for @onboardingTipSourcesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources'**
+  String get onboardingTipSourcesTitle;
+
+  /// No description provided for @onboardingTipSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Every part of an answer has its sources. Open one to read the original text and go from there to that line of the story.'**
+  String get onboardingTipSources;
+
   /// No description provided for @onboardingBackgroundTitle.
   ///
   /// In en, this message translates to:
@@ -668,6 +728,156 @@ abstract class AppLocalizations {
   /// **'Replay the first-launch guide to configure the app'**
   String get settingsShowOnboardingDesc;
 
+  /// No description provided for @updateVersionBuild.
+  ///
+  /// In en, this message translates to:
+  /// **'{version} (build {build})'**
+  String updateVersionBuild(String version, int build);
+
+  /// No description provided for @updateAutoCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check automatically'**
+  String get updateAutoCheck;
+
+  /// No description provided for @updateAutoCheckDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks when the app opens, at most once a day. It only tells you; nothing is downloaded.'**
+  String get updateAutoCheckDesc;
+
+  /// No description provided for @updateCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get updateCheck;
+
+  /// No description provided for @updateChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking.'**
+  String get updateChecking;
+
+  /// No description provided for @updateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You have the latest version.'**
+  String get updateUpToDate;
+
+  /// No description provided for @updateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'New version {version}'**
+  String updateAvailable(String version);
+
+  /// No description provided for @updateAvailableSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Package: {size}.'**
+  String updateAvailableSize(String size);
+
+  /// No description provided for @updateDownloadInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and install'**
+  String get updateDownloadInstall;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading {received} / {total}'**
+  String updateDownloading(String received, String total);
+
+  /// No description provided for @updateVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the package.'**
+  String get updateVerifying;
+
+  /// No description provided for @updateCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get updateCancel;
+
+  /// No description provided for @updateNeedsPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'To install the update, allow ArkLores to install apps. Come back here afterwards and it continues.'**
+  String get updateNeedsPermission;
+
+  /// No description provided for @updateAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get updateAllow;
+
+  /// No description provided for @updateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'The installer is open. If the update was not installed, tap again.'**
+  String get updateReady;
+
+  /// No description provided for @updateInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get updateInstall;
+
+  /// No description provided for @updateRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get updateRetry;
+
+  /// No description provided for @updateErrorCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the releases. Check the network and retry.'**
+  String get updateErrorCheck;
+
+  /// No description provided for @updateErrorDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'The download did not finish. Retry continues it.'**
+  String get updateErrorDownload;
+
+  /// No description provided for @updateErrorChecksum.
+  ///
+  /// In en, this message translates to:
+  /// **'The package did not match its checksum and was deleted. Download it again.'**
+  String get updateErrorChecksum;
+
+  /// No description provided for @updateErrorInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the installer.'**
+  String get updateErrorInstall;
+
+  /// No description provided for @updateUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the Android app can update itself.'**
+  String get updateUnsupported;
+
+  /// No description provided for @updateFound.
+  ///
+  /// In en, this message translates to:
+  /// **'New version {version}'**
+  String updateFound(String version);
+
+  /// No description provided for @updateFoundOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get updateFoundOpen;
+
+  /// No description provided for @updateNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading the update'**
+  String get updateNotification;
+
   /// No description provided for @aiTabAsk.
   ///
   /// In en, this message translates to:
@@ -745,12 +955,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Answer canceled.'**
   String get aiAskCanceled;
-
-  /// No description provided for @aiAnswerStatus.
-  ///
-  /// In en, this message translates to:
-  /// **'Answer status'**
-  String get aiAnswerStatus;
 
   /// No description provided for @aiAnswerStatusAnswered.
   ///
@@ -1100,23 +1304,11 @@ abstract class AppLocalizations {
   /// **'Official synopsis'**
   String get storyReaderSynopsis;
 
-  /// No description provided for @materialsEmptyTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'No texts of your own yet'**
-  String get materialsEmptyTitle;
-
   /// No description provided for @materialsNew.
   ///
   /// In en, this message translates to:
   /// **'New'**
   String get materialsNew;
-
-  /// No description provided for @materialsPaste.
-  ///
-  /// In en, this message translates to:
-  /// **'Paste from clipboard'**
-  String get materialsPaste;
 
   /// No description provided for @materialsTitleHint.
   ///
@@ -1142,12 +1334,6 @@ abstract class AppLocalizations {
   /// **'{n} characters'**
   String materialsChars(int n);
 
-  /// No description provided for @materialsClipboardEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'The clipboard has no text'**
-  String get materialsClipboardEmpty;
-
   /// No description provided for @materialsDiscard.
   ///
   /// In en, this message translates to:
@@ -1159,12 +1345,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discard'**
   String get materialsDiscardAction;
-
-  /// No description provided for @materialsAskAbout.
-  ///
-  /// In en, this message translates to:
-  /// **'Ask about it'**
-  String get materialsAskAbout;
 
   /// No description provided for @readingHistoryTitle.
   ///
@@ -1448,11 +1628,11 @@ abstract class AppLocalizations {
   /// **'planned'**
   String get aiWorkPlanned;
 
-  /// No description provided for @aiWorkRepeated.
+  /// No description provided for @aiWorkInContext.
   ///
   /// In en, this message translates to:
-  /// **'repeated'**
-  String get aiWorkRepeated;
+  /// **'already above'**
+  String get aiWorkInContext;
 
   /// No description provided for @aiWorkNotRun.
   ///
@@ -2450,6 +2630,48 @@ abstract class AppLocalizations {
   /// **'{count} wiki pages'**
   String aiCitedWikiPages(int count);
 
+  /// No description provided for @aiCitedMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Material'**
+  String get aiCitedMaterial;
+
+  /// No description provided for @aiCitedMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} materials'**
+  String aiCitedMaterials(int count);
+
+  /// No description provided for @aiNameLinks.
+  ///
+  /// In en, this message translates to:
+  /// **'Name underlines'**
+  String get aiNameLinks;
+
+  /// No description provided for @aiBlockNameQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop underlining this name?'**
+  String get aiBlockNameQuestion;
+
+  /// No description provided for @aiBlockNameDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers will leave it plain. You can undo this in Settings.'**
+  String get aiBlockNameDesc;
+
+  /// No description provided for @aiBlockNameConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get aiBlockNameConfirm;
+
+  /// No description provided for @aiBlockNameCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get aiBlockNameCancel;
+
   /// No description provided for @aiCitationParagraph.
   ///
   /// In en, this message translates to:
@@ -2594,11 +2816,11 @@ abstract class AppLocalizations {
   /// **'Find in this story'**
   String get storyReaderFindHint;
 
-  /// No description provided for @storyReaderScrubHint.
+  /// No description provided for @storyReaderFindEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Drag left or right; let go to stay here'**
-  String get storyReaderScrubHint;
+  /// **'Type a name or a word: the lines of this story that have it are listed here; tap one to go to it.'**
+  String get storyReaderFindEmpty;
 
   /// No description provided for @gameArknights.
   ///
@@ -2791,6 +3013,462 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Try asking'**
   String get aiAskTry;
+
+  /// No description provided for @settingsContextWarnTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Context warning threshold'**
+  String get settingsContextWarnTokens;
+
+  /// No description provided for @settingsContextWarnTokensDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Warn when a conversation exceeds this value.'**
+  String get settingsContextWarnTokensDesc;
+
+  /// No description provided for @settingsCompactPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-compaction point'**
+  String get settingsCompactPercent;
+
+  /// No description provided for @settingsCompactPercentDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'When the context reaches this share of the warning threshold, earlier content is compacted into notes.'**
+  String get settingsCompactPercentDesc;
+
+  /// No description provided for @settingsSkipOperatorNames.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave operator names plain in answers'**
+  String get settingsSkipOperatorNames;
+
+  /// No description provided for @settingsSkipOperatorNamesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.'**
+  String get settingsSkipOperatorNamesDesc;
+
+  /// No description provided for @settingsNameLinks.
+  ///
+  /// In en, this message translates to:
+  /// **'Underline names in answers'**
+  String get settingsNameLinks;
+
+  /// No description provided for @settingsNameLinksDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.'**
+  String get settingsNameLinksDesc;
+
+  /// No description provided for @settingsBlockedNames.
+  ///
+  /// In en, this message translates to:
+  /// **'Names left plain'**
+  String get settingsBlockedNames;
+
+  /// No description provided for @settingsBlockedNamesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'These names are never underlined. Long-press an underlined name in an answer to add it.'**
+  String get settingsBlockedNamesDesc;
+
+  /// No description provided for @settingsBlockedNamesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String settingsBlockedNamesCount(int count);
+
+  /// No description provided for @blockedNamesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Name to leave plain'**
+  String get blockedNamesHint;
+
+  /// No description provided for @blockedNamesAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get blockedNamesAdd;
+
+  /// No description provided for @blockedNamesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No names yet. Type one above, or long-press an underlined name in an answer.'**
+  String get blockedNamesEmpty;
+
+  /// No description provided for @blockedNamesRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Underline {name} again'**
+  String blockedNamesRemove(String name);
+
+  /// No description provided for @blockedNamesDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'This name is already on the list.'**
+  String get blockedNamesDuplicate;
+
+  /// No description provided for @aiContextMeter.
+  ///
+  /// In en, this message translates to:
+  /// **'Context {n} / {limit}'**
+  String aiContextMeter(String n, String limit);
+
+  /// No description provided for @aiContextNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation has exceeded the context warning threshold ({n} / {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.'**
+  String aiContextNotice(String n, String limit);
+
+  /// No description provided for @aiContextWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Context warning threshold exceeded'**
+  String get aiContextWarningTitle;
+
+  /// No description provided for @aiContextWarningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This conversation now has {n} of context (warning threshold {limit}). Longer context costs more per step and makes earlier content easier to miss. You can continue in a new conversation.'**
+  String aiContextWarningBody(String n, String limit);
+
+  /// No description provided for @aiContextNewChat.
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get aiContextNewChat;
+
+  /// No description provided for @aiContextStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop answering'**
+  String get aiContextStop;
+
+  /// No description provided for @aiContextDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get aiContextDismiss;
+
+  /// No description provided for @aiWorkCompaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact context / ≈ {from} → {to} / {count} passages kept'**
+  String aiWorkCompaction(String from, String to, int count);
+
+  /// No description provided for @storyArtPackMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'No story art pack installed.'**
+  String get storyArtPackMissing;
+
+  /// No description provided for @portraitNotInPack.
+  ///
+  /// In en, this message translates to:
+  /// **'This portrait is not in the pack.'**
+  String get portraitNotInPack;
+
+  /// No description provided for @portraitBlank.
+  ///
+  /// In en, this message translates to:
+  /// **'The portrait for this line is blank.'**
+  String get portraitBlank;
+
+  /// No description provided for @storyArtPackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Story art'**
+  String get storyArtPackTitle;
+
+  /// No description provided for @storyArtPackOldIndex.
+  ///
+  /// In en, this message translates to:
+  /// **'The installed knowledge base has no portrait data yet. Update it before downloading the story art pack.'**
+  String get storyArtPackOldIndex;
+
+  /// No description provided for @storyArtPackUnreleased.
+  ///
+  /// In en, this message translates to:
+  /// **'The story art pack has not been released yet.'**
+  String get storyArtPackUnreleased;
+
+  /// No description provided for @storyArtPackDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Download size: {size}'**
+  String storyArtPackDescription(String size);
+
+  /// No description provided for @storyArtPackInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits {count} / Scenes {scenes} / CG {cgs} / {size}'**
+  String storyArtPackInstalled(int count, int scenes, int cgs, String size);
+
+  /// No description provided for @storyArtPackUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'A new story art pack is available ({size}).'**
+  String storyArtPackUpdateAvailable(String size);
+
+  /// No description provided for @storyArtPackDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download story art pack'**
+  String get storyArtPackDownload;
+
+  /// No description provided for @storyArtPackUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get storyArtPackUpdate;
+
+  /// No description provided for @storyArtPackDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get storyArtPackDelete;
+
+  /// No description provided for @storyArtPackCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get storyArtPackCancel;
+
+  /// No description provided for @storyArtCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Images: Arkwaifu (CC BY-NC 4.0) / Hypergryph'**
+  String get storyArtCredit;
+
+  /// No description provided for @storyArtPackEndfield.
+  ///
+  /// In en, this message translates to:
+  /// **'Endfield stories have no art data.'**
+  String get storyArtPackEndfield;
+
+  /// No description provided for @storyArtPackDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the downloaded story art pack? You can download it again later.'**
+  String get storyArtPackDeleteConfirm;
+
+  /// No description provided for @storyArtPackError.
+  ///
+  /// In en, this message translates to:
+  /// **'The story art pack operation failed. Please retry.'**
+  String get storyArtPackError;
+
+  /// No description provided for @storyArtPackProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{received} / {total} ({percent}%)'**
+  String storyArtPackProgress(String received, String total, String percent);
+
+  /// No description provided for @portraitEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'PORTRAIT'**
+  String get portraitEyebrow;
+
+  /// No description provided for @portraitLines.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} lines'**
+  String portraitLines(int n);
+
+  /// No description provided for @portraitStories.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} stories'**
+  String portraitStories(int n);
+
+  /// No description provided for @portraitSprites.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} variants'**
+  String portraitSprites(int n);
+
+  /// No description provided for @portraitFaceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'face {face} / outfit {body}'**
+  String portraitFaceBody(int face, int body);
+
+  /// No description provided for @portraitGroupSpeakers.
+  ///
+  /// In en, this message translates to:
+  /// **'Who else uses this portrait?'**
+  String get portraitGroupSpeakers;
+
+  /// No description provided for @portraitWhoUses.
+  ///
+  /// In en, this message translates to:
+  /// **'Who uses this portrait?'**
+  String get portraitWhoUses;
+
+  /// No description provided for @portraitStoriesWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories where “{name}” has this portrait'**
+  String portraitStoriesWith(String name);
+
+  /// No description provided for @portraitSpeakerGroups.
+  ///
+  /// In en, this message translates to:
+  /// **'Other portraits of this character'**
+  String get portraitSpeakerGroups;
+
+  /// No description provided for @portraitOperator.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator file'**
+  String get portraitOperator;
+
+  /// No description provided for @portraitNoSprite.
+  ///
+  /// In en, this message translates to:
+  /// **'No portrait is shown for this line.'**
+  String get portraitNoSprite;
+
+  /// No description provided for @portraitTapSpeaker.
+  ///
+  /// In en, this message translates to:
+  /// **'Show portraits of “{name}”'**
+  String portraitTapSpeaker(String name);
+
+  /// No description provided for @portraitGroupPageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portrait speakers'**
+  String get portraitGroupPageTitle;
+
+  /// No description provided for @portraitSpeakerPageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits of “{name}”'**
+  String portraitSpeakerPageTitle(String name);
+
+  /// No description provided for @portraitPassingPortraits.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} more portraits used little'**
+  String portraitPassingPortraits(int n);
+
+  /// No description provided for @portraitPassingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Too few lines; probably voices from off the stage'**
+  String get portraitPassingHint;
+
+  /// No description provided for @portraitPassingSpeakers.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} more who appear little, their main portrait elsewhere'**
+  String portraitPassingSpeakers(int n);
+
+  /// No description provided for @portraitSpeakerCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} speakers'**
+  String portraitSpeakerCount(int n);
+
+  /// No description provided for @portraitMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get portraitMore;
+
+  /// No description provided for @portraitStoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stories with {name}'**
+  String portraitStoryTitle(String name);
+
+  /// No description provided for @portraitNoStories.
+  ///
+  /// In en, this message translates to:
+  /// **'No stories found.'**
+  String get portraitNoStories;
+
+  /// No description provided for @storyArtDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Portraits, backgrounds, CGs and close-ups from stories.'**
+  String get storyArtDescription;
+
+  /// No description provided for @storyArtClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get storyArtClose;
+
+  /// No description provided for @storyArtJump.
+  ///
+  /// In en, this message translates to:
+  /// **'Return to this point in the story'**
+  String get storyArtJump;
+
+  /// No description provided for @storyArtScene.
+  ///
+  /// In en, this message translates to:
+  /// **'Scene'**
+  String get storyArtScene;
+
+  /// No description provided for @storyArtTall.
+  ///
+  /// In en, this message translates to:
+  /// **'Tall image, tap to see all'**
+  String get storyArtTall;
+
+  /// No description provided for @storyArtNoScene.
+  ///
+  /// In en, this message translates to:
+  /// **'No scene has appeared yet'**
+  String get storyArtNoScene;
+
+  /// No description provided for @storyArtMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Image not in the story art pack.'**
+  String get storyArtMissing;
+
+  /// No description provided for @storyArtSceneSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Scene {number} of {total}'**
+  String storyArtSceneSemantic(int number, int total);
+
+  /// No description provided for @storyArtCgSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'CG {number} of {total}, {title}'**
+  String storyArtCgSemantic(int number, int total, String title);
+
+  /// No description provided for @portraitFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'View portrait fullscreen'**
+  String get portraitFullscreen;
+
+  /// No description provided for @portraitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Portrait'**
+  String get portraitTitle;
+
+  /// No description provided for @collectionArtTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Story art'**
+  String get collectionArtTitle;
+
+  /// No description provided for @collectionArtAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All story art'**
+  String get collectionArtAll;
 }
 
 class _AppLocalizationsDelegate

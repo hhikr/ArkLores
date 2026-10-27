@@ -35,7 +35,9 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 | `story_catalog`（可选） | 故事集名、关卡号、章名、行动前/后、顺序、官方梗概、上线时间 `start_time`、剧情回顾的开放时间 `show_time`（`story_review_table.json` 的 `startShowTime`；主线只有这个时间；2026-10-18 加，问答取材按它排上线顺序）（`story_review_table.json` + `[uc]info`） |
 | `story_chunk_vectors`（可选） | 剧情向量，12 行一块、步长 8，int8；模型/维度/切块记在 manifest |
 | `record_chunk_vectors`（可选，0.14） | 资料向量：`normalized_records` 里不是剧情副本的每条记录与 `entity_documents` 的每份档案；一条一块，超过 800 字的在 `## ` 小节处切、再按行切；每块存文字哈希与它覆盖的字符范围；与剧情向量同一模型 |
-| `gamedata_manifest` | schema 版本、上游提交、计数、向量与目录元数据 |
+| 立绘五张表（可选，0.20，只有明日方舟库） | `story_line_portraits`（每句显示的立绘）与派生的 `portrait_sprites`、`portrait_groups`、`speaker_portraits`、`speaker_names`；格式、规则与四条路径的写法见 `PORTRAITS.md` §2。旧 App 不读，加表不改 `min_app_build` |
+| 剧情美术事件表（可选，0.20，只有明日方舟库） | `story_art_events`：每篇换背景、出 CG、出特写的位置，特写带位置、缩放、透明度与层次；四条路径与补算工具同立绘，见 `PORTRAITS.md` §1.2、§2 |
+| `gamedata_manifest` | schema 版本、上游提交、计数、向量与目录元数据（0.20 起有 `portrait_index_version`、立绘行数与立绘数、`story_art_index_version`、美术事件数） |
 
 关系、名字、复刻合并、去重等规则见 `KNOWLEDGE_BASE_LESSONS.md` §2。
 
@@ -48,6 +50,14 @@ DDL 以 `gamedata_schema.dart` 为准，可选表见 `story_vectors.dart`、`sto
 明日方舟库未压缩 679 → 299 MB（679,129,088 → 299,241,472 字节），下载 210 → 119 MB（209,900,351 → 119,420,657 字节，两版的 manifest），终末地 62 → 31 MB；剧情行、资料、条目与之前逐行相同，向量按行迁移。v0.13.0 及更早的 App 的校验要求这些表，装不了新库：新库只随新版本发布。
 
 ## 4. 四条构建路径（同一套代码）
+
+四条路径都写立绘表与美术事件（0.20）：导入剧情时记下每句的立绘与这篇的美术事件，最后 `rebuildPortraitIndex` 重算派生表。给已有的库补立绘与美术事件、不重建剧情和向量（先把库备份一份）：
+
+```bash
+dart run tools/build_portrait_index.dart --db=<库> --source=<同一个提交的源目录>
+```
+
+逐篇重新解析，只有每行 `kind|speaker|content` 与库里相同的故事才写立绘行，不同的跳过并列出（同一个提交时应为 0）。
 
 ### 4.1 全量构建（桌面）
 
@@ -169,6 +179,10 @@ dart run tools/build_story_embeddings.dart --db=<新库> --migrate-from=<旧库>
    每次原地替换：每个文件先以 `<名字>.new` 上传、核对 SHA，再删掉旧的、改名，旧文件只缺那一瞬间；最后从 env 写出渠道文件（`write_gamedata_channel.dart`）并同样替换。
    之后用公开地址下载两个 gz 核对 SHA，改 `gamedata-channel` Release 的说明（当前版本、SHA、和上一份的差别），提交 env 的改动。
    渠道里的资产与包里的同一提交、同一日期时也算“不比包里的旧”；SHA 不同就会提示用着旧官方库的手机更新。
+   **剧情美术包**（0.20）：`build/story_art/arklores_story_art_zh.db` 不压缩，和知识库同一个 Release、同一个脚本：env 写 `STORY_ART_URL`（`gamedata-channel/arklores_story_art_zh.db`）、
+   `STORY_ART_SHA256`、`STORY_ART_SIZE`（字节）、`STORY_ART_KB_COMMIT`（生成它的知识库的上游提交），`-Files` 加上这个文件；渠道文件里就有 `arknights_story_art` 一项（`pack_version = 2`、`min_app_build = 43`）。
+   包只经渠道文件给出，不烘进 APK。打包与增量见 `PORTRAITS.md` §3。知识库的立绘表或美术事件变了（新的剧情）就重打一次包；包不变时不用重传，`-ChannelOnly` 只改渠道文件。
+   2026-10-27（0.20.0）第一次发布：知识库 gz `94c07dbb…`（125,840,589 字节）、美术包 `48b702bd…`（396,136,448 字节）。
 5. **发布 App**：`tools/release_app.ps1 -Version <v> -NotesFile <md> [-Stable]`：推 `release/v<v>` → CI 构建签名 APK（把 env 里的 URL/SHA 烘进去）→ 建 Release 并上传 APK。
    App 的 Release 只放 APK 和 `ArkLores-<v>.apk.sha256`，说明末尾一行指向知识库 Release。发版之后删掉 `release/v<v>` 分支（tag 指向同一提交）。
    知识库和 App 一起变时，先做第 4 步再发 App。

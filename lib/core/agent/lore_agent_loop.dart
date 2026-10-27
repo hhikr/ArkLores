@@ -10,8 +10,8 @@
 ///   whole corpus, chapter reads, grep with context (`lore_tools.dart`);
 /// - an append-only message list, so providers serve most of each request
 ///   from their prompt cache;
-/// - no hand-written progress rules — only a turn limit, a context budget
-///   (oldest tool results folded) and one citation check at the end.
+/// - no hand-written progress rules — only a helper turn limit, context
+///   compaction and one citation check at the end.
 ///
 /// 0.14 (`notes/ask_0.14_review.md`, kept locally): the question is searched
 /// once before the first turn; tool calls pass a gate before they run or
@@ -36,6 +36,7 @@ import '../materials/material_document.dart';
 import '../materials/material_snapshot.dart';
 import '../wiki/wiki_lookup.dart';
 import '../wiki/wiki_page.dart';
+import 'context_ledger.dart';
 import 'coverage.dart';
 import 'line_picker.dart';
 import 'lore_agent_prompts.dart';
@@ -49,17 +50,50 @@ import 'tool_call_gate.dart';
 import 'tools/agent_tool.dart';
 import 'tools/search_tool.dart';
 import 'tools/wiki_tools.dart';
+import 'turn_stats.dart';
+
+part 'lore_context_compaction.dart';
 
 /// The messages and seen lines of a conversation, carried into follow-up
 /// questions so they continue with the text already read.
 class LoreConversation {
+  factory LoreConversation.fromJson(Map<String, dynamic> json) {
+    if (json['version'] != 1) {
+      throw const FormatException('Unknown conversation version');
+    }
+    return LoreConversation(
+      messages: (json['messages'] as List)
+          .map((m) => Message.fromJson(m as Map<String, dynamic>))
+          .toList(),
+      seen: SeenLines.fromJson(json['seen'] as Map<String, dynamic>),
+      ledger: ContextLedger.fromJson(json['ledger'] as Map<String, dynamic>),
+      question: json['question'] as String,
+      questions: List<String>.from(json['questions'] as List),
+      lastAnswer: json['last_answer'] as String,
+      entries: (json['entries'] as List)
+          .map((e) => LoreAnswerEntry.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      compactions: json['compactions'] as int,
+      lastPromptTokens: json['last_prompt_tokens'] as int,
+      lastPromptChars: json['last_prompt_chars'] as int,
+      lastCompactionTokens: json['last_compaction_tokens'] as int?,
+    );
+  }
   LoreConversation({
     List<Message>? messages,
     SeenLines? seen,
+    ContextLedger? ledger,
     this.question = '',
     this.entries = const [],
+    this.questions = const [],
+    this.lastAnswer = '',
+    this.compactions = 0,
+    this.lastPromptTokens = 0,
+    this.lastPromptChars = 0,
+    this.lastCompactionTokens,
   })  : messages = messages ?? [],
-        seen = seen ?? SeenLines();
+        seen = seen ?? SeenLines(),
+        ledger = ledger ?? ContextLedger();
 
   /// The entries of the last answer with the citations that passed the
   /// check (what "提要" reorganises); empty when it was not a JSON answer.
@@ -69,10 +103,39 @@ class LoreConversation {
   /// results and answers.
   final List<Message> messages;
   final SeenLines seen;
+  final ContextLedger ledger;
 
   /// The last question as the user wrote it (0.14: a follow-up's search
   /// before the first turn includes it).
   final String question;
+  final List<String> questions;
+  final String lastAnswer;
+  final int compactions;
+  final int lastPromptTokens;
+  final int lastPromptChars;
+  final int? lastCompactionTokens;
+
+  Map<String, dynamic> toJson() => {
+        'version': 1,
+        'messages': [
+          for (final m in messages)
+            {
+              ...m.toJson(),
+              if (m.reasoningContent != null)
+                'reasoning_content': m.reasoningContent,
+            },
+        ],
+        'seen': seen.toJson(),
+        'ledger': ledger.toJson(),
+        'question': question,
+        'questions': questions,
+        'last_answer': lastAnswer,
+        'entries': [for (final e in entries) e.toJson()],
+        'compactions': compactions,
+        'last_prompt_tokens': lastPromptTokens,
+        'last_prompt_chars': lastPromptChars,
+        'last_compaction_tokens': lastCompactionTokens,
+      };
 }
 
 /// `story_id:12` or `story_id:12-40` (story ids end in .txt).
@@ -124,8 +187,9 @@ class LoreAgentLoop {
     this.embeddingClient,
     this.wiki,
     this.materials,
-    this.maxTurns = 30,
-    this.contextCharBudget = 80000,
+    this.maxTurns,
+    this.contextWarnTokens,
+    this.compactPercent = 80,
     this.maxTokens = 8192,
     this.temperature = 0.3,
     this.subtask = false,
@@ -210,16 +274,15 @@ class LoreAgentLoop {
   final bool pickLines;
 
   /// Model turns per question; the last one must answer.
-  final int maxTurns;
+  final int? maxTurns;
 
-  /// Characters of conversation kept whole; past it the oldest tool results
-  /// are folded to a one-line pointer (re-read when needed).
-  final int contextCharBudget;
+  final int? contextWarnTokens;
+
+  /// The share of [contextWarnTokens], in percent, at which the earlier
+  /// context is compacted (the setting "自动压缩位置").
+  final int compactPercent;
   final int maxTokens;
   final double temperature;
-
-  /// Messages kept whole at the end of the conversation when folding.
-  static const int _recentKept = 6;
 
   /// Sub-agents started so far in this question.
   int _subtasks = 0;
@@ -237,9 +300,22 @@ class LoreAgentLoop {
   }) async* {
     // [asQuestion]: what a follow-up takes as the last question when
     // [query] is not the player's own words (the reader's review).
-    final seen = prior?.seen ?? SeenLines();
+    final seen = prior == null
+        ? SeenLines()
+        : subtask
+            ? prior.seen
+            : SeenLines.fromJson(prior.seen.toJson());
+    final ledger = prior?.ledger
+            .remap({for (var i = 0; i < prior.messages.length; i++) i: i}) ?? ContextLedger();
+    var step = ledger.lastStep;
+    var displayTurn = 1;
+    var contextOnlyTurns = 0;
     seen.retainMaterials(
-        {for (final d in materials?.documents ?? const <MaterialDocument>[]) d.pageId},);
+      {
+        for (final d in materials?.documents ?? const <MaterialDocument>[])
+          d.pageId,
+      },
+    );
     // 0.12: the prompt describes every installed game's library.
     final games = store is MultiGameRetrieval
         ? await (store as MultiGameRetrieval).installedGames()
@@ -251,12 +327,14 @@ class LoreAgentLoop {
           store,
           seen,
           materials: materials,
+          ledger: subtask ? null : ledger,
           embeddingClient: embeddingClient,
           wiki: wiki,
           picker:
               pickLines && !subtask ? LinePicker(planClient ?? client) : null,
         ),
-        if (wiki != null) ...wikiTools(wiki!, seen),
+        if (wiki != null)
+          ...wikiTools(wiki!, seen, ledger: subtask ? null : ledger),
         if (delegating) DelegateTool((args) => _runSubtask(args, seen)),
       ])
         t.name: t,
@@ -304,16 +382,11 @@ class LoreAgentLoop {
       if (prior != null) ...prior.messages else ...history,
       Message.user(query),
     ];
-    // Indexes (in [conversation]) of tool results that may be folded.
+    // Tool-result indices also cover results converted to the text protocol.
     final toolResults = <int>{
       for (final (i, m) in conversation.indexed)
         if (m.role == MessageRole.tool) i,
     };
-    // 0.14: a follow-up keeps the earlier questions, answers and what was
-    // read (citable), not the earlier tool output itself.
-    if (prior != null) {
-      _foldOldToolResults(conversation, toolResults, const {}, all: true);
-    }
     // 0.14: messages of turns whose every call was refused by the gate are
     // left out of later requests once a call has gone through (pending
     // until then, so the model still sees why it was refused).
@@ -329,14 +402,178 @@ class LoreAgentLoop {
     // without this the model sent the same query three times.
     final triedInVain = <String, List<String>>{};
     final emptyTurns = <int>{};
-    // 0.14: what each tool result showed (by its index), for the pointer a
-    // folded result leaves.
-    final shownIn = <int, String>{};
+    // 0.14: notes a rejected final answer was asked again with (the answer
+    // itself is never added); hidden once an answer is accepted.
+    final redoNotes = <int>[];
+    List<Message> visible() => [
+          for (final (i, m) in conversation.indexed)
+            if (!hidden.contains(i)) m,
+        ];
+
+    final earlierQuestions = prior == null
+        ? <String>[]
+        : prior.questions.isNotEmpty
+            ? prior.questions
+            : [if (prior.question.isNotEmpty) prior.question];
+    final questions = [...earlierQuestions, if (asQuestion == null) query];
+    var compactions = prior?.compactions ?? 0;
+    var lastPromptTokens = prior?.lastPromptTokens ?? 0;
+    var lastPromptChars = prior?.lastPromptChars ?? 0;
+    int? lastCompactionTokens = prior?.lastCompactionTokens;
+    int chars() =>
+        _messageChars([Message.system(systemPrompt()), ...visible()]);
+    int estimate() {
+      final size = chars();
+      if (lastPromptTokens <= 0 || lastPromptChars <= 0) {
+        return estimateTokens(size);
+      }
+      return (lastPromptTokens +
+              (size - lastPromptChars) / (lastPromptChars / lastPromptTokens))
+          .round()
+          .clamp(0, 1 << 40);
+    }
+
+    Stream<ReActEvent> compactIfNeeded({bool followUp = false}) async* {
+      final limit = contextWarnTokens;
+      if (subtask || limit == null || limit <= 0) return;
+      final from = estimate();
+      if (from < limit * compactPercent / 100 ||
+          (lastCompactionTokens != null &&
+              from - lastCompactionTokens! < limit * 0.1)) {
+        return;
+      }
+      yield const ReActEvent(type: ReActEventType.status, content: '正在压缩上下文…');
+      final keepChars = (limit * 0.3 * 1.6).round();
+      var notes = '';
+      var keep = <String>[];
+      var raw = '';
+      try {
+        final reply = client.streamTurn(
+          [
+            Message.system(systemPrompt()),
+            ...visible(),
+            Message.user(loreCompactRequest(query, keepChars)),
+          ],
+          tools: toolSpecs,
+          toolChoice: 'none',
+          maxTokens: 4096,
+          temperature: temperature,
+        );
+        final buffer = StringBuffer();
+        await for (final delta in reply) {
+          buffer.write(delta.content);
+        }
+        raw = buffer.toString();
+        final parsed = _compactObject(raw);
+        notes = parsed.$1;
+        keep = parsed.$2;
+        if (notes.trim().isEmpty && keep.isEmpty) {
+          throw const FormatException('Empty compaction');
+        }
+      } catch (e) {
+        raw = raw.isEmpty ? '$e' : raw;
+        notes = '';
+        keep = [
+          for (final r in followUpReads(
+            [Message.assistant(prior?.lastAnswer ?? '')],
+            seen,
+          ))
+            '${r.storyId}:${r.start}-${r.start + r.count - 1}',
+        ];
+        yield const ReActEvent(
+          type: ReActEventType.recordNote,
+          content: '压缩没有成功，改用上一答引用过的原文',
+        );
+      }
+      final tailIndexes = <int>[];
+      if (!followUp) {
+        final lastCall = conversation.indexed.where((e) =>
+          !hidden.contains(e.$1) && e.$2.role == MessageRole.assistant &&
+          ((e.$2.toolCalls?.isNotEmpty ?? false) || _textToolCall.hasMatch(e.$2.content)),
+        ).map((e) => e.$1).lastOrNull ?? -1;
+        if (lastCall >= 0 && !hidden.contains(lastCall)) {
+          tailIndexes.add(lastCall);
+          for (var i = lastCall + 1; i < conversation.length; i++) {
+            if (hidden.contains(i)) continue;
+            final m = conversation[i];
+            if (m.role == MessageRole.tool ||
+                (transport.textProtocol && toolResults.contains(i))) {
+              tailIndexes.add(i);
+            } else {
+              break;
+            }
+          }
+        }
+      }
+      // The last calls' results stay as they are only when small: they count
+      // against the originals kept, and past half of that budget they go too
+      // (the compaction request saw them; what matters is in its notes and
+      // keep list, and the model may read them again).
+      var tailChars = _messageChars([for (final i in tailIndexes) conversation[i]]);
+      if (tailChars > keepChars ~/ 2) {
+        tailIndexes.clear();
+        tailChars = 0;
+      }
+      final retained = await _retainOriginals(
+          keep, keepChars - tailChars, store, seen, wiki, materials,);
+      final tail = [for (final i in tailIndexes) conversation[i]];
+      final nextLedger = ledger
+          .remap({for (final (i, old) in tailIndexes.indexed) old: i + 1});
+      compactions++;
+      final memo = _compactMemo(
+        compactions,
+        followUp ? earlierQuestions : questions,
+        _answerForMemo(prior),
+        notes,
+        retained,
+        seen,
+        followUp ? null : query,
+      );
+      nextLedger.record(0, retained.shown, step: 0, callKey: '');
+      ledger.replaceWith(nextLedger);
+      conversation
+        ..clear()
+        ..add(Message.user(memo))
+        ..addAll(tail);
+      if (followUp) conversation.add(Message.user(query));
+      hidden.clear();
+      refusedTurns.clear();
+      emptyTurns.clear();
+      redoNotes.clear();
+      toolResults
+        ..clear()
+        ..addAll([
+          for (final (i, m) in conversation.indexed)
+            if (m.role == MessageRole.tool ||
+                (transport.textProtocol && i > 1 && m.role == MessageRole.user))
+              i,
+        ]);
+      final to = estimate();
+      lastCompactionTokens = to;
+      onRawLlmResponse?.call(
+        ++record,
+        '（压缩上下文 #$compactions：约 $from → $to token，保留 ${retained.count} 段原文）\n$raw',
+      );
+      yield ReActEvent(
+        type: ReActEventType.contextCompacted,
+        content: memo,
+        compactedFrom: from,
+        compactedTo: to,
+        retainedCount: retained.count,
+      );
+      yield ReActEvent(
+        type: ReActEventType.contextSize,
+        contextTokens: to,
+        contextEstimated: true,
+      );
+    }
+
+    if (prior != null) yield* compactIfNeeded(followUp: true);
 
     // 0.14: the first steps, written by a call of its own
     // (`search_planner.dart`) and run here: searches, a collection's
     // outline, a wiki search. They enter the conversation as calls and
-    // results like the model's own (folded like them); the question stays
+    // results like the model's own; the question stays
     // as it was asked. Without a plan: with vectors the question itself is
     // searched by meaning; without, the model searches in its first turn.
     if (preSearch && !subtask && search is SearchTool) {
@@ -354,7 +591,7 @@ class LoreAgentLoop {
       // A step whose tool this question does not have is left out.
       final planned = <({String tool, Map<String, dynamic> args})>[
         // S0 (refactor phase 1): a follow-up gets the text the last answer
-        // cited again (its tool results are folded to pointers by now).
+        // cited again, unless those lines are still in context.
         if (prior != null && tools['read_story'] != null)
           for (final r in followUpReads(prior.messages, prior.seen))
             (
@@ -415,56 +652,71 @@ class LoreAgentLoop {
           }
         }
 
-        final runs = <Future<(String, SearchResult?)>>[];
+        // The steps run at the same time (gather after the others: the
+        // stories they found count a little more); one whose call or text
+        // is still above does not appear at all.
+        final keys = [
+          for (final p in planned) canonicalCallKey(p.tool, p.args),
+        ];
+        final runs = <Future<(String, SearchResult?)>?>[];
         for (var k = 0; k < planned.length; k++) {
+          if (ledger.stepOfCall(keys[k]) != null) {
+            runs.add(null);
+            continue;
+          }
+          final before = [for (final r in runs) if (r != null) r];
           runs.add(
             planned[k].tool == 'gather'
-                ? Future.wait([...runs]).then((_) => runOne(k))
+                ? Future.wait(before).then((_) => runOne(k))
                 : runOne(k),
           );
         }
-        final calls = [
-          for (final (k, step) in planned.indexed)
-            ToolCall(
-              id: 'planned_${k + 1}',
-              name: step.tool,
-              arguments: jsonEncode(step.args),
-            ),
-        ];
-        for (final (k, step) in planned.indexed) {
-          // (The first call shares the record of the plan itself.)
-          if (k > 0) {
-            onRawLlmResponse?.call(++record, '（拟定的第 ${k + 1} 步）');
-          }
+        final running = runs.nonNulls.length;
+        if (running > 0) {
           yield ReActEvent(
-            type: ReActEventType.toolCall,
-            content: _describeCall(step.tool, step.args),
-            toolName: step.tool,
-            toolArgs: step.args,
-            planned: true,
+            type: ReActEventType.status,
+            content: running > 1 ? '$running 项查找同时进行' : '正在检索资料…',
           );
         }
-        yield ReActEvent(
-          type: ReActEventType.status,
-          content: planned.length > 1 ? '${planned.length} 项查找同时进行' : '正在检索资料…',
-        );
-        conversation.add(Message.assistantToolCalls('', calls));
         String? lostVectors;
+        final plannedCalls = <ToolCall>[];
+        final plannedResults = <Message>[];
+        final plannedBase = conversation.length + 1;
         for (var k = 0; k < planned.length; k++) {
-          final (text, found) = await runs[k];
+          final plannedStep = planned[k];
+          final key = keys[k];
+          final run = runs[k];
+          if (run == null) continue;
+          final (text, found) = await run;
+          if (text.startsWith(inContextPrefix)) continue;
+          final call = ToolCall(
+              id: 'planned_${k + 1}',
+              name: plannedStep.tool,
+              arguments: jsonEncode(plannedStep.args),);
+          if (k > 0) onRawLlmResponse?.call(++record, '（拟定的第 ${k + 1} 步）');
+          step++;
           yield ReActEvent(
-            type: ReActEventType.toolObservation,
-            content: text,
-            toolName: planned[k].tool,
-          );
+              type: ReActEventType.toolCall,
+              content: _describeCall(plannedStep.tool, plannedStep.args),
+              toolName: plannedStep.tool,
+              toolArgs: plannedStep.args,
+              planned: true,);
+          plannedCalls.add(call);
+          yield ReActEvent(
+              type: ReActEventType.toolObservation,
+              content: text,
+              toolName: plannedStep.tool,);
           if (found?.mode == SearchMode.keywordOnly && keywordOnly == null) {
             lostVectors = found?.modeNote ?? '没有向量检索';
           }
-          toolResults.add(conversation.length);
-          if (!shown[k].isEmpty) {
-            shownIn[conversation.length] = shown[k].summary();
-          }
-          conversation.add(Message.toolResult(calls[k].id, text));
+          toolResults.add(plannedBase + plannedResults.length);
+          ledger.record(plannedBase + plannedResults.length, shown[k],
+              step: step, callKey: key,);
+          plannedResults.add(Message.toolResult(call.id, text));
+        }
+        if (plannedCalls.isNotEmpty) {
+          conversation.add(Message.assistantToolCalls('', plannedCalls));
+          conversation.addAll(plannedResults);
         }
         if (lostVectors != null) {
           yield ReActEvent(
@@ -476,9 +728,6 @@ class LoreAgentLoop {
       }
     }
 
-    // 0.14: notes a rejected final answer was asked again with (the answer
-    // itself is never added); hidden once an answer is accepted.
-    final redoNotes = <int>[];
     // The turn about to be sent asks again for a rejected answer.
     var redoing = false;
 
@@ -499,12 +748,7 @@ class LoreAgentLoop {
     var degradedThisTurn = false;
     var turnBase = (transport.plain, transport.textProtocol);
 
-    List<Message> visible() => [
-          for (final (i, m) in conversation.indexed)
-            if (!hidden.contains(i)) m,
-        ];
-
-    for (var turn = 1; turn <= maxTurns; turn++) {
+    for (var turn = 1; maxTurns == null || turn <= maxTurns!; turn++) {
       if (!retrying) {
         if (degradedThisTurn &&
             transport.degradedTurns < AgentTransport.stickyAfter) {
@@ -522,7 +766,14 @@ class LoreAgentLoop {
         degradedThisTurn = true;
       }
 
-      final lastTurn = turn == maxTurns;
+      // Developer rule, 2026-10-25: three context-only turns must answer.
+      final useContext = !subtask && contextOnlyTurns >= 3;
+      if (useContext &&
+          !visible().any((m) => m.content == loreUseContextNote)) {
+        redoNotes.add(conversation.length);
+        conversation.add(Message.user(loreUseContextNote));
+      }
+      final lastTurn = maxTurns != null && turn == maxTurns;
       // (Once: an empty last turn may be sent again another way.)
       if (lastTurn && !hitTurnLimit) {
         hitTurnLimit = true;
@@ -531,19 +782,19 @@ class LoreAgentLoop {
       if (transport.textProtocol) {
         _convertToTextProtocol(conversation, toolResults);
       }
-      _foldOldToolResults(conversation, toolResults, shownIn);
+      yield* compactIfNeeded();
       final statusPrefix = redoing
           ? '重新构思回答'
-          : turn == 1
+          : displayTurn == 1
               ? '正在思考'
-              : '第 $turn 轮';
+              : '第 $displayTurn 轮';
       yield ReActEvent(
         type: ReActEventType.status,
         content: redoing
             ? redoStatus
-            : turn == 1
+            : displayTurn == 1
                 ? '正在思考…'
-                : '第 $turn 轮 · 思考中',
+                : '第 $displayTurn 轮 · 思考中',
       );
       redoing = false;
 
@@ -555,15 +806,27 @@ class LoreAgentLoop {
       LoreAnswerStream? jsonAnswer;
       CompletionDelta? done;
       final callStart = DateTime.now();
+      var requestChars = 0;
+      int? promptTokens, completionTokens;
       try {
         final messages = [Message.system(systemPrompt()), ...visible()];
+        requestChars = messages.fold<int>(
+          0,
+          (n, m) =>
+              n +
+              m.content.length +
+              (m.reasoningContent?.length ?? 0) +
+              (m.toolCalls == null ? 0 : jsonEncode(m.toolCalls).length),
+        );
         final turnTools = transport.textProtocol ? null : toolSpecs;
-        final stream = transport.plain
+        final stream = transport.plain && !useContext
             ? _plainTurn(messages, turnTools)
             : client.streamTurn(
                 messages,
                 tools: turnTools,
-                toolChoice: lastTurn && !transport.textProtocol ? 'none' : null,
+                toolChoice: (lastTurn || useContext) && !transport.textProtocol
+                    ? 'none'
+                    : null,
                 temperature: temperature,
                 maxTokens: maxTokens,
               );
@@ -626,12 +889,19 @@ class LoreAgentLoop {
               );
             }
           }
+          if ((delta.promptTokens ?? 0) > 0) promptTokens = delta.promptTokens;
+          if ((delta.completionTokens ?? 0) > 0) {
+            completionTokens = delta.completionTokens;
+          }
           if (delta.done) done = delta;
         }
       } on LLMException catch (e) {
         // 0.14: a failed call is part of the timeline too.
         onSpan?.call(
-            'llm_error:${_clip(e.message, 80)}', callStart, DateTime.now(),);
+          'llm_error:${_clip(e.message, 80)}',
+          callStart,
+          DateTime.now(),
+        );
         if (!transport.textProtocol && _rejectsTools(e)) {
           // The provider has no function calling: switch to plain-text tool
           // calls and ask again.
@@ -738,6 +1008,19 @@ class LoreAgentLoop {
           continue;
         }
       }
+      if (!subtask) {
+        lastPromptTokens = promptTokens ?? estimateTokens(requestChars);
+        lastPromptChars = requestChars;
+        // The conversation after this call: what was sent and what came
+        // back (the next call sends both).
+        yield ReActEvent(
+          type: ReActEventType.contextSize,
+          contextTokens: (promptTokens ?? estimateTokens(requestChars)) +
+              (completionTokens ??
+                  estimateTokens(text.length + reasoning.length)),
+          contextEstimated: promptTokens == null || completionTokens == null,
+        );
+      }
       // Session records keep one tool per iteration: each call of a turn
       // gets its own record (the first carries the turn's raw response).
       if (calls.isEmpty || lastTurn) {
@@ -753,7 +1036,9 @@ class LoreAgentLoop {
         }
         if (content.trim().isNotEmpty) {
           yield ReActEvent(
-              type: ReActEventType.thought, content: content.trim(),);
+            type: ReActEventType.thought,
+            content: content.trim(),
+          );
         }
         // 0.14: the gate — glued calls split, arguments checked against
         // each tool's schema; what enters the conversation is valid JSON.
@@ -762,6 +1047,7 @@ class LoreAgentLoop {
             checkToolCall(c, tools[c.name], tools.keys),
         ];
         // The model has answered the last turn's empty lookups: they go.
+        ledger.forget(emptyTurns);
         hidden.addAll(emptyTurns);
         emptyTurns.clear();
         final turnStart = conversation.length;
@@ -789,32 +1075,40 @@ class LoreAgentLoop {
           for (final (k, c) in checked.indexed)
             !c.ok
                 ? Future<String>.value(c.error)
-                : (failedLookups[c.call.name] ?? 0) >= maxFailedLookups
-                    ? Future<String>.value(lookupLimitNote(c.call.name))
-                    : _runTool(tools[c.call.name]!, c, shown[k]),
+                : !subtask &&
+                        c.call.name != 'delegate' &&
+                        ledger.stepOfCall(
+                                canonicalCallKey(c.call.name, c.arguments),) !=
+                            null
+                    ? Future<String>.value(
+                        '$inContextPrefix 同样的调用在${contextStep(ledger.stepOfCall(canonicalCallKey(c.call.name, c.arguments))!)}，结果仍在上文，没有重新执行。',)
+                    : (failedLookups[c.call.name] ?? 0) >= maxFailedLookups
+                        ? Future<String>.value(lookupLimitNote(c.call.name))
+                        : _runTool(tools[c.call.name]!, c, shown[k]),
         ];
         var found = 0;
+        var blocked = 0;
+        var executed = false;
+        final inContextCalls = <bool>[];
+        final callSteps = <int>[];
         for (final (k, c) in checked.indexed) {
-          onRawLlmResponse?.call(
-            ++record,
-            k == 0
-                ? '$content\n${jsonEncode([for (final c in calls) c.toJson()])}'
-                    .trim()
-                : '（第 $turn 轮的第 ${k + 1} 个调用）',
-          );
-          final label = _describeCall(c.call.name, c.arguments);
-          yield ReActEvent(
-            type: ReActEventType.toolCall,
-            content: label,
-            toolName: c.call.name,
-            toolArgs: c.arguments,
-          );
+          // Delegation cannot be deduplicated; announce it before helper events.
+          final inContext = c.call.name != 'delegate' &&
+              (await results[k]).startsWith(inContextPrefix);
+          inContextCalls.add(inContext);
+          callSteps.add(inContext ? 0 : ++step);
+          onRawLlmResponse?.call(++record, k == 0
+              ? '$content\n${jsonEncode([for (final c in calls) c.toJson()])}'.trim()
+              : '（第 $turn 轮的第 ${k + 1} 个调用）',);
+          yield ReActEvent(type: ReActEventType.toolCall,
+              content: _describeCall(c.call.name, c.arguments),
+              toolName: c.call.name, toolArgs: c.arguments, inContext: inContext,);
         }
         yield ReActEvent(
           type: ReActEventType.status,
           content: delegates > 1
-              ? '第 $turn 轮 · $delegates 个子任务并行查阅中'
-              : '第 $turn 轮 · ${checked.length > 1 ? '${checked.length} 个工具同时运行' : _describeCall(checked.first.call.name, checked.first.arguments)}',
+              ? '第 $displayTurn 轮 · $delegates 个子任务并行查阅中'
+              : '第 $displayTurn 轮 · ${checked.length > 1 ? '${checked.length} 个工具同时运行' : _describeCall(checked.first.call.name, checked.first.arguments)}',
         );
         if (side != null) {
           // Sub-agents' steps show up while they work.
@@ -826,8 +1120,13 @@ class LoreAgentLoop {
         }
         for (final (k, c) in checked.indexed) {
           var result = await results[k];
+          final inContext = inContextCalls[k];
+          if (inContext) blocked++;
+          if (c.ok && !inContext && !result.startsWith(lookupLimitPrefix)) {
+            executed = true;
+          }
           if (c.ok && c.note != null) result = '$result\n${c.note}';
-          if (lookupFoundNothing(result)) {
+          if (!inContext && lookupFoundNothing(result)) {
             final name = c.call.name;
             final n = failedLookups[name] = (failedLookups[name] ?? 0) + 1;
             if (n <= maxFailedLookups &&
@@ -853,10 +1152,14 @@ class LoreAgentLoop {
             type: ReActEventType.toolObservation,
             content: result,
             toolName: c.call.name,
+            inContext: inContext,
           );
           toolResults.add(conversation.length);
-          if (!shown[k].isEmpty) {
-            shownIn[conversation.length] = shown[k].summary();
+          if (!inContext && c.ok) {
+            ledger.record(conversation.length, shown[k],
+                step: callSteps[k],
+                callKey: canonicalCallKey(c.call.name, c.arguments),
+            );
           }
           conversation.add(
             transport.textProtocol
@@ -864,11 +1167,16 @@ class LoreAgentLoop {
                 : Message.toolResult(c.call.id, result),
           );
         }
-        if (checked.every((c) => !c.ok)) {
+        final allInContext = blocked == checked.length;
+        if (allInContext) contextOnlyTurns++;
+        if (executed) contextOnlyTurns = 0;
+        if (!allInContext) displayTurn++;
+        if (checked.every((c) => !c.ok) || allInContext) {
           refusedTurns.addAll([
             for (var i = turnStart; i < conversation.length; i++) i,
           ]);
-        } else if (refusedTurns.isNotEmpty) {
+        } else if (executed && refusedTurns.isNotEmpty) {
+          ledger.forget(refusedTurns);
           hidden.addAll(refusedTurns);
           refusedTurns.clear();
         }
@@ -1104,7 +1412,9 @@ class LoreAgentLoop {
           (fewUnseen ? 0 : unseen.length - removedMaterialCitations);
       // The model's own text (JSON) stays in the conversation, so a
       // follow-up sees the format it is asked for.
+      ledger.forget(redoNotes);
       hidden.addAll(redoNotes);
+      ledger.forget(emptyTurns);
       hidden.addAll(emptyTurns);
       conversation.add(Message.assistant(fromJson == null ? body : keep));
 
@@ -1138,13 +1448,25 @@ class LoreAgentLoop {
           : (coverage == 'gaps' || hitTurnLimit)
               ? StoryAnswerStatus.partial
               : StoryAnswerStatus.answered;
-      // What a follow-up starts from: the tool results folded now, while
-      // what each showed is still known.
-      _foldOldToolResults(conversation, toolResults, shownIn, all: true);
       onConversation?.call(
         LoreConversation(
           messages: visible(),
           seen: seen,
+          ledger: ledger.remap({
+            for (final (newIndex, oldIndex) in [
+              for (var i = 0; i < conversation.length; i++)
+                if (!hidden.contains(i)) i,
+            ].indexed)
+              oldIndex: newIndex,
+          }),
+          questions: questions,
+          lastAnswer: visible()
+              .lastWhere((m) => m.role == MessageRole.assistant)
+              .content,
+          compactions: compactions,
+          lastPromptTokens: lastPromptTokens,
+          lastPromptChars: lastPromptChars,
+          lastCompactionTokens: lastCompactionTokens,
           question: asQuestion ?? query,
           entries: entries,
         ),
@@ -1280,7 +1602,8 @@ class LoreAgentLoop {
     final messages = [
       Message.system(loreRolePrompt(LoreRole.stager)),
       Message.user(
-          loreStagePrompt(numberedEntries(entries), question: question),),
+        loreStagePrompt(numberedEntries(entries), question: question),
+      ),
     ];
     final text = StringBuffer();
     var shown = 0;
@@ -1360,7 +1683,6 @@ class LoreAgentLoop {
       wiki: wiki,
       materials: materials,
       maxTurns: subtaskMaxTurns,
-      contextCharBudget: contextCharBudget,
       maxTokens: maxTokens,
       temperature: temperature,
       subtask: true,
@@ -1753,39 +2075,6 @@ class LoreAgentLoop {
     return calls;
   }
 
-  /// Folds the oldest tool results to a pointer while the conversation is
-  /// over [contextCharBudget] (the recent [_recentKept] messages stay
-  /// whole); with [all], every tool result so far (a follow-up question).
-  /// Lines a folded result showed stay citable ([SeenLines] keeps them).
-  void _foldOldToolResults(
-    List<Message> conversation,
-    Set<int> toolResults,
-    Map<int, String> shownIn, {
-    bool all = false,
-  }) {
-    var size = conversation.fold<int>(0, (n, m) => n + m.content.length);
-    if (!all && size <= contextCharBudget) return;
-    final target = all ? 0 : contextCharBudget * 7 ~/ 10;
-    final limit = all ? conversation.length : conversation.length - _recentKept;
-    for (final i in toolResults.toList()..sort()) {
-      if (size <= target || i >= limit) break;
-      final m = conversation[i];
-      if (m.content.startsWith('[已折叠]')) continue;
-      final firstLine = m.content.split('\n').first;
-      // 0.14: which lines it showed stays; their text does not, and an
-      // answer written from memory of it cited the wrong lines.
-      final shown = shownIn[i];
-      final folded = '[已折叠] 较早的工具结果（${m.content.length} 字）：'
-          '${firstLine.length > 120 ? '${firstLine.substring(0, 120)}…' : firstLine}'
-          '。${shown == null ? '' : '展示过：$shown。'}'
-          '这些行号仍可引用，但原文已不在对话里：要用其中的内容，先重新读取再写。';
-      size -= m.content.length - folded.length;
-      conversation[i] = m.role == MessageRole.tool
-          ? Message.toolResult(m.toolCallId ?? '', folded)
-          : Message.user(folded);
-    }
-  }
-
   /// Drops a short first paragraph that only narrates the process ("已核实，
   /// 现在输出完整最终答案。"): models write it after a citation re-check even
   /// when told not to. A paragraph with a citation is never dropped.
@@ -1936,7 +2225,10 @@ class LoreAgentLoop {
     for (final m in materialCitationPattern.allMatches(body)) {
       final a = int.parse(m[3]!), b = int.tryParse(m[4] ?? '') ?? a;
       if (!seen.covers(
-          'material:${m[1]}@${m[2]}', a <= b ? a : b, a <= b ? b : a,)) {
+        'material:${m[1]}@${m[2]}',
+        a <= b ? a : b,
+        a <= b ? b : a,
+      )) {
         unseen.add(m[0]!);
       }
     }

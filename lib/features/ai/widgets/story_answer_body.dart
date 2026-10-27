@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart' show HitTestResult;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,10 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/agent/agent_provider.dart' show gameStoreProvider;
 import '../../../core/agent/lore_answer_stages.dart' show loreDetailsMarker;
 import '../../../core/gamedata/build/text_harvest.dart' show cleanRichText;
-import '../../../core/gamedata/game.dart' show gameOfId;
+import '../../../core/gamedata/game.dart' show Game, gameOfId;
 import '../../../core/gamedata/story_catalog.dart' show fallbackStoryLabel;
 import '../../../core/library/library_queries.dart' show entryIdOfRecord;
 import '../../../core/library/placeholders.dart';
+import '../../../core/library/portrait_provider.dart';
 import '../../../core/materials/material_provider.dart';
 import '../../../core/wiki/wiki_page.dart';
 import '../../../core/wiki/wiki_provider.dart';
@@ -25,10 +28,15 @@ import '../../../shared/widgets/press_feedback.dart';
 import '../../../shared/widgets/smooth_page_route.dart';
 import '../../library/entry_page.dart';
 import '../../library/material_pages.dart';
+import '../../library/portrait_preview.dart';
+import '../../library/portrait_sheet.dart';
 import '../../library/reading_text.dart';
 import '../investigation_ui.dart';
+import '../speaker_highlight.dart';
 import '../story_labels_provider.dart';
 import '../story_reader_page.dart';
+import 'answer_reveal.dart';
+import 'block_name_card.dart';
 
 /// Opens the whole story at [range] (R17b).
 void openStoryReader(BuildContext context, String storyId, CitedRange range) {
@@ -36,6 +44,7 @@ void openStoryReader(BuildContext context, String storyId, CitedRange range) {
     smoothPageRoute<void>(
       builder: (_) => StoryReaderPage(
         storyId: storyId,
+        portraitOrigin: PortraitOrigin.ask,
         highlightStart: range.start,
         highlightEnd: range.end,
       ),
@@ -68,7 +77,9 @@ Future<void> showCitedRecord(
     return;
   }
   await showAppSheet<void>(
-      context, (_) => PlainSheet(child: _RecordSheet(id: id)),);
+    context,
+    (_) => PlainSheet(child: _RecordSheet(id: id)),
+  );
 }
 
 /// 0.13: shows the cited paragraphs of a wiki page (the version the agent
@@ -89,7 +100,11 @@ String wikiTabIdOf(WikiSite site) => switch (site) {
 /// Opens [url] of [site] in the Wiki tab (leaving the pages pushed over the
 /// main tabs).
 void openInWikiTab(
-    BuildContext context, WidgetRef ref, WikiSite site, Uri url,) {
+  BuildContext context,
+  WidgetRef ref,
+  WikiSite site,
+  Uri url,
+) {
   ref.read(wikiOpenRequestProvider.notifier).state =
       WikiOpenRequest(wikiTabIdOf(site), url);
   ref.read(mainTabRequestProvider.notifier).state = 0;
@@ -122,24 +137,89 @@ class StoryAnswerBody extends ConsumerStatefulWidget {
     required this.content,
     required this.styleSheet,
     required this.streaming,
+    this.revealImmediately = false,
   });
 
   /// Answer markdown without envelope / coverage markers, raw citations kept.
   final String content;
   final MarkdownStyleSheet styleSheet;
   final bool streaming;
+  final bool revealImmediately;
 
   @override
   ConsumerState<StoryAnswerBody> createState() => _StoryAnswerBodyState();
 }
 
-class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
+class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
+    with SingleTickerProviderStateMixin {
   bool _detailsOpen = false;
+  List<String>? _names;
+  SpeakerMatcher? _matcher;
+
+  /// Each paragraph with its names linked, by its stable position (a
+  /// rebuild, such as opening the details, does not scan it again).
+  final _linked = <String, String>{};
+  Offset? _portraitTap;
+  late final AnswerRevealQueue _reveal;
+  final _known = <String>{};
+  final _frozen = <String, AnswerBlock>{};
+  final _seenNames = <String>{};
+  bool _firstBuild = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _reveal = AnswerRevealQueue(this);
+  }
+
+  @override
+  void didUpdateWidget(StoryAnswerBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.content.startsWith(oldWidget.content)) {
+      _reveal.reset();
+      _frozen.clear();
+      _known.clear();
+      _linked.clear();
+      _seenNames.clear();
+      _firstBuild = !widget.streaming;
+    }
+  }
+
+  @override
+  void dispose() {
+    _reveal.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    _reveal.ended = !widget.streaming;
+    _reveal.immediate = widget.revealImmediately || Motion.reduced(context);
+    if (_reveal.immediate) _reveal.flush();
+    final initial = _firstBuild;
+    _firstBuild = false;
+    if (initial) {
+      final blocks = splitAnswerBlocks(widget.content);
+      for (var i = 0; i < blocks.length - (widget.streaming ? 1 : 0); i++) {
+        _known.add('top:$i');
+      }
+    }
     final theme = ref.watch(themeProvider);
     final content = widget.content;
+    // The names are those of Arknights stories: an answer from Endfield
+    // stories alone has none to show (DESIGN A.6).
+    final stories = extractCitedStoryIds(content);
+    final endfield = stories.isNotEmpty &&
+        stories.every((id) => gameOfId(id) == Game.endfield);
+    final names =
+        endfield ? null : ref.watch(highlightNamesProvider).valueOrNull;
+    if (!identical(names, _names)) {
+      _names = names;
+      _matcher = names == null || names.isEmpty ? null : SpeakerMatcher(names);
+      _linked.clear();
+      _seenNames.clear();
+    }
+    if (!endfield && names == null) return const SizedBox.shrink();
     final cut = content.indexOf(loreDetailsMarker);
     // Records are numbered in order of first citation in the whole answer,
     // as in the summary tree below it.
@@ -157,18 +237,17 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
       content.substring(cut + loreDetailsMarker.length),
     );
     final count = details.where((b) => !_isHeading(b.markdown)).length;
-    // The paragraphs are written after the details: while they stream, the
-    // details are complete.
-    final writingTop = widget.streaming && top.isNotEmpty;
+    // The marker seals the last summary block even before details arrive.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (top.isNotEmpty) ...[
-          _blocks(top, recordNumbers, theme, streaming: writingTop),
+          _blocks(top, recordNumbers, theme, streaming: false),
           const SizedBox(height: 8),
         ],
         PressRow(
           key: const ValueKey('answer-details-toggle'),
+          shift: false,
           onTap: () => setState(() => _detailsOpen = !_detailsOpen),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -197,7 +276,8 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
             details,
             recordNumbers,
             theme,
-            streaming: widget.streaming && !writingTop,
+            streaming: widget.streaming,
+            lane: 'details',
           ),
         ],
       ],
@@ -209,43 +289,167 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody> {
     List<String> recordNumbers,
     AppThemeTokens theme, {
     required bool streaming,
+    String lane = 'top',
   }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final (i, block) in blocks.indexed) ...[
-            if (i > 0) const SizedBox(height: 8),
-            Padding(
-              padding: EdgeInsets.only(left: 18.0 * block.indent),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (block.markdown.trim().isNotEmpty)
-                    MarkdownBody(
-                      data: block.markdown,
-                      styleSheet: widget.styleSheet,
+          for (final (i, current) in blocks.indexed)
+            if (!streaming || i < blocks.length - 1) ...[
+              for (final block in [_freeze('$lane:$i', current, lane)]) ...[
+                if (i > 0) const SizedBox(height: 8),
+                Padding(
+                  padding: EdgeInsets.only(left: 18.0 * block.indent),
+                  child: AnswerReveal(
+                    key: ValueKey('reveal:$lane:$i'),
+                    queue: _reveal,
+                    id: '$lane:$i',
+                    lineHeight: _lineHeight(block.markdown, context),
+                    text: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (block.markdown.trim().isNotEmpty)
+                          TextFieldTapRegion(
+                            child: GestureDetector(
+                              // Holding an underlined name offers to stop
+                              // underlining it.
+                              onLongPressStart: _matcher == null
+                                  ? null
+                                  : (details) =>
+                                      _offerBlock(details.globalPosition),
+                              child: Listener(
+                                onPointerDown: (event) =>
+                                    _portraitTap = event.position,
+                                child: MarkdownBody(
+                                  data: _matcher != null
+                                      ? _linked.putIfAbsent(
+                                          '$lane:$i',
+                                          () => _matcher!.linkNames(
+                                            block.markdown,
+                                            seenNames: _seenNames,
+                                          ),
+                                        )
+                                      : block.markdown,
+                                  styleSheet: widget.styleSheet.copyWith(
+                                    a: (widget.styleSheet.p ?? theme.text(16))
+                                        .copyWith(
+                                      // Without a colour the link takes the theme's.
+                                      color: widget.styleSheet.p?.color ??
+                                          theme.textPrimary,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: theme.accentPrimary,
+                                      decorationThickness: 2,
+                                    ),
+                                  ),
+                                  onTapLink: (_, href, __) {
+                                    final prefix = '$speakerLinkScheme:';
+                                    if (href != null &&
+                                        href.startsWith(prefix)) {
+                                      showPortraitPreview(
+                                        context,
+                                        anchor: _portraitTap == null
+                                            ? null
+                                            : Rect.fromLTWH(
+                                                _portraitTap!.dx,
+                                                _portraitTap!.dy - 16,
+                                                32,
+                                                24,
+                                              ),
+                                        speaker: Uri.decodeComponent(
+                                          href.substring(prefix.length),
+                                        ),
+                                        origin: PortraitOrigin.ask,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                  // The last block may still be receiving its citations.
-                  if (block.hasCitations &&
-                      (!streaming || i < blocks.length - 1))
-                    Padding(
-                      // List items: align with the item text, past the bullet.
-                      padding: EdgeInsets.only(
-                        left: _isListItem(block.markdown) ? 18 : 0,
-                        top: 4,
-                      ),
-                      child: _EvidenceChain(
-                        block: block,
-                        recordNumbers: recordNumbers,
-                        theme: theme,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+                    evidence: block.hasCitations
+                        ? Padding(
+                            // List items: align with the item text, past the bullet.
+                            padding: EdgeInsets.only(
+                              left: _isListItem(block.markdown) ? 18 : 0,
+                              top: 4,
+                            ),
+                            child: _EvidenceChain(
+                              block: block,
+                              recordNumbers: recordNumbers,
+                              theme: theme,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+              ],
+            ],
         ],
       );
+
+  /// The underlined name under [position], if any: the linked run of the
+  /// paragraph there, when it is one of the names.
+  String? _linkedNameAt(Offset position) {
+    final result = HitTestResult();
+    WidgetsBinding.instance
+        .hitTestInView(result, position, View.of(context).viewId);
+    for (final entry in result.path) {
+      final target = entry.target;
+      if (target is! RenderParagraph) continue;
+      final at = target.getPositionForOffset(target.globalToLocal(position));
+      final span = target.text.getSpanForPosition(at);
+      final text = span is TextSpan ? span.text : null;
+      return span is TextSpan &&
+              span.recognizer != null &&
+              text != null &&
+              (_names?.contains(text) ?? false)
+          ? text
+          : null;
+    }
+    return null;
+  }
+
+  void _offerBlock(Offset position) {
+    final name = _linkedNameAt(position);
+    if (name == null) return;
+    HapticFeedback.mediumImpact();
+    showBlockNameCard(
+      context,
+      name: name,
+      anchor: Rect.fromLTWH(position.dx, position.dy - 16, 32, 24),
+    );
+  }
+
+  AnswerBlock _freeze(String id, AnswerBlock block, String lane) {
+    if (_frozen.containsKey(id)) return _frozen[id]!;
+    _frozen[id] = block;
+    _reveal.add(
+      id,
+      block.markdown.runes.length,
+      animate: lane == 'top' && !_known.contains(id),
+    );
+    _known.add(id);
+    return block;
+  }
+
+  double _lineHeight(String markdown, BuildContext context) {
+    final heading = RegExp(r'^(#{1,6})\s').firstMatch(markdown);
+    final sheet = widget.styleSheet;
+    final style = heading == null
+        ? sheet.p
+        : switch (heading[1]!.length) {
+            1 => sheet.h1,
+            2 => sheet.h2,
+            3 => sheet.h3,
+            4 => sheet.h4,
+            5 => sheet.h5,
+            _ => sheet.h6,
+          };
+    return MediaQuery.textScalerOf(context).scale(style?.fontSize ?? 16) *
+        (style?.height ?? 1.5);
+  }
 
   static final RegExp _listMarker = RegExp(r'^(?:[-*+]|\d+[.)])\s');
   static bool _isListItem(String markdown) => _listMarker.hasMatch(markdown);
@@ -291,11 +495,13 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
     final block = widget.block;
     final count = block.stories.fold<int>(0, (n, s) => n + s.ranges.length) +
         block.records.length +
-        block.wikis.fold<int>(0, (n, w) => n + w.ranges.length);
+        block.wikis.fold<int>(0, (n, w) => n + w.ranges.length) +
+        block.materials.fold<int>(0, (n, m) => n + m.ranges.length);
     final collections = <String>{
       for (final story in block.stories) _labels(story.storyId).$1,
       if (block.records.isNotEmpty) context.t.aiCitedRecord,
       if (block.wikis.isNotEmpty) context.t.aiCitedWiki,
+      if (block.materials.isNotEmpty) context.t.aiCitedMaterial,
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,26 +740,28 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
-                ref
-                        .watch(citedMaterialProvider(material.pageId))
-                        .valueOrNull
-                        ?.title ??
-                    '补充资料',
-                style: chapterStyle,),
+              ref
+                      .watch(citedMaterialProvider(material.pageId))
+                      .valueOrNull
+                      ?.title ??
+                  context.t.aiCitedMaterial,
+              style: chapterStyle,
+            ),
             for (final range in material.ranges)
               _chip(
-                  key: 'chain:${material.pageId}:${range.start}',
-                  text: range.start == range.end
-                      ? context.t.aiCitationParagraph(range.start + 1)
-                      : context.t
-                          .aiCitationParagraphs(range.start + 1, range.end + 1),
-                  tooltip: '${material.pageId}:${range.start}-${range.end}',
-                  onTap: () => openMaterialPage(
-                      context,
-                      MaterialReaderPage(
-                          pageId: material.pageId,
-                          start: range.start,
-                          end: range.end,),),),
+                key: 'chain:${material.pageId}:${range.start}',
+                text: range.start == range.end
+                    ? context.t.aiCitationParagraph(range.start + 1)
+                    : context.t
+                        .aiCitationParagraphs(range.start + 1, range.end + 1),
+                tooltip: '${material.pageId}:${range.start}-${range.end}',
+                onTap: () => openCitedMaterial(
+                  context,
+                  material.pageId,
+                  range.start,
+                  range.end,
+                ),
+              ),
           ],
         ),
       // 0.13: wiki pages — "PRTS《title》" and its paragraph chips.
@@ -725,8 +933,11 @@ class CitedRecordText extends ConsumerWidget {
 /// one paragraph around them for context), under their section headings;
 /// the page's site, title and when it was read; a button to the page.
 class WikiCitationSheet extends ConsumerWidget {
-  const WikiCitationSheet(
-      {super.key, required this.pageId, required this.range,});
+  const WikiCitationSheet({
+    super.key,
+    required this.pageId,
+    required this.range,
+  });
 
   final String pageId;
   final CitedRange range;

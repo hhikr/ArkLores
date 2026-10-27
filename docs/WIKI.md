@@ -27,7 +27,7 @@
 
 ## 3. 浏览：顶栏、底栏与从问答打开
 
-- App 的顶部站点栏（`MainTopBar`）和底部标签栏盖在网页上，网页铺满屏幕。网页不能从外部留白，所以 `_applyDockInsets` 注入样式：给 `html` 上下加两条栏高度的 padding，并把站点自己 `fixed`/`sticky` 的栏同样平移；每次 build 用 `_syncDockInsets` 同步高度。**新增站点时要真机确认它的固定栏没被盖住。**
+- App 的顶部站点栏（`MainTopBar`）和底部标签栏盖在网页上，网页铺满屏幕。`_applyDockInsets` 保留 `html` 上下 padding，收栏时不改变正文布局；固定或 sticky 的零偏移顶栏、固定的零偏移底栏使用 `--arklores-dock-top` / `--arklores-dock-bottom`。`barsHiddenProvider` 变化时只更新状态，不逐帧调用 JavaScript：收栏后顶端偏移为状态栏高度，底端为系统导航区高度；恢复时为完整 App 栏占位。CSS 的 `top` / `bottom` 使用与 `BarsAway` 相同的时长和曲线，减少动效时不加过渡。新页面和 600 / 1600 ms 补扫识别出的元素均使用变量，不按站点选择器或域名判断。**新增站点时要真机确认它的固定栏没被盖住。**
 - 答案里的 Wiki 出处弹窗有“在 Wiki 中打开”：写 `wikiOpenRequestProvider`（站点 id + 网址）并切到 Wiki 标签，`WikiBrowserPage` 按站点 id（找不到时按域名）选标签加载；标签没恢复好时先记下。
 - 阅读器模式与“转交给 AI”已在 2026-10-17 删除：长文在资料页里读，问答自己会查 Wiki。剧情模拟器、图鉴交互、动态数据表保留为站点原生组件。
 

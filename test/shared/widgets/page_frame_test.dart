@@ -1,6 +1,7 @@
 // The top bar of a pushed page: a back button with a cut corner, the title
 // (ellipsised when long), the actions on the right, a hairline below;
 // content that scrolls under it is padded clear of it.
+import 'package:arklores/shared/widgets/dock_scaffold.dart';
 import 'package:arklores/shared/widgets/page_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +30,8 @@ Future<void> _push(WidgetTester tester, Widget page) async {
 }
 
 void main() {
-  testWidgets('back, title and actions sit in one bar; no app bar; '
+  testWidgets(
+      'back, title and actions sit in one bar; no app bar; '
       'the back button is 48 to the finger', (tester) async {
     await _push(
       tester,
@@ -79,7 +81,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('scrollUnder: the list starts under the bar, padded clear of '
+  testWidgets(
+      'scrollUnder: the list starts under the bar, padded clear of '
       'it; otherwise the body starts below it', (tester) async {
     await _push(
       tester,
@@ -96,8 +99,10 @@ void main() {
     );
     final bar = tester.getRect(find.byKey(const ValueKey('page-top-bar')));
     expect(tester.getRect(find.byType(ListView)).top, 0);
-    expect(tester.getTopLeft(find.text('first')).dy,
-        greaterThanOrEqualTo(bar.bottom),);
+    expect(
+      tester.getTopLeft(find.text('first')).dy,
+      greaterThanOrEqualTo(bar.bottom),
+    );
 
     await tester.tap(find.byKey(const ValueKey('page-back')));
     await tester.pumpAndSettle();
@@ -107,5 +112,126 @@ void main() {
       const PageScaffold(title: 'T', body: SizedBox.expand(key: Key('b'))),
     );
     expect(tester.getRect(find.byKey(const Key('b'))).top, topBarInset);
+  });
+
+  testWidgets(
+      'hides: dragging on moves the bar off the screen, a tap on the text '
+      'brings it back, dragging back too', (tester) async {
+    await _push(
+      tester,
+      PageScaffold(
+        title: 'T',
+        scrollUnder: true,
+        hides: true,
+        body: Builder(
+          builder: (context) => ListView(
+            padding: pagePadding(context, EdgeInsets.zero),
+            children: [
+              for (var i = 0; i < 60; i++)
+                SizedBox(height: 40, child: Text('line $i')),
+            ],
+          ),
+        ),
+      ),
+    );
+    // The bar moves as a picture: its title says where it is.
+    final shown = tester.getRect(find.text('T')).bottom;
+    double barBottom() =>
+        tester.getRect(find.text('T')).bottom - shown + topBarHeight;
+    expect(barBottom(), topBarHeight);
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(barBottom(), lessThanOrEqualTo(0));
+    await tester.tap(find.text('line 12'));
+    await tester.pumpAndSettle();
+    expect(barBottom(), topBarHeight);
+    await tester.tap(find.text('line 12'));
+    await tester.pumpAndSettle();
+    expect(barBottom(), lessThanOrEqualTo(0));
+    await tester.drag(find.byType(ListView), const Offset(0, 100));
+    await tester.pumpAndSettle();
+    expect(barBottom(), topBarHeight);
+  });
+
+  testWidgets(
+      'a dock page: separate plates float over the body near the '
+      'bottom', (tester) async {
+    var opened = 0;
+    Widget page() => DockScaffold(
+          title: '章节',
+          status: const Text('3 / 10'),
+          onTitleTap: () => opened++,
+          actions: [
+            DockAction(
+              key: const ValueKey('find'),
+              tooltip: 'find',
+              icon: Icons.search,
+              onPressed: () {},
+            ),
+          ],
+          body: const SizedBox.expand(key: Key('b')),
+        );
+    await _push(tester, page());
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final back = tester.getRect(find.byKey(const ValueKey('page-back')));
+    final title = tester.getRect(find.byKey(const ValueKey('page-title')));
+    final find_ = tester.getRect(find.byKey(const ValueKey('find')));
+    // The body runs under them, to the bottom of the screen.
+    expect(tester.getRect(find.byKey(const Key('b'))).bottom, screen.height);
+    for (final plate in [back, title, find_]) {
+      expect(plate.height, floatingDockHeight);
+      expect(plate.bottom, lessThan(screen.height - 4), reason: 'floating');
+    }
+    expect(back.left, greaterThanOrEqualTo(8), reason: 'off the edge');
+    expect(title.left - back.right, greaterThanOrEqualTo(6), reason: 'apart');
+    expect(find_.left - title.right, greaterThanOrEqualTo(6));
+    expect(find_.right, lessThanOrEqualTo(screen.width - 8));
+    expect(
+      floatingDockRoom(tester.element(find.byKey(const Key('b')))),
+      greaterThanOrEqualTo(screen.height - title.top),
+    );
+    await tester.tap(find.byKey(const ValueKey('page-title')));
+    expect(opened, 1);
+    await tester.tap(find.byKey(const ValueKey('page-back')));
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('the tab bar slides one block to the tab chosen', (tester) async {
+    var current = 0;
+    late StateSetter set;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            bottomNavigationBar: StatefulBuilder(
+              builder: (context, setState) {
+                set = setState;
+                return AppTabBar(
+                  items: const [('A', '甲'), ('B', '乙'), ('C', '丙')],
+                  current: current,
+                  onSelected: (i) => set(() => current = i),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    final block = find.byKey(const ValueKey('main-navigation-block'));
+    expect(block, findsOneWidget);
+    final from = tester.getRect(block).left;
+    await tester.tap(find.text('丙'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 140));
+    final mid = tester.getRect(block).left;
+    await tester.pumpAndSettle();
+    final to = tester.getRect(block).left;
+    expect(mid, greaterThan(from));
+    expect(mid, lessThan(to));
+    expect(
+      tester.getCenter(block).dx,
+      closeTo(tester.getCenter(find.text('丙')).dx, 4),
+    );
   });
 }

@@ -23,6 +23,17 @@ enum MessageRole {
 
 /// A single message in a conversation.
 class Message {
+  factory Message.fromJson(Map<String, dynamic> json) => Message(
+        role: MessageRole.values.byName(json['role'] as String),
+        content: json['content'] as String,
+        toolCallId: json['tool_call_id'] as String?,
+        toolCalls: (json['tool_calls'] as List?)
+            ?.map(
+              (c) => ToolCall.fromJson(c as Map<String, dynamic>).toJson(),
+            )
+            .toList(),
+        reasoningContent: json['reasoning_content'] as String?,
+      );
 
   const Message({
     required this.role,
@@ -78,6 +89,14 @@ class Message {
 
 /// R17: one function call requested by the model.
 class ToolCall {
+  factory ToolCall.fromJson(Map<String, dynamic> json) {
+    final function = json['function'] as Map<String, dynamic>;
+    return ToolCall(
+      id: json['id'] as String,
+      name: function['name'] as String,
+      arguments: function['arguments'] as String,
+    );
+  }
   const ToolCall({
     required this.id,
     required this.name,

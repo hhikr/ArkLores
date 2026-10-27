@@ -10,6 +10,8 @@ import 'package:arklores/features/ai/story_labels_provider.dart';
 import 'package:arklores/features/ai/story_reader_page.dart';
 import 'package:arklores/features/library/library_widgets.dart' show openStory;
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
+import 'package:arklores/shared/providers/settings_provider.dart'
+    show initialSkipUnreadOpensProvider;
 import 'package:arklores/shared/providers/theme_provider.dart' show ReadingFont;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,9 +47,13 @@ void main() {
   }
 
   // A fresh scope per call: the providers cache their first result.
-  Widget app(Widget home, List<StoryLineEntry> lines) => ProviderScope(
+  // The tests below that are not about it record a visit on open (the
+  // setting off); the setting's own tests turn it on.
+  Widget app(Widget home, List<StoryLineEntry> lines, {bool skipUnread = false}) =>
+      ProviderScope(
         key: UniqueKey(),
         overrides: [
+          initialSkipUnreadOpensProvider.overrideWithValue(skipUnread),
           userDataStoreProvider.overrideWith((ref) async => store),
           storyFullLinesProvider.overrideWith((ref, id) async => lines),
           storyHostProvider.overrideWith((ref, id) async => null),
@@ -339,6 +345,7 @@ void main() {
     Widget scoped(Widget home) => ProviderScope(
           key: UniqueKey(),
           overrides: [
+            initialSkipUnreadOpensProvider.overrideWithValue(false),
             userDataStoreProvider.overrideWith((ref) async => store),
             storyFullLinesProvider.overrideWith(
               (ref, id) async => id == host ? text('正文', 6) : text('战斗', 4),
@@ -491,9 +498,120 @@ void main() {
     await settle(tester);
     expect(find.byKey(const ValueKey('story-line-target-12000')), findsNothing);
 
+    // Read on, the controls are away: a tap on the text brings them back.
+    await tester.tapAt(const Offset(300, 300));
+    await settle(tester);
     await tester.tap(find.byKey(const ValueKey('story-reader-jump')));
     await settle(tester);
     expect(find.byKey(const ValueKey('story-line-target-12000')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  group('读到第一行不计入历史记录', () {
+    final long = [
+      for (var i = 0; i < 400; i++)
+        StoryLineEntry(lineIndex: i, speaker: null, content: '第$i句。'),
+    ];
+
+    Future<void> leave(WidgetTester tester) async {
+      await tester.pumpWidget(app(const SizedBox(), long));
+      await settle(tester);
+    }
+
+    testWidgets('on: opened and left without reading on records nothing',
+        (tester) async {
+      tall(tester);
+      await tester.pumpWidget(
+        app(const StoryReaderPage(storyId: _story), long, skipUnread: true),
+      );
+      await settle(tester);
+      expect(await store.recent(), isEmpty);
+      await leave(tester);
+      expect(await store.recent(), isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('on: a citation opened and left where it opened records '
+        'nothing', (tester) async {
+      tall(tester);
+      await tester.pumpWidget(app(
+        const StoryReaderPage(
+          storyId: _story,
+          highlightStart: 200,
+          highlightEnd: 201,
+        ),
+        long,
+        skipUnread: true,
+      ),);
+      await settle(tester);
+      await leave(tester);
+      expect(await store.recent(), isEmpty);
+    });
+
+    testWidgets('on: reading on records the visit and where the reader is',
+        (tester) async {
+      tall(tester);
+      await tester.pumpWidget(
+        app(const StoryReaderPage(storyId: _story), long, skipUnread: true),
+      );
+      await settle(tester);
+      await tester.drag(
+        find.byKey(const ValueKey('story-reader-scroll')),
+        const Offset(0, -1500),
+      );
+      await settle(tester);
+      final saved = (await store.recent()).single;
+      expect(saved.ref, const LibraryRef.story(_story).toString());
+      expect(saved.lineIndex, greaterThan(0));
+      expect(saved.totalLines, long.length);
+      expect(saved.passStart, 0);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('on: an entry already in the history keeps its place and '
+        'position after an open that did not move', (tester) async {
+      tall(tester);
+      await store.recordOpen(
+        const LibraryRef.story(_story),
+        title: '故事',
+        lineIndex: 120,
+        snippet: '第120句。',
+      );
+      await store.recordOpen(
+        const LibraryRef.story('s/other.txt'),
+        title: '别的故事',
+        lineIndex: 0,
+        snippet: '',
+      );
+      final before = store.rows['story:$_story']!;
+      await tester.pumpWidget(app(
+        const StoryReaderPage(
+          storyId: _story,
+          resumeLine: 120,
+          snippet: '第120句。',
+        ),
+        long,
+        skipUnread: true,
+      ),);
+      await settle(tester);
+      expect(find.byKey(const ValueKey('story-line-resume-120')), findsOneWidget);
+      await leave(tester);
+      final after = store.rows['story:$_story']!;
+      expect(after.lineIndex, before.lineIndex);
+      expect(after.openedAt, before.openedAt);
+      expect(after.openCount, before.openCount);
+      expect((await store.recent()).first.ref, 'story:s/other.txt');
+    });
+
+    testWidgets('off: opening records the visit at once', (tester) async {
+      tall(tester);
+      await tester.pumpWidget(
+        app(const StoryReaderPage(storyId: _story), long),
+      );
+      await settle(tester);
+      expect((await store.recent()).single.lineIndex, 0);
+      await leave(tester);
+      expect(await store.recent(), hasLength(1));
+    });
   });
 }

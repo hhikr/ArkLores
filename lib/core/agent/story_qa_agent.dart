@@ -50,6 +50,8 @@ class StoryQaAgent {
     List<Message> history = const [],
     LLMClient? client,
     AnswerOptions options = const AnswerOptions(),
+    int? contextWarnTokens,
+    int compactPercent = 80,
     LoreConversation? prior,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
@@ -76,7 +78,12 @@ class StoryQaAgent {
           type: ReActEventType.thought,
           content: '补充资料暂时不可用，本问继续检索游戏知识库与已开启的 Wiki。',);
     }
-    yield* _loop(store, client, options, materials: materials).run(
+    yield* _loop(
+      store, client, options,
+      materials: materials,
+      contextWarnTokens: contextWarnTokens,
+      compactPercent: compactPercent,
+    ).run(
       query: query,
       history: history,
       prior: prior,
@@ -90,6 +97,8 @@ class StoryQaAgent {
     LLMClient? client,
     AnswerOptions options, {
     bool preSearch = true,
+    int? contextWarnTokens,
+    int compactPercent = 80,
     MaterialSnapshot? materials,
   }) =>
       LoreAgentLoop(
@@ -103,6 +112,8 @@ class StoryQaAgent {
         wiki: options.wiki ? _wiki : null,
         delegate: options.delegate,
         preSearch: preSearch,
+        contextWarnTokens: contextWarnTokens,
+        compactPercent: compactPercent,
         onSpan: _usage?.addSpan,
       );
 
@@ -120,6 +131,8 @@ class StoryQaAgent {
     required String answer,
     LLMClient? client,
     AnswerOptions options = const AnswerOptions(),
+    int? contextWarnTokens,
+    int compactPercent = 80,
     void Function(LoreConversation conversation)? onConversation,
     void Function(int iteration, String rawResponse)? onRawLlmResponse,
   }) async* {
@@ -134,8 +147,13 @@ class StoryQaAgent {
       shifted = (iteration, raw) => onRawLlmResponse(iteration + 1, raw);
     }
     // No searches written ahead: the reader's questions say what to look up.
-    final loop = _loop(store, client, options,
-        preSearch: false, materials: await materialSnapshot?.call(),);
+    final loop = _loop(
+      store, client, options,
+      preSearch: false,
+      contextWarnTokens: contextWarnTokens,
+      compactPercent: compactPercent,
+      materials: await materialSnapshot?.call(),
+    );
     yield const ReActEvent(type: ReActEventType.status, content: '审稿中');
     final issues = await loop.review(
       prior.question,

@@ -19,6 +19,27 @@ ReActStep _out(String tool, String text) => ReActStep(
     );
 
 void main() {
+  test(
+      'context steps use event flags and skip numbering without guessing duplicates',
+      () {
+    final steps = workStepsOf([
+      _call('grep', {'pattern': '甲'}),
+      _out('grep', '结果'),
+      const ReActStep(
+          type: ReActEventType.toolCall,
+          content: '',
+          toolName: 'grep',
+          inContext: true,),
+      _out('grep', '（已在上文）第 1 步'),
+      _call('grep', {'pattern': '甲'}),
+      _out('grep', '结果'),
+    ]);
+    expect(steps.map((s) => s.number), [1, 0, 2]);
+    expect(steps.map((s) => s.inContext), [false, true, false]);
+    expect(steps[1].empty, isFalse);
+    expect(steps[1].failed, isFalse);
+  });
+
   test('parallel calls get their own outputs, oldest first per tool', () {
     final steps = workStepsOf([
       _call('read_story', {'story_id': 'a/x.txt'}),
@@ -27,8 +48,10 @@ void main() {
       _out('sql', 'n\n1\n（共 1 行）'),
       _out('read_story', '【X】 a/x.txt\nL5 [甲] 一\nL9 [乙] 二'),
     ]);
-    expect(steps.map((s) => s.kind),
-        [WorkKind.read, WorkKind.sql, WorkKind.read],);
+    expect(
+      steps.map((s) => s.kind),
+      [WorkKind.read, WorkKind.sql, WorkKind.read],
+    );
     expect(steps[0].done, isTrue);
     expect(steps[0].storyTitle, 'X');
     expect(steps[0].lineRange, (5, 9));
@@ -59,7 +82,10 @@ void main() {
             '   record:r1 | item | 灯 | 一盏灯\n'
             '## 终末地剧情：只有意思较远的段落（最接近 0.50），已略去',
       ),
-      _call('grep', {'pattern': '甲', 'story_ids': ['ef/three.txt']}),
+      _call('grep', {
+        'pattern': '甲',
+        'story_ids': ['ef/three.txt'],
+      }),
       _out('grep', '## 《三》 ef/three.txt（1 处）\n* L7 [甲] 一句。\n  …\n（* 为命中行）'),
       // Counts over the whole library show no line.
       _call('grep', {'pattern': '乙'}),
@@ -69,7 +95,8 @@ void main() {
       _call('sql', {
         'query': 'SELECT story_id, line_index, content FROM story_lines',
       }),
-      _out('sql', 'story_id | line_index | content\na/five.txt | 4 | 一句。\n（共 1 行）'),
+      _out('sql',
+          'story_id | line_index | content\na/five.txt | 4 | 一句。\n（共 1 行）',),
       _call('sql', {'query': 'SELECT story_id, line_index FROM story_lines'}),
       _out('sql', 'story_id | line_index\na/six.txt | 4\n（共 1 行）'),
       _call('read_record', {'id': 'r1'}),
@@ -86,7 +113,8 @@ void main() {
   });
 
   // 0.14: an answer taken back is not a step.
-  test('notes and errors are steps too; empty and failed outputs are '
+  test(
+      'notes and errors are steps too; empty and failed outputs are '
       'recognised', () {
     final steps = workStepsOf([
       const ReActStep(type: ReActEventType.thought, content: '  想一想  '),
@@ -140,8 +168,10 @@ void main() {
     // A search whose wiki part could not be reached still found stories.
     final search = workStepsOf([
       _call('search', {'query': '甲'}),
-      _out('search', '## 明日方舟剧情（最相关的 2 篇）\n## 终末地剧情（最相关的 1 篇）\n'
-          '## Wiki\nPRTS 暂时无法访问（超时）'),
+      _out(
+          'search',
+          '## 明日方舟剧情（最相关的 2 篇）\n## 终末地剧情（最相关的 1 篇）\n'
+              '## Wiki\nPRTS 暂时无法访问（超时）'),
     ]).single;
     expect(search.kind, WorkKind.find);
     expect(search.failed, isFalse);

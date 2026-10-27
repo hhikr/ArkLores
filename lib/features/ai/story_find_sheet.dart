@@ -1,11 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-import '../../core/gamedata/story_coverage_models.dart' show StoryLineEntry, unsearchedLineKinds;
+import '../../core/gamedata/story_coverage_models.dart'
+    show StoryLineEntry, unsearchedLineKinds;
 import '../../core/library/library_queries.dart' show snippetAround;
 import '../../core/library/placeholders.dart';
 import '../../shared/l10n/l10n.dart';
 import '../../shared/theme/app_theme.dart';
 import '../../shared/widgets/ef_widgets.dart';
+import '../../shared/widgets/search_marks.dart';
 
 /// Positions in [lines] whose text or speaker has every word of [query]
 /// (ignoring case), in reading order.
@@ -20,9 +24,11 @@ List<int> findStoryLines(List<StoryLineEntry> lines, String query) {
       if (line.kind != 'divider' &&
           line.kind != 'section' &&
           !unsearchedLineKinds.contains(line.kind) &&
-          words.every((w) =>
-              line.content.toLowerCase().contains(w) ||
-              (line.speaker ?? '').toLowerCase().contains(w),))
+          words.every(
+            (w) =>
+                line.content.toLowerCase().contains(w) ||
+                (line.speaker ?? '').toLowerCase().contains(w),
+          ))
         i,
   ];
 }
@@ -66,11 +72,19 @@ class _StoryFindState extends State<_StoryFind> {
     final theme = widget.theme;
     final found = findStoryLines(widget.lines, _query);
     final words = _query.trim().split(RegExp(r'\s+'));
+    final marks = searchWords(_query);
+    // As tall as what it holds: the box and a line saying what will come,
+    // then the lines found, up to about half of what the keyboard leaves.
+    final media = MediaQuery.of(context);
+    final room =
+        media.size.height - media.viewInsets.bottom - media.padding.top;
+    final blank = _query.trim().isEmpty;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.6,
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: math.max(160, room * 0.6)),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -82,7 +96,8 @@ class _StoryFindState extends State<_StoryFind> {
                 style: theme.text(15),
                 decoration: InputDecoration(
                   hintText: context.t.storyReaderFindHint,
-                  prefixIcon: Icon(Icons.search_sharp, color: theme.textSecondary),
+                  prefixIcon:
+                      Icon(Icons.search_sharp, color: theme.textSecondary),
                   suffixText: _query.trim().isEmpty
                       ? null
                       : context.t.librarySearchMatchCount(found.length),
@@ -90,63 +105,79 @@ class _StoryFindState extends State<_StoryFind> {
                 ),
               ),
             ),
-            Expanded(
-              child: _query.trim().isNotEmpty && found.isEmpty
-                  ? Center(
-                      child: Text(
-                        context.t.libraryNoResults,
-                        style: theme.text(14, color: theme.textSecondary),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: found.length,
-                      separatorBuilder: (_, __) =>
-                          Divider(height: 1, color: theme.divider),
-                      itemBuilder: (context, i) {
-                        final at = found[i];
-                        final line = widget.lines[at];
-                        final speaker = (line.speaker ?? '').trim();
-                        final text = withPlaceholders(
-                          snippetAround(line.content, words, width: 80),
-                          widget.nickname,
-                        );
-                        return PressRow(
-                          key: ValueKey('story-find-$at'),
-                          onTap: () => Navigator.of(context).pop(line.lineIndex),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minHeight: 48),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 10, 4, 10),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(
-                                    width: 44,
-                                    child: Text(
-                                      '${(line.shownIndex ?? line.lineIndex) + 1}',
-                                      style: theme.field(
-                                        color: theme.textMuted,
-                                        size: 13,
-                                      ),
-                                    ),
+            if (blank || found.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    blank
+                        ? context.t.storyReaderFindEmpty
+                        : context.t.libraryNoResults,
+                    style: theme.text(14, color: theme.textSecondary),
+                  ),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  itemCount: found.length,
+                  separatorBuilder: (_, __) =>
+                      Divider(height: 1, color: theme.divider),
+                  itemBuilder: (context, i) {
+                    final at = found[i];
+                    final line = widget.lines[at];
+                    final speaker = (line.speaker ?? '').trim();
+                    final text = withPlaceholders(
+                      snippetAround(line.content, words, width: 80),
+                      widget.nickname,
+                    );
+                    return PressRow(
+                      key: ValueKey('story-find-$at'),
+                      onTap: () => Navigator.of(context).pop(line.lineIndex),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 10, 4, 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 44,
+                                child: Text(
+                                  '${(line.shownIndex ?? line.lineIndex) + 1}',
+                                  style: theme.field(
+                                    color: theme.textMuted,
+                                    size: 13,
                                   ),
-                                  Expanded(
-                                    child: Text(
-                                      speaker.isEmpty ? text : '$speaker：$text',
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.text(14.5, height: 1.5),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
+                              Expanded(
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: searchSpans(
+                                      speaker.isEmpty
+                                          ? text
+                                          : '$speaker：$text',
+                                      marks,
+                                      searchMarkStyle(theme),
+                                    ),
+                                  ),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.text(14.5, height: 1.5),
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
-            ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
           ],
         ),
       ),
