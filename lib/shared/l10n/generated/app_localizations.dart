@@ -3038,6 +3038,72 @@ abstract class AppLocalizations {
   /// **'When the context reaches this share of the warning threshold, earlier content is compacted into notes.'**
   String get settingsCompactPercentDesc;
 
+  /// No description provided for @settingsTokenPrices.
+  ///
+  /// In en, this message translates to:
+  /// **'Answer cost'**
+  String get settingsTokenPrices;
+
+  /// No description provided for @settingsTokenPricesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your model service\'s prices to see what each question cost under its answer.'**
+  String get settingsTokenPricesDesc;
+
+  /// No description provided for @settingsTokenPricesUnset.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get settingsTokenPricesUnset;
+
+  /// No description provided for @tokenPricesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the prices from your model service\'s price list, per million tokens, in any currency; the cost under answers uses the same unit. Leave them empty to show no cost. The cost is worked out with the prices as they are now, so changing them changes the cost of earlier answers too. Embedding requests are not included.'**
+  String get tokenPricesIntro;
+
+  /// No description provided for @tokenPricesInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Input price (per million tokens)'**
+  String get tokenPricesInput;
+
+  /// No description provided for @tokenPricesOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'Output price (per million tokens)'**
+  String get tokenPricesOutput;
+
+  /// No description provided for @tokenPricesCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Cached input (% of the input price)'**
+  String get tokenPricesCached;
+
+  /// No description provided for @tokenPricesCachedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'20 means cached input costs 20% of the input price. Empty means 100%, no discount.'**
+  String get tokenPricesCachedHint;
+
+  /// No description provided for @tokenPricesInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number of 0 or more'**
+  String get tokenPricesInvalid;
+
+  /// No description provided for @tokenPricesCachedInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number from 0 to 100'**
+  String get tokenPricesCachedInvalid;
+
+  /// No description provided for @tokenPricesSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get tokenPricesSaved;
+
   /// No description provided for @settingsSkipOperatorNames.
   ///
   /// In en, this message translates to:

@@ -1659,6 +1659,41 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsCompactPercentDesc => '上下文到提醒值的这个比例时，较早的内容自动压缩成纪要。';
 
   @override
+  String get settingsTokenPrices => '回答价格';
+
+  @override
+  String get settingsTokenPricesDesc => '填入模型服务的价格，每个回答下面会显示这一问花了多少钱。';
+
+  @override
+  String get settingsTokenPricesUnset => '未设置';
+
+  @override
+  String get tokenPricesIntro =>
+      '价格按你的模型服务的价目表填写，单位是每百万 token；货币单位不限，回答下面的价格用同一个单位。不填就不显示价格。价格按现在填的计算，改了以后，旧回答的价格也会跟着变。向量检索的费用不算在内。';
+
+  @override
+  String get tokenPricesInput => '输入价格（每百万 token）';
+
+  @override
+  String get tokenPricesOutput => '输出价格（每百万 token）';
+
+  @override
+  String get tokenPricesCached => '缓存命中价格（输入价格的 %）';
+
+  @override
+  String get tokenPricesCachedHint =>
+      '填 20 表示缓存命中的输入按输入价格的 20% 计。不填按 100%，也就是不打折。';
+
+  @override
+  String get tokenPricesInvalid => '请填一个不小于 0 的数';
+
+  @override
+  String get tokenPricesCachedInvalid => '请填 0 到 100 之间的数';
+
+  @override
+  String get tokenPricesSaved => '已保存';
+
+  @override
   String get settingsSkipOperatorNames => '回答里不标干员名';
 
   @override

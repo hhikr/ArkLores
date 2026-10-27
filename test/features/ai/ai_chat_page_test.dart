@@ -167,10 +167,10 @@ void main() {
     const changed = AnswerOptions(wiki: false, delegate: true);
     expect(container.read(answerOptionsProvider), changed);
     expect(await SettingsService().loadAnswerOptions(), changed);
-    expect(container.read(deepThinkingProvider), isFalse);
+    expect(container.read(deepThinkingProvider), isTrue);
     await tester.tap(find.byKey(const ValueKey('answer-option-think')));
     await tester.pumpAndSettle();
-    expect(container.read(deepThinkingProvider), isTrue);
+    expect(container.read(deepThinkingProvider), isFalse);
     expect(tester.widget<EditableText>(box).focusNode.hasFocus, isTrue);
 
     // A touch elsewhere closes it: it wipes away, then leaves.

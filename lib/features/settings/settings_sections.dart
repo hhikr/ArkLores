@@ -22,6 +22,7 @@ import '../library/reading_text.dart' show readingFontSample;
 import 'background_access.dart';
 import 'blocked_names_page.dart';
 import 'onboarding_page.dart';
+import 'token_prices_page.dart';
 import 'update_page.dart';
 import 'wiki_sources_settings_page.dart';
 
@@ -199,6 +200,18 @@ class AiSettingsPage extends ConsumerWidget {
           ],
           onChanged: (value) =>
               ref.read(compactPercentProvider.notifier).set(value),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-token-prices'),
+          icon: Icons.payments_sharp,
+          label: context.t.settingsTokenPrices,
+          description: context.t.settingsTokenPricesDesc,
+          meta: ref.watch(tokenPricesProvider).isSet
+              ? null
+              : context.t.settingsTokenPricesUnset,
+          onTap: () => Navigator.of(context).push(
+            smoothPageRoute<void>(builder: (_) => const TokenPricesPage()),
+          ),
         ),
         ActionRow(
           key: const ValueKey('settings-name-links'),

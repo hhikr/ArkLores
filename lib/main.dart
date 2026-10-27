@@ -9,6 +9,7 @@ import 'core/agent/agent_logger.dart';
 import 'core/agent/answer_options.dart';
 import 'core/llm/embedding_client.dart';
 import 'core/llm/llm_client.dart';
+import 'core/llm/token_prices.dart';
 import 'core/update/app_update_provider.dart';
 import 'features/ai/phone_bridge.dart';
 import 'features/settings/api_settings_page.dart';
@@ -53,6 +54,7 @@ void main() async {
     appTheme,
     appLocale,
     sessionLogsEnabled,
+    tokenPrices,
     (
       nickname,
       answerOptions,
@@ -73,6 +75,7 @@ void main() async {
     load('theme', settingsService.loadTheme, AppTheme.system),
     load('locale', settingsService.loadLocale, SupportedLocale.zh),
     load('session log toggle', settingsService.loadSessionLogsEnabled, true),
+    load('token prices', settingsService.loadTokenPrices, const TokenPrices()),
     // A record's .wait takes at most nine futures.
     (
       load('nickname', settingsService.loadNickname, ''),
@@ -110,6 +113,7 @@ void main() async {
         initialReadingFontProvider.overrideWithValue(readingFont),
         initialContextWarnTokensProvider.overrideWithValue(contextWarnTokens),
         initialCompactPercentProvider.overrideWithValue(compactPercent),
+        initialTokenPricesProvider.overrideWithValue(tokenPrices),
         initialSkipOperatorNamesProvider.overrideWithValue(skipOperatorNames),
         initialSkipUnreadOpensProvider.overrideWithValue(skipUnreadOpens),
         initialAutoUpdateCheckProvider.overrideWithValue(autoUpdateCheck),

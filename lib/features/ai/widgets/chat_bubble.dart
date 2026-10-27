@@ -14,6 +14,8 @@ import '../../../core/llm/llm_client.dart';
 import '../../../core/materials/material_provider.dart'
     show citedMaterialProvider;
 import '../../../shared/l10n/l10n.dart';
+import '../../../shared/providers/settings_provider.dart'
+    show tokenPricesProvider;
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/theme/cut_border.dart';
@@ -150,12 +152,14 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     );
   }
 
-  /// What the question cost, in small grey text under the answer.
+  /// What the question cost, in small grey text under the answer (with its
+  /// price once Settings has the model service's prices; worked out with the
+  /// prices as they are now).
   Widget _buildStatsLine(AppThemeTokens theme, TurnStats stats) {
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: SelectableText(
-        formatUsageLine(stats),
+        formatUsageLine(stats, prices: ref.watch(tokenPricesProvider)),
         key: const ValueKey('usage-line'),
         style: theme.field(size: 12),
       ),

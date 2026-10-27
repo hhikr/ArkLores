@@ -1,3 +1,4 @@
+import '../llm/token_prices.dart';
 import '../llm/usage_meter.dart';
 
 int estimateTokens(int chars) => (chars / 1.6).round();
@@ -87,6 +88,16 @@ class TurnStats {
       ? cachedPromptTokens / promptTokens
       : null;
 
+  /// What these tokens cost at [prices], or null when no price is set or
+  /// the provider reported no tokens.
+  double? costAt(TokenPrices prices) => prices.isSet && hasTokens
+      ? prices.cost(
+          prompt: promptTokens,
+          cached: cachedPromptTokens,
+          completion: completionTokens,
+        )
+      : null;
+
   Map<String, Object?> toJson() => {
         'llm_calls': calls,
         'context_tokens': contextTokens,
@@ -121,8 +132,11 @@ String formatElapsed(Duration d) {
 /// `ctx 62.3k / 14 calls: in 382k, out 12k, cache 87% / 4m22s`. ctx is the
 /// conversation now; in and out add up every call of the question (each
 /// call sends the conversation again), so in is usually several times ctx.
-/// Parts the provider did not report are left out.
-String formatUsageLine(TurnStats s) {
+/// Parts the provider did not report are left out. With [prices] set, the
+/// line ends in what the question cost (`cost 0.385`, in the unit the
+/// prices were typed in).
+String formatUsageLine(TurnStats s, {TokenPrices? prices}) {
+  final cost = prices == null ? null : s.costAt(prices);
   final tokens = [
     if (s.hasTokens) ...[
       'in ${formatTokenCount(s.promptTokens)}',
@@ -138,5 +152,6 @@ String formatUsageLine(TurnStats s) {
     else if (tokens.isNotEmpty)
       tokens,
     formatElapsed(s.elapsed),
+    if (cost != null) 'cost ${formatCost(cost)}',
   ].join(' / ');
 }

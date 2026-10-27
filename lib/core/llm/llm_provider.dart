@@ -16,8 +16,8 @@ final usageMeterProvider = Provider<UsageMeter>((ref) => UsageMeter());
 /// Every role runs at [ReasoningLevel.off] by default: routing, planning,
 /// note extraction and disambiguation are mechanical, and the answer writer
 /// works from text that was already retrieved (high effort over-interpreted
-/// the story). The "深度思考" switch moves only the writer to
-/// [ReasoningLevel.low]; nothing uses [ReasoningLevel.high].
+/// the story). The "深度思考" switch (on by default) moves only the writer
+/// to [ReasoningLevel.low]; nothing uses [ReasoningLevel.high].
 final llmClientProvider =
     Provider.family<LLMClient, ReasoningLevel>((ref, level) {
   final meter = ref.read(usageMeterProvider);
@@ -32,9 +32,12 @@ final llmClientProvider =
   return client;
 });
 
-/// Whether the answer writer may think ([ReasoningLevel.low]); off by
-/// default, toggled from the Ask options menu.
-final deepThinkingProvider = StateProvider<bool>((ref) => false);
+/// Whether the answer writer may think ([ReasoningLevel.low]); on by
+/// default since 0.21 (a real question with it on: the thinking was about a
+/// quarter of the output and a few percent of the question's cost, the
+/// model thinks in only some of its calls), toggled from the Ask options
+/// menu.
+final deepThinkingProvider = StateProvider<bool>((ref) => true);
 
 /// Whether the configured model service has a known switch for thinking.
 /// Without one the request is the same either way, so the option is not

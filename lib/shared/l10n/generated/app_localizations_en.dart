@@ -1731,6 +1731,42 @@ class AppLocalizationsEn extends AppLocalizations {
       'When the context reaches this share of the warning threshold, earlier content is compacted into notes.';
 
   @override
+  String get settingsTokenPrices => 'Answer cost';
+
+  @override
+  String get settingsTokenPricesDesc =>
+      'Enter your model service\'s prices to see what each question cost under its answer.';
+
+  @override
+  String get settingsTokenPricesUnset => 'Not set';
+
+  @override
+  String get tokenPricesIntro =>
+      'Enter the prices from your model service\'s price list, per million tokens, in any currency; the cost under answers uses the same unit. Leave them empty to show no cost. The cost is worked out with the prices as they are now, so changing them changes the cost of earlier answers too. Embedding requests are not included.';
+
+  @override
+  String get tokenPricesInput => 'Input price (per million tokens)';
+
+  @override
+  String get tokenPricesOutput => 'Output price (per million tokens)';
+
+  @override
+  String get tokenPricesCached => 'Cached input (% of the input price)';
+
+  @override
+  String get tokenPricesCachedHint =>
+      '20 means cached input costs 20% of the input price. Empty means 100%, no discount.';
+
+  @override
+  String get tokenPricesInvalid => 'Enter a number of 0 or more';
+
+  @override
+  String get tokenPricesCachedInvalid => 'Enter a number from 0 to 100';
+
+  @override
+  String get tokenPricesSaved => 'Saved';
+
+  @override
   String get settingsSkipOperatorNames =>
       'Leave operator names plain in answers';
 

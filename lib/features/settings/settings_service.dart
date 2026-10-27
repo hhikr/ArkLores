@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/agent/answer_options.dart';
 import '../../core/llm/embedding_client.dart';
 import '../../core/llm/llm_client.dart';
+import '../../core/llm/token_prices.dart';
 import '../../shared/l10n/locale_provider.dart';
 import '../../shared/providers/theme_provider.dart';
 
@@ -99,6 +100,7 @@ class SettingsService {
   static const _keyReadingFont = 'reading_font';
   static const _keyContextWarnTokens = 'ask_context_warn_tokens';
   static const _keyCompactPercent = 'ask_compact_percent';
+  static const _keyTokenPrices = 'ask_token_prices';
 
   // ── Profile keys ─────────────────────────────────────────
   static const _keyNickname = 'profile_nickname';
@@ -288,6 +290,25 @@ class SettingsService {
 
   Future<void> saveCompactPercent(int value) =>
       _storage.write(key: _keyCompactPercent, value: '$value');
+
+  /// The model service's prices for the cost under each answer (none set
+  /// by default).
+  Future<TokenPrices> loadTokenPrices() async {
+    final raw = await _storage.read(key: _keyTokenPrices);
+    if (raw == null) return const TokenPrices();
+    try {
+      return TokenPrices.fromJson(
+        Map<String, dynamic>.from(jsonDecode(raw) as Map),
+      );
+    } catch (_) {
+      return const TokenPrices();
+    }
+  }
+
+  Future<void> saveTokenPrices(TokenPrices prices) => _storage.write(
+        key: _keyTokenPrices,
+        value: jsonEncode(prices.toJson()),
+      );
 
   /// The font of long reading text (default: the interface's Chinese sans).
   Future<ReadingFont> loadReadingFont() async {
