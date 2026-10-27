@@ -93,6 +93,8 @@ class SettingsService {
   static const _keyAnswerOptions = 'ask_answer_options';
   static const _keyProfileSectionsOpen = 'library_profile_sections_open';
   static const _keySkipOperatorNames = 'ask_skip_operator_names';
+  static const _keyNameLinks = 'ask_name_links';
+  static const _keyBlockedNames = 'ask_blocked_names';
   static const _keySkipUnreadOpens = 'library_skip_unread_opens';
   static const _keyReadingFont = 'reading_font';
   static const _keyContextWarnTokens = 'ask_context_warn_tokens';
@@ -245,6 +247,27 @@ class SettingsService {
 
   Future<void> saveSkipOperatorNames(bool skip) =>
       _storage.write(key: _keySkipOperatorNames, value: '$skip');
+
+  /// Whether names in answers are underlined at all (default on).
+  Future<bool> loadNameLinks() async =>
+      await _storage.read(key: _keyNameLinks) != 'false';
+
+  Future<void> saveNameLinks(bool on) =>
+      _storage.write(key: _keyNameLinks, value: '$on');
+
+  /// Names the reader chose never to underline, in the order added.
+  Future<List<String>> loadBlockedNames() async {
+    final raw = await _storage.read(key: _keyBlockedNames);
+    if (raw == null) return const [];
+    try {
+      return [for (final name in jsonDecode(raw) as List) '$name'];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> saveBlockedNames(List<String> names) =>
+      _storage.write(key: _keyBlockedNames, value: jsonEncode(names));
 
   Future<int> loadContextWarnTokens() async {
     final value =

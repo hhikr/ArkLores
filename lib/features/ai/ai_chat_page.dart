@@ -5,6 +5,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_provider.dart';
+import '../../core/library/portrait_provider.dart'
+    show hasPortraitIndexProvider, nameLinksProvider;
 import '../../core/llm/llm_provider.dart' show embeddingClientProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/bars_provider.dart';
@@ -154,6 +156,18 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       key: const ValueKey('ask-floating-actions'),
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Underlined names in answers, on or off (lit when on); only with
+        // a knowledge base that has the names.
+        if (ref.watch(hasPortraitIndexProvider).valueOrNull ?? false)
+          SquareIconButton(
+            key: const ValueKey('ask-name-links'),
+            onPressed: () => ref
+                .read(nameLinksProvider.notifier)
+                .setOn(!(ref.read(nameLinksProvider).valueOrNull?.on ?? true)),
+            tooltip: context.t.aiNameLinks,
+            icon: Icons.format_underlined_sharp,
+            selected: ref.watch(nameLinksProvider).valueOrNull?.on ?? true,
+          ),
         SquareIconButton(
           key: const ValueKey('ask-new-conversation'),
           onPressed: count == 0

@@ -1527,10 +1527,15 @@ void main() {
       expect(finalAnswerOf(events), contains('status=answered'));
     });
 
-    test('context uses reported input tokens and omits helper requests',
-        () async {
+    test(
+        'context is the reported input and output of the last call, '
+        'helper requests left out', () async {
       for (final helper in [false, true]) {
-        final client = _ScriptedClient([_answer('完成')], promptTokens: 84000);
+        final client = _ScriptedClient(
+          [_answer('完成')],
+          promptTokens: 83400,
+          completionTokens: 600,
+        );
         final events = await LoreAgentLoop(
           client: client,
           store: store,
@@ -1576,7 +1581,9 @@ void main() {
               (m.reasoningContent?.length ?? 0) +
               (m.toolCalls == null ? 0 : jsonEncode(m.toolCalls).length),
         );
-        expect(sizes[i].contextTokens, (chars / 1.6).round());
+        // What was sent, plus the reply that came back (estimated too).
+        final sent = (chars / 1.6).round();
+        expect(sizes[i].contextTokens, inInclusiveRange(sent, sent + 2000));
       }
     });
 
@@ -2154,6 +2161,7 @@ class _ScriptedClient extends LLMClient {
     this.turns, {
     this.rejectTools = false,
     this.promptTokens,
+    this.completionTokens,
     this.reviews = const [],
     this.plans = const [],
   });
@@ -2165,7 +2173,7 @@ class _ScriptedClient extends LLMClient {
 
   final List<_Turn> turns;
   final bool rejectTools;
-  final int? promptTokens;
+  final int? promptTokens, completionTokens;
 
   /// R18: replies of the reviewer (`chatCompletion`); with none left the
   /// call fails, which lets the answer through.
@@ -2229,7 +2237,12 @@ class _ScriptedClient extends LLMClient {
     toolSpecs.add(List.of(tools ?? const <Map<String, dynamic>>[]));
     final turn = turns[_next++];
     if (turn.content.isNotEmpty) yield CompletionDelta(content: turn.content);
-    yield CompletionDelta(done: true, toolCalls: turn.calls, promptTokens: promptTokens);
+    yield CompletionDelta(
+      done: true,
+      toolCalls: turn.calls,
+      promptTokens: promptTokens,
+      completionTokens: completionTokens,
+    );
   }
 }
 

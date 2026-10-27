@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart' show HitTestResult;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,6 +36,7 @@ import '../speaker_highlight.dart';
 import '../story_labels_provider.dart';
 import '../story_reader_page.dart';
 import 'answer_reveal.dart';
+import 'block_name_card.dart';
 
 /// Opens the whole story at [range] (R17b).
 void openStoryReader(BuildContext context, String storyId, CitedRange range) {
@@ -307,50 +310,59 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
                       children: [
                         if (block.markdown.trim().isNotEmpty)
                           TextFieldTapRegion(
-                            child: Listener(
-                              onPointerDown: (event) =>
-                                  _portraitTap = event.position,
-                              child: MarkdownBody(
-                                data: _matcher != null
-                                    ? _linked.putIfAbsent(
-                                        '$lane:$i',
-                                        () => _matcher!.linkNames(
-                                          block.markdown,
-                                          seenNames: _seenNames,
-                                        ),
-                                      )
-                                    : block.markdown,
-                                styleSheet: widget.styleSheet.copyWith(
-                                  a: (widget.styleSheet.p ?? theme.text(16))
-                                      .copyWith(
-                                    // Without a colour the link takes the theme's.
-                                    color: widget.styleSheet.p?.color ??
-                                        theme.textPrimary,
-                                    decoration: TextDecoration.underline,
-                                    decorationColor: theme.accentPrimary,
-                                    decorationThickness: 2,
+                            child: GestureDetector(
+                              // Holding an underlined name offers to stop
+                              // underlining it.
+                              onLongPressStart: _matcher == null
+                                  ? null
+                                  : (details) =>
+                                      _offerBlock(details.globalPosition),
+                              child: Listener(
+                                onPointerDown: (event) =>
+                                    _portraitTap = event.position,
+                                child: MarkdownBody(
+                                  data: _matcher != null
+                                      ? _linked.putIfAbsent(
+                                          '$lane:$i',
+                                          () => _matcher!.linkNames(
+                                            block.markdown,
+                                            seenNames: _seenNames,
+                                          ),
+                                        )
+                                      : block.markdown,
+                                  styleSheet: widget.styleSheet.copyWith(
+                                    a: (widget.styleSheet.p ?? theme.text(16))
+                                        .copyWith(
+                                      // Without a colour the link takes the theme's.
+                                      color: widget.styleSheet.p?.color ??
+                                          theme.textPrimary,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: theme.accentPrimary,
+                                      decorationThickness: 2,
+                                    ),
                                   ),
+                                  onTapLink: (_, href, __) {
+                                    final prefix = '$speakerLinkScheme:';
+                                    if (href != null &&
+                                        href.startsWith(prefix)) {
+                                      showPortraitPreview(
+                                        context,
+                                        anchor: _portraitTap == null
+                                            ? null
+                                            : Rect.fromLTWH(
+                                                _portraitTap!.dx,
+                                                _portraitTap!.dy - 16,
+                                                32,
+                                                24,
+                                              ),
+                                        speaker: Uri.decodeComponent(
+                                          href.substring(prefix.length),
+                                        ),
+                                        origin: PortraitOrigin.ask,
+                                      );
+                                    }
+                                  },
                                 ),
-                                onTapLink: (_, href, __) {
-                                  final prefix = '$speakerLinkScheme:';
-                                  if (href != null && href.startsWith(prefix)) {
-                                    showPortraitPreview(
-                                      context,
-                                      anchor: _portraitTap == null
-                                          ? null
-                                          : Rect.fromLTWH(
-                                              _portraitTap!.dx,
-                                              _portraitTap!.dy - 16,
-                                              32,
-                                              24,
-                                            ),
-                                      speaker: Uri.decodeComponent(
-                                        href.substring(prefix.length),
-                                      ),
-                                      origin: PortraitOrigin.ask,
-                                    );
-                                  }
-                                },
                               ),
                             ),
                           ),
@@ -376,6 +388,39 @@ class _StoryAnswerBodyState extends ConsumerState<StoryAnswerBody>
             ],
         ],
       );
+
+  /// The underlined name under [position], if any: the linked run of the
+  /// paragraph there, when it is one of the names.
+  String? _linkedNameAt(Offset position) {
+    final result = HitTestResult();
+    WidgetsBinding.instance
+        .hitTestInView(result, position, View.of(context).viewId);
+    for (final entry in result.path) {
+      final target = entry.target;
+      if (target is! RenderParagraph) continue;
+      final at = target.getPositionForOffset(target.globalToLocal(position));
+      final span = target.text.getSpanForPosition(at);
+      final text = span is TextSpan ? span.text : null;
+      return span is TextSpan &&
+              span.recognizer != null &&
+              text != null &&
+              (_names?.contains(text) ?? false)
+          ? text
+          : null;
+    }
+    return null;
+  }
+
+  void _offerBlock(Offset position) {
+    final name = _linkedNameAt(position);
+    if (name == null) return;
+    HapticFeedback.mediumImpact();
+    showBlockNameCard(
+      context,
+      name: name,
+      anchor: Rect.fromLTWH(position.dx, position.dy - 16, 32, 24),
+    );
+  }
 
   AnswerBlock _freeze(String id, AnswerBlock block, String lane) {
     if (_frozen.containsKey(id)) return _frozen[id]!;
@@ -450,11 +495,13 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
     final block = widget.block;
     final count = block.stories.fold<int>(0, (n, s) => n + s.ranges.length) +
         block.records.length +
-        block.wikis.fold<int>(0, (n, w) => n + w.ranges.length);
+        block.wikis.fold<int>(0, (n, w) => n + w.ranges.length) +
+        block.materials.fold<int>(0, (n, m) => n + m.ranges.length);
     final collections = <String>{
       for (final story in block.stories) _labels(story.storyId).$1,
       if (block.records.isNotEmpty) context.t.aiCitedRecord,
       if (block.wikis.isNotEmpty) context.t.aiCitedWiki,
+      if (block.materials.isNotEmpty) context.t.aiCitedMaterial,
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -697,7 +744,7 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                       .watch(citedMaterialProvider(material.pageId))
                       .valueOrNull
                       ?.title ??
-                  '补充资料',
+                  context.t.aiCitedMaterial,
               style: chapterStyle,
             ),
             for (final range in material.ranges)
@@ -708,13 +755,11 @@ class _EvidenceChainState extends ConsumerState<_EvidenceChain> {
                     : context.t
                         .aiCitationParagraphs(range.start + 1, range.end + 1),
                 tooltip: '${material.pageId}:${range.start}-${range.end}',
-                onTap: () => openMaterialPage(
+                onTap: () => openCitedMaterial(
                   context,
-                  MaterialReaderPage(
-                    pageId: material.pageId,
-                    start: range.start,
-                    end: range.end,
-                  ),
+                  material.pageId,
+                  range.start,
+                  range.end,
                 ),
               ),
           ],

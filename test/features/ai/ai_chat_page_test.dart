@@ -14,6 +14,7 @@ import 'package:arklores/features/ai/widgets/chat_bubble.dart';
 import 'package:arklores/features/settings/settings_service.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
 import 'package:arklores/shared/providers/settings_provider.dart';
+import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -73,6 +74,38 @@ void main() {
     expect(find.byKey(const ValueKey('deep-thinking-toggle')), findsNothing);
     expect(find.byKey(const ValueKey('answer-options')), findsOneWidget);
     expect(find.byTooltip('发送'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the top bar turns name underlines on and off, with names to '
+      'underline only', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    for (final index in [false, true]) {
+      // A new scope each time (overrides do not change in place).
+      await tester.pumpWidget(
+        KeyedSubtree(
+          key: ValueKey(index),
+          child: _app(
+            const AiChatPage(),
+            overrides: [
+              ..._withModel(ScriptedLLM(['x'])),
+              hasPortraitIndexProvider.overrideWith((ref) async => index),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final toggle = find.byKey(const ValueKey('ask-name-links'));
+      expect(toggle, index ? findsOneWidget : findsNothing);
+    }
+    SquareIconButton button() => tester.widget<SquareIconButton>(
+          find.byKey(const ValueKey('ask-name-links')),
+        );
+    expect(button().selected, isTrue);
+    await tester.tap(find.byKey(const ValueKey('ask-name-links')));
+    await tester.pumpAndSettle();
+    expect(button().selected, isFalse);
+    expect(await SettingsService().loadNameLinks(), isFalse);
     expect(tester.takeException(), isNull);
   });
 

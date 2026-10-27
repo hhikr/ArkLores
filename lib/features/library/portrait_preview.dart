@@ -29,6 +29,43 @@ void showPortraitPreview(
   bool fromLine = false,
   Rect? anchor,
   BuildContext? anchorContext,
+}) =>
+    showAnchoredCard(
+      context,
+      anchor: anchor,
+      anchorContext: anchorContext,
+      width: _width,
+      height: _height,
+      builder: (close) => _PreviewCard(
+        speaker: speaker,
+        sprite: sprite,
+        spriteFuture: spriteFuture,
+        fromLine: fromLine,
+        onMore: () {
+          close();
+          showPortraitSheet(
+            context,
+            speaker: speaker,
+            sprite: sprite,
+            spriteFuture: spriteFuture,
+            fromLine: fromLine,
+            origin: origin,
+          );
+        },
+      ),
+    );
+
+/// A small card opened out of a word on the page ([anchor], or the box of
+/// [anchorContext]): under it, or over it when there is no room below.
+/// One at a time; the first touch outside, back, or scrolling closes it.
+/// [builder] gets the way to close it.
+void showAnchoredCard(
+  BuildContext context, {
+  Rect? anchor,
+  BuildContext? anchorContext,
+  required double width,
+  required double height,
+  required Widget Function(VoidCallback close) builder,
 }) {
   _dismissPreview?.call();
   final box = (anchorContext ?? context).findRenderObject();
@@ -77,24 +114,12 @@ void showPortraitPreview(
         onEnd: () {
           if (closed) remove();
         },
-        child: _PreviewOverlay(
+        child: _AnchoredOverlay(
           anchor: anchor!,
-          speaker: speaker,
-          sprite: sprite,
-          spriteFuture: spriteFuture,
-          fromLine: fromLine,
+          width: width,
+          height: height,
           onClose: close,
-          onMore: () {
-            close();
-            showPortraitSheet(
-              context,
-              speaker: speaker,
-              sprite: sprite,
-              spriteFuture: spriteFuture,
-              fromLine: fromLine,
-              origin: origin,
-            );
-          },
+          child: builder(close),
         ),
       ),
     ),
@@ -134,38 +159,32 @@ class _Reveal extends CustomClipper<Rect> {
       old.below != below;
 }
 
-class _PreviewOverlay extends ConsumerWidget {
-  const _PreviewOverlay({
+class _AnchoredOverlay extends ConsumerWidget {
+  const _AnchoredOverlay({
     required this.anchor,
-    required this.speaker,
-    this.sprite,
-    this.spriteFuture,
-    required this.fromLine,
+    required this.width,
+    required this.height,
     required this.onClose,
-    required this.onMore,
+    required this.child,
   });
   final Rect anchor;
-  final String speaker;
-  final String? sprite;
-  final Future<String?>? spriteFuture;
-  final bool fromLine;
-  final VoidCallback onClose, onMore;
+  final double width, height;
+  final VoidCallback onClose;
+  final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeProvider);
     final size = MediaQuery.sizeOf(context);
     final bottom = size.height - MediaQuery.viewInsetsOf(context).bottom - 16;
-    // A tall, narrow card: the figure standing in it, a strip under it.
-    final width = math.min(_width, size.width - 32);
-    final height = math.min(_height, size.height * 0.5);
+    final width = math.min(this.width, size.width - 32);
+    final height = math.min(this.height, size.height * 0.5);
     final below = anchor.bottom + 6 + height <= bottom;
     final left = anchor.left.clamp(16.0, size.width - width - 16);
     // Where the name is along the card's width (-1 its left edge, 1 its
     // right): the card is put under or over the name and pushed in from
     // the screen's edge, so it may sit right, left or across it.
     final side = ((anchor.center.dx - left) / width * 2 - 1).clamp(-1.0, 1.0);
-    final name = ref.watch(speakerPortraitsProvider(speaker)).valueOrNull;
     return Stack(
       children: [
         // The first touch outside only closes the card: it does not reach
@@ -220,124 +239,143 @@ class _PreviewOverlay extends ConsumerWidget {
                     decoration: BoxDecoration(
                       border: Border.all(color: theme.cardBorder),
                     ),
-                    // The figure fills the card; the name, the count and the
-                    // way to the whole card share one strip under it.
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: FutureBuilder<String?>(
-                            future: spriteFuture,
-                            builder: (_, snapshot) {
-                              final shown = fromLine
-                                  ? (spriteFuture == null
-                                      ? sprite
-                                      : snapshot.data)
-                                  : name?.topSprite;
-                              if (spriteFuture != null &&
-                                  snapshot.connectionState !=
-                                      ConnectionState.done) {
-                                return const SizedBox.shrink();
-                              }
-                              if (shown == null) {
-                                return Hatch(
-                                  child: Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Text(
-                                        context.t.portraitNoSprite,
-                                        textAlign: TextAlign.center,
-                                        style: theme.text(
-                                          13,
-                                          color: theme.textSecondary,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }
-                              final group = ref
-                                  .watch(
-                                    portraitGroupProvider(
-                                      SpriteName.parse(shown)!.group,
-                                    ),
-                                  )
-                                  .valueOrNull;
-                              final variants = ref
-                                      .watch(
-                                        portraitSpritesProvider(
-                                          SpriteName.parse(shown)!.group,
-                                        ),
-                                      )
-                                      .valueOrNull ??
-                                  [shown];
-                              final pages = variants.contains(shown)
-                                  ? variants
-                                  : [shown, ...variants];
-                              return PortraitFullscreenTap(
-                                onTap: () => openArtViewer(
-                                  context,
-                                  pages: [
-                                    for (final item in pages)
-                                      ArtViewerPage.portrait(
-                                        sprite: item,
-                                        speaker: speaker,
-                                      ),
-                                  ],
-                                  initial: pages.indexOf(shown),
-                                ),
-                                child: PortraitImage(
-                                  sprite: shown,
-                                  fallbackSprite: group?.topSprite,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    speaker,
-                                    style: theme.heading(14),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (name != null)
-                                    Text(
-                                      context.t.portraitLines(name.lines),
-                                      maxLines: 1,
-                                      style: theme.field(size: 12),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            AppButton(
-                              context.t.portraitMore,
-                              small: true,
-                              onPressed: onMore,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          context.t.storyArtCredit,
-                          style: theme.text(12, color: theme.textMuted),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
+                    child: child,
                   ),
                 ),
               ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A tall, narrow card: the figure standing in it, a strip under it.
+class _PreviewCard extends ConsumerWidget {
+  const _PreviewCard({
+    required this.speaker,
+    this.sprite,
+    this.spriteFuture,
+    required this.fromLine,
+    required this.onMore,
+  });
+  final String speaker;
+  final String? sprite;
+  final Future<String?>? spriteFuture;
+  final bool fromLine;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
+    final name = ref.watch(speakerPortraitsProvider(speaker)).valueOrNull;
+    // The figure fills the card; the name, the count and the way to the
+    // whole card share one strip under it.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: FutureBuilder<String?>(
+            future: spriteFuture,
+            builder: (_, snapshot) {
+              final shown = fromLine
+                  ? (spriteFuture == null ? sprite : snapshot.data)
+                  : name?.topSprite;
+              if (spriteFuture != null &&
+                  snapshot.connectionState != ConnectionState.done) {
+                return const SizedBox.shrink();
+              }
+              if (shown == null) {
+                return Hatch(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        context.t.portraitNoSprite,
+                        textAlign: TextAlign.center,
+                        style: theme.text(
+                          13,
+                          color: theme.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              final group = ref
+                  .watch(
+                    portraitGroupProvider(
+                      SpriteName.parse(shown)!.group,
+                    ),
+                  )
+                  .valueOrNull;
+              final variants = ref
+                      .watch(
+                        portraitSpritesProvider(
+                          SpriteName.parse(shown)!.group,
+                        ),
+                      )
+                      .valueOrNull ??
+                  [shown];
+              final pages =
+                  variants.contains(shown) ? variants : [shown, ...variants];
+              return PortraitFullscreenTap(
+                onTap: () => openArtViewer(
+                  context,
+                  pages: [
+                    for (final item in pages)
+                      ArtViewerPage.portrait(
+                        sprite: item,
+                        speaker: speaker,
+                      ),
+                  ],
+                  initial: pages.indexOf(shown),
+                ),
+                child: PortraitImage(
+                  sprite: shown,
+                  fallbackSprite: group?.topSprite,
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    speaker,
+                    style: theme.heading(14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (name != null)
+                    Text(
+                      context.t.portraitLines(name.lines),
+                      maxLines: 1,
+                      style: theme.field(size: 12),
+                    ),
+                ],
+              ),
+            ),
+            AppButton(
+              context.t.portraitMore,
+              small: true,
+              onPressed: onMore,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          context.t.storyArtCredit,
+          style: theme.text(12, color: theme.textMuted),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

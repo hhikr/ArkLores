@@ -85,6 +85,21 @@ List<CitedWikiPage> extractCitedWikiPages(String content) {
   return pages.values.toList(growable: false);
 }
 
+/// Supplemental materials cited in [content] (page id with its version), in
+/// order of first citation.
+List<CitedWikiPage> extractCitedMaterials(String content) {
+  final pages = <String, CitedWikiPage>{};
+  for (final m in materialCitationPattern.allMatches(content)) {
+    final id = 'material:${m[1]}@${m[2]}';
+    final a = int.parse(m[3]!), b = int.tryParse(m[4] ?? '') ?? a;
+    _addRangeTo(
+      pages.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
+      CitedRange(a <= b ? a : b, a <= b ? b : a),
+    );
+  }
+  return pages.values.toList(growable: false);
+}
+
 /// Renders 1-based line numbers (`end` null for a single line).
 typedef LineRangeText = String Function(int start, int? end);
 
@@ -101,8 +116,11 @@ class CitedRange {
 
 /// R15: the cited ranges of one chapter.
 class CitedChapter {
-  CitedChapter(
-      {required this.storyId, required this.label, required this.order,});
+  CitedChapter({
+    required this.storyId,
+    required this.label,
+    required this.order,
+  });
   final String storyId;
 
   /// Chapter part of the label (`BB-9 行动前《尘埃落定》`), or the file part
@@ -336,8 +354,10 @@ AnswerBlock _toAnswerBlock(String text, int indent) {
       .replaceAllMapped(RegExp('`?${materialCitationPattern.pattern}`?'), (m) {
     final id = 'material:${m[1]}@${m[2]}';
     final a = int.parse(m[3]!), b = int.tryParse(m[4] ?? '') ?? a;
-    _addRangeTo(materials.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
-        CitedRange(a <= b ? a : b, a <= b ? b : a),);
+    _addRangeTo(
+      materials.putIfAbsent(id, () => CitedWikiPage(id)).ranges,
+      CitedRange(a <= b ? a : b, a <= b ? b : a),
+    );
     return _citeMark;
   })
       // Wiki refs first: a page key never ends in .txt, but its paragraph

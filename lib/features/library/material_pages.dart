@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +20,24 @@ import 'reading_text.dart';
 void openMaterialPage(BuildContext context, Widget page) =>
     Navigator.of(context)
         .push(smoothPageRoute<void>(frosted: true, builder: (_) => page));
+
+/// Opens paragraphs [start]–[end] (0-based) of a material cited in an
+/// answer: a personal text in full at that place, an included one (its
+/// rights are the author's) with only the cited paragraphs.
+void openCitedMaterial(
+  BuildContext context,
+  String pageId,
+  int start,
+  int end,
+) =>
+    openMaterialPage(
+      context,
+      MaterialReaderPage(pageId: pageId, start: start, end: end),
+    );
+
+/// An included source (not the user's own): read only through what Ask
+/// cites of it.
+bool _included(MaterialDocument doc) => !doc.sourceId.startsWith('personal/');
 
 class SupplementalMaterialsView extends ConsumerStatefulWidget {
   const SupplementalMaterialsView({super.key});
@@ -167,12 +186,6 @@ class _SupplementalMaterialsViewState
             _ => '待更新',
           }
         : null;
-    void read() => openMaterialPage(
-          context,
-          s.builtin
-              ? MaterialContentsPage(source: s)
-              : MyMaterialPage(id: s.id.substring('personal/'.length)),
-        );
     final actions = <Widget>[
       AppButton(
         '来源说明',
@@ -204,6 +217,26 @@ class _SupplementalMaterialsViewState
           onPressed: () => controller.cancel(s.id),
         ),
     ];
+    final head = Padding(
+      padding: const EdgeInsets.fromLTRB(10, 12, 8, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            s.title.isEmpty ? '未命名资料' : s.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.heading(16),
+          ),
+          const SizedBox(height: 4),
+          FactsRow([
+            s.kind,
+            s.enabled ? '参与问答' : '不参与问答',
+            if (state != null) state,
+          ]),
+        ],
+      ),
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: theme.divider)),
@@ -214,34 +247,22 @@ class _SupplementalMaterialsViewState
           Row(
             children: [
               Expanded(
-                child: PressRow(
-                  key: ValueKey(
-                    s.builtin
-                        ? 'source-${s.id}'
-                        : 'material-${s.id.substring('personal/'.length)}',
-                  ),
-                  onTap: read,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 12, 8, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          s.title.isEmpty ? '未命名资料' : s.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.heading(16),
+                // An included source is not opened here (its text is the
+                // author's): Ask's citations show what it quotes.
+                child: s.builtin
+                    ? KeyedSubtree(key: ValueKey('source-${s.id}'), child: head)
+                    : PressRow(
+                        key: ValueKey(
+                          'material-${s.id.substring('personal/'.length)}',
                         ),
-                        const SizedBox(height: 4),
-                        FactsRow([
-                          s.kind,
-                          s.enabled ? '参与问答' : '不参与问答',
-                          if (state != null) state,
-                        ]),
-                      ],
-                    ),
-                  ),
-                ),
+                        onTap: () => openMaterialPage(
+                          context,
+                          MyMaterialPage(
+                            id: s.id.substring('personal/'.length),
+                          ),
+                        ),
+                        child: head,
+                      ),
               ),
               SquareSwitch(
                 value: s.enabled,
@@ -259,52 +280,6 @@ class _SupplementalMaterialsViewState
             padding: const EdgeInsets.only(left: 2, bottom: 4),
             child: Wrap(spacing: 2, children: actions),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class MaterialContentsPage extends ConsumerWidget {
-  const MaterialContentsPage({super.key, required this.source});
-  final MaterialSource source;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final library = ref.watch(materialLibraryProvider);
-    final theme = ref.watch(themeProvider);
-    final docs = library.documents.where((d) => d.sourceId == source.id);
-    // What the source is, in plain text (it explains, it is not a warning),
-    // then its pages as rows.
-    return LibraryScaffold(
-      title: source.title,
-      scrollUnder: true,
-      body: ListView(
-        padding:
-            pagePadding(context, const EdgeInsets.fromLTRB(16, 16, 16, 32)),
-        children: [
-          FactsRow([source.kind, '${docs.length} 篇']),
-          if (source.policy.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              source.policy,
-              style: theme.text(14, color: theme.textSecondary, height: 1.65),
-            ),
-          ],
-          const SizedBox(height: 14),
-          Divider(height: 1, color: theme.divider),
-          for (final d in docs) ...[
-            LibraryRow(
-              title: d.title,
-              subtitle: '${d.blocks.length} 段',
-              subtitleLines: 1,
-              trailing: Icon(Icons.chevron_right_sharp, color: theme.textMuted),
-              onTap: () => openMaterialPage(
-                context,
-                MaterialReaderPage(pageId: d.pageId),
-              ),
-            ),
-            rowDivider(theme),
-          ],
         ],
       ),
     );
@@ -335,9 +310,10 @@ class MaterialReaderPage extends ConsumerWidget {
           if (d == null) return const NoticeBox('找不到对应版本的资料原文。');
           final target = start.clamp(0, d.blocks.length);
           final center = ValueKey('$pageId:$target');
+          final theme = ref.watch(themeProvider);
           Widget block(int i) {
-            final b = d.blocks[i], theme = ref.watch(themeProvider);
-            final cited = start > 0 && i >= start && i <= (end ?? start);
+            final b = d.blocks[i];
+            final cited = end != null && i >= start && i <= end!;
             // The gap between paragraphs is inside the marked box, so the
             // rail of a cited run is one unbroken line.
             return Padding(
@@ -384,6 +360,27 @@ class MaterialReaderPage extends ConsumerWidget {
             );
           }
 
+          // An included text is not shown whole: the paragraphs cited,
+          // after a line that says so.
+          if (_included(d)) {
+            final last = math.min(end ?? start, d.blocks.length - 1);
+            return ListView(
+              padding: pagePadding(
+                context,
+                const EdgeInsets.fromLTRB(0, 16, 0, 24),
+              ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(26, 0, 26, 4),
+                  child: Text(
+                    '这份资料只显示问答引用的段落。',
+                    style: theme.text(13.5, color: theme.textSecondary),
+                  ),
+                ),
+                for (var i = target; i <= last; i++) block(i),
+              ],
+            );
+          }
           // The paragraph asked for starts just under the top bar, not
           // behind it.
           return LayoutBuilder(

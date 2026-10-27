@@ -1457,6 +1457,29 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get aiCitedMaterial => '补充资料';
+
+  @override
+  String aiCitedMaterials(int count) {
+    return '补充资料 $count 篇';
+  }
+
+  @override
+  String get aiNameLinks => '人名下划线';
+
+  @override
+  String get aiBlockNameQuestion => '屏蔽这个名字？';
+
+  @override
+  String get aiBlockNameDesc => '回答里不再加下划线，可在设置里取消。';
+
+  @override
+  String get aiBlockNameConfirm => '屏蔽';
+
+  @override
+  String get aiBlockNameCancel => '取消';
+
+  @override
   String aiCitationParagraph(int n) {
     return '第 $n 段';
   }
@@ -1669,6 +1692,40 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get settingsSkipOperatorNamesDesc =>
       '打开后，回答里的干员名字不加下划线、不能点开立绘；其他人物照旧。';
+
+  @override
+  String get settingsNameLinks => '回答里的人名下划线';
+
+  @override
+  String get settingsNameLinksDesc => '有立绘的人物名字加下划线，点开看立绘。问答页顶栏也有这个开关。';
+
+  @override
+  String get settingsBlockedNames => '下划线屏蔽词';
+
+  @override
+  String get settingsBlockedNamesDesc => '这些名字不加下划线。在回答里长按带下划线的名字也能加进来。';
+
+  @override
+  String settingsBlockedNamesCount(int count) {
+    return '$count 个';
+  }
+
+  @override
+  String get blockedNamesHint => '要屏蔽的名字';
+
+  @override
+  String get blockedNamesAdd => '添加';
+
+  @override
+  String get blockedNamesEmpty => '还没有屏蔽词。在上面输入名字，或在回答里长按带下划线的名字。';
+
+  @override
+  String blockedNamesRemove(String name) {
+    return '取消屏蔽 $name';
+  }
+
+  @override
+  String get blockedNamesDuplicate => '这个名字已经在屏蔽词里了。';
 
   @override
   String aiContextMeter(String n, String limit) {

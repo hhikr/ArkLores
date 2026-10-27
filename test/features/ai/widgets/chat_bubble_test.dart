@@ -399,8 +399,10 @@ void main() {
           elapsed: Duration(seconds: 262),
         ),
       );
-      expect(find.text('in 382k / out 11.7k / cache 87% / 14 calls / 4m22s'),
-          findsOneWidget,);
+      expect(
+        find.text('14 calls: in 382k, out 11.7k, cache 87% / 4m22s'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('a provider without usage shows what it has', (tester) async {
@@ -419,7 +421,7 @@ void main() {
         ),
         locale: const Locale('en'),
       );
-      expect(find.text('in 1.2k / out 300 / 2 calls / 1m05s'), findsOneWidget);
+      expect(find.text('2 calls: in 1.2k, out 300 / 1m05s'), findsOneWidget);
     });
 
     testWidgets('no stats, no line', (tester) async {

@@ -18,8 +18,12 @@ class TurnStats {
   });
 
   /// Totals of [meter] over [elapsed].
-  factory TurnStats.of(UsageMeter meter, Duration elapsed,
-          {int contextTokens = 0, bool contextEstimated = false,}) =>
+  factory TurnStats.of(
+    UsageMeter meter,
+    Duration elapsed, {
+    int contextTokens = 0,
+    bool contextEstimated = false,
+  }) =>
       TurnStats(
         contextTokens: contextTokens,
         contextEstimated: contextEstimated,
@@ -54,9 +58,8 @@ class TurnStats {
         // is a separate request, not this conversation's context).
         contextTokens:
             other.contextTokens > 0 ? other.contextTokens : contextTokens,
-        contextEstimated: other.contextTokens > 0
-            ? other.contextEstimated
-            : contextEstimated,
+        contextEstimated:
+            other.contextTokens > 0 ? other.contextEstimated : contextEstimated,
         promptTokens: promptTokens + other.promptTokens,
         cachedPromptTokens: cachedPromptTokens + other.cachedPromptTokens,
         completionTokens: completionTokens + other.completionTokens,
@@ -109,20 +112,31 @@ String formatElapsed(Duration d) {
   final total = d.inSeconds;
   final minutes = total ~/ 60;
   final seconds = total % 60;
-  return minutes == 0 ? '${seconds}s' : '${minutes}m${seconds.toString().padLeft(2, '0')}s';
+  return minutes == 0
+      ? '${seconds}s'
+      : '${minutes}m${seconds.toString().padLeft(2, '0')}s';
 }
 
 /// The line under an answer, short and the same in every language:
-/// `in 382k · out 12k · cache 87% · 14 calls · 4m22s`. Parts the provider
-/// did not report are left out.
-String formatUsageLine(TurnStats s) => [
-      if (s.contextTokens > 0)
-        'ctx ${s.contextEstimated ? "≈" : ""}${formatTokenCount(s.contextTokens)}',
-      if (s.hasTokens) ...[
-        'in ${formatTokenCount(s.promptTokens)}',
-        'out ${formatTokenCount(s.completionTokens)}',
-        if (s.cacheRate != null) 'cache ${(s.cacheRate! * 100).round()}%',
-      ],
-      if (s.calls > 0) '${s.calls} calls',
-      formatElapsed(s.elapsed),
-    ].join(' / ');
+/// `ctx 62.3k / 14 calls: in 382k, out 12k, cache 87% / 4m22s`. ctx is the
+/// conversation now; in and out add up every call of the question (each
+/// call sends the conversation again), so in is usually several times ctx.
+/// Parts the provider did not report are left out.
+String formatUsageLine(TurnStats s) {
+  final tokens = [
+    if (s.hasTokens) ...[
+      'in ${formatTokenCount(s.promptTokens)}',
+      'out ${formatTokenCount(s.completionTokens)}',
+      if (s.cacheRate != null) 'cache ${(s.cacheRate! * 100).round()}%',
+    ],
+  ].join(', ');
+  return [
+    if (s.contextTokens > 0)
+      'ctx ${s.contextEstimated ? "≈" : ""}${formatTokenCount(s.contextTokens)}',
+    if (s.calls > 0)
+      tokens.isEmpty ? '${s.calls} calls' : '${s.calls} calls: $tokens'
+    else if (tokens.isNotEmpty)
+      tokens,
+    formatElapsed(s.elapsed),
+  ].join(' / ');
+}

@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:arklores/core/library/library_provider.dart';
+import 'package:arklores/core/library/portrait_provider.dart';
 import 'package:arklores/core/materials/material_document.dart';
 import 'package:arklores/core/materials/material_provider.dart';
+import 'package:arklores/features/ai/widgets/story_answer_body.dart';
 import 'package:arklores/features/library/material_pages.dart';
 import 'package:arklores/features/materials/materials_page.dart';
 import 'package:arklores/shared/l10n/generated/app_localizations.dart';
@@ -12,6 +14,7 @@ import 'package:arklores/shared/theme/endfield_theme_tokens.dart';
 import 'package:arklores/shared/widgets/ef_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -82,6 +85,7 @@ void main() {
               .overrideWith((ref, g) async => LibraryStatus.notInstalled),
           materialLibraryProvider.overrideWith((ref) => _Library(ref)),
           citedMaterialProvider.overrideWith((ref, id) async => doc),
+          highlightNamesProvider.overrideWith((ref) async => const []),
           themeProvider.overrideWith((ref) =>
               ThemeNotifier(dark ? ArkThemeTokens() : EndfieldThemeTokens()),),
         ],
@@ -126,13 +130,42 @@ void main() {
     expect(tester.takeException(), isNull);
     await shoot(tester, 'materials_dark_narrow');
   });
-  testWidgets(
-      'citation reader starts at the requested paragraph and keeps prior text accessible',
+  testWidgets('a paragraph cited from a material counts as a source',
+      (tester) async {
+    await pump(
+      tester,
+      Scaffold(
+        body: StoryAnswerBody(
+          content: '源石有时会自我复制。`${doc.pageId}:P3`',
+          styleSheet: MarkdownStyleSheet(p: const TextStyle(fontSize: 16)),
+          streaming: false,
+          revealImmediately: true,
+        ),
+      ),
+    );
+    expect(find.text('出处 1'), findsOneWidget);
+    await tester.tap(find.text('出处 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第 4 段'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('material-P3')), findsOneWidget);
+    expect(find.byKey(const ValueKey('material-P0')), findsNothing);
+  });
+  testWidgets('an included source is not opened from the list', (tester) async {
+    await pump(tester, const SupplementalMaterialsView());
+    await tester.tap(find.text('大地巡旅'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MaterialReaderPage), findsNothing);
+    expect(find.text('来源说明'), findsWidgets);
+  });
+  testWidgets('a citation of an included source shows only the cited paragraphs',
       (tester) async {
     await pump(
         tester, MaterialReaderPage(pageId: doc.pageId, start: 3, end: 3),);
     expect(find.byKey(const ValueKey('material-P3')), findsOneWidget);
     expect(find.textContaining('自我复制'), findsOneWidget);
+    expect(find.byKey(const ValueKey('material-P0')), findsNothing);
+    expect(find.text('这份资料只显示问答引用的段落。'), findsOneWidget);
     await shoot(tester, 'materials_reader_mobile');
     expect(tester.takeException(), isNull);
   });

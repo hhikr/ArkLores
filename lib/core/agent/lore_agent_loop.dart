@@ -807,7 +807,7 @@ class LoreAgentLoop {
       CompletionDelta? done;
       final callStart = DateTime.now();
       var requestChars = 0;
-      int? promptTokens;
+      int? promptTokens, completionTokens;
       try {
         final messages = [Message.system(systemPrompt()), ...visible()];
         requestChars = messages.fold<int>(
@@ -890,6 +890,9 @@ class LoreAgentLoop {
             }
           }
           if ((delta.promptTokens ?? 0) > 0) promptTokens = delta.promptTokens;
+          if ((delta.completionTokens ?? 0) > 0) {
+            completionTokens = delta.completionTokens;
+          }
           if (delta.done) done = delta;
         }
       } on LLMException catch (e) {
@@ -1008,10 +1011,14 @@ class LoreAgentLoop {
       if (!subtask) {
         lastPromptTokens = promptTokens ?? estimateTokens(requestChars);
         lastPromptChars = requestChars;
+        // The conversation after this call: what was sent and what came
+        // back (the next call sends both).
         yield ReActEvent(
           type: ReActEventType.contextSize,
-          contextTokens: promptTokens ?? estimateTokens(requestChars),
-          contextEstimated: promptTokens == null,
+          contextTokens: (promptTokens ?? estimateTokens(requestChars)) +
+              (completionTokens ??
+                  estimateTokens(text.length + reasoning.length)),
+          contextEstimated: promptTokens == null || completionTokens == null,
         );
       }
       // Session records keep one tool per iteration: each call of a turn

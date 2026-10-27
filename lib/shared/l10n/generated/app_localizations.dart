@@ -2684,6 +2684,48 @@ abstract class AppLocalizations {
   /// **'{count} wiki pages'**
   String aiCitedWikiPages(int count);
 
+  /// No description provided for @aiCitedMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Material'**
+  String get aiCitedMaterial;
+
+  /// No description provided for @aiCitedMaterials.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} materials'**
+  String aiCitedMaterials(int count);
+
+  /// No description provided for @aiNameLinks.
+  ///
+  /// In en, this message translates to:
+  /// **'Name underlines'**
+  String get aiNameLinks;
+
+  /// No description provided for @aiBlockNameQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop underlining this name?'**
+  String get aiBlockNameQuestion;
+
+  /// No description provided for @aiBlockNameDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers will leave it plain. You can undo this in Settings.'**
+  String get aiBlockNameDesc;
+
+  /// No description provided for @aiBlockNameConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get aiBlockNameConfirm;
+
+  /// No description provided for @aiBlockNameCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get aiBlockNameCancel;
+
   /// No description provided for @aiCitationParagraph.
   ///
   /// In en, this message translates to:
@@ -3061,6 +3103,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.'**
   String get settingsSkipOperatorNamesDesc;
+
+  /// No description provided for @settingsNameLinks.
+  ///
+  /// In en, this message translates to:
+  /// **'Underline names in answers'**
+  String get settingsNameLinks;
+
+  /// No description provided for @settingsNameLinksDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.'**
+  String get settingsNameLinksDesc;
+
+  /// No description provided for @settingsBlockedNames.
+  ///
+  /// In en, this message translates to:
+  /// **'Names left plain'**
+  String get settingsBlockedNames;
+
+  /// No description provided for @settingsBlockedNamesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'These names are never underlined. Long-press an underlined name in an answer to add it.'**
+  String get settingsBlockedNamesDesc;
+
+  /// No description provided for @settingsBlockedNamesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}'**
+  String settingsBlockedNamesCount(int count);
+
+  /// No description provided for @blockedNamesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Name to leave plain'**
+  String get blockedNamesHint;
+
+  /// No description provided for @blockedNamesAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get blockedNamesAdd;
+
+  /// No description provided for @blockedNamesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No names yet. Type one above, or long-press an underlined name in an answer.'**
+  String get blockedNamesEmpty;
+
+  /// No description provided for @blockedNamesRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Underline {name} again'**
+  String blockedNamesRemove(String name);
+
+  /// No description provided for @blockedNamesDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'This name is already on the list.'**
+  String get blockedNamesDuplicate;
 
   /// No description provided for @aiContextMeter.
   ///

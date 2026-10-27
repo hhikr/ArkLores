@@ -11,6 +11,8 @@ import '../../../core/agent/story_answer.dart';
 import '../../../core/agent/turn_stats.dart';
 import '../../../core/gamedata/story_catalog.dart' show StoryCatalogEntry;
 import '../../../core/llm/llm_client.dart';
+import '../../../core/materials/material_provider.dart'
+    show citedMaterialProvider;
 import '../../../shared/l10n/l10n.dart';
 import '../../../shared/providers/theme_provider.dart';
 import '../../../shared/theme/app_theme.dart';
@@ -18,6 +20,7 @@ import '../../../shared/theme/cut_border.dart';
 import '../../../shared/theme/motion.dart';
 import '../../../shared/widgets/ef_widgets.dart';
 import '../../../shared/widgets/press_feedback.dart';
+import '../../library/material_pages.dart' show openCitedMaterial;
 import '../../library/reading_text.dart' show readingStyle;
 import '../evidence_observation.dart';
 import '../investigation_ui.dart';
@@ -571,7 +574,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final ids = extractCitedStoryIds(cited);
     final records = extractCitedRecordIds(cited);
     final wikis = extractCitedWikiPages(cited);
-    if (ids.isEmpty && records.isEmpty && wikis.isEmpty) {
+    final materials = extractCitedMaterials(cited);
+    if (ids.isEmpty && records.isEmpty && wikis.isEmpty && materials.isEmpty) {
       return const SizedBox.shrink();
     }
     final entries = ids.isEmpty
@@ -583,7 +587,8 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
     final groups = groupCitations(cited, entries);
     final total = groups.fold<int>(0, (n, g) => n + g.citationCount) +
         records.length +
-        wikis.fold<int>(0, (n, w) => n + w.ranges.length);
+        wikis.fold<int>(0, (n, w) => n + w.ranges.length) +
+        materials.fold<int>(0, (n, m) => n + m.ranges.length);
     final open = _isOpen('*');
     final muted = theme.text(13.5, color: theme.textSecondary, height: 1.45);
 
@@ -824,6 +829,57 @@ class _ChatBubbleState extends ConsumerState<ChatBubble> {
                             selected: false,
                             onTap: () =>
                                 showCitedWiki(context, page.pageId, range),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+          ],
+          // Supplemental materials, each with its paragraph chips.
+          if (open && materials.isNotEmpty) ...[
+            row(
+              'materials',
+              context.t.aiCitedMaterials(materials.length),
+              isOpen: _isOpen('materials', byDefault: true),
+              indent: 14,
+              style: muted.copyWith(color: theme.textPrimary),
+            ),
+            if (_isOpen('materials', byDefault: true))
+              for (final page in materials)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 2, 0, 4),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        ref
+                                .watch(citedMaterialProvider(page.pageId))
+                                .valueOrNull
+                                ?.title ??
+                            context.t.aiCitedMaterial,
+                        style: muted.copyWith(color: theme.textPrimary),
+                      ),
+                      for (final range in page.ranges)
+                        Tooltip(
+                          message: '${page.pageId}:${range.start}-${range.end}',
+                          triggerMode: TooltipTriggerMode.longPress,
+                          child: chip(
+                            'm:${page.pageId}:${range.start}',
+                            range.start == range.end
+                                ? context.t.aiCitationParagraph(range.start + 1)
+                                : context.t.aiCitationParagraphs(
+                                    range.start + 1,
+                                    range.end + 1,
+                                  ),
+                            selected: false,
+                            onTap: () => openCitedMaterial(
+                              context,
+                              page.pageId,
+                              range.start,
+                              range.end,
+                            ),
                           ),
                         ),
                     ],

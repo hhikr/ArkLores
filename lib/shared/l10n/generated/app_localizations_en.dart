@@ -1520,6 +1520,30 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get aiCitedMaterial => 'Material';
+
+  @override
+  String aiCitedMaterials(int count) {
+    return '$count materials';
+  }
+
+  @override
+  String get aiNameLinks => 'Name underlines';
+
+  @override
+  String get aiBlockNameQuestion => 'Stop underlining this name?';
+
+  @override
+  String get aiBlockNameDesc =>
+      'Answers will leave it plain. You can undo this in Settings.';
+
+  @override
+  String get aiBlockNameConfirm => 'Stop';
+
+  @override
+  String get aiBlockNameCancel => 'Cancel';
+
+  @override
   String aiCitationParagraph(int n) {
     return '¶$n';
   }
@@ -1742,6 +1766,43 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsSkipOperatorNamesDesc =>
       'When on, operators\' names in answers are not underlined and do not open their portraits; other characters still do.';
+
+  @override
+  String get settingsNameLinks => 'Underline names in answers';
+
+  @override
+  String get settingsNameLinksDesc =>
+      'Names of characters with a portrait are underlined and open it. The Ask top bar has this switch too.';
+
+  @override
+  String get settingsBlockedNames => 'Names left plain';
+
+  @override
+  String get settingsBlockedNamesDesc =>
+      'These names are never underlined. Long-press an underlined name in an answer to add it.';
+
+  @override
+  String settingsBlockedNamesCount(int count) {
+    return '$count';
+  }
+
+  @override
+  String get blockedNamesHint => 'Name to leave plain';
+
+  @override
+  String get blockedNamesAdd => 'Add';
+
+  @override
+  String get blockedNamesEmpty =>
+      'No names yet. Type one above, or long-press an underlined name in an answer.';
+
+  @override
+  String blockedNamesRemove(String name) {
+    return 'Underline $name again';
+  }
+
+  @override
+  String get blockedNamesDuplicate => 'This name is already on the list.';
 
   @override
   String aiContextMeter(String n, String limit) {

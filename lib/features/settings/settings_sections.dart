@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/agent/agent_logger.dart';
+import '../../core/library/portrait_provider.dart'
+    show NameLinks, nameLinksProvider;
 import '../../shared/l10n/l10n.dart';
 import '../../shared/providers/settings_provider.dart';
 import '../../shared/providers/theme_provider.dart';
@@ -18,6 +20,7 @@ import '../../shared/widgets/page_frame.dart';
 import '../../shared/widgets/smooth_page_route.dart';
 import '../library/reading_text.dart' show readingFontSample;
 import 'background_access.dart';
+import 'blocked_names_page.dart';
 import 'onboarding_page.dart';
 import 'update_page.dart';
 import 'wiki_sources_settings_page.dart';
@@ -44,7 +47,8 @@ class SettingsSectionPage extends ConsumerWidget {
       code: code,
       scrollUnder: true,
       body: ListView(
-        padding: pagePadding(context, const EdgeInsets.fromLTRB(16, 12, 16, 40)),
+        padding:
+            pagePadding(context, const EdgeInsets.fromLTRB(16, 12, 16, 40)),
         children: [
           Center(
             child: ConstrainedBox(
@@ -153,6 +157,7 @@ class AiSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(sessionLogsEnabledProvider);
     final skipOperators = ref.watch(skipOperatorNamesProvider);
+    final links = ref.watch(nameLinksProvider).valueOrNull ?? const NameLinks();
     return SettingsSectionPage(
       title: context.t.settingsAiServices,
       code: context.t.settingsAiSectionCode,
@@ -194,6 +199,29 @@ class AiSettingsPage extends ConsumerWidget {
           ],
           onChanged: (value) =>
               ref.read(compactPercentProvider.notifier).set(value),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-name-links'),
+          icon: Icons.format_underlined_sharp,
+          label: context.t.settingsNameLinks,
+          description: context.t.settingsNameLinksDesc,
+          onTap: () => ref.read(nameLinksProvider.notifier).setOn(!links.on),
+          trailing: SquareSwitch(
+            value: links.on,
+            semanticLabel: context.t.settingsNameLinks,
+            onChanged: (value) =>
+                ref.read(nameLinksProvider.notifier).setOn(value),
+          ),
+        ),
+        ActionRow(
+          key: const ValueKey('settings-blocked-names'),
+          icon: Icons.format_strikethrough_sharp,
+          label: context.t.settingsBlockedNames,
+          description: context.t.settingsBlockedNamesDesc,
+          meta: context.t.settingsBlockedNamesCount(links.blocked.length),
+          onTap: () => Navigator.of(context).push(
+            smoothPageRoute<void>(builder: (_) => const BlockedNamesPage()),
+          ),
         ),
         ActionRow(
           key: const ValueKey('settings-skip-operator-names'),
