@@ -162,13 +162,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get kbCancel => '取消';
 
   @override
-  String get materialsTitle => '资料';
-
-  @override
-  String get materialsEmptyDesc =>
-      '把想留的文字放在这里：设定摘录、笔记、考据都可以。它们只保存在这台设备上，不会进入知识库。';
-
-  @override
   String get materialsCancel => '取消';
 
   @override
@@ -348,12 +341,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsShowOnboardingDesc => '重新进行首次启动导览与配置';
 
   @override
-  String get settingsUpdate => '更新';
-
-  @override
-  String get settingsUpdateDesc => '检查新版本，在 App 里更新';
-
-  @override
   String updateVersionBuild(String version, int build) {
     return '$version（build $build）';
   }
@@ -476,9 +463,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aiAskCanceled => '已取消本次回答。';
-
-  @override
-  String get aiAnswerStatus => '回答状态';
 
   @override
   String get aiAnswerStatusAnswered => '已作答';
@@ -680,13 +664,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storyReaderSynopsis => '官方梗概';
 
   @override
-  String get materialsEmptyTitle => '还没有自己的资料';
-
-  @override
   String get materialsNew => '新建';
-
-  @override
-  String get materialsPaste => '从剪贴板导入';
 
   @override
   String get materialsTitleHint => '标题（可留空）';
@@ -703,16 +681,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get materialsClipboardEmpty => '剪贴板里没有文字';
-
-  @override
   String get materialsDiscard => '放弃未保存的修改？';
 
   @override
   String get materialsDiscardAction => '放弃';
-
-  @override
-  String get materialsAskAbout => '用它提问';
 
   @override
   String get readingHistoryTitle => '最近阅读';

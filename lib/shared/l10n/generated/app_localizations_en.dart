@@ -163,13 +163,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbCancel => 'Cancel';
 
   @override
-  String get materialsTitle => 'Materials';
-
-  @override
-  String get materialsEmptyDesc =>
-      'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.';
-
-  @override
   String get materialsCancel => 'Cancel';
 
   @override
@@ -360,13 +353,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Replay the first-launch guide to configure the app';
 
   @override
-  String get settingsUpdate => 'Updates';
-
-  @override
-  String get settingsUpdateDesc =>
-      'Check for a new version and update in the app';
-
-  @override
   String updateVersionBuild(String version, int build) {
     return '$version (build $build)';
   }
@@ -498,9 +484,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiAskCanceled => 'Answer canceled.';
-
-  @override
-  String get aiAnswerStatus => 'Answer status';
 
   @override
   String get aiAnswerStatusAnswered => 'Answered';
@@ -710,13 +693,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storyReaderSynopsis => 'Official synopsis';
 
   @override
-  String get materialsEmptyTitle => 'No texts of your own yet';
-
-  @override
   String get materialsNew => 'New';
-
-  @override
-  String get materialsPaste => 'Paste from clipboard';
 
   @override
   String get materialsTitleHint => 'Title (optional)';
@@ -733,16 +710,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get materialsClipboardEmpty => 'The clipboard has no text';
-
-  @override
   String get materialsDiscard => 'Discard unsaved changes?';
 
   @override
   String get materialsDiscardAction => 'Discard';
-
-  @override
-  String get materialsAskAbout => 'Ask about it';
 
   @override
   String get readingHistoryTitle => 'Recently read';

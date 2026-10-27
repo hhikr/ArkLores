@@ -392,18 +392,6 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get kbCancel;
 
-  /// No description provided for @materialsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Materials'**
-  String get materialsTitle;
-
-  /// No description provided for @materialsEmptyDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Keep texts here: lore excerpts, notes, research. They stay on this device and never enter the knowledge base.'**
-  String get materialsEmptyDesc;
-
   /// No description provided for @materialsCancel.
   ///
   /// In en, this message translates to:
@@ -740,18 +728,6 @@ abstract class AppLocalizations {
   /// **'Replay the first-launch guide to configure the app'**
   String get settingsShowOnboardingDesc;
 
-  /// No description provided for @settingsUpdate.
-  ///
-  /// In en, this message translates to:
-  /// **'Updates'**
-  String get settingsUpdate;
-
-  /// No description provided for @settingsUpdateDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Check for a new version and update in the app'**
-  String get settingsUpdateDesc;
-
   /// No description provided for @updateVersionBuild.
   ///
   /// In en, this message translates to:
@@ -979,12 +955,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Answer canceled.'**
   String get aiAskCanceled;
-
-  /// No description provided for @aiAnswerStatus.
-  ///
-  /// In en, this message translates to:
-  /// **'Answer status'**
-  String get aiAnswerStatus;
 
   /// No description provided for @aiAnswerStatusAnswered.
   ///
@@ -1334,23 +1304,11 @@ abstract class AppLocalizations {
   /// **'Official synopsis'**
   String get storyReaderSynopsis;
 
-  /// No description provided for @materialsEmptyTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'No texts of your own yet'**
-  String get materialsEmptyTitle;
-
   /// No description provided for @materialsNew.
   ///
   /// In en, this message translates to:
   /// **'New'**
   String get materialsNew;
-
-  /// No description provided for @materialsPaste.
-  ///
-  /// In en, this message translates to:
-  /// **'Paste from clipboard'**
-  String get materialsPaste;
 
   /// No description provided for @materialsTitleHint.
   ///
@@ -1376,12 +1334,6 @@ abstract class AppLocalizations {
   /// **'{n} characters'**
   String materialsChars(int n);
 
-  /// No description provided for @materialsClipboardEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'The clipboard has no text'**
-  String get materialsClipboardEmpty;
-
   /// No description provided for @materialsDiscard.
   ///
   /// In en, this message translates to:
@@ -1393,12 +1345,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Discard'**
   String get materialsDiscardAction;
-
-  /// No description provided for @materialsAskAbout.
-  ///
-  /// In en, this message translates to:
-  /// **'Ask about it'**
-  String get materialsAskAbout;
 
   /// No description provided for @readingHistoryTitle.
   ///
