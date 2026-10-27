@@ -40,7 +40,7 @@ const _cases = {
   'cg_end': (_longCg, 217, false, 0.0),
   'cg_tall': ('activities/act6d5/level_act6d5_st01.txt', 101, false, 0.0),
   'cg_empty': ('activities/act12side/level_act12side_st01.txt', 17, false, 560.0),
-  'item': ('activities/act35side/level_act35side_06_beg.txt', 55, false, 0.0),
+  'item': ('activities/act35side/level_act35side_06_beg.txt', 55, false, 300.0),
   'panel': (_longCg, 150, true, 0.0),
 };
 
@@ -177,10 +177,12 @@ void main() {
               )
               .position;
           position.jumpTo(position.pixels + scroll);
-          await tester.pumpAndSettle();
-          await tester.runAsync(
-            () => Future<void>.delayed(const Duration(seconds: 2)),
-          );
+          for (var i = 0; i < 6; i++) {
+            await tester.pumpAndSettle();
+            await tester.runAsync(
+              () => Future<void>.delayed(const Duration(seconds: 1)),
+            );
+          }
           await tester.pumpAndSettle();
         }
         if (panel) {

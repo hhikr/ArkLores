@@ -90,16 +90,9 @@ final readerStoryArtProvider = FutureProvider.autoDispose
         (image, kind) => info[(image, kind)]?.solid,
         titleGroup: (image) => titles[image]?.groupKey,
       ).map(
-        (s) => StoryArtShot(
-          kind: s.kind,
-          image: s.image,
-          at: s.at,
-          layout: s.layout,
-          number: s.number,
+        (s) => s.copyWith(
           segment: s.segment == null ? null : s.segment! + segmentOffset,
           until: s.kind == 'cg' ? s.until ?? group.end : null,
-          titleGroup: s.titleGroup,
-          missing: s.missing,
         ),
       ),
     );
@@ -115,21 +108,13 @@ final readerStoryArtProvider = FutureProvider.autoDispose
   return ReaderStoryArt(
     [
       for (final s in shots)
-        StoryArtShot(
-          kind: s.kind,
-          image: s.image,
-          at: s.at,
-          layout: s.layout,
+        s.copyWith(
           number: s.kind == 'scene' ? ++scene : cgNumbers[s.image],
           total: s.kind == 'scene'
               ? sceneCount
               : s.kind == 'cg'
                   ? cgNumbers.length
                   : null,
-          until: s.until,
-          segment: s.segment,
-          titleGroup: s.titleGroup,
-          missing: s.missing,
         ),
     ],
     info,

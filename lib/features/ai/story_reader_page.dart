@@ -1266,7 +1266,8 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           );
           cgUntil = shot.until ?? lines.length;
           cgSegment = shot.segment;
-        } else {
+        } else if (!shot.joined) {
+          // (a joined scene is drawn in the item of the scene before it)
           rows.add(
             _Row.art(
               shot.kind == 'scene' ? _RowKind.scene : _RowKind.item,
@@ -1516,6 +1517,55 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
     final info =
         art.info[(shot.image, shot.kind == 'scene' ? 'background' : shot.kind)];
     if (row.kind == _RowKind.scene) {
+      String two(int? n) => (n ?? 0).toString().padLeft(2, '0');
+      final members = [row.shot!];
+      while (members.last + 1 < art.shots.length &&
+          art.shots[members.last + 1].joined) {
+        members.add(members.last + 1);
+      }
+      if (members.length > 1) {
+        // Scenes changed on one line: one label, the pictures three a row.
+        final last = art.shots[members.last];
+        return Padding(
+          key: ValueKey('story-art-scenes-${shot.number}-${last.number}'),
+          padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
+          child: Column(
+            children: [
+              _ruled(
+                theme,
+                '${context.t.storyArtScene} ${two(shot.number)}–${two(last.number)}',
+                key: ValueKey('story-art-scene-label-${shot.number}'),
+              ),
+              for (var i = 0; i < members.length; i += 3) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (var j = i; j < i + 3; j++) ...[
+                      if (j > i) const SizedBox(width: 6),
+                      Expanded(
+                        child: j < members.length
+                            ? SizedBox(
+                                key: ValueKey(
+                                  'story-art-scene-${art.shots[members[j]].number}',
+                                ),
+                                height: 56,
+                                child: _artPicture(
+                                  theme,
+                                  art.shots[members[j]],
+                                  members[j],
+                                  cut: 8,
+                                ),
+                              )
+                            : const SizedBox(height: 56),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      }
       return Padding(
         key: ValueKey('story-art-scene-${shot.number}'),
         padding: const EdgeInsets.fromLTRB(10, 30, 10, 16),
@@ -1523,7 +1573,7 @@ class _StoryReaderPageState extends ConsumerState<_StoryReaderBody>
           children: [
             _ruled(
               theme,
-              '${context.t.storyArtScene} ${shot.number.toString().padLeft(2, '0')}',
+              '${context.t.storyArtScene} ${two(shot.number)}',
               key: ValueKey('story-art-scene-label-${shot.number}'),
             ),
             if (!shot.missing) ...[

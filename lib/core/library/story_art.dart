@@ -76,13 +76,64 @@ class StoryArtShot {
       this.until,
       this.segment,
       this.titleGroup,
-      this.missing = false,});
+      this.missing = false,
+      this.joined = false,});
   final String kind, image;
   final int at;
   final String? layout, titleGroup;
   final int? number, total, until;
   final int? segment;
   final bool missing;
+
+  /// A scene shown in one item with the scene before it: the stage changed
+  /// again on the same line, with nothing said in between.
+  final bool joined;
+
+  StoryArtShot copyWith(
+          {int? at, int? number, int? total, int? until, int? segment,
+          bool? joined,}) =>
+      StoryArtShot(
+          kind: kind,
+          image: image,
+          at: at ?? this.at,
+          layout: layout,
+          number: number ?? this.number,
+          total: total ?? this.total,
+          until: until ?? this.until,
+          segment: segment ?? this.segment,
+          titleGroup: titleGroup,
+          missing: missing,
+          joined: joined ?? this.joined,);
+}
+
+/// Close-ups put up just before a CG on the same line (no CG taken down in
+/// between) are laid over that CG: they move to just after it.
+List<StoryArtEvent> _closeUpsAfterTheirCg(List<StoryArtEvent> events) {
+  bool cgFollows(int i) {
+    for (var j = i + 1;
+        j < events.length && events[j].at == events[i].at;
+        j++) {
+      if (events[j].kind == 'cg_off') return false;
+      if (events[j].kind == 'cg' && events[j].image != null) return true;
+    }
+    return false;
+  }
+
+  final result = <StoryArtEvent>[];
+  final held = <StoryArtEvent>[];
+  for (var i = 0; i < events.length; i++) {
+    final e = events[i];
+    if (e.kind == 'item' && cgFollows(i)) {
+      held.add(e);
+      continue;
+    }
+    result.add(e);
+    if (e.kind == 'cg' && e.image != null) {
+      result.addAll(held);
+      held.clear();
+    }
+  }
+  return result..addAll(held);
 }
 
 List<StoryArtShot> arrangeStoryArt(
@@ -106,7 +157,7 @@ List<StoryArtShot> arrangeStoryArt(
         missing: solid(background, 'background') == null,),);
   }
 
-  for (final e in events) {
+  for (final e in _closeUpsAfterTheirCg(events)) {
     switch (e.kind) {
       case 'background':
         background = e.image;
@@ -134,18 +185,7 @@ List<StoryArtShot> arrangeStoryArt(
         if (covered) {
           for (var i = segmentStart; i < shots.length; i++) {
             final s = shots[i];
-            if (s.kind == 'cg') {
-              shots[i] = StoryArtShot(
-                  kind: s.kind,
-                  image: s.image,
-                  layout: s.layout,
-                  at: s.at,
-                  number: s.number,
-                  segment: s.segment,
-                  until: e.at,
-                  titleGroup: s.titleGroup,
-                  missing: s.missing,);
-            }
+            if (s.kind == 'cg') shots[i] = s.copyWith(until: e.at);
           }
           covered = false;
           scene(e.at);
@@ -166,21 +206,17 @@ List<StoryArtShot> arrangeStoryArt(
   final sceneTotal = shots.where((s) => s.kind == 'scene').length;
   var sceneNumber = 0;
   return [
-    for (final s in shots)
-      StoryArtShot(
-          kind: s.kind,
-          image: s.image,
-          layout: s.layout,
-          at: s.at,
-          number: s.kind == 'scene' ? ++sceneNumber : s.number,
-          segment: s.segment,
+    for (final (i, s) in shots.indexed)
+      s.copyWith(
+          number: s.kind == 'scene' ? ++sceneNumber : null,
           total: s.kind == 'scene'
               ? sceneTotal
               : s.kind == 'cg'
                   ? cgNumbers.length
                   : null,
-          until: s.until,
-          titleGroup: s.titleGroup,
-          missing: s.missing,),
+          joined: s.kind == 'scene' &&
+              i > 0 &&
+              shots[i - 1].kind == 'scene' &&
+              shots[i - 1].at == s.at,),
   ];
 }

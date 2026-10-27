@@ -34,4 +34,54 @@ void main() {
     final shots = arrangeStoryArt([e(0,'background','a'), e(1,'cg','x'), e(2,'item','solid'), e(3,'cg_off')], lookup);
     expect(shots.map((s) => s.kind), ['scene','cg']);
   });
+  test('scenes changed on one line join; numbers and total stay', () {
+    StoryArtEvent at(int seq, int line, String kind, [String? image]) =>
+        StoryArtEvent(storyId: 's', seq: seq, at: line, kind: kind, image: image);
+    final shots = arrangeStoryArt([
+      at(0, 0, 'background', 'a'),
+      at(1, 5, 'background', 'b'),
+      at(2, 5, 'background', 'c'),
+      at(3, 5, 'background', 'd'),
+      at(4, 5, 'cg', 'x'),
+      at(5, 5, 'cg_off'),
+      at(6, 5, 'background', 'e'),
+      at(7, 9, 'background', 'f'),
+    ], lookup,);
+    expect(shots.map((s) => (s.kind, s.number, s.joined)), [
+      ('scene', 1, false),
+      ('scene', 2, false),
+      ('scene', 3, true),
+      ('scene', 4, true),
+      ('cg', 1, false),
+      ('scene', 5, false),
+      ('scene', 6, false),
+    ]);
+    expect(shots.where((s) => s.kind == 'scene').every((s) => s.total == 6),
+        isTrue,);
+  });
+  test('close-ups put up just before a CG on its line go into its segment', () {
+    StoryArtEvent at(int seq, int line, String kind, [String? image]) =>
+        StoryArtEvent(storyId: 's', seq: seq, at: line, kind: kind, image: image);
+    final shots = arrangeStoryArt([
+      at(0, 3, 'item', 'i1'),
+      at(1, 3, 'item', 'i2'),
+      at(2, 3, 'cg', 'x'),
+      at(3, 6, 'cg_off'),
+      // taken down in between, or the CG on a later line: not moved
+      at(4, 8, 'item', 'i3'),
+      at(5, 8, 'cg_off'),
+      at(6, 8, 'cg', 'y'),
+      at(7, 10, 'item', 'i4'),
+      at(8, 11, 'cg', 'z'),
+    ], lookup,);
+    expect(shots.map((s) => (s.image, s.segment)), [
+      ('x', 1),
+      ('i1', 1),
+      ('i2', 1),
+      ('i3', null),
+      ('y', 2),
+      ('i4', 2),
+      ('z', 2),
+    ]);
+  });
 }

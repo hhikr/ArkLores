@@ -268,6 +268,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('scenes joined on one line: one label, each picture opens',
+      (tester) async {
+    StoryArtShot scene(int n, {bool joined = false}) => StoryArtShot(
+          kind: 'scene',
+          image: 'scene',
+          at: n == 1 ? 0 : 3,
+          number: n,
+          total: 5,
+          joined: joined,
+        );
+    await open(
+      tester,
+      lines: numbered(30),
+      art: ReaderStoryArt(
+        [
+          scene(1),
+          scene(2),
+          scene(3, joined: true),
+          scene(4, joined: true),
+          scene(5, joined: true),
+        ],
+        cgInfo,
+        {},
+      ),
+    );
+    expect(find.byKey(const ValueKey('story-art-scenes-2-5')), findsOneWidget);
+    expect(find.text('场景 02–05'), findsOneWidget);
+    expect(find.byKey(const ValueKey('story-art-scene-1')), findsOneWidget);
+    double top(int n) =>
+        tester.getTopLeft(find.byKey(ValueKey('story-art-scene-$n'))).dy;
+    double width(int n) =>
+        tester.getSize(find.byKey(ValueKey('story-art-scene-$n'))).width;
+    expect(top(2), top(4), reason: 'three a row');
+    expect(top(5), greaterThan(top(2)));
+    expect(width(5), width(2), reason: 'the same width in a short row');
+    await tester.tap(find.byKey(const ValueKey('story-art-scene-3')));
+    await tester.pumpAndSettle();
+    expect(find.text('场景 03 / 05'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a cited block breaks at the edges of a CG', (tester) async {
     await open(
       tester,
