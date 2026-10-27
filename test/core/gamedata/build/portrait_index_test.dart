@@ -1,4 +1,4 @@
-import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';
+﻿import 'package:arklores/core/gamedata/build/gamedata_db_validator.dart';
 import 'package:arklores/core/gamedata/build/portrait_index.dart';
 import 'package:arklores/core/gamedata/build/story_script.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -145,7 +145,9 @@ void main() {
       'highlight': 1,
       'mentions': 0,
     });
-    for (final name in ['W', '12', 'Short']) {
+    // Few lines no longer matter; one letter and no letters still do.
+    expect(names.firstWhere((n) => n['speaker'] == 'Short')['highlight'], 1);
+    for (final name in ['W', '12']) {
       expect(
         names.firstWhere((n) => n['speaker'] == name)['highlight'],
         0,
@@ -170,11 +172,11 @@ void main() {
         whereArgs: ['portrait_index_version'],
       ))
           .single['value'],
-      '5',
+      '6',
     );
     await validateGameDataDatabase(db);
   });
-  test('shared aliases, unknown labels, generic crowds, variants and suffixes',
+  test('every speaker with a portrait counts but unknown, joint and one-letter',
       () async {
     Future<void> lines(String name, String sprite, int count) async {
       for (var i = 0; i < count; i++) {
@@ -205,33 +207,38 @@ void main() {
     for (var i = 0; i < 30; i++) {
       await add('第$i卫兵', null);
     }
-    // Extra punctuation alone and combined labels do not count as variants.
     await lines('叶澜', r'avg_leaf#1$1', 3);
     for (final name in ['叶澜？', '叶澜！', '叶澜＆甲', '叶澜/乙', '叶澜&丙']) {
       await add(name, null);
     }
-    // Extras told apart by a letter, and a title also said of a crowd.
+    // Titles, extras told apart by a letter and titles said of a crowd
+    // are highlighted when they have a portrait of their own.
     await lines('巡卫B', r'avg_patrol#1$1', 6);
     await lines('渡鸦', r'avg_raven#1$1', 9);
     await add('渡鸦们', null);
+    // One character is not linked.
+    await lines('岚', r'avg_one#1$1', 9);
     await rebuildPortraitIndex(db);
     final rows = {
       for (final r in await db.query(speakerNamesTable)) r['speaker']: r,
     };
-    for (final name in ['洛青', '青石', '林舟', '星弦', '石河', '叶澜']) {
-      expect(rows[name]!['highlight'], 1, reason: name);
-    }
     for (final name in [
-      '？？？',
-      '林舟？',
-      '洛青＆青石',
+      '洛青',
+      '青石',
+      '林舟',
+      '星弦',
+      '石河',
+      '叶澜',
       '访客',
       '女卫兵',
-      '行人0',
-      '甲客',
       '巡卫B',
       '渡鸦',
+      '行人0',
+      '甲客',
     ]) {
+      expect(rows[name]!['highlight'], 1, reason: name);
+    }
+    for (final name in ['？？？', '林舟？', '洛青＆青石', '岚']) {
       expect(rows[name]!['highlight'], 0, reason: name);
     }
     expect(rows['洛青']!['owns_group'], 0);

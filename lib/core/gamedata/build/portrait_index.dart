@@ -61,14 +61,8 @@ const speakerNamesDdl = '''CREATE TABLE speaker_names (
 /// word inside a place name), not something to highlight in answers.
 // Thresholds verified against the October 2026 local story corpus (P17).
 const highlightMaxMentionsPerLine = 3;
-const highlightMinLines = 3;
+/// One character is too often part of other words to link.
 const highlightMinNameLength = 2;
-const highlightMaxVariants = 3;
-const highlightMaxNamedSpeakers = 3;
-const highlightMinNamedShare = 0.25;
-const highlightCommonSuffixLabels = 30;
-const highlightMinSuffixLength = 2;
-const highlightMaxSuffixLength = 4;
 const _derived = {
   portraitSpritesTable: portraitSpritesDdl,
   portraitGroupsTable: portraitGroupsDdl,
@@ -202,64 +196,15 @@ Future<void> rebuildPortraitIndex(Database db) async {
       final letters = RegExp(r'\p{L}', unicode: true);
       final combined = RegExp(r'[&＆/]');
       final uncertain = RegExp(r'[？?！!]$');
-      // One of several extras told apart by a letter or number (`<title>A`).
-      final numbered = RegExp(r'[^\x00-\x7f][A-Za-z0-9]{1,2}$');
+      // Every speaker with a portrait is highlighted, titles, crowds and
+      // shared portraits included (developer, 2026-10-27): only what could
+      // underline the wrong words is left out.
       bool named(String name) =>
           letters.hasMatch(name) &&
           !combined.hasMatch(name) &&
-          !uncertain.hasMatch(name) &&
-          !numbered.hasMatch(name);
-      final labels = (await txn.rawQuery(
-        'SELECT DISTINCT trim(speaker) AS speaker FROM story_lines '
-        "WHERE trim(COALESCE(speaker, '')) <> ''",
-      ))
-          .map((r) => r['speaker'] as String)
-          .toList();
-      final suffixes = <String, int>{};
-      for (final label in labels) {
-        final points = label.runes.toList();
-        for (var n = highlightMinSuffixLength;
-            n <= highlightMaxSuffixLength && n <= points.length;
-            n++) {
-          final suffix = String.fromCharCodes(points.skip(points.length - n));
-          suffixes.update(suffix, (v) => v + 1, ifAbsent: () => 1);
-        }
-      }
-      final pairs = await txn.query(speakerPortraitsTable);
-      final namedCounts = <String, int>{};
-      final namedLines = <String, int>{};
-      for (final row in pairs) {
-        if (!letters.hasMatch(row['speaker'] as String) ||
-            (row['lines'] as int) < highlightMinLines) {
-          continue;
-        }
-        final group = row['group_id'] as String;
-        namedCounts.update(group, (n) => n + 1, ifAbsent: () => 1);
-        namedLines.update(
-          group,
-          (n) => n + (row['lines'] as int),
-          ifAbsent: () => row['lines'] as int,
-        );
-      }
-      final shared = <String>{};
-      for (final row in pairs) {
-        final name = row['speaker'] as String;
-        final group = row['group_id'] as String;
-        if (!letters.hasMatch(name) ||
-            (row['lines'] as int) < highlightMinLines) {
-          continue;
-        }
-        if (namedCounts[group]! <= highlightMaxNamedSpeakers ||
-            (row['lines'] as int) >=
-                namedLines[group]! * highlightMinNamedShare) {
-          shared.add(name);
-        }
-      }
+          !uncertain.hasMatch(name);
       final candidates = <String, Map<String, Object?>>{
-        for (final row in await txn.query(
-          speakerNamesTable,
-          where: 'lines >= $highlightMinLines',
-        ))
+        for (final row in await txn.query(speakerNamesTable))
           if ((row['speaker'] as String).runes.length >=
                   highlightMinNameLength &&
               named(row['speaker'] as String))
@@ -268,40 +213,13 @@ Future<void> rebuildPortraitIndex(Database db) async {
       final mentions = await _countMentions(txn, candidates.keys);
       final highlights = txn.batch();
       for (final MapEntry(key: speaker, value: row) in candidates.entries) {
-        final owns = row['owns_group'] == 1;
-        final variants = labels
-            .where(
-              (label) =>
-                  label != speaker &&
-                  !combined.hasMatch(label) &&
-                  label.contains(speaker) &&
-                  letters.hasMatch(label.replaceFirst(speaker, '')),
-            )
-            .length;
-        // A name counted out (`<name>A`, `<name>B`) or in a crowd
-        // (`<name>们`) stands for many people, however few the variants.
-        final crowd = RegExp('^${RegExp.escape(speaker)}(?:[A-Za-z0-9]{1,2}|们)\$');
-        final counted = labels.any(crowd.hasMatch);
-        final points = speaker.runes.toList();
-        var commonSuffix = false;
-        for (var n = highlightMinSuffixLength;
-            n <= highlightMaxSuffixLength && n <= points.length;
-            n++) {
-          final suffix = String.fromCharCodes(points.skip(points.length - n));
-          if ((suffixes[suffix] ?? 0) >= highlightCommonSuffixLabels) {
-            commonSuffix = true;
-          }
-        }
         final found = mentions[speaker]!;
         highlights.update(
           speakerNamesTable,
           {
             'mentions': found,
             'highlight':
-                found <= (row['lines'] as int) * highlightMaxMentionsPerLine &&
-                        variants < highlightMaxVariants &&
-                        !counted &&
-                        (owns || (shared.contains(speaker) && !commonSuffix))
+                found <= (row['lines'] as int) * highlightMaxMentionsPerLine
                     ? 1
                     : 0,
           },
@@ -318,7 +236,7 @@ Future<void> rebuildPortraitIndex(Database db) async {
       'SELECT (SELECT COUNT(*) FROM story_line_portraits) AS lines, (SELECT COUNT(*) FROM portrait_groups) AS groups',
     );
     await writeGamedataManifest(txn, {
-      'portrait_index_version': '5',
+      'portrait_index_version': '6',
       'portrait_line_count': '${counts.single['lines']}',
       'portrait_group_count': '${counts.single['groups']}',
     });
